@@ -5,7 +5,7 @@
 // the full iroh endpoint) with its data in userData, and a sign-in finished in
 // the system browser comes back through stillfail://auth/callback.
 import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, MessageChannelMain, nativeTheme, net, Notification, powerMonitor, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess, type WebContents } from "electron";
-import { autoUpdater } from "electron-updater";
+import { autoUpdater, type NsisUpdater, type UpdateInfo } from "electron-updater";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -15,6 +15,7 @@ import { isAbsolute, join, normalize } from "node:path";
 import { pathToFileURL } from "node:url";
 import { FETCH_LINK, socketScript, withSocketTag } from "../../../cloud/src/previewSocket";
 import { applyDelta, type DeltaOp } from "../../../web/src/core/delta";
+import { verifyDesktop } from "../../../station/src/updates/signed.ts";
 import { LocalStation, type Place } from "./station";
 import { controlService, installedService, servicePath, updateInstalled } from "./installed";
 import { contextMenu, type Action } from "./context-menu.mts";
@@ -963,6 +964,7 @@ function keepUpdated(): void {
   autoUpdater.on("download-progress", ({ percent }) => {
     if (update?.phase === "downloading") sayUpdate({ ...update, percent: Math.floor(percent) });
   });
+  if (process.platform === "win32") verifyWindowsUpdates();
   autoUpdater.on("update-downloaded", ({ version }) => {
     sayUpdate({ phase: "installing", version });
     void stopStation().then(() => autoUpdater.quitAndInstall(true, true));
@@ -989,6 +991,32 @@ function keepUpdated(): void {
   };
   check();
   setInterval(check, UPDATE_EVERY);
+}
+
+/**
+ * On Windows the installer downloaded is checked before it runs (docs/release-signing.md): its .sig beside it on the
+ * feed (scripts/release-sign.ts) must be signed by a release key, for the version offered, newer than this app, and
+ * name its very bytes; else electron-updater throws it away (ERR_UPDATER_INVALID_SIGNATURE). It asks only when
+ * app-update.yml names a publisher (build.sh sets one for Windows). macOS's update is checked by its code signature.
+ */
+function verifyWindowsUpdates(): void {
+  let offered: UpdateInfo | null = null;
+  autoUpdater.on("update-available", (info: UpdateInfo) => (offered = info));
+  (autoUpdater as NsisUpdater).verifyUpdateCodeSignature = async (_publishers, file) => {
+    try {
+      const info = offered;
+      const exe = info?.files.find((f) => f.url.endsWith(".exe"));
+      if (!info || !exe) return "no update was offered";
+      const url = new URL(`${exe.url}.sig`, `${CLOUD_ORIGIN}/releases/desktop/`);
+      const response = await net.fetch(url.href, { cache: "no-store" });
+      if (!response.ok) return `${url.href}: ${response.status}`;
+      const build = Number(app.getVersion().split(".").at(-1));
+      verifyDesktop(await response.json(), await readFile(file), info.version, build);
+      return null;
+    } catch (error) {
+      return (error as Error).message;
+    }
+  };
 }
 
 /** Pages outside the app open in the system browser, as a new tab would. */

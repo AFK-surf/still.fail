@@ -23,6 +23,7 @@
   "cloud.install.node.download": "Downloading Node {version} for the station (once per version)…",
   "cloud.install.node.failed": "Could not download Node {version} from {origin}; run the install command again once the network is back.",
   "cloud.install.node.mismatch": "The downloaded Node {version} did not match its checksum and was not installed; run the install command again.",
+  "cloud.install.release.mismatch": "The downloaded station is not the one its signature names and was not installed: the download may have been replaced.",
   "cloud.install.unsupported": "Only macOS (Apple silicon), Linux (x64, arm64) and Windows (x64) are supported for now; this is {machine}.",
   "cloud.install.upToDate": "still.fail station is already up to date ({version}); nothing to update.",
   "cloud.install.updateNoToken": "A station already in a workspace needs no token to update: stillfail update",

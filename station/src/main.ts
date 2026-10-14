@@ -4,6 +4,7 @@
 //
 //   run --app DIR [--port N] [--data DIR] [--with-parent] [--launcher-fds a,b,c]
 //   enroll <cloud> <token> [--provider stillfail|comma] [--data DIR]   status [--data DIR]   id [--data DIR]
+//   channel [stable|beta] [--app DIR] [--data DIR]   update [--beta|--stable] --app DIR [--data DIR]
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -45,7 +46,7 @@ try {
 } catch {}
 
 function usage(): never {
-  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> [--provider stillfail|comma] | status | id");
+  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> [--provider stillfail|comma] | status | id | channel [stable|beta] | update [--beta|--stable] --app DIR");
   process.exit(2);
 }
 
@@ -175,6 +176,14 @@ switch (command) {
   case "channel": {
     const { channelCommand } = await import("./updates/channel.ts");
     const code = await channelCommand(args, data);
+    if (code === 2) usage();
+    process.exitCode = code;
+    break;
+  }
+  // What `stillfail update` runs, its release verified (updates/command.ts): said, not run, here.
+  case "update": {
+    const { updateCommand } = await import("./updates/command.ts");
+    const code = await updateCommand(args, data);
     if (code === 2) usage();
     process.exitCode = code;
     break;

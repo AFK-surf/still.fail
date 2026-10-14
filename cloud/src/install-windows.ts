@@ -33,10 +33,23 @@ export function windowsInstallScript(origin: string, channel: "stable" | "beta" 
   const s = (key: string, args?: Record<string, string>) => say(lang, key, args);
   return SCRIPT.replaceAll("__ORIGIN__", origin.replaceAll("'", "''"))
     .replaceAll("__CHANNEL__", channel)
+    .replaceAll("__LANG__", lang)
     .replace(/__SAY\(([a-zA-Z.]+)(?:, ([^)]*))?\)/g, (_, key: string, args?: string) =>
       s(key, args ? Object.fromEntries(args.split(";").map((a) => a.split("=").map((x) => x.trim()) as [string, string])) : undefined),
     );
 }
+
+/**
+ * The installer a Windows release carries (bin/install.<lang>.ps1, scripts/installers.ts), for the station that runs it
+ * to update itself (station/src/updates/release.ts): this one, its cloud the one the station names (STILLFAIL_ORIGIN).
+ * With a BOM, as PowerShell 5.1 reads a file of non-ASCII words.
+ */
+export const bundledWindowsInstallScript = (lang: Lang) =>
+  String.fromCharCode(0xfeff) +
+  windowsInstallScript("__STILLFAIL_ORIGIN__", "stable", lang).replace(
+    "$origin = '__STILLFAIL_ORIGIN__'",
+    "$origin = $env:STILLFAIL_ORIGIN\nif (-not $origin) { [Console]::Error.WriteLine('STILLFAIL_ORIGIN is not set'); exit 2 }",
+  );
 
 // __SAY(key, name=$variable; …) is a message (say above).
 const SCRIPT = `# still.fail station installer for Windows (cloud/src/install-windows.ts).
@@ -76,9 +89,35 @@ $channel = if ($env:STILLFAIL_CHANNEL) { $env:STILLFAIL_CHANNEL } else { '__CHAN
 if ($channel -eq 'beta') { $release = "beta/stillfail-station-$platform.zip"; Say (__SAY(cloud.install.downloadBeta)) }
 else { $channel = 'stable'; $release = "stillfail-station-$platform.zip"; Say (__SAY(cloud.install.download)) }
 Step 'download'
-Invoke-WebRequest -UseBasicParsing "$origin/releases/$release" -OutFile (Join-Path $tmp 'stillfail.zip')
-Expand-Archive -Path (Join-Path $tmp 'stillfail.zip') -DestinationPath $tmp -Force
+$zip = Join-Path $tmp 'stillfail.zip'
+# Handed a release already downloaded (by the installer of the release before, below): taken, its directory removed.
+if ($env:STILLFAIL_ARCHIVE -and $env:STILLFAIL_ARCHIVE -match '[\\\\/]stillfail-handed-[0-9a-f]+[\\\\/]stillfail\\.zip$') {
+  Move-Item -LiteralPath $env:STILLFAIL_ARCHIVE $zip
+  Remove-Item -Recurse -Force (Split-Path -Parent $env:STILLFAIL_ARCHIVE) -ErrorAction SilentlyContinue
+} else {
+  Invoke-WebRequest -UseBasicParsing "$origin/releases/$release" -OutFile $zip
+}
+# A station updating itself says what the release must hash to, as its signed words say (station/src/updates/signed.ts):
+# anything else is not installed.
+if ($env:STILLFAIL_RELEASE_SHA256 -and (Get-FileHash -Algorithm SHA256 $zip).Hash -ne $env:STILLFAIL_RELEASE_SHA256) { Fail (__SAY(cloud.install.release.mismatch)) }
+Expand-Archive -Path $zip -DestinationPath $tmp -Force
 $new = Join-Path $tmp 'stillfail'
+# The release checked so is installed by its own installer (bin\\install.<lang>.ps1 in it, scripts/installers.ts): what
+# it does from here (its task, its handover) is the new release's, as the cloud's newest installer did it before.
+$lang = if ($env:STILLFAIL_INSTALL_LANG) { $env:STILLFAIL_INSTALL_LANG } else { '__LANG__' }
+$itsOwn = Join-Path $new "bin\\install.$lang.ps1"
+if ($env:STILLFAIL_RELEASE_SHA256 -and -not $env:STILLFAIL_INSTALLER_HANDED -and (Test-Path -LiteralPath $itsOwn)) {
+  $keep = Join-Path ([IO.Path]::GetTempPath()) ('stillfail-handed-' + [guid]::NewGuid().ToString('N'))
+  New-Item -ItemType Directory -Force $keep | Out-Null
+  Move-Item -LiteralPath $zip (Join-Path $keep 'stillfail.zip')
+  Copy-Item -LiteralPath $itsOwn (Join-Path $keep 'install.ps1')
+  $env:STILLFAIL_ARCHIVE = Join-Path $keep 'stillfail.zip'
+  $env:STILLFAIL_INSTALLER_HANDED = '1'
+  & (Get-Process -Id $PID).Path -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $keep 'install.ps1') @(if ($Token) { $Token })
+  $code = $LASTEXITCODE
+  Remove-Item -Recurse -Force $keep -ErrorAction SilentlyContinue
+  exit $code
+}
 Set-Content -Path (Join-Path $new 'CHANNEL') -Value $channel
 
 # The Node it runs on: kept in node\\v<version> beside the data, once per version, and copied to <app>\\node.
@@ -91,19 +130,25 @@ if (-not (Test-Path (Join-Path $nodeDir 'node.exe'))) {
   # The node.exe that node on PATH runs, when it is this version: what is on PATH can be a version manager's shim.
   $own = Get-Command node.exe -ErrorAction SilentlyContinue
   $ownExe = if ($own) { try { & $own.Source -e "if (process.version === 'v$nodeVersion') console.log(process.execPath)" 2>$null } catch { $null } }
-  if ($ownExe -and (Test-Path -LiteralPath $ownExe)) {
+  # With the signed hash of node.exe (STILLFAIL_NODE_SHA256), the machine's own only when it is that very one.
+  $signedNode = $env:STILLFAIL_NODE_SHA256
+  if ($ownExe -and (Test-Path -LiteralPath $ownExe) -and (-not $signedNode -or (Get-FileHash -Algorithm SHA256 -LiteralPath $ownExe).Hash -eq $signedNode)) {
     Copy-Item -LiteralPath $ownExe (Join-Path $part 'node.exe')
   } else {
     $nodeFile = "node-v$nodeVersion-win-x64.zip"
     Say (__SAY(cloud.install.node.download, version=$nodeVersion))
     try {
       Invoke-WebRequest -UseBasicParsing "$origin/releases/node/$nodeFile" -OutFile (Join-Path $tmp $nodeFile)
-      $want = ((Invoke-WebRequest -UseBasicParsing "$origin/releases/node/$nodeFile.sha256").Content -split '\\s+')[0]
+      if (-not $signedNode) { $want = ((Invoke-WebRequest -UseBasicParsing "$origin/releases/node/$nodeFile.sha256").Content -split '\\s+')[0] }
     } catch { Fail (__SAY(cloud.install.node.failed, version=$nodeVersion; origin=$origin)) }
-    $got = (Get-FileHash -Algorithm SHA256 (Join-Path $tmp $nodeFile)).Hash
-    if (-not $want -or $want -ne $got) { Fail (__SAY(cloud.install.node.mismatch, version=$nodeVersion)) }
+    if (-not $signedNode) {
+      $got = (Get-FileHash -Algorithm SHA256 (Join-Path $tmp $nodeFile)).Hash
+      if (-not $want -or $want -ne $got) { Fail (__SAY(cloud.install.node.mismatch, version=$nodeVersion)) }
+    }
     Expand-Archive -Path (Join-Path $tmp $nodeFile) -DestinationPath (Join-Path $tmp 'node') -Force
     Copy-Item (Join-Path $tmp "node\\node-v$nodeVersion-win-x64\\node.exe") (Join-Path $part 'node.exe')
+    # Signed: node.exe itself (nodejs.org's zip, as the release was signed with it).
+    if ($signedNode -and (Get-FileHash -Algorithm SHA256 (Join-Path $part 'node.exe')).Hash -ne $signedNode) { Fail (__SAY(cloud.install.node.mismatch, version=$nodeVersion)) }
   }
   if ((& (Join-Path $part 'node.exe') -v) -ne "v$nodeVersion") { Fail (__SAY(cloud.install.node.broken, version=$nodeVersion)) }
   Move-Item $part $nodeDir

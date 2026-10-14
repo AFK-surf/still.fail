@@ -5,7 +5,6 @@
 // What is asked is what the station means to do (end a job's group, make a command another program can run, join a
 // path as Rust does), not which machine this is; a feature only one machine has is a flag saying so (hasKeychain).
 import type { ChildProcess } from "node:child_process";
-import type { Lang } from "../ops/i18n.ts";
 import { unix } from "./unix.ts";
 import { windows } from "./windows.ts";
 
@@ -126,9 +125,11 @@ export type Platform = {
   // Updates.
   /// How Claude Code is installed where it is not.
   claudeInstall: How;
-  /// Starts the cloud's installer apart from the station, its exit to run/update.exit and what it said to
-  /// run/update.log. Whether it was started.
-  startInstaller(origin: string, runDir: string, env: Record<string, string>, app: string, lang: Lang): Promise<boolean>;
+  /// The kind of the installer a release carries for this machine: bin/install.<lang>.<this> (scripts/installers.ts).
+  installerExt: "sh" | "ps1";
+  /// Starts `script` (the installer the running release carries, docs/release-signing.md) apart from the station, run
+  /// from a copy in `runDir`, its exit to run/update.exit and what it said to run/update.log. Whether it was started.
+  startInstaller(script: string, runDir: string, env: Record<string, string>, app: string): Promise<boolean>;
   /// How a runtime found as a package manager's shim of this machine's kind is updated (Windows: Vite+'s beside
   /// vp.exe, npm's .cmd in its prefix), none for the shared rules.
   shimUpdate(found: Found, pkg: string, env: Env): How | "no-npm" | null;

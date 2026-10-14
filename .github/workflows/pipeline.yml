@@ -82,13 +82,14 @@ jobs:
           relay=false
           if has '^cloud/(src/(relay|relay-worker|limits|auth)\.ts|Dockerfile|relay-entrypoint\.sh|wrangler\.relay\.jsonc)$'; then relay=true; fi
           station=false
-          # The station in TypeScript, its native parts (vendor/: the mesh addon's iroh), the words it says.
-          if has '^(station/(src|native)/|station/(package\.json|pnpm-lock\.yaml)$|vendor/|client/i18n/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native)\.ts$)'; then station=true; fi
+          # The station in TypeScript, its native parts (vendor/: the mesh addon's iroh), the words it says, the installer
+          # it carries (cloud/src/install*.ts: scripts/installers.ts).
+          if has '^(station/(src|native)/|station/(package\.json|pnpm-lock\.yaml)$|vendor/|client/i18n/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native|installers|release-sign)\.ts$|cloud/src/(install|install-windows|i18n)\.ts$)'; then station=true; fi
           android=false
           if printf '%s\n' "$changed" | sh apps/android/carries.sh; then android=true; fi
           # The desktop app carries the core, the web app and a station: any of them changed is a new app.
           desktop=false
-          if has '^(apps/desktop/|client/|web/|station/(src|native)/|station/(package\.json|pnpm-lock\.yaml)$|vendor/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native)\.ts$)'; then desktop=true; fi
+          if has '^(apps/desktop/|client/|web/|station/(src|native)/|station/(package\.json|pnpm-lock\.yaml)$|vendor/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native|installers|release-sign)\.ts$|cloud/src/(install|install-windows|i18n)\.ts$)'; then desktop=true; fi
           # A branch's Windows app and its smoke run (windows-build, windows-smoke): only for what is Windows' own in it,
           # the app's code and its iroh addon (a change to the web app it carries is the Mac app's check too).
           windows=false
@@ -377,6 +378,8 @@ jobs:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
           MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
           MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
+          # The key the release is signed with (docs/release-signing.md): none is an error.
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           RELEASE_DIR: ${{ runner.temp }}/release
         run: sh .github/release.sh station
       - uses: actions/upload-artifact@v4
@@ -428,6 +431,8 @@ jobs:
           KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
           MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
           MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
+          # The Windows installer's signature (its .sig): none is an error.
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: python3 .github/release-desktop.py --out "$RUNNER_TEMP/release"
       - name: Put its files (named by its version, nothing points at them until put writes the feed)
         env:
@@ -470,7 +475,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: studio's station takes the published release
-        run: ssh -o BatchMode=yes studio 'env -u EMBER_DATA -u STILLFAIL_DATA STILLFAIL_CHANNEL=beta ~/.local/bin/stillfail update > /tmp/ember-station-update.log 2>&1 && tail -2 /tmp/ember-station-update.log'
+        run: ssh -o BatchMode=yes studio 'env -u EMBER_DATA -u STILLFAIL_DATA STILLFAIL_CHANNEL=beta ~/.local/bin/stillfail update --beta > /tmp/ember-station-update.log 2>&1 && tail -2 /tmp/ember-station-update.log'
 
   # The changelog, when nothing was released (put, which puts it after the releases, did not run): a fix in still.fail
   # cloud counts as out as soon as it is listed, not before the API carrying it is deployed.

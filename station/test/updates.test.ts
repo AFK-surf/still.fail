@@ -18,6 +18,7 @@ import {
 } from "../src/updates/versions.ts";
 import { setChannelIn } from "../src/updates/channel.ts";
 import { exe, launcher, script as stand_in } from "./accounts-fakes.ts";
+import { OTHER, SHA_A, SHA_B, feedOf, trusted } from "./release-fakes.ts";
 import { settle, testClock } from "./hub-fakes.ts";
 
 delete process.env.STILLFAIL_CONFIG;
@@ -36,15 +37,17 @@ const script = (path: string, text: string) => {
   stand_in(path, text);
 };
 
-/// A station installed by the installer (<data>/app, BUILD `build`, from `channel`), in a cloud that answers nothing.
-function installed(data: string, build: string, channel: string | null, more: Partial<UpdatesOptions> = {}): Updates {
+/// A station installed by the installer (<data>/app, BUILD `build`, from `channel`, carrying `installer` as its
+/// bin/install.zh.sh), in a cloud that answers nothing; it takes the tests' release key.
+function installed(data: string, build: string, channel: string | null, more: Partial<UpdatesOptions> = {}, installer?: string): Updates {
   const app = join(data, "app");
-  mkdirSync(app, { recursive: true });
+  mkdirSync(join(app, "bin"), { recursive: true });
   writeFileSync(join(app, "BUILD"), build);
   if (channel !== null) writeFileSync(join(app, "CHANNEL"), channel);
+  if (installer !== undefined) writeFileSync(join(app, "bin", "install.zh.sh"), installer);
   const updates = new Updates({
     app, data, config: new ConfigFile(data), origin: () => "http://127.0.0.1:1", registry: "http://127.0.0.1:1", env: { PATH: "/nowhere" },
-    timing: { followLook: 200 }, ...more,
+    timing: { followLook: 200 }, trusted, ...more,
   });
   return updates;
 }
@@ -68,10 +71,12 @@ async function serve(routes: (path: string, search: string) => Said | Promise<Sa
   return [`http://127.0.0.1:${(server.address() as AddressInfo).port}`, server];
 }
 
-/// A still.fail cloud with a release out (`latest` on the stable feed) and an installer that plays the real one's part
-/// on a temporary data directory: says its steps, puts the new BUILD in the release, ends 0. Its download goes on until
-/// `finish` is called (asking the cloud for /download, which answers then); unless `held`, it goes on at once.
-async function cloudWithRelease(latest: string, build: string, held = false): Promise<[string, Server, string[], () => void]> {
+/// A still.fail cloud with a release out (`latest` on the stable feed, signed with the tests' key; `feed` instead when
+/// given), and the installer the station's release carries (the last of what this gives), playing the real one's part
+/// on a temporary data directory: says its steps and what it was told, puts the new BUILD in the release, ends 0. Its
+/// download goes on until `finish` is called (asking the cloud for /download, which answers then); unless `held`, it
+/// goes on at once.
+async function cloudWithRelease(latest: string, build: string, held = false, feed?: object): Promise<[string, Server, string[], () => void, string]> {
   const asked: string[] = [];
   let finish = () => {};
   const finished = held ? new Promise<void>((r) => (finish = r)) : Promise.resolve();
@@ -82,19 +87,20 @@ run="$STILLFAIL_DATA/run"
 printf 'download\\n' > "$run/update.step"
 echo "### 50.0%"
 printf '%s %s %s\\n' "$STILLFAIL_CHANNEL" "$EMBER_DATA" "$STILLFAIL_DATA" > "$STILLFAIL_DATA/installer-saw"
+printf '%s %s %s %s\\n' "$STILLFAIL_ORIGIN" "$STILLFAIL_RELEASE_SHA256" "$STILLFAIL_NODE_SHA256" "$STILLFAIL_INSTALL_LANG" >> "$STILLFAIL_DATA/installer-saw"
+echo ran >> "$STILLFAIL_DATA/installer-ran"
 curl -fsS "${origin}/download" > /dev/null
 printf 'handoff\\n' > "$run/update.step"
 printf '${build}\\n' > "$STILLFAIL_DATA/app/BUILD"
 `;
   const [base, server] = await serve(async (path, search) => {
     asked.push(path + search);
-    if (path === "/releases/station.json") return { body: JSON.stringify({ version: latest }) };
-    if (path === "/install.sh") return { type: "text/plain", body: installer() };
+    if (path === "/releases/station.json") return { body: JSON.stringify(feed ?? feedOf(Number(latest.split(".").at(-1)))) };
     if (path === "/download") return finished.then(() => ({ type: "text/plain", body: "" }));
     return null;
   });
   origin = base;
-  return [origin, server, asked, finish];
+  return [origin, server, asked, finish, installer()];
 }
 
 /// A registry with Codex 0.47.0 out, its build for this machine downloadable; and a bin with a fake npm that records
@@ -374,46 +380,40 @@ describe("updates", { concurrency: true }, () => {
     assert.equal(updates.toUpdateTo(), "0.1.1310");
   });
 
-  // The installer here is install.sh, piped to sh; Windows' (install.ps1, by a scheduled task) is the next test's.
+  // The installer here is install.sh, run by sh; Windows' (install.ps1, by a scheduled task) is the next test's.
   const shInstaller = { skip: WINDOWS && "install.sh is macOS's and Linux's" };
 
-  test("on Windows the update's script runs install.ps1, its words in UTF-8 and its exit kept", { skip: !WINDOWS && "Windows'" }, async (t) => {
+  test("on Windows the update's script runs the release's install.ps1, its words in UTF-8 and its exit kept", { skip: !WINDOWS && "Windows'" }, async () => {
     const dir = temp();
     const run = join(dir, "run 'x'");
     mkdirSync(run);
-    const installer = [
-      "Write-Host ('下载 still.fail station… ' + $env:STILLFAIL_CHANNEL + ' ' + $env:STILLFAIL_DATA)",
+    // The release's installer, as startInstaller copies it there.
+    writeFileSync(join(run, "install.ps1"), String.fromCharCode(0xfeff) + [
+      "Write-Host ('下载 still.fail station… ' + $env:STILLFAIL_CHANNEL + ' ' + $env:STILLFAIL_DATA + ' ' + $env:STILLFAIL_RELEASE_SHA256)",
       "[Console]::Error.WriteLine('没能更新')",
       "exit 3",
-    ].join("\r\n");
-    const asked: string[] = [];
-    const [origin, server] = await serve((path, search) => {
-      asked.push(path + search);
-      return path === "/install.ps1" ? { type: "text/plain; charset=utf-8", body: installer } : null;
-    });
-    t.after(() => server.close());
-    const env = { STILLFAIL_DATA: dir, STILLFAIL_CHANNEL: "beta", PATH: "C:\\nowhere" };
+    ].join("\r\n"));
+    const env = { STILLFAIL_DATA: dir, STILLFAIL_CHANNEL: "beta", STILLFAIL_RELEASE_SHA256: SHA_A, PATH: "C:\\nowhere" };
     const ps1 = join(run, "update.ps1");
-    const text = windowsUpdateScript(origin, run, env, "still.fail station (test, not registered) update", "zh");
+    const text = windowsUpdateScript(run, env, "still.fail station (test, not registered) update");
     // Only the station's own variables: the task has the user's PATH.
     assert.ok(!text.includes("nowhere"));
     writeFileSync(ps1, text);
-    // Run here as the task runs it (no task: its removal at the end finds none). Not spawnSync: the cloud is this process.
+    // Run here as the task runs it (no task: its removal at the end finds none).
     await new Promise<void>((resolve, reject) =>
       execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", ps1], { timeout: 60_000 }, (e, _out, err) => (e ? reject(new Error(`${e.message} ${err}`)) : resolve())),
     );
-    assert.deepEqual(asked, ["/install.ps1?lang=zh"]);
     assert.equal(readFileSync(join(run, "update.exit"), "utf8").trim(), "3");
     const log = readFileSync(join(run, "update.log"), "utf8");
-    assert.ok(log.includes(`下载 still.fail station… beta ${dir}`), log);
+    assert.ok(log.includes(`下载 still.fail station… beta ${dir} ${SHA_A}`), log);
     assert.ok(log.includes("没能更新"), log);
   });
 
-  test("the station is updated by its cloud's installer, followed to its end", shInstaller, async (t) => {
+  test("the station is updated by the installer its release carries, told what the signed release hashes to, followed to its end", shInstaller, async (t) => {
     const dir = temp();
-    const [origin, server, asked, finish] = await cloudWithRelease("0.1.1310", "1310", true);
+    const [origin, server, asked, finish, installer] = await cloudWithRelease("0.1.1310", "1310", true);
     t.after(() => server.close());
-    const updates = installed(dir, "1300", null, { origin: () => origin, env: { PATH: "/usr/bin:/bin" } });
+    const updates = installed(dir, "1300", null, { origin: () => origin, env: { PATH: "/usr/bin:/bin" } }, installer);
     t.after(() => updates.close());
     await updates.check();
     assert.deepEqual([station(updates).latest, station(updates).newer, station(updates).updatable], ["0.1.1310", true, true]);
@@ -425,18 +425,67 @@ describe("updates", { concurrency: true }, () => {
     finish();
     await until("ended", () => station(updates).state === "idle");
     assert.equal(station(updates).done, "已更新到 0.1.1310，agent 没有中断");
-    assert.ok(asked.includes("/install.sh?lang=zh"), asked.join());
-    assert.equal(readFileSync(join(dir, "installer-saw"), "utf8").trim(), `stable ${dir} ${dir}`);
+    // Never the cloud's installer.
+    assert.ok(!asked.some((a) => a.startsWith("/install")), asked.join());
+    assert.equal(readFileSync(join(dir, "installer-saw"), "utf8").trim(), `stable ${dir} ${dir}\n${origin} ${SHA_A} ${SHA_B} zh`);
     assert.ok(!existsSync(join(dir, "run", "update.started")));
     assert.equal(readFileSync(join(dir, "run", "update.exit"), "utf8").trim(), "0");
   });
 
+  test("a feed that does not verify offers nothing, and nothing is installed from it", shInstaller, async (t) => {
+    const unsigned = { version: "0.1.1310", build: 1310, commit: "0".repeat(40) };
+    const forged = feedOf(1310, {}, OTHER);
+    // Words changed after signing: the archive's hash swapped for another.
+    const good = feedOf(1310);
+    const words = JSON.parse(Buffer.from(good.release, "base64").toString("utf8"));
+    for (const b of Object.values<any>(words.builds)) b.sha256 = "c".repeat(64);
+    const tampered = { ...good, release: Buffer.from(JSON.stringify(words)).toString("base64") };
+    // The signed words of 1310 under a feed that says 1320.
+    const relabeled = { ...feedOf(1310), version: "0.1.1320" };
+    for (const [name, feed] of Object.entries({ unsigned, forged, tampered, relabeled })) {
+      const dir = temp();
+      const [origin, server, asked, , installer] = await cloudWithRelease("0.1.1310", "1310", false, feed);
+      t.after(() => server.close());
+      const updates = installed(dir, "1300", null, { origin: () => origin, env: { PATH: "/usr/bin:/bin" } }, installer);
+      t.after(() => updates.close());
+      new ConfigFile(dir).update((raw) => (raw.autoUpdate = true));
+      await updates.check();
+      assert.deepEqual([station(updates).latest, station(updates).newer, updates.toUpdateTo()], [undefined, false, null], name);
+      // Asked anyway (a page from before it read): refused, and not left updating.
+      await assert.rejects(updates.update("station", "zh"), (e: Error) => e.message.startsWith("这个版本的签名验不过"), name);
+      assert.equal(station(updates).state, "idle", name);
+      assert.ok(!existsSync(join(dir, "installer-ran")), name);
+      assert.ok(!asked.some((a) => a.startsWith("/install")), name);
+    }
+  });
+
+  test("an older signed release is not installed, but back to the stable one from the beta", shInstaller, async (t) => {
+    const [origin, server, , , installer] = await cloudWithRelease("0.1.1290", "1290");
+    t.after(() => server.close());
+    const dir = temp();
+    const updates = installed(dir, "1300", null, { origin: () => origin, env: { PATH: "/usr/bin:/bin" } }, installer);
+    t.after(() => updates.close());
+    await updates.check();
+    assert.deepEqual([station(updates).latest, station(updates).newer, station(updates).downgrade], ["0.1.1290", false, false]);
+    await assert.rejects(updates.update("station", "zh"), (e: Error) => e.message === "0.1.1290 比现在的 0.1.1300 旧，不更新");
+    assert.ok(!existsSync(join(dir, "installer-ran")));
+    // Installed from the beta and put on the stable channel by a person: going back is theirs to ask.
+    const beta = temp();
+    const back = installed(beta, "1300", "beta", { origin: () => origin, env: { PATH: "/usr/bin:/bin" } }, installer);
+    t.after(() => back.close());
+    await back.setChannel("stable");
+    assert.deepEqual([station(back).latest, station(back).downgrade], ["0.1.1290", true]);
+    await back.update("station", "zh");
+    await until("ended", () => station(back).state === "idle");
+    assert.equal(readFileSync(join(beta, "installer-ran"), "utf8"), "ran\n");
+  });
+
   test("turned on, the station updates itself by the installer as soon as it reads a newer release, once", shInstaller, async (t) => {
     const dir = temp();
-    const [origin, server, asked] = await cloudWithRelease("0.1.1310", "1310");
+    const [origin, server, asked, , installer] = await cloudWithRelease("0.1.1310", "1310");
     t.after(() => server.close());
     const time = testClock();
-    const updates = installed(dir, "1300", null, { origin: () => origin, env: { PATH: "/usr/bin:/bin" }, timing: { followLook: 200 }, clock: time.clock });
+    const updates = installed(dir, "1300", null, { origin: () => origin, env: { PATH: "/usr/bin:/bin" }, timing: { followLook: 200 }, clock: time.clock }, installer);
     t.after(() => updates.close());
     new ConfigFile(dir).update((raw) => (raw.autoUpdate = true));
     /// Moves its time on by `ms` until `f` holds (what it waits for meanwhile may be a real process).
@@ -446,10 +495,11 @@ describe("updates", { concurrency: true }, () => {
         await sleep(10);
       }
     };
-    // A reading of what is out ended once the feed was asked a second time (it decides as it ends).
+    // A reading of what is out after the update ended once the feed was asked a third time (the first reading, the
+    // update's own, then that one; it decides as it ends).
     const feeds = () => asked.filter((a) => a.startsWith("/releases/station.json")).length;
     let readAgain = false;
-    updates.changes(() => void (feeds() >= 2 && (readAgain = true)));
+    updates.changes(() => void (feeds() >= 3 && (readAgain = true)));
     updates.start();
     // It reads what is out at once, and updates itself by the installer.
     await until("read", () => station(updates).latest === "0.1.1310");
@@ -464,7 +514,7 @@ describe("updates", { concurrency: true }, () => {
       await settle();
     }
     assert.equal(station(updates).state, "idle");
-    assert.equal(asked.filter((a) => a.startsWith("/install.sh")).length, 1);
+    assert.equal(readFileSync(join(dir, "installer-ran"), "utf8"), "ran\n");
   });
 
   test("a station not installed by the installer, or not in a workspace, is not updated here", async (t) => {

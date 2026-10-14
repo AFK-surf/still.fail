@@ -74,6 +74,8 @@ const APP_FILES: [RegExp, string][] = [
   [/^desktop\/stillfail\.yml$/, "text/yaml; charset=utf-8"],
   [/^desktop\/stillfail-(beta-)?[0-9.]+-x64-win\.exe$/, "application/vnd.microsoft.portable-executable"],
   [/^desktop\/stillfail-(beta-)?[0-9.]+-x64-win\.exe\.blockmap$/, "application/octet-stream"],
+  // Its signature (scripts/release-sign.ts), which the app checks before installing it (docs/release-signing.md).
+  [/^desktop\/stillfail-(beta-)?[0-9.]+-x64-win\.exe\.sig$/, "application/json"],
   [/^android\/latest\.json$/, "application/json"],
   // Builds from before the rename were android/ember-<n>.apk: the latest.json of then and the apps it updated name them.
   [/^android\/(stillfail|ember|stillfail-beta)-[0-9]+\.apk$/, "application/vnd.android.package-archive"],

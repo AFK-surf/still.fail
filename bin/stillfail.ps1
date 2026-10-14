@@ -24,21 +24,25 @@ switch ("$($a[0]) $($a[1])".Trim()) {
   'station id' { Run @('id', '--data', $data) }
   { $_ -like 'station enroll*' } { Run (@('enroll') + $a[2..($a.Count)] + @('--data', $data)) }
   { $a[0] -eq 'update' } {
-    # From the cloud the station is in (its installer, without a token, updates).
-    $cloud = Join-Path $data 'mesh\cloud.json'
-    $said = try { Get-Content $cloud -Raw | ConvertFrom-Json } catch { $null }
-    if (-not $said -or -not $said.origin) { [Console]::Error.WriteLine('这台 station 还没有加入 workspace，无从更新'); exit 1 }
-    $origin = $said.origin
-    # Comma keeps its station releases and installer under /stations.
-    if ($said.provider -eq 'comma') { $origin = "$origin/stations" }
-    $asked = switch ($a[1]) { '--beta' { @('beta') } '--stable' { @('stable') } $null { @() } default { [Console]::Error.WriteLine('usage: stillfail update [--beta|--stable]'); exit 2 } }
-    $channel = (& $station channel @asked --app $here --data $data 2>$null | Select-Object -Last 1)
-    if ($channel -notin 'stable', 'beta') {
-      if ($asked.Count -gt 0) { [Console]::Error.WriteLine("没能把 station 设成 $($asked[0]) 渠道"); exit 1 }
-      $channel = 'stable'
+    # The channel's latest release, verified by this release's Node (the station's `update`: its signature, newer than
+    # this one) and installed by the installer this release carries, told what it must hash to
+    # (docs/release-signing.md). Not the cloud's installer: whoever serves it could put anything here. Node only says
+    # what to run: the installer ends what runs from the release, which it is.
+    if ($a.Count -gt 2 -or ($a.Count -eq 2 -and $a[1] -notin '--beta', '--stable')) { [Console]::Error.WriteLine('usage: stillfail update [--beta|--stable]'); exit 2 }
+    $node = if ($env:STILLFAIL_NODE) { $env:STILLFAIL_NODE } else { Join-Path $here 'node\node.exe' }
+    $main = Join-Path $here 'station\main.js'
+    if (-not (Test-Path -LiteralPath $node) -or -not (Test-Path -LiteralPath $main)) { [Console]::Error.WriteLine("stillfail update: $here is not an installed release (no node\node.exe or station\main.js)"); exit 1 }
+    $plan = & $node $main update @($a[1..($a.Count)] | Where-Object { $_ }) --app $here --data $data
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    $script = $null
+    foreach ($line in @($plan)) {
+      $key, $value = $line -split '=', 2
+      if ($key -eq 'script') { $script = $value }
+      elseif ($key -in 'STILLFAIL_ORIGIN', 'STILLFAIL_CHANNEL', 'STILLFAIL_RELEASE_SHA256', 'STILLFAIL_NODE_SHA256', 'STILLFAIL_INSTALL_LANG') { Set-Item -Path "env:$key" -Value $value }
     }
-    $env:STILLFAIL_CHANNEL = $channel
-    Invoke-Expression (Invoke-RestMethod "$origin/install.ps1")
+    if (-not $script) { [Console]::Error.WriteLine('stillfail update: no installer to run'); exit 1 }
+    $env:STILLFAIL_DATA = $data
+    & (Get-Process -Id $PID).Path -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script
     exit $LASTEXITCODE
   }
   default { [Console]::Error.WriteLine($usage); exit 2 }

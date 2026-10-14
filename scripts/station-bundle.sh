@@ -5,6 +5,8 @@
 # (scripts/node-dist.sh, cloud/src/install.ts) and links it at stillfail/node; the desktop app runs it on Electron's. scripts/release.sh packs it for install.sh; the desktop app (apps/desktop/build.sh) carries
 # it and runs it itself. The layout:
 #   stillfail/bin/stillfail                               (the command people and services run; bin/ember beside it)
+#   stillfail/bin/install.{zh,en}.sh                      (the installer the station updates itself by, verified with
+#                                                          the release: scripts/installers.ts, docs/release-signing.md)
 #   stillfail/mesh/target/release/stillfail-station       (the launcher, with the Rust station's command line and path,
 #                                                          ember-station beside it: what the installer, bin/stillfail,
 #                                                          the desktop app and services written by older releases run)
@@ -17,7 +19,7 @@
 # On darwin-arm64 the native parts are signed when $STILLFAIL_SIGN_STATION is set (the station release job).
 # Its Node is the station's own: the agents' PATH never has it (a runtime installed with it would land there).
 # On win32-x64 the executables are .exe, and the command is bin/stillfail.cmd (bin/stillfail.ps1 behind it): no links
-# there (they take a privilege on Windows), so no ember beside them.
+# there (they take a privilege on Windows), so no ember beside them; its installers are bin/install.{zh,en}.ps1.
 #   station-bundle.sh DIR [darwin-arm64|linux-x64|linux-arm64|win32-x64]
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -44,6 +46,7 @@ else
   cp "$root/bin/stillfail" "$app/bin/"
   ln -s stillfail "$app/bin/ember"
 fi
+node "$root/scripts/installers.ts" "$app/bin" "$platform"
 cp -R "$root/dist/admin" "$app/dist/admin"
 cp "$launcher" "$app/mesh/target/release/stillfail-station$x"
 # And on Windows the launcher with no window beside it (what install.ps1's scheduled task runs; scripts/native.ts keeps

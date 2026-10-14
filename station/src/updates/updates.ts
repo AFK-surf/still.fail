@@ -2,18 +2,20 @@
 // updating them from the pages (the Rust station's updates.rs, whose rules this keeps):
 // - The station: its release says its version in BUILD (`0.1.<n>`); the latest is what still.fail cloud serves as
 //   releases/station.json, or on the test channel (`updateChannel: "beta"` in config.json; a release installed from the
-//   beta and not told otherwise is on it) releases/station-beta.json. Switched back from the beta, the older stable
-//   release is offered as going back (`downgrade`), only then. It is updated as `stillfail update` does: by the cloud's
-//   installer, run apart from the station; only a release that installer put in <data>/app is (the desktop app's
-//   comes with the desktop app, a clone's with the clone). With `autoUpdate: true` it does so by itself once the
+//   beta and not told otherwise is on it) releases/station-beta.json, only as its signature verifies (signed.ts,
+//   docs/release-signing.md: a feed that does not is no newer release). Switched back from the beta, the older stable
+//   release is offered as going back (`downgrade`), only then. It is updated as `stillfail update` does (release.ts):
+//   by the installer this release carries, told what the new one must hash to, run apart from the station; only a
+//   release the installer put in <data>/app is (the desktop app's comes with the desktop app, a clone's with the clone). With `autoUpdate: true` it does so by itself once the
 //   station has been quiet a while (never back from the beta, and a version it already went for, not again).
 // - Claude Code and Codex: `--version`, and the latest their npm packages say; updated the way each was installed.
 //   Running agents go on with what they started with; the next process starts the new one.
 //
-// The TS release (docs/station-ts-native.md) is updated by the same installer and the same files as the Rust one:
+// The TS release (docs/station-ts-native.md) is updated by the same files as the Rust one was:
 // run/update.started (this side's, so the process that runs after a handover or restart follows the update to its
 // end), run/update.step (download | handoff | drain | restart, the installer's), run/update.log and run/update.exit,
-// and the installer is started the same way (STILLFAIL_CHANNEL, STILLFAIL_DATA and EMBER_DATA, `?lang=`). Where it
+// and the installer is given STILLFAIL_CHANNEL, STILLFAIL_DATA and EMBER_DATA as it was (and now what release.ts
+// gives it). Where it
 // differs (see also the report in the station-ts work):
 // - The release is `--app` (Paths.app), not two up from dist/admin; BUILD and CHANNEL are read from it the same way.
 // - The installer's handoff (swap <data>/app, SIGUSR2 to the pid in run/station.json) reaches the launcher, which
@@ -39,12 +41,13 @@ import type { ConfigFile } from "../ops/config.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { platform as machine } from "../platform/index.ts";
+import { planUpdate, readFeed, verifiedOrNull, type Plan } from "./release.ts";
 import {
   type Env, type How, type Kind, KINDS, NotFinished, RUNTIMES, Unable, findCommand, howToInstall, howToUpdate, kindCommand,
   kindName, kindPackage, pinNpmVersion, run, runLines,
 } from "./runtimes.ts";
 import {
-  type Channel, type Words, INSTALLING, channelOf, downloading, feed, newer, offer, platform, releaseChannel, sameWords, say, stationDownloadPercent,
+  type Channel, type Words, INSTALLING, channelOf, downloading, newer, offer, platform, releaseChannel, sameWords, say, stationDownloadPercent,
   stationVersion, stepOf, tail, versionIn,
 } from "./versions.ts";
 
@@ -112,6 +115,8 @@ export type UpdatesOptions = {
   timing?: Partial<Timing>;
   /// Its time (a TestClock in tests).
   clock?: Clock.Clock;
+  /// The keys its releases are signed with, by id (signed.ts trustedKeys: tests give their own).
+  trusted?: Map<string, string>;
 };
 
 type Item = {
@@ -142,11 +147,11 @@ const empty = (): Item => ({ installed: false, version: null, latest: null, how:
 /// the station when it ends.
 type Started = { at: number; from: string | null };
 
-/// Starts the cloud's installer apart from the station (platform.startInstaller: in the background of a shell, or on
+/// Starts the installer `script` apart from the station (platform.startInstaller: in the background of a shell, or on
 /// Windows by a scheduled task of its own), its exit to run/update.exit and what it said to run/update.log. Whether it
 /// was started.
-export const startInstaller = (origin: string, runDir: string, env: Record<string, string>, app: string, lang = stationLang()): Promise<boolean> =>
-  machine.startInstaller(origin, runDir, env, app, lang);
+export const startInstaller = (script: string, runDir: string, env: Record<string, string>, app: string): Promise<boolean> =>
+  machine.startInstaller(script, runDir, env, app);
 
 const UA = { "user-agent": "stillfail-station" };
 
@@ -182,6 +187,7 @@ export class Updates {
   private registry: string;
   private claudeReleases: string;
   private timing: Timing;
+  private trusted: Map<string, string> | undefined;
   /// The channel the running release came from: as it says (CHANNEL), else the channel it started on.
   readonly installed: Channel;
   private items: Record<Kind, Item> = { station: empty(), claude: empty(), codex: empty() };
@@ -213,6 +219,7 @@ export class Updates {
     this.registry = o.registry ?? "https://registry.npmjs.org";
     this.claudeReleases = o.claudeReleases ?? "https://downloads.claude.ai/claude-code-releases";
     this.timing = { ...TIMING, ...o.timing };
+    this.trusted = o.trusted;
     this.running = o.running ?? (() => 0);
     this.runtimeChanged = o.runtimeChanged ?? (() => {});
     // Read before an update can replace the release.
@@ -408,8 +415,10 @@ export class Updates {
     let latest: string | null = null;
     if (origin !== null) {
       try {
-        const said = await fetchJson(feed(channel, origin));
-        latest = typeof said?.version === "string" ? said.version : null;
+        // Only a release whose words verify is one (none is newer than a feed that does not).
+        const { release, why } = verifiedOrNull(await readFeed(channel, origin), this.trusted);
+        if (release === null) log.warn("updates", "the station's latest release does not verify: not offered", { channel, why });
+        latest = release?.version ?? null;
       } catch (e) {
         log.warn("updates", "the station's latest release not read", { error: (e as Error).message });
       }
@@ -726,8 +735,9 @@ export class Updates {
     };
   }
 
-  /// Runs the cloud's installer apart from the station, as `stillfail update` does, and follows it: by this process,
-  /// and after a handover or a restart by the one that runs then (run/update.started says to).
+  /// Runs the installer this release carries apart from the station, as `stillfail update` does (release.ts), and
+  /// follows it: by this process, and after a handover or a restart by the one that runs then (run/update.started says
+  /// to).
   private async updateStation(lang: Lang): Promise<void> {
     const origin = this.origin() || null;
     if (origin === null) throw refused(lang, "station.updates.notJoined");
@@ -739,18 +749,25 @@ export class Updates {
     const before = { updating: station.updating, failed: station.failed, done: station.done };
     station.updating = this.fibers.now();
     const channel = this.channel();
+    // The release verified, the installer to run and what it is told (refused in `lang`: not left updating).
+    let plan: Plan;
+    try {
+      plan = await planUpdate({ base: origin, channel, app: this.app, installed: this.installed, lang, trusted: this.trusted });
+    } catch (e) {
+      Object.assign(station, before);
+      throw e;
+    }
     const env: Record<string, string> = {};
     for (const [k, v] of Object.entries(this.env)) if (v !== undefined) env[k] = v;
-    // Under both names: the cloud's installer from before the rename reads the old one. The release of its channel
-    // (the installer from before channels takes the stable one).
-    Object.assign(env, { STILLFAIL_DATA: this.data, EMBER_DATA: this.data, STILLFAIL_CHANNEL: channel });
-    const ok = await startInstaller(origin, runDir, env, this.app);
+    // Under both names, as installers from before the rename read the old one.
+    Object.assign(env, { STILLFAIL_DATA: this.data, EMBER_DATA: this.data }, plan.env);
+    const ok = await startInstaller(plan.script, runDir, env, this.app);
     if (!ok) {
       Object.assign(station, before);
       throw refused(lang, "station.updates.couldNotStart");
     }
-    log.info("updates", "updating the station", { origin, channel });
-    this.tried = station.latest;
+    log.info("updates", "updating the station", { origin, channel, to: plan.release.version });
+    this.tried = plan.release.version;
     const started: Started = { at: this.fibers.now(), from: stationVersion(this.app) ?? null };
     try {
       writeFileSync(join(runDir, "update.started"), JSON.stringify(started));

@@ -100,7 +100,7 @@ runner → 客户端：
 - 更新同 install.sh：station 在跑、计划任务没变、`station.json` 说 `handoff:1` 时，旧发布挪到 `app.old-<时间>`（还在跑的启动器、runner 让目录删不掉，挪可以），新发布放到原位，请启动器交接；`startedAt` 变了、pid 没变就是交接成功，启动器不重启。交接失败且旧的还在服务：挪回旧发布、报告失败。其余情况（第一次装、任务变了、交接失败且旧的已经不在）先 drain，再停（停任务、结束 launcher，按命令行里含 `<app>` 等 Node 退出）、换发布、重启。
 - 安装器在 PowerShell 里作为脚本块运行（`& ([scriptblock]::Create(...))`），那里的 `$script:` 是调用者的作用域：函数要改的状态放在一个哈希表里（`cloud/test/install-windows.test.ts` 守着不出现 `$script:`/`$global:`）。
 - `.cmd` 文件里只写 ASCII：cmd 按控制台代码页（中文系统 936、英文 437）读 .cmd，不是 UTF-8，所以 `C:\Users\张三\…` 写成 ASCII 会变成 `??`，写成 UTF-8 会读乱。含非 ASCII 的路径写成它所在的环境变量（`%USERPROFILE%\.stillfail\…`），cmd 运行时按 Unicode 展开。安装器的 `stillfail.cmd`（`CmdPath`/`WriteCmd`）和 station 的 `.cmd` 外壳（`platform/windows.ts` 的 `cmdPath`）用同一条规则；不在任何这类目录下时，安装器退而用系统 OEM 代码页写（能表示才写，否则报错），station 报错不写。
-- station 从页面上自更新（`updates.ts` 的 `startInstaller`）：写 `run/update.ps1`，复制 `stillfail-station-w.exe` 到 `run/`，注册一次性计划任务「<station 的任务名> update」去跑它，跑完自己删掉任务；`update.step`/`update.log`/`update.exit` 同 Unix。不用 WMI 的 `Win32_Process.Create`：那样起 PowerShell 会被安全软件拒（实测“Access is denied”）。
+- station 从页面上自更新（`updates.ts` 的 `startInstaller`）：把这个版本自带的 `bin/install.<lang>.ps1` 复制成 `run/install.ps1`（签名校验见 [release-signing.md](release-signing.md)），写 `run/update.ps1`，复制 `stillfail-station-w.exe` 到 `run/`，注册一次性计划任务「<station 的任务名> update」去跑它，跑完自己删掉任务；`update.step`/`update.log`/`update.exit` 同 Unix。不用 WMI 的 `Win32_Process.Create`：那样起 PowerShell 会被安全软件拒（实测“Access is denied”）。
 
 ### 从 Rust 版切过来
 

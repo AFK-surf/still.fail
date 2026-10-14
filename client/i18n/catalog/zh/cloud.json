@@ -23,6 +23,7 @@
   "cloud.install.node.download": "下载 station 运行用的 Node {version}（每个版本只下载一次）…",
   "cloud.install.node.failed": "没能从 {origin} 下载 Node {version}；网络恢复后再运行一次安装命令。",
   "cloud.install.node.mismatch": "下载的 Node {version} 校验不对，没有装上；再运行一次安装命令。",
+  "cloud.install.release.mismatch": "下载的 station 和签名里说的不一样，没有装上：可能是下载被换掉了。",
   "cloud.install.unsupported": "暂时只支持 macOS（Apple 芯片）、Linux（x64、arm64）和 Windows（x64）的机器，这台是 {machine}。",
   "cloud.install.upToDate": "still.fail station 已经是最新版（{version}），不用更新。",
   "cloud.install.updateNoToken": "已经加入 workspace 的 station 更新时不需要 token：stillfail update",

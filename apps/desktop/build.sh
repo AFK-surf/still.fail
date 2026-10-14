@@ -101,6 +101,9 @@ node -e '
   // @stillfail/desktop sanitized. Not on macOS, where it names the cache of the updater.
   if (win) {
     delete b.electronDist;
+    // A publisher named: the updater then asks main.ts verifyWindowsUpdates whether the installer it downloaded is
+    // the signed one (docs/release-signing.md). The name itself is not checked (the installer is not code-signed).
+    b.publish = { ...b.publish, publisherName: ["still.fail"] };
     b.extraResources.push({ from: "build/window-controls.node", to: "window-controls.node" });
     b.extraMetadata.name = beta ? "stillfail-beta" : "stillfail";
   }

@@ -16,7 +16,7 @@
 # stillfail-beta; fail.still.android.beta: apps/android/build.py --release --beta, android/stillfail-beta-<n>.apk and
 # android/beta/latest.json).
 # promote: the test channel's station release becomes the stable one: its tarballs and station.json copied to the
-# stable names, nothing built. (The beta apps are other apps: a released app is released by release.sh desktop/android.
+# stable names, nothing built (the signed words name no channel: they hold for both). (The beta apps are other apps: a released app is released by release.sh desktop/android.
 # The web app is promoted by cloud/deploy.py promote-web.)
 # A station's release names the Node it runs on (its NODE_VERSION), which is not in it: that Node goes beside the releases, once
 # per version (node/node-v<version>-<platform>.tar.gz and its .sha256: scripts/node-dist.sh), when they lack it.
@@ -115,6 +115,11 @@ for platform in $platforms; do
       feed="stillfail${beta:+-beta}.yml"
       put "$root/apps/desktop/out/$exe" "desktop/$exe" application/vnd.microsoft.portable-executable
       put "$root/apps/desktop/out/$exe.blockmap" "desktop/$exe.blockmap" application/octet-stream
+      # Its signature, which the app checks before it installs the update (main.ts; docs/release-signing.md): before
+      # the feed that offers it.
+      rm -f "$root/apps/desktop/out/$exe.sig"
+      node "$root/scripts/release-sign.ts" file "$root/apps/desktop/out/$exe" --kind stillfail-desktop-win --build "$build" ${RELEASE_DIR:+--unsigned-ok}
+      [ ! -f "$root/apps/desktop/out/$exe.sig" ] || put "$root/apps/desktop/out/$exe.sig" "desktop/$exe.sig" application/json
       put "$root/apps/desktop/out/$feed" "desktop/$feed" "text/yaml; charset=utf-8"
       ;;
     android)
@@ -143,9 +148,11 @@ for platform in $platforms; do
         node_file="node/node-v$(cat "$root/.node-version")-$platform.tar.gz"
       fi
       putting="${putting:-} $!"
-      # Its Node, unless the releases have that version already.
+      # Its Node (cached by node-dist.sh): its binary's hash is in the signed words; put unless the releases have that
+      # version already.
+      dist=$(sh "$root/scripts/node-dist.sh" "$out/node-$platform" "$platform")
+      signing="${signing:-} $platform=$out/$file,$dist"
       if ! released "$node_file"; then
-        dist=$(sh "$root/scripts/node-dist.sh" "$out/node-$platform" "$platform")
         node_type=application/gzip; [ "$platform" = win32-x64 ] && node_type=application/zip
         put "$dist" "$node_file" "$node_type"
         put "$dist.sha256" "$node_file.sha256" "text/plain; charset=utf-8"
@@ -155,8 +162,11 @@ for platform in $platforms; do
   esac
 done
 for pid in ${putting:-}; do wait "$pid" || { echo "a station release was not put" >&2; exit 1; }; done
-# What stations read to say a newer release is out (station/src/updates/updates.ts), once its files are there.
+# What stations read to say a newer release is out (station/src/updates/updates.ts), once its files are there: its
+# version, and the words naming each archive and its Node, signed with $RELEASE_SIGNING_KEY (scripts/release-sign.ts,
+# docs/release-signing.md). Not signing is an error but into RELEASE_DIR outside CI (a dev cloud's), where it warns.
 if [ -n "${station:-}" ]; then
-  printf '{"version":"0.1.%s","build":%s,"commit":"%s"}\n' "$build" "$build" "$(git -C "$root" rev-parse HEAD)" > "$out/station.json"
+  node "$root/scripts/release-sign.ts" station "$out/station.json" --build "$build" --commit "$(git -C "$root" rev-parse HEAD)" \
+    --node "$(cat "$root/.node-version")" ${RELEASE_DIR:+--unsigned-ok} $signing
   put "$out/station.json" "station${beta:+-beta}.json" application/json
 fi

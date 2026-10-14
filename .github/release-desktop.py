@@ -82,9 +82,13 @@ with tempfile.TemporaryDirectory(prefix='stillfail-signing-', dir=os.environ.get
         installer = f'stillfail{suffix}-0.1.{version}-x64-win.exe'
         for name, mime in (
             (archive, 'application/zip'), (archive + '.blockmap', 'application/octet-stream'), (f'stillfail{suffix}-mac.yml', 'text/yaml; charset=utf-8'),
-            (installer, 'application/vnd.microsoft.portable-executable'), (installer + '.blockmap', 'application/octet-stream'), (f'stillfail{suffix}.yml', 'text/yaml; charset=utf-8'),
+            (installer, 'application/vnd.microsoft.portable-executable'), (installer + '.blockmap', 'application/octet-stream'),
+            # Its signature (scripts/release-sign.ts), which the app checks before installing it: before the feed.
+            (installer + '.sig', 'application/json'), (f'stillfail{suffix}.yml', 'text/yaml; charset=utf-8'),
         ):
             path = Path(env['RELEASE_DIR']) / 'desktop' / name
+            # Unsigned only outside CI, without RELEASE_SIGNING_KEY (release-sign.ts refuses that in CI).
+            if name.endswith('.sig') and not path.is_file() and not os.environ.get('CI'): continue
             if not path.is_file(): raise SystemExit('Expected desktop artifact missing: ' + name)
             if args.out:
                 (Path(args.out) / 'desktop').mkdir(parents=True, exist_ok=True)

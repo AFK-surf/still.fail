@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { installScript, releaseType } from "../src/install.ts";
+import { createHash } from "node:crypto";
+import { bundledInstallScript, installScript, releaseType } from "../src/install.ts";
 
 test("the installer braces every variable that words follow, so no shell takes a character for part of its name", () => {
   const script = installScript("https://ember.test");
@@ -110,8 +111,8 @@ esac
 `);
     tool("pgrep", "exit 1\n");
   }
-  const run = (args: string[] = [], env: Record<string, string> = {}) => {
-    const script = installScript("https://app.still.fail").replaceAll("/proc/sys/kernel/osrelease", osrelease);
+  const run = (args: string[] = [], env: Record<string, string> = {}, installer = installScript("https://app.still.fail")) => {
+    const script = installer.replaceAll("/proc/sys/kernel/osrelease", osrelease);
     const done = spawnSync("sh", ["-c", script, "sh", ...args], {
       // Only these: not the caller's (an agent's STILLFAIL_DATA or EMBER_DATA would aim it at the real station).
       env: { HOME: home, PATH: `${stub}:/usr/bin:/bin:/usr/sbin:/sbin`, ...env } as unknown as NodeJS.ProcessEnv,
@@ -284,6 +285,85 @@ test("a handover the new release cannot take leaves the station running on the o
     assert.equal(readFileSync(join(data, "run", "station.json"), "utf8"), said);
   } finally {
     if (pid) process.kill(pid, "SIGKILL");
+    m.done();
+  }
+});
+
+const sha256Of = (file: string) => createHash("sha256").update(readFileSync(file)).digest("hex");
+
+test("a station updating itself installs only the release its signed words name, by that release's own installer", () => {
+  const m = machine();
+  const data = join(m.home, ".stillfail");
+  try {
+    mkdirSync(join(data, "mesh"), { recursive: true });
+    writeFileSync(join(data, "mesh", "cloud.json"), '{"origin": "https://app.still.fail"}');
+    // The release carries its installer (scripts/installers.ts), here one that says it ran and what it was handed.
+    const own = bundledInstallScript("zh").replace("set -eu\n", 'set -eu\necho "its own installer: $STILLFAIL_INSTALLER_HANDED $(basename "$STILLFAIL_ARCHIVE")" >> "$HOME/said"\n');
+    const release = join(m.root, "release", "stillfail");
+    writeFileSync(join(release, "bin", "install.zh.sh"), own);
+    execFileSync("tar", ["-czf", join(m.root, "release.tar.gz"), "-C", join(m.root, "release"), "stillfail"]);
+    const sha = sha256Of(join(m.root, "release.tar.gz"));
+    const bundled = bundledInstallScript("zh");
+    const told = { STILLFAIL_ORIGIN: "https://releases.test", STILLFAIL_INSTALL_LANG: "zh" };
+
+    // Not where the station names (no STILLFAIL_ORIGIN): nothing.
+    assert.notEqual(m.run([], {}, bundled).status, 0);
+    // A download that is not the signed release: not installed.
+    const bad = m.run([], { ...told, STILLFAIL_RELEASE_SHA256: "0".repeat(64) }, bundled);
+    assert.equal(bad.status, 1, bad.out);
+    assert.match(bad.out, /签名里说的不一样/);
+    assert.ok(!existsSync(join(data, "app")), "nothing installed");
+    assert.match(bad.said, /curl .*https:\/\/releases\.test\/releases\/stillfail-station-darwin-arm64\.tar\.gz/);
+
+    // The signed one: downloaded once, then installed by the installer it carries, handed the download.
+    writeFileSync(join(m.home, "said"), "");
+    const good = m.run([], { ...told, STILLFAIL_RELEASE_SHA256: sha }, bundled);
+    assert.equal(good.status, 0, good.out);
+    assert.equal(readFileSync(join(data, "app", "VERSION"), "utf8"), "new\n");
+    assert.match(good.said, /its own installer: 1 stillfail\.tar\.gz/);
+    assert.equal(good.said.match(/^curl /gm)?.length, 1, good.said);
+    // The download it was handed is gone with its directory.
+    assert.deepEqual(readdirSync("/tmp").filter((f) => f.startsWith("stillfail-handed.") && existsSync(join("/tmp", f, "stillfail.tar.gz")) && sha256Of(join("/tmp", f, "stillfail.tar.gz")) === sha), []);
+  } finally {
+    m.done();
+  }
+});
+
+test("a station updating itself runs on the Node its signed words name, the machine's own only when it is that one", () => {
+  const m = machine();
+  const data = join(m.home, ".stillfail");
+  try {
+    mkdirSync(join(data, "mesh"), { recursive: true });
+    writeFileSync(join(data, "mesh", "cloud.json"), '{"origin": "https://app.still.fail"}');
+    const release = join(m.root, "release", "stillfail");
+    writeFileSync(join(release, "NODE_VERSION"), "24.21.0\n");
+    execFileSync("tar", ["-czf", join(m.root, "release.tar.gz"), "-C", join(m.root, "release"), "stillfail"]);
+    // The Node, as node-dist.sh keeps it (bin/node in a tarball): a stand-in that says its version.
+    const dist = join(m.root, "node");
+    mkdirSync(join(dist, "bin"), { recursive: true });
+    writeFileSync(join(dist, "bin", "node"), '#!/bin/sh\necho v24.21.0\n', { mode: 0o755 });
+    execFileSync("tar", ["-czf", join(m.root, "node.tar.gz"), "-C", dist, "bin/node"]);
+    const stub = join(m.root, "stub");
+    writeFileSync(join(stub, "curl"), `#!/bin/sh\necho "curl $*" >> "$HOME/said"\nwhile [ $# -gt 1 ]; do\n  case "$1" in */releases/node/*) node=yes ;; esac\n  [ "$1" = -o ] && { [ -n "\${node:-}" ] && cp "${join(m.root, "node.tar.gz")}" "$2" || cp "${join(m.root, "release.tar.gz")}" "$2"; }\n  shift\ndone\n`, { mode: 0o755 });
+    const told = { STILLFAIL_ORIGIN: "https://releases.test", STILLFAIL_RELEASE_SHA256: sha256Of(join(m.root, "release.tar.gz")) };
+    const bundled = bundledInstallScript("zh");
+
+    const bad = m.run([], { ...told, STILLFAIL_NODE_SHA256: "0".repeat(64) }, bundled);
+    assert.equal(bad.status, 1, bad.out);
+    assert.match(bad.out, /Node 24\.21\.0 校验不对/);
+    assert.ok(!existsSync(join(data, "node", "v24.21.0")) && !existsSync(join(data, "node", "v24.21.0.part")));
+    // No .sha256 asked for: the signed hash is the binary's own.
+    assert.doesNotMatch(bad.said, /\.sha256/);
+
+    // A machine's own node of that version that is not that very binary is not taken.
+    const ownBin = join(m.root, "own");
+    mkdirSync(ownBin);
+    writeFileSync(join(ownBin, "node"), '#!/bin/sh\n# another build\necho v24.21.0\n', { mode: 0o755 });
+    const good = m.run([], { ...told, STILLFAIL_NODE_SHA256: sha256Of(join(dist, "bin", "node")), PATH: `${stub}:${ownBin}:/usr/bin:/bin:/usr/sbin:/sbin` }, bundled);
+    assert.equal(good.status, 0, good.out);
+    assert.equal(readFileSync(join(data, "node", "v24.21.0", "bin", "node"), "utf8"), readFileSync(join(dist, "bin", "node"), "utf8"));
+    assert.match(good.said, /curl .*\/releases\/node\/node-v24\.21\.0-darwin-arm64\.tar\.gz/);
+  } finally {
     m.done();
   }
 });

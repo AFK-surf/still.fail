@@ -8,7 +8,6 @@ import { delimiter, dirname, join, win32 } from "node:path";
 import { createConnection } from "node:net";
 import { promisify } from "node:util";
 import { pidAlive, runnerBinary } from "./processes.ts";
-import type { Lang } from "../ops/i18n.ts";
 import type { Env, Found, Host, Platform } from "./index.ts";
 import { trim } from "./text.ts";
 
@@ -223,10 +222,10 @@ const host: Host = {
 /// A PowerShell string of `s`.
 const q = (s: string) => `'${s.replaceAll("'", "''")}'`;
 
-/// run/update.ps1 (startInstaller): the STILLFAIL_ (and EMBER_DATA) variables of `env`, then the cloud's install.ps1
-/// fetched into run/ and run, what it says (both streams, UTF-8) in run/update.log and its exit in run/update.exit, then
-/// `task` removed. With a BOM, as PowerShell 5.1 reads a file of non-ASCII words.
-export function windowsUpdateScript(origin: string, runDir: string, env: Record<string, string>, task: string, lang: Lang): string {
+/// run/update.ps1 (startInstaller): the STILLFAIL_ (and EMBER_DATA) variables of `env`, then run/install.ps1 (the
+/// installer the release carries, copied there) run, what it says (both streams, UTF-8) in run/update.log and its exit
+/// in run/update.exit, then `task` removed. With a BOM, as PowerShell 5.1 reads a file of non-ASCII words.
+export function windowsUpdateScript(runDir: string, env: Record<string, string>, task: string): string {
   return String.fromCharCode(0xfeff) + `${[
     ...Object.entries(env).filter(([k]) => k.startsWith("STILLFAIL_") || k === "EMBER_DATA").map(([k, v]) => `$env:${k} = ${q(v)}`),
     "[Console]::OutputEncoding = [Text.Encoding]::UTF8",
@@ -235,8 +234,6 @@ export function windowsUpdateScript(origin: string, runDir: string, env: Record<
     "$err = Join-Path $run 'update.err'",
     "$code = 1",
     "try {",
-    `  $script = Invoke-RestMethod -UseBasicParsing ${q(`${origin}/install.ps1?lang=${lang}`)}`,
-    "  [IO.File]::WriteAllText((Join-Path $run 'install.ps1'), $script, (New-Object Text.UTF8Encoding $true))",
     `  $p = Start-Process (Get-Process -Id $PID).Path -ArgumentList '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ('"' + (Join-Path $run 'install.ps1') + '"') -RedirectStandardOutput $log -RedirectStandardError $err -NoNewWindow -PassThru`,
     "  $null = $p.Handle",
     "  $p.WaitForExit()",
@@ -253,7 +250,7 @@ export function windowsUpdateScript(origin: string, runDir: string, env: Record<
 /// (`stillfail-station-w --run`, copied into run/ so the installer stopping what runs from <app> leaves it be). (Not
 /// WMI's Win32_Process.Create: PowerShell started so is what malware does, and security software refuses it.) The task
 /// starts with the user's own environment, so what this side gives it is in run/update.ps1 (windowsUpdateScript).
-function startInstaller(origin: string, runDir: string, env: Record<string, string>, app: string, lang: Lang): Promise<boolean> {
+function startInstaller(script: string, runDir: string, env: Record<string, string>, app: string): Promise<boolean> {
   const ps1 = join(runDir, "update.ps1");
   const hidden = join(runDir, "stillfail-update-w.exe");
   // The station's task as install.ps1 named it (windows.json: a station apart's), and " update".
@@ -267,7 +264,9 @@ function startInstaller(origin: string, runDir: string, env: Record<string, stri
     rmSync(join(runDir, "update.err"), { force: true });
     // Refused while an update before still runs from it.
     copyFileSync(join(app, "mesh", "target", "release", "stillfail-station-w.exe"), hidden);
-    writeFileSync(ps1, windowsUpdateScript(origin, runDir, env, task, lang));
+    // A copy: the installer replaces the release it is in.
+    copyFileSync(script, join(runDir, "install.ps1"));
+    writeFileSync(ps1, windowsUpdateScript(runDir, env, task));
   } catch {
     return Promise.resolve(false);
   }
@@ -416,6 +415,7 @@ export const windows: Platform = {
     program: "powershell",
     args: ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", "irm https://claude.ai/install.ps1 | iex"],
   },
+  installerExt: "ps1",
   startInstaller,
   /// Vite+'s command is a shim of its own (codex.cmd, codex.exe) beside vp.exe; npm's a .cmd in its global prefix,
   /// the package in node_modules beside it.

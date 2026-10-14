@@ -1,7 +1,7 @@
 // macOS and Linux (and another Unix as Linux): process groups and signals, /bin/sh, `/` paths, links. What the two
 // differ in (how the machine reads: sysctl and vm_stat, or /proc; the keychain and QuickLook) is said here too.
 import { type ChildProcess, execFile, execFileSync, spawn } from "node:child_process";
-import { chmodSync, existsSync, lstatSync, readFileSync, readlinkSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, lstatSync, readFileSync, readlinkSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { cpus as cpuList, release, type as osType } from "node:os";
 import { delimiter, join } from "node:path";
 import { promisify } from "node:util";
@@ -281,10 +281,18 @@ export const unix: Platform = {
   claudeInstall: { program: "/bin/sh", args: ["-c", "curl -fsSL https://claude.ai/install.sh | bash"] },
   /// In the background of a shell that ends at once: the installer is nobody's child here, and outlives both a handover
   /// (this process is let go) and a restart (the service's processes are stopped).
-  startInstaller(origin, runDir, env, _app, lang) {
-    const script = `( curl -fsSL "$1/install.sh?lang=$3" | sh; echo $? > "$2/update.exit" ) > "$2/update.log" 2>&1 < /dev/null &`;
+  installerExt: "sh",
+  startInstaller(script, runDir, env) {
+    // A copy: the installer replaces the release it is in.
+    const copy = join(runDir, "install.sh");
+    try {
+      copyFileSync(script, copy);
+    } catch {
+      return Promise.resolve(false);
+    }
+    const shell = `( sh "$1"; echo $? > "$2/update.exit" ) > "$2/update.log" 2>&1 < /dev/null &`;
     return new Promise<boolean>((resolve) => {
-      const child = spawn("/bin/sh", ["-c", script, "sh", origin, runDir, lang], { env, stdio: "ignore", detached: true });
+      const child = spawn("/bin/sh", ["-c", shell, "sh", copy, runDir], { env, stdio: "ignore", detached: true });
       child.on("error", () => resolve(false));
       child.on("exit", (code) => resolve(code === 0));
       child.unref();
