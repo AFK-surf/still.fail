@@ -171,7 +171,8 @@ describe("remote", { concurrency: true }, () => {
       assert.equal(unb64(await call(r, "peer-a", "file.get", { path })), expected);
     }
     await assert.rejects(call(r, "peer-b", "task.get"));
-    await assert.rejects(call(r, "peer-c", "task.prepare", spec));
+    await call(r, "peer-c", "task.prepare", spec);
+    assert.equal((await call(r, "peer-c", "task.get")).job, null, "another station's same key is a task of its own");
     await assert.rejects(call(r, "peer-a", "task.get", { session: "other" }));
     await assert.rejects(call(r, "peer-a", "task.prepare", { spec: { command: "echo wrong" } }));
     await assert.rejects(call(r, "peer-a", "file.put", { path: "input", offset: 0, data: "", final: true }));
