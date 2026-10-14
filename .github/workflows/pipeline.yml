@@ -467,6 +467,10 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: sh scripts/changelog-put.sh
+      - name: Delete the installers older than the feeds name (their blockmaps stay, for updates from them)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/release-prune.ts
 
   station-update:
     needs: [station, put]
