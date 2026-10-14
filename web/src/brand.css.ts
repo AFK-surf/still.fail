@@ -5,6 +5,7 @@ import { list, pageNarrow } from "./styles/pages.css.ts";
 import { dialogError, dialogLead, dialogTitle, tooltip } from "./ui.css.ts";
 import { newChat } from "./NewChat.css.ts";
 import { pageBar } from "./styles/sidebar.css.ts";
+import { neg, outset } from "./styles/align.ts";
 
 export const brandLockup = style({ display: "block" });
 export const illus = style({
@@ -87,10 +88,10 @@ globalStyle(`${pageNarrow} > *`, { maxWidth: "760px", marginLeft: "auto", margin
 /** Lists stand on spacing, not frames or rules: their rows' text lines up with the page's, a row's ground shows on hover. */
 /** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
 // One column no wider than the page, so a long title is cut short rather than widening its row past it.
-globalStyle(list, { listStyle: "none", margin: "0 -12px", padding: "0", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px" });
+globalStyle(list, { listStyle: "none", marginBlock: "0", ...outset(12), padding: "0", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px" });
 /** A list right in a narrow page (not in a section): in the page's column like everything else there, its rows' grounds
  * out past it by their padding. Its own margin above would take the column's centring away (it comes later). */
-globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "none", marginLeft: "max(-12px, calc(50% - 392px))", marginRight: "max(-12px, calc(50% - 392px))" });
+globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "none", marginLeft: `max(${neg(12)}, calc(50% - 392px))`, marginRight: `max(${neg(12)}, calc(50% - 392px))` });
 /** Why a dialog's action did not work, just above its buttons. */
 /** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
 globalStyle(dialogError, { margin: "12px 0 0", fontSize: vars.textUi, color: vars.red });

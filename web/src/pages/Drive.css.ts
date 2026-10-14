@@ -1,6 +1,7 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { page as settingsPage, pageHead, pageNarrow } from "../styles/pages.css.ts";
+import { neg, outset } from "../styles/align.ts";
 
 /** Not a settings page: its head up by the window's top, its name level with the sidebar's first row, the files close under it. */
 export const page = style({ position: "relative", selectors: { [`${settingsPage}&`]: { paddingTop: "12px" } } });
@@ -31,7 +32,7 @@ globalStyle(`${spin}[data-on] svg`, { animation: `${turn} 900ms linear infinite`
 /** The entries: rows on the page, a row's ground on hover; files dropped on it go into the folder. */
 export const list = style({ position: "relative", display: "grid", gap: "2px", minHeight: "200px", borderRadius: vars.rCard, cornerShape: vars.cornerShape });
 // As the settings lists: rows reaching a little past the column, their text in line with the page's.
-globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "none", marginLeft: "max(-12px, calc(50% - 392px))", marginRight: "max(-12px, calc(50% - 392px))" });
+globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "none", marginLeft: `max(${neg(12)}, calc(50% - 392px))`, marginRight: `max(${neg(12)}, calc(50% - 392px))` });
 /** A line about the folders where there are none to show (none lent yet, or none matching). */
 export const count = style({ margin: "0 12px 8px", color: vars.muted, fontSize: vars.textMeta });
 
@@ -107,7 +108,7 @@ export const pickerFilter = style({ width: "200px", flex: "none" });
 export const pickerShut = style({ display: "grid", justifyItems: "center", alignContent: "center", gap: "12px", height: "100%", padding: "0 24px", color: vars.muted, textAlign: "center", fontSize: vars.textUi, lineHeight: "1.5" });
 globalStyle(`${pickerShut} p`, { margin: "0", maxWidth: "380px" });
 /** The usual places on the left, the folders where it is on the right. */
-export const picker = style({ display: "grid", gridTemplateColumns: "180px minmax(0, 1fr)", gap: "12px", height: "min(52vh, 420px)", margin: "0 -8px" });
+export const picker = style({ display: "grid", gridTemplateColumns: "180px minmax(0, 1fr)", gap: "12px", height: "min(52vh, 420px)", marginBlock: "0", ...outset(8) });
 export const pickerPlaces = style({ display: "grid", alignContent: "start", gap: "2px", overflowY: "auto" });
 export const pickerHead = style({ padding: "4px 8px", fontSize: vars.textCaption, color: vars.muted });
 export const pickerList = style({ display: "grid", alignContent: "start", gap: "2px", overflowY: "auto" });

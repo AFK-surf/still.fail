@@ -206,6 +206,9 @@ if part ts; then
     step "type sizes from tokens" sh -c '! git grep -nE "fontSize: *(\"[0-9.]+(px|rem)|[0-9])|font: *\"[^\"]*[0-9.]+px" -- "web/src/*.css.ts"'
     # Three weights: 400, 500 to stand out, 600 for titles (the official site's hero aside).
     step "three type weights" sh -c '! git grep -nE "fontWeight: *\"?(100|200|300|[5-6][1-9]0|[5-6][0-9][1-9]|7[0-9]{2}|8[0-9]{2}|9[0-9]{2}|bold|bolder|lighter)\b" -- "web/src/*.css.ts" ":!web/src/site/"'
+    # No margin taken back by hand: a ground reaching past its words, a corner, a column, a centring is one of
+    # styles/align.ts's (bleedX, surface, columns, centred…), so its numbers are said once (a var's own negative may be).
+    step "no hand-written negative margins" sh -c '! git grep -nE "margin[A-Za-z]*: *(-[0-9]|[\"\`][^\"\`]*[ (]-[0-9]|[\"\`]-[0-9])" -- "web/src/*.css.ts" | grep -v "calc(-1 \* var("'
   fi
   # Core tests also run for Rust-only client changes. A fresh CI checkout needs both
   # their JS dependencies and the real wasm package even when no TS file changed.

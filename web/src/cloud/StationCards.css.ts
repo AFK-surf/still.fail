@@ -2,6 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { btn } from "../styles/controls.css.ts";
 import { cardLook } from "../styles/pages.css.ts";
+import { bleedX, outsetBottom } from "../styles/align.ts";
 
 export const name = style({
   padding: "0", border: "0", background: "none", font: "inherit", cursor: "pointer",
@@ -93,8 +94,8 @@ export const peekRates = style({ display: "grid", gridTemplateColumns: "auto 1fr
  * (Hover.css.ts `card`, padded 10px 12px), it sits as far from the bottom as from the sides, its corners the card's own
  * shape less that distance: a fixed small radius left a wedge against the card's rounder corner. */
 export const peekLink = style({
-  display: "flex", alignItems: "center", justifyContent: "space-between", margin: "0 -6px", padding: "5px 6px",
+  display: "flex", alignItems: "center", justifyContent: "space-between", marginBlock: "0", paddingBlock: "5px", ...bleedX(6),
   borderRadius: `calc(${vars.rMenu} - 6px)`, cornerShape: vars.cornerShape,
   fontSize: vars.textMeta, color: vars.muted, textDecoration: "none",
-  selectors: { "&:hover": { color: vars.text, background: vars.hover }, "&:last-child": { marginBottom: "-4px" } },
+  selectors: { "&:hover": { color: vars.text, background: vars.hover }, "&:last-child": outsetBottom(4) },
 });

@@ -7,6 +7,7 @@ import { gate, muted } from "./styles/shell.css.ts";
 import { pageBar } from "./styles/sidebar.css.ts";
 import { markdown } from "./styles/conversation.css.ts";
 import { card, listRow } from "./styles/pages.css.ts";
+import { outsetStart } from "./styles/align.ts";
 
 export const firstOneTitle = style({
   textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere", margin: "12px 0 0", fontSize: vars.textTitle,
@@ -275,7 +276,7 @@ export const mobileBack = style({
 /** A detail page's way back, on every screen, above its header. */
 export const pageBackRow = style({ display: "flex", alignItems: "center", height: "24px", marginBottom: "14px" });
 export const pageBack = style({
-  display: "inline-flex", alignItems: "center", gap: "2px", marginLeft: "-4px", color: vars.muted,
+  display: "inline-flex", alignItems: "center", gap: "2px", ...outsetStart(4), color: vars.muted,
   fontSize: vars.textUi, lineHeight: "20px", textDecoration: "none",
   selectors: {
     "&:hover": { color: vars.text },

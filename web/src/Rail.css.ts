@@ -4,6 +4,8 @@ import { navFoot, stationRow, stationTrouble } from "./Sidebar.css.ts";
 import { floatingThumb } from "./scrollbars.css.ts";
 import { dock } from "./styles/shell.css.ts";
 import { vars } from "./styles/tokens.css.ts";
+import { outsetBottom } from "./styles/align.ts";
+import { surfaceVars } from "./styles/align.ts";
 
 const wide = "(min-width: 701px)";
 const narrow = "(max-width: 700px)";
@@ -31,7 +33,7 @@ export const top = style({
   selectors: {
     "[data-desktop] &": { height: 41, WebkitAppRegion: "drag" },
     // In the closed bar nothing: its places stand as far from its top as from its sides (rail's padding).
-    '[data-sidebar="closed"] &': { height: 0, marginBottom: -6 },
+    '[data-sidebar="closed"] &': { height: 0, ...outsetBottom(6) },
   },
 });
 /**
@@ -185,7 +187,7 @@ export const remove = style({
 export const adder = style({
   width: 248, display: "grid", gap: 8,
   // More room than a menu: over the popover's own, whichever sheet comes first; its rows concentric with it.
-  selectors: { "&[data-side]": { vars: { "--panel-pad": "12px", "--panel-in": `calc(${vars.rMenu} - 12px)` } } },
+  selectors: { "&[data-side]": { vars: surfaceVars(12, `calc(${vars.rMenu} - 12px)`) } },
 });
 export const zouSmall = style({ fontSize: vars.textBody, lineHeight: "18px", fontWeight: 600 });
 

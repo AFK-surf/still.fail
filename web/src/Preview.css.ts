@@ -8,6 +8,7 @@ import { enrollWait } from "./cloud/settings.css.ts";
 import { sidePanel } from "./pages/ChatPage.css.ts";
 import { composerQuote, msgUnsent } from "./Chat.css.ts";
 import { hPhaseText } from "./History.css.ts";
+import { surface } from "./styles/align.ts";
 
 /** A web service on the station's machine, in the side panel: where it is, then the page. */
 export const preview = style({ flex: "1", minHeight: "0", display: "flex", flexDirection: "column" });
@@ -76,7 +77,7 @@ globalStyle(`${enrollWait} > span:last-child`, { display: "grid", gap: "2px", fo
 
 export const loadRing = style({ color: vars.muted, flex: "none", selectors: { '&[data-failed]': { color: vars.red } } });
 export const loadDetails = style({
-  zIndex: 1000, width: "min(420px, calc(100vw - 24px))", padding: "12px", borderRadius: vars.rMenu, cornerShape: vars.cornerShape,
+  zIndex: 1000, width: "min(420px, calc(100vw - 24px))", ...surface(12, `calc(${vars.rMenu} - 12px)`),
   ...panel, color: vars.text,
   boxShadow: `0 12px 32px ${vars.shadow}`, fontSize: vars.textUi,
 });

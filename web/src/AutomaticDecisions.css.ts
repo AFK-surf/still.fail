@@ -1,5 +1,6 @@
 import { style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
+import { bleedX } from "./styles/align.ts";
 
 // Layout only: controls, popovers, switches and record text use the shared components.
 export const content = style({});
@@ -15,7 +16,7 @@ export const policyRow = style({ minHeight: 40, paddingLeft: 31, color: "inherit
 export const policy = style({ display: "grid", gap: 12 });
 export const policyHead = style({ display: "flex", alignItems: "center", gap: 8, minHeight: 28 });
 export const policyWords = style({
-  margin: 0, padding: "8px 10px", marginInline: -10, fontSize: vars.textUi, lineHeight: "1.6", whiteSpace: "pre-wrap", overflowWrap: "anywhere",
+  margin: 0, paddingBlock: 8, ...bleedX(10), fontSize: vars.textUi, lineHeight: "1.6", whiteSpace: "pre-wrap", overflowWrap: "anywhere",
   textAlign: "left", background: "none", border: "none", color: "inherit", font: "inherit", cursor: "pointer",
   borderRadius: vars.rField, cornerShape: vars.cornerShape, transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: { "&:hover:not(:disabled)": { background: vars.list }, "&:disabled": { cursor: "default" } },
@@ -24,7 +25,7 @@ export const policyText = style({ resize: "vertical", lineHeight: "1.6" });
 export const policyGroup = style({ display: "grid", gap: 2, justifyItems: "start" });
 export const policyGroupName = style({ fontSize: vars.textMeta, color: vars.muted, fontWeight: 600, padding: "4px 0" });
 export const option = style({
-  display: "flex", alignItems: "baseline", gap: 12, padding: "8px 10px", marginInline: -10, width: "calc(100% + 20px)", textAlign: "left",
+  display: "flex", alignItems: "baseline", gap: 12, paddingBlock: 8, ...bleedX(10), width: "calc(100% + 20px)", textAlign: "left",
   background: "none", border: "none", color: "inherit", font: "inherit", cursor: "pointer", minWidth: 0,
   borderRadius: vars.rField, cornerShape: vars.cornerShape, transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: { "&:hover:not(:disabled)": { background: vars.list }, "&:disabled": { cursor: "default" } },

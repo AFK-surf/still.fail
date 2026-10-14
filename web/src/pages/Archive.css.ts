@@ -1,5 +1,6 @@
 import { style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
+import { inLine, outsetEnd } from "../styles/align.ts";
 
 // The archive: one row a chat, its title with when (and where) at the end of its line, its last message the whole
 // line under it; what can be done with it in when's place while it is pointed at. No lines between.
@@ -23,7 +24,7 @@ export const archiveWhen = style({
 });
 /** In the title's line without making it taller. */
 export const archiveActions = style({
-  display: "none", gap: "2px", flex: "none", alignSelf: "center", margin: "-4px -4px -4px 0",
+  display: "none", gap: "2px", flex: "none", alignSelf: "center", marginInlineStart: 0, ...inLine(8), ...outsetEnd(4),
   selectors: { [`${archiveRow}:is(:hover, :focus-within) &`]: { display: "flex" } },
   // No pointer to point with: always there.
   "@media": { "(hover: none)": { display: "flex" } },

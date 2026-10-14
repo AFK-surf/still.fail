@@ -3,6 +3,7 @@ import { vars } from "./styles/tokens.css.ts";
 import { phrase } from "./styles/base.css.ts";
 import { runtimeTags } from "./styles/waiting.css.ts";
 import { btn } from "./styles/controls.css.ts";
+import { outset } from "./styles/align.ts";
 
 /**
  * A profile or an account (ProfileCard.tsx), laid out by its own width: in one line when wide; name and state over what
@@ -13,7 +14,7 @@ export const profileCard = style({
   cornerShape: vars.cornerShape, fontSize: vars.textUi, color: "inherit", textDecoration: "none",
   selectors: {
     // Standing alone (not a row of a list): its text lines up with what is around it.
-    "&[data-framed]": { margin: "0 -12px" },
+    "&[data-framed]": { marginBlock: 0, ...outset(12) },
   },
 });
 export const profileCardLink = style({

@@ -10,6 +10,7 @@ import { chooserMenu } from "./styles/chat.css.ts";
 import { accountMenu } from "./cloud/workspace.css.ts";
 import { detailRow, details, sideContent } from "./pages/ChatPage.css.ts";
 import { msgRoute } from "./Chat.css.ts";
+import { bleedStart, bleedX, columns } from "./styles/align.ts";
 
 export const history = style({
   minWidth: "0", minHeight: "0", display: "flex", flexDirection: "column", borderLeft: `1px solid ${vars.line}`,
@@ -25,7 +26,7 @@ export const historyHead = style({
 /** What is too long is cut at its end; its start has the room the model control stands out by (ModelTriple.css.ts). */
 export const historyIdentity = style({
   display: "flex", alignItems: "center", gap: "6px", flex: "1", minWidth: "0", fontSize: vars.textUi, color: vars.muted,
-  whiteSpace: "nowrap", overflow: "hidden", marginLeft: "-11px", paddingLeft: "11px",
+  whiteSpace: "nowrap", overflow: "hidden", ...bleedStart(columns.modelControl),
 });
 export const historyTools = style({ display: "flex", alignItems: "center", gap: "2px", flex: "none" });
 export const usage = style({
@@ -101,7 +102,7 @@ export const hText = style({ color: vars.text });
 export const hSub = style({ paddingLeft: "14px", borderLeft: `2px dashed ${vars.lineStrong}` });
 export const hGroup = style({ borderRadius: `calc(12px * ${vars.cornerScale})`, cornerShape: vars.cornerShape });
 export const hGroupHead = style({
-  display: "flex", alignItems: "center", gap: "6px", width: "100%", padding: "6px 8px", margin: "0 -8px", border: "0",
+  display: "flex", alignItems: "center", gap: "6px", width: "100%", paddingBlock: "6px", marginBlock: "0", ...bleedX(8), border: "0",
   borderRadius: `calc(10px * ${vars.cornerScale})`, background: "none", color: vars.muted, fontSize: vars.textMeta,
   lineHeight: "18px", textAlign: "left", cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {

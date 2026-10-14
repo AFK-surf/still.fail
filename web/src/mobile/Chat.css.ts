@@ -2,6 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { jobDot } from "../Jobs.css.ts";
 import { mChat, mMessages } from "./styles/chat.css.ts";
+import { outsetTop } from "../styles/align.ts";
 
 export const mCenter = style({
   flex: "1", display: "grid", placeItems: "center", padding: "32px", textAlign: "center", fontSize: vars.textUi,
@@ -13,7 +14,7 @@ globalStyle(`${mInfoHead} > b`, {
   display: "-webkit-box", WebkitLineClamp: "2", WebkitBoxOrient: "vertical", overflow: "hidden",
 });
 export const mInfoEdit = style({
-  display: "grid", placeItems: "center", flex: "none", width: "32px", height: "32px", marginTop: "-4px", padding: "0", border: "0",
+  display: "grid", placeItems: "center", flex: "none", width: "32px", height: "32px", ...outsetTop(4), padding: "0", border: "0",
   borderRadius: "50%", background: "color-mix(in srgb, var(--m-ink) 5%, transparent)", cursor: "pointer",
 });
 /** Who started it, how many take part, when it was last written in: a quiet line under its name. */

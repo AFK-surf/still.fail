@@ -8,6 +8,7 @@ import { mReaderBar, mSheetHead } from "./app.css.ts";
 import { mAttach, mChatBar, mChatBarTitle, mInfoAgent, mInfoStatus, mJobHead } from "./Chat.css.ts";
 import { mSteps } from "./styles/settings.css.ts";
 import { mHomeBar, mHomeWorkspace } from "./Home.css.ts";
+import { outsetTop } from "../styles/align.ts";
 
 export const mMaker = style({
   display: "block", flex: "none",
@@ -95,7 +96,7 @@ export const mNavbarBack = style({ gridColumn: "1", justifySelf: "start", displa
 export const mNavbarTitle = style({
   gridColumn: "2", display: "flex", flexDirection: "column", alignItems: "center", minWidth: "0", textAlign: "center",
 });
-export const mNavbarSub = style({ display: "flex", alignItems: "center", gap: "5px", maxWidth: "100%", marginTop: "-4px" });
+export const mNavbarSub = style({ display: "flex", alignItems: "center", gap: "5px", maxWidth: "100%", ...outsetTop(4) });
 export const mNavbarTrailing = style({ gridColumn: "3", justifySelf: "end", display: "flex", alignItems: "center", height: "32px" });
 export const mTopBack = style({ padding: "calc(var(--m-top) + 6px) 0 4px 10px" });
 /** A top bar with a button at its end as well (a page's ＋). */

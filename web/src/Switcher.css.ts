@@ -7,6 +7,8 @@ import { DIALOG_PAD } from "./ui.css.ts";
 
 const EDGE = 12;
 import { fadeKeyframes, popKeyframes } from "./styles/keyframes.css.ts";
+import { centredX } from "./styles/align.ts";
+import { inner, surface } from "./styles/align.ts";
 
 const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
 
@@ -15,9 +17,9 @@ export const overlay = style({
   animation: `${fadeKeyframes} 120ms ${vars.easeOut}`,
 });
 export const switcher = style({
-  position: "fixed", left: "50%", top: "14vh", zIndex: "50", marginLeft: "calc(min(560px, 100vw - 32px) / -2)",
+  position: "fixed", top: "14vh", zIndex: "50", ...centredX,
   display: "flex", flexDirection: "column", width: "min(560px, calc(100vw - 32px))", maxHeight: "min(480px, 72vh)",
-  padding: `${EDGE}px`, borderRadius: `calc(${DIALOG_PAD + 18}px * ${vars.cornerScale})`, color: vars.text, ...panel,
+  ...surface(EDGE, `calc(${DIALOG_PAD + 18}px * ${vars.cornerScale} - ${EDGE}px)`), color: vars.text, ...panel,
   boxShadow: `0 24px 64px ${vars.shadow}`, transformOrigin: "top", animation: `${popKeyframes} 140ms ${vars.easeOut}`,
   cornerShape: vars.cornerShape, outline: "none",
 });
@@ -29,7 +31,7 @@ export const search = style({
 });
 export const results = style({ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 0" });
 export const row = style({
-  display: "flex", alignItems: "center", gap: 10, minHeight: 38, padding: `8px ${DIALOG_PAD - EDGE}px`, borderRadius: `calc(${DIALOG_PAD + 18 - EDGE}px * ${vars.cornerScale})`,
+  display: "flex", alignItems: "center", gap: 10, minHeight: 38, padding: `8px ${DIALOG_PAD - EDGE}px`, borderRadius: inner,
   fontSize: vars.textUi, cursor: "pointer", userSelect: "none", cornerShape: vars.cornerShape,
   // A shade of the text, as the menus' rows are lit.
   selectors: { '&[aria-selected="true"]': { background: `color-mix(in srgb, ${vars.text} 7%, transparent)` } },

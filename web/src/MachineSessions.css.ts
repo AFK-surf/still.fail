@@ -1,6 +1,7 @@
 // The new chat page's way to go on with a session the machine kept (MachineSessions.tsx).
 import { style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
+import { outset } from "./styles/align.ts";
 
 const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
 
@@ -12,7 +13,7 @@ export const offer = style({
   selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
 
-export const list = style({ listStyle: "none", margin: "0 -12px", padding: 0, display: "grid", gap: 2 });
+export const list = style({ listStyle: "none", marginBlock: 0, ...outset(12), padding: 0, display: "grid", gap: 2 });
 
 export const row = style({
   width: "100%", display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", alignItems: "center", gap: 12,

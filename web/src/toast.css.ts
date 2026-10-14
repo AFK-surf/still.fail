@@ -14,6 +14,7 @@ import { groupHead } from "./cloud/settings.css.ts";
 import { details, detailsList, jobsPanel } from "./pages/ChatPage.css.ts";
 import { activityLine, attachBtn, fileCard, fileCardOpen, msgFiles, msgImage, msgUnsentNote, quoteCards, sendBtn } from "./Chat.css.ts";
 import { hPlace } from "./History.css.ts";
+import { bleedX, bleedY, overlap } from "./styles/align.ts";
 
 export const toastViewport = style({
   // The window's width, its toast in the middle (centred by moving it half its own width, a long one was held to half
@@ -43,7 +44,7 @@ globalStyle(`${chatList} > *`, { width: "100%", maxWidth: "760px", marginLeft: "
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(quotaNote, { margin: "0", fontSize: vars.textUi });
 /** Here rather than with its class: it comes after .toast-viewport, and wins over it. */
-globalStyle(`${peopleStack} > *`, { marginLeft: "-4px", boxShadow: `0 0 0 1.5px ${vars.sidebar}` });
+globalStyle(`${peopleStack} > *`, { ...overlap(4), boxShadow: `0 0 0 1.5px ${vars.sidebar}` });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(groupHead, { marginLeft: "0", marginRight: "0" });
 /** A profile's enabled models, as chips. */
@@ -144,8 +145,8 @@ globalStyle(fileCardOpen, {
  */
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(activityLine, {
-  display: "flex", alignItems: "center", gap: "8px", minWidth: "0", minHeight: "0", overflow: "hidden", padding: "6px",
-  margin: "-6px", border: "0", background: "none", font: "inherit", fontSize: vars.textUi, textAlign: "left",
+  display: "flex", alignItems: "center", gap: "8px", minWidth: "0", minHeight: "0", overflow: "hidden", ...bleedX(6), ...bleedY(6),
+  border: "0", background: "none", font: "inherit", fontSize: vars.textUi, textAlign: "left",
   color: vars.muted, cursor: "pointer",
 });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */

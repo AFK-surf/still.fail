@@ -7,6 +7,7 @@ import { segmented, segmentedOption } from "./ui.css.ts";
 import { detailsList, jobsPanel } from "./pages/ChatPage.css.ts";
 import { activityLine, agentActivity, composerThumb, msgFlash, msgWaitingLate } from "./Chat.css.ts";
 import { tokenGuide } from "./pages/SlackApp.css.ts";
+import { outsetStart } from "./styles/align.ts";
 
 export const jobDot = style({
   position: "relative", flex: "none", width: "8px", height: "8px", borderRadius: "50%", background: vars.lineStrong,
@@ -79,7 +80,7 @@ export const jobLast = style({
   display: "flex", flexDirection: "column", gap: "2px", marginTop: "10px", fontSize: vars.textCaption, color: vars.subtle,
   minWidth: "0",
 });
-export const jobActions = style({ display: "flex", gap: "2px", margin: "6px 0 0 -8px" });
+export const jobActions = style({ display: "flex", gap: "2px", marginTop: "6px", ...outsetStart(8) });
 export const jobAction = style({
   display: "inline-flex", alignItems: "center", gap: "5px", height: "26px", padding: "0 8px", border: "0",
   borderRadius: `calc(8px * ${vars.cornerScale})`, background: "none", color: vars.muted, font: "inherit",

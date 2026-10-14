@@ -12,6 +12,7 @@ import { onboardingRow } from "./cloud/settings.css.ts";
 import { sessionHead } from "./pages/ChatPage.css.ts";
 import { composerChoices } from "./Chat.css.ts";
 import { spinner } from "./styles/waiting.css.ts";
+import { columns, outsetStart, outsetTop } from "./styles/align.ts";
 
 /** A series of models in the control's list: its models one under another, each as wide as the list. */
 export const series = style({ display: "flex", flexDirection: "column", gap: 1 });
@@ -110,7 +111,7 @@ export const modelTripleFit = style({
   selectors: {
     // In a row of a list, a ring's mark sits beside it, so the ring is on the row's line.
     // Where it heads text, the control's text lines up with the text under it (its border and padding stand out).
-    [`:is(${sessionHead}, ${card}) > &`]: { marginLeft: "-11px" },
+    [`:is(${sessionHead}, ${card}) > &`]: outsetStart(columns.modelControl),
   },
 });
 export const tripleModel = style({
@@ -175,7 +176,7 @@ globalStyle(`${modelTriple} ${quotaChips}`, { marginLeft: "2px" });
 globalStyle(`${modelTriple} ${chooserChevron}`, { color: vars.muted, flex: "none" });
 globalStyle(`${runPickerGroup} h5`, { margin: "8px 8px 2px", fontSize: vars.textMeta, lineHeight: "18px", fontWeight: "500", color: vars.subtle });
 /** Here rather than with its class: it comes after .composer-choices > :not(.model-triple-fit), and wins over it. */
-globalStyle(`${runCardRow} > ${modelTripleFit}`, { flex: "1 1 auto", marginTop: "-5px" });
+globalStyle(`${runCardRow} > ${modelTripleFit}`, { flex: "1 1 auto", ...outsetTop(5) });
 /** Here rather than with its class: it comes after .composer-choices > :not(.model-triple-fit), and wins over it. */
 globalStyle(`${onboardingRow} ${input}`, { flex: "1", minWidth: "0" });
 

@@ -1,6 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { fadeInKeyframes } from "./styles/keyframes.css.ts";
+import { centredX, centredY } from "./styles/align.ts";
 
 /** Frosted, as the composer is. */
 const glass = {
@@ -55,8 +56,8 @@ export const edge = style({
       content: "\"\"", position: "absolute", borderRadius: "999px", background: vars.muted, opacity: "0",
       transition: `opacity ${vars.dur} ${vars.easeOut}`,
     },
-    "&[data-side=right]::after": { left: "5px", top: "50%", width: "4px", height: "36px", marginTop: "-18px" },
-    "&[data-side=bottom]::after": { top: "5px", left: "50%", width: "36px", height: "4px", marginLeft: "-18px" },
+    "&[data-side=right]::after": { left: "5px", ...centredY, width: "4px", height: "36px" },
+    "&[data-side=bottom]::after": { top: "5px", ...centredX, width: "36px", height: "4px" },
     "&[data-side=corner]::after": { display: "none" },
     [`${stage}:hover &::after`]: { opacity: ".45" },
     "&:hover::after, :root[data-viewport-resizing] &::after": { opacity: "1" },

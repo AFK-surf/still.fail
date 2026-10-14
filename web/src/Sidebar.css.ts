@@ -6,6 +6,7 @@ import { accountTrigger } from "./cloud/workspace.css.ts";
 import { iconBtn } from "./styles/pages.css.ts";
 import { dock, shell } from "./styles/shell.css.ts";
 import { kindIcon, kindMark, resizeHandle } from "./ui.css.ts";
+import { outsetEnd, oversize } from "./styles/align.ts";
 
 const wide = "(min-width: 701px)";
 const narrow = "(max-width: 700px)";
@@ -202,7 +203,7 @@ export const sessionKind = style({
 });
 globalStyle(`${sessionKind} ${kindIcon}`, { width: 14, height: 14 });
 // The buddy has air around it in its artwork: at 16px it reads as big as the 14px platform marks.
-globalStyle(`${sessionKind} ${kindMark}`, { margin: -1 });
+globalStyle(`${sessionKind} ${kindMark}`, oversize(1));
 /** Archive, beside a row while pointed at: centred on the title line (20px tall, 7px down the row). */
 export const rowArchive = style({
   position: "absolute", top: 5, right: 6, width: 24, height: 24, opacity: 0, pointerEvents: "none",
@@ -228,7 +229,7 @@ globalStyle(`${stationRow} > ${stationTrouble}`, { marginBottom: 0 });
 globalStyle(`${stationRow}:not(:has(> ${stationTrouble}[data-state], > * > ${stationTrouble}[data-state]))`, { "@media": { [wide]: { display: "none" } } });
 globalStyle(`${stationRow} > ${stationTrouble}[data-retry]`, { paddingRight: 64 });
 export const waitingRetry = style({
-  flex: "none", height: 22, padding: "0 10px", marginRight: -4, borderRadius: 999, border: 0, cursor: "pointer",
+  flex: "none", height: 22, padding: "0 10px", ...outsetEnd(4), borderRadius: 999, border: 0, cursor: "pointer",
   background: vars.hover, color: vars.text, fontSize: vars.textUi, display: "inline-flex", alignItems: "center", gap: 5,
   selectors: {
     "&:hover:not(:disabled)": { background: vars.line },

@@ -5,12 +5,13 @@
 import { keyframes, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { panel } from "./styles/glass.ts";
+import { surface } from "./styles/align.ts";
 
 const enter = keyframes({ from: { opacity: "0", transform: "scale(.96)", filter: "blur(2px)" } });
 const exit = keyframes({ to: { opacity: "0", transform: "scale(.97)" } });
 
 export const card = style({
-  zIndex: "60", width: "320px", maxWidth: "calc(100vw - 16px)", padding: "12px", borderRadius: vars.rMenu, ...panel,
+  zIndex: "60", width: "320px", maxWidth: "calc(100vw - 16px)", ...surface(12, `calc(${vars.rMenu} - 12px)`), ...panel,
   boxShadow: `0 12px 32px ${vars.shadow}`, color: vars.text, fontSize: vars.textUi, lineHeight: "1.45",
   transformOrigin: "var(--radix-hover-card-content-transform-origin)", cornerShape: vars.cornerShape,
   selectors: {

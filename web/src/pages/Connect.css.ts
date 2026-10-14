@@ -1,14 +1,15 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
+import { bleedX, bleedY, outsetTop } from "../styles/align.ts";
 
 export const kindTag = style({ display: "inline-flex", alignItems: "center", gap: "5px", color: vars.text });
 export const listRowTime = style({ flex: "none", minWidth: "5.5em", textAlign: "right", fontSize: vars.textMeta });
 export const moreSessions = style({ marginTop: "8px" });
-export const pageError = style({ margin: "-16px 0 20px" });
+export const pageError = style({ marginInline: 0, marginBottom: "20px", ...outsetTop(16) });
 export const dialogStep = style({
   fontSize: vars.textUi, fontWeight: "400", color: vars.muted, fontVariantNumeric: "tabular-nums",
 });
-export const sessionChoices = style({ maxHeight: "min(52vh, 460px)", overflowY: "auto", padding: "2px", margin: "-2px" });
+export const sessionChoices = style({ maxHeight: "min(52vh, 460px)", overflowY: "auto", ...bleedX(2), ...bleedY(2) });
 export const stepActions = style({});
 export const ownerLine = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
 export const inputLink = style({

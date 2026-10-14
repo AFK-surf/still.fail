@@ -33,7 +33,7 @@ export const mHomePane = style({
 export const mPull = style({
   vars: { "--pull": "0", "--gap": "0px" },
   position: "absolute", top: "calc(var(--m-top) + 58px)", left: "50%", zIndex: "2", display: "grid", placeItems: "center",
-  width: "36px", height: "36px", marginLeft: "-18px", borderRadius: "50%", color: "var(--m-subtle)", pointerEvents: "none",
+  width: "36px", height: "36px", translate: "-50% 0", borderRadius: "50%", color: "var(--m-subtle)", pointerEvents: "none",
   opacity: "var(--pull)", transform: "translateY(calc(var(--gap) / 2 - 18px)) scale(calc(.6 + var(--pull) * .4))",
   transition: "opacity 200ms var(--m-ease), transform 200ms var(--m-ease), color 120ms",
   selectors: {

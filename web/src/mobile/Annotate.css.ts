@@ -1,6 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { popKeyframes } from "../styles/keyframes.css.ts";
+import { bleedX, bleedY } from "../styles/align.ts";
 
 export const mAnnotate = style({});
 export const mAnnotateScroll = style({
@@ -30,7 +31,7 @@ globalStyle("::highlight(annotate-open)", {
 
 /** An end of the picked passage: a line down its side with a knob, and room round it for a finger. */
 export const mHandle = style({
-  position: "absolute", width: "2px", marginLeft: "-1px", background: "var(--m-accent)", touchAction: "none", zIndex: "2",
+  position: "absolute", width: "2px", translate: "-50% 0", background: "var(--m-accent)", touchAction: "none", zIndex: "2",
   selectors: {
     // The finger's room: 36px round the knob.
     "&::before": { content: "", position: "absolute", left: "-17px", width: "36px", height: "36px" },
@@ -102,7 +103,7 @@ export const mNoteDone = style({
 /** The notes as they are made, gathered over the foot's buttons in a row that scrolls sideways: a tap goes back to one. */
 export const mTray = style({
   // Room round the cards inside the row (it clips what is outside it, as a row that scrolls does), taken back outside.
-  pointerEvents: "auto", display: "flex", gap: "8px", listStyle: "none", margin: "-12px -16px -12px", padding: "12px 16px",
+  pointerEvents: "auto", display: "flex", gap: "8px", listStyle: "none", ...bleedX(16), ...bleedY(12),
   overflowX: "auto", scrollbarWidth: "none", overscrollBehaviorX: "contain",
 });
 export const mCard = style({

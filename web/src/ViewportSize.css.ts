@@ -2,6 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { panel as ground } from "./styles/glass.ts";
 import { fadeInKeyframes, mRiseInKeyframes, popKeyframes } from "./styles/keyframes.css.ts";
+import { inner, surface } from "./styles/align.ts";
 
 /** The bar's button: its icon alone, or with the size the page is laid out at (and how much it is drawn at). */
 export const button = style({
@@ -23,7 +24,7 @@ export const buttonText = style({
 export const buttonScale = style({ color: vars.muted, fontWeight: "400" });
 
 export const popover = style({
-  zIndex: "60", width: "256px", padding: "6px", borderRadius: vars.rMenu, cornerShape: vars.cornerShape,
+  zIndex: "60", width: "256px", ...surface(6, `calc(${vars.rMenu} - 6px)`),
   ...ground, boxShadow: `0 12px 32px ${vars.shadow}`,
   transformOrigin: "var(--radix-popper-transform-origin, top right)", animation: `${popKeyframes} 140ms ${vars.easeOut}`,
   outline: "none",
@@ -47,7 +48,7 @@ export const sheetTitle = style({ margin: "0 8px 8px", fontSize: vars.textTitle,
 export const panel = style({ display: "flex", flexDirection: "column" });
 export const option = style({
   display: "flex", alignItems: "center", gap: "8px", width: "100%", height: "34px", padding: "0 10px 0 8px",
-  border: "0", borderRadius: `calc(${vars.rMenu} - 6px)`, cornerShape: vars.cornerShape, background: "none", color: vars.text,
+  border: "0", borderRadius: inner, cornerShape: vars.cornerShape, background: "none", color: vars.text,
   font: "inherit", fontSize: vars.textUi, textAlign: "left", cursor: "pointer", outline: "none",
   selectors: {
     "&:hover, &:focus-visible": { background: vars.hover },

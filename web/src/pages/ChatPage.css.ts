@@ -7,6 +7,8 @@ import { panelRow, resizeHandle } from "../ui.css.ts";
 import { sessionMain } from "../styles/jobs.css.ts";
 import { windowsEmoji } from "../StationMark.css.ts";
 import { pageBar } from "../styles/sidebar.css.ts";
+import { bleedX, outset, outsetBottom, outsetTop } from "../styles/align.ts";
+import { surfaceVars } from "../styles/align.ts";
 
 export const agentMarkBtn = style({
   display: "inline-grid", padding: "0", border: "0", background: "none", cursor: "pointer",
@@ -82,7 +84,7 @@ export const sideTabText = style({
     },
   },
 });
-export const chatInfo = style({ width: "320px", vars: { "--panel-pad": "12px", "--panel-in": `calc(${vars.rMenu} - 12px)` } });
+export const chatInfo = style({ width: "320px", vars: surfaceVars(12, `calc(${vars.rMenu} - 12px)`) });
 export const detailsList = style({
   selectors: {
     [`${chatInfo} &`]: { marginTop: "10px" },
@@ -105,7 +107,7 @@ export const sessionDetails = style({
   display: "flex", flexDirection: "column", gap: "10px", padding: "2px 16px 14px",
   fontSize: vars.textMeta, lineHeight: vars.leadingMeta, color: vars.muted,
 });
-export const sessionQuiet = style({ margin: "-4px 0 0", overflowWrap: "anywhere" });
+export const sessionQuiet = style({ marginInline: 0, marginBottom: 0, ...outsetTop(4), overflowWrap: "anywhere" });
 export const sessionLine = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: "0" });
 export const sessionLineMark = style({ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "16px", flex: "none" });
 export const sessionLineText = style({ flex: "1 1 auto", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
@@ -177,7 +179,7 @@ export const detailInline = style({ display: "inline-flex", alignItems: "center"
  * icons stand under the details' words (12 in: 6 + 3 + the 14 icon in the middle of its 20).
  */
 export const infoRows = style({
-  display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px", margin: "8px -6px -6px",
+  display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px", marginTop: "8px", ...outset(6), ...outsetBottom(6),
   vars: { "--panel-in": `calc(${vars.rMenu} - 6px)` },
 });
 globalStyle(`${infoRows} ${panelRow}`, { padding: "0 6px 0 3px" });
@@ -186,7 +188,7 @@ export const shareText = style({
   minWidth: "0", color: vars.muted, fontSize: vars.textMeta, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 /** In its dialog, the workspaces to tick, then whether their agents may send. */
-export const shareList = style({ margin: "0 -12px", padding: "0", listStyle: "none" });
+export const shareList = style({ marginBlock: "0", ...outset(12), padding: "0", listStyle: "none" });
 export const shareWrite = style({ marginTop: "8px" });
 export const detailLink = style({
   display: "inline-flex", alignItems: "center", gap: "6px", flex: "none", whiteSpace: "nowrap",
@@ -249,7 +251,7 @@ globalStyle(`${sidePanel} ${resizeHandle}`, {
 globalStyle(`${sideBar} ${sideTabList}`, { flex: "1", minWidth: "0", height: "auto", padding: "0", borderBottom: "0" });
 /** The chat's title when it can be renamed: pressed, it turns into the field (Rename.css.ts titleInputBar) in the same box. */
 export const titleBtn = style({
-  display: "block", width: "calc(100% + 16px)", height: "28px", margin: "0 -8px", padding: "0 8px", border: "0",
+  display: "block", width: "calc(100% + 16px)", height: "28px", marginBlock: "0", paddingBlock: "0", ...bleedX(8), border: "0",
   borderRadius: `calc(6px * ${vars.cornerScale})`, background: "transparent", color: "inherit", font: "inherit", lineHeight: "28px",
   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer", cornerShape: vars.cornerShape,
   transition: `background ${vars.dur} ${vars.easeOut}`,

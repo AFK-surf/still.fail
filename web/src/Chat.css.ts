@@ -9,6 +9,7 @@ import { tokenStart } from "./pages/Connect.css.ts";
 import { msgAvatar, msgMine, msgWaiting } from "./styles/chat.css.ts";
 import { onboardingCard } from "./cloud/settings.css.ts";
 import { glass } from "./styles/glass.ts";
+import { columns, outsetStart } from "./styles/align.ts";
 
 export const msgName = style({ fontWeight: "600" });
 /** A chat's list of messages, on either screen (the wide screen's pane, the phone's page): what quotes jump within. */
@@ -331,13 +332,13 @@ export const quotePop = style({
 });
 export const activityLine = style({
   selectors: {
-    [`${chatList} &`]: { marginLeft: "-35px" },
+    [`${chatList} &`]: outsetStart(columns.activity),
     "&:hover": { color: vars.text },
   },
   "@media": {
     "(max-width: 700px)": {
       selectors: {
-        [`${chatList} &`]: { marginLeft: "-9px" },
+        [`${chatList} &`]: outsetStart(columns.activityNarrow),
       },
     },
   },
@@ -537,11 +538,11 @@ globalStyle(`${msgImage} img`, { display: "block", maxWidth: "100%", maxHeight: 
 globalStyle(`${msgAvatarAgent} img`, { width: "14px", height: "14px" });
 globalStyle(`${msgAvatarAgent} img`, { width: "12px", height: "12px" });
 /** Out in the list's 40px padding, as far from its edge as from the name: 11px + 18px + 11px. */
-globalStyle(`${msgRow} > ${msgAvatar}`, { marginLeft: "-29px" });
+globalStyle(`${msgRow} > ${msgAvatar}`, outsetStart(columns.avatar));
 globalStyle(`${msgRow} > ${msgAvatar}`, {
   "@media": {
     "(max-width: 700px)": {
-      marginLeft: "-3px",
+      ...outsetStart(columns.avatarNarrow),
     },
   },
 });
@@ -566,7 +567,7 @@ globalStyle(`${inlineHeads} ${msgRow} > ${msgMain} > ${msgHead}`, { paddingLeft:
 globalStyle(`${inlineHeads} ${msgRow}[data-emitting] > ${msgMain}`, { transformOrigin: "9px 12px" });
 /** No room beside the name there: where it went or came from has the line under it, from the row's start. */
 globalStyle(`${inlineHeads} ${msgHead}:has(> ${msgRoute})`, { flexWrap: "wrap", rowGap: "4px" });
-globalStyle(`${inlineHeads} ${msgHead} > ${msgRoute}`, { order: "1", flex: "none", width: "calc(100% + 25px)", marginLeft: "-25px" });
+globalStyle(`${inlineHeads} ${msgHead} > ${msgRoute}`, { order: "1", flex: "none", width: `calc(100% + ${columns.route}px)`, ...outsetStart(columns.route) });
 /** Here rather than with its class: it comes after .send-btn .spinner, and wins over it. */
 globalStyle(`${msgWaiting} ${spinner}`, { width: "10px", height: "10px", borderWidth: "1.5px" });
 globalStyle(`${fileCardOpen} ${fileCard}`, { transition: `background ${vars.dur} ${vars.easeOut}` });

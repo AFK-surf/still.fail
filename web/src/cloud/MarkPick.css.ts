@@ -1,6 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { segmentedThumb } from "../ui.css.ts";
+import { inner as innerCorner, surfaceVars } from "../styles/align.ts";
 
 // The station's mark before its name: a square the size of a line, dashed while it has none; a picture fills it.
 export const slot = style({
@@ -33,9 +34,9 @@ globalStyle(`${large}[data-picture] img`, { borderRadius: 0 });
 /** Only what it has, for those who may not change it. */
 export const shown = style({ display: "grid", flex: "none" });
 /** The panel: a panel's room (12); whatever sits in a corner is as round as the panel's corner less its padding. */
-export const pick = style({ width: "300px", vars: { "--panel-pad": "12px", "--panel-in": `calc(${vars.rMenu} - 12px)` } });
+export const pick = style({ width: "300px", vars: surfaceVars(12, `calc(${vars.rMenu} - 12px)`) });
 export const panel = style({ display: "flex", flexDirection: "column", gap: "6px" });
-const inner = "var(--panel-in)";
+const inner = innerCorner;
 // Not pills: a pill's round end beside the panel's squarer corner leaves a crescent between them. The switch and the
 // field take the corner's own shape, less the padding; the switch's thumb, less its own.
 export const kinds = style({ alignSelf: "stretch", borderRadius: inner, cornerShape: vars.cornerShape });

@@ -5,6 +5,7 @@ import { DIALOG_INNER, command, dialogBody, runtimeLogo } from "../ui.css.ts";
 import { machineLogins } from "../pages/Accounts.css.ts";
 import { btn } from "../styles/controls.css.ts";
 import { cardLook } from "../styles/pages.css.ts";
+import { bleedStart } from "../styles/align.ts";
 
 export const groupHead = style({});
 /** A group within the members' list (those added, the invitations): its name and how many, in line with the rows' words. */
@@ -68,7 +69,7 @@ globalStyle(`${workspaceFacts} > span + span::before`, { content: "\"·\"", marg
  * Its name, renamed where it is: the title's own words, a field's ground only under the pointer or while typed in.
  */
 export const titleField = style({
-  width: "calc(100% + 8px)", minWidth: "0", margin: "0 0 0 -8px", padding: "0 8px", border: "0", outline: "none", background: "none", color: vars.text,
+  width: "calc(100% + 8px)", minWidth: "0", marginBlock: "0", marginInlineEnd: "0", paddingBlock: "0", ...bleedStart(8), paddingInlineEnd: "8px", border: "0", outline: "none", background: "none", color: vars.text,
   font: "inherit", fontSize: vars.textHeading, lineHeight: "40px", height: "40px", fontWeight: "600",
   borderRadius: vars.rField, cornerShape: vars.cornerShape, transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: {

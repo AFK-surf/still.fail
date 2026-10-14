@@ -9,6 +9,8 @@ import { signIn } from "../pages/Accounts.css.ts";
 import { stepActions } from "../pages/Connect.css.ts";
 import { spinner } from "./waiting.css.ts";
 import { card } from "./pages.css.ts";
+import { bleedX } from "./align.ts";
+import { inner, surface } from "./align.ts";
 
 export const btn = style({
   display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", height: "36px",
@@ -49,7 +51,7 @@ export const btnDangerSolid = style({
  * words where the card's other words end (its padding taken back by its margin); hovered, a pill of its colour behind them.
  */
 globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnDangerSolid})`, {
-  borderColor: "transparent", background: "transparent", padding: "0 12px", marginInline: "-12px",
+  borderColor: "transparent", background: "transparent", paddingBlock: "0", ...bleedX(12),
 });
 globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnDangerSolid}):hover:not(:disabled)`, {
   background: "color-mix(in oklab, currentColor 10%, transparent)",
@@ -85,15 +87,15 @@ globalStyle(`input${input}`, { borderRadius: "999px", paddingLeft: "16px", paddi
  * `--panel-in` to that; one wanting more room sets `--panel-pad`. By default the menus' corner, as it was.
  */
 export const popover = style({
-  vars: { "--panel-pad": "6px", "--panel-in": `calc(${vars.rMenu} - 6px)` },
-  zIndex: "60", padding: "var(--panel-pad)", borderRadius: "calc(var(--panel-in) + var(--panel-pad))", ...panel,
+  ...surface(6, `calc(${vars.rMenu} - 6px)`),
+  zIndex: "60", ...panel,
   boxShadow: `0 12px 32px ${vars.shadow}`, transformOrigin: "var(--radix-popper-transform-origin, top)",
   animation: `${popKeyframes} 140ms ${vars.easeOut}`, cornerShape: vars.cornerShape,
 });
 export const menuList = style({ minWidth: "180px" });
 export const menuItem = style({
   display: "flex", alignItems: "center", gap: "8px", width: "100%", minHeight: "34px", padding: "7px 10px", lineHeight: "20px",
-  border: "0", borderRadius: "var(--panel-in)", background: "none", textAlign: "left", fontSize: vars.textUi,
+  border: "0", borderRadius: inner, background: "none", textAlign: "left", fontSize: vars.textUi,
   cursor: "pointer", outline: "none", userSelect: "none", cornerShape: vars.cornerShape,
   selectors: {
     "&[data-highlighted]": { background: vars.hover },
