@@ -197,9 +197,11 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
         if (changing) return;
         e.preventDefault();
         const slot = (e.target as HTMLElement).closest("[data-rail-item]");
-        // A place's slot is laid out by what is in it (display: contents): its box is its first child's.
-        const at = (slot?.firstElementChild ?? e.currentTarget).getBoundingClientRect();
-        setMenu({ item: (slot?.getAttribute("data-rail-item") as RailItem | null) ?? null, box: { left: at.left, top: at.top, width: at.width, height: slot ? at.height : 0 } });
+        // Off a place, by the first (the rail's top). A place's slot is laid out by what is in it (display: contents):
+        // its box is its first child's.
+        const by = slot ?? e.currentTarget.querySelector("[data-rail-item]");
+        const at = (by?.firstElementChild ?? e.currentTarget).getBoundingClientRect();
+        setMenu({ item: (slot?.getAttribute("data-rail-item") as RailItem | null) ?? null, box: { left: at.left, top: at.top, width: at.width, height: at.height } });
       }}>
       <div className={css.top} />
       {(dragged?.order ?? items).map((item) => changing ? (
