@@ -15,6 +15,21 @@ export const slot = style({
     "&:disabled": { cursor: "default" },
   },
 });
+/** The square heading a page: filled with the cards' ground, its letter large and muted while it has no mark. */
+export const large = style({
+  display: "inline-grid", placeItems: "center", flex: "none", width: "56px", height: "56px", padding: "0", overflow: "hidden",
+  border: "0", borderRadius: `calc(16px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: `color-mix(in oklab, ${vars.text} 6%, ${vars.canvas})`, color: vars.muted, fontSize: vars.textHeading, fontWeight: "600",
+  selectors: {
+    "&[data-set]": { color: vars.text },
+    "&[data-picture]": { background: "none" },
+    "button&": { cursor: "pointer", transition: `box-shadow ${vars.dur} ${vars.easeOut}` },
+    "button&:hover": { boxShadow: `inset 0 0 0 1.5px ${vars.fieldHover}` },
+    "&:focus-visible": { outline: `2px solid var(--focus, ${vars.accent})`, outlineOffset: "2px" },
+    "&:disabled": { cursor: "default" },
+  },
+});
+globalStyle(`${large}[data-picture] img`, { borderRadius: 0 });
 /** Only what it has, for those who may not change it. */
 export const shown = style({ display: "grid", flex: "none" });
 /** The panel: a menu's; whatever sits in a corner is as round as the panel's corner less its padding. */

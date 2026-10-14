@@ -805,6 +805,15 @@
   "web-pages.settings.workspace.nameHint": "Only owners and admins can rename.",
   "web-pages.settings.workspace.nameLabel": "Workspace name",
   "web-pages.settings.workspace.renameFailed": "Couldn't rename: {error}",
+  "web-pages.settings.workspace.youAreShort": "{role} · {email}",
+  "web-pages.settings.workspace.stationsCount": {
+    "one": "1 station",
+    "other": "{n} stations"
+  },
+  "web-pages.settings.workspace.members": "Members",
+  "web-pages.settings.workspace.icon": "Icon",
+  "web-pages.settings.workspace.noIcon": "None",
+  "web-pages.settings.workspace.you": "You are",
   "web-pages.settings.workspace.markFailed": "Couldn't set the icon: {error}",
   "web-pages.settings.workspace.renamed": "Renamed",
   "web-pages.settings.workspace.youAre": "Your role here: {role}, via {email}.",

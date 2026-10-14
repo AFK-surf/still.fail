@@ -1,7 +1,7 @@
 // A station's mark (the settings' stations): a square before its name; pressed, a panel to pick one of still.fail's icons
 // (in a colour, or the words') or an emoji (any, pasted or typed, besides those offered), to put up a picture (or paste
 // one), or to have none. Those who may not change it see only the one it has. What is sent is ../stationPick.ts's.
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Popover } from "radix-ui";
 import { Close, ImageUpload, Plus, STATION_ICONS } from "../icons.tsx";
 import { Glyph, glyphColor, isPicture, MARK_COLORS, markColor, StationMark, stationGlyph, type MarkColor } from "../StationMark.tsx";
@@ -13,17 +13,26 @@ import * as css from "./MarkPick.css.ts";
 
 const bare = (emoji: string) => emoji.replace(/️/g, "");
 
-export function MarkPick({ emoji, icon, name, editable, busy, onPick }: {
-  emoji: string | null | undefined; icon: string | null | undefined; name: string; editable: boolean; busy?: boolean; onPick(mark: Mark): void;
+/**
+ * `large`: the square heading a page (the workspace's): as large as a title's line and a half, filled; with none, `empty`
+ * (its letter) shows in it, and anyone sees it.
+ */
+export function MarkPick({ emoji, icon, name, editable, busy, large, empty, onPick }: {
+  emoji: string | null | undefined; icon: string | null | undefined; name: string; editable: boolean; busy?: boolean; large?: boolean; empty?: ReactNode; onPick(mark: Mark): void;
 }) {
   const [open, setOpen] = useState(false);
   const set = !!emoji || !!icon;
-  if (!editable) return set ? <span className={css.shown} aria-hidden="true"><StationMark emoji={emoji} icon={icon} size={16} /></span> : null;
+  const side = large ? 56 : 28, glyph = large ? 30 : 16;
+  const face = set ? <StationMark emoji={emoji} icon={icon} size={isPicture(icon) ? side : glyph} /> : large ? empty : <Plus size={14} />;
+  if (!editable) {
+    if (large) return <span className={css.large} data-picture={isPicture(icon) || undefined} aria-hidden="true">{face}</span>;
+    return set ? <span className={css.shown} aria-hidden="true"><StationMark emoji={emoji} icon={icon} size={16} /></span> : null;
+  }
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
-        <button type="button" className={css.slot} data-set={set ? "" : undefined} data-picture={isPicture(icon) || undefined} disabled={busy} aria-label={t("web-pages.stations.emoji.label", { name })}>
-          {set ? <StationMark emoji={emoji} icon={icon} size={isPicture(icon) ? 28 : 16} /> : <Plus size={14} />}
+        <button type="button" className={large ? css.large : css.slot} data-set={set ? "" : undefined} data-picture={isPicture(icon) || undefined} disabled={busy} aria-label={t("web-pages.stations.emoji.label", { name })}>
+          {face}
         </button>
       </Popover.Trigger>
       <Popover.Portal>
