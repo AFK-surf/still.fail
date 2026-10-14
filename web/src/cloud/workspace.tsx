@@ -2,6 +2,7 @@
 // place. The core reaches each station and puts the workspace's views
 // together (docs/client-core.md); a page opened from the sidebar talks to the
 // station the item belongs to (StationContext).
+import { StationSettings, StationsFirst, StationsNav, useStationsSide } from "./StationPage.tsx";
 import { Check, ChevronsUpDown, Plus, Settings, UserPlus } from "../icons.tsx";
 import { NewChat } from "../NewChat.tsx";
 import { lastChatOf, useLastChat, useRememberChat, useWorkspaceMarks } from "../lastChat.ts";
@@ -130,6 +131,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
           ? <nav className={nav.sidebar} aria-label={t("web-pages.settings.title")}><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><div className={railCss.narrowOnly}><WebUpdate /><WorkspaceSwitcher current={entry} /></div></div></nav>
           : place === "files" ? <FilesSidebar entry={entry} />
           : place === "profiles" ? <ProfilesSidebar entry={entry} />
+          : place === "stations" ? <StationsSidebar entry={entry} />
           : <WorkspaceSidebar entry={entry} />}
         </div>
         <SidebarEdge />
@@ -152,7 +154,8 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
             {/* Pages the workspace page took in: links to them still land there. */}
             <Route path="settings/general" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
             <Route path="settings/members" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
-            <Route path="settings/stations" element={<StationsSettings entry={entry} />} />
+            <Route path="settings/stations" element={<StationsIndex entry={entry} />} />
+            <Route path="settings/stations/:station" element={<StationSettings entry={entry} />} />
             <Route path="settings/connects" element={<ConnectsSettings entry={entry} />} />
             <Route path="settings/automatic-decisions" element={<AutomaticDecisionsSettings entry={entry} />} />
             <Route path="settings/automatic-decisions/completion" element={<AutomaticDecisionCompletionSettings entry={entry} />} />
@@ -347,6 +350,22 @@ function ProfilesSidebar({ entry }: { entry: WorkspaceEntry }) {
       <WorkspaceSidebarFooter entry={entry} />
     </nav>
   );
+}
+
+/** The sidebar while in Station (Rail.tsx): the stations, each opening its page (StationPage.tsx). */
+function StationsSidebar({ entry }: { entry: WorkspaceEntry }) {
+  return (
+    <nav ref={useGlassBands()} className={nav.sidebar} aria-label="Station">
+      <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div>
+      <StationsNav entry={entry} />
+      <WorkspaceSidebarFooter entry={entry} />
+    </nav>
+  );
+}
+
+/** Station's page: with the sidebar of their own, the first of them; else the settings' list of them. */
+function StationsIndex({ entry }: { entry: WorkspaceEntry }) {
+  return useStationsSide() ? <StationsFirst entry={entry} /> : <StationsSettings entry={entry} />;
 }
 
 /** Every folder the stations lend (docs/drive.md), one list, each with whose it is at its end (quiet; its dot grey while the

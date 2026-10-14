@@ -145,7 +145,7 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-function Page({ title, lead, back, backLabel, actions, children, entry }: { title: string; lead?: string; back: string; backLabel?: string; actions?: React.ReactNode; children: React.ReactNode; entry?: WorkspaceEntry }) {
+export function Page({ title, lead, back, backLabel, actions, children, entry }: { title: string; lead?: string; back: string; backLabel?: string; actions?: React.ReactNode; children: React.ReactNode; entry?: WorkspaceEntry }) {
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       {backLabel ? <BackLink to={back} label={backLabel} /> : <MobileBack to={back} label={t("web-pages.settings.title")} />}
@@ -220,7 +220,7 @@ function RevokeDevice({ account, id }: { account: Account; id: string }) {
 
 // ── workspace ───────────────────────────────────────────────────────────
 
-function useWorkspace(entry: WorkspaceEntry): { view: WorkspaceView | undefined; manager: boolean } {
+export function useWorkspace(entry: WorkspaceEntry): { view: WorkspaceView | undefined; manager: boolean } {
   const view = useWorkspaceTopic(entry.id).value;
   return { view, manager: view?.role === "owner" || view?.role === "admin" };
 }
@@ -522,40 +522,64 @@ function shownAs(s: StationView, mark: Mark | undefined): StationView {
   return { ...rest, ...(mark.emoji ? { emoji: mark.emoji } : {}), ...(mark.icon ? { icon: mark.icon } : {}) };
 }
 
-function Stations({ view, account, manager, stations }: { view: WorkspaceView; account: Account; manager: boolean; stations: StationView[] }) {
+/**
+ * What a manager changes of a station, on its card and on its own page alike: its name and mark (shown at once, `shown`,
+ * a ring by its menu until the cloud has them, a red mark a moment if not), and its removal; `menu` the items for its ⋯,
+ * `dialogs` what they open and what failed.
+ */
+export function useStationEdits(view: WorkspaceView | undefined, account: Account, stations: StationView[]) {
   const navigate = useGo();
-  const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<StationView | null>(null);
   // Asked in a dialog of ours: window.prompt does nothing in the desktop app (Electron has none).
   const [naming, setNaming] = useState<StationView | null>(null);
-  const remove = useAction((s: StationView) => cloud.removeStation(account.sub, view.id, s.id));
-  const rename = useAction(({ id, name }: { id: string; name: string }) => cloud.renameStation(account.sub, view.id, id, name));
+  const workspace = view?.id ?? "";
+  const remove = useAction((s: StationView) => cloud.removeStation(account.sub, workspace, s.id));
+  const rename = useAction(({ id, name }: { id: string; name: string }) => cloud.renameStation(account.sub, workspace, id, name));
   const renaming = (s: StationView) => rename.busy && rename.arg?.id === s.id;
-  const mark = useAction(({ id, mark }: { id: string; mark: Mark }) => cloud.setStationMark(account.sub, view.id, id, mark));
+  const mark = useAction(({ id, mark }: { id: string; mark: Mark }) => cloud.setStationMark(account.sub, workspace, id, mark));
   const picking = (s: StationView) => mark.busy && mark.arg?.id === s.id;
-  return (
-    <Section title={t("web-pages.settings.stations.count", { n: stations.length })} actions={manager && <><JoinThisMac account={account} workspace={view.id} /><Button icon={Plus} onClick={() => setAdding(true)}>{t("web-pages.settings.stations.add")}</Button></>}>
-      {/* A name or a removal on its way shows at once, a ring beside its menu until the cloud has it (a red mark a moment if not). */}
-      <StationList stations={stations.map((s) => shownAs(renaming(s) ? { ...s, name: rename.arg!.name } : s, picking(s) ? mark.arg!.mark : undefined))} manager={manager}
-        onMark={manager ? (s, m) => void mark.run({ id: s.id, mark: m }) : undefined} markBusy={picking} menu={(s) => (manager || s.overview?.drive) && <>
-        {manager && <DoingMark calls={["workspace.renameStation", "workspace.removeStation"]} on={{ account: account.sub, workspace: view.id, station: s.id }} className={controlsCss.iconSpinner} size={14}
-          label={renaming(s) ? t("web-pages.settings.stations.renaming") : t("web-main.activity.busy")} />}
-        <Menu items={[
-          // Its drive (docs/drive.md), for every member, where the station has one.
-          ...(s.overview?.drive ? [{ label: t("web-pages.drive.title"), icon: Folder, onSelect: () => navigate(`${stationBase(s.station)}/files`) }] : []),
-          ...(manager ? [
-            { label: t("web-pages.settings.stations.rename"), icon: Edit, disabled: renaming(s), onSelect: () => setNaming(s) },
-            { label: t("web-pages.settings.stations.remove"), icon: Trash, danger: true, onSelect: () => setRemoving(s) },
-          ] : []),
-        ]} />
-      </>} />
+  const shown = (s: StationView) => shownAs(renaming(s) ? { ...s, name: rename.arg!.name } : s, picking(s) ? mark.arg!.mark : undefined);
+  const busy = (s: StationView) => (
+    <DoingMark calls={["workspace.renameStation", "workspace.removeStation"]} on={{ account: account.sub, workspace, station: s.id }} className={controlsCss.iconSpinner} size={14}
+      label={renaming(s) ? t("web-pages.settings.stations.renaming") : t("web-main.activity.busy")} />
+  );
+  /** `drive`: its 文件 among them (the card's ⋯; its page has a button of its own). */
+  const menu = (s: StationView, manager: boolean, drive = true) => [
+    // Its drive (docs/drive.md), for every member, where the station has one.
+    ...(drive && s.overview?.drive ? [{ label: t("web-pages.drive.title"), icon: Folder, onSelect: () => navigate(`${stationBase(s.station)}/files`) }] : []),
+    ...(manager ? [
+      { label: t("web-pages.settings.stations.rename"), icon: Edit, disabled: renaming(s), onSelect: () => setNaming(s) },
+      { label: t("web-pages.settings.stations.remove"), icon: Trash, danger: true, onSelect: () => setRemoving(s) },
+    ] : []),
+  ];
+  const dialogs = (
+    <>
       {mark.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.stations.emoji.failed", { name: stations.find((s) => s.id === mark.arg?.id)?.name ?? "station", error: mark.error.message })}</p>}
       {rename.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.settings.stations.renameFailed", { name: stations.find((s) => s.id === rename.arg?.id)?.name ?? "station", error: rename.error.message })}</p>}
-      {adding && <AddStationDialog view={view} account={account} stations={stations} onClose={() => setAdding(false)} />}
       {naming && <RenameStationDialog station={naming} onClose={() => setNaming(null)} onRename={(name) => { if (name !== naming.name) void rename.run({ id: naming.id, name }); setNaming(null); }} />}
       <Confirm open={removing !== null} onClose={() => setRemoving(null)} onConfirm={() => { if (removing) void remove.run(removing); setRemoving(null); }}
         title={t("web-pages.settings.stations.removeConfirm", { name: removing?.name ?? "" })} action={t("web-pages.settings.stations.removeAction")}
         description={t("web-pages.settings.stations.removeConfirmBody", { name: NAME })} />
+    </>
+  );
+  return {
+    shown, busy, menu, dialogs, picking, setMark: (s: StationView, m: Mark) => void mark.run({ id: s.id, mark: m }),
+    rename: (s: StationView, name: string) => { if (name !== s.name && !renaming(s)) void rename.run({ id: s.id, name }); },
+  };
+}
+
+function Stations({ view, account, manager, stations }: { view: WorkspaceView; account: Account; manager: boolean; stations: StationView[] }) {
+  const [adding, setAdding] = useState(false);
+  const edits = useStationEdits(view, account, stations);
+  return (
+    <Section title={t("web-pages.settings.stations.count", { n: stations.length })} actions={manager && <><JoinThisMac account={account} workspace={view.id} /><Button icon={Plus} onClick={() => setAdding(true)}>{t("web-pages.settings.stations.add")}</Button></>}>
+      <StationList stations={stations.map(edits.shown)} manager={manager} page={(s) => `/w/${view.id}/settings/stations/${s.id}`}
+        onMark={manager ? edits.setMark : undefined} markBusy={edits.picking} menu={(s) => (manager || s.overview?.drive) && <>
+        {manager && edits.busy(s)}
+        <Menu items={edits.menu(s, manager)} />
+      </>} />
+      {edits.dialogs}
+      {adding && <AddStationDialog view={view} account={account} stations={stations} onClose={() => setAdding(false)} />}
     </Section>
   );
 }
@@ -574,7 +598,8 @@ function RenameStationDialog({ station, onClose, onRename }: { station: StationV
   );
 }
 
-function AddStationDialog({ view, account, stations, onClose }: { view: WorkspaceView; account: Account; stations: StationView[]; onClose(): void }) {
+/** `thisMac`: 添加这台 Mac in it too, where the app offers it (the sidebar's 添加 station; the list has it beside). */
+export function AddStationDialog({ view, account, stations, onClose, thisMac = false }: { view: WorkspaceView; account: Account; stations: StationView[]; onClose(): void; thisMac?: boolean }) {
   const [name, setName] = useState("");
   // The stations there before: the one that joins is the one not among them.
   const [known] = useState(() => new Set(stations.map((s) => s.id)));
@@ -600,6 +625,7 @@ function AddStationDialog({ view, account, stations, onClose }: { view: Workspac
         <div className={additionsCss.callout} data-tone="green"><Check {...ICON} /><span>{t("web-pages.settings.stations.joined", { name: joined.name })}</span></div>
       ) : <EnrollSteps enrollment={enroll.result} />}
       {enroll.error && <p className={controlsCss.fieldError} role="alert">{enroll.error.message}</p>}
+      {thisMac && !enroll.result && <JoinThisMac account={account} workspace={view.id} className={css.firstThisMac} />}
     </Dialog>
   );
 }
@@ -609,7 +635,7 @@ function AddStationDialog({ view, account, stations, onClose }: { view: Workspac
  * (never joined, or removed from its workspace: the app joins a removed one again only when asked). Nothing in a
  * browser, or in an app from before it. Once joined, the station shows in the list by itself, as one added by command.
  */
-function JoinThisMac({ account, workspace, className }: { account: Account; workspace: string; className?: string }) {
+export function JoinThisMac({ account, workspace, className }: { account: Account; workspace: string; className?: string }) {
   const desktop = typeof window !== "undefined" ? window.stillfailDesktop?.station : undefined;
   // The desktop app on Windows: a PC, not a Mac.
   const pc = typeof navigator !== "undefined" && /Windows/.test(navigator.userAgent);

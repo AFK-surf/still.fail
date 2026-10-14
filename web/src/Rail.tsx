@@ -188,13 +188,14 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   // the same click, once.
   const shut = () => document.documentElement.dataset.sidebar === "closed";
   const openSidebar = () => { if (shut()) sidebar.toggle(); };
-  // The places with a sidebar of their own (the settings and the files their way round, the profiles their list, the
-  // chats their lists) open it, come to with it closed; a page in the rail (Station, 连接, 用量) or the archive has none
+  // The places with a sidebar of their own (the settings, the files and the stations their way round, the profiles their
+  // list, the chats their lists) open it, come to with it closed; a page in the rail (连接, 用量) or the archive has none
   // (only the chats beside it), and closes it: the page the whole width. On the page's load the chats as they were left.
   // Only on a wide screen: on a narrow one the sidebar is a page of its own.
-  const own = place === "settings" || place === "files" || place === "profiles" || place === "chats" || !items.includes(place as RailItem);
+  const own = place === "settings" || place === "files" || place === "stations" || place === "profiles" || place === "chats" || !items.includes(place as RailItem);
   // Which sidebar it is, each as wide as it was made.
   const group: SidebarGroup = place === "files" ? "files" : place === "profiles" && items.includes("profiles") ? "profiles"
+    : place === "stations" && items.includes("stations") ? "stations"
     : place === "chats" || place === "archive" || items.includes(place as RailItem) ? "chats" : "settings";
   const cameFrom = useRef<Place | null>(null);
   useEffect(() => {
@@ -365,8 +366,8 @@ function RailWorkspaces({ scope, current }: { scope: string; current: ReactNode 
 /** The sidebar's width, its least and most (the sidebar's own, styles' --sidebar-w). */
 const SIDEBAR = { min: 180, max: 480, own: 240 } as const;
 
-/** The sidebars, each its own width: the chats' (and the pages beside them), the settings', the files', the profiles'. */
-type SidebarGroup = "chats" | "settings" | "files" | "profiles";
+/** The sidebars, each its own width: the chats' (and the pages beside them), the settings', the files', the profiles', the stations'. */
+type SidebarGroup = "chats" | "settings" | "files" | "profiles" | "stations";
 /** The one shown, whose width the edge drags. */
 let shownGroup: SidebarGroup = "chats";
 /** Where each is kept: the chats' where the one sidebar's was. */

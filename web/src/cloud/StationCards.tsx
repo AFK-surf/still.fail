@@ -1,9 +1,9 @@
-// Station overview: only alerts and available updates. Click its name for the complete device and software details.
+// Station overview: only alerts and available updates. Its name opens its own page (StationPage.tsx), where the rest is.
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { stamp, type StationView } from "../api.ts";
 import type { Level, NetFigure, NetRelay, StationNet } from "../core/shapes.ts";
-import { Dialog, StatusDot, Time, Tip } from "../ui.tsx";
-import { UpdateSummary, Versions } from "../Versions.tsx";
+import { StatusDot, Time, Tip } from "../ui.tsx";
+import { UpdateSummary } from "../Versions.tsx";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips, MeterDials } from "../components.tsx";
 import * as css from "./StationCards.css.ts";
@@ -19,10 +19,11 @@ import { t } from "../i18n.ts";
 import { tx } from "./words.tsx";
 
 /** `manager`: may update a station and its runtimes (a workspace owner or admin); `onMark`: may give it an icon or emoji. */
-export function StationList({ stations, menu, manager = false, onMark, markBusy }: {
-  stations: StationView[]; menu(s: StationView): ReactNode; manager?: boolean; onMark?: ((s: StationView, mark: Mark) => void) | undefined; markBusy?: ((s: StationView) => boolean) | undefined;
+/** `page`: where its own page is, opened by its name. */
+export function StationList({ stations, menu, page, manager = false, onMark, markBusy }: {
+  stations: StationView[]; menu(s: StationView): ReactNode; page(s: StationView): string; manager?: boolean; onMark?: ((s: StationView, mark: Mark) => void) | undefined; markBusy?: ((s: StationView) => boolean) | undefined;
 }) {
-  return <div className={css.cards}>{stations.map((s) => <StationCard key={s.id} s={s} menu={menu(s)} manager={manager} onMark={onMark} markBusy={markBusy?.(s) ?? false} />)}</div>;
+  return <div className={css.cards}>{stations.map((s) => <StationCard key={s.id} s={s} menu={menu(s)} page={page(s)} manager={manager} onMark={onMark} markBusy={markBusy?.(s) ?? false} />)}</div>;
 }
 
 /**
@@ -78,7 +79,7 @@ function PeekNet({ net }: { net: StationNet }) {
 }
 
 /** Whether its agents are at work, or when it was last seen. */
-function state(s: StationView): ReactNode {
+export function state(s: StationView): ReactNode {
   if (!s.online) return s.lastSeen ? tx("web-pages.stations.lastSeen", { time: <Time stamp={stamp(s, "lastSeen")} /> }) : t("web-pages.stations.neverOnline");
   if (!s.overview) return t("web-pages.stations.connecting");
   const running = s.overview.counts.running;
@@ -86,7 +87,7 @@ function state(s: StationView): ReactNode {
 }
 
 /** What may be wrong with it, each in words, worst first. */
-function problems(s: StationView, silent: boolean): { key: string; level: Level; text: string }[] {
+export function problems(s: StationView, silent: boolean): { key: string; level: Level; text: string }[] {
   if (s.online && silent) return [{ key: "silent", level: "amber", text: t("web-pages.stations.silent", { name: NAME }) }];
   if (!s.online) {
     return [{ key: "away", level: s.lastSeen ? "red" : "amber", text: s.lastSeen ? t("web-pages.stations.away", { name: NAME }) : t("web-pages.stations.neverConnected", { name: NAME }) }];
@@ -167,7 +168,7 @@ function Ways({ relays }: { relays: NetRelay[] }) {
 }
 
 /** Whether `waiting` has held for `ms`: a station that says it is online but has not answered for a while. */
-function useLong(waiting: boolean, ms: number): boolean {
+export function useLong(waiting: boolean, ms: number): boolean {
   const [long, setLong] = useState(false);
   useEffect(() => {
     setLong(false);
@@ -178,8 +179,7 @@ function useLong(waiting: boolean, ms: number): boolean {
   return waiting && long;
 }
 
-function StationCard({ s, menu, manager, onMark, markBusy }: { s: StationView; menu: ReactNode; manager: boolean; onMark: ((s: StationView, mark: Mark) => void) | undefined; markBusy: boolean }) {
-  const [details, setDetails] = useState(false);
+function StationCard({ s, menu, page, manager, onMark, markBusy }: { s: StationView; menu: ReactNode; page: string; manager: boolean; onMark: ((s: StationView, mark: Mark) => void) | undefined; markBusy: boolean }) {
   const silent = useLong(s.online && !s.host, 15_000);
   const wrong = problems(s, silent);
   return (
@@ -188,7 +188,7 @@ function StationCard({ s, menu, manager, onMark, markBusy }: { s: StationView; m
         <StatusDot state={s.online ? "online" : "offline"} label={s.online ? t("web-pages.stations.online") : t("web-pages.stations.offline")} />
         <MarkPick emoji={s.emoji} icon={s.icon} name={s.name} editable={onMark !== undefined} busy={markBusy} onPick={(m) => { if (!same(m, s.emoji, s.icon)) onMark?.(s, m); }} />
         <span className={css.cardTitle}>
-          <button type="button" className={css.name} onClick={() => setDetails(true)} aria-label={t("web-pages.stations.details", { name: s.name })}>{s.name}</button>
+          <Link className={css.name} to={page} aria-label={t("web-pages.stations.details", { name: s.name })}>{s.name}</Link>
           <span className={css.state}>{state(s)}</span>
         </span>
         {s.online && s.host && <MeterChips meters={s.host.meters} alerts />}
@@ -200,18 +200,6 @@ function StationCard({ s, menu, manager, onMark, markBusy }: { s: StationView; m
       {wrong.length > 0 && <div className={css.warn}>{wrong.map((p) => <span key={p.key} data-level={p.level}>{p.text}</span>)}</div>}
       {s.online && s.net && <Net net={s.net} />}
       {s.online && <div className={css.cardVersions}><UpdateSummary station={s.station} updates={s.overview?.updates} manager={manager} /></div>}
-      <Dialog open={details} title={s.name} onClose={() => setDetails(false)}>
-        <div className={css.details}>
-          <section className={css.detailSection} aria-label={t("web-pages.stations.device")}>
-            <MachineDetails s={s} />
-          </section>
-          <section className={css.detailSection} aria-label={t("web-pages.stations.software")}>
-            <h3 className={css.detailTitle}>{t("web-pages.stations.software")}</h3>
-            {s.online ? <Versions station={s.station} updates={s.overview?.updates} manager={manager} beta={s.betaOffered ?? false} rows /> : <span>{t("web-pages.stations.softwareOffline")}</span>}
-            {!s.overview?.updates?.length && s.version && <span>Station {s.version}</span>}
-          </section>
-        </div>
-      </Dialog>
     </div>
   );
 }

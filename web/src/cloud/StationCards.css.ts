@@ -56,7 +56,6 @@ export const waysTitle = style({ gridColumn: "1 / -1", opacity: 0.7, marginBotto
 export const way = style({ display: "contents", opacity: 0.75, selectors: { "&[data-current]": { opacity: 1, fontWeight: "600" } } });
 export const netRates = style({ display: "grid", gridTemplateColumns: "auto 9.5ch minmax(7.5ch, auto)", columnGap: "5px", rowGap: "2px", alignItems: "baseline", flex: "none" });
 
-export const details = style({ display: "grid", gap: "24px" });
 /** The machine on its own page: what it is, what is left of it large, the connection, then the rest a quiet row each. */
 export const machine = style({ display: "grid", gap: "16px", justifyItems: "start", minWidth: "0" });
 export const machineNote = style({ fontSize: vars.textUi, color: vars.muted });
@@ -69,8 +68,6 @@ export const hostDetails = style({
 });
 globalStyle(`${hostDetails} dt`, { color: vars.subtle });
 globalStyle(`${hostDetails} dd`, { margin: "0" });
-export const detailSection = style({ display: "grid", gap: "10px", fontSize: vars.textUi, color: vars.muted, overflowWrap: "anywhere" });
-export const detailTitle = style({ margin: "0", fontSize: vars.textBody, fontWeight: "600", color: vars.text });
 
 /** The card over a station's name in a chat's bar (StationPeek). */
 export const peek = style({ display: "flex", flexDirection: "column", gap: "8px", minWidth: "0" });
