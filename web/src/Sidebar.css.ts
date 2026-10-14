@@ -43,8 +43,12 @@ export const brand = style({
     // Full screen, the window's buttons are gone.
     '[data-desktop="inset"][data-fullscreen] &': { paddingLeft: 16 },
   },
-  // No rail on a narrow window: the buttons are all in this row.
-  "@media": { [narrow]: { selectors: { '[data-desktop="inset"] [data-rail] &': { paddingLeft: 86 } } } },
+  "@media": {
+    // No rail on a narrow window: the buttons are all in this row.
+    [narrow]: { selectors: { '[data-desktop="inset"] [data-rail] &': { paddingLeft: 86 } } },
+    // Beside the rail on the web, nothing is left in it (no name, no buddy, no window to drag): a margin only.
+    [wide]: { selectors: { ':root:not([data-desktop]) [data-rail] &': { height: 8 } } },
+  },
 });
 /** 云端侧边栏：lockup 在 workspace 切换器上方（always with `brand`, whose desktop top row still wins） */
 export const brandCompact = style({ height: 48, padding: "0 16px" });

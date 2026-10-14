@@ -23,7 +23,8 @@ export const rail = style({
  * dock), which starts under that row, no more than a margin; it shrinks with the bar, as long and eased.
  */
 export const top = style({
-  flex: "none", alignSelf: "stretch", height: 48, transition: `height 380ms ${vars.easeOut}`,
+  // On the web nothing is in the sidebar's top row either: a margin, as there.
+  flex: "none", alignSelf: "stretch", height: 8, transition: `height 380ms ${vars.easeOut}`,
   selectors: {
     "[data-desktop] &": { height: 44, WebkitAppRegion: "drag" },
     // In the closed bar nothing: its places stand as far from its top as from its sides (rail's padding).
