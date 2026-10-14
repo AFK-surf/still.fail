@@ -18,7 +18,7 @@ import { basename, dirname, isAbsolute, join } from "node:path";
 import { relativeParts } from "../ops/paths.ts";
 import { platform } from "../platform/index.ts";
 import { isDeepStrictEqual } from "node:util";
-import { Clock, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
+import { Clock, Duration, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { log } from "../ops/log.ts";
 import { type Json, type Store } from "../store/store.ts";
 import { type Jobs, jobJson, tail } from "./jobs.ts";
@@ -458,9 +458,8 @@ export class Remote {
   /// A request to another station of the workspace (session_send's messages, and this module's own).
   async ask(station: string, request: Json): Promise<Json> {
     if (!this.call) {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      await Promise.race([this.attached, new Promise<void>((resolve) => (timer = setTimeout(resolve, this.meshWaitMs)))]);
-      clearTimeout(timer);
+      const attached = this.attached;
+      await this.run(Effect.race(Effect.promise(() => attached), Effect.sleep(Duration.millis(this.meshWaitMs)))).catch(() => undefined);
     }
     const call = this.call;
     if (!call) throw new Error("station mesh is not ready");
