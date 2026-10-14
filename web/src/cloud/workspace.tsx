@@ -6,7 +6,7 @@ import { Check, ChevronsUpDown, Plus, Settings, UserPlus } from "../icons.tsx";
 import { NewChat } from "../NewChat.tsx";
 import { lastChatOf, useLastChat, useRememberChat, useWorkspaceMarks } from "../lastChat.ts";
 import { DropdownMenu } from "radix-ui";
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
 import { useChats, useStationViews, useStations } from "../api.ts";
 import { useGo } from "../go.ts";
@@ -18,7 +18,7 @@ import { ConnectPage } from "../pages/Connect.tsx";
 import { DriveHome, DrivePage, DrivePlayPage, DriveReadPage } from "../pages/Drive.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList, StationTrouble, useGlassBands } from "../Sidebar.tsx";
-import { Rail, placeOf, railItems } from "../Rail.tsx";
+import { Rail, placeOf, railItems, type RailItem } from "../Rail.tsx";
 import { usePrefs } from "../prefs.ts";
 import * as railCss from "../Rail.css.ts";
 import { drivePath } from "../drive/useDrive.ts";
@@ -85,7 +85,13 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
   const navigate = useGo();
   const detail = /\/(s\/[^/]+\/.+|settings|new$|archive$|decisions$|files$)/.test(path);
   // Settings, a connect or a station's runtime accounts: the sidebar becomes the settings menu.
-  const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path);
+  // A place in the rail (Station, Profile, 连接, 用量) is a page of its own beside the chats, not one of the settings: those
+  // left out of it are reached in the settings, and are among them there.
+  const railed = railItems(usePrefs((p) => p.rail));
+  const wide = useWide();
+  const place = placeOf(path);
+  const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path)
+    && !(place !== "settings" && place !== "files" && railed.includes(place as RailItem) && wide);
   // 奏: the page of the decision picked in the sidebar's 奏 (DecisionDesk.tsx); come to it any way, the sidebar shows 奏.
   const decisions = /^\/w\/[^/]+\/decisions$/.test(path);
   const [mode, setMode] = useSidebarMode();
@@ -117,13 +123,13 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
         <Rail scope={entry.id} workspace={<WorkspaceSwitcher current={entry} adder />} />
         {settings
           ? <nav className={nav.sidebar} aria-label={t("web-pages.settings.title")}><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} /><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><WebUpdate /><div className={railCss.narrowOnly}><WorkspaceSwitcher current={entry} /></div></div></nav>
-          : placeOf(path) === "files" ? <FilesSidebar entry={entry} />
+          : place === "files" ? <FilesSidebar entry={entry} />
           : <WorkspaceSidebar entry={entry} />}
         <main className={shellCss.main}>
           <ComposerDock>
           <Routes>
             <Route index element={<WorkspaceHome id={entry.id} stations={known && stations} />} />
-            <Route path="settings" element={<Navigate to="stations" replace />} />
+            <Route path="settings" element={<Navigate to="appearance" replace />} />
             <Route path="settings/appearance" element={<AppearancePage back={`/w/${entry.id}/settings`} />} />
             <Route path="settings/notifications" element={<NotificationsPage back={`/w/${entry.id}/settings`} />} />
             {CHANGEABLE && <Route path="settings/shortcuts" element={<ShortcutsPage back={`/w/${entry.id}/settings`} />} />}
@@ -196,6 +202,12 @@ const WorkspaceKept = memo(function WorkspaceKept({ entry }: { entry: WorkspaceE
   ]);
   return null;
 });
+
+/** Whether the rail is there (Rail.css.ts): a wide screen, followed as the window is resized. */
+function useWide(): boolean {
+  const query = typeof window === "undefined" ? null : window.matchMedia("(min-width: 701px)");
+  return useSyncExternalStore((f) => { query?.addEventListener("change", f); return () => query?.removeEventListener("change", f); }, () => query?.matches ?? true, () => true);
+}
 
 /** `stations` is undefined until the core has listed them: until then nothing is said (least of all "no such station"). */
 function StationPages({ stations }: { stations: Station[] | undefined }) {

@@ -6,10 +6,11 @@
 // at its foot every workspace to switch to (each with what waits in it; a ＋ over them, as the pointer comes, for making
 // one, another account, invitations) and under them the settings, which are not among what is chosen. It is changed where it is: its menu's 自定义侧边条 (or 外观's) has its places
 // dragged up and down, taken out with their −, added from a panel beside it by kind; a place's own menu takes it out.
-// Each place is what the sidebar beside it shows: the chats (or 奏, one of their lists), the folders the stations lend
-// (FilesNav, cloud/workspace.tsx), the settings. On a narrow screen there is none: the sidebar's foot keeps the switcher
-// and the settings.
-import { useRef, useState, useSyncExternalStore, type ComponentType, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+// Station, Profile, 连接 and 用量 in it are pages of their own beside the chats; left out of it, they are among the settings.
+// The sidebar beside shows the chats (or 奏, one of their lists), the folders the stations lend (FilesNav,
+// cloud/workspace.tsx) or the settings; coming to the last two with it closed opens it. On a narrow screen there is
+// none: the sidebar's foot keeps the switcher and the settings.
+import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { ContextMenu, Popover } from "radix-ui";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { Archive, Bell, Chart, Chats, Folder, Im, Minus, PanelClose, Plus, PanelOpen, Quota, Settings, User, Watch, type IconProps } from "./icons.tsx";
@@ -138,6 +139,9 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
     window.addEventListener("pointerup", up);
   };
   const sidebar = useSidebarToggle();
+  // The settings and the files have their way round in the sidebar: come to them with it closed, it opens.
+  const needsSidebar = place === "settings" || place === "files" || (place !== "chats" && place !== "archive" && !items.includes(place));
+  useEffect(() => { if (needsSidebar && sidebar.closed) sidebar.toggle(); }, [needsSidebar]); // eslint-disable-line react-hooks/exhaustive-deps
   const settings = `/w/${scope}/settings`;
   // A list of chats lit while the sidebar shows it; 对话 for one not in the rail.
   const shownList = (Object.keys(LISTS) as RailItem[]).find((i) => LISTS[i] === mode && items.includes(i)) ?? "chats";
