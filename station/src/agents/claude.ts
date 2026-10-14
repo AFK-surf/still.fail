@@ -4,7 +4,8 @@
 // Behaviour pinned by spikes (spike/README.md):
 // - a turn is framed by system/init … result; `result.is_error` decides success, not `subtype` (an auth failure ends
 //   as subtype "success");
-// - 401/403 is retried silently for minutes, visible only as system/api_retry frames, so the first one fails the turn;
+// - 401/403 is retried silently for minutes, visible only as system/api_retry frames, so the first one fails the turn
+//   (but see RENEWED);
 // - input written while a turn is finishing may start a turn of its own (a system/init with no prompt of ours);
 // - interrupt is a control_request; the turn still ends with a result frame.
 // - background_tasks (a control_request) moves the Bash commands and subagents a turn waits on to the background: each
@@ -110,14 +111,24 @@ export function classifyResult(text: string): FailureReason {
   return "model";
 }
 
-export type Turn = { busy: boolean; aborting: boolean; authFailure: string | null; closed: boolean };
+/// `renews`: its token is handed over and renewed while it runs (RENEWED): a first 401 is left to that.
+/// `renewed`: a new token was given it in this turn, so another 401 is not the old token's.
+export type Turn = { busy: boolean; aborting: boolean; authFailure: string | null; closed: boolean; renews?: boolean; renewed?: boolean };
+
+/// A token handed to the process (a machine login's, a lent one) is renewed while it runs: started with these, Claude
+/// Code asks its host for a new one on a 401 (an `oauth_token_refresh` control request) and retries with it, so the
+/// process, its background tasks and subagents go on. It honours them only for a few entrypoints; claude-desktop
+/// changes neither its prompt nor its tools (only the entrypoint named in its requests), as checked on 2.1.299.
+const RENEWED = { CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH: "1", CLAUDE_CODE_ENTRYPOINT: "claude-desktop" };
+/// A CLI that does not ask (one too old) retries a 401 on its own: past this attempt it is stopped as before.
+const RENEW_ATTEMPTS = 2;
 
 /// A session as a next station takes it up (claude.rs Handed: the turn as its last handled line left it).
 export type ClaudeSnapshot = {
   runtime: "claude";
   id: string;
   runner: string;
-  turn: { busy: boolean; aborting: boolean; authFailure: string | null };
+  turn: { busy: boolean; aborting: boolean; authFailure: string | null; renews?: boolean };
   machineExpires: number | null;
   live: ClaudeLiveState;
 };
@@ -129,11 +140,12 @@ export type ClaudeDriverOptions = {
   command?: string;
   /// The station's own environment (machine logins are read in it); process.env by default.
   env?: Env;
-  /// The machine login's current token, renewed when about to run out (claude_oauth.rs; the accounts module's).
-  machineToken?: (env: Env) => Promise<MachineToken>;
+  /// The machine login's current token, renewed when about to run out or when it is `rejected` (claude_oauth.rs; the
+  /// accounts module's).
+  machineToken?: (env: Env, rejected?: string) => Promise<MachineToken>;
   /// Another station's subscription, borrowed (share/index.ts): a token lent by the station signed in on it, handed
   /// to the process as the machine's is.
-  lent?: { borrowed(profile: Profile): boolean; token(profile: Profile): Promise<MachineToken> };
+  lent?: { borrowed(profile: Profile): boolean; token(profile: Profile, rejected?: string): Promise<MachineToken> };
 };
 
 const interruptRequest = () => JSON.stringify({ type: "control_request", request_id: `interrupt-${uuid()}`, request: { subtype: "interrupt" } });
@@ -150,7 +162,10 @@ export function onFrame(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => 
     if (!was) emit({ type: "turnStarted" });
   } else if (kind === "system" && subtype === "api_retry") {
     const status = Number.isInteger(frame.error_status) ? (frame.error_status as number) : 0;
-    if ((status === 401 || status === 403) && turn.authFailure === null) {
+    const attempt = Number.isInteger(frame.attempt) ? (frame.attempt as number) : 1;
+    // A token renewed while it runs asks for a new one (RENEWED); stopped only when that one fails too.
+    const renewing = status === 401 && turn.renews === true && turn.renewed !== true && attempt <= RENEW_ATTEMPTS;
+    if ((status === 401 || status === 403) && turn.authFailure === null && !renewing) {
       const error = frame.error === undefined ? "authentication failed" : typeof frame.error === "string" ? frame.error : JSON.stringify(frame.error);
       turn.authFailure = `${status} ${error}`;
       interrupt();
@@ -166,6 +181,7 @@ export function onFrame(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => 
     turn.busy = false;
     turn.aborting = false;
     turn.authFailure = null;
+    turn.renewed = false;
     emit({ type: "turnEnded", outcome });
   }
 }
@@ -183,7 +199,7 @@ export class ClaudeDriver implements AgentDriver {
   private readonly data: string;
   private readonly command: string;
   private readonly env: Env;
-  private readonly machineToken: (env: Env) => Promise<MachineToken>;
+  private readonly machineToken: (env: Env, rejected?: string) => Promise<MachineToken>;
   private readonly lent: ClaudeDriverOptions["lent"];
   private live = new Set<ClaudeSession>();
 
@@ -225,13 +241,11 @@ export class ClaudeDriver implements AgentDriver {
     for (const name of bothNames("RUNTIME_SESSION_ID")) env[name] = sessionId;
     // A machine profile runs on the machine's own login, handed over as its current token (machine_logins.rs).
     // Another station's subscription the same way, with the token that station lends.
-    const machine = isMachine(options.profile)
-      ? await this.machineToken(this.env)
-      : this.lent?.borrowed(options.profile)
-        ? await this.lent.token(options.profile)
-        : undefined;
+    const renew = this.renewer(options.profile);
+    const machine = renew ? await renew() : undefined;
     if (machine) {
       env.CLAUDE_CODE_OAUTH_TOKEN = machine.token;
+      Object.assign(env, RENEWED);
     } else {
       // Its own login stays in its home's file when it refreshes it (no_keychain.rs).
       await takeBack(home);
@@ -244,12 +258,22 @@ export class ClaudeDriver implements AgentDriver {
     // ordinary output reaches nobody, so the nudge turned into status posts in the chat; the instructions say when to post.
     env.CLAUDE_CODE_SILENT_TURN_REMINDER ??= "0";
 
-    const session = new ClaudeSession(this, sessionId, { busy: false, aborting: false, authFailure: null, closed: false }, machine?.expiresAt ?? null, new LiveFromClaude(), events, options.effort);
+    // Renewed while it runs, it is never started again for its token.
+    const session = new ClaudeSession(this, sessionId, { busy: false, aborting: false, authFailure: null, closed: false, renews: machine !== undefined }, null, new LiveFromClaude(), events, options.effort, renew, machine?.token ?? null);
     const label = `claude ${sessionId}`;
     session.toolsUrl = options.mcpUrl;
     session.attach(await AgentProcess.start(this.data, runnerId("claude", options.key), this.command, args, env, options.cwd, session.processOptions(label)));
     this.live.add(session);
     return session;
+  }
+
+  /// Where a profile whose token is handed to the process gets a current one (null for a profile with its own login):
+  /// the machine login's, or the one lent by the station a borrowed subscription is signed in on.
+  private renewer(profile: Profile): Renew | null {
+    if (isMachine(profile)) return (rejected) => this.machineToken(this.env, rejected);
+    const lent = this.lent;
+    if (lent?.borrowed(profile)) return (rejected) => lent.token(profile, rejected);
+    return null;
   }
 
   async adopt(options: OpenOptions, snapshot: unknown | null, events: (event: RuntimeEvent) => void): Promise<AgentSession> {
@@ -260,7 +284,7 @@ export class ClaudeDriver implements AgentDriver {
     let session: ClaudeSession;
     if (handed) {
       log.info("agents::claude", "taking up a claude process handed over", { session: handed.id, pgid: info.pgid, busy: handed.turn.busy });
-      session = new ClaudeSession(this, handed.id, { ...handed.turn, closed: false }, handed.machineExpires, new LiveFromClaude(handed.live), events, flagOf(info.args, "--effort"));
+      session = new ClaudeSession(this, handed.id, { ...handed.turn, closed: false }, handed.machineExpires, new LiveFromClaude(handed.live), events, flagOf(info.args, "--effort"), this.renewer(options.profile), null);
     } else {
       // The previous station crashed: what it had handled (stdout up to where it acknowledged) is read again, silently,
       // to know where the turn stands; the rest comes as it would have.
@@ -276,8 +300,10 @@ export class ClaudeDriver implements AgentDriver {
       const flag = info.args.findIndex((a) => a === "--session-id" || a === "--resume");
       const sessionId = flag >= 0 ? info.args[flag + 1]! : (options.resume ?? "");
       log.info("agents::claude", "taking up a claude process after a crash", { session: sessionId, pgid: info.pgid, busy: turn.busy, from: at });
-      // Its token is not known: as if about to run out, so its next turn starts it again with the machine's current one.
-      session = new ClaudeSession(this, sessionId, turn, isMachine(options.profile) ? wall.now() : null, live, events, flagOf(info.args, "--effort"));
+      // Its token is not known, nor whether it asks for a new one: as if about to run out, so its next turn starts it
+      // again with a current one (a machine login's or a lent one).
+      const renew = this.renewer(options.profile);
+      session = new ClaudeSession(this, sessionId, turn, renew ? wall.now() : null, live, events, flagOf(info.args, "--effort"), renew, null);
       // A turn is running that this station did not start.
       if (turn.busy) events({ type: "turnStarted" });
     }
@@ -304,6 +330,9 @@ export class ClaudeDriver implements AgentDriver {
   }
 }
 
+/// A current token for a process, renewed first when `rejected` is the one given.
+type Renew = (rejected?: string) => Promise<MachineToken>;
+
 export class ClaudeSession implements AgentSession {
   private proc!: AgentProcess;
   private driver: ClaudeDriver;
@@ -319,9 +348,14 @@ export class ClaudeSession implements AgentSession {
   toolsUrl: string | null = null;
   /// Its calls to the station's tools not answered yet (toolsLostIn).
   private calls = new Set<string>();
+  /// Where it gets a new token when it asks (RENEWED), and the one it was given last (null when not known here).
+  private renew: Renew | null;
+  private token: string | null;
 
-  constructor(driver: ClaudeDriver, sessionId: string, turn: Turn, machineExpires: number | null, live: LiveFromClaude, events: (event: RuntimeEvent) => void, effort: string | undefined) {
+  constructor(driver: ClaudeDriver, sessionId: string, turn: Turn, machineExpires: number | null, live: LiveFromClaude, events: (event: RuntimeEvent) => void, effort: string | undefined, renew: Renew | null, token: string | null) {
     this.driver = driver;
+    this.renew = renew;
+    this.token = token;
     this.effort = effort;
     this.sessionId = sessionId;
     this.turn = turn;
@@ -339,6 +373,7 @@ export class ClaudeSession implements AgentSession {
         for (const event of this.live.feed(frame)) this.events({ type: "live", event });
         const lost = toolsLostIn(frame, this.calls);
         if (lost !== null) this.events({ type: "toolsLost", why: lost });
+        if (frame?.type === "control_request" && frame.request?.subtype === "oauth_token_refresh") void this.renewToken(String(frame.request_id ?? ""));
         onFrame(frame, this.turn, this.events, () => this.proc.write(interruptRequest()));
       },
       exit: (said: string, stderr: string) => {
@@ -359,6 +394,26 @@ export class ClaudeSession implements AgentSession {
     this.proc = proc;
   }
 
+  /// It was refused with its token and asks for a new one (RENEWED): given one other than the token refused, or told
+  /// why not, when its turn ends failed on authentication as before.
+  private async renewToken(requestId: string) {
+    let response: Json;
+    try {
+      if (!this.renew) throw new Error("its token is its own login's");
+      const got = await this.renew(this.token ?? undefined);
+      if (got.token === this.token) throw new Error("no newer token");
+      this.token = got.token;
+      this.turn.renewed = true;
+      response = { accessToken: got.token };
+      log.info("agents::claude", "gave claude a new token", { session: this.sessionId });
+    } catch (error) {
+      log.warn("agents::claude", "no new token for claude", { session: this.sessionId, error: (error as Error).message });
+      response = { accessToken: null, reason: "refresh_failed" };
+    }
+    if (this.turn.closed) return;
+    this.proc.write(JSON.stringify({ type: "control_response", response: { subtype: "success", request_id: requestId, response } }));
+  }
+
   id() {
     return this.sessionId;
   }
@@ -374,8 +429,10 @@ export class ClaudeSession implements AgentSession {
   async prompt(text: string) {
     if (this.turn.closed) throw new Error("claude session is closed");
     if (this.turn.busy) throw new Error("a turn is already running");
-    // Its token cannot refresh itself: about to run out, it is started again (resuming) with the machine's next one.
+    // Taken up without knowing whether it renews its token (RENEWED): about to run out, it is started again (resuming)
+    // with a current one.
     if (this.machineExpires !== null && this.machineExpires - wall.now() < CLAUDE_TOKEN_MARGIN_MS) throw new Error("the machine login's token runs out");
+    this.turn.renewed = false;
     this.turn.busy = true;
     this.proc.write(userMessage(text));
   }
@@ -421,7 +478,7 @@ export class ClaudeSession implements AgentSession {
       runtime: "claude",
       id: this.sessionId,
       runner: this.proc.info.id,
-      turn: { busy: this.turn.busy, aborting: this.turn.aborting, authFailure: this.turn.authFailure },
+      turn: { busy: this.turn.busy, aborting: this.turn.aborting, authFailure: this.turn.authFailure, renews: this.turn.renews },
       machineExpires: this.machineExpires,
       live: this.live.state(),
     };

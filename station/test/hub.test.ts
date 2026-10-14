@@ -329,6 +329,33 @@ test("stop while waiting ends the jobs that would bring it back, but not its ser
   await r.close();
 });
 
+test("a turn that cannot start is not left starting, and stop clears what is still said to be under way", async () => {
+  const r = new Rig();
+  r.claude.refuses = "the station this subscription is signed in on did not lend it: station mesh is not ready";
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const phase = () => {
+    let said: unknown = "untold";
+    const id = r.hub.live.subscribe(key, 0, 0, (l: any) => {
+      if (l.type === "steps") said = l.phase;
+    });
+    r.hub.live.unsubscribe(key, id);
+    return said;
+  };
+  assert.equal(phase(), null, "the failed start ended what was said to be starting");
+  assert.equal(r.hub.processState(key), "cold");
+  assert.match(r.chat.lastText(), /did not lend it/);
+  // Said to be under way some other way: stop, with nothing running, clears it.
+  r.hub.live.event(key, { kind: "phase", phase: "starting" });
+  assert.notEqual(phase(), null);
+  await r.hub.stop(key);
+  await settle();
+  assert.equal(phase(), null);
+  await r.close();
+});
+
 test("claude auth retries once, then reports the profile and does not loop", async () => {
   const r = new Rig();
   const m = message();

@@ -79,6 +79,27 @@ const stdin = (dump: string) => readFileSync(`${dump}.stdin`, "utf8").trim().spl
 
 // Each test has its own driver, profile and runners: they run side by side.
 describe("the Codex driver", { concurrency: true }, () => {
+  test("a borrowed login about to run out is lent again under the running app-server, not by starting another", async () => {
+    let until = Date.now() + 3600_000;
+    const writes: number[] = [];
+    const d = driver({ lent: { borrowed: () => true, write: async () => (writes.push(until), until) } });
+    const p = profile();
+    const { events, push, until: wait } = listen();
+    const session = await d.open(options(p), push);
+    assert.equal(writes.length, 1, "lent as it starts");
+    await session.prompt("cmd");
+    await wait(ended(1));
+    assert.equal(writes.length, 2, "lent again before a turn, as it runs out within hours");
+    until = Date.now() + 48 * 3600_000;
+    const other = await d.open(options(p), () => {});
+    assert.equal(writes.length, 3, "and as another session opens on it");
+    await session.prompt("cmd");
+    await wait(ended(2));
+    assert.equal(writes.length, 3, "lasting long enough, it is not lent again");
+    assert.equal(starts(p.dump).length, 1, "one app-server all along");
+    await Promise.all([session.dispose(), other.dispose()]);
+  });
+
   test("a turn completes, on an app-server started with the flags and environment of codex.rs", async () => {
     const d = driver();
     const p = profile();

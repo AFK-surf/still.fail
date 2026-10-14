@@ -3,6 +3,10 @@
 //   say:<text>    a reply                       fail:auth|rate|model   a result with is_error
 //   slow:<n>      n deltas, 50 ms apart          retry401               two api_retry 401 frames, then waits until interrupted
 //                                                retry403               the same with 403 Request not allowed (a refused region)
+//                                                expired                its token refused: with CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH
+//                                                                       an api_retry 401, then an oauth_token_refresh control
+//                                                                       request; a new token given, a reply "token:<it>", else
+//                                                                       it fails on authentication (as Claude Code 2.1.299)
 //   hold:<k>      k deltas, then waits until steered (the steers its deltas) or interrupted
 //   gate:<n>:<k>:<name>   k of n deltas; the rest once FAKE_DUMP.<name>.a (a fifo) is written, then FAKE_DUMP.<name>.said
 //                 made; the end once FAKE_DUMP.<name>.b is (what the test lets happen when, not a time)
@@ -24,6 +28,15 @@ const flag = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : und
 const sessionId = flag("--session-id") || flag("--resume") || "none";
 
 const say = (frame) => fs.writeSync(1, JSON.stringify(frame) + "\n");
+/// The token it runs on (CLAUDE_CODE_OAUTH_TOKEN), and its control requests to the station waiting for an answer.
+let token = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+const asked = new Map();
+let asks = 0;
+const ask = (request) => new Promise((r) => {
+  const id = `ask-${++asks}`;
+  asked.set(id, r);
+  say({ type: "control_request", request_id: id, request });
+});
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /// A wait that a control request (interrupt, background_tasks) or a steer ends; nothing else does.
 let wake = () => {};
@@ -95,6 +108,18 @@ async function turn(text) {
     for (const attempt of [1, 2]) say({ type: "system", subtype: "api_retry", attempt, retry_delay_ms: 100, error_status: status, error, session_id: sessionId });
     while (!interrupted) await pause();
     result({ subtype: "error_during_execution", is_error: true, result: "" });
+  } else if (text === "expired") {
+    say({ type: "system", subtype: "api_retry", attempt: 1, retry_delay_ms: 100, error_status: 401, error: "authentication_failed", session_id: sessionId });
+    const answer = process.env.CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH ? await ask({ subtype: "oauth_token_refresh" }) : null;
+    const given = answer?.accessToken;
+    if (typeof given === "string" && given !== token) {
+      token = given;
+      result({ result: await message([`token:${token}`], 0) });
+    } else {
+      say({ type: "system", subtype: "api_retry", attempt: 2, retry_delay_ms: 100, error_status: 401, error: "authentication_failed", session_id: sessionId });
+      if (!process.env.CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH) while (!interrupted) await pause();
+      result({ is_error: true, result: "Failed to authenticate. API Error: 401 OAuth token has expired." });
+    }
   } else if (text.startsWith("hold:")) {
     const k = Number(text.slice(5));
     const all = await message(Array.from({ length: k }, (_, i) => `d${i} `), 0, async (i) => {
@@ -162,6 +187,12 @@ rl.on("line", (line) => {
   try {
     msg = JSON.parse(line);
   } catch {
+    return;
+  }
+  if (msg.type === "control_response") {
+    const id = msg.response?.request_id;
+    asked.get(id)?.(msg.response?.response);
+    asked.delete(id);
     return;
   }
   if (msg.type === "control_request") {

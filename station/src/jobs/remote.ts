@@ -18,7 +18,7 @@ import { basename, dirname, isAbsolute, join } from "node:path";
 import { relativeParts } from "../ops/paths.ts";
 import { platform } from "../platform/index.ts";
 import { isDeepStrictEqual } from "node:util";
-import { Clock, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
+import { Clock, Duration, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { log } from "../ops/log.ts";
 import { type Json, type Store } from "../store/store.ts";
 import { type Jobs, jobJson, tail } from "./jobs.ts";
@@ -57,7 +57,14 @@ export type RemoteOptions = {
   config: () => Json;
   /// The clock its schedules run on (a TestClock in tests).
   clock?: Clock.Clock;
+  /// How long a request made before the mesh is up waits for it (MESH_WAIT_MS; tests shorten it).
+  meshWaitMs?: number;
 };
+
+/// A request asked before the transport is attached (a chat taken up as the station starts, its subscription borrowed
+/// from another station) waits for it this long: the mesh is up within a second, or ~15 s when it waits for a relay
+/// (mesh/mesh.ts), before it is attached.
+export const MESH_WAIT_MS = 30_000;
 
 const text = (v: Json, key: string): string => (v !== null && typeof v === "object" && typeof v[key] === "string" ? v[key] : "");
 const field = (v: Json, key: string): Json => (v !== null && typeof v === "object" && !Array.isArray(v) && key in v ? v[key] : null);
@@ -148,6 +155,10 @@ export class Remote {
   private notify: RemoteNotify;
   private config: () => Json;
   private call: PeerCall | null = null;
+  /// Settled once the transport is attached; requests made before wait on it (MESH_WAIT_MS).
+  private attached: Promise<void>;
+  private markAttached!: () => void;
+  private meshWaitMs: number;
   private inbox: Inbox | null = null;
   private shares: Inbox | null = null;
   private xshare: { inside: Inbox; outside: Inbox } | null = null;
@@ -164,6 +175,8 @@ export class Remote {
     this.jobs = options.jobs;
     this.notify = options.notify;
     this.config = options.config;
+    this.meshWaitMs = options.meshWaitMs ?? MESH_WAIT_MS;
+    this.attached = new Promise((resolve) => (this.markAttached = resolve));
     this.root = join(options.data, "remote");
     for (const name of ["incoming", "outgoing", "sessions", "used"]) mkdirSync(join(this.root, name), { recursive: true });
     this.scope = Effect.runSync(Scope.make());
@@ -174,6 +187,7 @@ export class Remote {
   /// The transport is there: follow the tasks started from here and the sessions closing, sweep now and hourly.
   attach(call: PeerCall): void {
     this.call = call;
+    this.markAttached();
     for (const name of this.list(join(this.root, "outgoing")).filter((n) => n.endsWith(".json"))) this.watch(join(this.root, "outgoing", name));
     for (const name of this.list(join(this.root, "used")).filter((n) => n.endsWith(".json"))) {
       const path = join(this.root, "used", name);
@@ -442,9 +456,13 @@ export class Remote {
   }
 
   /// A request to another station of the workspace (session_send's messages, and this module's own).
-  ask(station: string, request: Json): Promise<Json> {
+  async ask(station: string, request: Json): Promise<Json> {
+    if (!this.call) {
+      const attached = this.attached;
+      await this.run(Effect.race(Effect.promise(() => attached), Effect.sleep(Duration.millis(this.meshWaitMs)))).catch(() => undefined);
+    }
     const call = this.call;
-    if (!call) return Promise.reject(new Error("station mesh is not ready"));
+    if (!call) throw new Error("station mesh is not ready");
     const workspace = typeof request?.workspace === "string" ? request.workspace : null;
     return call(station, workspace, request);
   }

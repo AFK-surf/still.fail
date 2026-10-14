@@ -154,6 +154,20 @@ describe("allowances and renewing", { concurrency: true }, () => {
     await p.close();
   });
 
+  test("a token handed out is renewed while it still lasts the usual margin, and given as it is when that fails", async () => {
+    const home = temp("handed");
+    const path = join(home, ".credentials.json");
+    writeFileSync(path, JSON.stringify(credentials(Date.now() + 1_800_000)));
+    let p = await oauthProvider(503);
+    const [kept] = await claudeOAuthToken({}, home, null, p.base, "en", 3_600_000);
+    assert.notEqual(kept, "new", "renewing failed: the token lasting half an hour is given");
+    assert.ok(p.asked.some((r) => r.method === "POST"), "it was renewed first");
+    await p.close();
+    p = await oauthProvider(200);
+    assert.equal((await claudeOAuthToken({}, home, null, p.base, "en", 3_600_000))[0], "new");
+    await p.close();
+  });
+
   test("the CLI's legacy lock is waited for, and the token it saved is read again", async () => {
     const home = temp("legacy");
     const path = join(home, ".credentials.json");

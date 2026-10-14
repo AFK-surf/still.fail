@@ -383,7 +383,9 @@ export type CodexDriverOptions = {
   installedVersion?: () => Promise<string | null>;
 };
 
-/// A borrowed login this close to its end is replaced (its app-server started again, once idle).
+/// A borrowed login this close to its end is replaced in its home's auth.json, under the app-server running on it: Codex
+/// reads that file again when it is refused (UnauthorizedRecovery's first step, codex-rs login/src/auth/manager.rs) and
+/// goes on with the new one, its threads and their turns as they were.
 const LENT_RENEW_MS = 6 * 3600_000;
 
 /// When the access token in a home's auth.json runs out (0 when it does not say).
@@ -494,12 +496,7 @@ export class CodexDriver implements AgentDriver {
     const host = await this.serial(async () => {
       await this.retireStale(profile.id, installed);
       const current = this.hosts.get(profile.id);
-      // A borrowed login about to run out: a new process with a new one, once none of its sessions is in a turn.
-      if (current && current.alive() && current.lentUntil !== null && current.lentUntil - wall.now() < LENT_RENEW_MS && current.threads.size === 0) {
-        log.info("agents::codex", "its borrowed login runs out; restarting its codex app-server", { profile: profile.id });
-        this.hosts.delete(profile.id);
-        await current.proc.kill(5000);
-      }
+      if (current && current.alive()) await this.renewLent(current, profile);
       if (current && current.alive() && current.signature !== hostSignature(profile)) {
         // The profile changed. Replace the process once no session uses it; until then keep serving.
         if (current.threads.size === 0) {
@@ -658,6 +655,20 @@ export class CodexDriver implements AgentDriver {
   }
 
   /// Whether a host runs a Codex other than the one installed.
+  /// A borrowed login about to run out: a new one lent in its place (LENT_RENEW_MS), the app-server left running. As a
+  /// session opens and before each turn.
+  async renewLent(host: Host, profile: Profile) {
+    const lent = this.options.lent;
+    if (host.lentUntil === null || host.lentUntil - wall.now() >= LENT_RENEW_MS || !lent?.borrowed(profile)) return;
+    try {
+      host.lentUntil = await lent.write(profile);
+      log.info("agents::codex", "its borrowed login runs out; a new one is lent under its app-server", { profile: profile.id });
+    } catch (error) {
+      // It goes on with the one it has: asked again at its next turn.
+      log.warn("agents::codex", "its borrowed login runs out and no new one was lent", { profile: profile.id, error: (error as Error).message });
+    }
+  }
+
   async outdated(host: Host): Promise<boolean> {
     if (host.version === null) return false;
     await this.installedVersion();
@@ -779,6 +790,7 @@ export class CodexSession implements AgentSession {
     // Codex was updated under its app-server, whose tools would all fail: opened again on a new one, unless another turn
     // runs on it yet.
     const outdated = this.host.turns.size === 0 && (await this.driver.outdated(this.host));
+    await this.driver.renewLent(this.host, this.profile);
     if (this.state.closed) throw new Error("codex session is closed");
     if (this.state.busy) throw new Error("a turn is already running");
     if (outdated) throw new Error("codex was updated under its app-server");
