@@ -13,7 +13,7 @@
 // last two with it closed opens it. On a narrow screen there is none: the sidebar's foot keeps the switcher and the
 // settings.
 import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { ContextMenu, Popover } from "radix-ui";
+import { DropdownMenu, Popover } from "radix-ui";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { Archive, Bell, Chart, Chats, Folder, Im, Minus, Plus, Quota, Settings, User, Watch, type IconProps } from "./icons.tsx";
 import { keptWidth, PanelGroup, PanelHead, PanelNote, PanelRow, setKeptWidth, Tip, usePointerTip } from "./ui.tsx";
@@ -115,7 +115,10 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   const [dragged, setDragged] = useState<{ item: RailItem; order: RailItem[] } | null>(null);
   const slots = useRef(new Map<RailItem, HTMLElement>());
   // Right-clicked: the place under the pointer, to take out.
-  const [pointed, setPointed] = useState<RailItem | null>(null);
+  // Right-clicked: the place under the pointer (to take out) and where the menu stands, by the place (or the rail), not
+  // the pointer.
+  const [menu, setMenu] = useState<{ item: RailItem | null; box: { left: number; top: number; width: number; height: number } } | null>(null);
+  const pointed = menu?.item ?? null;
   const keep = (next: RailItem[]) => setPrefs({ rail: next });
   const drag = (item: RailItem) => (e: ReactPointerEvent) => {
     if (e.button !== 0) return;
@@ -190,7 +193,14 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   const hidden = KINDS.map((k) => ({ ...k, items: k.items.filter((i) => !items.includes(i)) })).filter((k) => k.items.length > 0);
   const rail = (
     <nav className={css.rail} aria-label={t("web-main.rail.label")} data-editing={changing || undefined}
-      onContextMenu={(e) => setPointed(((e.target as HTMLElement).closest("[data-rail-item]")?.getAttribute("data-rail-item") as RailItem | null) ?? null)}>
+      onContextMenu={(e) => {
+        if (changing) return;
+        e.preventDefault();
+        const slot = (e.target as HTMLElement).closest("[data-rail-item]");
+        // A place's slot is laid out by what is in it (display: contents): its box is its first child's.
+        const at = (slot?.firstElementChild ?? e.currentTarget).getBoundingClientRect();
+        setMenu({ item: (slot?.getAttribute("data-rail-item") as RailItem | null) ?? null, box: { left: at.left, top: at.top, width: at.width, height: slot ? at.height : 0 } });
+      }}>
       <div className={css.top} />
       {(dragged?.order ?? items).map((item) => changing ? (
         <div key={item} ref={(el) => { if (el) slots.current.set(item, el); else slots.current.delete(item); }} className={css.editing}
@@ -213,18 +223,22 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   );
   return (
     <Popover.Root open={changing} onOpenChange={(open) => { if (!open) editRail(false); }}>
-      <ContextMenu.Root modal={false}>
-        <ContextMenu.Trigger asChild disabled={changing}><Popover.Anchor asChild>{rail}</Popover.Anchor></ContextMenu.Trigger>
-        <ContextMenu.Portal>
-          <ContextMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList}`} collisionPadding={8}>
+      <Popover.Anchor asChild>{rail}</Popover.Anchor>
+      <DropdownMenu.Root modal={false} open={menu !== null} onOpenChange={(open) => { if (!open) setMenu(null); }}>
+        <DropdownMenu.Trigger asChild>
+          <span aria-hidden="true" tabIndex={-1} style={{ position: "fixed", pointerEvents: "none", ...(menu?.box ?? { left: 0, top: 0, width: 0, height: 0 }) }} />
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList}`} side="right" align="start" sideOffset={8}
+            collisionPadding={{ top: 52, right: 8, bottom: 8, left: 8 }}>
             {pointed && pointed !== "chats" && (
-              <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => keep(items.filter((i) => i !== pointed))}>{t("web-main.rail.remove", { name: railLabel(pointed) })}</ContextMenu.Item>
+              <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => keep(items.filter((i) => i !== pointed))}>{t("web-main.rail.remove", { name: railLabel(pointed) })}</DropdownMenu.Item>
             )}
-            <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => editRail(true)}>{t("web-main.rail.customize")}</ContextMenu.Item>
-            {kept && <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => setPrefs({ rail: null })}>{t("web-main.rail.reset")}</ContextMenu.Item>}
-          </ContextMenu.Content>
-        </ContextMenu.Portal>
-      </ContextMenu.Root>
+            <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => editRail(true)}>{t("web-main.rail.customize")}</DropdownMenu.Item>
+            {kept && <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => setPrefs({ rail: null })}>{t("web-main.rail.reset")}</DropdownMenu.Item>}
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
       <Popover.Portal>
         {/* Beside the rail while it is changed: what can be added, by kind. Pressing in the rail does not close it; anywhere
             else (or Esc) ends the change, there is no button for it. 恢复默认 is in the rail's menu. */}
