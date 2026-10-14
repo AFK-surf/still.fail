@@ -65,7 +65,11 @@ export const chatList = style({
     },
   },
 });
-globalStyle(`${sessionPage} ${pageBar}`, { gridTemplateColumns: "minmax(0, 1fr) auto" });
+/** A long title's people and agents run up to its buttons: a space keeps them two groups (the phone's bar has its own gap). */
+globalStyle(`${sessionPage} ${pageBar}`, {
+  gridTemplateColumns: "minmax(0, 1fr) auto",
+  "@media": { "(min-width: 701px)": { columnGap: "16px" } },
+});
 /** Not clipped: an agent mark's state dot sits partly outside it (the title ellipsises by itself). */
 globalStyle(`${sessionPage} ${pageBarTitle}`, {
   gridColumn: "1", justifySelf: "stretch", gap: "10px", minWidth: "0", paddingLeft: "8px",
