@@ -93,6 +93,7 @@ fun SettingsScreen(current: WorkspaceEntry) {
     val workspace by rememberTopic<WorkspaceView>(app.core, Topics.workspace(current.workspace.id))
     val stationsTopic by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
     val connectsTopic by rememberTopic<ConnectsView>(app.core, Topics.connects(current.workspace.id, false))
+    val lock by rememberTopic<fail.still.android.data.LockView>(app.core, Topics.lock(current.workspace.id))
     val view = workspace.value
     val stations = stationsTopic.value
     val connects = connectsTopic.value
@@ -118,6 +119,9 @@ fun SettingsScreen(current: WorkspaceEntry) {
         SectionHeader(view?.let { t("android-settings.home.workspace", "name" to it.name, "role" to (ROLE_LABEL[it.role] ?: it.role)) } ?: current.workspace.name, start = 24.dp)
         ListCard {
             GoRow("Workspace", view?.let { if (it.manager && waiting > 0) t("android-settings.members.waiting", "n" to it.members.size, "waiting" to waiting) else t("android-settings.members.count", "n" to it.members.size) }) { app.push(Screen.Workspace) }
+            lock.value?.takeIf { it.available }?.let { l ->
+                GoRow(t("web-pages.security.title"), if (!l.locked) t("web-mobile.settings.securityOff") else if (l.attention > 0u) t("web-mobile.settings.securityWaiting", "n" to l.attention.toInt()) else t("web-mobile.settings.securityOn"), bad = l.attention > 0u) { app.push(Screen.Security) }
+            }
             GoRow("Station", stations?.let { t("android-settings.home.online", "online" to online, "total" to it.size) }, dot = troubled) { app.push(Screen.Stations) }
             GoRow(t("android-settings.connects.title"), connects?.let { if (failing > 0) t("android-settings.home.failing", "n" to failing) else t("android-settings.count", "n" to it.items.size) }, bad = failing > 0) { app.push(Screen.Connects()) }
             GoRow("Profile", stations?.let { if (short > 0) t("android-settings.home.short", "n" to short) else t("android-settings.count", "n" to profiles.size) }, bad = short > 0) { app.push(Screen.Profiles()) }

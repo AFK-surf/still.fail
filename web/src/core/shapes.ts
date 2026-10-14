@@ -2692,6 +2692,142 @@ export interface Live {
 	offline?: boolean;
 }
 
+/** A device in the workspace's lock. */
+export interface LockDevice {
+	id: string;
+	/** `app` (desktop, Android: it may sign) or `web` (a page: 30 days at a time). */
+	kind: string;
+	label: string;
+	signs: boolean;
+	/** An older client, known by the endpoint it connects with. */
+	older: boolean;
+	/** This device. */
+	mine: boolean;
+	/** A web page's: days until it runs out. */
+	daysLeft?: number;
+	renewSoon: boolean;
+	/** One of the viewer's own, added lately (shown on their other devices). */
+	recent: boolean;
+}
+
+/** A device turning the lock on would sign. */
+export interface LockDraftDevice {
+	id: string;
+	person: string;
+	kind: string;
+	label: string;
+	older: boolean;
+	/** This device: always in, the first signer. */
+	current: boolean;
+	last_seen: number;
+	on: boolean;
+	fixed: boolean;
+	time?: Record<string, Stamp>;
+}
+
+export interface LockDraftMember {
+	sub: string;
+	email: string;
+	name: string;
+	role: string;
+}
+
+/** A station turning the lock on would sign, or why not. */
+export interface LockDraftStation {
+	id: string;
+	name: string;
+	version?: string;
+	/** `ok` (it understands a lock), `old` (too old), `offline`, `asking`. */
+	state: string;
+	on: boolean;
+	fixed: boolean;
+}
+
+/** What turning the workspace's lock on would sign (the `lockDraft` topic): what is left out is `on: false`. */
+export interface LockDraftView {
+	available: boolean;
+	loading: boolean;
+	canSign: boolean;
+	owner: boolean;
+	ready: boolean;
+	members: LockDraftMember[];
+	devices: LockDraftDevice[];
+	stations: LockDraftStation[];
+}
+
+/** This device in the workspace's lock. */
+export interface LockMe {
+	device?: string;
+	code?: string;
+	kind: string;
+	confirmed: boolean;
+	daysLeft?: number;
+	/** A station refused this device for the lock: it waits to be confirmed. */
+	waiting: boolean;
+}
+
+/** A member in the workspace's lock, with their devices. */
+export interface LockPerson {
+	sub: string;
+	email: string;
+	name: string;
+	role: string;
+	you: boolean;
+	devices: LockDevice[];
+}
+
+/** A device waiting to be confirmed. */
+export interface LockRequest {
+	device: string;
+	sub: string;
+	email: string;
+	name: string;
+	kind: string;
+	label: string;
+	/** The code the device shows: compared before it is confirmed. */
+	code: string;
+	created_at: number;
+	yours: boolean;
+	/** Its times in words (`created_at`). */
+	time?: Record<string, Stamp>;
+}
+
+/** A station of the workspace and whether the lock protects it. */
+export interface LockStation {
+	id: string;
+	name: string;
+	version?: string;
+	online: boolean;
+	/** The lock names it: it holds the lock. */
+	protected: boolean;
+}
+
+/** The workspace's security mode, its lock (the `lock` topic; client/core-ts/src/views/lock.ts, docs/workspace-lock.md). */
+export interface LockView {
+	/** Whether the control plane keeps locks (still.fail cloud's does; Comma's not). */
+	available: boolean;
+	locked: boolean;
+	/** The one-line notice that it is off: the owner's, until closed (`lock.dismiss`). */
+	notice: boolean;
+	role: string;
+	manages: boolean;
+	owner: boolean;
+	/** An app: it may sign (a web page may not). */
+	canSign: boolean;
+	/** This device signs for the lock. */
+	signs: boolean;
+	me?: LockMe;
+	signers: number;
+	members: LockPerson[];
+	stations: LockStation[];
+	protected: number;
+	/** Devices waiting on the viewer: their own, anyone's for owners and admins. */
+	requests: LockRequest[];
+	/** The viewer's own web devices running out soon. */
+	renew: LockDevice[];
+	attention: number;
+}
+
 export interface LongJobsGroup {
 	/** services | jobs */
 	key: string;

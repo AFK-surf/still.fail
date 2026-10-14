@@ -24,6 +24,8 @@ import { NewProfileScreen, ProfileAccountScreen, ProfileScreen, ProfilesScreen }
 import { AppearanceScreen, LanguageScreen, SettingsScreen } from "./Settings.tsx";
 import { ChangelogScreen } from "./Changelog.tsx";
 import { WorkspaceScreen } from "./WorkspacePage.tsx";
+import { SecurityOpenScreen, SecurityScreen, SecurityWaitingScreen } from "./Security.tsx";
+import { useLock } from "../cloud/Security.tsx";
 import { identify } from "../telemetry.ts";
 import { t } from "../i18n.ts";
 
@@ -34,6 +36,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
   const stations = useStationList(found.value, entry.id);
   // The same while the stations are: a page is drawn again when what it is given changes, not whenever this is.
   const routes = useCallback((location: Location) => (
+    <LockGate workspace={entry.id} path={location.pathname}>
     <Routes location={location}>
       <Route index element={<Home />} />
       {/* A new chat and a chat are one page (ChatHost.tsx): as one becomes the other, its composer stays. */}
@@ -47,6 +50,8 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="settings/language" element={<LanguageScreen />} />
       <Route path="settings/changelog" element={<ChangelogScreen />} />
       <Route path="settings/workspace" element={<WorkspaceScreen />} />
+      <Route path="settings/security" element={<SecurityScreen />} />
+      <Route path="settings/security/open" element={<SecurityOpenScreen />} />
       <Route path="settings/stations" element={<StationsScreen />} />
       <Route path="settings/connects" element={<ConnectsScreen />} />
       <Route path="settings/automatic-decisions" element={<AutomaticDecisionsScreen />} />
@@ -80,8 +85,16 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       {/* What the narrow app has no page for (the desktop's settings, a station's bare address) is the list. */}
       <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
     </Routes>
+    </LockGate>
   ), [stations, entry.id]);
   return <MobileShell entry={entry} routes={routes} recent={() => <Recent />} />;
+}
+
+/** A device waiting to be confirmed into the workspace's lock sees that instead of its pages (but the settings). */
+function LockGate({ workspace, path, children }: { workspace: string; path: string; children: React.ReactNode }) {
+  const lock = useLock(workspace);
+  if (lock?.me?.waiting && !/\/settings(\/|$)/.test(path)) return <SecurityWaitingScreen lock={lock} />;
+  return <>{children}</>;
 }
 
 /** A station's page: its station in context, once the workspace's stations are known. */

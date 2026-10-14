@@ -168,7 +168,7 @@ export function counts(call: Call, name: string): boolean {
     case "adb":
       return call.call.kind === "pair" || call.call.kind === "grant";
     case "lock":
-      return call.name !== "state";
+      return call.name !== "state" && call.name !== "toggle" && call.name !== "dismiss";
     default:
       return false;
   }
@@ -177,7 +177,7 @@ export function counts(call: Call, name: string): boolean {
 const S = "string" as const;
 
 /// The workspace lock's calls (views/lock.ts).
-export const LOCK_CALLS = ["state", "open", "request", "confirm", "addStation", "disable"];
+export const LOCK_CALLS = ["state", "open", "toggle", "dismiss", "request", "confirm", "deny", "addStation", "renew", "removeDevice", "disable"];
 
 function form(name: string, params: unknown, prefix: string, actions: string[]): { topic: Topic; action: string; patch: unknown } | null {
   if (!name.startsWith(prefix)) return null;

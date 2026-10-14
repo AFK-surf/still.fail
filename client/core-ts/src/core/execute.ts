@@ -24,6 +24,9 @@ export const hooks: {
   updateNoticeOpen?: (inner: Inner, station: string, open: boolean) => void;
   /// A station's enrollment made: its commands, as the workspace lock has them say (views/lock.ts).
   enrolled?: (inner: Inner, sub: string, workspace: string, made: unknown) => Effect.Effect<unknown, CoreError>;
+  /// A station refused this device for the workspace lock; why a station is not asked now (views/lock.ts).
+  lockRefused?: (inner: Inner, workspace: string, station: string) => void;
+  lockWaiting?: (inner: Inner, workspace: string, station: string) => CoreError | null;
 } = {};
 
 /// Runs a call; `at` is the client and id it came with, `ctx` its trace.

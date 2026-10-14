@@ -165,6 +165,9 @@ sealed interface Screen {
     data class PreviewFile(val station: String, val session: String, val path: String, val name: String) : Screen { override val id = "preview-file/$station/$session/$path" }
     /** The workspace itself: its name, its people, leaving it. */
     data object Workspace : Screen { override val id = "workspace" }
+    /** The workspace's security mode (its lock), and turning it on. */
+    data object Security : Screen { override val id = "security" }
+    data object SecurityOpen : Screen { override val id = "security/open" }
     /** A connect of a station; how it runs; a new one on a station. */
     data class Connect(val station: String, val connect: String) : Screen { override val id = "connect/$station/$connect" }
     data class ConnectRun(val station: String, val connect: String) : Screen { override val id = "connect-run/$station/$connect" }
@@ -765,7 +768,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
             // A message's page draws its own ground, coming in over its chat (Annotate.kt).
             Box(Modifier.fillMaxSize().then(if (screen is Screen.Annotate) Modifier else Modifier.background(C.bg))) {
                 when (screen) {
-                    Screen.Home -> HomeScreen(current)
+                    Screen.Home -> fail.still.android.screens.LockGate(current) { HomeScreen(current) }
                     is Screen.Chat, Screen.NewChat -> fail.still.android.screens.ChatHost(current, screen)
                     Screen.Stations -> StationsScreen(current)
                     is Screen.Station -> StationScreen(current, screen.address)
@@ -789,6 +792,8 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     Screen.Usage -> fail.still.android.screens.UsageScreen(current)
                     is Screen.UsagePrices -> fail.still.android.screens.UsagePricesScreen(current, screen.days)
                     Screen.Workspace -> fail.still.android.screens.WorkspaceScreen(current)
+                    Screen.Security -> fail.still.android.screens.SecurityScreen(current)
+                    Screen.SecurityOpen -> fail.still.android.screens.SecurityOpenScreen(current)
                     is Screen.Preview -> fail.still.android.screens.PreviewScreen(screen.station, screen.job)
                     is Screen.PreviewFile -> fail.still.android.screens.PreviewFileScreen(screen.station, screen.session, screen.path, screen.name)
                     is Screen.Connect -> fail.still.android.screens.ConnectScreen(screen.station, screen.connect)

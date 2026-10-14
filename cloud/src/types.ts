@@ -14,7 +14,7 @@ export interface InvitationView { id: string; role: Role; email: string | null; 
 export interface PendingInvitation { id: string; workspace: string; name: string; role: Role; inviter: string; expires_at: number }
 /** An email added to a workspace whose account has not signed in yet: a member from its first sign-in on. */
 export interface AddedView { email: string; role: Role; added_by: string; added_at: number }
-export interface WorkspaceView { id: string; name: string; role: Role; created_at: number; members: MemberView[]; stations: StationView[]; invitations: InvitationView[]; added: AddedView[]; relays?: string[]; lock?: LockHead | null }
+export interface WorkspaceView { id: string; name: string; role: Role; created_at: number; members: MemberView[]; stations: StationView[]; invitations: InvitationView[]; added: AddedView[]; relays?: string[]; lock?: LockHead | null; lock_requests?: number }
 
 /** How far the workspace's lock goes as the cloud keeps it (docs/workspace-lock.md): null, none. */
 export interface LockHead { seq: number; hash: string; genesis: string }

@@ -1,0 +1,281 @@
+// The workspace's security mode (its lock, docs/workspace-lock.md), as the narrow web has it (web/src/mobile/Security.tsx):
+// its page from the settings, turning it on, a device to confirm in a bottom sheet, and what a device waiting itself
+// shows. All of it is the core's (`lock`, `lockDraft` topics, `lock.*` calls, client/core-ts/src/views/lock.ts).
+package fail.still.android.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import fail.still.android.AppState
+import fail.still.android.LocalApp
+import fail.still.android.Screen
+import fail.still.android.data.LockDevice
+import fail.still.android.data.LockDraftView
+import fail.still.android.data.LockRequest
+import fail.still.android.data.LockView
+import fail.still.android.data.ROLE_LABEL
+import fail.still.android.data.Topics
+import fail.still.android.data.WorkspaceEntry
+import fail.still.android.data.rememberTopic
+import fail.still.android.data.t
+import fail.still.android.ui.C
+import fail.still.android.ui.CodeFont
+import fail.still.android.ui.IconIn
+import fail.still.android.ui.Icons
+import fail.still.android.ui.LargeTitle
+import fail.still.android.ui.ListCard
+import fail.still.android.ui.ListRow
+import fail.still.android.ui.SectionHeader
+import fail.still.android.ui.SheetGrab
+import fail.still.android.ui.SheetHead
+import fail.still.android.ui.SheetSpec
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+
+/** A device's name as people know it: its label, or what kind of client it is. */
+private fun deviceName(kind: String, label: String, older: Boolean = false): String = when {
+    older -> label.ifEmpty { t("web-pages.security.olderClient") }
+    label.isNotEmpty() -> label
+    kind == "web" -> t("web-pages.security.webDevice")
+    else -> t("web-pages.security.appDevice")
+}
+
+/** `lock.<name>` on this workspace, let go on by itself and said how it ended. */
+private fun AppState.lockCall(workspace: String, name: String, what: String, done: String? = null, vararg params: Pair<String, String>) =
+    act(what, done) { core.call("lock.$name", buildJsonObject { put("workspace", workspace); params.forEach { (k, v) -> put(k, v) } }) }
+
+@Composable
+private fun Dot(on: Boolean, warn: Boolean = false) =
+    Box(Modifier.size(7.dp).background(if (on) C.green else if (warn) C.warn else C.line, CircleShape))
+
+@Composable
+private fun Body(content: @Composable () -> Unit) =
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { content() }
+
+@Composable
+private fun Para(main: String, sub: String? = null) = Column {
+    Text(main, fontSize = 15.sp, lineHeight = 22.sp, color = C.ink)
+    if (sub != null) Text(sub, fontSize = 15.sp, lineHeight = 22.sp, color = C.subtle)
+}
+
+@Composable
+private fun Note(text: String) = Text(text, fontSize = 12.sp, lineHeight = 18.sp, color = C.subtle)
+
+@Composable
+fun SecurityScreen(current: WorkspaceEntry) {
+    val app = LocalApp.current
+    val topic by rememberTopic<LockView>(app.core, Topics.lock(current.workspace.id))
+    val lock = topic.value
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
+        TopBack(t("android-settings.title"), app::pop)
+        LargeTitle("", t("web-pages.security.title"))
+        when {
+            lock == null -> Note(t("web-pages.settings.reading"))
+            !lock.available -> ListCard { Body { Note(t("web-pages.security.unavailable")) } }
+            lock.locked -> On(current, lock)
+            else -> Off(lock)
+        }
+        Spacer(Modifier.height(30.dp))
+    }
+}
+
+@Composable
+private fun Off(lock: LockView) {
+    val app = LocalApp.current
+    ListCard { Body {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Dot(false); Text(t("web-pages.security.off"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink) }
+        Para(t("web-pages.security.now"), t("web-pages.security.nowRisk"))
+        Para(t("web-pages.security.then"))
+        Para(t("web-pages.security.newDevices"), t("web-pages.security.newDevicesHow"))
+        when {
+            !lock.owner -> Note(t("web-pages.security.ownerOnly"))
+            lock.canSign -> Row(Modifier.fillMaxWidth()) { Button(t("web-pages.security.turnOn"), primary = true) { app.push(Screen.SecurityOpen) } }
+            else -> Note(t("web-pages.security.webCannotSign"))
+        }
+    } }
+    SectionHeader(t("web-pages.security.signing"), start = 24.dp)
+    ListCard { Body { Note(t("web-pages.security.signingWho")) } }
+}
+
+@Composable
+private fun On(current: WorkspaceEntry, lock: LockView) {
+    val app = LocalApp.current
+    val ws = current.workspace.id
+    ListCard { Body {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Dot(true); Text(t("web-pages.security.on"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink) }
+        Note(t("web-pages.security.onMeta", "signers" to lock.signers.toInt(), "stations" to lock.protected.toInt()))
+        if (!lock.signs) Note(if (lock.canSign) t("web-pages.security.notSignerApp") else t("web-pages.security.notSignerWeb"))
+    } }
+    if (lock.requests.isNotEmpty()) {
+        SectionHeader("${t("web-pages.security.waiting")} · ${lock.requests.size}", start = 24.dp)
+        ListCard {
+            lock.requests.forEach { r ->
+                ListRow(onClick = if (lock.signs) ({ confirmSheet(app, ws, r) }) else null) {
+                    Column(Modifier.weight(1f)) {
+                        Text(t("web-pages.security.newDeviceOf", "name" to r.name.ifEmpty { r.email }), fontSize = 15.sp, color = C.ink)
+                        Text("${deviceName(r.kind, r.label)} · ${r.time?.get("created_at")?.ago ?: ""}", fontSize = 13.sp, color = C.muted)
+                    }
+                    Text(r.code, fontFamily = CodeFont, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = C.ink)
+                }
+            }
+        }
+    }
+    SectionHeader(t("web-pages.security.people"), start = 24.dp)
+    ListCard {
+        lock.members.forEach { m ->
+            ListRow {
+                Text(m.name.ifEmpty { m.email }, fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
+                Text(ROLE_LABEL[m.role] ?: m.role, fontSize = 14.sp, color = C.subtle)
+            }
+            m.devices.forEach { d -> DeviceRow(ws, d, lock.signs) }
+        }
+    }
+    SectionHeader("Station", start = 24.dp)
+    ListCard {
+        lock.stations.forEach { s ->
+            ListRow {
+                Dot(s.protected, warn = !s.protected)
+                Text(s.name, fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
+                Text(if (s.protected) t("web-pages.security.protected") else t("web-pages.security.unprotected"), fontSize = 13.sp, color = if (s.protected) C.subtle else C.warn)
+            }
+        }
+    }
+    SectionHeader(t("web-pages.security.webTitle"), start = 24.dp)
+    ListCard { Body { Note(t("web-pages.security.webRisk")) } }
+}
+
+@Composable
+private fun DeviceRow(ws: String, d: LockDevice, canRenew: Boolean) {
+    val app = LocalApp.current
+    val renewing = app.isDoing("lock.renew", "workspace" to ws, "device" to d.id)
+    val meta = listOfNotNull(
+        if (d.kind == "web") t("web-pages.security.web") else t("web-pages.security.app"),
+        if (d.signs) t("web-pages.security.signs") else null,
+        if (d.mine) t("web-pages.security.thisDevice") else null,
+        d.daysLeft?.let { t("web-pages.security.daysLeft", "n" to it.toInt()) },
+        if (d.recent) t("web-pages.security.recent") else null,
+    ).joinToString(" · ")
+    val renew = d.daysLeft != null && canRenew
+    ListRow(onClick = if (renew && !renewing) ({ app.lockCall(ws, "renew", t("web-pages.security.renew"), t("web-pages.security.renewed"), "device" to d.id) }) else null) {
+        Column(Modifier.weight(1f).padding(start = 14.dp)) {
+            Text(deviceName(d.kind, d.label, d.older), fontSize = 15.sp, color = C.ink)
+            Text(meta, fontSize = 13.sp, color = if (d.renewSoon) C.warn else C.muted)
+        }
+        if (renewing) Spinner(14.dp) else if (renew) Text(t("web-pages.security.renew"), fontSize = 14.sp, color = C.accent)
+    }
+}
+
+/** A waiting device: confirmed once its code is the one on its screen. */
+private fun confirmSheet(app: AppState, ws: String, r: LockRequest) {
+    app.sheet = SheetSpec(0.55f) {
+        val who = r.name.ifEmpty { r.email }
+        SheetGrab()
+        SheetHead(t("web-pages.security.confirmTitle", "name" to who))
+        Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(t("web-pages.security.confirmBody", "device" to deviceName(r.kind, r.label), "name" to who), fontSize = 14.sp, color = C.muted)
+            Text(r.code, fontFamily = CodeFont, fontWeight = FontWeight.SemiBold, fontSize = 34.sp, letterSpacing = 5.sp, color = C.ink, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Note(if (r.kind == "web") t("web-pages.security.confirmWeb") else t("web-pages.security.confirmApp"))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(t("web-pages.security.deny"), primary = false) { app.sheet = null; app.lockCall(ws, "deny", t("web-pages.security.deny"), null, "device" to r.device) }
+                Button(t("web-pages.security.confirm"), primary = true) { app.sheet = null; app.lockCall(ws, "confirm", t("web-pages.security.confirm"), t("web-pages.security.confirmed"), "device" to r.device, "code" to r.code) }
+            }
+        }
+    }
+}
+
+/** 开启安全模式. */
+@Composable
+fun SecurityOpenScreen(current: WorkspaceEntry) {
+    val app = LocalApp.current
+    val ws = current.workspace.id
+    val topic by rememberTopic<LockDraftView>(app.core, Topics.lockDraft(ws))
+    val draft = topic.value
+    val opening = app.isDoing("lock.open", "workspace" to ws)
+    val toggle = { id: String -> app.act(t("web-pages.security.turnOn")) { app.core.call("lock.toggle", buildJsonObject { put("workspace", ws); put("id", id) }) } }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
+        TopBack(t("web-pages.security.title"), app::pop)
+        LargeTitle("", t("web-pages.security.openTitle"))
+        if (draft == null || draft.loading) { Note(t("web-pages.settings.reading")); return@Column }
+        PageNote(t("web-pages.security.openLead"))
+        SectionHeader(t("web-pages.security.members"), start = 24.dp)
+        ListCard {
+            draft.members.forEach { m ->
+                ListRow {
+                    Column(Modifier.weight(1f)) { Text(m.name.ifEmpty { m.email }, fontSize = 15.sp, color = C.ink); Text(m.email, fontSize = 13.sp, color = C.muted) }
+                    Text(ROLE_LABEL[m.role] ?: m.role, fontSize = 14.sp, color = C.subtle)
+                }
+            }
+        }
+        SectionHeader(t("web-pages.security.devices"), start = 24.dp)
+        ListCard {
+            draft.devices.forEach { d ->
+                PickRow("${d.person} · ${if (d.current) t("web-pages.security.thisDevice") else deviceName(d.kind, d.label, d.older)}",
+                    sub = if (d.older) t("web-pages.security.olderHow") else if (d.kind == "web") t("web-pages.security.web") else t("web-pages.security.app"),
+                    checked = d.on, enabled = !d.fixed) { toggle(d.id) }
+            }
+        }
+        SectionHeader("Station", start = 24.dp)
+        ListCard {
+            draft.stations.forEach { s ->
+                PickRow(s.name, sub = when (s.state) { "ok" -> s.version; "asking" -> t("web-pages.security.asking"); "old" -> t("web-pages.security.tooOld"); else -> t("web-pages.security.offline") },
+                    checked = s.on, enabled = !s.fixed) { toggle(s.id) }
+            }
+        }
+        PageNote("${t("web-pages.security.unprotectedNote")} · ${if (draft.canSign) t("web-pages.security.webExpiry") else t("web-pages.security.webCannotSign")}")
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 16.dp)) {
+            Button(t("web-pages.security.signAndTurnOn"), primary = true, busy = opening, enabled = draft.ready && draft.owner && draft.canSign) {
+                app.act(t("web-pages.security.turnOn"), t("web-pages.security.turnedOn")) {
+                    app.core.call("lock.open", buildJsonObject { put("workspace", ws) })
+                    app.pop()
+                }
+            }
+        }
+    }
+}
+
+/** What a device waiting to be confirmed shows instead of the workspace's pages. */
+@Composable
+fun SecurityWaitingScreen(current: WorkspaceEntry, lock: LockView) {
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = 28.dp).windowInsetsPadding(WindowInsets.navigationBars),
+        verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically), horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        IconIn(Icons.ShieldCheck, 44.dp, C.ink)
+        Text(t("web-pages.security.waitingTitle"), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, textAlign = TextAlign.Center)
+        Text(t("web-pages.security.waitingLead", "name" to current.workspace.name), fontSize = 15.sp, lineHeight = 22.sp, color = C.subtle, textAlign = TextAlign.Center)
+        Text(lock.me?.code ?: "", fontFamily = CodeFont, fontWeight = FontWeight.SemiBold, fontSize = 36.sp, letterSpacing = 5.sp, color = C.ink)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { Spinner(13.dp); Note(t("web-pages.security.waitingNote")) }
+    }
+}
+
+/** A device waiting to be confirmed into the workspace's lock sees that instead of the workspace (its settings stay). */
+@Composable
+fun LockGate(current: WorkspaceEntry, content: @Composable () -> Unit) {
+    val app = LocalApp.current
+    val topic by rememberTopic<LockView>(app.core, Topics.lock(current.workspace.id))
+    val lock = topic.value
+    if (lock?.me?.waiting == true) SecurityWaitingScreen(current, lock) else content()
+}

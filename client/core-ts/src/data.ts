@@ -573,6 +573,8 @@ export class Data {
       const ws = key.slice(6);
       return [this.#ofWorkspace(ws) ?? null, [ws, "links"]];
     }
+    // A workspace's lock as the cloud keeps it (views/lock.ts): in the workspace's, by its id.
+    if (table === "lock") return [this.#ofWorkspace(key) ?? null, [key, "lock"]];
     if (table === "place" || table === "link" || table === "heard") {
       // A station's own, kept by its address (`<workspace>/<station>…`), in its workspace's: where a chat was left
       // (`place`, `<address>/<thread>`), how its link was last time (`link`), the last event its stream told (`heard`,

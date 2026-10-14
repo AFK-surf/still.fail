@@ -89,6 +89,13 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 - 确定性的：`station/test/lock.test.ts`（谁能签什么、passkey、设备身份、锁住后 state 帧换 key/塞名单/改绑被拒、没锁的照旧、station 之间拉平）、`cloud/test/lock.test.ts`（存链、转发、补回、设备登记、待确认）、`client/core-ts/test/lock.test.ts`。三处用同一组哈希测试值。
 - 端到端（真进程、真 relay，不进 CI）：`node station/side/lock-e2e.ts`。dev cloud 加 4 台临时 station 和两个真 core（owner 的桌面、新设备），演示 cloud 给自己的设备发凭证、往名单里塞 station、把 station 改绑到别的 workspace、换 grant key（重启 dev cloud 就是换 key），锁住的 station 都拒绝，没锁的照做。
 
-## 还没做（第二步）
+## 界面（第二步）
 
-三端界面（设置里的「安全」、开锁核对页、等待确认、横幅）；签名钥匙放进系统钥匙串；passkey 的注册和签名。web 发版签名和多地比对哈希另开。
+- core：`lock`、`lockDraft` 两个 topic 和 `lock.*` 调用（`client/core-ts/src/views/lock.ts`），锁记录存在 workspace 的 `lock` 里；workspace 视图多了 `lock`、`lock_requests`，变了就重读。station 以 `lock_unconfirmed` 拒绝这台设备后，core 自己提交确认请求，锁没变前不再连那台 station；锁一变（有人确认了）立刻重试。
+- 桌面/网页：设置 › 安全（`web/src/cloud/Security.tsx`）；开启前核对页 `settings/security/open`；owner 在设置页顶上的一行提示（`lock.dismiss` 关掉，记在 prefs `lockNotice`）；等待确认的设备看到的整页。
+- 手机网页（`web/src/mobile/Security.tsx`）和安卓（`screens/Security.kt`）同一套：设置里「安全」一行写现状（等你确认的件数标红），确认设备用底部面板。
+- 网页版设备 30 天到期，快到期（5 天内）在「成员和设备」里标出、可续期（`lock.renew`）。
+
+## 还没做
+
+签名钥匙放进系统钥匙串（现在是 app 数据目录里的文件）；passkey 的注册和签名；新设备加入、快到期时推送到这个人的其他设备（现在只在页面里显示）。web 发版签名和多地比对哈希另开。

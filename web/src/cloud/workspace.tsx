@@ -32,6 +32,7 @@ import { AppVersionPage, HAS_VERSION } from "../pages/AppVersion.tsx";
 import { HAS_LOCAL_STATION, LocalStationPage } from "../pages/LocalStation.tsx";
 import { ChangelogNews, ChangelogPage } from "../pages/Changelog.tsx";
 import { AddProfile } from "../pages/AddProfile.tsx";
+import { SecurityOpen, SecuritySettings, SecurityWaiting, useLock } from "./Security.tsx";
 import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, useSidebarMode, useStationList, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
@@ -83,10 +84,23 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
   // 奏: the page of the decision picked in the sidebar's 奏 (DecisionDesk.tsx); come to it any way, the sidebar shows 奏.
   const decisions = /^\/w\/[^/]+\/decisions$/.test(path);
   const [mode, setMode] = useSidebarMode();
+  const lock = useLock(entry.id);
+  const waiting = lock?.me?.waiting === true;
   useEffect(() => { if (decisions && mode !== "decisions") setMode("decisions"); }, [decisions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // No station yet: nothing of the workspace's pages works, so none is shown; adding the first station is the page.
   if (known && known.length === 0 && !settings) return <><WorkspaceKept entry={entry} /><Onboarding entry={entry} /></>;
+  // A device waiting to be confirmed into the workspace's lock: nothing of it is reached until it is (its settings are).
+  if (waiting && !settings) {
+    return (
+      <><WorkspaceKept entry={entry} />
+        <div className={shellCss.shell}>
+          <nav className={nav.sidebar} aria-label={entry.name}><div className={nav.brand}><SidebarBrand /></div><div className={nav.navScroll} /><div className={nav.navFoot}><WorkspaceSwitcher current={entry} /></div></nav>
+          <main className={shellCss.main}>{lock && <SecurityWaiting entry={entry} lock={lock} />}</main>
+        </div>
+      </>
+    );
+  }
 
   return (
     <WorkspacePeople id={entry.id}>
@@ -111,6 +125,8 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
             <Route path="settings/changelog" element={<ChangelogPage back={`/w/${entry.id}/settings`} />} />
             <Route path="settings/account" element={<AccountSettings entry={entry} />} />
             <Route path="settings/workspace" element={<WorkspaceSettings entry={entry} />} />
+            <Route path="settings/security" element={<SecuritySettings entry={entry} />} />
+            <Route path="settings/security/open" element={<SecurityOpen entry={entry} />} />
             {/* Pages the workspace page took in: links to them still land there. */}
             <Route path="settings/general" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
             <Route path="settings/members" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />

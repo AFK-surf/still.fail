@@ -2715,6 +2715,152 @@ data class Live (
 	val offline: Boolean? = null
 )
 
+/// A device in the workspace's lock.
+@Serializable
+data class LockDevice (
+	val id: String,
+	/// `app` (desktop, Android: it may sign) or `web` (a page: 30 days at a time).
+	val kind: String,
+	val label: String,
+	val signs: Boolean,
+	/// An older client, known by the endpoint it connects with.
+	val older: Boolean,
+	/// This device.
+	val mine: Boolean,
+	/// A web page's: days until it runs out.
+	val daysLeft: UInt? = null,
+	val renewSoon: Boolean,
+	/// One of the viewer's own, added lately (shown on their other devices).
+	val recent: Boolean
+)
+
+/// A device turning the lock on would sign.
+@Serializable
+data class LockDraftDevice (
+	val id: String,
+	val person: String,
+	val kind: String,
+	val label: String,
+	val older: Boolean,
+	/// This device: always in, the first signer.
+	val current: Boolean,
+	val last_seen: Long,
+	val on: Boolean,
+	val fixed: Boolean,
+	val time: Map<String, Stamp>? = null
+)
+
+@Serializable
+data class LockDraftMember (
+	val sub: String,
+	val email: String,
+	val name: String,
+	val role: String
+)
+
+/// A station turning the lock on would sign, or why not.
+@Serializable
+data class LockDraftStation (
+	val id: String,
+	val name: String,
+	val version: String? = null,
+	/// `ok` (it understands a lock), `old` (too old), `offline`, `asking`.
+	val state: String,
+	val on: Boolean,
+	val fixed: Boolean
+)
+
+/// What turning the workspace's lock on would sign (the `lockDraft` topic): what is left out is `on: false`.
+@Serializable
+data class LockDraftView (
+	val available: Boolean,
+	val loading: Boolean,
+	val canSign: Boolean,
+	val owner: Boolean,
+	val ready: Boolean,
+	val members: List<LockDraftMember>,
+	val devices: List<LockDraftDevice>,
+	val stations: List<LockDraftStation>
+)
+
+/// This device in the workspace's lock.
+@Serializable
+data class LockMe (
+	val device: String? = null,
+	val code: String? = null,
+	val kind: String,
+	val confirmed: Boolean,
+	val daysLeft: UInt? = null,
+	/// A station refused this device for the lock: it waits to be confirmed.
+	val waiting: Boolean
+)
+
+/// A member in the workspace's lock, with their devices.
+@Serializable
+data class LockPerson (
+	val sub: String,
+	val email: String,
+	val name: String,
+	val role: String,
+	val you: Boolean,
+	val devices: List<LockDevice>
+)
+
+/// A device waiting to be confirmed.
+@Serializable
+data class LockRequest (
+	val device: String,
+	val sub: String,
+	val email: String,
+	val name: String,
+	val kind: String,
+	val label: String,
+	/// The code the device shows: compared before it is confirmed.
+	val code: String,
+	val created_at: Long,
+	val yours: Boolean,
+	/// Its times in words (`created_at`).
+	val time: Map<String, Stamp>? = null
+)
+
+/// A station of the workspace and whether the lock protects it.
+@Serializable
+data class LockStation (
+	val id: String,
+	val name: String,
+	val version: String? = null,
+	val online: Boolean,
+	/// The lock names it: it holds the lock.
+	val protected: Boolean
+)
+
+/// The workspace's security mode, its lock (the `lock` topic; client/core-ts/src/views/lock.ts, docs/workspace-lock.md).
+@Serializable
+data class LockView (
+	/// Whether the control plane keeps locks (still.fail cloud's does; Comma's not).
+	val available: Boolean,
+	val locked: Boolean,
+	/// The one-line notice that it is off: the owner's, until closed (`lock.dismiss`).
+	val notice: Boolean,
+	val role: String,
+	val manages: Boolean,
+	val owner: Boolean,
+	/// An app: it may sign (a web page may not).
+	val canSign: Boolean,
+	/// This device signs for the lock.
+	val signs: Boolean,
+	val me: LockMe? = null,
+	val signers: UInt,
+	val members: List<LockPerson>,
+	val stations: List<LockStation>,
+	val protected: UInt,
+	/// Devices waiting on the viewer: their own, anyone's for owners and admins.
+	val requests: List<LockRequest>,
+	/// The viewer's own web devices running out soon.
+	val renew: List<LockDevice>,
+	val attention: UInt
+)
+
 @Serializable
 data class LongJobsGroup (
 	/// services | jobs

@@ -7,6 +7,7 @@ import { useDoing } from "../doing.ts";
 import { useStations, useConnects } from "../api.ts";
 import { useWorkspace } from "../cloud/api.ts";
 import { ROLE_LABEL } from "../cloud/settings.tsx";
+import { useLock } from "../cloud/Security.tsx";
 import { ChevronRight } from "../icons.tsx";
 import { useAppearance, type Appearance } from "../theme.ts";
 import { CAN_NOTIFY, setNotify, useNotifyState } from "../notify.ts";
@@ -60,6 +61,7 @@ export function SettingsScreen() {
   const profiles = stations?.flatMap((s) => s.overview?.profiles ?? []) ?? [];
   const short = profiles.filter((p) => p.trouble != null).length;
   const language = usePrefs((p) => p.language) ?? null;
+  const lock = useLock(app.entry.id);
   const at = (path: string) => () => app.push(app.at(path));
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
@@ -75,6 +77,7 @@ export function SettingsScreen() {
       <SectionHeader title={view ? t("web-mobile.settings.workspaceRole", { workspace: view.name, role: ROLE_LABEL[view.role] }) : app.entry.name} start={24} />
       <ListCard>
         <GoRow title="Workspace" value={view ? (manager && waiting ? t("web-mobile.settings.membersWaiting", { n: view.members.length, waiting }) : t("web-mobile.settings.members", { n: view.members.length })) : undefined} onClick={at("/settings/workspace")} />
+        {lock?.available && <GoRow title={t("web-pages.security.title")} bad={lock.attention > 0} value={lock.locked ? (lock.attention > 0 ? t("web-mobile.settings.securityWaiting", { n: lock.attention }) : t("web-mobile.settings.securityOn")) : t("web-mobile.settings.securityOff")} onClick={at("/settings/security")} />}
         <GoRow title="Station" value={stations ? <>{troubled && <Presence state="error" />}{t("web-mobile.settings.stationsOnline", { online, n: stations.length })}</> : undefined} onClick={at("/settings/stations")} />
         <GoRow title={t("web-mobile.settings.connects")} bad={failing > 0} value={connects ? (failing ? t("web-mobile.settings.connectsFailing", { n: failing }) : t("web-mobile.settings.connectsCount", { n: connects.items.length })) : undefined} onClick={at("/settings/connects")} />
         <GoRow title="Profile" bad={short > 0} value={stations ? (short ? t("web-mobile.settings.profilesShort", { n: short }) : t("web-mobile.settings.profilesCount", { n: profiles.length })) : undefined} onClick={at("/settings/profiles")} />

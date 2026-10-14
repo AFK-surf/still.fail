@@ -8,8 +8,8 @@ import { fromLocale, follows, setCurrent, t, tr, type Lang } from "./i18n.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "resume", "invite", "badge", "reader"];
-const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "resume"];
+const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "resume", "invite", "badge", "reader", "lockNotice"];
+const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "resume", "lockNotice"];
 const TABS_KEPT = 200;
 const DEFERRED_KEPT = 200;
 const PREFS = { topic: "prefs" };

@@ -272,6 +272,9 @@ object Topics {
      * it; of those other than `workspace` (the one in view), the most urgent (client/core-ts/src/views/marks.ts).
      */
     fun workspaceMarks(workspace: String) = buildJsonObject { put("topic", "workspaceMarks"); put("workspace", workspace) }
+    /** The workspace's security mode (its lock), and what turning it on would sign (client/core-ts/src/views/lock.ts). */
+    fun lock(workspace: String) = buildJsonObject { put("topic", "lock"); put("workspace", workspace) }
+    fun lockDraft(workspace: String) = buildJsonObject { put("topic", "lockDraft"); put("workspace", workspace) }
     /** What is written to a chat on this device until sent (`chat`: its key, `thread:<id>`, or `new`; Drafts). */
     fun draft(station: String, chat: String) = buildJsonObject { put("topic", "draft"); put("station", station); put("chat", chat) }
     /**

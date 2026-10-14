@@ -626,5 +626,11 @@
   "web-mobile.agent.turns": "轮次",
   "web-mobile.agent.usage": "用量",
   "web-mobile.chat.startedByAt": "{name} {ago}开的",
-  "web-mobile.chat.latestAt": "最新 {ago}"
+  "web-mobile.chat.latestAt": "最新 {ago}",
+  "web-mobile.settings.securityOff": "未开启",
+  "web-mobile.settings.securityOn": "已开启",
+  "web-mobile.settings.securityWaiting": {
+    "one": "{n} 件等你",
+    "other": "{n} 件等你"
+  }
 }

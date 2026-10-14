@@ -659,5 +659,11 @@
   "web-mobile.agent.turns": "Turns",
   "web-mobile.agent.usage": "Usage",
   "web-mobile.chat.startedByAt": "{name} started it {ago}",
-  "web-mobile.chat.latestAt": "latest {ago}"
+  "web-mobile.chat.latestAt": "latest {ago}",
+  "web-mobile.settings.securityOff": "Off",
+  "web-mobile.settings.securityOn": "On",
+  "web-mobile.settings.securityWaiting": {
+    "one": "{n} waiting",
+    "other": "{n} waiting"
+  }
 }

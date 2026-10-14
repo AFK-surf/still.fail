@@ -384,7 +384,7 @@ export class Directory extends DurableObject<Env> {
     const added = MANAGERS.includes(role)
       ? this.#rows("SELECT email, role, added_by, added_at FROM added WHERE workspace = ? ORDER BY added_at", id) as unknown as AddedView[]
       : [];
-    return { id, name: w.name as string, role, created_at: w.created_at as number, members, stations, invitations, added, relays: parseRelays(w.relays), lock: this.#lockHead(id) };
+    return { id, name: w.name as string, role, created_at: w.created_at as number, members, stations, invitations, added, relays: parseRelays(w.relays), lock: this.#lockHead(id), lock_requests: this.#lockRequestCount(id, sub, role) };
   }
 
   // ── the workspace lock (docs/workspace-lock.md, lock.ts): kept and carried, not trusted ─────────────────────────
@@ -394,6 +394,11 @@ export class Directory extends DurableObject<Env> {
     if (!last) return null;
     const first = this.#one("SELECT hash FROM lock_entries WHERE workspace = ? AND seq = 0", workspace);
     return { seq: last.seq as number, hash: last.hash as string, genesis: (first?.hash as string) ?? "" };
+  }
+
+  /** How many devices wait to be confirmed, of those the caller sees (all for owners and admins, their own for others). */
+  #lockRequestCount(workspace: string, sub: string, role: Role): number {
+    return this.#one("SELECT COUNT(*) AS n FROM lock_requests WHERE workspace = ? AND (? OR sub = ?)", workspace, MANAGERS.includes(role) ? 1 : 0, sub)!.n as number;
   }
 
   #lockAfter(workspace: string, after: number): unknown[] {

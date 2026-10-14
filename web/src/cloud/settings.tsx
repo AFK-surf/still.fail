@@ -8,7 +8,8 @@ import { CHANGEABLE } from "../keymap.ts";
 import { CAN_NOTIFY } from "../notify.ts";
 import { HAS_VERSION } from "../pages/AppVersion.tsx";
 import { HAS_LOCAL_STATION } from "../pages/LocalStation.tsx";
-import { ArrowLeft, Bell, Brain, Chart, Check, ChevronRight, Folder, Info, Key, LogOut, Monitor, Plug, Plus, Refresh, Server, Settings, Sliders, Sparks, Command, Trash, User, UserPlus, Users, type IconProps } from "../icons.tsx";
+import { ArrowLeft, Bell, Brain, Chart, Check, ChevronRight, Folder, Info, Key, LogOut, Monitor, Plug, Plus, Refresh, Server, Settings, ShieldCheck, Sliders, Sparks, Command, Trash, User, UserPlus, Users, type IconProps } from "../icons.tsx";
+import { SecurityNotice } from "./Security.tsx";
 import { useCommands } from "../commands.ts";
 import { Fragment, useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import { Link, Navigate, NavLink, useNavigate, useParams, useSearchParams } from "react-router";
@@ -86,6 +87,7 @@ function settingsPages(entry: WorkspaceEntry, some: boolean): SettingsPage[] {
     ...page("station", "memory", t("web-pages.settings.nav.memory"), Brain, "memory", some),
     ...page("station", "usage", t("web-pages.settings.nav.usage"), Chart, "usage", some),
     ...page("cloud", "workspace", `Workspace · ${entry.name}`, Users, "workspace members"),
+    ...page("cloud", "security", t("web-pages.security.title"), ShieldCheck, "security lock devices"),
     ...page("cloud", "account", entry.account.email, User, "account sign out"),
   ];
 }
@@ -135,10 +137,11 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-function Page({ title, lead, back, backLabel, actions, children }: { title: string; lead?: string; back: string; backLabel?: string; actions?: React.ReactNode; children: React.ReactNode }) {
+function Page({ title, lead, back, backLabel, actions, children, entry }: { title: string; lead?: string; back: string; backLabel?: string; actions?: React.ReactNode; children: React.ReactNode; entry?: WorkspaceEntry }) {
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       {backLabel ? <BackLink to={back} label={backLabel} /> : <MobileBack to={back} label={t("web-pages.settings.title")} />}
+      {entry && <SecurityNotice entry={entry} />}
       <header className={pagesCss.pageHead}><div><h1>{title}{lead && <About>{lead}</About>}</h1></div>{actions}</header>
       {children}
     </div>
@@ -229,7 +232,7 @@ export function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
   const remove = useAction(() => cloud.deleteWorkspace(account.sub, entry.id), () => toast(t("web-pages.settings.workspace.deleted")));
   if (!view) return <Loading label={t("web-pages.settings.workspace.loading")} />;
   return (
-    <Page title="Workspace" back={`/w/${entry.id}/settings`}>
+    <Page title="Workspace" back={`/w/${entry.id}/settings`} entry={entry}>
       <Section title={t("web-pages.settings.workspace.name")}>
         <div className={pagesCss.card}>
           <Field label={t("web-pages.settings.workspace.nameLabel")} htmlFor="ws-rename" hint={manager ? undefined : t("web-pages.settings.workspace.nameHint")} error={rename.error ? t("web-pages.settings.workspace.renameFailed", { error: rename.error.message }) : undefined}>

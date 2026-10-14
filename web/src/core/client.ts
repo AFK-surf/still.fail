@@ -108,7 +108,11 @@ export type Topic =
   | { topic: "workspaceMarks"; workspace?: string }
   // The decisions waiting for the viewer in a workspace's chats, those set aside last, and how many
   // (client/core-ts/src/decisions.ts). A core from before it answers an error.
-  | { topic: "decisions"; workspace: string };
+  | { topic: "decisions"; workspace: string }
+  // The workspace's security mode (its lock), and what turning it on would sign (client/core-ts/src/views/lock.ts).
+  // A core from before it has neither.
+  | { topic: "lock"; workspace: string }
+  | { topic: "lockDraft"; workspace: string };
 
 /** A chat as a page shows it (`client.focus`): by its thread, or its key before it has one; `end`: its end in view. */
 export interface ChatShown { station: string; thread: number | null; session: string | null; end?: boolean }

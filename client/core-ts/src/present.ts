@@ -169,6 +169,8 @@ const SHAPED: Record<string, Ty> = {
   adbShare: "AdbShareView",
   workspaceMarks: "WorkspaceMarksView",
   decisions: "DecisionsView",
+  lock: "LockView",
+  lockDraft: "LockDraftView",
 };
 
 /// A topic's value through the shape the clients are generated from: what it does not declare is dropped, and a value

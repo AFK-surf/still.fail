@@ -95,6 +95,8 @@ export const TOPICS: Record<string, Spec> = {
   changelog: {},
   workspaceMarks: { workspace: ["string", "skip"] },
   decisions: { workspace: S },
+  lock: { workspace: S },
+  lockDraft: { workspace: S },
 };
 
 const LIMITS: Record<string, number> = { u64: 2 ** 64, u32: 2 ** 32 - 1, u16: 65535 };

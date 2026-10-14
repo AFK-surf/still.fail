@@ -25,6 +25,7 @@ import { RELAY } from "./status.ts";
 import { Kind, type Tracer } from "./trace.ts";
 import { fromUtf8, hex, parseJson, sha256, toJsonBytes, utf8 } from "./util.ts";
 import { type LockClaim, lockClaim } from "./lock.ts";
+import { hooks } from "./core/execute.ts";
 import type { Wakes } from "./wake.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -1474,6 +1475,9 @@ export type MeshWireEnv = {
   /// The relays a workspace has of its own (`Mesh.link`).
   relays: (workspace: string) => string[];
   status: (workspace: string) => import("./status.ts").Status;
+  /// The workspace lock (views/lock.ts): a station refused this device for it; why a station is not asked now.
+  lockRefused?: (workspace: string, station: string) => void;
+  lockWaiting?: (workspace: string, station: string) => CoreError | null;
 };
 
 export class MeshWire implements StationWire {
@@ -1490,7 +1494,11 @@ export class MeshWire implements StationWire {
     const workspace = station.workspace;
     const id = station.station;
     const address = { station: station.toString() };
-    return Effect.gen(function* () {
+    // A station that refused this device for the workspace lock is not asked again until the lock moves on.
+    const waits = env.lockWaiting?.(workspace, id);
+    if (waits) return Effect.fail(waits);
+    const refusedFor = (e: CoreError) => Effect.sync(() => e.code === "lock_unconfirmed" && env.lockRefused?.(workspace, id));
+    return Effect.tapError(Effect.gen(function* () {
       const status = env.status(workspace);
       const credentials = env.credentials(workspace);
       const theirs = env.relays(workspace);
@@ -1560,7 +1568,7 @@ export class MeshWire implements StationWire {
       const streams = head.headers.some(([k, v]) => k.toLowerCase() === "accept" && v.includes("text/event-stream"));
       const timed = relay !== null && !streams ? mesh.timed(id, relay, reply.body) : reply.body;
       return { status: reply.status, headers: reply.headers, body: timed, via: l.path(), relay: relay !== null ? relayHost(relay) : null };
-    });
+    }), refusedFor);
   }
 
   reset(station: StationAddr): void {
@@ -1660,6 +1668,8 @@ export function meshWire(inner: Inner): StationWire {
     credentials: (workspace) => (device, fresh) => inner.cloudSync.credential(workspace, device, fresh, up?.deviceId() ?? null, up?.lockClaim(workspace, device) ?? null),
     relays: (workspace) => inner.cloudSync.workspaceRelays(workspace),
     status: (workspace) => inner.workspaces.of(workspace).status,
+    lockRefused: (workspace, station) => hooks.lockRefused?.(inner, workspace, station),
+    lockWaiting: (workspace, station) => hooks.lockWaiting?.(inner, workspace, station) ?? null,
   });
 }
 
