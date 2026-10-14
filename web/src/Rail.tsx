@@ -146,14 +146,23 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
     window.addEventListener("pointerup", up);
   };
   const sidebar = useSidebarToggle();
-  // The settings and the files have their way round in the sidebar: come to them with it closed, it opens.
+  // By the page's root, not as last drawn: a list asked for from the rail opens it, and so may its place's change in
+  // the same click, once.
+  const openSidebar = () => { if (document.documentElement.dataset.sidebar === "closed") sidebar.toggle(); };
+  // Every place has its sidebar (the settings and the files their way round, the rest their chats): come to one from
+  // another with it closed, it opens. On the page's load only those with nothing else to find their way by.
   const needsSidebar = place === "settings" || place === "files" || (place !== "chats" && place !== "archive" && !items.includes(place));
-  useEffect(() => { if (needsSidebar && sidebar.closed) sidebar.toggle(); }, [needsSidebar]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cameFrom = useRef<Place | null>(null);
+  useEffect(() => {
+    const moved = cameFrom.current !== null && cameFrom.current !== place;
+    cameFrom.current = place;
+    if (moved || needsSidebar) openSidebar();
+  }, [place]); // eslint-disable-line react-hooks/exhaustive-deps
   const settings = `/w/${scope}/settings`;
   // A list of chats lit while the sidebar shows it; 对话 for one not in the rail.
   const shownList = (Object.keys(LISTS) as RailItem[]).find((i) => LISTS[i] === mode && items.includes(i)) ?? "chats";
   const on = (item: RailItem) => LISTS[item] ? place === "chats" && shownList === item : place === item;
-  const toList = (item: RailItem) => () => { setMode(LISTS[item]!); if (place !== "chats") navigate(last); };
+  const toList = (item: RailItem) => () => { setMode(LISTS[item]!); openSidebar(); if (place !== "chats") navigate(last); };
   const link = (item: RailItem, to: string) => {
     const Icon = RAIL_ICONS[item]!;
     return (
@@ -175,7 +184,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
       case "decisions": return (
         <Tip key={item} label={waiting > 0 ? t("web-main.decisions.entry", { n: waiting }) : railLabel(item)} side="right">
           <button type="button" className={css.item} data-on={on(item) || undefined} aria-label={railLabel(item)}
-            onClick={(e) => { openedAt(e.currentTarget); setMode("decisions"); navigate(`/w/${scope}/decisions`); }}>
+            onClick={(e) => { openedAt(e.currentTarget); setMode("decisions"); openSidebar(); navigate(`/w/${scope}/decisions`); }}>
             <span className={css.zou} aria-hidden="true">奏</span>
             {waiting > 0 && <span className={css.count} />}
           </button>
