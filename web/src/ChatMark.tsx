@@ -69,7 +69,7 @@ export function MarkCounts({ mark }: { mark: WorkspaceMark | undefined }) {
  * A row's second line from where its chat stands (the core's `stateText`; a core before it: its decision's `decision.text`):
  * 奏 · … (Decision · …) in ink, its lead bold; 要你帮忙：… (Needs you: …) in ink too (it wants the viewer); 出问题：…, 在等：…, 做完了 as quiet as the
  * last message would be. `slot` (every chat list, as Android's): a lead said as an icon (a bell, the waiting arc, a check; 监控中 a radar before its words;
- * the two still going, waiting and watching, move: waiting's dots breathe in turn, the radar's arcs ripple out)
+ * the two still going, waiting and watching, move: waiting's dots breathe in turn, the radar's arcs light up in turn, going out)
  * stands in the title's mark's column, centred under it, and what follows starts where the title does.
  */
 export function WaitingText({ text, className, slot = false }: { text: string; className: string; slot?: boolean }) {

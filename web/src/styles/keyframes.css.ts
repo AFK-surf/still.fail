@@ -10,15 +10,15 @@ export const splashFloatKeyframes = keyframes({ "50%": { transform: "translateY(
 export const appearKeyframes = keyframes({ "from": { opacity: "0" }, "to": { opacity: "1" } });
 export const spinKeyframes = keyframes({ "to": { transform: "rotate(360deg)" } });
 /**
+ * A chat row's watching radar (ChatMark.css.ts leadSlot): its dot beats, then its arcs light up in turn, inner then outer,
+ * a signal going out while they stay where they are; then they dim and rest till the next.
+ */
+export const leadBeatKeyframes = keyframes({ "0%": { transform: "scale(1)" }, "8%": { transform: "scale(1.35)" }, "22%, 100%": { transform: "scale(1)" } });
+export const leadLitKeyframes = keyframes({ "0%": { opacity: ".3" }, "10%": { opacity: "1" }, "32%, 100%": { opacity: ".3" } });
+/**
  * A chat row's waiting dots (ChatMark.css.ts leadSlot): one breath, in and out in the first
  * half of the loop, then still until the next, so it rests between breaths rather than going on and on.
  */
-/**
- * A chat row's watching radar's arcs (ChatMark.css.ts leadSlot): a ripple going out, the inner arc to where the outer one is
- * and the outer one past it, fading as they go; then both grow back from the centre and rest till the next.
- */
-export const leadRippleInnerKeyframes = keyframes({ "0%": { transform: "scale(1)", opacity: "1" }, "35%": { transform: "scale(1.75)", opacity: "0" }, "36%": { transform: "scale(.5)", opacity: "0" }, "55%, 100%": { transform: "scale(1)", opacity: "1" } });
-export const leadRippleOuterKeyframes = keyframes({ "0%": { transform: "scale(1)", opacity: "1" }, "35%": { transform: "scale(1.4)", opacity: "0" }, "36%": { transform: "scale(.5)", opacity: "0" }, "55%, 100%": { transform: "scale(1)", opacity: "1" } });
 export const leadBreatheKeyframes = keyframes({ "0%, 52%, 100%": { opacity: ".35" }, "23%": { opacity: "1" } });
 export const pulseKeyframes = keyframes({ "50%": { opacity: ".45" } });
 export const jobBreatheKeyframes = keyframes({ "50%": { opacity: ".35" } });
