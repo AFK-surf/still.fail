@@ -148,17 +148,20 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       if (model.mode.kind !== "follow" || !(model.target() > model.where + 0.5)) { model.glide(false); return; }
       made.last = performance.now();
       const glide = (now: number) => {
-        made.frame = 0;
+        // Keep this frame owned while a synchronous render runs its layout effects.
+        // Those effects call step too: clearing it here starts a second glide, resets
+        // last after this frame's timestamp, and lets the two chains pull backwards.
         const left = model.target() - model.where;
         if (model.mode.kind !== "follow" || left < 0.5) {
           // There: what came meanwhile is taken at once.
           model.glide(false);
           if (signature(model.layout()) !== made.drawn) flushSync(redraw);
           else put(el);
+          made.frame = 0;
           tell();
           return;
         }
-        const dt = Math.min(64, now - made.last);
+        const dt = Math.max(0, Math.min(64, now - made.last));
         made.last = now;
         model.place(left < 1 ? model.target() : model.where + left * (1 - Math.exp(-dt / 100)));
         made.stepping = true;
