@@ -2662,7 +2662,9 @@ export interface KeptTabs {
 
 /**
  * What one of still.fail's links opens in the app (`link.parse`): `invite` (`token`), a chat's page (`chat`), or an
- * item (`item`: its `session`, and `service` its web service); the call answers null for any other link.
+ * item (`item`: its `session`, and `service` its web service), each maybe with `history`, one of its agents' execution
+ * history (at `entry`); `history` alone (`?history=…`): that history in the chat the link is in. The call answers null
+ * for any other link.
  */
 export interface LinkTarget {
 	opens: string;
@@ -2672,6 +2674,8 @@ export interface LinkTarget {
 	chat?: string;
 	session?: string;
 	service?: string;
+	history?: string;
+	entry?: number;
 }
 
 export interface TimelineEntry {

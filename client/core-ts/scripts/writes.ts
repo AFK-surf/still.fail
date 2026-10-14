@@ -16,9 +16,10 @@
 //   node scripts/writes.ts [--check] [files…]     the writes found (default: the files below); --check fails on any
 import { readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseSync, traverse, types as t, type NodePath } from "@babel/core";
 
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 /// What makes a view or what goes out: what is shared passes through here.
 export const CHECKED = [

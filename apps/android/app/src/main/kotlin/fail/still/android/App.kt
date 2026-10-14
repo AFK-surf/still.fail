@@ -429,6 +429,12 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
         stack = listOf(Screen.Home, Screen.Chat(address, ChatOf.Session(session))) + listOfNotNull(service?.let { Screen.Preview(address, it) })
     }
 
+    /** An agent's execution history, over the chat it is in (at `entry`, else its newest): not twice over itself. */
+    private fun pushHistory(address: String, of: ChatOf, key: String, entry: Long?) {
+        val page = Screen.History(address, of, key, entry)
+        if (stack.last() != page) push(page)
+    }
+
     /** The agents of each chat page (by its id) as last shown: whether a link names one of them. */
     val chatAgents = HashMap<String, Set<String>>()
 
@@ -456,16 +462,24 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
     private fun open(t: LinkTarget, outside: Boolean): Boolean {
         val ws = t.workspace.orEmpty()
         val station = t.station.orEmpty()
+        // One of its agents' execution history the link names, over the chat once it is open (`?history=`, `entry`).
+        val history = t.history?.let { h -> { address: String, session: String -> pushHistory(address, ChatOf.Session(session), h, t.entry) } }
         when (t.opens) {
+            // `?history=…` alone, as a chat's notes link to it: in the chat it is in.
+            "history" -> {
+                val top = stack.last() as? Screen.Chat ?: return false
+                pushHistory(top.station, top.of, t.history ?: return false, t.entry)
+            }
             // An invitation's link: what it leads to, in a sheet, before it is accepted.
             "invite" -> fail.still.android.screens.openInvite(this, t.token ?: return false)
             // A reference to another chat (web/src/chatRefs.ts), opened over this one.
             "chat" -> {
                 val chat = t.chat ?: return false
                 val top = stack.last()
-                if (top is Screen.Chat && top.station == "$ws/$station" && (top.of as? ChatOf.Session)?.key == chat) return true
+                if (top is Screen.Chat && top.station == "$ws/$station" && (top.of as? ChatOf.Session)?.key == chat) { history?.invoke("$ws/$station", chat); return true }
                 if (ws != workspace) openItem(ws, station, chat)
                 else { sheet = null; menu = null; forward = true; stack = stack + Screen.Chat("$ws/$station", ChatOf.Session(chat)) }
+                history?.invoke("$ws/$station", chat)
             }
             "item" -> {
                 val session = t.session ?: return false
@@ -482,6 +496,8 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
                         stack = stack + Screen.Chat(address, ChatOf.Session(session)) + listOfNotNull(service?.let { Screen.Preview(address, it) })
                     }
                 }
+                // Here: over this chat, whose agent it is.
+                if (here && top is Screen.Chat) t.history?.let { pushHistory(top.station, top.of, it, t.entry) } else history?.invoke(address, session)
             }
             // A station's 共享调试, as its agent asks for it (adb_devices): the page, sharing only once its person taps.
             "adbShare" -> {
