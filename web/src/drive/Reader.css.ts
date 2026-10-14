@@ -270,3 +270,32 @@ export const sliderKnob = style({
   selectors: { "&[data-held]": { scale: "1.2" } },
 });
 export const sliderValue = style({ textAlign: "right", fontSize: vars.textMeta, fontWeight: "600", fontVariantNumeric: "tabular-nums" });
+
+// ── with a mouse: a desktop's reader ──
+const desk = `${reader}:not([data-narrow])`;
+const BAR = 52;
+const PANEL = 320;
+/** The toolbar across the top, on the paper itself, a line under it: the way back, the name in the middle, the tools. */
+globalStyle(`${desk} ${top}`, {
+  top: "0", left: "0", right: "0", transform: "none", translate: "0 0", width: "auto", maxWidth: "none", height: `${BAR}px`, padding: "0 12px",
+  gridTemplateColumns: "minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr)", gap: "16px", borderRadius: "0",
+  background: "var(--r-bg)", WebkitBackdropFilter: "none", backdropFilter: "none", boxShadow: "inset 0 -1px 0 var(--r-line)",
+});
+globalStyle(`${desk} ${back}`, { justifySelf: "start" });
+globalStyle(`${desk} ${topEnd}`, { gap: "2px" });
+globalStyle(`${desk} ${topButton}`, { width: "34px", height: "34px", borderRadius: `calc(10px * ${vars.cornerScale})`, color: "var(--r-muted)" });
+globalStyle(`${desk} ${topButton}:hover, ${desk} ${topButton}[data-on]`, { color: "var(--r-ink)" });
+/** The text under it, and clear of the panel docked at the right. */
+globalStyle(`${desk} ${scroller}`, { top: `${BAR}px`, paddingTop: "40px", outline: "none" });
+globalStyle(`${desk} ${scroller}[data-panel]`, { paddingRight: `${PANEL}px` });
+/** How far through it is: the hairline along the bottom, always. */
+globalStyle(`${desk} ${hairline}`, { opacity: "1" });
+/** The panel docked at the right, under the toolbar, on the paper with a line before it. */
+globalStyle(`${desk} ${panel}`, {
+  top: `${BAR}px`, right: "0", bottom: "0", width: `${PANEL}px`, borderRadius: "0", boxShadow: "inset 1px 0 0 var(--r-line)",
+  background: "var(--r-bg)", color: "var(--r-ink)", border: "0",
+});
+/** What was found, under the toolbar, over the text's middle. */
+globalStyle(`${desk} ${findStrip}`, { top: `${BAR + 10}px` });
+globalStyle(`${desk}:has(> ${panel}) ${top}`, { left: "0", maxWidth: "none" });
+globalStyle(`${desk}:has(> ${panel}) ${findStrip}`, { left: `calc((100% - ${PANEL}px) / 2)` });

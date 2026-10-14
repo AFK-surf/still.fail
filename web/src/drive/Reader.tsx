@@ -4,7 +4,8 @@
 // headings, a novel's 第X章), 搜索 (in the file, each place marked and stepped through) and 排版 (size, lines, face,
 // paper). A plain-text novel hard-wrapped at a fixed width is joined back into its paragraphs; Markdown is never
 // reflowed, and is drawn as a chat's is (Prose). Where it was left is kept on this device (`drive.place`) and opened at.
-// On a phone the panels are its sheets; with a mouse they open beside the text.
+// On a phone the panels are its sheets. With a mouse it is a desktop's: a toolbar always over the text (the way back,
+// the name, 目录 · 搜索 · 排版 · 夜间), the panels docked at its right, the arrow keys from chapter to chapter.
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Prose } from "../Prose.tsx";
 import * as conversationCss from "../styles/conversation.css.ts";
@@ -349,6 +350,8 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
   const resting = useRef(0);
   const onBars = useRef(false);
   const wake = useCallback((ms = REST_MS) => {
+    // With a mouse the bars stay.
+    if (!narrow) return;
     setBars(true);
     clearTimeout(resting.current);
     // With a mouse they go again once it rests (not over them); with a finger a tap takes them away.
@@ -359,10 +362,9 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
   const onPointerUp = (e: React.PointerEvent) => {
     const at = tapAt.current;
     tapAt.current = null;
-    if (!at || Math.hypot(e.clientX - at.x, e.clientY - at.y) > 8) return;
+    if (!narrow || !at || Math.hypot(e.clientX - at.x, e.clientY - at.y) > 8) return;
     if ((e.target as Element).closest("a, button, input, summary")) return;
     if (!window.getSelection()?.isCollapsed) return;
-    if (panel && !narrow) { setPanel(null); return; }
     if (bars) { clearTimeout(resting.current); setBars(false); } else wake(TAP_REST_MS);
   };
 
@@ -388,6 +390,13 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f" && !narrow) { e.preventDefault(); setPanel("find"); return; }
+      // ← → from chapter to chapter (not while words are being typed).
+      const typing = (e.target as Element | null)?.closest?.("input, textarea, [contenteditable]");
+      if (!narrow && !typing && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+        e.preventDefault();
+        acts.current.goChapter(acts.current.current() + (e.key === "ArrowLeft" ? -1 : 1));
+        return;
+      }
       if (e.key === "Escape" && (panel || found)) { e.preventDefault(); if (panel) setPanel(null); else setFound(null); }
     };
     addEventListener("keydown", onKey);
@@ -396,6 +405,9 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
 
   const share = book ? (book.markdown ? shareNow(scroller.current) : length > 0 ? Math.min(1, top / length) : 0) : 0;
   const chapter = current >= 0 ? chapters[current]?.title : undefined;
+  const shown = narrow ? bars : true;
+  // With a mouse the keys scroll the text at once (space, page down, the arrows up and down).
+  useEffect(() => { if (!narrow && book) scroller.current?.focus({ preventScroll: true }); }, [narrow, book]);
   const vars = { "--r-size": `${style.size}px`, "--r-line": style.line, "--r-margin": `${style.margin}px`, fontFamily: style.face === "serif" ? SERIF : SANS } as CSSProperties;
 
   let body: ReactNode;
@@ -414,30 +426,37 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
   </>;
 
   return (
-    <div className={css.reader} data-paper={paper} data-indent={style.indent || undefined} data-narrow={narrow || undefined} data-bars={bars || undefined} style={vars}
+    <div className={css.reader} data-paper={paper} data-indent={style.indent || undefined} data-narrow={narrow || undefined} data-bars={shown || undefined} style={vars}
       onPointerMove={(e) => { if (e.pointerType === "mouse" && !narrow) wake(); }}>
-      <div ref={scroller} className={css.scroller} onScroll={onScroll} data-panel={(!narrow && panel) || undefined}
+      <div ref={scroller} className={css.scroller} tabIndex={-1} onScroll={onScroll} data-panel={(!narrow && panel) || undefined}
         onPointerDown={(e) => { tapAt.current = { x: e.clientX, y: e.clientY }; }} onPointerUp={onPointerUp}>
         <div ref={column} className={css.column}>{body}</div>
       </div>
       {/* With the bars away, how far through it is: a hairline along the bottom. */}
       <div className={css.hairline} aria-hidden="true"><span style={{ transform: `scaleX(${share})` }} /></div>
-      <header className={css.top} data-shown={bars || undefined} inert={!bars}
+      <header className={css.top} data-shown={shown || undefined} inert={!shown}
         onPointerEnter={(e) => { if (e.pointerType === "mouse") { onBars.current = true; clearTimeout(resting.current); } }}
         onPointerLeave={(e) => { if (e.pointerType === "mouse") { onBars.current = false; wake(); } }}>
         <button type="button" className={css.back} onClick={onBack} aria-label={backLabel}><ChevronLeft size={20} /><span>{backLabel}</span></button>
         <span className={css.title}><b>{name}</b>{book && <small>{[chapter ?? book.encoding, `${Math.round(share * 100)}%`].join(" · ")}</small>}</span>
-        <span className={css.topEnd}><button type="button" className={css.topButton} aria-label={t("web-pages.drive.reader.find")} data-on={panel === "find" || undefined} onClick={() => open("find")}><Search size={20} /></button></span>
+        <span className={css.topEnd}>
+          {narrow ? <button type="button" className={css.topButton} aria-label={t("web-pages.drive.reader.find")} data-on={panel === "find" || undefined} onClick={() => open("find")}><Search size={20} /></button> : <>
+            <TopTool label={t("web-pages.drive.reader.contents")} on={panel === "contents"} onClick={() => open("contents")}><List size={18} /></TopTool>
+            <TopTool label={t("web-pages.drive.reader.find")} on={panel === "find"} onClick={() => open("find")}><Search size={18} /></TopTool>
+            <TopTool label={t("web-pages.drive.reader.layout")} on={panel === "layout"} onClick={() => open("layout")}><TextIcon size={18} /></TopTool>
+            <TopTool label={t(paper === "night" ? "web-pages.drive.reader.day" : "web-pages.drive.reader.night")} on={false} onClick={() => toggleNight(paper === "night")}>{paper === "night" ? <Sun size={18} /> : <Moon size={18} />}</TopTool>
+          </>}
+        </span>
       </header>
       {found && (
-        <div className={css.findStrip} data-bars={bars || undefined}>
+        <div className={css.findStrip} data-bars={shown || undefined}>
           <span className={css.findWords}>{t("web-pages.drive.reader.foundAt", { query: found.query, at: found.ranges.length ? found.at + 1 : 0, n: found.ranges.length })}</span>
           <button type="button" className={css.chip} aria-label={t("web-pages.drive.reader.prevHit")} disabled={found.at <= 0} onClick={() => show(found, found.at - 1)}><ChevronLeft size={16} /></button>
           <button type="button" className={css.chip} aria-label={t("web-pages.drive.reader.nextHit")} disabled={found.at >= found.ranges.length - 1} onClick={() => show(found, found.at + 1)}><ChevronRight size={16} /></button>
           <button type="button" className={css.chip} aria-label={t("common.close")} onClick={() => setFound(null)}><Close size={14} /></button>
         </div>
       )}
-      <footer className={css.bottom} data-shown={bars || undefined} inert={!bars}
+      {narrow && <footer className={css.bottom} data-shown={bars || undefined} inert={!bars}
         onPointerEnter={(e) => { if (e.pointerType === "mouse") { onBars.current = true; clearTimeout(resting.current); } }}
         onPointerLeave={(e) => { if (e.pointerType === "mouse") { onBars.current = false; wake(); } }}>
         {chapters.length > 0 && (
@@ -457,7 +476,7 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
           {/* It names where it goes: at night the day (the light paper last picked), by day the night. */}
           <Tool icon={paper === "night" ? <Sun size={20} /> : <Moon size={20} />} label={t(paper === "night" ? "web-pages.drive.reader.day" : "web-pages.drive.reader.night")} on={false} onClick={() => toggleNight(paper === "night")} />
         </div>
-      </footer>
+      </footer>}
       {!narrow && panel && (
         <aside className={css.panel} onPointerEnter={() => { onBars.current = true; clearTimeout(resting.current); }} onPointerLeave={() => { onBars.current = false; }}>
           <div className={css.panelHead}>
@@ -484,6 +503,11 @@ const shareNow = (s: HTMLElement | null) => {
   const most = s.scrollHeight - s.clientHeight;
   return most > 0 ? Math.min(1, s.scrollTop / most) : 0;
 };
+
+/** A desktop toolbar's button: its icon, its name on hover. */
+function TopTool({ label, on, onClick, children }: { label: string; on: boolean; onClick: () => void; children: ReactNode }) {
+  return <Tip label={label}><button type="button" className={css.topButton} aria-label={label} data-on={on || undefined} onClick={onClick}>{children}</button></Tip>;
+}
 
 function Tool({ icon, label, on, onClick }: { icon: ReactNode; label: string; on: boolean; onClick: () => void }) {
   return <button type="button" className={css.tool} data-on={on || undefined} onClick={onClick}>{icon}<span>{label}</span></button>;
