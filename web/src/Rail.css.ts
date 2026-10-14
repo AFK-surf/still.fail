@@ -199,8 +199,9 @@ export const adder = style({
 export const zouSmall = style({ fontSize: vars.textBody, lineHeight: "18px", fontWeight: 600 });
 
 // Beside the rail the sidebar's foot has nothing of its own (the switcher and settings are the rail's, the stations' line
-// only for what is wrong): gone when there is nothing in it, not an empty frosted band under the list.
+// only for what is wrong, and that in the rail's bell when the bell is there): gone when there is nothing in it shown, not
+// an empty frosted band under the list.
 // (Two :has, side by side: one inside another is not CSS.)
-globalStyle(`[data-rail] ${navFoot}:not(:has(:is(a, button):not(${narrowOnly} *, ${stationRow} *))):not(:has(${stationTrouble}[data-state]))`, {
+globalStyle(`[data-rail] ${navFoot}:not(:has(:is(a, button):not(${narrowOnly} *, ${stationRow} *))):not(:has(${stationTrouble}[data-state]:not(${narrowOnly} *)))`, {
   "@media": { [wide]: { display: "none" } },
 });
