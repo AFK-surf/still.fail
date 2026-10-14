@@ -286,9 +286,8 @@ internal object DriveKey {
 /** A file and the session that keeps it. */
 class Shown(val key: String, val file: Attachment)
 
-/** The chat's images in the order it shows them: an image opened steps to the one before or after. */
-internal fun Here.images(): List<Shown> =
-    (view.messages.flatMap { it.attachments } + view.outbox.flatMap { it.attachments }).mapNotNull { f -> owner(f)?.takeIf { isImage(f.name) }?.let { Shown(it, f) } }
+/** The chat's images in the order it shows them (the core's `images`): an image opened steps to the one before or after. */
+internal fun Here.images(): List<Shown> = view.images.orEmpty().mapNotNull { f -> f.owner?.let { Shown(it, f) } }
 
 /** A message's files, side by side and wrapping (6dp apart); `owner` says which session of the chat keeps each. */
 @Composable

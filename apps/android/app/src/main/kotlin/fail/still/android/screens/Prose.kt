@@ -26,25 +26,27 @@ import fail.still.android.data.Attachment
 import fail.still.android.ui.LocalFollowUp
 import fail.still.android.ui.Markdown
 import fail.still.android.ui.Placing
-import fail.still.android.ui.placeFiles
 
 private val IMAGE = Regex("\\.(png|jpe?g|gif|webp)$", RegexOption.IGNORE_CASE)
 private val HTML = Regex("\\.html?$", RegexOption.IGNORE_CASE)
 
 /**
- * An agent's Markdown with its files: those its text names shown there, the rest below it. `draft`: where words a
- * visualization asks to send go (the composer), for the person to send.
+ * An agent's Markdown with its files: those its text names (`placed`, by name: the core decides which) shown there, the
+ * rest below it. `draft`: where words a visualization asks to send go (the composer), for the person to send.
  */
 @Composable
-internal fun AgentWords(ctx: Here, text: String, files: List<Attachment>, draft: Draft? = null) {
-    val (placed, rest) = remember(text, files) { placeFiles(text, files) }
+internal fun AgentWords(ctx: Here, text: String, files: List<Attachment>, names: List<String>, draft: Draft? = null) {
+    val (placed, rest) = remember(files, names) {
+        val placed = names.mapNotNull { n -> files.firstOrNull { it.name == n }?.let { n to it } }.toMap()
+        placed to files.filter { it !in placed.values }
+    }
     var opened by remember { mutableStateOf<Attachment?>(null) }
     val placing = if (placed.isEmpty()) null else Placing(
         files = placed,
         shown = { f -> PlacedFile(ctx, f) },
         row = { f, size ->
             val owner = ctx.owner(f)
-            if (owner != null && IMAGE.containsMatchIn(f.name)) StationImage(ctx.station, owner, f, size)
+            if (owner != null && IMAGE.containsMatchIn(f.name)) StationImage(ctx.station, owner, f, size, gallery = { ctx.images() })
             // Markdown's ![] can place a video (or any file), too. Its card must open the same preview as a link.
             else FileCard(f.name, f.size, onClick = if (owner != null) ({ opened = f }) else null)
         },

@@ -96,7 +96,7 @@ class VizFlickerTest {
                             item {
                                 val n = if (churn) tick.intValue else 0
                                 val here = remember(n) { fail.still.android.screens.Here(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD), Fixtures.chat(emptyList()), emptyList(), "ember:c-1") }
-                                fail.still.android.screens.AgentWords(here, text, if (html != null) listOf(file) else emptyList())
+                                fail.still.android.screens.AgentWords(here, text, if (html != null) listOf(file) else emptyList(), if (html != null) listOf(file.name) else emptyList())
                             }
                             item { Text("下面的一条消息", color = C.ink) }
                         }

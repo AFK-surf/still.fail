@@ -16,7 +16,8 @@ import { PathSession } from "./Peeks.tsx";
 import { Avatar, ICON, ModelLogo, Pill, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { chatPage } from "./chatPage.ts";
-import { placeFiles, Prose, withBareLinks } from "./Prose.tsx";
+import { Prose, withBareLinks } from "./Prose.tsx";
+import { placeFiles } from "../../client/core-ts/src/placed.ts";
 import { shortcutOf, useKeymap, usePageKeysAvailable, useShortcut } from "./keymap.ts";
 import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
 import { imageBox } from "./imageBox.ts";
@@ -114,7 +115,7 @@ function ChatShown({ chat, draftKey, made }: { chat: ChatView; draftKey: string;
   // Files are kept in a session's workspace: what is sent here goes to the first agent's.
   const keeper = chat.agents[0]?.session.key ?? null;
   // The images a preview steps through: the same function (the context's value), the latest messages behind it.
-  const images = () => chatImages([...rows.messages, ...outbox.map((o) => ({ authorKind: "person", ...o }))]);
+  const images = () => chatImages(chat.images);
   const latest = useRef(images);
   latest.current = images;
   const [gallery] = useState(() => () => latest.current());

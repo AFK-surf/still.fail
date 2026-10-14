@@ -6,7 +6,7 @@ import { Dialog as RDialog } from "radix-ui";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { BIG_FILE, useApi, type Api, type Attachment, type FileProgress } from "./api.ts";
 import { Check, ChevronLeft, ChevronRight, Close, Copy, Download, Minus, Plus } from "./icons.tsx";
-import { placeFiles, Prose } from "./Prose.tsx";
+import { Prose } from "./Prose.tsx";
 import { isFragment, vizDocument } from "./Viz.tsx";
 import { fileLink } from "./Prose.css.ts";
 import { useStation } from "./station.tsx";
@@ -255,16 +255,10 @@ export interface Shown { sessionKey: string; file: Attachment }
  */
 export const Gallery = createContext<(() => Shown[]) | null>(null);
 
-/** A chat's images for its Gallery, as its messages show them: an agent's named in its text first, then those below it. */
-export function chatImages(messages: { authorKind?: string; text: string; attachments?: Attachment[] | undefined }[]): Shown[] {
-  return messages.flatMap((m) => {
-    const { placed, rest } = m.authorKind === "person" ? { placed: new Map<string, Attachment>(), rest: m.attachments ?? [] } : placeFiles(m.text, m.attachments);
-    return [...placed.values(), ...rest].flatMap((file) => {
-      // Through the session that keeps it (the core says which, `owner`).
-      const sessionKey = isImage(file.name) ? file.owner ?? null : null;
-      return sessionKey === null ? [] : [{ sessionKey, file }];
-    });
-  });
+/** A chat's images for its Gallery, as the core lays them out in the order its page shows them (`ChatView.images`). */
+export function chatImages(images: Attachment[] | undefined): Shown[] {
+  // Each through the session that keeps it (the core says which, `owner`).
+  return (images ?? []).flatMap((file) => (file.owner ? [{ sessionKey: file.owner, file }] : []));
 }
 
 /** A file already on this device (one in the draft, not sent yet): shown as it is, not fetched from the station. */

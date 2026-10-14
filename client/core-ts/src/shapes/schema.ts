@@ -197,6 +197,7 @@ export const SHAPES: Record<string, Shape> = {
     ["archive", opt("bool"), { doc: "In a chat's page: the agent's last post, at the chat's end, saying it is all done, with nothing left in the chat\n(`archivable`): 归档 is offered under it. Absent otherwise." }],
     ["archiveCheck", opt("ArchiveCheck"), { doc: "Under the same last all-done post: what the archive check made of the chat (the chat's `archiveCheck`)." }],
     ["elsewhere", opt(vec("ChatSentElsewhere")), { doc: "In a chat's page: what its agents sent to Slack or were given there after this message, before the next. Absent\nwhen nothing." }],
+    ["placed", opt(vec("String")), { doc: "In a chat's page: the names of the files its text places (`![](shot.png)`, `[the report](report.pdf)`), in the\norder it names them, drawn where it names them; the rest go below it. Absent when it places none (a person's\nwords never do)." }],
   ], { doc: "A message of a chat, with what the core decides of it: the viewer's (their bubble), still.fail's own notice, who said\nit, and whether its agents have yet to take it." }),
   MessageCard: struct([
     ["assignee", opt("String"), { doc: "The person the agent asks to decide, by email. Absent on legacy cards." }],
@@ -1667,6 +1668,7 @@ export const SHAPES: Record<string, Shape> = {
     ["unreadLine", opt("i64"), { client: opt("I54"), doc: "The message the unread line goes over: the first the viewer had not read when the chat was opened (not\ntheirs); none while older pages are loaded to find it, or with nothing unread. Absent from a core before it." }],
     ["unreadAbove", opt("bool"), { doc: "The unread line lies above the messages loaded: older pages are being loaded to find it." }],
     ["outbox", vec("Outgoing")],
+    ["images", vec("Attachment"), { default: true, doc: "The chat's images in the order its page shows them (each message's placed ones first, then those below it;\nthe outbox's last), each with its `owner`: an image opened in the preview steps to the one before or after." }],
     ["link", "Link"],
     ["offline", "bool"],
     ["watch", opt("RowWatch"), { doc: "One of its agents keeps watch: archiving it by hand asks first. Absent otherwise." }],

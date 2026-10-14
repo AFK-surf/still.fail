@@ -1531,6 +1531,12 @@ export interface ChatMessage {
 	 * when nothing.
 	 */
 	elsewhere?: ChatSentElsewhere[];
+	/**
+	 * In a chat's page: the names of the files its text places (`![](shot.png)`, `[the report](report.pdf)`), in the
+	 * order it names them, drawn where it names them; the rest go below it. Absent when it places none (a person's
+	 * words never do).
+	 */
+	placed?: string[];
 }
 
 /** A range of a text, `from` to `to` (UTF-16 units). */
@@ -1736,6 +1742,11 @@ export interface ChatView {
 	/** The unread line lies above the messages loaded: older pages are being loaded to find it. */
 	unreadAbove?: boolean;
 	outbox: Outgoing[];
+	/**
+	 * The chat's images in the order its page shows them (each message's placed ones first, then those below it;
+	 * the outbox's last), each with its `owner`: an image opened in the preview steps to the one before or after.
+	 */
+	images?: Attachment[];
 	link: Link;
 	offline: boolean;
 	/** One of its agents keeps watch: archiving it by hand asks first. Absent otherwise. */

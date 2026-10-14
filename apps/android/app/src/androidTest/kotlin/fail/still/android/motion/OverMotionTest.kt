@@ -26,6 +26,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
@@ -365,6 +366,57 @@ class OverMotionTest {
         edge.frame { rule.onRoot().performTouchInput { up() } }
         edge.frames(30)
         edge.end()
+    }
+
+    /**
+     * Images an agent's words place (`![](a.png)`), the first opened: a swipe steps to the next, through the chat's
+     * images as the core lays them out (`ChatView.images`). It showed the one alone, stepping nowhere.
+     */
+    @Test
+    fun viewerSwipesPlacedImages() {
+        val h = Harness(rule)
+        val pictures = mapOf(
+            "a.png" to slidePicture("1", 0xFFE8704A.toInt(), 0xFF3A6FD8.toInt()),
+            "b.png" to slidePicture("2", 0xFF2E9E6B.toInt(), 0xFFE0C341.toInt()),
+            "c.png" to slidePicture("3", 0xFF8A4FD8.toInt(), 0xFFD84F8A.toInt()),
+        )
+        h.fake.answer = { name, args ->
+            val path = args.toString()
+            val bytes = pictures.entries.firstOrNull { path.contains(it.key) }?.value
+            if (name == "station.file" && bytes != null) buildJsonObject { put("type", "image/png"); put("bytes", Base64.encodeToString(bytes, Base64.NO_WRAP)) } else JsonNull
+        }
+        val context = rule.activity
+        val prefs = context.getSharedPreferences("motion-test", Context.MODE_PRIVATE)
+        prefs.edit().clear().putString("theme", "light").commit()
+        val app = AppState(h.fake.core, prefs, "http://127.0.0.1:9", Updates(context, "http://127.0.0.1:9", h.fake.core))
+        val files = pictures.map { (name, bytes) -> Attachment(name = name, path = "ws/c-1/$name", size = bytes.size.toLong(), width = 800, height = 600, owner = "ember:c-1") }
+        val view = Fixtures.chat(emptyList()).copy(images = files)
+        val ctx = fail.still.android.screens.Here(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD), view, emptyList(), "ember:c-1")
+        rule.setContent {
+            StillFailTheme(false) {
+                CompositionLocalProvider(LocalApp provides app, LocalUi provides app) {
+                    Box(Modifier.fillMaxSize().background(C.bg)) {
+                        Column(Modifier.padding(start = 16.dp, top = 120.dp).width(260.dp)) {
+                            fail.still.android.screens.AgentWords(ctx, "看这几张：\n\n![](a.png)\n\n![](b.png)\n\n![](c.png)", files, files.map { it.name })
+                        }
+                        ViewerHost()
+                    }
+                }
+            }
+        }
+        h.settle()
+        val density = rule.activity.resources.displayMetrics.density
+        rule.onRoot().performTouchInput { click(Offset((16f + 100f) * density, (120f + 100f) * density)) }
+        h.settle(3000)
+        rule.onNodeWithText("a.png").assertExists()
+        val w = rule.onRoot().fetchSemanticsNode().size.width.toFloat()
+        val y = rule.onRoot().fetchSemanticsNode().size.height / 2f
+        rule.onRoot().performTouchInput { swipe(Offset(w * 0.8f, y), Offset(w * 0.2f, y), 200) }
+        h.settle(1500)
+        rule.onNodeWithText("b.png").assertExists()
+        rule.onRoot().performTouchInput { swipe(Offset(w * 0.8f, y), Offset(w * 0.2f, y), 200) }
+        h.settle(1500)
+        rule.onNodeWithText("c.png").assertExists()
     }
 
     /** A short clip (red to blue, a frame's number on each), encoded here: 30 frames at about 30 fps. */

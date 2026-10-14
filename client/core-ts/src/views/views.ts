@@ -24,6 +24,7 @@ import type { Value, Watch } from "../store.ts";
 import { arr as arrU, deepFreeze, get as getU, isObject } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
 import { presentHistory } from "../history.ts";
+import { isImage, placeFiles } from "../placed.ts";
 import { archive } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
 import * as marks from "./marks.ts";
@@ -1607,7 +1608,8 @@ const pinnedAt = new WeakMap<object, number>();
 
 /// What a chat's page draws by each message, decided here so the page only draws it (docs/client-core.md): whether the
 /// agent who said it is one of the chat's (its name opens its history), whose workspace keeps each of its files (and the
-/// outbox's), the 归档 offer and what the archive check made of the chat under its last all-done post, and what its
+/// outbox's), which of an agent's files its text places (placed.ts), the chat's images in the order shown (what its
+/// preview steps through), the 归档 offer and what the archive check made of the chat under its last all-done post, and what its
 /// agents sent to Slack or were given there after it (`elsewhere`; the chat's own `elsewhere` keeps what came before
 /// its first message).
 function drawn<V extends Value | undefined>(out: V): V {
@@ -1632,9 +1634,28 @@ function drawn<V extends Value | undefined>(out: V): V {
     const agent = str(get(by, "agent"));
     return agent !== null && keys.has(agent) ? { ...by, here: true } : by;
   };
-  const messages: J[] = arr(view.messages).map((m) => (isObject(m) ? { ...m, by: here(m.by), attachments: own(m.attachments) } : m));
+  const images: J[] = [];
+  const shown = (files: J[]) => { for (const f of files) if (isObject(f) && typeof f.name === "string" && typeof f.owner === "string" && isImage(f.name)) images.push(f); };
+  const messages: J[] = arr(view.messages).map((m) => {
+    if (!isObject(m)) return m;
+    const files = own(m.attachments);
+    const out: J = { ...m, by: here(m.by), attachments: files };
+    // A person's words place nothing: their files are all below them.
+    if (m.authorKind !== "person" && Array.isArray(files) && files.length > 0) {
+      const { placed, rest } = placeFiles(str(m.text) ?? "", files as J[]);
+      if (placed.size > 0) out.placed = [...placed.keys()];
+      shown([...placed.values(), ...rest]);
+    } else shown(arr(files));
+    return out;
+  });
   view.messages = messages;
-  if (Array.isArray(view.outbox)) view.outbox = view.outbox.map((o: J) => (isObject(o) ? { ...o, attachments: own(o.attachments) } : o));
+  if (Array.isArray(view.outbox)) view.outbox = view.outbox.map((o: J) => {
+    if (!isObject(o)) return o;
+    const files = own(o.attachments);
+    shown(arr(files));
+    return { ...o, attachments: files };
+  });
+  view.images = images;
   // Under the agent's last post, at the chat's end (not a window short of it), once it said it is all done.
   let lastAt = -1;
   for (let i = messages.length - 1; i >= 0 && view.newer !== true; i--) {

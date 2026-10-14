@@ -259,7 +259,7 @@ function Messages({ view, lives, list, draft, here, stationName }: {
   const [turn, setTurn] = useState(0);
   // Sent to by the page's key until its thread is known (a chat made here, or the agent's: useComposer).
   const to = view.thread?.id ?? here.key;
-  const images = () => chatImages([...rows.messages, ...view.outbox.map((o) => ({ authorKind: "person", ...o }))]);
+  const images = () => chatImages(view.images);
   // The messages are kept as they are while nothing they show changes: what they are handed stays the same function,
   // the latest one behind it.
   const archive = useArchiveChat(here.station, here.key);

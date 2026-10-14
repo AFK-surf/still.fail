@@ -1460,6 +1460,26 @@ test("a_chats_page_is_told_by_each_message_whose_its_files_are_and_where_archivi
   assert.deepEqual(v.messages.map((m: J) => m.archive ?? false), [false, false, true]);
 });
 
+test("a_chats_page_is_told_which_files_its_agents_words_place_and_its_images_in_the_order_shown", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  const file = (name: string) => ({ name, path: `ws/k/${name}`, size: 1 });
+  // The person's own words place nothing, even naming one; the agent's place theirs (not one named in code), in the
+  // order named, ahead of the rest below them.
+  const said = { ...entry(1, "![](a.png)"), attachments: [file("a.png"), file("notes.txt")] };
+  const agent = { ...entry(2, "先看第二张 ![](c.png)，再看 [这张](ember-file://ws/k/b.png)\n\n`![](d.png)`"), authorKind: "agent", author: "k", attachments: [file("b.png"), file("c.png"), file("d.png"), file("e.mp4")] };
+  t.set(pageOf("ws/a", 7), { first: 1, last: 2, entries: [said, agent], thread: null });
+  t.set(rows("ws/a"), [{ ...row("k", now), thread: 7 }]);
+  await t.read(u, 1);
+  const v = u.value;
+  assert.deepEqual(v.messages.map((m: J) => m.placed ?? null), [null, ["c.png", "b.png"]]);
+  assert.deepEqual(v.images.map((f: J) => [f.name, f.owner]), [["a.png", "k"], ["c.png", "k"], ["b.png", "k"], ["d.png", "k"]]);
+});
+
 test("an_agent_only_in_slack_shows_what_was_said_there_on_its_page", async () => {
   const t = setup();
   const u = ui();

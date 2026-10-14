@@ -1187,7 +1187,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             Box(hold.drawBehind { drawSmooth(press, 12.dp.toPx()) }) {
                 // A person's words as yours are drawn: a reference to another chat as its chip (web Chat.tsx → PersonWords).
                 if (m.authorKind == "person") { if (m.text.isNotEmpty()) { val words = fail.still.android.ui.markWeight(fail.still.android.ui.withRefs(m.text)); val (mark, laid) = passageMark(words.text); val (links, linked) = fail.still.android.ui.linkHold(words); Text(words, mark.then(links), fontSize = 15.sp, lineHeight = 23.sp, color = ink.text, onTextLayout = { laid(it); linked(it) }) } }
-                else AgentWords(ctx, m.text, m.attachments, draft)
+                else AgentWords(ctx, m.text, m.attachments, m.placed.orEmpty(), draft)
             }
             // An agent's files are placed in its words (Prose.kt), the rest below them there.
             if (m.authorKind == "person") Files(ctx, m.attachments)

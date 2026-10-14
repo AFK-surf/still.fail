@@ -1521,7 +1521,11 @@ data class ChatMessage (
 	val archiveCheck: ArchiveCheck? = null,
 	/// In a chat's page: what its agents sent to Slack or were given there after this message, before the next. Absent
 	/// when nothing.
-	val elsewhere: List<ChatSentElsewhere>? = null
+	val elsewhere: List<ChatSentElsewhere>? = null,
+	/// In a chat's page: the names of the files its text places (`![](shot.png)`, `[the report](report.pdf)`), in the
+	/// order it names them, drawn where it names them; the rest go below it. Absent when it places none (a person's
+	/// words never do).
+	val placed: List<String>? = null
 )
 
 /// A range of a text, `from` to `to` (UTF-16 units).
@@ -1721,6 +1725,9 @@ data class ChatView (
 	/// The unread line lies above the messages loaded: older pages are being loaded to find it.
 	val unreadAbove: Boolean? = null,
 	val outbox: List<Outgoing>,
+	/// The chat's images in the order its page shows them (each message's placed ones first, then those below it;
+	/// the outbox's last), each with its `owner`: an image opened in the preview steps to the one before or after.
+	val images: List<Attachment>? = null,
 	val link: Link,
 	val offline: Boolean,
 	/// One of its agents keeps watch: archiving it by hand asks first. Absent otherwise.

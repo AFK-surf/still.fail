@@ -112,7 +112,7 @@ class VideoAttachmentTest {
                     Box(Modifier.fillMaxSize().background(C.bg)) {
                         Column(Modifier.padding(start = 16.dp, top = 160.dp).width(320.dp)) {
                             fail.still.android.screens.AgentWords(ctx,
-                                "录了一段：\n\n![](markdown-video.mp4) ![](row-video.mp4)\n\n| 视频 |\n| --- |\n| ![](table-video.mp4) |", listOf(file, rowFile, tableFile))
+                                "录了一段：\n\n![](markdown-video.mp4) ![](row-video.mp4)\n\n| 视频 |\n| --- |\n| ![](table-video.mp4) |", listOf(file, rowFile, tableFile), listOf(file, rowFile, tableFile).map { it.name })
                         }
                         ViewerHost()
                     }

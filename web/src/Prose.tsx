@@ -14,6 +14,7 @@ import * as css from "./Prose.css.ts";
 import { RefChip } from "./ChatRef.tsx";
 import { isChatLink } from "./chatRefs.ts";
 import { bareLinks } from "./bareLinks.ts";
+import { nameOf, placeFiles } from "../../client/core-ts/src/placed.ts";
 import { FileRef, LinkHover, pathIn } from "./Peeks.tsx";
 import { Tip } from "./ui.tsx";
 import { failure, useToast } from "./toast.tsx";
@@ -168,31 +169,6 @@ export function withBareLinks(text: string): ReactNode {
   return bareLinks(text).map((part, i) => (typeof part === "string" ? part : <Fragment key={i}>{link({ href: part.url, className: css.bareLink, children: part.url })}</Fragment>));
 }
 
-/** The file a link or image in the text names, by its file name (the last part of its path): `shot.png`, `/w/shot.png`, `ember-file://…/shot.png`. */
-function nameOf(url: string): string {
-  let u = url.trim().replace(/^(ember-)?file:\/\//, "");
-  try { u = decodeURIComponent(u); } catch { /* kept as written */ }
-  return u.slice(u.lastIndexOf("/") + 1);
-}
-
-/**
- * Which of a message's files its text places, by the name its links and
- * images give (`![](shot.png)`, `[the report](report.pdf)`), and the rest,
- * shown below the text. Code is passed over: a name in it places nothing.
- */
-export function placeFiles(text: string, files: Attachment[] | undefined): { placed: Map<string, Attachment>; rest: Attachment[] } {
-  const placed = new Map<string, Attachment>();
-  if (!files?.length || !text) return { placed, rest: files ?? [] };
-  const prose = text.replace(/^ {0,3}(`{3,}|~{3,})[^]*?(^ {0,3}\1|(?![^]))/gm, "").replace(/(`+)[^]*?\1/g, "");
-  for (const [, url] of prose.matchAll(/\]\(\s*<?([^)\s>]+)>?(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)/g)) {
-    const name = nameOf(url!);
-    const file = files.find((f) => f.name === name);
-    if (file) placed.set(name, file);
-  }
-  const used = new Set(placed.values());
-  return { placed, rest: files.filter((f) => !used.has(f)) };
-}
-
 /** An image in a row of them: widths in proportion to their shapes, so a row's images share one height (120px or a little more, 200px at most). */
 function rowItem(f: Attachment): CSSProperties {
   const r = f.width && f.height ? Math.min(4, Math.max(0.25, f.width / f.height)) : 1.5;
@@ -200,7 +176,7 @@ function rowItem(f: Attachment): CSSProperties {
 }
 
 /**
- * Markdown. With `files` (from placeFiles), a link or image naming one of the
+ * Markdown. With `files` (from placeFiles, client/core-ts/src/placed.ts), a link or image naming one of the
  * message's files shows it there, as `file` draws it: shown whole for an
  * image, or a link on a line of its own; a link within a sentence stays a
  * link (its words), opening the file.

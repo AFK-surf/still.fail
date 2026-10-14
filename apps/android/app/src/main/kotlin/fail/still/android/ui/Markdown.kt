@@ -153,9 +153,10 @@ fun prepareMarkdown(text: String) {
 private fun Node.children(): List<Node> = generateSequence(firstChild) { it.next }.toList()
 
 /**
- * A message's files its text places (placeFiles), and how they are drawn: `shown` draws one on a line of its own
- * (an HTML file as its visualization, an image whole, any other as its card) or several images in a row (`row`, each
- * given the modifier that sizes it); `open` opens one a link within a sentence names.
+ * A message's files its text places (the core's `placed`, client/core-ts/src/placed.ts), and how they are drawn:
+ * `shown` draws one on a line of its own (an HTML file as its visualization, an image whole, any other as its card) or
+ * several images in a row (`row`, each given the modifier that sizes it); `open` opens one a link within a sentence
+ * names.
  */
 class Placing(
     val files: Map<String, Attachment>,
@@ -169,26 +170,6 @@ fun fileNameOf(url: String): String {
     var u = url.trim().replace(Regex("^(ember-)?file://"), "")
     u = try { java.net.URLDecoder.decode(u.replace("+", "%2B"), "UTF-8") } catch (_: Exception) { u }
     return u.substringAfterLast('/')
-}
-
-private val FENCE = Regex("(?ms)^ {0,3}(`{3,}|~{3,}).*?(^ {0,3}\\1|\\z)")
-private val TICKS = Regex("(`+)[\\s\\S]*?\\1")
-private val TARGET = Regex("\\]\\(\\s*<?([^)\\s>]+)>?(?:\\s+(?:\"[^\"]*\"|'[^']*'))?\\s*\\)")
-
-/**
- * Which of a message's files its text places, by the name its links and images give (`![](shot.png)`,
- * `[the report](report.pdf)`), and the rest, shown below the text. Code is passed over: a name in it places nothing.
- */
-fun placeFiles(text: String, files: List<Attachment>): Pair<Map<String, Attachment>, List<Attachment>> {
-    if (files.isEmpty() || text.isEmpty()) return emptyMap<String, Attachment>() to files
-    val prose = text.replace(FENCE, "").replace(TICKS, "")
-    val placed = LinkedHashMap<String, Attachment>()
-    for (m in TARGET.findAll(prose)) {
-        val name = fileNameOf(m.groupValues[1])
-        files.firstOrNull { it.name == name }?.let { placed[name] = it }
-    }
-    val used = placed.values.toSet()
-    return placed to files.filter { it !in used }
 }
 
 // ── references to chats (chatRefs.ts) ─────────────────────────────────
