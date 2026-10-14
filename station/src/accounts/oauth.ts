@@ -39,10 +39,10 @@ function access(c: Credentials, lang: Lang): [string, number] {
   return [token, Number.isInteger(oauth.expiresAt) ? oauth.expiresAt : 0];
 }
 
-function usable(c: Credentials, rejected: string | null, lang: Lang): boolean {
+function usable(c: Credentials, rejected: string | null, lang: Lang, margin = MARGIN_MS): boolean {
   try {
     const [token, expires] = access(c, lang);
-    return rejected !== token && (expires === 0 || expires - wall.now() > MARGIN_MS);
+    return rejected !== token && (expires === 0 || expires - wall.now() > margin);
   } catch {
     return false;
   }
@@ -124,17 +124,26 @@ async function save(env: Env, home: string, c: Credentials, lang: Lang) {
 /// A current access token and when it runs out: the one kept, unless it is about to run out or is `rejected` (a 401
 /// said so); then renewed. `home`: a profile's config directory; null: the machine's own login (~/.claude, and on
 /// macOS the keychain first).
-export async function claudeOAuthToken(env: Env, home: string | null, rejected: string | null, endpoint: string, lang: Lang = stationLang()): Promise<[string, number]> {
+/// `margin`: how long the token given must still last, renewed first when it lasts less (a token handed to a process
+/// that cannot renew it is asked for with longer).
+export async function claudeOAuthToken(env: Env, home: string | null, rejected: string | null, endpoint: string, lang: Lang = stationLang(), margin = MARGIN_MS): Promise<[string, number]> {
   const machine = home === null;
   const dir = home ?? join(homeOf(env), ".claude");
   const initial = await read(env, dir, machine, lang);
-  if (usable(initial, rejected, lang)) return access(initial, lang);
+  if (usable(initial, rejected, lang, margin)) return access(initial, lang);
   mkdirSync(dir, { recursive: true });
   const current = await RefreshLock.acquire(join(dir, ".oauth_refresh.lock"), lang);
   try {
     const legacy = await RefreshLock.acquire(`${realpathSync(dir)}.lock`, lang);
     try {
-      return await renew(env, dir, machine, rejected, endpoint, lang);
+      return await renew(env, dir, machine, rejected, endpoint, lang, margin);
+    } catch (error) {
+      // Renewed early and it could not be: the token is still given while it lasts the usual margin.
+      if (margin > MARGIN_MS) {
+        const latest = await read(env, dir, machine, lang);
+        if (usable(latest, rejected, lang)) return access(latest, lang);
+      }
+      throw error;
     } finally {
       legacy.release();
     }
@@ -143,10 +152,10 @@ export async function claudeOAuthToken(env: Env, home: string | null, rejected: 
   }
 }
 
-async function renew(env: Env, home: string, machine: boolean, rejected: string | null, endpoint: string, lang: Lang): Promise<[string, number]> {
+async function renew(env: Env, home: string, machine: boolean, rejected: string | null, endpoint: string, lang: Lang, margin: number): Promise<[string, number]> {
   const t = (key: string, args?: Record<string, unknown>) => tr(lang, key, args);
   const credentials = await read(env, home, machine, lang);
-  if (usable(credentials, rejected, lang)) return access(credentials, lang);
+  if (usable(credentials, rejected, lang, margin)) return access(credentials, lang);
   const oauth = credentials.data?.claudeAiOauth ?? {};
   const refresh = oauth.refreshToken;
   if (typeof refresh !== "string" || refresh === "") throw new Error(t("station.claudeAuth.expiredNoRefresh"));

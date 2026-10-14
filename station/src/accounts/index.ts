@@ -47,6 +47,9 @@ type Json = any;
 
 /// How often allowances are asked again while someone follows.
 const QUOTA_EVERY_MS = 5 * 60_000;
+/// A Claude token handed to a process (or lent to another station) that cannot renew it is renewed first when it would
+/// last less than this, so it is not swapped soon after.
+const HANDED_MARGIN_MS = 3600_000;
 const CHECK_ON_START_MS = 3_000;
 const PENDING_KEPT_MS = 15 * 60_000;
 /// The checks the policy page counts: of the last days, and the chats it names for each option at most.
@@ -245,7 +248,7 @@ export class Accounts {
 
   /// The machine login's current Claude token, renewed when about to run out (the Claude driver's `machineToken`).
   async machineToken(env: Env = this.env): Promise<MachineToken> {
-    const [token, expiresAt] = await claudeOAuthToken(env, null, null, this.urls.claudeToken);
+    const [token, expiresAt] = await claudeOAuthToken(env, null, null, this.urls.claudeToken, stationLang(), HANDED_MARGIN_MS);
     return { token, expiresAt };
   }
 
@@ -253,7 +256,7 @@ export class Accounts {
   async claudeToken(profile: Json): Promise<MachineToken> {
     if (profile.machine === true) return this.machineToken();
     const home = String(profile.home ?? "");
-    const [token, expiresAt] = await claudeOAuthToken(this.env, joinPath(this.deps.data, home), null, this.urls.claudeToken);
+    const [token, expiresAt] = await claudeOAuthToken(this.env, joinPath(this.deps.data, home), null, this.urls.claudeToken, stationLang(), HANDED_MARGIN_MS);
     return { token, expiresAt };
   }
 
