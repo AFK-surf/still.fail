@@ -168,9 +168,10 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 channel="\${STILLFAIL_CHANNEL:-__CHANNEL__}"
+# (Said once: not again by the release's own installer, handed the download below.)
 case "$channel" in
-  beta) release="beta/stillfail-station-$platform.tar.gz"; echo "${say("cloud.install.downloadBeta")}" ;;
-  *) channel=stable; release="stillfail-station-$platform.tar.gz"; echo "${say("cloud.install.download")}" ;;
+  beta) release="beta/stillfail-station-$platform.tar.gz"; [ -n "\${STILLFAIL_INSTALLER_HANDED:-}" ] || echo "${say("cloud.install.downloadBeta")}" ;;
+  *) channel=stable; release="stillfail-station-$platform.tar.gz"; [ -n "\${STILLFAIL_INSTALLER_HANDED:-}" ] || echo "${say("cloud.install.download")}" ;;
 esac
 step download
 sha256_of() { { shasum -a 256 "$1" 2>/dev/null || sha256sum "$1"; } | cut -d' ' -f1; }

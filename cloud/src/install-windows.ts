@@ -86,8 +86,9 @@ $tmp = Join-Path ([IO.Path]::GetTempPath()) ('stillfail-' + [guid]::NewGuid().To
 New-Item -ItemType Directory -Force $tmp | Out-Null
 try {
 $channel = if ($env:STILLFAIL_CHANNEL) { $env:STILLFAIL_CHANNEL } else { '__CHANNEL__' }
-if ($channel -eq 'beta') { $release = "beta/stillfail-station-$platform.zip"; Say (__SAY(cloud.install.downloadBeta)) }
-else { $channel = 'stable'; $release = "stillfail-station-$platform.zip"; Say (__SAY(cloud.install.download)) }
+# (Said once: not again by the release's own installer, handed the download below.)
+if ($channel -eq 'beta') { $release = "beta/stillfail-station-$platform.zip"; if (-not $env:STILLFAIL_INSTALLER_HANDED) { Say (__SAY(cloud.install.downloadBeta)) } }
+else { $channel = 'stable'; $release = "stillfail-station-$platform.zip"; if (-not $env:STILLFAIL_INSTALLER_HANDED) { Say (__SAY(cloud.install.download)) } }
 Step 'download'
 $zip = Join-Path $tmp 'stillfail.zip'
 # Handed a release already downloaded (by the installer of the release before, below): taken, its directory removed.
