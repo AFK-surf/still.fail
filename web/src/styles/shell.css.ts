@@ -30,6 +30,9 @@ export const dock = style({
     "(max-width: 700px)": { display: "contents" },
     "(min-width: 701px)": {
       position: "relative", display: "flex", minWidth: 0, minHeight: 0, overflow: "hidden", background: vars.sidebar, margin: 0, borderRadius: 0,
+      // The closed bar's line and shadow, there but clear while open: the same shadows either way, so they ease in
+      // (from none, or another kind, they would come at once).
+      boxShadow: "inset 0 0 0 1px transparent, 0 8px 24px transparent",
       cornerShape: vars.cornerShape,
       transition: ["margin", "border-radius", "background-color", "box-shadow"].map((p) => `${p} 380ms ${vars.easeOut}`).join(", "),
       selectors: {
