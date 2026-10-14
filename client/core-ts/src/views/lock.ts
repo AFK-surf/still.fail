@@ -68,10 +68,12 @@ export function fold(entries: Entry[]): Folded {
 
 /// A station's enrollment in a locked workspace: its commands name the lock's head, which it pins (`--lock`), as the
 /// stations this device reaches have it (the cloud's word only when none answers).
+/// A control plane that keeps no lock (Comma, a cloud from before locks): the commands as they were.
 export function enrolled(inner: Inner, sub: string, ws: string, made: unknown): Effect.Effect<unknown, CoreError> {
   return Effect.gen(function* () {
+    if (inner.provider.kind !== "stillfail") return made;
     const lock = new Lock(inner, ws, sub, null);
-    const head = yield* lock.head();
+    const head = yield* Effect.orElseSucceed(lock.head(), () => null);
     if (head === null || !isObject(made)) return made;
     const out: J = { ...made, lock: head.hash };
     if (typeof out.install === "string") out.install = `${out.install} ${head.hash}`;

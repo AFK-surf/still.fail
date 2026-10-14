@@ -179,7 +179,9 @@ export async function serve(m: Members, conn: Connection) {
     wall.after(200, () => conn.close(1, e instanceof LockRefusal ? "lock_unconfirmed" : "credential_refused"));
     throw e;
   }
-  await writeLine(first, { ok: true, station: state().name, expires_at: current.exp, lock: lockHead(m.cloud) });
+  // How far its lock goes, when it has one (a device that has more brings it, docs/workspace-lock.md).
+  const head = lockHead(m.cloud);
+  await writeLine(first, { ok: true, station: state().name, expires_at: current.exp, ...(head ? { lock: head } : {}) });
   log.info("mesh", "client connected", { email: current.viewer.email, device: device.slice(0, 12) });
 
   // The connection ends when its credential runs out or is revoked, or the station leaves its workspace: checked on

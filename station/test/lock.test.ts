@@ -130,7 +130,7 @@ test("a passkey signs as WebAuthn does: on the lock's origin, for its relying pa
   s = apply(s, assertion({}), 2000);
   assert.equal(s.stations.get((e.body as any).key)?.name, "by passkey");
   for (const [why, o] of [["another page", { origin: "https://evil.example" }], ["another entry", { challenge: "AAAA" }], ["another site", { rp: "evil.example" }], ["nobody present", { flags: 0 }]] as const) {
-    assert.throws(() => apply(apply(w.state, added, 2000), assertion(o)), /signature invalid/, why);
+    assert.throws(() => apply(apply(w.state, added, 2000), assertion(o), 2000), /signature invalid/, why);
   }
 });
 
@@ -277,7 +277,7 @@ test("an unlocked station pins no lock the control plane offers, but the one its
   const sent: any[] = [];
   const frame = JSON.stringify({ type: "state", workspace: WS, peers: [], grant_keys: { keys: [w.grant.jwk] }, revocations: [], lock: { seq: 0, hash: entryHash(w.first) } });
   applyState(cloud, frame, (f) => sent.push(f));
-  assert.deepEqual(sent, [], "nothing asked");
+  assert.equal(sent.length, 0, "nothing asked");
   applyState(cloud, JSON.stringify({ type: "lock", entries: [w.first] }));
   assert.equal(cloud.locked(), null, "nothing pinned");
   // Enrolled with another lock's hash: the plane's is not it.
