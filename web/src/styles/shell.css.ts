@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./tokens.css.ts";
+import { panel } from "./glass.ts";
 
 export const shell = style({
   position: "relative", display: "grid", gridTemplateColumns: "240px minmax(0, 1fr)", height: ["100vh", "100dvh"],
@@ -29,12 +30,18 @@ export const dock = style({
     "(max-width: 700px)": { display: "contents" },
     "(min-width: 701px)": {
       position: "relative", display: "flex", minWidth: 0, minHeight: 0, overflow: "hidden", background: vars.sidebar, margin: 0, borderRadius: 0,
-      cornerShape: vars.cornerShape, transition: `margin 380ms ${vars.easeOut}, border-radius 380ms ${vars.easeOut}`,
+      cornerShape: vars.cornerShape,
+      transition: ["margin", "border-radius", "background-color", "box-shadow"].map((p) => `${p} 380ms ${vars.easeOut}`).join(", "),
       selectors: {
         // Concentric with what is lit in it (the rail's places' ground, its 9 px corner 6 px in from its every edge), and
         // as far from the window's edges as that ground from its own: 6 (its 56 column's other 8 the gutter by the page,
         // where its edge's bar is, Rail.css.ts).
-        '[data-sidebar="closed"] &': { margin: "6px 8px 6px 6px", borderRadius: `calc(9px * ${vars.cornerScale} + 6px)` },
+        // Closed, no longer the sidebar but floating over the page: a floating panel's ground (glass.ts panel, as menus
+        // and notices), its line drawn within (a border would take from the rail's 42) and its shadow.
+        '[data-sidebar="closed"] &': {
+          margin: "6px 8px 6px 6px", borderRadius: `calc(9px * ${vars.cornerScale} + 6px)`,
+          background: panel.background, boxShadow: `inset 0 0 0 1px ${vars.line}, 0 8px 24px ${vars.shadow}`,
+        },
         '[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] &': { marginTop: 44 },
       },
     },
