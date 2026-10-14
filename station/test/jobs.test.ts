@@ -157,7 +157,17 @@ describe("jobs", { concurrency: true }, () => {
     const job = r.jobs.start("s1", "long", FOREVER, r.work, null, false);
     // Started lower than the station (ops/nice.ts), as what an agent starts is.
     const pgid = r.store.getJob(job.id)!.pgid!;
-    if (process.platform !== "win32") assert.equal(Number(execFileSync("ps", ["-o", "nice=", "-p", String(pgid)], { encoding: "utf8" }).trim()), agentNice());
+    if (process.platform !== "win32") {
+      const nice = (pid: number) => Number(execFileSync("ps", ["-o", "nice=", "-p", String(pid)], { encoding: "utf8" }).trim());
+      // `nice` lowers itself, then execs the job: looked at until it has (it is this process's niceness till then), and
+      // compared with this process's (a shell's background job here may run lowered already).
+      let got = nice(pgid);
+      while (got === nice(process.pid)) {
+        await new Promise((r) => setTimeout(r, 10));
+        got = nice(pgid);
+      }
+      assert.equal(got, nice(process.pid) + agentNice());
+    }
     r.jobs.notified(job.token, "  half way  ");
     assert.deepEqual(r.said(), [`Job "long" (${job.id}) says: half way`]);
     assert.throws(() => r.jobs.notified("wrong", "x"));
