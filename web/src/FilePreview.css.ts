@@ -9,14 +9,12 @@ import { enrollWait } from "./cloud/settings.css.ts";
 import { avatarTile, tokenGuide } from "./pages/SlackApp.css.ts";
 import { codeBar, codeBlock, codeShiki } from "./Prose.css.ts";
 
-/** Dark whatever the theme, as a viewer of pictures (images, video): the page's colours, redefined within it. */
-export const dark = {
-  [vars.canvas]: "#111113", [vars.text]: "#f4f4f5", [vars.muted]: "rgba(255, 255, 255, .6)",
-  [vars.subtle]: "rgba(255, 255, 255, .35)", [vars.hover]: "rgba(255, 255, 255, .12)", [vars.selected]: "rgba(255, 255, 255, .16)",
-  [vars.line]: "rgba(255, 255, 255, .1)", [vars.accent]: "#f4f4f5",
-};
-/** Frosted glass over a picture. */
+/** Frosted glass over a picture, in the theme's colours (a viewer is light in a light app, dark in a dark one). */
 export const glass = {
+  background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, backdropFilter: "blur(24px) saturate(1.6)", WebkitBackdropFilter: "blur(24px) saturate(1.6)",
+};
+/** Dark glass whatever the theme: notes written on a picture (annotate/), read over any of it. */
+export const darkGlass = {
   background: "rgba(18, 18, 20, .62)", backdropFilter: "blur(24px) saturate(1.6)", WebkitBackdropFilter: "blur(24px) saturate(1.6)",
 };
 /** The same over a page of the theme's colours (a document). */
@@ -35,7 +33,6 @@ export const fp = style({
     },
   },
 });
-globalStyle(`${fp}[data-kind="image"]`, { vars: dark, background: "#000" });
 // The page bars under it drag the desktop window whatever lies over them: without this, the top of its bar takes no pointer.
 globalStyle(`[data-desktop] ${fp}`, { WebkitAppRegion: "no-drag" });
 /** What floats: shown while the pointer moves, and whenever it or focus is on it (faded, it stays where it is to be clicked). */

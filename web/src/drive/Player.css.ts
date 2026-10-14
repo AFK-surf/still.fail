@@ -1,21 +1,20 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
-import { dark as darkVars, glass } from "../FilePreview.css.ts";
+import { glass } from "../FilePreview.css.ts";
 import { vvBar } from "../VideoViewer.css.ts";
-import { iconBtn } from "../styles/pages.css.ts";
 import { spinner as turning } from "../styles/waiting.css.ts";
 
-/** The player fills its page (the phone's, or the desktop's main pane), dark as the chat's video viewer. */
+/** The player fills its page (the phone's, or the desktop's main pane), in the theme's colours as the chat's video viewer. */
 export const player = style({ position: "absolute", inset: "0", userSelect: "none", WebkitUserSelect: "none" });
 export const stage = style({ position: "absolute", inset: "0", display: "grid", placeItems: "center" });
 export const media = style({
-  display: "block", width: "100%", height: "100%", objectFit: "contain", background: "#000",
+  display: "block", width: "100%", height: "100%", objectFit: "contain", background: "transparent",
   selectors: { "&[data-audio]": { position: "absolute", inset: "0", opacity: "0" } },
 });
 
 /** A song has no picture: its mark and its name. */
 export const cover = style({
-  display: "grid", justifyItems: "center", gap: "16px", padding: "0 32px", color: "rgba(255, 255, 255, .7)", textAlign: "center",
+  display: "grid", justifyItems: "center", gap: "16px", padding: "0 32px", color: vars.muted, textAlign: "center",
 });
 globalStyle(`${cover} span`, { color: vars.text, fontSize: vars.textTitle, fontWeight: "600", overflowWrap: "anywhere" });
 
@@ -38,11 +37,11 @@ export const bright = style({ color: `${vars.text} !important` });
 export const note = style({ display: "grid", justifyItems: "center", gap: "14px", padding: "0 32px", color: vars.muted, fontSize: vars.textMeta, textAlign: "center" });
 export const noteButton = style({
   display: "inline-flex", alignItems: "center", gap: "6px", height: "36px", padding: "0 16px", border: "0", borderRadius: "999px",
-  background: "rgba(255, 255, 255, .12)", color: vars.text, fontSize: vars.textUi, cursor: "pointer",
+  background: `color-mix(in srgb, ${vars.text} 12%, transparent)`, color: vars.text, fontSize: vars.textUi, cursor: "pointer",
 });
 export const spinner = style([turning, { position: "absolute", width: "28px", height: "28px", pointerEvents: "none" }]);
 /** What of it has come: a lighter band under the played part. */
-export const buffered = style({ position: "absolute", top: "0", bottom: "0", background: "rgba(255, 255, 255, .22)" });
+export const buffered = style({ position: "absolute", top: "0", bottom: "0", background: `color-mix(in srgb, ${vars.text} 22%, transparent)` });
 /** A subtitle's lines over the picture: above the controls while they show, lower once they fade. */
 export const cue = style({
   position: "absolute", zIndex: "2", left: "50%", transform: "translateX(-50%)", bottom: "calc(var(--m-foot, 0px) + 28px)",
@@ -100,7 +99,7 @@ globalStyle(`${listRow} span`, { overflow: "hidden", textOverflow: "ellipsis", w
 /** The sound: mute, and a short line to drag. */
 export const volume = style({ display: "flex", alignItems: "center", gap: "2px", marginRight: "6px" });
 export const volumeLine = style({ position: "relative", width: "72px", height: "22px", display: "grid", alignItems: "center", cursor: "pointer", touchAction: "none", outline: "none" });
-export const volumeTrack = style({ position: "relative", display: "block", height: "4px", borderRadius: "2px", overflow: "hidden", background: "rgba(255, 255, 255, .2)" });
+export const volumeTrack = style({ position: "relative", display: "block", height: "4px", borderRadius: "2px", overflow: "hidden", background: `color-mix(in srgb, ${vars.text} 20%, transparent)` });
 globalStyle(`${volumeTrack} > span`, { position: "absolute", inset: "0", transformOrigin: "left", background: vars.text });
 export const volumeHead = style({
   position: "absolute", top: "50%", left: "0", width: "10px", height: "10px", borderRadius: "50%", background: vars.text,
@@ -112,10 +111,3 @@ export const pointed = style({
   background: "rgba(0, 0, 0, .75)", color: "#fff", fontFamily: vars.fontMono, fontSize: vars.textCaption, fontVariantNumeric: "tabular-nums",
   pointerEvents: "none", whiteSpace: "nowrap",
 });
-
-/** In the page (with a mouse, out of full screen): the app's own colours; the picture on black. */
-export const inPage = style({ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: vars.canvas, color: vars.text });
-/** The picture and what floats over it: the viewer's dark, whatever the app's. */
-export const dark = style({ vars: darkVars, color: vars.text });
-globalStyle(`${inPage} ${stage}`, { background: "#000" });
-globalStyle(`${dark} ${iconBtn}:disabled`, { opacity: ".35", cursor: "default", background: "none" });

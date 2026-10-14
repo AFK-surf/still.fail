@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { iconBtn } from "../styles/pages.css.ts";
-import { glass } from "../FilePreview.css.ts";
+import { darkGlass as glass } from "../FilePreview.css.ts";
 import { note as marksNote, said as marksSaid } from "./Marks.css.ts";
 
 /** What is drawn on an image: still.fail's accent, as a preview's marks are (literal: the image viewer redefines the theme's). */

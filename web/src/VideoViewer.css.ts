@@ -1,11 +1,11 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { iconBtn } from "./styles/pages.css.ts";
-import { dark, fp, fpHead, fpZoom, glass } from "./FilePreview.css.ts";
+import { fp, fpHead, fpZoom, glass } from "./FilePreview.css.ts";
 
 /** The picture, its controls floating over it. */
-export const vv = style({ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: "#000", color: vars.text, vars: dark });
-export const vvStage = style({ background: "#000" });
+export const vv = style({ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: vars.canvas, color: vars.text });
+export const vvStage = style({ background: vars.canvas });
 export const vvPicture = style({
   position: "absolute", left: "50%", top: "50%", maxWidth: "none", transformOrigin: "center", display: "block",
   selectors: {
@@ -53,14 +53,14 @@ export const vvPixel = style({
   fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
 });
 export const vvSwatch = style({
-  width: "12px", height: "12px", borderRadius: "3px", boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, .3)",
+  width: "12px", height: "12px", borderRadius: "3px", boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${vars.text} 30%, transparent)`,
 });
 export const vvRate = style({
   height: "28px", minWidth: "46px", padding: "0 8px", border: "0", borderRadius: `calc(10px * ${vars.cornerScale})`,
-  background: "rgba(255, 255, 255, .1)", color: vars.text, fontFamily: vars.fontMono, fontSize: vars.textMeta, fontWeight: "600",
+  background: `color-mix(in srgb, ${vars.text} 10%, transparent)`, color: vars.text, fontFamily: vars.fontMono, fontSize: vars.textMeta, fontWeight: "600",
   cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
-    "&:hover": { background: "rgba(255, 255, 255, .18)" },
+    "&:hover": { background: `color-mix(in srgb, ${vars.text} 18%, transparent)` },
   },
 });
 
@@ -73,7 +73,7 @@ export const vvTimeline = style({
 });
 export const vvTrack = style({
   position: "relative", display: "block", height: "4px", borderRadius: "2px", overflow: "hidden",
-  background: "rgba(255, 255, 255, .2)", transition: `height ${vars.dur} ${vars.easeOut}`,
+  background: `color-mix(in srgb, ${vars.text} 20%, transparent)`, transition: `height ${vars.dur} ${vars.easeOut}`,
   selectors: {
     [`${vvTimeline}:hover &`]: { height: "6px", borderRadius: "3px" },
   },
@@ -86,8 +86,8 @@ export const vvHead = style({
   transform: "translate(-50%, -50%)", pointerEvents: "none", boxShadow: "0 1px 4px rgba(0, 0, 0, .35)",
 });
 globalStyle(`${vv} ${iconBtn}:disabled`, { opacity: ".35", cursor: "default", background: "none" });
-/** The picture takes the whole page, dark; the page's bar (its name, download, close) shows with the player's. */
-globalStyle(`${fp}:has(${vv})`, { vars: dark, background: "#000", color: vars.text });
+/** The picture takes the whole page, in the theme's colours; the page's bar (its name, download, close) shows with the player's. */
+globalStyle(`${fp}:has(${vv})`, { background: vars.canvas, color: vars.text });
 globalStyle(`${fp}:has(${vv}) ${fpHead}`, glass);
 globalStyle(`${fp}:has(${vvBar}[data-awake]) ${fpHead}`, { opacity: "1", transitionDuration: "120ms" });
 /** On a phone, pinching zooms: its buttons would crowd the frame's facts out. */
