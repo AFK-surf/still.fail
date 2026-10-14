@@ -13,7 +13,6 @@
 // 5. Centred while placed absolutely: `centred`, by translate, not a margin.
 // 6. Laid over one another on purpose (faces in a stack): `overlap(x)`.
 // 7. Room above taken back by a negative margin: never; the parent's room is changed instead.
-import { vars } from "./tokens.css.ts";
 
 const px = (v: number | string) => (typeof v === "number" ? `${v}px` : v);
 
@@ -32,7 +31,6 @@ export function surface(pad: number | string, innerCorner: number | string) {
     vars: { [PAD]: px(pad), [IN]: px(innerCorner) },
     padding: `var(${PAD})`,
     borderRadius: `calc(var(${IN}) + var(${PAD}))`,
-    cornerShape: vars.cornerShape,
   } as const;
 }
 

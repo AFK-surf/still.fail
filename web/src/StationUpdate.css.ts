@@ -8,7 +8,7 @@ const sweep = keyframes({ from: { transform: "translateX(-100%)" }, to: { transf
 
 export const trigger = style({ display: "inline-flex", alignItems: "center", gap: "5px", flexShrink: 0, padding: "6px 0", border: 0, background: "none", color: vars.accentText, fontSize: vars.textMeta, lineHeight: "18px", cursor: "pointer", whiteSpace: "nowrap", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, outline: "none", selectors: { "&:focus-visible": { boxShadow: `0 0 0 2px ${vars.fieldFocus}` }, '&[data-tone="trouble"]': { color: vars.red } } });
 export const dot = style({ width: "6px", height: "6px", borderRadius: "50%", background: "currentColor", flexShrink: 0 });
-export const popover = style({ display: "flex", flexDirection: "column", gap: "8px", width: "min(288px, calc(100vw - 24px))", boxSizing: "border-box", ...surface(12, `calc(${vars.rMenu} - 12px)`), zIndex: 100, ...panel, boxShadow: `0 12px 32px ${vars.shadow}`, color: vars.text, fontSize: vars.textUi, lineHeight: "19px", outline: "none" });
+export const popover = style({ display: "flex", flexDirection: "column", gap: "8px", width: "min(288px, calc(100vw - 24px))", boxSizing: "border-box", ...surface(12, `calc(${vars.rMenu} - 12px)`), cornerShape: vars.cornerShape, zIndex: 100, ...panel, boxShadow: `0 12px 32px ${vars.shadow}`, color: vars.text, fontSize: vars.textUi, lineHeight: "19px", outline: "none" });
 export const head = style({ display: "flex", alignItems: "flex-start", gap: "8px" });
 export const words = style({ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0, flex: 1 });
 export const title = style({ display: "flex", alignItems: "baseline", gap: "8px", minWidth: 0 });
