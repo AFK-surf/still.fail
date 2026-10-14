@@ -80,8 +80,8 @@ export const peekLine = style({ fontSize: vars.textMeta, color: vars.muted, over
 export const peekLines = style({ display: "flex", flexDirection: "column", gap: "2px", fontSize: vars.textMeta, color: vars.muted });
 /** One fact of a line: kept whole, the line breaking only between facts. */
 export const peekPart = style({ whiteSpace: "nowrap" });
-/** Load, connection, the process: each set off from the one above by a hairline. */
-export const peekSection = style({ borderTop: `1px solid ${vars.line}`, paddingTop: "8px" });
+/** Its load and its connection: each set off from the one above by room, no line. */
+export const peekSection = style({ paddingTop: "4px" });
 export const peekNet = style({ display: "grid", gap: "4px", fontSize: vars.textMeta, color: vars.muted, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" });
 globalStyle(`${peekNet} b`, { fontWeight: "500", color: vars.text });
 globalStyle(`${peekNet} b[data-level="amber"]`, { color: vars.amber });
