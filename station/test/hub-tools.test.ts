@@ -20,7 +20,7 @@ import { roomOf } from "../src/sessions/footprint.ts";
 import { Refused } from "../src/sessions/neighbours.ts";
 import { archive, newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { review, reviewUndecided } from "../src/sessions/review.ts";
-import { answerHold } from "../src/sessions/slack-hold.ts";
+import { answerHold, sayAnswering } from "../src/sessions/slack-hold.ts";
 import { cleanTitle } from "../src/sessions/titles.ts";
 import { adbTools } from "../src/tools/adb.ts";
 import { archiveTools } from "../src/tools/archive.ts";
@@ -650,11 +650,11 @@ test("a still.fail chat's session writes in Slack through connect= once a person
   agent.complete();
   await settle();
   // Not sent: nothing goes to Slack, and the agent is told.
-  assert.equal((await answerHold(r.hub, thread.id, "不发"))!.notice.startsWith("Not sent"), true);
-  sayIn(r.hub, thread.id, "ada@x.com", "不发");
+  await sayAnswering(r.hub, thread.id, "ada@x.com", "不发");
   assert.equal(r.chat.calls.filter(([m]) => m === "chat.postMessage").length, 0);
   assert.equal(await answerHold(r.hub, thread.id, "发送"), null, "answered: no hold waits any more");
   await settle();
+  assert.ok([...agent.prompts, ...agent.steers].some((p) => p.includes("Not sent to Slack")));
   // Asked again and sent: the call goes as the session, and its thread is the session's.
   await ask("1400 今晚发");
   r.chat.answers.set("chat.postMessage", { ok: true, ts: "8888.1" });

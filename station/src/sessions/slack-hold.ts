@@ -6,8 +6,10 @@
 import { threadAddress } from "../agents/instructions.ts";
 import { stationLang, tr } from "../ops/i18n.ts";
 import { STILLFAIL_SURFACE } from "../store/store.ts";
+import type { Attachment, Quote } from "../store/store.ts";
 import { slackApi } from "./conversations.ts";
 import type { Hub } from "./hub.ts";
+import { say } from "./lifecycle.ts";
 
 type Json = any;
 
@@ -70,4 +72,13 @@ export async function answerHold(hub: Hub, thread: number, said: string): Promis
   } catch (error) {
     return { session, notice: `Approved, but sending failed: ${hold.method} as ${hold.connect}: ${(error as Error).message}` };
   }
+}
+
+/// A person's message in a still.fail chat on the pages (lifecycle.ts `say`), answering a held Slack write first when
+/// its card waits there: the call made (or not) before the answer is recorded, its session told after. Its entry number.
+export async function sayAnswering(hub: Hub, thread: number, user: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = [], client: string | null = null): Promise<number> {
+  const held = await answerHold(hub, thread, text);
+  const n = say(hub, thread, user, text, attachments, quotes, client);
+  if (held !== null) hub.notify(held.session, held.notice);
+  return n;
 }
