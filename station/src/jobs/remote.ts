@@ -1,7 +1,7 @@
 // Tasks on other stations of the workspace (the Rust station's remote.rs). Workspace peers call named operations over an
 // authenticated station transport (`stillfail/station/1`, the mesh layer's); shell tasks are one service on it, never an
-// admin API proxy. An administrator explicitly trusts source station keys in config.json: remoteTasks.allow =
-// ["<station public key>"]. This grants shell execution as the station's OS user, not a sandbox. A source session's
+// admin API proxy. Any station of the workspace may run them (the transport checks the roster), as its agents may open a
+// chat here whose agent runs the same commands: shell execution as the station's OS user, not a sandbox. A source session's
 // tasks share one working directory on the target (remote/sessions/<id>/work). The source asks for it to be removed
 // when the session is archived or deleted; the target removes it itself after IDLE_MS unused.
 //
@@ -53,8 +53,6 @@ export type RemoteOptions = {
   store: Store;
   jobs: Jobs;
   notify: RemoteNotify;
-  /// config.json as it is now (remoteTasks.allow).
-  config: () => Json;
   /// The clock its schedules run on (a TestClock in tests).
   clock?: Clock.Clock;
   /// How long a request made before the mesh is up waits for it (MESH_WAIT_MS; tests shorten it).
@@ -153,7 +151,6 @@ export class Remote {
   private data: string;
   private jobs: Jobs;
   private notify: RemoteNotify;
-  private config: () => Json;
   private call: PeerCall | null = null;
   /// Settled once the transport is attached; requests made before wait on it (MESH_WAIT_MS).
   private attached: Promise<void>;
@@ -174,7 +171,6 @@ export class Remote {
     this.store = options.store;
     this.jobs = options.jobs;
     this.notify = options.notify;
-    this.config = options.config;
     this.meshWaitMs = options.meshWaitMs ?? MESH_WAIT_MS;
     this.attached = new Promise((resolve) => (this.markAttached = resolve));
     this.root = join(options.data, "remote");
@@ -467,16 +463,11 @@ export class Remote {
     return call(station, workspace, request);
   }
 
-  allowed(peer: string): boolean {
-    const allow = field(field(this.config(), "remoteTasks"), "allow");
-    return Array.isArray(allow) && allow.some((v) => v === peer);
-  }
-
   /// Called only after the transport authenticates the source station and checks current workspace membership.
   async handle(workspace: string, peer: string, request: Json): Promise<Json> {
     const method = text(request, "method");
     if (method === "describe") {
-      return { protocol: 1, os: OS, arch: ARCH, tasks: this.allowed(peer), sessions: true, messages: true, reads: true, files: true, chats: true, fileChunkBytes: CHUNK, maxFileBytes: MAX_FILE };
+      return { protocol: 1, os: OS, arch: ARCH, tasks: true, sessions: true, messages: true, reads: true, files: true, chats: true, fileChunkBytes: CHUNK, maxFileBytes: MAX_FILE };
     }
     if (method.startsWith("xshare.")) {
       const xshare = this.xshare;
@@ -494,9 +485,6 @@ export class Remote {
       const inbox = this.inbox;
       if (!inbox) throw new Error("station is starting");
       return inbox(peer, request);
-    }
-    if (!this.allowed(peer)) {
-      throw new Error("remote tasks are not enabled for this source station; a target administrator must add its public key to remoteTasks.allow");
     }
     return this.serially(() => this.task(workspace, peer, method, request));
   }
@@ -634,7 +622,7 @@ export class Remote {
     }
   }
 
-  /// Removed peers and withdrawn local permissions stop their tasks, without touching any local jobs.
+  /// Peers removed from the workspace have their tasks stopped, without touching any local jobs.
   revoke(workspace: string, peers: string[], membershipCurrent: boolean): Promise<void> {
     return this.serially(async () => {
       const incoming = join(this.root, "incoming");
@@ -646,7 +634,7 @@ export class Remote {
           continue;
         }
         const peer = text(meta, "station");
-        if (this.allowed(peer) && (!membershipCurrent || (text(meta, "workspace") === workspace && peers.includes(peer)))) continue;
+        if (!membershipCurrent || (text(meta, "workspace") === workspace && peers.includes(peer))) continue;
         const id = `remote_${name}`;
         if (this.store.getJob(id)?.state === "running") {
           try {

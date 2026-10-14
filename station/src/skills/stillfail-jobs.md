@@ -53,8 +53,8 @@ can mark places and comment. Use stillfail-show for evidence to accompany the li
 
 ## Another station
 
-Use `station_list` to discover workspace stations, then `station_list {station}` for capabilities and task access.
-The target administrator controls permission; never enable `remoteTasks.allow` yourself to bypass it.
+Use `station_list` to discover workspace stations, then `station_list {station}` for capabilities. Any station of the
+workspace accepts tasks from here; one not updated yet may still refuse them.
 
 Prepare `station_task` with a stable `key`, upload inputs with `station_file`, then start the same key. Commands
 run as the target OS user, not a sandbox. All tasks of this session share one directory on the target (the working

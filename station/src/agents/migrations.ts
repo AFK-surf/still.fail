@@ -33,6 +33,7 @@ export const NOTES: [number, string][] = [
   [26, "The formatting rules for Slack (mrkdwn) and still.fail chats (Markdown) are now one side-by-side table in your instructions (Formatting): check it when unsure, and never mix the two."],
   [27, "New tool chat_create: open a still.fail chat with an agent of its own, here or on another station; you are told how each of its turns ends. A chat headed 由…开的/Opened by <a chat's link> was opened for you: work in it with chat_post; its opener hears how your turns end by itself."],
   [28, "A chat may now be shared with other workspaces (a person @-mentions it in a chat of another workspace and confirms, or from its info): chat_list also lists chats other workspaces share with this one, and chat_read, session_history and session_send (where writing is allowed) take their links. chat_create does not reach other workspaces."],
+  [29, "station_task and station_file no longer need the target's remoteTasks.allow: any station of the workspace accepts them (an old station still refuses until it updates)."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

@@ -4,21 +4,17 @@ Stations in the same workspace can discover each other and call named services o
 
 ## Permission and compatibility
 
-The destination administrator opts in by adding the **source station's full public key** to its `config.json` (use the existing station configuration editor, or restart after a manual file edit):
+Any station of the workspace may run tasks on another; nothing is configured. Its agents could already open a chat there (`chat_create`) whose agent runs the same commands, so a separate opt-in protected nothing. It does not forward a person's admin credential or open the target's management APIs. Request metadata records the source station, source session and its creator (`requestedBy`, asserted by the source station, not an independently verified user identity).
 
-```json
-{"remoteTasks":{"allow":["SOURCE_STATION_PUBLIC_KEY"]}}
-```
+Stations before this change still require the source station's public key in their `config.json` (`{"remoteTasks":{"allow":[...]}}`) and refuse tasks without it; newer stations ignore the field.
 
-This trusts agents on that source to execute shell commands on the target. It does not forward a person's admin credential or open the target's management APIs. Request metadata records the source station, source session and its creator (`requestedBy`, asserted by the trusted source station, not an independently verified user identity).
-
-Cloud sends an additional `peers` field on station presence state frames. Enrollment, removal, movement and renaming update the workspace roster. A peer's iroh public key must match that roster; the request must name the same workspace. New calls fail closed while the control-plane connection is unavailable, or before a fresh roster arrives. Membership removal and permission withdrawal stop affected running tasks on the next check (every five seconds). Losing connectivity alone does not kill running commands.
+Cloud sends an additional `peers` field on station presence state frames. Enrollment, removal, movement and renaming update the workspace roster. A peer's iroh public key must match that roster; the request must name the same workspace. New calls fail closed while the control-plane connection is unavailable, or before a fresh roster arrives. Removal from the workspace stops that station's running tasks on the next check (every five seconds). Losing connectivity alone does not kill running commands.
 
 Deploy cloud first, then the stations that participate. Old stations ignore the new field; an old cloud provides no roster, so peer calls remain disabled. Existing member connections and existing local job tools keep their behavior. No database version change or data migration is required.
 
 ## Agent tools
 
-- `station_list {}` returns the workspace's registered stations and whether the roster is current. A listed station is not necessarily online. `station_list {station}` connects to one and returns its protocol, OS, architecture, task permission and file limits.
+- `station_list {}` returns the workspace's registered stations and whether the roster is current. A listed station is not necessarily online. `station_list {station}` connects to one and returns its protocol, OS, architecture, whether it accepts tasks and file limits.
 - `station_task {station, action:"prepare", key, name, command}` records the task specification and creates its directory. Pick a stable key for one execution. Preparing that key with a different specification is refused.
 - `station_file {station, key, direction:"upload", local, path}` uploads a local session file into a relative path in that task directory. Finish uploading before starting.
 - `station_task {station, action:"start", key}` starts the prepared command. A retry with the same key returns the original job; it never deliberately starts another copy.
@@ -35,7 +31,7 @@ Task files and records remain under the target's data directory `remote/incoming
 
 ## Chats on other stations
 
-Any station of the workspace may read another's chats and write to its sessions; no `remoteTasks.allow` is needed, as these are what a workspace member sees and does on the chats' pages, not execution.
+Any station of the workspace may read another's chats and write to its sessions; as with tasks, workspace membership is enough.
 
 - `chat_read` / `session_history` with a chat's link on another station ask it (`session.read`). Its answer lists the attachments of the messages read; the reader fetches each (`session.file`, 256 KiB chunks) into its session's `uploads/<station>/` and names them by their path there. Those up to 16 MB come by themselves (up to 64 MB per read); larger ones are fetched when the agent names them in `fetch`. `session.file` gives only a file in the uploads directory of one of that chat's sessions — the files its page shows, also from an archived workspace — never another path.
 - `session_send` to a session on another station sends its `files` first (`session.put`, at most 10 of 50 MB each), staged under the target's data directory `remote/staged`, then the message naming them (`session.message`); the target moves them into the uploads of the chat's agent and posts them with the message. Files no message claims are removed after a day. On the same station the files are copied there directly.
@@ -46,7 +42,7 @@ A station from before these methods takes them for tasks and refuses them; the r
 
 ## Shares
 
-Stations also share profiles and skills over this transport (`share.get`, `share.lend`, `share.status`, `share.put`, `share.take`; [station-share.md](station-share.md)). Any station of the workspace may ask; what each share allows is checked by its host, which keeps it (still.fail cloud keeps nothing of shares). No `remoteTasks.allow` is needed: these are not execution.
+Stations also share profiles and skills over this transport (`share.get`, `share.lend`, `share.status`, `share.put`, `share.take`; [station-share.md](station-share.md)). Any station of the workspace may ask; what each share allows is checked by its host, which keeps it (still.fail cloud keeps nothing of shares).
 
 ## Chats shared with other workspaces
 
@@ -56,4 +52,4 @@ A chat may be shared with other workspaces ([chat-share.md](chat-share.md)). Its
 
 ALPN `stillfail/station/1` is separate from the member/admin protocol. Each bounded request contains `{workspace, request:{method,...}}`, answered with `{result}` or `{error}` on a QUIC bidirectional stream. Services accept explicit methods (`describe`, `task.*`, `file.*`); this is not an arbitrary management-path proxy. Network timeouts explicitly report uncertain execution. The transport can carry further services without encoding build-specific concepts.
 
-Tests exercise workspace roster isolation/removal, real local iroh connections with temporary station data, task ownership, repeated starts, file transfer, cancellation and withdrawn permissions. No production station is used for verification.
+Tests exercise workspace roster isolation/removal, real local iroh connections with temporary station data, task ownership, repeated starts, file transfer, cancellation and removal from the workspace. No production station is used for verification.

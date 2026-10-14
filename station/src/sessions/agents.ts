@@ -173,7 +173,7 @@ export const AgentsLive = (control: Control) =>
           return page ? `${page}?service=${encode(job)}` : null;
         },
       });
-      const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text), config: () => config.raw() });
+      const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text) });
       hub.setJobs(jobs);
       hub.onClose((session) => remote.closeSession(session));
       const inbox = async (peer: string, request: any) => {

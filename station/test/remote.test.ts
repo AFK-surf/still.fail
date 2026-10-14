@@ -72,14 +72,13 @@ async function rounds(_what: string, clock: ReturnType<typeof testClock>, by: Du
 
 type Station = { dir: string; store: Store; jobs: Jobs; remote: Remote; told: [string, string][] };
 
-function station(allow: string[], options: { clock?: Clock.Clock; meshWaitMs?: number; dir?: string; store?: Store; jobs?: Jobs; notify?: (s: string, t: string) => void } = {}): Station {
+function station(options: { clock?: Clock.Clock; meshWaitMs?: number; dir?: string; store?: Store; jobs?: Jobs; notify?: (s: string, t: string) => void } = {}): Station {
   const dir = options.dir ?? tempdir();
   const store = options.store ?? Store.open(":memory:");
   const told: [string, string][] = [];
   const jobs = options.jobs ?? new Jobs({ store, data: dir, notify: () => {}, link: () => null });
-  const config = { remoteTasks: { allow } };
   const remote = new Remote({
-    data: dir, store, jobs, config: () => config, clock: options.clock, meshWaitMs: options.meshWaitMs,
+    data: dir, store, jobs, clock: options.clock, meshWaitMs: options.meshWaitMs,
     notify: options.notify ?? ((session, text) => void told.push([session, text])),
   });
   cleanup.push(async () => {
@@ -100,13 +99,13 @@ const unb64 = (v: Json) => Buffer.from(v.data, "base64").toString();
 describe("remote", { concurrency: true }, () => {
   test("a request asked before the mesh is up waits for it; one it never comes up for is refused after the wait", async () => {
     // As a chat taken up as the station starts, on a subscription borrowed from another station.
-    const s = station([], { meshWaitMs: 2000 });
+    const s = station({ meshWaitMs: 2000 });
     const asked = s.remote.ask("b".repeat(64), { method: "share.lend", id: "sh-x" });
     await new Promise((r) => setTimeout(r, 100));
     const call: PeerCall = async (to, _workspace, request) => ({ to, method: request.method });
     s.remote.attach(call);
     assert.deepEqual(await asked, { to: "b".repeat(64), method: "share.lend" });
-    const never = station([], { meshWaitMs: 200 });
+    const never = station({ meshWaitMs: 200 });
     const t0 = Date.now();
     await assert.rejects(never.remote.ask("b".repeat(64), {}), /station mesh is not ready/);
     assert.ok(Date.now() - t0 >= 180, "refused only after the wait");
@@ -136,8 +135,8 @@ describe("remote", { concurrency: true }, () => {
 
   const call = (s: Station, peer: string, method: string, more: Json = {}) => s.remote.handle("ws", peer, { session: "s", key: "build-1", method, ...more });
 
-  test("any workspace station may send a session a message, trusted for tasks or not", async () => {
-    const r = station(["peer-a", "peer-b"]);
+  test("any workspace station may send a session a message and run tasks", async () => {
+    const r = station();
     await assert.rejects(call(r, "peer-c", "session.message"), Error, "not taken before the hub is there");
     const got: [string, Json][] = [];
     r.remote.setInbox(async (peer, request) => {
@@ -154,11 +153,12 @@ describe("remote", { concurrency: true }, () => {
     }
     assert.equal((await call(r, "peer-c", "describe")).messages, true);
     assert.equal((await call(r, "peer-c", "describe")).files, true);
-    await assert.rejects(call(r, "peer-c", "task.list"), Error, "tasks still need remoteTasks.allow");
+    assert.equal((await call(r, "peer-c", "describe")).tasks, true, "any station of the workspace runs tasks");
+    assert.deepEqual((await call(r, "peer-c", "task.list")).tasks, []);
   });
 
   test("tasks are owned, idempotent and return files", async () => {
-    const r = station(["peer-a", "peer-b"]);
+    const r = station();
     const spec = { spec: { command: "cat input > output; echo ran >> count", name: "copy" } };
     await call(r, "peer-a", "task.prepare", spec);
     await call(r, "peer-a", "file.put", { path: "input", offset: 0, data: b64("hello"), final: true });
@@ -177,8 +177,8 @@ describe("remote", { concurrency: true }, () => {
     await assert.rejects(call(r, "peer-a", "file.put", { path: "input", offset: 0, data: "", final: true }));
   });
 
-  test("withdrawal stops only the revoked peer's task", async () => {
-    const r = station(["peer-a", "peer-b"]);
+  test("removal from the workspace stops only that peer's task", async () => {
+    const r = station();
     for (const peer of ["peer-a", "peer-b"]) {
       await call(r, peer, "task.prepare", { spec: { command: FOREVER } });
       await call(r, peer, "task.start");
@@ -205,7 +205,7 @@ describe("remote", { concurrency: true }, () => {
   }
 
   test("a session's tasks share one directory that closing removes", async () => {
-    const r = station(["peer-a"]);
+    const r = station();
     await run(r, "s", "clone", "mkdir repo && echo built > repo/out");
     assert.equal((await run(r, "s", "build", "cat repo/out > copy")).job.exitCode, 0);
     assert.equal(unb64(await callAs(r, "s", "build", "file.get", { path: "copy" })), "built\n");
@@ -223,7 +223,7 @@ describe("remote", { concurrency: true }, () => {
   });
 
   test("the target removes idle session and old task directories itself", async () => {
-    const r = station(["peer-a"]);
+    const r = station();
     await run(r, "idle", "a", "touch made");
     await run(r, "recent", "a", "touch made");
     const old = join(r.remote.root, "incoming", "from-before");
@@ -242,7 +242,7 @@ describe("remote", { concurrency: true }, () => {
 
   test("closing a source session asks each used station until answered", async () => {
     const clock = testClock();
-    const r = station(["peer-a"], { clock });
+    const r = station({ clock });
     mkdirSync(join(r.dir, "mesh"), { recursive: true });
     r.remote.recordUse("ws", "s", "up");
     r.remote.recordUse("ws", "s", "old");
@@ -273,12 +273,12 @@ describe("remote", { concurrency: true }, () => {
 
   test("a persisted receipt reconnects and delivers to its original session", async () => {
     const clock = testClock();
-    const first = station([]);
+    const first = station();
     const path = first.remote.outgoing("ws", "original-session", "target", "stable-key");
     writeJson(path, { workspace: "ws", session: "original-session", station: "target", key: "stable-key", delivered: false });
     await first.remote.close();
     const messages: [string, string][] = [];
-    const restarted = station([], { clock, dir: first.dir, store: first.store, jobs: first.jobs, notify: (s, t) => void messages.push([s, t]) });
+    const restarted = station({ clock, dir: first.dir, store: first.store, jobs: first.jobs, notify: (s, t) => void messages.push([s, t]) });
     let attempts = 0;
     restarted.remote.attach(async (station, _workspace, request) => {
       const n = attempts++;
@@ -300,12 +300,12 @@ describe("remote", { concurrency: true }, () => {
 
   // ── two stations ──
 
-  /// A source station "A" and a target "B" that trusts it, in one workspace; A's calls reach B as the transport would
+  /// A source station "A" and a target "B" in one workspace; A's calls reach B as the transport would
   /// carry them (B's errors come back as Refused).
-  function pair(allow = ["A"]) {
+  function pair() {
     const clock = testClock();
-    const a = station([], { clock });
-    const b = station(allow);
+    const a = station({ clock });
+    const b = station();
     mkdirSync(join(a.dir, "mesh"), { recursive: true });
     writeFileSync(join(a.dir, "mesh", "cloud.json"), JSON.stringify({ workspace: "ws", station: "A" }));
     const home = join(a.dir, "work");
@@ -383,8 +383,8 @@ describe("remote", { concurrency: true }, () => {
   });
 
   test("a start the target refuses is final, and asked for again only by a new start", async () => {
-    const { a, use, asked, clock } = pair([]);
-    await assert.rejects(use("station_task", { station: "B", key: "k", action: "start" }), (e: Error) => e instanceof Refused && /remoteTasks.allow/.test(e.message));
+    const { a, use, asked, clock } = pair();
+    await assert.rejects(use("station_task", { station: "B", key: "k", action: "start" }), (e: Error) => e instanceof Refused && /unknown task/.test(e.message));
     const record = readJson(a.remote.outgoing("ws", "s1", "B", "k"));
     assert.deepEqual([record.delivered, record.refused], [true, true]);
     const before = asked.length;
