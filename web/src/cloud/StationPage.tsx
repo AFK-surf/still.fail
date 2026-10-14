@@ -20,6 +20,7 @@ import { Versions } from "../Versions.tsx";
 import { WorkspaceMark } from "../WorkspaceMark.tsx";
 import { HostDetails, Net, problems, state, useLong } from "./StationCards.tsx";
 import { MarkPick } from "./MarkPick.tsx";
+import { ProfileCard } from "../ProfileCard.tsx";
 import { AddStationDialog, useStationEdits, useWorkspace } from "./settings.tsx";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import * as nav from "../Sidebar.css.ts";
@@ -199,14 +200,9 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
           <ul className={pagesCss.list}>
             {o.profiles.map((p) => (
               <li key={p.id}>
-                <Link className={pagesCss.listRow} to={`${base}/settings/accounts/${encodeURIComponent(p.id)}`}>
-                  <span className={pagesCss.listRowText}>
-                    <span className={pagesCss.listRowTitle}>{p.name}</span>
-                    <span className={shellCss.muted}>{[p.groupTitle, p.modelsText, p.usedBy.length ? t("web-pages.settings.profiles.usedBy", { n: p.usedBy.length }) : ""].filter(Boolean).join(" · ")}</span>
-                  </span>
-                  {p.checkTone !== "green" && <Pill tone={p.checkTone}>{p.checkText}</Pill>}
-                  <ChevronRight {...ICON} className={shellCss.muted} />
-                </Link>
+                {/* As the Profile page lists it: what it is, its models, who uses it, its allowance and its state. */}
+                <ProfileCard profile={p} to={`${base}/settings/accounts/${encodeURIComponent(p.id)}`}
+                  uses={p.usedBy.length ? t("web-pages.settings.profiles.usedBy", { n: p.usedBy.length }) : ""} />
               </li>
             ))}
           </ul>
