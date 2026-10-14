@@ -3,11 +3,11 @@
 // The phone's sheet is in mobile/Chat.tsx, with these same messages.
 import { useEffect, useState, type ReactNode } from "react";
 import { stationApi, useStationCall, type Attachment } from "./api.ts";
-import type { ChatPublished, PublishMessage, PublishPreview } from "./core/shapes.ts";
+import type { ChatPublished, PublishFile, PublishMessage, PublishPreview } from "./core/shapes.ts";
 import { AgentAvatar, MessageName, OthersMessage, PersonWords } from "./Chat.tsx";
 import { Prose } from "./Prose.tsx";
-import { Avatar, Button, Confirm, Dialog, Loading, Switch, Time } from "./ui.tsx";
-import { Copy, File, ShieldCheck } from "./icons.tsx";
+import { Avatar, Button, Confirm, Dialog, Loading, Time } from "./ui.tsx";
+import { Copy, ShieldCheck } from "./icons.tsx";
 import { useDoing } from "./doing.ts";
 import { failure, useAct, useToast } from "./toast.tsx";
 import * as css from "./Publish.css.ts";
@@ -43,57 +43,78 @@ export function useCopyLink(): (link: string) => void {
   return (link) => void navigator.clipboard.writeText(link).then(() => toast(t("common.link.copied")), (e: unknown) => toast(t("common.link.copyFailed", { error: failure(e) })));
 }
 
+/** Which attachments a panel leaves out (all are in at first), and how one is ticked or unticked. */
+export type Ticking = { off: ReadonlySet<string>; toggle(k: string): void };
+
+/** The attachments left out, one more ticked or unticked. */
+export function useTicking(): Ticking {
+  const [off, setOff] = useState<ReadonlySet<string>>(() => new Set());
+  return { off, toggle: (k) => setOff((was) => { const next = new Set(was); if (next.has(k)) next.delete(k); else next.add(k); return next; }) };
+}
+
 /**
  * A snapshot's messages as the chat draws others' (each one's head in line with its avatar, the phone's way): an
- * agent's in Markdown, a person's as written; under one with something hidden, how many. Its attachments are names
- * only (the preview has no file to show): one its words place is a chip there, the rest a line under it. `whole`: all
- * of it, in what scrolls around it (the phone's sheet), rather than a box of its own that scrolls.
+ * agent's in Markdown, a person's as written; under one with something hidden, how many. Its attachments are where the
+ * message has them, each ticked to go with it or not (the preview has no file to show, only its name and size): one
+ * its words place is there, the rest a line under it. `whole`: all of it, in what scrolls around it (the phone's
+ * sheet), rather than a box of its own that scrolls.
  */
-export function PublishMessages({ messages, whole = false }: { messages: PublishMessage[]; whole?: boolean }) {
+export function PublishMessages({ messages, ticking, whole = false }: { messages: PublishMessage[]; ticking: Ticking; whole?: boolean }) {
   return (
     <div className={`${css.preview} ${chatCss.inlineHeads}`} data-whole={whole || undefined}>
-      {messages.map((m) => <PreviewMessage key={m.n} message={m} />)}
+      {messages.map((m) => <PreviewMessage key={m.n} message={m} ticking={ticking} />)}
     </div>
   );
 }
 
-function PreviewMessage({ message: m }: { message: PublishMessage }) {
-  const named = new Map(m.files.map((name) => [name, { name, path: "", size: 0 } satisfies Attachment]));
-  const placed = m.agent ? m.files.filter((name) => m.text.includes(`](${name})`) || m.text.includes(`](${encodeURI(name)})`)) : [];
-  const under = m.files.filter((name) => !placed.includes(name));
+function PreviewMessage({ message: m, ticking }: { message: PublishMessage; ticking: Ticking }) {
+  const named = new Map(m.files.map((f) => [f.name, { name: f.name, path: "", size: f.size } satisfies Attachment]));
+  const placed = m.agent ? m.files.filter((f) => m.text.includes(`](${f.name})`) || m.text.includes(`](${encodeURI(f.name)})`)) : [];
+  const under = m.files.filter((f) => !placed.includes(f));
+  const toggle = (name: string) => {
+    const f = m.files.find((x) => x.name === name);
+    return f ? <FileToggle file={f} ticking={ticking} /> : null;
+  };
   const avatar = m.agent
     ? <AgentAvatar maker={null} runtime={null} />
     : <span className={chatCss2.msgAvatar}><Avatar id={m.author} name={m.author} size={18} /></span>;
   return (
     <OthersMessage avatar={avatar} name={<MessageName>{m.author}</MessageName>} time={m.time?.createdAt}>
       {m.agent
-        ? <div className={conversationCss.markdown}><Prose files={named} file={(f) => <FileChip name={f.name} />}>{m.text}</Prose></div>
+        ? <div className={conversationCss.markdown}><Prose files={named} file={(f) => toggle(f.name)}>{m.text}</Prose></div>
         : <PersonWords text={m.text} />}
-      {under.length > 0 && <div className={css.note}>{under.map((name) => <FileChip key={name} name={name} />)}</div>}
+      {under.length > 0 && <div className={css.files}>{under.map((f) => <FileToggle key={f.k} file={f} ticking={ticking} />)}</div>}
       {m.hiddenText && <div className={css.note}><ShieldCheck size={13} />{m.hiddenText}</div>}
     </OthersMessage>
   );
 }
 
-function FileChip({ name }: { name: string }) {
-  return <span className={css.fileChip}><File size={12} />{name}</span>;
+/** An attachment in the preview: ticked, it goes with the snapshot; unticked, it is greyed; one too big never goes. */
+function FileToggle({ file: f, ticking }: { file: PublishFile; ticking: Ticking }) {
+  const on = !f.over && !ticking.off.has(f.k);
+  return (
+    <label className={css.file} data-off={!on || undefined} data-over={f.over || undefined}>
+      <input type="checkbox" checked={on} disabled={f.over} onChange={() => ticking.toggle(f.k)} />
+      <span className={css.fileName}>{f.name}</span>
+      <span className={css.fileSize}>{f.over ? t("web-pages.chat.publish.tooBig") : f.sizeText}</span>
+    </label>
+  );
 }
 
 /**
- * Publishes the chat (wide screen): what it would hold, the attachments to tick (all at first; one too big is shown,
- * never ticked), who can read it, 「发布」. Published, its link with a way to copy it; the info lists it from then on.
+ * Publishes the chat (wide screen): what it would hold, its attachments ticked in their messages (all at first; one
+ * too big is shown, never ticked), who can read it, 「发布」. Published, its link with a way to copy it; the info lists it from then on.
  */
 export function PublishDialog({ station, thread, onClose }: { station: string; thread: number; onClose(): void }) {
   const api = stationApi(useStationCall(station));
   const toast = useToast();
   const copy = useCopyLink();
   const preview = usePublishPreview(station, thread);
-  const [off, setOff] = useState<ReadonlySet<string>>(() => new Set());
+  const ticking = useTicking();
   const [made, setMade] = useState<ChatPublished | null>(null);
   const publishing = useDoing("chat.publish", { station, thread });
   const p = "ok" in preview ? preview.ok : null;
-  const ticked = p ? tickedOf(p, off) : null;
-  const toggle = (k: string) => setOff((was) => { const next = new Set(was); if (next.has(k)) next.delete(k); else next.add(k); return next; });
+  const ticked = p ? tickedOf(p, ticking.off) : null;
   const go = () => {
     if (!p || !ticked) return;
     api.publish(thread, p.upto, ticked.files).then(setMade, (e: unknown) => toast(t("web-main.act.failed", { what: t("web-pages.chat.publish.verb"), error: failure(e) })));
@@ -105,19 +126,7 @@ export function PublishDialog({ station, thread, onClose }: { station: string; t
   else {
     body = (
       <>
-        <PublishMessages messages={p!.messages} />
-        {p!.files.length > 0 && (
-          <ul className={css.files} aria-label={t("web-pages.chat.publish.files")}>
-            {p!.files.map((f) => (
-              <li key={f.k} className={css.fileRow} data-off={f.over || undefined}>
-                <File size={14} />
-                <span className={css.fileName}>{f.name}</span>
-                <span className={css.fileSize}>{f.over ? t("web-pages.chat.publish.tooBig") : f.sizeText}</span>
-                <Switch small checked={!f.over && !off.has(f.k)} disabled={f.over} onChange={() => toggle(f.k)} label={f.name} />
-              </li>
-            ))}
-          </ul>
-        )}
+        <PublishMessages messages={p!.messages} ticking={ticking} />
         {ticked!.over && <p className={css.problem} role="alert">{t("web-pages.chat.publish.overTotal", { most: p!.mostText })}</p>}
       </>
     );

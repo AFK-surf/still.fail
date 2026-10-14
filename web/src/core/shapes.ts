@@ -3452,8 +3452,8 @@ export interface PublishMessage {
 	agent: boolean;
 	/** Its Markdown, what looks secret in it already `[已隐藏]`. */
 	text: string;
-	/** Its attachments' names. */
-	files: string[];
+	/** Its attachments, ticked or not where they are shown (the panel shows them in their message). */
+	files: PublishFile[];
 	/** How many things in it were hidden. */
 	hidden: number;
 	/** That in words (隐藏了 2 处); absent when none. */

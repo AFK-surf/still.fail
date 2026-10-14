@@ -3467,8 +3467,8 @@ data class PublishMessage (
 	val agent: Boolean,
 	/// Its Markdown, what looks secret in it already `[已隐藏]`.
 	val text: String,
-	/// Its attachments' names.
-	val files: List<String>,
+	/// Its attachments, ticked or not where they are shown (the panel shows them in their message).
+	val files: List<PublishFile>,
 	/// How many things in it were hidden.
 	val hidden: UInt,
 	/// That in words (隐藏了 2 处); absent when none.

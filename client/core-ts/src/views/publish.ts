@@ -102,8 +102,8 @@ function namesOf(inner: Inner, station: string): Record<string, string> {
 }
 
 /// What a station answers a preview with (`POST /threads/:thread/publish/preview`), for the panel that publishes it:
-/// its messages, each with how many things in it were hidden, and its attachments, those too big to tick marked, with
-/// the most they may be together.
+/// its messages, each with how many things in it were hidden and its attachments (those too big to tick marked), all
+/// its attachments together, and the most they may be together.
 export function previewShown(answer: J, clock: present.Clock): J {
   const most = { bytes: num(get(get(answer, "most"), "bytes")) || MOST.bytes, file: num(get(get(answer, "most"), "file")) || MOST.file };
   const hiddenAt = new Map<number, number>();
@@ -112,7 +112,6 @@ export function previewShown(answer: J, clock: present.Clock): J {
     const size = num(f.size);
     return { k: str(f.k) ?? "", name: str(f.name) ?? "", size, sizeText: format.bytes(size), type: str(f.type) ?? "", n: num(f.n), over: size > most.file };
   });
-  const nameOf = (k: unknown) => files.find((f) => f.k === k)?.name ?? null;
   const messages = arr(get(answer, "entries")).map((e) => {
     const hidden = hiddenAt.get(num(e.n)) ?? 0;
     return {
@@ -120,7 +119,7 @@ export function previewShown(answer: J, clock: present.Clock): J {
       author: str(e.author) ?? "",
       agent: e.authorKind === "agent",
       text: str(e.text) ?? "",
-      files: arr(e.files).map(nameOf).filter((n): n is string => n !== null),
+      files: arr(e.files).flatMap((k) => files.filter((f) => f.k === k)),
       hidden,
       ...(hidden > 0 ? { hiddenText: t("core-views.publish.hidden", { n: hidden }) } : {}),
       createdAt: num(e.at),

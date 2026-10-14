@@ -39,7 +39,7 @@ import { JobDot, metaOf, NO_JOBS, useClearEnded, useJobLog, useStopJob } from ".
 import { stillfailLinkClicked } from "../stillfailLink.ts";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
 import type { ChatJobsView, ChatPublish, ChatPublished, ChatShare, Job } from "../core/shapes.ts";
-import { PublishMessages, tickedOf, usePublishPreview } from "../Publish.tsx";
+import { PublishMessages, tickedOf, usePublishPreview, useTicking } from "../Publish.tsx";
 import * as publishCss from "../Publish.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as hostCss from "./ChatHost.css.ts";
@@ -824,12 +824,11 @@ function PublishSheet({ here, thread }: { here: Here; thread: number }) {
   const app = useApp();
   const call = useStationCall(here.station);
   const preview = usePublishPreview(here.station, thread);
-  const [off, setOff] = useState<ReadonlySet<string>>(() => new Set());
+  const ticking = useTicking();
   const [made, setMade] = useState<ChatPublished | null>(null);
   const publishing = useDoing("chat.publish", { station: here.station, thread });
   const p = "ok" in preview ? preview.ok : null;
-  const ticked = p ? tickedOf(p, off) : null;
-  const toggle = (k: string) => setOff((was) => { const next = new Set(was); if (next.has(k)) next.delete(k); else next.add(k); return next; });
+  const ticked = p ? tickedOf(p, ticking.off) : null;
   const go = () => {
     if (!p || !ticked) return;
     stationApi(call).publish(thread, p.upto, ticked.files)
@@ -856,14 +855,8 @@ function PublishSheet({ here, thread }: { here: Here; thread: number }) {
           <p className={partsCss.mMuted}>{t("web-pages.chat.publish.empty")}</p>
         ) : (
           <>
-            <PublishMessages messages={p!.messages} whole />
+            <PublishMessages messages={p!.messages} ticking={ticking} whole />
             {p!.hiddenText && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{p!.hiddenText}</p>}
-            {p!.files.length > 0 && (
-              <div className={css.mPublishFiles}>
-                <GroupLabel>{t("web-pages.chat.publish.files")}</GroupLabel>
-                {p!.files.map((f) => <PickRow key={f.k} label={f.name} sub={f.over ? t("web-pages.chat.publish.tooBig") : f.sizeText} checked={!f.over && !off.has(f.k)} enabled={!f.over} onClick={() => toggle(f.k)} />)}
-              </div>
-            )}
             {ticked!.over && <p className={partsCss.mError}>{t("web-pages.chat.publish.overTotal", { most: p!.mostText })}</p>}
             <Button primary label={t("web-pages.chat.publish.go")} busy={publishing} enabled={!ticked!.over} onClick={go} />
           </>

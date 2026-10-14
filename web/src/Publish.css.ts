@@ -16,25 +16,23 @@ export const preview = style({
 export const note = style({
   display: "flex", alignItems: "center", gap: "6px", fontSize: vars.textMeta, color: vars.muted, minWidth: "0",
 });
-/** An attachment in a message's words or under it: its name on a soft chip (the preview has no file to show). */
-export const fileChip = style({
-  display: "inline-flex", alignItems: "center", gap: "4px", maxWidth: "100%", padding: "1px 8px", verticalAlign: "middle",
-  borderRadius: vars.rOption, cornerShape: vars.cornerShape, background: vars.neutralBg, color: vars.muted,
-  fontSize: vars.textMeta, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+/** Attachments under a message: a line of them, wrapping. */
+export const files = style({ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "6px" });
+/**
+ * An attachment in a message, to tick: its box, name and size on a soft chip, as the chat's file chips; unticked, its
+ * words greyed (one too big also says so instead of its size).
+ */
+export const file = style({
+  display: "inline-flex", alignItems: "center", gap: "8px", maxWidth: "100%", minHeight: "32px", padding: "0 12px 0 8px",
+  verticalAlign: "middle", borderRadius: vars.rOption, cornerShape: vars.cornerShape, background: vars.neutralBg,
+  color: vars.text, fontSize: vars.textMeta, cursor: "pointer", transition: `color ${vars.dur} ${vars.easeOut}`,
+  selectors: {
+    "&[data-off]": { color: vars.subtle },
+    "&[data-over]": { cursor: "default" },
+  },
 });
-/** Its attachments, on a card as the preview: a row each, its size and its switch at its end (one too big: off, greyed). */
-export const files = style({
-  ...cardLook, borderRadius: DIALOG_INNER, margin: "0", padding: "6px 0", listStyle: "none",
-});
-export const fileRow = style({
-  display: "flex", alignItems: "center", gap: "10px", minHeight: "40px", padding: "0 16px 0 18px", color: vars.muted,
-  selectors: { "&[data-off]": { color: vars.subtle } },
-});
-export const fileName = style({
-  flex: "1 1 0", width: "0", fontSize: vars.textUi, color: vars.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-  selectors: { [`${fileRow}[data-off] &`]: { color: vars.subtle } },
-});
-export const fileSize = style({ flex: "none", fontSize: vars.textMeta, color: "inherit" });
+export const fileName = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const fileSize = style({ flex: "none", color: vars.muted, selectors: { [`${file}[data-off] &`]: { color: vars.subtle } } });
 /** In the footer, on the buttons' left: how many things were hidden in all. */
 export const footNote = style({
   display: "flex", alignItems: "center", gap: "6px", marginRight: "auto", fontSize: vars.textMeta, color: vars.muted, minWidth: "0",

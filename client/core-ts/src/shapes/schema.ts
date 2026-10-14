@@ -1819,7 +1819,7 @@ export const SHAPES: Record<string, Shape> = {
     ["author", "String", { doc: "As the snapshot names them (no emails)." }],
     ["agent", "bool"],
     ["text", "String", { doc: "Its Markdown, what looks secret in it already `[已隐藏]`." }],
-    ["files", vec("String"), { doc: "Its attachments' names." }],
+    ["files", vec("PublishFile"), { doc: "Its attachments, ticked or not where they are shown (the panel shows them in their message)." }],
     ["hidden", "u32", { doc: "How many things in it were hidden." }],
     ["hiddenText", opt("String"), { doc: "That in words (隐藏了 2 处); absent when none." }],
     ["createdAt", "i64", { client: "I54" }],

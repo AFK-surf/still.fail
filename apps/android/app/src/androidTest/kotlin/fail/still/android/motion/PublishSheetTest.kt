@@ -43,18 +43,20 @@ class PublishSheetTest {
 
     /** As views/publish.ts previewShown has a station's answer: a person's message with a key hidden, an agent's reply,
      * three attachments, one over 10 MB. */
+    private val files = listOf(
+        PublishFile(k = "f0", name = "login-page.png", size = 665u, sizeText = "665 B", type = "image/png", n = 9, over = false),
+        PublishFile(k = "f1", name = "deploy.log", size = 2048u, sizeText = "2.0 KB", type = "text/plain", n = 9, over = false),
+        PublishFile(k = "f2", name = "build-cache.tar", size = 12_582_912u, sizeText = "12 MB", type = "application/x-tar", n = 9, over = true),
+    )
+
     private val preview = PublishPreview(
         upto = 9, title = "部署登录页",
         messages = listOf(
             PublishMessage(n = 4, author = "Alice", agent = false, text = "帮我把登录页部署到预发，token 是 [已隐藏]", files = emptyList(), hidden = 1u, hiddenText = "隐藏了 1 处", createdAt = Fixtures.NOW, time = ago("12 分钟前")),
             PublishMessage(n = 6, author = "Opus 5.5", agent = true, text = "部署好了：**登录后跳回原页面**，`npm run deploy:staging` 跑了 42 秒。", files = emptyList(), hidden = 0u, createdAt = Fixtures.NOW, time = ago("10 分钟前")),
-            PublishMessage(n = 9, author = "Alice", agent = false, text = "截图、日志和构建缓存都附上了", files = listOf("login-page.png", "deploy.log", "build-cache.tar"), hidden = 0u, createdAt = Fixtures.NOW, time = ago("8 分钟前")),
+            PublishMessage(n = 9, author = "Alice", agent = false, text = "截图、日志和构建缓存都附上了", files = files, hidden = 0u, createdAt = Fixtures.NOW, time = ago("8 分钟前")),
         ),
-        files = listOf(
-            PublishFile(k = "f0", name = "login-page.png", size = 665u, sizeText = "665 B", type = "image/png", n = 9, over = false),
-            PublishFile(k = "f1", name = "deploy.log", size = 2048u, sizeText = "2.0 KB", type = "text/plain", n = 9, over = false),
-            PublishFile(k = "f2", name = "build-cache.tar", size = 12_582_912u, sizeText = "12 MB", type = "application/x-tar", n = 9, over = true),
-        ),
+        files = files,
         hidden = 1u, hiddenText = "共隐藏了 1 处疑似机密", most = 20_971_520u, mostText = "20 MB",
     )
 

@@ -80,7 +80,7 @@ test("a_preview_says_how_many_things_each_message_had_hidden_and_which_attachmen
   assert.equal(shown.title, "部署");
   assert.equal(shown.hidden, 3);
   assert.equal(shown.hiddenText, "共隐藏了 3 处疑似机密");
-  assert.deepEqual(shown.messages.map((m: J) => [m.n, m.author, m.agent, m.hidden, m.hiddenText ?? null, m.files]), [[4, "安", false, 3, "隐藏了 3 处", ["a.png"]], [9, "奏", true, 0, null, ["big.zip"]]]);
+  assert.deepEqual(shown.messages.map((m: J) => [m.n, m.author, m.agent, m.hidden, m.hiddenText ?? null, m.files.map((f: J) => [f.k, f.name, f.over])]), [[4, "安", false, 3, "隐藏了 3 处", [["f0", "a.png", false]]], [9, "奏", true, 0, null, [["f1", "big.zip", true]]]]);
   assert.ok(shown.messages[0].time.createdAt.ago, "its time in words");
   assert.deepEqual(shown.files.map((f: J) => [f.k, f.over]), [["f0", false], ["f1", true]]);
   assert.equal(shown.files[1].sizeText, "11 MB");
