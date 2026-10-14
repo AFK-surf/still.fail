@@ -2489,9 +2489,27 @@ export interface HistoryPost {
 	failed: boolean;
 }
 
-/** What a prompt carried: still.fail's own words around them (`note`), then the messages. */
+/** Work the agent started in the background telling it how it ended (a task notification). */
+export interface HistoryTask {
+	/** In a line: what it was, how it ended, its name. */
+	text: string;
+	/** A sub-agent's; otherwise a background command's. */
+	agent: boolean;
+	/** It failed or was stopped. */
+	failed: boolean;
+	/** What a sub-agent answered. */
+	result?: string;
+	/** `result` read as Markdown (markdown.ts): what the clients draw. */
+	md?: unknown;
+}
+
+/**
+ * What a prompt carried: still.fail's own words around them (`note`), how work the agent started ended (`tasks`),
+ * then the messages.
+ */
 export interface HistoryReceived {
 	note?: string;
+	tasks: HistoryTask[];
 	messages: HistoryMessage[];
 }
 

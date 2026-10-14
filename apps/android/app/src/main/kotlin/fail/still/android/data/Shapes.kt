@@ -2503,10 +2503,27 @@ data class HistoryPost (
 	val failed: Boolean
 )
 
-/// What a prompt carried: still.fail's own words around them (`note`), then the messages.
+/// Work the agent started in the background telling it how it ended (a task notification).
+@Serializable
+data class HistoryTask (
+	/// In a line: what it was, how it ended, its name.
+	val text: String,
+	/// A sub-agent's; otherwise a background command's.
+	val agent: Boolean,
+	/// It failed or was stopped.
+	val failed: Boolean,
+	/// What a sub-agent answered.
+	val result: String? = null,
+	/// `result` read as Markdown (markdown.ts): what the clients draw.
+	val md: JsonElement? = null
+)
+
+/// What a prompt carried: still.fail's own words around them (`note`), how work the agent started ended (`tasks`),
+/// then the messages.
 @Serializable
 data class HistoryReceived (
 	val note: String? = null,
+	val tasks: List<HistoryTask>,
 	val messages: List<HistoryMessage>
 )
 
