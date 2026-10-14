@@ -14,7 +14,15 @@ export interface InvitationView { id: string; role: Role; email: string | null; 
 export interface PendingInvitation { id: string; workspace: string; name: string; role: Role; inviter: string; expires_at: number }
 /** An email added to a workspace whose account has not signed in yet: a member from its first sign-in on. */
 export interface AddedView { email: string; role: Role; added_by: string; added_at: number }
-export interface WorkspaceView { id: string; name: string; role: Role; created_at: number; members: MemberView[]; stations: StationView[]; invitations: InvitationView[]; added: AddedView[]; relays?: string[] }
+export interface WorkspaceView { id: string; name: string; role: Role; created_at: number; members: MemberView[]; stations: StationView[]; invitations: InvitationView[]; added: AddedView[]; relays?: string[]; lock?: LockHead | null }
+
+/** How far the workspace's lock goes as the cloud keeps it (docs/workspace-lock.md): null, none. */
+export interface LockHead { seq: number; hash: string; genesis: string }
+/** A device that asked for a member credential in a workspace: its endpoint, and (a newer client) its base key, which
+ * proved it holds the endpoint. What turning the lock on lists for its owner to check. */
+export interface DeviceView { sub: string; email: string; device: string; base: string | null; kind: string | null; label: string | null; first_seen: number; last_seen: number }
+/** A device waiting to be confirmed into a locked workspace. */
+export interface LockRequestView { base: string; sub: string; email: string; kind: string; label: string; sign_key: string | null; endpoints: string[]; code: string; created_at: number }
 
 /** What `/v1/events` pushes: what changed, for the device to refetch. */
 export type AccountEvent =

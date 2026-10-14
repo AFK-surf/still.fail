@@ -46,6 +46,7 @@ import { Asks } from "./asks.ts";
 import { Adb } from "./adb.ts";
 import { envOf, Views } from "./views/views.ts";
 import * as xshare from "./views/xshare.ts";
+import * as lockCalls from "./views/lock.ts";
 import { isObject } from "./util.ts";
 
 /// Where a device's member credentials are kept (`credential/<account>/<workspace>`), and how long one serves.
@@ -195,6 +196,7 @@ export class Core {
       inner.viewCalls = new ViewCalls(inner, inner.views);
       inner.viewCalls.install();
       xshare.install(inner);
+      lockCalls.install(inner);
       inner.attention = new Attention(inner, yield* Attend.load(inner.host));
       inner.router.owners.push(inner.attention);
       inner.router.after = (topic, value) => inner.attention.attended(topic, value);
@@ -207,7 +209,7 @@ export class Core {
         runner: inner.runner,
         store: inner.store,
         mesh: () => inner.mesh(),
-        credentials: (workspace) => (device, fresh) => inner.cloudSync.credential(workspace, device, fresh, inner.meshNow()?.deviceId() ?? null),
+        credentials: (workspace) => (device, fresh) => inner.cloudSync.credential(workspace, device, fresh, inner.meshNow()?.deviceId() ?? null, inner.meshNow()?.lockClaim(workspace, device) ?? null),
         relays: (workspace) => inner.cloudSync.workspaceRelays(workspace),
       });
       handlers.adb = (_i, call) => inner.adb.run((call as Extract<Call, { kind: "adb" }>).call);

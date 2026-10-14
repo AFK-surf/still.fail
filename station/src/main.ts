@@ -3,14 +3,15 @@
 // interrupting it: every part's scope closes, and with it what it opened. Commands as the Rust station takes them:
 //
 //   run --app DIR [--port N] [--data DIR] [--with-parent] [--launcher-fds a,b,c]
-//   enroll <cloud> <token> [--provider stillfail|comma] [--data DIR]   status [--data DIR]   id [--data DIR]
+//   enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--data DIR]   status [--data DIR]   id [--data DIR]
 //   channel [stable|beta] [--app DIR] [--data DIR]   update [--beta|--stable] --app DIR [--data DIR]
+//   lock status|reset [--data DIR]
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { Effect, Fiber, Layer, SubscriptionRef } from "effect";
-import { enroll, id, status } from "./cli.ts";
+import { enroll, id, lockCommand, status } from "./cli.ts";
 import { MeshLive } from "./mesh/mesh.ts";
 import { AgentsLive } from "./sessions/agents.ts";
 import { dataDir, flag, ownData } from "./ops/files.ts";
@@ -37,7 +38,7 @@ const args = process.argv.slice(2);
 const data = dataDir(args);
 const command = args.find((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1].startsWith("--") && args[i - 1] !== "--with-parent"));
 /// Flags that take a value: what follows them is no command's argument.
-const VALUED = ["--data", "--provider"];
+const VALUED = ["--data", "--provider", "--lock"];
 
 // What it says on this machine is in the station's language (config.json `language`).
 try {
@@ -46,7 +47,7 @@ try {
 } catch {}
 
 function usage(): never {
-  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> [--provider stillfail|comma] | status | id | channel [stable|beta] | update [--beta|--stable] --app DIR");
+  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] | status | id | channel [stable|beta] | update [--beta|--stable] --app DIR | lock status|reset");
   process.exit(2);
 }
 
@@ -162,8 +163,16 @@ switch (command) {
   case "enroll": {
     const [, origin, token] = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && VALUED.includes(args[i - 1])));
     const provider = (flag(args, "--provider") ?? "stillfail") as Provider;
-    if (!origin || !token || !PROVIDERS.includes(provider)) usage();
-    await enroll(data, origin.replace(/\/+$/, ""), token, provider);
+    const lock = flag(args, "--lock");
+    if (!origin || !token || !PROVIDERS.includes(provider) || (lock !== undefined && !/^[0-9a-f]{64}$/.test(lock))) usage();
+    await enroll(data, origin.replace(/\/+$/, ""), token, provider, lock);
+    break;
+  }
+  // The workspace lock on this machine (docs/workspace-lock.md): what is pinned, or taking it away.
+  case "lock": {
+    const [, what] = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && VALUED.includes(args[i - 1])));
+    if (what !== "status" && what !== "reset") usage();
+    console.log(lockCommand(data, what));
     break;
   }
   case "status":

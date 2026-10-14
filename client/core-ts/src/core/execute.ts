@@ -70,7 +70,10 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
           const sub = call.op.target.cloud;
           return Effect.gen(function* () {
             const made = op.method === "POST" && op.path === "/v1/workspaces";
-            const result = yield* inner.provider.request(sub, op.method, op.path, op.body, ctx);
+            let result = yield* inner.provider.request(sub, op.method, op.path, op.body, ctx);
+            // A locked workspace's station joins with the lock's hash, to pin it (views/lock.ts).
+            const enrolling = op.method === "POST" ? /^\/v1\/workspaces\/([^/]+)\/enrollments$/.exec(op.path) : null;
+            if (enrolling && hooks.enrolled) result = yield* hooks.enrolled(inner, sub, decodeURIComponent(enrolling[1]!), result);
             // A workspace made: the invite code kept through signing in is done with.
             if (made) prefs.inviteUsed(inner.data);
             // A write may rename, join or leave a workspace: what the account's topics show is read again first.

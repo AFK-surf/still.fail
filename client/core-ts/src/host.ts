@@ -121,6 +121,9 @@ export interface Host {
   resetConnections(): void;
 
   randomBytes(buf: Uint8Array): void;
+  /// Whether what this host keeps is out of reach of still.fail cloud's code: an app's (desktop, Android), not a web
+  /// page's, whose code the cloud serves. Only such a host keeps a key that signs for the workspace lock (lock.ts).
+  appKeys?: boolean;
 
   /// Delivers a message to one connected UI.
   emit(client: ClientId, message: CoreMessage): void;

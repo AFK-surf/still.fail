@@ -95,13 +95,15 @@ export function releaseType(file: string): string | null {
 // in ($names, $(commands)) given as arguments.
 const script = (say: (key: string, args?: Record<string, string>) => string) => `#!/bin/sh
 # Installs the still.fail station on this machine and joins it to a workspace in still.fail cloud:
-#   curl -fsSL __ORIGIN__/install.sh | sh -s -- <token>
+#   curl -fsSL __ORIGIN__/install.sh | sh -s -- <token> [<lock>]
+# <lock>: the workspace lock's hash the station pins (a locked workspace's command gives it).
 # STILLFAIL_CHANNEL=beta gets the test channel's release (stable: the usual one); this copy defaults to __CHANNEL__.
 # The token comes from 「添加 station」 in still.fail. Running it again updates it and keeps its data (~/.stillfail;
 # a station from before the rename has it in ~/.ember, which is moved there).
 set -eu
 origin="__ORIGIN__"
 token="\${1:-}"
+lock="\${2:-}"
 # The data: $STILLFAIL_DATA, else $EMBER_DATA (a shell or service from before the rename), else ~/.stillfail. ~/.ember,
 # the default before the rename, is the default now too: it is moved to ~/.stillfail.
 old_data="$HOME/.ember"
@@ -453,7 +455,7 @@ ln -sf "$app/bin/stillfail" "$HOME/.local/bin/ember"
 
 if [ -n "$token" ]; then
   echo "${say("cloud.install.join")}"
-  "$app/bin/stillfail" station enroll "$origin" "$token"
+  "$app/bin/stillfail" station enroll "$origin" "$token" \${lock:+--lock "$lock"}
 fi
 
 if [ -n "$handed" ]; then

@@ -220,6 +220,9 @@ export class BridgeHost implements Host {
   utcOffsetMin(atMs: number): number {
     return this.#bridge.native.utcOffset(atMs);
   }
+  /// An app's: what it keeps is the device's, not code still.fail cloud serves (lock.ts).
+  readonly appKeys = true;
+
   randomBytes(buf: Uint8Array): void {
     this.#bridge.native.random(buf);
   }

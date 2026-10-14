@@ -11,6 +11,7 @@ import { wall } from "../ops/fibers.ts";
 import { nowSecs } from "../ops/files.ts";
 import type { Accepted } from "../cloud/provider.ts";
 import { type Admitted, readOnly, revoked, verifyMember } from "./credential.ts";
+import { type Entry, LockRefusal, admit, asEntry, genesis, lowerRole } from "../cloud/lock.ts";
 import type { Connection, Stream } from "./native.ts";
 import { answerAdb, type Shares } from "./adb.ts";
 import { compressed } from "./compress.ts";
@@ -78,6 +79,60 @@ export class Reader {
 
 export const writeLine = (stream: Stream, value: unknown) => stream.write(Buffer.from(JSON.stringify(value) + "\n"));
 
+/// A hello's `lock: {device, proof}`: the device's base key, and its signature saying this endpoint is its own.
+function lockProof(v: any): { base: string; proof: string } | undefined {
+  return typeof v?.device === "string" && typeof v?.proof === "string" && v.device.length === 64 && v.proof.length === 128 ? { base: v.device, proof: v.proof } : undefined;
+}
+
+/// How far this station's lock goes, for the device to bring it what it has more (null: no lock pinned here).
+export function lockHead(cloud: Cloud): { seq: number; hash: string; genesis: string } | null {
+  const s = cloud.locked()?.state;
+  return s ? { seq: s.seq, hash: s.head, genesis: s.genesis } : null;
+}
+
+/// GET /lock?after=<seq>: how far this station's lock goes and its entries after `after` (any member). POST /lock
+/// {entries}: more of the pinned lock, checked entry by entry; or, unpinned, a lock to pin, from its genesis: brought by
+/// its owner, on a device the genesis names (until then the control plane's word is what this station goes by, and the
+/// owner it names is who may turn the lock on).
+export function lockRoute(cloud: Cloud, method: string, query: [string, string][], body: Buffer, viewer: Admitted["viewer"]): [number, unknown] {
+  if (method === "GET") {
+    const after = Number(query.find(([k]) => k === "after")?.[1] ?? -1);
+    return [200, { head: lockHead(cloud), entries: cloud.lockAfter(Number.isSafeInteger(after) ? after : -1) }];
+  }
+  if (method !== "POST") return [405, { error: "GET or POST" }];
+  let entries: (Entry | null)[];
+  try {
+    const raw = JSON.parse(body.toString("utf8") || "{}")?.entries;
+    entries = Array.isArray(raw) ? raw.map(asEntry) : [];
+  } catch {
+    return [400, { error: "invalid JSON" }];
+  }
+  if (entries.length === 0 || entries.some((e) => e === null)) return [400, { error: "entries: lock entries" }];
+  try {
+    if (cloud.locked() === null) {
+      if (viewer.role !== "owner") return [403, { error: "only the workspace's owner turns its lock on" }];
+      const first = genesis(entries[0]!);
+      admit(first, { sub: viewer.sub, endpoint: viewer.device, base: viewer.lockDevice?.base, proof: viewer.lockDevice?.proof }, nowSecs());
+      if (first.members.get(viewer.sub)?.role !== "owner") return [403, { error: "the lock is brought by its owner" }];
+    }
+    const taken = cloud.takeLock(entries as Entry[]);
+    return [200, { taken, head: lockHead(cloud) }];
+  } catch (e) {
+    return [409, { error: (e as Error).message, head: lockHead(cloud) }];
+  }
+}
+
+/// With a lock pinned: the member admitted only on a device the lock names, with the lower of the lock's role and the
+/// credential's (`named`). Without one, as the credential says. Throws a LockRefusal why not.
+export function inLock(cloud: Cloud, admitted: Admitted, named: string, endpoint: string): Admitted {
+  const locked = cloud.locked();
+  if (locked === null) return { ...admitted, viewer: { ...admitted.viewer, role: named } };
+  if (locked.state === null) throw new LockRefusal("this station's workspace lock is broken; run `stillfail lock reset` on it");
+  const v = admitted.viewer;
+  const { role } = admit(locked.state, { sub: v.sub, endpoint, base: v.lockDevice?.base, proof: v.lockDevice?.proof }, nowSecs());
+  return { ...admitted, viewer: { ...v, role: lowerRole(role, named) } };
+}
+
 export type Members = {
   cloud: Cloud;
   admin: Admin;
@@ -102,40 +157,46 @@ export async function serve(m: Members, conn: Connection) {
   if (!first) return;
   const credentials = new Reader(first);
   const state = () => m.cloud.state!;
-  const check = (line: any) => verifyMember(typeof line?.credential === "string" ? line.credential : "", state().grant_keys, state().workspace, device, state().revocations, m.accepted?.());
   const hello = await credentials.line();
   if (hello === null) throw new Error("no credential");
+  // Which device this is in the workspace's lock: its base key's proof for this endpoint, said once (cloud/lock.ts).
+  const proof = lockProof(hello?.lock);
+  // The role the credential names: the control plane's word, which the lock may lower but not raise.
+  let named = "";
+  const check = (line: any) => {
+    const admitted = verifyMember(typeof line?.credential === "string" ? line.credential : "", m.cloud.grantKeys(), state().workspace, device, state().revocations, m.accepted?.());
+    named = admitted.viewer.role;
+    if (proof) admitted.viewer.lockDevice = proof;
+    return inLock(m.cloud, admitted, named, device);
+  };
   let current: Admitted;
   try {
     current = check(hello);
   } catch (e) {
-    await writeLine(first, { error: (e as Error).message }).catch(() => {});
+    const refusal = e instanceof LockRefusal ? { code: e.code, lock: lockHead(m.cloud) } : {};
+    await writeLine(first, { error: (e as Error).message, ...refusal }).catch(() => {});
     await first.finish().catch(() => {});
-    wall.after(200, () => conn.close(1, "credential_refused"));
+    wall.after(200, () => conn.close(1, e instanceof LockRefusal ? "lock_unconfirmed" : "credential_refused"));
     throw e;
   }
-  const protocol = Number.isInteger(hello.protocol) && hello.protocol >= 0 ? hello.protocol : 1;
-  if (protocol < MIN_CLIENT_PROTOCOL) {
-    await writeLine(first, {
-      code: "client_upgrade_required",
-      error: "Please update still.fail to the latest version, or reload the web page, before connecting to this station.",
-      required_protocol: MIN_CLIENT_PROTOCOL,
-      update_url: "https://still.fail",
-    });
-    await first.finish().catch(() => {});
-    wall.after(200, () => conn.close(4, "client_upgrade_required"));
-    throw new Error("client upgrade required");
-  }
-  await writeLine(first, { ok: true, station: state().name, expires_at: current.exp });
+  await writeLine(first, { ok: true, station: state().name, expires_at: current.exp, lock: lockHead(m.cloud) });
   log.info("mesh", "client connected", { email: current.viewer.email, device: device.slice(0, 12) });
 
   // The connection ends when its credential runs out or is revoked, or the station leaves its workspace: checked on
   // every change of the cloud's state, and when the credential runs out.
+  // Or the lock takes the device away (or lowers its member's role: the next request goes with the role it has now).
   const gone = () => {
     if (m.cloud.removed()) conn.close(2, "station_removed");
     else if (revoked(current, state().revocations)) conn.close(3, "credential_revoked");
     else if (current.exp <= nowSecs()) conn.close(3, "credential_expired");
-    else return false;
+    else {
+      try {
+        current = inLock(m.cloud, current, named, device);
+        return false;
+      } catch {
+        conn.close(3, "lock_unconfirmed");
+      }
+    }
     return true;
   };
   // A credential's expiry is the cloud's word, in the machine's time.
@@ -280,6 +341,11 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
   if (!m.up()) return answer(502, { error: "station unreachable: not started" });
   const rest = path.slice("/admin/api".length);
   const at = rest.indexOf("?");
+  // The workspace lock (cloud/lock.ts): the station's, here where the device that brings it is known.
+  if ((at < 0 ? rest : rest.slice(0, at)) === "/lock") {
+    const [status, said] = lockRoute(m.cloud, method, at < 0 ? [] : queryPairs(rest.slice(at + 1)), body, viewer);
+    return answer(status, said);
+  }
   const handled = await m.admin.handle({
     method,
     path: at < 0 ? rest : rest.slice(0, at),

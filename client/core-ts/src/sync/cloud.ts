@@ -15,6 +15,8 @@ import { topicKey, type Topic } from "../protocol.ts";
 import { CLOUD } from "../status.ts";
 import { GONE, NETWORK } from "../wake.ts";
 import { isObject, parseJson, pointer, toJsonBytes } from "../util.ts";
+import type { LockClaim } from "../lock.ts";
+import * as prefs from "../prefs.ts";
 import { Priority } from "./scheduler.ts";
 
 /// The first wait before an events socket is opened again; it doubles up to a minute, back to the first after one
@@ -363,7 +365,14 @@ export class CloudSync {
   /// with no still.fail cloud on the way. Kept, it serves for a day; then, or when a station refused it (`fresh`), a
   /// new one is asked for — and if still.fail cloud cannot be reached, the kept one serves until it runs out. `main`:
   /// the mesh's device key, when the mesh is up (another key's are kept apart).
-  credential(workspace: string, device: string, fresh: boolean, main: string | null): Effect.Effect<Credential, CoreError> {
+  /// `claim`: the device's base key's word that `device` is its own endpoint (lock.ts), told to the cloud with the ask
+  /// (it lists the devices for a lock's owner to check) and to the station with the credential.
+  credential(workspace: string, device: string, fresh: boolean, main: string | null, claim: LockClaim | null = null): Effect.Effect<Credential, CoreError> {
+    const claimed = (c: Credential): Credential => (claim === null ? c : { ...c, lock: claim });
+    return Effect.map(this.#credential(workspace, device, fresh, main, claim), claimed);
+  }
+
+  #credential(workspace: string, device: string, fresh: boolean, main: string | null, claim: LockClaim | null): Effect.Effect<Credential, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const core = this.#core;
       const sub = yield* this.owner(workspace);
@@ -388,7 +397,8 @@ export class CloudSync {
       }
       const kept: Credential | null = keptOne && keptOne.expires_at > now + 60 && !fresh ? strip(keptOne) : null;
       if (kept && now - kept.issued_at < CREDENTIAL_FOR_S) return kept;
-      const asked = yield* Effect.result(core.provider.credential(sub, workspace, device));
+      const said = claim === null ? undefined : { base: claim.device, proof: claim.proof, kind: core.host.appKeys ? "app" : "web", label: prefs.deviceName(core.data) ?? "" };
+      const asked = yield* Effect.result(core.provider.credential(sub, workspace, device, said));
       if (asked._tag === "Failure") {
         if (kept) return kept;
         return yield* Effect.fail(asked.failure);

@@ -6,7 +6,8 @@ import { createPublicKey, verify } from "node:crypto";
 import { type Accepted, STILLFAIL } from "../cloud/provider.ts";
 import { wall } from "../ops/fibers.ts";
 
-export type Viewer = { sub: string; email: string; name: string; role: string; workspace: string; device: string };
+/// `lockDevice`: the device's base key and its proof for this endpoint, as its hello gave them (cloud/lock.ts).
+export type Viewer = { sub: string; email: string; name: string; role: string; workspace: string; device: string; lockDevice?: { base: string; proof: string } };
 export type Admitted = { viewer: Viewer; exp: number; iat: number; sid: string };
 export type Revocation = { kind: string; id: string; at: number };
 

@@ -9,6 +9,7 @@ import { ownPaths } from "../ops/own.ts";
 import { TOOLS_ALPN, adminSessions, presenceTools, serveTools } from "./tools.ts";
 import { Agents } from "../sessions/agents.ts";
 import { PEER_ALPN, followRoster, peerCall, servePeer } from "./peer.ts";
+import { followLock } from "./lock-sync.ts";
 import { Traces } from "./traces.ts";
 import { SubscriptionRef } from "effect";
 import { keepRelays } from "./relays.ts";
@@ -43,7 +44,13 @@ export const MeshLive = Layer.effectDiscard(
       yield* Effect.forkScoped(plane.presence);
       // The workspace's other stations: asked through this endpoint, their tasks stopped once they are not in it.
       // And the stations of other workspaces chats are shared with or from (xshare/index.ts).
-      agents.remote.attach(peerCall(endpoint, cloud.state, undefined, agents.xshare));
+      const call = peerCall(endpoint, cloud.state, undefined, agents.xshare);
+      agents.remote.attach(call);
+      // The workspace lock, kept level with the other stations it names (lock-sync.ts).
+      yield* Effect.acquireRelease(
+        Effect.sync(() => followLock(cloud.state, call)),
+        (stop) => Effect.sync(stop),
+      );
       yield* Effect.acquireRelease(
         Effect.sync(() => followRoster(cloud.state, agents.remote, agents.config)),
         (stop) => Effect.sync(stop),

@@ -11,9 +11,12 @@
 #                                                       channel (stable, or the test channel's), once its signature
 #                                                       verifies; --beta/--stable puts it on that channel first (back to
 #                                                       the stable release even when that is older than the beta it runs)
-#   stillfail station enroll <cloud-origin> <token> [--provider comma]
-#                                                       joins a workspace in still.fail cloud (or in Comma)
+#   stillfail station enroll <cloud-origin> <token> [--provider comma] [--lock <hash>]
+#                                                       joins a workspace in still.fail cloud (or in Comma); --lock
+#                                                       pins that workspace lock (docs/workspace-lock.md)
 #   stillfail station id
+#   stillfail lock status|reset                         the workspace lock on this station: what is pinned, or taking
+#                                                       it away (when every device that could sign is lost)
 # The data is in $STILLFAIL_DATA (else $EMBER_DATA), default ~/.stillfail; ~/.ember is the old default, which the
 # station moves there on its first start (the Rust station's former.rs).
 set -eu
@@ -48,5 +51,6 @@ PLAN
   "station enroll") shift 2; exec "$station" enroll "$@" --data "$data" ;;
   "status "*|"station status") exec "$station" status --data "$data" ;;
   "station id") exec "$station" id --data "$data" ;;
-  *) echo "usage: stillfail start [--port N] | stillfail status | stillfail update [--beta|--stable] | stillfail station enroll <cloud-origin> <token> [--provider comma] | stillfail station id" >&2; exit 2 ;;
+  "lock status"|"lock reset") exec "$station" lock "$2" --data "$data" ;;
+  *) echo "usage: stillfail start [--port N] | stillfail status | stillfail update [--beta|--stable] | stillfail station enroll <cloud-origin> <token> [--provider comma] [--lock <hash>] | stillfail station id | stillfail lock status|reset" >&2; exit 2 ;;
 esac

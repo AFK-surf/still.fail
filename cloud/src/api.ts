@@ -10,7 +10,7 @@ import { betaOrigin, header, publicOrigins, signedMessages } from "./compat";
 import { EVENTS_PROTOCOLS, ROLES, type Role } from "./directory";
 import type { Env } from "./env";
 import type { FeedbackStatus } from "./types";
-import { grantKeys, signCredential, validKeyHex, verifyAnySignature } from "./grants";
+import { grantKeys, signCredential, validKeyHex, verifyAnySignature, verifyKeySignature } from "./grants";
 import { changelog, serveChangelog, serveFixed } from "./changelog";
 import { receiveFeedback } from "./feedback";
 import { pushKey, registration, stationNotify } from "./push";
@@ -214,12 +214,30 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   // A mstill.fail's credential for this device: what its stations take, offline, for the next 30 days (grants.ts).
   if (kind === "credential" && !target && method === "POST") {
     if (!validKeyHex(input.device)) return reply({ error: "invalid_device" }, 400);
+    // A newer client names its base key and proves the endpoint is its own (docs/workspace-lock.md): kept for the
+    // owner to check when the lock is turned on. An older one names only the endpoint.
+    const base = validKeyHex(input.base) && typeof input.proof === "string" && (await verifyKeySignature(input.base, input.proof, `stillfail-lock-endpoint/1\0${ws}\0${input.device}`)) ? input.base : undefined;
+    if (input.base !== undefined && base === undefined) return reply({ error: "invalid_proof" }, 400);
     return directory(async () => {
       const role = await dir.memberRole(sub, ws);
       const signed = await signCredential(env, { sub, email: claims.email, name: claims.name ?? "", ws, role, device: input.device as string, sid: claims.sid });
+      await dir.recordDevice(sub, ws, input.device as string, { base, kind: input.kind === "app" || input.kind === "web" ? input.kind : undefined, label: typeof input.label === "string" ? input.label.slice(0, 120) : undefined });
       return { ...signed, ...relays(env, true) };
     });
   }
+  // The workspace lock, which the cloud keeps and carries but does not decide (directory.ts, lock.ts).
+  if (kind === "lock" && !target) {
+    const after = url.searchParams.has("after") ? Number(url.searchParams.get("after")) : -1;
+    if (method === "GET") return directory(() => dir.lock(sub, ws, Number.isSafeInteger(after) ? after : -1));
+    if (method === "POST") return directory(() => dir.appendLock(sub, ws, input.entries));
+    if (method === "DELETE") return directory(() => dir.clearLock(sub, ws));
+  }
+  if (kind === "lock" && target === "requests") {
+    if (!action && method === "GET") return directory(() => dir.lockRequests(sub, ws));
+    if (!action && method === "POST") return directory(() => dir.requestLock(sub, ws, input));
+    if (action && method === "DELETE") return directory(() => dir.dropLockRequest(sub, ws, action));
+  }
+  if (kind === "devices" && !target && method === "GET") return directory(() => dir.devices(sub, ws));
   if (kind === "stations" && target && validKeyHex(target)) {
     if (!action && method === "PATCH") return directory(() => dir.updateStation(sub, ws, target, { name: input.name, emoji: input.emoji, icon: input.icon }));
     if (!action && method === "DELETE") return directory(() => dir.removeStation(sub, ws, target));

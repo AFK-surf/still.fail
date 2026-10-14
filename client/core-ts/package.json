@@ -12,6 +12,7 @@
     "hermes": "node scripts/hermes-bundle.ts"
   },
   "dependencies": {
+    "@noble/curves": "2.4.0",
     "effect": "4.0.0",
     "fzstd": "0.1.1",
     "mdast-util-from-markdown": "2.0.3",

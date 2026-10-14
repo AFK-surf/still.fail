@@ -24,6 +24,7 @@ import type { LinkNet, RequestHead, SocketOut, StationWire, WireReply, WireSocke
 import { RELAY } from "./status.ts";
 import { Kind, type Tracer } from "./trace.ts";
 import { fromUtf8, hex, parseJson, sha256, toJsonBytes, utf8 } from "./util.ts";
+import { type LockClaim, lockClaim } from "./lock.ts";
 import type { Wakes } from "./wake.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -256,8 +257,9 @@ class Control {
     this.lines = new Lines(stream);
   }
 
-  send(credential: string): Effect.Effect<void, CoreError> {
-    const line = utf8(`${JSON.stringify({ credential, protocol: 2 })}\n`);
+  /// `lock`: the device's claim for this endpoint (lock.ts), said in the first line, for a station with a workspace lock.
+  send(credential: string, lock?: LockClaim): Effect.Effect<void, CoreError> {
+    const line = utf8(`${JSON.stringify(lock ? { credential, protocol: 2, lock } : { credential, protocol: 2 })}\n`);
     return Effect.mapError(this.stream.write(line), (e) => meshError(t("core-logic.mesh.credential_unsent", { error: e.message })));
   }
 
@@ -275,6 +277,8 @@ class Control {
       if (answer !== null && typeof answer === "object" && "error" in answer) {
         const reason = typeof answer.error === "string" ? answer.error : JSON.stringify(answer.error);
         if (answer.code === "client_upgrade_required") return yield* Effect.fail(new CoreError("client_upgrade_required", reason));
+        // A station with a workspace lock that does not know this device yet: it waits to be confirmed (lock.ts).
+        if (answer.code === "lock_unconfirmed") return yield* Effect.fail(new CoreError("lock_unconfirmed", t("core-logic.mesh.lock_unconfirmed", { reason })));
         return yield* Effect.fail(new CoreError("credential_refused", t("core-logic.mesh.credential_refused_why", { reason })));
       }
       return answer;
@@ -680,6 +684,12 @@ export class Mesh {
 
   deviceId(): string {
     return this.#endpoint.id();
+  }
+
+  /// This device's word, with its key, that `endpoint` (its main endpoint's or one made over for a relay) is its own
+  /// in workspace `ws`: what a station with a workspace lock knows it by (lock.ts).
+  lockClaim(ws: string, endpoint: string): LockClaim {
+    return lockClaim(this.#secret, ws, endpoint);
   }
 
   /// This device's clock.
@@ -1397,7 +1407,7 @@ function open(
     }
     const stream = yield* Effect.mapError(conn.openBi(), (e) => meshError(t("core-logic.mesh.unreachable", { error: e.message })));
     const control = new Control(stream);
-    yield* control.send(credential.success.credential);
+    yield* control.send(credential.success.credential, credential.success.lock);
     const link = new Link(conn, control, credential.success.credential, credentials, pinned);
     // The station's answer to the first credential, while requests already go: a refusal closes the link.
     env.runner.fork(
@@ -1647,7 +1657,7 @@ export function meshWire(inner: Inner): StationWire {
   return new MeshWire({
     mesh: get,
     meshNow: () => up,
-    credentials: (workspace) => (device, fresh) => inner.cloudSync.credential(workspace, device, fresh, up?.deviceId() ?? null),
+    credentials: (workspace) => (device, fresh) => inner.cloudSync.credential(workspace, device, fresh, up?.deviceId() ?? null, up?.lockClaim(workspace, device) ?? null),
     relays: (workspace) => inner.cloudSync.workspaceRelays(workspace),
     status: (workspace) => inner.workspaces.of(workspace).status,
   });

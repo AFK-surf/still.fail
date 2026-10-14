@@ -7,7 +7,7 @@
 import { Effect, type Scope } from "effect";
 import { Accounts, type AccountView } from "./accounts.ts";
 import * as brand from "./brand.ts";
-import { Cloud, type Credential } from "./cloud.ts";
+import { Cloud, type Credential, type DeviceSaid } from "./cloud.ts";
 import { CoreError, asCoreError } from "./error.ts";
 import type { Host, Pull } from "./host.ts";
 import { t } from "./i18n.ts";
@@ -49,7 +49,8 @@ export interface AccountProvider {
   /// `GET /v1/me`: {user, workspaces, invitations, relay_urls}.
   me(sub: string, ctx?: SpanContext | null): Effect.Effect<unknown, CoreError>;
   /// This device's member credential for a workspace.
-  credential(sub: string, workspace: string, device: string): Effect.Effect<Credential, CoreError>;
+  /// `said`: the device's base key and proof, for a provider that lists devices (still.fail cloud's, for its lock).
+  credential(sub: string, workspace: string, device: string, said?: DeviceSaid): Effect.Effect<Credential, CoreError>;
   /// The account's events, as still.fail cloud's `/v1/events` frames them (`pong`, `{"type":"workspaces"}`,
   /// `{"type":"workspace","id"}`, `{"type":"station","workspace","id","online"}`), open while the scope is.
   events(sub: string): Effect.Effect<Pull<string>, CoreError, Scope.Scope>;
@@ -80,7 +81,7 @@ export const stillfailAccountProvider: AccountProviderFactory = ({ host, tracer,
       start: () => {},
       request: (sub, method, path, body, ctx) => cloud.request(sub, method, path, body, ctx),
       me: (sub, ctx) => cloud.me(sub, ctx),
-      credential: (sub, workspace, device) => cloud.credential(sub, workspace, device),
+      credential: (sub, workspace, device, said) => cloud.credential(sub, workspace, device, said),
       events: (sub) =>
         Effect.gen(function* () {
           const token = yield* accounts.accessToken(sub);

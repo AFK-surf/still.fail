@@ -278,6 +278,9 @@ export class NodeHost implements Host {
   utcOffsetMin(atMs: number): number {
     return -new Date(atMs).getTimezoneOffset();
   }
+  /// An app's: what it keeps is the device's, not code still.fail cloud serves (lock.ts).
+  readonly appKeys = true;
+
   randomBytes(buf: Uint8Array): void {
     webcrypto.getRandomValues(buf);
   }

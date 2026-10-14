@@ -7,6 +7,7 @@ import { log } from "../ops/log.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { type PeerCall, Refused, type Remote } from "../jobs/remote.ts";
 import type { Addr, Connection, Endpoint, Stream } from "./native.ts";
+import { answerLock } from "./lock-sync.ts";
 
 export const PEER_ALPN = Buffer.from("stillfail/station/1");
 const MAX_MESSAGE = 1024 * 1024;
@@ -107,7 +108,8 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Remote) 
       if (typeof envelope?.workspace !== "string") throw new Error("workspace missing");
       if (inside) {
         member(cloud, peer, envelope.workspace);
-        answer = { result: await remote.handle(envelope.workspace, peer, envelope.request ?? null) };
+        const method = envelope.request?.method;
+        answer = { result: typeof method === "string" && method.startsWith("lock.") ? answerLock(cloud, envelope.request) : await remote.handle(envelope.workspace, peer, envelope.request ?? null) };
       } else {
         if (cloud.removed() || envelope.workspace !== cloud.state?.workspace) throw new Error("station is outside this workspace");
         answer = { result: await remote.handleOutside(peer, envelope.request ?? null) };

@@ -85,7 +85,9 @@ export type Call =
   | { kind: "clientDevice"; facts: unknown }
   | { kind: "changelogSeen" }
   | { kind: "ask"; ask: Ask }
-  | { kind: "adb"; call: AdbCall };
+  | { kind: "adb"; call: AdbCall }
+  /// The workspace lock (views/lock.ts): `lock.<name>` on a workspace, with what it takes.
+  | { kind: "lock"; name: string; workspace: string; params: Record<string, unknown> };
 
 /// Whether a UI can cancel it (`{id, cancel}`), and one gone does: the calls that hold something open for a page.
 export function cancellable(call: Call): boolean {
@@ -165,12 +167,17 @@ export function counts(call: Call, name: string): boolean {
       return name === "dev.signIn";
     case "adb":
       return call.call.kind === "pair" || call.call.kind === "grant";
+    case "lock":
+      return call.name !== "state";
     default:
       return false;
   }
 }
 
 const S = "string" as const;
+
+/// The workspace lock's calls (views/lock.ts).
+export const LOCK_CALLS = ["state", "open", "request", "confirm", "addStation", "disable"];
 
 function form(name: string, params: unknown, prefix: string, actions: string[]): { topic: Topic; action: string; patch: unknown } | null {
   if (!name.startsWith(prefix)) return null;
@@ -229,6 +236,10 @@ export function parseCall(name: string, params: unknown): Call {
     return files as { id: string; name: string; size: number; width?: number; height?: number }[];
   };
   const uploadFields = () => { const files = uploads(); return files.length ? { uploads: files } : {}; };
+  if (name.startsWith("lock.") && LOCK_CALLS.includes(name.slice(5))) {
+    const p = read(params, [["workspace", S, "req"]]);
+    return { kind: "lock", name: name.slice(5), workspace: p.workspace as string, params: isObject(params) ? (params as Record<string, unknown>) : {} };
+  }
   switch (name) {
     case "auth.begin": {
       const p = read(params, [

@@ -21,7 +21,8 @@ import { langOf, type Lang } from "./i18n.ts";
 import { MAX_RELAYS, parseRelays, relays, relayUrls, sameUrl } from "./relays";
 import type { Part } from "./changelog";
 import type { FeedbackInput } from "./feedback";
-import type { AccountEvent, AddedView, Admission, AdminFeedback, AdminUser, AdminWorkspace, FeedbackStatus, InvitationView, InviteCodeView, MeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
+import type { AccountEvent, AddedView, Admission, AdminFeedback, AdminUser, AdminWorkspace, DeviceView, FeedbackStatus, InvitationView, InviteCodeView, LockHead, LockRequestView, MeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
+import { asEntry, entryHash, shortCode, type LockEntry } from "./lock";
 export type { Role };
 
 export const ROLES: readonly Role[] = ["owner", "admin", "member"];
@@ -105,6 +106,9 @@ export class Directory extends DurableObject<Env> {
       CREATE UNIQUE INDEX IF NOT EXISTS feedback_by_key ON feedback (sender, key);
       CREATE INDEX IF NOT EXISTS feedback_by_sender ON feedback (sender, created_at);
       CREATE TABLE IF NOT EXISTS migrations (name TEXT PRIMARY KEY, at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS lock_entries (workspace TEXT NOT NULL, seq INTEGER NOT NULL, hash TEXT NOT NULL, entry TEXT NOT NULL, PRIMARY KEY (workspace, seq));
+      CREATE TABLE IF NOT EXISTS devices (workspace TEXT NOT NULL, sub TEXT NOT NULL, device TEXT NOT NULL, base TEXT, kind TEXT, label TEXT, first_seen INTEGER NOT NULL, last_seen INTEGER NOT NULL, PRIMARY KEY (workspace, sub, device));
+      CREATE TABLE IF NOT EXISTS lock_requests (workspace TEXT NOT NULL, base TEXT NOT NULL, sub TEXT NOT NULL, request TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (workspace, base));
     `);
     // users had neither column before invite codes, nor beta (1: let into the test channel) before it, nor blocked (1:
     // the admin blocked the account; the account's own object is what keeps it out) before the console could block;
@@ -380,7 +384,130 @@ export class Directory extends DurableObject<Env> {
     const added = MANAGERS.includes(role)
       ? this.#rows("SELECT email, role, added_by, added_at FROM added WHERE workspace = ? ORDER BY added_at", id) as unknown as AddedView[]
       : [];
-    return { id, name: w.name as string, role, created_at: w.created_at as number, members, stations, invitations, added, relays: parseRelays(w.relays) };
+    return { id, name: w.name as string, role, created_at: w.created_at as number, members, stations, invitations, added, relays: parseRelays(w.relays), lock: this.#lockHead(id) };
+  }
+
+  // ── the workspace lock (docs/workspace-lock.md, lock.ts): kept and carried, not trusted ─────────────────────────
+
+  #lockHead(workspace: string): LockHead | null {
+    const last = this.#one("SELECT seq, hash FROM lock_entries WHERE workspace = ? ORDER BY seq DESC LIMIT 1", workspace);
+    if (!last) return null;
+    const first = this.#one("SELECT hash FROM lock_entries WHERE workspace = ? AND seq = 0", workspace);
+    return { seq: last.seq as number, hash: last.hash as string, genesis: (first?.hash as string) ?? "" };
+  }
+
+  #lockAfter(workspace: string, after: number): unknown[] {
+    return this.#rows("SELECT entry FROM lock_entries WHERE workspace = ? AND seq > ? ORDER BY seq", workspace, after).map((r) => JSON.parse(r.entry as string));
+  }
+
+  /** The lock's head and its entries after `after`, for any member. */
+  lock(sub: string, workspace: string, after: number): { head: LockHead | null; entries: unknown[] } {
+    this.#role(sub, workspace);
+    return { head: this.#lockHead(workspace), entries: this.#lockAfter(workspace, after) };
+  }
+
+  /**
+   * Entries that follow the kept chain (those it has are skipped; one that disagrees is refused, with the rest). A
+   * genesis starts a chain where there is none, or where the last one was turned off. Stations and members' devices
+   * bring them; whether one is signed by whom it may be is not checked here: a station checks every entry itself.
+   */
+  async #appendLock(workspace: string, raw: unknown): Promise<LockHead | null> {
+    const entries = (Array.isArray(raw) ? raw : []).map(asEntry);
+    if (entries.length === 0 || entries.length > 256 || entries.some((e) => e === null || e.ws !== workspace)) fail(400, "invalid_lock_entries");
+    // Hashed before anything is read: nothing else runs on this object between the reads and the writes below.
+    const hashed = await Promise.all((entries as LockEntry[]).map(async (e) => ({ e, hash: await entryHash(e) })));
+    this.ctx.storage.transactionSync(() => {
+      for (const { e, hash } of hashed) {
+        let head = this.#lockHead(workspace);
+        if (e.kind === "genesis" && e.seq === 0 && e.prev === null) {
+          if (head?.genesis === hash) continue;
+          const last = head ? this.#one("SELECT entry FROM lock_entries WHERE workspace = ? AND seq = ?", workspace, head.seq) : undefined;
+          if (head && (JSON.parse(last!.entry as string) as LockEntry).kind !== "disable") fail(409, "lock_exists");
+          this.#run("DELETE FROM lock_entries WHERE workspace = ?", workspace);
+          head = null;
+        } else if (head && e.seq <= head.seq) {
+          if (this.#one("SELECT hash FROM lock_entries WHERE workspace = ? AND seq = ?", workspace, e.seq)?.hash !== hash) fail(409, "lock_fork");
+          continue;
+        } else if (!head || e.seq !== head.seq + 1 || e.prev !== head.hash) fail(409, "lock_does_not_follow");
+        this.#run("INSERT INTO lock_entries (workspace, seq, hash, entry) VALUES (?, ?, ?, ?)", workspace, e.seq, hash, JSON.stringify(e));
+      }
+    });
+    this.#changed(workspace, false);
+    return this.#lockHead(workspace);
+  }
+
+  /** A member's device brings entries (its own signer's, or what a station had more). */
+  async appendLock(sub: string, workspace: string, entries: unknown): Promise<{ head: LockHead | null }> {
+    this.#role(sub, workspace);
+    return { head: await this.#appendLock(workspace, entries) };
+  }
+
+  /** The owner lets the kept lock go (its signers lost: each station is reset on its own machine). */
+  clearLock(sub: string, workspace: string): void {
+    this.#role(sub, workspace, ["owner"]);
+    this.#run("DELETE FROM lock_entries WHERE workspace = ?", workspace);
+    this.#changed(workspace, false);
+  }
+
+  /** A device asked for a credential: kept for the owner to check when the lock is turned on. */
+  recordDevice(sub: string, workspace: string, device: string, said: { base?: string; kind?: string; label?: string }): void {
+    const now = nowSeconds();
+    this.#run(
+      `INSERT INTO devices (workspace, sub, device, base, kind, label, first_seen, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (workspace, sub, device) DO UPDATE SET base = COALESCE(excluded.base, base), kind = COALESCE(excluded.kind, kind), label = COALESCE(excluded.label, label), last_seen = excluded.last_seen`,
+      workspace, sub, device, said.base ?? null, said.kind ?? null, said.label ?? null, now, now,
+    );
+  }
+
+  /** The devices that asked for credentials in the workspace in the last 31 days (its owners and admins). */
+  devices(sub: string, workspace: string): { devices: DeviceView[] } {
+    this.#role(sub, workspace, MANAGERS);
+    const devices = this.#rows(
+      `SELECT d.sub, COALESCE(u.email, '') AS email, d.device, d.base, d.kind, d.label, d.first_seen, d.last_seen FROM devices d LEFT JOIN users u ON u.sub = d.sub
+        WHERE d.workspace = ? AND d.last_seen >= ? AND d.sub IN (SELECT sub FROM members WHERE workspace = ?) ORDER BY d.sub, d.last_seen DESC`,
+      workspace, nowSeconds() - 31 * 86400, workspace,
+    ) as unknown as DeviceView[];
+    return { devices };
+  }
+
+  /** A member's new device asks to be confirmed into the lock: its owners and admins, and the member's other devices, are told. */
+  async requestLock(sub: string, workspace: string, input: Record<string, unknown>): Promise<LockRequestView> {
+    this.#role(sub, workspace);
+    const base = typeof input.base === "string" && /^[0-9a-f]{64}$/.test(input.base) ? input.base : fail(400, "invalid_device");
+    const kind = input.kind === "app" || input.kind === "web" ? input.kind : fail(400, "invalid_kind");
+    const label = typeof input.label === "string" ? input.label.slice(0, 120) : "";
+    const sign_key = typeof input.sign_key === "string" && input.sign_key.length <= 200 ? input.sign_key : null;
+    const endpoints = Array.isArray(input.endpoints) ? input.endpoints.filter((e): e is string => typeof e === "string" && /^[0-9a-f]{64}$/.test(e)).slice(0, 16) : [];
+    const code = await shortCode(base);
+    const request = { kind, label, sign_key, endpoints };
+    this.#run(
+      "INSERT INTO lock_requests (workspace, base, sub, request, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (workspace, base) DO UPDATE SET sub = excluded.sub, request = excluded.request",
+      workspace, base, sub, JSON.stringify(request), nowSeconds(),
+    );
+    this.#changed(workspace, false);
+    return { base, sub, email: (this.#one("SELECT email FROM users WHERE sub = ?", sub)?.email as string) ?? "", ...request, code, created_at: nowSeconds() };
+  }
+
+  /** Devices waiting to be confirmed: all of them for owners and admins, a member's own for a member. */
+  async lockRequests(sub: string, workspace: string): Promise<{ requests: LockRequestView[] }> {
+    const role = this.#role(sub, workspace);
+    const rows = this.#rows(
+      `SELECT r.base, r.sub, COALESCE(u.email, '') AS email, r.request, r.created_at FROM lock_requests r LEFT JOIN users u ON u.sub = r.sub
+        WHERE r.workspace = ? AND (? OR r.sub = ?) ORDER BY r.created_at`,
+      workspace, MANAGERS.includes(role) ? 1 : 0, sub,
+    );
+    const requests = await Promise.all(rows.map(async (r) => ({ base: r.base as string, sub: r.sub as string, email: r.email as string, ...(JSON.parse(r.request as string) as { kind: string; label: string; sign_key: string | null; endpoints: string[] }), code: await shortCode(r.base as string), created_at: r.created_at as number })));
+    return { requests };
+  }
+
+  /** A request answered (confirmed or turned down): gone from the list. Its member's own, or an owner's or admin's. */
+  dropLockRequest(sub: string, workspace: string, base: string): void {
+    const role = this.#role(sub, workspace);
+    const row = this.#one("SELECT sub FROM lock_requests WHERE workspace = ? AND base = ?", workspace, base);
+    if (!row) return;
+    if (row.sub !== sub && !MANAGERS.includes(role)) fail(403, "forbidden");
+    this.#run("DELETE FROM lock_requests WHERE workspace = ? AND base = ?", workspace, base);
+    this.#changed(workspace, false);
   }
 
   /**
@@ -419,7 +546,7 @@ export class Directory extends DurableObject<Env> {
     const told = [...this.#members(id), ...this.#invitees(id)];
     const stations = this.#rows("SELECT id FROM stations WHERE workspace = ?", id).map((r) => r.id as string);
     this.ctx.storage.transactionSync(() => {
-      for (const table of ["members", "invitations", "added", "stations", "enrollments"]) this.#run(`DELETE FROM ${table} WHERE workspace = ?`, id);
+      for (const table of ["members", "invitations", "added", "stations", "enrollments", "lock_entries", "devices", "lock_requests"]) this.#run(`DELETE FROM ${table} WHERE workspace = ?`, id);
       this.#run("DELETE FROM workspaces WHERE id = ?", id);
     });
     this.#tell(told, LIST, { type: "workspace", id });
@@ -1019,7 +1146,8 @@ export class Directory extends DurableObject<Env> {
     // The workspace's own relays after still.fail's: a station from before them keeps one more relay as it keeps the rest.
     const told = relays(this.env);
     const relay_urls = [...told.relay_urls, ...parseRelays(own).filter((u) => !told.relay_urls.map(sameUrl).includes(sameUrl(u)))];
-    const frame = JSON.stringify({ type: "state", peers, ...row, origin: this.env.PUBLIC_ORIGIN, ...told, relay_urls, grant_keys: grantKeys(this.env), revocations });
+    const lock = this.#lockHead(row.workspace as string);
+    const frame = JSON.stringify({ type: "state", peers, ...row, origin: this.env.PUBLIC_ORIGIN, ...told, relay_urls, grant_keys: grantKeys(this.env), revocations, lock });
     for (const ws of sockets) ws.send(frame);
   }
 
@@ -1028,8 +1156,25 @@ export class Directory extends DurableObject<Env> {
     this.#run("UPDATE stations SET last_seen = ? WHERE id = ?", nowSeconds(), station);
   }
 
-  async webSocketMessage(): Promise<void> {
-    // Nothing is read from sockets; "ping" is answered by the runtime.
+  /** "ping" is answered by the runtime; a station speaks otherwise only of the workspace lock: it asks for entries it
+   * lacks (`lock.get {after}`, answered `{type: "lock", entries}`) or brings ones the cloud lacks (`lock.put`). */
+  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    const attachment = ws.deserializeAttachment() as Attachment;
+    if (typeof message !== "string" || !("station" in attachment)) return;
+    let body: { type?: unknown; after?: unknown; entries?: unknown };
+    try {
+      body = JSON.parse(message);
+    } catch {
+      return;
+    }
+    const workspace = this.#one("SELECT workspace FROM stations WHERE id = ?", attachment.station)?.workspace as string | undefined;
+    if (!workspace) return;
+    if (body.type === "lock.get") {
+      ws.send(JSON.stringify({ type: "lock", entries: this.#lockAfter(workspace, Number.isSafeInteger(body.after) ? (body.after as number) : -1) }));
+    } else if (body.type === "lock.put") {
+      // Refused when it does not follow: the station hears the cloud's head in the state frame and asks again.
+      await this.#appendLock(workspace, body.entries).catch(() => this.#sendState(attachment.station));
+    }
   }
 
   async webSocketClose(ws: WebSocket, code: number): Promise<void> {

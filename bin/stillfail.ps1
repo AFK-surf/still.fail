@@ -5,12 +5,13 @@
 #   stillfail update [--beta|--stable]            updates this station to its cloud's latest release, on its channel
 #   stillfail station enroll <cloud-origin> <token> [--provider comma]
 #   stillfail station id
+#   stillfail lock status|reset                   the workspace lock on this station (docs/workspace-lock.md)
 # The data is in $env:STILLFAIL_DATA (else $env:EMBER_DATA), default ~\.stillfail.
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $PSScriptRoot
 $data = if ($env:STILLFAIL_DATA) { $env:STILLFAIL_DATA } elseif ($env:EMBER_DATA) { $env:EMBER_DATA } else { Join-Path $env:USERPROFILE '.stillfail' }
 $station = if ($env:STILLFAIL_STATION_BIN) { $env:STILLFAIL_STATION_BIN } else { Join-Path $here 'mesh\target\release\stillfail-station.exe' }
-$usage = 'usage: stillfail start [--port N] | stillfail status | stillfail update [--beta|--stable] | stillfail station enroll <cloud-origin> <token> [--provider comma] | stillfail station id'
+$usage = 'usage: stillfail start [--port N] | stillfail status | stillfail update [--beta|--stable] | stillfail station enroll <cloud-origin> <token> [--provider comma] | stillfail station id | stillfail lock status|reset'
 $a = @($args)
 
 function Run([string[]] $more) {
@@ -22,6 +23,7 @@ switch ("$($a[0]) $($a[1])".Trim()) {
   { $a[0] -eq 'start' } { Run (@('run', '--app', $here, '--data', $data) + $a[1..($a.Count)]) }
   { $a[0] -eq 'status' -or $_ -eq 'station status' } { Run @('status', '--data', $data) }
   'station id' { Run @('id', '--data', $data) }
+  { $_ -eq 'lock status' -or $_ -eq 'lock reset' } { Run @('lock', $a[1], '--data', $data) }
   { $_ -like 'station enroll*' } { Run (@('enroll') + $a[2..($a.Count)] + @('--data', $data)) }
   { $a[0] -eq 'update' } {
     # The channel's latest release, verified by this release's Node (the station's `update`: its signature, newer than

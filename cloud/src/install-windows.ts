@@ -1,5 +1,6 @@
 // The still.fail station's installer for Windows, served at /install.ps1 (install.ts is macOS's and Linux's): in
-// PowerShell on the machine that is to be a station, `& ([scriptblock]::Create((irm <origin>/install.ps1))) <token>`.
+// PowerShell on the machine that is to be a station, `& ([scriptblock]::Create((irm <origin>/install.ps1))) <token> [<lock>]`
+// (the workspace lock's hash to pin, docs/workspace-lock.md).
 // It does what install.sh does, the Windows way (docs/station-ts-native.md, "Windows"):
 // - the release (stillfail-station-win32-x64.zip) in ~\.stillfail\app; the Node it runs on (NODE_VERSION) downloaded
 //   once per version into ~\.stillfail\node\v<version> and checked, then copied to <app>\node (no links: they take a
@@ -53,7 +54,7 @@ export const bundledWindowsInstallScript = (lang: Lang) =>
 
 // __SAY(key, name=$variable; …) is a message (say above).
 const SCRIPT = `# still.fail station installer for Windows (cloud/src/install-windows.ts).
-param([string]$Token = '')
+param([string]$Token = '', [string]$Lock = '')
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $origin = '__ORIGIN__'
@@ -336,7 +337,8 @@ if (-not $binApart -and -not (($userPath -split ';') -contains $bin)) {
 
 if ($Token) {
   Say (__SAY(cloud.install.join))
-  & (Join-Path $app 'mesh\\target\\release\\stillfail-station.exe') enroll $origin $Token --data $data
+  $pin = if ($Lock) { @('--lock', $Lock) } else { @() }
+  & (Join-Path $app 'mesh\\target\\release\\stillfail-station.exe') enroll $origin $Token --data $data @pin
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 

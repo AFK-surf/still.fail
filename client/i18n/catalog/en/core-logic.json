@@ -446,6 +446,7 @@
   "core-logic.mesh.credential_expired": "Access expired",
   "core-logic.mesh.credential_refused": "Station refused access",
   "core-logic.mesh.credential_refused_why": "Station refused access: {reason}",
+  "core-logic.mesh.lock_unconfirmed": "This device isn't confirmed in the workspace's security mode yet: {reason}",
   "core-logic.mesh.credential_revoked": "Access revoked",
   "core-logic.mesh.credential_unreadable": "Unreadable access reply from station: {error}",
   "core-logic.mesh.credential_unsent": "Access request didn't reach station: {error}",

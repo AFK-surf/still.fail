@@ -3,7 +3,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadKey } from "./cloud/key.ts";
-import { readState, writeState, type CloudState } from "./cloud/state.ts";
+import { Cloud, pendingLockPath, readLock, readState, writeState, type CloudState } from "./cloud/state.ts";
+import { writePrivate } from "./ops/files.ts";
+import { shortCode } from "./cloud/lock.ts";
+import { rmSync } from "node:fs";
 import { type Provider, specOf } from "./cloud/provider.ts";
 import { stationLang, tr } from "./ops/i18n.ts";
 import { version } from "./ops/version.ts";
@@ -11,8 +14,10 @@ import { version } from "./ops/version.ts";
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((s): s is string => typeof s === "string") : []);
 
 /// Joins a workspace with a one-time token: proves this station holds its key, writes cloud.json. `provider`: whose
-/// control plane it is (still.fail cloud unless told; cloud/provider.ts).
-export async function enroll(data: string, origin: string, token: string, provider: Provider = "stillfail") {
+/// control plane it is (still.fail cloud unless told; cloud/provider.ts). `lock`: the workspace lock's hash (a locked
+/// workspace's command names it): pinned once the control plane brings a lock holding that entry. A lock pinned before
+/// is let go: joining (again) is the machine's own say, as `lock reset` is.
+export async function enroll(data: string, origin: string, token: string, provider: Provider = "stillfail", lock?: string) {
   const plane = specOf(provider);
   const key = loadKey(data);
   let response: Response | undefined;
@@ -47,7 +52,23 @@ export async function enroll(data: string, origin: string, token: string, provid
     state.gateway_keys = strings(body.gateway_keys);
   }
   writeState(data, state);
+  if (readLock(data) !== null) Cloud.resetLock(data);
+  rmSync(pendingLockPath(data), { force: true });
+  if (lock !== undefined) writePrivate(pendingLockPath(data), JSON.stringify({ hash: lock }));
   console.log(tr(stationLang(), "station.cli.joined", { workspace: state.workspace_name, name: state.name, id: key.id.slice(0, 12) }));
+  if (lock !== undefined) console.log(tr(stationLang(), "station.cli.lock.pending", { code: shortCode(key.id) }));
+}
+
+/// `lock status`: whether a workspace lock is pinned here and how far it goes; `lock reset`: takes it away (kept beside
+/// it), the control plane trusted again — for when every device that could sign is lost. The running station follows.
+export function lockCommand(data: string, what: "status" | "reset"): string {
+  const say = (key: string, args?: Record<string, unknown>) => tr(stationLang(), key, args);
+  if (what === "reset") return say(Cloud.resetLock(data) ? "station.cli.lock.reset" : "station.cli.lock.none");
+  const lock = readLock(data);
+  if (lock === null) return say("station.cli.lock.none");
+  if (lock.state === null) return say("station.cli.lock.broken");
+  const s = lock.state;
+  return say("station.cli.lock.status", { seq: s.seq, hash: s.head.slice(0, 16), members: s.members.size, devices: s.devices.size, stations: s.stations.size });
 }
 
 export function id(data: string) {
@@ -78,6 +99,7 @@ export function status(data: string): string {
   out.push(say("station.cli.status.workspace", { name: state.workspace_name, id: state.workspace }));
   out.push(say("station.cli.status.name", { name: state.name, id: state.station.slice(0, 12) }));
   out.push(say("station.cli.status.cloud", { origin: state.origin }));
+  if (readLock(data) !== null) out.push(lockCommand(data, "status"));
   if (state.removed_at !== undefined) {
     const how = state.removed_code === 4004 ? say("station.cli.status.removedOnClose")
       : state.removed_code === 404 ? say("station.cli.status.removedOn404")
