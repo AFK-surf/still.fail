@@ -2605,7 +2605,11 @@ data class ImageNear (
 	/// The image shown just before it, with its `owner`. Absent for the first (or one not among them).
 	val before: Attachment? = null,
 	/// The one just after it. Absent for the last.
-	val after: Attachment? = null
+	val after: Attachment? = null,
+	/// Where it is among them (0: the first), for `2 / 5`. Absent when it is not among them.
+	val index: UInt? = null,
+	/// How many images the chat shows.
+	val count: UInt
 )
 
 /// A job's output as it grows (the `jobLog` topic): its last lines, when it last grew, its state (absent from a

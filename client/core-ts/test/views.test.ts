@@ -1498,14 +1498,15 @@ test("a_chats_page_is_told_which_files_its_agents_words_place_and_an_open_image_
     const n = ui();
     t.subscribe(id, { topic: "imageNear", station: "ws/a", thread: 7, session: null, path: `ws/k/${name}` });
     await t.read(n, id);
-    return [n.value.before ? [n.value.before.name, n.value.before.owner] : null, n.value.after ? [n.value.after.name, n.value.after.owner] : null];
+    assert.equal(n.value.count, 4);
+    return [n.value.before ? [n.value.before.name, n.value.before.owner] : null, n.value.after ? [n.value.after.name, n.value.after.owner] : null, n.value.index ?? null];
   };
-  assert.deepEqual(await shown("a.png", 2), [null, ["c.png", "k"]]);
-  assert.deepEqual(await shown("c.png", 3), [["a.png", "k"], ["b.png", "k"]]);
-  assert.deepEqual(await shown("b.png", 4), [["c.png", "k"], ["d.png", "k"]]);
-  assert.deepEqual(await shown("d.png", 5), [["b.png", "k"], null]);
+  assert.deepEqual(await shown("a.png", 2), [null, ["c.png", "k"], 0]);
+  assert.deepEqual(await shown("c.png", 3), [["a.png", "k"], ["b.png", "k"], 1]);
+  assert.deepEqual(await shown("b.png", 4), [["c.png", "k"], ["d.png", "k"], 2]);
+  assert.deepEqual(await shown("d.png", 5), [["b.png", "k"], null, 3]);
   // One not among them (gone meanwhile): none beside it.
-  assert.deepEqual(await shown("x.png", 6), [null, null]);
+  assert.deepEqual(await shown("x.png", 6), [null, null, null]);
 });
 
 test("an_agent_only_in_slack_shows_what_was_said_there_on_its_page", async () => {

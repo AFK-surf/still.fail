@@ -562,7 +562,7 @@ private fun Viewer(station: String, opened: Shown, gallery: ChatOf?, onClose: ()
         // A page's taps are its own (they do not reach here to bring the bar back): over one, the bar stays.
         val show = awake || coming || marks.on || kind == PreviewKind.Html && !source
         // Over the image's sides, in the middle: to the one before and after.
-        if (images.size > 1 && at >= 0 && !marks.on) {
+        if ((before != null || after != null) && !marks.on) {
             listOf(before to Alignment.CenterStart, after to Alignment.CenterEnd).forEachIndexed { i, (to, side) ->
                 if (to != null) Box(
                     Modifier.align(side).padding(horizontal = 8.dp).graphicsLayer { alpha = flight.chrome }.alpha(if (show) 1f else 0f).size(36.dp).shadow(1.dp, CircleShape)

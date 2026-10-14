@@ -252,10 +252,12 @@ export function useNear(ref: RefObject<HTMLElement | null>, watch: boolean): boo
 export interface Shown { sessionKey: string; file: Attachment }
 
 /**
- * The chat a preview is opened from (as its `chat` topic names it): an image opened there steps to the one before or
- * after (arrows, ← →, a swipe), which the core tells for the one open (`imageNear`), not the chat's every image.
+ * What an image opened in a preview steps through (arrows, ← →, a swipe): the images of the chat it is opened from (as
+ * its `chat` topic names it), of which the core tells those beside the one open (`imageNear`), not the chat's every
+ * image; or a folder's (Drive.tsx), read when needed.
  */
-export const Gallery = createContext<{ thread: number } | { session: string } | null>(null);
+export type GalleryOf = { chat: { thread: number } | { session: string } } | { list: () => Shown[] };
+export const Gallery = createContext<GalleryOf | null>(null);
 
 /** A file already on this device (one in the draft, not sent yet): shown as it is, not fetched from the station. */
 export interface LocalFile { blob: Blob; url: string }
@@ -293,11 +295,16 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
   const api = useApi();
   const station = useStation();
   // One in the draft is not among the chat's: it shows alone.
-  const beside = useTopic<ImageNear>(isImage(file.name) && !local && gallery ? { topic: "imageNear", station: station.address, ...gallery, path: file.path } : null).value;
+  const steps = isImage(file.name) && !local ? gallery : null;
+  const chat = steps && "chat" in steps ? steps.chat : null;
+  const told = useTopic<ImageNear>(chat ? { topic: "imageNear", station: station.address, ...chat, path: file.path } : null).value;
   // Each through the session that keeps it (the core says which, `owner`).
   const shown = (f: Attachment | undefined): Shown | undefined => (f?.owner ? { sessionKey: f.owner, file: f } : undefined);
-  const before = shown(beside?.before);
-  const after = shown(beside?.after);
+  const list = steps && "list" in steps ? steps.list() : [];
+  const listAt = list.findIndex((i) => i.file.path === file.path);
+  const { before, after, at, count } = chat
+    ? { before: shown(told?.before), after: shown(told?.after), at: told?.index ?? -1, count: told?.count ?? 0 }
+    : { before: listAt > 0 ? list[listAt - 1] : undefined, after: listAt >= 0 ? list[listAt + 1] : undefined, at: listAt, count: list.length };
   // The one shown and those beside it move as one strip (GAP apart): a step slides it out to one side and the next in
   // from the other, a swipe carries it under the finger first. The one going is a copy: the real one is the next already.
   const slide = useRef<HTMLDivElement>(null);
@@ -483,7 +490,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
         onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; onBar.current = false; wake(); }}>
         <div className={css2.fpTitle}>
           <Tip label={file.path}><RDialog.Title className={css2.fpName}>{file.name}</RDialog.Title></Tip>
-          <span className={css2.fpMeta}>{images.length > 1 && at >= 0 ? `${at + 1} / ${images.length} · ` : ""}{fileSize(file.size)}{kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}</span>
+          <span className={css2.fpMeta}>{count > 1 && at >= 0 ? `${at + 1} / ${count} · ` : ""}{fileSize(file.size)}{kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}</span>
         </div>
         {coming !== undefined && <Progress got={coming} size={file.size} inBar />}
         {controls}
@@ -503,7 +510,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
           {known.kind === "image" && !marking && before && <Peek key={before.file.path} shown={before} side={-1} />}
           {known.kind === "image" && !marking && after && <Peek key={after.file.path} shown={after} side={1} />}
         </div>
-        {images.length > 1 && at >= 0 && !marking && <>
+        {count > 1 && at >= 0 && !marking && <>
           <Tip label={t("web-main.preview.prevKey")}><button type="button" className={css2.fpStep} data-side="before" aria-label={t("web-main.preview.prev")} disabled={!before} onClick={() => go(-1)}><ChevronLeft size={22} /></button></Tip>
           <Tip label={t("web-main.preview.nextKey")}><button type="button" className={css2.fpStep} data-side="after" aria-label={t("web-main.preview.next")} disabled={!after} onClick={() => go(1)}><ChevronRight size={22} /></button></Tip>
         </>}

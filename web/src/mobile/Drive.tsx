@@ -406,7 +406,7 @@ export function DrivePreview({ at, entries, entry, onClose }: { at: At; entries:
     },
   }), [byPath, at.station, at.root]); // eslint-disable-line react-hooks/exhaustive-deps
   const images = useMemo(() => entries.filter((e) => e.kind === "image").map((e): Shown => ({ sessionKey: key, file: asFile(at.path, e) })), [entries, at.path, key]);
-  const gallery = useMemo(() => () => images, [images]);
+  const gallery = useMemo(() => ({ list: () => images }), [images]);
   return (
     <FileSource.Provider value={source}>
       <Gallery.Provider value={gallery}>

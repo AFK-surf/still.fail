@@ -263,7 +263,7 @@ function Messages({ view, lives, list, draft, here, stationName }: {
   // the latest one behind it.
   const archive = useArchiveChat(here.station, here.key);
   // An image opened here steps through the chat's (the core tells those beside it, as this page's chat names it).
-  const gallery = useMemo(() => ({ session: here.key }), [here.key]);
+  const gallery = useMemo(() => ({ chat: { session: here.key } }), [here.key]);
   const latest = useRef({ here, draft, app });
   latest.current = { here, draft, app };
   // What is in the list (an agent's name, its activity, 归档) does these by the chat's key (../chatPage.ts).

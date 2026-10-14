@@ -34,29 +34,23 @@ export const isImage = (name: string): boolean => IMAGE.test(name);
 // deno-lint-ignore no-explicit-any
 type J = any;
 
-/** A chat's page (drawn: its files' `owner`, its messages' `placed`): the images before and after the one at `path`. */
-export function near(chat: J, path: string): { before?: J; after?: J } {
-  let before: J;
-  let found = false;
-  const step = (f: J): boolean => {
-    if (f === null || typeof f !== "object" || typeof f.name !== "string" || typeof f.owner !== "string" || !isImage(f.name)) return false;
-    if (found) return true;
-    if (f.path === path) found = true;
-    else before = f;
-    return false;
-  };
-  const all = (files: J): J => (Array.isArray(files) ? files.find(step) : undefined);
+/**
+ * A chat's page (drawn: its files' `owner`, its messages' `placed`): the images before and after the one at `path`, in
+ * the order the page shows them, where it is among them and how many there are.
+ */
+export function near(chat: J, path: string): { before?: J; after?: J; index?: number; count: number } {
+  const images: J[] = [];
+  const add = (files: J[]) => { for (const f of files) if (f !== null && typeof f === "object" && typeof f.name === "string" && typeof f.owner === "string" && isImage(f.name)) images.push(f); };
   for (const m of Array.isArray(chat?.messages) ? chat.messages : []) {
     const files: J[] = Array.isArray(m?.attachments) ? m.attachments : [];
     // A message shows the files its text places first, where it names them, then the rest below it.
     const placed: string[] = Array.isArray(m?.placed) ? m.placed : [];
     const first = placed.flatMap((n) => files.filter((f) => f?.name === n).slice(0, 1));
-    const after = all(first) ?? all(files.filter((f) => !first.includes(f)));
-    if (after !== undefined) return { ...(before ? { before } : {}), after };
+    add(first);
+    add(files.filter((f) => !first.includes(f)));
   }
-  for (const o of Array.isArray(chat?.outbox) ? chat.outbox : []) {
-    const after = all(o?.attachments);
-    if (after !== undefined) return { ...(before ? { before } : {}), after };
-  }
-  return found && before ? { before } : {};
+  for (const o of Array.isArray(chat?.outbox) ? chat.outbox : []) add(Array.isArray(o?.attachments) ? o.attachments : []);
+  const at = images.findIndex((f) => f.path === path);
+  if (at < 0) return { count: images.length };
+  return { ...(at > 0 ? { before: images[at - 1] } : {}), ...(at + 1 < images.length ? { after: images[at + 1] } : {}), index: at, count: images.length };
 }

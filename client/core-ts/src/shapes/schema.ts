@@ -1480,6 +1480,8 @@ export const SHAPES: Record<string, Shape> = {
   ImageNear: struct([
     ["before", opt("Attachment"), { doc: "The image shown just before it, with its `owner`. Absent for the first (or one not among them)." }],
     ["after", opt("Attachment"), { doc: "The one just after it. Absent for the last." }],
+    ["index", opt("u32"), { doc: "Where it is among them (0: the first), for `2 / 5`. Absent when it is not among them." }],
+    ["count", "u32", { doc: "How many images the chat shows." }],
   ], { doc: "An image of a chat opened in the preview (the `imageNear` view): the ones beside it in the order its page shows them\n(each message's placed ones first, then those below it; the outbox's last), to step to (arrows, a swipe)." }),
   ChatJobsView: struct([
     ["jobs", vec("Job")],

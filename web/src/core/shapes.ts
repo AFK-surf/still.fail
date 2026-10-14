@@ -2581,6 +2581,10 @@ export interface ImageNear {
 	before?: Attachment;
 	/** The one just after it. Absent for the last. */
 	after?: Attachment;
+	/** Where it is among them (0: the first), for `2 / 5`. Absent when it is not among them. */
+	index?: number;
+	/** How many images the chat shows. */
+	count: number;
 }
 
 /**

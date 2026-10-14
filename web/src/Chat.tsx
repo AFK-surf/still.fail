@@ -115,7 +115,7 @@ function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session:
   // Files are kept in a session's workspace: what is sent here goes to the first agent's.
   const keeper = chat.agents[0]?.session.key ?? null;
   // An image opened here steps through the chat's (the core tells those beside it, as this page's chat names it).
-  const gallery = useMemo(() => ({ session }), [session]);
+  const gallery = useMemo(() => ({ chat: { session } }), [session]);
   useShortcut("chat.latest", rows.toEnd);
   // Its own find, in place of the browser's (ChatFind.tsx).
   const find = useChatFind(list, rows.virtual, id, rows.messages, composerHeight);

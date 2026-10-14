@@ -429,7 +429,7 @@ class OverMotionTest {
 
     /** What the core tells of each of `files` open in the preview: the ones beside it, in their order. */
     private fun besides(h: Harness, of: ChatOf, files: List<Attachment>) = files.forEachIndexed { i, f ->
-        h.fake.put(Topics.imageNear(Fixtures.STATION, of, f.path), ImageNear(before = files.getOrNull(i - 1), after = files.getOrNull(i + 1)))
+        h.fake.put(Topics.imageNear(Fixtures.STATION, of, f.path), ImageNear(before = files.getOrNull(i - 1), after = files.getOrNull(i + 1), index = i.toUInt(), count = files.size.toUInt()))
     }
 
     /** A short clip (red to blue, a frame's number on each), encoded here: 30 frames at about 30 fps. */
