@@ -39,6 +39,7 @@ import { AppVersionPage, HAS_VERSION } from "../pages/AppVersion.tsx";
 import { HAS_LOCAL_STATION, LocalStationPage } from "../pages/LocalStation.tsx";
 import { ChangelogNews, ChangelogPage } from "../pages/Changelog.tsx";
 import { AddProfile } from "../pages/AddProfile.tsx";
+import { ProfilesNav } from "../ProfilesNav.tsx";
 import { SecurityOpen, SecuritySettings, SecurityWaiting, useLock } from "./Security.tsx";
 import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, useSidebarMode, useStationList, type Station } from "../station.tsx";
@@ -128,6 +129,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
         {settings
           ? <nav className={nav.sidebar} aria-label={t("web-pages.settings.title")}><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><div className={railCss.narrowOnly}><WebUpdate /><WorkspaceSwitcher current={entry} /></div></div></nav>
           : place === "files" ? <FilesSidebar entry={entry} />
+          : place === "profiles" ? <ProfilesSidebar entry={entry} />
           : <WorkspaceSidebar entry={entry} />}
         </div>
         <SidebarEdge />
@@ -331,6 +333,17 @@ function FilesSidebar({ entry }: { entry: WorkspaceEntry }) {
     <nav ref={useGlassBands()} className={nav.sidebar} aria-label={t("web-pages.drive.title")}>
       <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div>
       <FilesNav scope={entry.id} />
+      <WorkspaceSidebarFooter entry={entry} />
+    </nav>
+  );
+}
+
+/** The sidebar while in the profiles, with Profile in the rail (Rail.tsx): every profile of the workspace. */
+function ProfilesSidebar({ entry }: { entry: WorkspaceEntry }) {
+  return (
+    <nav ref={useGlassBands()} className={nav.sidebar} aria-label="Profile">
+      <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div>
+      <ProfilesNav scope={entry.id} />
       <WorkspaceSidebarFooter entry={entry} />
     </nav>
   );

@@ -1713,10 +1713,12 @@ export const SHAPES: Record<string, Shape> = {
     ["share", "f64"],
     ["shareText", "String"],
     ["calls", "f64"],
+    ["callsText", "String"],
+    ["tokensText", "String"],
     ["detail", "String"],
     ["person", opt("Creator")],
     ["chat", opt("UsageChat")],
-  ], { doc: "A person, chat, account or model, and what it spent: `share` of the total cost (of the calls, when nothing was\npriced), `detail` its calls and tokens in a line. A person's `person` (with `shown`); a chat's page (`chat`), when\nit is still there." }),
+  ], { doc: "A person, chat, account or model, and what it spent: `share` of the total cost (of the calls, when nothing was\npriced), `detail` its calls and tokens in a line (`callsText`, `tokensText` each alone: 1,204 · 3.2 万). A person's `person` (with `shown`); a chat's page (`chat`), when\nit is still there." }),
   UsageChat: struct([
     ["station", "String"],
     ["thread", opt("i64"), { client: opt("I54") }],

@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
+import { tiles } from "../Usage.css.ts";
 
 export const identityNameInput = style({ fontSize: vars.textTitle, fontWeight: "600", maxWidth: "360px" });
 export const envTable = style({ display: "grid", gap: "8px" });
@@ -42,3 +43,5 @@ export const pickRow = style({
 });
 /** The share card's rows, spaced as a card's rows are. */
 export const shareRows = style({ display: "grid", gap: "14px", marginTop: "10px" });
+/** Its last 7 days: three figures (cost, calls, tokens) across. */
+export const usageTiles = style({ selectors: { [`&${tiles}`]: { gridTemplateColumns: "repeat(3, minmax(0, 1fr))" } } });

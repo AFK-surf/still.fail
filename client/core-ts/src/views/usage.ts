@@ -141,6 +141,8 @@ function itemsShown(listed: Item[], total: Sum): J[] {
       share,
       shareText: percent(share, 1),
       calls: i.sum.calls,
+      callsText: count(i.sum.calls),
+      tokensText: count(i.sum.tokens()),
       detail: t("core-views.usage.detail", { n: count(i.sum.calls), tokens: count(i.sum.tokens()) }),
       ...i.extra,
     };

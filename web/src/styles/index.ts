@@ -58,6 +58,7 @@ import "../drive/Reader.css.ts";
 import "../drive/Player.css.ts";
 import "../dock.css.ts";
 import "../ProfileCard.css.ts";
+import "../ProfilesNav.css.ts";
 import "../Memory.css.ts";
 import "../pages/Archive.css.ts";
 import "../pages/AppVersion.css.ts";

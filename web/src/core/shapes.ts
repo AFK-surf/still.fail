@@ -3599,7 +3599,7 @@ export interface UsageDay {
 
 /**
  * A person, chat, account or model, and what it spent: `share` of the total cost (of the calls, when nothing was
- * priced), `detail` its calls and tokens in a line. A person's `person` (with `shown`); a chat's page (`chat`), when
+ * priced), `detail` its calls and tokens in a line (`callsText`, `tokensText` each alone: 1,204 · 3.2 万). A person's `person` (with `shown`); a chat's page (`chat`), when
  * it is still there.
  */
 export interface UsageItem {
@@ -3611,6 +3611,8 @@ export interface UsageItem {
 	share: number;
 	shareText: string;
 	calls: number;
+	callsText: string;
+	tokensText: string;
 	detail: string;
 	person?: Creator;
 	chat?: UsageChat;

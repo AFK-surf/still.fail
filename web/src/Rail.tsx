@@ -7,11 +7,11 @@
 // 连接, 用量; at its foot every workspace to switch to (each with what waits in it; a ＋ over them, as the pointer comes,
 // for making one, another account, invitations) and under them the settings, which are not among what is chosen. It is
 // changed where it is: its menu's 自定义侧边条 (or 外观's) has its places dragged up and down, taken out with their −,
-// added from a panel beside it by kind; a place's own menu takes it out. Station, Profile, 连接 and 用量 in it are pages
-// of their own beside the chats; left out of it, they are among the settings. The sidebar beside shows the chats (or 奏,
-// one of their lists), the folders the stations lend (FilesNav, cloud/workspace.tsx) or the settings; coming to the
-// last two with it closed opens it. On a narrow screen there is none: the sidebar's foot keeps the switcher and the
-// settings.
+// added from a panel beside it by kind; a place's own menu takes it out. Station, 连接 and 用量 in it are pages of their
+// own beside the chats, Profile its list in the sidebar (ProfilesNav.tsx) and the one picked beside; left out of it,
+// they are among the settings. The sidebar beside shows the chats (or 奏, one of their lists), the folders the stations
+// lend (FilesNav, cloud/workspace.tsx), the profiles or the settings; coming to the last three with it closed opens it.
+// On a narrow screen there is none: the sidebar's foot keeps the switcher and the settings.
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ComponentType, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { DropdownMenu, Popover } from "radix-ui";
 import { NavLink, useLocation, useNavigate } from "react-router";
@@ -188,13 +188,14 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   // the same click, once.
   const shut = () => document.documentElement.dataset.sidebar === "closed";
   const openSidebar = () => { if (shut()) sidebar.toggle(); };
-  // The places with a sidebar of their own (the settings and the files their way round, the chats their lists) open it,
-  // come to with it closed; a page in the rail (Station, Profile, 连接, 用量) or the archive has none (only the chats
-  // beside it), and closes it: the page the whole width. On the page's load the chats as they were left. Only on a wide
-  // screen: on a narrow one the sidebar is a page of its own.
-  const own = place === "settings" || place === "files" || place === "chats" || !items.includes(place as RailItem);
+  // The places with a sidebar of their own (the settings and the files their way round, the profiles their list, the
+  // chats their lists) open it, come to with it closed; a page in the rail (Station, 连接, 用量) or the archive has none
+  // (only the chats beside it), and closes it: the page the whole width. On the page's load the chats as they were left.
+  // Only on a wide screen: on a narrow one the sidebar is a page of its own.
+  const own = place === "settings" || place === "files" || place === "profiles" || place === "chats" || !items.includes(place as RailItem);
   // Which sidebar it is, each as wide as it was made.
-  const group: SidebarGroup = place === "files" ? "files" : place === "chats" || place === "archive" || items.includes(place as RailItem) ? "chats" : "settings";
+  const group: SidebarGroup = place === "files" ? "files" : place === "profiles" && items.includes("profiles") ? "profiles"
+    : place === "chats" || place === "archive" || items.includes(place as RailItem) ? "chats" : "settings";
   const cameFrom = useRef<Place | null>(null);
   useEffect(() => {
     const moved = cameFrom.current !== null && cameFrom.current !== place;
@@ -364,8 +365,8 @@ function RailWorkspaces({ scope, current }: { scope: string; current: ReactNode 
 /** The sidebar's width, its least and most (the sidebar's own, styles' --sidebar-w). */
 const SIDEBAR = { min: 180, max: 480, own: 240 } as const;
 
-/** The sidebars, each its own width: the chats' (and the pages beside them), the settings', the files'. */
-type SidebarGroup = "chats" | "settings" | "files";
+/** The sidebars, each its own width: the chats' (and the pages beside them), the settings', the files', the profiles'. */
+type SidebarGroup = "chats" | "settings" | "files" | "profiles";
 /** The one shown, whose width the edge drags. */
 let shownGroup: SidebarGroup = "chats";
 /** Where each is kept: the chats' where the one sidebar's was. */

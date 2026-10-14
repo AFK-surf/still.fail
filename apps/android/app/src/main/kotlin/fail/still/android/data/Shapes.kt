@@ -3614,7 +3614,7 @@ data class UsageDay (
 )
 
 /// A person, chat, account or model, and what it spent: `share` of the total cost (of the calls, when nothing was
-/// priced), `detail` its calls and tokens in a line. A person's `person` (with `shown`); a chat's page (`chat`), when
+/// priced), `detail` its calls and tokens in a line (`callsText`, `tokensText` each alone: 1,204 · 3.2 万). A person's `person` (with `shown`); a chat's page (`chat`), when
 /// it is still there.
 @Serializable
 data class UsageItem (
@@ -3626,6 +3626,8 @@ data class UsageItem (
 	val share: Double,
 	val shareText: String,
 	val calls: Double,
+	val callsText: String,
+	val tokensText: String,
 	val detail: String,
 	val person: Creator? = null,
 	val chat: UsageChat? = null

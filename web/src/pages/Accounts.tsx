@@ -1,10 +1,14 @@
 import type { MachineLogin } from "../core/shapes.ts";
 import { profilesPage, stationBase, useStation, useLink } from "../station.tsx";
-import { Edit, External, LogIn, Plus, Refresh, Trash } from "../icons.tsx";
+import { Chart, ChevronRight, Edit, External, LogIn, Plus, Refresh, Trash } from "../icons.tsx";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useOverview, useProfiles, type AccessKind, type LoginJob, type Overview, type ProfileInput, type Profile, type RuntimeKind } from "../api.ts";
-import { KEYED } from "../format.ts";
+import { ACCESS, KEYED } from "../format.ts";
+import { useUsage, usageCss } from "../Usage.tsx";
+import { useProfilesSidebar } from "../ProfilesNav.tsx";
+import { hosts } from "../cloud/settings.tsx";
+import type { WorkspaceProfile } from "../core/shapes.ts";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { useAct } from "../toast.tsx";
 import { useToast } from "../toast.tsx";
@@ -107,9 +111,20 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
   // A copy of another station's: shown, used, but changed only there.
   const copy = profile.share?.role === "user";
   const signingIn = profile.login && ["starting", "needs_code", "needs_approval", "verifying"].includes(profile.login.state);
+  // Beside the profiles' sidebar (ProfilesNav.tsx) the list is there: no way back to it.
+  const sidebar = useProfilesSidebar();
+  const workspace = station.address.split("/")[0]!;
+  // Its row of the workspace's list: the account it is, on whichever stations have it.
+  const entry = useProfiles(workspace).value?.items.find((e) => e.members?.some((m) => m.station === station.address && m.profileId === profile.id));
+  // What it is, in a line: its kind, the address signed in (when not its name), where it is.
+  const facts = [
+    profile.machine ? t("web-main.profile.machine") : profile.providerName ?? ACCESS[profile.access.kind].label,
+    profile.email && profile.email !== profile.name ? profile.email : null,
+    entry?.where,
+  ].filter(Boolean).join(" · ");
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
-      <BackLink to={profilesPage(station)} label="Profile" />
+      {!sidebar && <BackLink to={profilesPage(station)} label="Profile" />}
       {/* Who the account is and whether it works now: its provider, name, runtimes, and its last check. */}
       <header className={pagesCss.identity}>
         <span className={`${pagesCss.mark} ${waitingCss.runtimeMark}`} style={{ width: 48, height: 48 }}><ProviderLogo runtime={profile.runtime} kind={profile.access.kind} mark={profile.providerMark} size={26} /></span>
@@ -121,6 +136,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
             <h1 className={pagesCss.identityName}>{renamingTo ?? profile.name}
               {renamingTo && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label={t("web-pages.settings.stations.renaming")} />}<RuntimeTags runtimes={profile.runtimes} decision={profile.uses?.includes("decision")} />{!profile.machine && !copy && <IconButton label={t("web-pages.settings.stations.rename")} icon={Edit} onClick={() => setEditingName(true)} />}</h1>
           )}
+          {facts && <p className={pagesCss.identitySub}>{facts}</p>}
           <p className={`${pagesCss.identitySub} ${css.profileState}`}>
             {profile.checkTone !== "green" && <Pill tone={profile.checkTone}>{profile.checkText}</Pill>}
             {/* Keep check details without repeating the healthy status. */}
@@ -137,6 +153,10 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
       {!copy && signIn && !profile.machine && (latest?.state === "login" || signingIn) && <section className={pagesCss.section}><SignIn profile={profile} needed /></section>}
 
       <QuotaSection profile={profile} />
+
+      <UsageSection profile={profile} entry={entry} workspace={workspace} />
+
+      {entry && hosts(entry).length > 1 && <StationsSection entry={entry} here={station.address} />}
 
       {overview.sharing && <ShareSection profile={profile} />}
 
@@ -177,6 +197,54 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
 }
 
 const MACHINE_RUNTIME: Record<RuntimeKind, string> = { claude: "Claude Code", codex: "Codex" };
+
+/**
+ * What it spent in the last 7 days (the core's `usage`, its row by account): on this station, and on the others that
+ * have the same account when there are some (each its own line of 各 station).
+ */
+function UsageSection({ profile, entry, workspace }: { profile: Profile; entry: WorkspaceProfile | undefined; workspace: string }) {
+  const station = useStation();
+  const usage = useUsage(workspace, "7").value;
+  if (!usage) return null;
+  const item = usage.lists.find((l) => l.key === "profiles")?.items.find((i) => i.key === `${station.address}/${profile.id}`);
+  const several = (entry?.members?.length ?? 0) > 1;
+  return (
+    <Section title={several ? t("web-pages.profiles.usageHere", { station: station.name }) : t("web-pages.profiles.usage")}
+      actions={<Link className={`${controlsCss.btn} ${controlsCss.btnGhost}`} to={`/w/${workspace}/settings/usage`}><Chart {...ICON} />{t("web-pages.profiles.usageAll")}</Link>}>
+      {item ? (
+        <div className={`${usageCss.usage} ${usageCss.tiles} ${css.usageTiles}`}>
+          <div className={usageCss.tile}><span className={usageCss.tileLabel}>{t("web-pages.profiles.usageCost")}</span><span className={usageCss.tileValue}>{item.costText}</span><span className={usageCss.tileSub}>{t("web-pages.profiles.usageShare", { share: item.shareText })}</span></div>
+          <div className={usageCss.tile}><span className={usageCss.tileLabel}>{t("web-pages.profiles.usageCalls")}</span><span className={usageCss.tileValue}>{item.callsText}</span><span className={usageCss.tileSub}>{t("web-pages.profiles.usageCallsSub")}</span></div>
+          <div className={usageCss.tile}><span className={usageCss.tileLabel}>Tokens</span><span className={usageCss.tileValue}>{item.tokensText}</span><span className={usageCss.tileSub}>{t("web-pages.profiles.usageTokensSub")}</span></div>
+        </div>
+      ) : <p className={shellCss.muted}>{usage.loading ? t("web-pages.settings.reading") : t("web-pages.profiles.usageNone")}</p>}
+    </Section>
+  );
+}
+
+/** The same account on several stations: each's part (lending it, borrowing it, signed in on its own), its state and
+ * who uses it there, leading to its page there. */
+function StationsSection({ entry, here }: { entry: WorkspaceProfile; here: string }) {
+  return (
+    <Section title={t("web-pages.profiles.account.each")}>
+      <ul className={pagesCss.list}>
+        {(entry.members ?? []).map((m) => (
+          <li key={`${m.station}/${m.profileId}`}>
+            <Link className={pagesCss.listRow} to={`${stationBase(m.station)}/settings/accounts/${encodeURIComponent(m.profileId)}`} aria-current={m.station === here ? "page" : undefined}>
+              <StatusDot state={m.online ? "online" : "offline"} />
+              <span className={pagesCss.listRowText}>
+                <span className={pagesCss.listRowTitle}>{m.stationName}</span>
+                <span className={shellCss.muted}>{[m.about, m.usedBy > 0 ? t("web-pages.settings.profiles.usedBy", { n: m.usedBy }) : ""].filter(Boolean).join(" · ")}</span>
+              </span>
+              {!m.online ? <Pill tone="neutral">{t("web-pages.stations.offline")}</Pill> : !m.usable ? <Pill tone="red">{t("web-pages.settings.profiles.hostAway", { station: entry.hostName })}</Pill> : m.checkTone !== "green" && <Pill tone={m.checkTone as never}>{m.checkText}</Pill>}
+              <ChevronRight {...ICON} className={shellCss.muted} />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
 
 /**
  * Sharing with the workspace's other stations: a switch; once on, where a subscription is signed in (moved to another

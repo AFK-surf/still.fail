@@ -597,6 +597,15 @@
   "web-pages.profiles.useThis": "Use this",
   "web-pages.profiles.usedBy": "Used by",
   "web-pages.profiles.usedByNone": "No connects use this profile yet.",
+  "web-pages.profiles.usage": "Last 7 days",
+  "web-pages.profiles.usageHere": "Last 7 days · on {station}",
+  "web-pages.profiles.usageAll": "All usage",
+  "web-pages.profiles.usageCost": "Cost",
+  "web-pages.profiles.usageShare": "{share} of the workspace",
+  "web-pages.profiles.usageCalls": "Calls",
+  "web-pages.profiles.usageCallsSub": "Model requests",
+  "web-pages.profiles.usageTokensSub": "Input, cache and output",
+  "web-pages.profiles.usageNone": "Not used in the last 7 days",
   "web-pages.profiles.verifiedAdded": "Verified and added",
   "web-pages.profiles.verifyAdd": "Verify and add",
   "web-pages.roles.admin": "Admin",
@@ -716,6 +725,7 @@
   "web-pages.settings.profiles.offlineAdd": "Offline. Add once it's online",
   "web-pages.settings.profiles.offlineNone": "Offline. Profiles not loaded yet.",
   "web-pages.settings.profiles.usedBy": {
+  "web-pages.settings.profiles.using": "Adding…",
     "one": "Used by 1",
     "other": "Used by {n}"
   },

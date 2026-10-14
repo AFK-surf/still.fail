@@ -30,6 +30,7 @@ import { MemoryView } from "../Memory.tsx";
 import { DAYS, PriceTables, UsageBody, usageCss, useUsage, type UsageDays } from "../Usage.tsx";
 import { MachineLoginOffers, PROFILE_LEAD, type Choice } from "../pages/Accounts.tsx";
 import { addProfilePath } from "../pages/AddProfile.tsx";
+import { profilePath, useProfilesSidebar } from "../ProfilesNav.tsx";
 import { useCall, useTopic } from "../core/react.ts";
 import { failure, useAct, useToast } from "../toast.tsx";
 import { About, BackLink, Button, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Segmented, Select, StatusDot, Time } from "../ui.tsx";
@@ -365,12 +366,16 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
   const addPlan = (station: string, c: Choice) => navigate(addProfilePath(entry.id, station, c === "claude-sub" ? "anthropic" : "openai", "plan"));
   const online = stations.filter((s) => s.online);
   const profiles = useProfiles(entry.id);
+  const sidebar = useProfilesSidebar();
   // Which station a profile is added to, asked when there are several.
   const [choosing, setChoosing] = useState(false);
   const asStation = (s: (typeof stations)[number]): Station => ({ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${entry.id}/settings` });
   if (listed?.length === 0) return <Navigate to={`/w/${entry.id}/settings/stations`} replace />;
   // Not one profile on any station (each read): the page is about adding the first.
   const first = stations.length > 0 && stations.every((s) => s.overview && s.overview.profiles.length === 0);
+  // Beside the profiles' own sidebar (ProfilesNav.tsx) the page is the one picked there: the first, come to the list.
+  const top = profiles.value?.items[0];
+  if (sidebar && !first && top) return <Navigate to={profilePath(top)} replace />;
   return (
     <Page title="Profile" lead={t("web-pages.settings.profiles.lead", { name: NAME })} back={`/w/${entry.id}/settings`}
       actions={!first && online.length > 0 && <Button icon={Plus} onClick={() => (online.length === 1 ? setAdding(online[0]!.station) : setChoosing(true))}>{t("web-pages.settings.profiles.add")}</Button>}>
