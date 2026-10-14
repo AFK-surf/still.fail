@@ -59,10 +59,10 @@ import fail.still.android.ui.Smooth
 /**
  * The chat itself, from "…": its name (with a way to change it) over who started it, how many take part and when it was
  * last written in, in a line; its agents, each where it stands (a tap opens its card, AgentSheet.kt); then what can be
- * done with it, within reach: pin it, open it in Slack, archive it. As tall as what it shows.
+ * done with it, within reach: pin it, copy its link, open it in Slack, archive it. As tall as what it shows.
  */
 fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread, first: ChatView? = null) {
-    val rows = (first?.agents?.size ?: 1) * 56 + ((if (first?.pinned != null) 1 else 0) + (if (first?.slackUrl != null) 1 else 0) + (if (first?.xshare != null) 1 else 0) + 1) * 40
+    val rows = (first?.agents?.size ?: 1) * 56 + ((if (first?.pinned != null) 1 else 0) + (if (first?.slackUrl != null) 1 else 0) + (if (first?.xshare != null) 1 else 0) + 2) * 40
     app.sheet = SheetSpec(0.55f, fit = (22 + 84 + rows + 10 + 30).dp) {
         val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
         val view = chat.value
@@ -70,6 +70,8 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread,
         val open = view != null && view.archived != true && !view.offline
         val session = (of as? ChatOf.Session)?.key ?: view?.agents?.firstOrNull()?.session?.key ?: ""
         val about = view?.thread ?: thread
+        // Archived or offline it is still read, and pasted elsewhere still read there: its link is there whenever it has one.
+        val link = if (view != null) chatLink(app.cloudOrigin, station, session) else null
         SheetGrab()
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 30.dp)) {
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -116,7 +118,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread,
                 }
                 Spacer(Modifier.height(10.dp))
             }
-            if (open || view?.slackUrl != null || view?.xshare != null) InfoList {
+            if (open || link != null || view?.slackUrl != null || view?.xshare != null) InfoList {
                 // A station from before pins says nothing of them: its chats are not pinned from here.
                 if (open) view!!.pinned?.let { pinned ->
                     // Under way: a spinner on the row, not tapped again.
@@ -127,6 +129,13 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread,
                         IconIn(Icons.Pin, 16.dp, C.ink)
                         Text(if (pinned) t("android-chat.unpin") else t("android-chat.info.pinTop"), fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
                         if (pinning) Spinner(14.dp)
+                    }
+                }
+                link?.let {
+                    val context = LocalContext.current
+                    InfoRow(onClick = { copyChatLink(app, context, view?.title.orEmpty(), it) }) {
+                        IconIn(Icons.Copy, 16.dp, C.ink)
+                        Text(t("web-main.chat.copyLink"), fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
                     }
                 }
                 view?.xshare?.let { share -> ShareRow(app, station, about.id, share) }
