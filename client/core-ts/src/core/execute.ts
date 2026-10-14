@@ -22,6 +22,8 @@ export const handlers: Partial<Record<Call["kind"] | "migrateDevice", Handler>> 
 export const hooks: {
   device?: (inner: Inner, facts: unknown) => void;
   updateNoticeOpen?: (inner: Inner, station: string, open: boolean) => void;
+  /// A station's enrollment made: its commands, as the workspace lock has them say (views/lock.ts).
+  enrolled?: (inner: Inner, sub: string, workspace: string, made: unknown) => Effect.Effect<unknown, CoreError>;
 } = {};
 
 /// Runs a call; `at` is the client and id it came with, `ctx` its trace.

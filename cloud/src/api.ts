@@ -27,6 +27,7 @@ const STATUS: Record<string, number> = {
   invite_code_required: 403, invite_code_invalid: 404, invite_code_used: 409, invite_code_expired: 410,
   invalid_note: 400, invalid_expiry: 400,
   feedback_not_found: 404,
+  invalid_lock_entries: 400, lock_exists: 409, lock_fork: 409, lock_does_not_follow: 409, invalid_device: 400, invalid_kind: 400,
 };
 
 const FEEDBACK_STATUSES: readonly FeedbackStatus[] = ["new", "triaged", "fixed", "wontfix"];

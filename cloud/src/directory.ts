@@ -414,25 +414,35 @@ export class Directory extends DurableObject<Env> {
   async #appendLock(workspace: string, raw: unknown): Promise<LockHead | null> {
     const entries = (Array.isArray(raw) ? raw : []).map(asEntry);
     if (entries.length === 0 || entries.length > 256 || entries.some((e) => e === null || e.ws !== workspace)) fail(400, "invalid_lock_entries");
-    // Hashed before anything is read: nothing else runs on this object between the reads and the writes below.
+    // Hashed before anything is read: nothing else runs on this object between the reads and the writes below (no
+    // await between them), so they are one step. What is refused throws before anything is written.
     const hashed = await Promise.all((entries as LockEntry[]).map(async (e) => ({ e, hash: await entryHash(e) })));
-    this.ctx.storage.transactionSync(() => {
-      for (const { e, hash } of hashed) {
-        let head = this.#lockHead(workspace);
-        if (e.kind === "genesis" && e.seq === 0 && e.prev === null) {
-          if (head?.genesis === hash) continue;
-          const last = head ? this.#one("SELECT entry FROM lock_entries WHERE workspace = ? AND seq = ?", workspace, head.seq) : undefined;
-          if (head && (JSON.parse(last!.entry as string) as LockEntry).kind !== "disable") fail(409, "lock_exists");
-          this.#run("DELETE FROM lock_entries WHERE workspace = ?", workspace);
-          head = null;
-        } else if (head && e.seq <= head.seq) {
-          if (this.#one("SELECT hash FROM lock_entries WHERE workspace = ? AND seq = ?", workspace, e.seq)?.hash !== hash) fail(409, "lock_fork");
-          continue;
-        } else if (!head || e.seq !== head.seq + 1 || e.prev !== head.hash) fail(409, "lock_does_not_follow");
-        this.#run("INSERT INTO lock_entries (workspace, seq, hash, entry) VALUES (?, ?, ?, ?)", workspace, e.seq, hash, JSON.stringify(e));
-      }
-    });
-    this.#changed(workspace, false);
+    let head = this.#lockHead(workspace);
+    let lastKind = head ? (JSON.parse(this.#one("SELECT entry FROM lock_entries WHERE workspace = ? AND seq = ?", workspace, head.seq)!.entry as string) as LockEntry).kind : null;
+    let restart = false;
+    const adding: { e: LockEntry; hash: string }[] = [];
+    for (const { e, hash } of hashed) {
+      if (e.kind === "genesis" && e.seq === 0 && e.prev === null) {
+        if (head?.genesis === hash) continue;
+        if (head && lastKind !== "disable") fail(409, "lock_exists");
+        restart = true;
+        adding.length = 0;
+      } else if (head && e.seq <= head.seq) {
+        const had = adding.find((a) => a.e.seq === e.seq)?.hash ?? (restart ? undefined : (this.#one("SELECT hash FROM lock_entries WHERE workspace = ? AND seq = ?", workspace, e.seq)?.hash as string | undefined));
+        if (had !== hash) fail(409, "lock_fork");
+        continue;
+      } else if (!head || e.seq !== head.seq + 1 || e.prev !== head.hash) fail(409, "lock_does_not_follow");
+      adding.push({ e, hash });
+      head = { seq: e.seq, hash, genesis: e.seq === 0 ? hash : head!.genesis };
+      lastKind = e.kind;
+    }
+    if (adding.length > 0) {
+      this.ctx.storage.transactionSync(() => {
+        if (restart) this.#run("DELETE FROM lock_entries WHERE workspace = ?", workspace);
+        for (const { e, hash } of adding) this.#run("INSERT INTO lock_entries (workspace, seq, hash, entry) VALUES (?, ?, ?, ?)", workspace, e.seq, hash, JSON.stringify(e));
+      });
+      this.#changed(workspace, false);
+    }
     return this.#lockHead(workspace);
   }
 
