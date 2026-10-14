@@ -129,8 +129,8 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
           : place === "files" ? <FilesSidebar entry={entry} />
           : <WorkspaceSidebar entry={entry} />}
         </div>
+        <SidebarEdge />
         <main className={shellCss.main}>
-          <SidebarEdge />
           <ComposerDock>
           <Routes>
             <Route index element={<WorkspaceHome id={entry.id} stations={known && stations} />} />

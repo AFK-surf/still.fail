@@ -2,7 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./tokens.css.ts";
 
 export const shell = style({
-  display: "grid", gridTemplateColumns: "240px minmax(0, 1fr)", height: ["100vh", "100dvh"],
+  position: "relative", display: "grid", gridTemplateColumns: "240px minmax(0, 1fr)", height: ["100vh", "100dvh"],
   "@media": {
     "(max-width: 700px)": {
       gridTemplateColumns: "1fr",

@@ -28,20 +28,30 @@ export const top = style({
   },
 });
 /**
- * The sidebar's edge (Rail.tsx SidebarEdge), as Cue's rail handle: a strip at the page's left, by the sidebar's block,
+ * The sidebar's edge (Rail.tsx SidebarEdge), as Cue's rail handle: a strip over the sidebar's block's edge,
  * with a short bar at its middle: shown as the pointer is over the sidebar, longer on the strip, darker pressed; by the
  * closed bar, shown a second as the mouse moves.
  */
 export const edge = style({
-  position: "absolute", zIndex: 30, top: 0, bottom: 0, left: 0, width: 12, padding: 0, border: 0, background: "none",
+  // On the sidebar's edge, its bar on the line itself; by the closed bar, between it and the page. Moved with the
+  // sidebar's column (brand.tsx's toggle).
+  position: "absolute", zIndex: 30, top: 0, bottom: 0, left: "calc(56px + var(--sidebar-w, 240px) - 6px)", width: 12,
+  padding: 0, border: 0, background: "none",
   cursor: "col-resize", touchAction: "none", outline: "none", WebkitAppRegion: "no-drag",
   selectors: {
-    "&[data-closed]": { cursor: "pointer" },
+    "&[data-closed]": { cursor: "pointer", left: 47 },
     "&::after": {
       content: '""', position: "absolute", top: "50%", left: "50%", width: 4, height: 24, borderRadius: 999,
       background: vars.lineStrong, opacity: 0, transform: "translate(-50%, -50%)",
       transition: `height 180ms cubic-bezier(.16, 1, .3, 1), opacity 180ms cubic-bezier(.16, 1, .3, 1), background-color 150ms ${vars.easeOut}`,
     },
+    // The line itself (the hairline of the other edges, ui.css.ts resizeHandle), on hover and while dragged.
+    "&::before": {
+      content: '""', position: "absolute", top: 8, bottom: 8, left: "50%", width: 1, borderRadius: 999,
+      background: `linear-gradient(to bottom, transparent 10%, ${vars.fieldHover} 50%, transparent 90%)`,
+      opacity: 0, transform: "translateX(-50%)", transition: `opacity 140ms ${vars.easeOut}`,
+    },
+    "&:not([data-closed]):hover::before, &[data-active]::before": { opacity: 1 },
     "&[data-moving]::after": { opacity: 1 },
     "&:hover::after, &:focus-visible::after, &[data-active]::after": { height: 48, opacity: 1 },
     "&:active::after, &[data-active]::after": { background: vars.fieldHover },
@@ -49,7 +59,7 @@ export const edge = style({
   "@media": { [narrow]: { display: "none" }, "(prefers-reduced-motion: reduce)": { selectors: { "&::after": { transition: "none" } } } },
 });
 // The pointer over the sidebar (its block, before the page): the bar is there to find.
-globalStyle(`${dock}:hover ~ * ${edge}::after`, { opacity: 1 });
+globalStyle(`${dock}:hover ~ ${edge}::after`, { opacity: 1 });
 export const grow = style({ flex: 1 });
 
 export const item = style({

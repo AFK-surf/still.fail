@@ -6,6 +6,7 @@ import { shortcutOf, useKeymap, useShortcut } from "./keymap.ts";
 import * as css from "./brand.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import * as sidebarCss from "./styles/sidebar.css.ts";
+import * as railCss from "./Rail.css.ts";
 import { moveState } from "./motion.ts";
 import { Tip } from "./ui.tsx";
 import { NAME } from "./channel.ts";
@@ -121,6 +122,7 @@ export function useSidebarToggle(moved?: (closed: boolean) => void, { keys: owns
       ...moves(`.${shellCss.shell}`, ["grid-template-columns"]),
       ...moves(`.${css.sidebarBuddy}`, ["left"]),
       ...moves(`.${css.sidebarUpdate}`, ["left", "transform"]),
+      ...moves(`.${railCss.edge}`, ["left"]),
       ...moves(`.${sidebarCss.pageBar}`, ["padding-left"]),
     ], () => closeSidebar(next)).then(() => { if (turn === moving) delete document.documentElement.dataset.sidebarMoving; });
     moved?.(next);
