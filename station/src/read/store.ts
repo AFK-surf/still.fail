@@ -552,6 +552,25 @@ export function chatShares(s: Store): Map<string, { to: { workspace: string; nam
   );
 }
 
+// ── chats published as snapshots (published) ──
+
+/// Each chat's published snapshots, the latest first, by thread (none on a database from before the table).
+export function publishedByThread(s: Store): Map<number, { id: string; key: string; title: string; by: string; byName: string; at: number; upto: number; size: number }[]> {
+  let rows: Json[];
+  try {
+    rows = all(s, "SELECT * FROM published ORDER BY created_at DESC, id");
+  } catch {
+    return new Map();
+  }
+  const out = new Map<number, { id: string; key: string; title: string; by: string; byName: string; at: number; upto: number; size: number }[]>();
+  for (const r of rows) {
+    const list = out.get(r.thread) ?? [];
+    list.push({ id: r.id, key: r.key, title: r.title, by: r.created_by, byName: r.by_name, at: r.created_at, upto: r.upto, size: r.size });
+    out.set(r.thread, list);
+  }
+  return out;
+}
+
 // ── pins, kept chats ──
 
 /// The chats a viewer pinned (by their session's key), with when.

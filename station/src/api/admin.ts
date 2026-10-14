@@ -12,6 +12,7 @@ import { routes as marks } from "./routes/marks.ts";
 import { routes as updates } from "./routes/updates.ts";
 import { routes as accounts } from "./routes/accounts.ts";
 import { routes as xshare } from "./routes/xshare.ts";
+import { routes as publish } from "./routes/publish.ts";
 import { routes as slack } from "./routes/slack.ts";
 import { routes as hub } from "./routes/hub.ts";
 import { routes as deviceTools } from "./routes/tools.ts";
@@ -125,6 +126,7 @@ export class Admin {
           })
         : []),
       ...(deps.agents?.xshare ? xshare({ xshare: deps.agents.xshare, store: deps.store }) : []),
+      ...publish(tools),
       ...(deps.agents?.accounts ? accounts({ accounts: deps.agents.accounts, sharing: deps.agents.sharing, overview: (r) => deps.agents!.overview(r.viewer, r.lang) }) : []),
       // The station as its settings pages show it.
       ...(deps.agents?.overview ? [{ method: "GET", pattern: /^\/overview$/, handle: async (r: Request) => json(200, JSON.stringify(await deps.agents!.overview(r.viewer, r.lang))) }] : []),

@@ -72,7 +72,7 @@ export type AgentsParts = {
   xshare: ChatShares;
   slack: SlackParts;
   /// Where the station is in its control plane while in a workspace.
-  place(): { origin: string; workspace: string; station: string } | null;
+  place(): { origin: string; workspace: string; station: string; name: string } | null;
   /// GET /overview as `viewer` sees it.
   overview(viewer: Viewer, lang: Lang): Promise<unknown>;
 };
@@ -516,6 +516,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, slack, overview: view, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station } : null; } });
+      return Agents.of({ hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, slack, overview: view, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
     }),
   );

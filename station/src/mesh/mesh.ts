@@ -14,6 +14,7 @@ import { Traces } from "./traces.ts";
 import { SubscriptionRef } from "effect";
 import { keepRelays } from "./relays.ts";
 import { ALPN, FORMER_ALPN, serve } from "./serve.ts";
+import { GUEST_ALPN, Guests } from "../publish/guest.ts";
 
 export const MeshLive = Layer.effectDiscard(
   Effect.gen(function* () {
@@ -30,7 +31,7 @@ export const MeshLive = Layer.effectDiscard(
       // Not in a workspace yet: on the mesh once `enroll` writes cloud.json.
       if (!cloud.state.state) yield* cloud.changes.pipe(Stream.filter(() => cloud.state.state !== null), Stream.runHead);
       const endpoint = yield* Effect.acquireRelease(
-        Effect.promise(() => native.bind({ secretKey: key.seed, alpns: [ALPN, FORMER_ALPN, PEER_ALPN, TOOLS_ALPN], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1" })),
+        Effect.promise(() => native.bind({ secretKey: key.seed, alpns: [ALPN, FORMER_ALPN, PEER_ALPN, TOOLS_ALPN, GUEST_ALPN], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1" })),
         // iroh closes gracefully, waiting on every connection (the keepers' too): up to ~12 s. A station stopping or
         // handing over doesn't wait that long: a second, then it is gone (clients reconnect, as they do anyway).
         (endpoint) => Effect.ignore(Effect.timeoutOption(Effect.promise(() => endpoint.close()), "1 second")),
@@ -85,6 +86,8 @@ export const MeshLive = Layer.effectDiscard(
       // The same tools for requests Comma pushes on the presence socket.
       cloud.state.toolCalls = presenceTools(gateways);
       yield* Effect.addFinalizer(() => Effect.sync(() => (cloud.state.toolCalls = null)));
+      // Visitors of published snapshots (publish/guest.ts): no credential, nothing but the snapshots.
+      const guests = new Guests(store);
       for (;;) {
         const conn = yield* Effect.promise(() => endpoint.accept());
         if (!conn) return;
@@ -93,6 +96,7 @@ export const MeshLive = Layer.effectDiscard(
           Effect.tryPromise(() =>
             conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, agents.remote)
             : conn.alpn().equals(TOOLS_ALPN) ? serveTools(gateways, conn)
+            : conn.alpn().equals(GUEST_ALPN) ? guests.serve(conn)
             : serve(members, conn),
           ).pipe(
             Effect.catch((e) => Effect.sync(() => log.info("mesh", "connection ended", { error: String((e as Error).cause ?? e) }))),

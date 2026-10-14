@@ -300,6 +300,21 @@ CREATE TABLE IF NOT EXISTS chat_shares (
   by TEXT NOT NULL,
   at INTEGER NOT NULL
 );
+-- Chats published as a snapshot anyone with its link reads (docs/public-share.md, publish/): the link's id and key, the
+-- chat's title then, who published it (email, name) and when, its last message (upto, an n) and its size in bytes. The
+-- snapshot itself is in published/<id>/ beside the database.
+CREATE TABLE IF NOT EXISTS published (
+  id TEXT PRIMARY KEY,
+  thread INTEGER NOT NULL,
+  key TEXT NOT NULL,
+  title TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  by_name TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  upto INTEGER NOT NULL,
+  size INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS published_by_thread ON published (thread);
 `;
 
 /// Each message as it reads now: its latest edit's words, files and quotes.

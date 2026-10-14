@@ -201,7 +201,7 @@ function threadJson(t: ThreadRow): Json {
 }
 
 /// views.rs `thread_view`: a thread with its sessions, last entry and message, what the viewer read, who wrote.
-function threadView(s: Store, t: ThreadSummary, shares: ReturnType<typeof store.chatShares> = store.chatShares(s)): Json {
+function threadView(s: Store, t: ThreadSummary, shares: ReturnType<typeof store.chatShares> = store.chatShares(s), published: ReturnType<typeof store.publishedByThread> = store.publishedByThread(s)): Json {
   const names = authorNames(s, t.thread.id);
   const v = threadJson(t.thread);
   v.sessions = t.sessions.map((m) => ({ thread: m.thread, session: m.session, connect: m.connect, joinedAt: m.joinedAt }));
@@ -217,12 +217,16 @@ function threadView(s: Store, t: ThreadSummary, shares: ReturnType<typeof store.
   // Which other workspaces it is shared with (docs/chat-share.md), by the session key its link names.
   const shared = shares.get(t.thread.home ?? t.sessions[0]?.session ?? "");
   v.xshare = shared === undefined ? null : shared;
+  // Its snapshots published for anyone with their links (docs/public-share.md); left out when none.
+  const snapshots = published.get(t.thread.id);
+  if (snapshots !== undefined) v.published = snapshots;
   return v;
 }
 
 function threadViews(s: Store, viewer: Viewer, session: string | null): Json[] {
   const shares = store.chatShares(s);
-  return store.listThreads(s, viewer.email, session, null).map((t) => threadView(s, t, shares));
+  const published = store.publishedByThread(s);
+  return store.listThreads(s, viewer.email, session, null).map((t) => threadView(s, t, shares, published));
 }
 
 /// GET /threads?session= (views.rs `threads`): the threads (of one session).
@@ -298,7 +302,7 @@ export function widgetState(s: Store, key: string, path: string | undefined, lan
 // ---- a session's files (admin/files.rs) ----
 
 /// files.rs `mime`: by the file's extension.
-function mime(path: string): string {
+export function mime(path: string): string {
   const name = basename(path);
   const dot = name.lastIndexOf(".");
   // Path::extension: none for a name with no dot, or only the one it starts with.
