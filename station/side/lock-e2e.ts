@@ -114,6 +114,16 @@ async function endpointOf(seed: Buffer, alpn: Buffer): Promise<Endpoint> {
 /// Connects as a member's device with `credential`: the station's answer to the hello, and with it admitted, its
 /// answer to GET /admin/api/overview (what any member may read; a member may also run things).
 async function asDevice(endpoint: Endpoint, station: string, credential: string): Promise<{ hello: any; overview: number | null }> {
+  // A connection that the relay lost on the way is tried again (a refusal is an answer, not a loss).
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await asDeviceOnce(endpoint, station, credential);
+    } catch (e) {
+      if (attempt >= 3 || !/connection lost|closed/i.test(String((e as Error).message))) throw e;
+    }
+  }
+}
+async function asDeviceOnce(endpoint: Endpoint, station: string, credential: string): Promise<{ hello: any; overview: number | null }> {
   const conn: Connection = await endpoint.connect({ id: station, relays: [RELAY] }, ALPN);
   try {
     const first = await conn.openBi();
