@@ -56,6 +56,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.content.consume
+import androidx.compose.foundation.content.contentReceiver
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.OutputTransformation
+import androidx.compose.foundation.text.input.TextFieldBuffer
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.delete
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -97,10 +107,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -155,9 +162,10 @@ import kotlinx.serialization.builtins.serializer
 
 /**
  * A file on its way to the station: uploading, uploaded, or failed. `local`: a picture's bytes as picked (one read
- * whole), what the viewer shows it from before it is sent (no session keeps it yet), with its size.
+ * whole), what the viewer shows it from before it is sent (no session keeps it yet), with its size. `pasted`: the text
+ * it was made of, pasted (PastedText.kt).
  */
-class Pending(val id: Long, val name: String, val size: Long, val preview: ImageBitmap?, val local: ByteArray? = null, val width: Int? = null, val height: Int? = null) {
+class Pending(val id: Long, val name: String, val size: Long, val preview: ImageBitmap?, val local: ByteArray? = null, val width: Int? = null, val height: Int? = null, val pasted: PastedText? = null) {
     var done by mutableStateOf<Attachment?>(null)
     /** How much of it the station has, as it goes up in parts. */
     var sent by mutableStateOf<Long?>(null)
@@ -175,11 +183,16 @@ class DraftQuote(val id: Long, val author: String, val text: String, val ts: Str
  * chat, or the app, keeps it for when the chat is opened again; a new chat's lives while its page does.
  */
 class Draft {
-    var input by mutableStateOf(TextFieldValue(""))
+    /** The text box's own (it takes what is pasted, files and pictures too: ComposerBar). */
+    val field = TextFieldState()
+    /** Its text and where the cursor is; set, both are replaced. */
+    var input: TextFieldValue
+        get() = TextFieldValue(field.text.toString(), field.selection)
+        set(value) { field.edit { replace(0, length, value.text); selection = value.selection } }
     /** The text; set, the cursor goes to its end. */
     var text: String
-        get() = input.text
-        set(value) { input = TextFieldValue(value, TextRange(value.length)) }
+        get() = field.text.toString()
+        set(value) { field.setTextAndPlaceCursorAtEnd(value) }
     val quotes = mutableStateListOf<DraftQuote>()
     val files = mutableStateListOf<Pending>()
     /** A new chat is being made for the first message. */
@@ -354,22 +367,15 @@ object ChatRefs {
 }
 
 /** The composer's text with each mark drawn in the accent, its `[` before the `@` and both brackets unseen (the same letters in the same places). */
-private class RefMarks(private val accent: Color) : VisualTransformation {
-    override fun filter(text: AnnotatedString): TransformedText {
-        val s = text.text
-        if (!ChatRefs.MARK.containsMatchIn(s)) return TransformedText(text, OffsetMapping.Identity)
-        val out = buildAnnotatedString {
-            var at = 0
-            ChatRefs.MARK.findAll(s).forEach { m ->
-                append(s.substring(at, m.range.first))
-                pushStyle(SpanStyle(color = Color.Transparent)); append("["); pop()
-                pushStyle(SpanStyle(color = accent)); append("@"); append(m.groupValues[1]); pop()
-                pushStyle(SpanStyle(color = Color.Transparent)); append("]"); pop()
-                at = m.range.last + 1
-            }
-            append(s.substring(at))
+private class RefMarks(private val accent: Color) : OutputTransformation {
+    override fun TextFieldBuffer.transformOutput() {
+        val marks = ChatRefs.MARK.findAll(asCharSequence()).toList()
+        marks.forEach { m -> replace(m.range.first, m.range.first + 2, "[@") }
+        marks.forEach { m ->
+            addStyle(SpanStyle(color = Color.Transparent), m.range.first, m.range.first + 1)
+            addStyle(SpanStyle(color = accent), m.range.first + 1, m.range.last)
+            addStyle(SpanStyle(color = Color.Transparent), m.range.last, m.range.last + 1)
         }
-        return TransformedText(out, OffsetMapping.Identity)
     }
 }
 
@@ -611,8 +617,8 @@ fun photoPicked(bitmap: Bitmap): Picked {
 
 /** Files go to the station as soon as they are added, and wait there in no chat: the message that sends them takes them
  * into its chat (a new chat is made only then). A chat's draft is kept once the file is up. */
-fun AppState.upload(draft: Draft, station: String, picked: Picked, scope: CoroutineScope) {
-    val p = Pending(System.nanoTime(), picked.name, picked.size, picked.preview, picked.bytes.takeIf { picked.preview != null && it.isNotEmpty() }, picked.width, picked.height)
+fun AppState.upload(draft: Draft, station: String, picked: Picked, scope: CoroutineScope, pasted: PastedText? = null) {
+    val p = Pending(System.nanoTime(), picked.name, picked.size, picked.preview, picked.bytes.takeIf { picked.preview != null && it.isNotEmpty() }, picked.width, picked.height, pasted)
     draft.files += p
     if (picked.size > MAX_FILE || (picked.bytes.isEmpty() && picked.open == null && picked.size > 0)) { p.error = t("android-chat.file.tooBig"); return }
     scope.launch {
@@ -681,6 +687,7 @@ fun openAttach(app: AppState, launchers: Triple<() -> Unit, () -> Unit, () -> Un
  */
 @Composable
 fun DraftExtras(draft: Draft, host: Host? = null) {
+    val app = LocalApp.current
     if (draft.quotes.isNotEmpty()) Column(Modifier.fillMaxWidth().heightIn(max = 176.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         draft.quotes.forEach { q ->
             // In the composer's capsule: corners concentric with it.
@@ -727,11 +734,51 @@ fun DraftExtras(draft: Draft, host: Host? = null) {
                         IconIn(Icons.Close, 12.dp, Color.White)
                     }
                 }
+            } else if (f.pasted != null) Box(Modifier.sendTile(host, f.id)) {
+                PastedCard(f, f.pasted, onRemove = remove,
+                    onRetry = if (f.error != null && station != null) ({ draft.files.remove(f); pasteAsFile(app, draft, station, f.pasted.text) }) else null,
+                    onRestore = if (f.pasted.restorable && !draft.starting) ({ draft.files.remove(f); draft.text = if (draft.text.isEmpty()) f.pasted.text else "${draft.text}
+${f.pasted.text}"; draft.focus++ }) else null)
             } else Box(Modifier.sendTile(host, f.id)) {
                 FileCard(f.done?.name ?: f.name, f.done?.size ?: f.size, f.error ?: if (f.done == null) uploadingText(f) else null, busy = f.done == null && f.error == null, onRemove = remove, shape = InComposer)
             }
         }
     }
+}
+
+/**
+ * Text pasted as a file, as the web's composer shows it: its first line, then how it goes (going up, failed, or a text
+ * file of so many characters); 展开到输入框 puts it back in the text (not one too long for it), 重试上传 after it failed.
+ */
+@Composable
+private fun PastedCard(f: Pending, pasted: PastedText, onRemove: () -> Unit, onRetry: (() -> Unit)?, onRestore: (() -> Unit)?) {
+    val busy = f.done == null && f.error == null
+    Row(
+        Modifier.width(260.dp).clip(InComposer).background(chatInk().neutral).padding(start = 10.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        if (busy) Spinner(14.dp) else IconIn(Icons.Read, 16.dp, C.muted)
+        Column(Modifier.weight(1f)) {
+            Text(pasted.preview.ifEmpty { t("web-main.composer.pastedText") }, fontSize = 15.sp, lineHeight = 20.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                f.error ?: if (busy) t("web-main.composer.pasteUploading") else t("web-main.composer.pasteAttachment", "count" to pasted.characters),
+                fontSize = 11.sp, lineHeight = 16.sp, color = if (f.error != null) C.red else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+            val action = if (onRetry != null) t("web-main.composer.retryPaste") to onRetry else onRestore?.let { t("web-main.composer.expandPaste") to it }
+            if (action != null) Text(action.first, fontSize = 13.sp, lineHeight = 18.sp, color = C.accent, modifier = Modifier.padding(top = 2.dp).clickable(onClick = action.second))
+        }
+        Box(
+            Modifier.size(22.dp).clip(CircleShape).background(C.ink.copy(alpha = 0.06f)).clickable(onClick = onRemove)
+                .semantics { contentDescription = t("web-main.composer.removePaste") },
+            contentAlignment = Alignment.Center,
+        ) { IconIn(Icons.Close, 12.dp, C.muted) }
+    }
+}
+
+/** A long paste: the file it goes as, up to `station` as any file added (`upload`). */
+private fun pasteAsFile(app: AppState, draft: Draft, station: String, text: String) {
+    val pasted = PastedText(text)
+    app.upload(draft, station, pastedPicked(pasted), app.scope, pasted)
 }
 
 /** The same, but a touch target is only as big as what is drawn. */
@@ -770,6 +817,7 @@ private fun Modifier.draftPicture(f: Pending, station: String?): Modifier {
 internal val Draft.composerExpanded: Boolean
     get() = focused || text.isNotEmpty() || files.isNotEmpty() || quotes.isNotEmpty()
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ComposerBar(
     draft: Draft, placeholder: String, onPlus: () -> Unit, onType: () -> Unit, onSend: () -> Unit,
@@ -797,26 +845,50 @@ fun ComposerBar(
             LaunchedEffect(draft.focus) { if (draft.focus > 0) focus.requestFocus() }
             val accent = C.accent
             val marks = remember(accent) { RefMarks(accent) }
+            val context = LocalContext.current
+            // What the text takes as it is written (the user's edits; what the app puts there goes as it is).
+            val input = InputTransformation {
+                val was = originalText.toString()
+                val now = asCharSequence().toString()
+                if (now == was) return@InputTransformation
+                // A backspace just after a reference takes it whole.
+                val caret = originalSelection.start
+                val mark = if (originalSelection.collapsed && now.length == was.length - 1 && caret > 0 &&
+                    selection.collapsed && selection.start == caret - 1 && now == was.removeRange(caret - 1, caret)) ChatRefs.before(was, caret) else null
+                if (mark != null) { delete(mark, caret - 1); selection = TextRange(mark); onType(); return@InputTransformation }
+                val put = insertedRange(was, now)
+                // A long paste goes as a file (PastedText.kt), the text left as it was.
+                if (put != null && put.last - put.first + 1 >= PASTE_THRESHOLD && station != null && !locked) {
+                    val text = now.substring(put.first, put.last + 1)
+                    revertAllChanges()
+                    scope.launch { pasteAsFile(app, draft, station, text) }
+                    return@InputTransformation
+                }
+                onType()
+                // A chat's link pasted (`[its title](its link)`, as copied) goes in as a reference, as on the web.
+                if (station != null && put != null && put.last > put.first) {
+                    val refs = linkedRefs(now, station).filter { (m) -> m.range.first <= put.last && m.range.last >= put.first }
+                    if (refs.isNotEmpty()) scope.launch { markPasted(app, draft, now, refs) }
+                }
+            }
             BasicTextField(
-                draft.input,
-                { next ->
-                    val was = draft.input
-                    // A backspace just after a reference takes it whole.
-                    val caret = was.selection.start
-                    val mark = if (was.selection.collapsed && next.text.length == was.text.length - 1 && caret > 0 &&
-                        next.selection.collapsed && next.selection.start == caret - 1 && next.text == was.text.removeRange(caret - 1, caret)) ChatRefs.before(was.text, caret) else null
-                    draft.input = if (mark != null) TextFieldValue(was.text.removeRange(mark, caret), TextRange(mark)) else next
-                    if (next.text != was.text) onType()
-                    // A chat's link pasted (`[its title](its link)`, as copied) goes in as a reference, as on the web.
-                    if (mark == null && station != null) {
-                        val put = insertedRange(was.text, next.text)?.takeIf { it.last > it.first }
-                        val refs = if (put == null) emptyList() else linkedRefs(next.text, station).filter { (m) -> m.range.first <= put.last && m.range.last >= put.first }
-                        if (refs.isNotEmpty()) scope.launch { markPasted(app, draft, next.text, refs) }
-                    }
-                },
-                textStyle = style, visualTransformation = marks, readOnly = draft.starting,
-                cursorBrush = SolidColor(C.accent), maxLines = 6, onTextLayout = onFieldText,
-                modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { draft.focused = it.isFocused }.onGloballyPositioned(onField),
+                draft.field, inputTransformation = input, outputTransformation = marks,
+                textStyle = style, readOnly = draft.starting, cursorBrush = SolidColor(C.accent),
+                lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 6), onTextLayout = { result -> result()?.let(onFieldText) },
+                modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { draft.focused = it.isFocused }.onGloballyPositioned(onField)
+                    // Pictures and files pasted, or sent by the keyboard (its clipboard, stickers): with the message, as one
+                    // added by ＋ is; their text, and any other, goes into the text.
+                    .contentReceiver { content ->
+                        if (station == null || locked) return@contentReceiver content
+                        val uris = mutableListOf<Uri>()
+                        val rest = content.consume { item -> item.uri?.also { uris += it } != null }
+                        // `content` held until they are read: what lets them be read (the keyboard's grant) goes with it.
+                        if (uris.isNotEmpty()) scope.launch {
+                            uris.forEach { u -> readPicked(context, u)?.let { app.upload(draft, station, it, app.scope) } ?: run { app.toast = t("android-chat.file.uploadFailed") } }
+                            java.lang.ref.Reference.reachabilityFence(content)
+                        }
+                        rest
+                    },
             )
         }
         val ready = draft.ready
