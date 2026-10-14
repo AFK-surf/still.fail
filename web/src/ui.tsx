@@ -13,7 +13,7 @@ import {
 } from "radix-ui";
 import { createPortal, flushSync } from "react-dom";
 import { Link, useNavigate } from "react-router";
-import { forwardRef, Fragment, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentType, type CSSProperties, type ReactNode } from "react";
+import { forwardRef, Fragment, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentType, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./ui.css.ts";
@@ -572,61 +572,42 @@ export function keptWidth(variable: string, min: number, max: number): number | 
 }
 
 /**
- * A column's edge, as Cue's: a hairline fading toward both ends, shown while the pointer is on it or it is dragged (that
- * one alone, not every edge of the page), with a tip that follows the pointer along it. Dragged, the column takes the
- * width (`offset`: what of the column the width leaves out, the rail before the sidebar); double-clicked, its own width
- * again. With `toggle`, a press that does not move is its other use (the sidebar closing or opening); `closed`, that is
- * all it does.
+ * A column's edge: a hairline fading toward both ends, shown while the pointer is on it or it is dragged (that one alone,
+ * not every edge of the page), with a tip that follows the pointer along it. Dragged, the column takes the width;
+ * double-clicked, its own width again.
  */
-export function ResizeHandle({ variable, edge, min, max, label, offset = 0, toggle, closed = false, className }: {
-  variable: string; edge: "left" | "right"; min: number; max: number; label: string; offset?: number;
-  toggle?: { label: string; run(): void }; closed?: boolean; className?: string;
-}) {
+/** Sets a column's width (null: its own again) and keeps it on this device, as keptWidth reads it. */
+export function setKeptWidth(variable: string, px: number | null): void {
   const storage = `stillfail.width.${variable}`;
-  const set = (px: number | null) => {
-    if (px === null) {
-      document.documentElement.style.removeProperty(variable);
-      localStorage.removeItem(storage);
-    } else {
-      document.documentElement.style.setProperty(variable, `${px}px`);
-      localStorage.setItem(storage, String(px));
-    }
-  };
+  if (px === null) {
+    document.documentElement.style.removeProperty(variable);
+    localStorage.removeItem(storage);
+  } else {
+    document.documentElement.style.setProperty(variable, `${px}px`);
+    localStorage.setItem(storage, String(px));
+  }
+}
+
+export function ResizeHandle({ variable, edge, min, max, label }: { variable: string; edge: "left" | "right"; min: number; max: number; label: string }) {
+  const set = (px: number | null) => setKeptWidth(variable, px);
   // Each time its column comes (a chat's side panel opening).
   useEffect(() => { keptWidth(variable, min, max); }, [variable, min, max]);
-  const [tip, setTip] = useState<{ x: number; y: number } | null>(null);
+  const tip = usePointerTip();
   const [dragging, setDragging] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
-  const words = closed && toggle ? toggle.label : toggle ? `${label} · ${toggle.label}` : label;
   return (
     <>
-      <div className={className ? `${css.resizeHandle} ${className}` : css.resizeHandle} data-edge={edge} data-active={dragging || undefined}
-        role="separator" aria-orientation="vertical" aria-label={words} tabIndex={toggle ? 0 : undefined}
-        onKeyDown={(e) => { if (toggle && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggle.run(); } }}
-        onDoubleClick={() => { if (!toggle) set(null); }}
-        onPointerEnter={(e) => {
-          if (e.pointerType !== "mouse") return;
-          const at = { x: e.clientX, y: e.clientY };
-          clearTimeout(timer.current);
-          timer.current = setTimeout(() => setTip(at), 300);
-        }}
-        onPointerMove={(e) => { if (tip) setTip({ x: e.clientX, y: e.clientY }); }}
-        onPointerLeave={() => { clearTimeout(timer.current); setTip(null); }}
+      <div className={css.resizeHandle} data-edge={edge} data-active={dragging || undefined} role="separator" aria-orientation="vertical" aria-label={label}
+        {...tip.on}
+        onDoubleClick={() => set(null)}
         onPointerDown={(e) => {
-          if (e.button !== 0) return;
-          clearTimeout(timer.current);
-          setTip(null);
+          tip.hide();
           const column = e.currentTarget.parentElement!.getBoundingClientRect();
           const handle = e.currentTarget;
-          const from = e.clientX;
-          let moved = false;
           handle.setPointerCapture(e.pointerId);
+          setDragging(true);
+          document.body.dataset.resizing = "true";
           const move = (ev: PointerEvent) => {
-            if (closed) return;
-            if (!moved && Math.abs(ev.clientX - from) < 3) return;
-            if (!moved) { moved = true; setDragging(true); document.body.dataset.resizing = "true"; }
-            const width = (edge === "right" ? ev.clientX - column.left : column.right - ev.clientX) - offset;
+            const width = edge === "right" ? ev.clientX - column.left : column.right - ev.clientX;
             set(Math.round(Math.min(max, Math.max(min, width))));
           };
           const up = () => {
@@ -634,19 +615,43 @@ export function ResizeHandle({ variable, edge, min, max, label, offset = 0, togg
             handle.removeEventListener("pointerup", up);
             delete document.body.dataset.resizing;
             setDragging(false);
-            if (!moved) toggle?.run();
           };
           handle.addEventListener("pointermove", move);
           handle.addEventListener("pointerup", up);
           e.preventDefault();
         }} />
-      {tip && !dragging && onPage(
-        <div className={css.edgeTip} style={{ transform: `translate3d(${edge === "right" ? tip.x + 14 : tip.x - 14}px, ${tip.y}px, 0)` }} data-edge={edge} aria-hidden="true">
-          <div className={css.tooltip}>{words}</div>
-        </div>,
-      )}
+      {!dragging && tip.draw(label, edge === "right" ? "right" : "left")}
     </>
   );
+}
+
+/**
+ * A tip that follows the pointer along a tall thin thing (an edge): shown a moment after the pointer comes, beside it,
+ * its middle level with the pointer; `on` goes on the thing, `draw` where the tip is drawn.
+ */
+export function usePointerTip(): { on: { onPointerEnter(e: ReactPointerEvent): void; onPointerMove(e: ReactPointerEvent): void; onPointerLeave(): void }; hide(): void; draw(words: ReactNode, side: "left" | "right"): ReactNode } {
+  const [at, setAt] = useState<{ x: number; y: number } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const hide = () => { clearTimeout(timer.current); setAt(null); };
+  return {
+    on: {
+      onPointerEnter: (e) => {
+        if (e.pointerType !== "mouse" || e.buttons !== 0) return;
+        const where = { x: e.clientX, y: e.clientY };
+        clearTimeout(timer.current);
+        timer.current = setTimeout(() => setAt(where), 300);
+      },
+      onPointerMove: (e) => { if (at) setAt({ x: e.clientX, y: e.clientY }); },
+      onPointerLeave: hide,
+    },
+    hide,
+    draw: (words, side) => at && onPage(
+      <div className={css.edgeTip} style={{ transform: `translate3d(${side === "right" ? at.x + 14 : at.x - 14}px, ${at.y}px, 0)` }} data-edge={side} aria-hidden="true">
+        <div className={css.tooltip}>{words}</div>
+      </div>,
+    ),
+  };
 }
 
 /** Put on the page itself (a column cuts what is in it). */

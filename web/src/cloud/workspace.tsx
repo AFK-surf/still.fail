@@ -18,7 +18,7 @@ import { ConnectPage } from "../pages/Connect.tsx";
 import { DriveHome, DrivePage, DrivePlayPage, DriveReadPage } from "../pages/Drive.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList, StationTrouble, useGlassBands } from "../Sidebar.tsx";
-import { Rail, placeOf, railItems, type RailItem } from "../Rail.tsx";
+import { Rail, SidebarEdge, placeOf, railItems, type RailItem } from "../Rail.tsx";
 import { usePrefs } from "../prefs.ts";
 import * as railCss from "../Rail.css.ts";
 import { drivePath } from "../drive/useDrive.ts";
@@ -130,6 +130,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
           : <WorkspaceSidebar entry={entry} />}
         </div>
         <main className={shellCss.main}>
+          <SidebarEdge />
           <ComposerDock>
           <Routes>
             <Route index element={<WorkspaceHome id={entry.id} stations={known && stations} />} />

@@ -1,5 +1,6 @@
-// The rail at the wide screen's left, in one block with the sidebar (styles/shell.css.ts dock), whose right edge drags
-// the sidebar's width and, pressed, closes or opens it (no button for it; its shortcut still). In it the places the
+// The rail at the wide screen's left, in one block with the sidebar (styles/shell.css.ts dock), whose edge (SidebarEdge,
+// in the page's gutter by it) drags the sidebar's width and, pressed, closes or opens it (no button for it; its shortcut
+// still). In it the places the
 // person chose on this device (prefs `rail`, 外观's 侧边条: which, in what order; RAIL_DEFAULT when none was chosen):
 // 对话 and the lists of chats beside it (我参与的, 监控中, the archive), 奏 (the word, as the desktop has always had it,
 // a dot while some wait for the viewer), 待处理 (what wants them in every workspace), 文件, the stations' glyph, Profile,
@@ -15,7 +16,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType, 
 import { ContextMenu, Popover } from "radix-ui";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { Archive, Bell, Chart, Chats, Folder, Im, Minus, Plus, Quota, Settings, User, Watch, type IconProps } from "./icons.tsx";
-import { PanelGroup, PanelHead, PanelNote, PanelRow, ResizeHandle, Tip } from "./ui.tsx";
+import { keptWidth, PanelGroup, PanelHead, PanelNote, PanelRow, setKeptWidth, Tip, usePointerTip } from "./ui.tsx";
 import { lastChatOf, useLastChat, useWorkspaceMarks } from "./lastChat.ts";
 import { useSidebarMode, type SidebarMode } from "./station.tsx";
 import { AttentionEntry } from "./Attention.tsx";
@@ -208,9 +209,6 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
       <Tip label={t("web-pages.settings.title")} side="right">
         <NavLink className={css.item} to={settings} data-on={place === "settings" || (place !== "chats" && !items.includes(place as RailItem)) || undefined} aria-label={t("web-pages.settings.title")}><Settings size={20} /></NavLink>
       </Tip>
-      {/* The sidebar's edge, on the block's (styles/shell.css.ts dock): dragged, its width; pressed, it closes or opens. */}
-      <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} offset={56} className={css.edge} label={t("web-pages.workspace.resizeSidebar")}
-        toggle={{ label: sidebar.closed ? t("web-main.sidebar.open") : t("web-main.sidebar.close"), run: sidebar.toggle }} closed={sidebar.closed} />
     </nav>
   );
   return (
@@ -281,5 +279,69 @@ function RailWorkspaces({ scope, current }: { scope: string; current: ReactNode 
         );
       })}
     </div>
+  );
+}
+
+/** The sidebar's width, its least and most (the sidebar's own, styles' --sidebar-w). */
+const SIDEBAR = { min: 180, max: 480, own: 240 } as const;
+
+/**
+ * The sidebar's edge, as Cue's rail handle: a strip in the page's gutter by the sidebar's block (shell.css.ts dock), a
+ * short bar at its middle shown as the pointer is over the sidebar and longer on the strip itself. Dragged, the sidebar's
+ * width; pressed without moving, the sidebar closes, and by the closed bar, opens (its bar shown a second as the mouse
+ * moves anywhere). Its words follow the pointer along it.
+ */
+export function SidebarEdge() {
+  const sidebar = useSidebarToggle(undefined, { keys: false });
+  const tip = usePointerTip();
+  const [dragging, setDragging] = useState(false);
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => { keptWidth("--sidebar-w", SIDEBAR.min, SIDEBAR.max); }, []);
+  useEffect(() => {
+    const el = ref.current;
+    if (!sidebar.closed || !el) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const reveal = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return;
+      el.dataset.moving = "";
+      clearTimeout(timer);
+      timer = setTimeout(() => { delete el.dataset.moving; }, 1000);
+    };
+    window.addEventListener("pointermove", reveal, { passive: true });
+    return () => { window.removeEventListener("pointermove", reveal); clearTimeout(timer); delete el.dataset.moving; };
+  }, [sidebar.closed]);
+  const words = sidebar.closed ? t("web-main.sidebar.open") : `${t("web-pages.workspace.resizeSidebar")} · ${t("web-main.sidebar.close")}`;
+  return (
+    <>
+      <button ref={ref} type="button" className={css.edge} data-closed={sidebar.closed || undefined} data-active={dragging || undefined}
+        aria-label={words} aria-expanded={!sidebar.closed} {...tip.on}
+        // From the keyboard (no pointer): its press.
+        onClick={(e) => { if (e.detail === 0) sidebar.toggle(); }}
+        onPointerDown={(e) => {
+          if (e.button !== 0) return;
+          tip.hide();
+          const from = e.clientX;
+          const start = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sidebar-w")) || SIDEBAR.own;
+          const handle = e.currentTarget;
+          let moved = false;
+          handle.setPointerCapture(e.pointerId);
+          const move = (ev: PointerEvent) => {
+            if (sidebar.closed || (!moved && Math.abs(ev.clientX - from) < 3)) return;
+            if (!moved) { moved = true; setDragging(true); document.body.dataset.resizing = "true"; }
+            setKeptWidth("--sidebar-w", Math.round(Math.min(SIDEBAR.max, Math.max(SIDEBAR.min, start + ev.clientX - from))));
+          };
+          const up = () => {
+            handle.removeEventListener("pointermove", move);
+            handle.removeEventListener("pointerup", up);
+            delete document.body.dataset.resizing;
+            setDragging(false);
+            if (!moved) sidebar.toggle();
+          };
+          handle.addEventListener("pointermove", move);
+          handle.addEventListener("pointerup", up);
+          e.preventDefault();
+        }} />
+      {!dragging && tip.draw(words, "right")}
+    </>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useDark } from "./theme.ts";
 import type { AppUpdate } from "./core/client.ts";
@@ -94,11 +94,20 @@ function onPage(node: ReactNode): ReactNode {
 let moving = 0;
 
 /**
- * Opening and closing the sidebar (its shortcut too: one place on the page holds it), the page following as it moves;
- * `moved` is told where it goes as it starts.
+ * Opening and closing the sidebar (its shortcut too, unless `keys` is false: one place on the page holds it), the page
+ * following as it moves; `moved` is told where it goes as it starts.
  */
-export function useSidebarToggle(moved?: (closed: boolean) => void): { closed: boolean; toggle: () => void; label: string } {
-  const [closed, setClosed] = useState(() => document.documentElement.dataset.sidebar === "closed");
+/** Whether the sidebar is closed, as the page's root says: the same to everything reading it. */
+function useSidebarClosed(): boolean {
+  return useSyncExternalStore((changed) => {
+    const watch = new MutationObserver(changed);
+    watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-sidebar"] });
+    return () => watch.disconnect();
+  }, () => document.documentElement.dataset.sidebar === "closed", () => false);
+}
+
+export function useSidebarToggle(moved?: (closed: boolean) => void, { keys: owns = true }: { keys?: boolean } = {}): { closed: boolean; toggle: () => void; label: string } {
+  const closed = useSidebarClosed();
   const toggle = () => {
     const next = !closed;
     // It moves (and the sidebar with it, the page bars' room for it, 更新 by it) only now: resizing the sidebar follows
@@ -114,10 +123,10 @@ export function useSidebarToggle(moved?: (closed: boolean) => void): { closed: b
       ...moves(`.${css.sidebarUpdate}`, ["left", "transform"]),
       ...moves(`.${sidebarCss.pageBar}`, ["padding-left"]),
     ], () => closeSidebar(next)).then(() => { if (turn === moving) delete document.documentElement.dataset.sidebarMoving; });
-    setClosed(next);
     moved?.(next);
   };
-  useShortcut("sidebar.toggle", toggle);
+  // One place on the page holds the shortcut (the rail, or the buddy where there is none).
+  useShortcut("sidebar.toggle", owns ? toggle : null);
   useKeymap();
   const keys = shortcutOf("sidebar.toggle");
   return { closed, toggle, label: `${closed ? t("web-main.sidebar.open") : t("web-main.sidebar.close")}${keys ? `  ${keys}` : ""}` };
