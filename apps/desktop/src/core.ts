@@ -2,15 +2,16 @@
 // the TypeScript core on Node (client/core-ts, its hosts/node.ts bundled
 // beside this file as core-ts.js; docs/core-ts.md), with one MessagePort per
 // page, as the web's worker has one per tab (web/src/core/worker.ts). Pages
-// post messages as objects; the core takes JSON and answers JSON, which goes to
-// the page as it is. Its iroh is the native addon the station ships (mesh.node).
+// post messages as objects; the host restores selected file sources before the
+// core reads them. Answers are JSON. Its iroh is the station's addon (mesh.node).
 import { join } from "node:path";
 import type { MessagePortMain } from "electron";
+import type { CoreFiles as FilePort } from "../../../client/core-ts/src/hosts/file-port.ts";
 
 /** client/core-ts's Node start (the API the Rust core's Node addon had). */
 interface NodeCore {
   connect(): number;
-  receive(client: number, json: string): void;
+  receiveRaw(client: number, message: unknown): void;
   disconnect(client: number): void;
 }
 /** `channel`: "beta" for the beta app's core (main.ts BETA). */
@@ -18,7 +19,7 @@ type Start = (dataDir: string, cloudOrigin: string, listener: (client: number, j
 
 const [dataDir, cloudOrigin, mesh, channel] = process.argv.slice(2) as [string, string, string, string | undefined];
 process.env.STILLFAIL_MESH_NATIVE ??= mesh;
-const { start } = require(join(__dirname, "core-ts.js")) as { start: Start };
+const { start, CoreFiles } = require(join(__dirname, "core-ts.js")) as { start: Start; CoreFiles: new (send: (message: unknown) => void) => FilePort };
 
 /** One core and its clients. A panic ends a core; the pages then open new ports, which go to the next one. */
 interface Generation {
@@ -43,6 +44,7 @@ function begin(): Generation {
 let current = begin();
 
 function serve(port: MessagePortMain): void {
+  const files = new CoreFiles((message) => port.postMessage(message));
   // Connected on the first message, and again after a `bye` if the page comes back from the back/forward cache.
   let client: { generation: Generation; id: number } | null = null;
   const leave = () => {
@@ -52,6 +54,7 @@ function serve(port: MessagePortMain): void {
     client = null;
   };
   port.on("message", ({ data }) => {
+    if (files.receive(data)) return;
     if (typeof data === "object" && data !== null && "bye" in data) {
       leave();
       return;
@@ -60,10 +63,10 @@ function serve(port: MessagePortMain): void {
       client = { generation: current, id: current.core.connect() };
       current.clients.set(client.id, port);
     }
-    client.generation.core.receive(client.id, JSON.stringify(data));
+    client.generation.core.receiveRaw(client.id, files.prepare(data));
   });
   // The page closed or reloaded.
-  port.on("close", leave);
+  port.on("close", () => { files.close(); leave(); });
   port.start();
 }
 

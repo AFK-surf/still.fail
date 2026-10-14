@@ -17,6 +17,7 @@ import type { Topic } from "./protocol.ts";
 import { draftAt } from "./refs.ts";
 import { StationAddr } from "./station/addr.ts";
 import { isObject } from "./util.ts";
+import { FileSource } from "./file-source.ts";
 
 type J = any;
 
@@ -28,7 +29,7 @@ export type ComposerQuote = { id: string; author: string; text: string; comment:
 export type ComposerFile = { id: string; name: string; size: number; sent?: number; done: J | null; error: string | null; pasted?: J };
 
 /// A file handed to the core to send up: the page's id for it, the file itself.
-export type FileIn = { id: string; name: string; size: number; blob: Blob; pasted?: J };
+export type FileIn = { id: string; name: string; size: number; blob: Blob | FileSource; pasted?: J };
 
 type State = {
   /// The words as typed (what the page last said, or the core's own).
@@ -180,6 +181,7 @@ export class Composers {
       const tooBig = f.size > MAX_FILE;
       s.files = [...s.files, { id: f.id, name: f.name, size: f.size, done: null, error: tooBig ? t("core-misc.composer.too_big") : null, ...(f.pasted ? { pasted: f.pasted } : {}) }];
       if (!tooBig) this.#upload(key, station, f);
+      else if (f.blob instanceof FileSource) f.blob.close();
     }
     return this.#changed(key, s);
   }
@@ -207,7 +209,7 @@ export class Composers {
       let have = 0;
       let saved: J;
       while (saved === undefined) {
-        const bytes = new Uint8Array(yield* Effect.promise(() => f.blob.slice(have, have + PART).arrayBuffer()));
+        const bytes = new Uint8Array(yield* Effect.tryPromise({ try: () => f.blob.slice(have, have + PART).arrayBuffer(), catch: asCoreError }));
         const told = yield* inner.stations.requests.uploadPart(addr, { id, name: f.name, size: f.size, offset: have }, bytes, null);
         if (told.file !== undefined) saved = told.file;
         else if (told.have === have) return yield* Effect.fail(new CoreError("upload", t("core-misc.composer.upload_failed")));
@@ -215,14 +217,16 @@ export class Composers {
         change({ sent: told.file !== undefined ? f.size : have });
       }
       // An image's size travels with it, so every page can hold its place before it loads.
-      if (f.blob.type.startsWith("image/") && typeof createImageBitmap === "function") {
-        const size = yield* Effect.promise(() => createImageBitmap(f.blob).then((b) => { const s = { width: b.width, height: b.height }; b.close(); return s; }, () => null));
+      const blob = f.blob;
+      if (blob instanceof Blob && blob.type.startsWith("image/") && typeof createImageBitmap === "function") {
+        const size = yield* Effect.promise(() => createImageBitmap(blob).then((b) => { const s = { width: b.width, height: b.height }; b.close(); return s; }, () => null));
         if (size) saved = { ...saved, ...size };
       }
       return saved;
     });
     inner.runner.fork(
       run.pipe(
+        Effect.ensuring(Effect.sync(() => { if (f.blob instanceof FileSource) f.blob.close(); })),
         Effect.match({
           onSuccess: (done) => change({ done }),
           onFailure: (e) => change({ error: e.message || t("core-misc.composer.upload_failed") }),
@@ -335,7 +339,7 @@ export function parseComposer(name: string, params: unknown): Call | null {
     case "add": {
       const files = Array.isArray(p.files) ? p.files : [];
       const list = files.map((f: J) => {
-        if (!isObject(f) || typeof (f as J).id !== "string" || !((f as J).blob instanceof Blob)) throw CoreError.invalid(t("core-misc.params.missing", { field: "files" }));
+        if (!isObject(f) || typeof (f as J).id !== "string" || !((f as J).blob instanceof Blob || (f as J).blob instanceof FileSource)) throw CoreError.invalid(t("core-misc.params.missing", { field: "files" }));
         const x = f as J;
         return { id: x.id, name: typeof x.name === "string" ? x.name : x.blob.name ?? "", size: typeof x.size === "number" ? x.size : x.blob.size, blob: x.blob, ...(isObject(x.pasted) ? { pasted: x.pasted } : {}) } as FileIn;
       });

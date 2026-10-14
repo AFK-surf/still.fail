@@ -25,6 +25,7 @@ import { SOCKET_PING, SOCKET_PING_MS, type TcpConnection, type DbRange, type Hos
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { service } from "../trace.ts";
 import { t } from "../i18n.ts";
+export { CoreFiles } from "./file-port.ts";
 
 export type Listener = (client: ClientId, json: string) => void;
 
@@ -339,6 +340,9 @@ export function start(dataDir: string, cloudOrigin: string, listener: Listener, 
     },
     receive(client: number, json: string): void {
       later((core) => core.receiveJson(client, json));
+    },
+    receiveRaw(client: number, message: unknown): void {
+      later((core) => core.receiveRaw(client, message));
     },
     disconnect(client: number): void {
       clients.delete(client);

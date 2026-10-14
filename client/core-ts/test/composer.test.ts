@@ -6,8 +6,41 @@ import { Effect } from "effect";
 import { dbName, SOON_MS } from "../src/data.ts";
 import { apply, call, subscribe, v } from "./helpers.ts";
 import { started } from "./station-fixture.ts";
+import { CoreFiles, PageFiles } from "../src/hosts/file-port.ts";
 
 type J = any;
+
+test("desktop_files_reach_upload_and_release_the_page_file_on_success_or_read_failure", async () => {
+  const t = await setup();
+  const received: number[][] = [];
+  const released: number[] = [];
+  const page = new PageFiles((m) => bridge.receive(structuredClone(m)));
+  const bridge = new CoreFiles((m) => {
+    if ((m as J).filePort === "release") released.push((m as J).file);
+    page.receive(structuredClone(m));
+  });
+  (t.core.inner.stations.requests as J).uploadPart = (_addr: unknown, q: J, bytes: Uint8Array) => {
+    received.push([...bytes]);
+    return Effect.succeed({ have: bytes.length, file: { name: q.name, path: "/u/image.png", size: bytes.length } });
+  };
+  await t.watch(1, "ws/st:k");
+  const send = (id: number) => {
+    const message = { id, call: "composer.add", params: { key: "ws/st:k", station: "ws/st", files: [{ id: `f${id}`, name: "image.png", size: 3, blob: new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" }) }] } };
+    t.core.receiveRaw(t.ui, bridge.prepare(structuredClone(page.prepare(message))));
+  };
+  send(101);
+  await t.settle();
+  assert.deepEqual(received, [[1, 2, 3]]);
+  assert.equal(v(t.values, 1).files[0].done.path, "/u/image.png");
+  assert.equal(v(t.values, 1).uploading, false);
+  send(102);
+  page.close();
+  await t.settle();
+  assert.match(v(t.values, 1).files[1].error, /no longer available/);
+  assert.equal(v(t.values, 1).uploading, false);
+  assert.deepEqual(released, [1, 2]);
+  bridge.close(); t.core.close();
+});
 
 async function setup() {
   const s = await started();
