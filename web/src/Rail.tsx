@@ -1,10 +1,11 @@
-// The rail at the wide screen's left, of the sidebar's own ground: the workspace's places as icons, 对话, 奏 (with how
-// many wait for the viewer), 文件 and the stations' glyph, and at its foot the settings and the workspace's switcher.
+// The rail at the wide screen's left, of the sidebar's own ground: the workspace's places as icons, 对话, 奏 (the word,
+// as the desktop has always had it, with how many wait for the viewer), 文件 and the stations' glyph, and at its foot
+// the settings and the workspace's switcher.
 // Each place is what the sidebar beside it shows: the chats (or 奏, one of their lists), the folders the stations lend
 // (FilesNav, cloud/workspace.tsx), the settings. On a narrow screen there is none: the sidebar's foot keeps them.
 import type { ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
-import { Chats, Folder, Settings, Zou } from "./icons.tsx";
+import { Chats, Folder, Settings } from "./icons.tsx";
 import { Tip } from "./ui.tsx";
 import { useLastChat, useWorkspaceMarks } from "./lastChat.ts";
 import { useSidebarMode } from "./station.tsx";
@@ -43,7 +44,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
       <Tip label={waiting > 0 ? t("web-main.decisions.entry", { n: waiting }) : t("web-main.rail.decisions")} side="right">
         <button type="button" className={css.item} data-on={decisions || undefined} aria-label={t("web-main.rail.decisions")}
           onClick={(e) => { openedAt(e.currentTarget); setMode("decisions"); navigate(`/w/${scope}/decisions`); }}>
-          <Zou size={20} />
+          <span className={css.zou} aria-hidden="true">奏</span>
           {waiting > 0 && <span className={css.count}>{waiting > 99 ? "99+" : waiting}</span>}
         </button>
       </Tip>

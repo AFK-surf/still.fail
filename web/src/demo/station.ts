@@ -4,7 +4,7 @@
 // 0: they are moved to now here.
 import data from "./station.json";
 import { CHEN, LIN, stamp, STATION, ZHOU, type Runs } from "./fixtures.ts";
-import type { ArchiveDay, ArchiveView, Connect, ConnectsView, Person } from "../core/shapes.ts";
+import type { ArchiveDay, ArchiveView, Connect, ConnectsView, DriveEntry, DriveFolder, DriveKind, Person } from "../core/shapes.ts";
 
 const TIME = /^(at|checkedAt|resetsAt|startedAt|createdAt|endedAt|lastActiveAt|updatedAt)$/;
 
@@ -32,13 +32,48 @@ function subscription(base: Record<string, unknown>) {
 export const overview = () => {
   const base = now(data.overview);
   return {
-    ...base, connects: [slack()],
+    ...base, connects: [slack()], drive: DRIVE,
     // The station's own Claude Code login is the subscription's profile, not offered again.
     machineLogins: base.machineLogins.filter((l) => l.runtime !== "claude"),
     profiles: [subscription(base.profiles[0]!)],
   };
 };
 export const host = () => now(data.host);
+
+/** The folders the station lends (docs/drive.md), its downloads with what the chats made in them. */
+const DRIVE = { roots: [
+  { path: "/Users/lin/Downloads", name: "下载", state: "ok" as const },
+  { path: "/Users/lin/code/acme", name: "acme", state: "ok" as const },
+  { path: "/Users/lin/Desktop", name: "桌面", state: "ok" as const },
+] };
+type Made = [name: string, kind: DriveKind, size: number, minutes: number];
+const FOLDERS: Record<string, Made[]> = {
+  "/Users/lin/Downloads": [
+    ["设计稿", "folder", 0, 40], ["login-375.png", "image", 319_488, 52], ["发版录屏 1014.mp4", "video", 50_541_773, 175],
+    ["orders-慢查询.md", "markdown", 9_216, 240], ["export-1013.csv", "csv", 225_280, 1_500], ["合同-2026Q4.pdf", "pdf", 1_468_006, 1_380],
+    ["IMG_2041.HEIC", "image", 3_250_585, 2_900],
+  ],
+  "/Users/lin/code/acme": [["web", "folder", 0, 30], ["api", "folder", 0, 90], ["README.md", "markdown", 4_096, 600], ["package.json", "code", 2_048, 600]],
+  "/Users/lin/Desktop": [["截图 10-14.png", "image", 812_000, 300]],
+};
+const TYPES: Partial<Record<DriveKind, string>> = { image: "image/png", video: "video/mp4", markdown: "text/markdown", csv: "text/csv", pdf: "application/pdf", code: "application/json" };
+
+/** A folder lent, as the core shows it (client/core-ts/src/drive.ts): its folders first. */
+export function driveFolder(root: string, path: string): DriveFolder {
+  const at = Date.now();
+  const entries = path ? [] : (FOLDERS[root] ?? []).map(([name, kind, size, minutes]): DriveEntry => {
+    const mtime = at - minutes * 60_000;
+    const d = new Date(mtime);
+    const today = new Date(at).toDateString() === d.toDateString();
+    return {
+      name, dir: kind === "folder", size, mtime, type: TYPES[kind] ?? "", kind,
+      sizeText: kind === "folder" ? "" : size >= 1_048_576 ? `${(size / 1_048_576).toFixed(1)} MB` : `${Math.round(size / 1024)} KB`,
+      timeText: today ? d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : `${d.getMonth() + 1}/${d.getDate()}`,
+    };
+  });
+  const folders = entries.filter((e) => e.dir).length;
+  return { path, entries, folders, files: entries.length - folders, countText: `${folders} 个文件夹 · ${entries.length - folders} 个文件` };
+}
 export const stationView = () => {
   const base = now(data.station);
   return { ...base, station: STATION, overview: overview() };

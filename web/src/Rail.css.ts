@@ -28,6 +28,8 @@ export const item = style({
     "&[data-on]": { background: vars.selected, color: vars.text },
   },
 });
+/** 奏, the word, its size the icons' (vars.textTitle is the nearest of the type sizes). */
+export const zou = style({ fontSize: vars.textTitle, lineHeight: "20px", fontWeight: 600 });
 /** What waits on a place: a count on the icon's corner, cut out of the rail's ground. */
 export const count = style({
   position: "absolute", top: 2, right: 0, minWidth: 16, height: 16, padding: "0 4px", boxSizing: "border-box", borderRadius: 8,

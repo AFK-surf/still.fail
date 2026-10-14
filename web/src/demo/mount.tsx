@@ -54,6 +54,8 @@ function valueOf(topic: Topic): unknown {
     case "connects": return station.connects();
     case "stations": return [station.stationView()];
     case "archive": return station.archive();
+    case "drive": return station.driveFolder(topic.root, topic.path);
+    case "drivePlace": return null;
     // What the core puts together of them (client/core-ts/src/choose.ts), as a new chat and a model control start.
     case "newChat": return newChatView();
     case "pick": return pickView(topic.of);
