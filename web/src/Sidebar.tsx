@@ -137,6 +137,22 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
 }
 
 /**
+ * The stations in the rail (Rail.tsx): their glyph, what the foot's line would say on hover, leading to the stations.
+ */
+export function RailStations({ scope, to, on, className }: { scope: string; to: string; on: boolean; className: string }) {
+  const view = useTopicSelect<ChatsView, ChatsView | undefined>(chatsTopic(scope, "all"), (s) => s.value,
+    (a, b) => a?.stations === b?.stations && a?.glyph === b?.glyph && a?.trouble === b?.trouble);
+  const status = useStatus(scope);
+  const counts = glyphCounts(view, status?.state === "trouble");
+  const label = view?.trouble?.text ?? (status?.state ? status.text : undefined) ?? view?.glyph?.summary ?? "Station";
+  return (
+    <Tip label={label} side="right">
+      <NavLink className={className} to={to} data-on={on || undefined} aria-label={`Station：${label}`}><StationGlyph counts={counts} size={20} /></NavLink>
+    </Tip>
+  );
+}
+
+/**
  * 奏 N in the sidebar's foot, by the stations: the decisions waiting for the viewer in the workspace (the core's
  * `decisions` count), leading to their page. Nothing while there are none (or from a core before them).
  */

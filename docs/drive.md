@@ -68,3 +68,10 @@ part that leaves a gap is refused `upload_lost` with `have`, where to go on from
   of?}`.
 - A station from before the drive has no `drive` in its overview: the clients
   offer nothing for it.
+
+## Clients
+
+On a wide screen the rail's 文件 (web/src/Rail.tsx) goes to `/w/<ws>/files`,
+which opens the first station lending folders; the sidebar beside the drive's
+pages lists every station's folders under its name. The phone reaches a drive
+from its station's page.

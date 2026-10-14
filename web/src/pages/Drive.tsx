@@ -1,5 +1,6 @@
-// A station's drive on a wide screen (docs/drive.md), at `/w/<ws>/s/<station>/files` (opened from the station's card in
-// settings, the card over its name in a chat, or ⌘K): the folders it lends, a folder's entries in a list (its mark,
+// A station's drive on a wide screen (docs/drive.md), at `/w/<ws>/s/<station>/files` (opened from the rail's 文件 and
+// its sidebar of the stations' folders, the station's card in settings, the card over its name in a chat, or ⌘K), as
+// wide as the page: the folders it lends, a folder's entries in a list (its mark,
 // name, size, time), the path above as a trail back. With a mouse: a click opens, the row's … (on hover) or a right
 // click gives what can be done to it, files dropped on the list go up into the folder shown, ⌘/Ctrl+U puts files up.
 // The reader and the player are pages of their own (`files/read`, `files/play`); images, PDFs and code open in the
@@ -36,7 +37,7 @@ export function DrivePage() {
   const only = d.roots.length === 1 && d.roots[0]!.state === "ok" ? d.roots[0]!.path : null;
   const root = asked ?? only;
   return (
-    <div className={`${pagesCss.page} ${pagesCss.pageNarrow} ${css.page}`}>
+    <div className={`${pagesCss.page} ${css.page}`}>
       {d.loading || !d.offered || root === null ? <Roots d={d} /> : <FolderView d={d} root={root} path={path} />}
     </div>
   );

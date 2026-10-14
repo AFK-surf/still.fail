@@ -36,9 +36,13 @@ export const brand = style({
     // (apps/desktop/src/main.ts puts them in it), the buddy beside them; on Windows they are at the page's right.
     "[data-desktop] &": { height: 44, WebkitAppRegion: "drag" },
     '[data-desktop="inset"] &': { paddingLeft: 86 },
+    // Beside the rail (Rail.css.ts), the window's buttons reach over it into this row.
+    '[data-desktop="inset"] [data-rail] &': { paddingLeft: 30 },
     // Full screen, the window's buttons are gone.
     '[data-desktop="inset"][data-fullscreen] &': { paddingLeft: 16 },
   },
+  // No rail on a narrow window: the buttons are all in this row.
+  "@media": { [narrow]: { selectors: { '[data-desktop="inset"] [data-rail] &': { paddingLeft: 86 } } } },
 });
 /** 云端侧边栏：lockup 在 workspace 切换器上方（always with `brand`, whose desktop top row still wins） */
 export const brandCompact = style({ height: 48, padding: "0 16px" });
@@ -214,6 +218,8 @@ globalStyle(`${stationTrouble}[role="status"]:hover`, { background: "transparent
 /** The stations' row and, while down, 重试 at its end (a button, so beside the link, not in it). */
 export const stationRow = style({ position: "relative", marginBottom: 4 });
 globalStyle(`${stationRow} > ${stationTrouble}`, { marginBottom: 0 });
+// Beside the rail, whose glyph says how the stations are (Rail.tsx), the line is there only for what is wrong.
+globalStyle(`${stationRow}:not(:has(> ${stationTrouble}[data-state], > * > ${stationTrouble}[data-state]))`, { "@media": { [wide]: { display: "none" } } });
 globalStyle(`${stationRow} > ${stationTrouble}[data-retry]`, { paddingRight: 64 });
 export const waitingRetry = style({
   flex: "none", height: 22, padding: "0 10px", marginRight: -4, borderRadius: 999, border: 0, cursor: "pointer",

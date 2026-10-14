@@ -18,6 +18,10 @@ import { ConnectPage } from "../pages/Connect.tsx";
 import { DrivePage, DrivePlayPage, DriveReadPage } from "../pages/Drive.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList, StationTrouble, useGlassBands } from "../Sidebar.tsx";
+import { Rail, placeOf } from "../Rail.tsx";
+import * as railCss from "../Rail.css.ts";
+import { drivePath } from "../drive/useDrive.ts";
+import { Folder } from "../icons.tsx";
 import { AttentionEntry } from "../Attention.tsx";
 import { DecisionDeskProvider, DecisionPage } from "../DecisionDesk.tsx";
 import { MarkCounts } from "../ChatMark.tsx";
@@ -78,7 +82,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
   const stations = useStationList(known, entry.id) ?? NO_STATIONS;
   const path = useLocation().pathname;
   const navigate = useGo();
-  const detail = /\/(s\/[^/]+\/.+|settings|new$|archive$|decisions$)/.test(path);
+  const detail = /\/(s\/[^/]+\/.+|settings|new$|archive$|decisions$|files$)/.test(path);
   // Settings, a connect or a station's runtime accounts: the sidebar becomes the settings menu.
   const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path);
   // 奏: the page of the decision picked in the sidebar's 奏 (DecisionDesk.tsx); come to it any way, the sidebar shows 奏.
@@ -106,11 +110,13 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
     <WorkspacePeople id={entry.id}>
       <DecisionDeskProvider workspace={entry.id}>
       <WorkspaceKept entry={entry} />
-      <div className={shellCss.shell} data-detail={detail}>
+      <div className={shellCss.shell} data-detail={detail} data-rail="">
 
         <GlobalShortcuts scope={entry.id} newChat={`/w/${entry.id}/new`} settings={`/w/${entry.id}/settings`} />
+        <Rail scope={entry.id} workspace={<WorkspaceSwitcher current={entry} compact />} />
         {settings
-          ? <nav className={nav.sidebar} aria-label={t("web-pages.settings.title")}><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} /><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><WebUpdate /><WorkspaceSwitcher current={entry} /></div></nav>
+          ? <nav className={nav.sidebar} aria-label={t("web-pages.settings.title")}><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} /><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><WebUpdate /><div className={railCss.narrowOnly}><WorkspaceSwitcher current={entry} /></div></div></nav>
+          : placeOf(path) === "files" ? <FilesSidebar entry={entry} />
           : <WorkspaceSidebar entry={entry} />}
         <main className={shellCss.main}>
           <ComposerDock>
@@ -144,6 +150,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
             <Route path="settings/stations/:station/footprint" element={<Navigate to={`/w/${entry.id}/settings/stations`} replace />} />
             <Route path="settings/leave" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
             <Route path="s/:station/*" element={<StationPages stations={known && stations} />} />
+            <Route path="files" element={<FilesHome id={entry.id} stations={known && stations} />} />
             <Route path="archive" element={<ArchivePage scope={entry.id} back={`/w/${entry.id}`} />} />
             <Route path="decisions" element={<DecisionPage onOpen={(to) => navigate(to)} />} />
             <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, session) => toMadeChat(() => navigate(`${stationBase(station)}/chats/${encodeURIComponent(session)}`))} />} />
@@ -283,7 +290,7 @@ function WorkspaceSidebarFooter({ entry }: { entry: WorkspaceEntry }) {
           <StationTrouble scope={entry.id} to={`/w/${entry.id}/settings/stations`} />
           <OpenJobsChip scope={entry.id} />
         </div>
-        <div className={nav.navFootRow}>
+        <div className={`${nav.navFootRow} ${railCss.narrowOnly}`}>
           <WorkspaceSwitcher current={entry} />
           <Tip label={t("web-pages.settings.title")} side="top"><NavLink className={pagesCss.iconBtn} to={`/w/${entry.id}/settings`} aria-label={t("web-pages.settings.title")}><Settings {...ICON} /></NavLink></Tip>
         </div>
@@ -291,8 +298,58 @@ function WorkspaceSidebarFooter({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
+/** The sidebar while in the files (Rail.tsx): the folders each station lends, under its name. */
+function FilesSidebar({ entry }: { entry: WorkspaceEntry }) {
+  return (
+    <nav ref={useGlassBands()} className={nav.sidebar} aria-label={t("web-pages.drive.title")}>
+      <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} />
+      <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>
+      <FilesNav scope={entry.id} />
+      <WorkspaceSidebarFooter entry={entry} />
+    </nav>
+  );
+}
+
+/** Each station with a drive (docs/drive.md), online or not, and the folders it lends: one opens the folder's page. */
+function FilesNav({ scope }: { scope: string }) {
+  const stations = useStations(scope).value ?? [];
+  const where = useLocation();
+  const root = new URLSearchParams(where.search).get("root");
+  const lending = stations.filter((s) => s.overview?.drive);
+  return (
+    <div className={nav.navScroll}>
+      {lending.length === 0 && <p className={nav.navEmpty}>{t("web-main.rail.filesNone")}</p>}
+      {lending.map((s) => {
+        const base = stationBase(s.station);
+        const roots = s.overview?.drive?.roots ?? [];
+        const here = where.pathname.startsWith(`${base}/files`);
+        return (
+          <div key={s.station}>
+            <NavLink className={railCss.station} to={drivePath(base, null)}><span className={railCss.dot} data-online={s.online || undefined} />{s.name}</NavLink>
+            {roots.map((r) => (
+              <NavLink key={r.path} className={nav.navRow} to={drivePath(base, r.path)}
+                aria-current={here && (root === r.path || (!root && roots.length === 1)) ? "page" : undefined}>
+                <Folder {...ICON} /><span className={nav.navText}>{r.name}</span>
+              </NavLink>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** 文件 in the rail: the first station that lends folders, its page (one folder: that folder). */
+function FilesHome({ id, stations }: { id: string; stations: Station[] | undefined }) {
+  const views = useStations(id).value;
+  if (!stations || !views) return <Loading label={t("web-pages.drive.reading")} />;
+  const first = views.find((s) => s.overview?.drive?.roots.length) ?? views.find((s) => s.overview?.drive);
+  if (first) return <Navigate to={drivePath(stationBase(first.station), null)} replace />;
+  return <Empty><Illustration name="no-station" /><p>{t("web-main.rail.filesNone")}</p></Empty>;
+}
+
 /** At the sidebar's foot: the workspace in view, which account it belongs to, and the others. */
-function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
+function WorkspaceSwitcher({ current, compact }: { current: WorkspaceEntry; compact?: boolean }) {
   const byAccount = useWorkspaces().value ?? [];
   const list = useAccounts() ?? [];
   const navigate = useNavigate();
@@ -333,6 +390,14 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
     <>
       <DropdownMenu.Root modal={false}>
         <DropdownMenu.Trigger asChild>
+          {compact ? (
+            <button type="button" className={railCss.workspace} aria-label={current.name} title={current.name}>
+              {[...current.name.trim()][0]?.toUpperCase() ?? "·"}
+              {(othersTone || pending.length > 0) && <span className={railCss.mark}>{othersTone
+                ? <span className={chatMarkCss.chatMarkInline} data-tone={othersTone} role="img" aria-label={marks?.othersLabel ?? ""} />
+                : <span className={css.inviteDot} role="img" aria-label={t("web-pages.workspace.invitationsCount", { n: pending.length })} />}</span>}
+            </button>
+          ) : (
           <button type="button" className={css.accountTrigger}>
             <span className={css.accountText}>
               <span className={css.accountName}>{current.name}</span>
@@ -344,9 +409,10 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
               ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner} ${css.accountSpinner}`} role="status" aria-label={signIn.busy ? t("web-pages.workspace.openingSignIn") : t("web-pages.workspace.answering")} />
               : <ChevronsUpDown {...ICON} size={14} />}
           </button>
+          )}
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
-          <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${css.accountMenu}`} side="top" align="start" sideOffset={6}>
+          <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${css.accountMenu}`} side={compact ? "right" : "top"} align={compact ? "end" : "start"} sideOffset={compact ? 10 : 6}>
             {/* Seldom done: a line of small words atop, the list nearest the trigger it opens from; not rows to land on when reaching for a workspace. */}
             <div className={css.menuRare}>
               <DropdownMenu.Item className={css.menuRareItem} onSelect={() => setCreating(true)}><span className={css.menuRareIcon}><Plus {...ICON} size={13} /></span>{t("web-pages.workspace.create")}</DropdownMenu.Item>

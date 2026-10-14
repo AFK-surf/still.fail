@@ -11,6 +11,9 @@ export const shell = style({
       gridTemplateColumns: "var(--sidebar-w, 240px) minmax(0, 1fr)",
       selectors: {
         "[data-sidebar=\"closed\"] &": { gridTemplateColumns: "0px minmax(0, 1fr)" },
+        // A workspace's: the rail (Rail.tsx) first, then the sidebar beside it, which closes to nothing; the rail stays.
+        "&[data-rail]": { gridTemplateColumns: "56px var(--sidebar-w, 240px) minmax(0, 1fr)" },
+        "[data-sidebar=\"closed\"] &[data-rail]": { gridTemplateColumns: "56px 0px minmax(0, 1fr)" },
       },
     },
   },

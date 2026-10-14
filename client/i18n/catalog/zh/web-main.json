@@ -635,5 +635,9 @@
   "web-main.composer.removePaste": "删除粘贴片段",
   "web-main.composer.pasteUploading": "正在上传粘贴的文字…",
   "web-main.composer.pasteAttachment": "文字附件 · {count} 字符",
-  "web-main.composer.retryPaste": "重试上传"
+  "web-main.composer.retryPaste": "重试上传",
+  "web-main.rail.label": "主导航",
+  "web-main.rail.chats": "对话",
+  "web-main.rail.decisions": "奏",
+  "web-main.rail.filesNone": "还没有 station 借出文件夹"
 }
