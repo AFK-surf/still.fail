@@ -78,7 +78,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -146,7 +149,7 @@ private val Ink = Color(0xFFF4F4F5)
 private val Muted = Color.White.copy(alpha = 0.6f)
 
 /** The speeds offered, slowest first. */
-private val SPEEDS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+private val SPEEDS = listOf(1f, 1.25f, 1.5f, 2f, 0.5f, 0.75f)
 /** What a double tap on a side jumps. */
 private const val NUDGE_MS = 15_000L
 /** The controls fade after this long left alone while it plays. */
@@ -366,36 +369,47 @@ fun PlayerScreen(station: String, root: String, path: String) {
         }
         note?.let { Text(it, fontSize = 14.sp, color = Ink, modifier = Modifier.align(Alignment.Center).padding(bottom = 120.dp).background(Color.Black.copy(alpha = 0.55f), Smooth(12.dp)).padding(horizontal = 16.dp, vertical = 9.dp)) }
 
-        // The bar at the top: back, the name, the folder's others.
+        // The bar at the top: back, the name, which of the folder's it is (as the phone web's).
         val insets = WindowInsets.statusBars.union(WindowInsets.displayCutout)
+        val index = list.indexOf(name)
         Row(
             Modifier.align(Alignment.TopCenter).windowInsetsPadding(insets).padding(horizontal = 8.dp, vertical = 6.dp).fillMaxWidth().alpha(shown)
-                .glass(haze, Smooth(16.dp)).height(48.dp).padding(horizontal = 4.dp),
+                .glass(haze, Smooth(16.dp)).height(48.dp).padding(start = 4.dp, end = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Key(Icons.ChevronLeft, t("common.back"), enabled = shown > 0f) { if (sideways) sideways = false else app.pop() }
-            Text(name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(horizontal = 4.dp))
-            if (list.size > 1) Key(Icons.List, t("android-misc.drive.player.folder"), enabled = shown > 0f) { wake(); openPlaylist(app, list, name) { open(it) } }
+            Text(name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).padding(horizontal = 4.dp))
+            if (list.size > 1 && index >= 0) Text("${index + 1} / ${list.size}", fontSize = 12.sp, color = Muted, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.padding(start = 4.dp))
         }
-        // The controls at the foot: where it is (what is buffered beyond it), then play, the time, and the rest.
+        // The controls at the foot: the time over where it is (and what is buffered beyond it); the one before, 15 s back,
+        // play, 15 s on, the one after; the speed, the subtitle, sideways.
+        val prev = if (index > 0) list[index - 1] else null
         Column(
             Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.displayCutout)).padding(horizontal = 8.dp, vertical = 8.dp)
                 .widthIn(max = 720.dp).fillMaxWidth().alpha(shown).glass(haze, Smooth(20.dp))
                 .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false); wake() } }
-                .padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                .padding(start = 6.dp, end = 6.dp, top = 8.dp, bottom = 4.dp),
         ) {
+            Text(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(color = Ink, fontWeight = FontWeight.SemiBold)) { append(clock(position)) }
+                    append(" / ${if (duration > 0) clock(duration) else "--:--"}")
+                },
+                fontSize = 12.sp, color = Muted, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.padding(start = 10.dp),
+            )
             Timeline(position, duration, buffered, enabled = shown > 0f) { player.seekTo(it); wake() }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                if (list.size > 1) Key(Icons.SkipBack, t("android-misc.drive.player.prev"), enabled = shown > 0f && prev != null) { prev?.let { open(it) } }
+                Key(Icons.Back15, t("android-misc.drive.player.back15"), enabled = shown > 0f) { seekBy(-NUDGE_MS); wake() }
                 Key(if (phase == Phase.Playing || phase == Phase.Buffering) Icons.Pause else Icons.Play, if (playing) t("android-chat.video.pause") else t("android-chat.video.play"), enabled = shown > 0f) { playPause(); wake() }
-                if (next != null) Key(Icons.SkipForward, t("android-misc.drive.player.next"), enabled = shown > 0f) { open(next) }
-                Text(
-                    "${clock(position)} / ${if (duration > 0) clock(duration) else "--:--"}", fontSize = 12.sp, color = Muted, maxLines = 1,
-                    style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.padding(start = 6.dp).weight(1f),
-                )
-                SpeedKey(app, speed, enabled = shown > 0f) { speed = it; wake() }
+                Key(Icons.Forward15, t("android-misc.drive.player.forward15"), enabled = shown > 0f) { seekBy(NUDGE_MS); wake() }
+                if (list.size > 1) Key(Icons.SkipForward, t("android-misc.drive.player.next"), enabled = shown > 0f && next != null) { next?.let { open(it) } }
+                Spacer(Modifier.weight(1f))
+                SpeedKey(speed, enabled = shown > 0f) { speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.size]; wake() }
                 if (subtitle != null) Key(Icons.Captions, if (subtitlesOn) t("android-misc.drive.player.subtitlesOff") else t("android-misc.drive.player.subtitlesOn"), pressed = subtitlesOn, enabled = shown > 0f) { subtitlesOn = !subtitlesOn; wake() }
-                if (!audio) Key(Icons.Expand, if (fill) t("android-misc.drive.player.fit") else t("android-misc.drive.player.fill"), pressed = fill, enabled = shown > 0f) { fill = !fill; wake() }
-                if (!audio) Key(Icons.Landscape, if (sideways) t("android-chat.video.landscape.exit") else t("android-chat.video.landscape"), pressed = sideways, enabled = shown > 0f) { sideways = !sideways; wake() }
+                // Turned sideways the picture can fill the screen (cropped) or fit in it.
+                if (!audio && sideways) Key(if (fill) Icons.Shrink else Icons.Expand, if (fill) t("android-misc.drive.player.fit") else t("android-misc.drive.player.fill"), pressed = fill, enabled = shown > 0f) { fill = !fill; wake() }
+                if (!audio) Key(Icons.Landscape, if (sideways) t("android-misc.drive.player.unfull") else t("android-misc.drive.player.full"), pressed = sideways, enabled = shown > 0f) { sideways = !sideways; wake() }
             }
         }
     }
@@ -474,14 +488,13 @@ private fun Key(icon: ImageVector, label: String, pressed: Boolean = false, enab
     ) { IconIn(icon, 20.dp, Ink) }
 }
 
-/** The speed, as a figure; tapped, the speeds to pick from. */
+/** The speed, as a figure; a tap goes to the next (1×, 1.25×, 1.5×, 2×, 0.5×, 0.75×, as the phone web's). */
 @Composable
-private fun SpeedKey(app: AppState, speed: Float, enabled: Boolean, pick: (Float) -> Unit) {
-    var at by remember { mutableStateOf(Rect.Zero) }
+private fun SpeedKey(speed: Float, enabled: Boolean, next: () -> Unit) {
     Box(
-        Modifier.onGloballyPositioned { at = it.boundsInRoot() }.height(30.dp).widthIn(min = 44.dp).clip(Smooth(10.dp))
+        Modifier.height(30.dp).widthIn(min = 44.dp).clip(Smooth(10.dp))
             .background(if (speed != 1f) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.06f))
-            .clickable(enabled = enabled) { app.menu = MenuSpec(at, SPEEDS.map { s -> MenuItem(speedLabel(s), if (s == speed) Icons.Check else null) { pick(s) } }) }
+            .clickable(enabled = enabled, onClick = next)
             .padding(horizontal = 8.dp).semantics { contentDescription = t("android-misc.drive.player.speed") },
         contentAlignment = Alignment.Center,
     ) { Text(speedLabel(speed), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Ink) }
@@ -534,22 +547,3 @@ private fun Timeline(position: Long, duration: Long, buffered: Long, enabled: Bo
     }
 }
 
-/** The folder's videos and songs, the one playing checked: another one played in its place. */
-private fun openPlaylist(app: AppState, list: List<String>, now: String, open: (String) -> Unit) {
-    app.sheet = SheetSpec(0.6f, draggable = true) {
-        SheetGrab()
-        SheetHead(t("android-misc.drive.player.folderTitle", "n" to list.size))
-        androidx.compose.foundation.lazy.LazyColumn(Modifier.weight(1f)) {
-            items(list.size) { i ->
-                val name = list[i]
-                PickRow(name, checked = name == now, leading = { IconIn(kindIcon(if (name.substringAfterLast('.').lowercase() in AUDIO) "audio" else "video"), 18.dp, Palette.muted) }) {
-                    app.sheet = null
-                    if (name != now) open(name)
-                }
-            }
-        }
-        Spacer(Modifier.height(16.dp))
-    }
-}
-
-private val AUDIO = setOf("mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "wma")

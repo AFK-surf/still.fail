@@ -38,7 +38,9 @@ import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
@@ -59,6 +61,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -91,6 +94,7 @@ import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import fail.still.android.AppState
 import fail.still.android.LocalApp
+import fail.still.android.data.ReaderPrefs
 import fail.still.android.data.Topics
 import fail.still.android.data.t
 import fail.still.android.screens.Button
@@ -155,21 +159,15 @@ private class Reading(val novel: Novel, start: Pair<Int, Int>) {
     }
 }
 
-/** The reader's look, kept on this device (its type and paper). */
-private object ReaderPrefs {
-    fun typography(app: AppState) = ReaderTypography.decode(app.strings("drive.reader.type").firstOrNull())
-    fun setTypography(app: AppState, v: ReaderTypography) = app.setStrings("drive.reader.type", listOf(ReaderTypography.encode(v)))
-    fun paper(app: AppState) = Paper.of(app.strings("drive.reader.paper").firstOrNull())
-    fun setPaper(app: AppState, v: Paper) = app.setStrings("drive.reader.paper", listOf(v.name))
-}
-
 /** The text `path` of `root` on `station`, read. */
 @Composable
 fun ReaderScreen(station: String, root: String, path: String) {
     val app = LocalApp.current
     val name = nameOf(path)
-    var paper by remember { mutableStateOf(ReaderPrefs.paper(app)) }
-    var typography by remember { mutableStateOf(ReaderPrefs.typography(app)) }
+    // How it is laid out: the core's prefs (prefs.reader), the same on every page that reads.
+    val prefs = app.readerPrefs
+    val paper = Paper.of(prefs.paper)
+    val typography = ReaderTypography.of(prefs)
     val p = paper.ink(C.dark)
     PaperBars(p.dark)
     val opening by produceState<Opening>(Opening.Coming(0, null), station, root, path) {
@@ -188,9 +186,7 @@ fun ReaderScreen(station: String, root: String, path: String) {
     }
     Box(Modifier.fillMaxSize().background(p.ground)) {
         when (val o = opening) {
-            is Opening.Ready -> Book(app, station, root, path, o.novel, o.at, p, paper, typography,
-                setPaper = { paper = it; ReaderPrefs.setPaper(app, it) },
-                setTypography = { typography = it; ReaderPrefs.setTypography(app, it) })
+            is Opening.Ready -> Book(app, station, root, path, o.novel, o.at, p, typography)
             else -> {
                 Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)) {
                     when (o) {
@@ -207,7 +203,7 @@ fun ReaderScreen(station: String, root: String, path: String) {
                 }
                 // The way back is there while it comes.
                 val haze = remember { HazeState() }
-                TopBar(haze, p, name, "", onBack = app::pop, onSearch = null, modifier = Modifier.align(Alignment.TopCenter))
+                TopBar(haze, p, name, "", onBack = app::pop, modifier = Modifier.align(Alignment.TopCenter))
             }
         }
     }
@@ -228,10 +224,7 @@ private fun PaperBars(dark: Boolean) {
 
 @OptIn(FlowPreview::class)
 @Composable
-private fun Book(
-    app: AppState, station: String, root: String, path: String, novel: Novel, at: Int?, p: PaperInk, paper: Paper, typography: ReaderTypography,
-    setPaper: (Paper) -> Unit, setTypography: (ReaderTypography) -> Unit,
-) {
+private fun Book(app: AppState, station: String, root: String, path: String, novel: Novel, at: Int?, p: PaperInk, typography: ReaderTypography) {
     val r = remember(novel) { Reading(novel, at?.let { novel.at(it) } ?: (0 to 0)) }
     var chrome by remember { mutableStateOf(false) }
     val haze = remember { HazeState() }
@@ -246,10 +239,8 @@ private fun Book(
     LaunchedEffect(r.query) {
         if (r.query.isBlank()) { r.matches = emptyList(); r.hit = -1; return@LaunchedEffect }
         delay(250)
-        val found = withContext(Dispatchers.Default) { searchChunks(novel.chunks, r.query) }
-        r.matches = found
-        r.hit = if (found.isEmpty()) -1 else firstMatchAfter(found, r.chunk, r.offsetInChunk)
-        if (r.hit >= 0) found[r.hit].let { r.jumpTo(it.chunk, it.start) }
+        r.matches = withContext(Dispatchers.Default) { searchChunks(novel.chunks, r.query) }
+        r.hit = -1
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -258,21 +249,21 @@ private fun Book(
         }
         // The clock and the icons stay on the paper, not over the text running under them.
         Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(p.ground))
-        val percent = "${(r.fraction * 100).roundToInt()}%"
         val chapter = r.chapter
         val sub = listOfNotNull(
-            if (chapter >= 0 && r.hasChapters) novel.chapters[chapter].title else t("android-misc.drive.reader.chars", "n" to novel.charCount),
-            percent,
-            if (novel.truncated) t("android-misc.drive.reader.truncated", "size" to fileSize(novel.sourceBytes), "mb" to MAX_NOVEL_BYTES / (1024 * 1024)) else null,
+            if (chapter >= 0 && r.hasChapters) novel.chapters[chapter].title else null,
+            if (novel.truncated) t("android-misc.drive.reader.truncated", "size" to fileSize(MAX_NOVEL_BYTES.toLong())) else null,
         ).joinToString(" · ")
-        Box(Modifier.align(Alignment.TopCenter).alpha(shown)) {
-            if (shown > 0f) TopBar(haze, p, novel.title, sub, onBack = app::pop, onSearch = { openSearch(app, r) })
+        Column(Modifier.align(Alignment.TopCenter)) {
+            Box(Modifier.alpha(shown)) { if (shown > 0f) TopBar(haze, p, novel.title, sub, onBack = app::pop) }
+            // Gone to a hit: where among them, a step to the one before and after, and away.
+            if (r.hit >= 0 && r.matches.isNotEmpty()) FoundPill(haze, p, r, Modifier.align(Alignment.CenterHorizontally).padding(top = if (shown > 0f) 0.dp else 0.dp))
         }
         Box(Modifier.align(Alignment.BottomCenter).alpha(shown)) {
             if (shown > 0f) BottomBar(haze, p, r,
                 onChapters = { openChapters(app, r) },
-                onType = { openType(app, paper, typography, setPaper, setTypography) },
-                onDayNight = { setPaper(if (p.dark) Paper.White else Paper.Night) })
+                onFind = { openSearch(app, r) },
+                onLayout = { openLayout(app) })
         }
     }
 }
@@ -376,26 +367,38 @@ private fun BarIcon(icon: ImageVector, label: String, p: PaperInk, onClick: () -
     }
 }
 
-/** What is open and where in it: back, its name and chapter and how far, search. */
+/** What is open and where in it: back, its name, its chapter under it. */
 @Composable
-private fun TopBar(haze: HazeState, p: PaperInk, title: String, sub: String, onBack: () -> Unit, onSearch: (() -> Unit)?, modifier: Modifier = Modifier) {
-    Row(
+private fun TopBar(haze: HazeState, p: PaperInk, title: String, sub: String, onBack: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
         modifier.windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = 8.dp, vertical = 6.dp).fillMaxWidth()
-            .paperGlass(haze, Smooth(16.dp), p).height(48.dp).padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .paperGlass(haze, Smooth(16.dp), p).height(52.dp).padding(horizontal = 4.dp),
     ) {
-        BarIcon(Icons.ChevronLeft, t("common.back"), p, onBack)
-        Column(Modifier.weight(1f).padding(horizontal = 4.dp)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (sub.isNotEmpty()) Text(sub, fontSize = 12.sp, color = p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Box(Modifier.align(Alignment.CenterStart)) { BarIcon(Icons.ChevronLeft, t("common.back"), p, onBack) }
+        Column(Modifier.align(Alignment.Center).padding(horizontal = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+            if (sub.isNotEmpty()) Text(sub, fontSize = 12.sp, color = p.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
         }
-        if (onSearch != null) BarIcon(Icons.Search, t("android-misc.drive.reader.search"), p, onSearch)
     }
 }
 
-/** Chapters before and after, the jump along the whole text, and the contents, the type, day or night. */
+/** A hit gone to: 「what」 which of how many, the one before and after, and the search let go. */
 @Composable
-private fun BottomBar(haze: HazeState, p: PaperInk, r: Reading, onChapters: () -> Unit, onType: () -> Unit, onDayNight: () -> Unit) {
+private fun FoundPill(haze: HazeState, p: PaperInk, r: Reading, modifier: Modifier = Modifier) {
+    Row(
+        modifier.padding(top = 6.dp).paperGlass(haze, Smooth(18.dp), p).height(40.dp).padding(start = 14.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(t("android-misc.drive.reader.foundAt", "query" to r.query, "at" to r.hit + 1, "n" to r.matches.size), fontSize = 13.sp, color = p.ink, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.padding(end = 6.dp))
+        BarIcon(Icons.ChevronLeft, t("android-misc.drive.reader.prevHit"), p) { r.step(-1) }
+        BarIcon(Icons.ChevronRight, t("android-misc.drive.reader.nextHit"), p) { r.step(1) }
+        BarIcon(Icons.Close, t("common.close"), p) { r.query = ""; r.hit = -1 }
+    }
+}
+
+/** Chapters before and after, the jump along the whole text, and the contents, search, the layout. */
+@Composable
+private fun BottomBar(haze: HazeState, p: PaperInk, r: Reading, onChapters: () -> Unit, onFind: () -> Unit, onLayout: () -> Unit) {
     val novel = r.novel
     val ch = r.chapter
     Column(
@@ -415,22 +418,23 @@ private fun BottomBar(haze: HazeState, p: PaperInk, r: Reading, onChapters: () -
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(Modifier.weight(1f)) { Hairline(r.fraction, p.ink.copy(alpha = 0.14f), p.accent, p.bar) { r.jumpTo(it) } }
-            Text("${(r.fraction * 100).roundToInt()}%", fontSize = 12.sp, color = p.muted, textAlign = TextAlign.End, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.width(36.dp))
+            Text("${(r.fraction * 100).roundToInt()}%", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = p.ink, textAlign = TextAlign.End, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.width(40.dp))
         }
         Row {
             Tool(Icons.List, t("android-misc.drive.reader.contents"), p, onChapters)
-            Tool(Icons.Text, t("android-misc.drive.reader.type"), p, onType)
-            Tool(if (p.dark) Icons.Sun else Icons.Moon, if (p.dark) t("android-misc.drive.reader.day") else t("android-misc.drive.reader.night"), p, onDayNight)
+            Tool(Icons.Search, t("android-misc.drive.reader.search"), p, onFind)
+            Tool(Icons.Text, t("android-misc.drive.reader.type"), p, onLayout)
         }
     }
 }
 
-/** Text and nothing else, as a card's quieter keys are; faded and inert when there is nowhere to go. */
+/** A small key on the bar (上一章, 下一章); faded and inert when there is nowhere to go. */
 @Composable
 private fun TextKey(label: String, p: PaperInk, onClick: (() -> Unit)?) {
     Text(
         label, fontSize = 13.sp, color = if (onClick != null) p.ink else p.ink.copy(alpha = 0.3f), maxLines = 1,
-        modifier = Modifier.clip(Smooth(8.dp)).clickable(enabled = onClick != null) { onClick?.invoke() }.padding(horizontal = 6.dp, vertical = 6.dp),
+        modifier = Modifier.clip(Smooth(10.dp)).background(p.ink.copy(alpha = if (onClick != null) 0.07f else 0.04f)).clickable(enabled = onClick != null) { onClick?.invoke() }
+            .padding(horizontal = 12.dp, vertical = 6.dp),
     )
 }
 
@@ -479,15 +483,12 @@ private fun Hairline(fraction: Float, track: Color, fill: Color, ring: Color, on
 
 // ── the sheets ──────────────────────────────────────────────────────────
 
-/** The contents: each chapter, the one being read checked; a way into search. With none found, a jump by how far. */
+/** The contents: each chapter, the one being read checked; with none found, a jump by how far. */
 private fun openChapters(app: AppState, r: Reading) {
-    app.sheet = SheetSpec(if (r.hasChapters) 0.75f else 0.4f, draggable = r.hasChapters) {
+    app.sheet = SheetSpec(if (r.hasChapters) 0.75f else 0.3f, draggable = r.hasChapters, fit = if (r.hasChapters) null else 200.dp) {
         val novel = r.novel
         SheetGrab()
-        SheetHead(t("android-misc.drive.reader.contents"), trailing = {
-            Text(listOfNotNull(if (r.hasChapters) t("android-misc.drive.reader.chapters", "n" to novel.chapters.size) else null, t("android-misc.drive.reader.readShare", "n" to (r.fraction * 100).roundToInt())).joinToString(" · "), fontSize = 13.sp, color = C.muted)
-        })
-        PickRow(t("android-misc.drive.reader.searchAll"), leading = { IconIn(Icons.Search, 18.dp, C.muted) }) { openSearch(app, r) }
+        SheetHead(t("android-misc.drive.reader.contents"))
         if (!r.hasChapters) {
             Text(t("android-misc.drive.reader.noChapters"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
             Box(Modifier.padding(horizontal = 20.dp)) { Hairline(r.fraction, C.ink.copy(alpha = 0.12f), C.accent, C.surface) { r.jumpTo(it) } }
@@ -496,106 +497,145 @@ private fun openChapters(app: AppState, r: Reading) {
             val list = rememberLazyListState(initialFirstVisibleItemIndex = (now - 3).coerceAtLeast(0))
             LazyColumn(Modifier.weight(1f), state = list, contentPadding = PaddingValues(bottom = 16.dp)) {
                 itemsIndexed(novel.chapters) { i, c ->
-                    PickRow(c.title, checked = i == now, color = if (i < now) C.muted else C.ink, leading = {
-                        Text("${i + 1}", fontSize = 12.sp, color = C.subtle, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.width(30.dp))
-                    }) { r.jumpTo(c.chunk, c.offset); app.sheet = null }
+                    PickRow(c.title, checked = i == now) { r.jumpTo(c.chunk, c.offset); app.sheet = null }
                 }
             }
         }
     }
 }
 
-/** Search in the whole text: as it is typed the hits are marked and the first after here is gone to; ‹ › step through them. */
+/** Where a hit is, in a line: a little before it, it, a little after (as the web's search sheet lists them). */
+private fun snippet(chunk: String, m: TextMatch, ink: Color, accent: Color): AnnotatedString {
+    val from = (m.start - 18).coerceAtLeast(0)
+    val to = (m.start + m.length + 40).coerceAtMost(chunk.length)
+    val clean = { s: String -> s.replace('\n', ' ').replace('\u3000', ' ') }
+    return buildAnnotatedString {
+        append(if (from > 0) "…" else "")
+        append(clean(chunk.substring(from, m.start)))
+        pushStyle(SpanStyle(color = accent, fontWeight = FontWeight.SemiBold))
+        append(clean(chunk.substring(m.start, (m.start + m.length).coerceAtMost(chunk.length))))
+        pop()
+        append(clean(chunk.substring((m.start + m.length).coerceAtMost(chunk.length), to)))
+        if (to < chunk.length) append("…")
+    }
+}
+
+/** Search in the whole text: what is typed found as it is typed, each hit a line to go to; then the pill steps through them. */
 private fun openSearch(app: AppState, r: Reading) {
-    // Tall enough that what it says stays above the keyboard (the sheet keeps its height and makes room for it inside).
-    app.sheet = SheetSpec(0.62f) {
+    app.sheet = SheetSpec(0.75f, draggable = true) {
         val focus = remember { FocusRequester() }
-        LaunchedEffect(Unit) { delay(50); runCatching { focus.requestFocus() } }
+        LaunchedEffect(Unit) { delay(50); if (r.query.isEmpty()) runCatching { focus.requestFocus() } }
+        val focused = androidx.compose.ui.platform.LocalFocusManager.current
         SheetGrab()
         SheetHead(t("android-misc.drive.reader.search"))
         Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.surface).border(1.dp, C.line, Smooth(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp)) {
+            Box(Modifier.fillMaxWidth().clip(CircleShape).border(1.dp, C.line, CircleShape).padding(horizontal = 18.dp, vertical = 11.dp)) {
                 if (r.query.isEmpty()) Text(t("android-misc.drive.reader.searchAll"), color = C.subtle, fontSize = 15.sp)
                 BasicTextField(
                     r.query, { r.query = it }, singleLine = true, cursorBrush = SolidColor(C.accent),
                     textStyle = TextStyle(color = C.ink, fontSize = 15.sp),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { r.step(1) }),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     modifier = Modifier.fillMaxWidth().focusRequester(focus),
                 )
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                val status = when {
-                    r.query.isBlank() -> t("android-misc.drive.reader.searchHint")
-                    r.matches.isEmpty() -> t("android-misc.drive.reader.notFound")
-                    r.matches.size >= 400 -> t("android-misc.drive.reader.hitsMany", "at" to r.hit + 1, "n" to r.matches.size)
-                    else -> t("android-misc.drive.reader.hits", "at" to r.hit + 1, "n" to r.matches.size)
-                }
-                Text(status, fontSize = 13.sp, color = C.muted, modifier = Modifier.weight(1f))
-                Button(t("android-misc.drive.reader.prevHit"), primary = false, enabled = r.matches.isNotEmpty()) { r.step(-1) }
-                Button(t("android-misc.drive.reader.nextHit"), primary = false, enabled = r.matches.isNotEmpty()) { r.step(1) }
+            if (r.query.isNotBlank()) Text(
+                if (r.matches.isEmpty()) t("android-misc.drive.reader.notFound") else t("android-misc.drive.reader.foundCount", "n" to r.matches.size),
+                fontSize = 13.sp, color = C.muted,
+            )
+        }
+        LazyColumn(Modifier.weight(1f).padding(top = 6.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
+            itemsIndexed(r.matches.take(300)) { i, m ->
+                val chunk = r.novel.chunks.getOrElse(m.chunk) { "" }
+                val ink = C.ink
+                val accent = C.accent
+                Text(
+                    remember(m, ink, accent) { snippet(chunk, m, ink, accent) }, fontSize = 15.sp, lineHeight = 22.sp, color = ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().clickable { focused.clearFocus(); r.hit = i; r.jumpTo(m.chunk, m.start); app.sheet = null }.padding(horizontal = 20.dp, vertical = 10.dp),
+                )
             }
         }
-        DisposableEffect(Unit) { onDispose { if (app.sheet == null) { r.query = "" } } }
     }
 }
 
-/** The paper, the type's size, the lines' spacing, the margins, the face and the indent. */
-private fun openType(app: AppState, paper0: Paper, type0: ReaderTypography, setPaper: (Paper) -> Unit, setTypography: (ReaderTypography) -> Unit) {
-    app.sheet = SheetSpec(0.66f, draggable = true) {
-        var paper by remember { mutableStateOf(paper0) }
-        var type by remember { mutableStateOf(type0) }
-        fun put(v: ReaderTypography) { type = v; setTypography(v) }
+/** The layout: the type's size, the lines' height, the margins, the face, the indent and the paper, each kept by the core as it is changed. */
+private fun openLayout(app: AppState) {
+    app.sheet = SheetSpec(0.62f, draggable = true) {
+        val prefs = app.readerPrefs
+        fun put(shown: ReaderPrefs, field: String, value: kotlinx.serialization.json.JsonPrimitive) = app.setReader(shown, field, value)
         SheetGrab()
         SheetHead(t("android-misc.drive.reader.type"))
-        Column(Modifier.weight(1f).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Labeled(t("android-misc.drive.reader.paper")) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Paper.entries.forEach { option ->
-                        val chosen = option == paper
-                        val ink = option.ink(C.dark)
-                        Column(
-                            Modifier.weight(1f).height(60.dp).clip(Smooth(14.dp)).background(ink.ground)
-                                .let { if (chosen) it.border(2.dp, C.accent, Smooth(14.dp)) else it }
-                                .clickable { paper = option; setPaper(option) },
-                            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(1.dp, Alignment.CenterVertically),
-                        ) {
-                            Text(t("android-misc.drive.reader.sample"), fontSize = 16.sp, fontFamily = FontFamily.Serif, color = ink.ink)
-                            Text(option.label, fontSize = 11.sp, color = ink.muted, maxLines = 1)
-                        }
-                    }
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Stepper(t("android-misc.drive.reader.size"), "${prefs.size}", prefs.size > ReaderTypography.MIN_FONT_SP, prefs.size < ReaderTypography.MAX_FONT_SP) { d ->
+                val v = prefs.size + d; put(prefs.copy(size = v), "size", kotlinx.serialization.json.JsonPrimitive(v))
+            }
+            Stepper(t("android-misc.drive.reader.spacing"), "%.1f".format(prefs.line), prefs.line > ReaderTypography.MIN_LINE_SPACING + 1e-6, prefs.line < ReaderTypography.MAX_LINE_SPACING - 1e-6) { d ->
+                val v = Math.round((prefs.line + d * 0.1) * 10) / 10.0; put(prefs.copy(line = v), "line", kotlinx.serialization.json.JsonPrimitive(v))
+            }
+            Stepper(t("android-misc.drive.reader.margin"), "${prefs.margin}", prefs.margin > ReaderTypography.MIN_MARGIN_DP, prefs.margin < ReaderTypography.MAX_MARGIN_DP) { d ->
+                val v = prefs.margin + d * 2; put(prefs.copy(margin = v), "margin", kotlinx.serialization.json.JsonPrimitive(v))
+            }
+            SettingRow(t("android-misc.drive.reader.font")) {
+                Seg(ReaderFamily.entries.map { it.label }, ReaderFamily.of(prefs.face).ordinal, { i -> val f = ReaderFamily.entries[i].key; put(prefs.copy(face = f), "face", kotlinx.serialization.json.JsonPrimitive(f)) }, height = 34.dp)
+            }
+            SettingRow(t("android-misc.drive.reader.indent")) {
+                Seg(listOf(t("android-misc.drive.reader.indent.on"), t("android-misc.drive.reader.indent.off")), if (prefs.indent) 0 else 1, { i -> put(prefs.copy(indent = i == 0), "indent", kotlinx.serialization.json.JsonPrimitive(i == 0)) }, height = 34.dp)
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(t("android-misc.drive.reader.paper"), fontSize = 15.sp, color = C.ink)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Paper.entries.forEach { option -> PaperSwatch(option, chosen = option.key == prefs.paper) { put(prefs.copy(paper = option.key), "paper", kotlinx.serialization.json.JsonPrimitive(option.key)) } }
                 }
             }
-            Labeled(t("android-misc.drive.reader.size")) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button("A−", primary = false, enabled = type.fontSp > ReaderTypography.MIN_FONT_SP) { put(type.copy(fontSp = type.fontSp - 1)) }
-                    Text("${type.fontSp}", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
-                    Button("A+", primary = false, enabled = type.fontSp < ReaderTypography.MAX_FONT_SP) { put(type.copy(fontSp = type.fontSp + 1)) }
-                }
-            }
-            Slide(t("android-misc.drive.reader.spacing"), type.lineSpacing, ReaderTypography.MIN_LINE_SPACING, ReaderTypography.MAX_LINE_SPACING, "${(type.lineSpacing * 100).roundToInt()}%") { put(type.copy(lineSpacing = it)) }
-            Slide(t("android-misc.drive.reader.margin"), type.marginDp.toFloat(), ReaderTypography.MIN_MARGIN_DP.toFloat(), ReaderTypography.MAX_MARGIN_DP.toFloat(), "${type.marginDp}") { put(type.copy(marginDp = it.roundToInt())) }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Box(Modifier.weight(1f)) { Labeled(t("android-misc.drive.reader.font")) { Seg(ReaderFamily.entries.map { it.label }, type.family.ordinal, { put(type.copy(family = ReaderFamily.entries[it])) }, Modifier.fillMaxWidth(), fill = true, height = 36.dp) } }
-                Box(Modifier.weight(1f)) { Labeled(t("android-misc.drive.reader.indent")) { Seg(listOf(t("android-misc.drive.reader.indent.on"), t("android-misc.drive.reader.indent.off")), if (type.indent) 0 else 1, { put(type.copy(indent = it == 0)) }, Modifier.fillMaxWidth(), fill = true, height = 36.dp) } }
-            }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+/** A setting's name on the left, its control on the right. */
+@Composable
+private fun SettingRow(label: String, control: @Composable () -> Unit) {
+    Row(Modifier.fillMaxWidth().height(44.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
+        control()
+    }
+}
+
+/** A number stepped down and up (− value +), each step stopping at its end. */
+@Composable
+private fun Stepper(label: String, value: String, less: Boolean, more: Boolean, step: (Int) -> Unit) {
+    SettingRow(label) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StepKey(Icons.Minus, t("android-misc.drive.reader.less", "what" to label), less) { step(-1) }
+            Text(value, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink, textAlign = TextAlign.Center, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.width(48.dp))
+            StepKey(Icons.Plus, t("android-misc.drive.reader.more", "what" to label), more) { step(1) }
         }
     }
 }
 
 @Composable
-private fun Labeled(label: String, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(label, fontSize = 13.sp, color = C.muted)
-        content()
-    }
+private fun StepKey(icon: ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier.size(40.dp).clip(CircleShape).background(C.ink.copy(alpha = 0.07f)).clickable(enabled = enabled, onClick = onClick).semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) { IconIn(icon, 18.dp, if (enabled) C.ink else C.subtle) }
 }
 
+/** One paper, drawn in itself: 文 on its own ground, its name under it; the chosen one ringed in the accent. */
 @Composable
-private fun Slide(label: String, value: Float, from: Float, to: Float, shown: String, onValue: (Float) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(label, fontSize = 13.sp, color = C.muted, modifier = Modifier.width(40.dp))
-        Box(Modifier.weight(1f)) { Hairline((value - from) / (to - from), C.ink.copy(alpha = 0.12f), C.accent, C.surface) { onValue(from + it * (to - from)) } }
-        Text(shown, fontSize = 13.sp, color = C.ink, textAlign = TextAlign.End, modifier = Modifier.width(40.dp))
+private fun PaperSwatch(option: Paper, chosen: Boolean, onClick: () -> Unit) {
+    val ink = option.ink(C.dark)
+    Column(Modifier.clip(Smooth(10.dp)).clickable(onClick = onClick).padding(2.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box(Modifier.size(50.dp).clip(CircleShape).then(if (chosen) Modifier.border(2.dp, C.accent, CircleShape) else Modifier.border(1.dp, C.line, CircleShape)).padding(if (chosen) 3.dp else 0.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxSize().clip(CircleShape).then(
+                // As the app looks: half its light page, half its dark one.
+                if (option == Paper.Follow) Modifier.drawBehind {
+                    drawRect(Paper.White.ink(false).ground)
+                    drawPath(androidx.compose.ui.graphics.Path().apply { moveTo(size.width, 0f); lineTo(size.width, size.height); lineTo(0f, size.height); close() }, Paper.Night.ink(true).ground)
+                } else Modifier.background(ink.ground),
+            ), contentAlignment = Alignment.Center) {
+                Text(t("android-misc.drive.reader.sample"), fontSize = 18.sp, fontFamily = FontFamily.Serif, color = if (option == Paper.Follow) Color(0xFF808080) else ink.ink)
+            }
+        }
+        Text(option.label, fontSize = 12.sp, color = if (chosen) C.ink else C.muted)
     }
 }

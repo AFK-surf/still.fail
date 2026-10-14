@@ -18,6 +18,9 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.filter
+import androidx.compose.ui.test.onFirst
 import androidx.test.platform.app.InstrumentationRegistry
 import fail.still.android.Screen
 import fail.still.android.data.Counts
@@ -142,10 +145,13 @@ class DriveTest {
         rule.onNodeWithText("文件").performClick(); h.settle()
         h.record("drive-roots-$tone").end()
         rule.onNodeWithText("书").performClick(); h.settle()
-        rule.runOnUiThread { DriveUploads.list += DriveUpload(st, books, "", "封面.png", 4_200_000).also { it.sent = 1_600_000 } }
+        rule.runOnUiThread { DriveUploads.list += DriveUpload(st, books, "", "封面.png", android.net.Uri.EMPTY).also { it.size = 4_200_000; it.sent = 1_600_000; it.state = "going" } }
         h.settle()
         h.record("drive-folder-$tone").end()
         rule.runOnUiThread { DriveUploads.list.clear() }
+        rule.onNodeWithContentDescription("添加").performClick(); h.settle()
+        h.record("drive-plus-$tone").end()
+        rule.runOnUiThread { h.app.sheet = null }; h.settle()
         rule.onNodeWithText("三体.txt").performTouchInput { longClick() }; h.settle()
         h.record("drive-sheet-$tone").end()
         assertTrue(rule.onAllNodesWithText("重命名").fetchSemanticsNodes().isNotEmpty())
@@ -185,13 +191,14 @@ class DriveTest {
         rule.onNodeWithText("目录").performClick(); h.settle()
         h.record("drive-reader-toc-$tone").end()
         rule.onNodeWithText("第9章 科学边界").performClick(); h.settle()
-        // The bars stay up under the sheets: search from the top one.
-        rule.onNodeWithContentDescription("搜索正文").performClick(); h.settle()
+        // The bars stay up under the sheets: search from the bottom one; the hits listed, one gone to, the pill.
+        rule.onNodeWithText("搜索").performClick(); h.settle()
         rule.onNode(hasSetTextAction()).performTextInput("汪淼"); h.settle(2000)
         h.record("drive-reader-search-$tone").end()
-        rule.runOnUiThread { h.app.sheet = null }; h.settle()
+        rule.onAllNodesWithText("汪淼", substring = true).filter(hasClickAction() and !hasSetTextAction()).onFirst().performClick(); h.settle()
+        h.record("drive-reader-found-$tone").end()
         rule.onNodeWithText("排版").performClick(); h.settle()
-        rule.onNodeWithText("护眼").performClick(); h.settle()
+        rule.onNodeWithText("绿").performClick(); h.settle()
         h.record("drive-reader-type-$tone").end()
         rule.runOnUiThread { h.app.sheet = null }; h.settle()
         // A tap takes the bars away: the page alone, on its paper.

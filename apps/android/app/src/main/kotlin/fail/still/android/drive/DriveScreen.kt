@@ -3,7 +3,8 @@
 // listed as folders, one that cannot be browsed in red with why. A row opens by its kind: a folder goes in, text and
 // Markdown are read (Reader.kt), video and audio play (Player.kt), pictures, PDFs, code, tables and pages open in the
 // chat's viewer (FilePreview.kt), the rest goes to another app. Held, a row offers rename, remove, download and share.
-// The workspace's owners and admins choose the folders (⋯); read-only members get no way to change anything.
+// The workspace's owners and admins choose the folders (⋯); read-only members get no way to change anything. Laid out
+// as the phone web's (web/src/mobile/Drive.tsx), the reference for the phone (docs/mobile-parity.md).
 package fail.still.android.drive
 
 import android.content.ActivityNotFoundException
@@ -44,7 +45,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -100,8 +101,7 @@ import fail.still.android.ui.C
 import fail.still.android.ui.DownloadChip
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
-import fail.still.android.ui.MenuItem
-import fail.still.android.ui.MenuSpec
+import fail.still.android.ui.NavBar
 import fail.still.android.ui.NavButton
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
@@ -110,6 +110,7 @@ import fail.still.android.ui.Smooth
 import fail.still.core.CoreException
 import java.io.File
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -133,16 +134,15 @@ fun join(dir: String, name: String) = if (dir.isEmpty()) name else "$dir/$name"
 fun parentOf(path: String) = path.substringBeforeLast('/', "")
 fun nameOf(path: String) = path.substringAfterLast('/')
 
-/** What a root's name is shown as. */
-private fun rootName(root: String) = root.trimEnd('/').substringAfterLast('/').ifEmpty { root }
+/** What a root is called: its name as the station lends it, else its path's last part. */
+fun rootLabel(roots: List<DriveRoot>?, root: String) = roots?.firstOrNull { it.path == root }?.name ?: root.trimEnd('/', '\\').substringAfterLast('/').ifEmpty { root }
 
-/** Why a root cannot be browsed, in a line; null when it can. */
-fun rootTrouble(state: String): String? = when (state) {
+/** Why a root cannot be browsed (in red) and what to do about it; null while it can (web drive/useDrive.ts rootTrouble). */
+fun rootTrouble(state: String): Pair<String, String>? = when (state) {
     "ok" -> null
-    "missing" -> t("android-misc.drive.root.missing")
-    "not_a_directory" -> t("android-misc.drive.root.notFolder")
-    "unreadable" -> t("android-misc.drive.root.unreadable")
-    else -> t("android-misc.drive.root.unknown")
+    "missing" -> t("android-misc.drive.root.missing") to t("android-misc.drive.root.missingHint")
+    "not_a_directory" -> t("android-misc.drive.root.notFolder") to t("android-misc.drive.root.notFolderHint")
+    else -> t("android-misc.drive.root.unreadable") to t("android-misc.drive.root.unreadableHint")
 }
 
 /** A name not among `taken`: "name (1).ext", "name (2).ext"… */
@@ -156,54 +156,110 @@ fun freeName(name: String, taken: Set<String>): String {
     return "$stem ($n)$ext"
 }
 
-/** Whether the viewer may change what is in a drive (not a read-only member); null until the workspace is read. */
-@Composable
-private fun writable(current: WorkspaceEntry): Boolean {
-    val app = LocalApp.current
-    val ws by rememberTopic<WorkspaceView>(app.core, Topics.workspace(current.workspace.id))
-    return ws.value?.let { it.role != "viewer" } ?: false
+/** What a name a file or folder may have says is wrong with it (empty, a slash, . or ..); null when nothing is. */
+fun nameProblem(name: String): String? {
+    val n = name.trim()
+    if (n.isEmpty()) return t("android-misc.drive.name.empty")
+    if ('/' in n || '\\' in n || n == "." || n == "..") return t("android-misc.drive.name.bad")
+    return null
 }
 
+/** What the viewer may do with a station's drive: name the folders it lends (owners and admins), change what is in them (not a read-only member). */
+private class DriveRights(val manage: Boolean, val write: Boolean)
+
 @Composable
-private fun manager(current: WorkspaceEntry): Boolean {
+private fun rights(current: WorkspaceEntry, s: StationView?): DriveRights {
     val app = LocalApp.current
     val ws by rememberTopic<WorkspaceView>(app.core, Topics.workspace(current.workspace.id))
-    return ws.value?.manager == true
+    return DriveRights(manage = ws.value?.manager == true, write = s?.overview?.viewer?.role != "viewer" && ws.value?.role != "viewer")
 }
 
 // ── uploads ─────────────────────────────────────────────────────────────
 
-/** A file going up into a folder of a drive: how much of it the station has, shown in its folder's list until it is there. */
-class DriveUpload(val station: String, val root: String, val dir: String, name: String, val size: Long) {
+/**
+ * A file going up into a folder of a drive, shown in its folder's list until it is there: how much of it the station
+ * has; its name taken there (`taken`: replace it or keep both); why it failed (`failed`: tried again or let go).
+ */
+class DriveUpload(val station: String, val root: String, val dir: String, name: String, val uri: Uri) {
     var name by mutableStateOf(name)
+    var size by mutableLongStateOf(0L)
     var sent by mutableLongStateOf(0L)
+    /** waiting | going | taken | failed */
+    var state by mutableStateOf("waiting")
+    var error by mutableStateOf<String?>(null)
+    internal var job: Job? = null
+    internal var answer: CompletableDeferred<Boolean?>? = null
+    /** Replace a file of its name when it goes up. */
+    internal var replace = false
 }
 
-/** The uploads under way, whatever page is shown (they go on past the page that started them). */
+/** The uploads, whatever page is shown (they go on past the page that started them), one going at a time. */
 object DriveUploads {
     val list = mutableStateListOf<DriveUpload>()
-}
+    private var pumping = false
 
-/** What a file of that name already there is to become. */
-private enum class Clash { Replace, Both }
+    fun add(app: AppState, context: Context, ups: List<DriveUpload>, held: () -> List<DriveEntry>) {
+        list += ups
+        pump(app, context, held)
+    }
 
-/** Asks what to do with a file whose name is taken; null: leave it (the sheet closed). */
-private suspend fun askClash(app: AppState, name: String): Clash? {
-    val answer = CompletableDeferred<Clash?>()
-    app.sheet = SheetSpec(0.3f, fit = 200.dp) {
-        DisposableEffect(Unit) { onDispose { answer.complete(null) } }
-        SheetGrab()
-        SheetHead(t("android-misc.drive.exists.title"))
-        Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(t("android-misc.drive.exists.text", "name" to name), fontSize = 14.sp, color = C.muted)
-            Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                Button(t("common.cancel"), primary = false) { answer.complete(null); app.sheet = null }
-                Button(t("android-misc.drive.exists.both"), primary = false) { answer.complete(Clash.Both); app.sheet = null }
-                Button(t("android-misc.drive.exists.replace"), primary = true) { answer.complete(Clash.Replace); app.sheet = null }
-            }
+    /** Its name taken: replaced (`true`) or both kept (`false`). */
+    fun settle(up: DriveUpload, replace: Boolean) { up.answer?.complete(replace) }
+
+    /** Let go: off the list, what it was doing stopped. */
+    fun cancel(up: DriveUpload) { up.answer?.complete(null); up.job?.cancel(); list.remove(up) }
+
+    /** Failed: tried again from the start. */
+    fun retry(app: AppState, context: Context, up: DriveUpload, held: () -> List<DriveEntry>) { up.state = "waiting"; up.error = null; up.sent = 0; pump(app, context, held) }
+
+    private fun pump(app: AppState, context: Context, held: () -> List<DriveEntry>) {
+        if (pumping) return
+        pumping = true
+        app.scope.launch {
+            try {
+                while (true) {
+                    val up = list.firstOrNull { it.state == "waiting" } ?: break
+                    val job = launch { send(app, context, up, held) }
+                    up.job = job
+                    job.join()
+                }
+            } finally { pumping = false }
         }
     }
-    return answer.await()
+
+    private suspend fun send(app: AppState, context: Context, up: DriveUpload, held: () -> List<DriveEntry>) {
+        val resolver = context.contentResolver
+        up.state = "going"
+        try {
+            val (_, known) = withContext(Dispatchers.IO) { picked(resolver, up.uri) }
+            // A provider that does not say how big it is: read it once to know.
+            up.size = if (known >= 0) known else withContext(Dispatchers.IO) { resolver.openInputStream(up.uri)?.use { s -> s.skip(Long.MAX_VALUE) } ?: 0L }
+            val open = { resolver.openInputStream(up.uri) ?: throw java.io.IOException(t("android-misc.drive.upload.unreadable")) }
+            while (true) {
+                try {
+                    app.api(up.station).driveUpload(up.root, join(up.dir, up.name), up.size, open, up.replace) { up.sent = it }
+                    list.remove(up)
+                    return
+                } catch (e: CoreException) {
+                    // Its name taken by a file (a folder of that name cannot be replaced): asked here, in its row.
+                    if (e.status != 409 || up.replace || held().any { it.name == up.name && it.dir }) throw e
+                    val answer = CompletableDeferred<Boolean?>()
+                    up.answer = answer
+                    up.state = "taken"
+                    val replace = answer.await() ?: return
+                    up.answer = null
+                    up.state = "going"
+                    up.sent = 0
+                    if (replace) up.replace = true
+                    else up.name = freeName(up.name, held().map { it.name }.toSet() + list.filter { it !== up && it.dir == up.dir }.map { it.name })
+                }
+            }
+        } catch (e: CoreException) {
+            up.state = "failed"; up.error = e.message
+        } catch (e: java.io.IOException) {
+            up.state = "failed"; up.error = e.message ?: ""
+        }
+    }
 }
 
 /** A picked document's name and size, as its provider says. */
@@ -219,45 +275,13 @@ private fun picked(resolver: ContentResolver, uri: Uri): Pair<String, Long> {
     return name to size
 }
 
-/**
- * Puts the files picked into a folder of the drive, one after another, each a row in that folder's list while it goes
- * (on the app's own scope: on past this page). A name taken asks to replace it or keep both; `held` is what the folder
- * holds as last read.
- */
+/** Puts the files picked into a folder of the drive, one after another, each a row in that folder's list while it goes. */
 fun uploadInto(app: AppState, context: Context, station: String, root: String, dir: String, uris: List<Uri>, held: () -> List<DriveEntry>) {
     if (uris.isEmpty()) return
     val resolver = context.contentResolver
     app.scope.launch {
-        val api = app.api(station)
-        val ups = uris.map { uri ->
-            val (name, size) = withContext(Dispatchers.IO) { picked(resolver, uri) }
-            Triple(uri, DriveUpload(station, root, dir, name, size.coerceAtLeast(0)), size)
-        }
-        DriveUploads.list += ups.map { it.second }
-        for ((uri, up, known) in ups) {
-            try {
-                // A provider that does not say how big it is: read it once to know.
-                val size = if (known >= 0) known else withContext(Dispatchers.IO) { resolver.openInputStream(uri)?.use { s -> s.skip(Long.MAX_VALUE) } ?: 0L }
-                val open = { resolver.openInputStream(uri) ?: throw java.io.IOException(t("android-misc.drive.upload.unreadable")) }
-                suspend fun send(replace: Boolean) = api.driveUpload(root, join(dir, up.name), size, open, replace) { up.sent = it }
-                try {
-                    send(false)
-                } catch (e: CoreException) {
-                    // Taken: a folder by that name cannot be replaced; a file can, or both kept.
-                    if (e.status != 409 || held().any { it.name == up.name && it.dir }) throw e
-                    val choice = askClash(app, up.name) ?: continue
-                    if (choice == Clash.Both) up.name = freeName(up.name, held().map { it.name }.toSet() + DriveUploads.list.filter { it !== up && it.dir == dir }.map { it.name })
-                    up.sent = 0
-                    send(choice == Clash.Replace)
-                }
-            } catch (e: CoreException) {
-                app.toast = t("android-misc.drive.upload.failed", "name" to up.name, "error" to e.message)
-            } catch (e: java.io.IOException) {
-                app.toast = t("android-misc.drive.upload.failed", "name" to up.name, "error" to (e.message ?: ""))
-            } finally {
-                DriveUploads.list.remove(up)
-            }
-        }
+        val ups = uris.map { uri -> DriveUpload(station, root, dir, withContext(Dispatchers.IO) { picked(resolver, uri).first }, uri) }
+        DriveUploads.add(app, context, ups, held)
     }
 }
 
@@ -325,9 +349,12 @@ fun saveToDownloads(app: AppState, context: Context, station: String, root: Stri
 
 // ── the page ────────────────────────────────────────────────────────────
 
+/** A sheet's height for a title and `rows` rows (a sheet is as tall as what it holds). */
+private fun fit(rows: Int) = (96 + rows * 48 + 24).dp
+
 /**
- * A page of a station's drive: `root` null is the drive itself (its one root's contents, or its roots as folders);
- * else the folder `path` under `root`.
+ * A page of a station's drive (as the phone web's, web/src/mobile/Drive.tsx): `root` null is the drive itself (its one
+ * root's contents, or its roots as folders); else the folder `path` under `root`.
  */
 @Composable
 fun DriveScreen(current: WorkspaceEntry, station: String, root: String?, path: String) {
@@ -335,108 +362,177 @@ fun DriveScreen(current: WorkspaceEntry, station: String, root: String?, path: S
     val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
     val s = stations.value?.firstOrNull { it.station == station }
     val roots = s?.overview?.drive?.roots
-    val manager = manager(current)
-    val writable = writable(current)
-    // The drive's own page with one root: that root's contents, as if it were opened.
-    val folderRoot = root ?: roots?.singleOrNull()?.takeIf { it.state == "ok" }?.path
-    val top = root == null
-    val folder by rememberTopic<DriveFolder>(app.core, folderRoot?.let { Topics.drive(station, it, path) })
+    val can = rights(current, s)
+    // The drive's own page with one root, and nothing wrong with it: what is in it is the page.
+    val only = roots?.singleOrNull()?.takeIf { it.state == "ok" }?.path
+    val folderRoot = root ?: only
+    if (s == null || roots == null || folderRoot == null) return RootsPage(app, station, s, roots, stations.error?.message, can)
+    FolderPage(app, station, s, roots, folderRoot, path, top = root == null, can)
+}
+
+@Composable
+private fun RootsPage(app: AppState, station: String, s: StationView?, roots: List<DriveRoot>?, error: String?, can: DriveRights) {
+    Column(Modifier.fillMaxSize().background(C.bg)) {
+        NavBar(s?.name ?: "", app::pop, t("android-misc.drive.title"), trailing = if (can.manage && !roots.isNullOrEmpty()) ({
+            NavButton(Icons.More, { openRoots(app, station) })
+        }) else null)
+        when {
+            roots == null -> Note(error ?: if (s?.overview == null) t("android-misc.drive.reading") else t("android-misc.drive.oldStation"))
+            roots.isEmpty() -> Empty(if (can.manage) t("android-misc.drive.none.manager") else t("android-misc.drive.none.member")) {
+                if (can.manage) Button(t("android-misc.drive.choose"), primary = true) { openFolderPicker(app, station, emptyList()) }
+            }
+            else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 30.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
+                item(key = "count") { Count(t("android-misc.drive.roots.count", "n" to roots.size)) }
+                itemsIndexed(roots, key = { _, r -> r.path }) { i, r -> RootRow(app, station, r, roots, i == 0, i == roots.lastIndex, can.manage) }
+            }
+        }
+    }
+}
+
+/** A folder lent: its name, where it is; one that cannot be browsed now with why in red and what to do about it. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RootRow(app: AppState, station: String, r: DriveRoot, roots: List<DriveRoot>, first: Boolean, last: Boolean, manage: Boolean) {
+    val c = C
+    val trouble = rootTrouble(r.state)
+    Row(
+        Modifier.cardRow(first, last).background(c.surface)
+            .combinedClickable(onClick = { app.push(Screen.Drive(station, r.path, "")) }, onLongClick = if (manage) ({
+                app.sheet = SheetSpec(0.3f, fit = fit(1)) {
+                    SheetGrab()
+                    SheetHead(r.name)
+                    PickRow(t("android-misc.drive.roots.stop"), color = C.accent, leading = { IconIn(Icons.Close, 20.dp, C.accent) }) { unshare(app, station, roots, r) }
+                }
+            }) else null)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        IconIn(Icons.Folder, 22.dp, c.muted)
+        Column(Modifier.weight(1f)) {
+            Text(r.name, fontSize = 15.sp, lineHeight = 20.sp, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(r.path, fontSize = 12.sp, lineHeight = 16.sp, color = c.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (trouble != null) {
+                Text(trouble.first, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, color = c.red, modifier = Modifier.padding(top = 3.dp))
+                Text(trouble.second, fontSize = 12.sp, lineHeight = 16.sp, color = c.muted)
+            }
+        }
+        IconIn(Icons.ChevronRight, 14.dp, c.subtle)
+    }
+}
+
+private fun unshare(app: AppState, station: String, roots: List<DriveRoot>, r: DriveRoot) {
+    confirm(app, t("android-misc.drive.roots.stopTitle", "name" to r.name), t("android-misc.drive.roots.stopText"), t("android-misc.drive.roots.stop"), danger = true, what = t("android-misc.drive.roots.what")) {
+        app.api(station).driveSetRoots(roots.map { it.path } - r.path)
+    }
+}
+
+/** A folder: back to where it was opened from, its name; where it is under its root (each step a tap away), what it holds in a line, its entries. */
+@Composable
+private fun FolderPage(app: AppState, station: String, s: StationView, roots: List<DriveRoot>, root: String, path: String, top: Boolean, can: DriveRights) {
+    val context = LocalContext.current
+    val c = C
+    val folder by rememberTopic<DriveFolder>(app.core, Topics.drive(station, root, path))
+    val entries = folder.value?.entries.orEmpty()
+    val latest by rememberUpdatedState(entries)
+    val held = { latest }
+    val name = if (path.isEmpty()) rootLabel(roots, root) else nameOf(path)
+    val back = when {
+        top -> s.name
+        path.isEmpty() -> t("android-misc.drive.title")
+        parentOf(path).isEmpty() -> rootLabel(roots, root)
+        else -> nameOf(parentOf(path))
+    }
     var refreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
     var previewing by remember { mutableStateOf<DriveEntry?>(null) }
-    val entries = folder.value?.entries
-    val latest by rememberUpdatedState(entries)
-    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        if (folderRoot != null) uploadInto(app, context, station, folderRoot, path, uris) { latest.orEmpty() }
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> uploadInto(app, context, station, root, path, uris, held) }
+    fun upload() = pick.launch(arrayOf("*/*"))
+    fun reload() {
+        if (refreshing) return
+        scope.launch {
+            refreshing = true
+            try { app.api(station).driveRefresh(root, path) } catch (e: CoreException) { app.toast = t("android-misc.act.failed", "what" to t("android-misc.drive.refreshWhat"), "error" to e.message) } finally { refreshing = false }
+        }
     }
-    val title = when {
-        root == null && folderRoot == null -> t("android-misc.drive.title")
-        path.isEmpty() -> rootName(folderRoot ?: root ?: "")
-        else -> nameOf(path)
-    }
+    val uploads = DriveUploads.list.filter { it.station == station && it.root == root && it.dir == path }
 
-    Column(Modifier.fillMaxSize().background(C.bg)) {
-        DriveBar(
-            title = title,
-            onBack = app::pop,
-            refreshing = refreshing,
-            onRefresh = if (folderRoot == null) null else ({
-                if (!refreshing) scope.launch {
-                    refreshing = true
-                    try { app.api(station).driveRefresh(folderRoot, path) } catch (e: CoreException) { app.toast = e.message } finally { refreshing = false }
+    Column(Modifier.fillMaxSize().background(c.bg)) {
+        NavBar(back, app::pop, name, trailing = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(34.dp).clip(CircleShape).clickable(enabled = !refreshing) { reload() }.semantics { contentDescription = t("android-misc.drive.refresh") }, contentAlignment = Alignment.Center) {
+                    if (refreshing) Spinner(16.dp) else IconIn(Icons.Refresh, 18.dp)
                 }
-            }),
-            onAdd = if (writable && folderRoot != null && folder.value != null) ({ anchor ->
-                app.menu = MenuSpec(anchor, listOf(
-                    MenuItem(t("android-misc.drive.upload"), Icons.Upload) { pick.launch(arrayOf("*/*")) },
-                    MenuItem(t("android-misc.drive.mkdir"), Icons.FolderPlus) { newFolder(app, station, folderRoot, path, latest.orEmpty().map { it.name }.toSet()) },
-                ))
-            }) else null,
-            onMore = if (manager && top && roots != null && roots.isNotEmpty()) ({ anchor ->
-                app.menu = MenuSpec(anchor, listOf(
-                    MenuItem(t("android-misc.drive.roots.add"), Icons.FolderPlus) { openFolderPicker(app, station, roots.map { it.path }) },
-                    MenuItem(t("android-misc.drive.roots.manage"), Icons.Sliders) { openRoots(app, station) },
-                ))
-            }) else null,
-        )
-        when {
-            s == null || roots == null -> Note(stations.error?.message ?: t("android-misc.drive.reading"))
-            roots.isEmpty() -> NoRoots(manager) { openFolderPicker(app, station, emptyList()) }
-            folderRoot == null -> RootList(station, roots)
-            else -> FolderPage(app, station, s.name, folderRoot, path, roots.size > 1, folder.value, folder.error, writable) { previewing = it }
+                when {
+                    can.write -> Box(Modifier.semantics { contentDescription = t("android-misc.drive.add") }) {
+                        NavButton(Icons.Plus, {
+                            val rows = if (can.manage && top) 3 else 2
+                            app.sheet = SheetSpec(0.4f, fit = fit(rows)) {
+                                SheetGrab()
+                                SheetHead(name)
+                                PickRow(t("android-misc.drive.upload"), leading = { IconIn(Icons.Upload, 20.dp, C.ink) }) { app.sheet = null; upload() }
+                                PickRow(t("android-misc.drive.mkdir"), leading = { IconIn(Icons.FolderPlus, 20.dp, C.ink) }) { newFolder(app, station, root, path) }
+                                if (can.manage && top) PickRow(t("android-misc.drive.roots.manage"), leading = { IconIn(Icons.Folder, 20.dp, C.ink) }) { openRoots(app, station) }
+                            }
+                        }, 20.dp)
+                    }
+                    can.manage && top -> NavButton(Icons.More, { openRoots(app, station) })
+                }
+            }
+        })
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 30.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
+            if (path.isNotEmpty()) item(key = "crumbs") { Crumbs(app, station, root, rootLabel(roots, root), path) }
+            val error = folder.error
+            val value = folder.value
+            when {
+                error != null && value == null -> item(key = "error") {
+                    Row(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(error.message, fontSize = 14.sp, color = c.red, modifier = Modifier.weight(1f, fill = false))
+                        Text(t("android-misc.drive.retry"), fontSize = 14.sp, color = c.accent, modifier = Modifier.clip(Smooth(6.dp)).clickable { reload() }.padding(4.dp))
+                    }
+                }
+                value == null -> item(key = "reading") { Note(t("android-misc.drive.reading")) }
+                else -> {
+                    item(key = "count") { Count(value.countText + if (value.truncated == true) " · " + t("android-misc.drive.truncated") else "") }
+                    itemsIndexed(uploads, key = { _, u -> "up:" + System.identityHashCode(u) }) { i, u -> UploadRow(app, context, u, i == 0, i == uploads.lastIndex, held) }
+                    if (entries.isEmpty() && uploads.isEmpty()) item(key = "empty") {
+                        Empty(t("android-misc.drive.empty")) { if (can.write) Button(t("android-misc.drive.upload"), primary = false) { upload() } }
+                    }
+                    itemsIndexed(entries, key = { _, e -> "e:" + e.name }) { i, e ->
+                        val full = join(path, e.name)
+                        EntryRow(station, root, full, e, i == 0, i == entries.lastIndex,
+                            onOpen = { open(app, context, station, root, path, e) { previewing = it } },
+                            onHold = { openEntrySheet(app, context, station, root, path, e, can.write, entries.map { it.name }.toSet()) },
+                        )
+                    }
+                }
+            }
         }
     }
     // Pictures, PDFs, code, tables and pages: the chat's viewer, over the page; a picture steps to the folder's others.
     val shown = previewing
-    if (shown != null && folderRoot != null) {
-        val shownOf = { e: DriveEntry -> Shown(DriveKey.of(folderRoot, e.mtime), Attachment(e.name, join(path, e.name), e.size)) }
+    if (shown != null) {
+        val shownOf = { e: DriveEntry -> Shown(DriveKey.of(root, e.mtime), Attachment(e.name, join(path, e.name), e.size)) }
         val opened = remember(shown) { shownOf(shown) }
-        FilePreview(station, opened.key, opened.file, gallery = { latest.orEmpty().filter { it.kind == "image" }.map(shownOf) }, canDraft = false) { previewing = null }
+        FilePreview(station, opened.key, opened.file, gallery = { latest.filter { it.kind == "image" }.map(shownOf) }, canDraft = false) { previewing = null }
     }
 }
 
-/** The page's one row of chrome: back, where it is, refresh (a ring while it reads), + and ⋯ when they apply. */
+/** The line over a list: what it holds. */
 @Composable
-private fun DriveBar(title: String, onBack: () -> Unit, refreshing: Boolean, onRefresh: (() -> Unit)?, onAdd: ((Rect) -> Unit)?, onMore: ((Rect) -> Unit)?) {
-    Row(
-        Modifier.fillMaxWidth().background(C.bg).windowInsetsPadding(WindowInsets.statusBars).padding(start = 4.dp, end = 8.dp, top = 6.dp, bottom = 4.dp).height(36.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(36.dp).clip(CircleShape).clickable(onClick = onBack).semantics { contentDescription = t("common.back") }, contentAlignment = Alignment.Center) {
-            IconIn(Icons.ChevronLeft, 22.dp, C.accent)
-        }
-        Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 2.dp, end = 8.dp))
-        if (onRefresh != null) Box(Modifier.size(34.dp).clip(CircleShape).clickable(enabled = !refreshing, onClick = onRefresh).semantics { contentDescription = t("android-misc.drive.refresh") }, contentAlignment = Alignment.Center) {
-            if (refreshing) Spinner(16.dp) else IconIn(Icons.Refresh, 18.dp)
-        }
-        if (onAdd != null) Anchored(Icons.Plus, t("android-misc.drive.add"), 20.dp, onAdd)
-        if (onMore != null) Anchored(Icons.More, t("android-misc.drive.more"), 18.dp, onMore)
-    }
-}
-
-/** A bar's button whose menu opens under it. */
-@Composable
-private fun Anchored(icon: ImageVector, label: String, size: androidx.compose.ui.unit.Dp, open: (Rect) -> Unit) {
-    var at by remember { mutableStateOf(Rect.Zero) }
-    Box(Modifier.onGloballyPositioned { at = it.boundsInRoot() }.semantics { contentDescription = label }) {
-        NavButton(icon, { open(at) }, size)
-    }
-}
+private fun Count(text: String) = Text(text, fontSize = 13.sp, color = C.muted, maxLines = 1, modifier = Modifier.padding(start = 24.dp, end = 20.dp, top = 2.dp, bottom = 6.dp))
 
 @Composable
 private fun Note(text: String) {
-    Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) { Text(text, color = C.muted, fontSize = 14.sp, textAlign = TextAlign.Center) }
+    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Text(text, color = C.muted, fontSize = 14.sp, textAlign = TextAlign.Center) }
 }
 
-/** Nothing lent yet: the owners and admins can choose a folder; the others are told so. */
+/** Nothing here: a folder's mark, why, and what can be done about it. */
 @Composable
-private fun NoRoots(manager: Boolean, choose: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)) {
-        IconIn(Icons.Folder, 36.dp, C.subtle)
-        Text(t("android-misc.drive.none.title"), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-        Text(if (manager) t("android-misc.drive.none.manager") else t("android-misc.drive.none.member"), fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
-        if (manager) Box(Modifier.padding(top = 6.dp)) { Button(t("android-misc.drive.choose"), primary = true, onClick = choose) }
+private fun Empty(text: String, action: @Composable () -> Unit = {}) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 56.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        IconIn(Icons.Folder, 40.dp, C.subtle)
+        Text(text, fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
+        action()
     }
 }
 
@@ -449,113 +545,27 @@ private fun cardShape(first: Boolean, last: Boolean) = Smooth(
 private fun Modifier.cardRow(first: Boolean, last: Boolean) =
     padding(horizontal = 12.dp).padding(bottom = if (last) 10.dp else 0.dp).fillMaxWidth().clip(cardShape(first, last))
 
-/** The roots as folders: each its name, where it is on the station under it, and why it cannot be browsed when it cannot. */
+/** Where the folder is under its root: the root, then each folder down to this one, each but the last a way back to it. */
 @Composable
-private fun RootList(station: String, roots: List<DriveRoot>) {
-    val app = LocalApp.current
-    val c = C
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
-        itemsIndexed(roots, key = { _, r -> r.path }) { i, r ->
-            val trouble = rootTrouble(r.state)
-            Row(
-                Modifier.cardRow(i == 0, i == roots.lastIndex).background(c.surface)
-                    .clickable { if (trouble == null) app.push(Screen.Drive(station, r.path, "")) else app.toast = trouble }
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                IconIn(Icons.Folder, 20.dp, if (trouble != null) c.red else c.muted)
-                Column(Modifier.weight(1f)) {
-                    Text(r.name, fontSize = 15.sp, color = if (trouble != null) c.red else c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(trouble ?: r.path, fontSize = 12.sp, lineHeight = 16.sp, color = if (trouble != null) c.red else c.muted, maxLines = if (trouble != null) 3 else 1, overflow = TextOverflow.Ellipsis)
-                }
-                if (trouble == null) IconIn(Icons.ChevronRight, 14.dp, c.subtle)
-            }
-        }
-    }
-}
-
-/** A folder: where it is (each level a tap back), what it holds in a line, then its folders and files. */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun FolderPage(
-    app: AppState, station: String, stationName: String, root: String, path: String, severalRoots: Boolean,
-    folder: DriveFolder?, error: CoreException?, writable: Boolean, preview: (DriveEntry) -> Unit,
-) {
-    val context = LocalContext.current
-    val c = C
-    val uploads = DriveUploads.list.filter { it.station == station && it.root == root && it.dir == path }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
-        item(key = "where") {
-            Column(Modifier.padding(start = 17.dp, end = 20.dp, top = 2.dp, bottom = 10.dp)) {
-                Crumbs(station, stationName, root, path, severalRoots)
-                Text(
-                    folder?.countText ?: if (error == null) t("android-misc.drive.reading") else "",
-                    fontSize = 13.sp, color = C.muted, maxLines = 1, modifier = Modifier.padding(start = 3.dp, top = 2.dp),
-                )
-            }
-        }
-        if (error != null) item(key = "error") {
-            Text(error.message, fontSize = 14.sp, color = c.red, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
-        }
-        itemsIndexed(uploads, key = { _, u -> "up:" + System.identityHashCode(u) }) { i, u ->
-            Row(
-                Modifier.cardRow(i == 0, i == uploads.lastIndex).background(c.surface).padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                IconIn(Icons.Upload, 20.dp, c.muted)
-                Column(Modifier.weight(1f)) {
-                    Text(u.name, fontSize = 15.sp, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(t("android-misc.drive.upload.going", "sent" to fileSize(u.sent), "size" to fileSize(u.size)), fontSize = 12.sp, color = c.muted, maxLines = 1)
-                }
-                DownloadChip(if (u.size > 0) u.sent * 100 / u.size else 0)
-            }
-        }
-        val list = folder?.entries.orEmpty()
-        if (folder != null && list.isEmpty() && uploads.isEmpty()) item(key = "empty") {
-            Text(
-                if (writable) t("android-misc.drive.empty.writable") else t("android-misc.drive.empty"),
-                fontSize = 14.sp, color = c.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 48.dp),
-            )
-        }
-        entryRows(app, context, station, root, path, list, writable, preview)
-        if (folder?.truncated == true) item(key = "truncated") {
-            Text(t("android-misc.drive.truncated"), fontSize = 13.sp, color = c.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
-        }
-    }
-}
-
-/** The breadcrumb: the station, the root (with several), then each folder down to this one; each but the last a way back to it. */
-@Composable
-private fun Crumbs(station: String, stationName: String, root: String, path: String, severalRoots: Boolean) {
-    val app = LocalApp.current
-    val levels = buildList {
-        add(stationName to null as Screen?)
-        add(rootName(root) to (if (severalRoots) Screen.Drive(station, root, "") else Screen.Drive(station, null, "")))
-        val parts = path.split('/').filter { it.isNotEmpty() }
-        parts.forEachIndexed { i, p -> add(p to Screen.Drive(station, root, parts.take(i + 1).joinToString("/"))) }
-    }
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+private fun Crumbs(app: AppState, station: String, root: String, rootName: String, path: String) {
+    val parts = path.split('/').filter { it.isNotEmpty() }
+    val levels = listOf(rootName to Screen.Drive(station, root, "")) + parts.mapIndexed { i, p -> p to Screen.Drive(station, root, parts.take(i + 1).joinToString("/")) }
+    val scroll = rememberScrollState()
+    // The end of a long path is what matters: in view.
+    LaunchedEffect(path, scroll.maxValue) { scroll.scrollTo(scroll.maxValue) }
+    Row(Modifier.fillMaxWidth().horizontalScroll(scroll).padding(start = 21.dp, end = 20.dp, top = 2.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         levels.forEachIndexed { i, (label, to) ->
             if (i > 0) IconIn(Icons.ChevronRight, 12.dp, C.subtle)
             val last = i == levels.lastIndex
-            val back = to?.takeIf { !last }?.let { target -> app.stack.indexOfLast { it == target }.takeIf { it >= 0 } }
             Text(
-                label, fontSize = 13.sp, color = if (last) C.ink else C.muted, maxLines = 1,
-                modifier = Modifier.clip(Smooth(6.dp)).clickable(enabled = back != null) { repeat(app.stack.size - 1 - back!!) { app.pop() } }.padding(horizontal = 3.dp, vertical = 2.dp),
+                label, fontSize = 13.sp, color = if (last) C.ink else C.muted, fontWeight = if (last) FontWeight.SemiBold else null, maxLines = 1,
+                modifier = Modifier.clip(Smooth(6.dp)).clickable(enabled = !last) {
+                    // Back to it where it is in the stack; else opened there.
+                    val at = app.stack.indexOfLast { it == to }
+                    if (at >= 0) repeat(app.stack.size - 1 - at) { app.pop() } else app.push(to)
+                }.padding(horizontal = 3.dp, vertical = 2.dp),
             )
         }
-    }
-}
-
-/** The folder's entries, as card rows: folders, then files (the core's order). */
-@OptIn(ExperimentalFoundationApi::class)
-private fun LazyListScope.entryRows(app: AppState, context: Context, station: String, root: String, dir: String, list: List<DriveEntry>, writable: Boolean, preview: (DriveEntry) -> Unit) {
-    itemsIndexed(list, key = { _, e -> "e:" + e.name }) { i, e ->
-        val path = join(dir, e.name)
-        EntryRow(station, root, path, e, i == 0, i == list.lastIndex,
-            onOpen = { open(app, context, station, root, dir, e, preview) },
-            onHold = { openEntrySheet(app, context, station, root, dir, e, writable, list.map { it.name }.toSet()) { open(app, context, station, root, dir, e, preview) } },
-        )
     }
 }
 
@@ -576,17 +586,17 @@ private fun open(app: AppState, context: Context, station: String, root: String,
 private fun EntryRow(station: String, root: String, path: String, e: DriveEntry, first: Boolean, last: Boolean, onOpen: () -> Unit, onHold: () -> Unit) {
     val app = LocalApp.current
     val c = C
-    val busy = app.isDoing(setOf("drive.remove", "drive.rename"), "root" to root, "path" to path) || app.isDoing("drive.rename", "root" to root, "from" to path)
-    val failed = app.failedOf(setOf("drive.remove"), "root" to root, "path" to path) ?: app.failedOf("drive.rename", "root" to root, "from" to path)
+    val busy = app.isDoing("drive.remove", "root" to root, "path" to path) || app.isDoing("drive.rename", "root" to root, "from" to path)
+    val failed = app.failedOf("drive.remove", "root" to root, "path" to path) ?: app.failedOf("drive.rename", "root" to root, "from" to path)
     val fetching = DriveFetches.progress[DriveFetches.id(station, root, path)]
     Row(
-        Modifier.cardRow(first, last).background(c.surface).combinedClickable(onClick = onOpen, onLongClick = onHold).padding(horizontal = 16.dp, vertical = 11.dp),
+        Modifier.cardRow(first, last).background(c.surface).combinedClickable(enabled = !busy, onClick = onOpen, onLongClick = onHold).padding(horizontal = 16.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        IconIn(kindIcon(e.kind), 20.dp, if (e.dir) c.ink else c.muted)
+        IconIn(kindIcon(e.kind), 22.dp, c.muted)
         Column(Modifier.weight(1f)) {
             Text(e.name, fontSize = 15.sp, lineHeight = 20.sp, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val line = listOf(e.sizeText, e.timeText).filter { it.isNotEmpty() }.joinToString(" · ")
+            val line = if (e.dir) e.timeText else listOf(e.sizeText, e.timeText).filter { it.isNotEmpty() }.joinToString(" · ")
             if (line.isNotEmpty()) Text(line, fontSize = 12.sp, lineHeight = 16.sp, color = c.muted, maxLines = 1)
         }
         when {
@@ -596,6 +606,43 @@ private fun EntryRow(station: String, root: String, path: String, e: DriveEntry,
             e.dir -> IconIn(Icons.ChevronRight, 14.dp, c.subtle)
         }
     }
+}
+
+/** A file going up: its name, how far it has got (a thin bar); its name taken there (replace or keep both), or why it failed. */
+@Composable
+private fun UploadRow(app: AppState, context: Context, u: DriveUpload, first: Boolean, last: Boolean, held: () -> List<DriveEntry>) {
+    val c = C
+    Row(
+        Modifier.cardRow(first, last).background(c.surface).padding(start = 16.dp, end = 8.dp, top = 11.dp, bottom = 11.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        IconIn(Icons.Upload, 22.dp, c.muted)
+        Column(Modifier.weight(1f)) {
+            Text(u.name, fontSize = 15.sp, lineHeight = 20.sp, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            when (u.state) {
+                "taken" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(t("android-misc.drive.exists.title"), fontSize = 12.sp, lineHeight = 16.sp, color = c.muted)
+                    Text(t("android-misc.drive.exists.replace"), fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, color = c.accent, modifier = Modifier.clickable { DriveUploads.settle(u, true) })
+                    Text(t("android-misc.drive.exists.both"), fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, color = c.accent, modifier = Modifier.clickable { DriveUploads.settle(u, false) })
+                }
+                "failed" -> Text(t("android-misc.drive.upload.failed", "error" to (u.error ?: "")), fontSize = 12.sp, lineHeight = 16.sp, color = c.red, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                else -> {
+                    Text(t("android-misc.drive.upload.going", "sent" to fileSize(u.sent), "size" to fileSize(u.size)), fontSize = 12.sp, lineHeight = 16.sp, color = c.muted, maxLines = 1)
+                    val share = if (u.size > 0) (u.sent.toFloat() / u.size).coerceIn(0f, 1f) else 0f
+                    Box(Modifier.padding(top = 5.dp).fillMaxWidth().height(3.dp).clip(CircleShape).background(c.ink.copy(alpha = 0.08f))) {
+                        Box(Modifier.fillMaxWidth(share).height(3.dp).clip(CircleShape).background(c.accent))
+                    }
+                }
+            }
+        }
+        if (u.state == "failed") RowKey(Icons.Retry, t("android-misc.drive.retry")) { DriveUploads.retry(app, context, u, held) }
+        RowKey(Icons.Close, t("common.cancel")) { DriveUploads.cancel(u) }
+    }
+}
+
+@Composable
+private fun RowKey(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Box(Modifier.size(34.dp).clip(CircleShape).clickable(onClick = onClick).semantics { contentDescription = label }, contentAlignment = Alignment.Center) { IconIn(icon, 16.dp, C.muted) }
 }
 
 /** How far a text has been read on this device, when it has been opened: grey, as every ordinary figure is. */
@@ -613,132 +660,108 @@ private fun ReadShare(station: String, root: String, path: String) {
 
 // ── what can be done to an entry ────────────────────────────────────────
 
-/** Held: what the entry is, and what can be done to it (open, download, share; rename and remove for those who may). */
-private fun openEntrySheet(app: AppState, context: Context, station: String, root: String, dir: String, e: DriveEntry, writable: Boolean, names: Set<String>, open: () -> Unit) {
+/** Held: what can be done to it (rename and delete for those who may change the drive; download and share a file). */
+private fun openEntrySheet(app: AppState, context: Context, station: String, root: String, dir: String, e: DriveEntry, writable: Boolean, names: Set<String>) {
     val path = join(dir, e.name)
-    val rows = 1 + (if (e.dir) 0 else 2) + (if (writable) 2 else 0)
-    app.sheet = SheetSpec(0.5f, fit = (96 + 48 * rows).dp) {
+    val rows = (if (writable) 2 else 0) + (if (e.dir) 0 else 2)
+    if (rows == 0) return
+    app.sheet = SheetSpec(0.5f, fit = fit(rows)) {
         SheetGrab()
-        SheetHead(e.name, lead = { IconIn(kindIcon(e.kind), 18.dp, C.muted) })
-        val line = listOf(e.sizeText, e.timeText).filter { it.isNotEmpty() }.joinToString(" · ")
-        if (line.isNotEmpty()) Text(line, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 6.dp))
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            PickRow(t("android-misc.drive.open"), leading = { IconIn(kindIcon(e.kind), 18.dp, C.muted) }) { app.sheet = null; open() }
-            if (!e.dir) {
-                PickRow(t("android-misc.drive.download"), leading = { IconIn(Icons.Download, 18.dp, C.muted) }) { app.sheet = null; saveToDownloads(app, context, station, root, e, path) }
-                PickRow(t("android-misc.drive.share"), leading = { IconIn(Icons.External, 18.dp, C.muted) }) { app.sheet = null; openElsewhere(app, context, station, root, e, path, share = true) }
+        SheetHead(e.name)
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            if (writable) PickRow(t("android-misc.drive.rename"), leading = { IconIn(Icons.Edit, 20.dp, C.ink) }) {
+                ask(app, t("android-misc.drive.rename"), e.name, e.name, t("common.save"), what = t("android-misc.drive.rename.what")) { name ->
+                    nameProblem(name)?.let { throw CoreException("invalid", it, null) }
+                    if (name != e.name && name in names) throw CoreException("exists", t("station.drive.exists"), null)
+                    app.api(station).driveRename(root, path, join(dir, name))
+                }
             }
-            if (writable) {
-                PickRow(t("android-misc.drive.rename"), leading = { IconIn(Icons.Edit, 18.dp, C.muted) }) {
-                    ask(app, t("android-misc.drive.rename.title"), e.name, t("android-misc.drive.name"), t("android-misc.drive.rename"), what = t("android-misc.drive.rename.what")) { name ->
-                        if (name.contains('/')) throw CoreException("invalid", t("android-misc.drive.name.slash"), null)
-                        if (name in names) throw CoreException("exists", t("station.drive.exists"), null)
-                        app.api(station).driveRename(root, path, join(dir, name))
-                    }
+            if (!e.dir) {
+                PickRow(t("android-misc.drive.download"), leading = { IconIn(Icons.Download, 20.dp, C.ink) }) {
+                    app.sheet = null
+                    app.toast = t("android-misc.drive.downloading", "name" to e.name)
+                    saveToDownloads(app, context, station, root, e, path)
                 }
-                PickRow(t("android-misc.drive.remove"), color = C.red, leading = { IconIn(Icons.Trash, 18.dp, C.red) }) {
-                    confirm(
-                        app, t(if (e.dir) "android-misc.drive.remove.folderTitle" else "android-misc.drive.remove.fileTitle", "name" to e.name),
-                        t(if (e.dir) "android-misc.drive.remove.folderText" else "android-misc.drive.remove.fileText"),
-                        t("android-misc.drive.remove"), danger = true, what = t("android-misc.drive.remove.what"),
-                    ) { app.api(station).driveRemove(root, path) }
-                }
+                PickRow(t("android-misc.drive.share"), leading = { IconIn(Icons.External, 20.dp, C.ink) }) { app.sheet = null; openElsewhere(app, context, station, root, e, path, share = true) }
+            }
+            if (writable) PickRow(t("android-misc.drive.remove"), color = C.accent, leading = { IconIn(Icons.Trash, 20.dp, C.accent) }) {
+                confirm(
+                    app, t(if (e.dir) "android-misc.drive.remove.folderTitle" else "android-misc.drive.remove.fileTitle", "name" to e.name),
+                    t(if (e.dir) "android-misc.drive.remove.folderText" else "android-misc.drive.remove.fileText"),
+                    t("android-misc.drive.remove"), danger = true, what = t("android-misc.drive.remove.what"),
+                ) { app.api(station).driveRemove(root, path) }
             }
         }
     }
 }
 
 /** A new folder in `dir`, named here. */
-private fun newFolder(app: AppState, station: String, root: String, dir: String, names: Set<String>) {
-    ask(app, t("android-misc.drive.mkdir"), "", t("android-misc.drive.name"), t("android-misc.drive.mkdir.make"), what = t("android-misc.drive.mkdir.what")) { name ->
-        if (name.contains('/')) throw CoreException("invalid", t("android-misc.drive.name.slash"), null)
-        if (name in names) throw CoreException("exists", t("station.drive.exists"), null)
+private fun newFolder(app: AppState, station: String, root: String, dir: String) {
+    ask(app, t("android-misc.drive.mkdir"), "", t("android-misc.drive.mkdir.placeholder"), t("android-misc.drive.mkdir.make"), what = t("android-misc.drive.mkdir.what")) { name ->
+        nameProblem(name)?.let { throw CoreException("invalid", it, null) }
         app.api(station).driveMkdir(root, join(dir, name))
     }
 }
 
 // ── the folders lent ────────────────────────────────────────────────────
 
-/** The folders the station lends, each to stop lending (the owners and admins). */
+/** The folders the station lends (the owners and admins): each tapped to stop lending it; another one added. */
 private fun openRoots(app: AppState, station: String) {
-    app.sheet = SheetSpec(0.6f, draggable = true) {
+    app.sheet = SheetSpec(0.7f, draggable = true) {
         val workspace = station.substringBefore('/')
         val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(workspace))
         val roots = stations.value?.firstOrNull { it.station == station }?.overview?.drive?.roots.orEmpty()
         SheetGrab()
-        SheetHead(t("android-misc.drive.roots.title"))
+        SheetHead(t("android-misc.drive.roots.manage"), trailing = { if (app.isDoing("drive.setRoots")) Spinner(14.dp) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            Text(t("android-misc.drive.roots.note"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 6.dp))
             roots.forEach { r ->
                 val trouble = rootTrouble(r.state)
-                val busy = app.isDoing("drive.setRoots")
-                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    IconIn(Icons.Folder, 18.dp, if (trouble != null) C.red else C.muted)
-                    Column(Modifier.weight(1f)) {
-                        Text(r.name, fontSize = 15.sp, color = if (trouble != null) C.red else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(trouble ?: r.path, fontSize = 12.sp, color = if (trouble != null) C.red else C.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                    Text(
-                        t("android-misc.drive.roots.stop"), fontSize = 14.sp, color = if (busy) C.subtle else C.red,
-                        modifier = Modifier.clip(Smooth(8.dp)).clickable(enabled = !busy) {
-                            confirm(app, t("android-misc.drive.roots.stopTitle", "name" to r.name), t("android-misc.drive.roots.stopText"), t("android-misc.drive.roots.stop"), danger = true, what = t("android-misc.drive.roots.what")) {
-                                app.api(station).driveSetRoots(roots.map { it.path } - r.path)
-                            }
-                        }.padding(horizontal = 6.dp, vertical = 4.dp),
-                    )
-                }
+                PickRow(r.name, sub = r.path, leading = { IconIn(Icons.Folder, 20.dp, C.ink) },
+                    mark = if (trouble != null) ({ Text(trouble.first, fontSize = 12.sp, color = C.red) }) else null) { unshare(app, station, roots, r) }
             }
-            PickRow(t("android-misc.drive.roots.add"), leading = { IconIn(Icons.FolderPlus, 18.dp, C.accent) }, color = C.accent) {
-                openFolderPicker(app, station, roots.map { it.path })
-            }
+            PickRow(t("android-misc.drive.roots.add"), color = C.accent, leading = { IconIn(Icons.Plus, 20.dp, C.accent) }) { openFolderPicker(app, station, roots.map { it.path }) }
         }
     }
 }
 
-/**
- * Picks a folder of the station to lend (the owners and admins): from its home, into folders and back up, 选这个文件夹
- * lending the one shown; `lent`, those lent already.
- */
+/** The station's folders, from its home: entered by a tap, the one shown lent with 选这个文件夹; `lent`, those lent already. */
 fun openFolderPicker(app: AppState, station: String, lent: List<String>) {
-    app.sheet = SheetSpec(0.8f, draggable = true) {
-        var at by remember { mutableStateOf<String?>(null) }
+    app.sheet = SheetSpec(0.85f, draggable = true) {
         var shown by remember { mutableStateOf<DriveFolders?>(null) }
         var error by remember { mutableStateOf<String?>(null) }
-        var loading by remember { mutableStateOf(true) }
         val scope = rememberCoroutineScope()
         fun go(path: String?) {
-            loading = true; error = null
-            scope.launch {
-                try { shown = app.api(station).driveFolders(path); at = shown?.path } catch (e: CoreException) { error = e.message } finally { loading = false }
-            }
+            shown = null; error = null
+            scope.launch { try { shown = app.api(station).driveFolders(path) } catch (e: CoreException) { error = e.message } }
         }
-        androidx.compose.runtime.LaunchedEffect(Unit) { go(null) }
+        LaunchedEffect(Unit) { go(null) }
         val here = shown
         SheetGrab()
-        SheetHead(t("android-misc.drive.pick.title"), trailing = { if (loading) Spinner(14.dp) })
-        Text(here?.path ?: "", fontSize = 13.sp, color = C.muted, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 6.dp))
-        error?.let { Text(it, fontSize = 13.sp, color = C.red, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) }
+        SheetHead(t("android-misc.drive.pick.title"))
+        Text(here?.path ?: " ", fontSize = 13.sp, color = C.muted, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 6.dp))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            here?.parent?.let { up -> PickRow(t("android-misc.drive.pick.up"), sub = up, leading = { IconIn(Icons.ArrowUp, 18.dp, C.muted) }) { go(up) } }
-            if (here != null && here.home.isNotEmpty() && here.path != here.home) PickRow(t("android-misc.drive.pick.home"), sub = here.home, leading = { IconIn(Icons.User, 18.dp, C.muted) }) { go(here.home) }
-            here?.folders?.forEach { name ->
-                PickRow(name, leading = { IconIn(Icons.Folder, 18.dp, C.muted) }) { go(here.path.trimEnd('/') + "/" + name) }
+            when {
+                error != null -> Text(error!!, fontSize = 13.sp, color = C.red, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+                here == null -> Note(t("android-misc.drive.reading"))
+                else -> {
+                    here.parent?.let { up -> PickRow(t("android-misc.drive.pick.up"), leading = { IconIn(Icons.ChevronUp, 18.dp, C.ink) }) { go(up) } }
+                    if (here.folders.isEmpty()) Text(t("android-misc.drive.pick.empty"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
+                    here.folders.forEach { name -> PickRow(name, leading = { IconIn(Icons.Folder, 20.dp, C.ink) }) { go(here.path.trimEnd('/') + "/" + name) } }
+                }
             }
-            if (here != null && here.folders.isEmpty()) Text(t("android-misc.drive.pick.empty"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
         }
-        val path = at
-        val already = path != null && path in lent
-        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
-            if (already) Text(t("android-misc.drive.pick.already"), fontSize = 13.sp, color = C.muted, modifier = Modifier.weight(1f))
+        val taken = here != null && here.path in lent
+        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             Button(t("common.cancel"), primary = false) { app.sheet = null }
-            Button(t("android-misc.drive.pick.choose"), primary = true, enabled = path != null && !already && !loading) {
-                val p = path ?: return@Button
+            Button(if (taken) t("android-misc.drive.pick.already") else t("android-misc.drive.pick.choose"), primary = true, enabled = here != null && !taken) {
+                val p = here?.path ?: return@Button
                 app.sheet = null
-                app.act(t("android-misc.drive.roots.what"), done = t("android-misc.drive.roots.added", "name" to rootName(p))) { app.api(station).driveSetRoots(lent + p) }
+                app.act(t("android-misc.drive.roots.what"), done = t("android-misc.drive.roots.added", "name" to p.trimEnd('/').substringAfterLast('/').ifEmpty { p })) { app.api(station).driveSetRoots(lent + p) }
             }
         }
     }
 }
 
 /** What the station page's row says of a drive: how many folders it lends, or that it lends none. */
-fun driveValue(roots: List<DriveRoot>): String = if (roots.isEmpty()) t("android-misc.drive.row.none") else t("android-misc.drive.row.count", "n" to roots.size)
-
+fun driveValue(roots: List<DriveRoot>): String = if (roots.isEmpty()) t("android-misc.drive.row.none") else t("android-misc.drive.roots.count", "n" to roots.size)

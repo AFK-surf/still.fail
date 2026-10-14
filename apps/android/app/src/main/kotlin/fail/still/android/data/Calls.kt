@@ -485,10 +485,13 @@ class StationApi(private val core: StillFailCore, val station: String) {
             try {
                 var have = 0L
                 var done = false
+                // Small first, doubling while parts go through (as DriveSource's reads): a name taken is told after a quarter
+                // of a megabyte sent, not four.
+                var planned = 256 * 1024
                 while (!done) {
                     // The station goes on from what it has: elsewhere than where the file was read to, read again from there.
                     if (at != have) { input.close(); input = open(); var left = have; while (left > 0) { val n = input.skip(left); if (n <= 0) throw java.io.IOException("short file"); left -= n }; at = have }
-                    val part = ByteArray(minOf(UPLOAD_PART.toLong(), size - have).toInt())
+                    val part = ByteArray(minOf(planned.toLong(), size - have).toInt())
                     var got = 0
                     while (got < part.size) { val n = input.read(part, got, part.size - got); if (n < 0) throw java.io.IOException("short file"); got += n }
                     at += got
@@ -507,6 +510,7 @@ class StationApi(private val core: StillFailCore, val station: String) {
                         // Nothing more taken: a part the station could not take.
                         next == have -> throw CoreException("upload", t("android-chat.file.uploadFailed"), null)
                     }
+                    planned = if (next == have + got) (planned * 2).coerceAtMost(UPLOAD_PART) else 256 * 1024
                     have = next
                     onProgress(if (done) size else have)
                 }
