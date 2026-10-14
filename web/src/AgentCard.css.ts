@@ -48,7 +48,7 @@ export const tile = style({
 });
 globalStyle(`${tile}[data-level=amber] b`, { color: vars.amber });
 globalStyle(`${tile}[data-level=red] b`, { color: vars.red });
-globalStyle(`${tile} b`, { fontSize: vars.textTitle, lineHeight: vars.leadingTitle, fontWeight: "600", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" });
+globalStyle(`${tile} b`, { color: vars.text, fontSize: vars.textTitle, lineHeight: vars.leadingTitle, fontWeight: "600", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" });
 globalStyle(`${tile} small`, { fontSize: vars.textCaption, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 
 /** The account it runs on, what is left of it to its right. */

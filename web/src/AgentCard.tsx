@@ -4,6 +4,7 @@
 // cost and used, its account and what is left of it, its jobs, what is wrong.
 import { createContext, memo, useContext, useLayoutEffect, useRef, type ReactElement, type RefObject } from "react";
 import { useAgentCard, useApi, type ChatAgent } from "./api.ts";
+import type { AgentCardView } from "./core/shapes.ts";
 import { useStation } from "./station.tsx";
 import { Hover } from "./Peeks.tsx";
 import { AgentMark, Tip } from "./ui.tsx";
@@ -121,7 +122,6 @@ export function AgentCard({ agent }: { agent: ChatAgent }) {
   useLinesMotion(lines);
   const account = agent.account ?? agent.profile;
   const quota = agent.account?.quota?.state === "ok" ? agent.account.quota.windows : [];
-  const context = card?.context;
   const quiet = [card?.work, card?.tokens].filter(Boolean).join(" · ");
   return (
     <div className={css.agentCard}>
@@ -146,20 +146,7 @@ export function AgentCard({ agent }: { agent: ChatAgent }) {
           {latest.map((r) => <li key={r.key} data-line={r.key} data-now={r.now ? "" : undefined}>{r.text}</li>)}
         </ol>
       )}
-      {(card?.cost || card?.cache || context) && (
-        <div className={css.tiles}>
-          {card?.cost && <span className={css.tile}><b>{card.cost}</b><small>{t("web-main.chat.agentCard.cost")}</small></span>}
-          {card?.cache && <span className={css.tile}><b>{card.cache.text}</b><small>{t("web-main.chat.agentCard.cache")}</small></span>}
-          {/* How full, large; how much of how much on hover. */}
-          {context && (context.unknown
-            ? <span className={css.tile}><b>{context.text}</b><small>{t("web-main.chat.agentCard.context")}</small></span>
-            : (
-              <Tip label={context.text}>
-                <span className={css.tile} data-level={context.level}><b>{Math.round(context.percent)}%</b><small>{t("web-main.chat.agentCard.context")}</small></span>
-              </Tip>
-            ))}
-        </div>
-      )}
+      {card && <UsageTiles card={card} />}
       {(account || quota.length > 0) && (
         <div className={css.account}>
           <span className={css.accountName}>{account?.name}</span>
@@ -179,6 +166,29 @@ export function AgentCard({ agent }: { agent: ChatAgent }) {
           {card?.attention.map((a, i) => <span key={i} data-level={a.level}>{a.text}</span>)}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * The figures that say most of what an agent used (cost, the cache's hit rate, how full its context is), large, side
+ * by side: in its card, and in its execution history's details (ChatPage.tsx). None before it has made a call.
+ */
+export function UsageTiles({ card }: { card: AgentCardView }) {
+  const context = card.context;
+  if (!card.cost && !card.cache && !context) return null;
+  return (
+    <div className={css.tiles}>
+      {card.cost && <span className={css.tile}><b>{card.cost}</b><small>{t("web-main.chat.agentCard.cost")}</small></span>}
+      {card.cache && <span className={css.tile}><b>{card.cache.text}</b><small>{t("web-main.chat.agentCard.cache")}</small></span>}
+      {/* How full, large; how much of how much on hover. */}
+      {context && (context.unknown
+        ? <span className={css.tile}><b>{context.text}</b><small>{t("web-main.chat.agentCard.context")}</small></span>
+        : (
+          <Tip label={context.text}>
+            <span className={css.tile} data-level={context.level}><b>{Math.round(context.percent)}%</b><small>{t("web-main.chat.agentCard.context")}</small></span>
+          </Tip>
+        ))}
     </div>
   );
 }

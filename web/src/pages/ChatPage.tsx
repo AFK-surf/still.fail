@@ -15,12 +15,12 @@ import { ownOrigin } from "../stillfailLink.ts";
 import { keepTabs } from "../chatTabs.ts";
 import { usePrefs } from "../prefs.ts";
 import type { ChatJobsView, ChatShare, Host, StationView } from "../core/shapes.ts";
-import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useStationCall, useStationLook, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
+import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useStationCall, useStationLook, useAgentCard, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { StationPeek } from "../cloud/StationCards.tsx";
 import { Hover } from "../Peeks.tsx";
-import { AgentCard } from "../AgentCard.tsx";
+import { AgentCard, UsageTiles } from "../AgentCard.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
 import { usePick } from "../pick.ts";
 import { ChatPanel, goToNeighbour } from "../Chat.tsx";
@@ -804,34 +804,46 @@ function SessionHead({ agent }: { agent: ChatAgent }) {
 }
 
 /**
- * Unfolded under the history's head, a row each, quiet: what runs it (and its account's page), what it has used, the
- * station it runs on with what runs low on it.
+ * Unfolded under the history's head: what it has used, as its card says it (the figures that say most, large; the
+ * rest in a quiet line), then a row each, its mark leading: what runs it (and its account's page), and the station it
+ * runs on with what runs low on it.
  */
 function SessionDetails({ agent }: { agent: ChatAgent }) {
   const { session } = agent;
   const station = useStation();
   const link = useLink();
   const host = useHost(station.address).value;
+  const look = useStationLook(station.address);
+  const card = useAgentCard(station.address, session.key).value;
+  // A station older than the card's figures: what it has used in a line, as before.
   const usage = useHistory(station.address, session.key).value?.usageLine;
+  const tiles = card && (card.cost || card.cache || card.context);
+  const quiet = tiles ? [card.work, card.tokens].filter(Boolean).join(" · ") : usage;
   return (
-    <dl className={css.sessionDetails}>
-      <dt>{t("web-pages.chat.detailRuns")}</dt>
-      <dd>
-        {session.runtimeText} · {session.processText}
-        {session.process === "warm" && <>{" · "}<Evict session={session.key} /></>}
-        {" · "}<Link className={css.detailLink} to={link(`/settings/accounts/${session.profile}`)}>{t("web-pages.chat.profileDetails")}</Link>
-      </dd>
-      {usage && <><dt>{t("web-pages.chat.detailUsed")}</dt><dd>{usage}</dd></>}
-      <dt>{t("web-pages.chat.detailStation")}</dt>
-      <dd>
-        {station.name || host?.hostname || t("web-pages.chat.thisMachine")}{host ? ` · ${host.identity}` : ""}
+    <div className={css.sessionDetails}>
+      {tiles && <UsageTiles card={card} />}
+      {quiet && <p className={css.sessionQuiet}>{quiet}</p>}
+      <div className={css.sessionLine}>
+        <span className={css.sessionLineMark}><AgentMark maker={session.maker} runtime={session.runtime} badge={undefined} size={16} /></span>
+        <span className={css.sessionLineText}>
+          {session.runtimeText} · {session.processText}
+          {session.process === "warm" && <>{" · "}<Evict session={session.key} /></>}
+        </span>
+        <Link className={css.detailLink} to={link(`/settings/accounts/${session.profile}`)}>{t("web-pages.chat.profileDetails")}</Link>
+      </div>
+      <div className={css.sessionLine}>
+        <span className={css.sessionLineMark}><StationMark emoji={look?.emoji} icon={look?.icon} size={16} /></span>
+        <span className={css.sessionLineText}>
+          <span className={css.sessionLineName}>{station.name || host?.hostname || t("web-pages.chat.thisMachine")}</span>
+          {host?.identity ? ` · ${host.identity}` : ""}
+        </span>
         {host && host.meters.some((m) => m.level !== "ok") && (
           <span className={css.resourceRings}>
             <MeterChips meters={host.meters} alerts />
           </span>
         )}
-      </dd>
-    </dl>
+      </div>
+    </div>
   );
 }
 

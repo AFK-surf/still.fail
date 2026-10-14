@@ -100,14 +100,17 @@ export const attentionQuota = style({});
 /** A session's details, by how much each matters: the account (largest), the model, what it used, the station. */
 /** The history's head: its model control, and why saving it failed. */
 export const sessionHead = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: "0", flex: "1" });
-/** Under the head: a label and a line a row, small and quiet. */
+/** Under the head: what it used (large figures, a quiet line), then a row each, its mark leading. */
 export const sessionDetails = style({
-  display: "grid", gridTemplateColumns: "auto minmax(0, 1fr)", gap: "8px 14px", alignItems: "baseline", margin: "0",
-  padding: "0 16px 14px", fontSize: vars.textMeta, lineHeight: vars.leadingMeta, color: vars.muted,
+  display: "flex", flexDirection: "column", gap: "10px", padding: "2px 16px 14px",
+  fontSize: vars.textMeta, lineHeight: vars.leadingMeta, color: vars.muted,
 });
-globalStyle(`${sessionDetails} dt`, { color: vars.subtle });
-globalStyle(`${sessionDetails} dd`, { margin: "0", minWidth: "0" });
-export const resourceRings = style({ display: "flex", alignItems: "center", gap: "10px", marginTop: "8px" });
+export const sessionQuiet = style({ margin: "-4px 0 0", overflowWrap: "anywhere" });
+export const sessionLine = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: "0" });
+export const sessionLineMark = style({ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "16px", flex: "none" });
+export const sessionLineText = style({ flex: "1 1 auto", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const sessionLineName = style({ color: vars.text });
+export const resourceRings = style({ display: "flex", alignItems: "center", gap: "10px", flex: "none" });
 export const sidePanel = style({
   minWidth: "0", minHeight: "0", display: "flex", flexDirection: "column",
   background: vars.canvas,
@@ -185,7 +188,7 @@ export const shareText = style({
 export const shareList = style({ margin: "0 -12px", padding: "0", listStyle: "none" });
 export const shareWrite = style({ marginTop: "8px" });
 export const detailLink = style({
-  display: "inline-flex", alignItems: "center", gap: "6px",
+  display: "inline-flex", alignItems: "center", gap: "6px", flex: "none", whiteSpace: "nowrap",
   selectors: {
     "&:hover": { textDecoration: "underline" },
   },
