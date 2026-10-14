@@ -563,8 +563,8 @@ export function RuntimeLogo({ runtime, size = 16 }: { runtime: "claude" | "codex
  * page just loaded), and answered in pixels; null with none kept. What lays the column out by its own reckoning asks
  * here first, so the styles and it go by the same width from the column's first frame.
  */
-export function keptWidth(variable: string, min: number, max: number): number | null {
-  const saved = Number(localStorage.getItem(`stillfail.width.${variable}`));
+export function keptWidth(variable: string, min: number, max: number, key = variable): number | null {
+  const saved = Number(localStorage.getItem(`stillfail.width.${key}`));
   if (!saved) return null;
   const px = Math.min(max, Math.max(min, saved));
   // Only when it differs: set, even the same, the page's every element is styled anew (the variable is on the root
@@ -579,9 +579,10 @@ export function keptWidth(variable: string, min: number, max: number): number | 
  * (that edge alone, not every edge of the page), with a tip that follows the pointer along it. Dragged, the column takes
  * the width; pressed without moving, `press` (a panel closing); else double-clicked, its own width again.
  */
-/** Sets a column's width (null: its own again) and keeps it on this device, as keptWidth reads it. */
-export function setKeptWidth(variable: string, px: number | null): void {
-  const storage = `stillfail.width.${variable}`;
+/** Sets a column's width (null: its own again) and keeps it on this device (under `key`, one column's of several
+ * drawn by the same variable), as keptWidth reads it. */
+export function setKeptWidth(variable: string, px: number | null, key = variable): void {
+  const storage = `stillfail.width.${key}`;
   if (px === null) {
     document.documentElement.style.removeProperty(variable);
     localStorage.removeItem(storage);

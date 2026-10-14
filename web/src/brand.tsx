@@ -96,6 +96,25 @@ function onPage(node: ReactNode): ReactNode {
 let moving = 0;
 
 /**
+ * The sidebar opened, closed or made wider or narrower by `change`, the page following as it moves (and the sidebar with
+ * it, the page bars' room for it, 更新 by it). Only so: resizing the sidebar follows the pointer at once.
+ */
+export function moveSidebar(change: () => void): void {
+  const moves = (selector: string, props: string[]) => [...document.querySelectorAll<HTMLElement>(selector)].map((el) => [el, props] as [HTMLElement, string[]]);
+  // Cut to its column while it moves, opening too (open, it is not: its resize handle stands over its edge). Else what
+  // is drawn over the list (its frosted top and foot) shows at its whole width over the page from the first frame.
+  const turn = ++moving;
+  document.documentElement.dataset.sidebarMoving = "";
+  void moveState([
+    ...moves(`.${shellCss.shell}`, ["grid-template-columns"]),
+    ...moves(`.${css.sidebarBuddy}`, ["left"]),
+    ...moves(`.${css.sidebarUpdate}`, ["left", "transform"]),
+    ...moves(`.${railCss.edge}`, ["left"]),
+    ...moves(`.${sidebarCss.pageBar}`, ["padding-left"]),
+  ], change).then(() => { if (turn === moving) delete document.documentElement.dataset.sidebarMoving; });
+}
+
+/**
  * Opening and closing the sidebar (its shortcut too, unless `keys` is false: one place on the page holds it), the page
  * following as it moves; `moved` is told where it goes as it starts.
  */
@@ -112,20 +131,7 @@ export function useSidebarToggle(moved?: (closed: boolean) => void, { keys: owns
   const closed = useSidebarClosed();
   const toggle = () => {
     const next = !closed;
-    // It moves (and the sidebar with it, the page bars' room for it, 更新 by it) only now: resizing the sidebar follows
-    // the pointer at once.
-    const moves = (selector: string, props: string[]) => [...document.querySelectorAll<HTMLElement>(selector)].map((el) => [el, props] as [HTMLElement, string[]]);
-    // Cut to its column while it moves, opening too (open, it is not: its resize handle stands over its edge). Else what
-    // is drawn over the list (its frosted top and foot) shows at its whole width over the page from the first frame.
-    const turn = ++moving;
-    document.documentElement.dataset.sidebarMoving = "";
-    void moveState([
-      ...moves(`.${shellCss.shell}`, ["grid-template-columns"]),
-      ...moves(`.${css.sidebarBuddy}`, ["left"]),
-      ...moves(`.${css.sidebarUpdate}`, ["left", "transform"]),
-      ...moves(`.${railCss.edge}`, ["left"]),
-      ...moves(`.${sidebarCss.pageBar}`, ["padding-left"]),
-    ], () => closeSidebar(next)).then(() => { if (turn === moving) delete document.documentElement.dataset.sidebarMoving; });
+    moveSidebar(() => closeSidebar(next));
     moved?.(next);
   };
   // One place on the page holds the shortcut (the rail, or the buddy where there is none).

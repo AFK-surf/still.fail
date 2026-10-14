@@ -15,8 +15,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { DropdownMenu, Popover } from "radix-ui";
 import { NavLink, useLocation, useNavigate } from "react-router";
-import { Archive, Bell, Chart, Chats, Folder, Im, Minus, Plus, Quota, Settings, User, Watch, type IconProps } from "./icons.tsx";
-import { keptWidth, PanelGroup, PanelHead, PanelNote, PanelRow, setKeptWidth, Tip, usePointerTip } from "./ui.tsx";
+import { Archive, Bell, Chart, Chats, Folder, Im, Minus, Plus, Quota, Retry, Settings, Sliders, User, Watch, type IconProps } from "./icons.tsx";
+import { ICON, PanelGroup, PanelHead, PanelNote, PanelRow, setKeptWidth, Tip, usePointerTip } from "./ui.tsx";
 import { lastChatOf, useLastChat, useWorkspaceMarks } from "./lastChat.ts";
 import { useSidebarMode, type SidebarMode } from "./station.tsx";
 import { AttentionEntry } from "./Attention.tsx";
@@ -28,7 +28,7 @@ import { RailStations } from "./Sidebar.tsx";
 import { isPicture } from "./StationMark.tsx";
 import { marked, WorkspaceMark } from "./WorkspaceMark.tsx";
 import { openedAt } from "./DecisionDesk.tsx";
-import { useSidebarToggle } from "./brand.tsx";
+import { moveSidebar, useSidebarToggle } from "./brand.tsx";
 import * as css from "./Rail.css.ts";
 import { t } from "./i18n.ts";
 
@@ -155,14 +155,17 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   // beside it), and closes it: the page the whole width. On the page's load the chats as they were left. Only on a wide
   // screen: on a narrow one the sidebar is a page of its own.
   const own = place === "settings" || place === "files" || place === "chats" || !items.includes(place as RailItem);
+  // Which sidebar it is, each as wide as it was made.
+  const group: SidebarGroup = place === "files" ? "files" : place === "chats" || place === "archive" || items.includes(place as RailItem) ? "chats" : "settings";
   const cameFrom = useRef<Place | null>(null);
   useEffect(() => {
     const moved = cameFrom.current !== null && cameFrom.current !== place;
     cameFrom.current = place;
     if (!matchMedia("(min-width: 701px)").matches) return;
+    widthFor(group, moved && !shut());
     if (own && (moved || place !== "chats")) openSidebar();
     else if (!own && !shut()) sidebar.toggle();
-  }, [place, own]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [place, own, group]); // eslint-disable-line react-hooks/exhaustive-deps
   const settings = `/w/${scope}/settings`;
   // A list of chats lit while the sidebar shows it; 对话 for one not in the rail.
   const shownList = (Object.keys(LISTS) as RailItem[]).find((i) => LISTS[i] === mode && items.includes(i)) ?? "chats";
@@ -248,10 +251,10 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
           <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList}`} side="right" align="start" sideOffset={8}
             collisionPadding={{ top: 52, right: 8, bottom: 8, left: 8 }}>
             {pointed && pointed !== "chats" && (
-              <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => keep(items.filter((i) => i !== pointed))}>{t("web-main.rail.remove", { name: railLabel(pointed) })}</DropdownMenu.Item>
+              <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => keep(items.filter((i) => i !== pointed))}><Minus {...ICON} />{t("web-main.rail.remove", { name: railLabel(pointed) })}</DropdownMenu.Item>
             )}
-            <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => editRail(true)}>{t("web-main.rail.customize")}</DropdownMenu.Item>
-            {kept && <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => setPrefs({ rail: null })}>{t("web-main.rail.reset")}</DropdownMenu.Item>}
+            <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => editRail(true)}><Sliders {...ICON} />{t("web-main.rail.customize")}</DropdownMenu.Item>
+            {kept && <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => setPrefs({ rail: null })}><Retry {...ICON} />{t("web-main.rail.reset")}</DropdownMenu.Item>}
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
@@ -315,6 +318,23 @@ function RailWorkspaces({ scope, current }: { scope: string; current: ReactNode 
 /** The sidebar's width, its least and most (the sidebar's own, styles' --sidebar-w). */
 const SIDEBAR = { min: 180, max: 480, own: 240 } as const;
 
+/** The sidebars, each its own width: the chats' (and the pages beside them), the settings', the files'. */
+type SidebarGroup = "chats" | "settings" | "files";
+/** The one shown, whose width the edge drags. */
+let shownGroup: SidebarGroup = "chats";
+/** Where each is kept: the chats' where the one sidebar's was. */
+const widthKey = (group: SidebarGroup) => group === "chats" ? "--sidebar-w" : `--sidebar-w.${group}`;
+/** The sidebar as wide as `group`'s was made (its own width, none made); moved there with the page, if `glide`. */
+function widthFor(group: SidebarGroup, glide: boolean): void {
+  shownGroup = group;
+  const root = document.documentElement.style;
+  const saved = Number(localStorage.getItem(`stillfail.width.${widthKey(group)}`));
+  const px = saved ? `${Math.min(SIDEBAR.max, Math.max(SIDEBAR.min, saved))}px` : "";
+  if (root.getPropertyValue("--sidebar-w") === px) return;
+  const put = () => { if (px) root.setProperty("--sidebar-w", px); else root.removeProperty("--sidebar-w"); };
+  if (glide) moveSidebar(put); else put();
+}
+
 /**
  * The sidebar's edge, as Cue's rail handle: a strip in the page's gutter by the sidebar's block (shell.css.ts dock), a
  * short bar at its middle shown as the pointer is over the sidebar and longer on the strip itself. Dragged, the sidebar's
@@ -326,7 +346,6 @@ export function SidebarEdge() {
   const tip = usePointerTip();
   const [dragging, setDragging] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
-  useEffect(() => { keptWidth("--sidebar-w", SIDEBAR.min, SIDEBAR.max); }, []);
   useEffect(() => {
     const el = ref.current;
     if (!sidebar.closed || !el) return;
@@ -358,7 +377,7 @@ export function SidebarEdge() {
           const move = (ev: PointerEvent) => {
             if (sidebar.closed || (!moved && Math.abs(ev.clientX - from) < 3)) return;
             if (!moved) { moved = true; setDragging(true); document.body.dataset.resizing = "true"; }
-            setKeptWidth("--sidebar-w", Math.round(Math.min(SIDEBAR.max, Math.max(SIDEBAR.min, start + ev.clientX - from))));
+            setKeptWidth("--sidebar-w", Math.round(Math.min(SIDEBAR.max, Math.max(SIDEBAR.min, start + ev.clientX - from))), widthKey(shownGroup));
           };
           const up = () => {
             handle.removeEventListener("pointermove", move);

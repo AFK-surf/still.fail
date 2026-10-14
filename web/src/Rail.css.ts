@@ -24,10 +24,11 @@ export const rail = style({
  * dock), which starts under that row, no more than a margin; it shrinks with the bar, as long and eased.
  */
 export const top = style({
-  // On the web nothing is in the sidebar's top row either: a margin, as there.
-  flex: "none", alignSelf: "stretch", height: 8, transition: `height 380ms ${vars.easeOut}`,
+  // On the web nothing is in the sidebar's top row either: a margin, as there. Its first place's ground (30) level with
+  // the sidebar's first row (新对话, 32 from 14 down there): its middle at 30, 3 above the gap's 6 and its 4 within.
+  flex: "none", alignSelf: "stretch", height: 5, transition: `height 380ms ${vars.easeOut}`,
   selectors: {
-    "[data-desktop] &": { height: 44, WebkitAppRegion: "drag" },
+    "[data-desktop] &": { height: 41, WebkitAppRegion: "drag" },
     // In the closed bar nothing: its places stand as far from its top as from its sides (rail's padding).
     '[data-sidebar="closed"] &': { height: 0, marginBottom: -6 },
   },
@@ -89,6 +90,10 @@ export const item = style({
     "&:hover::before": { background: vars.hover },
     "&[data-on]": { color: vars.text },
     "&[data-on]::before": { background: vars.selected },
+    // Focused from the keyboard: the ring round its ground, not its 38 (which, the last place, reaches 4 from the
+    // block's foot but 9 from its side), as far from the block's edges every way.
+    "&:focus-visible": { outline: "none" },
+    "&:focus-visible::before": { outline: `2px solid ${vars.fieldFocus}`, outlineOffset: 1 },
   },
 });
 /** 奏, the word, its size the icons' (vars.textTitle is the nearest of the type sizes). */
