@@ -13,19 +13,20 @@ import { Check, ChevronLeft, ChevronRight, Close, List, Moon, Search, Sun, Text 
 import { useNarrow, useApp, SheetGrab, SheetHead, type MobileApp } from "../mobile/app.tsx";
 import { Seg } from "../mobile/parts.tsx";
 import { Segmented, Tip } from "../ui.tsx";
-import { useDark } from "../theme.ts";
+import { useAppearance, useDark, type Appearance } from "../theme.ts";
 import { REST_MS, TAP_REST_MS } from "../FilePreview.tsx";
 import { placeStrokes, strokeLayer } from "../strokes.ts";
 import { placeAt, readWhole, sizeOf, usePlace, type At, type Got } from "./model.ts";
 import { isHeading, search, type Book, type Chapter } from "./text.ts";
-import { LINES, MARGINS, SIZES, pickPaper, setReaderStyle, toggleNight, useReaderStyle, type Paper } from "./readerStyle.ts";
+import { LINES, MARGINS, SIZES, setReaderStyle, useReaderStyle, type Paper } from "./readerStyle.ts";
 import * as css from "./Reader.css.ts";
 import { t } from "../i18n.ts";
 
 /** The most of a file the reader holds (its front, saying so, when it is bigger). */
 const MOST = 32 * 1024 * 1024;
 const SERIF = "\"Songti SC\", \"STSong\", \"Noto Serif CJK SC\", \"Source Han Serif SC\", \"Noto Serif SC\", serif";
-const SANS = "var(--font-body)";
+/** The system's own face (PingFang on a Mac, YaHei on Windows), not the app's: a book reads in what the machine reads in. */
+const SANS = "system-ui, -apple-system, \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", \"Noto Sans CJK SC\", sans-serif";
 
 type Loaded = { state: "loading"; got: Got | null } | { state: "error"; message: string } | { state: "ready"; book: Book; cut: boolean };
 
@@ -153,7 +154,8 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
   const app = useAppSafe();
   const style = useReaderStyle();
   const dark = useDark();
-  const paper: Exclude<Paper, "follow"> = style.paper === "follow" ? (dark ? "night" : "white") : style.paper;
+  const paper = paperOf(style.paper, dark);
+  const night = useNight();
   const loaded = useBook(at, size, mtime, markdown);
   const book = loaded.state === "ready" ? loaded.book : null;
   const place = usePlace(at);
@@ -444,7 +446,7 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
             <TopTool label={t("web-pages.drive.reader.contents")} on={panel === "contents"} onClick={() => open("contents")}><List size={18} /></TopTool>
             <TopTool label={t("web-pages.drive.reader.find")} on={panel === "find"} onClick={() => open("find")}><Search size={18} /></TopTool>
             <TopTool label={t("web-pages.drive.reader.layout")} on={panel === "layout"} onClick={() => open("layout")}><TextIcon size={18} /></TopTool>
-            <TopTool label={t(paper === "night" ? "web-pages.drive.reader.day" : "web-pages.drive.reader.night")} on={false} onClick={() => toggleNight(paper === "night")}>{paper === "night" ? <Sun size={18} /> : <Moon size={18} />}</TopTool>
+            <TopTool label={t(paper === "night" ? "web-pages.drive.reader.day" : "web-pages.drive.reader.night")} on={false} onClick={night}>{paper === "night" ? <Sun size={18} /> : <Moon size={18} />}</TopTool>
           </>}
         </span>
       </header>
@@ -474,7 +476,7 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
           <Tool icon={<List size={20} />} label={t("web-pages.drive.reader.contents")} on={panel === "contents"} onClick={() => open("contents")} />
           <Tool icon={<TextIcon size={20} />} label={t("web-pages.drive.reader.layout")} on={panel === "layout"} onClick={() => open("layout")} />
           {/* It names where it goes: at night the day (the light paper last picked), by day the night. */}
-          <Tool icon={paper === "night" ? <Sun size={20} /> : <Moon size={20} />} label={t(paper === "night" ? "web-pages.drive.reader.day" : "web-pages.drive.reader.night")} on={false} onClick={() => toggleNight(paper === "night")} />
+          <Tool icon={paper === "night" ? <Sun size={20} /> : <Moon size={20} />} label={t(paper === "night" ? "web-pages.drive.reader.day" : "web-pages.drive.reader.night")} on={false} onClick={night} />
         </div>
       </footer>}
       {!narrow && panel && (
@@ -627,12 +629,41 @@ function LayoutSheet() {
   );
 }
 
-const PAPERS: Paper[] = ["follow", "white", "green", "grey", "night"];
+/** The papers: the light ones, then night — which is the app's dark, as the app's dark is the reader's night. */
+const PAPERS: Exclude<Paper, "follow">[] = ["white", "green", "grey", "night"];
+type Light = "white" | "green" | "grey";
+const isLight = (p: Paper): p is Light => p === "white" || p === "green" || p === "grey";
+
+/** The paper shown: night while the app is dark, by day the light paper chosen (white until one is). */
+function paperOf(chosen: Paper, dark: boolean): Exclude<Paper, "follow"> {
+  return dark ? "night" : isLight(chosen) ? chosen : "white";
+}
+
+/** Night and day are the whole app's (外观): the reader's 夜间 turns the app dark, 日间 light. */
+function useNight(): () => void {
+  const dark = useDark();
+  const [, setAppearance] = useAppearance();
+  return () => setAppearance(dark ? "light" : "dark");
+}
+
+/** A paper picked: night turns the app dark; a light one is the day's paper, the app turned light if it was dark. */
+function usePickPaper(): (paper: Exclude<Paper, "follow">) => void {
+  const dark = useDark();
+  const [, setAppearance] = useAppearance();
+  return (paper) => {
+    if (paper === "night") { if (!dark) setAppearance("dark"); return; }
+    setReaderStyle({ paper });
+    if (dark) setAppearance("light" satisfies Appearance);
+  };
+}
 
 /** The paper under the text, its size, its lines' height, the room either side, its face, and whether paragraphs are
  *  indented: each changed as it is picked (`prefs.set {reader: {…}}`, that one setting). */
 function Layout({ narrow }: { narrow: boolean }) {
   const style = useReaderStyle();
+  const dark = useDark();
+  const shownPaper = paperOf(style.paper, dark);
+  const pickPaper = usePickPaper();
   const faces = [t("web-pages.drive.reader.serif"), t("web-pages.drive.reader.sans")];
   const indents = [t("web-pages.drive.reader.indent"), t("web-pages.drive.reader.flush")];
   const choose = (label: string, options: string[], at: number, pick: (i: number) => void) => narrow
@@ -644,7 +675,7 @@ function Layout({ narrow }: { narrow: boolean }) {
         <span className={css.layoutLabel}>{t("web-pages.drive.reader.paper")}</span>
         <span className={css.papers}>
           {PAPERS.map((p) => (
-            <button key={p} type="button" className={css.paperSwatch} data-paper={p} data-on={style.paper === p || undefined} aria-pressed={style.paper === p} onClick={() => pickPaper(p)}>
+            <button key={p} type="button" className={css.paperSwatch} data-paper={p} data-on={shownPaper === p || undefined} aria-pressed={shownPaper === p} onClick={() => pickPaper(p)}>
               <span aria-hidden="true">{t("web-pages.drive.reader.paperGlyph")}</span>
               <small>{t(`web-pages.drive.reader.paper.${p}`)}</small>
             </button>

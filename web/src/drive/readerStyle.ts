@@ -20,19 +20,5 @@ export function setReaderStyle(change: Partial<ReaderPrefs>): void {
   setPrefs({ reader: change } as PrefsPatch);
 }
 
-/** The light paper 日间 goes back to: the last one chosen here (white until one is). */
-let lastLight: Exclude<ReaderPaper, "follow" | "night"> = "white";
-
-/** Night, or back to the day (the light paper last chosen), from the paper shown now. */
-export function toggleNight(shownNight: boolean): void {
-  setReaderStyle({ paper: shownNight ? lastLight : "night" });
-}
-
-/** A paper picked: the day 日间 goes back to, when it is a light one. */
-export function pickPaper(paper: ReaderPaper): void {
-  if (paper === "white" || paper === "green" || paper === "grey") lastLight = paper;
-  setReaderStyle({ paper });
-}
-
 /** The prefs now (outside a render). */
 export const readerNow = () => prefs().reader;

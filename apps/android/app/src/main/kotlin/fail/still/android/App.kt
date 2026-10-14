@@ -292,7 +292,7 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
     fun useTheme(value: String) = setPrefs(kept.copy(appearance = value), buildJsonObject { put("appearance", value) })
 
     /** How the drive's reader lays text out on this device (the core's `prefs.reader`, whole; its defaults before it says). */
-    val readerPrefs: fail.still.android.data.ReaderPrefs get() = kept.reader ?: fail.still.android.data.ReaderPrefs(size = 18, line = 1.7, margin = 22, face = "serif", indent = true, paper = "follow")
+    val readerPrefs: fail.still.android.data.ReaderPrefs get() = kept.reader ?: fail.still.android.data.ReaderPrefs(size = 18, line = 1.7, margin = 22, face = "sans", indent = true, paper = "follow")
     /** One setting of the reader changed (`prefs.set {reader: {field: value}}`): shown at once, kept in its bounds by the core. */
     fun setReader(shown: fail.still.android.data.ReaderPrefs, field: String, value: kotlinx.serialization.json.JsonPrimitive) =
         setPrefs(kept.copy(reader = shown), buildJsonObject { putJsonObject("reader") { put(field, value) } })

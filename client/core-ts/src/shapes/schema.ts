@@ -1166,7 +1166,7 @@ export const SHAPES: Record<string, Shape> = {
     ["indent", "bool", { doc: "Paragraphs start indented two characters." }],
     ["paper", "ReaderPaper"],
   ], { doc: "How the drive's reader lays text out on this device (`prefs.set {reader: {…}}`, one setting or several)." }),
-  ReaderFace: words(["serif","sans"], { default: "serif" }),
+  ReaderFace: words(["serif","sans"], { default: "sans" }),
   ReaderPaper: words(["follow","white","green","grey","night"], { doc: "The reader's paper: as the app looks (`follow`), or one of its own.", default: "follow" }),
   OpenChat: struct([
     ["station", "String"],

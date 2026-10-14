@@ -212,7 +212,6 @@ globalStyle(`${paperSwatch} > span`, {
 });
 globalStyle(`${paperSwatch}[data-on] > span`, { boxShadow: `inset 0 0 0 2px var(--m-accent, ${vars.accent})` });
 globalStyle(`${paperSwatch} small`, { fontSize: vars.textCaption, color: `var(--m-muted, ${vars.muted})` });
-globalStyle(`${paperSwatch}[data-paper="follow"] > span`, { background: `linear-gradient(135deg, ${PAPER_BG.white} 50%, ${PAPER_BG.night} 50%)`, color: "#7A7D83" });
 globalStyle(`${paperSwatch}[data-paper="white"] > span`, { background: PAPER_BG.white, color: "#24272B" });
 globalStyle(`${paperSwatch}[data-paper="green"] > span`, { background: PAPER_BG.green, color: "#24302A" });
 globalStyle(`${paperSwatch}[data-paper="grey"] > span`, { background: PAPER_BG.grey, color: "#24272B" });
@@ -299,3 +298,7 @@ globalStyle(`${desk} ${panel}`, {
 globalStyle(`${desk} ${findStrip}`, { top: `${BAR + 10}px` });
 globalStyle(`${desk}:has(> ${panel}) ${top}`, { left: "0", maxWidth: "none" });
 globalStyle(`${desk}:has(> ${panel}) ${findStrip}`, { left: `calc((100% - ${PANEL}px) / 2)` });
+/** In the panel beside the text, the face and the indent each on a row of their own: side by side, 首行缩进 had no room. */
+globalStyle(`${desk} ${layoutPair}`, { gridTemplateColumns: "minmax(0, 1fr)" });
+/** The panel's close: square, as the toolbar's buttons. */
+globalStyle(`${panelHead} ${chip}`, { width: "30px", minWidth: "0", padding: "0" });

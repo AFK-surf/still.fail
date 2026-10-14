@@ -33,7 +33,7 @@ export function readerOf(v: unknown): Map_ {
     size: num("size", 1),
     line: Math.round(num("line", 0.1) * 10) / 10,
     margin: num("margin", 1),
-    face: FACES.includes(r.face as string) ? r.face : "serif",
+    face: FACES.includes(r.face as string) ? r.face : "sans",
     indent: typeof r.indent === "boolean" ? r.indent : true,
     paper: PAPERS.includes(r.paper as string) ? r.paper : "follow",
   };
