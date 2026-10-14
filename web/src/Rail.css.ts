@@ -44,15 +44,16 @@ export const edge = style({
   selectors: {
     "&[data-closed]": { cursor: "pointer", left: 47 },
     "&::after": {
-      content: '""', position: "absolute", top: "50%", left: "50%", width: 4, height: 24, borderRadius: 999,
-      background: vars.lineStrong, opacity: 0, transform: "translate(-50%, -50%)",
+      // Odd widths on whole pixels, the bar's middle and the line's one (left 6, 1 wide; left 4, 5 wide).
+      content: '""', position: "absolute", top: "50%", left: 4, width: 5, height: 24, borderRadius: 999,
+      background: vars.lineStrong, opacity: 0, transform: "translateY(-50%)",
       transition: `height 180ms cubic-bezier(.16, 1, .3, 1), opacity 180ms cubic-bezier(.16, 1, .3, 1), background-color 150ms ${vars.easeOut}`,
     },
     // The line itself (the hairline of the other edges, ui.css.ts resizeHandle), on hover and while dragged.
     "&::before": {
-      content: '""', position: "absolute", top: 8, bottom: 8, left: "50%", width: 1, borderRadius: 999,
+      content: '""', position: "absolute", top: 8, bottom: 8, left: 6, width: 1, borderRadius: 999,
       background: `linear-gradient(to bottom, transparent 10%, ${vars.fieldHover} 50%, transparent 90%)`,
-      opacity: 0, transform: "translateX(-50%)", transition: `opacity 140ms ${vars.easeOut}`,
+      opacity: 0, transition: `opacity 140ms ${vars.easeOut}`,
     },
     "&:not([data-closed]):hover::before, &[data-active]::before": { opacity: 1 },
     "&[data-moving]::after": { opacity: 1 },

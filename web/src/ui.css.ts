@@ -321,8 +321,9 @@ export const resizeHandle = style({
     "&:hover::after, &:focus-visible::after, &[data-active]::after": { opacity: 1 },
     // The bar at its middle, on the line (Rail.css.ts edge, the sidebar's, is the same).
     "&::before": {
-      content: "\"\"", position: "absolute", top: "50%", left: "3.5px", width: "4px", height: "24px", borderRadius: "999px",
-      background: vars.lineStrong, opacity: 0, transform: "translate(-50%, -50%)", zIndex: 1,
+      // Odd widths on whole pixels: the bar's middle is the line's (the line left 3, 1 wide; the bar left 1, 5 wide).
+      content: "\"\"", position: "absolute", top: "50%", left: "1px", width: "5px", height: "24px", borderRadius: "999px",
+      background: vars.lineStrong, opacity: 0, transform: "translateY(-50%)", zIndex: 1,
       transition: `height 180ms cubic-bezier(.16, 1, .3, 1), opacity 180ms cubic-bezier(.16, 1, .3, 1), background-color 150ms ${vars.easeOut}`,
     },
     "&:hover::before, &:focus-visible::before, &[data-active]::before": { height: "48px", opacity: 1 },
