@@ -97,6 +97,9 @@ export const item = style({
     "&:hover::before": { background: vars.hover },
     "&[data-on]": { color: vars.text },
     "&[data-on]::before": { background: vars.selected },
+    // On the closed bar's floating ground (shell.css.ts dock), raised in dark: lit by the words' colour, as plain a step
+    // above it as the selected grey is above the sidebar.
+    '[data-sidebar="closed"] &[data-on]::before': { background: `color-mix(in srgb, ${vars.text} 12%, transparent)` },
     // Focused from the keyboard: the ring round its ground, not its 38 (which, the last place, reaches 4 from the
     // block's foot but 9 from its side), as far from the block's edges every way.
     "&:focus-visible": { outline: "none" },
