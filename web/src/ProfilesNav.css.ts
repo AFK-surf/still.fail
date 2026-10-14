@@ -21,7 +21,7 @@ export const name = style({
   flex: 1, ...ellipsis,
   selectors: { [`${row}[data-away] &`]: { opacity: 0.5 } },
 });
-export const quota = style({ flex: "none", display: "flex" });
+export const quota = style({ flex: "none", display: "flex", gap: 4 });
 export const credits = style({ flex: "none", fontSize: vars.textMeta, color: vars.muted, fontVariantNumeric: "tabular-nums" });
 export const meta = style({
   display: "flex", alignItems: "center", gap: 4, height: 18, lineHeight: "18px", minWidth: 0,

@@ -42,6 +42,8 @@ export const quotaChip = style({
 });
 export const quotaChipEdge = style({
   position: "absolute", inset: "0", width: "100%", height: "100%", overflow: "visible", pointerEvents: "none",
+  // Its box's colour, over what a row gives the icons in it (a sidebar row's `svg` muted).
+  selectors: { [`${quotaChip} > &`]: { color: "inherit" } },
 });
 /** The track: in dark a step stronger than the line, which on a popped-up panel's raised grey does not show. */
 export const quotaChipTrack = style({ stroke: `light-dark(${vars.line}, ${vars.lineStrong})` });

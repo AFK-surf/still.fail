@@ -98,7 +98,7 @@ function ProfileRow({ entry, scope }: { entry: WorkspaceProfile; scope: string }
       <span className={css.text}>
         <span className={css.head}>
           <span className={css.name}>{p.name}</span>
-          <Tightest quota={p.quota} />
+          <Windows quota={p.quota} />
         </span>
         <span className={css.meta}>
           {trouble && <span className={css.trouble} data-tone={entry.usable ? p.checkTone : "red"}>{trouble}</span>}
@@ -110,19 +110,19 @@ function ProfileRow({ entry, scope }: { entry: WorkspaceProfile; scope: string }
   );
 }
 
-/** Of an allowance's windows, the one with least left (the one that runs out first, all a row has room for), named
- * however many there are; the others on its tip. */
-function Tightest({ quota }: { quota: Quota | null | undefined }) {
+/** An allowance's windows, shortest first, each named by its mark; when each refills on the tip. */
+function Windows({ quota }: { quota: Quota | null | undefined }) {
   if (!quota || quota.state !== "ok") return null;
   // A key's balance, where its provider says one.
   if (quota.windows.length === 0) return quota.creditsText ? <span className={css.credits}>{quota.creditsText}</span> : null;
-  const least = quota.windows.reduce((a, b) => (b.left < a.left ? b : a));
   const left = (w: Quota["windows"][number]) => t("web-main.quota.left", { label: w.label, left: w.left });
   return (
     <span className={css.quota}>
-      <Tip label={<>{quota.windows.map((w, i) => <span key={w.label}>{i > 0 && <br />}{left(w)}{w.refills && ` · ${w.refills}`}</span>)}</>}>
-        <EdgeChip fill={least.left} level={least.level} mark={least.mark} label={left(least)} small bare />
-      </Tip>
+      {quota.windows.map((w) => (
+        <Tip key={w.label} label={<>{left(w)}{w.refills && <><br />{w.refills}</>}</>}>
+          <EdgeChip fill={w.left} level={w.level} mark={w.mark} label={left(w)} small bare />
+        </Tip>
+      ))}
     </span>
   );
 }
@@ -161,7 +161,7 @@ function MachineLoginRow({ login, scope, station }: { login: MachineLogin; scope
         <span className={css.text}>
           <span className={css.head}>
             <span className={css.name}>{RUNTIME[login.runtime]}</span>
-            <Tightest quota={login.quota} />
+            <Windows quota={login.quota} />
           </span>
           <span className={css.meta}>
             <span className={css.facts}>{login.email ?? t("web-main.profile.signedIn")}</span>
