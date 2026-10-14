@@ -232,7 +232,9 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
       <Popover.Portal>
         {/* Beside the rail while it is changed: what can be added, by kind. Pressing in the rail does not close it; anywhere
             else (or Esc) ends the change, there is no button for it. 恢复默认 is in the rail's menu. */}
-        <Popover.Content className={`${controlsCss.popover} ${css.adder}`} side="right" align="start" sideOffset={8} collisionPadding={8}
+        <Popover.Content className={`${controlsCss.popover} ${css.adder}`} side="right" align="start" sideOffset={8}
+          // Clear of the top row: the macOS window's buttons are in it.
+          collisionPadding={{ top: 52, right: 8, bottom: 8, left: 8 }}
           onOpenAutoFocus={(e) => e.preventDefault()}
           onInteractOutside={(e) => { if ((e.target as HTMLElement | null)?.closest(`.${css.rail}`)) e.preventDefault(); }}>
           <PanelHead title={t("web-main.rail.customize")} note={t("web-main.rail.customizeLead")} />
