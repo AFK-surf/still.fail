@@ -373,6 +373,37 @@ private class RefMarks(private val accent: Color) : VisualTransformation {
     }
 }
 
+/**
+ * Puts each chat's link pasted in `pasted` (`linkedRefs`) as its mark, the core keeping its link as for one picked with
+ * `@` (a link to its agent's execution history kept as that link); one the core cannot make a mark of stays as it is.
+ * Written on meanwhile: each link where it is now, if it still is.
+ */
+private suspend fun markPasted(app: AppState, draft: Draft, pasted: String, refs: List<Pair<MatchResult, LinkedChat>>) {
+    val made = refs.map { (m, chat) ->
+        try {
+            val mark = app.core.call("chat.ref", buildJsonObject { put("station", chat.station); put("id", chat.id); put("title", m.groupValues[1]); put("base", app.cloudOrigin) })
+                .jsonObject["mark"]?.jsonPrimitive?.content ?: m.value
+            if (chat.history.isNotEmpty() && mark != m.value) {
+                val at = chat.station.indexOf('/')
+                val page = "${app.cloudOrigin.trimEnd('/')}/w/${chat.station.substring(0, at)}/s/${chat.station.substring(at + 1)}/chats/${encodeComponent(chat.id)}${chat.history}"
+                app.core.call("chat.refs", buildJsonObject { put("links", JsonArray(listOf(JsonArray(listOf(JsonPrimitive(mark.substring(2, mark.length - 1)), JsonPrimitive(page)))))) })
+            }
+            mark
+        } catch (_: CoreException) { m.value }
+    }
+    val now = draft.input
+    var text = now.text
+    var caret = now.selection.start
+    // Last first, so the places of those before stay as they are.
+    refs.indices.reversed().forEach { i ->
+        val m = refs[i].first
+        val at = if (now.text == pasted) m.range.first else text.indexOf(m.value).takeIf { it >= 0 } ?: return@forEach
+        text = text.substring(0, at) + made[i] + text.substring(at + m.value.length)
+        if (caret >= at + m.value.length) caret += made[i].length - m.value.length
+    }
+    if (text != now.text) draft.input = TextFieldValue(text, TextRange(caret.coerceIn(0, text.length)))
+}
+
 /** The address's workspace (the scope of its chats' list). */
 private fun scopeOf(address: String) = address.substringBefore('/')
 
@@ -743,8 +774,10 @@ internal val Draft.composerExpanded: Boolean
 fun ComposerBar(
     draft: Draft, placeholder: String, onPlus: () -> Unit, onType: () -> Unit, onSend: () -> Unit,
     hint: () -> Float = { 1f }, morph: Morph? = null, onField: (LayoutCoordinates) -> Unit = {},
-    onFieldText: (TextLayoutResult) -> Unit = {},
+    onFieldText: (TextLayoutResult) -> Unit = {}, station: String? = null,
 ) {
+    val app = LocalApp.current
+    val scope = rememberCoroutineScope()
     // One style for what is typed and the placeholder: the field is as tall empty as with a line in it.
     val style = SendTextStyle.copy(color = C.ink)
     val locked = draft.locked || draft.starting
@@ -774,6 +807,12 @@ fun ComposerBar(
                         next.selection.collapsed && next.selection.start == caret - 1 && next.text == was.text.removeRange(caret - 1, caret)) ChatRefs.before(was.text, caret) else null
                     draft.input = if (mark != null) TextFieldValue(was.text.removeRange(mark, caret), TextRange(mark)) else next
                     if (next.text != was.text) onType()
+                    // A chat's link pasted (`[its title](its link)`, as copied) goes in as a reference, as on the web.
+                    if (mark == null && station != null) {
+                        val put = insertedRange(was.text, next.text)?.takeIf { it.last > it.first }
+                        val refs = if (put == null) emptyList() else linkedRefs(next.text, station).filter { (m) -> m.range.first <= put.last && m.range.last >= put.first }
+                        if (refs.isNotEmpty()) scope.launch { markPasted(app, draft, next.text, refs) }
+                    }
                 },
                 textStyle = style, visualTransformation = marks, readOnly = draft.starting,
                 cursorBrush = SolidColor(C.accent), maxLines = 6, onTextLayout = onFieldText,
