@@ -2,15 +2,45 @@
 // back, carried on into the chat a new one made, and kept on the device as the chat's draft.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Effect } from "effect";
+import { Deferred, Effect } from "effect";
 import { dbName, SOON_MS } from "../src/data.ts";
 import { apply, call, subscribe, v } from "./helpers.ts";
-import { started } from "./station-fixture.ts";
 import { CoreFiles, PageFiles } from "../src/hosts/file-port.ts";
+import { CoreError } from "../src/error.ts";
+import { stationReplies, started } from "./station-fixture.ts";
 
 type J = any;
 
-test("desktop_files_reach_upload_and_release_the_page_file_on_success_or_read_failure", async () => {
+test("desktop_upload_retry_keeps_its_source_after_a_station_failure", async () => {
+  const t = await setup();
+  const released: number[] = [];
+  const received: number[][] = [];
+  const page = new PageFiles((m) => bridge.receive(structuredClone(m)));
+  const bridge = new CoreFiles((m) => {
+    if ((m as J).filePort === "release") released.push((m as J).file);
+    page.receive(structuredClone(m));
+  });
+  (t.core.inner.stations.requests as J).uploadPart = (_addr: unknown, q: J, bytes: Uint8Array) => {
+    received.push([...bytes]);
+    return received.length === 1
+      ? Effect.fail(new CoreError("upload", "try again"))
+      : Effect.succeed({ have: bytes.length, file: { name: q.name, path: "/u/retried.png", size: bytes.length } });
+  };
+  await t.watch(1, "ws/st:k");
+  const params = { key: "ws/st:k", station: "ws/st", files: [{ id: "f1", name: "image.png", size: 3, blob: new Blob([new Uint8Array([1, 2, 3])]) }] };
+  t.core.receiveRaw(t.ui, bridge.prepare(structuredClone(page.prepare({ id: 101, call: "composer.add", params }))));
+  await t.settle();
+  assert.equal(v(t.values, 1).files[0].error, "try again");
+  assert.deepEqual(released, []);
+  const retry = Effect.runPromise(t.core.inner.composers.uploaded("ws/st", [{ id: "f1", name: "image.png" }], true));
+  await t.settle();
+  assert.equal((await retry)[0].path, "/u/retried.png");
+  assert.deepEqual(received, [[1, 2, 3], [1, 2, 3]]);
+  assert.deepEqual(released, [1]);
+  bridge.close(); t.core.close();
+});
+
+test("desktop_files_reach_upload_and_release_on_success_or_removal_after_failure", async () => {
   const t = await setup();
   const received: number[][] = [];
   const released: number[] = [];
@@ -38,6 +68,8 @@ test("desktop_files_reach_upload_and_release_the_page_file_on_success_or_read_fa
   await t.settle();
   assert.match(v(t.values, 1).files[1].error, /no longer available/);
   assert.equal(v(t.values, 1).uploading, false);
+  assert.deepEqual(released, [1]);
+  await t.ask("remove", { key: "ws/st:k", id: "f102" });
   assert.deepEqual(released, [1, 2]);
   bridge.close(); t.core.close();
 });
@@ -171,5 +203,153 @@ test("what_the_core_kept_frozen_is_read_back_and_written_on_copies", async () =>
   await t.ask("remove", { key: "ws/st:new", id: file });
   const v2 = v(t.values, 2);
   assert.deepEqual([v2.text, v2.quotes.map((q: J) => [q.text, q.comment]), v2.files], ["旧的草稿，接着写", [["那段", "改了"]], []]);
+  t.core.close();
+});
+
+
+// Hold the station's upload response until the test releases it: no timers or real network.
+async function queuedUpload() {
+  const t = await setup();
+  const gate = Deferred.makeUnsafe<J, CoreError>();
+  let tries = 0;
+  (t.core.inner.stations.requests as J).uploadPart = () => { tries++; return Deferred.await(gate); };
+  const posted: J[] = [];
+  (t.core.inner.stations as J).post = (_station: string, thread: number, message: J) => Effect.sync(() => { posted.push({ thread, ...message }); return posted.length; });
+  await t.watch(1, "ws/st:k");
+  const file = { id: "slow", name: "slow.txt", size: 3, blob: new Blob(["abc"]) };
+  await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [file] });
+  const uploads = [{ id: file.id, name: file.name, size: file.size }];
+  const saved = { name: file.name, size: file.size, path: "/u/slow.txt" };
+  const send = (id: number, extra: J = {}) => call(t.core, t.ui, id, "chat.send", { station: "ws/st", thread: 7, text: "with file", uploads, ...extra });
+  const finish = () => Deferred.doneUnsafe(gate, Effect.succeed({ have: 3, file: saved }));
+  return { ...t, gate, posted, send, finish, saved, uploads, tries: () => tries, local: t.core.inner.views.local };
+}
+
+test("uploading_attachment_can_be_submitted_and_survives_leaving_the_composer_without_early_delivery", async () => {
+  const t = await queuedUpload();
+  assert.equal(v(t.values, 1).uploading, true);
+  assert.equal(v(t.values, 1).ready, true); // attachment alone is enough
+  await t.ask("take", { key: "ws/st:k" });
+  t.send(501, { text: "", quotes: [{ author: "agent", text: "quote", comment: "" }] });
+  await t.settle();
+  assert.equal(v(t.values, 1).ready, false);
+  assert.equal(t.posted.length, 0);
+  assert.equal(t.local.outbox("ws/st", 7)[0].uploads[0].name, "slow.txt");
+  t.core.disconnect(t.ui);
+  t.finish();
+  await t.settle();
+  assert.equal(t.posted.length, 1);
+  assert.deepEqual(t.posted[0].attachments, [t.saved]);
+  assert.equal(t.posted[0].quotes[0].text, "quote");
+  assert.equal(t.posted[0].uploads, undefined);
+  t.core.close();
+});
+
+test("later_messages_wait_behind_uploads_but_other_chats_are_free", async () => {
+  const t = await queuedUpload();
+  t.send(501);
+  t.send(502, { text: "next", uploads: [] });
+  t.send(503, { thread: 8, text: "other chat", uploads: [] });
+  await t.settle();
+  assert.deepEqual(t.posted.map((m) => m.text), ["other chat"]);
+  t.finish();
+  await t.settle();
+  assert.deepEqual(t.posted.map((m) => m.text), ["other chat", "with file", "next"]);
+  t.core.close();
+});
+
+test("failed_upload_keeps_the_message_and_retry_uploads_before_delivery", async () => {
+  const t = await queuedUpload();
+  t.send(501);
+  await t.settle();
+  Deferred.doneUnsafe(t.gate, Effect.fail(new CoreError("upload", "offline")));
+  await t.settle();
+  const failed = t.local.outbox("ws/st", 7)[0];
+  assert.equal(failed.state, "failed");
+  assert.equal(failed.error, "offline");
+  assert.equal(t.posted.length, 0);
+  const retry = Deferred.makeUnsafe<J, CoreError>();
+  (t.core.inner.stations.requests as J).uploadPart = () => Deferred.await(retry);
+  call(t.core, t.ui, 502, "chat.retry", { station: "ws/st", thread: 7, id: failed.id });
+  await t.settle();
+  assert.equal(t.posted.length, 0);
+  Deferred.doneUnsafe(retry, Effect.succeed({ have: 3, file: t.saved }));
+  await t.settle();
+  assert.equal(t.posted.length, 1);
+  assert.deepEqual(t.posted[0].attachments, [t.saved]);
+  t.core.close();
+});
+
+test("discarding_a_message_waiting_for_upload_never_sends_it", async () => {
+  const t = await queuedUpload();
+  t.send(501);
+  await t.settle();
+  call(t.core, t.ui, 502, "chat.discard", { station: "ws/st", thread: 7, id: t.local.outbox("ws/st", 7)[0].id });
+  await t.settle();
+  t.finish();
+  await t.settle();
+  assert.equal(t.posted.length, 0);
+  assert.equal(t.local.outbox("ws/st", 7).length, 0);
+  t.core.close();
+});
+
+test("missing_upload_sources_fail_visibly_instead_of_sending_without_attachments", async () => {
+  const t = await queuedUpload();
+  t.core.inner.composers.release(t.uploads); // source unavailable after a core restart
+  t.send(501);
+  await t.settle();
+  assert.equal(t.posted.length, 0);
+  const entry = t.local.outbox("ws/st", 7)[0];
+  assert.equal(entry.state, "failed");
+  assert.match(entry.error, /slow.txt/);
+  assert.equal(entry.text, "with file");
+  t.core.close();
+});
+
+test("a_new_chat_keeps_its_queued_upload_until_the_chat_and_file_are_ready", async () => {
+  const t = await queuedUpload();
+  stationReplies(t.host, (req) => req.method === "POST" && req.url.endsWith("/sessions") ? { key: "ember:new", thread: { id: 9 } } : undefined);
+  const key = t.local.pendingNew("ws/st", { runtime: "claude" });
+  t.send(501, { thread: undefined, session: key });
+  await t.settle();
+  assert.equal(t.posted.length, 0);
+  // Start its creation after the message has joined the new chat's queue.
+  t.core.inner.viewCalls.makeChat(key);
+  await t.settle();
+  assert.equal(t.posted.length, 0);
+  assert.equal(t.local.outbox("ws/st", 9)[0].uploads[0].id, "slow");
+  t.finish();
+  await t.settle();
+  assert.equal(t.posted[0].thread, 9);
+  assert.deepEqual(t.posted[0].attachments, [t.saved]);
+  t.core.close();
+});
+
+
+test("an_upload_finishing_between_the_click_and_take_still_resolves_the_submitted_file_id", async () => {
+  const t = await queuedUpload();
+  t.finish();
+  await t.settle();
+  await t.ask("take", { key: "ws/st:k" });
+  t.send(501); // the page's last frame still had this file uploading
+  await t.settle();
+  assert.deepEqual(t.posted[0].attachments, [t.saved]);
+  t.core.close();
+});
+
+test("a_message_waits_for_every_upload_and_keeps_already_uploaded_attachments", async () => {
+  const t = await queuedUpload();
+  const second = Deferred.makeUnsafe<J, CoreError>();
+  (t.core.inner.stations.requests as J).uploadPart = () => Deferred.await(second);
+  await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [{ id: "second", name: "second.txt", size: 1, blob: new Blob(["x"]) }] });
+  const ready = { name: "ready.txt", path: "/u/ready.txt", size: 1 };
+  t.send(501, { attachments: [ready], uploads: [...t.uploads, { id: "second", name: "second.txt", size: 1 }] });
+  t.finish();
+  await t.settle();
+  assert.equal(t.posted.length, 0);
+  const saved = { name: "second.txt", path: "/u/second.txt", size: 1 };
+  Deferred.doneUnsafe(second, Effect.succeed({ have: 1, file: saved }));
+  await t.settle();
+  assert.deepEqual(t.posted[0].attachments, [ready, t.saved, saved]);
   t.core.close();
 });

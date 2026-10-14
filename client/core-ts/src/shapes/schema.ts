@@ -906,7 +906,7 @@ export const SHAPES: Record<string, Shape> = {
     ["quotes", vec("ComposerQuote")],
     ["focus", opt("String"), { doc: "The quote just added: its comment takes the focus (`composer.focused` once it has)." }],
     ["files", vec("ComposerFile")],
-    ["uploading", "bool", { doc: "A file still going up: nothing can be sent until it is there." }],
+    ["uploading", "bool", { doc: "A file still going up; sending queues the message until it is there." }],
     ["ready", "bool", { doc: "Something to send, and nothing holding it: words, a file that is up, or a quote." }],
     ["starting", "bool", { doc: "A new chat being made for the message." }],
     ["error", opt("String")],
@@ -1561,6 +1561,7 @@ export const SHAPES: Record<string, Shape> = {
     ["said", opt("String")],
   ], { doc: "A job's output as it grows (the `jobLog` topic): its last lines, when it last grew, its state (absent from a\nstation yet to say), and, put in by the core, its last line and when in words (absent: nothing to say)." }),
   Outgoing: struct([
+    ["uploads", opt(vec("ComposerFile")), { doc: "Attachments still uploading in the background before delivery." }],
     ["id", "String"],
     ["text", "String"],
     ["attachments", vec("Attachment")],

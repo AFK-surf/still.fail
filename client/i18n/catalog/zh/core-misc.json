@@ -165,5 +165,6 @@
   "core-misc.wake.gone": "页面回到前台，重新连接",
   "core-misc.wake.network": "网络变了，重新连接",
   "core-misc.composer.too_big": "超过 1 GB",
+  "core-misc.composer.upload_missing": "{name} 的上传源已丢失，请在新消息中重新添加附件。",
   "core-misc.composer.upload_failed": "上传失败"
 }

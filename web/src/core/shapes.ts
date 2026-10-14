@@ -1608,8 +1608,32 @@ export interface Me {
 	email?: string;
 }
 
+/** Long words pasted into a composer, kept as a file: how they are named there, and how many characters they are. */
+export interface PastedInfo {
+	preview: string;
+	characters: number;
+	/** The words pasted, while they can still be put back into the text. */
+	text?: string;
+}
+
+/** A file in what is being written: going up, up, or failed. */
+export interface ComposerFile {
+	/** The page's id for it (`composer.add`). */
+	id: string;
+	name: string;
+	size: number;
+	/** How much of it the station has, while it goes up. */
+	sent?: number;
+	/** Up: as the station keeps it (in no chat until a message takes it). */
+	done?: Attachment;
+	error?: string;
+	pasted?: PastedInfo;
+}
+
 /** A message sent from here that the chat does not show yet (sending | failed); `seq` once the station has it. */
 export interface Outgoing {
+	/** Attachments still uploading in the background before delivery. */
+	uploads?: ComposerFile[];
 	id: string;
 	text: string;
 	attachments: Attachment[];
@@ -1821,28 +1845,6 @@ export interface ChatsView {
 	note?: ListNote;
 }
 
-/** Long words pasted into a composer, kept as a file: how they are named there, and how many characters they are. */
-export interface PastedInfo {
-	preview: string;
-	characters: number;
-	/** The words pasted, while they can still be put back into the text. */
-	text?: string;
-}
-
-/** A file in what is being written: going up, up, or failed. */
-export interface ComposerFile {
-	/** The page's id for it (`composer.add`). */
-	id: string;
-	name: string;
-	size: number;
-	/** How much of it the station has, while it goes up. */
-	sent?: number;
-	/** Up: as the station keeps it (in no chat until a message takes it). */
-	done?: Attachment;
-	error?: string;
-	pasted?: PastedInfo;
-}
-
 /** A passage quoted in what is being written, with what is said about it. */
 export interface ComposerQuote {
 	/** Names it while it is written (`composer.comment`, `composer.unquote`). */
@@ -1867,7 +1869,7 @@ export interface ComposerView {
 	/** The quote just added: its comment takes the focus (`composer.focused` once it has). */
 	focus?: string;
 	files: ComposerFile[];
-	/** A file still going up: nothing can be sent until it is there. */
+	/** A file still going up; sending queues the message until it is there. */
 	uploading: boolean;
 	/** Something to send, and nothing holding it: words, a file that is up, or a quote. */
 	ready: boolean;

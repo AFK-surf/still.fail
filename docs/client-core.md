@@ -96,8 +96,9 @@ object into its Node utility process: its channel adapter (`src/hosts/file-port.
 keeps the Blob in the page and sends a descriptor, restored to a `FileSource`
 before the core reads the call. The core pulls at most one 4 MB part at a time
 per upload; the adapter carries those bytes as ArrayBuffers on the same port.
-It releases the page's file when the upload ends, and fails outstanding reads
-when the port closes. Only local file IO lives in this adapter: draft state,
+It releases the page's file on success or removal, keeps failed uploads' sources
+for the outbox's retry, and fails outstanding reads when the port closes.
+Only local file IO lives in this adapter: draft state,
 station requests, progress, errors and sending stay in the shared core.
 
 UI → core:

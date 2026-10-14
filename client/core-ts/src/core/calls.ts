@@ -33,11 +33,11 @@ export type Call =
   | { kind: "chatArchive"; op: ops.Request; thread: number | null; session: string; archived: boolean }
   | { kind: "chatChange"; op: ops.Request; thread: number | null; session: string; title: string | null; pinned: boolean | null; keep: boolean }
   | { kind: "chatXshare"; station: string; workspace: string | null; session: string; thread: number | null; to: string[]; write: boolean }
-  | { kind: "chatSend"; station: string; thread: number; text: string; attachments: unknown; quotes: unknown; client: string | null }
+  | { kind: "chatSend"; station: string; thread: number; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number }[]; quotes: unknown; client: string | null }
   | { kind: "chatCreate"; station: string; ask: Record<string, unknown> }
-  | { kind: "chatSendTo"; station: string; session: string; text: string; attachments: unknown; quotes: unknown; client: string | null }
+  | { kind: "chatSendTo"; station: string; session: string; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number }[]; quotes: unknown; client: string | null }
   | { kind: "decisionAnswer"; station: string; thread: number; seq: number; option: string }
-  | { kind: "decisionReply"; station: string; thread: number; seq: number; text: string; attachments: unknown; quotes: unknown }
+  | { kind: "decisionReply"; station: string; thread: number; seq: number; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number }[]; quotes: unknown }
   | { kind: "decisionDefer"; station: string; thread: number; seq: number }
   | { kind: "chatRetryIn"; station: string; session: string; id: string }
   | { kind: "chatDiscardIn"; station: string; session: string; id: string }
@@ -218,6 +218,12 @@ export function parseCall(name: string, params: unknown): Call {
     ]);
   // `#[serde(default = "empty_list")]`: [] when absent; given (null too), as given.
   const listOf = (field: string) => (isObject(params) && field in params ? (params as Record<string, unknown>)[field] : []);
+  const uploads = () => {
+    const files = listOf("uploads");
+    if (!Array.isArray(files) || files.some((f) => !isObject(f) || typeof f.id !== "string" || !f.id || typeof f.name !== "string" || typeof f.size !== "number" || !Number.isFinite(f.size) || f.size < 0)) throw CoreError.invalid("invalid uploads");
+    return files as { id: string; name: string; size: number }[];
+  };
+  const uploadFields = () => { const files = uploads(); return files.length ? { uploads: files } : {}; };
   switch (name) {
     case "auth.begin": {
       const p = read(params, [
@@ -296,7 +302,7 @@ export function parseCall(name: string, params: unknown): Call {
       ["quotes", "value", "opt"],
       ["client", S, "opt"],
     ]);
-    return { kind: "chatSendTo", station: p.station as string, session: p.session as string, text: p.text as string, attachments: listOf("attachments"), quotes: listOf("quotes"), client: p.client as string | null };
+    return { kind: "chatSendTo", station: p.station as string, session: p.session as string, text: p.text as string, attachments: listOf("attachments"), ...uploadFields(), quotes: listOf("quotes"), client: p.client as string | null };
   }
   if (bySession && (name === "chat.retry" || name === "chat.discard")) {
     const p = read(params, [
@@ -309,7 +315,7 @@ export function parseCall(name: string, params: unknown): Call {
   switch (name) {
     case "chat.send": {
       const p = send(params);
-      return { kind: "chatSend", station: p.station as string, thread: p.thread as number, text: p.text as string, attachments: listOf("attachments"), quotes: listOf("quotes"), client: p.client as string | null };
+      return { kind: "chatSend", station: p.station as string, thread: p.thread as number, text: p.text as string, attachments: listOf("attachments"), ...uploadFields(), quotes: listOf("quotes"), client: p.client as string | null };
     }
     case "decision.answer": {
       const p = read(params, [
@@ -334,8 +340,9 @@ export function parseCall(name: string, params: unknown): Call {
       const text = (p.text as string).trim();
       const attachments = p.attachments as unknown[];
       const quotes = p.quotes as unknown[];
-      if (text === "" && attachments.length === 0 && quotes.length === 0) throw CoreError.invalid(t("core-misc.params.empty_reply"));
-      return { kind: "decisionReply", station: p.station as string, thread: p.thread as number, seq: p.seq as number, text, attachments, quotes };
+      const files = uploads();
+      if (text === "" && attachments.length === 0 && files.length === 0 && quotes.length === 0) throw CoreError.invalid(t("core-misc.params.empty_reply"));
+      return { kind: "decisionReply", station: p.station as string, thread: p.thread as number, seq: p.seq as number, text, attachments, ...(files.length ? { uploads: files } : {}), quotes };
     }
     case "station.updateNotice": {
       const p = read(params, [
