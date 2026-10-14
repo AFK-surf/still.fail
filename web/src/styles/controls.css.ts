@@ -78,8 +78,18 @@ export const input = style({
 });
 /** A one-line field is a pill, as the buttons beside it are; a textarea keeps --r-field (its lines in a pill would not sit right). */
 globalStyle(`input${input}`, { borderRadius: "999px", paddingLeft: "16px", paddingRight: "16px", cornerShape: "round" });
+/**
+ * Every popped-up panel (menus, popovers, the rail's adder): its corner and its padding as variables, and what sits in it
+ * (rows and fields by the option and field corners, buttons) rounded by the corner less the padding, so each is
+ * concentric with the panel whoever draws it. A panel wanting more room sets `--panel-pad` only.
+ */
 export const popover = style({
-  zIndex: "60", padding: "6px", borderRadius: vars.rMenu, ...panel,
+  vars: {
+    "--panel-pad": "6px", "--panel-in": `calc(${vars.rMenu} - var(--panel-pad))`,
+    // Rows and fields inside take the inner corner through the tokens they are drawn with.
+    [vars.rOption]: "var(--panel-in)", [vars.rField]: "var(--panel-in)",
+  },
+  zIndex: "60", padding: "var(--panel-pad)", borderRadius: vars.rMenu, ...panel,
   boxShadow: `0 12px 32px ${vars.shadow}`, transformOrigin: "var(--radix-popper-transform-origin, top)",
   animation: `${popKeyframes} 140ms ${vars.easeOut}`, cornerShape: vars.cornerShape,
 });
@@ -124,3 +134,6 @@ globalStyle(`${skeletonRow} span:first-child`, { width: "80%" });
 globalStyle(`${skeletonRow} span:last-child`, { width: "45%", height: "8px" });
 /** Here rather than with its class: it comes after .field-error, and wins over it. */
 globalStyle(newChatStatus, { minHeight: "1.5em", margin: "0", fontSize: vars.textMeta, color: vars.muted });
+
+// Buttons in a panel are rounded as its rows are (popover's --panel-in), not pills in its rounder corner.
+globalStyle(`${popover} ${btn}`, { borderRadius: "var(--panel-in)", cornerShape: vars.cornerShape });

@@ -99,19 +99,10 @@ export const remove = style({
   position: "absolute", top: -5, left: -5, display: "grid", placeItems: "center", width: 18, height: 18, padding: 0, border: 0,
   borderRadius: "50%", background: vars.text, color: vars.sidebar, cursor: "pointer", boxShadow: `0 0 0 2px ${vars.sidebar}`,
 });
-/** The panel beside the rail of what can be added, by kind, and 完成. */
-export const adder = style({ width: 248, padding: 12, display: "grid", gap: 8 });
-export const adderTitle = style({ fontSize: vars.textUi, fontWeight: 600, padding: "2px 4px 0" });
-export const adderLead = style({ margin: 0, padding: "0 4px", fontSize: vars.textMeta, lineHeight: vars.leadingMeta, color: vars.muted });
-export const adderGroup = style({ display: "grid", gap: 2 });
-export const adderKind = style({ padding: "6px 4px 2px", fontSize: vars.textMeta, color: vars.muted });
-export const adderRow = style({
-  display: "flex", alignItems: "center", gap: 10, minHeight: 34, padding: "0 8px", border: 0, borderRadius: vars.rOption, cornerShape: vars.cornerShape,
-  background: "none", color: vars.text, fontSize: vars.textUi, textAlign: "left", cursor: "pointer",
-  selectors: { "&:hover": { background: vars.hover } },
+/** The panel beside the rail of what can be added (ui.tsx Panel* parts), with more room than a menu. */
+export const adder = style({
+  width: 248, display: "grid", gap: 8,
+  // Over the popover's own padding, whichever of the two style sheets comes first.
+  selectors: { "&[data-side]": { vars: { "--panel-pad": "12px" } } },
 });
-export const adderIcon = style({ display: "grid", placeItems: "center", width: 20, color: vars.muted });
-export const adderLabel = style({ flex: 1, minWidth: 0 });
-export const adderPlus = style({ color: vars.subtle });
-export const adderFoot = style({ display: "flex", justifyContent: "flex-end", gap: 6, paddingTop: 4 });
 export const zouSmall = style({ fontSize: vars.textBody, lineHeight: "18px", fontWeight: 600 });

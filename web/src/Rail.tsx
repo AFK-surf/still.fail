@@ -3,8 +3,8 @@
 // `rail`, 外观's 侧边条: which, in what order; RAIL_DEFAULT when none was chosen): 对话 and the lists of chats beside it
 // (我参与的, 监控中, the archive), 奏 (the word, as the desktop has always had it, with how many wait for the viewer),
 // 待处理 (what wants them in every workspace, as the sidebar's top has it), 文件, the stations' glyph, Profile, 连接, 用量;
-// at its foot the settings and every workspace to switch to (each with what waits in it, the one in view its switcher),
-// which are not among what is chosen. It is changed where it is: its menu's 自定义侧边条 (or 外观's) has its places
+// at its foot every workspace to switch to (each with what waits in it, the one in view its switcher) and under them the
+// settings, which are not among what is chosen. It is changed where it is: its menu's 自定义侧边条 (or 外观's) has its places
 // dragged up and down, taken out with their −, added from a panel beside it by kind; a place's own menu takes it out.
 // Each place is what the sidebar beside it shows: the chats (or 奏, one of their lists), the folders the stations lend
 // (FilesNav, cloud/workspace.tsx), the settings. On a narrow screen there is none: the sidebar's foot keeps the switcher
@@ -13,7 +13,7 @@ import { useRef, useState, useSyncExternalStore, type ComponentType, type Pointe
 import { ContextMenu, Popover } from "radix-ui";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { Archive, Bell, Chart, Chats, Folder, Im, Minus, PanelClose, Plus, PanelOpen, Quota, Settings, User, Watch, type IconProps } from "./icons.tsx";
-import { Button, Tip } from "./ui.tsx";
+import { Button, PanelFoot, PanelGroup, PanelHead, PanelNote, PanelRow, Tip } from "./ui.tsx";
 import { lastChatOf, useLastChat, useWorkspaceMarks } from "./lastChat.ts";
 import { useSidebarMode, type SidebarMode } from "./station.tsx";
 import { AttentionEntry } from "./Attention.tsx";
@@ -203,12 +203,12 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
         </div>
       ) : <div key={item} data-rail-item={item} className={css.slot}>{drawn(item)}</div>)}
       <div className={css.grow} />
+      {/* Every workspace at the foot, always, not one of the places chosen: the one in view its switcher. */}
+      <RailWorkspaces scope={scope} current={workspace} />
       {/* A place left out of the rail is reached in the settings: they are lit while in it. */}
       <Tip label={t("web-pages.settings.title")} side="right">
         <NavLink className={css.item} to={settings} data-on={place === "settings" || (place !== "chats" && !items.includes(place as RailItem)) || undefined} aria-label={t("web-pages.settings.title")}><Settings size={20} /></NavLink>
       </Tip>
-      {/* Every workspace at the foot, always, not one of the places chosen: the one in view its switcher. */}
-      <RailWorkspaces scope={scope} current={workspace} />
     </nav>
   );
   return (
@@ -229,28 +229,21 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
         <Popover.Content className={`${controlsCss.popover} ${css.adder}`} side="right" align="start" sideOffset={8} collisionPadding={8}
           onOpenAutoFocus={(e) => e.preventDefault()}
           onInteractOutside={(e) => { if ((e.target as HTMLElement | null)?.closest(`.${css.rail}`)) e.preventDefault(); }}>
-          <div className={css.adderTitle}>{t("web-main.rail.customize")}</div>
-          <p className={css.adderLead}>{t("web-main.rail.customizeLead")}</p>
-          {hidden.length === 0 && <p className={css.adderLead}>{t("web-main.rail.allIn")}</p>}
+          <PanelHead title={t("web-main.rail.customize")} note={t("web-main.rail.customizeLead")} />
+          {hidden.length === 0 && <PanelNote>{t("web-main.rail.allIn")}</PanelNote>}
           {hidden.map((k) => (
-            <div key={k.title} className={css.adderGroup}>
-              <div className={css.adderKind}>{t(k.title)}</div>
+            <PanelGroup key={k.title} label={t(k.title)}>
               {k.items.map((i) => {
                 const Icon = RAIL_ICONS[i];
-                return (
-                  <button key={i} type="button" className={css.adderRow} onClick={() => keep([...items, i])}>
-                    <span className={css.adderIcon}>{Icon ? <Icon size={18} /> : i === "decisions" ? <span className={css.zouSmall}>奏</span> : null}</span>
-                    <span className={css.adderLabel}>{railLabel(i)}</span>
-                    <Plus size={14} className={css.adderPlus} />
-                  </button>
-                );
+                return <PanelRow key={i} icon={Icon ? <Icon size={18} /> : i === "decisions" ? <span className={css.zouSmall}>奏</span> : null}
+                  label={railLabel(i)} end={<Plus size={14} />} onClick={() => keep([...items, i])} />;
               })}
-            </div>
+            </PanelGroup>
           ))}
-          <div className={css.adderFoot}>
+          <PanelFoot>
             {kept && <Button variant="ghost" onClick={() => setPrefs({ rail: null })}>{t("web-main.rail.reset")}</Button>}
             <Button variant="primary" onClick={() => editRail(false)}>{t("web-main.rail.done")}</Button>
-          </div>
+          </PanelFoot>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

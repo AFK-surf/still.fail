@@ -309,6 +309,33 @@ export function Confirm({ open, title, description, action, onConfirm, onClose, 
 
 export interface MenuItem { label: string; icon?: IconType; danger?: boolean; disabled?: boolean | undefined; onSelect(): void }
 
+/**
+ * A popped-up panel's parts, for what is put in styles/controls.css.ts `popover`: its head (a title, a line under it),
+ * groups under a small label, rows (an icon, the words, something at the end) and a foot of buttons. Their corners are
+ * the panel's inner one (the popover's `--panel-in`), so a panel made of them is right whoever makes it.
+ */
+export function PanelHead({ title, note }: { title: ReactNode; note?: ReactNode }) {
+  return <div className={css.panelHead}><div className={css.panelTitle}>{title}</div>{note && <p className={css.panelNote}>{note}</p>}</div>;
+}
+export function PanelGroup({ label, children }: { label?: ReactNode; children: ReactNode }) {
+  return <div className={css.panelGroup}>{label && <div className={css.panelLabel}>{label}</div>}{children}</div>;
+}
+export function PanelRow({ icon, label, end, onClick }: { icon?: ReactNode; label: ReactNode; end?: ReactNode; onClick(): void }) {
+  return (
+    <button type="button" className={css.panelRow} onClick={onClick}>
+      {icon && <span className={css.panelRowIcon}>{icon}</span>}
+      <span className={css.panelRowLabel}>{label}</span>
+      {end && <span className={css.panelRowEnd}>{end}</span>}
+    </button>
+  );
+}
+export function PanelNote({ children }: { children: ReactNode }) {
+  return <p className={css.panelNote}>{children}</p>;
+}
+export function PanelFoot({ children }: { children: ReactNode }) {
+  return <div className={css.panelFoot}>{children}</div>;
+}
+
 /** "…" menu: a list of actions on the thing it sits beside. */
 export function Menu({ label = t("web-main.menu.more"), items }: { label?: string; items: (MenuItem | "separator")[] }) {
   return (

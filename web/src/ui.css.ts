@@ -393,3 +393,20 @@ globalStyle(`${skeletonRow} span`, {
 
 /** Inline completion mark, aligned with the state explanation's text. */
 export const doneMark = style({ display: "inline-flex", width: 14, height: 14, verticalAlign: "-2px", alignItems: "center", justifyContent: "center" });
+
+// ── a popped-up panel's parts (ui.tsx Panel*): inside styles/controls.css.ts popover, its rows concentric with it ──
+
+export const panelHead = style({ display: "grid", gap: 2, padding: "2px 4px 4px" });
+export const panelTitle = style({ fontSize: vars.textUi, fontWeight: 600 });
+export const panelNote = style({ margin: 0, fontSize: vars.textMeta, lineHeight: vars.leadingMeta, color: vars.muted });
+export const panelGroup = style({ display: "grid", gap: 2 });
+export const panelLabel = style({ padding: "6px 4px 2px", fontSize: vars.textMeta, color: vars.muted });
+export const panelRow = style({
+  display: "flex", alignItems: "center", gap: 10, minHeight: 34, padding: "0 8px", border: 0, borderRadius: vars.rOption,
+  cornerShape: vars.cornerShape, background: "none", color: vars.text, fontSize: vars.textUi, textAlign: "left", cursor: "pointer",
+  selectors: { "&:hover": { background: vars.hover } },
+});
+export const panelRowIcon = style({ display: "grid", placeItems: "center", width: 20, color: vars.muted, flex: "none" });
+export const panelRowLabel = style({ flex: 1, minWidth: 0 });
+export const panelRowEnd = style({ display: "flex", color: vars.subtle, flex: "none" });
+export const panelFoot = style({ display: "flex", justifyContent: "flex-end", gap: 6, paddingTop: 4 });
