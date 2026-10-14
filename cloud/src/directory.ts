@@ -131,6 +131,11 @@ export class Directory extends DurableObject<Env> {
     if (!this.#rows("PRAGMA table_info(stations)").some((r) => r.name === "emoji")) this.#run("ALTER TABLE stations ADD COLUMN emoji TEXT");
     // Nor an icon (one of still.fail's, or a picture put up; shown before the emoji where it is known), before they could.
     if (!this.#rows("PRAGMA table_info(stations)").some((r) => r.name === "icon")) this.#run("ALTER TABLE stations ADD COLUMN icon TEXT");
+    // Nor had workspaces a mark of their own (an emoji, an icon, as a station's), before they could; their first letter till then.
+    const marked = new Set(this.#rows("PRAGMA table_info(workspaces)").map((r) => r.name as string));
+    for (const column of ["emoji TEXT", "icon TEXT"]) {
+      if (!marked.has(column.split(" ")[0]!)) this.#run(`ALTER TABLE workspaces ADD COLUMN ${column}`);
+    }
     this.migrateFreePlan();
   }
 
@@ -297,9 +302,9 @@ export class Directory extends DurableObject<Env> {
     const workspaces = this.#rows(`
       SELECT w.id, w.name, m.role, w.created_at,
         (SELECT COUNT(*) FROM stations s WHERE s.workspace = w.id) AS stations,
-        (SELECT COUNT(*) FROM members x WHERE x.workspace = w.id) AS members, w.relays
+        (SELECT COUNT(*) FROM members x WHERE x.workspace = w.id) AS members, w.relays, w.emoji, w.icon
       FROM members m JOIN workspaces w ON w.id = m.workspace WHERE m.sub = ? ORDER BY w.created_at`, sub)
-      .map(({ relays, ...w }) => ({ ...w, relays: parseRelays(relays) })) as unknown as WorkspaceSummary[];
+      .map(({ relays, emoji, icon, ...w }) => ({ ...w, relays: parseRelays(relays), ...marks(emoji, icon) })) as unknown as WorkspaceSummary[];
     return { user: user ?? null, workspaces };
   }
 
@@ -373,7 +378,7 @@ export class Directory extends DurableObject<Env> {
 
   workspace(sub: string, id: string): WorkspaceView {
     const role = this.#role(sub, id);
-    const w = this.#one("SELECT id, name, created_at, relays FROM workspaces WHERE id = ?", id)!;
+    const w = this.#one("SELECT id, name, created_at, relays, emoji, icon FROM workspaces WHERE id = ?", id)!;
     const members = this.#rows(`
       SELECT m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name, COALESCE(u.picture, '') AS picture, m.role, m.added_at
       FROM members m LEFT JOIN users u ON u.sub = m.sub WHERE m.workspace = ? ORDER BY m.added_at`, id) as unknown as MemberView[];
@@ -384,7 +389,7 @@ export class Directory extends DurableObject<Env> {
     const added = MANAGERS.includes(role)
       ? this.#rows("SELECT email, role, added_by, added_at FROM added WHERE workspace = ? ORDER BY added_at", id) as unknown as AddedView[]
       : [];
-    return { id, name: w.name as string, role, created_at: w.created_at as number, members, stations, invitations, added, relays: parseRelays(w.relays), lock: this.#lockHead(id), lock_requests: this.#lockRequestCount(id, sub, role) };
+    return { id, name: w.name as string, ...marks(w.emoji, w.icon), role, created_at: w.created_at as number, members, stations, invitations, added, relays: parseRelays(w.relays), lock: this.#lockHead(id), lock_requests: this.#lockRequestCount(id, sub, role) };
   }
 
   // ── the workspace lock (docs/workspace-lock.md, lock.ts): kept and carried, not trusted ─────────────────────────
@@ -548,11 +553,18 @@ export class Directory extends DurableObject<Env> {
     return this.workspace(sub, id);
   }
 
-  renameWorkspace(sub: string, id: string, name: string): WorkspaceView {
+  /** A new name, a new emoji, a new icon (null or "" takes either away; a station's, cleanIcon), or several; what is not given stays. */
+  updateWorkspace(sub: string, id: string, input: { name?: unknown; emoji?: unknown; icon?: unknown }): WorkspaceView {
     this.#role(sub, id, MANAGERS);
-    this.#run("UPDATE workspaces SET name = ? WHERE id = ?", cleanName(name) ?? fail(400, "invalid_name"), id);
-    this.#changed(id, true, this.#invitees(id));
-    for (const row of this.#rows("SELECT id FROM stations WHERE workspace = ?", id)) this.#sendState(row.id as string);
+    const name = input.name === undefined ? undefined : cleanName(input.name) ?? fail(400, "invalid_name");
+    const emoji = input.emoji === undefined ? undefined : input.emoji === null || input.emoji === "" ? null : cleanEmoji(input.emoji) ?? fail(400, "invalid_emoji");
+    const icon = input.icon === undefined ? undefined : input.icon === null || input.icon === "" ? null : cleanIcon(input.icon) ?? fail(400, "invalid_icon");
+    if (name === undefined && emoji === undefined && icon === undefined) fail(400, "invalid_name");
+    if (name !== undefined) this.#run("UPDATE workspaces SET name = ? WHERE id = ?", name, id);
+    if (emoji !== undefined) this.#run("UPDATE workspaces SET emoji = ? WHERE id = ?", emoji, id);
+    if (icon !== undefined) this.#run("UPDATE workspaces SET icon = ? WHERE id = ?", icon, id);
+    // Invitations show the name; the switchers, the mark.
+    this.#changed(id, true, name !== undefined ? this.#invitees(id) : []);
     return this.workspace(sub, id);
   }
 
@@ -1250,6 +1262,10 @@ function cleanIcon(value: unknown): string | null {
   if (typeof value !== "string") return null;
   if (/^glyph:[a-z0-9-]{1,40}(:[a-z]{1,16})?$/.test(value)) return value;
   return value.length <= ICON_BYTES && /^data:image\/(png|webp|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/.test(value) ? value : null;
+}
+/** A workspace's emoji and icon as its views carry them: each only when set (clients from before them know neither). */
+function marks(emoji: unknown, icon: unknown): { emoji?: string; icon?: string } {
+  return { ...(emoji ? { emoji: emoji as string } : {}), ...(icon ? { icon: icon as string } : {}) };
 }
 /** How long a picture's data URL may be: it goes to every member with the workspace. */
 const ICON_BYTES = 48_000;

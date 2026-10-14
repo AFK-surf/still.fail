@@ -46,6 +46,8 @@ export const cloud = {
   /** `code`: an invite code, for an account not let in yet (still.fail is invite-only). */
   createWorkspace: (sub: string, name: string, code?: string) => operations(sub).workspaceCreate<WorkspaceView>(code ? { name, invite_code: code } : { name }),
   renameWorkspace: (sub: string, id: string, name: string) => operations(sub).workspaceRename<WorkspaceView>({ workspace: id, name }),
+  /** Its icon and emoji together, as a station's (../stationPick.ts); "" takes either away. */
+  setWorkspaceMark: (sub: string, id: string, mark: { emoji: string; icon: string }) => operations(sub).workspaceRename<WorkspaceView>({ workspace: id, emoji: mark.emoji, icon: mark.icon }),
   /** The workspace's own relays, the whole list (cloud directory.ts setRelays). */
   setRelays: (sub: string, id: string, relays: string[]) => operations(sub).workspaceSetRelays<WorkspaceView>({ workspace: id, relays }),
   deleteWorkspace: (sub: string, id: string) => operations(sub).workspaceDelete<{ ok: true }>({ workspace: id }),

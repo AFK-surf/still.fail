@@ -745,6 +745,7 @@
   "web-pages.settings.workspace.nameHint": "只有 owner 和管理员能改名。",
   "web-pages.settings.workspace.nameLabel": "Workspace 名字",
   "web-pages.settings.workspace.renameFailed": "没能改名：{error}",
+  "web-pages.settings.workspace.markFailed": "没能设图标：{error}",
   "web-pages.settings.workspace.renamed": "已改名",
   "web-pages.settings.workspace.youAre": "你在这里是{role}，通过 {email} 访问。",
   "web-pages.signIn.again": "重新登录",

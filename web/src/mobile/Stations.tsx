@@ -290,10 +290,10 @@ function useManager(): boolean {
 }
 
 /**
- * A station's mark picked in a sheet (the wide screen's popover: ../cloud/MarkPick.tsx): one of still.fail's icons or an
- * emoji (any, pasted or typed), a picture put up, or none; set at once.
+ * A station's or a workspace's mark picked in a sheet (the wide screen's popover: ../cloud/MarkPick.tsx): one of
+ * still.fail's icons or an emoji (any, pasted or typed), a picture put up, or none; set at once by `set`.
  */
-function StationMarkSheet({ s }: { s: StationView }) {
+export function MarkSheet({ s, set }: { s: { name: string; emoji?: string | null | undefined; icon?: string | null | undefined }; set(mark: Mark): Promise<unknown> }) {
   const app = useApp();
   const act = useAct();
   const [kind, setKind] = useState<Kind>(() => kindOf(s.emoji, s.icon));
@@ -303,7 +303,7 @@ function StationMarkSheet({ s }: { s: StationView }) {
   const [query, setQuery] = useState("");
   const pick = (m: Mark, stay?: boolean) => {
     if (!stay) app.sheet(null);
-    if (!same(m, s.emoji, s.icon)) act(cloud.setStationMark(app.entry.account.sub, app.entry.id, s.id, m), t("web-mobile.stations.emojiWhat"), t("web-mobile.stations.emojiSet"));
+    if (!same(m, s.emoji, s.icon)) act(set(m), t("web-mobile.stations.emojiWhat"), t("web-mobile.stations.emojiSet"));
   };
   const upload = (f: Blob) => pictureOf(f).then((url) => pick(pictureMark(url)),
     (e: unknown) => app.toast(t((e as Error).message === "too_big" ? "web-pages.stations.mark.tooBig" : "web-pages.stations.mark.unreadable")));
@@ -344,7 +344,7 @@ function StationMenu({ s }: { s: StationView }) {
         <PickRow label={t("web-mobile.stations.rename")} onClick={() => ask(app, { title: t("web-mobile.stations.renameTitle"), value: s.name, placeholder: t("web-mobile.stations.renamePlaceholder"), action: t("common.save"), atOnce: "web-main.rename.failed",
           run: (name) => cloud.renameStation(me.sub, app.entry.id, s.id, name).then(() => app.toast(t("web-mobile.workspace.renamed"))) })} />
         <PickRow label={t("web-mobile.stations.emoji")} mark={(s.emoji || s.icon) ? <StationMark emoji={s.emoji} icon={s.icon} size={18} /> : undefined}
-          onClick={() => app.sheet({ height: 0.78, content: () => <StationMarkSheet s={s} /> })} />
+          onClick={() => app.sheet({ height: 0.78, content: () => <MarkSheet s={s} set={(m) => cloud.setStationMark(me.sub, app.entry.id, s.id, m)} /> })} />
         <PickRow label={t("web-mobile.stations.remove")} accent onClick={() => confirm(app, {
           title: t("web-mobile.stations.removeAsk", { name: s.name }), action: t("web-mobile.stations.removeAction"), danger: true,
           text: t("web-mobile.stations.removeText", { name: NAME }), atOnce: "web-mobile.workspace.removeFailed",

@@ -617,6 +617,8 @@ class Cloud(private val core: StillFailCore, private val account: String) {
     suspend fun declineInvitation(id: String) { ops.invitationDecline(id = id) }
 
     suspend fun renameWorkspace(workspace: String, name: String) { ops.workspaceRename(workspace = workspace) { this.name = name } }
+    /** Its icon and emoji together, as a station's (setStationMark); "" takes either away. */
+    suspend fun setWorkspaceMark(workspace: String, emoji: String, icon: String) { ops.workspaceRename(workspace = workspace) { this.emoji = emoji; this.icon = icon } }
     /** The workspace's own relays, the whole list (cloud directory.ts setRelays). */
     suspend fun setRelays(workspace: String, relays: List<String>) { ops.workspaceSetRelays(workspace = workspace) { this.relays = relays } }
     suspend fun deleteWorkspace(workspace: String) { ops.workspaceDelete(workspace = workspace) }

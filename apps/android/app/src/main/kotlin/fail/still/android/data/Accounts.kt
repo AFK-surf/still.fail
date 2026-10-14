@@ -8,7 +8,8 @@ import kotlinx.serialization.json.JsonElement
 
 @Serializable data class Account(val sub: String, val email: String, val name: String = "", val picture: String = "")
 
-@Serializable data class WorkspaceSummary(val id: String, val name: String, val role: String = "", val stations: Int = 0, val members: Int = 0)
+/** `emoji` and `icon` are its mark, as a station's (StationMark): none when none. */
+@Serializable data class WorkspaceSummary(val id: String, val name: String, val role: String = "", val stations: Int = 0, val members: Int = 0, val emoji: String? = null, val icon: String? = null)
 
 @Serializable data class AccountWorkspaces(
     val account: Account,
@@ -49,10 +50,10 @@ val ROLE_HINT get() = mapOf("owner" to t("android-misc.role.owner.hint"), "admin
 /**
  * The `workspace` topic: the viewer's role in it, its members (to name people by their email, and to manage them), its
  * stations' names, the emails added but not signed in yet, the invitations not accepted yet, and its own relays (used
- * besides still.fail's; none from a cloud from before them).
+ * besides still.fail's; none from a cloud from before them). Its mark (`emoji`, `icon`) is as a station's.
  */
 @Serializable data class WorkspaceView(
-    val id: String, val name: String = "", val role: String = "member", val members: List<Member> = emptyList(),
+    val id: String, val name: String = "", val emoji: String? = null, val icon: String? = null, val role: String = "member", val members: List<Member> = emptyList(),
     val stations: List<WorkspaceStation> = emptyList(), val invitations: List<Invitation> = emptyList(),
     val added: List<Added> = emptyList(), val relays: List<String> = emptyList(),
 ) {

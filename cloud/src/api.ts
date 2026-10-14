@@ -185,7 +185,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (!ws || !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(ws)) return reply({ error: "not_found" }, 404);
   if (!kind) {
     if (method === "GET") return directory(() => dir.workspace(sub, ws));
-    if (method === "PATCH") return directory(() => dir.renameWorkspace(sub, ws, text("name")));
+    if (method === "PATCH") return directory(() => dir.updateWorkspace(sub, ws, { name: input.name, emoji: input.emoji, icon: input.icon }));
     if (method === "DELETE") return directory(() => dir.deleteWorkspace(sub, ws));
   }
   if (kind === "invitations" && !target && method === "POST") {

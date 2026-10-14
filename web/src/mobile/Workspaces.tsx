@@ -2,7 +2,8 @@
 // to, and a new one; a new workspace in a sheet of its own. The workspace's settings are in 设置 (./Settings.tsx).
 import { useState } from "react";
 import { signIn, useAccounts, useSignIn } from "../cloud/accounts.ts";
-import { cloud, errorText, needsInviteCode, useAction, useWorkspaces, type AccountWorkspaces, type PendingInvitation } from "../cloud/api.ts";
+import { cloud, errorText, needsInviteCode, useAction, useWorkspaces, type AccountWorkspaces, type PendingInvitation, type WorkspaceSummary } from "../cloud/api.ts";
+import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
 import type { Account } from "../cloud/accounts.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { useWorkspaceMarks } from "../lastChat.ts";
@@ -29,6 +30,9 @@ function WorkspacesSheet() {
   const others = byAccount
     .map((a) => ({ account: a.account, workspaces: a.workspaces.filter((w) => w.id !== app.entry.id) }))
     .filter((a) => a.workspaces.length > 0);
+  // Each its mark before its name, its letter where it has none, once any has one (the actions' icons stand there too).
+  const anyMarked = byAccount.some((a) => a.workspaces.some(marked));
+  const lead = (w: WorkspaceSummary) => anyMarked ? <span className={css.mMark}><WorkspaceMark w={w} size={20} picture={24} /></span> : undefined;
   // What each of the others has waiting, as the core counts it.
   const marks = useWorkspaceMarks(app.entry.id);
   const respond = useAction(async ({ account, invite, join }: { account: Account; invite: PendingInvitation; join: boolean }) => {
@@ -49,7 +53,7 @@ function WorkspacesSheet() {
         {current && <>
           <div className={css.mSheetLabel}>{t("web-mobile.workspaces.current")}</div>
           <div className={css.mCurrent}>
-            <PickRow label={current.name} sub={currentOf!.account.email} checked onClick={() => app.sheet(null)} />
+            <PickRow label={current.name} sub={currentOf!.account.email} leading={lead(current)} checked onClick={() => app.sheet(null)} />
           </div>
         </>}
         {pending.length > 0 && (
@@ -67,7 +71,7 @@ function WorkspacesSheet() {
         )}
         {others.length > 0 && <div className={css.mSheetLabel}>{t("web-mobile.workspaces.others")}</div>}
         {others.flatMap(({ account, workspaces }) => workspaces.map((w) => (
-          <PickRow key={w.id} label={w.name} sub={account.email}
+          <PickRow key={w.id} label={w.name} sub={account.email} leading={lead(w)}
             mark={marks?.workspaces[w.id]?.tone && <MarkCounts mark={marks.workspaces[w.id]} />}
             onClick={() => { app.sheet(null); app.replace(`/w/${w.id}`); }} />
         )))}

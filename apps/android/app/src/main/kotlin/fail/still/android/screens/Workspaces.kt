@@ -62,6 +62,7 @@ import fail.still.android.data.ROLE_LABEL
 import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceMark
 import fail.still.android.data.WorkspaceMarksView
+import fail.still.android.data.WorkspaceSummary
 import fail.still.android.data.errorText
 import fail.still.android.data.needsInviteCode
 import fail.still.android.data.rememberTopic
@@ -74,6 +75,8 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.StationMark
+import fail.still.android.ui.hasStationMark
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 
@@ -250,6 +253,8 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
     val currentOf = byAccount.firstOrNull { a -> a.workspaces.any { it.id == app.workspace } }
     val current = currentOf?.workspaces?.firstOrNull { it.id == app.workspace }
     val others = byAccount.flatMap { a -> a.workspaces.filter { it.id != app.workspace }.map { a.account to it } }
+    // Each its mark before its name, its letter where it has none, once any has one.
+    val anyMarked = byAccount.any { a -> a.workspaces.any { hasStationMark(it.emoji, it.icon) } }
     // What each of the others has waiting, as the core counts it.
     val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(app.workspace.orEmpty()))
     SheetGrab()
@@ -258,7 +263,7 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
         if (current != null) {
             Label(t("android-misc.workspace.current"))
             Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp).clip(Smooth(16.dp)).background(C.bg)) {
-                PickRow(current.name, sub = currentOf.account.email, checked = true) { app.sheet = null }
+                PickRow(current.name, sub = currentOf.account.email, checked = true, leading = if (anyMarked) ({ WorkspaceIcon(current) }) else null) { app.sheet = null }
             }
         }
         if (pending.isNotEmpty()) {
@@ -281,7 +286,7 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
         }
         if (others.isNotEmpty()) Label(t("android-misc.workspace.others"))
         others.forEach { (account, w) ->
-            WorkspaceRow(w.name, account.email, marks.value?.workspaces?.get(w.id)) { app.pickWorkspace(w.id); app.home() }
+            WorkspaceRow(w, account.email, marks.value?.workspaces?.get(w.id), anyMarked) { app.pickWorkspace(w.id); app.home() }
         }
     }
     Column(Modifier.padding(top = 8.dp, bottom = 16.dp)) {
@@ -290,17 +295,25 @@ private fun ColumnScope.WorkspacesSheet(app: AppState) {
     }
 }
 
-/** Workspace identity and its waiting work; membership counts belong in settings. */
+/** Workspace identity (its icon, when it has one, and name) and its waiting work; membership counts belong in settings. */
 @Composable
-private fun WorkspaceRow(label: String, email: String, mark: WorkspaceMark?, onClick: () -> Unit) {
+private fun WorkspaceRow(w: WorkspaceSummary, email: String, mark: WorkspaceMark?, lead: Boolean, onClick: () -> Unit) {
     Row(Modifier.padding(horizontal = 12.dp).fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (lead) WorkspaceIcon(w)
         Column(Modifier.weight(1f)) {
-            Text(label, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(w.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(email, fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (mark != null) MarkCounts(mark)
     }
+}
+
+/** A workspace's mark in the sheet's rows, drawn as a station's is; its first letter, muted, where it has none. */
+@Composable
+private fun WorkspaceIcon(w: WorkspaceSummary) = Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+    if (hasStationMark(w.emoji, w.icon)) StationMark(w.emoji, w.icon, 22.dp, C.ink)
+    else Text(w.name.trim().take(1).uppercase(), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.muted)
 }
 
 @Composable

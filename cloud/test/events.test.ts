@@ -114,6 +114,17 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
 
     await alice("PATCH", `/v1/workspaces/${w}`, { name: "House" });
     await expect(on, { alice: [list, ws], bob: [list, ws] }, "rename workspace");
+    // Its mark, as a station's: an icon of still.fail's or a picture, an emoji; in the lists as in the workspace, "" takes it away.
+    await alice("PATCH", `/v1/workspaces/${w}`, { icon: "glyph:rocket:blue", emoji: "🚀" });
+    await expect(on, { alice: [list, ws], bob: [list, ws] }, "workspace icon");
+    let marked = ((await (await bob("GET", "/v1/me")).json()) as any).workspaces.find((x: any) => x.id === w);
+    assert.deepEqual([marked.name, marked.icon, marked.emoji], ["House", "glyph:rocket:blue", "🚀"]);
+    assert.equal((await alice("PATCH", `/v1/workspaces/${w}`, { icon: "rocket" })).status, 400);
+    assert.equal((await alice("PATCH", `/v1/workspaces/${w}`, {})).status, 400);
+    await alice("PATCH", `/v1/workspaces/${w}`, { icon: "", emoji: "" });
+    await expect(on, { alice: [list, ws], bob: [list, ws] }, "workspace icon cleared");
+    marked = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any);
+    assert.deepEqual([marked.name, "icon" in marked, "emoji" in marked], ["House", false, false]);
 
     const view = (await (await alice("GET", `/v1/workspaces/${w}`)).json()) as any;
     const bobSub = view.members.find((m: any) => m.email === "bob@example.test").sub;

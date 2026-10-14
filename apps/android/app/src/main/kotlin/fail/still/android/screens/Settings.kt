@@ -193,12 +193,28 @@ fun WorkspaceScreen(current: WorkspaceEntry) {
         }) else null)
         if (view == null) return Loading(topic.error?.message ?: t("android-settings.workspace.reading"))
         val waiting = if (view.manager) view.added.size + view.invitations.size else 0
-        // Its name is the title, renamed by a tap on it (by its owner and admins).
+        // Its name is the title, after its mark (when it has one), renamed by a tap on it (by its owner and admins).
         Box(if (view.manager) Modifier.clickable { ask(app, t("android-settings.workspace.name"), view.name, t("android-settings.workspace.namePlaceholder"), t("common.save"), what = t("android-settings.workspace.renameWhat")) { cloud.renameWorkspace(view.id, it); app.toast = t("android-settings.renamed") } } else Modifier) {
-            LargeTitle("", view.name)
+            LargeTitle("", view.name, lead = if (hasStationMark(view.emoji, view.icon)) ({ StationMark(view.emoji, view.icon, 30.dp, C.ink) }) else null)
         }
         Text(t(if (view.manager) "android-settings.workspace.aboutRename" else "android-settings.workspace.about", "role" to (ROLE_LABEL[view.role] ?: view.role), "people" to t("android-settings.members.count", "n" to view.members.size), "stations" to t("android-settings.workspace.stations", "n" to view.stations.size)),
             fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp))
+        // Its mark, set by its owner and admins in the sheet a station's is (an icon, an emoji, a picture, or none).
+        if (view.manager) {
+            Spacer(Modifier.height(10.dp))
+            ListCard {
+                ListRow(onClick = {
+                    openMarkPick(app, view.name, view.emoji, view.icon, t("android-settings.workspace.iconWhat")) { emoji, icon -> cloud.setWorkspaceMark(view.id, emoji, icon) }
+                }) {
+                    Text(t("android-settings.workspace.icon"), fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
+                    val on = arrayOf<Pair<String, Any?>>("workspace" to view.id)
+                    DoingMark(app.isDoing("workspace.rename", *on), app.failedOf("workspace.rename", *on))
+                    if (hasStationMark(view.emoji, view.icon)) StationMark(view.emoji, view.icon, 20.dp, C.ink)
+                    else Text(t("android-settings.workspace.iconNone"), fontSize = 14.sp, color = C.muted)
+                    IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+                }
+            }
+        }
         // Its people in one list: those in it, then those added who have not signed in yet, then the invitations out;
         // which is which on each row's second line.
         SectionHeader(t("android-settings.members.title"), if (waiting > 0) t("android-settings.members.waiting", "n" to view.members.size, "waiting" to waiting) else t("android-settings.members.count", "n" to view.members.size), start = 24.dp)
@@ -572,24 +588,24 @@ fun FirstStation(current: WorkspaceEntry) {
 }
 
 /**
- * A station's mark, picked in a sheet (the web's: web/src/cloud/MarkPick.tsx, the phone web's sheet): one of still.fail's
- * icons (in a colour, or the words') or an emoji (any, pasted or typed), a picture put up, or none; set at once. What is sent is web/src/stationPick.ts's:
- * a glyph keeps its emoji beside it for older clients, an emoji or a picture takes the other away.
+ * A station's or a workspace's mark (`name` its, `emoji` and `icon` the ones it has now), picked in a sheet (the web's:
+ * web/src/cloud/MarkPick.tsx, the phone web's sheet): one of still.fail's icons (in a colour, or the words') or an emoji
+ * (any, pasted or typed), a picture put up, or none; set at once by `save`, `what` naming it should it fail. What is sent
+ * is web/src/stationPick.ts's: a glyph keeps its emoji beside it for older clients, an emoji or a picture takes the other away.
  */
-private fun openStationMark(app: AppState, current: WorkspaceEntry, s: StationView) {
-    val cloud = Cloud(app.core, current.account.sub)
-    val set = { emoji: String, icon: String ->
-        if (emoji != (s.emoji ?: "") || icon != (s.icon ?: "")) app.act(t("android-settings.station.emojiWhat"), t("android-settings.station.emojiSet")) { cloud.setStationMark(current.workspace.id, s.id, emoji, icon) }
+private fun openMarkPick(app: AppState, name: String, emoji: String?, icon: String?, what: String, save: suspend (emoji: String, icon: String) -> Unit) {
+    val set = { e: String, i: String ->
+        if (e != (emoji ?: "") || i != (icon ?: "")) app.act(what, t("android-settings.station.emojiSet")) { save(e, i) }
     }
-    val pick = { emoji: String, icon: String -> app.sheet = null; set(emoji, icon) }
-    val glyph = StationIcons.of(s.icon)
-    val picture = s.icon?.takeIf { it.startsWith("data:image/") }
+    val pick = { e: String, i: String -> app.sheet = null; set(e, i) }
+    val glyph = StationIcons.of(icon)
+    val picture = icon?.takeIf { it.startsWith("data:image/") }
     app.sheet = SheetSpec(0.78f) {
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
-        var emojis by remember { mutableStateOf(glyph == null && picture == null && s.emoji != null) }
+        var emojis by remember { mutableStateOf(glyph == null && picture == null && emoji != null) }
         var typed by remember { mutableStateOf("") }
-        var color by remember { mutableStateOf(glyphColor(s.icon)) }
+        var color by remember { mutableStateOf(glyphColor(icon)) }
         var query by remember { mutableStateOf("") }
         val tint = markColor(color)
         val upload = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -599,7 +615,7 @@ private fun openStationMark(app: AppState, current: WorkspaceEntry, s: StationVi
             }
         }
         SheetGrab()
-        SheetHead(t("android-settings.station.emojiTitle", "name" to s.name))
+        SheetHead(t("android-settings.station.emojiTitle", "name" to name))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             Column(Modifier.padding(start = 18.dp, end = 18.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Seg(listOf(t("android-settings.station.glyphs"), "Emoji"), if (emojis) 1 else 0, { emojis = it == 1 }, Modifier.fillMaxWidth(), height = 34.dp, fill = true, radius = 17.dp)
@@ -607,7 +623,7 @@ private fun openStationMark(app: AppState, current: WorkspaceEntry, s: StationVi
                 else Field(query, { query = it }, t("android-settings.station.glyphSearch"))
             }
             // The icons' colour: the words' own first, then MARK_COLORS; the one picked ringed. It colours the grid, and the
-            // icon the station has, at once.
+            // icon it has, at once.
             if (!emojis) Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, bottom = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 (listOf<String?>(null) + MARK_COLORS).forEach { c ->
                     val of = markColor(c) ?: C.ink
@@ -620,10 +636,10 @@ private fun openStationMark(app: AppState, current: WorkspaceEntry, s: StationVi
                 }
             }
             // Six to a row, wide enough for a thumb; the one it has on the accent's wash.
-            val kept = if (emojis) s.emoji?.takeIf { glyph == null && picture == null }?.replace("\uFE0F", "") else glyph?.name
+            val kept = if (emojis) emoji?.takeIf { glyph == null && picture == null }?.replace("\uFE0F", "") else glyph?.name
             // The icons found by every word typed (in their names, English or Chinese); all of them for none.
             val terms = query.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
-            val offered = if (!emojis) StationIcons.all.filter { g -> terms.all { it in g.words } }.map { it.name } else if (kept != null && STATION_EMOJI.none { it.replace("\uFE0F", "") == kept }) listOf(s.emoji!!) + STATION_EMOJI.dropLast(1) else STATION_EMOJI
+            val offered = if (!emojis) StationIcons.all.filter { g -> terms.all { it in g.words } }.map { it.name } else if (kept != null && STATION_EMOJI.none { it.replace("\uFE0F", "") == kept }) listOf(emoji!!) + STATION_EMOJI.dropLast(1) else STATION_EMOJI
             if (offered.isEmpty()) Text(t("android-settings.station.glyphNone"), Modifier.fillMaxWidth().padding(vertical = 24.dp), color = C.muted, fontSize = 15.sp, textAlign = TextAlign.Center)
             Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 offered.chunked(6).forEach { row ->
@@ -648,7 +664,7 @@ private fun openStationMark(app: AppState, current: WorkspaceEntry, s: StationVi
                 leading = { if (picture != null) StationMark(null, picture, 20.dp, C.ink) else IconIn(Icons.ImageUpload, 20.dp, C.ink) }) {
                 upload.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             }
-            if (hasStationMark(s.emoji, s.icon)) PickRow(t("android-settings.station.emojiClear"), leading = { IconIn(Icons.Close, 20.dp, C.ink) }) { pick("", "") }
+            if (hasStationMark(emoji, icon)) PickRow(t("android-settings.station.emojiClear"), leading = { IconIn(Icons.Close, 20.dp, C.ink) }) { pick("", "") }
         }
     }
 }
@@ -701,7 +717,9 @@ fun openStationMenu(app: AppState, current: WorkspaceEntry, s: StationView) {
         SheetHead(s.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             PickRow(t("android-settings.station.rename")) { ask(app, t("android-settings.station.renameTitle"), s.name, t("android-settings.station.renamePlaceholder"), t("common.save"), what = t("android-settings.station.renameWhat")) { cloud.renameStation(current.workspace.id, s.id, it); app.toast = t("android-settings.renamed") } }
-            PickRow(t("android-settings.station.emoji"), mark = if (hasStationMark(s.emoji, s.icon)) ({ StationMark(s.emoji, s.icon, 15.dp, C.ink) }) else null) { openStationMark(app, current, s) }
+            PickRow(t("android-settings.station.emoji"), mark = if (hasStationMark(s.emoji, s.icon)) ({ StationMark(s.emoji, s.icon, 15.dp, C.ink) }) else null) {
+                openMarkPick(app, s.name, s.emoji, s.icon, t("android-settings.station.emojiWhat")) { emoji, icon -> cloud.setStationMark(current.workspace.id, s.id, emoji, icon) }
+            }
             PickRow(t("android-settings.station.removeRow"), color = C.red) {
                 confirm(app, t("android-settings.station.removeTitle", "name" to s.name), t("android-settings.station.removeText", "app" to BuildConfig.APP_NAME), t("android-settings.station.remove"), danger = true,
                     what = t("android-settings.station.removeWhat"), then = app::pop) {

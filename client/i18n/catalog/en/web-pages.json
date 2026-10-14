@@ -805,6 +805,7 @@
   "web-pages.settings.workspace.nameHint": "Only owners and admins can rename.",
   "web-pages.settings.workspace.nameLabel": "Workspace name",
   "web-pages.settings.workspace.renameFailed": "Couldn't rename: {error}",
+  "web-pages.settings.workspace.markFailed": "Couldn't set the icon: {error}",
   "web-pages.settings.workspace.renamed": "Renamed",
   "web-pages.settings.workspace.youAre": "Your role here: {role}, via {email}.",
   "web-pages.signIn.again": "Sign in again",

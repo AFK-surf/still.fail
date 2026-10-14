@@ -80,7 +80,7 @@ export interface OperationParams {
   "drive.remove": { root: string; path: string };
   "software.auto": { on?: boolean | null | undefined };
   "workspace.create": { name?: string | null | undefined; invite_code?: string | null | undefined };
-  "workspace.rename": { workspace: string; name?: string | null | undefined };
+  "workspace.rename": { workspace: string; name?: string | null | undefined; emoji?: string | null | undefined; icon?: string | null | undefined };
   "workspace.setRelays": { workspace: string; relays?: string[] | null | undefined };
   "workspace.delete": { workspace: string };
   "workspace.invite": { workspace: string; role?: string | null | undefined; email?: string | null | undefined };

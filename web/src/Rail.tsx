@@ -23,6 +23,8 @@ import * as chatMarkCss from "./ChatMark.css.ts";
 import { setPrefs, usePrefs } from "./prefs.ts";
 import * as controlsCss from "./styles/controls.css.ts";
 import { RailStations } from "./Sidebar.tsx";
+import { isPicture } from "./StationMark.tsx";
+import { marked, WorkspaceMark } from "./WorkspaceMark.tsx";
 import { openedAt } from "./DecisionDesk.tsx";
 import { useSidebarToggle } from "./brand.tsx";
 import * as css from "./Rail.css.ts";
@@ -255,7 +257,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
 }
 
 /**
- * Every workspace of the viewer's accounts, each its first letter, the one in view marked; the others with what waits in
+ * Every workspace of the viewer's accounts, each its mark or else its first letter, the one in view marked; the others with what waits in
  * them (the core's marks: red, something went wrong; amber, someone waits for them; blue, new), its words on hover.
  * Pressed, the chat last open there. Above them `current`'s ＋ (making one, another account, invitations), shown as the
  * pointer comes over them.
@@ -274,9 +276,9 @@ function RailWorkspaces({ scope, current }: { scope: string; current: ReactNode 
         const mark = marks?.workspaces[w.id];
         return (
           <Tip key={`${account.sub}/${w.id}`} label={!here && mark?.label ? `${w.name} · ${mark.label}` : w.name} side="right">
-            <button type="button" className={css.workspaceItem} data-on={here || undefined} aria-current={here || undefined} aria-label={w.name}
-              onClick={() => { if (!here) navigate(lastChatOf(marks, w.id) ?? `/w/${w.id}`); }}>
-              {[...w.name.trim()][0]?.toUpperCase() ?? "·"}
+            <button type="button" className={css.workspaceItem} data-on={here || undefined} data-marked={marked(w) || undefined} data-picture={isPicture(w.icon) || undefined}
+              aria-current={here || undefined} aria-label={w.name} onClick={() => { if (!here) navigate(lastChatOf(marks, w.id) ?? `/w/${w.id}`); }}>
+              <WorkspaceMark w={w} size={18} picture={30} />
               {!here && mark?.tone && <span className={css.mark}><span className={chatMarkCss.chatMarkInline} data-tone={mark.tone} /></span>}
             </button>
           </Tip>

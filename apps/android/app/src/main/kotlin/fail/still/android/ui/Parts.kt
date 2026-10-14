@@ -566,12 +566,16 @@ fun NavBar(back: String, onBack: () -> Unit, title: String, sub: (@Composable Ro
     }
 }
 
-/** A page's large title (stations, settings): a small line over a big word; none when `small` is empty. */
+/** A page's large title (stations, settings): a small line over a big word; none when `small` is empty. `lead` goes before the word (a workspace's mark). */
 @Composable
-fun LargeTitle(small: String, big: String) {
+fun LargeTitle(small: String, big: String, lead: (@Composable () -> Unit)? = null) {
     Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 6.dp)) {
         if (small.isNotEmpty()) Text(small, fontSize = 13.sp, color = C.muted)
-        Text(big, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = C.ink, letterSpacing = (-0.6).sp)
+        if (lead == null) Text(big, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = C.ink, letterSpacing = (-0.6).sp)
+        else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            lead()
+            Text(big, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = C.ink, letterSpacing = (-0.6).sp)
+        }
     }
 }
 

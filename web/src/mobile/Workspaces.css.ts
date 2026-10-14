@@ -15,3 +15,5 @@ globalStyle(`${mSettingText} small`, { fontSize: vars.textCaption });
 
 export const mCurrent = style({ margin: "4px 12px 16px", borderRadius: `calc(16px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "var(--m-bg)" });
 export const mActions = style({ flexShrink: 0, padding: "8px 0 16px" });
+/** A workspace's mark before its name (as wide as the actions' icons below): its letter, muted, where it has none. */
+export const mMark = style({ display: "grid", placeItems: "center", flex: "none", width: "24px", height: "24px", color: "var(--m-muted)", fontWeight: 600, fontSize: vars.textBody });

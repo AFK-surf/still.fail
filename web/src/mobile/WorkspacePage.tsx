@@ -13,6 +13,8 @@ import { Check, UserPlus } from "../icons.tsx";
 import { Avatar, Button, failedIn, Field, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavButton, PickRow, SectionHeader, TopBack } from "./parts.tsx";
 import { doingMatches, failed, useDoingList } from "../doing.ts";
 import { ask, confirm } from "./sheets.tsx";
+import { MarkSheet } from "./Stations.tsx";
+import { WorkspaceMark } from "../WorkspaceMark.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
@@ -56,6 +58,15 @@ export function WorkspaceScreen() {
         <LargeTitle small="" big={view.name} />
       </div>
       <p className={css.mLead}>{t(manager ? "web-mobile.workspace.leadManager" : "web-mobile.workspace.lead", { role: ROLE_LABEL[view.role], members: t("web-mobile.settings.members", { n: view.members.length }), stations: t("web-mobile.workspaces.stations", { n: view.stations.length }) })}</p>
+      {/* Its mark, where it is switched to (its letter till it has one): picked in the stations' sheet. */}
+      {manager && (
+        <ListCard>
+          <ListRow onClick={() => app.sheet({ height: 0.78, content: () => <MarkSheet s={view} set={(m) => cloud.setWorkspaceMark(me.sub, view.id, m)} /> })}>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("web-mobile.stations.emoji")}</span>
+            <span className={css.mMark}><WorkspaceMark w={view} size={20} picture={28} /></span>
+          </ListRow>
+        </ListCard>
+      )}
       {/* Its people in one list: those in it, then those added who have not signed in yet, then the invitations out; which is which on each row's second line. */}
       <SectionHeader title={t("web-mobile.workspace.members")} trailing={waiting ? t("web-mobile.settings.membersWaiting", { n: view.members.length, waiting }) : t("web-mobile.settings.members", { n: view.members.length })} start={24} />
       <ListCard>

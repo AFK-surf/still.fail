@@ -14,7 +14,8 @@ import { useCommands } from "../commands.ts";
 import { Fragment, useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import { Link, Navigate, NavLink, useNavigate, useParams, useSearchParams } from "react-router";
 import { useProfiles, useStations, type Profile, type StationView } from "../api.ts";
-import type { Mark } from "../stationPick.ts";
+import { same, type Mark } from "../stationPick.ts";
+import { MarkPick } from "./MarkPick.tsx";
 import type { WorkspaceProfile } from "../core/shapes.ts";
 import { ConnectList } from "../pages/Connects.tsx";
 import { ACCESS, RUNTIME_LABEL } from "../format.ts";
@@ -231,6 +232,8 @@ export function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
   const [name, setName] = useState("");
   useEffect(() => { if (view) setName(view.name); }, [view?.name]);
   const rename = useAction(() => cloud.renameWorkspace(account.sub, entry.id, name), () => toast(t("web-pages.settings.workspace.renamed")));
+  // Its mark shows at once, the square turning until the cloud has it.
+  const mark = useAction((m: Mark) => cloud.setWorkspaceMark(account.sub, entry.id, m));
   const [leaving, setLeaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const leave = useAction(() => cloud.removeMember(account.sub, entry.id, account.sub), () => toast(t("web-pages.settings.workspace.left")));
@@ -240,8 +243,11 @@ export function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
     <Page title="Workspace" back={`/w/${entry.id}/settings`} entry={entry}>
       <Section title={t("web-pages.settings.workspace.name")}>
         <div className={pagesCss.card}>
-          <Field label={t("web-pages.settings.workspace.nameLabel")} htmlFor="ws-rename" hint={manager ? undefined : t("web-pages.settings.workspace.nameHint")} error={rename.error ? t("web-pages.settings.workspace.renameFailed", { error: rename.error.message }) : undefined}>
+          <Field label={t("web-pages.settings.workspace.nameLabel")} htmlFor="ws-rename" hint={manager ? undefined : t("web-pages.settings.workspace.nameHint")}
+            error={rename.error ? t("web-pages.settings.workspace.renameFailed", { error: rename.error.message }) : mark.error ? t("web-pages.settings.workspace.markFailed", { error: mark.error.message }) : undefined}>
             <div className={additionsCss.inputRow}>
+              <MarkPick emoji={mark.busy ? mark.arg!.emoji : view.emoji} icon={mark.busy ? mark.arg!.icon : view.icon} name={view.name} editable={manager} busy={mark.busy}
+                onPick={(m) => { if (!same(m, view.emoji, view.icon)) void mark.run(m); }} />
               <input id="ws-rename" className={controlsCss.input} value={name} maxLength={80} disabled={!manager} onChange={(e) => setName(e.target.value)} />
               {manager && <Button variant="primary" disabled={!name.trim() || name.trim() === view.name} busy={rename.busy} onClick={() => rename.run()}>{t("common.save")}</Button>}
             </div>

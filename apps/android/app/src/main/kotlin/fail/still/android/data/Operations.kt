@@ -538,6 +538,8 @@ class CloudOperations(private val call: suspend (String, JsonObject) -> JsonElem
     }
     class WorkspaceRenameFields : OperationFields() {
         var name: String? by field<String>("name") { JsonPrimitive(it) }
+        var emoji: String? by field<String>("emoji") { JsonPrimitive(it) }
+        var icon: String? by field<String>("icon") { JsonPrimitive(it) }
     }
     suspend fun workspaceRename(workspace: String, fill: WorkspaceRenameFields.() -> Unit = {}): JsonElement {
         val values = WorkspaceRenameFields().apply(fill).fields
