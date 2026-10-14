@@ -175,7 +175,7 @@ export const detailInline = style({ display: "inline-flex", alignItems: "center"
  * Last in the chat's info: its sharing with other workspaces, then its public links, as the panel's rows (ui.tsx
  * PanelRow) at its padding on every side, their corner (`--panel-in`) concentric with the panel's.
  */
-export const infoRows = style({ display: "grid", gap: "2px", marginTop: "8px" });
+export const infoRows = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px", marginTop: "8px" });
 /** Where the chat is shared, at the end of its row. */
 export const shareText = style({
   minWidth: "0", color: vars.muted, fontSize: vars.textMeta, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
