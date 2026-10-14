@@ -281,6 +281,13 @@ globalStyle(`${desk} ${top}`, {
   background: "var(--r-bg)", WebkitBackdropFilter: "none", backdropFilter: "none", boxShadow: "inset 0 -1px 0 var(--r-line)",
 });
 globalStyle(`${desk} ${back}`, { justifySelf: "start" });
+// The desktop app has no title bar: the toolbar, over the page's top row (styles/shell.css.ts main), drags the window, all
+// but what is pressed in it; on Windows what is at its right end stays clear of the window's buttons (styles/sidebar.css.ts pageBar).
+globalStyle(`[data-desktop] ${desk} ${top}`, { WebkitAppRegion: "drag" });
+globalStyle(`:is([data-desktop="overlay"], [data-desktop="custom"]) ${desk} ${top}`, { paddingRight: "calc(var(--window-buttons, 0px) + 12px)" });
+globalStyle(`[data-desktop] ${desk} ${top} :is(a, button, input, select, [role="button"], [tabindex])`, { WebkitAppRegion: "no-drag" });
+// In a narrow window its floating bar, shown, takes the pointer over that row (FilePreview.css.ts).
+globalStyle(`[data-desktop] ${reader}[data-narrow] ${top}[data-shown]`, { WebkitAppRegion: "no-drag" });
 globalStyle(`${desk} ${topEnd}`, { gap: "2px" });
 globalStyle(`${desk} ${topButton}`, { width: "34px", height: "34px", borderRadius: `calc(10px * ${vars.cornerScale})`, color: "var(--r-muted)" });
 globalStyle(`${desk} ${topButton}:hover, ${desk} ${topButton}[data-on]`, { color: "var(--r-ink)" });
