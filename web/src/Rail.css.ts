@@ -95,8 +95,9 @@ export const count = style({
 
 /**
  * The workspaces to switch to (Rail.tsx RailWorkspaces), each on a square as large as the places' ground above them: a
- * letter on one of its own, a mark (an icon, an emoji, a picture a little smaller) on nothing. Under the pointer and the
- * one in view, the places' own grounds (a ground under a mark at rest greyed an icon's colours and showed round a picture).
+ * letter on one of its own, a mark (an icon, an emoji, a picture a little smaller) on nothing. Under the pointer, the
+ * places' ground; the one in view, a short bar at its left and no ground (a ground under a mark greyed an icon's colours
+ * and showed round a picture).
  */
 export const workspaces = style({ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "4px 0" });
 export const workspaceItem = style({
@@ -107,8 +108,12 @@ export const workspaceItem = style({
     "&:hover": { color: vars.text },
     "&[data-marked]": { background: "none", color: vars.text },
     "&[data-marked]:hover": { background: vars.hover },
-    "&[data-on], &[data-on]:hover": { background: vars.selected, color: vars.text },
+    "&[data-on]": { color: vars.text },
   },
+});
+// The one in view: a short bar in the margin at its left (inside the closed bar too).
+globalStyle(`${workspaceItem}[data-on]::before`, {
+  content: "", position: "absolute", left: -6, top: 8, width: 3, height: 14, borderRadius: 2, background: vars.text,
 });
 // A picture inside the square as an icon is, rounded as the square is.
 globalStyle(`${workspaceItem}[data-picture] img`, { borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape });
