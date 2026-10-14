@@ -9,6 +9,7 @@
 // on) come with a new `rev`, which the page shows.
 import { Deferred, Effect } from "effect";
 import type { Inner } from "./core.ts";
+import type { AccountDb } from "./db/account.ts";
 import type { Call } from "./core/calls.ts";
 import { handlers } from "./core/execute.ts";
 import { asCoreError, CoreError } from "./error.ts";
@@ -32,6 +33,12 @@ export type ComposerFile = { id: string; name: string; size: number; sent?: numb
 export type FileIn = { id: string; name: string; size: number; blob: Blob | FileSource; pasted?: J };
 
 type State = {
+  /// Cached only for the account database it was read from.
+  db: AccountDb | undefined;
+  /// The last content edit, excluding upload progress and focus/status changes.
+  edited: number;
+  /// The station key already joined to this original key.
+  joined: string | null;
   /// The words as typed (what the page last said, or the core's own).
   text: string;
   /// How many times the core has set the words itself.
@@ -54,11 +61,14 @@ export const MAX_FILE = 1024 * 1024 * 1024;
 const PART = 4 * 1024 * 1024;
 
 const topicOf = (key: string): Topic => ({ topic: "composer", key });
-const empty = (): State => ({ text: "", rev: 0, quotes: [], focus: null, files: [], starting: false, error: null, version: 0, taken: null });
+const empty = (db?: AccountDb): State => ({ db, edited: 0, joined: null, text: "", rev: 0, quotes: [], focus: null, files: [], starting: false, error: null, version: 0, taken: null });
+const draftKey = (station: string, chat: string) => chat === "new" ? `new:${station}` : `${station}:${chat}`;
 
 export class Composers {
   #inner: Inner;
   #all = new Map<string, State>();
+  #edits = 0;
+  #keptId = 0;
   #uploads = new Map<string, { station: string; file: FileIn | null; done: Deferred.Deferred<J, CoreError>; error: boolean }>();
 
   constructor(inner: Inner) {
@@ -78,38 +88,147 @@ export class Composers {
     };
   }
 
+  /// A chat made here keeps one composer under its original key. Its page uses that key until reload, then the
+  /// station's session key; the persisted creation record connects them even before the station is reached again.
+  #keys(key: string): string[] {
+    const at = draftAt(key);
+    if (!at) return [key];
+    const [station, session] = at;
+    const local = this.#inner.views.local;
+    const original = local.pendingKey(station, session);
+    if (!original) return [key];
+    const pending = local.pending(original);
+    if (pending?.station !== station || !pending.made) return [key];
+    return [`${station}:${original}`, `${station}:${pending.made[0]}`];
+  }
+
   #state(key: string): State {
-    let s = this.#all.get(key);
-    if (!s) {
-      s = empty();
-      const at = draftAt(key);
-      const kept = at ? this.#inner.data.get({ topic: "draft", station: at[0], chat: at[1] }) : undefined;
-      if (isObject(kept)) {
-        const text = typeof kept.text === "string" ? kept.text : "";
-        s.text = text;
-        if (text) s.rev = 1;
-        let n = 0;
-        s.quotes = (Array.isArray(kept.quotes) ? kept.quotes : []).filter(isObject).map((q: J) => ({ ...q, id: `kept-${n++}` }) as ComposerQuote);
-        s.files = (Array.isArray(kept.files) ? kept.files : []).filter(isObject).map((f: J) => ({ id: `kept-${n++}`, name: String(f.name ?? ""), size: Number(f.size ?? 0), done: f, error: null }));
-      }
+    const keys = this.#keys(key);
+    key = keys[0]!;
+    const before = this.#cached(key);
+    const alias = keys[1];
+    if (!alias) {
+      if (before) return before;
+      const s = this.#read(key);
       this.#all.set(key, s);
+      return s;
+    }
+    const other = this.#cached(alias);
+    if (before?.joined === alias && !other) return before;
+    // Both names may have been opened before the creation reply connected them. Keep the latest actual edit,
+    // including a send that emptied it; an empty subscription or a file's progress must not displace that edit.
+    const savedAlias = this.#kept(alias);
+    const s = before && before.edited > (other?.edited ?? 0) ? before
+      : other && other.edited > 0 ? other
+      // Older clients left later drafts under the station key after reload. With no live edits, that copy wins.
+      : isObject(savedAlias) ? (other ?? this.#from(savedAlias, this.#db(key)))
+      : (before ?? this.#read(key));
+    s.rev = Math.max(s.rev, before?.rev ?? 0, other?.rev ?? 0) + 1;
+    s.version = Math.max(s.version, before?.version ?? 0, other?.version ?? 0) + 1;
+    s.joined = alias;
+    this.#all.set(key, s);
+    this.#all.delete(alias);
+    // Consolidate in one database burst. Also cancel either delayed write, so it cannot resurrect the old copy.
+    this.#forget(key);
+    this.#save(key, s, true);
+    this.#forget(alias);
+    this.#tell(keys);
+    return s;
+  }
+
+  #db(key: string): AccountDb | undefined {
+    const at = draftAt(key);
+    return at ? this.#inner.data.of(at[0]) : undefined;
+  }
+
+  #cached(key: string): State | undefined {
+    const s = this.#all.get(key);
+    if (s && s.db !== this.#db(key)) {
+      this.#all.delete(key);
+      return undefined;
     }
     return s;
   }
 
-  /// A change made: the topic told, the chat's draft kept (written a moment after its last change).
-  #changed(key: string, s: State, count = true): number {
-    if (count) s.version++;
-    this.#inner.store.invalidate(topicOf(key));
+  #kept(key: string): unknown {
     const at = draftAt(key);
-    if (at) {
-      const topic = { topic: "draft", station: at[0], chat: at[1] };
-      const quotes = s.quotes.map(({ id: _, ...q }) => q);
-      const files = s.files.flatMap((f) => (f.done ? [f.done] : []));
-      if (!s.text.trim() && quotes.length === 0 && files.length === 0) this.#inner.data.forgetTopic(topic);
-      else this.#inner.data.setSoon(topic, { text: s.text, quotes, files });
-    }
+    return at ? this.#inner.data.get({ topic: "draft", station: at[0], chat: at[1] }) : undefined;
+  }
+
+  #read(key: string): State {
+    return this.#from(this.#kept(key), this.#db(key));
+  }
+
+  #from(kept: unknown, db: AccountDb | undefined): State {
+    const s = empty(db);
+    if (!isObject(kept)) return s;
+    s.text = typeof kept.text === "string" ? kept.text : "";
+    if (s.text) s.rev = 1;
+    s.quotes = (Array.isArray(kept.quotes) ? kept.quotes : []).filter(isObject).map((q: J) => ({ ...q, id: `kept-${this.#keptId++}` }) as ComposerQuote);
+    s.files = (Array.isArray(kept.files) ? kept.files : []).filter(isObject).map((f: J) => ({ id: `kept-${this.#keptId++}`, name: String(f.name ?? ""), size: Number(f.size ?? 0), done: f, error: null }));
+    return s;
+  }
+
+  #draft(s: State) {
+    return { text: s.text, quotes: s.quotes.map(({ id: _, ...q }) => q), files: s.files.flatMap((f) => f.done ? [f.done] : []) };
+  }
+
+  #forget(key: string): void {
+    const at = draftAt(key);
+    if (at) this.#inner.data.forgetTopic({ topic: "draft", station: at[0], chat: at[1] });
+  }
+
+  #save(key: string, s: State, immediate = false): void {
+    const at = draftAt(key);
+    if (!at || s.db !== this.#db(key)) return;
+    const topic = { topic: "draft", station: at[0], chat: at[1] };
+    const draft = this.#draft(s);
+    if (!draft.text.trim() && draft.quotes.length === 0 && draft.files.length === 0) this.#inner.data.forgetTopic(topic);
+    else if (immediate) this.#inner.data.set(topic, draft, false);
+    else this.#inner.data.setSoon(topic, draft);
+  }
+
+  /// The creation reply arrived: join any live composers before their next edit or upload update.
+  made(station: string, key: string): void {
+    this.#state(`${station}:${key}`);
+  }
+
+  /// The draft API (including native clients) reads and replaces the same state as the web composer.
+  readDraft(station: string, chat: string) {
+    const draft = this.#draft(this.#state(draftKey(station, chat)));
+    if (!draft.text.trim() && draft.quotes.length === 0 && draft.files.length === 0) draft.text = "";
+    return draft;
+  }
+
+  putDraft(station: string, chat: string, value: unknown): void {
+    const key = this.#keys(draftKey(station, chat))[0]!;
+    const was = this.#state(key);
+    const s = this.#from(value, was.db);
+    if (!s.text.trim() && s.quotes.length === 0 && s.files.length === 0) s.text = "";
+    s.rev = was.rev + 1;
+    s.version = was.version;
+    s.joined = was.joined;
+    this.release(was.files);
+    this.#all.set(key, s);
+    this.#changed(key, s);
+  }
+
+  /// A change made: the topic told, the chat's draft kept (written a moment after its last change).
+  #changed(key: string, s: State, count = true, edited = true): number {
+    if (edited) s.edited = ++this.#edits;
+    if (count) s.version++;
+    const keys = this.#keys(key);
+    this.#tell(keys);
+    this.#save(keys[0]!, s);
     return s.version;
+  }
+
+  #tell(keys: string[]): void {
+    for (const key of keys) {
+      this.#inner.store.invalidate(topicOf(key));
+      const at = draftAt(key);
+      if (at) this.#inner.store.invalidate({ topic: "draft", station: at[0], chat: at[1] });
+    }
   }
 
   /// The core's own words for it: shown in place of what was typed.
@@ -157,21 +276,21 @@ export class Composers {
     const s = this.#state(key);
     if (s.focus === null) return s.version;
     s.focus = null;
-    return this.#changed(key, s);
+    return this.#changed(key, s, true, false);
   }
 
   error(key: string, error: string | null): number {
     const s = this.#state(key);
     if (s.error === error) return s.version;
     s.error = error;
-    return this.#changed(key, s);
+    return this.#changed(key, s, true, false);
   }
 
   starting(key: string, starting: boolean): number {
     const s = this.#state(key);
     if (s.starting === starting) return s.version;
     s.starting = starting;
-    return this.#changed(key, s);
+    return this.#changed(key, s, true, false);
   }
 
   /// Files picked, pasted or dropped: each goes up to `station` at once, and waits there in no chat until a message
@@ -203,10 +322,11 @@ export class Composers {
     const id = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
     const change = (patch: Partial<ComposerFile>) => {
       for (const [k, s] of this.#all) {
+        if (s.db !== this.#db(k)) continue;
         if (s.taken?.files.some((x) => x.id === f.id)) s.taken.files = s.taken.files.map((x) => x.id === f.id ? { ...x, ...patch } : x);
         if (!s.files.some((x) => x.id === f.id)) continue;
         s.files = s.files.map((x) => (x.id === f.id ? { ...x, ...patch } : x));
-        this.#changed(k, s);
+        this.#changed(k, s, true, false);
       }
     };
     const run = Effect.gen(function* () {
@@ -305,12 +425,15 @@ export class Composers {
 
   /// What is written in `from` goes on into `to` (a new chat becoming the chat it made), `from` left empty.
   carry(from: string, to: string): number {
+    from = this.#keys(from)[0]!;
+    to = this.#keys(to)[0]!;
     const s = this.#state(from);
+    if (from === to) return s.version;
     // Counted on from where `to` was: what was shown of it before is older than this.
     const was = this.#state(to);
-    const next = { ...empty(), text: s.text, rev: was.rev + 1, quotes: s.quotes, files: s.files, version: was.version };
+    const next = { ...empty(was.db), joined: was.joined, text: s.text, rev: was.rev + 1, quotes: s.quotes, files: s.files, version: was.version };
     this.#all.set(to, next);
-    this.#all.set(from, { ...empty(), rev: s.rev + 1, version: s.version });
+    this.#all.set(from, { ...empty(s.db), joined: s.joined, rev: s.rev + 1, version: s.version });
     this.#changed(from, this.#all.get(from)!);
     return this.#changed(to, next);
   }
@@ -319,6 +442,7 @@ export class Composers {
   move(from: string, to: string): number {
     const a = this.#state(from);
     const b = this.#state(to);
+    if (a === b) return b.version;
     b.quotes = [...b.quotes, ...a.quotes];
     if (a.text) this.#say(b, a.text);
     b.error = null;

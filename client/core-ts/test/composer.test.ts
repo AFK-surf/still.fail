@@ -3,11 +3,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Deferred, Effect } from "effect";
+import { Core } from "../src/core.ts";
 import { dbName, SOON_MS } from "../src/data.ts";
 import { apply, call, subscribe, v } from "./helpers.ts";
 import { CoreFiles, PageFiles } from "../src/hosts/file-port.ts";
 import { CoreError } from "../src/error.ts";
 import { stationReplies, started } from "./station-fixture.ts";
+import { HostWire } from "../src/station/wire.ts";
 
 type J = any;
 
@@ -156,6 +158,137 @@ test("a_new_chats_words_go_on_into_the_chat_it_made_and_a_new_chat_moved_takes_i
   await t.watch(3, "new:ws/other");
   assert.equal(v(t.values, 3).text, "换个 station");
   t.core.close();
+});
+
+test("a_made_chats_pending_draft_survives_restart_and_stays_cleared_after_sending", async () => {
+  const t = await setup();
+  const pending = t.core.inner.views.local.pendingNew("ws/st", { runtime: "claude" });
+  t.core.inner.views.local.pendingMade(pending, "ember:made", 9);
+  const key = "ws/st:ember:made";
+  const quote = { author: "agent", text: "那段", comment: "为什么", ts: "1.0", role: "agent" };
+  const file = { name: "a.png", path: "/u/a.png", size: 3 };
+  // Older clients kept writing under the temporary key after the station made the chat.
+  t.core.inner.data.set({ topic: "draft", station: "ws/st", chat: pending }, { text: "还没发送", quotes: [quote], files: [file] });
+  const restart = async (core: Core) => {
+    await t.host.time.pass(SOON_MS + 50);
+    await t.host.settle();
+    await Effect.runPromise(core.inner.data.written);
+    core.close();
+    t.host.takeEmitted();
+    return Core.create(t.host, { clock: t.host.time.clock, sample: 0, wire: () => new HostWire(t.host) });
+  };
+  const again = await restart(t.core);
+  try {
+    const restored = again.inner.composers.value(key) as J;
+    assert.deepEqual([restored.text, restored.quotes.map(({ id: _, ...q }: J) => q), restored.files.map((f: J) => f.done)], ["还没发送", [quote], [file]]);
+    const sent = again.inner.composers.take(key);
+    assert.deepEqual([sent.text, sent.quotes, sent.attachments], ["还没发送", [quote], [file]]);
+    const third = await restart(again);
+    try {
+      for (const draft of [key, `ws/st:${pending}`]) {
+        const cleared = third.inner.composers.value(draft) as J;
+        assert.deepEqual([cleared.text, cleared.quotes, cleared.files, cleared.ready], ["", [], [], false]);
+      }
+    } finally { third.close(); }
+  } finally { again.close(); }
+});
+
+test("a_canonical_draft_wins_over_its_old_pending_draft_without_crossing_stations", async () => {
+  const t = await setup();
+  const pending = t.core.inner.views.local.pendingNew("ws/st", { runtime: "claude" });
+  t.core.inner.views.local.pendingMade(pending, "ember:made", 9);
+  const keep = (station: string, chat: string, text: string) => t.core.inner.data.set({ topic: "draft", station, chat }, { text, quotes: [], files: [] });
+  keep("ws/st", pending, "旧的草稿");
+  keep("ws/st", "ember:made", "接着写的草稿");
+  keep("ws/other", "ember:made", "另一台 station 的草稿");
+  await t.host.time.pass(SOON_MS + 50);
+  await t.host.settle();
+  await Effect.runPromise(t.core.inner.data.written);
+  t.core.close();
+  t.host.takeEmitted();
+  const again = await Core.create(t.host, { clock: t.host.time.clock, sample: 0, wire: () => new HostWire(t.host) });
+  try {
+    const text = (key: string) => (again.inner.composers.value(key) as J).text;
+    assert.equal(text(`ws/st:${pending}`), "接着写的草稿");
+    assert.equal(text("ws/st:ember:made"), "接着写的草稿");
+    assert.equal(text("ws/other:ember:made"), "另一台 station 的草稿");
+    assert.equal(text(`ws/other:${pending}`), "");
+  } finally { again.close(); }
+});
+
+test("a_pending_and_made_composer_share_live_edits_upload_completion_and_a_draft_after_restart", async () => {
+  const t = await setup();
+  const pending = t.core.inner.views.local.pendingNew("ws/st", { runtime: "claude" });
+  const old = `ws/st:${pending}`;
+  const key = "ws/st:ember:made";
+  const gate = Deferred.makeUnsafe<J, CoreError>();
+  let uploads = 0;
+  (t.core.inner.stations.requests as J).uploadPart = () => { uploads++; return Deferred.await(gate); };
+  try {
+    await t.watch(1, old);
+    await t.ask("text", { key: old, text: "创建时写的" });
+    await t.ask("add", { key: old, station: "ws/st", files: [{ id: "slow", name: "slow.txt", size: 3, blob: new Blob(["abc"]) }] });
+    t.core.inner.views.local.pendingMade(pending, "ember:made", 9);
+    await t.watch(2, key);
+    assert.equal(v(t.values, 2).text, "创建时写的");
+    assert.equal(v(t.values, 2).uploading, true);
+    await t.ask("text", { key, text: "接着写" });
+    assert.equal(v(t.values, 1).text, "接着写");
+    const saved = { name: "slow.txt", path: "/u/slow.txt", size: 3 };
+    Deferred.doneUnsafe(gate, Effect.succeed({ have: 3, file: saved }));
+    await t.settle();
+    assert.equal(uploads, 1);
+    for (const sub of [1, 2]) {
+      assert.deepEqual(v(t.values, sub).files.map((f: J) => f.done), [saved]);
+      assert.equal(v(t.values, sub).uploading, false);
+    }
+    assert.equal(v(t.values, 1).version, v(t.values, 2).version);
+    // The current page keeps the pending key even after creation; reopening uses the station's key.
+    await t.ask("text", { key: old, text: "创建完成后继续写" });
+    for (const [from, to] of [[old, key], [key, old]]) {
+      await t.ask("carry", { key: from, to });
+      for (const sub of [1, 2]) {
+        assert.equal(v(t.values, sub).text, "创建完成后继续写");
+        assert.deepEqual(v(t.values, sub).files.map((f: J) => f.done), [saved]);
+      }
+    }
+    await t.host.time.pass(SOON_MS + 50);
+    await t.host.settle();
+    await Effect.runPromise(t.core.inner.data.written);
+    t.core.close();
+    t.host.takeEmitted();
+    const again = await Core.create(t.host, { clock: t.host.time.clock, sample: 0, wire: () => new HostWire(t.host) });
+    try {
+      const restored = again.inner.composers.value(key) as J;
+      assert.deepEqual([restored.text, restored.files.map((f: J) => f.done)], ["创建完成后继续写", [saved]]);
+    } finally { again.close(); }
+  } finally { t.core.close(); }
+});
+
+test("draft_subscriptions_follow_both_chat_keys_when_joined_edited_and_taken", async () => {
+  const t = await setup();
+  const pending = t.core.inner.views.local.pendingNew("ws/st", { runtime: "claude" });
+  const draft = { text: "还没发", quotes: [{ author: "agent", text: "那段", comment: "为什么", role: "agent" }], files: [{ name: "a.png", path: "/u/a.png", size: 3 }] };
+  try {
+    subscribe(t.core, t.ui, 1, { topic: "draft", station: "ws/st", chat: pending });
+    subscribe(t.core, t.ui, 2, { topic: "draft", station: "ws/st", chat: "ember:made" });
+    await t.settle();
+    call(t.core, t.ui, 901, "draft.put", { key: `ws/st:${pending}`, ...draft });
+    await t.settle();
+    assert.deepEqual(v(t.values, 1), draft);
+    assert.deepEqual(v(t.values, 2), { text: "", quotes: [], files: [] });
+
+    t.core.inner.views.local.pendingMade(pending, "ember:made", 9);
+    await t.settle();
+    for (const sub of [1, 2]) assert.deepEqual(v(t.values, sub), draft);
+    const edited = { ...draft, text: "继续写" };
+    call(t.core, t.ui, 902, "draft.put", { key: "ws/st:ember:made", ...edited });
+    await t.settle();
+    for (const sub of [1, 2]) assert.deepEqual(v(t.values, sub), edited);
+
+    await t.ask("take", { key: "ws/st:ember:made" });
+    for (const sub of [1, 2]) assert.deepEqual(v(t.values, sub), { text: "", quotes: [], files: [] });
+  } finally { t.core.close(); }
 });
 
 test("files_go_up_by_their_station_and_say_how_far_and_a_failed_one_says_why", async () => {

@@ -103,19 +103,11 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         prefs.deferDecision(inner.data, `${call.station}\t${call.thread}\t${call.seq}`, inner.host.nowMs());
         return Effect.succeed(null);
       case "draftPut": {
-        const topic = { topic: "draft", station: call.station, chat: call.chat };
-        const draft = call.draft;
-        const empty = (field: string) => {
-          const v = isObject(draft) ? draft[field] : undefined;
-          return v === undefined || (typeof v === "string" && v.trim() === "") || (Array.isArray(v) && v.length === 0);
-        };
-        if (empty("text") && empty("quotes") && empty("files")) inner.data.forgetTopic(topic);
-        else inner.data.setSoon(topic, draft);
+        inner.composers.putDraft(call.station, call.chat, call.draft);
         return Effect.succeed(null);
       }
       case "draftGet": {
-        const v = inner.data.get({ topic: "draft", station: call.station, chat: call.chat });
-        return Effect.succeed(v === undefined ? { text: "", quotes: [], files: [] } : v);
+        return Effect.succeed(inner.composers.readDraft(call.station, call.chat));
       }
       case "migrate":
         return Effect.gen(function* () {
