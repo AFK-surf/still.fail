@@ -3,7 +3,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { panel } from "./styles/glass.ts";
-import { toastInKeyframes } from "./styles/keyframes.css.ts";
 
 export const stack = style({
   position: "fixed", zIndex: 150, left: "calc(env(safe-area-inset-left, 0px) + 12px)", bottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)",
@@ -11,6 +10,13 @@ export const stack = style({
   pointerEvents: "none",
   "@media": { "(min-width: 701px)": { selectors: { ":root:has([data-rail]) &": { left: 68 } } } },
 });
+/** A bubble's room in the stack, opened and closed as it comes and goes (SystemBubbles.tsx): the bubble at its foot,
+ * standing out over it while it is short. */
+export const slot = style({
+  display: "flex", flexDirection: "column", justifyContent: "flex-end", maxWidth: "100%",
+  selectors: { "&[data-leaving]": { pointerEvents: "none" } },
+});
+globalStyle(`${slot}[data-leaving] *`, { pointerEvents: "none" });
 export const bubble = style({
   // Its mark and its close on its first line; what can be done by the last line of its words, at their right.
   ...panel, display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto auto", gridTemplateAreas: '"icon text act close"',
@@ -18,8 +24,6 @@ export const bubble = style({
   // Its corner its close's (14) and its padding (6): concentric.
   borderRadius: 20, boxShadow: `0 8px 24px ${vars.shadow}`,
   color: vars.text, fontSize: vars.textUi, lineHeight: "20px", pointerEvents: "auto",
-  animation: `${toastInKeyframes} 220ms ${vars.easeOut}`,
-  "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } },
 });
 export const icon = style({ gridArea: "icon", alignSelf: "start", display: "grid", placeItems: "center", height: 28, marginRight: 4, color: vars.accent });
 export const text = style({ gridArea: "text", display: "flex", flexDirection: "column", minWidth: 0, padding: "4px 0" });
