@@ -90,6 +90,7 @@ import fail.still.android.screens.Button
 import fail.still.android.screens.DoingMark
 import fail.still.android.screens.DriveKey
 import fail.still.android.screens.FilePreview
+import fail.still.android.screens.Gallery
 import fail.still.android.screens.PickRow
 import fail.still.android.screens.Shown
 import fail.still.android.screens.Spinner
@@ -513,7 +514,7 @@ private fun FolderPage(app: AppState, station: String, s: StationView, roots: Li
     if (shown != null) {
         val shownOf = { e: DriveEntry -> Shown(DriveKey.of(root, e.mtime), Attachment(e.name, join(path, e.name), e.size)) }
         val opened = remember(shown) { shownOf(shown) }
-        FilePreview(station, opened.key, opened.file, gallery = { latest.filter { it.kind == "image" }.map(shownOf) }, canDraft = false) { previewing = null }
+        FilePreview(station, opened.key, opened.file, gallery = Gallery.Folder { latest.filter { it.kind == "image" }.map(shownOf) }, canDraft = false) { previewing = null }
     }
 }
 

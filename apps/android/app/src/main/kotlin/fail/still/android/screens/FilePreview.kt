@@ -175,11 +175,11 @@ private sealed interface FileLoad {
 }
 
 /**
- * `file` (kept by the session `key`) over the whole screen; `gallery`: the chat it is opened from, for an image to step
- * to the one before or after (the core tells those beside the one shown, `imageNear`). Back (or ×) closes it.
+ * `file` (kept by the session `key`) over the whole screen; `gallery`: what an image steps through to the one before or
+ * after. Back (or ×) closes it.
  */
 @Composable
-fun FilePreview(station: String, key: String, file: Attachment, gallery: ChatOf? = null, canDraft: Boolean = true, onClose: () -> Unit) {
+fun FilePreview(station: String, key: String, file: Attachment, gallery: Gallery? = null, canDraft: Boolean = true, onClose: () -> Unit) {
     // Drawn by ViewerHost, a layer of the app's own window over the pages (not a dialog's window of its own): it can grow
     // out of the thumbnail in the chat and shrink back into it. Here it only says it is open, while it is.
     val open = remember { ViewerOpen(station, Shown(key, file), gallery, canDraft) }
@@ -198,8 +198,17 @@ private const val CLOSE_MS = 280
 /** Opened or closed with no thumbnail on the screen: the web's fade (FilePreview.css.ts fp: 140ms ease-out). */
 private const val FADE_MS = 140
 
+/**
+ * What an image opened in the viewer steps through: the images of the chat it is opened from (as its `chat` topic names
+ * it), of which the core tells those beside the one shown (`imageNear`), not the chat's every image; or a folder's.
+ */
+sealed interface Gallery {
+    class Chat(val of: ChatOf) : Gallery
+    class Folder(val images: () -> List<Shown>) : Gallery
+}
+
 /** `canDraft`: marks on it can go into its chat's draft (not a picture that is in a draft already). */
-internal class ViewerOpen(val station: String, val opened: Shown, val gallery: ChatOf?, val canDraft: Boolean = true) {
+internal class ViewerOpen(val station: String, val opened: Shown, val gallery: Gallery?, val canDraft: Boolean = true) {
     var onClose: () -> Unit = {}
 }
 
@@ -386,7 +395,7 @@ private fun ViewerLayer(open: ViewerOpen) {
 private fun known(s: Shown) = kindOf(s.file.name).kind.let { it == PreviewKind.Image || it == PreviewKind.Video }
 
 @Composable
-private fun Viewer(station: String, opened: Shown, gallery: ChatOf?, onClose: () -> Unit, flight: ViewerFlight, closing: Boolean, canDraft: Boolean, onShown: (Shown) -> Unit) {
+private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: () -> Unit, flight: ViewerFlight, closing: Boolean, canDraft: Boolean, onShown: (Shown) -> Unit) {
     val app = LocalApp.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -396,10 +405,13 @@ private fun Viewer(station: String, opened: Shown, gallery: ChatOf?, onClose: ()
     val key = shown.key
     LaunchedEffect(shown) { onShown(shown) }
     val known = remember(file.path) { kindOf(file.name) }
-    val beside by rememberTopic<ImageNear>(app.core, if (known.kind == PreviewKind.Image && gallery != null) Topics.imageNear(station, gallery, file.path) else null)
-    // Each through the session that keeps it (the core says which, `owner`).
-    val before = beside.value?.before?.let { f -> f.owner?.let { Shown(it, f) } }
-    val after = beside.value?.after?.let { f -> f.owner?.let { Shown(it, f) } }
+    val chat = (gallery as? Gallery.Chat)?.of?.takeIf { known.kind == PreviewKind.Image }
+    val told by rememberTopic<ImageNear>(app.core, chat?.let { Topics.imageNear(station, it, file.path) })
+    val folder = remember(file.path) { if (known.kind == PreviewKind.Image) (gallery as? Gallery.Folder)?.images?.invoke().orEmpty() else emptyList() }
+    val at = folder.indexOfFirst { it.file.path == file.path }
+    // A chat's through the session that keeps each (the core says which, `owner`).
+    val before = if (chat != null) told.value?.before?.let { f -> f.owner?.let { Shown(it, f) } } else folder.getOrNull(at - 1).takeIf { at > 0 }
+    val after = if (chat != null) told.value?.after?.let { f -> f.owner?.let { Shown(it, f) } } else folder.getOrNull(at + 1).takeIf { at >= 0 }
     val fullId = FileData.id(station, key, file, thumb = false)
     fun keptLoad() = FileData.kept(fullId)?.let { FileLoad.Ready(it) } ?: FileLoad.Loading(null)
     // By the file it is of: stepped to another, what came of the one before is not taken for it (not even for a frame).

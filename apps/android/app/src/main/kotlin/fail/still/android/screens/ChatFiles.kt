@@ -299,7 +299,7 @@ internal fun Files(ctx: Here, list: List<Attachment>, mine: Boolean = false) {
     }
     val shown = open
     val key = shown?.let { ctx.owner(it) }
-    if (shown != null && key != null) FilePreview(ctx.station, key, shown, gallery = ctx.of) { open = null }
+    if (shown != null && key != null) FilePreview(ctx.station, key, shown, gallery = Gallery.Chat(ctx.of)) { open = null }
 }
 
 /** Its children in rows as wide as it may be, `gap` apart, each row from the start (or the end). */
@@ -336,7 +336,7 @@ private fun Wrap(gap: Dp, end: Boolean, content: @Composable () -> Unit) {
 internal fun StationImage(station: String, key: String, file: Attachment, modifier: Modifier? = null, gallery: ChatOf? = null) {
     var open by remember { mutableStateOf(false) }
     ChatImage(station, key, file, modifier) { open = true }
-    if (open) FilePreview(station, key, file, gallery) { open = false }
+    if (open) FilePreview(station, key, file, gallery?.let { Gallery.Chat(it) }) { open = false }
 }
 
 /** One file of the chat on its own, as a message shows it, opening in the preview (what has no message around it). */
