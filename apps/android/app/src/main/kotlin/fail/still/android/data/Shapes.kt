@@ -3324,7 +3324,7 @@ data class PrefsView (
 	/// How the drive's reader lays text out (always whole: the core fills in what is not kept).
 	val reader: ReaderPrefs? = null,
 	/// What the wide screen's rail shows, in its order (web/src/Rail.tsx RAIL_ITEMS: chats, mine, watching, archive,
-	/// decisions, attention, files, stations, profiles, connects, usage, workspaces); none: its default ones.
+	/// decisions, attention, files, stations, profiles, connects, usage); none: its default ones.
 	val rail: List<String>? = null
 )
 

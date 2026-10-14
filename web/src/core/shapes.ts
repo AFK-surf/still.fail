@@ -3314,7 +3314,7 @@ export interface PrefsView {
 	reader?: ReaderPrefs;
 	/**
 	 * What the wide screen's rail shows, in its order (web/src/Rail.tsx RAIL_ITEMS: chats, mine, watching, archive,
-	 * decisions, attention, files, stations, profiles, connects, usage, workspaces); none: its default ones.
+	 * decisions, attention, files, stations, profiles, connects, usage); none: its default ones.
 	 */
 	rail?: string[];
 }
