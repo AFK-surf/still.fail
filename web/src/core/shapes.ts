@@ -3440,8 +3440,8 @@ export interface PublishFile {
 	type: string;
 	/** The message it came with. */
 	n: number;
-	/** Bigger than one attachment may be (10 MB, as the station says): shown, not ticked. */
-	over: boolean;
+	/** It as the chat has it (its `owner` the session that keeps it): shown as the chat shows it. */
+	file: Attachment;
 }
 
 /** A message as a snapshot would hold it. */
@@ -3474,10 +3474,6 @@ export interface PublishPreview {
 	hidden: number;
 	/** That in words (隐藏了 3 处); absent when none. */
 	hiddenText?: string;
-	/** The most a snapshot may be with its attachments: those ticked together beyond it are not published. */
-	most: number;
-	/** That in words (20 MB). */
-	mostText: string;
 }
 
 /** A session with its threads and turns (`session` topic). */

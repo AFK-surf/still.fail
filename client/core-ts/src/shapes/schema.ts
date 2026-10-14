@@ -1811,8 +1811,6 @@ export const SHAPES: Record<string, Shape> = {
     ["files", vec("PublishFile"), { doc: "Its messages' attachments, to tick (`chat.publish` takes those ticked by `k`)." }],
     ["hidden", "u32", { doc: "How many things in all were hidden as looking secret." }],
     ["hiddenText", opt("String"), { doc: "That in words (隐藏了 3 处); absent when none." }],
-    ["most", "u64", { doc: "The most a snapshot may be with its attachments: those ticked together beyond it are not published." }],
-    ["mostText", "String", { doc: "That in words (20 MB)." }],
   ], { doc: "What a snapshot of a chat would hold now (`chat.publishPreview`): nothing is kept until it is published." }),
   PublishMessage: struct([
     ["n", "i64", { client: "I54" }],
@@ -1832,7 +1830,7 @@ export const SHAPES: Record<string, Shape> = {
     ["sizeText", "String"],
     ["type", "String"],
     ["n", "i64", { client: "I54", doc: "The message it came with." }],
-    ["over", "bool", { doc: "Bigger than one attachment may be (10 MB, as the station says): shown, not ticked." }],
+    ["file", "Attachment", { doc: "It as the chat has it (its `owner` the session that keeps it): shown as the chat shows it." }],
   ], { doc: "An attachment a snapshot may take." }),
   ChatShare: struct([
     ["session", "String", { doc: "The session its station keeps its sharing by (its thread's own, else its first): `chat.xshare` names it." }],

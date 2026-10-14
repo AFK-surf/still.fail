@@ -11,10 +11,6 @@ import { roomOf } from "../sessions/footprint.ts";
 import { withLock, workspaceFile } from "../sessions/archive.ts";
 import { type Draft, snapshotOf } from "./snapshot.ts";
 
-/// A snapshot with its attachments is this big at most, and each attachment this big.
-export const MOST_BYTES = 20 * 1024 * 1024;
-export const MOST_FILE = 10 * 1024 * 1024;
-
 /// Why a snapshot was not written: said to the person publishing.
 export class NotPublished extends Error {
   status: number;
@@ -64,16 +60,13 @@ export async function publish(
   store: Store,
   draft: Draft,
   a: { thread: number; ticked: string[]; station: string; by: { email: string; name: string } },
-  say: { tooLong: string; tooLarge: string; fileGone: (name: string) => string },
+  say: { fileGone: (name: string) => string },
 ): Promise<Published> {
   const ticked = new Set(a.ticked.filter((k) => draft.files.some((f) => f.k === k)));
   const files = draft.files.filter((f) => ticked.has(f.k));
-  if (files.some((f) => f.size > MOST_FILE)) throw new NotPublished(413, say.tooLarge);
   const at = store.now();
   const snapshot = Buffer.from(JSON.stringify(snapshotOf(draft, a.station, a.by.name, at, ticked)));
-  if (snapshot.length > MOST_BYTES) throw new NotPublished(413, say.tooLong);
   const size = snapshot.length + files.reduce((sum, f) => sum + f.size, 0);
-  if (size > MOST_BYTES) throw new NotPublished(413, say.tooLarge);
   const id = random(12);
   const dir = snapshotDir(store, id);
   // Written aside and moved into place whole: a snapshot is there with all its files, or not at all.

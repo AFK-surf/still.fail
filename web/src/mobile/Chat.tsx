@@ -831,7 +831,7 @@ function PublishSheet({ here, thread }: { here: Here; thread: number }) {
   const ticked = p ? tickedOf(p, ticking.off) : null;
   const go = () => {
     if (!p || !ticked) return;
-    stationApi(call).publish(thread, p.upto, ticked.files)
+    stationApi(call).publish(thread, p.upto, ticked)
       .then(setMade, (e: unknown) => app.toast(t("web-main.act.failed", { what: t("web-pages.chat.publish.verb"), error: e instanceof Error ? e.message : String(e) })));
   };
   const copy = (link: string) => void navigator.clipboard.writeText(link).then(() => app.toast(t("common.link.copied")), (e: unknown) => app.toast(t("common.link.copyFailed", { error: e instanceof Error ? e.message : String(e) })));
@@ -857,8 +857,7 @@ function PublishSheet({ here, thread }: { here: Here; thread: number }) {
           <>
             <PublishMessages messages={p!.messages} ticking={ticking} whole />
             {p!.hiddenText && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{p!.hiddenText}</p>}
-            {ticked!.over && <p className={partsCss.mError}>{t("web-pages.chat.publish.overTotal", { most: p!.mostText })}</p>}
-            <Button primary label={t("web-pages.chat.publish.go")} busy={publishing} enabled={!ticked!.over} onClick={go} />
+            <Button primary label={t("web-pages.chat.publish.go")} busy={publishing} onClick={go} />
           </>
         )}
       </div>

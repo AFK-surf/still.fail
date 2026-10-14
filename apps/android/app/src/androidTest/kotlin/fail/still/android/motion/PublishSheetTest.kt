@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import fail.still.android.Screen
+import fail.still.android.data.Attachment
 import fail.still.android.data.ChatOf
 import fail.still.android.data.ChatPublish
 import fail.still.android.data.ChatPublished
@@ -42,11 +43,14 @@ class PublishSheetTest {
         ChatPublished(id = id, link = "$link-$id", createdAt = Fixtures.NOW, byName = by, mayRevoke = mine, time = ago(ago))
 
     /** As views/publish.ts previewShown has a station's answer: a person's message with a key hidden, an agent's reply,
-     * three attachments, one over 10 MB. */
+     * three attachments. */
+    private fun file(k: String, name: String, size: Long, sizeText: String, type: String) =
+        PublishFile(k = k, name = name, size = size.toULong(), sizeText = sizeText, type = type, n = 9, file = Attachment(name = name, path = "/w/uploads/$name", size = size))
+
     private val files = listOf(
-        PublishFile(k = "f0", name = "login-page.png", size = 665u, sizeText = "665 B", type = "image/png", n = 9, over = false),
-        PublishFile(k = "f1", name = "deploy.log", size = 2048u, sizeText = "2.0 KB", type = "text/plain", n = 9, over = false),
-        PublishFile(k = "f2", name = "build-cache.tar", size = 12_582_912u, sizeText = "12 MB", type = "application/x-tar", n = 9, over = true),
+        file("f0", "login-page.png", 665, "665 B", "image/png"),
+        file("f1", "deploy.log", 2048, "2.0 KB", "text/plain"),
+        file("f2", "build-cache.tar", 12_582_912, "12 MB", "application/x-tar"),
     )
 
     private val preview = PublishPreview(
@@ -57,7 +61,7 @@ class PublishSheetTest {
             PublishMessage(n = 9, author = "Alice", agent = false, text = "截图、日志和构建缓存都附上了", files = files, hidden = 0u, createdAt = Fixtures.NOW, time = ago("8 分钟前")),
         ),
         files = files,
-        hidden = 1u, hiddenText = "共隐藏了 1 处疑似机密", most = 20_971_520u, mostText = "20 MB",
+        hidden = 1u, hiddenText = "共隐藏了 1 处疑似机密",
     )
 
     private fun open(publish: ChatPublish, dark: Boolean = false): Harness {
@@ -102,10 +106,9 @@ class PublishSheetTest {
         rule.onNodeWithText("拿到链接的人都能看到这些消息；station 离线时打不开").assertIsDisplayed()
         rule.onNodeWithText("隐藏了 1 处").assertIsDisplayed()
         picture(h, "publish-sheet$suffix")
-        // The log unticked; the cache too big to tick at all.
+        // The log and the cache unticked, where their message has them.
         rule.onNodeWithText("deploy.log").performScrollTo().performClick()
         rule.onNodeWithText("build-cache.tar").performScrollTo().performClick()
-        rule.onNodeWithText("超过 10 MB").assertIsDisplayed()
         h.settle()
         picture(h, "publish-sheet-files$suffix")
         rule.onNodeWithText("发布").performScrollTo().performClick()

@@ -209,8 +209,6 @@
   "web-pages.chat.publish.reading": "正在准备预览",
   "web-pages.chat.publish.empty": "还没有可以公开的消息",
   "web-pages.chat.publish.files": "附件",
-  "web-pages.chat.publish.tooBig": "超过 10 MB",
-  "web-pages.chat.publish.overTotal": "勾选的附件加起来超过 {most}",
   "web-pages.chat.publish.go": "发布",
   "web-pages.chat.publish.publishing": "正在发布",
   "web-pages.chat.publish.verb": "公开分享",

@@ -26,8 +26,6 @@ const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v)
 
 /// Where a snapshot's link opens: still.fail's viewer, which reads it from the station itself, never through the cloud.
 export const SHARE_ORIGIN = "https://share.still.fail";
-/// The most a snapshot (`bytes`, with its attachments) and one attachment (`file`) may be, where a station does not say.
-export const MOST = { bytes: 20 * 1024 * 1024, file: 10 * 1024 * 1024 };
 
 const PART = "publish";
 
@@ -102,15 +100,20 @@ function namesOf(inner: Inner, station: string): Record<string, string> {
 }
 
 /// What a station answers a preview with (`POST /threads/:thread/publish/preview`), for the panel that publishes it:
-/// its messages, each with how many things in it were hidden and its attachments (those too big to tick marked), all
-/// its attachments together, and the most they may be together.
+/// its messages, each with how many things in it were hidden and its attachments (as the chat has them, to show alike),
+/// and all its attachments together.
 export function previewShown(answer: J, clock: present.Clock): J {
-  const most = { bytes: num(get(get(answer, "most"), "bytes")) || MOST.bytes, file: num(get(get(answer, "most"), "file")) || MOST.file };
   const hiddenAt = new Map<number, number>();
   for (const r of arr(get(answer, "redacted"))) hiddenAt.set(num(get(r, "n")), (hiddenAt.get(num(get(r, "n"))) ?? 0) + num(get(r, "count")));
   const files = arr(get(answer, "files")).map((f) => {
     const size = num(f.size);
-    return { k: str(f.k) ?? "", name: str(f.name) ?? "", size, sizeText: format.bytes(size), type: str(f.type) ?? "", n: num(f.n), over: size > most.file };
+    const name = str(f.name) ?? "";
+    // As the chat's messages have their attachments (a station from before `path` and `owner` gives none: a card only).
+    const file: J = { name, path: str(f.path) ?? "", size };
+    for (const key of ["width", "height"] as const) if (typeof f[key] === "number") file[key] = f[key];
+    if (typeof f.thumbhash === "string") file.thumbhash = f.thumbhash;
+    if (typeof f.owner === "string") file.owner = f.owner;
+    return { k: str(f.k) ?? "", name, size, sizeText: format.bytes(size), type: str(f.type) ?? "", n: num(f.n), file };
   });
   const messages = arr(get(answer, "entries")).map((e) => {
     const hidden = hiddenAt.get(num(e.n)) ?? 0;
@@ -133,8 +136,6 @@ export function previewShown(answer: J, clock: present.Clock): J {
     files,
     hidden,
     ...(hidden > 0 ? { hiddenText: t("core-views.publish.hiddenAll", { n: hidden }) } : {}),
-    most: most.bytes,
-    mostText: format.bytes(most.bytes),
   }, clock);
 }
 

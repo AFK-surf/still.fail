@@ -138,8 +138,6 @@
   "station.publish.hidden": "[已隐藏]",
   "station.publish.noChat": "这个 chat 不在这台 station 上",
   "station.publish.empty": "这个 chat 还没有消息，没有可以公开的",
-  "station.publish.tooLong": "这个 chat 的消息太多了，快照最多 {mb} MB",
-  "station.publish.tooLarge": "快照最多 {mb} MB，少勾几个附件",
   "station.publish.fileGone": "附件 {name} 已经不在了",
   "station.publish.notYours": "只有发布人或 workspace 的 owner、admin 能撤销",
   "station.publish.notFound": "没有这个公开链接",

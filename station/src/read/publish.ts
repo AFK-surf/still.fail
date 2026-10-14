@@ -10,6 +10,8 @@ import { modelName } from "../ops/model-name.ts";
 import { setLang, tr } from "./spoken.ts";
 import { HttpError, apiOf, authorNames, chatTitle, useNames } from "./views.ts";
 import { mime } from "./sessions.ts";
+import { dirname, join } from "node:path";
+import { clean, samePath } from "../ops/paths.ts";
 
 /// Messages read for a snapshot at most: a chat with more is published from its latest ones.
 const MOST = 5000;
@@ -50,13 +52,17 @@ export function publishDraft(s: Store, a: { thread: number; upto: number | null;
   const mark = tr("station.publish.hidden");
   const redacted: Draft["redacted"] = [];
   const files: DraftFile[] = [];
+  // The session whose uploads keep each file (what its preview on the pages goes through): the one whose workspace it is
+  // in, else the chat's first.
+  const sessions = store.threadSessions(s, a.thread).map((m) => store.getSession(s, m.session)).filter((x) => x !== null);
+  const ownerOf = (path: string) => (sessions.find((x) => samePath(clean(join(x.workspace, "uploads")), dirname(clean(path)))) ?? sessions[0])?.key ?? null;
   const entries = messages.map((m) => {
     const hidden = redact(m.text, mark);
     if (hidden.count > 0) redacted.push({ n: m.n, count: hidden.count });
     const author = authorOf(s, m, a.names, s.names, names);
     const own = m.attachments.map((f) => {
       const k = `f${files.length}`;
-      const file: DraftFile = { k, name: f.name, size: f.size, type: mime(f.name), n: m.n, path: f.path };
+      const file: DraftFile = { k, name: f.name, size: f.size, type: mime(f.name), n: m.n, path: f.path, owner: ownerOf(f.path) };
       if (f.width !== undefined) file.width = f.width;
       if (f.height !== undefined) file.height = f.height;
       if (f.thumbhash !== undefined) file.thumbhash = f.thumbhash;

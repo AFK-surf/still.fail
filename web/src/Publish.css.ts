@@ -16,23 +16,15 @@ export const preview = style({
 export const note = style({
   display: "flex", alignItems: "center", gap: "6px", fontSize: vars.textMeta, color: vars.muted, minWidth: "0",
 });
-/** Attachments under a message: a line of them, wrapping. */
-export const files = style({ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "6px" });
-/**
- * An attachment in a message, to tick: its box, name and size on a soft chip, as the chat's file chips; unticked, its
- * words greyed (one too big also says so instead of its size).
- */
+/** Attachments under a message: as the chat lays them out, wrapping. */
+export const files = style({ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: "8px", marginTop: "6px" });
+/** An attachment in a message, as the chat draws it, to tick: its box in its top right corner; unticked, it fades. */
 export const file = style({
-  display: "inline-flex", alignItems: "center", gap: "8px", maxWidth: "100%", minHeight: "32px", padding: "0 12px 0 8px",
-  verticalAlign: "middle", borderRadius: vars.rOption, cornerShape: vars.cornerShape, background: vars.neutralBg,
-  color: vars.text, fontSize: vars.textMeta, cursor: "pointer", transition: `color ${vars.dur} ${vars.easeOut}`,
-  selectors: {
-    "&[data-off]": { color: vars.subtle },
-    "&[data-over]": { cursor: "default" },
-  },
+  position: "relative", display: "inline-block", maxWidth: "100%", verticalAlign: "top", cursor: "pointer",
+  transition: `opacity ${vars.dur} ${vars.easeOut}`,
+  selectors: { "&[data-off]": { opacity: "0.45" } },
 });
-export const fileName = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-export const fileSize = style({ flex: "none", color: vars.muted, selectors: { [`${file}[data-off] &`]: { color: vars.subtle } } });
+export const tick = style({ position: "absolute", top: "8px", right: "8px" });
 /** In the footer, on the buttons' left: how many things were hidden in all. */
 export const footNote = style({
   display: "flex", alignItems: "center", gap: "6px", marginRight: "auto", fontSize: vars.textMeta, color: vars.muted, minWidth: "0",

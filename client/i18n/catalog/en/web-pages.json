@@ -224,8 +224,6 @@
   "web-pages.chat.publish.reading": "Preparing the preview",
   "web-pages.chat.publish.empty": "No messages to share yet",
   "web-pages.chat.publish.files": "Attachments",
-  "web-pages.chat.publish.tooBig": "Over 10 MB",
-  "web-pages.chat.publish.overTotal": "The ticked attachments come to more than {most}",
   "web-pages.chat.publish.go": "Publish",
   "web-pages.chat.publish.publishing": "Publishing",
   "web-pages.chat.publish.verb": "share the chat publicly",

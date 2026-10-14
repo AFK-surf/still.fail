@@ -6,6 +6,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.FlowRow
@@ -153,16 +155,14 @@ internal fun openPublish(app: AppState, station: String, thread: Long) {
                 now is Previewed.Ok && now.preview.messages.isEmpty() -> Text(t("web-pages.chat.publish.empty"), fontSize = 14.sp, color = C.muted, modifier = inset)
                 now is Previewed.Ok -> {
                     val p = now.preview
-                    val ticked = p.files.filter { !it.over && it.k !in off }
-                    val over = ticked.fold(0UL) { n, f -> n + f.size } > p.most
+                    val ticked = p.files.filter { it.k !in off }
                     // As the chat draws others' messages, on a card.
                     Column(inset.fillMaxWidth().clip(Smooth(22.dp)).background(C.ink.copy(alpha = 0.04f)).padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        p.messages.forEach { m -> PreviewMessage(m, off) { k -> off = if (k in off) off - k else off + k } }
+                        p.messages.forEach { m -> PreviewMessage(station, m, off) { k -> off = if (k in off) off - k else off + k } }
                     }
                     p.hiddenText?.let { Text(it, fontSize = 12.sp, color = C.muted, modifier = inset) }
-                    if (over) Text(t("web-pages.chat.publish.overTotal", "most" to p.mostText), fontSize = 13.sp, color = C.red, modifier = inset)
                     Row(inset.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        Button(t("web-pages.chat.publish.go"), primary = true, busy = publishing, enabled = !over) {
+                        Button(t("web-pages.chat.publish.go"), primary = true, busy = publishing) {
                             app.act(t("web-pages.chat.publish.verb")) { made = app.api(station).publish(thread, p.upto, ticked.map { it.k }) }
                         }
                     }
@@ -174,12 +174,12 @@ internal fun openPublish(app: AppState, station: String, thread: Long) {
 
 /**
  * A message as the snapshot would hold it, drawn as the chat draws someone else's (Chat.kt SaidRow): its avatar and
- * name in line over what it says, an agent's in Markdown; under it its attachments, each ticked to go with it or not
- * (`off`: those left out), and with something hidden, how many.
+ * name in line over what it says, an agent's in Markdown; under it its attachments as the chat shows them, each ticked
+ * to go with it or not (`off`: those left out), and with something hidden, how many.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PreviewMessage(m: PublishMessage, off: Set<String>, toggle: (String) -> Unit) {
+private fun PreviewMessage(station: String, m: PublishMessage, off: Set<String>, toggle: (String) -> Unit) {
     val ink = chatInk()
     Box(Modifier.fillMaxWidth()) {
         Box(Modifier.padding(top = 3.dp)) { if (m.agent) AgentAvatar(null, null) else Avatar(m.author, m.author, 18.dp) }
@@ -191,7 +191,7 @@ private fun PreviewMessage(m: PublishMessage, off: Set<String>, toggle: (String)
             if (m.agent) Markdown(m.text)
             else if (m.text.isNotEmpty()) Text(fail.still.android.ui.withRefs(m.text), fontSize = 15.sp, lineHeight = 23.sp, color = ink.text)
             if (m.files.isNotEmpty()) FlowRow(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                m.files.forEach { f -> FileToggle(f, on = !f.over && f.k !in off) { toggle(f.k) } }
+                m.files.forEach { f -> FileToggle(station, f, on = f.k !in off) { toggle(f.k) } }
             }
             m.hiddenText?.let { hidden ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -203,21 +203,23 @@ private fun PreviewMessage(m: PublishMessage, off: Set<String>, toggle: (String)
     }
 }
 
-/** An attachment in the preview (web Publish.tsx FileToggle): ticked, it goes with the snapshot; unticked, greyed; one too big never goes. */
+/**
+ * An attachment in the preview as the chat shows it (web Publish.tsx FileToggle): an image's box, else its card, with
+ * the app's checkbox in its top right corner; a tap anywhere on it ticks or unticks it (nothing opens), unticked it fades.
+ */
 @Composable
-private fun FileToggle(f: PublishFile, on: Boolean, toggle: () -> Unit) {
-    Row(
-        Modifier.clip(Smooth(12.dp)).background(C.ink.copy(alpha = 0.05f)).clickable(enabled = !f.over, onClick = toggle)
-            .heightIn(min = 32.dp).padding(start = 8.dp, end = 12.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+private fun FileToggle(station: String, f: PublishFile, on: Boolean, toggle: () -> Unit) {
+    val owner = f.file.owner
+    Box(Modifier.alpha(if (on) 1f else 0.45f)) {
+        if (owner != null && kindOf(f.name).kind == PreviewKind.Image) StationImage(station, owner, f.file, Modifier.width(160.dp).aspectRatio(imageBox(f.file).let { it.width / it.height }))
+        else FileCard(f.name, f.size.toLong(), onClick = null)
+        // Over it all: a tap ticks, rather than opening the file.
+        Box(Modifier.matchParentSize().clickable(onClick = toggle))
         // The app's checkbox (web global.css.ts): a soft square, ink with a check when ticked.
         Box(
-            Modifier.size(18.dp).clip(Smooth(6.dp)).background(if (on) C.ink else C.bg)
-                .border(1.dp, if (on) C.ink else C.line, Smooth(6.dp)).alpha(if (f.over) 0.45f else 1f),
+            Modifier.align(Alignment.TopEnd).padding(8.dp).size(18.dp).clip(Smooth(6.dp)).background(if (on) C.ink else C.bg)
+                .border(1.dp, if (on) C.ink else C.line, Smooth(6.dp)),
             contentAlignment = Alignment.Center,
         ) { if (on) IconIn(Icons.Check, 12.dp, C.bg) }
-        Text(f.name, fontSize = 13.sp, color = if (on) C.ink else C.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 200.dp))
-        Text(if (f.over) t("web-pages.chat.publish.tooBig") else f.sizeText, fontSize = 13.sp, color = if (on) C.muted else C.subtle)
     }
 }

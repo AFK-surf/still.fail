@@ -147,7 +147,8 @@ test("a chat published: previewed, written out frozen with the attachments ticke
     assert.equal(p.title, "deploy with token: [hidden]", "its name, the first thing said, hidden alike");
     assert.deepEqual(p.redacted, [{ n: p.entries[0].n, count: 1 }]);
     assert.deepEqual(p.files.map((f: any) => [f.k, f.name, f.type]), [["f0", "shot.png", "image/png"], ["f1", "notes.txt", "text/plain; charset=utf-8"]]);
-    assert.ok(p.files.every((f: any) => f.path === undefined), "where a file is stays on the station");
+    // Members' pages show them as the chat does: where each is, through the session that keeps it.
+    assert.deepEqual(p.files.map((f: any) => [f.path, f.owner]), [[join(workspace, "uploads/shot.png"), made.key], [join(workspace, "uploads/notes.txt"), made.key]]);
     const upto: number = p.upto;
 
     // Said after the preview: not in what is published.
@@ -203,15 +204,18 @@ test("a chat published: previewed, written out frozen with the attachments ticke
     const view2 = JSON.parse(await readers.read("thread", { id: String(thread), viewer: alice, lang: "en" }, "en"));
     assert.equal(view2.published, undefined, "left out when none");
 
-    // An owner takes down another's; too big a snapshot, an empty chat, a chat that is not there are refused.
+    // An owner takes down another's; however big its attachments, a snapshot takes them; an empty chat, a chat that is
+    // not there are refused.
     const again = (await ask(bob, "POST", `/threads/${thread}/publish`, { upto, files: [] })).body.published;
     assert.deepEqual((await ask(owner, "DELETE", `/published/${again.id}`)).body, { ok: true });
     writeFileSync(join(workspace, "uploads/huge.bin"), Buffer.alloc(11 * 1024 * 1024));
     const [hugeN] = store.insertMessage({ ...newMessage(thread, "1.5", "agent", made.key, "big"), attachments: [{ name: "huge.bin", path: join(workspace, "uploads/huge.bin"), size: 11 * 1024 * 1024 }] });
     const big = (await ask(alice, "POST", `/threads/${thread}/publish/preview`, {})).body;
     const k = big.files.find((f: any) => f.name === "huge.bin").k;
-    const refused = await ask(alice, "POST", `/threads/${thread}/publish`, { upto: hugeN, files: [k] });
-    assert.deepEqual(refused, { status: 413, body: { error: tr("en", "station.publish.tooLarge", { mb: "20" }) } });
+    const whole = await ask(alice, "POST", `/threads/${thread}/publish`, { upto: hugeN, files: [k] });
+    assert.equal(whole.status, 200, JSON.stringify(whole.body));
+    assert.ok(whole.body.published.size > 11 * 1024 * 1024);
+    assert.equal((await ask(alice, "DELETE", `/published/${whole.body.published.id}`)).status, 200);
     const empty = (await ask(alice, "POST", "/sessions", { runtime: "claude" })).body;
     assert.deepEqual(await ask(alice, "POST", `/threads/${empty.thread.id}/publish/preview`, {}), { status: 400, body: { error: tr("en", "station.publish.empty") } });
     assert.equal((await ask(alice, "POST", "/threads/99999/publish/preview", {})).status, 404);

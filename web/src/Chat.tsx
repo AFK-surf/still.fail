@@ -1384,6 +1384,24 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   );
 }
 
+/**
+ * A file drawn as the chat draws it, but still: an image's box (fetched at once), else its card; nothing opens from it.
+ * A published chat's preview (Publish.tsx), where a tap ticks the file instead.
+ */
+export function FileLook({ sessionKey, file }: { sessionKey: string | null; file: Attachment }) {
+  const image = isImage(file.name);
+  const fetched = useFileShown(sessionKey ?? "", file, image && sessionKey !== null, true);
+  if (!image || sessionKey === null) return look.card(file);
+  const { letterbox, ...size } = look.box(file);
+  return (
+    <span className={look.image} style={size} data-letterbox={letterbox ? "" : undefined} data-loaded={fetched.url ? "instant" : undefined} data-failed={fetched.failed || undefined}>
+      {!fetched.url && <Waiting hash={file.thumbhash} fit={letterbox} />}
+      {fetched.failed && <span className={css.msgImageUnavailable} aria-hidden="true"><Read size={20} /><span>{t("web-main.file.noPreview")}</span></span>}
+      {fetched.url && <img src={fetched.url} alt={file.name} />}
+    </span>
+  );
+}
+
 /** What an image's box shows until it loads: its ThumbHash drawn, sent with it; else the blots drifting. */
 /** `fit`: a letterboxed image's share of its box, all the placeholder takes. */
 function Waiting({ hash, fit }: { hash: string | undefined; fit?: { width: string; height: string } | undefined }) {

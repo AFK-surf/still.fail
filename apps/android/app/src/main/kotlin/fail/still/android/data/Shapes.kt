@@ -3454,8 +3454,8 @@ data class PublishFile (
 	val type: String,
 	/// The message it came with.
 	val n: Long,
-	/// Bigger than one attachment may be (10 MB, as the station says): shown, not ticked.
-	val over: Boolean
+	/// It as the chat has it (its `owner` the session that keeps it): shown as the chat shows it.
+	val file: Attachment
 )
 
 /// A message as a snapshot would hold it.
@@ -3489,11 +3489,7 @@ data class PublishPreview (
 	/// How many things in all were hidden as looking secret.
 	val hidden: UInt,
 	/// That in words (隐藏了 3 处); absent when none.
-	val hiddenText: String? = null,
-	/// The most a snapshot may be with its attachments: those ticked together beyond it are not published.
-	val most: ULong,
-	/// That in words (20 MB).
-	val mostText: String
+	val hiddenText: String? = null
 )
 
 /// A session with its threads and turns (`session` topic).

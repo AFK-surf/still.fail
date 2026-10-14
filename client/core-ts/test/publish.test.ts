@@ -64,7 +64,7 @@ test("a_link_is_the_share_origin_with_the_stations_key_in_base64url_and_the_snap
   assert.equal(linkOf(HEX, "abcdefghijklmnop", "k".repeat(43)), `https://share.still.fail/#${B64}.abcdefghijklmnop.${"k".repeat(43)}`);
 });
 
-test("a_preview_says_how_many_things_each_message_had_hidden_and_which_attachments_are_too_big", () => {
+test("a_preview_says_how_many_things_each_message_had_hidden_and_has_its_attachments_as_the_chat_does", () => {
   const shown = previewShown({
     upto: 9,
     title: "部署",
@@ -73,18 +73,23 @@ test("a_preview_says_how_many_things_each_message_had_hidden_and_which_attachmen
       { n: 9, at: 2_000, authorKind: "agent", author: "奏", text: "好了", files: ["f1"] },
     ],
     redacted: [{ n: 4, count: 2 }, { n: 4, count: 1 }],
-    files: [{ k: "f0", name: "a.png", size: 5, type: "image/png", n: 4, width: 4, height: 3 }, { k: "f1", name: "big.zip", size: 11 * 1024 * 1024, type: "application/zip", n: 9 }],
-    most: { bytes: 20 * 1024 * 1024, file: 10 * 1024 * 1024 },
+    files: [
+      { k: "f0", name: "a.png", size: 5, type: "image/png", n: 4, width: 4, height: 3, thumbhash: "th", path: "/w/s1/uploads/a.png", owner: "s1" },
+      // From a station before `path` and `owner`: a card only.
+      { k: "f1", name: "big.zip", size: 11 * 1024 * 1024, type: "application/zip", n: 9 },
+    ],
   }, { now: 3_000, offsetMin: 0 });
   assert.equal(shown.upto, 9);
   assert.equal(shown.title, "部署");
   assert.equal(shown.hidden, 3);
   assert.equal(shown.hiddenText, "共隐藏了 3 处疑似机密");
-  assert.deepEqual(shown.messages.map((m: J) => [m.n, m.author, m.agent, m.hidden, m.hiddenText ?? null, m.files.map((f: J) => [f.k, f.name, f.over])]), [[4, "安", false, 3, "隐藏了 3 处", [["f0", "a.png", false]]], [9, "奏", true, 0, null, [["f1", "big.zip", true]]]]);
+  assert.deepEqual(shown.messages.map((m: J) => [m.n, m.author, m.agent, m.hidden, m.hiddenText ?? null, m.files.map((f: J) => [f.k, f.name])]), [[4, "安", false, 3, "隐藏了 3 处", [["f0", "a.png"]]], [9, "奏", true, 0, null, [["f1", "big.zip"]]]]);
   assert.ok(shown.messages[0].time.createdAt.ago, "its time in words");
-  assert.deepEqual(shown.files.map((f: J) => [f.k, f.over]), [["f0", false], ["f1", true]]);
+  assert.deepEqual(shown.files.map((f: J) => f.file), [
+    { name: "a.png", path: "/w/s1/uploads/a.png", size: 5, width: 4, height: 3, thumbhash: "th", owner: "s1" },
+    { name: "big.zip", path: "", size: 11 * 1024 * 1024 },
+  ]);
   assert.equal(shown.files[1].sizeText, "11 MB");
-  assert.deepEqual([shown.most, shown.mostText], [20 * 1024 * 1024, "20 MB"]);
 });
 
 test("the_chats_links_are_listed_newest_first_and_each_is_revoked_by_its_publisher_or_a_manager", async () => {
@@ -136,7 +141,6 @@ test("a_preview_is_asked_with_the_workspaces_names_and_a_station_from_before_say
       entries: [{ n: 3, at: 3, authorKind: "person", author: "安", text: "[已隐藏]", files: [] }],
       redacted: [{ n: 3, count: 1 }],
       files: [],
-      most: { bytes: 20 * 1024 * 1024, file: 10 * 1024 * 1024 },
     };
   });
   const ui = core.connect();

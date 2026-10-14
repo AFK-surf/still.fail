@@ -5,8 +5,9 @@ type Json = any;
 /// The snapshot's format (`v`), as the share page reads it.
 export const SNAPSHOT_VERSION = 1;
 
-/// An attachment of the snapshot: its number in it (`k`), what it is, and (for the route alone) where it is now.
-export type DraftFile = { k: string; name: string; size: number; type: string; width?: number; height?: number; thumbhash?: string; n: number; path: string };
+/// An attachment of the snapshot: its number in it (`k`), what it is, and (for the members' preview alone) where it is now
+/// and the session that keeps it.
+export type DraftFile = { k: string; name: string; size: number; type: string; width?: number; height?: number; thumbhash?: string; n: number; path: string; owner: string | null };
 
 /// A chat as a snapshot would show it.
 export type Draft = {
@@ -36,7 +37,7 @@ export function snapshotOf(d: Draft, station: string, by: string, at: number, ti
       files: e.files.flatMap((k) => {
         const f = files.get(k);
         if (f === undefined) return [];
-        const { n: _n, path: _path, ...shown } = f;
+        const { n: _n, path: _path, owner: _owner, ...shown } = f;
         return [shown];
       }),
     })),

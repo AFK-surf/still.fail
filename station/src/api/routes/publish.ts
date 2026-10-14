@@ -4,7 +4,7 @@
 import { type Request, type Answer, error, json, percentDecode } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
 import { tr } from "../../ops/i18n.ts";
-import { MOST_BYTES, MOST_FILE, NotPublished, publish } from "../../publish/index.ts";
+import { NotPublished, publish } from "../../publish/index.ts";
 import type { Draft } from "../../publish/snapshot.ts";
 
 /// A request's JSON object: nothing is `{}`, as is anything not an object; more than a megabyte refused.
@@ -24,8 +24,6 @@ function namesOf(v: unknown): Record<string, string> {
   return Object.fromEntries(Object.entries(v).filter((e): e is [string, string] => typeof e[1] === "string"));
 }
 
-const MB = String(MOST_BYTES / 1024 / 1024);
-
 export const routes = ({ read, store, agents }: Tools): Route[] => {
   /// The chat as its snapshot would show it, up to `upto` (its latest message without it), or the readers' refusal.
   const draft = async (r: Request, thread: number, upto: number | null, names: Record<string, string>): Promise<Draft | Answer> => {
@@ -37,7 +35,8 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
   const threadOf = (raw: string) => (/^\d+$/.test(raw) ? Number(raw) : null);
   return [
     {
-      // What publishing it would show: the snapshot, what was hidden in which message, the attachments to tick.
+      // What publishing it would show: the snapshot, what was hidden in which message, the attachments to tick (where each
+      // is, and the session that keeps it: the members' pages show them as the chat does).
       method: "POST",
       pattern: /^\/*threads\/+([^/]+)\/+publish\/+preview\/*$/,
       handle: async (r, [raw]) => {
@@ -52,8 +51,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
           title: d.title,
           entries: d.entries,
           redacted: d.redacted,
-          files: d.files.map(({ path: _path, ...f }) => f),
-          most: { bytes: MOST_BYTES, file: MOST_FILE },
+          files: d.files,
         }));
       },
     },
@@ -76,7 +74,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
             store,
             d,
             { thread, ticked: i.files.filter((k: unknown): k is string => typeof k === "string"), station: agents.place()?.name ?? "", by: { email: r.viewer.email, name: r.viewer.name || r.viewer.email.split("@")[0]! } },
-            { tooLong: tr(r.lang, "station.publish.tooLong", { mb: MB }), tooLarge: tr(r.lang, "station.publish.tooLarge", { mb: MB }), fileGone: (name) => tr(r.lang, "station.publish.fileGone", { name }) },
+            { fileGone: (name) => tr(r.lang, "station.publish.fileGone", { name }) },
           );
           return json(200, JSON.stringify({ published: { id: published.id, key: published.key, title: published.title, by: published.by, byName: published.byName, at: published.at, upto: published.upto, size: published.size } }));
         } catch (e) {

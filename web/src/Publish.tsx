@@ -2,9 +2,9 @@
 // draws its messages (both screens), and on the wide screen the dialog that publishes it and the links in its info.
 // The phone's sheet is in mobile/Chat.tsx, with these same messages.
 import { useEffect, useState, type ReactNode } from "react";
-import { stationApi, useStationCall, type Attachment } from "./api.ts";
+import { stationApi, useStationCall } from "./api.ts";
 import type { ChatPublished, PublishFile, PublishMessage, PublishPreview } from "./core/shapes.ts";
-import { AgentAvatar, MessageName, OthersMessage, PersonWords } from "./Chat.tsx";
+import { AgentAvatar, FileLook, MessageName, OthersMessage, PersonWords } from "./Chat.tsx";
 import { Prose } from "./Prose.tsx";
 import { Avatar, Button, Confirm, Dialog, Loading, Time } from "./ui.tsx";
 import { Copy, ShieldCheck } from "./icons.tsx";
@@ -31,10 +31,9 @@ export function usePublishPreview(station: string, thread: number): Previewed {
   return shown;
 }
 
-/** The attachments a preview's panel publishes: all but those unticked and those too big; whether they are too big together. */
-export function tickedOf(preview: PublishPreview, off: ReadonlySet<string>): { files: string[]; over: boolean } {
-  const ticked = preview.files.filter((f) => !f.over && !off.has(f.k));
-  return { files: ticked.map((f) => f.k), over: ticked.reduce((n, f) => n + f.size, 0) > preview.most };
+/** The attachments a preview's panel publishes: all but those unticked. */
+export function tickedOf(preview: PublishPreview, off: ReadonlySet<string>): string[] {
+  return preview.files.filter((f) => !off.has(f.k)).map((f) => f.k);
 }
 
 /** Puts a link on the clipboard, saying so. */
@@ -55,8 +54,8 @@ export function useTicking(): Ticking {
 /**
  * A snapshot's messages as the chat draws others' (each one's head in line with its avatar, the phone's way): an
  * agent's in Markdown, a person's as written; under one with something hidden, how many. Its attachments are where the
- * message has them, each ticked to go with it or not (the preview has no file to show, only its name and size): one
- * its words place is there, the rest a line under it. `whole`: all of it, in what scrolls around it (the phone's
+ * message has them, drawn as the chat draws them, each ticked to go with it or not: one its words place is there, the
+ * rest under it. `whole`: all of it, in what scrolls around it (the phone's
  * sheet), rather than a box of its own that scrolls.
  */
 export function PublishMessages({ messages, ticking, whole = false }: { messages: PublishMessage[]; ticking: Ticking; whole?: boolean }) {
@@ -68,7 +67,7 @@ export function PublishMessages({ messages, ticking, whole = false }: { messages
 }
 
 function PreviewMessage({ message: m, ticking }: { message: PublishMessage; ticking: Ticking }) {
-  const named = new Map(m.files.map((f) => [f.name, { name: f.name, path: "", size: f.size } satisfies Attachment]));
+  const named = new Map(m.files.map((f) => [f.name, f.file]));
   const placed = m.agent ? m.files.filter((f) => m.text.includes(`](${f.name})`) || m.text.includes(`](${encodeURI(f.name)})`)) : [];
   const under = m.files.filter((f) => !placed.includes(f));
   const toggle = (name: string) => {
@@ -89,21 +88,20 @@ function PreviewMessage({ message: m, ticking }: { message: PublishMessage; tick
   );
 }
 
-/** An attachment in the preview: ticked, it goes with the snapshot; unticked, it is greyed; one too big never goes. */
+/** An attachment in the preview, as the chat shows it: ticked (its box in the corner), it goes with the snapshot; unticked, it fades. */
 function FileToggle({ file: f, ticking }: { file: PublishFile; ticking: Ticking }) {
-  const on = !f.over && !ticking.off.has(f.k);
+  const on = !ticking.off.has(f.k);
   return (
-    <label className={css.file} data-off={!on || undefined} data-over={f.over || undefined}>
-      <input type="checkbox" checked={on} disabled={f.over} onChange={() => ticking.toggle(f.k)} />
-      <span className={css.fileName}>{f.name}</span>
-      <span className={css.fileSize}>{f.over ? t("web-pages.chat.publish.tooBig") : f.sizeText}</span>
+    <label className={css.file} data-off={!on || undefined}>
+      <FileLook sessionKey={f.file.owner ?? null} file={f.file} />
+      <input type="checkbox" className={css.tick} checked={on} onChange={() => ticking.toggle(f.k)} aria-label={f.name} />
     </label>
   );
 }
 
 /**
- * Publishes the chat (wide screen): what it would hold, its attachments ticked in their messages (all at first; one
- * too big is shown, never ticked), who can read it, 「发布」. Published, its link with a way to copy it; the info lists it from then on.
+ * Publishes the chat (wide screen): what it would hold, its attachments ticked in their messages (all at first), who
+ * can read it, 「发布」. Published, its link with a way to copy it; the info lists it from then on.
  */
 export function PublishDialog({ station, thread, onClose }: { station: string; thread: number; onClose(): void }) {
   const api = stationApi(useStationCall(station));
@@ -117,7 +115,7 @@ export function PublishDialog({ station, thread, onClose }: { station: string; t
   const ticked = p ? tickedOf(p, ticking.off) : null;
   const go = () => {
     if (!p || !ticked) return;
-    api.publish(thread, p.upto, ticked.files).then(setMade, (e: unknown) => toast(t("web-main.act.failed", { what: t("web-pages.chat.publish.verb"), error: failure(e) })));
+    api.publish(thread, p.upto, ticked).then(setMade, (e: unknown) => toast(t("web-main.act.failed", { what: t("web-pages.chat.publish.verb"), error: failure(e) })));
   };
   let body: ReactNode;
   if (made) body = <span className={css.madeLink} title={made.link}>{made.link}</span>; else if ("reading" in preview) body = <Loading label={t("web-pages.chat.publish.reading")} fill={false} />;
@@ -127,7 +125,6 @@ export function PublishDialog({ station, thread, onClose }: { station: string; t
     body = (
       <>
         <PublishMessages messages={p!.messages} ticking={ticking} />
-        {ticked!.over && <p className={css.problem} role="alert">{t("web-pages.chat.publish.overTotal", { most: p!.mostText })}</p>}
       </>
     );
   }
@@ -140,7 +137,7 @@ export function PublishDialog({ station, thread, onClose }: { station: string; t
           </>
         : <>
             {p?.hiddenText && <span className={css.footNote}><ShieldCheck size={14} />{p.hiddenText}</span>}
-            <Button variant="primary" busy={publishing} disabled={!p || p.messages.length === 0 || ticked!.over} onClick={go}>{t("web-pages.chat.publish.go")}</Button>
+            <Button variant="primary" busy={publishing} disabled={!p || p.messages.length === 0} onClick={go}>{t("web-pages.chat.publish.go")}</Button>
           </>}>
       {body}
     </Dialog>

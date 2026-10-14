@@ -138,8 +138,6 @@
   "station.publish.hidden": "[hidden]",
   "station.publish.noChat": "That chat is not on this station",
   "station.publish.empty": "This chat has no messages to publish yet",
-  "station.publish.tooLong": "This chat has too many messages: a snapshot is {mb} MB at most",
-  "station.publish.tooLarge": "A snapshot is {mb} MB at most: untick some attachments",
   "station.publish.fileGone": "The attachment {name} is gone",
   "station.publish.notYours": "Only whoever published it, or a workspace owner or admin, can take it down",
   "station.publish.notFound": "No such public link",
