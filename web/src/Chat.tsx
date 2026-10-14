@@ -1495,6 +1495,7 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
   // before it is first drawn: it never shows unfocused first.
   useLayoutEffect(() => {
     if (window.matchMedia("(pointer: fine)").matches) input.current?.focus();
+    if (document.activeElement !== input.current) setFocused(false);
   }, [thread]);
   // Space with nothing that takes keys focused (the cursor lost to a click on the messages, a closed menu…) puts it
   // back in the composer, rather than scrolling the page.
@@ -1518,6 +1519,14 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
   const box = useRef<HTMLFormElement>(null);
   // What it is laid out by: any change of it may change its height (a line more or less, capsule ⇄ box, files).
   useMorph(box, `${multiline}|${text}|${files.length}|${quotes.length}`, roomy);
+  // Its cursor lost to a click on what takes none (the messages, read or selected), it stays a box: a capsule again
+  // only once the focus goes into something else (a field, a button), or another chat opens.
+  useEffect(() => {
+    if (!focused) return;
+    const moved = (e: FocusEvent) => { if (!box.current?.contains(e.target as Node)) setFocused(false); };
+    document.addEventListener("focusin", moved);
+    return () => document.removeEventListener("focusin", moved);
+  }, [focused]);
   return (
     <div className={cloudCss.composerWrap}>
       {outside.node}
@@ -1525,7 +1534,6 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
       {above && <div className={css.composerAbove}>{above}</div>}
       <form ref={box} className={`${composerCss.composerBox} ${refCss.refHost}`} data-multiline={multiline || undefined} data-dragging={dragging || undefined}
         onFocus={() => setFocused(true)}
-        onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false); }}
         onSubmit={(e) => { e.preventDefault(); submit(); }} onClick={() => input.current?.focus()}
         // Locked (its station offline), no file is taken in.
         onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !locked) { e.preventDefault(); setDragging(true); } }}
