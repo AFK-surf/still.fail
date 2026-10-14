@@ -20,7 +20,7 @@
 //
 // A station that refuses this device for the lock (`lock_unconfirmed`) is not asked again until the lock moves on
 // (someone confirmed something): what waits for it then is tried at once.
-import { Effect } from "effect";
+import { Effect, Schedule } from "effect";
 import type { Inner } from "../core.ts";
 import { handlers, hooks } from "../core/execute.ts";
 import type { Call } from "../core/calls.ts";
@@ -155,6 +155,18 @@ export function install(inner: Inner): void {
 /// The lock and the waiting devices, read from the cloud and held; a lock that moved on lets the stations that refused
 /// this device be tried again.
 function read(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
+  // What changed while it read (a request dropped just after an entry came) is read again: an ask made meanwhile
+  // under the same key was folded into this one.
+  return Effect.gen(function* () {
+    for (let round = 0; round < 3; round++) {
+      const before = cloudSays(view(inner, ws));
+      yield* readOnce(inner, ws);
+      if (cloudSays(view(inner, ws)) === before) return;
+    }
+  });
+}
+
+function readOnce(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
   return Effect.gen(function* () {
     const sub = inner.workspaces.owner(ws);
     if (sub === null) return;
@@ -194,7 +206,10 @@ function refused(inner: Inner, ws: string, station: string): void {
   p.requested = head;
   const sub = inner.workspaces.owner(ws);
   if (sub === null) return;
-  inner.scheduler.enqueue("cloud", `lock/${ws}/request`, Priority.background, Effect.asVoid(new Lock(inner, ws, sub, null).request()));
+  // Asked again a few times if the cloud did not take it (the page says the others were told); after that, the next
+  // refusal asks anew.
+  const ask = Effect.retry(new Lock(inner, ws, sub, null).request(), { times: 5, schedule: Schedule.spaced("2 seconds") });
+  inner.scheduler.enqueue("cloud", `lock/${ws}/request`, Priority.background, Effect.asVoid(Effect.tapError(ask, () => Effect.sync(() => (p.requested = undefined)))));
 }
 
 /// Why a station is not asked now: it refused this device and the lock has not moved on since.
@@ -380,7 +395,7 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
     switch (c.name) {
       case "state":
         yield* Effect.ignore(lock.base());
-        if (held(inner, c.workspace) === null) yield* Effect.ignore(read(inner, c.workspace));
+        yield* Effect.ignore(read(inner, c.workspace));
         return lockView(inner, c.workspace);
       // The notice that the lock is off, closed for good on this device (prefs `lockNotice`).
       case "dismiss":
