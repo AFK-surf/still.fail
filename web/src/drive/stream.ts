@@ -5,7 +5,28 @@
 // stream: the caller reads the file whole instead (small enough) or says it cannot be played here.
 import { readPart, type At } from "./model.ts";
 
-interface Opened { at: At; size: number; type: string }
+/** `ahead`: how far into the file reading is welcome now (the playing position and some), null while not known. */
+interface Opened { at: At; size: number; type: string; ahead?: (() => number | null) | undefined }
+
+/** A part asked for past where reading is welcome waits for playback to come near, this long at most at a time (the
+ *  service worker gives up on an answer after a minute). */
+const HOLD_MS = 20_000;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Whether to read a part at `offset` now: at once while within `ahead`; past it, once playback has come near or a while
+ * has gone by (a player reading ahead of what it plays, as Safari's does, is kept to about what it will play soon).
+ */
+async function welcome(token: string, offset: number): Promise<boolean> {
+  for (const since = performance.now(); performance.now() - since < HOLD_MS;) {
+    const file = opened.get(token);
+    if (!file) return false;
+    const ahead = file.ahead?.();
+    if (ahead === null || ahead === undefined || offset <= ahead) return true;
+    await sleep(300);
+  }
+  return opened.has(token);
+}
 const opened = new Map<string, Opened>();
 let listening = false;
 
@@ -20,7 +41,7 @@ function answer(event: MessageEvent): void {
   const file = opened.get(ask.token);
   // Another page's: the worker asks the next one.
   if (!file) { port.postMessage({ unknown: true }); return; }
-  readPart(file.at, ask.offset, ask.length).then(
+  void welcome(ask.token, ask.offset).then((go) => (go ? readPart(file.at, ask.offset, ask.length) : Promise.reject(new Error("closed")))).then(
     (got) => port.postMessage({ total: got.total, bytes: got.bytes.buffer }, [got.bytes.buffer]),
     (e: unknown) => port.postMessage({ error: e instanceof Error ? e.message : String(e) }),
   );
@@ -76,9 +97,9 @@ export function streaming(): Promise<boolean> {
 }
 
 /** A URL a <video> or <audio> plays the file from, a range at a time; `close` lets it go. */
-export function streamUrl(at: At, size: number, type: string): { url: string; close: () => void } {
+export function streamUrl(at: At, size: number, type: string, ahead?: () => number | null): { url: string; close: () => void } {
   const token = crypto.randomUUID();
-  opened.set(token, { at, size, type });
+  opened.set(token, { at, size, type, ahead });
   const url = `/__drive/${token}?n=${size}&t=${encodeURIComponent(type || "application/octet-stream")}`;
   return { url, close: () => { opened.delete(token); } };
 }

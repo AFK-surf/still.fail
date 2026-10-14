@@ -8,7 +8,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Prose } from "../Prose.tsx";
 import * as conversationCss from "../styles/conversation.css.ts";
-import { ChevronLeft, ChevronRight, Close, List, Minus, Plus, Search, Text as TextIcon } from "../icons.tsx";
+import { Check, ChevronLeft, ChevronRight, Close, List, Moon, Search, Sun, Text as TextIcon } from "../icons.tsx";
 import { useNarrow, useApp, SheetGrab, SheetHead, type MobileApp } from "../mobile/app.tsx";
 import { Seg } from "../mobile/parts.tsx";
 import { Segmented, Tip } from "../ui.tsx";
@@ -17,7 +17,7 @@ import { REST_MS, TAP_REST_MS } from "../FilePreview.tsx";
 import { placeStrokes, strokeLayer } from "../strokes.ts";
 import { placeAt, readWhole, sizeOf, usePlace, type At, type Got } from "./model.ts";
 import { isHeading, search, type Book, type Chapter } from "./text.ts";
-import { LINES, SIZES, setReaderStyle, useReaderStyle, type Paper } from "./readerStyle.ts";
+import { LINES, MARGINS, SIZES, pickPaper, setReaderStyle, toggleNight, useReaderStyle, type Paper } from "./readerStyle.ts";
 import * as css from "./Reader.css.ts";
 import { t } from "../i18n.ts";
 
@@ -135,6 +135,10 @@ interface Found { query: string; ranges: Range[]; offsets: number[]; at: number 
 /** What the panels act on, the same object while the reader is open (a phone's sheet is drawn outside it). */
 interface Acts {
   book: () => Book | null;
+  /** How far through it is (0 to 1). */
+  share: () => number;
+  /** The find opened in place of what is open. */
+  openFind: () => void;
   chapters: () => { title: string; at: number }[];
   current: () => number;
   goChapter: (i: number) => void;
@@ -148,7 +152,7 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
   const app = useAppSafe();
   const style = useReaderStyle();
   const dark = useDark();
-  const paper: Exclude<Paper, "auto"> = style.paper === "auto" ? (dark ? "night" : narrow ? "paper" : "white") : style.paper;
+  const paper: Exclude<Paper, "follow"> = style.paper === "follow" ? (dark ? "night" : "white") : style.paper;
   const loaded = useBook(at, size, mtime, markdown);
   const book = loaded.state === "ready" ? loaded.book : null;
   const place = usePlace(at);
@@ -364,9 +368,9 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
 
   // ── panels ──
   const acts = useRef<Acts>(null as unknown as Acts);
-  acts.current = { book: () => book, chapters: () => chapters, current: () => current, goChapter, find, show, close: () => setFound(null) };
+  acts.current = { book: () => book, share: () => share, openFind: () => open("find"), chapters: () => chapters, current: () => current, goChapter, find, show, close: () => setFound(null) };
   const stable = useMemo<Acts>(() => ({
-    book: () => acts.current.book(), chapters: () => acts.current.chapters(), current: () => acts.current.current(),
+    book: () => acts.current.book(), share: () => acts.current.share(), openFind: () => acts.current.openFind(), chapters: () => acts.current.chapters(), current: () => acts.current.current(),
     goChapter: (i) => acts.current.goChapter(i), find: (q) => acts.current.find(q), show: (f, i) => acts.current.show(f, i), close: () => acts.current.close(),
   }), []);
   const open = (which: "contents" | "find" | "layout") => {
@@ -392,7 +396,7 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
 
   const share = book ? (book.markdown ? shareNow(scroller.current) : length > 0 ? Math.min(1, top / length) : 0) : 0;
   const chapter = current >= 0 ? chapters[current]?.title : undefined;
-  const vars = { "--r-size": `${style.size}px`, "--r-line": style.line, fontFamily: style.face === "serif" ? SERIF : SANS } as CSSProperties;
+  const vars = { "--r-size": `${style.size}px`, "--r-line": style.line, "--r-margin": `${style.margin}px`, fontFamily: style.face === "serif" ? SERIF : SANS } as CSSProperties;
 
   let body: ReactNode;
   if (loaded.state === "error") body = <div className={css.note}>{t("web-pages.drive.reader.failed", { error: loaded.message })}</div>;
@@ -410,7 +414,7 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
   </>;
 
   return (
-    <div className={css.reader} data-paper={paper} data-narrow={narrow || undefined} data-bars={bars || undefined} style={vars}
+    <div className={css.reader} data-paper={paper} data-indent={style.indent || undefined} data-narrow={narrow || undefined} data-bars={bars || undefined} style={vars}
       onPointerMove={(e) => { if (e.pointerType === "mouse" && !narrow) wake(); }}>
       <div ref={scroller} className={css.scroller} onScroll={onScroll} data-panel={(!narrow && panel) || undefined}
         onPointerDown={(e) => { tapAt.current = { x: e.clientX, y: e.clientY }; }} onPointerUp={onPointerUp}>
@@ -422,8 +426,8 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
         onPointerEnter={(e) => { if (e.pointerType === "mouse") { onBars.current = true; clearTimeout(resting.current); } }}
         onPointerLeave={(e) => { if (e.pointerType === "mouse") { onBars.current = false; wake(); } }}>
         <button type="button" className={css.back} onClick={onBack} aria-label={backLabel}><ChevronLeft size={20} /><span>{backLabel}</span></button>
-        <span className={css.title}><b>{name}</b>{chapter ? <small>{chapter}</small> : book && <small>{book.encoding}</small>}</span>
-        <span className={css.backSpace} aria-hidden="true" />
+        <span className={css.title}><b>{name}</b>{book && <small>{[chapter ?? book.encoding, `${Math.round(share * 100)}%`].join(" · ")}</small>}</span>
+        <span className={css.topEnd}><button type="button" className={css.topButton} aria-label={t("web-pages.drive.reader.find")} data-on={panel === "find" || undefined} onClick={() => open("find")}><Search size={20} /></button></span>
       </header>
       {found && (
         <div className={css.findStrip} data-bars={bars || undefined}>
@@ -449,14 +453,16 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
         </div>
         <div className={css.tools}>
           <Tool icon={<List size={20} />} label={t("web-pages.drive.reader.contents")} on={panel === "contents"} onClick={() => open("contents")} />
-          <Tool icon={<Search size={20} />} label={t("web-pages.drive.reader.find")} on={panel === "find"} onClick={() => open("find")} />
           <Tool icon={<TextIcon size={20} />} label={t("web-pages.drive.reader.layout")} on={panel === "layout"} onClick={() => open("layout")} />
+          {/* It names where it goes: at night the day (the light paper last picked), by day the night. */}
+          <Tool icon={paper === "night" ? <Sun size={20} /> : <Moon size={20} />} label={t(paper === "night" ? "web-pages.drive.reader.day" : "web-pages.drive.reader.night")} on={false} onClick={() => toggleNight(paper === "night")} />
         </div>
       </footer>
       {!narrow && panel && (
         <aside className={css.panel} onPointerEnter={() => { onBars.current = true; clearTimeout(resting.current); }} onPointerLeave={() => { onBars.current = false; }}>
           <div className={css.panelHead}>
             <b>{t(panel === "contents" ? "web-pages.drive.reader.contents" : panel === "find" ? "web-pages.drive.reader.find" : "web-pages.drive.reader.layout")}</b>
+            {panel === "contents" && contentsNote(stable) && <span className={css.headNote}>{contentsNote(stable)}</span>}
             <Tip label={t("common.close")}><button type="button" className={css.chip} aria-label={t("common.close")} onClick={() => setPanel(null)}><Close size={14} /></button></Tip>
           </div>
           {panel === "contents" && <Contents acts={stable} done={() => undefined} />}
@@ -506,28 +512,34 @@ function Track({ share, onJump }: { share: number; onJump: (share: number) => vo
 
 // ── the panels: a phone's sheets, or beside the text ───────────────────
 
+/** How many chapters, and how far through it is: beside the contents' title. */
+const contentsNote = (acts: Acts) => acts.chapters().length ? t("web-pages.drive.reader.contentsNote", { n: acts.chapters().length, read: Math.round(acts.share() * 100) }) : undefined;
+
 function ContentsSheet({ acts, app }: { acts: Acts; app: MobileApp }) {
+  const note = contentsNote(acts);
   return (
     <>
       <SheetGrab />
-      <SheetHead title={t("web-pages.drive.reader.contents")} />
+      <SheetHead title={t("web-pages.drive.reader.contents")} trailing={note ? <span className={css.headNote}>{note}</span> : undefined} />
       <Contents acts={acts} done={() => app.sheet(null)} />
     </>
   );
 }
 
+/** The chapters, numbered, the one being read marked; finding in the whole text from its top. */
 function Contents({ acts, done }: { acts: Acts; done: () => void }) {
   const chapters = acts.chapters();
   const current = acts.current();
   const list = useRef<HTMLDivElement>(null);
   // Opened at the chapter being read.
   useLayoutEffect(() => { list.current?.querySelector("[data-current]")?.scrollIntoView({ block: "center" }); }, []);
-  if (!chapters.length) return <p className={css.panelNote}>{t("web-pages.drive.reader.noChapters")}</p>;
   return (
     <div ref={list} className={css.panelList}>
+      <button type="button" className={`${css.panelRow} ${css.findRow}`} onClick={() => acts.openFind()}><Search size={16} /><span>{t("web-pages.drive.reader.findPlaceholder")}</span></button>
+      {!chapters.length && <p className={css.panelNote}>{t("web-pages.drive.reader.noChapters")}</p>}
       {chapters.map((c, i) => (
-        <button key={i} type="button" className={css.panelRow} data-current={i === current || undefined} onClick={() => { acts.goChapter(i); done(); }}>
-          <span>{c.title}</span>
+        <button key={i} type="button" className={`${css.panelRow} ${css.chapterLine}`} data-current={i === current || undefined} onClick={() => { acts.goChapter(i); done(); }}>
+          <small>{i + 1}</small><span>{c.title}</span>{i === current && <Check size={14} />}
         </button>
       ))}
     </div>
@@ -586,53 +598,83 @@ function LayoutSheet() {
     <>
       <SheetGrab />
       <SheetHead title={t("web-pages.drive.reader.layout")} />
-      <Layout narrow />
+      <div className={css.layoutScroll}><Layout narrow /></div>
     </>
   );
 }
 
-const PAPERS: Paper[] = ["auto", "paper", "white", "night"];
+const PAPERS: Paper[] = ["follow", "white", "green", "grey", "night"];
 
-/** The text's size, its lines' height, its face and the paper under it: each changed as it is picked. */
+/** The paper under the text, its size, its lines' height, the room either side, its face, and whether paragraphs are
+ *  indented: each changed as it is picked (`prefs.set {reader: {…}}`, that one setting). */
 function Layout({ narrow }: { narrow: boolean }) {
   const style = useReaderStyle();
   const faces = [t("web-pages.drive.reader.serif"), t("web-pages.drive.reader.sans")];
+  const indents = [t("web-pages.drive.reader.indent"), t("web-pages.drive.reader.flush")];
+  const choose = (label: string, options: string[], at: number, pick: (i: number) => void) => narrow
+    ? <Seg options={options} selected={at} onSelect={pick} fill />
+    : <Segmented label={label} value={String(at)} onChange={(v) => pick(Number(v))} options={options.map((o, i) => ({ value: String(i), label: o }))} />;
   return (
     <div className={css.layout}>
-      <Stepper label={t("web-pages.drive.reader.size")} value={String(style.size)} less={style.size > SIZES.min} more={style.size < SIZES.max}
-        onLess={() => setReaderStyle({ size: style.size - 1 })} onMore={() => setReaderStyle({ size: style.size + 1 })} />
-      <Stepper label={t("web-pages.drive.reader.lines")} value={style.line.toFixed(1)} less={style.line > LINES.min + 0.01} more={style.line < LINES.max - 0.01}
-        onLess={() => setReaderStyle({ line: Math.round((style.line - 0.1) * 10) / 10 })} onMore={() => setReaderStyle({ line: Math.round((style.line + 0.1) * 10) / 10 })} />
-      <div className={css.layoutRow}>
-        <span>{t("web-pages.drive.reader.face")}</span>
-        {narrow
-          ? <Seg options={faces} selected={style.face === "serif" ? 0 : 1} onSelect={(i) => setReaderStyle({ face: i === 0 ? "serif" : "sans" })} />
-          : <Segmented label={t("web-pages.drive.reader.face")} value={style.face} onChange={(face) => setReaderStyle({ face })} options={[{ value: "serif", label: faces[0] }, { value: "sans", label: faces[1] }]} />}
-      </div>
-      <div className={css.layoutRow}>
-        <span>{t("web-pages.drive.reader.paper")}</span>
+      <div className={css.layoutBlock}>
+        <span className={css.layoutLabel}>{t("web-pages.drive.reader.paper")}</span>
         <span className={css.papers}>
           {PAPERS.map((p) => (
-            <button key={p} type="button" className={css.paperSwatch} data-paper={p} data-on={style.paper === p || undefined} aria-pressed={style.paper === p} onClick={() => setReaderStyle({ paper: p })}>
+            <button key={p} type="button" className={css.paperSwatch} data-paper={p} data-on={style.paper === p || undefined} aria-pressed={style.paper === p} onClick={() => pickPaper(p)}>
               <span aria-hidden="true">{t("web-pages.drive.reader.paperGlyph")}</span>
               <small>{t(`web-pages.drive.reader.paper.${p}`)}</small>
             </button>
           ))}
         </span>
       </div>
+      <div className={css.layoutBlock}>
+        <span className={css.layoutLabel}>{t("web-pages.drive.reader.size")}</span>
+        <span className={css.sizeRow}>
+          <button type="button" className={css.sizeKey} aria-label={t("web-pages.drive.reader.less", { what: t("web-pages.drive.reader.size") })} disabled={style.size <= SIZES.min} onClick={() => setReaderStyle({ size: style.size - 1 })}>A−</button>
+          <b>{style.size}</b>
+          <button type="button" className={css.sizeKey} aria-label={t("web-pages.drive.reader.more", { what: t("web-pages.drive.reader.size") })} disabled={style.size >= SIZES.max} onClick={() => setReaderStyle({ size: style.size + 1 })}>A+</button>
+        </span>
+      </div>
+      <Slider label={t("web-pages.drive.reader.lines")} value={style.line} min={LINES.min} max={LINES.max} step={0.1} shown={(v) => `${Math.round(v * 100)}%`} onChange={(line) => setReaderStyle({ line })} />
+      <Slider label={t("web-pages.drive.reader.margin")} value={style.margin} min={MARGINS.min} max={MARGINS.max} step={1} shown={(v) => String(v)} onChange={(margin) => setReaderStyle({ margin })} />
+      <div className={css.layoutPair}>
+        <div className={css.layoutBlock}>
+          <span className={css.layoutLabel}>{t("web-pages.drive.reader.face")}</span>
+          {choose(t("web-pages.drive.reader.face"), faces, style.face === "serif" ? 0 : 1, (i) => setReaderStyle({ face: i === 0 ? "serif" : "sans" }))}
+        </div>
+        <div className={css.layoutBlock}>
+          <span className={css.layoutLabel}>{t("web-pages.drive.reader.indentLabel")}</span>
+          {choose(t("web-pages.drive.reader.indentLabel"), indents, style.indent ? 0 : 1, (i) => setReaderStyle({ indent: i === 0 }))}
+        </div>
+      </div>
     </div>
   );
 }
 
-function Stepper({ label, value, less, more, onLess, onMore }: { label: string; value: string; less: boolean; more: boolean; onLess: () => void; onMore: () => void }) {
+/** A value along a hairline with a knob: dragged or tapped; the value kept as the finger lets go. */
+function Slider({ label, value, min, max, step, shown, onChange }: { label: string; value: number; min: number; max: number; step: number; shown: (v: number) => string; onChange: (v: number) => void }) {
+  const box = useRef<HTMLSpanElement>(null);
+  const [drag, setDrag] = useState<number | null>(null);
+  const at = (x: number) => {
+    const r = box.current!.getBoundingClientRect();
+    const v = min + Math.min(1, Math.max(0, (x - r.left) / r.width)) * (max - min);
+    return Math.round(Math.round(v / step) * step * 10) / 10;
+  };
+  const now = drag ?? value;
+  const share = (now - min) / (max - min);
   return (
-    <div className={css.layoutRow}>
-      <span>{label}</span>
-      <span className={css.stepper}>
-        <button type="button" aria-label={t("web-pages.drive.reader.less", { what: label })} disabled={!less} onClick={onLess}><Minus size={16} /></button>
-        <b>{value}</b>
-        <button type="button" aria-label={t("web-pages.drive.reader.more", { what: label })} disabled={!more} onClick={onMore}><Plus size={16} /></button>
+    <div className={css.sliderRow}>
+      <span className={css.layoutLabel}>{label}</span>
+      <span ref={box} className={css.slider} role="slider" aria-label={label} aria-valuemin={min} aria-valuemax={max} aria-valuenow={now} tabIndex={0}
+        onKeyDown={(e) => { if (e.key === "ArrowLeft" || e.key === "ArrowRight") { e.preventDefault(); onChange(Math.min(max, Math.max(min, Math.round((value + (e.key === "ArrowLeft" ? -step : step)) * 10) / 10))); } }}
+        onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); setDrag(at(e.clientX)); }}
+        onPointerMove={(e) => { if (drag !== null) setDrag(at(e.clientX)); }}
+        onPointerUp={(e) => { if (drag === null) return; const v = at(e.clientX); setDrag(null); if (v !== value) onChange(v); }}
+        onPointerCancel={() => setDrag(null)}>
+        <span className={css.sliderLine}><span style={{ transform: `scaleX(${share})` }} /></span>
+        <span className={css.knobRail} style={{ transform: `translateX(${share * 100}%)` }}><span className={css.sliderKnob} data-held={drag !== null || undefined} /></span>
       </span>
+      <b className={css.sliderValue}>{shown(now)}</b>
     </div>
   );
 }

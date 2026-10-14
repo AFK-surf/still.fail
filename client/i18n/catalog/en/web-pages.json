@@ -1088,9 +1088,7 @@
   "web-pages.drive.reader.face": "Font",
   "web-pages.drive.reader.paper": "Paper",
   "web-pages.drive.reader.paperGlyph": "Aa",
-  "web-pages.drive.reader.paper.auto": "Auto",
-  "web-pages.drive.reader.paper.paper": "Paper",
-  "web-pages.drive.reader.paper.white": "White",
+  "web-pages.drive.reader.paper.white": "Paper",
   "web-pages.drive.reader.paper.night": "Night",
   "web-pages.drive.reader.less": "Smaller {what}",
   "web-pages.drive.reader.more": "Bigger {what}",
@@ -1105,5 +1103,15 @@
   "web-pages.drive.player.captionsOn": "Show subtitles",
   "web-pages.drive.player.captionsOff": "Hide subtitles",
   "web-pages.drive.player.full": "Full screen",
-  "web-pages.drive.player.unfull": "Exit full screen"
+  "web-pages.drive.player.unfull": "Exit full screen",
+  "web-pages.drive.reader.contentsNote": "{n} chapters · {read}% read",
+  "web-pages.drive.reader.margin": "Margin",
+  "web-pages.drive.reader.indentLabel": "Indent",
+  "web-pages.drive.reader.indent": "Indented",
+  "web-pages.drive.reader.flush": "Flush",
+  "web-pages.drive.reader.day": "Day",
+  "web-pages.drive.reader.night": "Night",
+  "web-pages.drive.reader.paper.follow": "System",
+  "web-pages.drive.reader.paper.green": "Green",
+  "web-pages.drive.reader.paper.grey": "Grey"
 }

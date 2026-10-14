@@ -35,7 +35,11 @@ function clock(seconds: number): string {
   return h ? `${h}:${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}` : `${m}:${String(r).padStart(2, "0")}`;
 }
 
-function useSource(at: At, entry: DriveEntry): Source {
+/** How far ahead of what plays the file is read: this much playing time, and this much more. */
+const AHEAD_S = 30;
+const AHEAD_BYTES = 4 * 1024 * 1024;
+
+function useSource(at: At, entry: DriveEntry, media: React.RefObject<HTMLVideoElement | null>): Source {
   const [source, setSource] = useState<Source>({ state: "opening", got: null });
   useEffect(() => {
     let live = true;
@@ -46,7 +50,12 @@ function useSource(at: At, entry: DriveEntry): Source {
     void streaming().then((on) => {
       if (!live) return;
       if (on) {
-        const s = streamUrl(at, entry.size, type);
+        // Read about what is played soon, not as far as the browser would buffer (by the file's bytes a second).
+        const s = streamUrl(at, entry.size, type, () => {
+          const v = media.current;
+          if (!v || !Number.isFinite(v.duration) || v.duration <= 0) return null;
+          return ((v.currentTime + AHEAD_S) / v.duration) * entry.size + AHEAD_BYTES;
+        });
         close = s.close;
         setSource({ state: "ready", url: s.url, streamed: true });
         return;
@@ -93,10 +102,10 @@ export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
 }) {
   const narrow = useNarrow();
   const audio = entry.kind === "audio";
-  const source = useSource(at, entry);
+  const media = useRef<HTMLVideoElement>(null);
+  const source = useSource(at, entry, media);
   const subtitle = useSubtitle(at, entry, siblings);
   const place = usePlace(at);
-  const media = useRef<HTMLVideoElement>(null);
   const root = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);

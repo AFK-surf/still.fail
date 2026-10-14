@@ -34,6 +34,11 @@ self.addEventListener("notificationclick", (event) => {
 
 /** How much of a file one answer's part asks the page for. */
 const DRIVE_PART = 1024 * 1024;
+/**
+ * The most one answer gives: a player asking for all the rest (`bytes=N-`, as Safari does and keeps reading) is given a
+ * window of it, and asks again from where it ends as it needs more, so what is read is about what is played.
+ */
+const DRIVE_WINDOW = 4 * 1024 * 1024;
 
 // A page asks whether this worker streams the drive (one from before it does not answer): it does.
 self.addEventListener("message", (event) => {
@@ -84,6 +89,7 @@ async function driveAnswer(event, url) {
       if (range[2] !== "") end = Math.min(Number(range[2]), total - 1);
     }
     if (start >= total || start > end) return new Response(null, { status: 416, headers: { "content-range": `bytes */${total}` } });
+    end = Math.min(end, start + DRIVE_WINDOW - 1);
   }
   let at = start;
   let stopped = false;

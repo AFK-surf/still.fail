@@ -7,17 +7,27 @@ import { panel as panelGround } from "../styles/glass.ts";
  * white canvas. Each sets the reader's ink, the bars' raised ground and the accent on it.
  */
 const light = { "--r-ink": "#24272B", "--r-muted": "#7A7D83", "--r-line": "#E7E3DC", "--r-accent": "#E5704A" };
+/** The papers, of still.fail's grounds: white the phone's warm page, 护眼 its green as a tint of it, 浅灰 its ink as one,
+ *  night its dark page; the bars on each the raised ground over it. */
+export const PAPER_BG = {
+  white: "#F5F3EF",
+  green: "color-mix(in srgb, #2F8F5B 13%, #F5F3EF)",
+  grey: "color-mix(in srgb, #24272B 8%, #FBFAF7)",
+  night: "#1B1C1F",
+} as const;
 const PAPER = {
-  paper: { ...light, "--r-bg": "#F5F3EF", "--r-raised": "#FFFFFF" },
-  white: { ...light, "--r-bg": "#FFFFFF", "--r-raised": "#E4E4E8" },
-  night: { "--r-bg": "#1B1C1F", "--r-ink": "color-mix(in srgb, #ECECED 88%, #1B1C1F)", "--r-muted": "#9A9DA3", "--r-raised": "#2A2C31", "--r-line": "#34353A", "--r-accent": "#EF7A55" },
+  white: { ...light, "--r-bg": PAPER_BG.white, "--r-raised": "#FFFFFF" },
+  green: { ...light, "--r-ink": "#24302A", "--r-bg": PAPER_BG.green, "--r-raised": "color-mix(in srgb, #2F8F5B 6%, #FFFFFF)", "--r-accent": "#2F8F5B" },
+  grey: { ...light, "--r-bg": PAPER_BG.grey, "--r-raised": "#FFFFFF" },
+  night: { "--r-bg": PAPER_BG.night, "--r-ink": "color-mix(in srgb, #ECECED 88%, #1B1C1F)", "--r-muted": "#9A9DA3", "--r-raised": "#2A2C31", "--r-line": "#34353A", "--r-accent": "#EF7A55" },
 };
 
 export const reader = style({
   position: "absolute", inset: "0", overflow: "hidden", background: "var(--r-bg)", color: "var(--r-ink)",
   selectors: {
-    '&[data-paper="paper"]': { vars: PAPER.paper, colorScheme: "light" },
     '&[data-paper="white"]': { vars: PAPER.white, colorScheme: "light" },
+    '&[data-paper="green"]': { vars: PAPER.green, colorScheme: "light" },
+    '&[data-paper="grey"]': { vars: PAPER.grey, colorScheme: "light" },
     '&[data-paper="night"]': { vars: PAPER.night, colorScheme: "dark" },
   },
 });
@@ -33,14 +43,14 @@ export const scroller = style({
 
 /** One column, as wide as a line reads well, in the reader's own size and lines. */
 export const column = style({
-  boxSizing: "border-box", maxWidth: "calc(34em + 48px)", margin: "0 auto", padding: "0 24px",
+  boxSizing: "border-box", maxWidth: "calc(34em + 2 * var(--r-margin))", margin: "0 auto", padding: "0 var(--r-margin)",
   fontSize: "var(--r-size)", lineHeight: "var(--r-line)", overflowWrap: "anywhere", textWrap: "wrap",
-  selectors: { [`${reader}[data-narrow] &`]: { padding: "0 20px" } },
 });
 
 /** Lines laid out only as they come near the screen; their height kept once drawn. */
 export const piece = style({ contentVisibility: "auto", containIntrinsicSize: "auto 1600px" });
-globalStyle(`${piece} p`, { margin: "0", textIndent: "2em" });
+globalStyle(`${piece} p`, { margin: "0" });
+globalStyle(`${reader}[data-indent] ${piece} p`, { textIndent: "2em" });
 globalStyle(`${piece} p[data-heading]`, { textIndent: "0", fontWeight: "600", fontSize: "calc(var(--r-size) * 1.2)", margin: "1.2em 0 0.6em" });
 export const blank = style({ height: "0.6em" });
 
@@ -111,9 +121,9 @@ export const chip = style({
   border: "0", borderRadius: `calc(10px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "color-mix(in srgb, var(--r-ink, currentColor) 7%, transparent)", color: "inherit", fontSize: vars.textMeta, cursor: "pointer",
   selectors: {
-    "&:hover:not(:disabled)": { background: "color-mix(in srgb, var(--r-ink, currentColor) 12%, transparent)" },
     "&:disabled": { opacity: ".35", cursor: "default" },
   },
+  "@media": { "(hover: hover)": { selectors: { "&:hover:not(:disabled)": { background: "color-mix(in srgb, var(--r-ink, currentColor) 12%, transparent)" } } } },
 });
 
 export const trackRow = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 40px", alignItems: "center", gap: "10px" });
@@ -138,9 +148,9 @@ export const tool = style({
   display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", height: "50px",
   border: "0", borderRadius: `calc(14px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none", color: "var(--r-ink)",
   fontSize: vars.textCaption, cursor: "pointer",
-  selectors: {
-    "&:hover, &[data-on]": { background: "color-mix(in srgb, var(--r-ink) 7%, transparent)" },
-  },
+  selectors: { "&[data-on]": { background: "color-mix(in srgb, var(--r-ink) 7%, transparent)" } },
+  // A finger leaves no hover behind it.
+  "@media": { "(hover: hover)": { selectors: { "&:hover": { background: "color-mix(in srgb, var(--r-ink) 7%, transparent)" } } } },
 });
 
 /** What was found, and the steps through it: a capsule under the top bar. */
@@ -182,7 +192,7 @@ export const findInput = style({
 export const snippet = style({ display: "-webkit-box", WebkitLineClamp: "2", WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: "1.5" });
 globalStyle(`${snippet} b`, { fontWeight: "600", color: `var(--m-accent-ink, ${vars.accentText})` });
 
-export const layout = style({ display: "grid", gap: "6px", padding: "6px 20px 20px" });
+export const layout = style({ display: "block", padding: "4px 20px 24px" });
 export const layoutRow = style({ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", minHeight: "48px", fontSize: vars.textUi });
 export const stepper = style({ display: "flex", alignItems: "center", gap: "6px" });
 globalStyle(`${stepper} button`, {
@@ -191,21 +201,22 @@ globalStyle(`${stepper} button`, {
 });
 globalStyle(`${stepper} button:disabled`, { opacity: ".35", cursor: "default" });
 globalStyle(`${stepper} b`, { minWidth: "40px", textAlign: "center", fontWeight: "600", fontVariantNumeric: "tabular-nums" });
-export const papers = style({ display: "flex", gap: "10px" });
+export const papers = style({ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "8px" });
 export const paperSwatch = style({
   display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", padding: "0", border: "0", background: "none", color: "inherit",
   cursor: "pointer",
 });
 globalStyle(`${paperSwatch} > span`, {
-  display: "grid", placeItems: "center", width: "40px", height: "40px", borderRadius: `calc(12px * ${vars.cornerScale})`,
+  display: "grid", placeItems: "center", width: "100%", height: "44px", borderRadius: `calc(12px * ${vars.cornerScale})`,
   boxShadow: "inset 0 0 0 1px color-mix(in srgb, currentColor 14%, transparent)", fontFamily: "serif", fontSize: vars.textTitle,
 });
 globalStyle(`${paperSwatch}[data-on] > span`, { boxShadow: `inset 0 0 0 2px var(--m-accent, ${vars.accent})` });
 globalStyle(`${paperSwatch} small`, { fontSize: vars.textCaption, color: `var(--m-muted, ${vars.muted})` });
-globalStyle(`${paperSwatch}[data-paper="auto"] > span`, { background: "linear-gradient(135deg, #F5F3EF 50%, #1B1C1F 50%)", color: "#7A7D83" });
-globalStyle(`${paperSwatch}[data-paper="paper"] > span`, { background: "#F5F3EF", color: "#24272B" });
-globalStyle(`${paperSwatch}[data-paper="white"] > span`, { background: "#FFFFFF", color: "#24272B" });
-globalStyle(`${paperSwatch}[data-paper="night"] > span`, { background: "#1B1C1F", color: "#ECECED" });
+globalStyle(`${paperSwatch}[data-paper="follow"] > span`, { background: `linear-gradient(135deg, ${PAPER_BG.white} 50%, ${PAPER_BG.night} 50%)`, color: "#7A7D83" });
+globalStyle(`${paperSwatch}[data-paper="white"] > span`, { background: PAPER_BG.white, color: "#24272B" });
+globalStyle(`${paperSwatch}[data-paper="green"] > span`, { background: PAPER_BG.green, color: "#24302A" });
+globalStyle(`${paperSwatch}[data-paper="grey"] > span`, { background: PAPER_BG.grey, color: "#24272B" });
+globalStyle(`${paperSwatch}[data-paper="night"] > span`, { background: PAPER_BG.night, color: "#ECECED" });
 
 /** The panel open beside the text: the bars over the text, not under the panel. */
 globalStyle(`${reader}:has(> ${panel}) ${top}, ${reader}:has(> ${panel}) ${bottom}, ${reader}:has(> ${panel}) ${findStrip}`, {
@@ -213,3 +224,49 @@ globalStyle(`${reader}:has(> ${panel}) ${top}, ${reader}:has(> ${panel}) ${botto
 });
 /** What was found, in the paper's ink (the app's own may be the other way round, white on a white page). */
 globalStyle(`${column} ::highlight(find-hit), ${column} ::highlight(find-current)`, { color: "var(--r-ink)" });
+
+/** The top bar's end: finding in the text. */
+export const topEnd = style({ display: "flex", justifyContent: "flex-end" });
+export const topButton = style({
+  display: "grid", placeItems: "center", width: "36px", height: "36px", padding: "0", border: "0", borderRadius: `calc(12px * ${vars.cornerScale})`,
+  background: "none", color: "var(--r-ink)", cursor: "pointer",
+  selectors: { "&[data-on]": { background: "color-mix(in srgb, var(--r-ink) 7%, transparent)" } },
+  "@media": { "(hover: hover)": { selectors: { "&:hover": { background: "color-mix(in srgb, var(--r-ink) 7%, transparent)" } } } },
+});
+/** Beside a panel's title: how many chapters, how far read. */
+export const headNote = style({ marginLeft: "auto", marginRight: "8px", fontSize: vars.textMeta, color: `var(--m-muted, ${vars.muted})`, fontWeight: "400" });
+export const findRow = style({ display: "flex", alignItems: "center", gap: "10px", color: `var(--m-muted, ${vars.muted})` });
+/** A chapter: its number, its title, a check on the one being read. */
+export const chapterLine = style({ display: "grid", gridTemplateColumns: "28px minmax(0, 1fr) auto", alignItems: "center", gap: "4px" });
+globalStyle(`${chapterLine} small`, { color: `var(--m-muted, ${vars.muted})`, fontSize: vars.textCaption, fontVariantNumeric: "tabular-nums" });
+globalStyle(`${chapterLine} span`, { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+
+export const layoutScroll = style({ overflowY: "auto", minHeight: "0", flex: "1" });
+export const layoutBlock = style({ display: "grid", gap: "8px", minWidth: "0" });
+export const layoutLabel = style({ fontSize: vars.textMeta, color: `var(--m-muted, ${vars.muted})` });
+export const layoutPair = style({ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" });
+globalStyle(`${layout} > * + *`, { marginTop: "10px" });
+export const sizeRow = style({
+  display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", height: "40px", padding: "0 4px",
+  borderRadius: `calc(12px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "color-mix(in srgb, currentColor 6%, transparent)",
+});
+globalStyle(`${sizeRow} b`, { textAlign: "center", fontWeight: "600", fontVariantNumeric: "tabular-nums" });
+export const sizeKey = style({
+  height: "32px", minWidth: "44px", padding: "0 10px", border: "0", borderRadius: `calc(10px * ${vars.cornerScale})`, background: "none", color: "inherit",
+  fontSize: vars.textUi, fontWeight: "600", cursor: "pointer",
+  selectors: { "&:disabled": { opacity: ".35", cursor: "default" }, "&:hover:not(:disabled)": { background: "color-mix(in srgb, currentColor 8%, transparent)" } },
+});
+/** A setting along a hairline with a knob (line height, margin): its name, the line, its value. */
+export const sliderRow = style({ display: "grid", gridTemplateColumns: "48px minmax(0, 1fr) 48px", alignItems: "center", gap: "10px" });
+export const slider = style({ position: "relative", height: "28px", cursor: "pointer", touchAction: "none", margin: "0 8px", outline: "none" });
+export const sliderLine = style({
+  position: "absolute", left: "0", right: "0", top: "13px", height: "2px", borderRadius: "1px", overflow: "hidden",
+  background: "color-mix(in srgb, currentColor 16%, transparent)",
+});
+globalStyle(`${sliderLine} > span`, { position: "absolute", inset: "0", background: `var(--m-accent, ${vars.accent})`, transformOrigin: "left" });
+export const sliderKnob = style({
+  position: "absolute", top: "6px", left: "-8px", width: "16px", height: "16px", borderRadius: "50%", boxSizing: "border-box",
+  background: `var(--m-accent, ${vars.accent})`, boxShadow: `0 0 0 3px var(--m-surface, ${vars.canvas})`, transition: `scale 120ms ${vars.easeOut}`,
+  selectors: { "&[data-held]": { scale: "1.2" } },
+});
+export const sliderValue = style({ textAlign: "right", fontSize: vars.textMeta, fontWeight: "600", fontVariantNumeric: "tabular-nums" });
