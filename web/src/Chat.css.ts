@@ -147,7 +147,8 @@ export const attachBtn = style({
 export const composerFiles = style({
   display: "flex", flexWrap: "wrap", gap: "6px", padding: "2px 4px 0", alignItems: "flex-start",
   selectors: {
-    [`${composerBox} &`]: { padding: "0 4px", maxHeight: "148px", overflowY: "auto", overscrollBehavior: "contain" },
+    // Flush with the frame's padding, as the quotes above are: 12px from its edge on every side.
+    [`${composerBox} &`]: { padding: "0", maxHeight: "148px", overflowY: "auto", overscrollBehavior: "contain" },
   },
 });
 export const msgFiles = style({
@@ -671,3 +672,7 @@ export const pasteSnippetOpen = style({ textAlign: "left", padding: 0, border: 0
 export const pasteSnippetTitle = style({ padding: 0, border: 0, background: "transparent", textAlign: "left", cursor: "pointer", width: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 });
 export const pasteSnippetHint = style({ color: vars.subtle, fontSize: vars.textMeta });
 export const pasteSnippetRemove = style({ flexShrink: 0, padding: "10px", border: 0, background: "transparent", color: vars.subtle, cursor: "pointer" });
+/** Inside the composer, files follow its curve as its quotes do: inner radius = the frame's radius less its padding. */
+globalStyle(`${composerFiles} :is(${composerThumb}, ${fileCard}, ${pasteSnippet})`, {
+  borderRadius: `calc(32px * ${vars.cornerScale} - 12px)`, cornerShape: vars.cornerShape,
+});
