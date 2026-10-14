@@ -6,7 +6,7 @@ import { accountTrigger } from "./cloud/workspace.css.ts";
 import { iconBtn } from "./styles/pages.css.ts";
 import { dock, shell } from "./styles/shell.css.ts";
 import { kindIcon, kindMark, resizeHandle } from "./ui.css.ts";
-import { outsetEnd, oversize } from "./styles/align.ts";
+import { outsetEnd, outsetStart, oversize } from "./styles/align.ts";
 
 const wide = "(min-width: 701px)";
 const narrow = "(max-width: 700px)";
@@ -25,7 +25,15 @@ export const sidebar = style({
   },
 });
 // In the block with the rail (shell.css.ts dock): its ground is the block's, its width its own, cut as the block closes.
-globalStyle(`${dock} > ${sidebar}`, { background: "none", flex: "none", width: fallbackVar(vars.sidebarW, "240px") });
+globalStyle(`${dock} > ${sidebar}`, {
+  background: "none", flex: "none", width: fallbackVar(vars.sidebarW, "240px"),
+  "@media": { [wide]: { transition: `margin-inline-start 380ms ${vars.easeOut}, width 380ms ${vars.easeOut}` } },
+});
+// Open, reaching 8 into the rail's 56 (empty there, right of its places): its rows 13 from the rail's ground, as that
+// ground is from the window's edge, not 21; its right edge where it was. Closed, after the rail, cut by the bar.
+globalStyle(`:root:not([data-sidebar="closed"]) ${dock} > ${sidebar}`, {
+  "@media": { [wide]: { ...outsetStart(8), width: `calc(${fallbackVar(vars.sidebarW, "240px")} + 8px)` } },
+});
 globalStyle(`${sidebar} :is(input, textarea)`, { WebkitUserSelect: "text", userSelect: "text" });
 globalStyle(`${sidebar} :is(a, img, svg)`, { WebkitUserDrag: "none" });
 // Closing or opening, its contents keep their width and are cut, not laid out anew at every step.
