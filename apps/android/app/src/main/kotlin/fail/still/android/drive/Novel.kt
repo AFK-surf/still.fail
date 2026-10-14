@@ -3,13 +3,12 @@
 // blocks a list lays out one at a time. Where the reader is, is an offset into the text it shows (drivePlace's `at`).
 package fail.still.android.drive
 
-import androidx.compose.runtime.saveable.Saver
-import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
+import fail.still.android.data.ReaderPrefs
 import fail.still.android.data.t
 import fail.still.android.ui.Dark
 import fail.still.android.ui.Light
@@ -83,9 +82,9 @@ data class PaperInk(val ground: Color, val ink: Color, val muted: Color, val bar
 
 /**
  * The papers a reader can pick (zdrive's), in still.fail's colours: the app's own light and dark page, a green and a
- * grey one; `Follow` (the default) is the app's light or dark as it is now. Kept by name.
+ * grey one; `Follow` (the default) is the app's light or dark as it is now. Kept by the core (`prefs.reader.paper`).
  */
-enum class Paper(private val key: String) {
+enum class Paper(val key: String) {
     Follow("follow"), White("white"), Green("green"), Grey("grey"), Night("night");
 
     val label: String get() = t("android-misc.drive.reader.paper.$key")
@@ -99,33 +98,29 @@ enum class Paper(private val key: String) {
     }
 
     companion object {
-        fun of(name: String?): Paper = entries.firstOrNull { it.name == name } ?: Follow
+        fun of(key: String?): Paper = entries.firstOrNull { it.key == key } ?: Follow
     }
 }
 
-/** The two faces a phone reader offers. */
-enum class ReaderFamily(private val key: String, val family: FontFamily) {
+/** The two faces a phone reader offers (`prefs.reader.face`). */
+enum class ReaderFamily(val key: String, val family: FontFamily) {
     Serif("serif", FontFamily.Serif), Sans("sans", FontFamily.SansSerif);
 
     val label: String get() = t("android-misc.drive.reader.font.$key")
+
+    companion object {
+        fun of(key: String?): ReaderFamily = entries.firstOrNull { it.key == key } ?: Serif
+    }
 }
 
-/** Everything the reader lays text out with, in one value: the sheet edits it, the page is drawn with it. */
-data class ReaderTypography(
-    val fontSp: Int = DEFAULT_FONT_SP,
-    val lineSpacing: Float = DEFAULT_LINE_SPACING,
-    val marginDp: Int = DEFAULT_MARGIN_DP,
-    val family: ReaderFamily = ReaderFamily.Serif,
-    val indent: Boolean = true,
-) {
+/** Everything the reader lays text out with, as the core keeps it (`prefs.reader`): the sheet changes it, the page is drawn with it. */
+data class ReaderTypography(val fontSp: Int, val lineSpacing: Float, val marginDp: Int, val family: ReaderFamily, val indent: Boolean) {
     fun style(color: Color): TextStyle = TextStyle(
         color = color, fontSize = fontSp.sp, lineHeight = (fontSp * lineSpacing).sp, fontFamily = family.family, textAlign = TextAlign.Start,
     )
 
     companion object {
-        const val DEFAULT_FONT_SP = 18
-        const val DEFAULT_LINE_SPACING = 1.7f
-        const val DEFAULT_MARGIN_DP = 22
+        /** Each setting's range (the core keeps them within it): where the sheet's steps stop. */
         const val MIN_FONT_SP = 12
         const val MAX_FONT_SP = 32
         const val MIN_LINE_SPACING = 1.2f
@@ -133,25 +128,7 @@ data class ReaderTypography(
         const val MIN_MARGIN_DP = 8
         const val MAX_MARGIN_DP = 44
 
-        /** One line, kept on this device. */
-        fun encode(v: ReaderTypography): String = listOf(v.fontSp, v.lineSpacing, v.marginDp, v.family.ordinal, if (v.indent) 1 else 0).joinToString(",")
-
-        /** Anything unreadable is the defaults. */
-        fun decode(text: String?): ReaderTypography {
-            val n = text?.split(",")?.mapNotNull { it.trim().toFloatOrNull() }?.takeIf { it.size == 5 } ?: return ReaderTypography()
-            return ReaderTypography(
-                fontSp = n[0].toInt().coerceIn(MIN_FONT_SP, MAX_FONT_SP),
-                lineSpacing = n[1].coerceIn(MIN_LINE_SPACING, MAX_LINE_SPACING),
-                marginDp = n[2].toInt().coerceIn(MIN_MARGIN_DP, MAX_MARGIN_DP),
-                family = ReaderFamily.entries[n[3].toInt().coerceIn(0, ReaderFamily.entries.size - 1)],
-                indent = n[4] != 0f,
-            )
-        }
-
-        val Saver: Saver<ReaderTypography, Any> = listSaver(
-            save = { listOf(encode(it)) },
-            restore = { decode(it[0] as String) },
-        )
+        fun of(p: ReaderPrefs) = ReaderTypography(p.size.toInt(), p.line.toFloat(), p.margin.toInt(), ReaderFamily.of(p.face), p.indent)
     }
 }
 
