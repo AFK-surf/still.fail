@@ -497,7 +497,7 @@ internal fun HostComposer(host: Host, modifier: Modifier, overContent: Boolean =
                 DraftExtras(draft, host)
                 ComposerBar(
                     draft, spec.placeholder, onPlus = spec.onPlus, onType = spec.onType, onSend = spec.onSend,
-                    hint = { if (host.hintAway) 0f else hint.value }, morph = morph, onField = { host.field = it }, onFieldText = { host.fieldText = it },
+                    hint = { if (host.hintAway) 0f else hint.value }, morph = morph, onField = { host.field = it }, onFieldText = { host.fieldText = it }, station = spec.station,
                 )
                 draft.error?.let { Text(it, fontSize = 12.sp, color = C.red, modifier = Modifier.padding(horizontal = 6.dp)) }
             }
