@@ -775,8 +775,12 @@ mod tests {
         station.pass(MS);
         let again = station.last();
         assert_ne!(again, new);
+        // Said afresh once it is up (startedAt is the wall clock's, the same millisecond as `first` on a fast machine:
+        // what was there is told apart by what is put there now, not by the time).
+        std::fs::write(station.run.join("station.json"), "before").unwrap();
         station.up(Slot::Current, "0.1.0", 7000);
-        assert_ne!(station.file("station.json"), first);
+        assert_ne!(station.file("station.json").as_deref(), Some("before"));
+        assert_eq!(station.station_json()["version"], "0.1.0");
         assert_eq!(station.serving(), again);
     }
 
