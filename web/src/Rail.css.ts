@@ -16,7 +16,7 @@ export const rail = style({
     '[data-sidebar="closed"] &': { background: vars.canvas },
     '&::before': {
       content: '""', position: "absolute", zIndex: -1, inset: 0, background: vars.sidebar, borderRadius: 0,
-      cornerShape: vars.cornerShape, transition: `inset 240ms ${vars.easeOut}, border-radius 240ms ${vars.easeOut}`,
+      cornerShape: vars.cornerShape, transition: `inset 380ms ${vars.easeOut}, border-radius 380ms ${vars.easeOut}`,
     },
     // Concentric with what is lit in it (the items' 12 px corner, 3 px in from its sides).
     '[data-sidebar="closed"] &::before': { inset: "8px 6px", borderRadius: `calc(12px * ${vars.cornerScale} + 3px)` },
@@ -30,8 +30,9 @@ export const rail = style({
  */
 export const top = style({
   flex: "none", alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "center", height: 48, marginBottom: 6,
-  // Its height follows the sidebar closing as the rounded block does (rail ::before): the places glide, not jump.
-  transition: `height 240ms ${vars.easeOut}`,
+  // Its height follows the sidebar closing as the rounded block does (rail ::before), both as long and eased as the
+// sidebar's own move (motion.ts moveState): the places glide, not jump.
+  transition: `height 380ms ${vars.easeOut}`,
   selectors: {
     "[data-desktop] &": { height: 44, WebkitAppRegion: "drag" },
     '[data-desktop="inset"]:not([data-fullscreen]) &': { height: 88, alignItems: "flex-end" },
