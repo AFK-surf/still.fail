@@ -426,7 +426,8 @@ export const panelRow = style({
   selectors: { "&:is(button):hover": { background: vars.hover }, "&:not(button)": { cursor: "default" } },
 });
 export const panelRowIcon = style({ display: "grid", placeItems: "center", width: 20, color: vars.muted, flex: "none" });
-// The words and what is at the end share the row, each cut short by its own width when both do not fit.
+// When the row is too narrow for both, what is at the end is cut short first (it shrinks a thousand times as fast), the
+// words only once it is gone.
 export const panelRowLabel = style({ flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-export const panelRowEnd = style({ display: "flex", alignItems: "center", gap: 6, minWidth: 0, color: vars.subtle, flex: "0 1 auto" });
+export const panelRowEnd = style({ display: "flex", alignItems: "center", gap: 6, minWidth: 0, color: vars.subtle, flex: "0 1000 auto" });
 export const panelFoot = style({ display: "flex", justifyContent: "flex-end", gap: 6, paddingTop: 4 });
