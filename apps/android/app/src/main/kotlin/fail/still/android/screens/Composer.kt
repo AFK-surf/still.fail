@@ -735,10 +735,10 @@ fun DraftExtras(draft: Draft, host: Host? = null) {
                     }
                 }
             } else if (f.pasted != null) Box(Modifier.sendTile(host, f.id)) {
-                PastedCard(f, f.pasted, onRemove = remove,
-                    onRetry = if (f.error != null && station != null) ({ draft.files.remove(f); pasteAsFile(app, draft, station, f.pasted.text) }) else null,
-                    onRestore = if (f.pasted.restorable && !draft.starting) ({ draft.files.remove(f); draft.text = if (draft.text.isEmpty()) f.pasted.text else "${draft.text}
-${f.pasted.text}"; draft.focus++ }) else null)
+                val pasted = f.pasted
+                PastedCard(f, pasted, onRemove = remove,
+                    onRetry = if (f.error != null && station != null) ({ draft.files.remove(f); pasteAsFile(app, draft, station, pasted.text) }) else null,
+                    onRestore = if (pasted.restorable && !draft.starting) ({ draft.files.remove(f); draft.text = if (draft.text.isEmpty()) pasted.text else "${draft.text}\n${pasted.text}"; draft.focus++ }) else null)
             } else Box(Modifier.sendTile(host, f.id)) {
                 FileCard(f.done?.name ?: f.name, f.done?.size ?: f.size, f.error ?: if (f.done == null) uploadingText(f) else null, busy = f.done == null && f.error == null, onRemove = remove, shape = InComposer)
             }
