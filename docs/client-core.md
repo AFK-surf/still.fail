@@ -87,8 +87,19 @@ lines and the choice of relay are the core's (`src/mesh.ts`).
 ## Protocol (UI ↔ core)
 
 Messages are JSON-shaped data (structured clone on the web, JSON strings
-natively). Binary values (file bytes) are base64 strings everywhere, so the
-protocol is the same on every host.
+natively). Binary values in the JSON protocol (file bytes) are base64 strings.
+
+The composer's `composer.add` hands selected files to the core, which owns
+their upload and reports progress through the `composer` topic. On the web,
+the worker receives a structured-cloned Blob. Electron cannot carry that DOM
+object into its Node utility process: its channel adapter (`src/hosts/file-port.ts`)
+keeps the Blob in the page and sends a descriptor, restored to a `FileSource`
+before the core reads the call. The core pulls at most one 4 MB part at a time
+per upload; the adapter carries those bytes as ArrayBuffers on the same port.
+It releases the page's file on success or removal, keeps failed uploads' sources
+for the outbox's retry, and fails outstanding reads when the port closes.
+Only local file IO lives in this adapter: draft state,
+station requests, progress, errors and sending stay in the shared core.
 
 UI → core:
 

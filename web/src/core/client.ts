@@ -1,4 +1,5 @@
 import { UNTRACKED_OPERATIONS } from "./operations.ts";
+import { PageFiles } from "../../../client/core-ts/src/hosts/file-port.ts";
 // The UI's side of the core (docs/client-core.md): one channel to the worker
 // that runs it, calls with request ids, and subscriptions that survive the
 // worker being replaced. Each tab has a dedicated Worker; one of them runs the
@@ -634,6 +635,7 @@ export function desktopOpener(desktop: StillFailDesktop): Opener {
   return (onMessage, onFail) => {
     const id = nextPort++;
     let port: MessagePort | null = null;
+    const files = new PageFiles((message) => port?.postMessage(message));
     // What the client posts before the port is here, in order.
     const early: unknown[] = [];
     const arrive = (event: MessageEvent) => {
@@ -643,7 +645,9 @@ export function desktopOpener(desktop: StillFailDesktop): Opener {
         onFail(data.reason ?? t("web-main.core.exited"));
       } else if (data?.stillfailCore === "port" && data.id === id && !port && event.ports[0]) {
         port = event.ports[0];
-        port.onmessage = (message) => onMessage(JSON.parse(message.data as string));
+        port.onmessage = (message) => {
+          if (!files.receive(message.data)) onMessage(JSON.parse(message.data as string));
+        };
         for (const message of early.splice(0)) port.postMessage(message);
       }
     };
@@ -651,6 +655,7 @@ export function desktopOpener(desktop: StillFailDesktop): Opener {
     desktop.openCore(id);
     return {
       post: (message) => {
+        message = files.prepare(message);
         if (port) {
           port.postMessage(message);
         } else {
@@ -660,6 +665,7 @@ export function desktopOpener(desktop: StillFailDesktop): Opener {
         }
       },
       close: () => {
+        files.close();
         removeEventListener("message", arrive);
         port?.close();
       },

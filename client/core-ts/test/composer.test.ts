@@ -5,10 +5,74 @@ import { test } from "node:test";
 import { Deferred, Effect } from "effect";
 import { dbName, SOON_MS } from "../src/data.ts";
 import { apply, call, subscribe, v } from "./helpers.ts";
+import { CoreFiles, PageFiles } from "../src/hosts/file-port.ts";
 import { CoreError } from "../src/error.ts";
 import { stationReplies, started } from "./station-fixture.ts";
 
 type J = any;
+
+test("desktop_upload_retry_keeps_its_source_after_a_station_failure", async () => {
+  const t = await setup();
+  const released: number[] = [];
+  const received: number[][] = [];
+  const page = new PageFiles((m) => bridge.receive(structuredClone(m)));
+  const bridge = new CoreFiles((m) => {
+    if ((m as J).filePort === "release") released.push((m as J).file);
+    page.receive(structuredClone(m));
+  });
+  (t.core.inner.stations.requests as J).uploadPart = (_addr: unknown, q: J, bytes: Uint8Array) => {
+    received.push([...bytes]);
+    return received.length === 1
+      ? Effect.fail(new CoreError("upload", "try again"))
+      : Effect.succeed({ have: bytes.length, file: { name: q.name, path: "/u/retried.png", size: bytes.length } });
+  };
+  await t.watch(1, "ws/st:k");
+  const params = { key: "ws/st:k", station: "ws/st", files: [{ id: "f1", name: "image.png", size: 3, blob: new Blob([new Uint8Array([1, 2, 3])]) }] };
+  t.core.receiveRaw(t.ui, bridge.prepare(structuredClone(page.prepare({ id: 101, call: "composer.add", params }))));
+  await t.settle();
+  assert.equal(v(t.values, 1).files[0].error, "try again");
+  assert.deepEqual(released, []);
+  const retry = Effect.runPromise(t.core.inner.composers.uploaded("ws/st", [{ id: "f1", name: "image.png" }], true));
+  await t.settle();
+  assert.equal((await retry)[0].path, "/u/retried.png");
+  assert.deepEqual(received, [[1, 2, 3], [1, 2, 3]]);
+  assert.deepEqual(released, [1]);
+  bridge.close(); t.core.close();
+});
+
+test("desktop_files_reach_upload_and_release_on_success_or_removal_after_failure", async () => {
+  const t = await setup();
+  const received: number[][] = [];
+  const released: number[] = [];
+  const page = new PageFiles((m) => bridge.receive(structuredClone(m)));
+  const bridge = new CoreFiles((m) => {
+    if ((m as J).filePort === "release") released.push((m as J).file);
+    page.receive(structuredClone(m));
+  });
+  (t.core.inner.stations.requests as J).uploadPart = (_addr: unknown, q: J, bytes: Uint8Array) => {
+    received.push([...bytes]);
+    return Effect.succeed({ have: bytes.length, file: { name: q.name, path: "/u/image.png", size: bytes.length } });
+  };
+  await t.watch(1, "ws/st:k");
+  const send = (id: number) => {
+    const message = { id, call: "composer.add", params: { key: "ws/st:k", station: "ws/st", files: [{ id: `f${id}`, name: "image.png", size: 3, blob: new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" }) }] } };
+    t.core.receiveRaw(t.ui, bridge.prepare(structuredClone(page.prepare(message))));
+  };
+  send(101);
+  await t.settle();
+  assert.deepEqual(received, [[1, 2, 3]]);
+  assert.equal(v(t.values, 1).files[0].done.path, "/u/image.png");
+  assert.equal(v(t.values, 1).uploading, false);
+  send(102);
+  page.close();
+  await t.settle();
+  assert.match(v(t.values, 1).files[1].error, /no longer available/);
+  assert.equal(v(t.values, 1).uploading, false);
+  assert.deepEqual(released, [1]);
+  await t.ask("remove", { key: "ws/st:k", id: "f102" });
+  assert.deepEqual(released, [1, 2]);
+  bridge.close(); t.core.close();
+});
 
 async function setup() {
   const s = await started();

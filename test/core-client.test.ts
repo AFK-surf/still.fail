@@ -3,6 +3,41 @@ import { test } from "node:test";
 import { CoreClient, CoreError, WAKE_ANSWER_MS, desktopOpener, type Channel, type Opener } from "../web/src/core/client.ts";
 import { migrateLegacy, migratePrefs } from "../web/src/core/migrate.ts";
 import { carryOver } from "../web/src/renamed.ts";
+import { CoreFiles } from "../client/core-ts/src/hosts/file-port.ts";
+import { FileSource } from "../client/core-ts/src/file-source.ts";
+
+test("desktop: a file queued before its port opens is read through the channel without a DOM Blob", async () => {
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const before = ["window", "addEventListener", "removeEventListener"].map((key) => [key, globals[key]] as const);
+  const page = new EventTarget();
+  Object.assign(globalThis, { window: page, addEventListener: page.addEventListener.bind(page), removeEventListener: page.removeEventListener.bind(page) });
+  let asked = 0;
+  const client = new CoreClient(desktopOpener({ openCore: (id) => { asked = id; }, previewHost: async () => null, inWorkspace: () => {} }));
+  const ports = new MessageChannel();
+  const files = new CoreFiles((m) => ports.port2.postMessage(m));
+  ports.port2.onmessage = async ({ data }) => {
+    if (files.receive(data)) return;
+    try {
+      assert.equal(data.params.files[0].blob instanceof Blob, false);
+      const restored = files.prepare(data) as { params: { files: { blob: FileSource }[] } };
+      const blob = restored.params.files[0]!.blob;
+      assert.ok(blob instanceof FileSource);
+      const bytes = new Uint8Array(await blob.slice(0, blob.size).arrayBuffer());
+      blob.close();
+      ports.port2.postMessage(JSON.stringify({ id: data.id, ok: [...bytes] }));
+    } catch (error) {
+      ports.port2.postMessage(JSON.stringify({ id: data.id, error: { code: "test", message: String(error) } }));
+    }
+  };
+  const uploaded = client.call("composer.add", { key: "ws/st:k", station: "ws/st", files: [{ id: "f1", name: "paste.png", size: 3, blob: new File([new Uint8Array([0, 127, 255])], "paste.png", { type: "image/png" }) }] });
+  page.dispatchEvent(Object.assign(new Event("message"), { data: { stillfailCore: "port", id: asked }, source: page, ports: [ports.port1] }));
+  try { assert.deepEqual(await uploaded, [0, 127, 255]); }
+  finally {
+    delete globals.window;
+    client.close(); files.close(); ports.port2.close();
+    for (const [key, value] of before) { if (value === undefined) delete globals[key]; else globals[key] = value; }
+  }
+});
 
 /** A worker stand-in: records what the client posts and answers on demand. */
 class FakeWorkers {
