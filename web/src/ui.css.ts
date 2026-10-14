@@ -6,6 +6,7 @@ import { appearKeyframes, dialogInKeyframes, fadeKeyframes, pulseKeyframes, spin
 import { gate, muted } from "./styles/shell.css.ts";
 import { pageBar } from "./styles/sidebar.css.ts";
 import { markdown } from "./styles/conversation.css.ts";
+import { card, listRow } from "./styles/pages.css.ts";
 
 export const firstOneTitle = style({
   textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere", margin: "12px 0 0", fontSize: vars.textTitle,
@@ -364,6 +365,10 @@ globalStyle(`${select} > span:first-child`, { minWidth: "0", overflow: "hidden",
 globalStyle(`${command} code`, { flex: "1", fontSize: vars.textMeta, overflowX: "auto", whiteSpace: "nowrap" });
 globalStyle(`${dialogAlert} ${dialogLead}`, { margin: "0" });
 globalStyle(`${dialogHead} > button`, { borderRadius: "999px", cornerShape: "round" });
+/** A list's rows in a dialog reach 12 past its words (pages.css.ts listRow): their hover follows the dialog's curve too. */
+globalStyle(`${dialogBody} ${listRow}`, { borderRadius: `calc(${DIALOG_PAD + 18 - 12}px * ${vars.cornerScale})` });
+/** Cards, choices and command lines in a dialog sit at its padding: their corners are the dialog's, less it. */
+globalStyle(`${dialogBody} :is(${card}, ${choice}, ${command})`, { borderRadius: DIALOG_INNER });
 /** Here rather than with its class: it comes after .empty p, and wins over it. */
 globalStyle(`${markdown} p`, { margin: "0 0 8px" });
 /** Here rather than with its class: it comes after .empty h2, and wins over it. */

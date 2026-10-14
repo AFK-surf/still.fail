@@ -188,6 +188,25 @@ globalStyle("button, input, select, textarea", { font: "inherit", color: "inheri
 // The browser pads a button 1px 6px: an icon button narrower than its icon plus that pushes the icon off center.
 globalStyle("button", { padding: "0" });
 globalStyle("a", { color: "inherit", textDecoration: "none" });
+/**
+ * A checkbox as the app draws its controls, not the system's blue one: a small soft square with a line round it;
+ * ticked, the primary colour with a check in the colour on it (a switch's on, ui.tsx Switch).
+ */
+globalStyle('input[type="checkbox"]', {
+  appearance: "none", display: "inline-grid", placeItems: "center", flex: "none", width: "18px", height: "18px", margin: "0",
+  border: `1px solid ${vars.lineStrong}`, borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: vars.canvas, cursor: "pointer", transition: `background ${vars.dur} ${vars.easeOut}, border-color ${vars.dur} ${vars.easeOut}`,
+});
+globalStyle('input[type="checkbox"]:hover:not(:disabled)', { borderColor: vars.fieldHover });
+globalStyle('input[type="checkbox"]:checked', { background: vars.primary, borderColor: vars.primary });
+globalStyle('input[type="checkbox"]::before', {
+  content: '""', width: "12px", height: "12px", background: vars.onPrimary, transform: "scale(0)",
+  transition: `transform ${vars.dur} ${vars.easeOut}`,
+  mask: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6.2l2.4 2.4 4.6-5'/%3E%3C/svg%3E") center / contain no-repeat`,
+});
+globalStyle('input[type="checkbox"]:checked::before', { transform: "scale(1)" });
+globalStyle('input[type="checkbox"]:disabled', { opacity: ".45", cursor: "default" });
+globalStyle('input[type="checkbox"]:focus-visible', { outline: `2px solid ${vars.fieldFocus}`, outlineOffset: "2px" });
 globalStyle("code, pre", { fontFamily: vars.fontMono });
 globalStyle("[hidden]", { display: "none !important" });
 globalStyle("*, *::before, *::after", {
