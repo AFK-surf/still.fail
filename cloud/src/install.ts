@@ -27,8 +27,14 @@ import { tr, type Lang } from "./i18n.ts";
  * test channel's (beta/, scripts/release.sh --beta). STILLFAIL_CHANNEL where it runs says otherwise.
  */
 export function installScript(origin: string, channel: "stable" | "beta" = "stable", lang: Lang = "zh"): string {
-  return script((key, args) => tr(lang, key, args)).replaceAll("__ORIGIN__", origin).replaceAll("__CHANNEL__", channel);
+  return script((key, args) => tr(lang, key, args)).replaceAll("__ORIGIN__", origin).replaceAll("__CHANNEL__", channel).replaceAll("__LANG__", lang);
 }
+
+/**
+ * The installer a release carries (bin/install.<lang>.sh, scripts/installers.ts), for the station that runs it to update
+ * itself (station/src/updates/updates.ts): this one, its cloud the one the station names (STILLFAIL_ORIGIN).
+ */
+export const bundledInstallScript = (lang: Lang) => installScript("$STILLFAIL_ORIGIN", "stable", lang).replace('origin="$STILLFAIL_ORIGIN"', 'origin="${STILLFAIL_ORIGIN:?}"');
 
 /**
  * A release's file, as the bucket keeps it: stillfail-station-<platform>.tar.gz; ember-station-<platform>.tar.gz is the
@@ -165,8 +171,32 @@ case "$channel" in
   *) channel=stable; release="stillfail-station-$platform.tar.gz"; echo "${say("cloud.install.download")}" ;;
 esac
 step download
-curl -fL --progress-bar "$origin/releases/$release" -o "$tmp/stillfail.tar.gz"
+sha256_of() { { shasum -a 256 "$1" 2>/dev/null || sha256sum "$1"; } | cut -d' ' -f1; }
+# Handed a release already downloaded (by the installer of the release before, below): taken, its directory removed.
+case "\${STILLFAIL_ARCHIVE:-}" in
+  */stillfail-handed.*/stillfail.tar.gz)
+    mv "$STILLFAIL_ARCHIVE" "$tmp/stillfail.tar.gz"
+    rm -rf "$(dirname "$STILLFAIL_ARCHIVE")" ;;
+  *) curl -fL --progress-bar "$origin/releases/$release" -o "$tmp/stillfail.tar.gz" ;;
+esac
+# A station updating itself says what the release must hash to, as its signed words say (station/src/updates/signed.ts):
+# anything else is not installed.
+if [ -n "\${STILLFAIL_RELEASE_SHA256:-}" ] && [ "$(sha256_of "$tmp/stillfail.tar.gz")" != "$STILLFAIL_RELEASE_SHA256" ]; then
+  echo "${say("cloud.install.release.mismatch")}" >&2
+  exit 1
+fi
 tar -xzf "$tmp/stillfail.tar.gz" -C "$tmp"
+# The release checked so is installed by its own installer (bin/install.<lang>.sh in it, scripts/installers.ts): what
+# it does from here (its service, its handover) is the new release's, as the cloud's newest installer did it before.
+lang="\${STILLFAIL_INSTALL_LANG:-__LANG__}"
+if [ -n "\${STILLFAIL_RELEASE_SHA256:-}" ] && [ -z "\${STILLFAIL_INSTALLER_HANDED:-}" ] && [ -f "$tmp/stillfail/bin/install.$lang.sh" ]; then
+  keep=$(mktemp -d "\${TMPDIR:-/tmp}/stillfail-handed.XXXXXX")
+  mv "$tmp/stillfail.tar.gz" "$keep/stillfail.tar.gz"
+  cp "$tmp/stillfail/bin/install.$lang.sh" "$keep/install.sh"
+  rm -rf "$tmp"
+  trap - EXIT
+  STILLFAIL_ARCHIVE="$keep/stillfail.tar.gz" STILLFAIL_INSTALLER_HANDED=1 exec sh "$keep/install.sh" "$@"
+fi
 # Which channel the release came from, for the station (the Rust station's updates.rs: where it goes back from the beta).
 printf '%s\n' "$channel" > "$tmp/stillfail/CHANNEL"
 
@@ -182,8 +212,22 @@ if [ -f "$tmp/stillfail/NODE_VERSION" ]; then
     rm -rf "$node_dir.part"
     mkdir -p "$node_dir.part/bin"
     own=$(command -v node 2>/dev/null || true)
-    if [ -n "$own" ] && [ "$("$own" -v 2>/dev/null)" = "v$node_version" ]; then
+    # With the signed hash of the Node binary (STILLFAIL_NODE_SHA256), the machine's own only when it is that very one.
+    if [ -n "$own" ] && [ "$("$own" -v 2>/dev/null)" = "v$node_version" ] && { [ -z "\${STILLFAIL_NODE_SHA256:-}" ] || [ "$(sha256_of "$own")" = "$STILLFAIL_NODE_SHA256" ]; }; then
       cp "$own" "$node_dir.part/bin/node"
+    elif [ -n "\${STILLFAIL_NODE_SHA256:-}" ]; then
+      node_file="node-v$node_version-$platform.tar.gz"
+      echo "${say("cloud.install.node.download", { version: "${node_version}" })}"
+      if ! curl -fL --progress-bar "$origin/releases/node/$node_file" -o "$tmp/$node_file"; then
+        echo "${say("cloud.install.node.failed", { version: "${node_version}", origin: "${origin}" })}" >&2
+        exit 1
+      fi
+      tar -xzf "$tmp/$node_file" -C "$node_dir.part"
+      if [ "$(sha256_of "$node_dir.part/bin/node")" != "$STILLFAIL_NODE_SHA256" ]; then
+        rm -rf "$node_dir.part"
+        echo "${say("cloud.install.node.mismatch", { version: "${node_version}" })}" >&2
+        exit 1
+      fi
     else
       node_file="node-v$node_version-$platform.tar.gz"
       echo "${say("cloud.install.node.download", { version: "${node_version}" })}"
@@ -192,7 +236,7 @@ if [ -f "$tmp/stillfail/NODE_VERSION" ]; then
         exit 1
       fi
       want=$(cut -d' ' -f1 < "$tmp/$node_file.sha256")
-      got=$({ shasum -a 256 "$tmp/$node_file" 2>/dev/null || sha256sum "$tmp/$node_file"; } | cut -d' ' -f1)
+      got=$(sha256_of "$tmp/$node_file")
       if [ -z "$want" ] || [ "$want" != "$got" ]; then
         echo "${say("cloud.install.node.mismatch", { version: "${node_version}" })}" >&2
         exit 1
