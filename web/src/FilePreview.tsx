@@ -5,6 +5,8 @@
 import { Dialog as RDialog } from "radix-ui";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { BIG_FILE, useApi, type Api, type Attachment, type FileProgress } from "./api.ts";
+import { useTopic } from "./core/react.ts";
+import type { ImageNear } from "./core/shapes.ts";
 import { Check, ChevronLeft, ChevronRight, Close, Copy, Download, Minus, Plus } from "./icons.tsx";
 import { Prose } from "./Prose.tsx";
 import { isFragment, vizDocument } from "./Viz.tsx";
@@ -250,16 +252,10 @@ export function useNear(ref: RefObject<HTMLElement | null>, watch: boolean): boo
 export interface Shown { sessionKey: string; file: Attachment }
 
 /**
- * The images of the chat a preview is opened from, in the order it shows them (read when needed, so the messages
- * need not be drawn again as it grows): an image opened steps to the one before or after (arrows, ← →, a swipe).
+ * The chat a preview is opened from (as its `chat` topic names it): an image opened there steps to the one before or
+ * after (arrows, ← →, a swipe), which the core tells for the one open (`imageNear`), not the chat's every image.
  */
-export const Gallery = createContext<(() => Shown[]) | null>(null);
-
-/** A chat's images for its Gallery, as the core lays them out in the order its page shows them (`ChatView.images`). */
-export function chatImages(images: Attachment[] | undefined): Shown[] {
-  // Each through the session that keeps it (the core says which, `owner`).
-  return (images ?? []).flatMap((file) => (file.owner ? [{ sessionKey: file.owner, file }] : []));
-}
+export const Gallery = createContext<{ thread: number } | { session: string } | null>(null);
 
 /** A file already on this device (one in the draft, not sent yet): shown as it is, not fetched from the station. */
 export interface LocalFile { blob: Blob; url: string }
@@ -294,13 +290,14 @@ export function FileLink({ sessionKey, file, children }: { sessionKey: string | 
 function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closing: RefObject<((done: () => void) => void) | null>; sessionKey: string; file: Attachment; local?: LocalFile | undefined }) {
   const [{ sessionKey, file }, setShown] = useState<Shown>(opened);
   const gallery = useContext(Gallery);
-  // One in the draft is not among the chat's: it shows alone.
-  const images = isImage(file.name) && !local ? gallery?.() ?? [] : [];
-  const at = images.findIndex((i) => i.file.path === file.path);
-  const before = at > 0 ? images[at - 1] : undefined;
-  const after = at >= 0 ? images[at + 1] : undefined;
   const api = useApi();
   const station = useStation();
+  // One in the draft is not among the chat's: it shows alone.
+  const beside = useTopic<ImageNear>(isImage(file.name) && !local && gallery ? { topic: "imageNear", station: station.address, ...gallery, path: file.path } : null).value;
+  // Each through the session that keeps it (the core says which, `owner`).
+  const shown = (f: Attachment | undefined): Shown | undefined => (f?.owner ? { sessionKey: f.owner, file: f } : undefined);
+  const before = shown(beside?.before);
+  const after = shown(beside?.after);
   // The one shown and those beside it move as one strip (GAP apart): a step slides it out to one side and the next in
   // from the other, a swipe carries it under the finger first. The one going is a copy: the real one is the next already.
   const slide = useRef<HTMLDivElement>(null);

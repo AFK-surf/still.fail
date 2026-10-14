@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.sp
 import fail.still.android.AppState
 import fail.still.android.LocalApp
 import fail.still.android.data.Attachment
+import fail.still.android.data.ChatOf
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
@@ -286,8 +287,6 @@ internal object DriveKey {
 /** A file and the session that keeps it. */
 class Shown(val key: String, val file: Attachment)
 
-/** The chat's images in the order it shows them (the core's `images`): an image opened steps to the one before or after. */
-internal fun Here.images(): List<Shown> = view.images.orEmpty().mapNotNull { f -> f.owner?.let { Shown(it, f) } }
 
 /** A message's files, side by side and wrapping (6dp apart); `owner` says which session of the chat keeps each. */
 @Composable
@@ -300,7 +299,7 @@ internal fun Files(ctx: Here, list: List<Attachment>, mine: Boolean = false) {
     }
     val shown = open
     val key = shown?.let { ctx.owner(it) }
-    if (shown != null && key != null) FilePreview(ctx.station, key, shown, gallery = { ctx.images() }) { open = null }
+    if (shown != null && key != null) FilePreview(ctx.station, key, shown, gallery = ctx.of) { open = null }
 }
 
 /** Its children in rows as wide as it may be, `gap` apart, each row from the start (or the end). */
@@ -331,10 +330,10 @@ private fun Wrap(gap: Dp, end: Boolean, content: @Composable () -> Unit) {
 
 /**
  * An image of the chat on its own (placed in an agent's text, Prose.kt): in the box `modifier` gives it (else its own
- * proportions); a tap opens it in the preview, stepping through `gallery`.
+ * proportions); a tap opens it in the preview, stepping through the images of the chat `gallery` names.
  */
 @Composable
-internal fun StationImage(station: String, key: String, file: Attachment, modifier: Modifier? = null, gallery: () -> List<Shown> = { emptyList() }) {
+internal fun StationImage(station: String, key: String, file: Attachment, modifier: Modifier? = null, gallery: ChatOf? = null) {
     var open by remember { mutableStateOf(false) }
     ChatImage(station, key, file, modifier) { open = true }
     if (open) FilePreview(station, key, file, gallery) { open = false }

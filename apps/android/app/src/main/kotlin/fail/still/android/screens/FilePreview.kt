@@ -123,6 +123,10 @@ import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import fail.still.android.LocalApp
 import fail.still.android.data.Attachment
+import fail.still.android.data.ChatOf
+import fail.still.android.data.ImageNear
+import fail.still.android.data.Topics
+import fail.still.android.data.rememberTopic
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
@@ -171,11 +175,11 @@ private sealed interface FileLoad {
 }
 
 /**
- * `file` (kept by the session `key`) over the whole screen; `gallery`: the chat's images, for an image to step to the
- * one before or after. Back (or ×) closes it.
+ * `file` (kept by the session `key`) over the whole screen; `gallery`: the chat it is opened from, for an image to step
+ * to the one before or after (the core tells those beside the one shown, `imageNear`). Back (or ×) closes it.
  */
 @Composable
-fun FilePreview(station: String, key: String, file: Attachment, gallery: () -> List<Shown> = { emptyList() }, canDraft: Boolean = true, onClose: () -> Unit) {
+fun FilePreview(station: String, key: String, file: Attachment, gallery: ChatOf? = null, canDraft: Boolean = true, onClose: () -> Unit) {
     // Drawn by ViewerHost, a layer of the app's own window over the pages (not a dialog's window of its own): it can grow
     // out of the thumbnail in the chat and shrink back into it. Here it only says it is open, while it is.
     val open = remember { ViewerOpen(station, Shown(key, file), gallery, canDraft) }
@@ -195,7 +199,7 @@ private const val CLOSE_MS = 280
 private const val FADE_MS = 140
 
 /** `canDraft`: marks on it can go into its chat's draft (not a picture that is in a draft already). */
-internal class ViewerOpen(val station: String, val opened: Shown, val gallery: () -> List<Shown>, val canDraft: Boolean = true) {
+internal class ViewerOpen(val station: String, val opened: Shown, val gallery: ChatOf?, val canDraft: Boolean = true) {
     var onClose: () -> Unit = {}
 }
 
@@ -382,7 +386,7 @@ private fun ViewerLayer(open: ViewerOpen) {
 private fun known(s: Shown) = kindOf(s.file.name).kind.let { it == PreviewKind.Image || it == PreviewKind.Video }
 
 @Composable
-private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, onClose: () -> Unit, flight: ViewerFlight, closing: Boolean, canDraft: Boolean, onShown: (Shown) -> Unit) {
+private fun Viewer(station: String, opened: Shown, gallery: ChatOf?, onClose: () -> Unit, flight: ViewerFlight, closing: Boolean, canDraft: Boolean, onShown: (Shown) -> Unit) {
     val app = LocalApp.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -392,10 +396,10 @@ private fun Viewer(station: String, opened: Shown, gallery: () -> List<Shown>, o
     val key = shown.key
     LaunchedEffect(shown) { onShown(shown) }
     val known = remember(file.path) { kindOf(file.name) }
-    val images = remember(file.path) { if (known.kind == PreviewKind.Image) gallery() else emptyList() }
-    val at = images.indexOfFirst { it.file.path == file.path }
-    val before = if (at > 0) images[at - 1] else null
-    val after = if (at >= 0) images.getOrNull(at + 1) else null
+    val beside by rememberTopic<ImageNear>(app.core, if (known.kind == PreviewKind.Image && gallery != null) Topics.imageNear(station, gallery, file.path) else null)
+    // Each through the session that keeps it (the core says which, `owner`).
+    val before = beside.value?.before?.let { f -> f.owner?.let { Shown(it, f) } }
+    val after = beside.value?.after?.let { f -> f.owner?.let { Shown(it, f) } }
     val fullId = FileData.id(station, key, file, thumb = false)
     fun keptLoad() = FileData.kept(fullId)?.let { FileLoad.Ready(it) } ?: FileLoad.Loading(null)
     // By the file it is of: stepped to another, what came of the one before is not taken for it (not even for a frame).

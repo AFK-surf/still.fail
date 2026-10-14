@@ -40,6 +40,7 @@ import fail.still.android.Screen
 import fail.still.android.Updates
 import fail.still.android.data.Attachment
 import fail.still.android.data.ChatOf
+import fail.still.android.data.ImageNear
 import fail.still.android.data.Topics
 import fail.still.android.screens.StationImage
 import fail.still.android.screens.StationFile
@@ -321,14 +322,15 @@ class OverMotionTest {
         prefs.edit().clear().putString("theme", "light").commit()
         rule.runOnUiThread { context.enableEdgeToEdge() }
         val app = AppState(h.fake.core, prefs, "http://127.0.0.1:9", Updates(context, "http://127.0.0.1:9", h.fake.core))
-        val files = pictures.map { (name, bytes) -> Attachment(name = name, path = "ws/c-1/$name", size = bytes.size.toLong(), width = 800, height = 600) }
-        val gallery = files.map { fail.still.android.screens.Shown("ember:c-1", it) }
+        val files = pictures.map { (name, bytes) -> Attachment(name = name, path = "ws/c-1/$name", size = bytes.size.toLong(), width = 800, height = 600, owner = "ember:c-1") }
+        val of = ChatOf.Thread(Fixtures.THREAD)
+        besides(h, of, files)
         rule.setContent {
             StillFailTheme(false) {
                 CompositionLocalProvider(LocalApp provides app, LocalUi provides app) {
                     Box(Modifier.fillMaxSize().background(C.bg)) {
                         Column(Modifier.padding(start = 16.dp, top = 360.dp).width(260.dp)) {
-                            StationImage(Fixtures.STATION, "ember:c-1", files[0], gallery = { gallery })
+                            StationImage(Fixtures.STATION, "ember:c-1", files[0], gallery = of)
                         }
                         ViewerHost()
                     }
@@ -370,7 +372,7 @@ class OverMotionTest {
 
     /**
      * Images an agent's words place (`![](a.png)`), the first opened: a swipe steps to the next, through the chat's
-     * images as the core lays them out (`ChatView.images`). It showed the one alone, stepping nowhere.
+     * images as the core tells those beside the one open (`imageNear`). It showed the one alone, stepping nowhere.
      */
     @Test
     fun viewerSwipesPlacedImages() {
@@ -390,8 +392,9 @@ class OverMotionTest {
         prefs.edit().clear().putString("theme", "light").commit()
         val app = AppState(h.fake.core, prefs, "http://127.0.0.1:9", Updates(context, "http://127.0.0.1:9", h.fake.core))
         val files = pictures.map { (name, bytes) -> Attachment(name = name, path = "ws/c-1/$name", size = bytes.size.toLong(), width = 800, height = 600, owner = "ember:c-1") }
-        val view = Fixtures.chat(emptyList()).copy(images = files)
-        val ctx = fail.still.android.screens.Here(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD), view, emptyList(), "ember:c-1")
+        val of = ChatOf.Thread(Fixtures.THREAD)
+        besides(h, of, files)
+        val ctx = fail.still.android.screens.Here(Fixtures.STATION, of, Fixtures.chat(emptyList()), emptyList(), "ember:c-1")
         rule.setContent {
             StillFailTheme(false) {
                 CompositionLocalProvider(LocalApp provides app, LocalUi provides app) {
@@ -422,6 +425,11 @@ class OverMotionTest {
         rule.onRoot().performTouchInput { swipe(Offset(w * 0.8f, y), Offset(w * 0.2f, y), 200) }
         h.settle(1500)
         rule.onNodeWithText("c.png").assertExists()
+    }
+
+    /** What the core tells of each of `files` open in the preview: the ones beside it, in their order. */
+    private fun besides(h: Harness, of: ChatOf, files: List<Attachment>) = files.forEachIndexed { i, f ->
+        h.fake.put(Topics.imageNear(Fixtures.STATION, of, f.path), ImageNear(before = files.getOrNull(i - 1), after = files.getOrNull(i + 1)))
     }
 
     /** A short clip (red to blue, a frame's number on each), encoded here: 30 frames at about 30 fps. */

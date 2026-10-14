@@ -21,7 +21,7 @@ holdLanguage();
 type J = any;
 const DAY_MS = 86_400_000;
 
-const VIEWS = new Set(["chats", "chatSearch", "stations", "connects", "chat", "history", "archive", "workspaceMarks", "decisions", "chatJobs", "longJobs"]);
+const VIEWS = new Set(["chats", "chatSearch", "stations", "connects", "chat", "history", "archive", "workspaceMarks", "decisions", "chatJobs", "imageNear", "longJobs"]);
 
 class Router implements Source {
   views!: Views;
@@ -1475,7 +1475,7 @@ test("a_chats_page_is_told_by_each_message_whose_its_files_are_and_where_archivi
   assert.deepEqual(v.messages.map((m: J) => m.archive ?? false), [false, false, true]);
 });
 
-test("a_chats_page_is_told_which_files_its_agents_words_place_and_its_images_in_the_order_shown", async () => {
+test("a_chats_page_is_told_which_files_its_agents_words_place_and_an_open_image_the_ones_beside_it", async () => {
   const t = setup();
   const u = ui();
   t.subscribe(1, chatTopic("ws/a", 7));
@@ -1492,7 +1492,20 @@ test("a_chats_page_is_told_which_files_its_agents_words_place_and_its_images_in_
   await t.read(u, 1);
   const v = u.value;
   assert.deepEqual(v.messages.map((m: J) => m.placed ?? null), [null, ["c.png", "b.png"]]);
-  assert.deepEqual(v.images.map((f: J) => [f.name, f.owner]), [["a.png", "k"], ["c.png", "k"], ["b.png", "k"], ["d.png", "k"]]);
+  // The page is not told every image; the one open in the preview, those beside it as the page shows them.
+  assert.equal(v.images, undefined);
+  const shown = async (name: string, id: number) => {
+    const n = ui();
+    t.subscribe(id, { topic: "imageNear", station: "ws/a", thread: 7, session: null, path: `ws/k/${name}` });
+    await t.read(n, id);
+    return [n.value.before ? [n.value.before.name, n.value.before.owner] : null, n.value.after ? [n.value.after.name, n.value.after.owner] : null];
+  };
+  assert.deepEqual(await shown("a.png", 2), [null, ["c.png", "k"]]);
+  assert.deepEqual(await shown("c.png", 3), [["a.png", "k"], ["b.png", "k"]]);
+  assert.deepEqual(await shown("b.png", 4), [["c.png", "k"], ["d.png", "k"]]);
+  assert.deepEqual(await shown("d.png", 5), [["b.png", "k"], null]);
+  // One not among them (gone meanwhile): none beside it.
+  assert.deepEqual(await shown("x.png", 6), [null, null]);
 });
 
 test("an_agent_only_in_slack_shows_what_was_said_there_on_its_page", async () => {

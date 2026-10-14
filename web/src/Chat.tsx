@@ -19,7 +19,7 @@ import { chatPage } from "./chatPage.ts";
 import { Prose, withBareLinks } from "./Prose.tsx";
 import { placeFiles } from "../../client/core-ts/src/placed.ts";
 import { shortcutOf, useKeymap, usePageKeysAvailable, useShortcut } from "./keymap.ts";
-import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
+import { FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
 import { imageBox } from "./imageBox.ts";
 import { thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
@@ -99,10 +99,10 @@ export const ChatPanel = memo(function ChatPanel({ session, draftKey, made }: {
   made?: string | undefined;
 }) {
   const chat = useChat(useStation().address, { session }).value;
-  return chat ? <ChatShown chat={chat} draftKey={draftKey} made={made} /> : null;
+  return chat ? <ChatShown chat={chat} session={session} draftKey={draftKey} made={made} /> : null;
 });
 
-function ChatShown({ chat, draftKey, made }: { chat: ChatView; draftKey: string; made: string | undefined }) {
+function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session: string; draftKey: string; made: string | undefined }) {
   const station = useStation();
   const list = useRef<HTMLDivElement>(null);
   const composerHeight = useComposerHeight();
@@ -114,11 +114,8 @@ function ChatShown({ chat, draftKey, made }: { chat: ChatView; draftKey: string;
   const rows = useMessageList(list, chat, `${station.address}:${chat.thread?.id ?? chat.agents[0]?.session.key ?? ""}`, lives, 28);
   // Files are kept in a session's workspace: what is sent here goes to the first agent's.
   const keeper = chat.agents[0]?.session.key ?? null;
-  // The images a preview steps through: the same function (the context's value), the latest messages behind it.
-  const images = () => chatImages(chat.images);
-  const latest = useRef(images);
-  latest.current = images;
-  const [gallery] = useState(() => () => latest.current());
+  // An image opened here steps through the chat's (the core tells those beside it, as this page's chat names it).
+  const gallery = useMemo(() => ({ session }), [session]);
   useShortcut("chat.latest", rows.toEnd);
   // Its own find, in place of the browser's (ChatFind.tsx).
   const find = useChatFind(list, rows.virtual, id, rows.messages, composerHeight);

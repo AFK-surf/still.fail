@@ -231,6 +231,12 @@ object Topics {
         put("topic", "chatJobs"); put("station", station)
         when (of) { is ChatOf.Thread -> put("thread", of.id); is ChatOf.Session -> put("session", of.key) }
     }
+    /** An image of a chat open in the preview: the ones beside it, as the chat's page shows them (the same `of` as its `chat`). */
+    fun imageNear(station: String, of: ChatOf, path: String) = buildJsonObject {
+        put("topic", "imageNear"); put("station", station)
+        when (of) { is ChatOf.Thread -> put("thread", of.id); is ChatOf.Session -> put("session", of.key) }
+        put("path", path)
+    }
     /** The services and jobs left up a long while on the scope's stations that are up (OpenJobs.kt). */
     fun longJobs(scope: String) = buildJsonObject { put("topic", "longJobs"); put("scope", scope) }
     /** What the agents of a scope's stations spent over its last `days` (7 or 30): client/core-ts/src/views/usage.ts. */

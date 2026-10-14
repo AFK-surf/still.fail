@@ -12,7 +12,7 @@ import { DraftKey } from "../draft.ts";
 import { OpenFile } from "../Viz.tsx";
 import { fileService } from "../Preview.tsx";
 import type { Draft as SharedDraft } from "../draft.ts";
-import { chatImages, Gallery } from "../FilePreview.tsx";
+import { Gallery } from "../FilePreview.tsx";
 import { chatPage, useChatPageActions } from "../chatPage.ts";
 import { useChatFind } from "../ChatFind.tsx";
 import { ChatRows, historyLinkClicked, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
@@ -259,12 +259,13 @@ function Messages({ view, lives, list, draft, here, stationName }: {
   const [turn, setTurn] = useState(0);
   // Sent to by the page's key until its thread is known (a chat made here, or the agent's: useComposer).
   const to = view.thread?.id ?? here.key;
-  const images = () => chatImages(view.images);
   // The messages are kept as they are while nothing they show changes: what they are handed stays the same function,
   // the latest one behind it.
   const archive = useArchiveChat(here.station, here.key);
-  const latest = useRef({ here, draft, images, app });
-  latest.current = { here, draft, images, app };
+  // An image opened here steps through the chat's (the core tells those beside it, as this page's chat names it).
+  const gallery = useMemo(() => ({ session: here.key }), [here.key]);
+  const latest = useRef({ here, draft, app });
+  latest.current = { here, draft, app };
   // What is in the list (an agent's name, its activity, 归档) does these by the chat's key (../chatPage.ts).
   const chatKey = draftKeyOf(here.station, here.key);
   useChatPageActions(chatKey, {
@@ -276,7 +277,6 @@ function Messages({ view, lives, list, draft, here, stationName }: {
   });
   const [stable] = useState(() => ({
     quote: (q: Omit<Quote, "comment">) => latest.current.draft.current.quote(q),
-    images: () => latest.current.images(),
     hold: (ts: string) => { const { app, here } = latest.current; app.push(annotatePath(here.station, here.key, ts)); },
     file: (session: string, file: { path: string; name: string }) => {
       const { app, here } = latest.current;
@@ -319,7 +319,7 @@ function Messages({ view, lives, list, draft, here, stationName }: {
       {quoting.pop}
       {askedFile}
       {find.bar}
-      <Gallery.Provider value={stable.images}>
+      <Gallery.Provider value={gallery}>
       <div className={`${chatCss.mMessages} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} ref={list} onClick={onClick} {...quoting.listProps} {...hold}>
         <DraftKey.Provider value={chatKey}>
           <ChatRows chat={view} rows={rows} to={to} />

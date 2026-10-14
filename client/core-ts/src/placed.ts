@@ -1,6 +1,6 @@
 // The files an agent's message places in its text (`![](shot.png)`, `[the report](report.pdf)`), by the file name its
-// links and images give, and a chat's images in the order its page shows them (the preview steps through those). The
-// core decides both (views.ts drawn()): the web draws a message's files by them, and the Android app the same.
+// links and images give (views.ts drawn(): a message's `placed`), and the images beside one a chat's preview shows, in
+// the order its page shows them (the `imageNear` view): told only for the one open, not the chat's every image.
 
 /** The file a link or image in the text names, by its file name (the last part of its path): `shot.png`, `/w/shot.png`, `ember-file://…/shot.png`. */
 export function nameOf(url: string): string {
@@ -30,3 +30,33 @@ const IMAGE = /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/i;
 
 /** A file the preview shows as an image (and steps between). */
 export const isImage = (name: string): boolean => IMAGE.test(name);
+
+// deno-lint-ignore no-explicit-any
+type J = any;
+
+/** A chat's page (drawn: its files' `owner`, its messages' `placed`): the images before and after the one at `path`. */
+export function near(chat: J, path: string): { before?: J; after?: J } {
+  let before: J;
+  let found = false;
+  const step = (f: J): boolean => {
+    if (f === null || typeof f !== "object" || typeof f.name !== "string" || typeof f.owner !== "string" || !isImage(f.name)) return false;
+    if (found) return true;
+    if (f.path === path) found = true;
+    else before = f;
+    return false;
+  };
+  const all = (files: J): J => (Array.isArray(files) ? files.find(step) : undefined);
+  for (const m of Array.isArray(chat?.messages) ? chat.messages : []) {
+    const files: J[] = Array.isArray(m?.attachments) ? m.attachments : [];
+    // A message shows the files its text places first, where it names them, then the rest below it.
+    const placed: string[] = Array.isArray(m?.placed) ? m.placed : [];
+    const first = placed.flatMap((n) => files.filter((f) => f?.name === n).slice(0, 1));
+    const after = all(first) ?? all(files.filter((f) => !first.includes(f)));
+    if (after !== undefined) return { ...(before ? { before } : {}), after };
+  }
+  for (const o of Array.isArray(chat?.outbox) ? chat.outbox : []) {
+    const after = all(o?.attachments);
+    if (after !== undefined) return { ...(before ? { before } : {}), after };
+  }
+  return found && before ? { before } : {};
+}

@@ -1742,11 +1742,6 @@ export interface ChatView {
 	/** The unread line lies above the messages loaded: older pages are being loaded to find it. */
 	unreadAbove?: boolean;
 	outbox: Outgoing[];
-	/**
-	 * The chat's images in the order its page shows them (each message's placed ones first, then those below it;
-	 * the outbox's last), each with its `owner`: an image opened in the preview steps to the one before or after.
-	 */
-	images?: Attachment[];
 	link: Link;
 	offline: boolean;
 	/** One of its agents keeps watch: archiving it by hand asks first. Absent otherwise. */
@@ -2575,6 +2570,17 @@ export interface Host {
 	/** Memory and disk in a line, what is used and what is left: 内存 12.3 / 32 GB · 磁盘 剩 45.2 / 460 GB. */
 	usage: string;
 	emberText: string;
+}
+
+/**
+ * An image of a chat opened in the preview (the `imageNear` view): the ones beside it in the order its page shows them
+ * (each message's placed ones first, then those below it; the outbox's last), to step to (arrows, a swipe).
+ */
+export interface ImageNear {
+	/** The image shown just before it, with its `owner`. Absent for the first (or one not among them). */
+	before?: Attachment;
+	/** The one just after it. Absent for the last. */
+	after?: Attachment;
 }
 
 /**

@@ -290,7 +290,7 @@ cloud 的端口、`doing` 的 `since`。
     的行）。写操作用 `afterWrite` 只读它影响的记录。后台再把其余的搬到设备上（`#history`：各会话详情和每个 channel）。
 - 文字和显示：`present.ts`、`decisions.ts`、`jobs.ts`、`footprint.ts`、`looks.ts`、`history.ts`、`refs.ts`、`notices.ts`、
   `attend.ts`、`pill.ts`、`changelog.ts`、`asks.ts`、`preview-load.ts`、`format.ts`。
-- 视图 `src/views/`：chats/chatSearch/chat/stations/connects/decisions/history/archive/workspaceMarks/chatJobs/longJobs/
+- 视图 `src/views/`：chats/chatSearch/chat/stations/connects/decisions/history/archive/workspaceMarks/chatJobs/imageNear/longJobs/
   usage/admin*，覆盖层 `views/local.ts`（outbox、pending、first、changing、archiving 全是记录），改 chat 的 call
   `views/calls.ts`（发送、建 chat、回答卡片、改名置顶归档，启动时把没做完的接着做）。
 - 选择（newChat/pick，`choose.ts`）、表单（自动决策、Slack token、连接向导、加 profile，`forms.ts`）、注意力和通知

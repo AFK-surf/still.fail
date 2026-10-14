@@ -1725,9 +1725,6 @@ data class ChatView (
 	/// The unread line lies above the messages loaded: older pages are being loaded to find it.
 	val unreadAbove: Boolean? = null,
 	val outbox: List<Outgoing>,
-	/// The chat's images in the order its page shows them (each message's placed ones first, then those below it;
-	/// the outbox's last), each with its `owner`: an image opened in the preview steps to the one before or after.
-	val images: List<Attachment>? = null,
 	val link: Link,
 	val offline: Boolean,
 	/// One of its agents keeps watch: archiving it by hand asks first. Absent otherwise.
@@ -2599,6 +2596,16 @@ data class Host (
 	/// Memory and disk in a line, what is used and what is left: 内存 12.3 / 32 GB · 磁盘 剩 45.2 / 460 GB.
 	val usage: String,
 	val emberText: String
+)
+
+/// An image of a chat opened in the preview (the `imageNear` view): the ones beside it in the order its page shows them
+/// (each message's placed ones first, then those below it; the outbox's last), to step to (arrows, a swipe).
+@Serializable
+data class ImageNear (
+	/// The image shown just before it, with its `owner`. Absent for the first (or one not among them).
+	val before: Attachment? = null,
+	/// The one just after it. Absent for the last.
+	val after: Attachment? = null
 )
 
 /// A job's output as it grows (the `jobLog` topic): its last lines, when it last grew, its state (absent from a

@@ -76,6 +76,10 @@ export type Topic =
   | { topic: "agentCard"; station: string; key: string }
   | { topic: "chatJobs"; station: string; thread: number }
   | { topic: "chatJobs"; station: string; session: string }
+  // An image of a chat open in the preview: the ones beside it, as the chat's page shows them (the same thread or
+  // session as its `chat`; `path` the image's).
+  | { topic: "imageNear"; station: string; thread: number; path: string }
+  | { topic: "imageNear"; station: string; session: string; path: string }
   // The services and jobs left up a long while on the scope's stations that are up.
   | { topic: "longJobs"; scope: string }
   | { topic: "profiles"; scope: string }

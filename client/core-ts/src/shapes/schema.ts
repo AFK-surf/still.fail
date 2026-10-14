@@ -1477,6 +1477,10 @@ export const SHAPES: Record<string, Shape> = {
     ["ago", opt("String")],
     ["clock", opt("String")],
   ], { doc: "Something a job said, and when; `ago` (3 分钟前) and `clock` (13:04, 9/27 13:04) put in by the core." }),
+  ImageNear: struct([
+    ["before", opt("Attachment"), { doc: "The image shown just before it, with its `owner`. Absent for the first (or one not among them)." }],
+    ["after", opt("Attachment"), { doc: "The one just after it. Absent for the last." }],
+  ], { doc: "An image of a chat opened in the preview (the `imageNear` view): the ones beside it in the order its page shows them\n(each message's placed ones first, then those below it; the outbox's last), to step to (arrows, a swipe)." }),
   ChatJobsView: struct([
     ["jobs", vec("Job")],
     ["alarm", opt("String"), { doc: "fail: one died lately; restart: a service is being started again." }],
@@ -1668,7 +1672,6 @@ export const SHAPES: Record<string, Shape> = {
     ["unreadLine", opt("i64"), { client: opt("I54"), doc: "The message the unread line goes over: the first the viewer had not read when the chat was opened (not\ntheirs); none while older pages are loaded to find it, or with nothing unread. Absent from a core before it." }],
     ["unreadAbove", opt("bool"), { doc: "The unread line lies above the messages loaded: older pages are being loaded to find it." }],
     ["outbox", vec("Outgoing")],
-    ["images", vec("Attachment"), { default: true, doc: "The chat's images in the order its page shows them (each message's placed ones first, then those below it;\nthe outbox's last), each with its `owner`: an image opened in the preview steps to the one before or after." }],
     ["link", "Link"],
     ["offline", "bool"],
     ["watch", opt("RowWatch"), { doc: "One of its agents keeps watch: archiving it by hand asks first. Absent otherwise." }],

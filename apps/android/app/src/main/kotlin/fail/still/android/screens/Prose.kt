@@ -46,7 +46,7 @@ internal fun AgentWords(ctx: Here, text: String, files: List<Attachment>, names:
         shown = { f -> PlacedFile(ctx, f) },
         row = { f, size ->
             val owner = ctx.owner(f)
-            if (owner != null && IMAGE.containsMatchIn(f.name)) StationImage(ctx.station, owner, f, size, gallery = { ctx.images() })
+            if (owner != null && IMAGE.containsMatchIn(f.name)) StationImage(ctx.station, owner, f, size, gallery = ctx.of)
             // Markdown's ![] can place a video (or any file), too. Its card must open the same preview as a link.
             else FileCard(f.name, f.size, onClick = if (owner != null) ({ opened = f }) else null)
         },
@@ -77,7 +77,7 @@ private fun OpenedFile(ctx: Here, file: Attachment, onClose: () -> Unit) {
     val owner = ctx.owner(file)
     if (owner != null && HTML.containsMatchIn(file.name)) return VizOpen(ctx.station, owner, file, onClose)
     // Any other opens in the file preview (FilePreview.kt), as a tap on it below the text does.
-    if (owner != null) return FilePreview(ctx.station, owner, file, { ctx.images() }, onClose = onClose)
+    if (owner != null) return FilePreview(ctx.station, owner, file, ctx.of, onClose = onClose)
     Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false)) {
         Box(
             Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose),
