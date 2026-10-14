@@ -656,6 +656,23 @@ export class Store {
     });
   }
 
+  /// How what a message's card asked came out, said by the station (`text`), the message as it was: a settle entry
+  /// quoting it (rows.ts EntryKind). The entry, or null for a message the thread does not have.
+  settleCard(thread: number, n: number, text: string): EntryRow | null {
+    return this.#with((changes) => {
+      const asked = this.#one("SELECT ts, author FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", thread, n);
+      if (asked === undefined || asked.ts === null) return null;
+      const quote: Quote = { author: asked.author, text: "", comment: "", ts: asked.ts, role: "agent" };
+      return this.#append(
+        {
+          agentIdentity: undefined, thread, n: 0, kind: "settle", target: null, ts: null, authorKind: "ember", author: "ember", text,
+          attachments: [], quotes: [quote], declared: null, client: null, profile: null, options: undefined, card: undefined, at: this.now(),
+        },
+        changes,
+      );
+    });
+  }
+
   recentDecisions(): Json[] {
     return this.#all("SELECT id, session, created_at, result FROM decision_checks ORDER BY id DESC LIMIT 30").map((r) => ({
       id: r.id, session: r.session, at: r.created_at, detail: parsed(r.result) ?? null,

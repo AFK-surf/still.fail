@@ -38,6 +38,18 @@ test("a_slack_place_is_named_with_its_workspace_and_links_to_its_thread", () => 
   assert.deepEqual([unknown.name, unknown.url], ["#C9", null]);
 });
 
+test("the_threads_it_takes_part_in_are_its_places_in_their_order", () => {
+  const threads = [
+    { surface: "slack:T1", channel: "C1", threadTs: "1.000200", channelName: "ops", sessions: [{ session: "s1" }] },
+    { surface: "stillfail", channel: "STILLFAIL", threadTs: "2.0", title: "发版", sessions: [{ session: "s1" }] },
+    { surface: "slack:T1", channel: "D7", threadTs: "3.0", sessions: [{ session: "s1" }] },
+  ];
+  const h = presentHistory({ loaded: true, timeline: [] }, cx(threads, [], []));
+  assert.deepEqual(h.places.map((p: J) => [p.name, p.surface]), [["Acme#ops", "slack"], ["发版", "ember"], ["Acme 私信", "slack"]]);
+  assert.equal(h.places[1].session, "s1");
+  assert.deepEqual(presentHistory({ loaded: true, timeline: [] }, cx([], [], [])).places, []);
+});
+
 test("a_prompt_is_the_messages_it_carried_and_embers_words_around_them", () => {
   const [said] = parsePrompt('<message via="slack" connect="cl" you="ember (<@UBOT>)" thread="C1/1.0" from="Ada (U1)" ts="1.2">\nhi\n</message>');
   assert.deepEqual([said.length, said[0].user, said[0].ts, said[0].text], [1, "U1", "1.2", "hi"]);

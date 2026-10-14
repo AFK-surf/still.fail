@@ -97,6 +97,7 @@
   "android-chat.history.identity.notMe": "Not me",
   "android-chat.history.identity.unbind": "unlink",
   "android-chat.history.loading": "Loading run history…",
+  "android-chat.history.places": "Takes part in",
   "android-chat.history.received.message": "Message from {name}",
   "android-chat.history.received.note": "Reminder from {name}",
   "android-chat.history.run.auto": "Auto · {name}",

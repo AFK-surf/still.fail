@@ -331,7 +331,21 @@ export function presentHistory(live: J, cx: Context): J {
     [edge, empty] = [t(why), true];
   } else if (base > 0) [edge, empty] = [t("core-logic.history.edge.earlier"), false];
   else [edge, empty] = [t("core-logic.history.edge.start"), false];
-  return { items: shown, live: liveSteps, phase, usage, usageLine, edge, empty, loaded, more: base > 0 };
+  return { items: shown, live: liveSteps, phase, usage, usageLine, edge, empty, loaded, more: base > 0, places: places(cx) };
+}
+
+/// The chats and Slack threads the session takes part in, as places: in the order its threads come (the one last said
+/// in first).
+function places(cx: Context): J[] {
+  const out: J[] = [];
+  for (const th of cx.threads) {
+    const channel = th?.channel;
+    const ts = th?.threadTs;
+    if (typeof channel !== "string" || typeof ts !== "string") continue;
+    const p = format.place(cx.threads, `${channel}/${ts}`, cx.offsetMin, cx.workspaces);
+    if (p !== null) out.push(p);
+  }
+  return out;
 }
 
 /// What a session's calls used (its live `usage`), as its history shows it: label and value rows, and in a line; and on

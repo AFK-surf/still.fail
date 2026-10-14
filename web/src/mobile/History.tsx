@@ -359,7 +359,7 @@ function PhaseLine({ phase }: { phase: HistoryPhase }) {
   return <span className={css.mHPhase}><i />{phase.text}<small>{Math.max(0, Math.floor((now - phase.since) / 1000))}s</small></span>;
 }
 
-/** How it runs (which can be changed here), what it has used, the station. */
+/** How it runs (which can be changed here), the chats and Slack threads it takes part in, what it has used, the station. */
 function Details({ station, chat, agent, history }: { station: string; chat: string; agent: ChatAgent; history: HistoryView | undefined }) {
   const app = useApp();
   const host = useHost(station).value;
@@ -381,6 +381,12 @@ function Details({ station, chat, agent, history }: { station: string; chat: str
         {s.processText && <Detail label={t("web-mobile.history.process")} value={s.processText} />}
         {card?.work && <Detail label={t("web-mobile.agent.turns")} value={card.work} />}
       </div>
+      {history && history.places.length > 0 && (
+        <>
+          <GroupLabel>{t("web-mobile.history.places")}</GroupLabel>
+          <div className={css.mHPlaces}>{history.places.map((p, i) => <PlaceMark key={i} station={station} chat={chat} place={p} />)}</div>
+        </>
+      )}
       {history?.usage && history.usage.length > 0 && (
         <>
           <GroupLabel>{t("web-mobile.agent.usage")}</GroupLabel>

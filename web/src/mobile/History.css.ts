@@ -114,6 +114,8 @@ export const mHFacts = style({
 });
 export const mHDetail = style({ display: "contents", fontSize: vars.textUi });
 export const mHRings = style({ display: "flex", gap: "18px", padding: "10px 0" });
+/** The chats and Slack threads it takes part in, one a line. */
+export const mHPlaces = style({ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "8px", padding: "12px 0 10px", fontSize: vars.textUi });
 /** Changing how it runs. */
 export const mRunSummary = style({
   display: "flex", flexDirection: "column", gap: "6px", marginTop: "8px", padding: "14px",

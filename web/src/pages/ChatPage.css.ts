@@ -107,6 +107,8 @@ export const sessionDetails = style({
 });
 globalStyle(`${sessionDetails} dt`, { color: vars.subtle });
 globalStyle(`${sessionDetails} dd`, { margin: "0", minWidth: "0" });
+/** The chats and Slack threads it takes part in: their places in a row, wrapping. */
+export const sessionPlaces = style({ display: "flex", flexWrap: "wrap", gap: "4px 0", marginLeft: "-2px" });
 export const resourceRings = style({ display: "flex", alignItems: "center", gap: "10px", marginTop: "8px" });
 export const sidePanel = style({
   minWidth: "0", minHeight: "0", display: "flex", flexDirection: "column",

@@ -57,7 +57,11 @@ export type Membership = { thread: number; session: string; connect: string; joi
 
 /// "ember" is the station itself (named, stored and sent as before the rename).
 export type AuthorKind = "person" | "agent" | "ember";
-export type EntryKind = "message" | "edit";
+/// `edit`: a message's new words, files and quotes, naming it by `target`; `settle`: how what a message's card asked came
+/// out, said by the station (its `text`: 已发送到 #ops), naming it by quoting it (its first quote's `ts`), the message
+/// itself as it was. The log only grows. A settle has no `target`: the `merged` view (as the Rust station has it, and
+/// reads it) takes whatever has one for an edit; the Rust station reads it as a message of the station's.
+export type EntryKind = "message" | "edit" | "settle";
 
 export type Quote = { author: string; text: string; comment: string; ts?: string; role?: string; file?: string };
 export type Attachment = { name: string; path: string; size: number; width?: number; height?: number; thumbhash?: string };
@@ -303,7 +307,7 @@ export const toMembership = (r: Json): Membership => ({ thread: r.thread, sessio
 
 export function toEntry(r: Json): EntryRow {
   return {
-    agentIdentity: parsed(r.agent_identity), thread: r.thread, n: r.n, kind: r.kind === "edit" ? "edit" : "message",
+    agentIdentity: parsed(r.agent_identity), thread: r.thread, n: r.n, kind: r.kind === "edit" || r.kind === "settle" ? r.kind : "message",
     target: r.target, ts: r.ts, authorKind: authorKind(r.author_kind), author: r.author, text: r.text,
     attachments: fromJsonList(r.attachments, attachment), quotes: fromJsonList(r.quotes, quote), declared: r.declared,
     client: r.client, profile: r.profile, options: parsed(r.options), card: parsed(r.card), at: r.at,
@@ -365,7 +369,7 @@ export function mergeEntries(entries: EntryRow[]): MessageRow[] {
         author: e.author, text: e.text ?? "", attachments: e.attachments, quotes: e.quotes, declared: e.declared,
         client: e.client, createdAt: e.at, editedAt: null,
       });
-    } else {
+    } else if (e.kind === "edit") {
       const m = e.target === null ? undefined : messages.get(e.target);
       if (m) {
         m.text = e.text ?? "";

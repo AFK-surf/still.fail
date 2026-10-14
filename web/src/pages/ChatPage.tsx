@@ -16,7 +16,7 @@ import { keepTabs } from "../chatTabs.ts";
 import { usePrefs } from "../prefs.ts";
 import type { ChatJobsView, ChatShare, Host, StationView } from "../core/shapes.ts";
 import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useStationCall, useStationLook, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
-import { History } from "../History.tsx";
+import { History, Where } from "../History.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { StationPeek } from "../cloud/StationCards.tsx";
 import { Hover } from "../Peeks.tsx";
@@ -805,14 +805,16 @@ function SessionHead({ agent }: { agent: ChatAgent }) {
 
 /**
  * Unfolded under the history's head, a row each, quiet: what runs it (and its account's page), what it has used, the
- * station it runs on with what runs low on it.
+ * chats and Slack threads it takes part in, the station it runs on with what runs low on it.
  */
 function SessionDetails({ agent }: { agent: ChatAgent }) {
   const { session } = agent;
   const station = useStation();
   const link = useLink();
   const host = useHost(station.address).value;
-  const usage = useHistory(station.address, session.key).value?.usageLine;
+  const history = useHistory(station.address, session.key).value;
+  const usage = history?.usageLine;
+  const places = history?.places ?? [];
   return (
     <dl className={css.sessionDetails}>
       <dt>{t("web-pages.chat.detailRuns")}</dt>
@@ -822,6 +824,9 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
         {" · "}<Link className={css.detailLink} to={link(`/settings/accounts/${session.profile}`)}>{t("web-pages.chat.profileDetails")}</Link>
       </dd>
       {usage && <><dt>{t("web-pages.chat.detailUsed")}</dt><dd>{usage}</dd></>}
+      {places.length > 0 && (
+        <><dt>{t("web-pages.chat.detailPlaces")}</dt><dd className={css.sessionPlaces}>{places.map((p, i) => <Where key={i} place={p} />)}</dd></>
+      )}
       <dt>{t("web-pages.chat.detailStation")}</dt>
       <dd>
         {station.name || host?.hostname || t("web-pages.chat.thisMachine")}{host ? ` · ${host.identity}` : ""}

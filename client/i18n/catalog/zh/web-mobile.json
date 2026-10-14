@@ -196,6 +196,7 @@
   "web-mobile.history.changed": "已改，下一轮起生效",
   "web-mobile.history.copyLink": "复制执行记录链接",
   "web-mobile.history.details": "详情",
+  "web-mobile.history.places": "参与的对话",
   "web-mobile.history.effort": "深度",
   "web-mobile.history.effortNote": "想得越深越慢，也越费额度。",
   "web-mobile.history.evict": "释放进程",

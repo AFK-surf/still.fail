@@ -91,6 +91,7 @@
   "android-chat.history.identity.notMe": "不是我",
   "android-chat.history.identity.unbind": "解除",
   "android-chat.history.loading": "正在读取执行历史…",
+  "android-chat.history.places": "参与的对话",
   "android-chat.history.received.message": "收到来自 {name} 的消息",
   "android-chat.history.received.note": "收到来自 {name} 的提醒",
   "android-chat.history.run.auto": "自动 · {name}",

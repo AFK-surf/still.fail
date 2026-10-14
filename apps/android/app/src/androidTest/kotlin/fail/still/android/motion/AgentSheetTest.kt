@@ -28,6 +28,7 @@ import fail.still.android.data.HistoryView
 import fail.still.android.data.Job
 import fail.still.android.data.Live
 import fail.still.android.data.Person
+import fail.still.android.data.Place
 import fail.still.android.data.PersonShown
 import fail.still.android.data.Quota
 import fail.still.android.data.QuotaWindow
@@ -104,6 +105,7 @@ class AgentSheetTest {
         h.fake.put(Topics.history(Fixtures.STATION, key), HistoryView(
             items = emptyList(), live = emptyList(), edge = "已到 Session 开始处", empty = false, loaded = true,
             usage = listOf(UsageLine("模型调用", "142 次"), UsageLine("输入", "1.2M"), UsageLine("其中缓存", "1.1M"), UsageLine("输出", "34K"), UsageLine("缓存命中率", "92%"), UsageLine("上下文", "122K / 200K（61%）"), UsageLine("费用估算", "$4.20")),
+            places = listOf(Place("发版 1400", "ember", key), Place("Acme#release", "slack", url = "https://acme.slack.com/archives/C1/p1000200")),
         ))
         h.launch(stack, dark = dark)
         return h
@@ -237,6 +239,9 @@ class AgentSheetTest {
         rule.onNodeWithText("61%").assertIsDisplayed()
         rule.onNodeWithText("8 轮 · 共干了 1 小时 12 分").assertIsDisplayed()
         rule.onNodeWithText("142 次").assertIsDisplayed()
+        // The chats and Slack threads it takes part in.
+        rule.onNodeWithText("发版 1400").assertIsDisplayed()
+        rule.onNodeWithText("Acme#release").assertIsDisplayed()
         picture(h, "history-details")
     }
 }

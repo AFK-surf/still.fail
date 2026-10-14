@@ -205,6 +205,7 @@
   "web-mobile.history.changed": "Changed; applies next turn",
   "web-mobile.history.copyLink": "Copy history link",
   "web-mobile.history.details": "Details",
+  "web-mobile.history.places": "Takes part in",
   "web-mobile.history.effort": "Effort",
   "web-mobile.history.effortNote": "Deeper is slower and uses more quota.",
   "web-mobile.history.evict": "Release",

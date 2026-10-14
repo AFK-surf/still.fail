@@ -186,6 +186,7 @@
   "web-pages.chat.detailRuns": "运行",
   "web-pages.chat.detailStation": "机器",
   "web-pages.chat.detailUsed": "用量",
+  "web-pages.chat.detailPlaces": "参与的对话",
   "web-pages.chat.evict": "释放进程",
   "web-pages.chat.evicted": "已释放进程",
   "web-pages.chat.history": "执行历史",

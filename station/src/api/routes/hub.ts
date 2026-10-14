@@ -25,11 +25,11 @@ import {
   deleteSession,
   newSession,
   openChat,
-  say,
 } from "../../sessions/lifecycle.ts";
 import { shown } from "../../jobs/jobs.ts";
 import { withLock, workspaceFile } from "../../sessions/archive.ts";
 import { roomOf } from "../../sessions/footprint.ts";
+import { sayAnswering } from "../../sessions/slack-hold.ts";
 import { dir as thumbsDir, keep } from "../../sessions/thumbs.ts";
 import { wall } from "../../ops/fibers.ts";
 
@@ -496,7 +496,8 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
           // Which app sent it ("android 0.1.1123"): for its agent, never shown. Older apps say nothing.
           const client = typeof i.client === "string" ? chars([...i.client.trim()].filter((c) => !/\p{Cc}/u.test(c)).join(""), 80) : "";
           const kept = await keep(files, thumbsDir(a.hub.config().dataDir));
-          const n = say(a.hub, t.id, r.viewer.email, said, kept, quotes, client === "" ? null : client);
+          // A card holding a Slack write (slack_api connect=) is answered first: choosing to send it sends it.
+          const n = await sayAnswering(a.hub, t.id, r.viewer.email, said, kept, quotes, client === "" ? null : client);
           // Answering from the decisions page means the question was read, even without opening its chat. Stop at that
           // card: later messages may not have been seen.
           if (answeredCard !== null) s.setRead(r.viewer.email, t.id, answeredCard);

@@ -48,7 +48,7 @@ export type Membership = { thread: number; session: string; connect: string; joi
 /// One entry of a thread's log. `agentIdentity`, `options` and `card` are undefined where the Rust has None (and
 /// leaves them out), and may be null where it has Some(Value::Null).
 export type EntryRow = {
-  agentIdentity: Json | undefined; thread: number; n: number; kind: "message" | "edit"; target: number | null;
+  agentIdentity: Json | undefined; thread: number; n: number; kind: "message" | "edit" | "settle"; target: number | null;
   ts: string | null; authorKind: AuthorKind; author: string; text: string | null; attachments: Json[]; quotes: Json[];
   declared: string | null; client: string | null; profile: string | null; options: Json | undefined; card: Json | undefined;
   at: number;
@@ -185,7 +185,7 @@ function toEntry(r: Json): EntryRow {
     agentIdentity: parsed(r.agent_identity),
     thread: r.thread,
     n: r.n,
-    kind: r.kind === "edit" ? "edit" : "message",
+    kind: r.kind === "edit" || r.kind === "settle" ? r.kind : "message",
     target: r.target,
     ts: r.ts,
     authorKind: authorKind(r.author_kind),
@@ -223,7 +223,7 @@ function toMessage(r: Json): MessageRow {
 /// An entry from an archive file, as serde reads EntryRow (null where an Option is: None).
 function archivedEntry(e: Json): EntryRow {
   const kind = e.kind;
-  if (kind !== "message" && kind !== "edit") throw new Error(`unknown entry kind ${kind}`);
+  if (kind !== "message" && kind !== "edit" && kind !== "settle") throw new Error(`unknown entry kind ${kind}`);
   if (!["person", "agent", "ember", "stillfail"].includes(e.authorKind)) throw new Error(`unknown author kind ${e.authorKind}`);
   const some = (v: Json) => (v === undefined || v === null ? undefined : v);
   return {
@@ -244,7 +244,7 @@ function mergeEntries(entries: EntryRow[]): MessageRow[] {
         author: e.author, text: e.text ?? "", attachments: e.attachments, quotes: e.quotes, declared: e.declared,
         client: e.client, createdAt: e.at, editedAt: null,
       });
-    } else {
+    } else if (e.kind === "edit") {
       const m = e.target === null ? undefined : messages.get(e.target);
       if (m) {
         m.text = e.text ?? "";
