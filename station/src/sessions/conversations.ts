@@ -275,14 +275,31 @@ export async function threadHistory(hub: Hub, key: string, thread: ThreadRow, co
   return formatHistory(messages, thread.surface, threadAddress(thread.channel, thread.threadTs), key, names);
 }
 
+/// The station's Slack connects that are connected, as an agent names them: `id (bot name)`.
+function connectedSlack(hub: Hub): string {
+  const listed = hub.config().connects
+    .filter((c) => c.id !== INTERNAL_CONNECT && hub.chatOf(c.id) !== undefined)
+    .map((c) => (c.slack.botName ? `${c.id} (${c.slack.botName})` : c.id));
+  return listed.length === 0 ? "none is connected" : listed.join(", ");
+}
+
+/// slack_api's connect=: one of the station's connected Slack connects, by its id or its bot's name.
+export function slackConnect(hub: Hub, named: string): string {
+  const name = named.trim();
+  const found = hub.config().connects.find((c) => c.id !== INTERNAL_CONNECT && (c.id === name || c.slack.botName === name));
+  if (!found || hub.chatOf(found.id) === undefined) throw new Error(`${JSON.stringify(named)} is not a connected Slack connect of this station. Its Slack connects: ${connectedSlack(hub)}`);
+  return found.id;
+}
+
 /// slack_api: a Slack Web API call from session `key`, as the bot of `via` (else the session's own connect). Writes keep
-/// to the threads rule: not in a thread another session of the same bot takes part in; one it writes in becomes its own.
+/// to the threads rule: not in a thread another session of the same bot takes part in; one it writes in becomes its own,
+/// through `via`: a session of the station's own chats starts a Slack conversation so.
 export async function slackApi(hub: Hub, key: string, method: string, params: Record<string, Json>, via: string | null): Promise<string> {
   const { store } = hub;
   if (!isSlackMethod(method)) throw new Error(`not a Slack method: ${JSON.stringify(method)}`);
   if (["admin.", "apps.", "oauth."].some((p) => method.startsWith(p)) || method === "auth.revoke") throw new Error(`${method} is not for agents: it manages the Slack app itself`);
   const connect = via ?? store.getSession(key)?.connect ?? null;
-  if (connect === null || connect === INTERNAL_CONNECT) throw new Error("this session has no Slack connect: give to= one of your Slack conversations");
+  if (connect === null || connect === INTERNAL_CONNECT) throw new Error(`this session has no Slack connect of its own: give connect= one of the station's (${connectedSlack(hub)}), or to= one of your Slack conversations`);
   const chat = hub.chat(connect);
   const textOf = (name: string): string | null => (typeof params[name] === "string" ? params[name] : null);
   const channel = textOf("channel") ?? textOf("channel_id");
