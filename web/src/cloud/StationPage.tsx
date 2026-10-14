@@ -6,7 +6,7 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react
 import { Link, Navigate, NavLink, useParams } from "react-router";
 import { stamp, useStations, type StationView } from "../api.ts";
 import { useGo } from "../go.ts";
-import { MeterDials } from "../components.tsx";
+import { EdgeChip, MeterDials } from "../components.tsx";
 import { RetryPill } from "../Connection.tsx";
 import { drivePath } from "../drive/useDrive.ts";
 import { ChevronRight, Folder, Plus } from "../icons.tsx";
@@ -59,22 +59,34 @@ export function StationsNav({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-/** A station in the sidebar: its mark and name, then how it is, quiet (its agents at work in the accent, a meter running
- * low or its being away in their colour), and what the machine is under them. */
+/** A station in the sidebar: its mark and name, how it is at the end of that line (its agents at work, when it was last
+ * seen while away); what the machine is under them; then, while it is up, what is left of its CPU, memory and disk in
+ * small boxes (as in a chat's bar: their edge in their level's colour), and how this device reaches it, a newer version
+ * there said too. Nothing in colour but what is off. */
 function StationRow({ s, to }: { s: StationView; to: string }) {
-  const low = s.online ? s.host?.meters.filter((m) => m.level !== "ok") ?? [] : [];
+  const meters = s.online ? s.host?.meters ?? [] : [];
+  const newer = s.online && (s.overview?.updates ?? []).some((v) => v.installed && v.updatable && (v.newer || v.downgrade));
   return (
     <NavLink className={`${nav.navRow} ${css.row}`} to={to}>
       <span className={css.rowMark}>{s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={16} /> : <WorkspaceMark w={{ name: s.name }} size={18} />}</span>
       <span className={css.rowText}>
         <span className={css.rowHead}>
           <span className={nav.navText}>{s.name}</span>
-          <span className={css.rowState}>
-            <span className={railCss.dot} data-online={s.online || undefined} />
-            {low.length ? <span data-level={low[0]!.level} className={css.low}>{low.map((m) => `${m.short} ${m.remaining}`).join(" · ")}</span> : brief(s)}
-          </span>
+          <span className={css.rowState}><span className={railCss.dot} data-online={s.online || undefined} />{brief(s)}</span>
         </span>
         <span className={css.rowSub}>{s.host?.identity ?? (s.online ? t("web-pages.stations.connecting") : t("web-pages.stations.offline"))}</span>
+        {meters.length > 0 && (
+          <span className={css.rowMeters}>
+            {meters.map((m) => <EdgeChip key={m.label} small bare fill={m.left} level={m.level} mark={m.short} text={`${m.big}${m.unit === "%" ? "%" : m.unit.slice(0, 1)}`} label={`${m.label} ${m.remaining}`} />)}
+          </span>
+        )}
+        {s.online && (s.net || newer) && (
+          <span className={css.rowSub}>
+            {s.net && <>{s.net.path}{s.net.rtt && <>{" · "}<span className={css.low} data-level={s.net.rtt.level}>{s.net.rtt.text}</span></>}</>}
+            {s.net && newer && " · "}
+            {newer && t("web-pages.stations.page.newer")}
+          </span>
+        )}
       </span>
     </NavLink>
   );

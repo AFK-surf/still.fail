@@ -972,6 +972,7 @@
   "web-pages.stations.page.warm": "Warm",
   "web-pages.stations.page.sessions": "Sessions",
   "web-pages.stations.page.footprint": "Data on disk",
+  "web-pages.stations.page.newer": "Update available",
   "web-pages.version.available": "{version} available",
   "web-pages.version.check": "Check now",
   "web-pages.version.checkFailed": "Check failed: {error}",

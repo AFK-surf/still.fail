@@ -364,7 +364,7 @@ function RailWorkspaces({ scope, current }: { scope: string; current: ReactNode 
 }
 
 /** The sidebar's width, its least and most (the sidebar's own, styles' --sidebar-w). */
-const SIDEBAR = { min: 180, max: 480, own: 240 } as const;
+const SIDEBAR = { min: 180, max: 480, own: 240, stations: 280 } as const;
 
 /** The sidebars, each its own width: the chats' (and the pages beside them), the settings', the files', the profiles', the stations'. */
 type SidebarGroup = "chats" | "settings" | "files" | "profiles" | "stations";
@@ -377,7 +377,8 @@ function widthFor(group: SidebarGroup, glide: boolean): void {
   shownGroup = group;
   const root = document.documentElement.style;
   const saved = Number(localStorage.getItem(`stillfail.width.${widthKey(group)}`));
-  const px = saved ? `${Math.min(SIDEBAR.max, Math.max(SIDEBAR.min, saved))}px` : "";
+  // The stations' a little wider by itself: each row has a line of meters.
+  const px = saved ? `${Math.min(SIDEBAR.max, Math.max(SIDEBAR.min, saved))}px` : group === "stations" ? `${SIDEBAR.stations}px` : "";
   if (root.getPropertyValue("--sidebar-w") === px) return;
   const put = () => { if (px) root.setProperty("--sidebar-w", px); else root.removeProperty("--sidebar-w"); };
   if (glide) moveSidebar(put); else put();

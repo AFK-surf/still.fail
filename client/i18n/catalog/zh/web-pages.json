@@ -906,6 +906,7 @@
   "web-pages.stations.page.warm": "待命",
   "web-pages.stations.page.sessions": "会话",
   "web-pages.stations.page.footprint": "数据占用",
+  "web-pages.stations.page.newer": "有更新",
   "web-pages.version.available": "有新版本 {version}",
   "web-pages.version.check": "检查更新",
   "web-pages.version.checkFailed": "检查失败：{error}",
