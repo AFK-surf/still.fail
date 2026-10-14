@@ -1,4 +1,4 @@
-// The rail at the wide screen's left (Rail.tsx): a column of the sidebar's own ground, the places as icons.
+// The rail at the wide screen's left (Rail.tsx): a column in the sidebar's block (styles/shell.css.ts dock), the places as icons.
 import { globalStyle, style } from "@vanilla-extract/css";
 import { navFoot, stationRow, stationTrouble } from "./Sidebar.css.ts";
 import { vars } from "./styles/tokens.css.ts";
@@ -7,22 +7,12 @@ const wide = "(min-width: 701px)";
 const narrow = "(max-width: 700px)";
 
 export const rail = style({
-  display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "0 0 12px", background: vars.sidebar,
+  display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "0 0 12px", flex: "none", width: 56,
   WebkitUserSelect: "none", userSelect: "none",
-  position: "relative", isolation: "isolate",
-  selectors: {
-    // With the sidebar closed the rail is no band of ground but a long rounded block standing on the page (its ::before),
-    // clear of the page's edges and, in the macOS app, under the window's buttons (wider than it).
-    '[data-sidebar="closed"] &': { background: vars.canvas },
-    '&::before': {
-      content: '""', position: "absolute", zIndex: -1, inset: 0, background: vars.sidebar, borderRadius: 0,
-      cornerShape: vars.cornerShape, transition: `inset 380ms ${vars.easeOut}, border-radius 380ms ${vars.easeOut}`,
-    },
-    // Concentric with what is lit in it (the items' 12 px corner, 3 px in from its sides).
-    '[data-sidebar="closed"] &::before': { inset: "8px 6px", borderRadius: `calc(12px * ${vars.cornerScale} + 3px)` },
-    '[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] &::before': { top: 44 },
-  },
-  "@media": { [narrow]: { display: "none" }, "(prefers-reduced-motion: reduce)": { selectors: { "&::before": { transition: "none" } } } },
+  // In the closed bar (shell.css.ts dock), as narrow as it, at the same pace.
+  transition: `width 380ms ${vars.easeOut}`,
+  selectors: { '[data-sidebar="closed"] &': { width: 44 } },
+  "@media": { [narrow]: { display: "none" }, "(prefers-reduced-motion: reduce)": { transition: "none" } },
 });
 /**
  * Level with the sidebar's top row, the sidebar's opening and closing in it. In the desktop app the row drags the window;
@@ -30,15 +20,13 @@ export const rail = style({
  */
 export const top = style({
   flex: "none", alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "center", height: 48, marginBottom: 6,
-  // Its height follows the sidebar closing as the rounded block does (rail ::before), both as long and eased as the
-// sidebar's own move (motion.ts moveState): the places glide, not jump.
+  // Its height follows the closing bar (shell.css.ts dock), as long and eased: the places glide, not jump.
   transition: `height 380ms ${vars.easeOut}`,
   selectors: {
     "[data-desktop] &": { height: 44, WebkitAppRegion: "drag" },
     '[data-desktop="inset"]:not([data-fullscreen]) &': { height: 88, alignItems: "flex-end" },
-    // In the closed sidebar's rounded block (rail ::before), clear of its top.
-    '[data-sidebar="closed"] &': { height: 56, alignItems: "flex-end" },
-    '[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] &': { height: 94 },
+    // The closed bar starts under the window's buttons: no room for them in it.
+    '[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] &': { height: 48 },
   },
 });
 globalStyle(`[data-desktop] ${top} > *`, { WebkitAppRegion: "no-drag" });

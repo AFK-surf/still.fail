@@ -11,13 +11,35 @@ export const shell = style({
       gridTemplateColumns: "var(--sidebar-w, 240px) minmax(0, 1fr)",
       selectors: {
         "[data-sidebar=\"closed\"] &": { gridTemplateColumns: "0px minmax(0, 1fr)" },
-        // A workspace's: the rail (Rail.tsx) first, then the sidebar beside it, which closes to nothing; the rail stays.
-        "&[data-rail]": { gridTemplateColumns: "56px var(--sidebar-w, 240px) minmax(0, 1fr)" },
-        "[data-sidebar=\"closed\"] &[data-rail]": { gridTemplateColumns: "56px 0px minmax(0, 1fr)" },
+        // A workspace's: the rail (Rail.tsx) and the sidebar beside it in one block (dock), which closes to the rail.
+        "&[data-rail]": { gridTemplateColumns: "calc(56px + var(--sidebar-w, 240px)) minmax(0, 1fr)" },
+        "[data-sidebar=\"closed\"] &[data-rail]": { gridTemplateColumns: "56px minmax(0, 1fr)" },
       },
     },
   },
 });
+/**
+ * The rail and the sidebar as one block of the sidebar's ground. The sidebar closing, the block narrows to the rail (its
+ * column, styles above, moved by brand.tsx) and stands off the page's edges as a long rounded bar, cutting the sidebar as
+ * it goes (the sidebar keeps its width inside); in the macOS app the bar is under the window's buttons. Its margins and
+ * corner move as long and eased as the column (motion.ts moveState, 380 ms). On a narrow screen it is nothing of its own.
+ */
+export const dock = style({
+  "@media": {
+    "(max-width: 700px)": { display: "contents" },
+    "(min-width: 701px)": {
+      display: "flex", minWidth: 0, minHeight: 0, overflow: "hidden", background: vars.sidebar, margin: 0, borderRadius: 0,
+      cornerShape: vars.cornerShape, transition: `margin 380ms ${vars.easeOut}, border-radius 380ms ${vars.easeOut}`,
+      selectors: {
+        // Concentric with what is lit in it (the rail's items, their 12 px corner 3 px in from its sides).
+        '[data-sidebar="closed"] &': { margin: "8px 6px", borderRadius: `calc(12px * ${vars.cornerScale} + 3px)` },
+        '[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] &': { marginTop: 44 },
+      },
+    },
+    "(prefers-reduced-motion: reduce)": { transition: "none" },
+  },
+});
+
 export const main = style({
   position: "relative", minWidth: "0", minHeight: "0", overflow: "hidden", display: "flex", flexDirection: "column",
   selectors: {

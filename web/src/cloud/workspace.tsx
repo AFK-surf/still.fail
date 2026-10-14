@@ -120,11 +120,14 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
       <div className={shellCss.shell} data-detail={detail} data-rail="">
 
         <GlobalShortcuts scope={entry.id} newChat={`/w/${entry.id}/new`} settings={`/w/${entry.id}/settings`} />
+        {/* The rail and the sidebar in one block, which closes to the rail as a bar (shell.css.ts dock). */}
+        <div className={shellCss.dock}>
         <Rail scope={entry.id} workspace={<WorkspaceSwitcher current={entry} adder />} />
         {settings
           ? <nav className={nav.sidebar} aria-label={t("web-pages.settings.title")}><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} /><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><WebUpdate /><div className={railCss.narrowOnly}><WorkspaceSwitcher current={entry} /></div></div></nav>
           : place === "files" ? <FilesSidebar entry={entry} />
           : <WorkspaceSidebar entry={entry} />}
+        </div>
         <main className={shellCss.main}>
           <ComposerDock>
           <Routes>

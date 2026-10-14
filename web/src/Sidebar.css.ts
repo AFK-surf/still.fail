@@ -4,7 +4,7 @@ import { fallbackVar, globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { accountTrigger } from "./cloud/workspace.css.ts";
 import { iconBtn } from "./styles/pages.css.ts";
-import { shell } from "./styles/shell.css.ts";
+import { dock, shell } from "./styles/shell.css.ts";
 import { kindIcon, kindMark, resizeHandle } from "./ui.css.ts";
 
 const wide = "(min-width: 701px)";
@@ -23,6 +23,8 @@ export const sidebar = style({
     [narrow]: { selectors: { [`${shell}[data-detail="true"] &`]: { display: "none" } } },
   },
 });
+// In the block with the rail (shell.css.ts dock): its ground is the block's, its width its own, cut as the block closes.
+globalStyle(`${dock} > ${sidebar}`, { background: "none", flex: "none", width: fallbackVar(vars.sidebarW, "240px") });
 globalStyle(`${sidebar} :is(input, textarea)`, { WebkitUserSelect: "text", userSelect: "text" });
 globalStyle(`${sidebar} :is(a, img, svg)`, { WebkitUserDrag: "none" });
 // Closing or opening, its contents keep their width and are cut, not laid out anew at every step.
