@@ -3045,6 +3045,25 @@ export type Appearance = "system" | "light" | "dark";
  */
 export type RowPictureSetting = "auto" | "agents" | "people";
 
+export type ReaderFace = "serif" | "sans";
+
+/** The reader's paper: as the app looks (`follow`), or one of its own. */
+export type ReaderPaper = "follow" | "white" | "green" | "grey" | "night";
+
+/** How the drive's reader lays text out on this device (`prefs.set {reader: {…}}`, one setting or several). */
+export interface ReaderPrefs {
+	/** The text's size (sp/px), 12 to 32. */
+	size: number;
+	/** Line height as a multiple of the size, 1.2 to 2.4. */
+	line: number;
+	/** Room either side (dp/px), 8 to 44. */
+	margin: number;
+	face: ReaderFace;
+	/** Paragraphs start indented two characters. */
+	indent: boolean;
+	paper: ReaderPaper;
+}
+
 /** What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is. */
 export interface PrefsView {
 	/** The lists show only the chats and connects the viewer takes part in. */
@@ -3097,6 +3116,8 @@ export interface PrefsView {
 	/** The invite code a page was opened with, kept through signing in until a workspace is made with it. */
 	invite?: string;
 	device?: DeviceView;
+	/** How the drive's reader lays text out (always whole: the core fills in what is not kept). */
+	reader?: ReaderPrefs;
 }
 
 /** Providers of one group, as the picker lists them. */

@@ -3059,6 +3059,26 @@ typealias Appearance = String
 /// people's.
 typealias RowPictureSetting = String
 
+typealias ReaderFace = String
+
+/// The reader's paper: as the app looks (`follow`), or one of its own.
+typealias ReaderPaper = String
+
+/// How the drive's reader lays text out on this device (`prefs.set {reader: {…}}`, one setting or several).
+@Serializable
+data class ReaderPrefs (
+	/// The text's size (sp/px), 12 to 32.
+	val size: Long,
+	/// Line height as a multiple of the size, 1.2 to 2.4.
+	val line: Double,
+	/// Room either side (dp/px), 8 to 44.
+	val margin: Long,
+	val face: ReaderFace,
+	/// Paragraphs start indented two characters.
+	val indent: Boolean,
+	val paper: ReaderPaper
+)
+
 /// What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is.
 @Serializable
 data class PrefsView (
@@ -3101,7 +3121,9 @@ data class PrefsView (
 	val badge: String? = null,
 	/// The invite code a page was opened with, kept through signing in until a workspace is made with it.
 	val invite: String? = null,
-	val device: DeviceView? = null
+	val device: DeviceView? = null,
+	/// How the drive's reader lays text out (always whole: the core fills in what is not kept).
+	val reader: ReaderPrefs? = null
 )
 
 /// Providers of one group, as the picker lists them.

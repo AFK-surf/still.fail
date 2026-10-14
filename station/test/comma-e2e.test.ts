@@ -4,7 +4,7 @@
 // the gateway's `comma/tools/1` admitted — exec refused under the default `read`, done once an owner sets `full`, a chat
 // started and driven — while another iroh id is turned away.
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -145,6 +145,19 @@ test("a station in Comma: enrolled, online, a member admitted, a viewer read-onl
   assert.equal((await ask(viewer, "GET", "/admin/api/tools/access"))[0], 200);
   assert.deepEqual(await ask(viewer, "POST", "/admin/api/sessions", { runtime: "claude" }), [403, { error: "read-only members cannot change this station" }]);
   assert.deepEqual(await ask(viewer, "PUT", "/admin/api/tools/access", { access: "full" }), [403, { error: "read-only members cannot change this station" }]);
+  // The drive (docs/drive.md): a viewer lists and reads what is shared, and changes nothing of it; a member does.
+  const shared = realpathSync(mkdtempSync(join(tmpdir(), "comma-drive-")));
+  t.after(() => rmSync(shared, { recursive: true, force: true }));
+  writeFileSync(join(shared, "a.txt"), "hi");
+  config.update((raw) => (raw.drive = { roots: [shared] }));
+  const listed = await ask(viewer, "GET", `/admin/api/drive/list?root=${encodeURIComponent(shared)}&path=`);
+  assert.deepEqual([listed[0], listed[1].entries.map((e: any) => e.name)], [200, ["a.txt"]]);
+  for (const [path, body] of [["/admin/api/drive/mkdir", { root: shared, path: "made" }], ["/admin/api/drive/remove", { root: shared, path: "a.txt" }], ["/admin/api/drive/rename", { root: shared, from: "a.txt", to: "b.txt" }]] as const) {
+    assert.deepEqual(await ask(viewer, "POST", path, body), [403, { error: "read-only members cannot change this station" }], path);
+  }
+  assert.deepEqual(await ask(viewer, "PUT", "/admin/api/drive/roots", { roots: [] }), [403, { error: "read-only members cannot change this station" }]);
+  assert.deepEqual(readFileSync(join(shared, "a.txt"), "utf8"), "hi");
+  assert.equal((await ask(owner, "POST", "/admin/api/drive/mkdir", { root: shared, path: "made" }))[0], 200);
   // Nor through a preview's socket, whose page may send anything.
   const socket = await viewerDevice.connect(addr, ALPN).then(async (c) => (await member(c, credential(viewerDevice.id(), "viewer")), c));
   const ws = await socket.openBi();

@@ -21,6 +21,8 @@ export type PrefsPatch = { [K in keyof Omit<Prefs, "device">]?: NonNullable<Pref
 
 const DEFAULTS: Prefs = {
   onlyMine: false, onlyWatching: false, onlyDecisions: false, listFilter: {}, appearance: "system", rowPicture: "auto", absoluteTime: false, keys: {}, lastChat: {}, openChat: {}, chatTabs: {}, resume: {}, stationUpdatesDismissed: {},
+  // As the core fills it in (prefs.ts readerOf), before it has answered.
+  reader: { size: 18, line: 1.7, margin: 22, face: "serif", indent: true, paper: "follow" },
   device: { app: "", phone: false, handoff: false },
 };
 

@@ -8,13 +8,41 @@ import { fromLocale, follows, setCurrent, t, tr, type Lang } from "./i18n.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "resume", "invite", "badge"];
+const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "resume", "invite", "badge", "reader"];
 const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "resume"];
 const TABS_KEPT = 200;
 const DEFERRED_KEPT = 200;
 const PREFS = { topic: "prefs" };
 
 type Map_ = Record<string, unknown>;
+
+/// How the drive's reader lays text out on this device (docs/drive.md): each number within its bounds, its default
+/// where none is kept; the papers and faces there are.
+const READER_NUMBERS = { size: [12, 32, 18], line: [1.2, 2.4, 1.7], margin: [8, 44, 22] } as const;
+const PAPERS = ["follow", "white", "green", "grey", "night"];
+const FACES = ["serif", "sans"];
+
+export function readerOf(v: unknown): Map_ {
+  const r = isObject(v) ? v : {};
+  const num = (k: keyof typeof READER_NUMBERS, step: number) => {
+    const [min, max, fallback] = READER_NUMBERS[k];
+    const n = r[k];
+    return typeof n === "number" && Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n / step) * step)) : fallback;
+  };
+  return {
+    size: num("size", 1),
+    line: Math.round(num("line", 0.1) * 10) / 10,
+    margin: num("margin", 1),
+    face: FACES.includes(r.face as string) ? r.face : "serif",
+    indent: typeof r.indent === "boolean" ? r.indent : true,
+    paper: PAPERS.includes(r.paper as string) ? r.paper : "follow",
+  };
+}
+
+/// The prefs as they go out: the reader's settings whole.
+export function shown(v: unknown): unknown {
+  return isObject(v) ? { ...v, reader: readerOf(v.reader) } : v;
+}
 
 /// What is kept, as kept (no defaults filled in).
 function kept(data: Data): Map_ {
@@ -31,7 +59,10 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
   for (const field of Object.keys(patch).sort()) {
     const value = patch[field];
     if (!FIELDS.includes(field)) throw CoreError.invalid(t("core-misc.params.unknown_field", { field }));
-    if (isObject(value) && MAPS.includes(field)) {
+    if (field === "reader" && isObject(value)) {
+      // Only what is said changes: one setting of the 排版 sheet at a time.
+      prefs.reader = readerOf({ ...(isObject(prefs.reader) ? prefs.reader : {}), ...value });
+    } else if (isObject(value) && MAPS.includes(field)) {
       if (!(field in prefs)) prefs[field] = {};
       const map = prefs[field];
       if (!isObject(map)) continue;

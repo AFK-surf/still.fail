@@ -7,6 +7,7 @@ import type { Topic } from "./protocol.ts";
 import * as brand from "./brand.ts";
 import * as decisions from "./decisions.ts";
 import * as drive from "./drive.ts";
+import * as prefsMod from "./prefs.ts";
 import * as footprint from "./footprint.ts";
 import * as jobsMod from "./jobs.ts";
 import * as model from "./shapes/model.ts";
@@ -869,6 +870,8 @@ export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
       return footprint.shown(value, c);
     case "drive":
       return drive.shown(value, c);
+    case "prefs":
+      return prefsMod.shown(value);
   }
   if (!ticks(topic)) return value;
   const v = value as J;

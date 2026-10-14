@@ -1049,7 +1049,18 @@ export const SHAPES: Record<string, Shape> = {
     ["badge", opt("String"), { default: true, doc: "What the app's badge counts: decisions (the cards waiting for them), attention (those and the chats of\ntheirs that went wrong; none: this), all (those and the unread)." }],
     ["invite", opt("String"), { default: true, doc: "The invite code a page was opened with, kept through signing in until a workspace is made with it." }],
     ["device", "DeviceView", { default: true }],
+    ["reader", "ReaderPrefs", { default: true, doc: "How the drive's reader lays text out (always whole: the core fills in what is not kept)." }],
   ], { doc: "What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is." }),
+  ReaderPrefs: struct([
+    ["size", "i64", { client: "I54", doc: "The text's size (sp/px), 12 to 32." }],
+    ["line", "f64", { doc: "Line height as a multiple of the size, 1.2 to 2.4." }],
+    ["margin", "i64", { client: "I54", doc: "Room either side (dp/px), 8 to 44." }],
+    ["face", "ReaderFace"],
+    ["indent", "bool", { doc: "Paragraphs start indented two characters." }],
+    ["paper", "ReaderPaper"],
+  ], { doc: "How the drive's reader lays text out on this device (`prefs.set {reader: {…}}`, one setting or several)." }),
+  ReaderFace: words(["serif","sans"], { default: "serif" }),
+  ReaderPaper: words(["follow","white","green","grey","night"], { doc: "The reader's paper: as the app looks (`follow`), or one of its own.", default: "follow" }),
   OpenChat: struct([
     ["station", "String"],
     ["key", "String"],

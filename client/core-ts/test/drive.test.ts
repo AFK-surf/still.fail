@@ -159,3 +159,20 @@ test("where a file was left is kept on the device, none before", async () => {
   assert.deepEqual([v(values, 1).at, v(values, 1).of, v(values, 1).changed], [1200, 50000, at]);
   core.close();
 });
+
+test("the reader's settings are the core's: whole, each in its bounds, one changed at a time", async () => {
+  const { host, core } = await started();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "prefs" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).reader, { size: 18, line: 1.7, margin: 22, face: "serif", indent: true, paper: "follow" });
+  call(core, ui, 2, "prefs.set", { reader: { size: 40, paper: "green" } });
+  await host.settle();
+  call(core, ui, 3, "prefs.set", { reader: { line: 1.93, paper: "nope" } });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).reader, { size: 32, line: 1.9, margin: 22, face: "serif", indent: true, paper: "follow" });
+  core.close();
+});
