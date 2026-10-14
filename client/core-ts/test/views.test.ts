@@ -779,6 +779,21 @@ test("a_stopped_view_lets_its_topics_go", async () => {
   assert.deepEqual(t.store.liveTopics(), []);
 });
 
+test("a_held_topic_a_view_watches_goes_out_to_a_page_subscribing_later", async () => {
+  // The station list watches the workspace; a station's page subscribing to the workspace itself then (its role, for
+  // the ⋯ menu) has it at once, not when it next changes.
+  const t = setup();
+  const list = ui();
+  t.subscribe(1, { topic: "stations", scope: "ws" });
+  t.set(workspace(), { ...oneStation(), role: "owner" });
+  await t.read(list, 1);
+  assert.equal(list.value.length, 1);
+  const page = ui();
+  t.subscribe(2, workspace());
+  await t.read(page, 2);
+  assert.equal(page.value?.role, "owner");
+});
+
 test("stations_shows_each_station_with_its_models", async () => {
   const t = setup();
   const u = ui();
