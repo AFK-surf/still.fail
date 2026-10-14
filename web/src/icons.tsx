@@ -485,6 +485,14 @@ export function Users(props: IconProps) {
   return <Svg {...props}><path d="M12 8Q12 11.5 8.5 11.5Q5 11.5 5 8Q5 4.5 8.5 4.5Q12 4.5 12 8Z M3 20V18.5Q3 15 8.5 15Q14 15 14 18.5V20 M15 4.5Q19 4.5 19 8Q19 11.5 15 11.5 M17 15Q21 15.5 21 18.5V20" /></Svg>;
 }
 
+export function VolumeX(props: IconProps) {
+  return <Svg {...props}><path d="M4.5 9H7.5L12 5V19L7.5 15H4.5Q3 15 3 13.5V10.5Q3 9 4.5 9Z M16 9.5L21 14.5 M21 9.5L16 14.5" /></Svg>;
+}
+
+export function Volume(props: IconProps) {
+  return <Svg {...props}><path d="M4.5 9H7.5L12 5V19L7.5 15H4.5Q3 15 3 13.5V10.5Q3 9 4.5 9Z M15.5 9Q17 10.3 17 12Q17 13.7 15.5 15 M18 6.5Q21 8.8 21 12Q21 15.2 18 17.5" /></Svg>;
+}
+
 export function Wait(props: IconProps) {
   return <Svg {...props}><path d="M18 7.5A7.5 7.5 0 1 0 18 16.5" /><path d="M11.5 12h.01" /><path d="M15.5 12h.01" /><path d="M19.5 12h.01" /></Svg>;
 }
@@ -621,6 +629,8 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "user-plus": UserPlus,
   "user": User,
   "users": Users,
+  "volume-x": VolumeX,
+  "volume": Volume,
   "wait": Wait,
   "watch": Watch,
   "web": Web,

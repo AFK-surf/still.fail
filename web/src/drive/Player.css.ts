@@ -1,6 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { glass } from "../FilePreview.css.ts";
+import { vvBar } from "../VideoViewer.css.ts";
 import { spinner as turning } from "../styles/waiting.css.ts";
 
 /** The player fills its page (the phone's, or the desktop's main pane), dark as the chat's video viewer. */
@@ -59,3 +60,54 @@ export const timeTop = style({
 });
 globalStyle(`${timeTop} b`, { color: vars.text, fontWeight: "600" });
 export const timeRow = style({ "@media": { "(max-width: 640px)": { visibility: "hidden" } } });
+
+// ── with a mouse: a desktop's player ──
+const BAR = 52;
+const LIST = 320;
+const desk = `${player}:not([data-narrow]):not(:fullscreen)`;
+/** The toolbar over the picture, always there (out of full screen): the way back, the name, 选集. */
+globalStyle(`${desk} ${head}`, {
+  top: "0", left: "0", right: "0", transform: "none", width: "auto", maxWidth: "none", height: `${BAR}px`, padding: "0 12px 0 8px",
+  borderRadius: "0", background: "#000", WebkitBackdropFilter: "none", backdropFilter: "none", boxShadow: "inset 0 -1px 0 rgba(255, 255, 255, .08)",
+  opacity: "1", pointerEvents: "auto",
+});
+globalStyle(`${desk} ${name}`, { flex: "1" });
+export const listButton = style({ flex: "none", selectors: { '&[aria-pressed="true"]': { background: "rgba(255, 255, 255, .12)", color: `${vars.text} !important` } } });
+/** The picture under it, clear of the list docked at the right; the controls and a subtitle over the picture's middle. */
+globalStyle(`${desk} ${stage}`, { top: `${BAR}px` });
+globalStyle(`${desk}[data-list] ${stage}`, { right: `${LIST}px` });
+globalStyle(`${desk}[data-list] ${vvBar}, ${desk}[data-list] ${cue}`, { left: `calc((100% - ${LIST}px) / 2)`, width: `min(100% - ${LIST + 32}px, 1080px)` });
+
+/** The folder's others, docked at the right under the toolbar. */
+export const list = style({
+  position: "absolute", zIndex: "3", top: `${BAR}px`, right: "0", bottom: "0", width: `${LIST}px`, display: "flex", flexDirection: "column",
+  background: "#111", boxShadow: "inset 1px 0 0 rgba(255, 255, 255, .08)", color: vars.text,
+});
+export const listHead = style({ display: "flex", alignItems: "center", gap: "8px", padding: "12px 10px 6px 18px" });
+globalStyle(`${listHead} b`, { fontSize: vars.textTitle, fontWeight: "600" });
+globalStyle(`${listHead} small`, { flex: "1", color: vars.muted, fontSize: vars.textMeta, fontVariantNumeric: "tabular-nums" });
+export const listRows = style({ flex: "1", minHeight: "0", overflowY: "auto", padding: "2px 8px 12px" });
+export const listRow = style({
+  display: "grid", gridTemplateColumns: "28px minmax(0, 1fr) auto", alignItems: "center", gap: "4px", width: "100%", minHeight: "40px",
+  padding: "8px 10px", border: "0", borderRadius: `calc(12px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none",
+  color: vars.text, fontSize: vars.textUi, textAlign: "left", cursor: "pointer",
+  selectors: { "&:hover": { background: "rgba(255, 255, 255, .07)" }, "&[data-current]": { background: "rgba(255, 255, 255, .1)", fontWeight: "500" } },
+});
+globalStyle(`${listRow} small`, { color: vars.muted, fontSize: vars.textCaption, fontVariantNumeric: "tabular-nums" });
+globalStyle(`${listRow} span`, { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+
+/** The sound: mute, and a short line to drag. */
+export const volume = style({ display: "flex", alignItems: "center", gap: "2px", marginRight: "6px" });
+export const volumeLine = style({ position: "relative", width: "72px", height: "22px", display: "grid", alignItems: "center", cursor: "pointer", touchAction: "none", outline: "none" });
+export const volumeTrack = style({ position: "relative", display: "block", height: "4px", borderRadius: "2px", overflow: "hidden", background: "rgba(255, 255, 255, .2)" });
+globalStyle(`${volumeTrack} > span`, { position: "absolute", inset: "0", transformOrigin: "left", background: vars.text });
+export const volumeHead = style({
+  position: "absolute", top: "50%", left: "0", width: "10px", height: "10px", borderRadius: "50%", background: vars.text,
+  transform: "translate(-50%, -50%)", boxShadow: "0 1px 4px rgba(0, 0, 0, .35)",
+});
+/** The time where the pointer is along the timeline, over it. */
+export const pointed = style({
+  position: "absolute", bottom: "100%", transform: "translateX(-50%)", marginBottom: "4px", padding: "2px 6px", borderRadius: "6px",
+  background: "rgba(0, 0, 0, .75)", color: "#fff", fontFamily: vars.fontMono, fontSize: vars.textCaption, fontVariantNumeric: "tabular-nums",
+  pointerEvents: "none", whiteSpace: "nowrap",
+});

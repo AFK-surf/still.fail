@@ -4,11 +4,14 @@
 // back on a phone), a timeline drawn here, not the browser's. And zdrive's: speed, a subtitle beside it (E01.srt for
 // E01.mp4, E01.zh.srt; SubRip and ASS turned into WebVTT for the <track>), the folder's others as a playlist (the next
 // one plays at the end), 15 s back and on, full screen; where it was left kept on this device (`drive.place`).
+// With a mouse it sits in the page as a desktop's player: a toolbar over the picture (the way back, the name, 选集
+// when the folder has more), the picture under it with its controls over it, the volume beside them, a time under the
+// pointer along the timeline, and the folder's others in a panel docked at the right.
 // Where no service worker runs the page, a file of up to 200 MB is read whole first instead (its progress shown);
 // a bigger one says it cannot be played here and offers the download.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { DriveEntry } from "../core/shapes.ts";
-import { Back15, Captions, ChevronLeft, Download, Expand, FileAudio, Forward15, Pause, Play, Shrink, SkipBack, SkipForward } from "../icons.tsx";
+import { Back15, Captions, Check, ChevronLeft, Close, Download, Expand, FileAudio, Forward15, List, Pause, Play, Shrink, SkipBack, SkipForward, Volume, VolumeX } from "../icons.tsx";
 import { useNarrow } from "../mobile/app.tsx";
 import { Tip } from "../ui.tsx";
 import { REST_MS, TAP_REST_MS } from "../FilePreview.tsx";
@@ -118,6 +121,10 @@ export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
   const [captions, setCaptions] = useState(true);
   const [full, setFull] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+  const [volume, setVolume] = useState(heard.volume);
+  const [muted, setMuted] = useState(heard.muted);
+  const [listing, setListing] = useState(false);
+  const desk = !narrow;
 
   // The folder's others of its kind, in their names' order: the playlist.
   const list = useMemo(() => siblings.filter((e) => !e.dir && e.kind === entry.kind).sort((a, b) => compareNatural(a.name, b.name)), [siblings, entry.kind]);
@@ -194,6 +201,12 @@ export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
     return () => document.removeEventListener("fullscreenchange", on);
   }, []);
   useEffect(() => { if (media.current) media.current.playbackRate = rate; }, [rate, source]);
+  // How loud, kept for the next one played while the page is open.
+  useEffect(() => {
+    heard.volume = volume; heard.muted = muted;
+    if (media.current) { media.current.volume = volume; media.current.muted = muted; }
+  }, [volume, muted, source]);
+  const louder = useCallback((by: number) => { setMuted(false); setVolume((v) => Math.min(1, Math.max(0, Math.round((v + by) * 20) / 20))); }, []);
   // The subtitle's lines drawn here, not by the browser: above the controls while they show, lower when they fade.
   const [cue, setCue] = useState<string | null>(null);
   useEffect(() => {
@@ -213,6 +226,9 @@ export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
       else if (e.key === "ArrowLeft" || e.key === "j") by(-STEP);
       else if (e.key === "ArrowRight" || e.key === "l") by(STEP);
       else if (e.key === "f") void turn();
+      else if (e.key === "m") setMuted((m) => !m);
+      else if (e.key === "ArrowUp" && desk) louder(0.05);
+      else if (e.key === "ArrowDown" && desk) louder(-0.05);
       else if (e.key === "c" && subtitle) setCaptions((c) => !c);
       else if (e.key === "N" && next) onGo(next.name);
       else if (e.key === "P" && prev) onGo(prev.name);
@@ -222,7 +238,7 @@ export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [toggle, by, turn, wake, subtitle, next, prev, onGo]);
+  }, [toggle, by, turn, wake, subtitle, next, prev, onGo, desk, louder]);
 
   const readBuffered = () => {
     const v = media.current;
@@ -264,7 +280,7 @@ export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
   }
 
   return (
-    <div ref={root} className={`${vvCss.vv} ${css.player}`} data-narrow={narrow || undefined}
+    <div ref={root} className={`${vvCss.vv} ${css.player}`} data-narrow={narrow || undefined} data-list={(desk && listing && list.length > 1) || undefined}
       onPointerMove={(e) => { if (e.pointerType === "mouse") wake(); }}
       onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; clearTimeout(resting.current); if (!onControls.current && playing) setAwake(false); }}
       onPointerDown={(e) => { tapAt.current = { x: e.clientX, y: e.clientY }; }}
@@ -286,7 +302,27 @@ export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
       <header className={css.head} data-awake={awake || undefined} {...keep}>
         <Tip label={backLabel}><button type="button" className={`${pagesCss.iconBtn} ${css.bright}`} aria-label={backLabel} onClick={onBack}><ChevronLeft size={20} /></button></Tip>
         <span className={css.name}><b>{entry.name}</b>{list.length > 1 && index >= 0 && <small>{index + 1} / {list.length}</small>}</span>
+        {desk && list.length > 1 && (
+          <Tip label={t("web-pages.drive.player.list")}>
+            <button type="button" className={`${pagesCss.iconBtn} ${css.listButton}`} aria-label={t("web-pages.drive.player.list")} aria-pressed={listing} onClick={() => setListing((l) => !l)}><List size={18} /></button>
+          </Tip>
+        )}
       </header>
+      {desk && listing && list.length > 1 && (
+        <aside className={css.list}>
+          <div className={css.listHead}>
+            <b>{t("web-pages.drive.player.list")}</b><small>{index + 1} / {list.length}</small>
+            <Tip label={t("common.close")}><button type="button" className={pagesCss.iconBtn} aria-label={t("common.close")} onClick={() => setListing(false)}><Close size={16} /></button></Tip>
+          </div>
+          <div className={css.listRows}>
+            {list.map((e, i) => (
+              <button key={e.name} type="button" className={css.listRow} data-current={i === index || undefined} onClick={() => { if (i !== index) onGo(e.name); }}>
+                <small>{i + 1}</small><span>{e.name}</span>{i === index && (playing ? <Play size={14} /> : <Check size={14} />)}
+              </button>
+            ))}
+          </div>
+        </aside>
+      )}
       <div className={vvCss.vvBar} data-floats data-awake={awake || source.state !== "ready" || undefined} {...keep}>
         {/* On a phone the time goes over the timeline: the buttons take the row. */}
         <span className={css.timeTop}><b>{clock(time)}</b> / {clock(duration)}</span>
@@ -303,6 +339,7 @@ export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
           </span>
           <span className={`${vvCss.vvInfo} ${css.timeRow}`}><span className={vvCss.vvFact}><b className={vvCss.vvNow}>{clock(time)}</b><span className={vvCss.vvDim}> / {clock(duration)}</span></span></span>
           <span className={vvCss.vvGroup}>
+            {desk && <VolumeControl volume={volume} muted={muted} onVolume={(v) => { setVolume(v); setMuted(v === 0); }} onMute={() => setMuted((m) => !m)} />}
             <Tip label={t("web-pages.drive.player.rate")}><button type="button" className={vvCss.vvRate} onClick={() => setRate((r) => RATES[(RATES.indexOf(r) + 1) % RATES.length]!)}>{rate}×</button></Tip>
             {subtitle && <Tip label={captions ? t("web-pages.drive.player.captionsOff") : t("web-pages.drive.player.captionsOn")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-pages.drive.player.captions")} aria-pressed={captions} onClick={() => setCaptions((c) => !c)}><Captions size={18} /></button></Tip>}
             {!audio && <Tip label={full ? t("web-pages.drive.player.unfull") : t("web-pages.drive.player.full")}><button type="button" className={pagesCss.iconBtn} aria-label={full ? t("web-pages.drive.player.unfull") : t("web-pages.drive.player.full")} onClick={() => void turn()}>{full ? <Shrink size={18} /> : <Expand size={18} />}</button></Tip>}
@@ -313,23 +350,59 @@ export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
   );
 }
 
+/** How loud, for the next played as for this one while the page is open. */
+const heard = { volume: 1, muted: false };
+
+/** The sound: a button that mutes, and beside it a line to drag (wider while pointed at). */
+function VolumeControl({ volume, muted, onVolume, onMute }: { volume: number; muted: boolean; onVolume: (v: number) => void; onMute: () => void }) {
+  const box = useRef<HTMLSpanElement>(null);
+  const [drag, setDrag] = useState<number | null>(null);
+  const at = (x: number) => {
+    const r = box.current!.getBoundingClientRect();
+    return Math.round(Math.min(1, Math.max(0, (x - r.left) / r.width)) * 20) / 20;
+  };
+  const shown = drag ?? (muted ? 0 : volume);
+  const silent = muted || volume === 0;
+  return (
+    <span className={css.volume}>
+      <Tip label={silent ? t("web-pages.drive.player.unmute") : t("web-pages.drive.player.mute")}>
+        <button type="button" className={pagesCss.iconBtn} aria-label={silent ? t("web-pages.drive.player.unmute") : t("web-pages.drive.player.mute")} onClick={onMute}>
+          {silent ? <VolumeX size={18} /> : <Volume size={18} />}
+        </button>
+      </Tip>
+      <span ref={box} className={css.volumeLine} role="slider" aria-label={t("web-pages.drive.player.volume")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(shown * 100)} tabIndex={0}
+        onPointerDown={(e) => { if (e.button !== 0) return; e.currentTarget.setPointerCapture(e.pointerId); const v = at(e.clientX); setDrag(v); onVolume(v); }}
+        onPointerMove={(e) => { if (drag === null) return; const v = at(e.clientX); setDrag(v); onVolume(v); }}
+        onPointerUp={() => setDrag(null)} onPointerCancel={() => setDrag(null)}>
+        <span className={css.volumeTrack}><span style={{ transform: `scaleX(${shown})` }} /></span>
+        <span className={vvCss.vvHeadRail} style={{ transform: `translateX(${shown * 100}%)` }}><span className={css.volumeHead} /></span>
+      </span>
+    </span>
+  );
+}
+
 /** Where in it it is, to click or drag to a place; what has come so far a lighter band (VideoViewer's timeline). */
 function Timeline({ duration, now, buffered, onSeek }: { duration: number; now: number; buffered: [number, number][]; onSeek: (time: number) => void }) {
   const box = useRef<HTMLDivElement>(null);
   const span = duration > 0 && Number.isFinite(duration) ? duration : 0;
   const [drag, setDrag] = useState<number | null>(null);
+  // With a mouse over it, the time where it points.
+  const [over, setOver] = useState<number | null>(null);
   const at = (x: number) => {
     const r = box.current!.getBoundingClientRect();
     return Math.min(1, Math.max(0, (x - r.left) / r.width)) * span;
   };
   const shown = drag ?? now;
+  const pointed = drag ?? over;
   const share = span ? Math.min(1, Math.max(0, shown / span)) : 0;
   return (
     <div ref={box} className={vvCss.vvTimeline} role="slider" aria-label={t("web-main.video.position")} aria-valuemin={0} aria-valuemax={Math.round(span)} aria-valuenow={Math.round(shown)}
       onPointerDown={(e) => { if (e.button !== 0 || !span) return; e.currentTarget.setPointerCapture(e.pointerId); setDrag(at(e.clientX)); }}
-      onPointerMove={(e) => { if (drag !== null) setDrag(at(e.clientX)); }}
+      onPointerMove={(e) => { if (drag !== null) setDrag(at(e.clientX)); if (e.pointerType === "mouse" && span) setOver(at(e.clientX)); }}
+      onPointerLeave={() => setOver(null)}
       onPointerUp={(e) => { if (drag === null) return; const to = at(e.clientX); setDrag(null); onSeek(to); }}
       onPointerCancel={() => setDrag(null)}>
+      {pointed !== null && span > 0 && <span className={css.pointed} style={{ left: `${(pointed / span) * 100}%` }}>{clock(pointed)}</span>}
       <span className={vvCss.vvTrack}>
         {span > 0 && buffered.map(([a, b], i) => <span key={i} className={css.buffered} style={{ left: `${(a / span) * 100}%`, width: `${((b - a) / span) * 100}%` }} />)}
         <span className={vvCss.vvPlayed} style={{ transform: `scaleX(${share})` }} />
