@@ -1,14 +1,16 @@
 // The settings' 本机 Station page, in the desktop app: this machine's station whoever runs it (the app, a service
-// installed on its own, a process started by hand), where it stands, and starting, stopping, restarting it, an
-// installed one behind the app's release brought up to it in place (apps/desktop/src/main.ts, station:local). Which
-// workspace it is in is only said: joining one is the workspace's station settings' (「添加这台 Mac」).
+// installed on its own, a process started by hand), in a card as a workspace's stations are (cloud/StationCards.tsx):
+// whether it runs, how and where, starting, stopping, restarting it in its menu, and an installed one behind the app's
+// release brought up to it in place, offered as a station's updates are (Versions.tsx UpdateSummary). Which workspace
+// it is in is only said: joining one is the workspace's station settings' (「添加这台 Mac」).
 import { useEffect, useState } from "react";
 import { useAction } from "../action.ts";
 import type { LocalStationAction, LocalStationState } from "../core/client.ts";
-import { Folder, FileText, Play, Refresh, Stop } from "../icons.tsx";
-import { About, Button, MobileBack, Pill, Section, StatusDot } from "../ui.tsx";
+import { FileText, Folder, Play, Refresh, Stop } from "../icons.tsx";
+import { About, Menu, MobileBack, StatusDot } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
-import * as additionsCss from "../styles/additions.css.ts";
+import * as cardsCss from "../cloud/StationCards.css.ts";
+import * as versionsCss from "../Versions.css.ts";
 import * as css from "./LocalStation.css.ts";
 
 import { NAME } from "../channel.ts";
@@ -44,62 +46,71 @@ export function LocalStationPage({ back }: { back: string }) {
     return done;
   }, (done) => { if ("station" in done) setState(done.station); });
   const doing = act.busy ? act.args?.[0] : state?.doing;
-  const button = (action: LocalStationAction, label: string, icon: typeof Play, primary = false) => (
-    <Button variant={primary ? "primary" : "secondary"} icon={icon} busy={doing === action} disabled={!!doing && doing !== action} onClick={() => void act.run(action)}>{label}</Button>
-  );
+  const working = doing === "start" || doing === "stop" || doing === "restart" || doing === "update" ? doing : undefined;
+  const running = state?.runner !== "none";
+  const canStart = !!state && (!!state.service || state.carried);
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={back} label={t("web-pages.settings.title")} />
       <header className={pagesCss.pageHead}><div><h1>{t("web-pages.localStation.title")}<About>{t(PC ? "web-pages.localStation.leadPc" : "web-pages.localStation.lead", { name: NAME })}</About></h1></div></header>
       {state && (
-        <>
+        <div className={cardsCss.card}>
+          <div className={cardsCss.cardHead}>
+            <StatusDot state={working ? "busy" : running ? "online" : "offline"} label={running ? t("web-pages.localStation.running") : t("web-pages.localStation.stopped")} />
+            <span className={cardsCss.cardTitle}>
+              <span className={css.name}>{state.workspace?.stationName ?? t(PC ? "web-pages.localStation.thisPc" : "web-pages.localStation.thisMac")}</span>
+              <span className={cardsCss.state}>{working ? t(`web-pages.localStation.doing.${working}`) : running ? t("web-pages.localStation.running") : t("web-pages.localStation.stopped")}</span>
+            </span>
+            {!running && !working && canStart && <button type="button" className={versionsCss.action} onClick={() => void act.run("start")}>{t("web-pages.localStation.start")}</button>}
+            <span className={cardsCss.menu}>
+              <Menu items={[
+                running
+                  ? { label: t("web-pages.localStation.stop"), icon: Stop, disabled: !!working, onSelect: () => void act.run("stop") }
+                  : { label: t("web-pages.localStation.start"), icon: Play, disabled: !!working || !canStart, onSelect: () => void act.run("start") },
+                ...(running && state.runner !== "other" ? [{ label: t("web-pages.localStation.restart"), icon: Refresh, disabled: !!working, onSelect: () => void act.run("restart") }] : []),
+                "separator",
+                { label: t("web-pages.localStation.openLog"), icon: FileText, onSelect: () => void act.run("log") },
+                { label: t(PC ? "web-pages.localStation.openFolderPc" : "web-pages.localStation.openFolder"), icon: Folder, onSelect: () => void act.run("folder") },
+              ]} />
+            </span>
+          </div>
+          <div className={cardsCss.cardFoot}>
+            <span>{runBy(state)}</span>
+            {state.version && <span>{state.version}</span>}
+            <span>{place(state)}</span>
+            <span className={cardsCss.mono}>{state.data}</span>
+          </div>
           {state.outdated && (
-            <div className={`${additionsCss.callout} ${css.outdated}`} data-tone="amber">
-              <span>{t("web-pages.localStation.outdated", { version: state.version ?? "?", latest: state.carriedVersion ?? "" })}</span>
-              {button("update", t("web-pages.localStation.update", { version: state.carriedVersion ?? "" }), Refresh, true)}
+            <div className={cardsCss.cardVersions}>
+              <div className={versionsCss.summary}>
+                <span className={versionsCss.summaryText}>
+                  <span>{t("web-pages.localStation.newer", { version: state.version ?? "?", latest: state.carriedVersion ?? "" })}</span>
+                </span>
+                <span className={versionsCss.summaryAction}>
+                  <button type="button" className={versionsCss.action} disabled={!!working} onClick={() => void act.run("update")}>{working === "update" ? t("web-main.versions.updating") : t("web-main.versions.update")}</button>
+                </span>
+              </div>
             </div>
           )}
-          <Section title={t("web-pages.localStation.state")} actions={<>
-            {state.runner === "none"
-              ? (state.service || state.carried) && button("start", t("web-pages.localStation.start"), Play)
-              : button("stop", t("web-pages.localStation.stop"), Stop)}
-            {state.runner !== "none" && state.runner !== "other" && button("restart", t("web-pages.localStation.restart"), Refresh)}
-          </>}>
-            <div className={css.card}>
-              <div className={css.head}>
-                <StatusDot state={state.runner === "none" ? "offline" : "online"} />
-                <span className={css.status}>{state.runner === "none" ? t("web-pages.localStation.stopped") : t("web-pages.localStation.running")}</span>
-                {state.version && <span className={css.version}>{state.version}</span>}
-                {state.outdated && <Pill tone="amber">{t("web-pages.localStation.behind")}</Pill>}
-              </div>
-              <dl className={css.facts}>
-                <dt>{t("web-pages.localStation.runBy")}</dt>
-                <dd>{runBy(state)}</dd>
-                <dt>Workspace</dt>
-                <dd>{!state.workspace ? t("web-pages.localStation.noWorkspace")
-                  : state.workspace.removed ? t("web-pages.localStation.removed", { workspace: state.workspace.name ?? state.workspace.id })
-                  : t("web-pages.localStation.inWorkspace", { workspace: state.workspace.name ?? state.workspace.id, station: state.workspace.stationName ?? "" })}</dd>
-                <dt>{t("web-pages.localStation.data")}</dt>
-                <dd className={css.path}>{state.data}</dd>
-              </dl>
-              <div className={css.links}>
-                <Button variant="ghost" icon={FileText} onClick={() => void act.run("log")}>{t("web-pages.localStation.openLog")}</Button>
-                <Button variant="ghost" icon={Folder} onClick={() => void act.run("folder")}>{t(PC ? "web-pages.localStation.openFolderPc" : "web-pages.localStation.openFolder")}</Button>
-              </div>
-            </div>
-          </Section>
-        </>
+          {act.error && <div className={cardsCss.warn}><span data-level="red" role="alert">{act.error.message}</span></div>}
+        </div>
       )}
     </div>
   );
 }
 
-/** Who runs it: the app, the installed service (and which), or a process started by hand. */
+/** Who runs it: the app, the installed service (and which kind), or a process started by hand. */
 function runBy(state: LocalStationState): string {
-  const service = state.service && t(`web-pages.localStation.service.${state.service.kind}`, { name: state.service.name });
+  const service = state.service && t(`web-pages.localStation.service.${state.service.kind}`);
   if (state.runner === "app") return t("web-pages.localStation.byApp", { name: NAME });
   if (state.runner === "service") return service!;
   if (state.runner === "other") return t("web-pages.localStation.byHand");
-  return service ?? (state.carried ? t("web-pages.localStation.byApp", { name: NAME }) : t("web-pages.localStation.nothing"));
+  return service ?? t("web-pages.localStation.byApp", { name: NAME });
 }
 
+/** The workspace its data is in, only said. */
+function place(state: LocalStationState): string {
+  const w = state.workspace;
+  if (!w) return t("web-pages.localStation.noWorkspace");
+  return t(w.removed ? "web-pages.localStation.removed" : "web-pages.localStation.inWorkspace", { workspace: w.name ?? w.id });
+}
