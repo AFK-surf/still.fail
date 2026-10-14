@@ -18,6 +18,8 @@ export const rowHead = style({ display: "flex", alignItems: "center", gap: 8, mi
 export const rowMeters = style({ display: "flex", flexWrap: "wrap", gap: 4, margin: "4px 0 2px" });
 // Their edges in their own colour, not the row's muted icons' (Sidebar.css.ts).
 globalStyle(`${rowMeters} svg`, { color: "inherit" });
+// The words of a small box set by Inter's line sit a pixel high (more so its CJK name): measured, a pixel down centres them.
+globalStyle(`${rowMeters} [role="img"] > span`, { top: 1 });
 export const rowSub = style({ ...ellipsis, fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted });
 /** How it is, at the end of its first line: short, and never cut (its name gives way). */
 export const rowState = style({ flex: "none", display: "flex", alignItems: "center", gap: 5, marginLeft: "auto", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "nowrap" });
@@ -45,3 +47,7 @@ export const figureNumber = style({
 });
 export const figureLabel = style({ fontSize: vars.textUi, fontWeight: "500", color: vars.text });
 export const note = style({ margin: "10px 0 0", fontSize: vars.textUi, color: vars.muted });
+/** A folder lent: its name, then where it is, quiet, cut at the end (the chevron stays). */
+export const folder = style({ minHeight: 44 });
+export const folderName = style({ flex: "none", fontWeight: "500", maxWidth: "50%", ...ellipsis });
+export const folderPath = style({ flex: 1, ...ellipsis, color: vars.muted });

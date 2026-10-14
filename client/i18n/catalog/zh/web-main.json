@@ -537,6 +537,7 @@
   "web-main.versions.available": "可更新",
   "web-main.versions.backToStable": "回到正式版",
   "web-main.versions.beta": "测试版",
+  "web-main.versions.betaNote": "新版本先到这里，可能不稳定",
   "web-main.versions.betaStation": "接收 station 测试版",
   "web-main.versions.check": "检查更新",
   "web-main.versions.checkFailedRetry": "检查更新失败，点「检查更新」重试",

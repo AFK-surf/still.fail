@@ -16,7 +16,7 @@ import { stationBase } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { same } from "../stationPick.ts";
 import { BackLink, Button, ICON, Loading, Menu, MobileBack, Pill, Section, StatusDot, Time } from "../ui.tsx";
-import { Versions } from "../Versions.tsx";
+import { SoftwareCard } from "../Versions.tsx";
 import { WorkspaceMark } from "../WorkspaceMark.tsx";
 import { HostDetails, Net, problems, state, useLong } from "./StationCards.tsx";
 import { MarkPick } from "./MarkPick.tsx";
@@ -232,10 +232,11 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
           <ul className={pagesCss.list}>
             {folders.map((r) => (
               <li key={r.path}>
-                {/* Its name alone, as the files' sidebar lists it; where it is on hover. */}
-                <Link className={pagesCss.listRow} to={drivePath(base, r.path)} title={r.path}>
+                {/* Its name, where it is quiet after it, on one line. */}
+                <Link className={`${pagesCss.listRow} ${css.folder}`} to={drivePath(base, r.path)} title={r.path}>
                   <Folder {...ICON} className={shellCss.muted} />
-                  <span className={pagesCss.listRowTitle}>{r.name}</span>
+                  <span className={css.folderName}>{r.name}</span>
+                  <span className={css.folderPath}>{r.path}</span>
                   <ChevronRight {...ICON} className={shellCss.muted} />
                 </Link>
               </li>
@@ -244,7 +245,7 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
         </Section>
       )}
       <Section title={t("web-pages.stations.software")}>
-        {s.online ? <Versions station={s.station} updates={o?.updates} manager={manager} beta={s.betaOffered ?? false} rows /> : <p className={css.note}>{t("web-pages.stations.softwareOffline")}</p>}
+        {s.online ? <SoftwareCard station={s.station} updates={o?.updates} manager={manager} beta={s.betaOffered ?? false} /> : <p className={css.note}>{t("web-pages.stations.softwareOffline")}</p>}
         {!o?.updates?.length && s.version && <p className={css.note}>Station {s.version}</p>}
       </Section>
       <Section title={t("web-pages.stations.device")}>

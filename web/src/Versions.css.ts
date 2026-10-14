@@ -5,8 +5,6 @@ import { vars } from "./styles/tokens.css.ts";
 export const versions = style({
   display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "2px 14px", fontSize: vars.textMeta, color: vars.muted,
 });
-/** One to a line, with the check at the end (a page of its own rather than a card's foot). */
-export const rows = style({ flexDirection: "column", alignItems: "flex-start", gap: "8px", fontSize: vars.textUi });
 export const item = style({ display: "inline-flex", alignItems: "baseline", gap: "5px", whiteSpace: "nowrap" });
 export const version = style({ fontVariantNumeric: "tabular-nums" });
 export const newer = style({ color: vars.accentText, fontWeight: "500" });
@@ -23,9 +21,18 @@ export const betaTag = style({
   fontSize: vars.textCaption, fontWeight: "500", lineHeight: "16px",
 });
 /** The 测试版 switch, with its name before it. */
-export const channel = style({ selectors: { [`${rows} &`]: { alignSelf: "flex-start" } }, display: "inline-flex", alignItems: "center", gap: "6px", alignSelf: "center", cursor: "pointer", whiteSpace: "nowrap" });
+export const channel = style({ display: "inline-flex", alignItems: "center", gap: "6px", alignSelf: "center", cursor: "pointer", whiteSpace: "nowrap" });
 
 /** A single overview line; version numbers and settings live in the station detail. */
 export const summary = style({ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "16px", fontSize: vars.textUi, color: vars.muted });
 export const summaryText = style({ display: "flex", flexWrap: "wrap", gap: "4px 12px", minWidth: 0 });
 export const summaryAction = style({ display: "inline-flex", alignItems: "center", gap: "6px", flexShrink: 0 });
+
+/** The station's page: a row each, its mark in a square as a profile's is (ProfileCard). */
+export const softRow = style({ display: "flex", alignItems: "center", gap: "12px", minHeight: "40px" });
+export const softMark = style({ width: "36px", height: "36px" });
+export const softName = style({ display: "inline-flex", alignItems: "center", gap: "6px", fontWeight: "500", color: vars.text });
+export const softVersion = style({ color: vars.muted, fontVariantNumeric: "tabular-nums" });
+export const softRest = style({ display: "inline-flex", alignItems: "center", gap: "10px", flex: "none", fontSize: vars.textUi });
+/** When it was last checked and checking again, quiet, under the rest. */
+export const cardFoot = style({ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "4px 12px", fontSize: vars.textMeta, color: vars.muted });

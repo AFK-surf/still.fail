@@ -5,15 +5,19 @@ import { stationApi, useAction, useStationCall } from "./api.ts";
 import { useDoing } from "./doing.ts";
 import { DoingMark } from "./DoingMark.tsx";
 import { EdgeChip } from "./components.tsx";
-import { Switch, Tip } from "./ui.tsx";
+import { Button, Switch, SwitchRow, Tip } from "./ui.tsx";
+import { ProviderLogo } from "./ui.tsx";
+import { Mark } from "./brand.tsx";
+import { Server } from "./icons.tsx";
+import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./Versions.css.ts";
 import { t } from "./i18n.ts";
 
 /**
  * `updates`: the station's overview's (none from a station older than them: nothing shows); `manager`: may update;
- * `beta`: the 测试版 switch is offered (the core's `betaOffered`); `rows`: one to a line.
+ * `beta`: the 测试版 switch is offered (the core's `betaOffered`).
  */
-export function Versions({ station, updates, manager, beta = false, rows = false }: { station: string; updates: SoftwareVersion[] | undefined; manager: boolean; beta?: boolean; rows?: boolean }) {
+export function Versions({ station, updates, manager, beta = false }: { station: string; updates: SoftwareVersion[] | undefined; manager: boolean; beta?: boolean }) {
   const { update, check, channel, auto } = useSoftware(station);
   const batch = useDoing("software.updateAll", { station });
   if (!updates?.length) return null;
@@ -22,11 +26,11 @@ export function Versions({ station, updates, manager, beta = false, rows = false
   const autoOn = autoUpdating(updates, auto);
   const error = update.error ?? channel.error ?? auto.error ?? (check.error && new Error(t("web-main.versions.checkFailedWhy", { error: check.error.message })));
   return (
-    <div className={`${css.versions}${rows ? ` ${css.rows}` : ""}`}>
+    <div className={css.versions}>
       {updates.map((v) => <Item key={v.id} v={v} manager={manager} busy={batch || (update.busy && update.args?.[0] === v.id)} onUpdate={() => void update.run(v.id)} />)}
       {beta && manager && on != null && (
         <label className={css.channel}>
-          {rows ? t("web-main.versions.betaStation") : t("web-main.versions.beta")}
+          {t("web-main.versions.beta")}
           <Switch small checked={on} disabled={batch || channel.busy} label={t("web-main.versions.beta")} onChange={(next) => void channel.run(next ? "beta" : "stable")} />
         </label>
       )}
@@ -139,4 +143,69 @@ function Item({ v, manager, busy, onUpdate }: { v: SoftwareVersion; manager: boo
 /** How much of what a runtime's install downloads is in: the allowance's rounded box, its edge going round as it comes. */
 export function DownloadChip({ percent }: { percent: number }) {
   return <EdgeChip fill={percent} level="progress" label={t("web-main.versions.downloaded", { percent })} bare />;
+}
+
+/** What a piece of software is drawn with: still.fail's mark for the station, its maker's for a runtime. */
+function SoftwareMark({ id }: { id: string }) {
+  if (id === "station") return <Mark size={18} />;
+  if (id === "claude" || id === "codex") return <ProviderLogo runtime={id} kind="subscription" size={18} />;
+  return <Server size={18} strokeWidth={1.7} />;
+}
+
+/**
+ * A station's software on its own page (cloud/StationPage.tsx), as a settings card: a row each, its mark, name and
+ * version (the test channel's tagged), what is newer and updating it at the row's end; then the test channel and
+ * updating by itself as switches, and when it was last checked with checking again. Grey but for what wants doing.
+ */
+export function SoftwareCard({ station, updates, manager, beta = false }: { station: string; updates: SoftwareVersion[] | undefined; manager: boolean; beta?: boolean }) {
+  const { update, check, channel, auto } = useSoftware(station);
+  const batch = useDoing("software.updateAll", { station });
+  if (!updates?.length) return null;
+  const checked = updates[0]?.checkedAt;
+  const on = onBeta(updates, channel);
+  const autoOn = autoUpdating(updates, auto);
+  const idle = updates.find((v) => v.id === "station")?.idleOnly;
+  const error = update.error ?? channel.error ?? auto.error ?? (check.error && new Error(t("web-main.versions.checkFailedWhy", { error: check.error.message })));
+  return (
+    <div className={pagesCss.card}>
+      {updates.map((v) => <SoftwareRow key={v.id} v={v} manager={manager} busy={batch || (update.busy && update.args?.[0] === v.id)} onUpdate={() => void update.run(v.id)} />)}
+      {beta && manager && on != null && (
+        <SwitchRow title={t("web-main.versions.betaStation")} description={t("web-main.versions.betaNote")} checked={on} disabled={batch || channel.busy} busy={channel.busy}
+          onChange={(next) => void channel.run(next ? "beta" : "stable")} />
+      )}
+      {manager && autoOn != null && (
+        <SwitchRow title={t("web-main.versions.auto")} description={idle ? t("web-main.versions.autoIdleTip") : t("web-main.versions.autoTip")} checked={autoOn} disabled={batch || auto.busy} busy={auto.busy}
+          onChange={(next) => void auto.run(next)} />
+      )}
+      <div className={css.cardFoot}>
+        <span>{checked == null ? t("web-main.versions.checkingVersions") : t("web-main.versions.lastChecked", { time: new Date(checked).toLocaleString() })}</span>
+        {error && <span className={css.failed} role="alert">{error.message}</span>}
+        {checked != null && <button type="button" className={css.check} disabled={check.busy} onClick={() => void check.run()}>{check.busy ? t("web-main.versions.checking") : t("web-main.versions.check")}</button>}
+      </div>
+    </div>
+  );
+}
+
+function SoftwareRow({ v, manager, busy, onUpdate }: { v: SoftwareVersion; manager: boolean; busy: boolean; onUpdate(): void }) {
+  const { shown, failed, tip, updating, beta } = describe(v);
+  const button = (label: string, primary: boolean) => manager && v.updatable && (
+    <Button variant={primary ? "primary" : "secondary"} disabled={busy} onClick={onUpdate}>{label}</Button>
+  );
+  let rest;
+  if (v.state === "updating") rest = <>{v.percent != null && <DownloadChip percent={v.percent} />}<span className={css.newer}>{updating}</span></>;
+  else if (v.state === "failed") rest = <><Tip label={v.message ?? ""}><span className={css.failed} tabIndex={0}>{failed}</span></Tip>{button(t("common.retry"), false)}</>;
+  else if (!v.installed) rest = button(t("web-main.versions.install"), false);
+  else if (v.newer && v.latest) rest = <><span className={css.newer}>{v.latest}</span>{button(t("web-main.versions.update"), true)}</>;
+  else if (v.downgrade && v.latest) rest = <><span className={css.newer}>{v.latest}</span>{button(t("web-main.versions.backToStable"), false)}</>;
+  else if (v.done) rest = <span className={css.newer}>{v.done}</span>;
+  return (
+    <div className={css.softRow}>
+      <span className={`${pagesCss.mark} ${css.softMark}`}>{<SoftwareMark id={v.id} />}</span>
+      <span className={pagesCss.cardRowText}>
+        <strong className={css.softName}>{v.name}{beta && <span className={css.betaTag}>{t("web-main.versions.beta")}</span>}</strong>
+        <Tip label={tip}><span className={css.softVersion}>{shown}</span></Tip>
+      </span>
+      {rest && <span className={css.softRest}>{rest}</span>}
+    </div>
+  );
 }

@@ -594,6 +594,7 @@
   "web-main.versions.available": "Update ready",
   "web-main.versions.backToStable": "Back to stable",
   "web-main.versions.beta": "Beta",
+  "web-main.versions.betaNote": "New versions come here first and may be unstable",
   "web-main.versions.betaStation": "Get station betas",
   "web-main.versions.check": "Check now",
   "web-main.versions.checkFailedRetry": "Update check failed. Click \"Check now\" to retry.",
