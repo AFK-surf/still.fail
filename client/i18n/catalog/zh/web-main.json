@@ -643,9 +643,16 @@
   "web-main.rail.filesAll": "所有 station",
   "web-main.rail.lendsNone": "还没有借出文件夹",
   "web-main.rail.title": "侧边条",
-  "web-main.rail.lead": "左边这一列显示什么、按什么顺序，只在这台设备上",
-  "web-main.rail.show": "显示",
+  "web-main.rail.lead": "左边那一列放什么、按什么顺序，只在这台设备上",
   "web-main.rail.reset": "恢复默认",
-  "web-main.rail.drag": "拖动排序",
-  "web-main.rail.workspaces": "Workspace 切换"
+  "web-main.rail.workspaces": "Workspace 切换",
+  "web-main.rail.customize": "自定义侧边条",
+  "web-main.rail.customizeLead": "在侧边条上拖动换位置，点 − 拿掉",
+  "web-main.rail.allIn": "能放的都在侧边条上了",
+  "web-main.rail.done": "完成",
+  "web-main.rail.remove": "从侧边条移除{name}",
+  "web-main.rail.kind.places": "页面",
+  "web-main.rail.kind.lists": "对话列表",
+  "web-main.rail.kind.attention": "提醒",
+  "web-main.rail.kind.workspaces": "Workspace"
 }

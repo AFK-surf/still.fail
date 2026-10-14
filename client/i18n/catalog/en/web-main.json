@@ -712,9 +712,16 @@
   "web-main.rail.filesAll": "All stations",
   "web-main.rail.lendsNone": "No folder lent yet",
   "web-main.rail.title": "Rail",
-  "web-main.rail.lead": "What the column at the left shows and in what order, on this device",
-  "web-main.rail.show": "Show",
+  "web-main.rail.lead": "What the column at the left holds and in what order, on this device",
   "web-main.rail.reset": "Reset",
-  "web-main.rail.drag": "Drag to reorder",
-  "web-main.rail.workspaces": "Workspaces"
+  "web-main.rail.workspaces": "Workspaces",
+  "web-main.rail.customize": "Customize rail",
+  "web-main.rail.customizeLead": "Drag in the rail to move, press − to take out",
+  "web-main.rail.allIn": "Everything is in the rail",
+  "web-main.rail.done": "Done",
+  "web-main.rail.remove": "Remove {name} from the rail",
+  "web-main.rail.kind.places": "Pages",
+  "web-main.rail.kind.lists": "Chat lists",
+  "web-main.rail.kind.attention": "Alerts",
+  "web-main.rail.kind.workspaces": "Workspaces"
 }

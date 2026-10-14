@@ -83,23 +83,35 @@ export const dot = style({
   selectors: { "&[data-online]": { background: vars.online } },
 });
 
-// ── 侧边条 in 外观 (RailSetting.tsx) ──
+// ── changing it (Rail.tsx: its menu's 自定义侧边条, or 外观's) ──
 
-/** The places in one card, as the settings' cards are. */
-export const setting = style({
-  borderRadius: `calc(22px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: `color-mix(in oklab, ${vars.text} 4%, ${vars.canvas})`,
-  padding: "6px 8px",
+/** A place in the rail as it is: nothing of its own in the layout (its menu finds it by `data-rail-item`). */
+export const slot = style({ display: "contents" });
+/** A place while the rail is changed: dragged up or down to where it goes, a − at its corner to take it out. */
+export const editing = style({
+  position: "relative", borderRadius: `calc(12px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, cursor: "grab", touchAction: "none",
+  outline: `1.5px dashed ${vars.lineStrong}`, outlineOffset: -1,
+  selectors: { "&[data-dragged]": { cursor: "grabbing", background: vars.selected, outlineStyle: "solid", zIndex: 1 } },
 });
-export const settingRow = style({
-  display: "flex", alignItems: "center", gap: 10, minHeight: 44, padding: "0 12px 0 4px", borderRadius: vars.rField, cornerShape: vars.cornerShape,
-  selectors: { "&[data-dragging]": { background: vars.hover } },
+/** What the place draws, not pressed while it is moved. */
+export const still = style({ pointerEvents: "none" });
+export const remove = style({
+  position: "absolute", top: -5, left: -5, display: "grid", placeItems: "center", width: 18, height: 18, padding: 0, border: 0,
+  borderRadius: "50%", background: vars.text, color: vars.sidebar, cursor: "pointer", boxShadow: `0 0 0 2px ${vars.sidebar}`,
 });
-/** Where a row is taken to be dragged. */
-export const handle = style({
-  display: "grid", placeItems: "center", width: 28, height: 28, color: vars.subtle, cursor: "grab", borderRadius: vars.rField,
-  selectors: { "&:hover": { color: vars.text, background: vars.hover }, "&:active": { cursor: "grabbing" } },
+/** The panel beside the rail of what can be added, by kind, and 完成. */
+export const adder = style({ width: 248, padding: 12, display: "grid", gap: 8 });
+export const adderTitle = style({ fontSize: vars.textUi, fontWeight: 600, padding: "2px 4px 0" });
+export const adderLead = style({ margin: 0, padding: "0 4px", fontSize: vars.textMeta, lineHeight: vars.leadingMeta, color: vars.muted });
+export const adderGroup = style({ display: "grid", gap: 2 });
+export const adderKind = style({ padding: "6px 4px 2px", fontSize: vars.textMeta, color: vars.muted });
+export const adderRow = style({
+  display: "flex", alignItems: "center", gap: 10, minHeight: 34, padding: "0 8px", border: 0, borderRadius: vars.rOption, cornerShape: vars.cornerShape,
+  background: "none", color: vars.text, fontSize: vars.textUi, textAlign: "left", cursor: "pointer",
+  selectors: { "&:hover": { background: vars.hover } },
 });
-export const settingIcon = style({ display: "grid", placeItems: "center", width: 20, color: vars.muted });
+export const adderIcon = style({ display: "grid", placeItems: "center", width: 20, color: vars.muted });
+export const adderLabel = style({ flex: 1, minWidth: 0 });
+export const adderPlus = style({ color: vars.subtle });
+export const adderFoot = style({ display: "flex", justifyContent: "flex-end", gap: 6, paddingTop: 4 });
 export const zouSmall = style({ fontSize: vars.textBody, lineHeight: "18px", fontWeight: 600 });
-export const settingLabel = style({ flex: 1, minWidth: 0, fontSize: vars.textUi });
-export const settingFoot = style({ display: "flex", justifyContent: "flex-end", padding: "4px 4px 2px" });

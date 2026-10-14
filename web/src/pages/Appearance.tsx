@@ -2,10 +2,10 @@
 import { AppearanceSetting } from "../components.tsx";
 import { t } from "../i18n.ts";
 import { setPrefs, usePrefs } from "../prefs.ts";
-import { MobileBack, Section, Segmented } from "../ui.tsx";
+import { Button, MobileBack, Section, Segmented } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
-import { RailSetting } from "../RailSetting.tsx";
+import { editRail } from "../Rail.tsx";
 import * as railCss from "../Rail.css.ts";
 
 export function AppearancePage({ back }: { back: string }) {
@@ -22,7 +22,7 @@ export function AppearancePage({ back }: { back: string }) {
       {/* The rail is the wide screen's (Rail.tsx). */}
       <div className={railCss.wideOnly}>
         <Section title={t("web-main.rail.title")} description={t("web-main.rail.lead")}>
-          <RailSetting />
+          <div><Button onClick={() => editRail(true)}>{t("web-main.rail.customize")}</Button></div>
         </Section>
       </div>
     </div>
