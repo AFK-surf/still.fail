@@ -26,7 +26,7 @@ export const rail = style({
 export const top = style({
   // On the web nothing is in the sidebar's top row either: a margin, as there. Its first place's ground (30) level with
   // the sidebar's first row (新对话, 32 from 14 down there): its middle at 30, 3 above the gap's 6 and its 4 within.
-  flex: "none", alignSelf: "stretch", height: 5, transition: `height 380ms ${vars.easeOut}`,
+  flex: "none", alignSelf: "stretch", height: 5, transition: `height 380ms ${vars.easeOut}, margin-bottom 380ms ${vars.easeOut}`,
   selectors: {
     "[data-desktop] &": { height: 41, WebkitAppRegion: "drag" },
     // In the closed bar nothing: its places stand as far from its top as from its sides (rail's padding).
