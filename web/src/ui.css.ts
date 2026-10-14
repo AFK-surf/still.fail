@@ -86,7 +86,7 @@ export const select = style({
   alignItems: "center", justifyContent: "space-between", gap: "8px", textAlign: "left", cursor: "pointer",
   selectors: {
     "&:hover": { borderColor: vars.fieldHover },
-    "&:focus": { outline: "none", borderColor: vars.fieldFocus },
+    "&:focus": { outline: "none", borderColor: vars.fieldHover },
     "&[data-placeholder]": { color: vars.subtle },
     "&:disabled": { opacity: ".55", cursor: "default" },
   },
