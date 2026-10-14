@@ -4,6 +4,7 @@ import { buddyHopKeyframes, fadeKeyframes } from "./styles/keyframes.css.ts";
 import { list, pageNarrow } from "./styles/pages.css.ts";
 import { dialogError, dialogLead, dialogTitle, tooltip } from "./ui.css.ts";
 import { newChat } from "./NewChat.css.ts";
+import { pageBar } from "./styles/sidebar.css.ts";
 
 export const brandLockup = style({ display: "block" });
 export const illus = style({
@@ -50,6 +51,19 @@ export const sidebarUpdate = style({
     },
   },
 });
+// Beside the rail (Rail.tsx, a workspace's page), which opens and closes the sidebar: 更新 at the open sidebar's top right,
+// or past the window's buttons when it is closed, the page bars making room for what is over them.
+const railed = ":root:has([data-rail])";
+const wide = "(min-width: 701px)";
+globalStyle(`${railed} ${sidebarUpdate}`, { "@media": { [wide]: { left: "calc(56px + var(--sidebar-w, 240px) - 12px)" } } });
+globalStyle(`${railed}[data-sidebar="closed"] ${sidebarUpdate}`, { "@media": { [wide]: { left: "68px", transform: "none" } } });
+globalStyle(`${railed}[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] ${sidebarUpdate}`, { "@media": { [wide]: { left: "80px" } } });
+globalStyle(`${railed}[data-sidebar="closed"] ${pageBar}`, { "@media": { [wide]: { paddingLeft: "12px" } } });
+// The window's buttons reach 12 px past the rail.
+globalStyle(`${railed}[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] ${pageBar}`, { "@media": { [wide]: { paddingLeft: "28px" } } });
+globalStyle(`${railed}:has(${sidebarUpdate})[data-sidebar="closed"] ${pageBar}`, { "@media": { [wide]: { paddingLeft: "72px" } } });
+globalStyle(`${railed}:has(${sidebarUpdate})[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] ${pageBar}`, { "@media": { [wide]: { paddingLeft: "84px" } } });
+
 export const brandWordmark = style({
   display: "block",
   "@media": {

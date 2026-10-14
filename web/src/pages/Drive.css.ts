@@ -28,6 +28,15 @@ globalStyle(`${spin}[data-on] svg`, { animation: `${turn} 900ms linear infinite`
 export const list = style({ position: "relative", display: "grid", gap: "2px", minHeight: "200px", borderRadius: vars.rCard, cornerShape: vars.cornerShape });
 // As the settings lists: rows reaching a little past the column, their text in line with the page's.
 globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "none", marginLeft: "max(-12px, calc(50% - 392px))", marginRight: "max(-12px, calc(50% - 392px))" });
+/** A station's folders on the page of them all (DriveHome), under its name and whether it is up. */
+export const station = style({ marginBottom: "24px" });
+export const stationName = style({
+  display: "flex", alignItems: "center", gap: "8px", margin: "0 12px 6px", fontSize: vars.textUi, lineHeight: vars.leadingUi, fontWeight: "600",
+});
+export const stationDot = style({
+  width: "6px", height: "6px", borderRadius: "50%", background: vars.subtle, flex: "none",
+  selectors: { "&[data-online]": { background: vars.online } },
+});
 export const count = style({ margin: "0 12px 8px", color: vars.muted, fontSize: vars.textMeta });
 
 export const entry = style({

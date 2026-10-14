@@ -3322,7 +3322,10 @@ data class PrefsView (
 	val invite: String? = null,
 	val device: DeviceView? = null,
 	/// How the drive's reader lays text out (always whole: the core fills in what is not kept).
-	val reader: ReaderPrefs? = null
+	val reader: ReaderPrefs? = null,
+	/// What the wide screen's rail shows, in its order (web/src/Rail.tsx: chats, decisions, files, stations, profiles,
+	/// connects, usage); none: all of them, so.
+	val rail: List<String>? = null
 )
 
 /// Providers of one group, as the picker lists them.

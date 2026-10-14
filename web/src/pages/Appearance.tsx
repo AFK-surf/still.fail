@@ -5,6 +5,8 @@ import { setPrefs, usePrefs } from "../prefs.ts";
 import { MobileBack, Section, Segmented } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
+import { RailSetting } from "../RailSetting.tsx";
+import * as railCss from "../Rail.css.ts";
 
 export function AppearancePage({ back }: { back: string }) {
   return (
@@ -17,6 +19,12 @@ export function AppearancePage({ back }: { back: string }) {
       <Section title={t("common.language")} description={t("web-pages.appearance.language.description")}>
         <div className={chatCss.appearanceSetting}><LanguageSetting /></div>
       </Section>
+      {/* The rail is the wide screen's (Rail.tsx). */}
+      <div className={railCss.wideOnly}>
+        <Section title={t("web-main.rail.title")} description={t("web-main.rail.lead")}>
+          <RailSetting />
+        </Section>
+      </div>
     </div>
   );
 }

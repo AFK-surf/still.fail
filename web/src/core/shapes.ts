@@ -3312,6 +3312,11 @@ export interface PrefsView {
 	device?: DeviceView;
 	/** How the drive's reader lays text out (always whole: the core fills in what is not kept). */
 	reader?: ReaderPrefs;
+	/**
+	 * What the wide screen's rail shows, in its order (web/src/Rail.tsx: chats, decisions, files, stations, profiles,
+	 * connects, usage); none: all of them, so.
+	 */
+	rail?: string[];
 }
 
 /** Providers of one group, as the picker lists them. */

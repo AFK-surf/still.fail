@@ -1154,6 +1154,7 @@ export const SHAPES: Record<string, Shape> = {
     ["invite", opt("String"), { default: true, doc: "The invite code a page was opened with, kept through signing in until a workspace is made with it." }],
     ["device", "DeviceView", { default: true }],
     ["reader", "ReaderPrefs", { default: true, doc: "How the drive's reader lays text out (always whole: the core fills in what is not kept)." }],
+    ["rail", opt(vec("String")), { default: true, doc: "What the wide screen's rail shows, in its order (web/src/Rail.tsx: chats, decisions, files, stations, profiles,\nconnects, usage); none: all of them, so." }],
   ], { doc: "What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is." }),
   ReaderPrefs: struct([
     ["size", "i64", { client: "I54", doc: "The text's size (sp/px), 12 to 32." }],

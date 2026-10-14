@@ -639,5 +639,12 @@
   "web-main.rail.label": "主导航",
   "web-main.rail.chats": "对话",
   "web-main.rail.decisions": "奏",
-  "web-main.rail.filesNone": "还没有 station 借出文件夹"
+  "web-main.rail.filesNone": "还没有 station 借出文件夹",
+  "web-main.rail.filesAll": "所有 station",
+  "web-main.rail.lendsNone": "还没有借出文件夹",
+  "web-main.rail.title": "侧边条",
+  "web-main.rail.lead": "左边这一列显示什么、按什么顺序，只在这台设备上",
+  "web-main.rail.show": "显示",
+  "web-main.rail.reset": "恢复默认",
+  "web-main.rail.drag": "拖动排序"
 }

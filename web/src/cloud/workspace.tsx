@@ -15,13 +15,13 @@ import { useReady, useTopics } from "../core/react.ts";
 import { LOCAL_MS } from "../motion.ts";
 import { AccountPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
-import { DrivePage, DrivePlayPage, DriveReadPage } from "../pages/Drive.tsx";
+import { DriveHome, DrivePage, DrivePlayPage, DriveReadPage } from "../pages/Drive.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList, StationTrouble, useGlassBands } from "../Sidebar.tsx";
 import { Rail, placeOf } from "../Rail.tsx";
 import * as railCss from "../Rail.css.ts";
 import { drivePath } from "../drive/useDrive.ts";
-import { Folder } from "../icons.tsx";
+import { Boxes, Folder } from "../icons.tsx";
 import { AttentionEntry } from "../Attention.tsx";
 import { DecisionDeskProvider, DecisionPage } from "../DecisionDesk.tsx";
 import { MarkCounts } from "../ChatMark.tsx";
@@ -115,7 +115,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
         <GlobalShortcuts scope={entry.id} newChat={`/w/${entry.id}/new`} settings={`/w/${entry.id}/settings`} />
         <Rail scope={entry.id} workspace={<WorkspaceSwitcher current={entry} compact />} />
         {settings
-          ? <nav className={nav.sidebar} aria-label={t("web-pages.settings.title")}><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} /><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><WebUpdate /><div className={railCss.narrowOnly}><WorkspaceSwitcher current={entry} /></div></div></nav>
+          ? <nav className={nav.sidebar} aria-label={t("web-pages.settings.title")}><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} /><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><WebUpdate /><div className={railCss.narrowOnly}><WorkspaceSwitcher current={entry} /></div></div></nav>
           : placeOf(path) === "files" ? <FilesSidebar entry={entry} />
           : <WorkspaceSidebar entry={entry} />}
         <main className={shellCss.main}>
@@ -150,7 +150,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
             <Route path="settings/stations/:station/footprint" element={<Navigate to={`/w/${entry.id}/settings/stations`} replace />} />
             <Route path="settings/leave" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
             <Route path="s/:station/*" element={<StationPages stations={known && stations} />} />
-            <Route path="files" element={<FilesHome id={entry.id} stations={known && stations} />} />
+            <Route path="files" element={<DriveHome scope={entry.id} />} />
             <Route path="archive" element={<ArchivePage scope={entry.id} back={`/w/${entry.id}`} />} />
             <Route path="decisions" element={<DecisionPage onOpen={(to) => navigate(to)} />} />
             <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, session) => toMadeChat(() => navigate(`${stationBase(station)}/chats/${encodeURIComponent(session)}`))} />} />
@@ -272,7 +272,7 @@ const WorkspaceSidebar = memo(function WorkspaceSidebar({ entry }: { entry: Work
   return (
     <nav ref={useGlassBands()} className={nav.sidebar} aria-label={t("web-pages.workspace.navigation")}>
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} />
-      <ChatList top={<div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>} scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`} decisions={`/w/${entry.id}/decisions`}
+      <ChatList top={<div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div>} scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`} decisions={`/w/${entry.id}/decisions`}
         below={<div className={nav.navTodo}><AttentionEntry scope={entry.id} /></div>} />
       <WorkspaceSidebarFooter entry={entry} />
     </nav>
@@ -303,14 +303,14 @@ function FilesSidebar({ entry }: { entry: WorkspaceEntry }) {
   return (
     <nav ref={useGlassBands()} className={nav.sidebar} aria-label={t("web-pages.drive.title")}>
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} />
-      <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>
+      <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div>
       <FilesNav scope={entry.id} />
       <WorkspaceSidebarFooter entry={entry} />
     </nav>
   );
 }
 
-/** Each station with a drive (docs/drive.md), online or not, and the folders it lends: one opens the folder's page. */
+/** All the stations' folders (DriveHome), then each station with a drive (docs/drive.md), online or not, and the folders it lends. */
 function FilesNav({ scope }: { scope: string }) {
   const stations = useStations(scope).value ?? [];
   const where = useLocation();
@@ -318,6 +318,9 @@ function FilesNav({ scope }: { scope: string }) {
   const lending = stations.filter((s) => s.overview?.drive);
   return (
     <div className={nav.navScroll}>
+      <Link className={nav.navRow} to={`/w/${scope}/files`} aria-current={where.pathname === `/w/${scope}/files` ? "page" : undefined}>
+        <Boxes {...ICON} />{t("web-main.rail.filesAll")}
+      </Link>
       {lending.length === 0 && <p className={nav.navEmpty}>{t("web-main.rail.filesNone")}</p>}
       {lending.map((s) => {
         const base = stationBase(s.station);
@@ -338,15 +341,6 @@ function FilesNav({ scope }: { scope: string }) {
       })}
     </div>
   );
-}
-
-/** 文件 in the rail: the first station that lends folders, its page (one folder: that folder). */
-function FilesHome({ id, stations }: { id: string; stations: Station[] | undefined }) {
-  const views = useStations(id).value;
-  if (!stations || !views) return <Loading label={t("web-pages.drive.reading")} />;
-  const first = views.find((s) => s.overview?.drive?.roots.length) ?? views.find((s) => s.overview?.drive);
-  if (first) return <Navigate to={drivePath(stationBase(first.station), null)} replace />;
-  return <Empty><Illustration name="no-station" /><p>{t("web-main.rail.filesNone")}</p></Empty>;
 }
 
 /** At the sidebar's foot: the workspace in view, which account it belongs to, and the others. */

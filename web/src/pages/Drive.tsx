@@ -8,7 +8,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
 import { ContextMenu, DropdownMenu } from "radix-ui";
-import { useStation } from "../station.tsx";
+import { stationBase, useStation } from "../station.tsx";
+import { useStations } from "../api.ts";
 import { useGo } from "../go.ts";
 import { useDoing } from "../doing.ts";
 import { useAct } from "../toast.tsx";
@@ -39,6 +40,32 @@ export function DrivePage() {
   return (
     <div className={`${pagesCss.page} ${css.page}`}>
       {d.loading || !d.offered || root === null ? <Roots d={d} /> : <FolderView d={d} root={root} path={path} />}
+    </div>
+  );
+}
+
+/** 文件 in the rail (`/w/<ws>/files`): every station that lends folders, its folders under its name; one opens. */
+export function DriveHome({ scope }: { scope: string }) {
+  const stations = useStations(scope).value;
+  const go = useGo();
+  const lending = (stations ?? []).filter((s) => s.overview?.drive);
+  return (
+    <div className={`${pagesCss.page} ${css.page}`}>
+      <header className={pagesCss.pageHead}><div className={css.headText}><h1>{t("web-pages.drive.title")}</h1></div></header>
+      {!stations ? <p className={shellCss.muted}>{t("web-pages.drive.reading")}</p>
+        : lending.length === 0 ? <Empty text={t("web-main.rail.filesNone")} />
+        : lending.map((s) => {
+          const roots = s.overview?.drive?.roots ?? [];
+          return (
+            <section key={s.station} className={css.station}>
+              <h2 className={css.stationName}><span className={css.stationDot} data-online={s.online || undefined} />{s.name}</h2>
+              <div className={css.list}>
+                {roots.length === 0 && <p className={css.count}>{t("web-main.rail.lendsNone")}</p>}
+                {roots.map((r) => <RootRow key={r.path} root={r} onOpen={() => go(drivePath(stationBase(s.station), r.path))} />)}
+              </div>
+            </section>
+          );
+        })}
     </div>
   );
 }

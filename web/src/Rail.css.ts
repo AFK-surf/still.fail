@@ -1,22 +1,29 @@
 // The rail at the wide screen's left (Rail.tsx): a column of the sidebar's own ground, the places as icons.
-import { style } from "@vanilla-extract/css";
+import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 
 const wide = "(min-width: 701px)";
 const narrow = "(max-width: 700px)";
-/** The rail's width (styles/shell.css.ts puts it in the grid). */
-export const RAIL_W = 56;
 
 export const rail = style({
   display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "0 0 12px", background: vars.sidebar,
   WebkitUserSelect: "none", userSelect: "none",
   "@media": { [narrow]: { display: "none" } },
 });
-/** Level with the sidebar's brand row; in the desktop app, the row the window's buttons are in, which drags it. */
+/**
+ * Level with the sidebar's top row, the sidebar's opening and closing in it. In the desktop app the row drags the window;
+ * on macOS its buttons are in it (main.ts puts them 16 px in, reaching past the rail), and the toggle comes under them.
+ */
 export const top = style({
-  flex: "none", height: 48,
-  selectors: { "[data-desktop] &": { height: 44, alignSelf: "stretch", WebkitAppRegion: "drag" } },
+  flex: "none", alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "center", height: 48, marginBottom: 6,
+  selectors: {
+    "[data-desktop] &": { height: 44, WebkitAppRegion: "drag" },
+    '[data-desktop="inset"]:not([data-fullscreen]) &': { height: 88, alignItems: "flex-end" },
+  },
 });
+globalStyle(`[data-desktop] ${top} > *`, { WebkitAppRegion: "no-drag" });
+/** The panel icons are drawn for a panel at the right: turned round for the sidebar at the left. */
+export const mirrored = style({ transform: "scaleX(-1)" });
 export const grow = style({ flex: 1 });
 
 export const item = style({
@@ -45,6 +52,8 @@ export const workspace = style({
 });
 export const mark = style({ position: "absolute", top: -4, right: -4, display: "flex", padding: 2, borderRadius: "50%", background: vars.sidebar });
 
+/** What is about the rail: nothing on a narrow screen. */
+export const wideOnly = style({ "@media": { [narrow]: { display: "none" } } });
 /** What the rail holds, on a narrow screen (no rail there) in the sidebar's foot as before. */
 export const narrowOnly = style({ "@media": { [wide]: { display: "none" } } });
 
@@ -57,3 +66,24 @@ export const dot = style({
   width: 6, height: 6, borderRadius: "50%", background: vars.subtle, flex: "none",
   selectors: { "&[data-online]": { background: vars.online } },
 });
+
+// ── 侧边条 in 外观 (RailSetting.tsx) ──
+
+/** The places in one card, as the settings' cards are. */
+export const setting = style({
+  borderRadius: `calc(22px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: `color-mix(in oklab, ${vars.text} 4%, ${vars.canvas})`,
+  padding: "6px 8px",
+});
+export const settingRow = style({
+  display: "flex", alignItems: "center", gap: 10, minHeight: 44, padding: "0 12px 0 4px", borderRadius: vars.rField, cornerShape: vars.cornerShape,
+  selectors: { "&[data-dragging]": { background: vars.hover } },
+});
+/** Where a row is taken to be dragged. */
+export const handle = style({
+  display: "grid", placeItems: "center", width: 28, height: 28, color: vars.subtle, cursor: "grab", borderRadius: vars.rField,
+  selectors: { "&:hover": { color: vars.text, background: vars.hover }, "&:active": { cursor: "grabbing" } },
+});
+export const settingIcon = style({ display: "grid", placeItems: "center", width: 20, color: vars.muted });
+export const zouSmall = style({ fontSize: vars.textBody, lineHeight: "18px", fontWeight: 600 });
+export const settingLabel = style({ flex: 1, minWidth: 0, fontSize: vars.textUi });
+export const settingFoot = style({ display: "flex", justifyContent: "flex-end", padding: "4px 4px 2px" });

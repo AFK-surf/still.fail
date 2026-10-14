@@ -51,12 +51,13 @@ const titleless = () => !!window.stillfailDesktop && (window.stillfailDesktop.fr
  * the sidebar while it hops to rest at the top left (beside the window's buttons in the desktop app); a click there
  * opens it again. On the web and in the Windows app the name stays at the top; on a phone, where the sidebar is a page, it is the lockup.
  */
-export function SidebarBrand() {
+export function SidebarBrand({ rail }: { rail?: boolean }) {
+  // Beside the rail (Rail.tsx) the top is the window's: its buttons, 更新; the rail opens and closes the sidebar.
   return (
     <>
-      {!titleless() && <Themed name={WORDMARK.name} width={WORDMARK.width} height={WORDMARK.height} alt={NAME} className={css.brandWordmark} />}
+      {!titleless() && !rail && <Themed name={WORDMARK.name} width={WORDMARK.width} height={WORDMARK.height} alt={NAME} className={css.brandWordmark} />}
       {!titleless() && <span className={css.brandPhone}><Lockup /></span>}
-      <SidebarBuddy />
+      {!rail && <SidebarBuddy />}
       <UpdateButton />
     </>
   );
@@ -92,11 +93,12 @@ function onPage(node: ReactNode): ReactNode {
 /** The sidebar's latest opening or closing: only its end lets the sidebar overflow again. */
 let moving = 0;
 
-function SidebarBuddy() {
+/**
+ * Opening and closing the sidebar (its shortcut too: one place on the page holds it), the page following as it moves;
+ * `moved` is told where it goes as it starts.
+ */
+export function useSidebarToggle(moved?: (closed: boolean) => void): { closed: boolean; toggle: () => void; label: string } {
   const [closed, setClosed] = useState(() => document.documentElement.dataset.sidebar === "closed");
-  const [pose, setPose] = useState<Pose>(closed ? "rest" : "push");
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
   const toggle = () => {
     const next = !closed;
     // It moves (and the sidebar with it, the page bars' room for it, 更新 by it) only now: resizing the sidebar follows
@@ -113,18 +115,28 @@ function SidebarBuddy() {
       ...moves(`.${sidebarCss.pageBar}`, ["padding-left"]),
     ], () => closeSidebar(next)).then(() => { if (turn === moving) delete document.documentElement.dataset.sidebarMoving; });
     setClosed(next);
-    // It hops on the way, and lands in the pose of where it goes.
-    setPose("hop");
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => setPose(next ? "rest" : "push"), 380);
+    moved?.(next);
   };
   useShortcut("sidebar.toggle", toggle);
   useKeymap();
   const keys = shortcutOf("sidebar.toggle");
+  return { closed, toggle, label: `${closed ? t("web-main.sidebar.open") : t("web-main.sidebar.close")}${keys ? `  ${keys}` : ""}` };
+}
+
+function SidebarBuddy() {
+  const [pose, setPose] = useState<Pose>(() => document.documentElement.dataset.sidebar === "closed" ? "rest" : "push");
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  // It hops on the way, and lands in the pose of where it goes.
+  const { closed, toggle, label } = useSidebarToggle((next) => {
+    setPose("hop");
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setPose(next ? "rest" : "push"), 380);
+  });
   // On the page itself, not in the sidebar: a closed sidebar clips what is in it, and the desktop app's window would
   // then take a click on the buddy for a drag of the window.
   const buddy = (
-    <Tip label={`${closed ? t("web-main.sidebar.open") : t("web-main.sidebar.close")}${keys ? `  ${keys}` : ""}`}><button type="button" className={css.sidebarBuddy} data-pose={pose} onClick={toggle} aria-label={closed ? t("web-main.sidebar.open") : t("web-main.sidebar.close")}>
+    <Tip label={label}><button type="button" className={css.sidebarBuddy} data-pose={pose} onClick={toggle} aria-label={closed ? t("web-main.sidebar.open") : t("web-main.sidebar.close")}>
       <Themed name={`buddy/${pose}`} width={28} height={28} />
     </button></Tip>
   );
