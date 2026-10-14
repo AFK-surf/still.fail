@@ -47,10 +47,11 @@ export function flag(args: string[], name: string): string | undefined {
   return at >= 0 ? args[at + 1] : undefined;
 }
 
-/// Written beside and renamed into place, synced, readable by its owner only.
+/// Written beside and renamed into place, synced, readable by its owner only. Beside under this process's own name:
+/// another process writing the same file at once (`enroll` while the station runs) has its own.
 export function writePrivate(path: string, data: string | Uint8Array) {
   mkdirSync(dirname(path), { recursive: true });
-  const tmp = `${path}.tmp`;
+  const tmp = `${path}.${process.pid}.tmp`;
   const fd = openSync(tmp, "w", 0o600);
   try {
     writeSync(fd, typeof data === "string" ? Buffer.from(data) : data);
