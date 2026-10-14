@@ -154,10 +154,10 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
         const left = model.target() - model.where;
         if (model.mode.kind !== "follow" || left < 0.5) {
           // There: what came meanwhile is taken at once.
+          made.frame = 0;
           model.glide(false);
           if (signature(model.layout()) !== made.drawn) flushSync(redraw);
           else put(el);
-          made.frame = 0;
           tell();
           return;
         }

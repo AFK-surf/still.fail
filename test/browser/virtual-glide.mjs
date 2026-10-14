@@ -42,6 +42,7 @@ createRoot(document.getElementById('root')!).render(<List />);
     const glides = new Set();
     window.glideStats = { peak: 0, pending: () => glides.size };
     window.requestAnimationFrame = callback => {
+      // Vite serves the source here, without minifying callback names.
       const glide = callback.name === 'glide';
       const id = request(time => { glides.delete(id); callback(time); });
       if (glide) { glides.add(id); glideStats.peak = Math.max(glideStats.peak, glides.size); }
