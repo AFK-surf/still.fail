@@ -36,7 +36,7 @@ Windows 桌面版（NSIS 安装包，没有代码签名）同样签：`desktop/<
 
 ## 密钥
 
-- 私钥（Ed25519，PKCS#8 PEM）放在 GitHub Environment `production` 的 secret `RELEASE_SIGNING_KEY`。用到它的 job：`pipeline.yml` 的 `station`、`desktop`，`stable.yml` 的 `station`、`desktop`。CI 里没有 key、或者 key 不在 `RELEASE_KEYS` 里，`release-sign.ts` 直接失败，不发未签名的版本。
+- 私钥（Ed25519，PKCS#8 PEM）放在 GitHub Environment `production` 的 secret `RELEASE_SIGNING_KEY`，备份在左子健的 1Password（个人账号的 Personal vault，「still.fail release signing key (release-1 …)」）。恢复 key 只在同一个 vault 里（「still.fail release recovery key …」），不进 CI。两把都是 2026-10-15 在 mba 上用 openssl 生成的，生成完本地文件已删。用到它的 job：`pipeline.yml` 的 `station`、`desktop`，`stable.yml` 的 `station`、`desktop`。CI 里没有 key、或者 key 不在 `RELEASE_KEYS` 里，`release-sign.ts` 直接失败，不发未签名的版本。
 - 本地用 `RELEASE_DIR` 发到 dev cloud 时没有 key 只警告，产出未签名的 feed（station 不会更新到它）；要测签名就自己生成一把测试 key（下面），station 用 `STILLFAIL_RELEASE_KEYS` 认它。
 - 生成：`node scripts/release-sign.ts keygen <私钥文件>`，打印公钥和 key id。公钥加进 `signed.ts` 的 `RELEASE_KEYS`。
 - 恢复 key：`RELEASE_KEYS` 里再放一把离线保管的公钥。CI 的 key 泄露或丢失时，用恢复 key 签一个把 `RELEASE_KEYS` 换成新 key 的版本，station 就能继续更新。

@@ -13,8 +13,10 @@ import { createHash, createPublicKey, verify } from "node:crypto";
 /// (comma-separated) adds keys for a test's own releases (a dev cloud's); it is the station's environment, which only
 /// the machine's user sets.
 export const RELEASE_KEYS: readonly string[] = [
-  // release-1: CI's RELEASE_SIGNING_KEY.
-  "__RELEASE_KEY_1__",
+  // release-1 (id 3c2d0f7ad7f9eca2): CI's RELEASE_SIGNING_KEY; its private key also kept in 1Password.
+  "vJeYSXYJW04ANrn49w+I7nzS/8NFsh1MKwRCiJ8PVPI=",
+  // recovery (id d3353d225efaaecd): kept offline (1Password) only, never in CI; signs a release that replaces release-1 should it be lost.
+  "pvYJzkDfZGPRIPSLQ0jQDTXwhkwfbMsUtXxdVavugxc=",
 ];
 
 /// What a key is named by in what it signed: the first 16 hex digits of the sha256 of its raw bytes.
