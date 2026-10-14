@@ -16,7 +16,10 @@ import { StationKey } from "../src/cloud/key.ts";
 import { loadMesh, type Connection, type Endpoint } from "../src/mesh/native.ts";
 import { PEER_ALPN, peerCall } from "../src/mesh/peer.ts";
 import { ALPN } from "../src/mesh/serve.ts";
-import { start } from "../../client/core-ts/src/hosts/node.ts";
+// The core, as the desktop app runs it: imported by its path at run time, so the station's typecheck does not take in
+// the core's sources (they are checked under the core's own settings).
+const CORE = "../../client/core-ts/src/hosts/node.ts";
+const { start } = (await import(CORE)) as { start: (dir: string, origin: string, listener: (client: number, json: string) => void) => { connect(): number; receive(client: number, json: string): void; close(): Promise<void> } };
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const PORT = Number(process.env.PORT ?? 8877);
