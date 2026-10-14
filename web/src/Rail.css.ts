@@ -1,6 +1,7 @@
 // The rail at the wide screen's left (Rail.tsx): a column in the sidebar's block (styles/shell.css.ts dock), the places as icons.
 import { globalStyle, style } from "@vanilla-extract/css";
 import { navFoot, stationRow, stationTrouble } from "./Sidebar.css.ts";
+import { floatingThumb } from "./scrollbars.css.ts";
 import { dock } from "./styles/shell.css.ts";
 import { vars } from "./styles/tokens.css.ts";
 
@@ -70,6 +71,9 @@ export const edge = style({
 });
 // A scrollbar in the sidebar (scrollbars.ts) a pixel clear of the edge's line, not on it.
 globalStyle(`${dock} *`, { "@media": { [wide]: { scrollPaddingRight: 1 } } });
+// Its scrollbar gone as the sidebar starts to close (fixed, the bar's clipping does not cut it), not left a moment over
+// the closing bar or the page.
+globalStyle(`:root[data-sidebar="closed"] ${dock} ${floatingThumb}`, { "@media": { [wide]: { visibility: "hidden" } } });
 // The pointer over the sidebar (its block, before the page): the bar is there to find.
 globalStyle(`${dock}:hover ~ ${edge}::after`, { opacity: 1 });
 export const grow = style({ flex: 1 });
