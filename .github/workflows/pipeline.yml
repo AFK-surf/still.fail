@@ -2,7 +2,7 @@
 #   a branch: the full check (scripts/check.sh) of what it changes from main, and every part it touches built and
 #             bundled (deploy.py --dry-run): evidence for its merge; nothing deployed, no secrets.
 #   main:     the full check of what changed since the last deploy (the tag deployed/beta), then what changed of it goes
-#             out, the API first: api, then the test channel's web app (app.youdid.wtf), admin, preview and youdid.wtf,
+#             out, the API first: api, then the test channel's web app (app.youdid.wtf), admin, preview, share and youdid.wtf,
 #             its station release (then studio's station updates to it), its Android app and its desktop app (built
 #             and signed on the organization Mac runner with the existing certificate).
 #             Nothing goes out after a step that fails; the tag moves to the commit once all of it is out.
@@ -76,9 +76,11 @@ jobs:
           if has '^(web/|client/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.web-beta\.jsonc)$)' && [ ${#static[@]} = 0 ]; then static+=(web-beta); fi
           if has '^(web/|client/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.admin\.jsonc)$)'; then static+=(admin); fi
           if has '^cloud/(src/preview\.ts|build-static\.ts|wrangler\.preview\.jsonc)$'; then static+=(preview); fi
+          # The share host's page is the web's Markdown and visualizations, its words, the iroh it binds (client/), and its headers.
+          if has '^(web/|client/|package\.json$|pnpm-lock\.yaml$|cloud/(src/share\.ts|share-hosts\.ts|build-static\.ts|wrangler\.share\.jsonc|wrangler\.jsonc|deploy\.py)$)'; then static+=(share); fi
           if has '^(web/src/site/|cloud/wrangler\.site-beta\.jsonc$)'; then static+=(site-beta); fi
           api=false
-          if printf '%s\n' "$changed" | grep -E '^cloud/(src/|wrangler\.jsonc$|package\.json$|deploy\.py$)' | grep -qvE '^cloud/src/(relay|relay-worker|limits|preview)\.ts$'; then api=true; fi
+          if printf '%s\n' "$changed" | grep -E '^cloud/(src/|wrangler\.jsonc$|package\.json$|deploy\.py$)' | grep -qvE '^cloud/src/(relay|relay-worker|limits|preview|share)\.ts$'; then api=true; fi
           relay=false
           if has '^cloud/(src/(relay|relay-worker|limits|auth)\.ts|Dockerfile|relay-entrypoint\.sh|wrangler\.relay\.jsonc)$'; then relay=true; fi
           station=false

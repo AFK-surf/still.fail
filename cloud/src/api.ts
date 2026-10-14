@@ -14,7 +14,7 @@ import { grantKeys, signCredential, validKeyHex, verifyAnySignature, verifyKeySi
 import { changelog, serveChangelog, serveFixed } from "./changelog";
 import { receiveFeedback } from "./feedback";
 import { pushKey, registration, stationNotify } from "./push";
-import { relays } from "./relays";
+import { relays, relayUrls } from "./relays";
 import { receiveTraces } from "./tracing";
 
 /** Directory errors travel over RPC as their code; this gives each its status. */
@@ -130,6 +130,9 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   // Which of its reports are fixed and out, for a station to tell who reported them; what changed, for anyone (changelog.ts).
   if (path === "/v1/feedback/fixed" && method === "POST") return serveFixed(request, env);
   if (path === "/v1/changelog" && method === "GET") return serveChangelog(request, env);
+  // still.fail's relays, for anyone: the page that shows a published chat (share.still.fail, src/share.ts) reaches the
+  // station through them, signed in to nothing (docs/public-share.md). From any page: what it says is no secret.
+  if (path === "/v1/relays" && method === "GET") return reply({ relay_urls: relayUrls(env) }, 200, { "access-control-allow-origin": "*", "cache-control": "public, max-age=300" });
 
   // Notices of a station's chats, signed with its key like its spans, pushed to the people they are for (push.ts).
   if (path === "/v1/stations/notify" && method === "POST") return stationNotify(request, env);

@@ -8,6 +8,7 @@
 //   stillfail-web-beta the same files, on BETA_ORIGIN's: the test channel (wrangler.web-beta.jsonc)
   //   stillfail-admin    the admin's console, static, on ADMIN_ORIGIN's (wrangler.admin.jsonc)
   //   stillfail-preview  the preview host, static, on PREVIEW_ORIGIN's (wrangler.preview.jsonc)
+  //   stillfail-share    the share host, static, on share.still.fail: published chats (wrangler.share.jsonc)
   // A route takes precedence over a Custom Domain on the same host, so the API's and the relay's paths reach their
   // Workers and every other path the static ones.
   // Each host has its new name (still.fail) and its old one (3720.org), both bound for good (docs/rename-still-fail.md):

@@ -1,10 +1,13 @@
 // A local still.fail cloud for trying the whole path without Cloudflare: its Workers
 // in miniflare (Google mocked; see harness.ts) behind a small server on :8787
 // (PORT), on :8789 (ADMIN_PORT) as the admin console's host, :8790 as the
-// preview host and :8791 (PORT + 4) as the test channel's (app.youdid.wtf's: the
-// web app's files, with what ember-web-beta adds; alice is let in, bob is not). The static sites come from dist/cloud-web, dist/cloud-admin and
-// dist/cloud-preview (`pnpm run build:cloud`) as on Cloudflare. WebSockets
-// (/v1/events, the relay) are piped to miniflare itself, listening on PORT + 1.
+// preview host, :8791 (PORT + 4) as the test channel's (app.youdid.wtf's: the
+// web app's files, with what ember-web-beta adds; alice is let in, bob is not) and :8792 (PORT + 5) as the share host
+// (share.still.fail's: published chats). The static sites come from dist/cloud-web, dist/cloud-admin, dist/cloud-preview
+// and dist/cloud-share (`pnpm run build:cloud`) as on Cloudflare; the share page asks the cloud it was built for for the
+// relays, so build it for this one (cloud/share-hosts.ts):
+//   STILLFAIL_SHARE_CLOUD=http://127.0.0.1:8787 STILLFAIL_SHARE_RELAYS=http://127.0.0.1:3340 pnpm run build:cloud
+// WebSockets (/v1/events, the relay) are piped to miniflare itself, listening on PORT + 1.
 //   RELAY=http://127.0.0.1:3340 pnpm exec tsx test/dev.ts
 // The console's admin is alice (ADMIN_EMAIL=bob@example.test makes it bob). SEED=600 fills it with made-up people.
 // Development-only routes (never in the Worker), on either port:
@@ -36,10 +39,13 @@ const previewOrigin = `http://127.0.0.1:${previewPort}`;
 // The test channel's host: another origin again.
 const betaPort = port + 4;
 const betaOrigin = `http://127.0.0.1:${betaPort}`;
+// The share host: another origin again.
+const sharePort = port + 5;
+const shareOrigin = `http://127.0.0.1:${sharePort}`;
 const dist = join(import.meta.dirname, "..", "..", "dist");
 const TYPES: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json", ".wasm": "application/wasm", ".woff2": "font/woff2" };
 
-/** The static sites' files as the stand-in static Worker asks for them (/web/…, /admin/…, /preview/…); 404 for anything else. */
+/** The static sites' files as the stand-in static Worker asks for them (/web/…, /admin/…, /preview/…, /share/…); 404 for anything else. */
 async function assets(request: Request): Promise<Response> {
   const [, site, ...rest] = posix.normalize(decodeURIComponent(new URL(request.url).pathname)).split("/");
   const file = rest.join("/");
@@ -68,7 +74,7 @@ const pushes = pushLog ? {
 } : {};
 
 // With AXIOM_TOKEN (and AXIOM_DATASET) in the environment, traces go to Axiom as they would from Cloudflare.
-const h = await harness({ clock: "real", ...pushes, origin, adminOrigin, previewOrigin, betaOrigin, assets, port: port + 1, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340", adminEmail: process.env.ADMIN_EMAIL ?? "alice@example.test", ...(process.env.AXIOM_TOKEN ? { axiom: "real" as const } : {}), ...(process.env.REVIEW_ACCOUNTS ? { reviewAccounts: process.env.REVIEW_ACCOUNTS } : {}), ...(process.env.PERSIST ? { persist: process.env.PERSIST } : {}), ...(process.env.AUTH_KEY ? { signingKey: process.env.AUTH_KEY } : {}) });
+const h = await harness({ clock: "real", ...pushes, origin, adminOrigin, previewOrigin, betaOrigin, shareOrigin, assets, port: port + 1, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340", adminEmail: process.env.ADMIN_EMAIL ?? "alice@example.test", ...(process.env.AXIOM_TOKEN ? { axiom: "real" as const } : {}), ...(process.env.REVIEW_ACCOUNTS ? { reviewAccounts: process.env.REVIEW_ACCOUNTS } : {}), ...(process.env.PERSIST ? { persist: process.env.PERSIST } : {}), ...(process.env.AUTH_KEY ? { signingKey: process.env.AUTH_KEY } : {}) });
 const aliceTokens = await h.login("alice");
 const alice = h.as(aliceTokens);
 // alice may use the test channel (the console's switch does the same).
@@ -135,7 +141,7 @@ async function serve(base: string, req: IncomingMessage, res: ServerResponse) {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(chunk as Buffer);
   const headers = Object.fromEntries(Object.entries(req.headers).filter(([k, v]) => typeof v === "string" && !["host", "connection"].includes(k))) as Record<string, string>;
-  const response = await (base === origin ? h.fetch : base === previewOrigin ? h.fetchPreview : base === betaOrigin ? h.fetchBeta : h.fetchAdmin)(url.pathname + url.search, {
+  const response = await (base === origin ? h.fetch : base === previewOrigin ? h.fetchPreview : base === betaOrigin ? h.fetchBeta : base === shareOrigin ? h.fetchShare : h.fetchAdmin)(url.pathname + url.search, {
     method: req.method, headers, redirect: "manual",
     ...(chunks.length ? { body: Buffer.concat(chunks) } : {}),
   });
@@ -171,6 +177,7 @@ createServer(handle(previewOrigin)).listen(previewPort, "127.0.0.1", () => conso
 const betaServer = createServer(handle(betaOrigin));
 betaServer.on("upgrade", (req, socket, head) => server.emit("upgrade", req, socket, head));
 betaServer.listen(betaPort, "127.0.0.1", () => console.log(`READY beta (dev) on :${betaPort}`));
+createServer(handle(shareOrigin)).listen(sharePort, "127.0.0.1", () => console.log(`READY share host (dev) on :${sharePort}`));
 
 /** An account as the web app kept it in localStorage (what `migrate` takes). */
 async function signIn(user: string) {

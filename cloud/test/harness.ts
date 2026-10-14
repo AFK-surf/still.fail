@@ -3,6 +3,7 @@ import { Miniflare, convertV4MiniflareOptions, Response as MFResponse, Log, LogL
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { ulid } from "ulid";
 import { digest, randomSecret, type Tokens } from "../src/auth.ts";
+import { shareFiles } from "../src/share.ts";
 import { createRequire } from "node:module";
 
 // workerd keeps a WebSocket's TCP connection open some ten seconds after a close the Worker began (Cloudflare does
@@ -51,6 +52,8 @@ export async function harness(
     /** The console's host. */
     adminOrigin?: string;
     previewOrigin?: string;
+    /** The share host (src/share.ts): published chats. */
+    shareOrigin?: string;
     /** The test channel's host (BETA_ORIGIN): the web app and the API, for accounts let in. */
     betaOrigin?: string;
     /** The hosts' old names (before the rename to still.fail), bound to the same Workers: PUBLIC_ORIGIN_ALIASES and so on. */
@@ -73,6 +76,7 @@ export async function harness(
   const origin = options.origin ?? "https://relay.example";
   const adminOrigin = options.adminOrigin ?? "https://admin.relay.example";
   const previewOrigin = options.previewOrigin ?? "https://preview.relay.example";
+  const shareOrigin = options.shareOrigin ?? "https://share.relay.example";
   const betaOrigin = options.betaOrigin ?? "https://app.beta-domain.example";
   const oldOrigin = options.oldOrigin ?? "https://old.relay.example";
   const oldAdminOrigin = options.oldAdminOrigin ?? "https://admin.old.relay.example";
@@ -120,7 +124,7 @@ export async function harness(
         ...common,
         name: "static",
         script: await bundle("test/static-worker.ts"),
-        bindings: { PUBLIC_ORIGIN: origin, ADMIN_ORIGIN: adminOrigin, PREVIEW_ORIGIN: previewOrigin, PUBLIC_ORIGIN_ALIASES: oldOrigin, ADMIN_ORIGIN_ALIASES: oldAdminOrigin, PREVIEW_ORIGIN_ALIASES: oldPreviewOrigin, BETA_ORIGIN: betaOrigin },
+        bindings: { PUBLIC_ORIGIN: origin, ADMIN_ORIGIN: adminOrigin, PREVIEW_ORIGIN: previewOrigin, PUBLIC_ORIGIN_ALIASES: oldOrigin, ADMIN_ORIGIN_ALIASES: oldAdminOrigin, PREVIEW_ORIGIN_ALIASES: oldPreviewOrigin, BETA_ORIGIN: betaOrigin, SHARE_ORIGIN: shareOrigin },
         serviceBindings: { ASSETS: (options.assets ?? standInAssets) as any },
       }, {
         ...common,
@@ -210,6 +214,7 @@ export async function harness(
   /** A request to the console's host. */
   const fetchAdmin = (path: string, init?: RequestInit) => mf.dispatchFetch(adminOrigin + path, init as any);
   const fetchPreview = (path: string, init?: RequestInit) => mf.dispatchFetch(previewOrigin + path, init as any);
+  const fetchShare = (path: string, init?: RequestInit) => mf.dispatchFetch(shareOrigin + path, init as any);
   /** A request to the test channel's host. */
   const fetchBeta = (path: string, init?: RequestInit) => mf.dispatchFetch(betaOrigin + path, init as any);
   /** A request to a host's old name (before the rename): "main", "admin" or "preview". */
@@ -294,6 +299,7 @@ export async function harness(
     fetch,
     fetchAdmin,
     fetchPreview,
+    fetchShare,
     fetchBeta,
     fetchOld,
     fetchWorker,
@@ -305,7 +311,7 @@ export async function harness(
   };
 }
 
-/** The static sites' files, by site (`/web/…`, `/admin/…`, `/preview/…`: see test/static-worker.ts). */
+/** The static sites' files, by site (`/web/…`, `/admin/…`, `/preview/…`, `/share/…`: see test/static-worker.ts). */
 export const STAND_IN_FILES: Record<string, string> = {
   "/web/index.html": "<title>still.fail</title>",
   "/web/assets/app.js": "// the web app",
@@ -317,6 +323,9 @@ export const STAND_IN_FILES: Record<string, string> = {
   "/preview/_ember/frame.html": "<title>still.fail preview (old path)</title>",
   "/preview/_ember/sw.js": "// the preview's service worker (old path)",
   "/preview/404.html": "这是 still.fail 的预览地址",
+  "/share/index.html": "<title>still.fail 分享</title>",
+  "/share/assets/share.js": "// the share page",
+  ...Object.fromEntries(Object.entries(shareFiles({ cloud: "https://relay.example", relays: ["https://relay.example", "https://39.105.157.122"] })).map(([path, text]) => [`/share/${path}`, text])),
 };
 
 function standInAssets(request: Request): Response {
