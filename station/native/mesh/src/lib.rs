@@ -270,12 +270,16 @@ pub struct RelayState {
     pub connected: bool,
 }
 
-/// One way a connection can go: through a relay (its URL) or direct; the one chosen now, and its round trip.
+/// One way a connection can go: through a relay (its URL) or direct; the one chosen now, its round trip, and the
+/// packets sent and lost on it alone (the connection's own counts take in every way it tried and dropped too).
 #[napi(object)]
 pub struct PathState {
+    pub id: String,
     pub selected: bool,
     pub relay: Option<String>,
     pub rtt_ms: f64,
+    pub tx_packets: f64,
+    pub lost_packets: f64,
 }
 
 /// What went over a connection since it opened, both ways.
@@ -283,8 +287,6 @@ pub struct PathState {
 pub struct Stats {
     pub rx_bytes: f64,
     pub tx_bytes: f64,
-    pub tx_packets: f64,
-    pub lost_packets: f64,
 }
 
 /// Why a connection went: `application` (the other end closed it, saying `reason`), `local`, `timeout`, or `other`
@@ -374,20 +376,26 @@ impl Connection {
     /// Every way it can go now.
     #[napi]
     pub fn paths(&self) -> Vec<PathState> {
-        self.inner.paths().iter().map(|p| PathState {
-            selected: p.is_selected(),
-            relay: match p.remote_addr() {
-                iroh::TransportAddr::Relay(url) => Some(url.to_string()),
-                _ => None,
-            },
-            rtt_ms: p.rtt().as_secs_f64() * 1000.0,
+        self.inner.paths().iter().map(|p| {
+            let stats = p.stats();
+            PathState {
+                id: p.id().to_string(),
+                selected: p.is_selected(),
+                relay: match p.remote_addr() {
+                    iroh::TransportAddr::Relay(url) => Some(url.to_string()),
+                    _ => None,
+                },
+                rtt_ms: stats.rtt.as_secs_f64() * 1000.0,
+                tx_packets: stats.udp_tx.datagrams as f64,
+                lost_packets: stats.lost_packets as f64,
+            }
         }).collect()
     }
 
     #[napi]
     pub fn stats(&self) -> Stats {
         let stats = self.inner.stats();
-        Stats { rx_bytes: stats.udp_rx.bytes as f64, tx_bytes: stats.udp_tx.bytes as f64, tx_packets: stats.udp_tx.datagrams as f64, lost_packets: stats.lost_packets as f64 }
+        Stats { rx_bytes: stats.udp_rx.bytes as f64, tx_bytes: stats.udp_tx.bytes as f64 }
     }
 
     /// A stream one way: what measures a round trip sends a byte on it (mesh.rs `sample_relay_rtt`).

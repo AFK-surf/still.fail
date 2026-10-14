@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { conform } from "../src/conform.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import * as p from "../src/present.ts";
+import { packetsSince } from "../src/station/topics.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -28,13 +29,15 @@ test("a_connection_is_said_in_words_and_only_what_is_off_is_coloured", () => {
   assert.equal(shown.total, "今天共 ↓ 1.0 GB · ↑ 50 MB");
   assert.deepEqual([shown.downTotal, shown.upTotal], ["1.0 GB", "50 MB"]);
 
-  const relay: J = { path: "relay", relay: "relay.still.fail", rttMs: 286, rxBytes: 0, txBytes: 0, samples: [sample(1200, 40, 2)] };
+  const relay: J = { path: "relay", relay: "relay.still.fail", rttMs: 286, rxBytes: 0, txBytes: 0, samples: [sample(1200, 200, 10)] };
   shown = p.net(relay, unnamed);
   assert.equal(shown.path, "中继 relay.still.fail");
   const named = (host: string) => (host === "relay.still.fail" ? "北京" : null);
   assert.equal(p.net(relay, named).path, "北京中继");
   assert.equal(shown.rtt.level, "ok");
   assert.deepEqual(shown.loss, { text: "丢包 5.0%", level: "amber" });
+  // A quiet minute: too few packets for a share of them to say anything.
+  assert.equal(p.net({ ...relay, samples: [sample(1200, 60, 20)] }, unnamed).loss, null);
   const measured = { measuring: false, relays: [{ relay: "relay.still.fail", rttMs: 11_000 }, { relay: "hk.test", rttMs: 82 }, { relay: "cf.test", rttMs: null }], moved: "hk.test" };
   const viaHk = { path: "relay", relay: "hk.test", rttMs: 90, rxBytes: 0, txBytes: 0, samples: [], measured };
   assert.deepEqual(p.net(viaHk, named).measured, {
@@ -440,4 +443,13 @@ test("a_meter_is_drawn_as_an_allowance_to_what_is_left", () => {
   h.memory.usedBytes = 7 * GIB;
   h = p.host(h);
   assert.equal(h.meters[1].remaining, "剩 0.0 G");
+});
+
+test("loss_is_counted_on_the_way_in_use_and_not_across_a_change_of_it", () => {
+  const way = (path: string, sent: number, lost: number) => ({ path, sent, lost });
+  assert.deepEqual(packetsSince(way("1", 100, 2), way("1", 160, 3)), { sent: 60, lost: 1 });
+  // Another way now, or a new connection counting from nothing: its counts say nothing about the last sample's.
+  assert.deepEqual(packetsSince(way("1", 100, 2), way("3", 400, 40)), { sent: 0, lost: 0 });
+  assert.deepEqual(packetsSince(way("0", 100, 2), way("0", 10, 0)), { sent: 0, lost: 0 });
+  assert.deepEqual(packetsSince(null, way("0", 10, 0)), { sent: 0, lost: 0 });
 });

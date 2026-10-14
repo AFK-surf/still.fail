@@ -20,8 +20,8 @@ export type BoundConnection = {
   close(code: number, reason: string): void;
   closeReason(): CloseReason | null | undefined;
   closedInfo(): Promise<CloseReason>;
-  paths(): { selected: boolean; relay?: string | null; rttMs: number }[];
-  stats(): { rxBytes: number; txBytes: number; txPackets: number; lostPackets: number };
+  paths(): { id: string; selected: boolean; relay?: string | null; rttMs: number; txPackets: number; lostPackets: number }[];
+  stats(): { rxBytes: number; txBytes: number };
 };
 export type BoundEndpoint = {
   id(): string;
@@ -61,7 +61,7 @@ export function wrapIroh(bind: (o: BindOptions) => Promise<BoundEndpoint>, bytes
     close: (code, reason) => c.close(code, reason),
     closeReason: () => c.closeReason() ?? null,
     closed: () => Effect.promise(() => c.closedInfo()),
-    paths: () => c.paths().map((p) => ({ selected: p.selected, relay: p.relay ?? null, rttMs: p.rttMs })),
+    paths: () => c.paths().map((p) => ({ id: p.id, selected: p.selected, relay: p.relay ?? null, rttMs: p.rttMs, txPackets: p.txPackets, lostPackets: p.lostPackets })),
     stats: () => c.stats(),
   });
   const endpoint = (e: BoundEndpoint): IrohEndpoint => ({

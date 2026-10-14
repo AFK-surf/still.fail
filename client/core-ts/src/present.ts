@@ -830,8 +830,9 @@ export function net(raw: J, relayName: (host: string) => string | null): J {
   }
   const daily = typeof r.todayRxBytes === "number";
   const [rx, tx] = daily ? [num("todayRxBytes"), num("todayTxBytes")] : [num("rxBytes"), num("txBytes")];
+  // Over a minute of a quiet link a lost packet or two is most of what there is to count: shown once enough went.
   const loss =
-    sent >= 20 && lost / sent >= 0.01
+    sent >= 100 && lost / sent >= 0.01
       ? (() => {
           const pct = (lost / sent) * 100;
           return { text: t("core-views.present.net.loss", { percent: format.fixed1(pct) }), level: pct >= 10 ? "red" : "amber" };

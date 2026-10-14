@@ -28,7 +28,7 @@
 import { Effect, type Scope } from "effect";
 import { Core } from "../core.ts";
 import { HostError } from "../error.ts";
-import type { CloseReason, Iroh, IrohAddr, IrohConnection, IrohEndpoint, IrohStream } from "../iroh.ts";
+import type { CloseReason, Iroh, IrohAddr, IrohConnection, IrohEndpoint, IrohPath, IrohStream } from "../iroh.ts";
 import { SOCKET_PING, SOCKET_PING_MS, type DbRange, type Host, type HttpRequest, type HttpResponse, type Pull, type Sql, type SqlRow, type SqlValue, type StreamResponse, type TcpConnection, type SqlError, sqlError } from "../host.ts";
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { t } from "../i18n.ts";
@@ -287,7 +287,7 @@ export function bridgeIroh(bridge: Bridge): Iroh {
     close: (code, reason) => void Effect.runFork(Effect.ignore(bridge.call("conn.close", { id, code, reason }))),
     closeReason: () => (bridge.sync("conn.closeReason", { id }) as CloseReason | null) ?? null,
     closed: () => Effect.orElseSucceed(Effect.map(bridge.call("conn.closed", { id }), (a) => a.json as CloseReason), () => ({ kind: "other", reason: "" }) as CloseReason),
-    paths: () => (bridge.sync("conn.paths", { id }) as { selected: boolean; relay: string | null; rttMs: number }[]) ?? [],
+    paths: () => (bridge.sync("conn.paths", { id }) as IrohPath[]) ?? [],
     stats: () => bridge.sync("conn.stats", { id }) as ReturnType<IrohConnection["stats"]>,
   });
   const endpoint = (id: number): IrohEndpoint => ({

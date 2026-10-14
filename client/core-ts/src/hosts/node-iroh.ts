@@ -21,8 +21,8 @@ type NConnection = {
   close(code: number, reason: string): void;
   closeReason(): CloseReason | null;
   closedInfo(): Promise<CloseReason>;
-  paths(): { selected: boolean; relay?: string | null; rttMs: number }[];
-  stats(): { rxBytes: number; txBytes: number; txPackets: number; lostPackets: number };
+  paths(): { id: string; selected: boolean; relay?: string | null; rttMs: number; txPackets: number; lostPackets: number }[];
+  stats(): { rxBytes: number; txBytes: number };
 };
 type NEndpoint = {
   id(): string;

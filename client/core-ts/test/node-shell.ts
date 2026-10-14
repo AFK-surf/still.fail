@@ -218,7 +218,7 @@ export class NodeShell implements Native {
         case "conn.closeReason":
           return it.closeReason() ?? null;
         case "conn.paths":
-          return it.paths().map((p: J) => ({ selected: p.selected, relay: p.relay ?? null, rttMs: p.rttMs }));
+          return it.paths().map((p: J) => ({ id: p.id, selected: p.selected, relay: p.relay ?? null, rttMs: p.rttMs, txPackets: p.txPackets, lostPackets: p.lostPackets }));
         case "conn.stats":
           return it.stats();
         default:

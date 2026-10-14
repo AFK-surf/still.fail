@@ -12,11 +12,13 @@ export type IrohAddr = { id: string; relays?: string[]; ips?: string[] };
 /// heard (`timeout`), or something else (`other`, `reason` in words).
 export type CloseReason = { kind: "application" | "local" | "timeout" | "other"; reason: string };
 
-/// One way a connection can go now: through a relay (its URL) or direct; whether it is the one chosen, its round trip.
-export type IrohPath = { selected: boolean; relay: string | null; rttMs: number };
+/// One way a connection can go now: through a relay (its URL) or direct; whether it is the one chosen, its round trip,
+/// and the packets sent and lost on it alone since it opened (`id` tells one way's counts from another's). The
+/// connection's own counts take in every way it tried, those dropped with packets still out counted lost.
+export type IrohPath = { id: string; selected: boolean; relay: string | null; rttMs: number; txPackets: number; lostPackets: number };
 
 /// What went over a connection since it opened.
-export type IrohStats = { rxBytes: number; txBytes: number; txPackets: number; lostPackets: number };
+export type IrohStats = { rxBytes: number; txBytes: number };
 
 /// A stream both ways (or one way: `read` then answers null at once).
 export interface IrohStream {

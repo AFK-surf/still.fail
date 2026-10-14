@@ -462,11 +462,11 @@ export class SimConnection {
   closedInfo(): Promise<CloseReason> {
     return this.#closed;
   }
-  stats(): { rxBytes: number; txBytes: number; txPackets: number; lostPackets: number } {
-    return { ...this.counts };
+  stats(): { rxBytes: number; txBytes: number } {
+    return { rxBytes: this.counts.rxBytes, txBytes: this.counts.txBytes };
   }
-  paths(): { selected: boolean; relay: string | null; rttMs: number }[] {
-    return [{ selected: true, relay: this.way.relay, rttMs: this.rttMs }];
+  paths(): { id: string; selected: boolean; relay: string | null; rttMs: number; txPackets: number; lostPackets: number }[] {
+    return [{ id: "0", selected: true, relay: this.way.relay, rttMs: this.rttMs, txPackets: this.counts.txPackets, lostPackets: this.counts.lostPackets }];
   }
 }
 

@@ -16,6 +16,7 @@ import { equal, get, isObject, parseJson } from "../util.ts";
 import { StationAddr } from "./addr.ts";
 import { PAGE, TRANSCRIPT_PAGE, entriesOf, transcriptOf } from "./channel-kinds.ts";
 import type { StationsSync } from "./sync.ts";
+import type { LinkNet } from "./wire.ts";
 
 /// A chat shows a window of its thread's entries: at most this many.
 export const WINDOW = 3 * PAGE;
@@ -24,6 +25,13 @@ const AROUND = 10;
 /// How often a station's connection is sampled while its card shows it, and how many samples are kept.
 export const NET_EVERY_MS = 2_000;
 const NET_KEPT = 30;
+
+/// Packets sent and lost between two samples, on the way in use: none counted across a change of way (or of
+/// connection), whose counts are another way's.
+export function packetsSince(was: LinkNet["packets"], now: LinkNet["packets"]): { sent: number; lost: number } {
+  if (was === null || now === null || was.path !== now.path || now.sent < was.sent || now.lost < was.lost) return { sent: 0, lost: 0 };
+  return { sent: now.sent - was.sent, lost: now.lost - was.lost };
+}
 
 const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "job", "drive"]);
 
@@ -559,7 +567,7 @@ export class StationTopics implements Owner {
         const since = last !== null && net.rxBytes >= last[1].rxBytes && net.txBytes >= last[1].txBytes ? last : null;
         if (since) {
           const secs = Math.max((now - since[0]) / 1000, 0.001);
-          samples.push({ at: Math.round(now), rttMs: net.rttMs, rxBps: Math.round((net.rxBytes - since[1].rxBytes) / secs), txBps: Math.round((net.txBytes - since[1].txBytes) / secs), sent: Math.max(net.txPackets - since[1].txPackets, 0), lost: Math.max(net.lostPackets - since[1].lostPackets, 0) });
+          samples.push({ at: Math.round(now), rttMs: net.rttMs, rxBps: Math.round((net.rxBytes - since[1].rxBytes) / secs), txBps: Math.round((net.txBytes - since[1].txBytes) / secs), ...packetsSince(since[1].packets, net.packets) });
         } else samples = [];
         while (samples.length > NET_KEPT) samples.shift();
         const measured = net.measured ? { measuring: net.measured.measuring, relays: net.measured.relays.map(([relay, ms]) => ({ relay, rttMs: ms })), moved: net.measured.moved } : null;

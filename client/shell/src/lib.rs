@@ -694,13 +694,15 @@ impl Inner {
                             iroh::TransportAddr::Relay(url) => Some(url.to_string()),
                             _ => None,
                         };
-                        json!({ "selected": p.is_selected(), "relay": relay, "rttMs": p.rtt().as_secs_f64() * 1000.0 })
+                        // Packets sent and lost on this way alone: the connection's counts take in every way it tried.
+                        let stats = p.stats();
+                        json!({ "id": p.id().to_string(), "selected": p.is_selected(), "relay": relay, "rttMs": stats.rtt.as_secs_f64() * 1000.0, "txPackets": stats.udp_tx.datagrams, "lostPackets": stats.lost_packets })
                     })
                     .collect(),
             )),
             ("conn.stats", Handle::Conn(c)) => {
                 let s = c.stats();
-                Ok(json!({ "rxBytes": s.udp_rx.bytes, "txBytes": s.udp_tx.bytes, "txPackets": s.udp_tx.datagrams, "lostPackets": s.lost_packets }))
+                Ok(json!({ "rxBytes": s.udp_rx.bytes, "txBytes": s.udp_tx.bytes }))
             }
             (op, _) => Err(format!("no operation {op} on that handle")),
         }

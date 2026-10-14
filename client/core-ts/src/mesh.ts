@@ -436,8 +436,9 @@ export class Link {
       today: null,
       rxBytes: stats.rxBytes,
       txBytes: stats.txBytes,
-      txPackets: stats.txPackets,
-      lostPackets: stats.lostPackets,
+      // The way in use alone: the connection's own counts take in every way iroh tried and dropped, which made a
+      // quiet direct link look like it lost a third of its packets.
+      packets: selected === undefined ? null : { path: selected.id, sent: selected.txPackets, lost: selected.lostPackets },
     };
   }
 

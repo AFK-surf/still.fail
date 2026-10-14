@@ -51,8 +51,8 @@ export type LinkNet = {
   today: [number, number] | null;
   rxBytes: number;
   txBytes: number;
-  txPackets: number;
-  lostPackets: number;
+  /// Packets sent and lost on the way in use (`path` its id) since it opened.
+  packets: { path: string; sent: number; lost: number } | null;
 };
 
 /// The client's half of a socket stream.
