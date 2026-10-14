@@ -59,7 +59,8 @@ export function SidebarBrand({ rail }: { rail?: boolean }) {
       {!titleless() && !rail && <Themed name={WORDMARK.name} width={WORDMARK.width} height={WORDMARK.height} alt={NAME} className={css.brandWordmark} />}
       {!titleless() && <span className={css.brandPhone}><Lockup /></span>}
       {!rail && <SidebarBuddy />}
-      <UpdateButton />
+      {/* Beside the rail the app's newer build is one of its bubbles (SystemBubbles.tsx). */}
+      {!rail && <UpdateButton />}
     </>
   );
 }

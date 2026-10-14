@@ -10,6 +10,9 @@ import { useCall } from "./core/react.ts";
 import { stationBase } from "./station.tsx";
 import { useAct } from "./toast.tsx";
 import { useWorkspaceMarks } from "./lastChat.ts";
+import { useStationTrouble } from "./Sidebar.tsx";
+import { OpenJobs, useLongJobs } from "./OpenJobs.tsx";
+import { useToast } from "./toast.tsx";
 import { Bell } from "./icons.tsx";
 import { ICON } from "./ui.tsx";
 import * as nav from "./Sidebar.css.ts";
@@ -34,7 +37,10 @@ function groups(marks: WorkspaceMarksView | undefined, scope: string): { workspa
     .filter((g) => g.items.length > 0);
 }
 
-/** `rail`: drawn in the rail (Rail.tsx) as its bell, a dot on it while some came since they last looked (how many in its label), there even with none. */
+/**
+ * `rail`: drawn in the rail (Rail.tsx) as its bell, there even with none, a dot on it while some came since they last
+ * looked (how many in its label) or a station is in trouble or services were left up long, which it lists too.
+ */
 export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: string; count: string; label: string } }) {
   const marks = useWorkspaceMarks(scope);
   const [open, setOpen] = useState(false);
@@ -46,6 +52,10 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
   const all = listed.flatMap((g) => g.items);
   const goneFresh = groups(marks, scope).flatMap((g) => g.items).filter((i) => gone.has(keyOf(i)) && !i.seen).length;
   const n = Math.max(0, (marks?.badge ?? 0) - goneFresh);
+  // In the rail's bell, besides: the stations' trouble and the services left up long (the sidebar's foot had them).
+  const trouble = useStationTrouble(scope);
+  const jobs = useLongJobs(scope, useToast()).groups.reduce((sum, g) => sum + g.jobs.length, 0);
+  const more = !!rail && (!!trouble || jobs > 0);
   if (!rail && (!marks || (all.length === 0 && !open))) return null;
   const several = listed.length > 1 || listed.some((g) => g.workspace !== scope);
   const go = (i: MarkItem) => {
@@ -67,7 +77,7 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
         {rail ? (
           <button type="button" className={rail.item} data-on={open || undefined} title={rail.label} aria-label={n > 0 ? t("web-main.attention.label", { n }) : rail.label}>
             <Bell size={20} />
-            {n > 0 && <span className={rail.count} />}
+            {(n > 0 || more) && <span className={rail.count} />}
           </button>
         ) : (
         <button type="button" className={`${nav.navRow} ${css.entry}`} aria-label={n > 0 ? t("web-main.attention.label", { n }) : t("web-main.attention.entry")}>
@@ -80,7 +90,17 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
       <Popover.Portal>
         <Popover.Content className={`${controlsCss.popover} ${css.panel}`} side={rail ? "right" : "bottom"} align="start" sideOffset={rail ? 10 : 6} collisionPadding={8}
           onOpenAutoFocus={(e) => e.preventDefault()}>
-          {all.length === 0 && <div className={css.empty}>{t("web-main.attention.empty")}</div>}
+          {all.length === 0 && !more && <div className={css.empty}>{t("web-main.attention.empty")}</div>}
+          {rail && trouble && (
+            <div className={css.group}>
+              <div className={css.groupName}>Station</div>
+              <NavLink className={css.item} to={`/w/${scope}/settings/stations`} onClick={() => setOpen(false)}>
+                <span className={css.dot} data-kind="alert" role="img" aria-hidden="true" />
+                <span className={css.itemText}><span className={css.itemTitle}>{trouble.text}</span></span>
+              </NavLink>
+            </div>
+          )}
+          {rail && jobs > 0 && <div className={css.group}><OpenJobs scope={scope} /></div>}
           {listed.map((g) => (
             <div key={g.workspace} className={css.group}>
               {several && <div className={css.groupName}>{g.name}</div>}

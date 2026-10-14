@@ -19,6 +19,7 @@ import { DriveHome, DrivePage, DrivePlayPage, DriveReadPage } from "../pages/Dri
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList, StationTrouble, useGlassBands } from "../Sidebar.tsx";
 import { Rail, SidebarEdge, placeOf, railItems, type RailItem } from "../Rail.tsx";
+import { SystemBubbles } from "../SystemBubbles.tsx";
 import { usePrefs } from "../prefs.ts";
 import * as railCss from "../Rail.css.ts";
 import { drivePath } from "../drive/useDrive.ts";
@@ -125,11 +126,12 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
         <div className={shellCss.dock}>
         <Rail scope={entry.id} workspace={<WorkspaceSwitcher current={entry} adder />} />
         {settings
-          ? <nav className={nav.sidebar} aria-label={t("web-pages.settings.title")}><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><WebUpdate /><div className={railCss.narrowOnly}><WorkspaceSwitcher current={entry} /></div></div></nav>
+          ? <nav className={nav.sidebar} aria-label={t("web-pages.settings.title")}><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><div className={railCss.narrowOnly}><WebUpdate /><WorkspaceSwitcher current={entry} /></div></div></nav>
           : place === "files" ? <FilesSidebar entry={entry} />
           : <WorkspaceSidebar entry={entry} />}
         </div>
         <SidebarEdge />
+        <SystemBubbles scope={entry.id} />
         <main className={shellCss.main}>
           <ComposerDock>
           <Routes>
@@ -304,12 +306,14 @@ function SidebarTodo({ scope }: { scope: string }) {
 
 /** Under the sidebar's lists: workspace controls, and what wants the viewer (奏 among it). */
 function WorkspaceSidebarFooter({ entry }: { entry: WorkspaceEntry }) {
+  const railed = railItems(usePrefs((p) => p.rail)).includes("attention");
   return (
       <div className={nav.navFoot}>
-        <WebUpdate />
-        <ChangelogNews to={`/w/${entry.id}/settings/changelog`} />
-        {/* How the stations are, and the services left up long, in one line; what wants the viewer is at the top. */}
-        <div className={nav.navFootStatus}>
+        {/* Beside the rail the app's own news is its bubbles (SystemBubbles.tsx); on a narrow screen, here. */}
+        <div className={railCss.narrowOnly}><WebUpdate /><ChangelogNews to={`/w/${entry.id}/settings/changelog`} /></div>
+        {/* How the stations are, and the services left up long, in one line; what wants the viewer is at the top. With
+            the rail's bell (Attention.tsx), they are in it. */}
+        <div className={railed ? `${nav.navFootStatus} ${railCss.narrowOnly}` : nav.navFootStatus}>
           <StationTrouble scope={entry.id} to={`/w/${entry.id}/settings/stations`} />
           <OpenJobsChip scope={entry.id} />
         </div>

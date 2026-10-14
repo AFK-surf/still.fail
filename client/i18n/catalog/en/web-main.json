@@ -721,5 +721,7 @@
   "web-main.rail.kind.places": "Pages",
   "web-main.rail.kind.lists": "Chat lists",
   "web-main.rail.kind.attention": "Alerts",
-  "web-main.rail.addWorkspace": "New workspace, add account"
+  "web-main.rail.addWorkspace": "New workspace, add account",
+  "web-main.system.label": "From the app",
+  "web-main.system.changelog": "See what's new"
 }
