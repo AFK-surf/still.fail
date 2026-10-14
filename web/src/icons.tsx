@@ -197,6 +197,10 @@ export function Forward15(props: IconProps) {
   return <Svg {...props}><path d="M9.8 2.8L12 5L9.8 7.2 M12 5A7.5 7.5 0 1 0 18.5 8.75" /></Svg>;
 }
 
+export function Im(props: IconProps) {
+  return <Svg {...props}><path d="M11 4.5H8Q3.5 4.5 3.5 9V14Q3.5 18 7 18H8V21L12.5 18H15.5Q20 18 20 13.5V12 M12 11L20.5 3.5 M15 3.5H20.5V9" /></Svg>;
+}
+
 export function ImageUpload(props: IconProps) {
   return <Svg {...props}><path d="M11.5 3.5H7Q3.5 3.5 3.5 7V17Q3.5 20.5 7 20.5H17Q20.5 20.5 20.5 17V13 M4 17L9 12L15 18 M17.5 11V3.5 M14 7L17.5 3.5L21 7" /></Svg>;
 }
@@ -351,6 +355,10 @@ export function Plus(props: IconProps) {
 
 export function Power(props: IconProps) {
   return <Svg {...props}><path d="M12 3.5V11 M7 5.5C4.5 7 3.5 9 3.5 12C3.5 17.5 6.5 20.5 12 20.5C17.5 20.5 20.5 17.5 20.5 12C20.5 9 19.5 7 17 5.5" /></Svg>;
+}
+
+export function Quota(props: IconProps) {
+  return <Svg {...props}><path d="M6.5 6H16Q19.5 6 19.5 9.5V14.5Q19.5 18 16 18H6.5Q3 18 3 14.5V9.5Q3 6 6.5 6Z M22 10V14 M7 10V14 M11 10V14" /></Svg>;
 }
 
 export function Quote(props: IconProps) {
@@ -541,6 +549,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "folder-plus": FolderPlus,
   "folder": Folder,
   "forward-15": Forward15,
+  "im": Im,
   "image-upload": ImageUpload,
   "info": Info,
   "key": Key,
@@ -580,6 +589,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "plug": Plug,
   "plus": Plus,
   "power": Power,
+  "quota": Quota,
   "quote": Quote,
   "read": Read,
   "received": Received,

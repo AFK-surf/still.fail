@@ -8,7 +8,7 @@ import { CHANGEABLE } from "../keymap.ts";
 import { CAN_NOTIFY } from "../notify.ts";
 import { HAS_VERSION } from "../pages/AppVersion.tsx";
 import { HAS_LOCAL_STATION } from "../pages/LocalStation.tsx";
-import { ArrowLeft, Bell, Brain, Chart, Check, ChevronRight, Folder, Info, Key, LogOut, Monitor, Plug, Plus, Refresh, Server, Settings, ShieldCheck, Sliders, Sparks, Command, Trash, User, UserPlus, Users, type IconProps } from "../icons.tsx";
+import { ArrowLeft, Bell, Brain, Chart, Check, ChevronRight, Folder, Im, Info, LogOut, Monitor, Plus, Quota, Refresh, Server, Settings, ShieldCheck, Sliders, Sparks, Command, Trash, User, UserPlus, Users, type IconProps } from "../icons.tsx";
 import { SecurityNotice } from "./Security.tsx";
 import { useCommands } from "../commands.ts";
 import { Fragment, useCallback, useEffect, useRef, useState, type ComponentType } from "react";
@@ -81,8 +81,8 @@ function settingsPages(entry: WorkspaceEntry, some: boolean): SettingsPage[] {
     ...page("client", "local-station", t("web-pages.localStation.title"), Monitor, "local station this mac", HAS_LOCAL_STATION),
     ...page("client", "changelog", t("web-pages.settings.nav.changelog"), Sparks, "changelog"),
     ...page("station", "stations", "Station", Server, "station"),
-    ...page("station", "connects", t("web-pages.settings.nav.connects"), Plug, "connects slack", some),
-    ...page("station", "profiles", "Profile", Key, "profile", some),
+    ...page("station", "connects", t("web-pages.settings.nav.connects"), Im, "connects slack", some),
+    ...page("station", "profiles", "Profile", Quota, "profile", some),
     ...page("station", "automatic-decisions", t("web-pages.automaticDecisions.title"), Check, "automatic decisions", some),
     ...page("station", "memory", t("web-pages.settings.nav.memory"), Brain, "memory", some),
     ...page("station", "usage", t("web-pages.settings.nav.usage"), Chart, "usage", some),

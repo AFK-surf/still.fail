@@ -7,7 +7,7 @@
 // none: the sidebar's foot keeps the switcher and the settings.
 import type { ComponentType, ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
-import { Chart, Chats, Folder, Key, PanelClose, PanelOpen, Plug, Settings, type IconProps } from "./icons.tsx";
+import { Chart, Chats, Folder, Im, PanelClose, PanelOpen, Quota, Settings, type IconProps } from "./icons.tsx";
 import { Tip } from "./ui.tsx";
 import { useLastChat, useWorkspaceMarks } from "./lastChat.ts";
 import { useSidebarMode } from "./station.tsx";
@@ -43,7 +43,7 @@ export function railLabel(item: RailItem): string {
 }
 
 /** The icons of the places drawn as one (the stations' is their glyph, 奏 its word). */
-export const RAIL_ICONS: Partial<Record<RailItem, ComponentType<IconProps>>> = { chats: Chats, files: Folder, profiles: Key, connects: Plug, usage: Chart };
+export const RAIL_ICONS: Partial<Record<RailItem, ComponentType<IconProps>>> = { chats: Chats, files: Folder, profiles: Quota, connects: Im, usage: Chart };
 
 /** Which place the page is in, by its path: the files' and the settings' pages have the sidebar of their own. */
 export type Place = RailItem | "settings";
