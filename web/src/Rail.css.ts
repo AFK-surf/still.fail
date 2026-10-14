@@ -47,7 +47,8 @@ export const edge = style({
   selectors: {
     // By the page's root, not its own data-closed (set a render later): the sidebar's toggle reads its end in the same
     // frame it closes the sidebar, and moves it there with the column (brand.tsx moveState), not after it, at once.
-    '[data-sidebar="closed"] &': { cursor: "pointer", left: 47 },
+    // By the closed bar (6 to 48), its bar (4 in, 5 wide) in the gutter to the page (48 to 56): 50 to 55.
+    '[data-sidebar="closed"] &': { cursor: "pointer", left: 46 },
     "&::after": {
       // Odd widths on whole pixels, the bar's middle and the line's one (left 6, 1 wide; left 4, 5 wide).
       content: '""', position: "absolute", top: "50%", left: 4, width: 5, height: 24, borderRadius: 999,
