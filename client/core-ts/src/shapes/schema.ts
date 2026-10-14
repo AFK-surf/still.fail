@@ -866,7 +866,9 @@ export const SHAPES: Record<string, Shape> = {
     ["chat", opt("String")],
     ["session", opt("String")],
     ["service", opt("String")],
-  ], { doc: "What one of still.fail's links opens in the app (`link.parse`): `invite` (`token`), a chat's page (`chat`), or an\nitem (`item`: its `session`, and `service` its web service); the call answers null for any other link." }),
+    ["history", opt("String")],
+    ["entry", opt("i64"), { client: opt("I54") }],
+  ], { doc: "What one of still.fail's links opens in the app (`link.parse`): `invite` (`token`), a chat's page (`chat`), or an\nitem (`item`: its `session`, and `service` its web service), each maybe with `history`, one of its agents' execution\nhistory (at `entry`); `history` alone (`?history=…`): that history in the chat the link is in. The call answers null\nfor any other link." }),
   AppRelease: struct([
     ["versionCode", "i64", { client: "I54" }],
     ["versionName", "String"],

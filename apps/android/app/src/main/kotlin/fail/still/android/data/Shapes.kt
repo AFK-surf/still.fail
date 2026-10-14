@@ -2638,7 +2638,9 @@ data class KeptTabs (
 )
 
 /// What one of still.fail's links opens in the app (`link.parse`): `invite` (`token`), a chat's page (`chat`), or an
-/// item (`item`: its `session`, and `service` its web service); the call answers null for any other link.
+/// item (`item`: its `session`, and `service` its web service), each maybe with `history`, one of its agents' execution
+/// history (at `entry`); `history` alone (`?history=…`): that history in the chat the link is in. The call answers null
+/// for any other link.
 @Serializable
 data class LinkTarget (
 	val opens: String,
@@ -2647,7 +2649,9 @@ data class LinkTarget (
 	val station: String? = null,
 	val chat: String? = null,
 	val session: String? = null,
-	val service: String? = null
+	val service: String? = null,
+	val history: String? = null,
+	val entry: Long? = null
 )
 
 @Serializable

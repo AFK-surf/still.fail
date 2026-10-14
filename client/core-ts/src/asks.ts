@@ -199,8 +199,32 @@ function decode(s: string): string {
   return fromUtf8(new Uint8Array(out));
 }
 
-/// What one of still.fail's own links opens in the app; null for any other link.
+/// A query's value of `name` (its first), decoded; null when it has none.
+function param(query: string, name: string): string | null {
+  for (const kv of query.split("&")) {
+    const i = kv.indexOf("=");
+    if (i >= 0 && kv.slice(0, i) === name) return decode(kv.slice(i + 1).replaceAll("+", " "));
+  }
+  return null;
+}
+
+/// The agent's execution history a link names (`?history=<session>&entry=<n>`): `history`, and `entry` when it says
+/// one; nothing for a link that names none.
+function historyOf(query: string): { history?: string; entry?: number } {
+  const history = param(query, "history");
+  if (history === null || history === "") return {};
+  const entry = param(query, "entry");
+  return entry !== null && /^\d{1,15}$/.test(entry) ? { history, entry: Number(entry) } : { history };
+}
+
+/// What one of still.fail's own links opens in the app; null for any other link. A chat's page or an item, with
+/// `history` (and `entry`) when it names one of its agents' execution history; a link of only that (`?history=…`, as
+/// a chat's notes write it) opens it in the chat it is in (`history`).
 export function linkTarget(url: string, origin: string): J {
+  if (url.startsWith("?")) {
+    const h = historyOf(url.slice(1).split("#")[0]!);
+    return h.history === undefined ? null : { opens: "history", ...h };
+  }
   const u = splitUrl(url);
   const o = splitUrl(origin);
   if (u === null || o === null) return null;
@@ -209,19 +233,11 @@ export function linkTarget(url: string, origin: string): J {
   if (!(same || sameCloud)) return null;
   const s = u.segments;
   if (s.length === 1 && s[0] === "invite" && u.fragment !== "") return { opens: "invite", token: u.fragment };
-  if (s.length === 6 && s[0] === "w" && s[2] === "s" && s[4] === "chats") return { opens: "chat", workspace: s[1], station: s[3], chat: s[5] };
+  if (s.length === 6 && s[0] === "w" && s[2] === "s" && s[4] === "chats") return { opens: "chat", workspace: s[1], station: s[3], chat: s[5], ...historyOf(u.query) };
   if (s.length === 5 && s[0] === "w" && s[2] === "s" && s[4] === "adb") return { opens: "adbShare", workspace: s[1], station: s[3] };
   if (s.length === 4 && s[0] === "o") {
-    let service: string | null = null;
-    for (const kv of u.query.split("&")) {
-      const i = kv.indexOf("=");
-      if (i < 0) continue;
-      if (kv.slice(0, i) === "service") {
-        service = decode(kv.slice(i + 1).replaceAll("+", " "));
-        break;
-      }
-    }
-    return { opens: "item", workspace: s[1], station: s[2], session: s[3], service: service !== null && service !== "" ? service : null };
+    const service = param(u.query, "service");
+    return { opens: "item", workspace: s[1], station: s[2], session: s[3], service: service !== null && service !== "" ? service : null, ...historyOf(u.query) };
   }
   return null;
 }

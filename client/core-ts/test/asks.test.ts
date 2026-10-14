@@ -26,6 +26,11 @@ test("still_fail_links_open_in_the_app_and_others_do_not", () => {
   assert.deepEqual(linkTarget("https://app.still.fail/o/ws1/st1/k", "https://app.youdid.wtf"), { opens: "item", workspace: "ws1", station: "st1", session: "k", service: null });
   assert.equal(linkTarget("https://app.still.fail/o/ws1/st1/k/", cloud).service, null);
   assert.deepEqual(linkTarget("https://app.still.fail/w/ws1/s/st1/adb", cloud), { opens: "adbShare", workspace: "ws1", station: "st1" });
+  assert.deepEqual(linkTarget("https://app.still.fail/o/ws1/st1/k?history=k%3A2&entry=12", cloud), { opens: "item", workspace: "ws1", station: "st1", session: "k", service: null, history: "k:2", entry: 12 });
+  assert.deepEqual(linkTarget("https://app.still.fail/w/ws1/s/st1/chats/c?history=k", cloud), { opens: "chat", workspace: "ws1", station: "st1", chat: "c", history: "k" });
+  assert.deepEqual(linkTarget("?history=k&entry=3", cloud), { opens: "history", history: "k", entry: 3 });
+  assert.deepEqual(linkTarget("?history=k&entry=x", cloud), { opens: "history", history: "k" });
+  assert.equal(linkTarget("?service=web", cloud), null);
   assert.equal(linkTarget("https://example.com/o/ws1/st1/k", cloud), null);
   assert.equal(linkTarget("https://app.still.fail:8443/o/ws1/st1/k", cloud), null);
   assert.equal(linkTarget("http://app.still.fail/o/ws1/st1/k", cloud), null);

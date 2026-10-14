@@ -95,6 +95,10 @@ import fail.still.android.ui.ProviderMark
 import fail.still.android.ui.QuotaRing
 import fail.still.android.ui.QuotaRings
 import fail.still.android.ui.Icons
+import fail.still.android.ui.NavButton
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import fail.still.android.ui.Mark
 import fail.still.android.ui.Markdown
 import fail.still.android.ui.MenuItem
@@ -124,8 +128,15 @@ fun openHistory(app: AppState, station: String, of: ChatOf, key: String, entry: 
 @Composable
 fun HistoryScreen(station: String, of: ChatOf, key: String, entry: Long? = null) {
     val app = LocalApp.current
+    val context = LocalContext.current
+    val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
+    // Its link, to paste into another chat for its agent to read (or a person to open here), as the web's.
+    val title = chat.value?.title
+    val link = chatLink(app.cloudOrigin, station, key)?.let { "$it?history=${encodeComponent(key)}" }
     Column(Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.navigationBars)) {
-        NavBar(t("common.back"), { app.pop() }, t("android-chat.history.title"))
+        NavBar(t("common.back"), { app.pop() }, t("android-chat.history.title"), trailing = if (title != null && link != null) ({
+            Box(Modifier.semantics { contentDescription = t("web-mobile.history.copyLink") }) { NavButton(Icons.Copy, { copyChatLink(app, context, title, link) }) }
+        }) else null)
         HistoryContent(station, of, key, entry)
     }
 }
