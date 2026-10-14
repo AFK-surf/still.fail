@@ -67,6 +67,8 @@ export const brandCompact = style({ height: 48, padding: "0 16px" });
 const band = {
   position: "relative", zIndex: 1, flex: "none",
   background: `color-mix(in srgb, ${vars.sidebar} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)",
+  // With the sidebar's ground as it closes to the bar (shell.css.ts dock), at its pace.
+  transition: `background-color 380ms ${vars.easeOut}`,
 } as const;
 export const navTop = style(band);
 

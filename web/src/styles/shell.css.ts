@@ -43,7 +43,10 @@ export const dock = style({
         // and notices), its line drawn within (a border would take from the rail's 42) and its shadow.
         '[data-sidebar="closed"] &': {
           margin: "6px 8px 6px 6px", borderRadius: `calc(9px * ${vars.cornerScale} + 6px)`,
-          background: panel.background, boxShadow: `inset 0 0 0 1px ${vars.line}, 0 8px 24px ${vars.shadow}`,
+          // As the sidebar's ground for all in it (the list's frosted bands, the rings round marks), so none shows the
+          // old one as it closes.
+          vars: { [vars.sidebar]: panel.background },
+          boxShadow: `inset 0 0 0 1px ${vars.line}, 0 8px 24px ${vars.shadow}`,
         },
         '[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] &': { marginTop: 44 },
       },
