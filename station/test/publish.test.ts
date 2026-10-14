@@ -62,7 +62,7 @@ function visitor(requests: unknown[]) {
         sent = true;
         return Buffer.from(JSON.stringify(request) + "\n");
       },
-      write: async (bytes) => void answers[i]!.push(Buffer.from(bytes)),
+      write: async (bytes: Buffer) => void answers[i]!.push(Buffer.from(bytes)),
       finish: async () => {},
       stopped: async () => null,
       reset: () => {},
@@ -173,7 +173,7 @@ test("a chat published: previewed, written out frozen with the attachments ticke
     assert.equal(readFileSync(join(dir, "f", "f0"), "utf8"), "png bytes");
 
     // A visitor reads the snapshot and its attachment; a wrong key, an unknown id and a file not in it are all "gone".
-    const guests = new Guests(store, clock());
+    const guests = new Guests(store, clock(), { ...LIMITS, streams: 8 });
     const v = visitor([
       { get: published.id, key: published.key },
       { get: published.id, key: published.key, file: "f0" },

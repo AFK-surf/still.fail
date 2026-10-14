@@ -10,7 +10,7 @@
 
 - **只由人发布**：没有给 agent 的工具。客户端里 chat 的「…」→「公开分享」。只读成员（`viewer`）不能发布；撤销：发布人，或 workspace 的 owner/admin。
 - **只含消息**：chat 里的消息（最新一次编辑后的样子），不含执行历史、卡片的选项、notice。附件逐个勾，默认全勾。
-- **发布前预览、打码**：station 按一组特征（各家的 API key、token、私钥块、`password=…` 一类）把疑似机密换成 `[已隐藏]`，预览里标出每条消息隐藏了几处。
+- **发布前预览、打码**：station 按一组特征（各家的 API key、token、私钥块、`password=…` 一类，`publish/redact.ts`）把疑似机密换成 `[已隐藏]`，标题（没人起名时就是第一句话）也一样；预览里标出每条消息隐藏了几处。
 - **冻结**：快照停在预览时看到的最后一条消息（`upto`），附件拷一份进快照目录，之后 chat 怎么变都不影响它。
 - **只读、单独的通道**：访客走 ALPN `stillfail/guest/1`，只能凭口令读一份快照和它的附件；不经过成员的 admin API，碰不到 `session.*`、`task.*`。
 - **一次读完就断**：中继是所有人共用一份额度（cloud `limits.ts`：同时 160 个连接、每天 5GB），查看页拿到快照和图片就关掉连接；station 限制访客的并发和频率。
@@ -32,7 +32,7 @@ https://share.still.fail/#<station>.<id>.<key>
 **数据**：stillfail.db 新表 `published`（`CREATE TABLE IF NOT EXISTS`）：
 
 ```
-id TEXT PRIMARY KEY, thread INTEGER, key TEXT, title TEXT, created_by TEXT, created_at INTEGER, upto INTEGER, size INTEGER
+id TEXT PRIMARY KEY, thread INTEGER, key TEXT, title TEXT, created_by TEXT, by_name TEXT, created_at INTEGER, upto INTEGER, size INTEGER
 ```
 
 快照在 `<data>/published/<id>/snapshot.json`，附件在 `<data>/published/<id>/f/<k>`。chat 被删除时它的快照一起删。
@@ -41,12 +41,12 @@ id TEXT PRIMARY KEY, thread INTEGER, key TEXT, title TEXT, created_by TEXT, crea
 
 | 请求 | 回答 |
 |---|---|
-| `POST /threads/:thread/publish/preview {names}` | `{upto, snapshot, redacted: [{n, count}], files: [{k, name, size, type, n}]}`：照现在的样子拼一份，不存 |
+| `POST /threads/:thread/publish/preview {names}` | `{upto, title, entries, redacted: [{n, count}], files: [{k, name, size, type, n, width?, height?, thumbhash?}], most: {bytes, file}}`：照现在的样子拼一份，不存；`entries` 和快照里的一样，只是 `files` 是 `k` 的列表 |
 | `POST /threads/:thread/publish {upto, files: [k], names}` | `{published: Published}`：按 `upto` 再拼一次，只带勾上的附件，存下 |
 | `DELETE /published/:id` | `{ok: true}` |
 
 - `names`：`{email: 名字}`，客户端从 workspace 成员名单给。快照里人的名字按它换，不在里面的用邮箱 @ 前面那段；快照里不出现邮箱。agent 用它在 chat 里的名字。
-- `Published = {id, station, key, at, by, byName, size, upto}`；thread 视图（`GET /threads/:id`、`/threads`、`changed/threads`）多一个可选字段 `published: Published[]`（没有时不给）。发布、撤销后 thread 照常推变化。
+- `Published = {id, key, title, at, by, byName, size, upto}`（`by` 是邮箱，只给成员看）；thread 视图（`GET /threads/:id`、`/threads`、`changed/threads`）多一个可选字段 `published: Published[]`（没有时不给）。发布、撤销后 thread 照常推变化。
 - 上限：快照（含附件）20 MB，单个附件 10 MB，超了的附件在预览里标出、不能勾。
 
 **快照**（`snapshot.json`，也是预览里的 `snapshot`）：
@@ -62,7 +62,7 @@ id TEXT PRIMARY KEY, thread INTEGER, key TEXT, title TEXT, created_by TEXT, crea
 **访客通道** `stillfail/guest/1`：每个双向流一问一答。
 
 ```
-→ {"get": "<id>", "key": "<key>"}                 ← {"ok": true, "size": N} + N 字节的 snapshot.json
+→ {"get": "<id>", "key": "<key>"}                 ← {"ok": true, "size": N, "type": "application/json"} + N 字节的 snapshot.json
 → {"get": "<id>", "key": "<key>", "file": "<k>"}  ← {"ok": true, "size": N, "type": "<mime>"} + N 字节
                                                    ← {"error": "…", "code": "gone" | "busy"}
 ```
