@@ -663,6 +663,11 @@ test("a still.fail chat's session writes in Slack through connect= once a person
   assert.deepEqual(r.chat.calls.at(-1), ["chat.postMessage", { channel: "C2", text: "1400 今晚发" }]);
   const started = r.thread("C2", "8888.1");
   assert.deepEqual(r.store.threadSessions(started.id).map((m) => [m.session, m.connect]), [[key, "cl"]]);
+  // How it came out is appended for its card (settle); the card's post reads as it was.
+  const asked = r.store.messagesBefore(thread.id, null, 50).filter((m) => m.authorKind === "agent" && m.text.includes("> 1400 今晚发")).at(-1)!;
+  const settled = r.store.entriesBetween(thread.id, asked.n + 1, asked.n + 50).filter((e) => e.kind === "settle");
+  assert.deepEqual(settled.map((e) => [e.target, e.authorKind, e.text]), [[asked.n, "ember", "已发送到 #C2"]]);
+  assert.equal(r.store.messageAt(thread.id, asked.ts)!.text, asked.text);
   // In its own thread now: written at once, and with chat_post.
   r.chat.answers.set("reactions.add", { ok: true });
   await r.call(key, "slack_api", { method: "reactions.add", connect: "cl", params: { channel: "C2", timestamp: "8888.1", name: "eyes" } });

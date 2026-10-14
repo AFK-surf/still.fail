@@ -33,6 +33,15 @@ test("edits_merge_into_their_messages", () => {
   assert.deepEqual((merge(entries.slice(2)) as J[]).map((m) => m.seq), [4, 6]);
 });
 
+test("a_settle_entry_says_how_a_card_came_out_and_leaves_the_message_as_it_was", () => {
+  const asked = { ...message(1, "要发吗？"), authorKind: "agent", card: { type: "options", options: [{ label: "发送" }] } };
+  const settled = { ...change(3, "settle", 1, "已发送到 #ops"), authorKind: "ember", attachments: [] };
+  const merged = merge([asked, message(2, "发送"), settled]) as J[];
+  assert.deepEqual(merged.map((m) => [m.seq, m.text, m.editedAt]), [[1, "要发吗？", null], [2, "发送", null]]);
+  assert.equal(merged[0].settled, "已发送到 #ops");
+  assert.deepEqual(merged[0].attachments, []);
+});
+
 test("a_block_post_keeps_its_options", () => {
   const asked = { ...message(1, "选哪个？"), options: [{ label: "A" }] };
   const merged = merge([asked, message(2, "A")]) as J[];

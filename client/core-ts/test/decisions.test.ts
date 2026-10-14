@@ -173,6 +173,9 @@ test("cards_in_a_chat_say_whether_they_wait_and_who_answered_how", () => {
   messages = d.inMessages(messages, null);
   assert.deepEqual(messages[0].decision, { resolved: true, answeredBy: "林晓", chosen: "B", text: "林晓 选了「B」" });
   shape("MessageDecision", messages[0].decision);
+  // How it came out, as the station said after: with who chose, and kept to the decision.
+  messages = d.inMessages([{ ...askedMsg(2), settled: "已发送到 #ops" }, pick], null);
+  assert.deepEqual([messages[0].decision.text, messages[0].settled], ["林晓 选了「B」 · 已发送到 #ops", undefined]);
   const mine = said(3, "person", "都不要");
   mine.mine = true;
   messages = [askedMsg(2), mine];

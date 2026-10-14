@@ -296,11 +296,14 @@ export function inMessages(messages: J[], pendingOf: [number, boolean] | null | 
           decision.chosen = chosen;
           decision.text = t("core-logic.decisions.chose", { name, label: chosen });
         } else decision.text = t("core-logic.decisions.replied", { name });
+        // How it came out, as the station said after (a settle entry: 已发送到 #ops).
+        const settled = str(get(messages[i], "settled"));
+        if (settled !== undefined) decision.text = `${decision.text} · ${settled}`;
       } else if (replaced) decision.text = t("core-logic.decisions.replaced");
     }
     const m = messages[i];
     if (!isObject(m)) return;
-    const { options: _options, ...rest } = m as J;
+    const { options: _options, settled: _settled, ...rest } = m as J;
     out[i] = { ...rest, ...(kind(card) === "options" ? { options } : {}), card: s, decision };
   });
   return out;

@@ -1,5 +1,6 @@
 // A thread's entries merged into its messages (entries.rs): the one place edits are applied. A message shows its
-// latest edit's text, attachments and quotes, marked edited.
+// latest edit's text, attachments and quotes, marked edited; and how its card came out (a settle entry's text, the
+// station's: `settled`), the message itself as it was. The station's log only grows: what changes is read here.
 import { get, isObject } from "./util.ts";
 
 /// An entry's number in its thread.
@@ -45,6 +46,10 @@ export function merge(entries: unknown[]): Record<string, unknown>[] {
       message.attachments = entry.attachments === undefined ? [] : entry.attachments;
       message.quotes = entry.quotes === undefined ? [] : entry.quotes;
       message.editedAt = field("at");
+    } else if (kind === "settle") {
+      const target = entry.target;
+      const message = typeof target === "number" ? messages.get(target) : undefined;
+      if (message && typeof entry.text === "string" && entry.text !== "") message.settled = entry.text;
     }
   }
   return [...messages.keys()].sort((a, b) => a - b).map((k) => messages.get(k)!);

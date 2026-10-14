@@ -34,7 +34,7 @@ export function entryJson(e: EntryRow): Record<string, Json> {
 /// An entry from an archive file, as serde reads EntryRow (null where an Option is: None).
 export function archivedEntry(e: Json): EntryRow {
   const kind = e.kind;
-  if (kind !== "message" && kind !== "edit") throw new Error(`unknown entry kind ${kind}`);
+  if (kind !== "message" && kind !== "edit" && kind !== "settle") throw new Error(`unknown entry kind ${kind}`);
   if (!["person", "agent", "ember", "stillfail"].includes(e.authorKind)) throw new Error(`unknown author kind ${e.authorKind}`);
   const some = (v: Json) => (v === undefined || v === null ? undefined : v);
   return {
