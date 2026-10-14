@@ -646,5 +646,6 @@
   "web-main.rail.lead": "左边这一列显示什么、按什么顺序，只在这台设备上",
   "web-main.rail.show": "显示",
   "web-main.rail.reset": "恢复默认",
-  "web-main.rail.drag": "拖动排序"
+  "web-main.rail.drag": "拖动排序",
+  "web-main.rail.workspaces": "Workspace 切换"
 }

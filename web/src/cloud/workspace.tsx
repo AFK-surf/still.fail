@@ -18,7 +18,8 @@ import { ConnectPage } from "../pages/Connect.tsx";
 import { DriveHome, DrivePage, DrivePlayPage, DriveReadPage } from "../pages/Drive.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList, StationTrouble, useGlassBands } from "../Sidebar.tsx";
-import { Rail, placeOf } from "../Rail.tsx";
+import { Rail, placeOf, railItems } from "../Rail.tsx";
+import { usePrefs } from "../prefs.ts";
 import * as railCss from "../Rail.css.ts";
 import { drivePath } from "../drive/useDrive.ts";
 import { Boxes, Folder } from "../icons.tsx";
@@ -273,11 +274,17 @@ const WorkspaceSidebar = memo(function WorkspaceSidebar({ entry }: { entry: Work
     <nav ref={useGlassBands()} className={nav.sidebar} aria-label={t("web-pages.workspace.navigation")}>
       <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} />
       <ChatList top={<div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div>} scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`} decisions={`/w/${entry.id}/decisions`}
-        below={<div className={nav.navTodo}><AttentionEntry scope={entry.id} /></div>} />
+        below={<SidebarTodo scope={entry.id} />} />
       <WorkspaceSidebarFooter entry={entry} />
     </nav>
   );
 });
+
+/** 待处理 under 新建对话; with it in the rail (Rail.tsx), only on a narrow screen (no rail there). */
+function SidebarTodo({ scope }: { scope: string }) {
+  const railed = railItems(usePrefs((p) => p.rail)).includes("attention");
+  return <div className={railed ? `${nav.navTodo} ${railCss.narrowOnly}` : nav.navTodo}><AttentionEntry scope={scope} /></div>;
+}
 
 /** Under the sidebar's lists: workspace controls, and what wants the viewer (奏 among it). */
 function WorkspaceSidebarFooter({ entry }: { entry: WorkspaceEntry }) {

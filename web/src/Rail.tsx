@@ -1,16 +1,21 @@
 // The rail at the wide screen's left, of the sidebar's own ground: at its top what opens and closes the sidebar (under
-// the window's buttons in the desktop app on macOS), then the workspace's places as the person chose them on this device
-// (prefs `rail`, 外观 in the settings: which, in what order; all of them, so, by default): 对话, 奏 (the word, as the
-// desktop has always had it, with how many wait for the viewer), 文件, the stations' glyph, Profile, 连接, 用量; at its
-// foot the settings and the workspace's switcher. Each place is what the sidebar beside it shows: the chats (or 奏, one of
-// their lists), the folders the stations lend (FilesNav, cloud/workspace.tsx), the settings. On a narrow screen there is
-// none: the sidebar's foot keeps the switcher and the settings.
+// the window's buttons in the desktop app on macOS), then the places the person chose for it on this device (prefs
+// `rail`, 外观's 侧边条: which, in what order; RAIL_DEFAULT when none was chosen): 对话 and the lists of chats beside it
+// (我参与的, 监控中, the archive), 奏 (the word, as the desktop has always had it, with how many wait for the viewer),
+// 待处理 (what wants them in every workspace, as the sidebar's top has it), 文件, the stations' glyph, Profile, 连接, 用量,
+// the workspaces to switch to (each with what waits in it); at its foot the settings and the workspace's switcher. Each
+// place is what the sidebar beside it shows: the chats (or 奏, one of their lists), the folders the stations lend
+// (FilesNav, cloud/workspace.tsx), the settings. On a narrow screen there is none: the sidebar's foot keeps the switcher
+// and the settings.
 import type { ComponentType, ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
-import { Chart, Chats, Folder, Im, PanelClose, PanelOpen, Quota, Settings, type IconProps } from "./icons.tsx";
+import { Archive, Bell, Chart, Chats, Folder, Im, PanelClose, PanelOpen, Quota, Settings, User, Users, Watch, type IconProps } from "./icons.tsx";
 import { Tip } from "./ui.tsx";
-import { useLastChat, useWorkspaceMarks } from "./lastChat.ts";
-import { useSidebarMode } from "./station.tsx";
+import { lastChatOf, useLastChat, useWorkspaceMarks } from "./lastChat.ts";
+import { useSidebarMode, type SidebarMode } from "./station.tsx";
+import { AttentionEntry } from "./Attention.tsx";
+import { useWorkspaces } from "./cloud/api.ts";
+import * as chatMarkCss from "./ChatMark.css.ts";
 import { usePrefs } from "./prefs.ts";
 import { RailStations } from "./Sidebar.tsx";
 import { openedAt } from "./DecisionDesk.tsx";
@@ -18,13 +23,15 @@ import { useSidebarToggle } from "./brand.tsx";
 import * as css from "./Rail.css.ts";
 import { t } from "./i18n.ts";
 
-/** The places the rail can show, in the order they come in when none was chosen. */
-export const RAIL_ITEMS = ["chats", "decisions", "files", "stations", "profiles", "connects", "usage"] as const;
+/** Every place the rail can show, in the order the settings list them when none was chosen. */
+export const RAIL_ITEMS = ["chats", "mine", "watching", "archive", "decisions", "attention", "files", "stations", "profiles", "connects", "usage", "workspaces"] as const;
 export type RailItem = (typeof RAIL_ITEMS)[number];
+/** What it shows when none was chosen. */
+export const RAIL_DEFAULT: readonly RailItem[] = ["chats", "decisions", "files", "stations", "profiles", "connects", "usage"];
 
 /** What the rail shows, in its order: as kept (what this build does not know left out), the chats always among them. */
 export function railItems(kept: readonly string[] | null | undefined): RailItem[] {
-  if (!kept) return [...RAIL_ITEMS];
+  if (!kept) return [...RAIL_DEFAULT];
   const items = [...new Set(kept.filter((k): k is RailItem => (RAIL_ITEMS as readonly string[]).includes(k)))];
   return items.includes("chats") ? items : ["chats", ...items];
 }
@@ -33,23 +40,31 @@ export function railItems(kept: readonly string[] | null | undefined): RailItem[
 export function railLabel(item: RailItem): string {
   switch (item) {
     case "chats": return t("web-main.rail.chats");
+    case "mine": return t("web-main.filter.chats.mine");
+    case "watching": return t("web-main.filter.watching");
+    case "archive": return t("web-main.filter.archived");
     case "decisions": return t("web-main.rail.decisions");
+    case "attention": return t("web-main.attention.entry");
     case "files": return t("web-pages.drive.title");
     case "stations": return "Station";
     case "profiles": return "Profile";
     case "connects": return t("web-pages.settings.nav.connects");
     case "usage": return t("web-pages.settings.nav.usage");
+    case "workspaces": return t("web-main.rail.workspaces");
   }
 }
 
-/** The icons of the places drawn as one (the stations' is their glyph, 奏 its word). */
-export const RAIL_ICONS: Partial<Record<RailItem, ComponentType<IconProps>>> = { chats: Chats, files: Folder, profiles: Quota, connects: Im, usage: Chart };
+/** The icons of the places drawn as one (the stations' is their glyph, 奏 its word, the workspaces each its letter). */
+export const RAIL_ICONS: Partial<Record<RailItem, ComponentType<IconProps>>> = {
+  chats: Chats, mine: User, watching: Watch, archive: Archive, attention: Bell, files: Folder, profiles: Quota, connects: Im, usage: Chart, workspaces: Users,
+};
 
 /** Which place the page is in, by its path: the files' and the settings' pages have the sidebar of their own. */
-export type Place = RailItem | "settings";
+export type Place = "chats" | "archive" | "files" | "stations" | "profiles" | "connects" | "usage" | "settings";
 
 export function placeOf(path: string): Place {
   if (/^\/w\/[^/]+\/(files|s\/[^/]+\/files)(\/|$)/.test(path)) return "files";
+  if (/^\/w\/[^/]+\/archive$/.test(path)) return "archive";
   if (/^\/w\/[^/]+\/settings\/stations(\/|$)/.test(path)) return "stations";
   if (/^\/w\/[^/]+\/(settings\/profiles|s\/[^/]+\/settings\/accounts)(\/|$)/.test(path)) return "profiles";
   if (/^\/w\/[^/]+\/(settings\/connects|s\/[^/]+\/connects)(\/|$)/.test(path)) return "connects";
@@ -57,6 +72,9 @@ export function placeOf(path: string): Place {
   if (/^\/w\/[^/]+\/(settings|s\/[^/]+\/settings)(\/|$)/.test(path)) return "settings";
   return "chats";
 }
+
+/** The lists of chats the rail can lead to, by the sidebar's mode they are. */
+const LISTS: Partial<Record<RailItem, SidebarMode>> = { chats: "all", mine: "mine", watching: "watching", decisions: "decisions" };
 
 export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode }) {
   const place = placeOf(useLocation().pathname);
@@ -67,9 +85,10 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   const items = railItems(usePrefs((p) => p.rail));
   const sidebar = useSidebarToggle();
   const settings = `/w/${scope}/settings`;
-  const on = (item: RailItem) => item === "decisions" ? place === "chats" && mode === "decisions"
-    : item === "chats" ? place === "chats" && (mode !== "decisions" || !items.includes("decisions"))
-    : place === item;
+  // A list of chats lit while the sidebar shows it; 对话 for one not in the rail.
+  const shownList = (Object.keys(LISTS) as RailItem[]).find((i) => LISTS[i] === mode && items.includes(i)) ?? "chats";
+  const on = (item: RailItem) => LISTS[item] ? place === "chats" && shownList === item : place === item;
+  const toList = (item: RailItem) => () => { setMode(LISTS[item]!); if (place !== "chats") navigate(last); };
   const link = (item: RailItem, to: string) => {
     const Icon = RAIL_ICONS[item]!;
     return (
@@ -80,14 +99,14 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   };
   const drawn = (item: RailItem): ReactNode => {
     switch (item) {
-      case "chats": return (
-        <Tip key={item} label={railLabel(item)} side="right">
-          <button type="button" className={css.item} data-on={on(item) || undefined} aria-label={railLabel(item)}
-            onClick={() => { if (mode === "decisions") setMode("all"); if (place !== "chats") navigate(last); }}>
-            <Chats size={20} />
-          </button>
-        </Tip>
-      );
+      case "chats": case "mine": case "watching": {
+        const Icon = RAIL_ICONS[item]!;
+        return (
+          <Tip key={item} label={railLabel(item)} side="right">
+            <button type="button" className={css.item} data-on={on(item) || undefined} aria-label={railLabel(item)} onClick={toList(item)}><Icon size={20} /></button>
+          </Tip>
+        );
+      }
       case "decisions": return (
         <Tip key={item} label={waiting > 0 ? t("web-main.decisions.entry", { n: waiting }) : railLabel(item)} side="right">
           <button type="button" className={css.item} data-on={on(item) || undefined} aria-label={railLabel(item)}
@@ -97,6 +116,9 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
           </button>
         </Tip>
       );
+      case "archive": return link(item, `/w/${scope}/archive`);
+      case "attention": return <AttentionEntry key={item} scope={scope} rail={{ item: css.item, count: css.count, label: railLabel(item) }} />;
+      case "workspaces": return <RailWorkspaces key={item} scope={scope} />;
       case "files": return link(item, `/w/${scope}/files`);
       case "stations": return <RailStations key={item} scope={scope} to={`${settings}/stations`} on={on(item)} className={css.item} />;
       case "profiles": return link(item, `${settings}/profiles`);
@@ -119,9 +141,37 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
       <div className={css.grow} />
       {/* A place left out of the rail is reached in the settings: they are lit while in it. */}
       <Tip label={t("web-pages.settings.title")} side="right">
-        <NavLink className={css.item} to={settings} data-on={place === "settings" || (place !== "chats" && !items.includes(place)) || undefined} aria-label={t("web-pages.settings.title")}><Settings size={20} /></NavLink>
+        <NavLink className={css.item} to={settings} data-on={place === "settings" || (place !== "chats" && !items.includes(place as RailItem)) || undefined} aria-label={t("web-pages.settings.title")}><Settings size={20} /></NavLink>
       </Tip>
       {workspace}
     </nav>
+  );
+}
+
+/**
+ * Every workspace of the viewer's accounts, each its first letter, the one in view marked; the others with what waits in
+ * them (the core's marks: red, something went wrong; amber, someone waits for them; blue, new), its words on hover.
+ * Pressed, the chat last open there.
+ */
+function RailWorkspaces({ scope }: { scope: string }) {
+  const all = (useWorkspaces().value ?? []).flatMap(({ account, workspaces }) => workspaces.map((w) => ({ account, w })));
+  const marks = useWorkspaceMarks(scope);
+  const navigate = useNavigate();
+  return (
+    <div className={css.workspaces}>
+      {all.map(({ account, w }) => {
+        const here = w.id === scope;
+        const mark = marks?.workspaces[w.id];
+        return (
+          <Tip key={`${account.sub}/${w.id}`} label={!here && mark?.label ? `${w.name} · ${mark.label}` : w.name} side="right">
+            <button type="button" className={css.workspaceItem} data-on={here || undefined} aria-current={here || undefined} aria-label={w.name}
+              onClick={() => { if (!here) navigate(lastChatOf(marks, w.id) ?? `/w/${w.id}`); }}>
+              {[...w.name.trim()][0]?.toUpperCase() ?? "·"}
+              {!here && mark?.tone && <span className={css.mark}><span className={chatMarkCss.chatMarkInline} data-tone={mark.tone} /></span>}
+            </button>
+          </Tip>
+        );
+      })}
+    </div>
   );
 }

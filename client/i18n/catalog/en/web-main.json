@@ -715,5 +715,6 @@
   "web-main.rail.lead": "What the column at the left shows and in what order, on this device",
   "web-main.rail.show": "Show",
   "web-main.rail.reset": "Reset",
-  "web-main.rail.drag": "Drag to reorder"
+  "web-main.rail.drag": "Drag to reorder",
+  "web-main.rail.workspaces": "Workspaces"
 }

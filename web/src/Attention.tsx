@@ -34,7 +34,8 @@ function groups(marks: WorkspaceMarksView | undefined, scope: string): { workspa
     .filter((g) => g.items.length > 0);
 }
 
-export function AttentionEntry({ scope }: { scope: string }) {
+/** `rail`: drawn in the rail (Rail.tsx) as its bell, with how many came since they last looked, there even with none. */
+export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: string; count: string; label: string } }) {
   const marks = useWorkspaceMarks(scope);
   const [open, setOpen] = useState(false);
   const [gone, setGone] = useState<Set<string>>(new Set());
@@ -45,7 +46,7 @@ export function AttentionEntry({ scope }: { scope: string }) {
   const all = listed.flatMap((g) => g.items);
   const goneFresh = groups(marks, scope).flatMap((g) => g.items).filter((i) => gone.has(keyOf(i)) && !i.seen).length;
   const n = Math.max(0, (marks?.badge ?? 0) - goneFresh);
-  if (!marks || (all.length === 0 && !open)) return null;
+  if (!rail && (!marks || (all.length === 0 && !open))) return null;
   const several = listed.length > 1 || listed.some((g) => g.workspace !== scope);
   const go = (i: MarkItem) => {
     setOpen(false);
@@ -63,14 +64,21 @@ export function AttentionEntry({ scope }: { scope: string }) {
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
+        {rail ? (
+          <button type="button" className={rail.item} data-on={open || undefined} title={rail.label} aria-label={n > 0 ? t("web-main.attention.label", { n }) : rail.label}>
+            <Bell size={20} />
+            {n > 0 && <span className={rail.count}>{n > 99 ? "99+" : n}</span>}
+          </button>
+        ) : (
         <button type="button" className={`${nav.navRow} ${css.entry}`} aria-label={n > 0 ? t("web-main.attention.label", { n }) : t("web-main.attention.entry")}>
           <Bell {...ICON} />
           <span className={css.name}>{t("web-main.attention.entry")}</span>
           <span className={css.slot}>{n > 0 ? <span className={css.count}>{n}</span> : <span className={css.quiet}>{all.length}</span>}</span>
         </button>
+        )}
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content className={`${controlsCss.popover} ${css.panel}`} side="bottom" align="start" sideOffset={6} collisionPadding={8}
+        <Popover.Content className={`${controlsCss.popover} ${css.panel}`} side={rail ? "right" : "bottom"} align="start" sideOffset={rail ? 10 : 6} collisionPadding={8}
           onOpenAutoFocus={(e) => e.preventDefault()}>
           {all.length === 0 && <div className={css.empty}>{t("web-main.attention.empty")}</div>}
           {listed.map((g) => (

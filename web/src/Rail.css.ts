@@ -44,6 +44,17 @@ export const count = style({
   fontVariantNumeric: "tabular-nums", boxShadow: `0 0 0 2px ${vars.sidebar}`,
 });
 
+/** The workspaces to switch to (Rail.tsx RailWorkspaces), each its first letter, the one in view ringed. */
+export const workspaces = style({ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "4px 0" });
+export const workspaceItem = style({
+  position: "relative", display: "grid", placeItems: "center", width: 30, height: 30, padding: 0, border: 0,
+  borderRadius: `calc(9px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: vars.hover, color: vars.muted,
+  fontSize: vars.textUi, fontWeight: 600, cursor: "pointer",
+  selectors: {
+    "&:hover": { color: vars.text },
+    "&[data-on]": { background: vars.text, color: vars.sidebar },
+  },
+});
 /** The workspace in view, its first letter; its menu is the switcher's (cloud/workspace.tsx). */
 export const workspace = style({
   position: "relative", display: "grid", placeItems: "center", width: 30, height: 30, marginTop: 4, padding: 0, border: 0,
