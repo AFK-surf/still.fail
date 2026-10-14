@@ -74,7 +74,7 @@ function AppBubble() {
     : t("web-main.appUpdate.title", { version: state.version, app: NAME });
   return (
     <Bubble icon={<Download size={16} />} closeLabel={t("web-main.webUpdate.later")} onClose={busy ? undefined : () => setAway(true)}
-      action={!busy && (() => <button type="button" className={css.action} onClick={() => updates.start()}>{state.phase === "failed" ? t("web-main.appUpdate.failed") : t("web-main.versions.update")}</button>)}>
+      action={!busy && (() => <button type="button" className={css.action} data-tone="accent" onClick={() => updates.start()}>{state.phase === "failed" ? t("web-main.appUpdate.failed") : t("web-main.versions.update")}</button>)}>
       {text}
     </Bubble>
   );
@@ -86,7 +86,7 @@ function WebBubble() {
   if (!update) return null;
   return (
     <Bubble icon={<Refresh size={16} />} closeLabel={t("web-main.webUpdate.later")} onClose={webUpdates.dismiss}
-      action={() => <button type="button" className={css.action} onClick={webUpdates.refresh}>{t("web-main.webUpdate.refresh")}</button>}>
+      action={() => <button type="button" className={css.action} data-tone="accent" onClick={webUpdates.refresh}>{t("web-main.webUpdate.refresh")}</button>}>
       {t("web-main.webUpdate.found")}
     </Bubble>
   );
@@ -100,7 +100,7 @@ function ChangelogBubble({ scope }: { scope: string }) {
   const first = news.entries.flatMap((e) => e.text)[0];
   return (
     <Bubble icon={<Sparks size={16} strokeWidth={1.8} />} closeLabel={t("web-pages.changelog.dismiss")} onClose={seen}
-      action={(away) => <Link className={css.action} to={`/w/${scope}/settings/changelog`} onClick={() => away(seen)}>{t("web-main.system.changelog")}</Link>}>
+      action={(away) => <Link className={css.action} data-tone="accent" to={`/w/${scope}/settings/changelog`} onClick={() => away(seen)}>{t("web-main.system.changelog")}</Link>}>
       <b>{news.build ? t("web-pages.changelog.updatedTo", { build: news.build }) : t("web-pages.changelog.updated")}</b>
       {first && <span className={css.line}>{first}</span>}
     </Bubble>

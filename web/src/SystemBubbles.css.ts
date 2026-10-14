@@ -4,6 +4,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { panel } from "./styles/glass.ts";
 import { surface } from "./styles/align.ts";
+import { panelButton, panelIcon } from "./ui.css.ts";
 
 export const stack = style({
   position: "fixed", zIndex: 150, left: "calc(env(safe-area-inset-left, 0px) + 12px)", bottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)",
@@ -32,19 +33,9 @@ export const line = style({
   color: vars.muted, fontSize: vars.textMeta, lineHeight: "18px", overflow: "hidden",
   display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2,
 });
-/** Its one thing to do: words in the accent, a link's, by the last line of the words: never a button's ground, underlined
- * while pointed at (its padding only room to press, its words' end under the close's mark). */
-export const action = style({
-  gridArea: "act", alignSelf: "end", height: 28, padding: "0 8px", border: 0, background: "none",
-  color: vars.accentText, font: "inherit", fontWeight: 600, lineHeight: "28px", textDecoration: "none", whiteSpace: "nowrap",
-  textUnderlineOffset: "3px", cursor: "pointer",
-  selectors: { "&:hover, &:focus-visible": { textDecoration: "underline" }, "&:focus-visible": { outline: "none" } },
-});
-export const close = style({
-  gridArea: "close", alignSelf: "start", justifySelf: "end", display: "grid", placeItems: "center", width: 28, height: 28, padding: 0, border: 0, borderRadius: "50%",
-  background: "none", color: vars.muted, cursor: "pointer",
-  selectors: { "&:hover": { background: vars.hover, color: vars.text } },
-});
+/** Its one thing to do: a small panel's words to press (ui.css.ts panelButton, accent), by the last line of the words. */
+export const action = style([panelButton, { gridArea: "act", alignSelf: "end" }]);
+export const close = style([panelIcon, { gridArea: "close", alignSelf: "start", justifySelf: "end" }]);
 
 // With words under its title: its close at the top right and what can be done under it, at the right of the last line.
 globalStyle(`${bubble}:has(${line})`, { gridTemplateColumns: "auto minmax(0, 1fr) auto", gridTemplateAreas: '"icon text close" "icon text act"' });

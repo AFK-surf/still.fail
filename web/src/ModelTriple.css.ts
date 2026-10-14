@@ -89,7 +89,8 @@ export const runPickerOption = style({
 });
 globalStyle(`${runPickerOption}[aria-pressed="true"] > ${runCheck}, ${runPickerOption}[aria-pressed="true"] ${runCheck}`, { visibility: "visible" });
 export const runPickerNote = style({ margin: "0 8px 6px", fontSize: vars.textMeta, color: vars.amber });
-export const btnSm = style({ height: "28px", padding: "0 12px", fontSize: vars.textUi });
+/** The picker's own buttons: 28 high, rounded as what sits in it (its corner less its padding), not pills. */
+export const btnSm = style({ height: "28px", padding: "0 12px", fontSize: vars.textUi, borderRadius: inner, cornerShape: vars.cornerShape });
 export const modelTriple = style({
   display: "inline-flex", alignItems: "center", gap: "6px", maxWidth: "100%", justifySelf: "start", alignSelf: "start",
   width: "max-content", height: "30px", padding: "0 10px", border: "1px solid transparent",
