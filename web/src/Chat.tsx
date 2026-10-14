@@ -571,7 +571,8 @@ function tallOf(m: ChatMessage): number {
  * The way to a chat's end, from the button over the list or its shortcut: down the list, gliding, as always; from a
  * window short of the end (`chat.newer`), its latest page in its place first (`latest`), then straight to its bottom,
  * with nothing gliding or coming in. A message sent from such a window takes the reader there the same way (the core
- * puts the latest page in place as it sends); sent from up the list, straight to its bottom.
+ * does not move the window as it sends: the list asks for the latest page itself); sent from up the list, straight to
+ * its bottom.
  */
 function useToEnd(list: RefObject<HTMLElement | null>, virtual: VirtualList, chat: ChatView, latest: () => Promise<unknown>): () => void {
   const toast = useToast();
@@ -585,25 +586,28 @@ function useToEnd(list: RefObject<HTMLElement | null>, virtual: VirtualList, cha
     going.current = false;
     virtual.toEnd(true);
   });
+  const toLatest = useRef(() => {});
+  toLatest.current = () => {
+    going.current = true;
+    latest().catch((e: unknown) => { going.current = false; toast(t("web-main.chat.toLatestFailed", { error: failure(e) })); });
+  };
   // A message sent (the composer says so as it sends, `sent`, rather than the outbox growing: on a quick link the
-  // station has it before the outbox ever shows it): from up the list, to its bottom at once, following again.
+  // station has it before the outbox ever shows it): from up the list, to its bottom at once, following again; from a
+  // window short of the end, its latest page first. Left waiting for the reader to load the rest, the list jumped to
+  // the end at once whenever a page they scrolled to reached it.
   useEffect(() => {
     const el = list.current;
     if (!el) return;
     const sent = () => {
-      if (isShort.current) going.current = true;
+      if (isShort.current) toLatest.current();
       else if (virtual.model.mode.kind !== "follow") virtual.toEnd(true);
     };
     el.addEventListener("sent", sent);
     return () => el.removeEventListener("sent", sent);
   }, [list, virtual]);
   return () => {
-    if (!short) {
-      virtual.toEnd();
-      return;
-    }
-    going.current = true;
-    latest().catch((e: unknown) => { going.current = false; toast(t("web-main.chat.toLatestFailed", { error: failure(e) })); });
+    if (!short) virtual.toEnd();
+    else toLatest.current();
   };
 }
 
