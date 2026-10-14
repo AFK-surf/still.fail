@@ -249,7 +249,9 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList}`} side="right" align="start" sideOffset={8}
-            collisionPadding={{ top: 52, right: 8, bottom: 8, left: 8 }}>
+            collisionPadding={{ top: 52, right: 8, bottom: 8, left: 8 }}
+            // Not back to its anchor (by the rail, not in it): the change it opens would take that for going elsewhere.
+            onCloseAutoFocus={(e) => e.preventDefault()}>
             {pointed && pointed !== "chats" && (
               <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => keep(items.filter((i) => i !== pointed))}><Minus {...ICON} />{t("web-main.rail.remove", { name: railLabel(pointed) })}</DropdownMenu.Item>
             )}
