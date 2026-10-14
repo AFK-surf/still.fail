@@ -55,16 +55,12 @@ export const workspaceItem = style({
     "&[data-on]": { background: vars.text, color: vars.sidebar },
   },
 });
-/** The switcher among them: no room above it there. */
-export const workspaceHere = style({ display: "contents" });
-globalStyle(`${workspaceHere} > button`, { marginTop: 0 });
-// What waits in the others is on each of them there, not on it too.
-globalStyle(`${workspaceHere} > button > span`, { display: "none" });
-/** The workspace in view, its first letter; its menu is the switcher's (cloud/workspace.tsx). */
-export const workspace = style({
-  position: "relative", display: "grid", placeItems: "center", width: 30, height: 30, marginTop: 4, padding: 0, border: 0,
-  borderRadius: `calc(9px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: vars.text, color: vars.sidebar,
-  fontSize: vars.textUi, fontWeight: 600, cursor: "pointer",
+/** Under the workspaces: making one, another account, invitations (its menu), a dashed square. */
+export const workspaceAdd = style({
+  position: "relative", display: "grid", placeItems: "center", width: 30, height: 30, padding: 0,
+  border: `1.5px dashed ${vars.lineStrong}`, borderRadius: `calc(9px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: "none", color: vars.muted, cursor: "pointer",
+  selectors: { "&:hover, &[data-state=open]": { color: vars.text, borderColor: vars.fieldHover } },
 });
 export const mark = style({ position: "absolute", top: -4, right: -4, display: "flex", padding: 2, borderRadius: "50%", background: vars.sidebar });
 

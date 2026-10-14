@@ -651,5 +651,6 @@
   "web-main.rail.remove": "从侧边条移除{name}",
   "web-main.rail.kind.places": "页面",
   "web-main.rail.kind.lists": "对话列表",
-  "web-main.rail.kind.attention": "提醒"
+  "web-main.rail.kind.attention": "提醒",
+  "web-main.rail.addWorkspace": "新建 workspace、添加账号"
 }

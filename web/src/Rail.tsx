@@ -3,8 +3,8 @@
 // `rail`, 外观's 侧边条: which, in what order; RAIL_DEFAULT when none was chosen): 对话 and the lists of chats beside it
 // (我参与的, 监控中, the archive), 奏 (the word, as the desktop has always had it, with how many wait for the viewer),
 // 待处理 (what wants them in every workspace, as the sidebar's top has it), 文件, the stations' glyph, Profile, 连接, 用量;
-// at its foot every workspace to switch to (each with what waits in it, the one in view its switcher) and under them the
-// settings, which are not among what is chosen. It is changed where it is: its menu's 自定义侧边条 (or 外观's) has its places
+// at its foot every workspace to switch to (each with what waits in it; a ＋ under them for making one, another account,
+// invitations) and under them the settings, which are not among what is chosen. It is changed where it is: its menu's 自定义侧边条 (or 外观's) has its places
 // dragged up and down, taken out with their −, added from a panel beside it by kind; a place's own menu takes it out.
 // Each place is what the sidebar beside it shows: the chats (or 奏, one of their lists), the folders the stations lend
 // (FilesNav, cloud/workspace.tsx), the settings. On a narrow screen there is none: the sidebar's foot keeps the switcher
@@ -249,9 +249,9 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
 }
 
 /**
- * Every workspace of the viewer's accounts, each its first letter, the one in view its switcher; the others with what waits in
+ * Every workspace of the viewer's accounts, each its first letter, the one in view marked; the others with what waits in
  * them (the core's marks: red, something went wrong; amber, someone waits for them; blue, new), its words on hover.
- * Pressed, the chat last open there.
+ * Pressed, the chat last open there. Under them `current`'s ＋: making one, another account, invitations.
  */
 function RailWorkspaces({ scope, current }: { scope: string; current: ReactNode }) {
   const all = (useWorkspaces().value ?? []).flatMap(({ account, workspaces }) => workspaces.map((w) => ({ account, w })));
@@ -261,8 +261,6 @@ function RailWorkspaces({ scope, current }: { scope: string; current: ReactNode 
     <div className={css.workspaces}>
       {all.map(({ account, w }) => {
         const here = w.id === scope;
-        // The one in view is the switcher (its menu: making one, another account, invitations).
-        if (here) return <span key={`${account.sub}/${w.id}`} className={css.workspaceHere}>{current}</span>;
         const mark = marks?.workspaces[w.id];
         return (
           <Tip key={`${account.sub}/${w.id}`} label={!here && mark?.label ? `${w.name} · ${mark.label}` : w.name} side="right">
@@ -274,6 +272,8 @@ function RailWorkspaces({ scope, current }: { scope: string; current: ReactNode 
           </Tip>
         );
       })}
+      {/* Making one, another account, invitations (the switcher's menu, cloud/workspace.tsx). */}
+      {current}
     </div>
   );
 }

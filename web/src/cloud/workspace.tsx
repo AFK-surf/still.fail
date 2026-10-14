@@ -114,7 +114,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
       <div className={shellCss.shell} data-detail={detail} data-rail="">
 
         <GlobalShortcuts scope={entry.id} newChat={`/w/${entry.id}/new`} settings={`/w/${entry.id}/settings`} />
-        <Rail scope={entry.id} workspace={<WorkspaceSwitcher current={entry} compact />} />
+        <Rail scope={entry.id} workspace={<WorkspaceSwitcher current={entry} adder />} />
         {settings
           ? <nav className={nav.sidebar} aria-label={t("web-pages.settings.title")}><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} /><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><WebUpdate /><div className={railCss.narrowOnly}><WorkspaceSwitcher current={entry} /></div></div></nav>
           : placeOf(path) === "files" ? <FilesSidebar entry={entry} />
@@ -351,7 +351,11 @@ function FilesNav({ scope }: { scope: string }) {
 }
 
 /** At the sidebar's foot: the workspace in view, which account it belongs to, and the others. */
-function WorkspaceSwitcher({ current, compact }: { current: WorkspaceEntry; compact?: boolean }) {
+/**
+ * `adder`: in the rail (Rail.tsx), under the workspaces it lists: a dashed ＋ whose menu is making a workspace, signing in
+ * another account and the invitations, no list of the workspaces (the rail has them); a dot on it while one waits.
+ */
+function WorkspaceSwitcher({ current, adder }: { current: WorkspaceEntry; adder?: boolean }) {
   const byAccount = useWorkspaces().value ?? [];
   const list = useAccounts() ?? [];
   const navigate = useNavigate();
@@ -392,12 +396,10 @@ function WorkspaceSwitcher({ current, compact }: { current: WorkspaceEntry; comp
     <>
       <DropdownMenu.Root modal={false}>
         <DropdownMenu.Trigger asChild>
-          {compact ? (
-            <button type="button" className={railCss.workspace} aria-label={current.name} title={current.name}>
-              {[...current.name.trim()][0]?.toUpperCase() ?? "·"}
-              {(othersTone || pending.length > 0) && <span className={railCss.mark}>{othersTone
-                ? <span className={chatMarkCss.chatMarkInline} data-tone={othersTone} role="img" aria-label={marks?.othersLabel ?? ""} />
-                : <span className={css.inviteDot} role="img" aria-label={t("web-pages.workspace.invitationsCount", { n: pending.length })} />}</span>}
+          {adder ? (
+            <button type="button" className={railCss.workspaceAdd} aria-label={t("web-main.rail.addWorkspace")} title={t("web-main.rail.addWorkspace")}>
+              {respond.busy || signIn.busy ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" /> : <Plus size={16} />}
+              {pending.length > 0 && <span className={railCss.mark}><span className={css.inviteDot} role="img" aria-label={t("web-pages.workspace.invitationsCount", { n: pending.length })} /></span>}
             </button>
           ) : (
           <button type="button" className={css.accountTrigger}>
@@ -414,12 +416,21 @@ function WorkspaceSwitcher({ current, compact }: { current: WorkspaceEntry; comp
           )}
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
-          <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${css.accountMenu}`} side={compact ? "right" : "top"} align={compact ? "end" : "start"} sideOffset={compact ? 10 : 6}>
+          <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${css.accountMenu}`} side={adder ? "right" : "top"} align={adder ? "end" : "start"} sideOffset={adder ? 10 : 6}>
             {/* Seldom done: a line of small words atop, the list nearest the trigger it opens from; not rows to land on when reaching for a workspace. */}
+            {/* The rail's ＋ is for them alone: they are its rows. */}
+            {adder ? (
+              <>
+                <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => setCreating(true)}><Plus {...ICON} />{t("web-pages.workspace.create")}</DropdownMenu.Item>
+                <DropdownMenu.Item className={controlsCss.menuItem} disabled={signIn.busy} onSelect={() => void signIn.signIn()}><UserPlus {...ICON} />{t("web-pages.workspace.addAccount")}</DropdownMenu.Item>
+                {pending.length > 0 && <DropdownMenu.Separator className={controlsCss.menuSep} />}
+              </>
+            ) : (
             <div className={css.menuRare}>
               <DropdownMenu.Item className={css.menuRareItem} onSelect={() => setCreating(true)}><span className={css.menuRareIcon}><Plus {...ICON} size={13} /></span>{t("web-pages.workspace.create")}</DropdownMenu.Item>
               <DropdownMenu.Item className={css.menuRareItem} disabled={signIn.busy} onSelect={() => void signIn.signIn()}><span className={css.menuRareIcon}><UserPlus {...ICON} size={13} /></span>{t("web-pages.workspace.addAccount")}</DropdownMenu.Item>
             </div>
+            )}
             {pending.length > 0 && (
               <>
                 <DropdownMenu.Label className={controlsCss.menuLabel}>{t("web-pages.workspace.invitations")}</DropdownMenu.Label>
@@ -445,13 +456,13 @@ function WorkspaceSwitcher({ current, compact }: { current: WorkspaceEntry; comp
                     {respond.error && respond.arg?.invite.id === invite.id && <p className={`${controlsCss.fieldError} ${css.menuInviteError}`} role="alert">{respond.arg.accept ? t("web-pages.cloud.joinFailed", { error: errorText(respond.error) }) : t("web-pages.workspace.ignoreFailed", { error: errorText(respond.error) })}</p>}
                   </div>
                 ))}
-                <DropdownMenu.Separator className={controlsCss.menuSep} />
+                {!adder && <DropdownMenu.Separator className={controlsCss.menuSep} />}
               </>
             )}
             {/* Every workspace, the one in use among them, in an order of their own: switching often, each stays where the hand knows it. */}
             {/* Each says whose it is under its name when there are accounts to tell apart, and the key that switches to it at its end. */}
             {/* Its page goes back to the chat last open there (WorkspaceHome). */}
-            {all.map(({ account, w }, i) => {
+            {!adder && all.map(({ account, w }, i) => {
               const here = isCurrent(account.sub, w.id);
               return (
               <DropdownMenu.Item key={`${account.sub}/${w.id}`} className={controlsCss.menuItem} aria-current={here || undefined} onSelect={() => { if (!here) navigate(to(w.id)); }}>
