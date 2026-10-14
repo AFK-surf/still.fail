@@ -325,12 +325,13 @@ function FilesNav({ scope }: { scope: string }) {
         const here = where.pathname.startsWith(`${base}/files`);
         return (
           <div key={s.station}>
-            <NavLink className={railCss.station} to={drivePath(base, null)}><span className={railCss.dot} data-online={s.online || undefined} />{s.name}</NavLink>
+            <Link className={railCss.station} to={drivePath(base, null)}><span className={railCss.dot} data-online={s.online || undefined} />{s.name}</Link>
+            {/* Links, not NavLinks: they differ in their query alone, which a NavLink does not look at. */}
             {roots.map((r) => (
-              <NavLink key={r.path} className={nav.navRow} to={drivePath(base, r.path)}
+              <Link key={r.path} className={nav.navRow} to={drivePath(base, r.path)}
                 aria-current={here && (root === r.path || (!root && roots.length === 1)) ? "page" : undefined}>
                 <Folder {...ICON} /><span className={nav.navText}>{r.name}</span>
-              </NavLink>
+              </Link>
             ))}
           </div>
         );

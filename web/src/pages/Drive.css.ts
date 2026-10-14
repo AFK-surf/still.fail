@@ -3,6 +3,8 @@ import { vars } from "../styles/tokens.css.ts";
 import { pageNarrow } from "../styles/pages.css.ts";
 
 export const page = style({ position: "relative" });
+// As wide as the page, up to where a row's name and its size and time still read as one line.
+globalStyle(`${page} > *`, { maxWidth: "1120px" });
 
 export const headText = style({ minWidth: "0", display: "grid", gap: "4px" });
 globalStyle(`${headText} h1`, { margin: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
