@@ -54,11 +54,10 @@ export const item = style({
 });
 /** 奏, the word, its size the icons' (vars.textTitle is the nearest of the type sizes). */
 export const zou = style({ fontSize: vars.textTitle, lineHeight: "20px", fontWeight: 600 });
-/** What waits on a place: a count on the icon's corner, cut out of the rail's ground. */
+/** What waits on a place: a small dot on the icon's corner (how many is in its tip), cut out of the rail's ground. */
 export const count = style({
-  position: "absolute", top: 2, right: 0, minWidth: 16, height: 16, padding: "0 4px", boxSizing: "border-box", borderRadius: 8,
-  background: vars.red, color: "#fff", fontSize: vars.textCaption, lineHeight: "16px", fontWeight: 600, textAlign: "center",
-  fontVariantNumeric: "tabular-nums", boxShadow: `0 0 0 2px ${vars.sidebar}`,
+  position: "absolute", top: 6, right: 6, width: 8, height: 8, borderRadius: "50%", background: vars.red,
+  boxShadow: `0 0 0 2px ${vars.sidebar}`,
 });
 
 /** The workspaces to switch to (Rail.tsx RailWorkspaces), each its first letter, the one in view ringed. */

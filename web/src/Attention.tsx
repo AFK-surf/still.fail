@@ -34,7 +34,7 @@ function groups(marks: WorkspaceMarksView | undefined, scope: string): { workspa
     .filter((g) => g.items.length > 0);
 }
 
-/** `rail`: drawn in the rail (Rail.tsx) as its bell, with how many came since they last looked, there even with none. */
+/** `rail`: drawn in the rail (Rail.tsx) as its bell, a dot on it while some came since they last looked (how many in its label), there even with none. */
 export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: string; count: string; label: string } }) {
   const marks = useWorkspaceMarks(scope);
   const [open, setOpen] = useState(false);
@@ -67,7 +67,7 @@ export function AttentionEntry({ scope, rail }: { scope: string; rail?: { item: 
         {rail ? (
           <button type="button" className={rail.item} data-on={open || undefined} title={rail.label} aria-label={n > 0 ? t("web-main.attention.label", { n }) : rail.label}>
             <Bell size={20} />
-            {n > 0 && <span className={rail.count}>{n > 99 ? "99+" : n}</span>}
+            {n > 0 && <span className={rail.count} />}
           </button>
         ) : (
         <button type="button" className={`${nav.navRow} ${css.entry}`} aria-label={n > 0 ? t("web-main.attention.label", { n }) : t("web-main.attention.entry")}>

@@ -170,7 +170,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
           <button type="button" className={css.item} data-on={on(item) || undefined} aria-label={railLabel(item)}
             onClick={(e) => { openedAt(e.currentTarget); setMode("decisions"); navigate(`/w/${scope}/decisions`); }}>
             <span className={css.zou} aria-hidden="true">奏</span>
-            {waiting > 0 && <span className={css.count}>{waiting > 99 ? "99+" : waiting}</span>}
+            {waiting > 0 && <span className={css.count} />}
           </button>
         </Tip>
       );
