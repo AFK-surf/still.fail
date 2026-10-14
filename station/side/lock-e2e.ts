@@ -197,7 +197,10 @@ async function main() {
   const owner = core("owner");
   await owner.call("migrate", { accounts: [alice] });
   await until(async () => (await owner.call("lock.state", { workspace: ws })).me.device, "owner core up");
-  const opened = await until(async () => owner.call("lock.open", { workspace: ws, exclude: { stations: [B.id] } }).catch((e) => (console.log("  open:", e.message), null)), "lock.open", 30);
+  // The draft as the owner's page has it, unlocked-b unticked.
+  await until(async () => (await owner.call("lock.state", { workspace: ws })) && true, "state");
+  await owner.call("lock.toggle", { workspace: ws, id: B.id });
+  const opened = await until(async () => owner.call("lock.open", { workspace: ws }).catch((e) => (console.log("  open:", e.message), null)), "lock.open", 30);
   console.log(`  opened: entry ${opened.head.seq}, ${opened.members} members, ${opened.devices} devices, stations ${opened.stations.map((x: any) => x.name).join(", ")}`);
   for (const s of [A, C]) await until(async () => JSON.parse(readFileSync(join(s.data, "mesh/lock.json"), "utf8")).entries.length > 0, `${s.name} pinned`);
   const lockLine = (st: Station) => status(st).split("\n").find((l) => /锁：|lock:/.test(l)) ?? "(no lock line)";
@@ -212,7 +215,7 @@ async function main() {
   await until(async () => (await phone.call("lock.state", { workspace: ws })).me.device, "phone core up");
   const waits = await phone.call("tools.access", { station: `${ws}/${A.id}` }).then(() => "admitted", (e) => `${e.code}: ${e.message}`);
   const asked = await phone.call("lock.request", { workspace: ws });
-  const listed = (await owner.call("lock.state", { workspace: ws })).requests.find((r: any) => r.base === asked.device);
+  const listed = await until(async () => (await owner.call("lock.state", { workspace: ws })).requests.find((r: any) => r.device === asked.device), "request listed");
   const wrong = await owner.call("lock.confirm", { workspace: ws, device: asked.device, code: "AAA-AAA" }).then(() => "confirmed", (e) => `refused: ${e.message}`);
   await owner.call("lock.confirm", { workspace: ws, device: asked.device, code: listed.code });
   const after = await until(async () => phone.call("tools.access", { station: `${ws}/${A.id}` }).then(() => "admitted", () => null), "phone admitted", 50);
