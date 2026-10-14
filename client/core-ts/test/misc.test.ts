@@ -35,7 +35,7 @@ test("edits_merge_into_their_messages", () => {
 
 test("a_settle_entry_says_how_a_card_came_out_and_leaves_the_message_as_it_was", () => {
   const asked = { ...message(1, "要发吗？"), authorKind: "agent", card: { type: "options", options: [{ label: "发送" }] } };
-  const settled = { ...change(3, "settle", 1, "已发送到 #ops"), authorKind: "ember", attachments: [] };
+  const settled = { ...change(3, "settle", null as unknown as number, "已发送到 #ops"), authorKind: "ember", attachments: [], quotes: [{ author: "s", text: "", comment: "", ts: "1.0", role: "agent" }] };
   const merged = merge([asked, message(2, "发送"), settled]) as J[];
   assert.deepEqual(merged.map((m) => [m.seq, m.text, m.editedAt]), [[1, "要发吗？", null], [2, "发送", null]]);
   assert.equal(merged[0].settled, "已发送到 #ops");

@@ -302,7 +302,7 @@ CREATE TABLE IF NOT EXISTS chat_shares (
 );
 `;
 
-/// Each message as it reads now: its latest edit's words, files and quotes (a settle entry names it too, and is no edit).
+/// Each message as it reads now: its latest edit's words, files and quotes.
 export const MERGED = `CREATE VIEW merged AS
   SELECT m.thread, m.n, m.ts, m.author_kind, m.author,
     CASE WHEN e.n IS NULL THEN m.text ELSE e.text END AS text,
@@ -311,7 +311,7 @@ export const MERGED = `CREATE VIEW merged AS
     m.declared, m.client, m.agent_identity, m.at AS created_at, e.at AS edited_at
   FROM entries m
   LEFT JOIN entries e ON e.thread = m.thread
-    AND e.n = (SELECT MAX(x.n) FROM entries x WHERE x.thread = m.thread AND x.target = m.n AND x.kind = 'edit')
+    AND e.n = (SELECT MAX(x.n) FROM entries x WHERE x.thread = m.thread AND x.target = m.n)
   WHERE m.kind = 'message';`;
 
 const has = (db: DatabaseSync, table: string, column: string): boolean =>
@@ -373,11 +373,8 @@ export function addClientColumn(db: DatabaseSync): void {
   db.exec("CREATE INDEX IF NOT EXISTS entries_cards ON entries (thread, n) WHERE card IS NOT NULL");
   // What people said lately is looked for on every list of chats (the cards they answered: `answersSince`).
   db.exec("CREATE INDEX IF NOT EXISTS entries_people_at ON entries (at) WHERE author_kind = 'person' AND kind = 'message'");
-  // A prior upgrade may have added the table column without rebuilding this view; one from before settle entries takes
-  // them for edits.
-  const view = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'view' AND name = 'merged'").get() as { sql?: string } | undefined;
-  const stale = !String(view?.sql ?? "").includes("x.kind = 'edit'");
-  if (stale || !has(db, "merged", "client") || !has(db, "merged", "agent_identity")) db.exec(`BEGIN; DROP VIEW IF EXISTS merged; ${MERGED} COMMIT;`);
+  // A prior upgrade may have added the table column without rebuilding this view.
+  if (!has(db, "merged", "client") || !has(db, "merged", "agent_identity")) db.exec(`BEGIN; DROP VIEW IF EXISTS merged; ${MERGED} COMMIT;`);
 }
 
 /// add_auto_title_columns: the columns a chat's own name from its agent came with (threads.auto_title…).

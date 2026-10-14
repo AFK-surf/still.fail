@@ -57,8 +57,10 @@ export type Membership = { thread: number; session: string; connect: string; joi
 
 /// "ember" is the station itself (named, stored and sent as before the rename).
 export type AuthorKind = "person" | "agent" | "ember";
-/// `edit`: a message's new words, files and quotes; `settle`: how what its card asked came out, said by the station
-/// (its `text`: 已发送到 #ops), the message itself as it was. Both name the message (`target`); the log only grows.
+/// `edit`: a message's new words, files and quotes, naming it by `target`; `settle`: how what a message's card asked came
+/// out, said by the station (its `text`: 已发送到 #ops), naming it by quoting it (its first quote's `ts`), the message
+/// itself as it was. The log only grows. A settle has no `target`: the `merged` view (as the Rust station has it, and
+/// reads it) takes whatever has one for an edit; the Rust station reads it as a message of the station's.
 export type EntryKind = "message" | "edit" | "settle";
 
 export type Quote = { author: string; text: string; comment: string; ts?: string; role?: string; file?: string };
