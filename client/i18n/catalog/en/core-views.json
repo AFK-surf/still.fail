@@ -199,6 +199,8 @@
   "core-views.xshare.none": "Not shared",
   "core-views.xshare.read": "read only",
   "core-views.xshare.write": "can send",
+  "core-views.publish.hidden": "{n} hidden",
+  "core-views.publish.hiddenAll": "{n} things that looked secret hidden",
   "core-views.policy.archive": "archive suggested",
   "core-views.policy.byAgent": "{agent} (in “{chat}”)",
   "core-views.policy.changedBy": "Changed by {who}",

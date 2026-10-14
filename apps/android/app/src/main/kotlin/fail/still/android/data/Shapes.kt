@@ -1531,6 +1531,32 @@ data class ChatMessage (
 	val placed: List<String>? = null
 )
 
+/// A snapshot of a chat its station keeps for anyone with its link (`chat.publish` answers one too).
+@Serializable
+data class ChatPublished (
+	/// `chat.unpublish` names it.
+	val id: String,
+	/// Its whole link (`https://share.still.fail/#<station key>.<id>.<key>`): anyone who has it can read it.
+	val link: String,
+	/// When it was published.
+	val createdAt: Long,
+	/// Who published it.
+	val byName: String,
+	/// The viewer may revoke it (who published it, or an owner or admin).
+	val mayRevoke: Boolean,
+	/// Its times in words (`createdAt`).
+	val time: Map<String, Stamp>? = null
+)
+
+/// A chat made public, for its "…": what it has published, and whether the viewer may publish it.
+@Serializable
+data class ChatPublish (
+	/// The viewer may publish it (not a read-only member).
+	val may: Boolean,
+	/// The snapshots its station keeps of it, the newest first (without those being revoked here).
+	val links: List<ChatPublished>
+)
+
 /// A range of a text, `from` to `to` (UTF-16 units).
 @Serializable
 data class TextMark (
@@ -1758,7 +1784,9 @@ data class ChatView (
 	val archiveCheck: ArchiveCheck? = null,
 	/// Its sharing with the viewer's other workspaces (docs/chat-share.md); absent while it has no chat or agent, or
 	/// the viewer is in no other workspace.
-	val xshare: ChatShare? = null
+	val xshare: ChatShare? = null,
+	/// Its public snapshots (docs/public-share.md); absent while it has no chat.
+	val publish: ChatPublish? = null
 )
 
 @Serializable
@@ -3413,6 +3441,59 @@ data class ProfilesView (
 	val items: List<WorkspaceProfile>,
 	/// A station that is up is not read yet: its profiles come later.
 	val loading: Boolean
+)
+
+/// An attachment a snapshot may take.
+@Serializable
+data class PublishFile (
+	/// Its number in the snapshot (`f0`, `f1`…).
+	val k: String,
+	val name: String,
+	val size: ULong,
+	val sizeText: String,
+	val type: String,
+	/// The message it came with.
+	val n: Long,
+	/// Bigger than one attachment may be (10 MB, as the station says): shown, not ticked.
+	val over: Boolean
+)
+
+/// A message as a snapshot would hold it.
+@Serializable
+data class PublishMessage (
+	val n: Long,
+	/// As the snapshot names them (no emails).
+	val author: String,
+	val agent: Boolean,
+	/// Its Markdown, what looks secret in it already `[已隐藏]`.
+	val text: String,
+	/// Its attachments' names.
+	val files: List<String>,
+	/// How many things in it were hidden.
+	val hidden: UInt,
+	/// That in words (隐藏了 2 处); absent when none.
+	val hiddenText: String? = null,
+	val createdAt: Long,
+	val time: Map<String, Stamp>? = null
+)
+
+/// What a snapshot of a chat would hold now (`chat.publishPreview`): nothing is kept until it is published.
+@Serializable
+data class PublishPreview (
+	/// The last message it holds: `chat.publish` takes it, so what is kept is what was seen.
+	val upto: Long,
+	val title: String,
+	val messages: List<PublishMessage>,
+	/// Its messages' attachments, to tick (`chat.publish` takes those ticked by `k`).
+	val files: List<PublishFile>,
+	/// How many things in all were hidden as looking secret.
+	val hidden: UInt,
+	/// That in words (隐藏了 3 处); absent when none.
+	val hiddenText: String? = null,
+	/// The most a snapshot may be with its attachments: those ticked together beyond it are not published.
+	val most: ULong,
+	/// That in words (20 MB).
+	val mostText: String
 )
 
 /// A session with its threads and turns (`session` topic).

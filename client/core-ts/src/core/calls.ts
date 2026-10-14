@@ -79,6 +79,10 @@ export type Call =
   | { kind: "chatRef"; station: string; id: string; title: string; base: string | null; into: string | null }
   | { kind: "chatOutsideRefs"; station: string; text: string }
   | { kind: "chatXshareAdd"; station: string; id: string; workspace: string; prefer: string | null }
+  /// A chat made public (views/publish.ts): what a snapshot would hold, one kept, one revoked.
+  | { kind: "chatPublishPreview"; station: string; thread: number }
+  | { kind: "chatPublish"; station: string; thread: number; upto: number; files: string[] }
+  | { kind: "chatUnpublish"; station: string; thread: number | null; id: string }
   | { kind: "chatRefsKeep"; links: [string, string][] }
   | { kind: "choose"; name: string; params: Record<string, unknown> }
   | { kind: "prefsSet"; patch: unknown; fill: boolean }
@@ -143,6 +147,8 @@ export function counts(call: Call, name: string): boolean {
     case "chatChange":
     case "chatXshare":
     case "chatXshareAdd":
+    case "chatPublish":
+    case "chatUnpublish":
     case "chatRetry":
     case "chatRetryIn":
     case "chatDiscard":
@@ -524,6 +530,30 @@ export function parseCall(name: string, params: unknown): Call {
         ["prefer", S, "opt"],
       ]);
       return { kind: "chatXshareAdd", station: p.station as string, id: p.id as string, workspace: p.workspace as string, prefer: p.prefer as string | null };
+    }
+    case "chat.publishPreview": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+      ]);
+      return { kind: "chatPublishPreview", station: p.station as string, thread: p.thread as number };
+    }
+    case "chat.publish": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+        ["upto", "u64", "req"],
+        ["files", "strings", "default"],
+      ]);
+      return { kind: "chatPublish", station: p.station as string, thread: p.thread as number, upto: p.upto as number, files: [...new Set(p.files as string[])] };
+    }
+    case "chat.unpublish": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "opt"],
+        ["id", S, "req"],
+      ]);
+      return { kind: "chatUnpublish", station: p.station as string, thread: p.thread as number | null, id: p.id as string };
     }
     case "chat.refs":
       return { kind: "chatRefsKeep", links: read(params, [["links", "pairs", "req"]]).links as [string, string][] };

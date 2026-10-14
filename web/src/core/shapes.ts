@@ -1544,6 +1544,30 @@ export interface ChatMessage {
 	placed?: string[];
 }
 
+/** A snapshot of a chat its station keeps for anyone with its link (`chat.publish` answers one too). */
+export interface ChatPublished {
+	/** `chat.unpublish` names it. */
+	id: string;
+	/** Its whole link (`https://share.still.fail/#<station key>.<id>.<key>`): anyone who has it can read it. */
+	link: string;
+	/** When it was published. */
+	createdAt: number;
+	/** Who published it. */
+	byName: string;
+	/** The viewer may revoke it (who published it, or an owner or admin). */
+	mayRevoke: boolean;
+	/** Its times in words (`createdAt`). */
+	time?: Record<string, Stamp>;
+}
+
+/** A chat made public, for its "…": what it has published, and whether the viewer may publish it. */
+export interface ChatPublish {
+	/** The viewer may publish it (not a read-only member). */
+	may: boolean;
+	/** The snapshots its station keeps of it, the newest first (without those being revoked here). */
+	links: ChatPublished[];
+}
+
 /** A range of a text, `from` to `to` (UTF-16 units). */
 export interface TextMark {
 	from: number;
@@ -1786,6 +1810,8 @@ export interface ChatView {
 	 * the viewer is in no other workspace.
 	 */
 	xshare?: ChatShare;
+	/** Its public snapshots (docs/public-share.md); absent while it has no chat. */
+	publish?: ChatPublish;
 }
 
 export interface StationState {
@@ -3402,6 +3428,56 @@ export interface ProfilesView {
 	items: WorkspaceProfile[];
 	/** A station that is up is not read yet: its profiles come later. */
 	loading: boolean;
+}
+
+/** An attachment a snapshot may take. */
+export interface PublishFile {
+	/** Its number in the snapshot (`f0`, `f1`…). */
+	k: string;
+	name: string;
+	size: number;
+	sizeText: string;
+	type: string;
+	/** The message it came with. */
+	n: number;
+	/** Bigger than one attachment may be (10 MB, as the station says): shown, not ticked. */
+	over: boolean;
+}
+
+/** A message as a snapshot would hold it. */
+export interface PublishMessage {
+	n: number;
+	/** As the snapshot names them (no emails). */
+	author: string;
+	agent: boolean;
+	/** Its Markdown, what looks secret in it already `[已隐藏]`. */
+	text: string;
+	/** Its attachments' names. */
+	files: string[];
+	/** How many things in it were hidden. */
+	hidden: number;
+	/** That in words (隐藏了 2 处); absent when none. */
+	hiddenText?: string;
+	createdAt: number;
+	time?: Record<string, Stamp>;
+}
+
+/** What a snapshot of a chat would hold now (`chat.publishPreview`): nothing is kept until it is published. */
+export interface PublishPreview {
+	/** The last message it holds: `chat.publish` takes it, so what is kept is what was seen. */
+	upto: number;
+	title: string;
+	messages: PublishMessage[];
+	/** Its messages' attachments, to tick (`chat.publish` takes those ticked by `k`). */
+	files: PublishFile[];
+	/** How many things in all were hidden as looking secret. */
+	hidden: number;
+	/** That in words (隐藏了 3 处); absent when none. */
+	hiddenText?: string;
+	/** The most a snapshot may be with its attachments: those ticked together beyond it are not published. */
+	most: number;
+	/** That in words (20 MB). */
+	mostText: string;
 }
 
 /** A session with its threads and turns (`session` topic). */

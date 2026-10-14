@@ -34,6 +34,7 @@ import { admin, sources as adminSources } from "./admin.ts";
 import { attention, choices, find, models, runnableOn, runtimes } from "./models.ts";
 import * as brief from "./brief.ts";
 import * as xshare from "./xshare.ts";
+import * as publish from "./publish.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -291,6 +292,8 @@ export type ViewsEnv = {
   places?: () => xshare.Place[];
   /// A chat's sharing asked here (`chat.xshare`) and not answered yet.
   xshareAsked?: (station: string, session: string) => xshare.Asked | undefined;
+  /// A chat's snapshot being revoked here (`chat.unpublish`) and not answered yet.
+  revoking?: (station: string, id: string) => boolean;
 };
 
 /// The views' environment in a core.
@@ -311,6 +314,7 @@ export function envOf(core: Inner): ViewsEnv {
     },
     places: () => xshare.places(core),
     xshareAsked: (station, session) => xshare.asked(core, station, session),
+    revoking: (station, id) => publish.revoking(core, station, id),
     relayName: (host) => {
       for (const account of core.accounts.list()) {
         const names = get(core.data.record("me", account.sub), "relay_names");
@@ -711,6 +715,9 @@ export class Views implements Owner {
     // Its sharing with the viewer's other workspaces, as asked here meanwhile.
     const shared = xshare.shown({ places: this.#core.places?.() ?? [], asked: (session) => this.#core.xshareAsked?.(station, session), me: str(get(v.me, "email")) }, station, v.thread);
     if (shared !== null) v.xshare = shared;
+    // Its public snapshots, without those being revoked here meanwhile.
+    const published = publish.shown({ me: str(get(v.me, "email")), role: typeof role === "string" ? role : null, revoking: (id) => this.#core.revoking?.(station, id) === true }, station, v.thread);
+    if (published !== null) v.publish = published;
     return out;
   }
 

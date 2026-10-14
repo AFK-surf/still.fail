@@ -31,6 +31,8 @@
   "core-misc.xshare.notRead": "{name}'s stations aren't loaded yet",
   "core-misc.xshare.oldStation": "This station needs an update",
   "core-misc.xshare.noStation": "{name} has no station online",
+  "core-misc.publish.oldStation": "This station needs an update",
+  "core-misc.publish.badReply": "The station's reply has no snapshot",
   "core-misc.call.no_new_session": "Station reply has no new session",
   "core-misc.call.no_option": "No such option",
   "core-misc.call.no_outbox": "No such pending message",

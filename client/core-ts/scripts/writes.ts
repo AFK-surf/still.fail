@@ -30,6 +30,7 @@ export const CHECKED = [
   "src/views/profiles.ts",
   "src/views/usage.ts",
   "src/views/xshare.ts",
+  "src/views/publish.ts",
   "src/present.ts",
   "src/decisions.ts",
   "src/attend.ts",
