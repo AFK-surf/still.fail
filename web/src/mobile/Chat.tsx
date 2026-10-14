@@ -30,7 +30,7 @@ import { ask, confirm } from "./sheets.tsx";
 import { openHistory } from "./History.tsx";
 import { AgentSince, openAgent } from "./AgentSheet.tsx";
 import { annotatePath } from "./Annotate.tsx";
-import { Button, GroupLabel, InfoList, InfoRow, ModelMark, NavButton, PickRow, QuotaRings, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
+import { Button, GroupLabel, InfoList, InfoRow, LinkButton, ModelMark, NavButton, PickRow, QuotaRings, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
 import { AgentMark } from "../ui.tsx";
 import { OutsideList, outsideOf, shareOutside, type Outside } from "../OutsideShare.tsx";
 import { useAction } from "../action.ts";
@@ -38,7 +38,9 @@ import { PeopleStack } from "../components.tsx";
 import { JobDot, metaOf, NO_JOBS, useClearEnded, useJobLog, useStopJob } from "../Jobs.tsx";
 import { stillfailLinkClicked } from "../stillfailLink.ts";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
-import type { ChatJobsView, ChatShare, Job } from "../core/shapes.ts";
+import type { ChatJobsView, ChatPublish, ChatPublished, ChatShare, Job } from "../core/shapes.ts";
+import { PublishMessages, tickedOf, usePublishPreview } from "../Publish.tsx";
+import * as publishCss from "../Publish.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as hostCss from "./ChatHost.css.ts";
 import { sendingHere } from "../madeChat.ts";
@@ -691,7 +693,9 @@ function JobOutput({ station, job }: { station: string; job: Job }) {
  * within reach: pin it, open it in Slack, archive it.
  */
 function openChatInfo(app: MobileApp, here: Here, thread: ChatThread) {
-  const rows = here.view.agents.length * 56 + ((here.view.pinned != null ? 1 : 0) + (here.view.slackUrl ? 1 : 0) + (here.view.xshare ? 1 : 0) + 2) * 41;
+  const publish = shownPublish(here.view);
+  const rows = here.view.agents.length * 56 + ((here.view.pinned != null ? 1 : 0) + (here.view.slackUrl ? 1 : 0) + (here.view.xshare ? 1 : 0) + 2) * 41
+    + (publish ? ((publish.may ? 1 : 0) + publish.links.length) * 41 + 10 : 0);
   // As tall as what it shows: its name and line, its agents, its rows.
   app.sheet({ height: Math.min(0.9, (25 + 84 + rows + 10 + 34) / window.innerHeight), content: () => <ChatInfo here={here} thread={thread} /> });
 }
@@ -704,6 +708,7 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
   const pinning = useDoing("chat.pin", { station: here.station, session: here.key });
   const pinFailed = useDoingFailed("chat.pin", { station: here.station, session: here.key });
   const open = !view.archived && !view.offline;
+  const publish = shownPublish(view);
   const rename = () => ask(app, {
     title: t("web-mobile.home.renameTitle"), value: view.title, placeholder: t("web-mobile.home.renamePlaceholder"), action: t("common.save"), empty: true, hint: t("web-mobile.home.renameHint"), atOnce: "web-main.rename.failed",
     run: (title) => stationApi(call).rename({ thread: thread.id, session: here.key }, title),
@@ -762,6 +767,106 @@ function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
             {view.slackUrl && <a className={listsCss.mInfoRow} href={view.slackUrl} target="_blank" rel="noopener"><SlackMark size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.openSlack")}</span><ChevronRight size={14} className={partsCss.mSubtle} /></a>}
             {open && <ArchiveRow here={here} view={view} thread={thread} />}
           </InfoList>
+        )}
+        {publish && <PublishList here={here} thread={thread} publish={publish} />}
+      </div>
+    </>
+  );
+}
+
+/** A chat's public links as its sheet shows them: to those who may publish it, or when it has some (a read-only member sees them). */
+function shownPublish(view: ChatView): ChatPublish | undefined {
+  return view.publish && (view.publish.may || view.publish.links.length > 0) ? view.publish : undefined;
+}
+
+/**
+ * Making the chat public (docs/public-share.md), a card of its own: 「公开分享」 opens the sheet that publishes it, for
+ * those who may (not a read-only member); each of its links under it, when and by whom, 复制, and 撤销 for who
+ * published it or an owner or admin (asked first; gone from here at once).
+ */
+function PublishList({ here, thread, publish }: { here: Here; thread: ChatThread; publish: ChatPublish }) {
+  const app = useApp();
+  return (
+    <InfoList>
+      {publish.may && (
+        <InfoRow onClick={() => app.sheet({ height: 0.9, content: () => <PublishSheet here={here} thread={thread.id} /> })}>
+          <Web size={16} /><span className={partsCss.mGrow}>{t("web-pages.chat.publish")}</span><ChevronRight size={14} className={partsCss.mSubtle} />
+        </InfoRow>
+      )}
+      {publish.links.map((l) => <PublishedRow key={l.id} here={here} thread={thread.id} link={l} />)}
+    </InfoList>
+  );
+}
+
+function PublishedRow({ here, thread, link }: { here: Here; thread: number; link: ChatPublished }) {
+  const app = useApp();
+  const call = useStationCall(here.station);
+  const copy = () => void navigator.clipboard.writeText(link.link).then(() => app.toast(t("common.link.copied")), (e: unknown) => app.toast(t("common.link.copyFailed", { error: e instanceof Error ? e.message : String(e) })));
+  const revoke = () => confirm(app, {
+    title: t("web-pages.chat.publish.revokeAsk"), text: t("web-pages.chat.publish.revokeNote"), action: t("web-pages.chat.publish.revoke"), danger: true,
+    atOnce: "web-pages.chat.publish.revokeFailed", run: () => stationApi(call).unpublish(thread, link.id),
+  });
+  return (
+    <div className={`${listsCss.mInfoRow} ${css.mPublished}`}>
+      <span className={`${partsCss.mGrow} ${css.mPublishedText}`}>{link.time?.createdAt?.ago} · {link.byName}</span>
+      <LinkButton label={t("common.copy")} onClick={copy} />
+      {link.mayRevoke && <LinkButton label={t("web-pages.chat.publish.revoke")} onClick={revoke} />}
+    </div>
+  );
+}
+
+/**
+ * Publishes the chat (the phone's; the wide screen's is Publish.tsx PublishDialog): what it would hold, the attachments
+ * to tick (all at first; one too big is shown, never ticked), who can read it, 「发布」. Published, its link with a
+ * way to copy it; the chat's sheet lists it from then on.
+ */
+function PublishSheet({ here, thread }: { here: Here; thread: number }) {
+  const app = useApp();
+  const call = useStationCall(here.station);
+  const preview = usePublishPreview(here.station, thread);
+  const [off, setOff] = useState<ReadonlySet<string>>(() => new Set());
+  const [made, setMade] = useState<ChatPublished | null>(null);
+  const publishing = useDoing("chat.publish", { station: here.station, thread });
+  const p = "ok" in preview ? preview.ok : null;
+  const ticked = p ? tickedOf(p, off) : null;
+  const toggle = (k: string) => setOff((was) => { const next = new Set(was); if (next.has(k)) next.delete(k); else next.add(k); return next; });
+  const go = () => {
+    if (!p || !ticked) return;
+    stationApi(call).publish(thread, p.upto, ticked.files)
+      .then(setMade, (e: unknown) => app.toast(t("web-main.act.failed", { what: t("web-pages.chat.publish.verb"), error: e instanceof Error ? e.message : String(e) })));
+  };
+  const copy = (link: string) => void navigator.clipboard.writeText(link).then(() => app.toast(t("common.link.copied")), (e: unknown) => app.toast(t("common.link.copyFailed", { error: e instanceof Error ? e.message : String(e) })));
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title={made ? t("web-pages.chat.publish.made") : t("web-pages.chat.publish")} />
+      <div className={`${sheetsCss.mSheetScroll} ${css.mPublishBody}`}>
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-pages.chat.publish.lead")}</p>
+        {made ? (
+          <>
+            <div className={publishCss.madeLink}>{made.link}</div>
+            <Button primary label={t("common.link.copy")} onClick={() => copy(made.link)} />
+            <Button primary={false} label={t("common.done")} onClick={() => app.sheet(null)} />
+          </>
+        ) : "reading" in preview ? (
+          <p className={partsCss.mMuted}><Spinner size={14} /> {t("web-pages.chat.publish.reading")}</p>
+        ) : "error" in preview ? (
+          <p className={partsCss.mError}>{preview.error}</p>
+        ) : p!.messages.length === 0 ? (
+          <p className={partsCss.mMuted}>{t("web-pages.chat.publish.empty")}</p>
+        ) : (
+          <>
+            <PublishMessages messages={p!.messages} whole />
+            {p!.hiddenText && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{p!.hiddenText}</p>}
+            {p!.files.length > 0 && (
+              <div className={css.mPublishFiles}>
+                <GroupLabel>{t("web-pages.chat.publish.files")}</GroupLabel>
+                {p!.files.map((f) => <PickRow key={f.k} label={f.name} sub={f.over ? t("web-pages.chat.publish.tooBig") : f.sizeText} checked={!f.over && !off.has(f.k)} enabled={!f.over} onClick={() => toggle(f.k)} />)}
+              </div>
+            )}
+            {ticked!.over && <p className={partsCss.mError}>{t("web-pages.chat.publish.overTotal", { most: p!.mostText })}</p>}
+            <Button primary label={t("web-pages.chat.publish.go")} busy={publishing} enabled={!ticked!.over} onClick={go} />
+          </>
         )}
       </div>
     </>

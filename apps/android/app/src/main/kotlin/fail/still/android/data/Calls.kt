@@ -364,6 +364,13 @@ class StationApi(private val core: StillFailCore, val station: String) {
      */
     suspend fun outsideRefs(text: String): List<OutsideRef> =
         decode(OutsideRefs.serializer(), op("chat.outsideRefs") { put("text", text) }).chats
+    /** What a public snapshot of the chat would hold now (nothing kept): its messages, what was hidden in them, its attachments. */
+    suspend fun publishPreview(thread: Long): PublishPreview = decode(PublishPreview.serializer(), op("chat.publishPreview") { put("thread", thread) })
+    /** Keeps a public snapshot of the chat up to `upto` (the preview's last message), with the attachments ticked: its link. */
+    suspend fun publish(thread: Long, upto: Long, files: List<String>): ChatPublished =
+        decode(ChatPublished.serializer(), op("chat.publish") { put("thread", thread); put("upto", upto); putJsonArray("files") { files.forEach { add(JsonPrimitive(it)) } } })
+    /** Revokes one of the chat's public snapshots: its link opens nothing any more. */
+    suspend fun unpublish(thread: Long, id: String) { op("chat.unpublish") { put("thread", thread); put("id", id) } }
     /** Shares this station's chat `id` with one workspace more (`workspace`), telling its station `prefer` first. */
     suspend fun shareInto(id: String, workspace: String, prefer: String?) {
         op("chat.xshareAdd") { put("id", id); put("workspace", workspace); prefer?.let { put("prefer", it) } }

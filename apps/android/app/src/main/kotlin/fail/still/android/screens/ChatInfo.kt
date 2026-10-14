@@ -62,7 +62,9 @@ import fail.still.android.ui.Smooth
  * done with it, within reach: pin it, copy its link, open it in Slack, archive it. As tall as what it shows.
  */
 fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread, first: ChatView? = null) {
-    val rows = (first?.agents?.size ?: 1) * 56 + ((if (first?.pinned != null) 1 else 0) + (if (first?.slackUrl != null) 1 else 0) + (if (first?.xshare != null) 1 else 0) + 2) * 40
+    val publish = shownPublish(first?.publish)
+    val rows = (first?.agents?.size ?: 1) * 56 + ((if (first?.pinned != null) 1 else 0) + (if (first?.slackUrl != null) 1 else 0) + (if (first?.xshare != null) 1 else 0) + 2) * 40 +
+        (if (publish != null) ((if (publish.may) 1 else 0) + publish.links.size) * 40 + 10 else 0)
     app.sheet = SheetSpec(0.55f, fit = (22 + 84 + rows + 10 + 30).dp) {
         val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
         val view = chat.value
@@ -160,6 +162,11 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread,
                     IconIn(Icons.Archive, 16.dp, C.ink)
                     Text(t("android-chat.info.archive"), fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
                 }
+            }
+            // Making it public, a card of its own (Publish.kt).
+            shownPublish(view?.publish)?.let { shown ->
+                Spacer(Modifier.height(10.dp))
+                PublishList(app, station, about.id, shown)
             }
         }
     }

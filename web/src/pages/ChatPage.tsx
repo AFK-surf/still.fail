@@ -14,7 +14,7 @@ import { PENDING } from "../lastChat.ts";
 import { ownOrigin } from "../stillfailLink.ts";
 import { keepTabs } from "../chatTabs.ts";
 import { usePrefs } from "../prefs.ts";
-import type { ChatJobsView, ChatShare, Host, StationView } from "../core/shapes.ts";
+import type { ChatJobsView, ChatPublish, ChatShare, Host, StationView } from "../core/shapes.ts";
 import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useStationCall, useStationLook, useAgentCard, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { StationMark } from "../StationMark.tsx";
@@ -51,6 +51,7 @@ import * as shellCss from "../styles/shell.css.ts";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { tx } from "../cloud/words.tsx";
+import { PublishDialog, PublishedLinks, RevokeConfirm } from "../Publish.tsx";
 /**
  * An item's page, one for every item: its chat's messages (none before its agent has a chat), the composer, and its
  * agents' execution histories beside them. The address is the item's: its chat's thread, or its agent's session key
@@ -641,6 +642,9 @@ function slackConnect(chat: ChatView) {
 function ChatInfo({ station, session }: { station: string; session: string }) {
   const [open, setOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
+  // Its thread, while publishing it or asking before one of its links is revoked (the info closes meanwhile).
+  const [publishing, setPublishing] = useState<number | null>(null);
+  const [revoking, setRevoking] = useState<{ thread: number; id: string } | null>(null);
   return (
     <>
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -651,11 +655,14 @@ function ChatInfo({ station, session }: { station: string; session: string }) {
       </Tip>
       <Popover.Portal>
         <Popover.Content className={`${controlsCss.popover} ${css.chatInfo}`} align="end" sideOffset={6} collisionPadding={8}>
-          <ChatInfoBody station={station} session={session} onShare={() => { setOpen(false); setSharing(true); }} />
+          <ChatInfoBody station={station} session={session} onShare={() => { setOpen(false); setSharing(true); }}
+            onPublish={(thread) => { setOpen(false); setPublishing(thread); }} onRevoke={(thread, id) => { setOpen(false); setRevoking({ thread, id }); }} />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
     {sharing && <ShareOf station={station} session={session} onClose={() => setSharing(false)} />}
+    {publishing !== null && <PublishDialog station={station} thread={publishing} onClose={() => setPublishing(null)} />}
+    <RevokeConfirm station={station} thread={revoking?.thread ?? 0} id={revoking?.id ?? null} onClose={() => setRevoking(null)} />
     </>
   );
 }
@@ -667,7 +674,7 @@ function ShareOf({ station, session, onClose }: { station: string; session: stri
 }
 
 /** What the chat's info says, as the chat is now: read only while it shows. */
-function ChatInfoBody({ station, session, onShare }: { station: string; session: string; onShare(): void }) {
+function ChatInfoBody({ station, session, onShare, onPublish, onRevoke }: { station: string; session: string; onShare(): void; onPublish(thread: number): void; onRevoke(thread: number, id: string): void }) {
   const chat = useChat(station, { session }).value;
   const link = useLink();
   if (!chat?.thread) return null;
@@ -676,6 +683,8 @@ function ChatInfoBody({ station, session, onShare }: { station: string; session:
   const row = (label: string, value: ReactNode) => <div className={css.detailRow}><dt>{label}</dt><dd>{value}</dd></div>;
   const where = chat.place;
   const share = chat.xshare;
+  // A read-only member does not publish, but sees what is published.
+  const publish = chat.publish && (chat.publish.may || chat.publish.links.length > 0) ? chat.publish : undefined;
   return (
     <>
       <dl className={css.details}>
@@ -692,9 +701,26 @@ function ChatInfoBody({ station, session, onShare }: { station: string; session:
           {chat.agents.map((a) => <AgentLine key={a.session.key} agent={a} />)}
         </ul>
       )}
-      {share && <ShareRow share={share} onOpen={onShare} />}
+      {(share || publish) && (
+        <div className={css.infoRows}>
+          {share && <ShareRow share={share} onOpen={onShare} />}
+          {publish && <PublishRow publish={publish} onOpen={() => onPublish(thread.id)} />}
+          {publish && <PublishedLinks links={publish.links} onRevoke={(id) => onRevoke(thread.id, id)} />}
+        </div>
+      )}
     </>
   );
+}
+
+/**
+ * Making the chat public (docs/public-share.md), in its info: the row that opens what publishes it, for those who may
+ * (not a read-only member), its links under it (PublishedLinks).
+ */
+function PublishRow({ publish, onOpen }: { publish: ChatPublish; onOpen(): void }) {
+  const body = <><Web size={14} /><span className={css.shareLabel}>{t("web-pages.chat.publish")}</span></>;
+  return publish.may
+    ? <button type="button" className={`${controlsCss.menuItem} ${css.shareRow}`} data-may="" onClick={onOpen}>{body}</button>
+    : <div className={`${controlsCss.menuItem} ${css.shareRow}`}>{body}</div>;
 }
 
 /**

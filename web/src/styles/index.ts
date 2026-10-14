@@ -29,6 +29,7 @@ import "../admin/console.css.ts";
 import "../slack.css.ts";
 import "../pages/ChatPage.css.ts";
 import "../Chat.css.ts";
+import "../Publish.css.ts";
 import "../Decisions.css.ts";
 import "../DecisionDesk.css.ts";
 import "../DecisionsIdle.css.ts";

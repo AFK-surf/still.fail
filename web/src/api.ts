@@ -11,6 +11,7 @@ import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
 import type { AgentCardView, ArchiveView, Attachment, ChatJobsView, ChatSearchView, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, Live, Overview, ProfilesView, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
 import type { AccessKind, ConnectMode, Job, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackIdentity } from "./core/shapes.ts";
+import type { ChatPublished, PublishPreview } from "./core/shapes.ts";
 import type { SlackPerson } from "./cloud/adding.ts";
 import { t } from "./i18n.ts";
 
@@ -365,6 +366,12 @@ export function stationApi(t: StationCall) {
     /** Shares a chat with the viewer's other workspaces ticked (none: no longer), their agents sending in it too when `write`. */
     xshare: (of: { thread?: number | null; session: string }, to: string[], write: boolean) =>
       t.op<unknown>("chat.xshare", { session: of.session, ...(of.thread == null ? {} : { thread: of.thread }), to, write }),
+    /** What a public snapshot of the chat would hold now (nothing kept): its messages, what was hidden in them, its attachments. */
+    publishPreview: (thread: number) => t.op<PublishPreview>("chat.publishPreview", { thread }),
+    /** Keeps a public snapshot of the chat up to `upto` (the preview's last message), with the attachments ticked: its link. */
+    publish: (thread: number, upto: number, files: string[]) => t.op<ChatPublished>("chat.publish", { thread, upto, files }),
+    /** Revokes one of the chat's public snapshots: its link opens nothing any more. */
+    unpublish: (thread: number, id: string) => t.op<unknown>("chat.unpublish", { thread, id }),
     deleteSession: (key: string) => ops.sessionDelete<{ ok: true }>({ key }),
     evict: (key: string) => ops.sessionEvict<{ ok: true }>({ key }),
     putConnect: (id: string, input: ConnectInput) => ops.connectPut<Overview>({ id, input }),

@@ -229,7 +229,7 @@ internal fun quoteGround() = chatInk().card
 private var absoluteTimes by mutableStateOf(false)
 
 @Composable
-private fun MessageTime(stamp: fail.still.android.data.Stamp?, modifier: Modifier = Modifier) {
+internal fun MessageTime(stamp: fail.still.android.data.Stamp?, modifier: Modifier = Modifier) {
     if (stamp == null) return
     Text(
         if (absoluteTimes) stamp.full else stamp.ago, fontSize = 10.sp, lineHeight = 16.sp, color = chatMuted(), maxLines = 1,
@@ -1036,7 +1036,7 @@ private fun MessageAvatar(m: ChatMessage) {
 
 /** An agent's picture in a chat: its model's maker (still.fail's mark without one), small on a round grey ground. */
 @Composable
-private fun AgentAvatar(maker: Maker?, runtime: String?) {
+internal fun AgentAvatar(maker: Maker?, runtime: String?) {
     Box(Modifier.size(18.dp).clip(CircleShape).background(chatInk().neutral), contentAlignment = Alignment.Center) {
         if (runtime != null) MakerIcon(maker, runtime, 12.dp) else Mark(12.dp)
     }

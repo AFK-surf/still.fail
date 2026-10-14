@@ -30,6 +30,16 @@ export const mShareText = style({
   flex: "1 1 0", width: "0", textAlign: "right", fontSize: vars.textMeta, color: "var(--m-muted)",
   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
+/** One of a chat's public links in its sheet: when and by whom, cut short; 复制 and 撤销 at its end. */
+export const mPublished = style({ minHeight: "41px", paddingTop: "6px", paddingBottom: "6px" });
+export const mPublishedText = style({ fontSize: vars.textMeta, color: "var(--m-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+/** The sheet that publishes it: its lead, the preview, the attachments, the button, one under another. */
+export const mPublishBody = style({ display: "flex", flexDirection: "column", gap: "12px", padding: "4px 20px 30px" });
+// Each as tall as it is: the sheet scrolls, nothing in it is squeezed.
+globalStyle(`${mPublishBody} > *`, { flexShrink: "0" });
+/** Its attachments run to the sheet's edges, as a list of rows to tick does. */
+export const mPublishFiles = style({ margin: "0 -20px" });
+globalStyle(`${mPublishFiles} > div:first-child`, { padding: "4px 20px" });
 /** In its sheet, under the workspaces: whether their agents may send (faint while none is ticked). */
 export const mShareWrite = style({ padding: "12px 20px 16px" });
 globalStyle(`${mShareWrite} > button`, { width: "100%" });
