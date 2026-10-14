@@ -43,7 +43,8 @@ fun Modifier.glass(state: HazeState): Modifier {
 @Composable
 fun Modifier.glassFoot(state: HazeState): Modifier {
     val bg = C.bg
-    return hazeEffect(state) {
+    // The paper under the frost, for when Haze draws none (see floating).
+    return background(bg).hazeEffect(state) {
         backgroundColor = bg
         tints = listOf(HazeTint(bg.copy(alpha = 0.7f)))
         blurRadius = cssBlur(24f)
@@ -75,8 +76,12 @@ val InComposer = RoundedCornerShape(ComposerCorner - ComposerInset)
 @Composable
 fun Modifier.floating(state: HazeState, shape: Shape, tint: Color = Raised): Modifier {
     val bg = C.bg
+    // Its glass over the plain page under the frost: Haze draws nothing at all when what it frosts is not where it
+    // last saw it (its source moved or resized under it, as the keyboard comes up), and the capsule would be clear,
+    // showing its own shadow through it as a wide grey ring.
+    val ground = tint.copy(alpha = 0.72f).compositeOver(bg)
     return shadow(1.dp, shape, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))
-        .clip(shape)
+        .clip(shape).background(ground)
         .hazeEffect(state) {
             backgroundColor = bg
             tints = listOf(HazeTint(tint.copy(alpha = 0.72f)))
