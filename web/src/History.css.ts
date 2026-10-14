@@ -52,10 +52,12 @@ export const hLabel = style({
 });
 /** How background work ended: red when it failed or was stopped. */
 export const hTask = style({
+  flexWrap: "nowrap", alignItems: "flex-start",
   selectors: {
     "&[data-failed=\"true\"]": { color: vars.red },
   },
 });
+globalStyle(`${hTask} > svg`, { flex: "none", marginTop: "2px" });
 /** A Slack user's name: a button that says whether it is the viewer. */
 export const hPerson = style({
   font: "inherit", color: "inherit", background: "none", border: "0", padding: "0", cursor: "pointer",

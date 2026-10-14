@@ -289,7 +289,7 @@ function Task({ task }: { task: HistoryTask }) {
   return (
     <div className={css.hReceived}>
       <div className={`${css.hLabel} ${css.hTask}`} data-failed={task.failed}><Icon {...ICON} size={14} /><span>{task.text}</span></div>
-      {task.md && <Fold className={`${css.hQuote} ${css.hQuoteMd} ${conversationCss.markdown}`} of={task.md as Md} head={headOf(task.md as Md)}><MdView md={task.md as Md} /></Fold>}
+      {task.md != null && <Fold className={`${css.hQuote} ${css.hQuoteMd} ${conversationCss.markdown}`} of={task.md as Md} head={headOf(task.md as Md)}><MdView md={task.md as Md} /></Fold>}
     </div>
   );
 }
