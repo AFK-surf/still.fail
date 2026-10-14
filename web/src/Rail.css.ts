@@ -128,6 +128,7 @@ export const zouSmall = style({ fontSize: vars.textBody, lineHeight: "18px", fon
 
 // Beside the rail the sidebar's foot has nothing of its own (the switcher and settings are the rail's, the stations' line
 // only for what is wrong): gone when there is nothing in it, not an empty frosted band under the list.
-globalStyle(`[data-rail] ${navFoot}:not(:has(:is(a, button):not(${narrowOnly} *, ${stationRow}:not(:has(${stationTrouble}[data-state])) *)))`, {
+// (Two :has, side by side: one inside another is not CSS.)
+globalStyle(`[data-rail] ${navFoot}:not(:has(:is(a, button):not(${narrowOnly} *, ${stationRow} *))):not(:has(${stationTrouble}[data-state]))`, {
   "@media": { [wide]: { display: "none" } },
 });
