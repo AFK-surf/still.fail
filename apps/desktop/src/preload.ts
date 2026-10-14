@@ -7,6 +7,9 @@ const desktop = {
   openCore: (id: number) => ipcRenderer.send("core:open", id),
   /** The host a station's web service is shown at (stillfail-preview://<host>/): see main.ts, previews. */
   previewHost: (station: string, port: number): Promise<string | null> => ipcRenderer.invoke("preview:host", station, port),
+  /** A drive's file to play as it comes, at the URL given (stillfail-drive://), and letting it go: see main.ts, drive. */
+  driveOpen: (file: { station: string; root: string; path: string; size: number; type: string }): Promise<string | null> => ipcRenderer.invoke("drive:open", file),
+  driveClose: (url: string) => ipcRenderer.send("drive:close", url),
   /** The page is in a workspace, reached as `account`: this machine's station may join it (see main.ts). */
   inWorkspace: (account: string, workspace: string) => ipcRenderer.send("station:workspace", account, workspace),
   /** The station the app carries: where it stands, and joining it to a workspace when asked to (main.ts, station:join). */

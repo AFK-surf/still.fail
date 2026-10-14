@@ -1,8 +1,9 @@
 // A file of the drive played as it comes, never fetched whole: the page's service worker (public/sw.js) answers
 // `/__drive/<token>` itself, a range at a time, by asking this page for the bytes (a MessageChannel), and this page
 // asks the core (`drive.read`). A <video> pointed there starts at once and seeks anywhere, reading only what it shows.
-// Where no service worker runs the page (a browser that has none for it, the desktop app's own scheme), there is no
-// stream: the caller reads the file whole instead (small enough) or says it cannot be played here.
+// The desktop app's page has none: the app answers the ranges itself (apps/desktop/src/main.ts, drive). Where neither
+// is (a browser with no service worker for it), there is no stream: the caller reads the file whole instead (small
+// enough) or says it cannot be played here.
 import { readPart, type At } from "./model.ts";
 
 /** `ahead`: how far into the file reading is welcome now (the playing position and some), null while not known. */
@@ -70,6 +71,7 @@ function hello(worker: ServiceWorker): Promise<boolean> {
 
 /** Whether this page's fetches go through the service worker: registered (it also takes pushes) and in control. */
 export function streaming(): Promise<boolean> {
+  if (typeof window !== "undefined" && window.stillfailDesktop?.driveOpen) return Promise.resolve(true);
   ready ??= (async () => {
     const sw = typeof navigator !== "undefined" ? navigator.serviceWorker : undefined;
     if (!sw || location.protocol !== "https:" && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") return false;
@@ -96,8 +98,13 @@ export function streaming(): Promise<boolean> {
   return ready;
 }
 
-/** A URL a <video> or <audio> plays the file from, a range at a time; `close` lets it go. */
-export function streamUrl(at: At, size: number, type: string, ahead?: () => number | null): { url: string; close: () => void } {
+/** A URL a <video> or <audio> plays the file from, a range at a time (null: the app would not open it); `close` lets it go. */
+export async function streamUrl(at: At, size: number, type: string, ahead?: () => number | null): Promise<{ url: string; close: () => void } | null> {
+  const desktop = window.stillfailDesktop;
+  if (desktop?.driveOpen) {
+    const url = await desktop.driveOpen({ station: at.station, root: at.root, path: at.path, size, type });
+    return url ? { url, close: () => desktop.driveClose?.(url) } : null;
+  }
   const token = crypto.randomUUID();
   opened.set(token, { at, size, type, ahead });
   const url = `/__drive/${token}?n=${size}&t=${encodeURIComponent(type || "application/octet-stream")}`;

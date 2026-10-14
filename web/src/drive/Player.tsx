@@ -47,15 +47,17 @@ function useSource(at: At, entry: DriveEntry, media: React.RefObject<HTMLVideoEl
     let url: string | null = null;
     setSource({ state: "opening", got: null });
     const type = entry.type || (entry.kind === "audio" ? "audio/mpeg" : "video/mp4");
-    void streaming().then((on) => {
+    void streaming().then(async (on) => {
       if (!live) return;
-      if (on) {
-        // Read about what is played soon, not as far as the browser would buffer (by the file's bytes a second).
-        const s = streamUrl(at, entry.size, type, () => {
-          const v = media.current;
-          if (!v || !Number.isFinite(v.duration) || v.duration <= 0) return null;
-          return ((v.currentTime + AHEAD_S) / v.duration) * entry.size + AHEAD_BYTES;
-        });
+      // Read about what is played soon, not as far as the browser would buffer (by the file's bytes a second).
+      const s = on ? await streamUrl(at, entry.size, type, () => {
+        const v = media.current;
+        if (!v || !Number.isFinite(v.duration) || v.duration <= 0) return null;
+        return ((v.currentTime + AHEAD_S) / v.duration) * entry.size + AHEAD_BYTES;
+      }).catch(() => null) : null;
+      if (s && !live) { s.close(); return; }
+      if (!live) return;
+      if (s) {
         close = s.close;
         setSource({ state: "ready", url: s.url, streamed: true });
         return;

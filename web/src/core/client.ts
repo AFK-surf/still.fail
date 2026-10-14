@@ -533,6 +533,9 @@ export interface StillFailDesktop {
   openCore(id: number): void;
   /** The host a station's web service is shown at, stillfail-preview://<host>/ (apps/desktop/src/main.ts, previews). */
   previewHost(station: string, port: number): Promise<string | null>;
+  /** A drive's file played as it comes from stillfail-drive:// (apps/desktop/src/main.ts, drive); an app from before this has none. */
+  driveOpen?(file: { station: string; root: string; path: string; size: number; type: string }): Promise<string | null>;
+  driveClose?(url: string): void;
   /** The page is in a workspace, reached as `account`: the app's station joins it when it is in none yet. */
   inWorkspace(account: string, workspace: string): void;
   /** The station the app carries, and joining it to a workspace when asked to; an app from before this has none. */

@@ -7,7 +7,7 @@
 import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, MessageChannelMain, nativeTheme, net, Notification, powerMonitor, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess, type WebContents } from "electron";
 import { autoUpdater, type NsisUpdater, type UpdateInfo } from "electron-updater";
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { homedir, hostname, networkInterfaces } from "node:os";
@@ -101,6 +101,8 @@ protocol.registerSchemesAsPrivileged([
   { scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, codeCache: true } },
   // A web service on a station's machine, shown in a frame (see preview below): an origin of its own per station and port.
   { scheme: "stillfail-preview", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
+  // A file of a station's drive played as it comes (see drive below): what the web app's service worker does for it.
+  { scheme: "stillfail-drive", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
 ]);
 
 /** A file of the web app, or for any other path (a client-side route) its index.html, as the cloud serves it (cloud/src/index.ts). */
@@ -532,6 +534,65 @@ async function preview(request: Request): Promise<Response> {
   } catch (error) {
     return plain(502, t("desktop.preview.fetchFailed", { error: error instanceof Error ? error.message : String(error) }));
   }
+}
+
+// The drive (web/src/drive/stream.ts): the app's page has no service worker to answer a <video>'s ranges, so a file it
+// opens is played from stillfail-drive://f/<token> and each range is read here from the station through the core
+// (drive.read), a part at a time, as the player takes it. Only the app's own page opens one, and lets it go.
+const driveFiles = new Map<string, { station: string; root: string; path: string; size: number; type: string }>();
+/** How much of a file one read asks the core for. */
+const DRIVE_PART = 1024 * 1024;
+
+ipcMain.handle("drive:open", (event, file: unknown) => {
+  const f = file as { station?: unknown; root?: unknown; path?: unknown; size?: unknown; type?: unknown } | null;
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof f?.station !== "string" || typeof f.root !== "string" || typeof f.path !== "string" || !Number.isSafeInteger(f.size) || (f.size as number) < 0) return null;
+  const token = randomUUID();
+  driveFiles.set(token, { station: f.station, root: f.root, path: f.path, size: f.size as number, type: typeof f.type === "string" && f.type ? f.type : "application/octet-stream" });
+  return `stillfail-drive://f/${token}`;
+});
+ipcMain.on("drive:close", (event, url: unknown) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof url !== "string") return;
+  driveFiles.delete(url.slice("stillfail-drive://f/".length));
+});
+
+/** A 206 with the range asked for (all of it, 200, when none was), its bytes read as the player takes them. */
+function drive(request: Request): Response {
+  const file = driveFiles.get(new URL(request.url).pathname.slice(1));
+  if (!file) return new Response(null, { status: 404 });
+  const total = file.size;
+  const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get("range") ?? "");
+  let start = 0;
+  let end = total - 1;
+  if (range) {
+    if (range[1] === "" && range[2] !== "") start = Math.max(0, total - Number(range[2]));
+    else {
+      start = Number(range[1]);
+      if (range[2] !== "") end = Math.min(Number(range[2]), total - 1);
+    }
+    if (start >= total || start > end) return new Response(null, { status: 416, headers: { "content-range": `bytes */${total}` } });
+  }
+  const stop = new AbortController();
+  let at = start;
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (at > end) { controller.close(); return; }
+      try {
+        const got = await coreCall("drive.read", { station: file.station, root: file.root, path: file.path, offset: at, length: Math.min(DRIVE_PART, end - at + 1) }, undefined, stop.signal) as { bytes: string };
+        const bytes = new Uint8Array(Buffer.from(got.bytes, "base64"));
+        if (bytes.length === 0) throw new Error("nothing read");
+        controller.enqueue(bytes);
+        at += bytes.length;
+        if (at > end) controller.close();
+      } catch (error) {
+        if (!stop.signal.aborted) controller.error(error);
+      }
+    },
+    // The player moved on (a seek): no more of this range is read.
+    cancel() { stop.abort(); },
+  }, { highWaterMark: 0 });
+  const headers: Record<string, string> = { "content-type": file.type, "accept-ranges": "bytes", "content-length": String(end - start + 1), "cache-control": "no-store" };
+  if (range) headers["content-range"] = `bytes ${start}-${end}/${total}`;
+  return new Response(request.method === "HEAD" ? null : body, { status: range ? 206 : 200, headers });
 }
 
 // This machine as a station: the one the app runs (station.ts), or one installed here. A page in a workspace says so
@@ -1300,6 +1361,7 @@ if (!app.requestSingleInstanceLock()) {
     protocol.handle("app", serve);
     await migrateOrigin();
     protocol.handle("stillfail-preview", preview);
+    protocol.handle("stillfail-drive", drive);
     setMenu();
     started = true;
     open();
