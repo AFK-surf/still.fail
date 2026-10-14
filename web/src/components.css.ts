@@ -43,7 +43,8 @@ export const quotaChip = style({
 export const quotaChipEdge = style({
   position: "absolute", inset: "0", width: "100%", height: "100%", overflow: "visible", pointerEvents: "none",
 });
-export const quotaChipTrack = style({ stroke: vars.line });
+/** The track: in dark a step stronger than the line, which on a popped-up panel's raised grey does not show. */
+export const quotaChipTrack = style({ stroke: `light-dark(${vars.line}, ${vars.lineStrong})` });
 export const quotaChipLeft = style({
   stroke: "currentColor", strokeLinecap: "round",
   selectors: { [`${quotaChip}[data-level="progress"] &`]: { transition: "stroke-dasharray .5s ease-out" } },
