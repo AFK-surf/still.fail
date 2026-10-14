@@ -425,7 +425,8 @@ when it goes idle, instead of a sweep every minute), Slack reconnect and
 rate-limit backoff, a keepalive comment on open
 event streams every 25 s (proxies close silent ones), a 40 ms coalescing of
 transcript writes for live watchers, a sign-in's 15-minute deadline, the
-profile checks a few seconds after start, the hourly auto-archive, and a look
+profile checks a few seconds after start, the auto-archive (when the next chat
+comes due, at most ten minutes apart), and a look
 at `mesh/cloud.json` every 2 s (enrollment and renames; `MeshFile`).
 
 ### still.fail cloud → devices: `GET /v1/events` (WebSocket)

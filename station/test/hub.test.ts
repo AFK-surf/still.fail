@@ -1114,8 +1114,11 @@ test("idle chats that are done are archived by the station; busy, blocked, unrea
   r.claude.last().complete();
   await settle();
 
-  autoArchive(r.hub, Date.now());
+  const now = Date.now();
+  const due = autoArchive(r.hub, now);
   assert.ok(r.store.listSessions().every((s) => s.archivedAt === null), "nothing has idled a day yet");
+  // The next look is when the first of them will have idled a day, not on an hourly sweep.
+  assert.ok(due !== null && due > now && due <= now + day, `next due ${due}`);
   const later = Date.now() + 2 * day;
   autoArchive(r.hub, later);
   assert.equal(r.session(idle).archivedBy, AUTO);
