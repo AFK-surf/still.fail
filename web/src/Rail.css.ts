@@ -8,14 +8,19 @@ const narrow = "(max-width: 700px)";
 export const rail = style({
   display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "0 0 12px", background: vars.sidebar,
   WebkitUserSelect: "none", userSelect: "none",
+  position: "relative", isolation: "isolate",
   selectors: {
-    // The macOS app's window buttons reach past the rail: with the sidebar closed, the row they are in is the page's
-    // ground across, and the rail starts under them (else they sit astride its edge).
-    '[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] &': {
-      background: `linear-gradient(${vars.canvas} 0 44px, ${vars.sidebar} 44px)`,
+    // With the sidebar closed the rail is no band of ground but a long rounded block standing on the page (its ::before),
+    // clear of the page's edges and, in the macOS app, under the window's buttons (wider than it).
+    '[data-sidebar="closed"] &': { background: vars.canvas },
+    '&::before': {
+      content: '""', position: "absolute", zIndex: -1, inset: 0, background: vars.sidebar, borderRadius: 0,
+      cornerShape: vars.cornerShape, transition: `inset 240ms ${vars.easeOut}, border-radius 240ms ${vars.easeOut}`,
     },
+    '[data-sidebar="closed"] &::before': { inset: "8px 6px", borderRadius: vars.rCard },
+    '[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] &::before': { top: 44 },
   },
-  "@media": { [narrow]: { display: "none" } },
+  "@media": { [narrow]: { display: "none" }, "(prefers-reduced-motion: reduce)": { selectors: { "&::before": { transition: "none" } } } },
 });
 /**
  * Level with the sidebar's top row, the sidebar's opening and closing in it. In the desktop app the row drags the window;
@@ -26,6 +31,9 @@ export const top = style({
   selectors: {
     "[data-desktop] &": { height: 44, WebkitAppRegion: "drag" },
     '[data-desktop="inset"]:not([data-fullscreen]) &': { height: 88, alignItems: "flex-end" },
+    // In the closed sidebar's rounded block (rail ::before), clear of its top.
+    '[data-sidebar="closed"] &': { height: 56, alignItems: "flex-end" },
+    '[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] &': { height: 94 },
   },
 });
 globalStyle(`[data-desktop] ${top} > *`, { WebkitAppRegion: "no-drag" });
