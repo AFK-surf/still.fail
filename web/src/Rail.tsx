@@ -103,7 +103,8 @@ function useEditing(): boolean {
 }
 
 export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode }) {
-  const place = placeOf(useLocation().pathname);
+  const location = useLocation();
+  const place = placeOf(location.pathname);
   const [mode, setMode] = useSidebarMode();
   const navigate = useNavigate();
   const last = useLastChat(scope, `/w/${scope}/new`) ?? `/w/${scope}`;
@@ -167,6 +168,11 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
     else if (!own && !shut()) sidebar.toggle();
   }, [place, own, group]); // eslint-disable-line react-hooks/exhaustive-deps
   const settings = `/w/${scope}/settings`;
+  // The settings lit (in them, or a place left out of the rail), pressed again, go back to where they were come to from:
+  // the page last shown with them unlit, the last chat when the settings were where the page was opened.
+  const inSettings = place === "settings" || (place !== "chats" && !items.includes(place as RailItem));
+  const before = useRef<string | null>(null);
+  useEffect(() => { if (!inSettings) before.current = location.pathname + location.search; }, [inSettings, location.pathname, location.search]);
   // A list of chats lit while the sidebar shows it; 对话 for one not in the rail.
   const shownList = (Object.keys(LISTS) as RailItem[]).find((i) => LISTS[i] === mode && items.includes(i)) ?? "chats";
   const on = (item: RailItem) => LISTS[item] ? place === "chats" && shownList === item : place === item;
@@ -236,7 +242,8 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
       <RailWorkspaces scope={scope} current={workspace} />
       {/* A place left out of the rail is reached in the settings: they are lit while in it. */}
       <Tip label={t("web-pages.settings.title")} side="right">
-        <NavLink className={css.item} to={settings} data-on={place === "settings" || (place !== "chats" && !items.includes(place as RailItem)) || undefined} aria-label={t("web-pages.settings.title")}><Settings size={20} /></NavLink>
+        <NavLink className={css.item} to={settings} data-on={inSettings || undefined} aria-label={t("web-pages.settings.title")}
+          onClick={(e) => { if (inSettings) { e.preventDefault(); navigate(before.current ?? last); } }}><Settings size={20} /></NavLink>
       </Tip>
     </nav>
   );
