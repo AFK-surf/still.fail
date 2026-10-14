@@ -43,7 +43,7 @@ import { PublishMessages, tickedOf, usePublishPreview, useTicking } from "../Pub
 import * as publishCss from "../Publish.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as hostCss from "./ChatHost.css.ts";
-import { sendingHere } from "../madeChat.ts";
+import { sendingHere, sentAfter } from "../madeChat.ts";
 import * as css from "./Chat.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -322,7 +322,7 @@ function Messages({ view, lives, list, draft, here, stationName }: {
       {askedFile}
       {find.bar}
       <Gallery.Provider value={gallery}>
-      <div className={`${chatCss.mMessages} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} ref={list} onClick={onClick} {...quoting.listProps} {...hold}>
+      <div className={`${chatCss.mMessages} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} ref={list} onClick={onClick} {...quoting.listProps} {...hold} {...sentAfter(view)}>
         <DraftKey.Provider value={chatKey}>
           <ChatRows chat={view} rows={rows} to={to} />
         </DraftKey.Provider>

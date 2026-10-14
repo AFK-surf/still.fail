@@ -46,7 +46,7 @@ import * as cloudCss from "./styles/cloud.css.ts";
 import * as composerCss from "./styles/composer.css.ts";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as dockCss from "./dock.css.ts";
-import { sendingHere, toMadeChat as toMadeChatOf } from "./madeChat.ts";
+import { sendingHere, sentAfter, toMadeChat as toMadeChatOf } from "./madeChat.ts";
 import { thumbId } from "./viewerFlight.ts";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { failure, useToast, useAct } from "./toast.tsx";
@@ -135,7 +135,7 @@ function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session:
       {rows.away && <ToLatest station={station.address} thread={id} waiting={rows.waiting} onClick={rows.toEnd} />}
       {asks.length > 0 && id !== null && <ToAsk station={station.address} thread={id} asks={asks} above={rows.away} />}
       <Gallery.Provider value={gallery}>
-      <div className={`${sessionCss.chatList} ${css.chatMessages}`} ref={list} {...quoting.listProps}
+      <div className={`${sessionCss.chatList} ${css.chatMessages}`} ref={list} {...quoting.listProps} {...sentAfter(chat)}
         onClick={(e) => {
           const to = historyLinkClicked(e);
           // At the entry it names (else its start); opened, not toggled. Another chat's agent's opens with its chat (ChatPage).
@@ -943,7 +943,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
   const chat = useContext(DraftKey);
   if (m.mine) {
     return (
-      <MineMessage data-vk={`m:${m.seq}`} data-author={t("web-main.chat.you")} data-ts={m.ts} data-role="person" data-enter={enter} data-caught={caught}>
+      <MineMessage data-vk={`m:${m.seq}`} data-outgoing={m.outgoing} data-author={t("web-main.chat.you")} data-ts={m.ts} data-role="person" data-enter={enter} data-caught={caught}>
         <MineWords message={m} />
         {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
         {m.waiting

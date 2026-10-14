@@ -21,7 +21,8 @@ function textAt(el: Element): Typed {
   const style = getComputedStyle(el);
   return {
     x: box.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft),
-    y: box.top + parseFloat(style.borderTopWidth) + parseFloat(style.paddingTop) + (parseFloat(style.lineHeight) - parseFloat(style.fontSize)) / 2,
+    // Its first line, above the box when it is scrolled (a long draft, its end in view).
+    y: box.top - el.scrollTop + parseFloat(style.borderTopWidth) + parseFloat(style.paddingTop) + (parseFloat(style.lineHeight) - parseFloat(style.fontSize)) / 2,
     size: parseFloat(style.fontSize),
   };
 }
@@ -93,6 +94,8 @@ function standIn(field: HTMLElement, text: string, layer: HTMLElement, z: string
     overflowWrap: style.overflowWrap, wordBreak: style.wordBreak, textAlign: style.textAlign,
   });
   layer.append(stand);
+  // Scrolled as the field was: the lines seen there, not its first ones.
+  stand.scrollTop = field.scrollTop;
   return stand;
 }
 
@@ -277,14 +280,18 @@ function flight(t: number): { up: number; across: number } {
   return { across: FLIGHT(Math.min(1, t / 0.88)), up: FLIGHT(Math.max(0, (t - 0.12) / 0.88)) };
 }
 
+/** What a chat's list says of what it had (`data-last-seq`, `data-outbox`), for `sendingHere` to know the row sent. */
+export function sentAfter(chat: { messages: readonly { seq: number }[]; outbox: readonly { id: string }[]; newer?: boolean }): Record<string, string> {
+  return { "data-last-seq": chat.newer ? "" : String(chat.messages.at(-1)?.seq ?? 0), "data-outbox": chat.outbox.map((o) => o.id).join(" ") };
+}
+
 /** Words sent in an open chat, waiting for their row or on their way to it; `done` lets them go (at once). */
 let flying: { done(): void } | null = null;
 
 /**
  * A message is sent in an open chat from `field` (a composer's text box, still showing `text`) into `list` (the chat's
  * list): its words stay where they were typed, drawn in `layer` (over the composer, at `z`), its hint gone, until this
- * device's own row for it is in the list (the first of the viewer's own not there when it was sent: the outbox's, or
- * the station's message itself when it is quick). Then that row is drawn from there to its place, over what it
+ * device's own row for it is in the list (the outbox's, or the station's message itself when it is quick). Then that row is drawn from there to its place, over what it
  * passes, its words from the size they were typed at to their own, its bubble's ground and its time coming in on the
  * way; where it goes is read again every frame (the list may move as it settles), and the list itself does not move.
  * The row itself, hidden meanwhile, is shown again as the copy of it goes, in the same frame. The images going with it
@@ -300,7 +307,20 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
   const pictures = picturesIn(composer, layer, z);
   if (!stand && !pictures.length) return;
   const mine = `.${msgCss.msgMine}`;
-  const before = new Set(list.querySelectorAll(mine));
+  // Which of the viewer's rows is this message's, by what the chat had when it was sent (`sentAfter`, on the list): an
+  // outbox entry it did not have, or a message after its last (or, short of the chat's end, the one an entry it took
+  // became). Not "any row not drawn before": rows of the viewer's older messages are made too as the list goes to its end
+  // or grows taller, and the words would fly to them.
+  const { lastSeq, outbox } = list.dataset;
+  const after = lastSeq === undefined || lastSeq === "" ? null : Number(lastSeq);
+  const queued = new Set(outbox?.split(" "));
+  const sent = (el: HTMLElement) => {
+    const key = el.dataset.vk ?? "";
+    if (key.startsWith("o:")) return !queued.has(key.slice(2));
+    if (!key.startsWith("m:")) return false;
+    if (el.dataset.outgoing && rows.some((r) => r.dataset.vk === `o:${el.dataset.outgoing}`)) return true;
+    return after !== null && Number(key.slice(2)) > after;
+  };
   const from = textAt(field);
   field.dataset.madeField = "";
   // Only words pass over the hint; images alone leave it where it is.
@@ -312,7 +332,7 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
   const rows: HTMLElement[] = [];
   const take = () => {
     for (const el of list.querySelectorAll<HTMLElement>(mine)) {
-      if (before.has(el) || rows.includes(el)) continue;
+      if (rows.includes(el) || !sent(el)) continue;
       el.style.animation = "none";
       // Hide the row and its delayed status together, without changing opacity: the chat's emphasis transition
       // would otherwise fade the real row back in after its flying copy has already gone.
