@@ -1969,8 +1969,16 @@ export const SHAPES: Record<string, Shape> = {
   ]),
   HistoryReceived: struct([
     ["note", opt("String")],
+    ["tasks", vec("HistoryTask")],
     ["messages", vec("HistoryMessage")],
-  ], { doc: "What a prompt carried: still.fail's own words around them (`note`), then the messages." }),
+  ], { doc: "What a prompt carried: still.fail's own words around them (`note`), how work the agent started ended (`tasks`),\nthen the messages." }),
+  HistoryTask: struct([
+    ["text", "String", { doc: "In a line: what it was, how it ended, its name." }],
+    ["agent", "bool", { doc: "A sub-agent's; otherwise a background command's." }],
+    ["failed", "bool", { doc: "It failed or was stopped." }],
+    ["result", opt("String"), { doc: "What a sub-agent answered." }],
+    ["md", opt("Value"), { doc: "`result` read as Markdown (markdown.ts): what the clients draw." }],
+  ], { doc: "Work the agent started in the background telling it how it ended (a task notification)." }),
   HistoryText: struct([
     ["text", "String"],
     ["md", "Value", { doc: "`text` read as Markdown (markdown.ts): what the clients draw." }],

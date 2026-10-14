@@ -103,7 +103,7 @@ export function groupOf(steps: HistoryStep[], pending: number): HistoryItem["bod
 const placeOf = (chat: DemoChat) => ({ name: chat.title, surface: "ember", session: chat.key });
 
 export function received(chat: DemoChat, from: Person, text: string): HistoryItem["body"] {
-  return { kind: "received", content: { messages: [{ key: `m${chat.items.length}`, from: { name: from.name, bound: false }, text, place: placeOf(chat) }] } };
+  return { kind: "received", content: { tasks: [], messages: [{ key: `m${chat.items.length}`, from: { name: from.name, bound: false }, text, place: placeOf(chat) }] } };
 }
 export function posted(chat: DemoChat, text: string): HistoryItem["body"] {
   return { kind: "post", content: { text, md: markdown(text), place: placeOf(chat), block: false, failed: false } };

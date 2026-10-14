@@ -154,6 +154,53 @@ export function parsePrompt(text: string): [Sourced[], string] {
   return [messages, note.trim()];
 }
 
+/// Work the agent started on its own that told it how it ended (Claude Code's `<task-notification>`): a background command
+/// or a sub-agent, its name, how it ended and, a sub-agent's, what it answered.
+export type Task = { agent: boolean; name: string; status: string; code: number | null; result: string | null };
+
+function inner(block: string, tag: string, last = false): string | null {
+  const open = block.indexOf(`<${tag}>`);
+  if (open < 0) return null;
+  const from = open + tag.length + 2;
+  const close = last ? block.lastIndexOf(`</${tag}>`) : block.indexOf(`</${tag}>`, from);
+  return (close < from ? block.slice(from) : block.slice(from, close)).trim();
+}
+
+/// Takes the task notifications out of still.fail's words to the agent: what they told, and the words left.
+export function parseTasks(note: string): [Task[], string] {
+  const tasks: Task[] = [];
+  let rest = "";
+  let at = 0;
+  for (;;) {
+    const open = note.indexOf("<task-notification>", at);
+    if (open < 0) break;
+    const close = note.indexOf("</task-notification>", open);
+    const end = close < 0 ? note.length : close + "</task-notification>".length;
+    const block = note.slice(open, close < 0 ? note.length : close);
+    const summary = inner(block, "summary") ?? "";
+    // "Background command "…" completed (exit code 0)", "… failed with exit code 1", "Agent "…" finished".
+    const said = /^(Background command|Agent) "([\s\S]*)" (?:completed|failed|finished|was stopped)/.exec(summary);
+    const code = /exit code (\d+)\)?$/.exec(summary);
+    tasks.push({
+      agent: said ? said[1] === "Agent" : inner(block, "result") !== null,
+      name: said ? said[2] : summary,
+      status: inner(block, "status") ?? "",
+      code: code ? Number(code[1]) : null,
+      result: inner(block, "result", true) || null,
+    });
+    rest += note.slice(at, open);
+    at = end;
+  }
+  rest += note.slice(at);
+  return [tasks, rest.trim()];
+}
+
+function taskText(task: Task): string {
+  const what = task.agent ? "agent" : "command";
+  const how = task.status === "completed" ? "done" : task.status === "failed" ? (task.code !== null ? "failed_code" : "failed") : task.status === "killed" ? "stopped" : "other";
+  return t(`core-logic.history.task.${what}.${how}`, { name: task.name, code: task.code ?? 0, status: task.status });
+}
+
 function mentions(text: string, cx: Context): string {
   const bots: [string, string][] = cx.botUserId !== null ? [[cx.botUserId, cx.botName]] : [];
   return present.mentions(text, bots, cx.members);
@@ -233,10 +280,18 @@ export function presentHistory(live: J, cx: Context): J {
     let v: J;
     switch (item.kind) {
       case "received": {
-        const [messages, note] = parsePrompt(s(timeline[item.i], "text"));
+        const [messages, said] = parsePrompt(s(timeline[item.i], "text"));
+        const [tasks, note] = parseTasks(said);
         v = {
           kind: "received",
           note: note !== "" ? note : null,
+          tasks: tasks.map((task) => ({
+            text: taskText(task),
+            agent: task.agent,
+            failed: task.status === "failed" || task.status === "killed",
+            result: task.result,
+            md: task.result !== null ? markdown(task.result) : null,
+          })),
           messages: messages.map((m) => {
             let from: J;
             if (m.slack) {

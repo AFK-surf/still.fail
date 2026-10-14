@@ -4,12 +4,12 @@
 import { PathSession } from "./Peeks.tsx";
 import { failure, useToast } from "./toast.tsx";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
-import { ChevronDown, ChevronRight, Copy, Wait, Received as ReceivedIcon, Send } from "./icons.tsx";
+import { Agent, ChevronDown, ChevronRight, Command, Copy, Wait, Received as ReceivedIcon, Send } from "./icons.tsx";
 import { DropdownMenu } from "radix-ui";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { animate, EASE_OUT, reducedMotion, type AnimationPlaybackControls } from "./motion.ts";
-import { useApi, useHistory, useHistoryDetail, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryStep, type HistoryView, type Place } from "./api.ts";
+import { useApi, useHistory, useHistoryDetail, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryStep, type HistoryTask, type HistoryView, type Place } from "./api.ts";
 import { ICON, IconButton, Pill, SlackLogo, Tip } from "./ui.tsx";
 import { useCopyChatLink } from "./ChatRef.tsx";
 import { useLink, useStation } from "./station.tsx";
@@ -174,7 +174,8 @@ function tall(item: HistoryItem, per: number): number {
     case "post": return LABEL_PX + words(mdLines(body.content.md as Md, per, 6));
     case "received":
       return [body.content.note, ...body.content.messages.map((m) => m.text)]
-        .reduce<number>((sum, text) => (text ? sum + (sum ? GAP_PX : 0) + LABEL_PX + words(textLines(text, per, 6)) : sum), 0);
+        .reduce<number>((sum, text) => (text ? sum + (sum ? GAP_PX : 0) + LABEL_PX + words(textLines(text, per, 6)) : sum), 0)
+        + body.content.tasks.reduce((sum, task) => sum + GAP_PX + LABEL_PX + (task.md ? words(mdLines(task.md as Md, per, 6)) : 0), 0);
     case "mark": return MARK_PX;
     case "group": return GROUP_PX;
   }
@@ -217,6 +218,7 @@ const HistoryItemView = memo(function HistoryItemView({ item }: { item: HistoryI
       return (
         <>
           {body.content.note && <Received from="ember" text={body.content.note} />}
+          {body.content.tasks.map((task, i) => <Task key={i} task={task} />)}
           {body.content.messages.map((m) => (
             <Received key={m.key} text={m.text} place={m.place ? <Where place={m.place} /> : null}
               from={m.from.slackUser ? <SlackName user={m.from.slackUser} name={m.from.name} bound={m.from.bound} /> : m.from.name} />
@@ -277,6 +279,17 @@ function Received({ from, text, place }: { from: ReactNode; text: string; place?
     <div className={css.hReceived}>
       <div className={css.hLabel}><ReceivedIcon {...ICON} size={14} />{t(from === "ember" ? "web-main.history.reminder.before" : "web-main.history.message.before")}<strong>{from === "ember" ? NAME : from}</strong>{t(from === "ember" ? "web-main.history.reminder.after" : "web-main.history.message.after")}{place && <> · {place}</>}</div>
       <Fold className={css.hQuote} of={text} head={textHead(text, HEAD_LINES)}>{text}</Fold>
+    </div>
+  );
+}
+
+/** Work the agent started in the background, ended: a line saying how, and what a sub-agent answered beside a bar. */
+function Task({ task }: { task: HistoryTask }) {
+  const Icon = task.agent ? Agent : Command;
+  return (
+    <div className={css.hReceived}>
+      <div className={`${css.hLabel} ${css.hTask}`} data-failed={task.failed}><Icon {...ICON} size={14} /><span>{task.text}</span></div>
+      {task.md && <Fold className={`${css.hQuote} ${css.hQuoteMd} ${conversationCss.markdown}`} of={task.md as Md} head={headOf(task.md as Md)}><MdView md={task.md as Md} /></Fold>}
     </div>
   );
 }

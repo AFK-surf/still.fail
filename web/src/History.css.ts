@@ -50,6 +50,12 @@ export const hLabel = style({
   display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 6px", minWidth: "0", fontSize: vars.textMeta,
   color: vars.muted,
 });
+/** How background work ended: red when it failed or was stopped. */
+export const hTask = style({
+  selectors: {
+    "&[data-failed=\"true\"]": { color: vars.red },
+  },
+});
 /** A Slack user's name: a button that says whether it is the viewer. */
 export const hPerson = style({
   font: "inherit", color: "inherit", background: "none", border: "0", padding: "0", cursor: "pointer",

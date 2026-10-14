@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as format from "../src/format.ts";
 import { args, doing } from "../src/activity.ts";
-import { hint, parsePrompt, presentHistory, type Context } from "../src/history.ts";
+import { hint, parsePrompt, parseTasks, presentHistory, type Context } from "../src/history.ts";
 import { holdLanguage } from "../src/i18n.ts";
 
 holdLanguage();
@@ -47,6 +47,28 @@ test("a_prompt_is_the_messages_it_carried_and_embers_words_around_them", () => {
   const [old] = parsePrompt('<slack user="U2" bot ts="3.4">\nyo\n</slack>');
   assert.equal(old[0].user, "U2");
   assert.equal(old[0].text, "yo");
+});
+
+test("a_task_notification_is_read_into_how_the_work_ended", () => {
+  const note = (status: string, summary: string, more = "") =>
+    `<task-notification>\n<task-id>b1</task-id>\n<tool-use-id>toolu_1</tool-use-id>\n<output-file>/tmp/b1.output</output-file>\n<status>${status}</status>\n<summary>${summary}</summary>${more}\n</task-notification>`;
+  const [tasks, rest] = parseTasks(
+    `Heads up.\n${note("completed", 'Background command "Push and wait for "CI"" completed (exit code 0)')}\n` +
+      note("failed", 'Background command "Run tests" failed with exit code 2') +
+      note("killed", 'Background command "Watch" was stopped after reaching its background time limit', "\n<note>more</note>") +
+      note("completed", 'Agent "Map it" finished', "\n<note>n</note>\n<result>## Found\n**it**</result>\n<usage>u</usage>"),
+  );
+  assert.equal(rest, "Heads up.");
+  assert.deepEqual(tasks, [
+    { agent: false, name: 'Push and wait for "CI"', status: "completed", code: 0, result: null },
+    { agent: false, name: "Run tests", status: "failed", code: 2, result: null },
+    { agent: false, name: "Watch", status: "killed", code: null, result: null },
+    { agent: true, name: "Map it", status: "completed", code: null, result: "## Found\n**it**" },
+  ]);
+  const h = presentHistory({ loaded: true, timeline: [{ kind: "user", text: note("failed", 'Background command "Run tests" failed with exit code 2') }] }, cx([], [], []));
+  const received = h.items[0].body.content;
+  assert.equal(received.note, null);
+  assert.deepEqual(received.tasks, [{ text: "后台命令失败（退出码 2）：Run tests", agent: false, failed: true, result: null, md: null }]);
 });
 
 test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {

@@ -8,7 +8,7 @@ import { LOCAL_MS } from "../motion.ts";
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { stationApi, useAgentCard, useChat, useHistory, useHistoryDetail, useHistoryOlder, useHost, useStationCall, useStations, type ChatAgent, type HistoryGroup, type HistoryItem, type HistoryPhase, type HistoryStep, type HistoryView, type ModelOption, type Place, type RunnableProfile } from "../api.ts";
-import { ArrowRight, Check, ChevronDown, Copy, ChevronRight, Wait, Received, Send, Stop, Unplug } from "../icons.tsx";
+import { Agent, ArrowRight, Check, ChevronDown, Command, Copy, ChevronRight, Wait, Received, Send, Stop, Unplug } from "../icons.tsx";
 import { optionOf } from "../ModelTriple.tsx";
 import { usePick } from "../pick.ts";
 import { MdView } from "../Prose.tsx";
@@ -209,6 +209,13 @@ function Item({ item, station, chat, agentText }: { item: HistoryItem; station: 
       return (
         <div className={css.mHReceived}>
           {body.content.note && <Message icon={Received} label={tNodes("web-mobile.history.reminder", { name: <b>{NAME}</b> })} text={body.content.note} full={<p className={chatCss.mPlain}>{body.content.note}</p>} />}
+          {body.content.tasks.map((task, i) => {
+            const I = task.agent ? Agent : Command;
+            const label = <span className={css.mHTask} data-failed={task.failed || undefined}>{task.text}</span>;
+            return task.result != null && task.md != null
+              ? <Message key={`t${i}`} icon={I} label={label} text={task.result} full={<div className={`${rootCss.wide} ${conversationCss.markdown}`}><MdView md={task.md as Md} /></div>} />
+              : <p key={`t${i}`} className={`${css.mHMark} ${css.mHTask}`} data-failed={task.failed || undefined}><I size={14} />{task.text}</p>;
+          })}
           {body.content.messages.map((m) => (
             <Message key={m.key} icon={Received}
               label={<>{tNodes("web-mobile.history.message", { name: <b>{m.from.name}</b> })}{m.place && <> · <PlaceMark station={station} chat={chat} place={m.place} /></>}</>}

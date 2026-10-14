@@ -287,6 +287,16 @@ private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgen
                     Text(note, fontSize = 15.sp, lineHeight = 23.sp, color = C.ink)
                 }
             }
+            body.content.tasks.forEach { task ->
+                val icon = if (task.agent) Icons.Agent else Icons.Command
+                val color = if (task.failed) C.red else C.muted
+                val result = task.result
+                if (result != null) Message(icon, { Text(task.text, fontSize = 13.sp, color = color) }, result) { Markdown(result, size = 15) }
+                else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    IconIn(icon, 14.dp, color)
+                    Text(task.text, fontSize = 13.sp, color = color)
+                }
+            }
             body.content.messages.forEach { m ->
                 Message(Icons.Received, {
                     val (before, after) = around("android-chat.history.received.message")

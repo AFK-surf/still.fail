@@ -55,6 +55,8 @@ export const mHBrief = style({
 });
 export const mHSub = style({ paddingLeft: "12px" });
 export const mHMark = style({ display: "flex", alignItems: "center", gap: "6px", fontSize: vars.textMeta, color: "var(--m-muted)" });
+/** How background work ended: red when it failed or was stopped. */
+export const mHTask = style({ minWidth: "0", overflowWrap: "anywhere", selectors: { "&[data-failed]": { color: "var(--m-red)" } } });
 export const mHPlace = style({
   display: "inline-flex", alignItems: "center", gap: "3px", maxWidth: "100%", minWidth: "0", padding: "0", border: "0",
   borderRadius: `calc(4px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none", verticalAlign: "middle",
