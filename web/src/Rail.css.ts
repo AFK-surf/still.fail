@@ -55,12 +55,18 @@ export const workspaceItem = style({
     "&[data-on]": { background: vars.text, color: vars.sidebar },
   },
 });
-/** Under the workspaces: making one, another account, invitations (its menu), a dashed square. */
+/** Over the workspaces: making one, another account, invitations (its menu), a dashed square seen as the pointer comes. */
 export const workspaceAdd = style({
   position: "relative", display: "grid", placeItems: "center", width: 30, height: 30, padding: 0,
   border: `1.5px dashed ${vars.lineStrong}`, borderRadius: `calc(9px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "none", color: vars.muted, cursor: "pointer",
-  selectors: { "&:hover, &[data-state=open]": { color: vars.text, borderColor: vars.fieldHover } },
+  opacity: 0, transition: `opacity ${vars.dur} ${vars.easeOut}`,
+  selectors: {
+    "&:hover, &[data-state=open]": { color: vars.text, borderColor: vars.fieldHover },
+    // Out of sight until the pointer is over the workspaces (or it is reached by keys, open, or an invitation waits).
+    [`${workspaces}:hover &, &:focus-visible, &[data-state=open], &:has([role=img])`]: { opacity: 1 },
+  },
+  "@media": { "(hover: none)": { opacity: 1 } },
 });
 export const mark = style({ position: "absolute", top: -4, right: -4, display: "flex", padding: 2, borderRadius: "50%", background: vars.sidebar });
 
