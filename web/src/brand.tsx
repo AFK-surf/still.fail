@@ -119,7 +119,7 @@ export function moveSidebar(change: () => void): void {
  * following as it moves; `moved` is told where it goes as it starts.
  */
 /** Whether the sidebar is closed, as the page's root says: the same to everything reading it. */
-function useSidebarClosed(): boolean {
+export function useSidebarClosed(): boolean {
   return useSyncExternalStore((changed) => {
     const watch = new MutationObserver(changed);
     watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-sidebar"] });

@@ -51,7 +51,7 @@ import { ComposerDock } from "../dock.tsx";
 import { Previews } from "../Previews.tsx";
 import { useAccounts, useSignIn, type Account } from "./accounts.ts";
 import { cloud, errorText, inviteCode, needsInviteCode, useAction, useWorkspace, useWorkspaces, type PendingInvitation } from "./api.ts";
-import { Illustration, PageBrand, SidebarBrand } from "../brand.tsx";
+import { Illustration, PageBrand, SidebarBrand, useSidebarClosed } from "../brand.tsx";
 import { identify, track } from "../telemetry.ts";
 import { useInWorkspace } from "../notify.ts";
 import * as nav from "../Sidebar.css.ts";
@@ -97,6 +97,15 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
   const place = placeOf(path);
   const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path)
     && !(place !== "settings" && place !== "files" && railed.includes(place as RailItem) && wide);
+  // Which sidebar is drawn. A page in the rail with none of its own (连接, 用量, the archive) closes it (Rail.tsx): the one
+  // it had stays while it goes, not the chats' list first; opened again there, it is the chats'.
+  const own = settings ? "settings" : place === "files" || place === "profiles" || place === "stations" ? place : "chats";
+  const bare = !settings && (place === "archive" || place === "connects" || place === "usage") && railed.includes(place as RailItem) && wide;
+  const closed = useSidebarClosed();
+  const kept = useRef({ side: own, closed, reopened: false });
+  if (!bare) kept.current = { side: own, closed, reopened: false };
+  else { if (kept.current.closed && !closed) kept.current.reopened = true; kept.current.closed = closed; }
+  const side = bare && !kept.current.reopened ? kept.current.side : own;
   // 奏: the page of the decision picked in the sidebar's 奏 (DecisionDesk.tsx); come to it any way, the sidebar shows 奏.
   const decisions = /^\/w\/[^/]+\/decisions$/.test(path);
   const [mode, setMode] = useSidebarMode();
@@ -128,11 +137,11 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
         {/* The rail and the sidebar in one block, which closes to the rail as a bar (shell.css.ts dock). */}
         <div className={shellCss.dock}>
         <Rail scope={entry.id} workspace={<WorkspaceSwitcher current={entry} adder />} />
-        {settings
+        {side === "settings"
           ? <nav className={nav.sidebar} aria-label={t("web-pages.settings.title")}><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><div className={railCss.narrowOnly}><WebUpdate /><WorkspaceSwitcher current={entry} /></div></div></nav>
-          : place === "files" ? <FilesSidebar entry={entry} />
-          : place === "profiles" ? <ProfilesSidebar entry={entry} />
-          : place === "stations" ? <StationsSidebar entry={entry} />
+          : side === "files" ? <FilesSidebar entry={entry} />
+          : side === "profiles" ? <ProfilesSidebar entry={entry} />
+          : side === "stations" ? <StationsSidebar entry={entry} />
           : <WorkspaceSidebar entry={entry} />}
         </div>
         <SidebarEdge />

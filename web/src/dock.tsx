@@ -267,6 +267,15 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     const frame = requestAnimationFrame(() => setSettled(spec.variant));
     return () => cancelAnimationFrame(frame);
   }, [switching, spec?.variant]);
+  // Put away and shown again (back from a page with none, the files, a station's page…), the same chat's composer is not
+  // made again, so its own focusing on a new chat does not run: it takes the cursor here, as a chat switched to does
+  // (not on touch screens, where it would raise the keyboard).
+  const wasShown = useRef(shown);
+  useLayoutEffect(() => {
+    const back = shown && !wasShown.current;
+    wasShown.current = shown;
+    if (back && window.matchMedia("(pointer: fine)").matches) box.current?.querySelector("textarea")?.focus();
+  }, [shown]);
   // Changes only with the height: the places re-render then, not each time a page hands over what it writes to.
   const value = useMemo(() => ({ ...dock, height }), [dock, height]);
   // Drawn anew with what the page hands it, not with the dock's own height (which changes every frame it grows).
