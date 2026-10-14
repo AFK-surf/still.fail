@@ -148,16 +148,21 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   const sidebar = useSidebarToggle();
   // By the page's root, not as last drawn: a list asked for from the rail opens it, and so may its place's change in
   // the same click, once.
-  const openSidebar = () => { if (document.documentElement.dataset.sidebar === "closed") sidebar.toggle(); };
-  // Every place has its sidebar (the settings and the files their way round, the rest their chats): come to one from
-  // another with it closed, it opens. On the page's load only those with nothing else to find their way by.
-  const needsSidebar = place === "settings" || place === "files" || (place !== "chats" && place !== "archive" && !items.includes(place));
+  const shut = () => document.documentElement.dataset.sidebar === "closed";
+  const openSidebar = () => { if (shut()) sidebar.toggle(); };
+  // The places with a sidebar of their own (the settings and the files their way round, the chats their lists) open it,
+  // come to with it closed; a page in the rail (Station, Profile, 连接, 用量) or the archive has none (only the chats
+  // beside it), and closes it: the page the whole width. On the page's load the chats as they were left. Only on a wide
+  // screen: on a narrow one the sidebar is a page of its own.
+  const own = place === "settings" || place === "files" || place === "chats" || !items.includes(place as RailItem);
   const cameFrom = useRef<Place | null>(null);
   useEffect(() => {
     const moved = cameFrom.current !== null && cameFrom.current !== place;
     cameFrom.current = place;
-    if (moved || needsSidebar) openSidebar();
-  }, [place]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!matchMedia("(min-width: 701px)").matches) return;
+    if (own && (moved || place !== "chats")) openSidebar();
+    else if (!own && !shut()) sidebar.toggle();
+  }, [place, own]); // eslint-disable-line react-hooks/exhaustive-deps
   const settings = `/w/${scope}/settings`;
   // A list of chats lit while the sidebar shows it; 对话 for one not in the rail.
   const shownList = (Object.keys(LISTS) as RailItem[]).find((i) => LISTS[i] === mode && items.includes(i)) ?? "chats";
