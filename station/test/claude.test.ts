@@ -39,7 +39,7 @@ after(async () => {
   rmSync(data, { recursive: true, force: true });
 });
 
-function driver(machineToken?: () => Promise<{ token: string; expiresAt: number }>) {
+function driver(machineToken?: (env?: unknown, rejected?: string) => Promise<{ token: string; expiresAt: number }>) {
   const d = new ClaudeDriver({ data, machineToken });
   drivers.push(d);
   return d;
@@ -255,7 +255,7 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     await session.dispose();
   });
 
-  test("a machine profile runs on the machine's token, and is not prompted once it is about to run out", async () => {
+  test("a machine profile runs on the machine's token, and a token about to run out does not stop it", async () => {
     let expiresAt = Date.now() + 3600_000;
     const d = driver(async () => ({ token: "machine-token", expiresAt }));
     const o = options({ machine: true });
@@ -268,9 +268,43 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     if (process.platform === "darwin") assert.doesNotMatch(env.PATH.split(":")[0], /stillfail-no-keychain/);
     await session.dispose();
     expiresAt = Date.now() + 60_000;
-    const soon = await d.open(options({ machine: true }), () => {});
-    await assert.rejects(soon.prompt("say:hi"), /token runs out/);
-    await soon.dispose();
+    const soon = listen();
+    const s2 = await d.open(options({ machine: true }), soon.push);
+    await s2.prompt("say:hi");
+    await soon.until(ended(1));
+    await s2.dispose();
+  });
+
+  test("a token handed over is renewed in the process: claude asks on a 401 and the turn goes on, never started again", async () => {
+    const given: (string | undefined)[] = [];
+    let next = 1;
+    const d = driver(async (_env?: unknown, rejected?: string) => {
+      given.push(rejected);
+      return { token: `machine-${next}`, expiresAt: Date.now() + 60_000 };
+    });
+    const o = options({ machine: true });
+    const { events, push, until } = listen();
+    const session = await d.open(o, push);
+    // A token about to run out no longer stops a turn: it is renewed when refused.
+    next = 2;
+    await session.prompt("expired");
+    await until(ended(1));
+    const env = JSON.parse(readFileSync(o.dump, "utf8").trim()).env;
+    assert.equal(env.CLAUDE_CODE_OAUTH_TOKEN, "machine-1");
+    assert.equal(env.CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH, "1");
+    assert.equal(env.CLAUDE_CODE_ENTRYPOINT, "claude-desktop");
+    assert.deepEqual(outcome(events), { kind: "completed" });
+    assert.deepEqual(given, [undefined, "machine-1"], "renewed with the refused one named");
+    const answers = stdin(o.dump).filter((m) => m.type === "control_response");
+    assert.equal(answers.length, 1);
+    assert.equal(answers[0].response.response.accessToken, "machine-2");
+    assert.equal(stdin(o.dump).filter((m) => m.type === "control_request").length, 0, "not interrupted");
+    // No newer token: it is told so, and the turn fails on authentication as before.
+    await session.prompt("expired");
+    await until(ended(2));
+    assert.equal((outcome(events, 1) as { reason?: string }).reason, "auth");
+    assert.equal(stdin(o.dump).filter((m) => m.type === "control_response").at(-1).response.response.reason, "refresh_failed");
+    await session.dispose();
   });
 
   for (const crashed of [false, true]) {

@@ -247,16 +247,16 @@ export class Accounts {
   }
 
   /// The machine login's current Claude token, renewed when about to run out (the Claude driver's `machineToken`).
-  async machineToken(env: Env = this.env): Promise<MachineToken> {
-    const [token, expiresAt] = await claudeOAuthToken(env, null, null, this.urls.claudeToken, stationLang(), HANDED_MARGIN_MS);
+  async machineToken(env: Env = this.env, rejected?: string): Promise<MachineToken> {
+    const [token, expiresAt] = await claudeOAuthToken(env, null, rejected ?? null, this.urls.claudeToken, stationLang(), HANDED_MARGIN_MS);
     return { token, expiresAt };
   }
 
   /// A Claude profile's current token, renewed when about to run out: what a station sharing it lends.
-  async claudeToken(profile: Json): Promise<MachineToken> {
-    if (profile.machine === true) return this.machineToken();
+  async claudeToken(profile: Json, rejected?: string): Promise<MachineToken> {
+    if (profile.machine === true) return this.machineToken(this.env, rejected);
     const home = String(profile.home ?? "");
-    const [token, expiresAt] = await claudeOAuthToken(this.env, joinPath(this.deps.data, home), null, this.urls.claudeToken, stationLang(), HANDED_MARGIN_MS);
+    const [token, expiresAt] = await claudeOAuthToken(this.env, joinPath(this.deps.data, home), rejected ?? null, this.urls.claudeToken, stationLang(), HANDED_MARGIN_MS);
     return { token, expiresAt };
   }
 

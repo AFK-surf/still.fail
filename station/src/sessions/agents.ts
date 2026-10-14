@@ -148,7 +148,7 @@ export const AgentsLive = (control: Control) =>
         // The connects' Slack (made below); the station's own chat is the hub's.
         chats: (id) => slack.chats(id),
         drivers: [
-          new ClaudeDriver({ data, machineToken: (env) => accounts.machineToken(env), lent: { borrowed, token: (p) => sharing!.lendClaude(p) } }),
+          new ClaudeDriver({ data, machineToken: (env, rejected) => accounts.machineToken(env, rejected), lent: { borrowed, token: (p, rejected) => sharing!.lendClaude(p, rejected) } }),
           codex,
         ],
         mcpUrl: () => door?.url ?? "",
@@ -300,7 +300,7 @@ export const AgentsLive = (control: Control) =>
         ask: (station, request) => remote.ask(station, request),
         agentHome: () => settings().agentHome,
         env: process.env as Record<string, string | undefined>,
-        claudeToken: (p) => accounts.claudeToken(p),
+        claudeToken: (p, rejected) => accounts.claudeToken(p, rejected),
         codexRunning: (id) => codex.running(id),
         status: (id) => { const h = accounts.health(id); return { check: h.check ?? null, quota: h.quota ?? null }; },
         changed: () => events.overviewChanged(),

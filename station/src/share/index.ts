@@ -71,7 +71,8 @@ export type SharingDeps = {
   /// The station's environment (the machine's own logins are found in it).
   env: Env;
   /// A Claude profile's current access token, renewed when about to run out (the accounts module's).
-  claudeToken: (profile: Json) => Promise<MachineToken>;
+  /// `rejected`: the token a borrower was refused with, renewed first if it is still the current one.
+  claudeToken: (profile: Json, rejected?: string) => Promise<MachineToken>;
   /// Whether a Codex app-server runs on a profile here now (its login must not be renewed under it).
   codexRunning: (profileId: string) => boolean;
   /// A profile's check and allowance as this station has them (for the stations borrowing it).
@@ -615,7 +616,7 @@ export class Sharing {
       }
       if (method === "share.lend") {
         if (this.moving.has(id)) throw new Error("the login is being moved to another station");
-        return this.lend(p);
+        return this.lend(p, typeof request.rejected === "string" ? request.rejected : undefined);
       }
       if (method === "share.status") return this.deps.status(p.id);
     } else {
@@ -727,10 +728,10 @@ export class Sharing {
   }
 
   /// A short-lived access token of a shared subscription, renewed here when needed.
-  private async lend(p: Json): Promise<Json> {
+  private async lend(p: Json, rejected?: string): Promise<Json> {
     if (p.access?.kind !== "subscription") throw new Error("only a subscription is lent");
     if (p.runtime === "claude") {
-      const t = await this.deps.claudeToken(p);
+      const t = await this.deps.claudeToken(p, rejected);
       return { runtime: "claude", token: t.token, expiresAt: t.expiresAt };
     }
     const file = p.machine === true ? codexAuthFile(this.deps.env) : join(this.home(p), "auth.json");
@@ -782,11 +783,11 @@ export class Sharing {
     return host;
   }
 
-  /// A borrowed Claude subscription's token, from its host.
-  async lendClaude(profile: Json): Promise<MachineToken> {
+  /// A borrowed Claude subscription's token, from its host; `rejected`, the one a process here was refused with.
+  async lendClaude(profile: Json, rejected?: string): Promise<MachineToken> {
     const host = this.hostOf(profile);
     try {
-      const got = await this.deps.ask(host, { method: "share.lend", id: profile.share.id });
+      const got = await this.deps.ask(host, { method: "share.lend", id: profile.share.id, ...(rejected !== undefined ? { rejected } : {}) });
       this.unreachable.delete(host);
       if (typeof got?.token !== "string") throw new Error("the host lent no token");
       const token = { token: got.token, expiresAt: Number(got.expiresAt ?? 0) };
@@ -796,7 +797,7 @@ export class Sharing {
       this.unreachable.set(host, this.time.now());
       this.deps.changed();
       const kept = this.lentClaude.get(profile.id);
-      if (kept && kept.expiresAt - this.time.now() >= KEEP_LENT_MS) {
+      if (kept && kept.token !== rejected && kept.expiresAt - this.time.now() >= KEEP_LENT_MS) {
         log.warn("share", "the host did not lend a new token; the one lent before is used", { profile: profile.id, error: (e as Error).message });
         return kept;
       }
