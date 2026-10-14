@@ -37,7 +37,8 @@ export function publishDraft(s: Store, a: { thread: number; upto: number | null;
   const entries = messages.map((m) => {
     const hidden = redact(m.text, mark);
     if (hidden.count > 0) redacted.push({ n: m.n, count: hidden.count });
-    const author = m.authorKind === "person" ? personName(m.author, a.names, s.names) : (names(m.authorKind, m.author) ?? m.author);
+    // A person of a Slack thread goes by their Slack name (their id when none is known), as the chat shows them.
+    const author = m.authorKind === "person" && m.author.includes("@") ? personName(m.author, a.names, s.names) : (names(m.authorKind, m.author) ?? m.author);
     const own = m.attachments.map((f) => {
       const k = `f${files.length}`;
       const file: DraftFile = { k, name: f.name, size: f.size, type: mime(f.name), n: m.n, path: f.path };
