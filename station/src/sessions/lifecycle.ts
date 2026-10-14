@@ -208,12 +208,18 @@ export function archiveChat(hub: Hub, thread: number, archived: boolean): void |
 /// Archives what has idled past autoArchiveMs (counted from its last activity, or from being shown again by hand) and is
 /// done: nothing running or waiting to be heard, no background job or service of its own still up (a watch above all),
 /// not stopped at a block for someone, nothing its chat's starter has not read, and no single-session connect feeding
-/// it. Anything new said brings it back.
-export function autoArchive(hub: Hub, now: number) {
+/// it. Anything new said brings it back. Returns when the next one not idle long enough yet will have (null: none, or
+/// auto-archiving off): what is idle but not done by now is not on a clock, so it is looked at again after a while.
+export function autoArchive(hub: Hub, now: number): number | null {
   const { store } = hub;
   const after = hub.config().autoArchiveMs;
-  if (after <= 0) return;
-  const idle = (at: (number | null | undefined)[]) => now - Math.max(0, ...at.filter((x): x is number => typeof x === "number")) >= after;
+  if (after <= 0) return null;
+  let next: number | null = null;
+  const idle = (at: (number | null | undefined)[]) => {
+    const due = Math.max(0, ...at.filter((x): x is number => typeof x === "number")) + after;
+    if (due > now && (next === null || due < next)) next = due;
+    return due <= now;
+  };
   const unread = (t: ThreadRow) => t.createdBy !== null && t.surface === STILLFAIL_SURFACE && store.unreadCount(t.createdBy, t.id) > 0;
   const bound = store.listBindings();
   const stats = store.sessionStats(null);
@@ -241,6 +247,7 @@ export function autoArchive(hub: Hub, now: number) {
     log.info("hub", "archiving an idle chat", { thread: t.id });
     store.setThreadHidden(t.id, true, AUTO);
   }
+  return next;
 }
 
 /// Deletes a session: its process ends, its rows go (with the threads only it was in) and its workspace directory and

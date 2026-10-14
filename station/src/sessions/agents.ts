@@ -447,14 +447,18 @@ export const AgentsLive = (control: Control) =>
         time.every(3_600_000, tellingFixed);
       }
 
-      // Chats idle long enough go to the archive: looked at every hour.
-      time.every(3_600_000, () => {
+      // Chats idle long enough go to the archive: looked at when the next one comes due, and every ten minutes for what
+      // was idle but not done (a job up, unread, at a block) and is done since, or the setting changed.
+      const archiving = () => {
+        let next: number | null = null;
         try {
-          autoArchive(hub, hub.now());
+          next = autoArchive(hub, hub.now());
         } catch (error) {
           log.warn("hub", "auto-archiving failed", { error: (error as Error).message });
         }
-      });
+        time.after(Math.min(600_000, next === null ? Infinity : next - hub.now()), archiving);
+      };
+      time.after(60_000, archiving);
 
       // The archive review turned on, or given another model: the done chats no decision has answered are reviewed then,
       // not only the ones that end all_done from now on; and once after the start (the profiles' checks read by then).
