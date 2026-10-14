@@ -14,6 +14,8 @@ export const rail = style({
   // Its last place's ground (30 in 38) as far from its foot as from its sides: 13.
   display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "0 0 9px", flex: "none", width: 56,
   WebkitUserSelect: "none", userSelect: "none",
+  // A window too short for every place: they scroll (its bar floating, scrollbars.ts), not squashed.
+  overflowY: "auto", scrollbarWidth: "none",
   // In the closed bar (shell.css.ts dock), as narrow as it, at the same pace.
   transition: `width 380ms ${vars.easeOut}, padding 380ms ${vars.easeOut}`,
   // In the closed bar (42 wide) its places' ground 6 px from its every edge (4 of it within the place), the bar's
@@ -21,6 +23,8 @@ export const rail = style({
   selectors: { '[data-sidebar="closed"] &': { width: 42, paddingTop: 2, paddingBottom: 2 } },
   "@media": { [narrow]: { display: "none" }, "(prefers-reduced-motion: reduce)": { transition: "none" } },
 });
+// Each place its own 38 (its ground 30 square), however short the window; a place's slot is display: contents.
+globalStyle(`${rail} > *, ${rail} > [data-rail-item] > *`, { flexShrink: 0 });
 /**
  * Level with the sidebar's top row (empty: its brand is gone beside the rail). In the desktop app the row drags the
  * window; on macOS its buttons are in it (main.ts puts them 16 px in, reaching past the rail). In the closed bar (shell.css.ts
