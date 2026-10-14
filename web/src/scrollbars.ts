@@ -73,28 +73,38 @@ export function startScrollbars(): void {
   if (!window.matchMedia("(pointer: fine)").matches) return;
   document.documentElement.dataset.floatingScrollbars = "";
 
-  const thumbs = { y: make("y"), x: make("x") };
-  let active: Element | null = null;
+  /** One pane's pair of thumbs. Two at most are out: the pane under the pointer keeps its own while another pane
+   * scrolls by itself (a chat opened from the sidebar going to its foot), rather than giving it up to that one and
+   * coming back a moment later. */
+  type Bar = { thumbs: Record<Axis, HTMLDivElement>; el: Element | null; resize: ResizeObserver; timer?: ReturnType<typeof setTimeout> };
   /** The pane under the pointer: its bar stays while the pointer does. */
   let hover: Element | null = null;
-  let dragging: Axis | null = null;
-  let hideTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Where the pointer was last seen over the page: the pane under it is found again when the one it was over is
+   * taken out of the page (another chat opened in its place) without the pointer moving. */
+  let pointer: { x: number; y: number } | null = null;
+  let dragging: { bar: Bar; axis: Axis } | null = null;
   let frame = 0;
-  const resize = new ResizeObserver(() => schedule());
+  const under = bar();
+  const moving = bar();
 
-  function make(axis: Axis): HTMLDivElement {
+  function bar(): Bar {
+    const b: Bar = { thumbs: { y: make(() => b, "y"), x: make(() => b, "x") }, el: null, resize: new ResizeObserver(() => schedule()) };
+    return b;
+  }
+
+  function make(of: () => Bar, axis: Axis): HTMLDivElement {
     const el = document.createElement("div");
     el.className = css.floatingThumb;
     el.dataset.axis = axis;
-    el.addEventListener("pointerdown", (e) => drag(axis, e));
+    el.addEventListener("pointerdown", (e) => drag(of(), axis, e));
     return el;
   }
 
-  function show(el: Element | null) {
-    if (el !== active) {
-      if (active) resize.unobserve(active);
-      active = el;
-      if (el) resize.observe(el);
+  function show(b: Bar, el: Element | null) {
+    if (el !== b.el) {
+      if (b.el) b.resize.unobserve(b.el);
+      b.el = el;
+      if (el) b.resize.observe(el);
     }
     schedule();
   }
@@ -118,15 +128,28 @@ export function startScrollbars(): void {
     if (!frame) frame = requestAnimationFrame(() => { frame = 0; draw(); });
   }
 
-  function linger() {
-    clearTimeout(hideTimer);
-    hideTimer = setTimeout(() => { if (!dragging) show(hover); }, HIDE_AFTER);
+  /** The bar of a pane scrolled away from the pointer goes HIDE_AFTER its last move; the pointer's, once it has left. */
+  function linger(b: Bar) {
+    clearTimeout(b.timer);
+    b.timer = setTimeout(() => { if (dragging?.bar !== b) show(b, b === under ? hover : null); }, HIDE_AFTER);
   }
 
   function draw() {
-    const el = active;
+    if (hover && !hover.isConnected) {
+      hover = pointer ? scrollerOf(document.elementFromPoint(pointer.x, pointer.y)) : null;
+      if (hover === moving.el) moving.el = null;
+      if (under.el) under.resize.unobserve(under.el);
+      under.el = hover;
+      if (hover) under.resize.observe(hover);
+    }
+    drawBar(under);
+    drawBar(moving);
+  }
+
+  function drawBar(b: Bar) {
+    const el = b.el;
     for (const axis of ["y", "x"] as const) {
-      const thumb = thumbs[axis];
+      const thumb = b.thumbs[axis];
       const size = axis === "y" ? el?.clientHeight ?? 0 : el?.clientWidth ?? 0;
       const content = axis === "y" ? el?.scrollHeight ?? 0 : el?.scrollWidth ?? 0;
       if (!el || !el.isConnected || content <= size + 1) { delete thumb.dataset.on; continue; }
@@ -150,13 +173,13 @@ export function startScrollbars(): void {
     }
   }
 
-  function drag(axis: Axis, e: PointerEvent) {
-    const el = active;
+  function drag(b: Bar, axis: Axis, e: PointerEvent) {
+    const el = b.el;
     if (!el || e.button !== 0) return;
     e.preventDefault();
-    const thumb = thumbs[axis];
+    const thumb = b.thumbs[axis];
     thumb.setPointerCapture(e.pointerId);
-    dragging = axis;
+    dragging = { bar: b, axis };
     thumb.dataset.drag = "";
     const from = axis === "y" ? e.clientY : e.clientX;
     const start = axis === "y" ? el.scrollTop : el.scrollLeft;
@@ -174,7 +197,7 @@ export function startScrollbars(): void {
       thumb.removeEventListener("pointermove", move);
       thumb.removeEventListener("pointerup", end);
       thumb.removeEventListener("pointercancel", end);
-      linger();
+      linger(b);
     };
     thumb.addEventListener("pointermove", move);
     thumb.addEventListener("pointerup", end);
@@ -188,6 +211,7 @@ export function startScrollbars(): void {
   let reading = 0;
   document.addEventListener("pointerover", (e) => {
     if (dragging || e.pointerType !== "mouse") return;
+    pointer = { x: e.clientX, y: e.clientY };
     if (e.target instanceof HTMLElement && e.target.classList.contains(css.floatingThumb)) return;
     over = e.target;
     if (reading) return;
@@ -195,16 +219,22 @@ export function startScrollbars(): void {
       reading = 0;
       if (dragging) return;
       hover = scrollerOf(over);
-      if (hover) { clearTimeout(hideTimer); show(hover); } else linger();
+      if (!hover) { linger(under); return; }
+      clearTimeout(under.timer);
+      // The pane come under the pointer had its bar out as it scrolled: one bar for it, the pointer's.
+      if (moving.el === hover) { clearTimeout(moving.timer); show(moving, null); }
+      show(under, hover);
     }));
   }, { passive: true });
-  document.documentElement.addEventListener("pointerleave", () => { hover = null; linger(); });
-  // Whatever scrolls (a wheel over a pane, a chat following new messages) shows its bar for a moment.
+  document.documentElement.addEventListener("pointerleave", () => { hover = null; pointer = null; linger(under); });
+  // Whatever scrolls (a wheel over a pane, a chat following new messages) shows its bar for a moment; the pane under
+  // the pointer keeps its own meanwhile.
   document.addEventListener("scroll", (e) => {
     if (dragging) { schedule(); return; }
     const el = e.target instanceof Element ? e.target : document.scrollingElement;
-    show(el);
-    if (el !== hover) linger();
+    if (el && el === under.el) { schedule(); if (el !== hover) linger(under); return; }
+    show(moving, el);
+    linger(moving);
   }, { capture: true, passive: true });
   window.addEventListener("resize", schedule);
 }
