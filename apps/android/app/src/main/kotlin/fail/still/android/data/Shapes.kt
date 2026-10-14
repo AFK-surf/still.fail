@@ -1602,9 +1602,35 @@ data class Me (
 	val email: String? = null
 )
 
+/// Long words pasted into a composer, kept as a file: how they are named there, and how many characters they are.
+@Serializable
+data class PastedInfo (
+	val preview: String,
+	val characters: Long,
+	/// The words pasted, while they can still be put back into the text.
+	val text: String? = null
+)
+
+/// A file in what is being written: going up, up, or failed.
+@Serializable
+data class ComposerFile (
+	/// The page's id for it (`composer.add`).
+	val id: String,
+	val name: String,
+	val size: Long,
+	/// How much of it the station has, while it goes up.
+	val sent: Long? = null,
+	/// Up: as the station keeps it (in no chat until a message takes it).
+	val done: Attachment? = null,
+	val error: String? = null,
+	val pasted: PastedInfo? = null
+)
+
 /// A message sent from here that the chat does not show yet (sending | failed); `seq` once the station has it.
 @Serializable
 data class Outgoing (
+	/// Attachments still uploading in the background before delivery.
+	val uploads: List<ComposerFile>? = null,
 	val id: String,
 	val text: String,
 	val attachments: List<Attachment>,
@@ -1796,30 +1822,6 @@ data class ChatsView (
 	val note: ListNote? = null
 )
 
-/// Long words pasted into a composer, kept as a file: how they are named there, and how many characters they are.
-@Serializable
-data class PastedInfo (
-	val preview: String,
-	val characters: Long,
-	/// The words pasted, while they can still be put back into the text.
-	val text: String? = null
-)
-
-/// A file in what is being written: going up, up, or failed.
-@Serializable
-data class ComposerFile (
-	/// The page's id for it (`composer.add`).
-	val id: String,
-	val name: String,
-	val size: Long,
-	/// How much of it the station has, while it goes up.
-	val sent: Long? = null,
-	/// Up: as the station keeps it (in no chat until a message takes it).
-	val done: Attachment? = null,
-	val error: String? = null,
-	val pasted: PastedInfo? = null
-)
-
 /// A passage quoted in what is being written, with what is said about it.
 @Serializable
 data class ComposerQuote (
@@ -1844,7 +1846,7 @@ data class ComposerView (
 	/// The quote just added: its comment takes the focus (`composer.focused` once it has).
 	val focus: String? = null,
 	val files: List<ComposerFile>,
-	/// A file still going up: nothing can be sent until it is there.
+	/// A file still going up; sending queues the message until it is there.
 	val uploading: Boolean,
 	/// Something to send, and nothing holding it: words, a file that is up, or a quote.
 	val ready: Boolean,

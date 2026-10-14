@@ -404,6 +404,17 @@ export class Local {
     return id;
   }
 
+  /// A queued message cannot be acknowledged by equal text until its own POST has started.
+  outboxDelivering(station: string, thread: number, id: string): void {
+    this.#outboxPut(station, thread, this.outbox(station, thread).map((m) => m.id === id ? { ...m, queued: false } : m));
+  }
+
+  /// Persist resolved attachments before delivery, so a retry/restart never needs their source Blobs again.
+  outboxUploaded(station: string, thread: number, id: string, files: J[]): void {
+    this.#outboxPut(station, thread, this.outbox(station, thread).map((m) => m.id === id ? { ...m, attachments: [...(m.attachments ?? []), ...files], uploads: [] } : m));
+    this.onChange({ kind: "outbox", station, thread });
+  }
+
   outboxGet(station: string, thread: number, id: string): J | undefined {
     return this.outbox(station, thread).find((m) => m.id === id);
   }

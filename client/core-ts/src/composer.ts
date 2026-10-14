@@ -7,7 +7,7 @@
 // The words are typed in the page, which has them at once: what it sends (`composer.text`) comes back in the topic's
 // `text` without the page taking it again; the core's own words for it (read back, taken to send, put back, carried
 // on) come with a new `rev`, which the page shows.
-import { Effect } from "effect";
+import { Deferred, Effect } from "effect";
 import type { Inner } from "./core.ts";
 import type { Call } from "./core/calls.ts";
 import { handlers } from "./core/execute.ts";
@@ -58,6 +58,7 @@ const empty = (): State => ({ text: "", rev: 0, quotes: [], focus: null, files: 
 export class Composers {
   #inner: Inner;
   #all = new Map<string, State>();
+  #uploads = new Map<string, { station: string; file: FileIn | null; done: Deferred.Deferred<J, CoreError>; error: boolean }>();
 
   constructor(inner: Inner) {
     this.#inner = inner;
@@ -67,7 +68,7 @@ export class Composers {
   value(key: string): unknown {
     const s = this.#state(key);
     const uploading = s.files.some((f) => !f.done && !f.error);
-    const ready = (s.text.trim() !== "" || s.files.some((f) => f.done) || s.quotes.length > 0) && !uploading && !s.starting && !s.files.some((f) => f.pasted && f.error);
+    const ready = (s.text.trim() !== "" || s.files.some((f) => !f.error) || s.quotes.length > 0) && !s.starting && !s.files.some((f) => f.pasted && f.error);
     return {
       text: s.text, rev: s.rev, quotes: s.quotes, ...(s.focus !== null ? { focus: s.focus } : {}),
       // Nothing said for what is not (yet): a file not up has no `done`, one not failed no `error`.
@@ -187,6 +188,7 @@ export class Composers {
   remove(key: string, id: string): number {
     const s = this.#state(key);
     s.files = s.files.filter((f) => f.id !== id);
+    this.#uploads.delete(id);
     return this.#changed(key, s);
   }
 
@@ -194,9 +196,12 @@ export class Composers {
   /// is in by then said as it goes.
   #upload(key: string, station: string, f: FileIn): void {
     const inner = this.#inner;
+    const upload = { station, file: f as FileIn | null, done: Deferred.makeUnsafe<J, CoreError>(), error: false };
+    this.#uploads.set(f.id, upload);
     const id = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
     const change = (patch: Partial<ComposerFile>) => {
       for (const [k, s] of this.#all) {
+        if (s.taken?.files.some((x) => x.id === f.id)) s.taken.files = s.taken.files.map((x) => x.id === f.id ? { ...x, ...patch } : x);
         if (!s.files.some((x) => x.id === f.id)) continue;
         s.files = s.files.map((x) => (x.id === f.id ? { ...x, ...patch } : x));
         this.#changed(k, s);
@@ -224,12 +229,34 @@ export class Composers {
     inner.runner.fork(
       run.pipe(
         Effect.match({
-          onSuccess: (done) => change({ done }),
-          onFailure: (e) => change({ error: e.message || t("core-misc.composer.upload_failed") }),
+          onSuccess: (done) => { upload.file = null; change({ done }); Deferred.doneUnsafe(upload.done, Effect.succeed(done)); },
+          onFailure: (e) => {
+            upload.error = true;
+            change({ error: e.message || t("core-misc.composer.upload_failed") });
+            Deferred.doneUnsafe(upload.done, Effect.fail(e));
+          },
         }),
       ),
     );
     void key;
+  }
+
+  /// Outgoing messages hold file ids, independently of the composer or the page that submitted them.
+  /// After a core restart the source Blob is gone: fail visibly rather than sending an incomplete message.
+  uploaded(station: string, files: { id: string; name: string }[], retry = false): Effect.Effect<J[], CoreError> {
+    return Effect.forEach(files, (f) => Effect.suspend(() => {
+      let upload = this.#uploads.get(f.id);
+      if (!upload || upload.station !== station) return Effect.fail(new CoreError("upload", t("core-misc.composer.upload_missing", { name: f.name })));
+      if (retry && upload.error && upload.file) {
+        this.#upload("", station, upload.file);
+        upload = this.#uploads.get(f.id)!;
+      }
+      return Deferred.await(upload.done);
+    }));
+  }
+
+  release(files: { id: string }[]): void {
+    for (const f of files) this.#uploads.delete(f.id);
   }
 
   /// What is written, taken to be sent (the words trimmed), the composer left empty; `restore` puts it back.

@@ -39,7 +39,7 @@ export interface Draft {
   /** Quotes a passage; its comment line then asks for the focus (`focusQuote`, until `quoteFocused`). */
   quote(q: Omit<Quote, "comment">): void;
   focusQuote: string | null; quoteFocused(): void;
-  /** A file still going up: nothing can be sent until it is there. */
+  /** A file still going up; sending queues the message until it is there. */
   uploading: boolean;
   /** Something to send, and nothing holding it: text, a file that is up, or a quote. */
   ready: boolean;
@@ -244,7 +244,7 @@ export function useDraft({ key: given, station, carry }: {
   const files: Pending[] = shown.files.map((f) => ({ ...f, done: (f.done ?? null) as Attachment | null, error: f.error ?? null, ...(f.sent != null ? { sent: f.sent } : {}), ...(f.pasted ? { pasted: f.pasted as PastedInfo } : {}), ...local.get(f.id) }));
   const quotes = shown.quotes;
   const uploading = files.some((f) => !f.done && !f.error);
-  const ready = (Boolean(text.trim()) || files.some((f) => f.done) || quotes.length > 0) && !uploading && !shown.starting && !files.some((f) => f.pasted && f.error);
+  const ready = (Boolean(text.trim()) || files.some((f) => !f.error) || quotes.length > 0) && !shown.starting && !files.some((f) => f.pasted && f.error);
 
   const back = useRef<{ text: string; shown: Shown } | null>(null);
   const take = () => {
@@ -289,7 +289,7 @@ export function useDraft({ key: given, station, carry }: {
     };
     const at = performance.now();
     const counts = { attachments: attachments.length, quotes: sent.length, first };
-    chat.send(to, value, attachments, sent).then(
+    chat.send(to, value, attachments, sent, sentFiles.filter((f) => !f.done && !f.error).map(({ id, name, size }) => ({ id, name, size }))).then(
       () => { drop(); track("message_sent", { ...counts, ok: true, ms: Math.round(performance.now() - at) }); },
       (failure: unknown) => {
         track("message_sent", { ...counts, ok: false });

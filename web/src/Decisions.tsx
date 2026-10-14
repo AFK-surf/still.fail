@@ -100,6 +100,7 @@ export function DecisionReply({ station, thread, seq, session, mobile, placehold
     const reply = call("decision.reply", {
       station, thread, seq, text: taken.text,
       attachments: taken.files.flatMap((f) => f.done ? [f.done] : []),
+      uploads: taken.files.filter((f) => !f.done && !f.error).map(({ id, name, size }) => ({ id, name, size })),
       quotes: taken.quotes.map(({ id: _, ...q }) => q),
     });
     // Not taken by the core (the card no longer waits, the station gone): back in the field, if nothing was written since.

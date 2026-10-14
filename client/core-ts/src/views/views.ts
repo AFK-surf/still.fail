@@ -1181,6 +1181,8 @@ export class Views implements Owner {
     const list = this.local.outbox(station, id).map((m) => ({ ...m }));
     const kept: J[] = [];
     for (const m of list) {
+      // Queued messages have not reached the station; equal text cannot acknowledge them.
+      if (m.queued || m.uploads?.length) { kept.push(m); continue; }
       const seq = u64(m.seq);
       if (seq !== null) {
         past = Math.max(past, seq);
