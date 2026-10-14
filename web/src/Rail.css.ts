@@ -99,10 +99,10 @@ export const remove = style({
   position: "absolute", top: -5, left: -5, display: "grid", placeItems: "center", width: 18, height: 18, padding: 0, border: 0,
   borderRadius: "50%", background: vars.text, color: vars.sidebar, cursor: "pointer", boxShadow: `0 0 0 2px ${vars.sidebar}`,
 });
-/** The panel beside the rail of what can be added (ui.tsx Panel* parts), with more room than a menu. */
+/** The panel beside the rail of what can be added (ui.tsx Panel* parts), no button: pressing elsewhere ends it. */
 export const adder = style({
   width: 248, display: "grid", gap: 8,
-  // More room than a menu, and 完成 (a pill 36 high) in its corner: over the popover's own, whichever sheet comes first.
-  selectors: { "&[data-side]": { vars: { "--panel-pad": "12px", "--panel-in": "18px" } } },
+  // More room than a menu: over the popover's own, whichever sheet comes first; its rows concentric with it.
+  selectors: { "&[data-side]": { vars: { "--panel-pad": "12px", "--panel-in": `calc(${vars.rMenu} - 12px)` } } },
 });
 export const zouSmall = style({ fontSize: vars.textBody, lineHeight: "18px", fontWeight: 600 });

@@ -13,7 +13,7 @@ import { useRef, useState, useSyncExternalStore, type ComponentType, type Pointe
 import { ContextMenu, Popover } from "radix-ui";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { Archive, Bell, Chart, Chats, Folder, Im, Minus, PanelClose, Plus, PanelOpen, Quota, Settings, User, Watch, type IconProps } from "./icons.tsx";
-import { Button, PanelFoot, PanelGroup, PanelHead, PanelNote, PanelRow, Tip } from "./ui.tsx";
+import { PanelGroup, PanelHead, PanelNote, PanelRow, Tip } from "./ui.tsx";
 import { lastChatOf, useLastChat, useWorkspaceMarks } from "./lastChat.ts";
 import { useSidebarMode, type SidebarMode } from "./station.tsx";
 import { AttentionEntry } from "./Attention.tsx";
@@ -221,11 +221,13 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
               <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => keep(items.filter((i) => i !== pointed))}>{t("web-main.rail.remove", { name: railLabel(pointed) })}</ContextMenu.Item>
             )}
             <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => editRail(true)}>{t("web-main.rail.customize")}</ContextMenu.Item>
+            {kept && <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => setPrefs({ rail: null })}>{t("web-main.rail.reset")}</ContextMenu.Item>}
           </ContextMenu.Content>
         </ContextMenu.Portal>
       </ContextMenu.Root>
       <Popover.Portal>
-        {/* Beside the rail while it is changed: what can be added, by kind; pressing in the rail does not close it. */}
+        {/* Beside the rail while it is changed: what can be added, by kind. Pressing in the rail does not close it; anywhere
+            else (or Esc) ends the change, there is no button for it. 恢复默认 is in the rail's menu. */}
         <Popover.Content className={`${controlsCss.popover} ${css.adder}`} side="right" align="start" sideOffset={8} collisionPadding={8}
           onOpenAutoFocus={(e) => e.preventDefault()}
           onInteractOutside={(e) => { if ((e.target as HTMLElement | null)?.closest(`.${css.rail}`)) e.preventDefault(); }}>
@@ -240,10 +242,6 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
               })}
             </PanelGroup>
           ))}
-          <PanelFoot>
-            {kept && <Button variant="ghost" onClick={() => setPrefs({ rail: null })}>{t("web-main.rail.reset")}</Button>}
-            <Button variant="primary" onClick={() => editRail(false)}>{t("web-main.rail.done")}</Button>
-          </PanelFoot>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
