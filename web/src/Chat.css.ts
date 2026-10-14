@@ -672,7 +672,19 @@ export const pasteSnippetOpen = style({ textAlign: "left", padding: 0, border: 0
 export const pasteSnippetTitle = style({ padding: 0, border: 0, background: "transparent", textAlign: "left", cursor: "pointer", width: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 });
 export const pasteSnippetHint = style({ color: vars.subtle, fontSize: vars.textMeta });
 export const pasteSnippetRemove = style({ flexShrink: 0, padding: "10px", border: 0, background: "transparent", color: vars.subtle, cursor: "pointer" });
-/** Inside the composer, files follow its curve as its quotes do: inner radius = the frame's radius less its padding. */
+/**
+ * Inside the composer, files follow its curve as its quotes do: inner radius = the frame's radius less its padding.
+ * Cards are as tall as an image's thumbnail beside them.
+ */
 globalStyle(`${composerFiles} :is(${composerThumb}, ${fileCard}, ${pasteSnippet})`, {
   borderRadius: `calc(32px * ${vars.cornerScale} - 12px)`, cornerShape: vars.cornerShape,
 });
+globalStyle(`${composerFiles} :is(${fileCard}, ${pasteSnippet})`, { boxSizing: "border-box", height: "64px", alignItems: "center" });
+globalStyle(`${composerFiles} ${fileCard}`, { padding: "0 14px" });
+/** Its name on one line, what it is and its buttons on the next: two lines, as a file's card has. */
+globalStyle(`${composerFiles} ${pasteSnippetBody}`, {
+  flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", columnGap: "8px", rowGap: "0", padding: "0 0 0 14px",
+});
+globalStyle(`${composerFiles} ${pasteSnippetTitle}`, { flexBasis: "100%", fontSize: vars.textUi, lineHeight: "20px" });
+globalStyle(`${composerFiles} :is(${pasteSnippetHint}, ${pasteSnippetOpen})`, { fontSize: vars.textCaption, lineHeight: "16px" });
+globalStyle(`${composerFiles} ${pasteSnippetRemove}`, { padding: "0", width: "22px", height: "22px", marginRight: "14px", display: "grid", placeItems: "center" });
