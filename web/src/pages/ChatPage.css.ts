@@ -82,7 +82,7 @@ export const sideTabText = style({
     },
   },
 });
-export const chatInfo = style({ width: "320px", padding: "12px 14px" });
+export const chatInfo = style({ width: "320px", vars: { "--panel-pad": "12px", "--panel-in": `calc(${vars.rMenu} - 12px)` } });
 export const detailsList = style({
   selectors: {
     [`${chatInfo} &`]: { marginTop: "10px" },

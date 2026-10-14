@@ -93,7 +93,7 @@ export const popover = style({
 export const menuList = style({ minWidth: "180px" });
 export const menuItem = style({
   display: "flex", alignItems: "center", gap: "8px", width: "100%", minHeight: "34px", padding: "7px 10px", lineHeight: "20px",
-  border: "0", borderRadius: vars.rOption, background: "none", textAlign: "left", fontSize: vars.textUi,
+  border: "0", borderRadius: "var(--panel-in)", background: "none", textAlign: "left", fontSize: vars.textUi,
   cursor: "pointer", outline: "none", userSelect: "none", cornerShape: vars.cornerShape,
   selectors: {
     "&[data-highlighted]": { background: vars.hover },

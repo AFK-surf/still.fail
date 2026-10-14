@@ -20,9 +20,9 @@ export const panel = style({
   overflowY: "auto", display: "flex", flexDirection: "column", gap: "2px",
 });
 export const group = style({ display: "flex", flexDirection: "column", gap: "1px", selectors: { "& + &": { marginTop: "6px" } } });
-export const groupName = style({ padding: "4px 8px 2px", fontSize: vars.textMeta, color: vars.muted });
+export const groupName = style({ padding: "4px 10px 2px", fontSize: vars.textMeta, color: vars.muted });
 export const item = style({
-  display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "6px 8px", borderRadius: vars.rOption,
+  display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "6px 10px", borderRadius: "var(--panel-in)",
   color: vars.text, cursor: "pointer", outline: "none", cornerShape: vars.cornerShape,
   selectors: { "&:hover, &:focus-visible": { background: vars.hover } },
 });
@@ -44,6 +44,6 @@ export const dismiss = style({
   selectors: { "&:hover": { color: vars.text, background: vars.hover } },
 });
 globalStyle(`${item}:hover ${dismiss}, ${item}:focus-visible ${dismiss}, ${dismiss}:focus-visible`, { visibility: "visible" });
-export const foot = style({ display: "flex", gap: "12px", padding: "8px 8px 4px", marginTop: "4px", borderTop: `1px solid ${vars.line}`, fontSize: vars.textMeta });
+export const foot = style({ display: "flex", gap: "12px", padding: "8px 10px 4px", marginTop: "4px", borderTop: `1px solid ${vars.line}`, fontSize: vars.textMeta });
 export const link = style({ color: vars.muted, textDecoration: "none", selectors: { "&:hover": { color: vars.text } } });
-export const empty = style({ padding: "10px 8px", fontSize: vars.textUi, color: vars.muted });
+export const empty = style({ padding: "10px", fontSize: vars.textUi, color: vars.muted });

@@ -47,7 +47,7 @@ export const sheetTitle = style({ margin: "0 8px 8px", fontSize: vars.textTitle,
 export const panel = style({ display: "flex", flexDirection: "column" });
 export const option = style({
   display: "flex", alignItems: "center", gap: "8px", width: "100%", height: "34px", padding: "0 10px 0 8px",
-  border: "0", borderRadius: vars.rOption, cornerShape: vars.cornerShape, background: "none", color: vars.text,
+  border: "0", borderRadius: `calc(${vars.rMenu} - 6px)`, cornerShape: vars.cornerShape, background: "none", color: vars.text,
   font: "inherit", fontSize: vars.textUi, textAlign: "left", cursor: "pointer", outline: "none",
   selectors: {
     "&:hover, &:focus-visible": { background: vars.hover },

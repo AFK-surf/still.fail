@@ -4,7 +4,7 @@ import { spinner } from "./styles/waiting.css.ts";
 import { emitOutKeyframes, enterUpKeyframes, jobBreatheKeyframes, jobLiveKeyframes, msgFlashKeyframes, msgWaitingInKeyframes } from "./styles/keyframes.css.ts";
 import { msg } from "./styles/conversation.css.ts";
 import { segmented, segmentedOption } from "./ui.css.ts";
-import { detailsList } from "./pages/ChatPage.css.ts";
+import { detailsList, jobsPanel } from "./pages/ChatPage.css.ts";
 import { activityLine, agentActivity, composerThumb, msgFlash, msgWaitingLate } from "./Chat.css.ts";
 import { tokenGuide } from "./pages/SlackApp.css.ts";
 
@@ -233,3 +233,5 @@ globalStyle(`${tokenGuide} li`, {
 /** Here rather than with its class: it comes after [data-enter], and wins over it. */
 globalStyle(msgWaitingLate, { animation: `${msgWaitingInKeyframes} 0s linear 1s both` });
 globalStyle(`${jobSpinner}${spinner}`, { width: "12px", height: "12px", borderWidth: "1.5px" });
+/** In the title bar's popover, the rows and its foot's buttons follow its corner as a menu's do. */
+globalStyle(`${jobsPanel} :is(${jobRow}, ${jobsAll}, ${jobsClear})`, { borderRadius: "var(--panel-in)" });
