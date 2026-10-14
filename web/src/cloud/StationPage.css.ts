@@ -16,10 +16,6 @@ export const rowText = style({ flex: 1, display: "grid", gap: 1, minWidth: 0 });
 export const rowHead = style({ display: "flex", alignItems: "center", gap: 8, minWidth: 0 });
 /** Its meters' boxes, a line of them (wrapping in a narrow sidebar). */
 export const rowMeters = style({ display: "flex", flexWrap: "wrap", gap: 4, margin: "4px 0 2px" });
-// Their edges in their own colour, not the row's muted icons' (Sidebar.css.ts).
-globalStyle(`${rowMeters} svg`, { color: "inherit" });
-// The words of a small box set by Inter's line sit a pixel high (more so its CJK name): measured, a pixel down centres them.
-globalStyle(`${rowMeters} [role="img"] > span`, { top: 1 });
 export const rowSub = style({ ...ellipsis, fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted });
 /** How it is, at the end of its first line: short, and never cut (its name gives way). */
 export const rowState = style({ flex: "none", display: "flex", alignItems: "center", gap: 5, marginLeft: "auto", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "nowrap" });
