@@ -440,7 +440,7 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
         onPointerEnter={(e) => { if (e.pointerType === "mouse") { onBars.current = true; clearTimeout(resting.current); } }}
         onPointerLeave={(e) => { if (e.pointerType === "mouse") { onBars.current = false; wake(); } }}>
         <button type="button" className={css.back} onClick={onBack} aria-label={backLabel}><ChevronLeft size={20} /><span>{backLabel}</span></button>
-        <span className={css.title}><b>{name}</b>{book && <small>{[chapter ?? book.encoding, `${Math.round(share * 100)}%`].join(" · ")}</small>}</span>
+        <span className={css.title}><b>{name}</b>{book && <small>{[chapter, `${Math.round(share * 100)}%`].filter(Boolean).join(" · ")}</small>}</span>
         <span className={css.topEnd}>
           {narrow ? <button type="button" className={css.topButton} aria-label={t("web-pages.drive.reader.find")} data-on={panel === "find" || undefined} onClick={() => open("find")}><Search size={20} /></button> : <>
             <TopTool label={t("web-pages.drive.reader.contents")} on={panel === "contents"} onClick={() => open("contents")}><List size={18} /></TopTool>
