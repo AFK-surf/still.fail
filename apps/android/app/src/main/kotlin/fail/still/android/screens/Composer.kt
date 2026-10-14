@@ -184,15 +184,15 @@ class DraftQuote(val id: Long, val author: String, val text: String, val ts: Str
  */
 class Draft {
     /** The text box's own (it takes what is pasted, files and pictures too: ComposerBar). */
-    val field = TextFieldState()
+    val state = TextFieldState()
     /** Its text and where the cursor is; set, both are replaced. */
     var input: TextFieldValue
-        get() = TextFieldValue(field.text.toString(), field.selection)
-        set(value) { field.edit { replace(0, length, value.text); selection = value.selection } }
+        get() = TextFieldValue(state.text.toString(), state.selection)
+        set(value) { state.edit { replace(0, length, value.text); selection = value.selection } }
     /** The text; set, the cursor goes to its end. */
     var text: String
-        get() = field.text.toString()
-        set(value) { field.setTextAndPlaceCursorAtEnd(value) }
+        get() = state.text.toString()
+        set(value) { state.setTextAndPlaceCursorAtEnd(value) }
     val quotes = mutableStateListOf<DraftQuote>()
     val files = mutableStateListOf<Pending>()
     /** A new chat is being made for the first message. */
@@ -872,7 +872,7 @@ fun ComposerBar(
                 }
             }
             BasicTextField(
-                draft.field, inputTransformation = input, outputTransformation = marks,
+                draft.state, inputTransformation = input, outputTransformation = marks,
                 textStyle = style, readOnly = draft.starting, cursorBrush = SolidColor(C.accent),
                 lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 6), onTextLayout = { result -> result()?.let(onFieldText) },
                 modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { draft.focused = it.isFocused }.onGloballyPositioned(onField)
