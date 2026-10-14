@@ -3,7 +3,7 @@ import { vars } from "./tokens.css.ts";
 import { panel } from "./glass.ts";
 import { popKeyframes } from "./keyframes.css.ts";
 import { inputRow } from "./additions.css.ts";
-import { command, field, skeletonRow } from "../ui.css.ts";
+import { command, dialog, field, select, skeletonRow } from "../ui.css.ts";
 import { newChatStatus } from "../NewChat.css.ts";
 import { signIn } from "../pages/Accounts.css.ts";
 import { stepActions } from "../pages/Connect.css.ts";
@@ -75,6 +75,11 @@ export const input = style({
     [`${inputRow} &`]: { flex: "1" },
   },
 });
+/**
+ * In a dialog, as in a floating panel (design: the station icon panel's field), a field is a light line that only
+ * darkens a step when hovered or written in: the settings pages' near-black focus line reads as a frame there.
+ */
+globalStyle(`${dialog} :is(${input}, ${select}):is(:focus, :focus-visible)`, { borderColor: vars.fieldHover });
 /** A one-line field is a pill, as the buttons beside it are; a textarea keeps --r-field (its lines in a pill would not sit right). */
 globalStyle(`input${input}`, { borderRadius: "999px", paddingLeft: "16px", paddingRight: "16px", cornerShape: "round" });
 export const popover = style({

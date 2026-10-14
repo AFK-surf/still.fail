@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { muted } from "../styles/shell.css.ts";
-import { command, runtimeLogo } from "../ui.css.ts";
+import { DIALOG_INNER, command, dialogBody, runtimeLogo } from "../ui.css.ts";
 import { machineLogins } from "../pages/Accounts.css.ts";
 import { btn } from "../styles/controls.css.ts";
 import { cardLook } from "../styles/pages.css.ts";
@@ -42,6 +42,8 @@ globalStyle(`${enrollSystem} > button`, { whiteSpace: "nowrap", padding: "0 14px
 globalStyle(`${enrollWait} strong`, { fontWeight: "600" });
 globalStyle(`${enrollWait} ${muted}`, { fontSize: vars.textMeta });
 globalStyle(`${enroll} ${command}`, { padding: "8px 8px 8px 16px", boxShadow: `inset 0 0 0 1px ${vars.line}` });
+/** In a dialog the wait's corners are its command's (ui.css.ts DIALOG_INNER): the two boxes one under the other alike. */
+globalStyle(`${dialogBody} ${enrollWait}`, { borderRadius: DIALOG_INNER });
 /** A shell prompt before the command: what to do with it, at a glance. Not copied (the button copies the text). */
 globalStyle(`${enroll} ${command} code::before`, { content: '"$ "', color: vars.muted, userSelect: "none" });
 globalStyle(`${enrollStep}[data-shell="powershell"] ${command} code::before`, { content: '"PS> "' });
