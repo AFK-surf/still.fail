@@ -43,7 +43,7 @@ Google OAuth（`openid email profile`），access token 5 分钟，refresh token
 
 1. admin 在 workspace 里点「添加 station」，得到一条一次性、1 小时有效的登记命令。
 2. 在要当 station 的机器上运行它。station 用自己的 iroh 密钥签名证明持有这把密钥，控制面把这个公钥记入 workspace。
-3. station 保存控制面的签名公钥（Ed25519），之后校验成员凭证不需要在线访问控制面。
+3. station 用控制面在 state 帧里给的签名公钥（Ed25519）校验成员凭证，不需要在线访问控制面。这把公钥、名单、station 属于哪个 workspace 都以 cloud 说的为准；workspace 开了安全模式（锁）后改以锁里签过的为准，见 [workspace-lock.md](workspace-lock.md)。
 
 ## 连接 station 与成员凭证
 
