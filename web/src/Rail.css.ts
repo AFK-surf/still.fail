@@ -171,7 +171,9 @@ export const slot = style({ display: "contents" });
 export const editing = style({
   position: "relative", borderRadius: `calc(12px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, cursor: "grab", touchAction: "none",
   outline: `1.5px dashed ${vars.lineStrong}`, outlineOffset: -1,
-  selectors: { "&[data-dragged]": { cursor: "grabbing", background: vars.selected, outlineStyle: "solid", zIndex: 1 } },
+  // Lifted while dragged (Rail.tsx moves it with the pointer).
+  transition: `box-shadow ${vars.dur} ${vars.easeOut}`,
+  selectors: { "&[data-dragged]": { cursor: "grabbing", background: vars.selected, outlineStyle: "solid", zIndex: 1, boxShadow: `0 6px 16px ${vars.shadow}` } },
 });
 /** What the place draws, not pressed while it is moved. */
 export const still = style({ pointerEvents: "none" });

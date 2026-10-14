@@ -12,7 +12,7 @@
 // one of their lists), the folders the stations lend (FilesNav, cloud/workspace.tsx) or the settings; coming to the
 // last two with it closed opens it. On a narrow screen there is none: the sidebar's foot keeps the switcher and the
 // settings.
-import { useEffect, useRef, useState, useSyncExternalStore, type ComponentType, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ComponentType, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { DropdownMenu, Popover } from "radix-ui";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { Archive, Bell, Chart, Chats, Folder, Im, Minus, Plus, Quota, Retry, Settings, Sliders, User, Watch, type IconProps } from "./icons.tsx";
@@ -29,6 +29,7 @@ import { isPicture } from "./StationMark.tsx";
 import { marked, WorkspaceMark } from "./WorkspaceMark.tsx";
 import { openedAt } from "./DecisionDesk.tsx";
 import { moveSidebar, useSidebarToggle } from "./brand.tsx";
+import { reducedMotion } from "./motion.ts";
 import * as css from "./Rail.css.ts";
 import { t } from "./i18n.ts";
 
@@ -112,8 +113,10 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   const kept = usePrefs((p) => p.rail);
   const items = railItems(kept);
   const changing = useEditing();
-  // Dragged in the rail: the order as it would be let go of now.
-  const [dragged, setDragged] = useState<{ item: RailItem; order: RailItem[] } | null>(null);
+  // Dragged in the rail: the order as it would be let go of now (and, let go of, until the kept order is it: no frame of
+  // the old one between).
+  const [dragged, setDragged] = useState<{ item: RailItem | null; order: RailItem[] } | null>(null);
+  useEffect(() => { if (dragged && !dragged.item && dragged.order.join() === items.join()) setDragged(null); }, [dragged, items]);
   const slots = useRef(new Map<RailItem, HTMLElement>());
   // Right-clicked: the place under the pointer, to take out.
   // Right-clicked: the place under the pointer (to take out) and where the menu stands, by the place (or the rail), not
@@ -121,18 +124,47 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   const [menu, setMenu] = useState<{ item: RailItem | null; box: { left: number; top: number; width: number; height: number } } | null>(null);
   const pointed = menu?.item ?? null;
   const keep = (next: RailItem[]) => setPrefs({ rail: next });
+  // The place dragged under the pointer, lifted; the others moving out of its way (each from where it was drawn to its
+  // new place), and it, let go of, to its own. Its place among them by their places, not where they are drawn moving.
+  const pointerY = useRef(0);
+  const grabbed = useRef(0);
+  const drawnAt = useRef(new Map<RailItem, number>());
+  const follow = (item: RailItem) => {
+    const el = slots.current.get(item);
+    if (el) el.style.transform = `translateY(${pointerY.current - grabbed.current - el.offsetTop}px) scale(1.06)`;
+  };
+  useLayoutEffect(() => {
+    const was = drawnAt.current;
+    const now = new Map<RailItem, number>();
+    for (const [item, el] of slots.current) {
+      now.set(item, el.offsetTop);
+      if (item === dragged?.item) continue;
+      const from = was.get(item);
+      if (from !== undefined && from !== el.offsetTop && !reducedMotion()) {
+        el.animate([{ transform: `translateY(${from - el.offsetTop}px)` }, { transform: "none" }], { duration: 220, easing: "cubic-bezier(.2, .7, .2, 1)" });
+      }
+    }
+    drawnAt.current = now;
+    if (dragged?.item) follow(dragged.item);
+  });
   const drag = (item: RailItem) => (e: ReactPointerEvent) => {
     if (e.button !== 0) return;
     e.preventDefault();
     let order = items;
+    const el = slots.current.get(item);
+    const top = (el?.offsetParent as HTMLElement | null)?.getBoundingClientRect().top ?? 0;
+    pointerY.current = e.clientY - top;
+    grabbed.current = pointerY.current - (el?.offsetTop ?? 0);
     setDragged({ item, order });
     const move = (ev: PointerEvent) => {
+      pointerY.current = ev.clientY - top;
+      follow(item);
       // Where the pointer is among the others' middles.
       const rest = order.filter((i) => i !== item);
       let at = rest.length;
       for (let i = 0; i < rest.length; i++) {
-        const box = slots.current.get(rest[i]!)?.getBoundingClientRect();
-        if (box && ev.clientY < box.top + box.height / 2) { at = i; break; }
+        const other = slots.current.get(rest[i]!);
+        if (other && pointerY.current < other.offsetTop + other.offsetHeight / 2) { at = i; break; }
       }
       const next = [...rest.slice(0, at), item, ...rest.slice(at)];
       if (next.join() !== order.join()) { order = next; setDragged({ item, order }); }
@@ -140,8 +172,13 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
-      setDragged(null);
-      if (order.join() !== items.join()) keep(order);
+      const held = slots.current.get(item);
+      if (held) {
+        const from = held.style.transform;
+        held.style.transform = "";
+        if (from && !reducedMotion()) held.animate([{ transform: from }, { transform: "none" }], { duration: 200, easing: "cubic-bezier(.2, .7, .2, 1)" });
+      }
+      if (order.join() !== items.join()) { setDragged({ item: null, order }); keep(order); } else setDragged(null);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
