@@ -617,7 +617,9 @@ class Lock {
   joinStation(station: string): Effect.Effect<unknown, CoreError> {
     const self = this;
     return Effect.gen(function* () {
-      const s = arr(get(view(self.#inner, self.ws), "stations")).find((x) => x.id === station);
+      // The workspace as the cloud has it now: the station may have come back to it a moment ago.
+      const now = yield* self.#cloud("GET", "");
+      const s = arr(get(now, "stations")).find((x) => x.id === station);
       if (!s) return yield* Effect.fail(CoreError.invalid("not a station of this workspace"));
       const asked = yield* Effect.result(self.#station(station, "GET", "/lock"));
       if (asked._tag === "Failure") {
