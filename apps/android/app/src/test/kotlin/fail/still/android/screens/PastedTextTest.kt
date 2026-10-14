@@ -16,7 +16,7 @@ class PastedTextTest {
 
     @Test fun itGoesAsAUtf8TextFile() {
         val picked = pastedPicked(PastedText("会".repeat(3)))
-        assertTrue(Regex("pasted-text-[0-9a-f-]{36}\.txt").matches(picked.name))
+        assertTrue(Regex("pasted-text-[0-9a-f-]{36}[.]txt").matches(picked.name))
         assertEquals(9L, picked.size)
         assertNull(picked.preview)
     }
