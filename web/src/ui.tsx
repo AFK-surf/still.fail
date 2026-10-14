@@ -572,9 +572,10 @@ export function keptWidth(variable: string, min: number, max: number): number | 
 }
 
 /**
- * A column's edge: a hairline fading toward both ends, shown while the pointer is on it or it is dragged (that one alone,
- * not every edge of the page), with a tip that follows the pointer along it. Dragged, the column takes the width;
- * double-clicked, its own width again.
+ * A column's edge, as the sidebar's (Rail.tsx SidebarEdge, Cue's rail handle): a short bar at its middle, shown as the
+ * pointer is over the column and longer on the edge, and a hairline fading toward both ends on hover or while dragged
+ * (that edge alone, not every edge of the page), with a tip that follows the pointer along it. Dragged, the column takes
+ * the width; pressed without moving, `press` (a panel closing); else double-clicked, its own width again.
  */
 /** Sets a column's width (null: its own again) and keeps it on this device, as keptWidth reads it. */
 export function setKeptWidth(variable: string, px: number | null): void {
@@ -588,25 +589,33 @@ export function setKeptWidth(variable: string, px: number | null): void {
   }
 }
 
-export function ResizeHandle({ variable, edge, min, max, label }: { variable: string; edge: "left" | "right"; min: number; max: number; label: string }) {
+export function ResizeHandle({ variable, edge, min, max, label, press }: {
+  variable: string; edge: "left" | "right"; min: number; max: number; label: string;
+  /** What a press without moving does (a panel closing), said after the label. */
+  press?: { label: string; run(): void };
+}) {
   const set = (px: number | null) => setKeptWidth(variable, px);
   // Each time its column comes (a chat's side panel opening).
   useEffect(() => { keptWidth(variable, min, max); }, [variable, min, max]);
   const tip = usePointerTip();
   const [dragging, setDragging] = useState(false);
+  const words = press ? `${label} · ${press.label}` : label;
   return (
     <>
-      <div className={css.resizeHandle} data-edge={edge} data-active={dragging || undefined} role="separator" aria-orientation="vertical" aria-label={label}
+      <div className={css.resizeHandle} data-edge={edge} data-active={dragging || undefined} role="separator" aria-orientation="vertical" aria-label={words}
         {...tip.on}
-        onDoubleClick={() => set(null)}
+        onDoubleClick={() => { if (!press) set(null); }}
         onPointerDown={(e) => {
+          if (e.button !== 0) return;
           tip.hide();
           const column = e.currentTarget.parentElement!.getBoundingClientRect();
           const handle = e.currentTarget;
+          const from = e.clientX;
+          let moved = false;
           handle.setPointerCapture(e.pointerId);
-          setDragging(true);
-          document.body.dataset.resizing = "true";
           const move = (ev: PointerEvent) => {
+            if (!moved && Math.abs(ev.clientX - from) < 3) return;
+            if (!moved) { moved = true; setDragging(true); document.body.dataset.resizing = "true"; }
             const width = edge === "right" ? ev.clientX - column.left : column.right - ev.clientX;
             set(Math.round(Math.min(max, Math.max(min, width))));
           };
@@ -615,12 +624,13 @@ export function ResizeHandle({ variable, edge, min, max, label }: { variable: st
             handle.removeEventListener("pointerup", up);
             delete document.body.dataset.resizing;
             setDragging(false);
+            if (!moved) press?.run();
           };
           handle.addEventListener("pointermove", move);
           handle.addEventListener("pointerup", up);
           e.preventDefault();
         }} />
-      {!dragging && tip.draw(label, edge === "right" ? "right" : "left")}
+      {!dragging && tip.draw(words, edge === "right" ? "right" : "left")}
     </>
   );
 }

@@ -424,7 +424,8 @@ function ChatScreen({ session: chatSession }: { session: string }) {
       </div>
         {side && (
           <Tabs.Root ref={panelRef} className={css.sidePanel} data-over-composer value={side.shown} onValueChange={setActive} inert={side === leaving}>
-            <ResizeHandle variable="--panel-w" edge="left" min={PANEL_MIN} max={PANEL_MAX} label={t("web-pages.chat.resizePanel")} />
+            <ResizeHandle variable="--panel-w" edge="left" min={PANEL_MIN} max={PANEL_MAX} label={t("web-pages.chat.resizePanel")}
+              press={{ label: t("web-pages.chat.closePanel"), run: () => saveTabs([]) }} />
             <div className={css.sideBar}>
               <Tabs.List className={css.sideTabList} aria-label={t("web-pages.chat.history")}>
                 {side.tabs.map((key) => {

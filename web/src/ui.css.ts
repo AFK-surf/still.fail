@@ -319,6 +319,14 @@ export const resizeHandle = style({
       opacity: 0, transition: `opacity 140ms ${vars.easeOut}`,
     },
     "&:hover::after, &:focus-visible::after, &[data-active]::after": { opacity: 1 },
+    // The bar at its middle, on the line (Rail.css.ts edge, the sidebar's, is the same).
+    "&::before": {
+      content: "\"\"", position: "absolute", top: "50%", left: "3.5px", width: "4px", height: "24px", borderRadius: "999px",
+      background: vars.lineStrong, opacity: 0, transform: "translate(-50%, -50%)", zIndex: 1,
+      transition: `height 180ms cubic-bezier(.16, 1, .3, 1), opacity 180ms cubic-bezier(.16, 1, .3, 1), background-color 150ms ${vars.easeOut}`,
+    },
+    "&:hover::before, &:focus-visible::before, &[data-active]::before": { height: "48px", opacity: 1 },
+    "&:active::before, &[data-active]::before": { background: vars.fieldHover },
   },
   "@media": {
     "(max-width: 700px)": {
@@ -326,6 +334,8 @@ export const resizeHandle = style({
     },
   },
 });
+// The pointer over the column: its edge's bar is there to find.
+globalStyle(`:hover > ${resizeHandle}::before`, { opacity: 1 });
 /** A handle's tip, following the pointer along it (ui.tsx ResizeHandle): beside it, its middle level with the pointer. */
 export const edgeTip = style({
   position: "fixed", top: 0, left: 0, zIndex: 70, pointerEvents: "none", willChange: "transform",
