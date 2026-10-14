@@ -1,6 +1,6 @@
 // The app's own bubbles (SystemBubbles.tsx): at the page's bottom left, beside the rail (none on a narrow screen: the
 // window's edge), the newest lowest, each rising in.
-import { style } from "@vanilla-extract/css";
+import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { panel } from "./styles/glass.ts";
 import { toastInKeyframes } from "./styles/keyframes.css.ts";
@@ -39,3 +39,7 @@ export const close = style({
   background: "none", color: vars.muted, cursor: "pointer",
   selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
+
+// With words under its title: its close at the top right and what can be done under it, at the right of the last line.
+globalStyle(`${bubble}:has(${line})`, { gridTemplateColumns: "auto minmax(0, 1fr) auto", gridTemplateAreas: '"icon text close" "icon text act"' });
+globalStyle(`${bubble}:has(${line}) > ${action}`, { justifySelf: "end", marginRight: -2 });
