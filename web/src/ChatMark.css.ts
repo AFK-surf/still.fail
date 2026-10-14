@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { busyRing } from "./styles/busyRing.ts";
-import { leadBreatheKeyframes, spinKeyframes } from "./styles/keyframes.css.ts";
+import { leadBeatKeyframes, leadBreatheKeyframes, leadLitKeyframes, spinKeyframes } from "./styles/keyframes.css.ts";
 
 /**
  * A chat's state on its row's picture (ChatMark.tsx), at the corner, over the picture: a gap of the row's ground
@@ -74,9 +74,15 @@ export const waitingLead = style({ fontWeight: 600 });
 export const leadLine = style({ display: "flex", alignItems: "center", gap: "var(--lead-gap, 8px)", selectors: { "&&": { overflow: "visible" } } });
 export const leadSlot = style({ display: "flex", flex: "none", width: 10, height: 14, alignItems: "center", justifyContent: "center", overflow: "visible" });
 globalStyle(`${leadSlot} svg`, { flex: "none" });
-/** Waiting's dots and watching's arcs breathe once, one after another, then rest (icons wait, watch: one path each). */
-globalStyle(`${leadSlot}[data-motion="wait"] path:not(:first-child), ${leadSlot}[data-motion="watch"] path`, { animation: `${leadBreatheKeyframes} 3.1s ease-in-out infinite` });
-globalStyle(`${leadSlot}[data-motion="wait"] path:nth-child(3), ${leadSlot}[data-motion="watch"] path:nth-child(3)`, { animationDelay: ".3s" });
+/**
+ * Waiting's dots breathe once, one after another, then rest; watching's dot beats and its arcs light up after it, inner
+ * then outer, then rest (icons wait, watch: one path each). Every 3.1s.
+ */
+globalStyle(`${leadSlot}[data-motion="wait"] path:not(:first-child)`, { animation: `${leadBreatheKeyframes} 3.1s ease-in-out infinite` });
+globalStyle(`${leadSlot}[data-motion="wait"] path:nth-child(3)`, { animationDelay: ".3s" });
 globalStyle(`${leadSlot}[data-motion="wait"] path:nth-child(4)`, { animationDelay: ".6s" });
-globalStyle(`${leadSlot}[data-motion] path`, { "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } } });
+globalStyle(`${leadSlot}[data-motion="watch"] circle`, { transformBox: "view-box", transformOrigin: "12px 12px", animation: `${leadBeatKeyframes} 3.1s ease-out infinite` });
+globalStyle(`${leadSlot}[data-motion="watch"] path`, { opacity: .3, animation: `${leadLitKeyframes} 3.1s ease-out .18s infinite` });
+globalStyle(`${leadSlot}[data-motion="watch"] path:nth-child(3)`, { animationDelay: ".42s" });
+globalStyle(`${leadSlot}[data-motion] path, ${leadSlot}[data-motion] circle`, { "@media": { "(prefers-reduced-motion: reduce)": { animation: "none", opacity: 1 } } });
 export const leadRest = style({ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
