@@ -16,7 +16,7 @@ import { useReady, useTopics } from "../core/react.ts";
 import { LOCAL_MS } from "../motion.ts";
 import { AccountPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
-import { DriveHome, DrivePage, DrivePlayPage, DriveReadPage } from "../pages/Drive.tsx";
+import { DriveHome, DrivePage, useAddFolder, DrivePlayPage, DriveReadPage } from "../pages/Drive.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList, StationTrouble, useGlassBands } from "../Sidebar.tsx";
 import { Rail, SidebarEdge, placeOf, railItems, type RailItem } from "../Rail.tsx";
@@ -57,6 +57,7 @@ import { useInWorkspace } from "../notify.ts";
 import * as nav from "../Sidebar.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./workspace.css.ts";
+import * as stationCss from "./StationPage.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as controlsCss from "../styles/controls.css.ts";
@@ -375,8 +376,10 @@ function FilesNav({ scope }: { scope: string }) {
   const where = useLocation();
   const root = new URLSearchParams(where.search).get("root");
   const folders = stations.flatMap((s) => (s.overview?.drive?.roots ?? []).map((r) => ({ s, r })));
+  const add = useAddFolder(scope);
   return (
     <div className={nav.navScroll}>
+      {add.can && <button type="button" className={`${nav.navRow} ${stationCss.navAdd}`} onClick={add.start}><Plus {...ICON} />{t("web-pages.drive.addRoot")}</button>}
       {folders.length === 0 && <p className={nav.navEmpty}>{t("web-main.rail.filesNone")}</p>}
       {folders.map(({ s, r }) => {
         const base = stationBase(s.station);
@@ -390,6 +393,7 @@ function FilesNav({ scope }: { scope: string }) {
           </Link>
         );
       })}
+      {add.dialogs}
     </div>
   );
 }

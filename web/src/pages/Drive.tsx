@@ -10,12 +10,13 @@ import { Navigate, useSearchParams } from "react-router";
 import { ContextMenu } from "radix-ui";
 import { stationBase, useStation } from "../station.tsx";
 import { useStations } from "../api.ts";
+import { useWorkspace } from "../cloud/api.ts";
 import { useGo } from "../go.ts";
 import { useDoing } from "../doing.ts";
 import { useAct } from "../toast.tsx";
 import type { DriveEntry, DriveRoot } from "../core/shapes.ts";
 import { Button, Confirm, Dialog, ICON, IconButton, Menu, Tip, type MenuItem } from "../ui.tsx";
-import { ChevronLeft, ChevronRight, Close, Disk, Download, Edit, Folder, FolderPlus, Plus, Refresh, Retry, Trash, Upload } from "../icons.tsx";
+import { ChevronLeft, ChevronRight, Close, Disk, Server, Download, Edit, Folder, FolderPlus, Plus, Refresh, Retry, Trash, Upload } from "../icons.tsx";
 import { KindIcon } from "../drive/KindIcon.tsx";
 import { Reader } from "../drive/Reader.tsx";
 import { Player } from "../drive/Player.tsx";
@@ -47,14 +48,50 @@ export function DrivePage() {
 /** 文件 in the rail (`/w/<ws>/files`): the first folder any station lends (the sidebar lists them all); none, says so. */
 export function DriveHome({ scope }: { scope: string }) {
   const stations = useStations(scope).value;
+  const add = useAddFolder(scope);
   const first = (stations ?? []).flatMap((s) => (s.overview?.drive?.roots ?? []).map((r) => drivePath(stationBase(s.station), r.path)))[0];
   if (first) return <Navigate to={first} replace />;
   return (
     <div className={`${pagesCss.page} ${css.page}`}>
       <header className={pagesCss.pageHead}><div className={css.headText}><h1>{t("web-pages.drive.title")}</h1></div></header>
-      {!stations ? <p className={shellCss.muted}>{t("web-pages.drive.reading")}</p> : <Empty text={t("web-main.rail.filesNone")} />}
+      {!stations ? <p className={shellCss.muted}>{t("web-pages.drive.reading")}</p>
+        : <Empty text={t("web-main.rail.filesNone")} action={add.can ? <Button variant="primary" icon={Folder} onClick={add.start}>{t("web-pages.drive.pick")}</Button> : undefined} />}
+      {add.dialogs}
     </div>
   );
+}
+
+/**
+ * 添加文件夹 where no one station is in view (the files' sidebar, their empty page), for the workspace's owners and admins:
+ * the folders of the one station with a drive to pick from, or of the one chosen first when there are several.
+ */
+export function useAddFolder(scope: string) {
+  const stations = (useStations(scope).value ?? []).filter((s) => s.overview?.drive);
+  const role = useWorkspace(scope).value?.role;
+  const [choosing, setChoosing] = useState(false);
+  const [picking, setPicking] = useState<string | null>(null);
+  const roots = stations.find((s) => s.station === picking)?.overview?.drive?.roots ?? [];
+  const dialogs = <>
+    {choosing && (
+      <Dialog open onClose={() => setChoosing(false)} title={t("web-pages.drive.addRoot")} description={t("web-pages.drive.whichStation")}>
+        <div className={css.rootsList}>
+          {stations.map((s) => (
+            <button key={s.station} type="button" className={css.pickRow} onClick={() => { setChoosing(false); setPicking(s.station); }}>
+              <Server size={18} strokeWidth={1.6} className={css.icon} />
+              <span className={css.name}>{s.name}</span>
+              {!s.online && <span className={shellCss.muted}>{t("web-pages.stations.offline")}</span>}
+            </button>
+          ))}
+        </div>
+      </Dialog>
+    )}
+    {picking && <PickerDialog station={picking} roots={roots} onClose={() => setPicking(null)} />}
+  </>;
+  return {
+    can: (role === "owner" || role === "admin") && stations.length > 0,
+    start: () => { if (stations.length === 1) setPicking(stations[0]!.station); else setChoosing(true); },
+    dialogs,
+  };
 }
 
 /** What can be done about the folders lent, for the workspace's owners and admins (its page's … menu). */

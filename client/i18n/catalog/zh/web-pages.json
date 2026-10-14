@@ -1001,6 +1001,7 @@
   "web-pages.drive.manage": "管理开放的文件夹",
   "web-pages.drive.manageNote": "开放的文件夹 workspace 的成员都能浏览，只读成员不能改动",
   "web-pages.drive.addRoot": "添加文件夹",
+  "web-pages.drive.whichStation": "选一台 station，再从它上面选要开放的文件夹",
   "web-pages.drive.unshare": "不再开放",
   "web-pages.drive.unshareAsk": "不再开放「{name}」？",
   "web-pages.drive.unshareText": "文件夹和里面的文件都留在 station 上，只是成员不能再浏览",

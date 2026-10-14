@@ -1073,6 +1073,7 @@
   "web-pages.drive.manage": "Manage shared folders",
   "web-pages.drive.manageNote": "The workspace's members can browse the shared folders; read-only members can't change them",
   "web-pages.drive.addRoot": "Add a folder",
+  "web-pages.drive.whichStation": "Choose a station, then a folder on it to share",
   "web-pages.drive.unshare": "Stop sharing",
   "web-pages.drive.unshareAsk": "Stop sharing “{name}”?",
   "web-pages.drive.unshareText": "The folder and its files stay on the station; members just can't browse it anymore",
