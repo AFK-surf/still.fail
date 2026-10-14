@@ -45,4 +45,3 @@ export const figureNumber = style({
 });
 export const figureLabel = style({ fontSize: vars.textUi, fontWeight: "500", color: vars.text });
 export const note = style({ margin: "10px 0 0", fontSize: vars.textUi, color: vars.muted });
-export const path = style({ ...ellipsis, fontSize: vars.textMeta });

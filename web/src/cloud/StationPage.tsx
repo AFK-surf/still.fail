@@ -232,12 +232,10 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
           <ul className={pagesCss.list}>
             {folders.map((r) => (
               <li key={r.path}>
-                <Link className={pagesCss.listRow} to={drivePath(base, r.path)}>
+                {/* Its name alone, as the files' sidebar lists it; where it is on hover. */}
+                <Link className={pagesCss.listRow} to={drivePath(base, r.path)} title={r.path}>
                   <Folder {...ICON} className={shellCss.muted} />
-                  <span className={pagesCss.listRowText}>
-                    <span className={pagesCss.listRowTitle}>{r.name}</span>
-                    <span className={`${shellCss.muted} ${css.path}`}>{r.path}</span>
-                  </span>
+                  <span className={pagesCss.listRowTitle}>{r.name}</span>
                   <ChevronRight {...ICON} className={shellCss.muted} />
                 </Link>
               </li>
