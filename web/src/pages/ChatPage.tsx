@@ -194,7 +194,11 @@ function ChatScreen({ session: chatSession }: { session: string }) {
     const page = pageRef.current;
     const el = panelRef.current;
     // Slid out: the page has laid itself out without the panel now, so the column it held is let go of in the same frame.
-    if (!sliding) return void page?.style.removeProperty("grid-template-columns");
+    if (!sliding) {
+      page?.style.removeProperty("grid-template-columns");
+      page?.style.removeProperty("--panel-visible-width");
+      return;
+    }
     if (!page || !el) return;
     const was = slide.current;
     was?.run.stop();
@@ -207,6 +211,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
     const start = was ? was.value : sliding === "in" ? 0 : whole;
     const goal = sliding === "in" ? whole : 0;
     const draw = (v: number) => {
+      page.style.setProperty("--panel-visible-width", `${v}px`);
       el.style.width = `${whole}px`;
       if (narrow) el.style.transform = `translateX(${whole - v}px)`;
       else page.style.gridTemplateColumns = `minmax(0, 1fr) ${v}px`;

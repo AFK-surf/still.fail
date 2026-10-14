@@ -6,6 +6,7 @@ import { pageBarTitle } from "../styles/conversation.css.ts";
 import { resizeHandle } from "../ui.css.ts";
 import { sessionMain } from "../styles/jobs.css.ts";
 import { windowsEmoji } from "../StationMark.css.ts";
+import { pageBar } from "../styles/sidebar.css.ts";
 
 export const agentMarkBtn = style({
   display: "inline-grid", padding: "0", border: "0", background: "none", cursor: "pointer",
@@ -213,15 +214,18 @@ export const sideBar = style({
     // The desktop app has no title bar: the panel's bar drags the window as the page's does (styles/sidebar.css.ts),
     // and on Windows keeps clear of the window's buttons over its right end (styles/global.css.ts).
     "[data-desktop] &": { WebkitAppRegion: "drag" },
-    ':is([data-desktop="overlay"], [data-desktop="custom"]) &': { paddingRight: "calc(var(--window-buttons, 0px) + 12px)" },
+    ':is([data-desktop="overlay"], [data-desktop="custom"]) &': {
+      paddingRight: "calc(var(--window-buttons, 0px) + 12px)",
+      // The bar slides beyond the viewport; clip its moving contents before the fixed window buttons.
+      clipPath: "inset(0 max(0px, calc(100% - var(--panel-visible-width, 100vw) + var(--window-buttons, 0px))) 0 0)",
+    },
   },
 });
 globalStyle(`[data-desktop] ${sideBar} :is(a, button, input, select, textarea, [role="button"], [role="tab"], [tabindex])`, { WebkitAppRegion: "no-drag" });
-// Beside the open panel the chat's bar ends short of the window's right end: the buttons are over the panel's. Only
-// where there are such buttons: set on the chat, the variable is its every element's (inherited), all styled anew as
-// the panel opens and closes.
-globalStyle(`:is([data-desktop="overlay"], [data-desktop="custom"]) ${sessionPage}[data-panel="true"] > ${sessionMain}`, {
-  "@media": { "(min-width: 1101px)": { vars: { "--window-buttons": "0px" } } },
+// While the panel narrows, its remaining width only covers part of the window controls. The chat's bar reserves
+// the rest, including the final animation frame before the panel unmounts. At rest the panel covers them all.
+globalStyle(`:is([data-desktop="overlay"], [data-desktop="custom"]) ${sessionPage}[data-panel="true"] > ${sessionMain} > ${pageBar}`, {
+  "@media": { "(min-width: 1101px)": { paddingRight: "calc(12px + max(0px, var(--window-buttons, 0px) - var(--panel-visible-width, 100vw)))" } },
 });
 globalStyle(`${jobsPanel} section`, { display: "flex", flexDirection: "column" });
 globalStyle(`${jobsPanel} section + section`, { marginTop: "6px" });
