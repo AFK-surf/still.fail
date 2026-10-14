@@ -31,7 +31,7 @@ import { t } from "./i18n.ts";
 export const RAIL_ITEMS = ["chats", "mine", "watching", "archive", "decisions", "attention", "files", "stations", "profiles", "connects", "usage"] as const;
 export type RailItem = (typeof RAIL_ITEMS)[number];
 /** What it shows when none was chosen. */
-export const RAIL_DEFAULT: readonly RailItem[] = ["chats", "decisions", "files", "stations", "profiles", "connects", "usage"];
+export const RAIL_DEFAULT: readonly RailItem[] = ["chats", "decisions", "attention", "files", "stations", "profiles", "connects", "usage"];
 
 /** What the rail shows, in its order: as kept (what this build does not know left out), the chats always among them. */
 export function railItems(kept: readonly string[] | null | undefined): RailItem[] {

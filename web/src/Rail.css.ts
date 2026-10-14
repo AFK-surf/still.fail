@@ -8,6 +8,13 @@ const narrow = "(max-width: 700px)";
 export const rail = style({
   display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "0 0 12px", background: vars.sidebar,
   WebkitUserSelect: "none", userSelect: "none",
+  selectors: {
+    // The macOS app's window buttons reach past the rail: with the sidebar closed, the row they are in is the page's
+    // ground across, and the rail starts under them (else they sit astride its edge).
+    '[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] &': {
+      background: `linear-gradient(${vars.canvas} 0 44px, ${vars.sidebar} 44px)`,
+    },
+  },
   "@media": { [narrow]: { display: "none" } },
 });
 /**
