@@ -2,6 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { cardLook } from "./styles/pages.css.ts";
 import { DIALOG_INNER } from "./ui.css.ts";
+import { fpHead } from "./FilePreview.css.ts";
 
 /** What a public snapshot would hold, as the chat draws it (its messages' heads in line, the phone's way), on a card. */
 export const preview = style({
@@ -32,8 +33,13 @@ export const page = style({
 });
 /** Who can read it, over the messages. */
 export const lead = style({ margin: "0", fontSize: vars.textUi, color: vars.muted });
-/** 「发布」 in the bar: its corners the bar's (14), less the 4 round it, as the bar's other buttons are. */
-export const headGo = style({ height: "36px", borderRadius: `calc(10px * ${vars.cornerScale})`, cornerShape: vars.cornerShape });
+/**
+ * Its bar, as a file preview's but round at the ends: a pill holds the pill 「发布」 (buttons are pills everywhere) at
+ * one distance all round (its half height 22, the button's 18, 4 between), and the close button is round too.
+ */
+export const head = style({});
+globalStyle(`${fpHead}${head}`, { borderRadius: "22px", cornerShape: "round", paddingLeft: "20px", paddingRight: "4px" });
+globalStyle(`${head} > button:last-child, ${head} > :last-child > button`, { borderRadius: "999px", cornerShape: "round", width: "36px", height: "36px" });
 /** In the bar, after its name: how many things were hidden in all. */
 export const headNote = style({ display: "inline-flex", alignItems: "center", gap: "4px", alignSelf: "center" });
 /** What went wrong (the preview not read, the ticked too big together), in red. */
