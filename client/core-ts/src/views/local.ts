@@ -74,6 +74,9 @@ export class Local {
   #changes = 0;
   readonly #outbox = new Map<string, J[]>();
   readonly #pending = new Map<string, Pending>();
+  readonly #pendingDb = new Map<string, AccountDb>();
+  /// The station's session back to the key this device created it with, kept across restarts.
+  readonly #made = new Map<string, string>();
   readonly #firsts = new Map<string, First>();
   readonly #changing: Change[] = [];
   /// Chats on their way into the archive from here: station, thread (none: an agent with no chat), session.
@@ -83,6 +86,7 @@ export class Local {
   /// Messages sent from here that their station has taken: station, thread, seq.
   readonly #sentIn: [string, number, number][] = [];
   onChange: (change: LocalChange) => void = () => {};
+  onMade: (station: string, key: string) => void = () => {};
 
   constructor(data: Data, now: () => number) {
     this.#data = data;
@@ -99,7 +103,12 @@ export class Local {
     for (const [station, thread, list] of db.locals(OUTBOX)) {
       if (Array.isArray(list) && list.length > 0) this.#outbox.set(join([station, thread]), list);
     }
-    for (const [, key, chat] of db.locals(PENDING)) if (isObject(chat)) this.#pending.set(key, chat as unknown as Pending);
+    for (const [, key, chat] of db.locals(PENDING)) if (isObject(chat)) {
+      const pending = chat as unknown as Pending;
+      this.#pending.set(key, pending);
+      this.#pendingDb.set(key, db);
+      if (pending.made) this.#made.set(join([pending.station, pending.made[0]]), key);
+    }
     for (const [station, key, first] of db.locals(FIRST)) if (isObject(first)) this.#firsts.set(join([station, key]), first as unknown as First);
     for (const [, , change] of db.locals(CHANGING)) if (isObject(change) && !this.#changing.some((c) => c.station === change.station && c.id === change.id)) this.#changing.push(change as unknown as Change);
     const ids = [...this.#outbox.values(), ...[...this.#pending.values()].map((p) => p.queue), ...[...this.#firsts.values()].map((f) => f.queue)].flat();
@@ -126,6 +135,8 @@ export class Local {
     const now = this.#now();
     const key = `${PENDING_PREFIX}${Math.round(now)}-${++this.#sent}`;
     this.#pending.set(key, { station, ask, createdAt: now, queue: [], failed: null, made: null, listed: false, making: false });
+    const db = this.#data.of(station);
+    if (db) this.#pendingDb.set(key, db);
     this.#savePending(key);
     this.onChange({ kind: "pending", key });
     return key;
@@ -140,6 +151,14 @@ export class Local {
 
   pending(key: string): Pending | undefined {
     return this.#pending.get(key);
+  }
+
+  /// A made chat's original key, from either name, only in the account that keeps this station now.
+  pendingKey(station: string, session: string): string | undefined {
+    const key = this.#made.get(join([station, session])) ?? session;
+    const pending = this.#pending.get(key);
+    const db = this.#data.of(station);
+    return db && this.#pendingDb.get(key) === db && pending?.station === station && pending.made ? key : undefined;
   }
 
   /// The chats asked for and not answered: what a restart asks for again.
@@ -183,6 +202,7 @@ export class Local {
     const gone = chat.queue.length === 0 && chat.failed !== null;
     if (gone) {
       this.#pending.delete(key);
+      this.#pendingDb.delete(key);
       this.#data.putLocal(PENDING, chat.station, key, undefined);
     } else this.#savePending(key);
     this.onChange({ kind: "pending", key });
@@ -213,10 +233,12 @@ export class Local {
     const chat = this.#pending.get(key);
     if (!chat || chat.made) return [];
     chat.made = [session, thread];
+    this.#made.set(join([chat.station, session]), key);
     chat.making = false;
     const queue = chat.queue;
     chat.queue = [];
     this.#savePending(key);
+    this.onMade(chat.station, key);
     const sends = queue.map((m) => [String(m.id ?? ""), sentAs(m)] as [string, J]);
     if (queue.length > 0) this.#outboxPut(chat.station, thread, [...this.outbox(chat.station, thread), ...queue]);
     this.onChange({ kind: "pending", key });

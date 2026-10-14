@@ -161,7 +161,9 @@ export class Core {
       prefs.followLang(inner.data);
       // What goes out is what the clients' types say (client/core-ts/src/shapes/schema.ts).
       store.setShaped();
-      store.setHeld((topic) => inner.data.shared(topic), (topic) => inner.data.release(topic));
+      store.setHeld((topic) => topic.topic === "draft"
+        ? inner.composers.readDraft(String(topic.station), String(topic.chat))
+        : inner.data.shared(topic), (topic) => inner.data.release(topic));
       inner.data.onChange((topic) => {
         if (topic.topic === "*") {
           for (const t of store.liveTopics()) if (holds(t)) store.changed(t);
@@ -188,6 +190,7 @@ export class Core {
       inner.composers = new Composers(inner);
       installComposer();
       inner.views = new Views(envOf(inner));
+      inner.views.local.onMade = (station, key) => inner.composers.made(station, key);
       inner.router.owners.push(inner.views);
       inner.viewCalls = new ViewCalls(inner, inner.views);
       inner.viewCalls.install();
