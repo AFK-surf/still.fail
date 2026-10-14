@@ -3,7 +3,7 @@ import { vars } from "../styles/tokens.css.ts";
 import { muted } from "../styles/shell.css.ts";
 import { sessionPage } from "../styles/session.css.ts";
 import { pageBarTitle } from "../styles/conversation.css.ts";
-import { resizeHandle } from "../ui.css.ts";
+import { panelRow, resizeHandle } from "../ui.css.ts";
 import { sessionMain } from "../styles/jobs.css.ts";
 import { windowsEmoji } from "../StationMark.css.ts";
 import { pageBar } from "../styles/sidebar.css.ts";
@@ -172,10 +172,15 @@ export const detailRow = style({
 });
 export const detailInline = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
 /**
- * Last in the chat's info: its sharing with other workspaces, then its public links, as the panel's rows (ui.tsx
- * PanelRow) at its padding on every side, their corner (`--panel-in`) concentric with the panel's.
+ * Last in the chat's info: its sharing with other workspaces, then its public links, rows to press (ui.tsx PanelRow) as a
+ * menu's: 6 from the panel's edge at the sides and below, rounded at the menu's corner less 6, concentric with it. Their
+ * icons stand under the details' words (12 in: 6 + 3 + the 14 icon in the middle of its 20).
  */
-export const infoRows = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px", marginTop: "8px" });
+export const infoRows = style({
+  display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px", margin: "8px -6px -6px",
+  vars: { "--panel-in": `calc(${vars.rMenu} - 6px)` },
+});
+globalStyle(`${infoRows} ${panelRow}`, { padding: "0 6px 0 3px" });
 /** Where the chat is shared, at the end of its row. */
 export const shareText = style({
   minWidth: "0", color: vars.muted, fontSize: vars.textMeta, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
