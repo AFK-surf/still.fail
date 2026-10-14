@@ -83,9 +83,10 @@ export function enrolled(inner: Inner, sub: string, ws: string, made: unknown): 
   });
 }
 
-export function install(inner: Inner): void {
+/// The handler runs with the core it is called on (`inner`), not the one that installed it.
+export function install(_installer: Inner): void {
   hooks.enrolled = enrolled;
-  handlers.lock = (_inner, call, _progress, _at, ctx) => {
+  handlers.lock = (inner, call, _progress, _at, ctx) => {
     const c = call as Of;
     return Effect.gen(function* () {
       const sub = inner.workspaces.owner(c.workspace);

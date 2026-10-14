@@ -149,6 +149,7 @@ export class WakingHost implements Host {
   readonly wakes: Wakes;
 
   readonly tcp?: Host["tcp"];
+  readonly appKeys?: boolean;
   readonly openDb?: Host["openDb"];
   readonly memoryDb?: Host["memoryDb"];
   readonly deleteDb?: Host["deleteDb"];
@@ -158,6 +159,7 @@ export class WakingHost implements Host {
     this.inner = inner;
     this.wakes = wakes;
     if (inner.tcp) this.tcp = (port) => inner.tcp!(port);
+    this.appKeys = inner.appKeys;
     // The databases are the device's: nothing of them waits on a UI coming back.
     if (inner.openDb) this.openDb = (name) => inner.openDb!(name);
     if (inner.memoryDb) this.memoryDb = () => inner.memoryDb!();
