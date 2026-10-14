@@ -66,7 +66,7 @@ export function AttentionEntry({ scope }: { scope: string }) {
         <button type="button" className={`${nav.navRow} ${css.entry}`} aria-label={n > 0 ? t("web-main.attention.label", { n }) : t("web-main.attention.entry")}>
           <Bell {...ICON} />
           <span className={css.name}>{t("web-main.attention.entry")}</span>
-          {n > 0 ? <span className={css.count}>{n}</span> : <span className={css.quiet}>{all.length}</span>}
+          <span className={css.slot}>{n > 0 ? <span className={css.count}>{n}</span> : <span className={css.quiet}>{all.length}</span>}</span>
         </button>
       </Popover.Trigger>
       <Popover.Portal>

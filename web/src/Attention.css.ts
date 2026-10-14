@@ -5,6 +5,8 @@ import { vars } from "./styles/tokens.css.ts";
 
 export const entry = style({ width: "100%", border: "0", background: "none", textAlign: "left", fontFamily: "inherit", cursor: "pointer", selectors: { '&[data-state="open"]': { background: vars.hover } } });
 export const name = style({ flex: "1", color: vars.text });
+/** The count's place: as wide as the lists' menu button above it (32px, as far in from the edge), centred under it. */
+export const slot = style({ flex: "none", display: "flex", justifyContent: "center", width: "32px", marginRight: "-10px" });
 /** How many came since the viewer looked: a small red count, as the Dock's. */
 export const count = style({
   minWidth: "16px", height: "16px", padding: "0 4px", borderRadius: "8px", background: vars.red, color: vars.onPrimary,
