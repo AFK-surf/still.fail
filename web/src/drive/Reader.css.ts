@@ -305,7 +305,9 @@ globalStyle(`${panelHead} ${chip}`, { width: "30px", minWidth: "0", padding: "0"
 
 // ── Markdown as a page, not a chat's message: everything in the reader's size and on its paper ──
 const md = `${reader} ${markdown}`;
-globalStyle(`${md} p, ${md} ul, ${md} ol, ${md} pre, ${md} table, ${md} blockquote`, { margin: "0 0 1em" });
+/** Room after each block of the page; none inside a code block's or a table's own frame (it would show as a gap in it). */
+globalStyle(`${md} > *`, { marginBottom: "1em" });
+globalStyle(`${md} > * pre, ${md} > * table, ${md} blockquote > *`, { margin: "0" });
 globalStyle(`${md} li + li`, { marginTop: "0.3em" });
 globalStyle(`${md} ul, ${md} ol`, { paddingLeft: "1.4em" });
 /** Inline code a step under the text, on a tint of the paper's ink (not the chat's colour). */
@@ -320,6 +322,5 @@ globalStyle(`${md} pre`, {
 globalStyle(`${md} table`, { fontSize: "0.86em" });
 globalStyle(`${md} th, ${md} td`, { padding: "0.5em 0.9em", borderBottom: "1px solid var(--r-line)" });
 globalStyle(`${md} th`, { fontSize: "inherit", color: "var(--r-muted)", background: "color-mix(in srgb, var(--r-ink) 4%, transparent)" });
-globalStyle(`${md} blockquote`, { padding: "0.1em 0 0.1em 1em", borderLeft: "3px solid var(--r-line)", color: "var(--r-muted)" });
-globalStyle(`${md} blockquote > :last-child`, { marginBottom: "0" });
+globalStyle(`${md} blockquote`, { padding: "0.1em 0 0.1em 1em", borderLeft: "3px solid color-mix(in srgb, var(--r-ink) 22%, transparent)", color: "var(--r-muted)" });
 globalStyle(`${md} hr`, { border: "0", borderTop: "1px solid var(--r-line)", margin: "1.6em 0" });
