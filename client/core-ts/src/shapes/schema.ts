@@ -134,6 +134,7 @@ export const SHAPES: Record<string, Shape> = {
     ["height", opt("i64"), { client: opt("I54") }],
     ["thumbhash", opt("String"), { doc: "An image's ThumbHash (base64): a blurred likeness of it, shown until it loads." }],
     ["owner", opt("String"), { doc: "In a chat's page: the session whose workspace keeps it (its agent's, else the chat's first agent's), which\nits preview and download go through. Absent elsewhere." }],
+    ["upload", opt("String"), { doc: "In a chat's page: the id of this device's upload it is (`composer.add`), while this device still has its\npicture; absent for every other file." }],
   ]),
   Quote: struct([
     ["author", "String"],
@@ -942,6 +943,8 @@ export const SHAPES: Record<string, Shape> = {
     ["name", "String"],
     ["size", "i64", { client: "I54" }],
     ["sent", opt("i64"), { client: opt("I54"), doc: "How much of it the station has, while it goes up." }],
+    ["width", opt("i64"), { client: opt("I54"), doc: "An image's size, read here as soon as it is added (before it is up): where it is shown takes its\nshape at once." }],
+    ["height", opt("i64"), { client: opt("I54") }],
     ["done", opt("Attachment"), { doc: "Up: as the station keeps it (in no chat until a message takes it)." }],
     ["error", opt("String")],
     ["pasted", opt("PastedInfo")],

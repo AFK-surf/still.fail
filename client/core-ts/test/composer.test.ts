@@ -378,6 +378,27 @@ test("uploading_attachment_can_be_submitted_and_survives_leaving_the_composer_wi
   t.core.close();
 });
 
+test("an_image_sent_while_going_up_keeps_its_shape_and_its_message_says_which_upload_it_was", async () => {
+  const t = await queuedUpload();
+  t.send(501, { uploads: [{ ...t.uploads[0], width: 1200, height: 800 }] });
+  await t.settle();
+  assert.deepEqual([t.local.outbox("ws/st", 7)[0].uploads[0].width, t.local.outbox("ws/st", 7)[0].uploads[0].height], [1200, 800]);
+  assert.equal(t.local.uploadOf("ws/st", "/u/slow.txt"), undefined);
+  t.finish();
+  await t.settle();
+  // The station is given the file as it keeps it, nothing of this device's; this device knows it by its name there,
+  // wherever the station moves it.
+  assert.deepEqual(t.posted[0].attachments, [t.saved]);
+  assert.equal(t.local.uploadOf("ws/st", "/sessions/x/uploads/slow.txt"), "slow");
+  assert.equal(t.local.uploadOf("ws/other", "/u/slow.txt"), undefined);
+  // A size that is no size is refused: nothing joins the outbox.
+  const queued = t.local.outbox("ws/st", 7).length;
+  call(t.core, t.ui, 502, "chat.send", { station: "ws/st", thread: 7, text: "x", uploads: [{ ...t.uploads[0], width: 0 }] });
+  await t.settle();
+  assert.equal(t.local.outbox("ws/st", 7).length, queued);
+  t.core.close();
+});
+
 test("later_messages_wait_behind_uploads_but_other_chats_are_free", async () => {
   const t = await queuedUpload();
   t.send(501);

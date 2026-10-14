@@ -752,17 +752,18 @@ export class Views implements Owner {
         return this.#connects(view.scope as string, view.mine === true);
       case "chat": {
         const station = view.station as string;
-        if (typeof view.thread === "number") return drawn(this.#chat(station, view.thread));
+        const draw = <V extends Value | undefined>(out: V) => drawn(out, (path) => this.local.uploadOf(station, path));
+        if (typeof view.thread === "number") return draw(this.#chat(station, view.thread));
         const session = typeof view.session === "string" ? view.session : null;
         if (session === null) return { err: CoreError.invalid(t("core-views.error.chat_needs_thread")) };
-        if (session.startsWith(PENDING_PREFIX)) return drawn(this.#pendingChat(station, session) ?? { err: new CoreError("http_404", t("core-views.error.no_chat"), 404) });
+        if (session.startsWith(PENDING_PREFIX)) return draw(this.#pendingChat(station, session) ?? { err: new CoreError("http_404", t("core-views.error.no_chat"), 404) });
         const bound = this.boundThread(station, session);
         const out = bound !== null ? this.#chat(station, bound) : this.#unchatted(station, session);
         const waiting = this.local.firstOutbox(station, session);
-        if (waiting.length === 0 || out === undefined || !("ok" in out)) return drawn(out);
+        if (waiting.length === 0 || out === undefined || !("ok" in out)) return draw(out);
         const v = out.ok as J;
         if (Array.isArray(v.outbox)) v.outbox.push(...waiting);
-        return drawn(out);
+        return draw(out);
       }
       case "history":
         return this.#history(view.station as string, view.key as string);
@@ -1614,10 +1615,10 @@ const pinnedAt = new WeakMap<object, number>();
 
 /// What a chat's page draws by each message, decided here so the page only draws it (docs/client-core.md): whether the
 /// agent who said it is one of the chat's (its name opens its history), whose workspace keeps each of its files (and the
-/// outbox's), which of an agent's files its text places (placed.ts), the 归档 offer and what the archive check made of the chat under its last all-done post, and what its
+/// outbox's) and which of them went up from here after it was sent (`uploadOf`: their pictures are still here), which of an agent's files its text places (placed.ts), the 归档 offer and what the archive check made of the chat under its last all-done post, and what its
 /// agents sent to Slack or were given there after it (`elsewhere`; the chat's own `elsewhere` keeps what came before
 /// its first message).
-function drawn<V extends Value | undefined>(out: V): V {
+function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) => string | undefined): V {
   if (out === undefined || !("ok" in out) || !isObject(out.ok)) return out;
   // Everything said here goes on copies: what the view is made of may be the core's kept values, frozen (a message's
   // files, the outbox's), and writing on one of them threw and took the core down.
@@ -1631,8 +1632,11 @@ function drawn<V extends Value | undefined>(out: V): V {
   const own = (files: unknown): J => {
     if (!Array.isArray(files)) return files;
     return files.map((f) => {
-      const key = isObject(f) ? owner(get(f, "path")) : null;
-      return key !== null ? { ...f, owner: key } : f;
+      if (!isObject(f)) return f;
+      const key = owner(get(f, "path"));
+      // One sent from here before it was up: its picture is still here, under its upload's id.
+      const upload = uploadOf(get(f, "path"));
+      return key !== null || upload !== undefined ? { ...f, ...(key !== null ? { owner: key } : {}), ...(upload !== undefined ? { upload } : {}) } : f;
     });
   };
   const here = (by: J): J => {

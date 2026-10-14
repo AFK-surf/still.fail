@@ -11,7 +11,7 @@ import { core, useTopicSelect } from "./core/react.ts";
 import type { ComposerFile, ComposerView } from "./core/shapes.ts";
 import { track } from "./telemetry.ts";
 import { useStation } from "./station.tsx";
-import { keepSentImage } from "./sentImages.ts";
+import { keepSentImage, uploadImageKey } from "./sentImages.ts";
 import { useToast } from "./toast.tsx";
 import { t } from "./i18n.ts";
 
@@ -19,7 +19,7 @@ export const MAX_FILE = 1024 * 1024 * 1024;
 
 /** A file on its way to the station: uploading (`sent`: how much of it the station has), uploaded, or failed.
  * `preview`: an image's local picture, until it leaves the draft. */
-export interface Pending { id: string; name: string; size: number; sent?: number; done: Attachment | null; error: string | null; preview?: string; image?: Blob; pasted?: PastedInfo; pastedFile?: File }
+export interface Pending { id: string; name: string; size: number; sent?: number; width?: number; height?: number; done: Attachment | null; error: string | null; preview?: string; image?: Blob; pasted?: PastedInfo; pastedFile?: File }
 
 /** A passage quoted in the message being written, with what is said about it. */
 export interface DraftQuote extends Quote { id: string }
@@ -262,7 +262,13 @@ export function useDraft({ key: given, station, carry }: {
   };
   const send: Draft["send"] = async (open, { first = false, onSending } = {}) => {
     const from = key;
-    for (const f of files) if (f.done && f.image) keepSentImage(station ?? contextStation, f.done.path, f.image);
+    // Its images' pictures stay here until the station's are read: one still going up by its upload's id, as its outbox
+    // row and then its message draw it.
+    for (const f of files) {
+      if (!f.image || f.error) continue;
+      if (f.done) keepSentImage(station ?? contextStation, f.done.path, f.image);
+      else keepSentImage(station ?? contextStation, uploadImageKey(f.id), f.image, 10 * 60_000);
+    }
     const { text: value, files: sentFiles, quotes: sentQuotes } = take();
     const attachments = sentFiles.flatMap((f) => (f.done ? [f.done] : []));
     const sent = sentQuotes.map(({ author, text: q, comment: c, ts, role, file }) => ({ author, text: q, comment: c.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}), ...(file ? { file } : {}) }));
@@ -289,7 +295,7 @@ export function useDraft({ key: given, station, carry }: {
     };
     const at = performance.now();
     const counts = { attachments: attachments.length, quotes: sent.length, first };
-    chat.send(to, value, attachments, sent, sentFiles.filter((f) => !f.done && !f.error).map(({ id, name, size }) => ({ id, name, size }))).then(
+    chat.send(to, value, attachments, sent, sentFiles.filter((f) => !f.done && !f.error).map(({ id, name, size, width, height }) => ({ id, name, size, ...(width && height ? { width, height } : {}) }))).then(
       () => { drop(); track("message_sent", { ...counts, ok: true, ms: Math.round(performance.now() - at) }); },
       (failure: unknown) => {
         track("message_sent", { ...counts, ok: false });

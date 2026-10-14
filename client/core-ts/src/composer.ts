@@ -27,7 +27,7 @@ export type ComposerQuote = { id: string; author: string; text: string; comment:
 
 /// A file in what is written: going up (`sent` of `size`), up (`done`, as the station keeps it) or failed (`error`).
 /// `pasted`: long words pasted, kept as a file (what the page says of them).
-export type ComposerFile = { id: string; name: string; size: number; sent?: number; done: J | null; error: string | null; pasted?: J };
+export type ComposerFile = { id: string; name: string; size: number; sent?: number; width?: number; height?: number; done: J | null; error: string | null; pasted?: J };
 
 /// A file handed to the core to send up: the page's id for it, the file itself.
 export type FileIn = { id: string; name: string; size: number; blob: Blob | FileSource; pasted?: J };
@@ -329,6 +329,12 @@ export class Composers {
         this.#changed(k, s, true, false);
       }
     };
+    // An image's size, read while it goes up: every page holds its place from the first (the outbox's row too, before it
+    // is up), and it travels with the file.
+    const blob = f.blob;
+    const sizing: Promise<{ width: number; height: number } | null> = blob instanceof Blob && blob.type.startsWith("image/") && typeof createImageBitmap === "function"
+      ? createImageBitmap(blob).then((b) => { const s = { width: b.width, height: b.height }; b.close(); change(s); return s; }, () => null)
+      : Promise.resolve(null);
     const run = Effect.gen(function* () {
       const addr = yield* Effect.try({ try: () => StationAddr.parse(station), catch: asCoreError });
       let have = 0;
@@ -341,12 +347,8 @@ export class Composers {
         else have = told.have;
         change({ sent: told.file !== undefined ? f.size : have });
       }
-      // An image's size travels with it, so every page can hold its place before it loads.
-      const blob = f.blob;
-      if (blob instanceof Blob && blob.type.startsWith("image/") && typeof createImageBitmap === "function") {
-        const size = yield* Effect.promise(() => createImageBitmap(blob).then((b) => { const s = { width: b.width, height: b.height }; b.close(); return s; }, () => null));
-        if (size) saved = { ...saved, ...size };
-      }
+      const size = yield* Effect.promise(() => sizing);
+      if (size) saved = { ...saved, ...size };
       return saved;
     });
     inner.runner.fork(

@@ -3,7 +3,7 @@ import { makePastedFile, pastedInfo, PASTE_THRESHOLD } from "./pastedText.ts";
 // bubble with only their time; everyone else (people and the agent) gets an
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
-import { sentImage, sentImageKey } from "./sentImages.ts";
+import { sentFileKey, sentImage, sentImageKey, uploadImageKey } from "./sentImages.ts";
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Web } from "./icons.tsx";
 import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
@@ -302,6 +302,17 @@ function ToLatest({ station, thread, waiting, onClick }: { station: string; thre
 
 const SENDING_SHOWS_MS = 800;
 
+/**
+ * What is sent from here, its images still going up among its files: each in its place and shape at once, drawn from
+ * this device (as its message is, once up: `Attachment.upload`), not a card that turns into a picture later.
+ */
+function upImages(o: Outgoing): Outgoing {
+  const going = o.uploads?.filter((f) => isImage(f.name)) ?? [];
+  if (!going.length) return o;
+  const shown = going.map((f): Attachment => ({ name: f.name, path: uploadImageKey(f.id), size: f.size, upload: f.id, ...(f.width && f.height ? { width: f.width, height: f.height } : {}) }));
+  return { ...o, attachments: [...(o.attachments ?? []), ...shown] };
+}
+
 /** A message sent from here that the chat does not show yet: on its way, or failed with a way to send it again or drop it. */
 function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: boolean }) {
   const sending = useChatSend();
@@ -319,8 +330,8 @@ function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: 
   const [delay] = useState(() => `${Math.max(0, showsAt - Date.now())}ms`);
   return (
     <MineMessage data-vk={`o:${o.id}`} data-author={t("web-main.chat.you")} data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
-      <MineWords message={o} />
-      {o.uploads?.map((f) => <FileCard key={f.id} file={f} pending={o.state !== "failed"} error={o.state === "failed" ? o.error ?? null : null} />)}
+      <MineWords message={upImages(o)} />
+      {o.uploads?.filter((f) => !isImage(f.name)).map((f) => <FileCard key={f.id} file={f} pending={o.state !== "failed"} error={o.state === "failed" ? o.error ?? null : null} />)}
       {o.state === "failed"
         // Not sent: said briefly, why in its tip; sending it again or dropping it right beside.
         ? <div className={css.msgUnsent}>
@@ -1299,7 +1310,8 @@ export function useAskedFile(list: RefObject<HTMLDivElement | null>, messages: C
 function Files({ files }: { files: Attachment[] | undefined }) {
   const owner = useKeeper();
   if (!files?.length) return null;
-  return <div className={css.msgFiles}>{files.map((f) => <FileItem key={f.path} sessionKey={owner(f)} file={f} />)}</div>;
+  // One still going up is on no station yet: drawn from this device alone.
+  return <div className={css.msgFiles}>{files.map((f) => <FileItem key={f.upload ?? f.path} sessionKey={f.upload && f.path === uploadImageKey(f.upload) ? null : owner(f)} file={f} />)}</div>;
 }
 
 /** Images already brushed in on this page (session key and path): shown again, they just show. */
@@ -1315,7 +1327,7 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   const near = useNear(box, image || video);
   const fetched = useFileShown(sessionKey ?? "", file, image && sessionKey !== null && near, true);
   const still = useVideoStill(sessionKey ?? "", file, video && sessionKey !== null && near);
-  const [local] = useState(() => image ? sentImage(station.address, file.path) : undefined);
+  const [local] = useState(() => image ? sentImage(station.address, sentFileKey(file)) : undefined);
   const url = local ?? fetched.url;
   const failed = !local && fetched.failed;
   const [open, setOpen] = useState(false);
@@ -1349,7 +1361,7 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (image) {
     return (
       <>
-        <button ref={box} type="button" className={look.image} data-send-image={sentImageKey(file.path)} onClick={() => (url || failed) && setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })} style={size} data-letterbox={letterbox ? "" : undefined}
+        <button ref={box} type="button" className={look.image} data-send-image={sentFileKey(file)} onClick={() => (url || failed) && setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })} style={size} data-letterbox={letterbox ? "" : undefined}
           data-viewer-thumb={url && sessionKey !== null ? thumbId(station.address, sessionKey, file.path) : undefined}
           data-loaded={loaded ?? undefined} data-failed={failed || undefined} data-near={near || undefined}>
           {loaded !== "instant" && <Waiting hash={file.thumbhash} fit={letterbox} />}
@@ -1849,7 +1861,7 @@ function PendingFile({ file: f, onRemove, onRestore, onRetry }: { file: Pending;
     {onRemove && <button type="button" className={css.pasteSnippetRemove} aria-label={t("web-main.composer.removePaste")} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
   </div>{f.pastedFile && f.preview && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey="" file={shown} local={{ blob: f.pastedFile, url: f.preview }} />}</>;
   return f.preview ? (
-    <Tip label={f.error ?? f.name}><span className={css.composerThumb} data-send-image={f.done ? sentImageKey(f.done.path) : undefined} data-error={f.error ? true : undefined}>
+    <Tip label={f.error ?? f.name}><span className={css.composerThumb} data-send-image={f.done ? sentImageKey(f.done.path) : f.error ? undefined : uploadImageKey(f.id)} data-error={f.error ? true : undefined}>
       <button type="button" className={css.composerThumbOpen} aria-label={t("web-main.file.view", { name: f.name })} data-viewer-thumb={thumbId(station.address, "", shown.path)}
         onClick={(e) => { e.stopPropagation(); setOpen(true); }}>
         <img src={f.preview} alt={f.name} />

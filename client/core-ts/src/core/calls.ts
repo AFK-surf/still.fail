@@ -33,11 +33,11 @@ export type Call =
   | { kind: "chatArchive"; op: ops.Request; thread: number | null; session: string; archived: boolean }
   | { kind: "chatChange"; op: ops.Request; thread: number | null; session: string; title: string | null; pinned: boolean | null; keep: boolean }
   | { kind: "chatXshare"; station: string; workspace: string | null; session: string; thread: number | null; to: string[]; write: boolean }
-  | { kind: "chatSend"; station: string; thread: number; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number }[]; quotes: unknown; client: string | null }
+  | { kind: "chatSend"; station: string; thread: number; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number; width?: number; height?: number }[]; quotes: unknown; client: string | null }
   | { kind: "chatCreate"; station: string; ask: Record<string, unknown> }
-  | { kind: "chatSendTo"; station: string; session: string; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number }[]; quotes: unknown; client: string | null }
+  | { kind: "chatSendTo"; station: string; session: string; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number; width?: number; height?: number }[]; quotes: unknown; client: string | null }
   | { kind: "decisionAnswer"; station: string; thread: number; seq: number; option: string }
-  | { kind: "decisionReply"; station: string; thread: number; seq: number; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number }[]; quotes: unknown }
+  | { kind: "decisionReply"; station: string; thread: number; seq: number; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number; width?: number; height?: number }[]; quotes: unknown }
   | { kind: "decisionDefer"; station: string; thread: number; seq: number }
   | { kind: "chatRetryIn"; station: string; session: string; id: string }
   | { kind: "chatDiscardIn"; station: string; session: string; id: string }
@@ -224,8 +224,9 @@ export function parseCall(name: string, params: unknown): Call {
   const listOf = (field: string) => (isObject(params) && field in params ? (params as Record<string, unknown>)[field] : []);
   const uploads = () => {
     const files = listOf("uploads");
-    if (!Array.isArray(files) || files.some((f) => !isObject(f) || typeof f.id !== "string" || !f.id || typeof f.name !== "string" || typeof f.size !== "number" || !Number.isFinite(f.size) || f.size < 0)) throw CoreError.invalid("invalid uploads");
-    return files as { id: string; name: string; size: number }[];
+    if (!Array.isArray(files) || files.some((f) => !isObject(f) || typeof f.id !== "string" || !f.id || typeof f.name !== "string" || typeof f.size !== "number" || !Number.isFinite(f.size) || f.size < 0
+      || [f.width, f.height].some((n) => n !== undefined && (!Number.isSafeInteger(n) || (n as number) <= 0)))) throw CoreError.invalid("invalid uploads");
+    return files as { id: string; name: string; size: number; width?: number; height?: number }[];
   };
   const uploadFields = () => { const files = uploads(); return files.length ? { uploads: files } : {}; };
   switch (name) {

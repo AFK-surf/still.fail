@@ -36,7 +36,7 @@ const settle = <A>(r: { _tag: "Success"; success: A } | { _tag: "Failure"; failu
 const parse = (station: string) => Effect.try({ try: () => StationAddr.parse(station), catch: asCoreError });
 
 /// What goes out of a message written here, with the key that makes it go once however often it is sent.
-function outgoing(inner: Inner, station: string, text: string, attachments: unknown, quotes: unknown, client: string | null, uploads: { id: string; name: string; size: number }[] = []): J {
+function outgoing(inner: Inner, station: string, text: string, attachments: unknown, quotes: unknown, client: string | null, uploads: { id: string; name: string; size: number; width?: number; height?: number }[] = []): J {
   const key = new Uint8Array(16);
   inner.host.randomBytes(key);
   const message: J = { text: refs.expand(inner.data, station, text), attachments, quotes, queued: true, ...(uploads.length ? { uploads } : {}), idem: hex(key) };

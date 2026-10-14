@@ -62,6 +62,8 @@ export type LocalChange =
   | { kind: "changing"; station: string }
   | { kind: "archiving" };
 
+/// The name a station keeps an upload under: the last part of its path, wherever it is moved.
+const keptName = (path: string) => path.split("/").at(-1)!;
 const OUTBOX = "outbox";
 const PENDING = "pending";
 const FIRST = "first";
@@ -83,6 +85,10 @@ export class Local {
   readonly #archiving: [string, number | null, string][] = [];
   /// Recent outbox-to-message identities (the UI may skip the acknowledgement frame), by `station␁thread␁seq`.
   readonly delivered = new Map<string, string>();
+  /// Files that went up after their message was sent, by the name the station keeps each under (unique; it keeps it as
+  /// it moves the file into the chat's uploads): the upload each was here (`composer.add`'s id), whose picture this
+  /// device still has (the latest few).
+  readonly #uploadedFrom = new Map<string, string>();
   /// Messages sent from here that their station has taken: station, thread, seq.
   readonly #sentIn: [string, number, number][] = [];
   onChange: (change: LocalChange) => void = () => {};
@@ -433,8 +439,21 @@ export class Local {
 
   /// Persist resolved attachments before delivery, so a retry/restart never needs their source Blobs again.
   outboxUploaded(station: string, thread: number, id: string, files: J[]): void {
+    const uploads = this.outboxGet(station, thread, id)?.uploads;
+    files.forEach((f, i) => {
+      const from = get(arr(uploads)[i], "id");
+      const path = get(f, "path");
+      if (typeof from !== "string" || typeof path !== "string") return;
+      this.#uploadedFrom.set(`${station}\n${keptName(path)}`, from);
+      while (this.#uploadedFrom.size > 64) this.#uploadedFrom.delete(this.#uploadedFrom.keys().next().value!);
+    });
     this.#outboxPut(station, thread, this.outbox(station, thread).map((m) => m.id === id ? { ...m, attachments: [...(m.attachments ?? []), ...files], uploads: [] } : m));
     this.onChange({ kind: "outbox", station, thread });
+  }
+
+  /// The upload (`composer.add`'s id) a file of `station` kept at `path` was here, sent before it was up.
+  uploadOf(station: string, path: unknown): string | undefined {
+    return typeof path === "string" ? this.#uploadedFrom.get(`${station}\n${keptName(path)}`) : undefined;
   }
 
   outboxGet(station: string, thread: number, id: string): J | undefined {

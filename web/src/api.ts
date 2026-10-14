@@ -477,7 +477,7 @@ export function useChatSend(address?: string) {
   const inContext = useStation().address;
   const station = address ?? inContext;
   return useMemo(() => ({
-    send: (to: ChatTo, text: string, attachments: Attachment[], quotes: Quote[], uploads: { id: string; name: string; size: number }[] = []) => call("chat.send", { station, ...chatTo(to), text, attachments, quotes, uploads }),
+    send: (to: ChatTo, text: string, attachments: Attachment[], quotes: Quote[], uploads: { id: string; name: string; size: number; width?: number; height?: number }[] = []) => call("chat.send", { station, ...chatTo(to), text, attachments, quotes, uploads }),
     retry: (to: ChatTo, id: string) => call("chat.retry", { station, ...chatTo(to), id }),
     discard: (to: ChatTo, id: string) => call("chat.discard", { station, ...chatTo(to), id }),
     /** A new chat: there at once under the key answered (its page, its row); the station makes it behind it. */

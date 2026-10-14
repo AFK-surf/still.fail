@@ -302,6 +302,11 @@ export interface Attachment {
 	 * its preview and download go through. Absent elsewhere.
 	 */
 	owner?: string;
+	/**
+	 * In a chat's page: the id of this device's upload it is (`composer.add`), while this device still has its
+	 * picture; absent for every other file.
+	 */
+	upload?: string;
 }
 
 /** A window of a session's account running out, as its ring draws it. */
@@ -1630,6 +1635,12 @@ export interface ComposerFile {
 	size: number;
 	/** How much of it the station has, while it goes up. */
 	sent?: number;
+	/**
+	 * An image's size, read here as soon as it is added (before it is up): where it is shown takes its
+	 * shape at once.
+	 */
+	width?: number;
+	height?: number;
 	/** Up: as the station keeps it (in no chat until a message takes it). */
 	done?: Attachment;
 	error?: string;

@@ -314,7 +314,10 @@ data class Attachment (
 	val thumbhash: String? = null,
 	/// In a chat's page: the session whose workspace keeps it (its agent's, else the chat's first agent's), which
 	/// its preview and download go through. Absent elsewhere.
-	val owner: String? = null
+	val owner: String? = null,
+	/// In a chat's page: the id of this device's upload it is (`composer.add`), while this device still has its
+	/// picture; absent for every other file.
+	val upload: String? = null
 )
 
 /// A window of a session's account running out, as its ring draws it.
@@ -1624,6 +1627,10 @@ data class ComposerFile (
 	val size: Long,
 	/// How much of it the station has, while it goes up.
 	val sent: Long? = null,
+	/// An image's size, read here as soon as it is added (before it is up): where it is shown takes its
+	/// shape at once.
+	val width: Long? = null,
+	val height: Long? = null,
 	/// Up: as the station keeps it (in no chat until a message takes it).
 	val done: Attachment? = null,
 	val error: String? = null,
