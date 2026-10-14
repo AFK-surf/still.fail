@@ -32,7 +32,7 @@ export const low = style({
 /** The page's head (as the workspace's): how it is, its dot before it. */
 export const status = style({ display: "inline-flex", alignItems: "center", gap: 6 });
 export const headActions = style({ display: "flex", alignItems: "center", gap: 8, flex: "none" });
-export const warn = style({ display: "grid", gap: 4, marginTop: -20, marginBottom: 28, fontSize: vars.textUi, fontWeight: "500" });
+export const warn = style({ display: "grid", gap: 4, marginTop: 6, fontSize: vars.textUi, fontWeight: "500" });
 globalStyle(`${warn} [data-level="amber"]`, { color: vars.amber });
 globalStyle(`${warn} [data-level="red"]`, { color: vars.red });
 

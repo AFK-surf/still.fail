@@ -157,6 +157,8 @@ function Head({ s, manager, edits }: { s: StationView; manager: boolean; edits: 
             {s.host && <span>{s.host.identity}</span>}
             {s.version && <span>Station {s.version}</span>}
           </p>
+          {/* What is wrong with it, under how it is. */}
+          {wrong.length > 0 && <div className={css.warn}>{wrong.map((p) => <span key={p.key} data-level={p.level}>{p.text}</span>)}</div>}
         </div>
         <div className={css.headActions}>
           {(!s.online || silent) && <RetryPill />}
@@ -165,7 +167,6 @@ function Head({ s, manager, edits }: { s: StationView; manager: boolean; edits: 
           {items.length > 0 && <Menu items={items} />}
         </div>
       </header>
-      {wrong.length > 0 && <div className={css.warn}>{wrong.map((p) => <span key={p.key} data-level={p.level}>{p.text}</span>)}</div>}
     </>
   );
 }
