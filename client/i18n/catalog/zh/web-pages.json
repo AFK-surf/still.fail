@@ -215,6 +215,7 @@
   "web-pages.chat.publish.publishing": "正在发布",
   "web-pages.chat.publish.verb": "公开分享",
   "web-pages.chat.publish.made": "发布好了",
+  "web-pages.chat.publish.copyLink": "复制链接",
   "web-pages.chat.publish.revoke": "撤销",
   "web-pages.chat.publish.revokeAsk": "撤销这条链接？",
   "web-pages.chat.publish.revokeNote": "撤销后，拿到链接的人就打不开了",

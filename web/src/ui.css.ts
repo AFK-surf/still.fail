@@ -222,30 +222,39 @@ export const overlay = style({
   position: "fixed", inset: "0", zIndex: "40", background: vars.overlay,
   animation: `${fadeKeyframes} 180ms ${vars.easeOut}`,
 });
+/**
+ * A dialog's corners and what sits at them are one curve (concentric): its padding (DIALOG_PAD) plus a button's half
+ * height (18) is its radius, so a pill button in a corner, the close button, and a card inside (radius DIALOG_INNER) all
+ * follow its edge at the same distance.
+ */
+const DIALOG_PAD = 24;
+export const DIALOG_INNER = `calc(18px * ${vars.cornerScale})`;
 export const dialog = style({
   position: "fixed", left: "50%", top: "50%", zIndex: "50", transform: "translate(-50%, -50%)", display: "flex",
   flexDirection: "column", width: "min(520px, calc(100vw - 32px))", maxHeight: "calc(100dvh - 48px)",
-  borderRadius: vars.rDialog, ...panel, color: vars.text, boxShadow: `0 24px 64px ${vars.shadow}`,
+  borderRadius: `calc(${DIALOG_PAD + 18}px * ${vars.cornerScale})`, ...panel, color: vars.text, boxShadow: `0 24px 64px ${vars.shadow}`,
   animation: `${dialogInKeyframes} 200ms ${vars.easeOut}`, cornerShape: vars.cornerShape,
   selectors: {
     "&:focus": { outline: "none" },
   },
 });
 export const dialogWide = style({ width: "min(640px, calc(100vw - 32px))" });
-export const dialogAlert = style({ width: "min(420px, calc(100vw - 32px))", padding: "32px", gap: "10px" });
+export const dialogAlert = style({ width: "min(420px, calc(100vw - 32px))", padding: `${DIALOG_PAD + 4}px ${DIALOG_PAD}px ${DIALOG_PAD}px`, gap: "8px" });
+/** Its title, and the close button in the corner: round (half width 16), its centre the corner's radius from the edges. */
 export const dialogHead = style({
-  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", padding: "28px 24px 0 32px",
+  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", padding: `${DIALOG_PAD - 2}px ${DIALOG_PAD + 2}px 0 ${DIALOG_PAD}px`,
 });
 export const dialogTitle = style({});
 export const dialogBody = style({
   // One column no wider than the dialog: a long unbroken line (an install command) scrolls in itself instead of widening it.
-  display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "18px", padding: "20px 32px 4px", overflowY: "auto", minHeight: "0",
-  selectors: { "&:last-child": { paddingBottom: "32px" } },
+  display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "16px", padding: `18px ${DIALOG_PAD}px 0`, overflowY: "auto", minHeight: "0",
+  selectors: { "&:last-child": { paddingBottom: `${DIALOG_PAD}px` } },
 });
+/** Its buttons, the last in the corner; anything before them that is not a button (a note) takes the room on their left. */
 export const dialogFoot = style({
-  display: "flex", justifyContent: "flex-end", gap: "8px", padding: "20px 32px 32px",
+  display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px", padding: `${DIALOG_PAD}px`,
   selectors: {
-    [`${dialogAlert} &`]: { padding: "12px 0 0" },
+    [`${dialogAlert} &`]: { padding: "16px 0 0" },
   },
 });
 export const srOnly = style({
@@ -354,6 +363,7 @@ globalStyle(`${choiceText} ${muted}`, { fontSize: vars.textMeta, lineHeight: "1.
 globalStyle(`${select} > span:first-child`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 globalStyle(`${command} code`, { flex: "1", fontSize: vars.textMeta, overflowX: "auto", whiteSpace: "nowrap" });
 globalStyle(`${dialogAlert} ${dialogLead}`, { margin: "0" });
+globalStyle(`${dialogHead} > button`, { borderRadius: "999px", cornerShape: "round" });
 /** Here rather than with its class: it comes after .empty p, and wins over it. */
 globalStyle(`${markdown} p`, { margin: "0 0 8px" });
 /** Here rather than with its class: it comes after .empty h2, and wins over it. */

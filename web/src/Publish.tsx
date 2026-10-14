@@ -6,7 +6,7 @@ import { stationApi, useStationCall, type Attachment } from "./api.ts";
 import type { ChatPublished, PublishMessage, PublishPreview } from "./core/shapes.ts";
 import { AgentAvatar, MessageName, OthersMessage, PersonWords } from "./Chat.tsx";
 import { Prose } from "./Prose.tsx";
-import { Avatar, Button, Confirm, Dialog, Loading, Time } from "./ui.tsx";
+import { Avatar, Button, Confirm, Dialog, Loading, Switch, Time } from "./ui.tsx";
 import { Copy, File, ShieldCheck } from "./icons.tsx";
 import { useDoing } from "./doing.ts";
 import { failure, useAct, useToast } from "./toast.tsx";
@@ -14,7 +14,6 @@ import * as css from "./Publish.css.ts";
 import * as chatCss from "./Chat.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
-import * as pagesCss from "./styles/pages.css.ts";
 import { t } from "./i18n.ts";
 
 /** A preview as asked (`chat.publishPreview`): being read, read, or why not. */
@@ -100,30 +99,21 @@ export function PublishDialog({ station, thread, onClose }: { station: string; t
     api.publish(thread, p.upto, ticked.files).then(setMade, (e: unknown) => toast(t("web-main.act.failed", { what: t("web-pages.chat.publish.verb"), error: failure(e) })));
   };
   let body: ReactNode;
-  if (made) {
-    body = (
-      <div className={css.made}>
-        <span className={css.madeLink} title={made.link}>{made.link}</span>
-        <Button icon={Copy} onClick={() => copy(made.link)}>{t("common.copy")}</Button>
-      </div>
-    );
-  } else if ("reading" in preview) body = <Loading label={t("web-pages.chat.publish.reading")} fill={false} />;
+  if (made) body = <span className={css.madeLink} title={made.link}>{made.link}</span>; else if ("reading" in preview) body = <Loading label={t("web-pages.chat.publish.reading")} fill={false} />;
   else if ("error" in preview) body = <p className={css.problem} role="alert">{preview.error}</p>;
   else if (p!.messages.length === 0) body = <p className={css.note}>{t("web-pages.chat.publish.empty")}</p>;
   else {
     body = (
       <>
         <PublishMessages messages={p!.messages} />
-        {p!.hiddenText && <div className={css.note}><ShieldCheck size={13} />{p!.hiddenText}</div>}
         {p!.files.length > 0 && (
           <ul className={css.files} aria-label={t("web-pages.chat.publish.files")}>
             {p!.files.map((f) => (
-              <li key={f.k}>
-                <label className={`${pagesCss.listRow} ${css.fileRow}`} data-off={f.over || undefined}>
-                  <input type="checkbox" checked={!f.over && !off.has(f.k)} disabled={f.over} onChange={() => toggle(f.k)} />
-                  <span className={pagesCss.listRowTitle}>{f.name}</span>
-                  <span className={css.fileSize}>{f.over ? t("web-pages.chat.publish.tooBig") : f.sizeText}</span>
-                </label>
+              <li key={f.k} className={css.fileRow} data-off={f.over || undefined}>
+                <File size={14} />
+                <span className={css.fileName}>{f.name}</span>
+                <span className={css.fileSize}>{f.over ? t("web-pages.chat.publish.tooBig") : f.sizeText}</span>
+                <Switch small checked={!f.over && !off.has(f.k)} disabled={f.over} onChange={() => toggle(f.k)} label={f.name} />
               </li>
             ))}
           </ul>
@@ -135,8 +125,14 @@ export function PublishDialog({ station, thread, onClose }: { station: string; t
   return (
     <Dialog open wide onClose={onClose} title={made ? t("web-pages.chat.publish.made") : t("web-pages.chat.publish")} description={t("web-pages.chat.publish.lead")}
       footer={made
-        ? <Button variant="primary" onClick={onClose}>{t("common.done")}</Button>
-        : <Button variant="primary" busy={publishing} disabled={!p || p.messages.length === 0 || ticked!.over} onClick={go}>{t("web-pages.chat.publish.go")}</Button>}>
+        ? <>
+            <Button variant="ghost" onClick={onClose}>{t("common.done")}</Button>
+            <Button variant="primary" icon={Copy} onClick={() => copy(made.link)}>{t("web-pages.chat.publish.copyLink")}</Button>
+          </>
+        : <>
+            {p?.hiddenText && <span className={css.footNote}><ShieldCheck size={14} />{p.hiddenText}</span>}
+            <Button variant="primary" busy={publishing} disabled={!p || p.messages.length === 0 || ticked!.over} onClick={go}>{t("web-pages.chat.publish.go")}</Button>
+          </>}>
       {body}
     </Dialog>
   );
