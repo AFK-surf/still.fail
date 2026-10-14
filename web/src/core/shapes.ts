@@ -2518,6 +2518,8 @@ export interface HistoryView {
 	loaded: boolean;
 	/** Older entries exist: `history.older` loads the page before them. */
 	more?: boolean;
+	/** The chats and Slack threads it takes part in, the one last said in first. */
+	places: Place[];
 }
 
 export interface Memory {

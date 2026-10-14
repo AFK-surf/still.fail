@@ -522,7 +522,7 @@ private fun PhaseLine(phase: HistoryPhase) {
     }
 }
 
-/** Where it stands and its figures, how it runs (which can be changed here), what it has used, the station. */
+/** Where it stands and its figures, how it runs (which can be changed here), the chats and Slack threads it takes part in, what it has used, the station. */
 @Composable
 private fun Details(station: String, of: ChatOf, agent: ChatAgent, history: HistoryView?, host: Host?) {
     val app = LocalApp.current
@@ -540,6 +540,10 @@ private fun Details(station: String, of: ChatOf, agent: ChatAgent, history: Hist
             Detail(t("android-chat.history.detail.runtime"), s.runtimeText)
             s.processText?.let { Detail(t("android-chat.history.detail.process"), it) }
             card.value?.work?.let { Detail(t("android-chat.agent.turns"), it) }
+        }
+        history?.places?.takeIf { it.isNotEmpty() }?.let { places ->
+            GroupLabel(t("android-chat.history.places"))
+            Column(Modifier.padding(top = 6.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { places.forEach { Place(station, of, it) } }
         }
         history?.usage?.takeIf { it.isNotEmpty() }?.let { usage ->
             GroupLabel(t("android-chat.agent.usage"))

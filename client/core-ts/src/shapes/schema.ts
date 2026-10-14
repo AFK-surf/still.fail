@@ -1888,6 +1888,7 @@ export const SHAPES: Record<string, Shape> = {
     ["empty", "bool"],
     ["loaded", "bool"],
     ["more", opt("bool"), { doc: "Older entries exist: `history.older` loads the page before them." }],
+    ["places", vec("Place"), { doc: "The chats and Slack threads it takes part in, the one last said in first." }],
   ], { doc: "An agent's execution history, read for people (history.ts)." }),
   FootprintView: struct([
     ["measured", "bool", { doc: "Measured at least once: before, the page says it is being measured." }],

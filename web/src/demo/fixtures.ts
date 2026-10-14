@@ -295,6 +295,7 @@ export function liveView(chat: DemoChat): Live {
 export function historyView(chat: DemoChat): HistoryView {
   return {
     items: chat.items, live: [], edge: "已到 Session 开始处", empty: chat.items.length === 0, loaded: true,
+    places: [{ name: chat.title, surface: "ember", session: chat.key }],
     ...(chat.running ? { phase: { phase: "working", text: "执行工具中", since: chat.running.since } } : {}),
   };
 }

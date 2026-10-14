@@ -2535,7 +2535,9 @@ data class HistoryView (
 	val empty: Boolean,
 	val loaded: Boolean,
 	/// Older entries exist: `history.older` loads the page before them.
-	val more: Boolean? = null
+	val more: Boolean? = null,
+	/// The chats and Slack threads it takes part in, the one last said in first.
+	val places: List<Place>
 )
 
 @Serializable
