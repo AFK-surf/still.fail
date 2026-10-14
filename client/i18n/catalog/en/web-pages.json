@@ -1229,7 +1229,7 @@
   "web-pages.security.unavailable": "This workspace's control plane doesn't support security mode",
   "web-pages.security.unprotected": "Not protected",
   "web-pages.security.unprotectedNote": "Unprotected stations still trust the servers; remote tasks and sharing between them and protected stations stop",
-  "web-pages.security.unprotectedWhy": "Offline or too old; add it after updating",
+  "web-pages.security.unprotectedWhy": "Not in security mode: offline, old, or updated after it was turned on",
   "web-pages.security.viewer": "Viewer",
   "web-pages.security.waiting": "Waiting for you",
   "web-pages.security.waitingLead": "“{name}” has security mode on, so new devices are confirmed first. On another of your devices open Settings › Security and compare this code",
@@ -1240,5 +1240,9 @@
   "web-pages.security.webDevice": "Web",
   "web-pages.security.webExpiry": "Web devices need renewing every 30 days",
   "web-pages.security.webRisk": "The web app's code comes from still.fail's servers. If they were compromised, while you have the page open it could act as you; if that matters, use the desktop or Android app",
-  "web-pages.security.webTitle": "Web app"
+  "web-pages.security.webTitle": "Web app",
+  "web-pages.security.join": "Add",
+  "web-pages.security.joined": "{name} is protected",
+  "web-pages.security.joinTitle": "Add {name} to security mode?",
+  "web-pages.security.joinBody": "It pins this workspace's lock and from then on accepts only signed devices and stations. Add it only if it is your own machine"
 }

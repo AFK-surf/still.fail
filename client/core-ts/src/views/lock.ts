@@ -13,6 +13,7 @@
 //   confirm {device, code}  a waiting device confirmed, its code compared on both screens
 //   deny {device}           a waiting device turned down
 //   addStation {station, code}  a station enrolled with the lock's hash, confirmed by the code it printed
+//   joinStation {station}   a station of the workspace from before (offline or too old then, updated since) taken in
 //   renew {device}          a web page's device for 30 days more
 //   removeDevice {device}   a device taken out of the lock
 //   disable                 the owner turns it off
@@ -26,6 +27,7 @@ import { handlers, hooks } from "../core/execute.ts";
 import type { Call } from "../core/calls.ts";
 import type { Owner } from "../core/routing.ts";
 import { CoreError } from "../error.ts";
+import { t } from "../i18n.ts";
 import { type Entry, type Head, Signer, WEB_DEVICE_SECS, entryHash, next, readHead, shortCode } from "../lock.ts";
 import * as prefs from "../prefs.ts";
 import type { Topic } from "../protocol.ts";
@@ -425,6 +427,9 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
       case "addStation":
         result = yield* lock.addStation(param("station"), param("code"));
         break;
+      case "joinStation":
+        result = yield* lock.joinStation(param("station"));
+        break;
       case "renew":
         result = yield* lock.renew(param("device"));
         break;
@@ -603,6 +608,26 @@ class Lock {
       if (shortCode(station) !== code.trim().toUpperCase()) return yield* Effect.fail(CoreError.invalid("the code does not match that station's"));
       const s = arr(get(view(self.#inner, self.ws), "stations")).find((x) => x.id === station);
       return yield* self.append("station", { key: station, name: s?.name ?? "" });
+    });
+  }
+
+  /// A station the workspace already had, not in the lock (offline or too old when it was turned on, updated since):
+  /// asked whether it understands a lock, signed in, and given the whole chain, which it pins (the owner brings it: a
+  /// station without a lock pins only one its owner brings, on a device the genesis names).
+  joinStation(station: string): Effect.Effect<unknown, CoreError> {
+    const self = this;
+    return Effect.gen(function* () {
+      const s = arr(get(view(self.#inner, self.ws), "stations")).find((x) => x.id === station);
+      if (!s) return yield* Effect.fail(CoreError.invalid("not a station of this workspace"));
+      const asked = yield* Effect.result(self.#station(station, "GET", "/lock"));
+      if (asked._tag === "Failure") {
+        const old = asked.failure.status === 404 || /404|no route/.test(asked.failure.message);
+        return yield* Effect.fail(new CoreError(old ? "lock_station_old" : "lock_station_offline", old ? t("core-misc.lock.stationOld", { name: s.name }) : t("core-misc.lock.stationOffline", { name: s.name })));
+      }
+      const done = yield* self.append("station", { key: station, name: s.name ?? "" });
+      const pinned = get(get(done, "stations"), station);
+      if (isObject(pinned) && typeof pinned.error === "string") return yield* Effect.fail(new CoreError("lock_station_refused", pinned.error));
+      return done;
     });
   }
 

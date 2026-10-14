@@ -1160,7 +1160,7 @@
   "web-pages.security.unavailable": "这个 workspace 的控制面不支持安全模式",
   "web-pages.security.unprotected": "不受保护",
   "web-pages.security.unprotectedNote": "没保护的 station 照旧信任服务器；它和受保护的 station 之间的远程任务、分享会停",
-  "web-pages.security.unprotectedWhy": "离线或版本太旧，升级后加入",
+  "web-pages.security.unprotectedWhy": "没在安全模式里：离线、版本旧，或开启后才更新",
   "web-pages.security.viewer": "只读",
   "web-pages.security.waiting": "等你确认",
   "web-pages.security.waitingLead": "「{name}」开了安全模式，新设备要先确认。在你的另一台设备上打开 设置 › 安全，核对这个短码",
@@ -1171,5 +1171,9 @@
   "web-pages.security.webDevice": "网页版",
   "web-pages.security.webExpiry": "网页版设备 30 天后要续期",
   "web-pages.security.webRisk": "网页版的代码来自 still.fail 的服务器。服务器被攻破时，你开着网页期间它能以你的身份操作；在意的话用桌面或安卓客户端",
-  "web-pages.security.webTitle": "网页版"
+  "web-pages.security.webTitle": "网页版",
+  "web-pages.security.join": "加入",
+  "web-pages.security.joined": "{name} 已受保护",
+  "web-pages.security.joinTitle": "把 {name} 加入安全模式？",
+  "web-pages.security.joinBody": "它会钉住这个 workspace 的锁，之后只认签过的设备和 station。确认这是你自己的机器再加入"
 }

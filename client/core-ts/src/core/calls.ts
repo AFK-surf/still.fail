@@ -183,7 +183,7 @@ export function counts(call: Call, name: string): boolean {
 const S = "string" as const;
 
 /// The workspace lock's calls (views/lock.ts).
-export const LOCK_CALLS = ["state", "open", "toggle", "dismiss", "request", "confirm", "deny", "addStation", "renew", "removeDevice", "disable"];
+export const LOCK_CALLS = ["state", "open", "toggle", "dismiss", "request", "confirm", "deny", "addStation", "joinStation", "renew", "removeDevice", "disable"];
 
 function form(name: string, params: unknown, prefix: string, actions: string[]): { topic: Topic; action: string; patch: unknown } | null {
   if (!name.startsWith(prefix)) return null;

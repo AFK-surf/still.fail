@@ -102,13 +102,20 @@ function On({ lock }: { lock: LockView }) {
       </ListCard>
       <SectionHeader title="Station" start={24} />
       <ListCard>
-        {lock.stations.map((s) => (
-          <ListRow key={s.id}>
-            <span className={css.mDot} data-on={s.protected} data-tone={s.protected ? undefined : "amber"} />
-            <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{s.name}</span>
-            <span className={s.protected ? partsCss.mSubtle : css.mWarn}>{s.protected ? t("web-pages.security.protected") : t("web-pages.security.unprotected")}</span>
-          </ListRow>
-        ))}
+        {lock.stations.map((s) => {
+          const join = !s.protected && lock.owner && lock.signs;
+          return (
+            <ListRow key={s.id} onClick={join ? () => app.sheet({ height: 0.4, content: () => <JoinSheet s={s} /> }) : undefined}>
+              <span className={css.mDot} data-on={s.protected} data-tone={s.protected ? undefined : "amber"} />
+              <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+                <span className={listsCss.mRowTitle}>{s.name}</span>
+                {!s.protected && <span className={listsCss.mRowNote}>{t("web-pages.security.unprotectedWhy")}</span>}
+              </span>
+              {s.protected ? <span className={partsCss.mSubtle}>{t("web-pages.security.protected")}</span>
+                : join ? <JoinMark id={s.id} /> : <span className={css.mWarn}>{t("web-pages.security.unprotected")}</span>}
+            </ListRow>
+          );
+        })}
       </ListCard>
       <SectionHeader title={t("web-pages.security.webTitle")} start={24} />
       <ListCard><div className={css.mBody}><span className={partsCss.mSubtle}>{t("web-pages.security.webRisk")}</span></div></ListCard>
@@ -134,6 +141,27 @@ function DeviceRow({ d, renew }: { d: LockView["members"][number]["devices"][num
       </span>
       {renewing ? <Spinner size={14} /> : d.daysLeft != null && renew && <span className={partsCss.mAccent}>{t("web-pages.security.renew")}</span>}
     </ListRow>
+  );
+}
+
+function JoinMark({ id }: { id: string }) {
+  const app = useApp();
+  return useDoing("lock.joinStation", { workspace: app.entry.id, station: id }) ? <Spinner size={14} /> : <span className={partsCss.mAccent}>{t("web-pages.security.join")}</span>;
+}
+
+/** A station of the workspace not in the lock, taken in once its owner says it is theirs. */
+function JoinSheet({ s }: { s: LockView["stations"][number] }) {
+  const app = useApp();
+  const run = useRun();
+  return (
+    <div className={css.mSheet}>
+      <b className={css.mSheetTitle}>{t("web-pages.security.joinTitle", { name: s.name })}</b>
+      <span className={partsCss.mSubtle}>{t("web-pages.security.joinBody")}</span>
+      <div className={css.mPair}>
+        <Button primary={false} label={t("common.cancel")} onClick={() => app.sheet(null)} />
+        <Button primary label={t("web-pages.security.join")} onClick={() => { app.sheet(null); void run("lock.joinStation", { workspace: app.entry.id, station: s.id }, t("web-pages.security.join"), t("web-pages.security.joined", { name: s.name })); }} />
+      </div>
+    </div>
   );
 }
 

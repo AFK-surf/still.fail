@@ -16,7 +16,7 @@ import * as waitingCss from "../styles/waiting.css.ts";
 import * as css from "./Security.css.ts";
 
 export type { LockDevice, LockRequest, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
-import type { LockDevice, LockRequest, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
+import type { LockDevice, LockRequest, LockStation, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
 
 const ROLE: Record<string, string> = { owner: "Owner", admin: "Admin", member: t("web-pages.roles.member"), viewer: t("web-pages.security.viewer") };
 
@@ -80,6 +80,7 @@ function On({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
   const act = useAct();
   const [checking, setChecking] = useState<LockRequest | null>(null);
   const [off, setOff] = useState(false);
+  const [joining, setJoining] = useState<LockStation | null>(null);
   const turningOff = useDoing("lock.disable", { workspace: entry.id });
   return (
     <>
@@ -119,25 +120,37 @@ function On({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
       </Section>
       <Section title="Station">
         <div className={pagesCss.card}><div className={css.rows}>
-          {lock.stations.map((s) => (
-            <div key={s.id} className={css.row}>
-              <span className={css.dot} data-on={s.protected} data-tone={s.protected ? undefined : "amber"} />
-              <div className={css.rowText}><span className={css.rowName}>{s.name}</span>{!s.protected && <span className={css.rowMeta}>{t("web-pages.security.unprotectedWhy")}</span>}</div>
-              <span className={s.protected ? css.rowMeta : css.warn}>{s.protected ? t("web-pages.security.protected") : t("web-pages.security.unprotected")}</span>
-            </div>
-          ))}
+          {lock.stations.map((s) => <StationRow key={s.id} entry={entry} s={s} canJoin={lock.owner && lock.signs} onJoin={() => setJoining(s)} />)}
         </div></div>
       </Section>
       <Section title={t("web-pages.security.webTitle")}>
         <div className={pagesCss.card}><p className={css.sub}>{t("web-pages.security.webRisk")}</p></div>
       </Section>
-      {lock.owner && lock.signs && <Button variant="danger" busy={turningOff} onClick={() => setOff(true)}>{t("web-pages.security.turnOff")}</Button>}
+      {lock.owner && lock.signs && <div><Button variant="danger" busy={turningOff} onClick={() => setOff(true)}>{t("web-pages.security.turnOff")}</Button></div>}
+      <Dialog open={joining !== null} onClose={() => setJoining(null)} title={joining ? t("web-pages.security.joinTitle", { name: joining.name }) : ""} description={t("web-pages.security.joinBody")}
+        footer={joining && <><Button variant="ghost" onClick={() => setJoining(null)}>{t("common.cancel")}</Button><Button variant="primary" onClick={() => { const s = joining; setJoining(null); act(call("lock.joinStation", { workspace: entry.id, station: s.id }), t("web-pages.security.join"), t("web-pages.security.joined", { name: s.name })); }}>{t("web-pages.security.join")}</Button></>}>
+        <span />
+      </Dialog>
       <ConfirmDevice entry={entry} request={checking} onClose={() => setChecking(null)} />
       <Dialog open={off} onClose={() => setOff(false)} title={t("web-pages.security.turnOffTitle")} description={t("web-pages.security.turnOffBody")}
         footer={<><Button variant="ghost" onClick={() => setOff(false)}>{t("common.cancel")}</Button><Button variant="danger" onClick={() => { setOff(false); act(call("lock.disable", { workspace: entry.id }), t("web-pages.security.turnOff")); }}>{t("web-pages.security.turnOff")}</Button></>}>
         <span />
       </Dialog>
     </>
+  );
+}
+
+/** A station and whether the lock protects it; one it does not, the owner's signing device can take in. */
+function StationRow({ entry, s, canJoin, onJoin }: { entry: WorkspaceEntry; s: LockStation; canJoin: boolean; onJoin(): void }) {
+  const joiningNow = useDoing("lock.joinStation", { workspace: entry.id, station: s.id });
+  return (
+    <div className={css.row}>
+      <span className={css.dot} data-on={s.protected} data-tone={s.protected ? undefined : "amber"} />
+      <div className={css.rowText}><span className={css.rowName}>{s.name}</span>{!s.protected && <span className={css.rowMeta}>{t("web-pages.security.unprotectedWhy")}</span>}</div>
+      {s.protected ? <span className={css.rowMeta}>{t("web-pages.security.protected")}</span>
+        : canJoin ? <Button variant="ghost" busy={joiningNow} onClick={onJoin}>{t("web-pages.security.join")}</Button>
+        : <span className={css.warn}>{t("web-pages.security.unprotected")}</span>}
+    </div>
   );
 }
 

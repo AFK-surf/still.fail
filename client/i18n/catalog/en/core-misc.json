@@ -168,5 +168,7 @@
   "core-misc.wake.network": "Network changed; reconnecting",
   "core-misc.composer.too_big": "Over 1 GB",
   "core-misc.composer.upload_missing": "The upload source for {name} is no longer available. Attach the file again in a new message.",
-  "core-misc.composer.upload_failed": "Upload failed"
+  "core-misc.composer.upload_failed": "Upload failed",
+  "core-misc.lock.stationOld": "{name} is too old; update it first",
+  "core-misc.lock.stationOffline": "Can't reach {name}; add it once it's online"
 }

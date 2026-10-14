@@ -277,6 +277,15 @@ async function main() {
   const kB = await asDevice(bobDevice, B.id, await credentialFor(bob, evilWs, bobDevice.id()));
   check("a credential signed with the cloud's new key", `${A.name}: ${said(kA)}`, `${B.name}: ${said(kB)}`, !kA.hello?.ok && /credential/.test(kA.hello?.error ?? "") && kB.hello?.ok === true);
 
+  say("5. unlocked-b, updated, is taken in by the owner afterwards");
+  // Back in Dev first (the move above was the cloud's doing): the owner enrolls it again on its machine.
+  const back = enrollArgs((await api(alice, "POST", `/v1/workspaces/${ws}/enrollments`, { name: "unlocked-b" })).command);
+  execFileSync(native("launcher"), ["enroll", ...back, "--app", join(B.data, "../app"), "--data", B.data], { env: env() });
+  await until(async () => stationState(B).workspace === ws && online(B), "unlocked-b back in Dev");
+  const joined = await owner.call("lock.joinStation", { workspace: ws, station: B.id }).then(() => "joined", (e: Error) => `refused: ${e.message}`);
+  await until(async () => /已钉住|pinned/.test(lockLine(B)), "unlocked-b pinned", 60).catch(() => null);
+  check("an existing station taken in later", `${B.name}: ${joined}; ${lockLine(B)}`, "-", joined === "joined" && /已钉住|pinned/.test(lockLine(B)));
+
   say("summary");
   console.table(results.map((r) => ({ check: r.check, ok: r.ok ? "PASS" : "FAIL" })));
   owner.close();

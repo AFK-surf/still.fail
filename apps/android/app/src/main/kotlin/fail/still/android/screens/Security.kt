@@ -183,10 +183,20 @@ private fun On(current: WorkspaceEntry, lock: LockView) {
     SectionHeader("Station", start = 24.dp)
     ListCard {
         lock.stations.forEach { s ->
-            ListRow {
+            val join = !s.protected && lock.owner && lock.signs
+            val joining = app.isDoing("lock.joinStation", "workspace" to ws, "station" to s.id)
+            ListRow(onClick = if (join && !joining) ({ joinSheet(app, ws, s.id, s.name) }) else null) {
                 Dot(s.protected, warn = !s.protected)
-                Text(s.name, fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
-                Text(if (s.protected) t("web-pages.security.protected") else t("web-pages.security.unprotected"), fontSize = 13.sp, color = if (s.protected) C.subtle else C.warn)
+                Column(Modifier.weight(1f)) {
+                    Text(s.name, fontSize = 15.sp, color = C.ink)
+                    if (!s.protected) Text(t("web-pages.security.unprotectedWhy"), fontSize = 13.sp, color = C.muted)
+                }
+                when {
+                    s.protected -> Text(t("web-pages.security.protected"), fontSize = 13.sp, color = C.subtle)
+                    joining -> Spinner(14.dp)
+                    join -> Text(t("web-pages.security.join"), fontSize = 14.sp, color = C.accent)
+                    else -> Text(t("web-pages.security.unprotected"), fontSize = 13.sp, color = C.warn)
+                }
             }
         }
     }
@@ -212,6 +222,21 @@ private fun DeviceRow(ws: String, d: LockDevice, canRenew: Boolean) {
             Text(meta, fontSize = 13.sp, color = if (d.renewSoon) C.warn else C.muted)
         }
         if (renewing) Spinner(14.dp) else if (renew) Text(t("web-pages.security.renew"), fontSize = 14.sp, color = C.accent)
+    }
+}
+
+/** A station of the workspace not in the lock, taken in once its owner says it is theirs. */
+private fun joinSheet(app: AppState, ws: String, station: String, name: String) {
+    app.sheet = SheetSpec(0.4f) {
+        SheetGrab()
+        SheetHead(t("web-pages.security.joinTitle", "name" to name))
+        Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(t("web-pages.security.joinBody"), fontSize = 14.sp, color = C.muted)
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                WideButton(t("common.cancel"), primary = false, modifier = Modifier.weight(1f)) { app.sheet = null }
+                WideButton(t("web-pages.security.join"), primary = true, modifier = Modifier.weight(1f)) { app.sheet = null; app.lockCall(ws, "joinStation", t("web-pages.security.join"), t("web-pages.security.joined", "name" to name), "station" to station) }
+            }
+        }
     }
 }
 
