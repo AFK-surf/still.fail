@@ -483,6 +483,8 @@ function shownAs(s: StationView, mark: Mark | undefined): StationView {
 function Stations({ view, account, manager, stations }: { view: WorkspaceView; account: Account; manager: boolean; stations: StationView[] }) {
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<StationView | null>(null);
+  // Asked in a dialog of ours: window.prompt does nothing in the desktop app (Electron has none).
+  const [naming, setNaming] = useState<StationView | null>(null);
   const remove = useAction((s: StationView) => cloud.removeStation(account.sub, view.id, s.id));
   const rename = useAction(({ id, name }: { id: string; name: string }) => cloud.renameStation(account.sub, view.id, id, name));
   const renaming = (s: StationView) => rename.busy && rename.arg?.id === s.id;
@@ -496,17 +498,32 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
         <DoingMark calls={["workspace.renameStation", "workspace.removeStation"]} on={{ account: account.sub, workspace: view.id, station: s.id }} className={controlsCss.iconSpinner} size={14}
           label={renaming(s) ? t("web-pages.settings.stations.renaming") : t("web-main.activity.busy")} />
         <Menu items={[
-          { label: t("web-pages.settings.stations.rename"), disabled: renaming(s), onSelect: () => { const n = window.prompt(t("web-pages.settings.stations.namePrompt"), s.name); if (n?.trim() && n.trim() !== s.name) rename.run({ id: s.id, name: n.trim() }); } },
+          { label: t("web-pages.settings.stations.rename"), disabled: renaming(s), onSelect: () => setNaming(s) },
           { label: t("web-pages.settings.stations.remove"), icon: Trash, danger: true, onSelect: () => setRemoving(s) },
         ]} />
       </>} />
       {mark.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.stations.emoji.failed", { name: stations.find((s) => s.id === mark.arg?.id)?.name ?? "station", error: mark.error.message })}</p>}
       {rename.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.settings.stations.renameFailed", { name: stations.find((s) => s.id === rename.arg?.id)?.name ?? "station", error: rename.error.message })}</p>}
       {adding && <AddStationDialog view={view} account={account} stations={stations} onClose={() => setAdding(false)} />}
+      {naming && <RenameStationDialog station={naming} onClose={() => setNaming(null)} onRename={(name) => { if (name !== naming.name) void rename.run({ id: naming.id, name }); setNaming(null); }} />}
       <Confirm open={removing !== null} onClose={() => setRemoving(null)} onConfirm={() => { if (removing) void remove.run(removing); setRemoving(null); }}
         title={t("web-pages.settings.stations.removeConfirm", { name: removing?.name ?? "" })} action={t("web-pages.settings.stations.removeAction")}
         description={t("web-pages.settings.stations.removeConfirmBody", { name: NAME })} />
     </Section>
+  );
+}
+
+function RenameStationDialog({ station, onClose, onRename }: { station: StationView; onClose(): void; onRename(name: string): void }) {
+  const [name, setName] = useState(station.name);
+  const save = () => { if (name.trim()) onRename(name.trim()); };
+  return (
+    <Dialog open onClose={onClose} title={t("web-pages.settings.stations.rename")}
+      footer={<><Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button><Button variant="primary" disabled={!name.trim()} onClick={save}>{t("common.save")}</Button></>}>
+      <Field label={t("web-pages.settings.stations.namePrompt")} htmlFor="station-name">
+        <input id="station-name" className={controlsCss.input} value={name} autoFocus onFocus={(e) => e.target.select()} onChange={(e) => setName(e.target.value)} maxLength={80}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) save(); }} />
+      </Field>
+    </Dialog>
   );
 }
 
