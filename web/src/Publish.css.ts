@@ -32,6 +32,8 @@ export const page = style({
 });
 /** Who can read it, over the messages. */
 export const lead = style({ margin: "0", fontSize: vars.textUi, color: vars.muted });
+/** 「发布」 in the bar: its corners the bar's (14), less the 4 round it, as the bar's other buttons are. */
+export const headGo = style({ height: "36px", borderRadius: `calc(10px * ${vars.cornerScale})`, cornerShape: vars.cornerShape });
 /** In the bar, after its name: how many things were hidden in all. */
 export const headNote = style({ display: "inline-flex", alignItems: "center", gap: "4px", alignSelf: "center" });
 /** What went wrong (the preview not read, the ticked too big together), in red. */

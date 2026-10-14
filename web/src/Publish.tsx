@@ -160,7 +160,7 @@ export function PublishDialog({ station, thread, onClose }: { station: string; t
               <RDialog.Title className={fpCss.fpName}>{t("web-pages.chat.publish")}</RDialog.Title>
               {p?.hiddenText && <span className={`${fpCss.fpMeta} ${css.headNote}`}><ShieldCheck size={14} />{p.hiddenText}</span>}
             </div>
-            <Button variant="primary" busy={publishing} disabled={!p || p.messages.length === 0} onClick={go}>{t("web-pages.chat.publish.go")}</Button>
+            <Button variant="primary" className={css.headGo} busy={publishing} disabled={!p || p.messages.length === 0} onClick={go}>{t("web-pages.chat.publish.go")}</Button>
             <Tip label={t("web-main.preview.closeKey")}><RDialog.Close className={pagesCss.iconBtn} aria-label={t("common.close")}><Close size={18} /></RDialog.Close></Tip>
           </header>
           <div className={fpCss.fpBody}>{body}</div>
