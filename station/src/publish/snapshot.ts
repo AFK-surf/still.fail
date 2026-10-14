@@ -13,7 +13,8 @@ export type DraftFile = { k: string; name: string; size: number; type: string; w
 export type Draft = {
   title: string;
   upto: number;
-  entries: { n: number; at: number; authorKind: string; author: string; text: string; files: string[] }[];
+  /// `maker`, `runtime`: an agent's mark; `model`, `person`: an agent's model, a person's address (the members' preview alone).
+  entries: { n: number; at: number; authorKind: string; author: string; text: string; files: string[]; maker?: string; model?: string; runtime?: string; person?: string }[];
   /// How many things were hidden, by message (those with none left out).
   redacted: { n: number; count: number }[];
   files: DraftFile[];
@@ -34,6 +35,8 @@ export function snapshotOf(d: Draft, station: string, by: string, at: number, ti
       authorKind: e.authorKind,
       author: e.author,
       text: e.text,
+      ...(e.maker !== undefined ? { maker: e.maker } : {}),
+      ...(e.runtime !== undefined ? { runtime: e.runtime } : {}),
       files: e.files.flatMap((k) => {
         const f = files.get(k);
         if (f === undefined) return [];

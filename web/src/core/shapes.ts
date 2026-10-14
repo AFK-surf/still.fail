@@ -3473,6 +3473,12 @@ export interface PublishMessage {
 	/** As the snapshot names them (no emails). */
 	author: string;
 	agent: boolean;
+	/** An agent's model's maker, for its mark as the chat draws it. */
+	maker?: Maker;
+	/** An agent's runtime (its mark when the maker is not known). */
+	runtime?: string;
+	/** A person's picture, as the workspace's members have it. */
+	picture?: string;
 	/** Its Markdown, what looks secret in it already `[已隐藏]`. */
 	text: string;
 	/** Its attachments, ticked or not where they are shown (the panel shows them in their message). */

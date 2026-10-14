@@ -99,10 +99,18 @@ function namesOf(inner: Inner, station: string): Record<string, string> {
   return out;
 }
 
+/// A member's picture by their address, as the workspace has it.
+function pictureOf(members: J[], email: string | null): string | null {
+  if (email === null) return null;
+  const member = members.find((m) => typeof get(m, "email") === "string" && (get(m, "email") as string).toLowerCase() === email.toLowerCase());
+  const picture = str(get(member, "picture"));
+  return picture !== null && picture !== "" ? picture : null;
+}
+
 /// What a station answers a preview with (`POST /threads/:thread/publish/preview`), for the panel that publishes it:
 /// its messages, each with how many things in it were hidden and its attachments (as the chat has them, to show alike),
 /// and all its attachments together.
-export function previewShown(answer: J, clock: present.Clock): J {
+export function previewShown(answer: J, clock: present.Clock, members: J[] = []): J {
   const hiddenAt = new Map<number, number>();
   for (const r of arr(get(answer, "redacted"))) hiddenAt.set(num(get(r, "n")), (hiddenAt.get(num(get(r, "n"))) ?? 0) + num(get(r, "count")));
   const files = arr(get(answer, "files")).map((f) => {
@@ -121,6 +129,10 @@ export function previewShown(answer: J, clock: present.Clock): J {
       n: num(e.n),
       author: str(e.author) ?? "",
       agent: e.authorKind === "agent",
+      // Who said it drawn as the chat draws them: an agent's maker's mark, a person's picture.
+      ...(present.maker(str(e.model)) ? { maker: present.maker(str(e.model)) } : {}),
+      ...(str(e.runtime) !== null ? { runtime: str(e.runtime) } : {}),
+      ...(pictureOf(members, str(e.person)) !== null ? { picture: pictureOf(members, str(e.person)) } : {}),
       text: str(e.text) ?? "",
       files: arr(e.files).flatMap((k) => files.filter((f) => f.k === k)),
       hidden,
@@ -171,7 +183,7 @@ export function install(inner: Inner): void {
         inner.stations.requests.call(at, "POST", `/threads/${c.thread}/publish/preview`, { names: namesOf(inner, c.station) }, { ctx }),
         oldStation,
       );
-      return previewShown(answer, clock());
+      return previewShown(answer, clock(), arr(get(inner.data.shared({ topic: "workspace", workspace: ofAddress(c.station) }), "members")));
     });
   };
   handlers.chatPublish = (_inner, call, _progress, _at, ctx) => {

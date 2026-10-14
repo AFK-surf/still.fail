@@ -182,7 +182,8 @@ internal fun openPublish(app: AppState, station: String, thread: Long) {
 private fun PreviewMessage(station: String, m: PublishMessage, off: Set<String>, toggle: (String) -> Unit) {
     val ink = chatInk()
     Box(Modifier.fillMaxWidth()) {
-        Box(Modifier.padding(top = 3.dp)) { if (m.agent) AgentAvatar(null, null) else Avatar(m.author, m.author, 18.dp) }
+        // As the chat draws them (Chat.kt SaidRow): an agent by its maker's mark, a person by their picture.
+        Box(Modifier.padding(top = 3.dp)) { if (m.agent) AgentAvatar(m.maker, m.runtime) else Avatar(m.author, m.author, 18.dp, picture = m.picture) }
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(Modifier.padding(start = 25.dp).heightIn(min = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(m.author, fontSize = 15.sp, fontWeight = FontWeight(650), color = ink.name, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 240.dp))

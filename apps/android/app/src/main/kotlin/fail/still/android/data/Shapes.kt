@@ -3485,6 +3485,12 @@ data class PublishMessage (
 	/// As the snapshot names them (no emails).
 	val author: String,
 	val agent: Boolean,
+	/// An agent's model's maker, for its mark as the chat draws it.
+	val maker: Maker? = null,
+	/// An agent's runtime (its mark when the maker is not known).
+	val runtime: String? = null,
+	/// A person's picture, as the workspace's members have it.
+	val picture: String? = null,
 	/// Its Markdown, what looks secret in it already `[已隐藏]`.
 	val text: String,
 	/// Its attachments, ticked or not where they are shown (the panel shows them in their message).

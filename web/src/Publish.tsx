@@ -74,9 +74,12 @@ function PreviewMessage({ message: m, ticking }: { message: PublishMessage; tick
     const f = m.files.find((x) => x.name === name);
     return f ? <FileToggle file={f} ticking={ticking} /> : null;
   };
+  // As the chat draws them (Chat.tsx MessageAvatar): an agent by its maker's mark, a person by their picture.
   const avatar = m.agent
-    ? <AgentAvatar maker={null} runtime={null} />
-    : <span className={chatCss2.msgAvatar}><Avatar id={m.author} name={m.author} size={18} /></span>;
+    ? <AgentAvatar maker={m.maker ?? null} runtime={m.runtime === "claude" || m.runtime === "codex" ? m.runtime : null} />
+    : m.picture
+      ? <img className={chatCss2.msgAvatar} src={m.picture} alt="" width={18} height={18} referrerPolicy="no-referrer" />
+      : <span className={chatCss2.msgAvatar}><Avatar id={m.author} name={m.author} size={18} /></span>;
   return (
     <OthersMessage avatar={avatar} name={<MessageName>{m.author}</MessageName>} time={m.time?.createdAt}>
       {m.agent
@@ -129,7 +132,7 @@ export function PublishDialog({ station, thread, onClose }: { station: string; t
     );
   }
   return (
-    <Dialog open wide onClose={onClose} title={made ? t("web-pages.chat.publish.made") : t("web-pages.chat.publish")} description={t("web-pages.chat.publish.lead")}
+    <Dialog open wide tall={made === null} onClose={onClose} title={made ? t("web-pages.chat.publish.made") : t("web-pages.chat.publish")} description={t("web-pages.chat.publish.lead")}
       footer={made
         ? <>
             <Button variant="ghost" onClick={onClose}>{t("common.done")}</Button>

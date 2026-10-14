@@ -130,7 +130,7 @@ const snapshot: Snapshot = {
       { k: "f5", name: "unplaced.html", size: 60, type: "text/html" },
       { k: "f6", name: "b.svg", size: 70, type: "image/svg+xml" },
     ] },
-    { n: 3, at: 1760400002000, authorKind: "agent", author: "ember", text: "more", files: [1, 2, 3, 4].map((i) => ({ k: `f${6 + i}`, name: `shot${i}.jpg`, size: 5, type: "image/jpeg" })) },
+    { n: 3, at: 1760400002000, authorKind: "agent", author: "ember", text: "more", maker: "anthropic", runtime: "claude", files: [1, 2, 3, 4].map((i) => ({ k: `f${6 + i}`, name: `shot${i}.jpg`, size: 5, type: "image/jpeg" })) },
   ],
 };
 
@@ -138,6 +138,9 @@ test("a snapshot is read as the station writes it; what it lacks is nothing, a f
   assert.deepEqual(parseSnapshot(encode(JSON.stringify(snapshot))), snapshot);
   const sparse = parseSnapshot(encode(JSON.stringify({ v: 1, entries: [{ text: "hi", files: [{ k: "f0", name: "x.png" }, { name: "no k" }, null] }, "nonsense"], extra: true })));
   assert.deepEqual(sparse, { v: 1, title: "", station: "", at: 0, by: "", redacted: 0, entries: [{ n: 0, at: 0, authorKind: "person", author: "", text: "hi", files: [{ k: "f0", name: "x.png", size: 0, type: "application/octet-stream" }] }] });
+  // A maker is a mark's name, nothing that reaches past public/models; a runtime one of the two.
+  const odd = parseSnapshot(encode(JSON.stringify({ v: 1, entries: [{ authorKind: "agent", text: "x", maker: "../x", runtime: "other" }] })));
+  assert.deepEqual([odd.entries[0]!.maker, odd.entries[0]!.runtime], [undefined, undefined]);
   for (const bad of ["", "[]", "null", JSON.stringify({ ...snapshot, v: 2 }), JSON.stringify({ entries: [] })]) {
     assert.throws(() => parseSnapshot(encode(bad)), (e: unknown) => e instanceof GuestError && e.kind === "broken", bad);
   }

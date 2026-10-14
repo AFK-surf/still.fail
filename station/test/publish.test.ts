@@ -142,7 +142,8 @@ test("a chat published: previewed, written out frozen with the attachments ticke
     assert.equal(preview.status, 200, JSON.stringify(preview.body));
     const p = preview.body;
     assert.deepEqual(p.entries.map((e: any) => e.author), ["Alice Liddell", "Opus 4.1", "carol"], "people by name, agents by model, never by address or key");
-    assert.ok(!JSON.stringify(p).includes("@acme.dev") && !JSON.stringify(p).includes("@elsewhere.org"), "no address in the snapshot");
+    // The members' preview draws them as the chat does: an agent by its maker's mark, a person by their address's picture.
+    assert.deepEqual(p.entries.map((e: any) => [e.maker ?? null, e.model ?? null, e.runtime ?? null, e.person ?? null]), [[null, null, null, "alice@acme.dev"], ["anthropic", "claude-opus-4-1", "claude", null], [null, null, null, "carol@elsewhere.org"]]);
     assert.equal(p.entries[0].text, "deploy with token: [hidden]");
     assert.equal(p.title, "deploy with token: [hidden]", "its name, the first thing said, hidden alike");
     assert.deepEqual(p.redacted, [{ n: p.entries[0].n, count: 1 }]);
@@ -165,6 +166,8 @@ test("a chat published: previewed, written out frozen with the attachments ticke
     assert.equal(snapshot.station, "Studio");
     assert.equal(snapshot.by, "Alice");
     assert.deepEqual(snapshot.entries.map((e: any) => e.text), ["deploy with token: [hidden]", "done ![](shot.png)", "looks good"]);
+    assert.deepEqual(snapshot.entries.map((e: any) => [e.maker ?? null, e.model ?? null, e.runtime ?? null]), [[null, null, null], ["anthropic", null, "claude"], [null, null, null]]);
+    assert.ok(!JSON.stringify(snapshot).includes("@acme.dev") && !JSON.stringify(snapshot).includes("@elsewhere.org"), "no address in the snapshot");
     assert.deepEqual(snapshot.entries[1].files.map((f: any) => f.k), ["f0"], "only what was ticked");
     assert.equal(readFileSync(join(dir, "f", "f0"), "utf8"), "png bytes");
     assert.ok(!existsSync(join(dir, "f", "f1")));

@@ -6,7 +6,7 @@ import type { Draft, DraftFile } from "../publish/snapshot.ts";
 import type { Lang } from "../ops/i18n.ts";
 import * as store from "./store.ts";
 import type { AuthorKind, MessageRow, Store } from "./store.ts";
-import { modelName } from "../ops/model-name.ts";
+import { makerOf, modelName } from "../ops/model-name.ts";
 import { setLang, tr } from "./spoken.ts";
 import { HttpError, apiOf, authorNames, chatTitle, useNames } from "./views.ts";
 import { mime } from "./sessions.ts";
@@ -40,6 +40,17 @@ function authorOf(s: Store, m: MessageRow, names: Record<string, string>, known:
   return said(m.authorKind, m.author) ?? "still.fail";
 }
 
+/// What draws who said a message as the chat does: an agent's model's maker and its runtime (its mark; its model too, for
+/// the members' preview), a person's address (the members' preview gives their picture by it; never in the snapshot).
+function whoDrawn(s: Store, m: MessageRow): { maker?: string; model?: string; runtime?: string; person?: string } {
+  if (m.authorKind === "person") return m.author.includes("@") ? { person: m.author } : {};
+  if (m.authorKind !== "agent") return {};
+  const session = store.getSession(s, m.author);
+  const model = typeof m.agentIdentity?.model === "string" && m.agentIdentity.model !== "" ? m.agentIdentity.model : (session?.model ?? null);
+  const maker = model !== null ? makerOf(model) : null;
+  return { ...(maker !== null ? { maker } : {}), ...(model !== null ? { model } : {}), ...(session ? { runtime: session.runtime } : {}) };
+}
+
 /// The chat `thread` as published up to message n = `upto` (its latest without it), read by `viewer`.
 export function publishDraft(s: Store, a: { thread: number; upto: number | null; names: Record<string, string>; viewer: string }, lang: Lang): Draft {
   setLang(lang);
@@ -69,7 +80,7 @@ export function publishDraft(s: Store, a: { thread: number; upto: number | null;
       files.push(file);
       return k;
     });
-    return { n: m.n, at: m.createdAt, authorKind: m.authorKind, author, text: hidden.text, files: own };
+    return { n: m.n, at: m.createdAt, authorKind: m.authorKind, author, text: hidden.text, files: own, ...whoDrawn(s, m) };
   });
   // Its name is the first thing said in it when nobody gave it one: hidden alike.
   return { title: redact(chatTitle(found, null), mark).text, upto: messages.at(-1)!.n, entries, redacted, files };

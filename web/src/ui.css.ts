@@ -240,6 +240,8 @@ export const dialog = style({
   },
 });
 export const dialogWide = style({ width: "min(640px, calc(100vw - 32px))" });
+/** One for reading in (a chat's preview before it is published): wide, the window's height less a margin, its body all of what is left. */
+export const dialogTall = style({ width: "min(880px, calc(100vw - 32px))", height: "calc(100dvh - 48px)" });
 export const dialogAlert = style({ width: "min(420px, calc(100vw - 32px))", padding: `${DIALOG_PAD + 4}px ${DIALOG_PAD}px ${DIALOG_PAD}px`, gap: "8px" });
 /** Its title, and the close button in the corner: round (half width 16), its centre the corner's radius from the edges. */
 export const dialogHead = style({
@@ -365,6 +367,7 @@ globalStyle(`${select} > span:first-child`, { minWidth: "0", overflow: "hidden",
 globalStyle(`${command} code`, { flex: "1", fontSize: vars.textMeta, overflowX: "auto", whiteSpace: "nowrap" });
 globalStyle(`${dialogAlert} ${dialogLead}`, { margin: "0" });
 globalStyle(`${dialogHead} > button`, { borderRadius: "999px", cornerShape: "round" });
+globalStyle(`${dialogTall} ${dialogBody}`, { display: "flex", flexDirection: "column", flex: "1 1 0", minHeight: "0" });
 /** A list's rows in a dialog reach 12 past its words (pages.css.ts listRow): their hover follows the dialog's curve too. */
 globalStyle(`${dialogBody} ${listRow}`, { borderRadius: `calc(${DIALOG_PAD + 18 - 12}px * ${vars.cornerScale})` });
 /** Cards, choices and command lines in a dialog sit at its padding: their corners are the dialog's, less it. */

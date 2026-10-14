@@ -12,7 +12,8 @@ export type GuestConnection = { openBi(): Promise<GuestStream> };
 
 /** An attachment of the snapshot, by its number in it (`k`: f0, f1…). */
 export type SharedFile = { k: string; name: string; size: number; type: string; width?: number; height?: number; thumbhash?: string };
-export type SharedEntry = { n: number; at: number; authorKind: string; author: string; text: string; files: SharedFile[] };
+/** `maker`, `runtime`: an agent's (its maker's mark, as the chat draws it). */
+export type SharedEntry = { n: number; at: number; authorKind: string; author: string; text: string; files: SharedFile[]; maker?: string; runtime?: string };
 /** snapshot.json (station/src/publish/snapshot.ts). */
 export type Snapshot = { v: number; title: string; station: string; at: number; by: string; entries: SharedEntry[]; redacted: number };
 /** What a request was answered: the bytes, and what they are. */
@@ -123,7 +124,10 @@ export function parseSnapshot(bytes: Uint8Array): Snapshot {
   const entries = (Array.isArray(o.entries) ? o.entries : []).flatMap((e): SharedEntry[] => {
     if (e === null || typeof e !== "object") return [];
     const x = e as Record<string, unknown>;
-    return [{ n: count(x.n), at: count(x.at), authorKind: text(x.authorKind, "person"), author: text(x.author), text: text(x.text), files: (Array.isArray(x.files) ? x.files : []).flatMap(fileOf) }];
+    // Its maker's mark: a known maker's name only (it names a file the page has, public/models).
+    const maker = typeof x.maker === "string" && /^[a-z0-9-]{1,40}$/.test(x.maker) ? { maker: x.maker } : {};
+    const runtime = x.runtime === "claude" || x.runtime === "codex" ? { runtime: x.runtime } : {};
+    return [{ n: count(x.n), at: count(x.at), authorKind: text(x.authorKind, "person"), author: text(x.author), text: text(x.text), files: (Array.isArray(x.files) ? x.files : []).flatMap(fileOf), ...maker, ...runtime }];
   });
   return { v: SNAPSHOT_VERSION, title: text(o.title), station: text(o.station), at: count(o.at), by: text(o.by), entries, redacted: count(o.redacted) };
 }

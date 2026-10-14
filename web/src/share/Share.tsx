@@ -32,12 +32,18 @@ import * as css from "./share.css.ts";
 import { GuestError, guestFiles, isAgent, isHtml, isShownImage, readShared, type Got, type SharedEntry, type SharedFile, type Snapshot } from "./guest.ts";
 import { Unreachable, visit } from "./iroh.ts";
 import { parseLink, type ShareLink } from "./link.ts";
+import { MONO } from "../modelMarks.ts";
+import * as uiCss from "../ui.css.ts";
 import mark16 from "../../public/mark-16.svg";
 import mark16Dark from "../../public/mark-16-dark.svg";
 import idle from "../../public/idle.svg";
 import idleDark from "../../public/idle-dark.svg";
 import offline from "../../public/offline.svg";
 import offlineDark from "../../public/offline-dark.svg";
+
+/** The marks of models' makers (public/models), as the chat draws an agent by its maker's; one the page does not know: none. */
+const MARKS = import.meta.glob<string>("../../public/models/*.svg", { query: "?url", import: "default", eager: true });
+const markOf = (maker: string | undefined): string | undefined => (maker ? MARKS[`../../public/models/${maker}.svg`] : undefined);
 
 declare const __SHARE_CLOUD__: string;
 
@@ -255,7 +261,9 @@ function Entry({ entry: e }: { entry: SharedEntry }) {
   return (
     <div className={`${conversationCss.msg} ${msgCss.msgRow}`} data-role={agent ? "agent" : "person"}>
       {agent
-        ? <span className={`${chatCss.msgAvatar} ${msgCss.msgAvatarAgent}`}><Themed light={mark16} dark={mark16Dark} size={12} /></span>
+        ? <span className={`${chatCss.msgAvatar} ${msgCss.msgAvatarAgent}`}>{markOf(e.maker)
+          ? <img className={uiCss.modelLogo} src={markOf(e.maker)} alt="" width={12} height={12} data-mono={MONO.has(e.maker!) || undefined} />
+          : <Themed light={mark16} dark={mark16Dark} size={12} />}</span>
         : <span className={chatCss.msgAvatar}><Avatar id={e.author} name={e.author} size={18} /></span>}
       <div className={msgCss.msgMain}>
         <div className={conversationCss.msgHead}>

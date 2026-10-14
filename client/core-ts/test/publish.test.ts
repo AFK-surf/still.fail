@@ -69,8 +69,8 @@ test("a_preview_says_how_many_things_each_message_had_hidden_and_has_its_attachm
     upto: 9,
     title: "部署",
     entries: [
-      { n: 4, at: 1_000, authorKind: "person", author: "安", text: "key: [已隐藏]", files: ["f0"] },
-      { n: 9, at: 2_000, authorKind: "agent", author: "奏", text: "好了", files: ["f1"] },
+      { n: 4, at: 1_000, authorKind: "person", author: "安", text: "key: [已隐藏]", files: ["f0"], person: "A@x.com" },
+      { n: 9, at: 2_000, authorKind: "agent", author: "奏", text: "好了", files: ["f1"], model: "claude-opus-4-1", maker: "anthropic", runtime: "claude" },
     ],
     redacted: [{ n: 4, count: 2 }, { n: 4, count: 1 }],
     files: [
@@ -78,13 +78,15 @@ test("a_preview_says_how_many_things_each_message_had_hidden_and_has_its_attachm
       // From a station before `path` and `owner`: a card only.
       { k: "f1", name: "big.zip", size: 11 * 1024 * 1024, type: "application/zip", n: 9 },
     ],
-  }, { now: 3_000, offsetMin: 0 });
+  }, { now: 3_000, offsetMin: 0 }, [{ email: "a@x.com", name: "安", picture: "https://p/a.png" }]);
   assert.equal(shown.upto, 9);
   assert.equal(shown.title, "部署");
   assert.equal(shown.hidden, 3);
   assert.equal(shown.hiddenText, "共隐藏了 3 处疑似机密");
   assert.deepEqual(shown.messages.map((m: J) => [m.n, m.author, m.agent, m.hidden, m.hiddenText ?? null, m.files.map((f: J) => [f.k, f.name])]), [[4, "安", false, 3, "隐藏了 3 处", [["f0", "a.png"]]], [9, "奏", true, 0, null, [["f1", "big.zip"]]]]);
   assert.ok(shown.messages[0].time.createdAt.ago, "its time in words");
+  // Drawn as the chat draws them: the person by their picture, the agent by its maker's mark.
+  assert.deepEqual(shown.messages.map((m: J) => [m.picture ?? null, m.maker?.id ?? null, m.runtime ?? null]), [["https://p/a.png", null, null], [null, "anthropic", "claude"]]);
   assert.deepEqual(shown.files.map((f: J) => f.file), [
     { name: "a.png", path: "/w/s1/uploads/a.png", size: 5, width: 4, height: 3, thumbhash: "th", owner: "s1" },
     { name: "big.zip", path: "", size: 11 * 1024 * 1024 },

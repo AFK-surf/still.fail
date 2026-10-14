@@ -1,4 +1,5 @@
-// A model as people call it (shapes model.rs `name`): the accounts' pages and published snapshots name models so.
+// A model as people call it (shapes model.rs `name`), and who made it (client/core-ts format.ts `makerOf`): the accounts'
+// pages and published snapshots name models so, and draw their makers' marks.
 import { modelKey } from "../read/usage.ts";
 
 const CLAUDE = ["fable", "opus", "sonnet", "haiku"];
@@ -39,4 +40,20 @@ export function modelName(id: string): string {
   const named = namedModel(base);
   if (named === undefined) return id.trim();
   return context === "" ? named : `${named} ${context}`;
+}
+
+/// Who made a model, as its mark is known by (client/core-ts format.ts `makerOf`): none for one the marks do not know.
+export function makerOf(model: string): string | null {
+  const m = model.toLowerCase();
+  const has = (words: string[]) => words.some((w) => m.includes(w));
+  if (has(["claude", "opus", "sonnet", "haiku", "fable"])) return "anthropic";
+  if (has(["gpt", "codex", "openai"]) || (m.startsWith("o") && /^[0-9]/.test(m.slice(1)))) return "openai";
+  if (has(["deepseek"])) return "deepseek";
+  if (has(["qwen", "qwq"])) return "qwen";
+  if (has(["glm", "zhipu"])) return "zhipu";
+  if (has(["gemini", "gemma"])) return "gemini";
+  if (has(["kimi", "moonshot"])) return "kimi";
+  if (has(["minimax", "abab"])) return "minimax";
+  if (has(["grok"])) return "xai";
+  return null;
 }

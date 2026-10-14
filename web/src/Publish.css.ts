@@ -1,7 +1,7 @@
 import { style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { cardLook } from "./styles/pages.css.ts";
-import { DIALOG_INNER } from "./ui.css.ts";
+import { DIALOG_INNER, dialogTall } from "./ui.css.ts";
 
 /** What a public snapshot would hold, as the chat draws it (its messages' heads in line, the phone's way), on a card. */
 export const preview = style({
@@ -10,6 +10,8 @@ export const preview = style({
     // In the dialog its corners follow the dialog's (ui.css.ts DIALOG_INNER); on the phone's sheet, the cards' own.
     "&:not([data-whole])": { borderRadius: DIALOG_INNER },
     "&[data-whole]": { maxHeight: "none", minHeight: "auto", overflowY: "visible" },
+    // In the tall dialog: all the room its body has, scrolling in itself.
+    [`${dialogTall} &`]: { maxHeight: "none", flex: "1 1 0" },
   },
 });
 /** Under a message: how many things in it were hidden (as looking secret), or its attachments' names. */

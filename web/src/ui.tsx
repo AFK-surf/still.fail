@@ -24,6 +24,7 @@ import * as waitingCss from "./styles/waiting.css.ts";
 import * as doingCss from "./DoingMark.css.ts";
 import { failure, useToast } from "./toast.tsx";
 import { t } from "./i18n.ts";
+import { MONO } from "./modelMarks.ts";
 
 
 export const ICON = { size: 16, strokeWidth: 1.7 } as const;
@@ -261,15 +262,16 @@ export function StatusDot({ state, label }: { state: Presence; label?: string })
 // A lettered tile (Avatar.tsx): here too, where the app has always had it.
 export { Avatar } from "./Avatar.tsx";
 
-export function Dialog({ open, title, description, onClose, children, footer, wide }:
-  { open: boolean; title: ReactNode; description?: ReactNode; onClose(): void; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
+/** `wide`: for more than a form; `tall`: wider still and the window's height, its body filling it (what is read in it). */
+export function Dialog({ open, title, description, onClose, children, footer, wide, tall }:
+  { open: boolean; title: ReactNode; description?: ReactNode; onClose(): void; children: ReactNode; footer?: ReactNode; wide?: boolean; tall?: boolean }) {
   useBackClose(open, onClose);
   return (
     <RDialog.Root open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
       <RDialog.Portal>
         <RDialog.Overlay className={css.overlay} />
         {/* Focus the dialog itself rather than its first button, so the close button's tooltip does not pop up on open. */}
-        <RDialog.Content className={`${css.dialog}${wide ? ` ${css.dialogWide}` : ""}`} tabIndex={-1}
+        <RDialog.Content className={`${css.dialog}${tall ? ` ${css.dialogTall}` : wide ? ` ${css.dialogWide}` : ""}`} tabIndex={-1}
           onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).focus(); }}>
           <div className={css.dialogHead}>
             <RDialog.Title className={css.dialogTitle}>{title}</RDialog.Title>
@@ -607,8 +609,6 @@ export function ResizeHandle({ variable, edge, min, max, label }: { variable: st
   );
 }
 
-/** Makers whose marks are one colour (drawn in the text's). Marks from Zork's provider set and lobehub icons (MIT). */
-const MONO = new Set(["anthropic", "openai", "kimi", "xai", "mistral", "xiaomi", "ant-ling", "openrouter", "vercel", "cloudflare", "azure", "groq", "together", "fireworks", "cerebras", "huggingface", "nvidia", "baseten"]);
 
 /**
  * The mark of the company that made a model (the core says which); the runtime's mark when it does not know. No tip of
