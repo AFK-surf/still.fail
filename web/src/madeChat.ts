@@ -31,7 +31,7 @@ function textAt(el: Element): Typed {
 const EASE = "cubic-bezier(.2, .8, .2, 1)";
 
 /** A first message on its way: the words sent, where they were, until the chat's page takes them. */
-interface Picture { key: string; rect: DOMRect; stand: HTMLElement }
+interface Picture { key: string; rect: DOMRect; stand: HTMLElement; img: HTMLImageElement; ratio: number }
 interface Sending { field: HTMLElement; from: Typed; top: number; stand: HTMLElement | null; pictures: Picture[]; release?: (() => void) | undefined }
 let sending: Sending | null = null;
 
@@ -54,6 +54,22 @@ export function sendingFirst(field: HTMLElement, text: string, layer: HTMLElemen
   field.dataset.madeHint = "hidden";
 }
 
+/**
+ * How big `ratio`'s picture is drawn in a `width`×`height` box: filling it (cropped), or, `whole`, fitted inside it (a
+ * letterboxed image's, Chat.css.ts's `data-letterbox`).
+ */
+function fill(width: number, height: number, ratio: number, whole = false): { width: number; height: number } {
+  const h = (whole ? Math.min : Math.max)(height, width / ratio);
+  return { width: h * ratio, height: h };
+}
+
+/** How `picture` is drawn in its box on its way, `p` (0..1) from its thumbnail's to `to`'s: cropped as there, then as it lands. */
+function fillAt(picture: Picture, to: HTMLElement, end: { width: number; height: number }, p: number): { width: string; height: string } {
+  const a = fill(picture.rect.width, picture.rect.height, picture.ratio);
+  const b = fill(end.width, end.height, picture.ratio, to.dataset.letterbox !== undefined);
+  return { width: `${a.width + (b.width - a.width) * p}px`, height: `${a.height + (b.height - a.height) * p}px` };
+}
+
 /** The images going with the message, drawn in `layer` (at `z`) where their thumbnails are in `composer`, cropped as there. */
 function picturesIn(composer: Element, layer: HTMLElement, z: string): Picture[] {
   const base = layer.getBoundingClientRect();
@@ -69,11 +85,18 @@ function picturesIn(composer: Element, layer: HTMLElement, z: string): Picture[]
       width: `${rect.width}px`, height: `${rect.height}px`, overflow: "hidden",
       borderRadius: getComputedStyle(source).borderRadius, zIndex: z, pointerEvents: "none",
     });
+    // Sized and centred by hand rather than by object-fit: on the way its box changes shape, and where it lands it may
+    // be letterboxed rather than cropped.
+    const ratio = img.naturalWidth / img.naturalHeight;
     const copy = img.cloneNode(true) as HTMLImageElement;
-    Object.assign(copy.style, { width: "100%", height: "100%", objectFit: "cover", display: "block" });
+    const at = fill(rect.width, rect.height, ratio);
+    Object.assign(copy.style, {
+      position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", width: `${at.width}px`,
+      height: `${at.height}px`, maxWidth: "none", maxHeight: "none", display: "block",
+    });
     picture.append(copy);
     layer.append(picture);
-    pictures.push({ key: source.dataset.sendImage!, rect, stand: picture });
+    pictures.push({ key: source.dataset.sendImage!, rect, stand: picture, img: copy, ratio });
   }
   return pictures;
 }
@@ -171,7 +194,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
     const frame = into.getBoundingClientRect();
     // Capture image destinations before translating the list itself.
     const destinations = new Map([...first.querySelectorAll<HTMLElement>("[data-send-image]")].map((el) =>
-      [el.dataset.sendImage!, { rect: el.getBoundingClientRect(), radius: getComputedStyle(el).borderRadius }]));
+      [el.dataset.sendImage!, { el, rect: el.getBoundingClientRect(), radius: getComputedStyle(el).borderRadius }]));
     const { from, top } = now;
     const timing = { duration: 480, delay: wait, easing: EASE, fill: "backwards" } as const;
     // The rest of the list comes up with it, out of the composer's top edge: cut there, wherever it has got to.
@@ -219,6 +242,9 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
         { transform: `translate(${picture.rect.left - end.left}px, ${picture.rect.top - end.top}px)`, width: `${picture.rect.width}px`, height: `${picture.rect.height}px` },
         { transform: "none", width: `${end.width}px`, height: `${end.height}px` },
       ], timing).finished);
+      const landed = fillAt(picture, target.el, end, 1);
+      Object.assign(picture.img.style, landed);
+      moves.push(picture.img.animate([fillAt(picture, target.el, end, 0), landed], timing).finished);
     }
     moves.push(copy.animate([
       { transform: `translate(${from.x - to.x}px, ${rise}px) scale(${from.size / to.size})` },
@@ -427,6 +453,7 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
         left: `${a.left + (end.left - a.left) * across - box.left}px`, top: `${a.top + (end.top - a.top) * up - box.top}px`,
         width: `${a.width + (end.width - a.width) * up}px`, height: `${a.height + (end.height - a.height) * up}px`,
       });
+      Object.assign(picture.img.style, fillAt(picture, target, end, up));
     }
     const bubble = copy.querySelector<HTMLElement>(`.${conversationCss.msgBubble}`);
     if (bubble && ground) bubble.style.backgroundColor = `color-mix(in srgb, ${ground} ${e * 100}%, transparent)`;
