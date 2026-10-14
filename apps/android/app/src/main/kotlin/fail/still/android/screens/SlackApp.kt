@@ -56,6 +56,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -109,6 +110,9 @@ internal class SlackAppView(val state: String, val appId: String? = null, val li
 internal val SLACK_GROUP_WORDS: List<Pair<String, Pair<String, String>>>
     get() = listOf("base", "public", "dm", "customize", "files", "reactions", "channels", "people", "extras", "canvases", "lists", "topics", "usergroups", "search", "connect", "more")
         .map { it to (t("android-settings.slack.group.$it") to t("android-settings.slack.group.$it.note")) }
+
+/** Groups that only work as Slack's admins allow, marked so (web/src/pages/SlackApp.tsx → ADMIN, which says why). */
+internal val SLACK_ADMIN_GROUPS = setOf("connect", "usergroups")
 
 /** The groups in sections, as the form shows them (web/src/pages/SlackApp.tsx → SECTIONS). */
 internal val SLACK_SECTIONS
@@ -481,7 +485,8 @@ private fun AppForm(station: String, connect: String, settings: SlackAppSettings
                 else Box(Modifier.size(20.dp).clip(Smooth(6.dp)).background(if (checked) C.accent else C.chip), contentAlignment = Alignment.Center) {
                     if (checked) IconIn(Icons.Check, 13.dp, C.bg)
                 }
-                Text(words.getValue(g).first, fontSize = 14.sp, color = if (checked) C.ink else C.muted)
+                Text(words.getValue(g).first, fontSize = 14.sp, color = if (checked) C.ink else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (g in SLACK_ADMIN_GROUPS) Text(t("android-settings.slack.admin"), fontSize = 12.sp, color = C.muted)
             }
         }
     }

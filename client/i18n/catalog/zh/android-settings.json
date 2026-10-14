@@ -422,6 +422,7 @@
   "android-settings.slack.group.lists.note": "新建、编辑和读取 Slack 列表（Lists），比如维护任务清单。",
   "android-settings.slack.group.more": "状态、元数据和斜杠命令",
   "android-settings.slack.group.more.note": "设置自己的在线状态，读取消息元数据和工作区设置，嵌入视频链接，响应斜杠命令。",
+  "android-settings.slack.admin": "需管理员",
   "android-settings.slack.group.people": "查看成员资料",
   "android-settings.slack.group.people.note": "读取邮箱、个人资料、用户组、工作区信息和自定义表情。",
   "android-settings.slack.group.public": "在没加入的公开频道发言",

@@ -45,6 +45,12 @@ const GROUPS: Record<SlackGroup, { label: string; description: string }> = {
   more: group("more"),
 };
 
+/** Groups that only work as Slack's admins allow (who installs the app, or the workspace's settings): marked so. */
+const ADMIN: Partial<Record<SlackGroup, () => string>> = {
+  connect: () => t("web-pages.slackApp.group.connect.admin"),
+  usergroups: () => t("web-pages.slackApp.group.usergroups.admin"),
+};
+
 /** The groups in sections, as the form shows them. */
 const SECTIONS: { title: string; groups: SlackGroup[] }[] = [
   { get title() { return t("web-pages.slackApp.section.messages"); }, groups: ["base", "public", "dm", "customize", "reactions"] },
@@ -396,10 +402,11 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
                           <span>{GROUPS[g].label}</span>
                         </span></Tip>
                       ) : (
-                        <Tip label={GROUPS[g].description}><label className={chatCss.modelPoolItem} data-on={settings.groups[g] || undefined}>
+                        <Tip label={ADMIN[g] ? `${GROUPS[g].description} ${ADMIN[g]()}` : GROUPS[g].description}><label className={chatCss.modelPoolItem} data-on={settings.groups[g] || undefined}>
                           <input type="checkbox" checked={settings.groups[g] ?? false}
                             onChange={(e) => set("groups", { ...settings.groups, [g]: e.target.checked })} />
-                          <span>{GROUPS[g].label}</span>
+                          <span className={css.permLabel}>{GROUPS[g].label}</span>
+                          {ADMIN[g] && <span className={css.permAdmin}>{t("web-pages.slackApp.admin")}</span>}
                         </label></Tip>
                       )}
                     </li>

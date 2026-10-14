@@ -67,6 +67,9 @@ export const permGrid = style({
   display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "0 8px", margin: "0", padding: "0", listStyle: "none",
   "@media": { "(max-width: 720px)": { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" } },
 });
+export const permLabel = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+/** Beside a permission only admins can give: the word, quiet. */
+export const permAdmin = style({ flex: "none", fontSize: vars.textMeta, color: vars.muted });
 export const appFold = style({ marginTop: "28px", marginBottom: "28px" });
 export const appFoldTitle = style({ fontWeight: "600" });
 export const appFoldBody = style({ display: "grid", gap: "10px", marginTop: "8px" });

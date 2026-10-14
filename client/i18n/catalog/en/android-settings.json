@@ -461,6 +461,7 @@
   "android-settings.slack.group.lists.note": "Create, edit and read Slack Lists, e.g. keep a task list.",
   "android-settings.slack.group.more": "Status, metadata, commands",
   "android-settings.slack.group.more.note": "Set its presence, read message metadata and workspace settings, embed video links, answer slash commands.",
+  "android-settings.slack.admin": "Admin",
   "android-settings.slack.group.people": "View profiles",
   "android-settings.slack.group.people.note": "Read emails, profiles, user groups, workspace info and custom emoji.",
   "android-settings.slack.group.public": "Post in any public channel",
