@@ -1,5 +1,6 @@
 // The profiles' sidebar (ProfilesNav.tsx): two lines a row, as a chat's, the provider's mark beside the name.
 import { style } from "@vanilla-extract/css";
+import { navRow } from "./Sidebar.css.ts";
 import { vars } from "./styles/tokens.css.ts";
 
 const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
@@ -9,9 +10,13 @@ export const add = style({ padding: "2px 0 0" });
 export const addRow = style({ width: "100%", border: 0, background: "none", font: "inherit", textAlign: "left", cursor: "pointer" });
 
 export const row = style({
-  width: "100%", alignItems: "flex-start", paddingTop: 7, paddingBottom: 7, textAlign: "left", font: "inherit", border: 0,
+  width: "100%", paddingTop: 7, paddingBottom: 7, textAlign: "left", font: "inherit", border: 0,
   background: "none", cursor: "pointer", textDecoration: "none",
-  selectors: { "&:disabled": { cursor: "progress" } },
+  selectors: {
+    "&:disabled": { cursor: "progress" },
+    // The mark beside the name, not between the lines: over a sidebar row's centring, whichever's rule comes later.
+    [`${navRow}&`]: { alignItems: "flex-start" },
+  },
 });
 /** The mark on the first line, as wide as the add row's icon. */
 export const mark = style({ display: "grid", placeItems: "center", flex: "none", width: 16, height: 20 });

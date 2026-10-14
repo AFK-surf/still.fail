@@ -1,8 +1,9 @@
 // The sidebar while in the profiles (Rail.tsx, with Profile in the rail): 添加 Profile on top, then every profile of the
 // workspace (the core's `profiles`), a section each kind of account, one row an account however many stations it is
-// on: its provider, its name and what is left of its allowance on the first line, how it is doing, where it is and
-// which connects use it on the second. Under them, the machines' own logins not used yet. The page beside is the one
-// picked (pages/Accounts.tsx); come to the profiles, the first is picked (cloud/settings.tsx RuntimeSettings).
+// on: its provider and its name on the first line, what is left of its allowance on the second (how it is doing before
+// it when something is wrong; where it is and which connects use it instead when there is no allowance to show). Under
+// them, the machines' own logins not used yet. The page beside is the one picked (pages/Accounts.tsx); come to the
+// profiles, the first is picked (cloud/settings.tsx RuntimeSettings).
 import { useSyncExternalStore, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { useAction, useApi, useProfiles, useStations, type StationView } from "./api.ts";
@@ -91,19 +92,19 @@ function ProfileRow({ entry, scope }: { entry: WorkspaceProfile; scope: string }
     entry.where,
     p.usedBy.length > 0 ? t("web-pages.settings.profiles.usedBy", { n: p.usedBy.length }) : null,
   ].filter(Boolean).join(" · ");
+  // What is left of its allowance has the second line to itself; where it is and who uses it, on the tip then.
+  const windows = Windows({ quota: p.quota });
   return (
     <Link className={`${nav.navRow} ${css.row}`} to={profilePath(entry)} aria-current={isHere(entry, path, scope) ? "page" : undefined}
-      data-away={entry.usable ? undefined : ""} title={several ? entry.where : undefined}>
+      data-away={entry.usable ? undefined : ""} title={windows ? facts || undefined : several ? entry.where : undefined}>
       <span className={css.mark}><ProviderLogo runtime={p.runtime} kind={p.access.kind} mark={p.providerMark} size={16} /></span>
       <span className={css.text}>
         <span className={css.head}>
           <span className={css.name}>{p.name}</span>
-          <Windows quota={p.quota} />
         </span>
         <span className={css.meta}>
           {trouble && <span className={css.trouble} data-tone={entry.usable ? p.checkTone : "red"}>{trouble}</span>}
-          {trouble && facts && <span aria-hidden="true">·</span>}
-          <span className={css.facts}>{facts}</span>
+          {windows ?? <>{trouble && facts && <span aria-hidden="true">·</span>}<span className={css.facts}>{facts}</span></>}
         </span>
       </span>
     </Link>
@@ -161,10 +162,10 @@ function MachineLoginRow({ login, scope, station }: { login: MachineLogin; scope
         <span className={css.text}>
           <span className={css.head}>
             <span className={css.name}>{RUNTIME[login.runtime]}</span>
-            <Windows quota={login.quota} />
           </span>
           <span className={css.meta}>
             <span className={css.facts}>{login.email ?? t("web-main.profile.signedIn")}</span>
+            <Windows quota={login.quota} />
             <span className={css.offer}>{use.busy ? t("web-pages.settings.profiles.using") : login.usable ? t("web-pages.profiles.useThis") : t("web-pages.profiles.signIn")}</span>
           </span>
         </span>

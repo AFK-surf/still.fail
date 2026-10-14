@@ -154,7 +154,7 @@ export function EdgeChip({ fill, level, mark, label, text, small, bare, ...rest 
         <rect className={css.quotaChipTrack} pathLength={100} />
         {p > 0 && <rect className={css.quotaChipLeft} pathLength={100} strokeDasharray={`${p} 100`} />}
       </svg>
-      <span className={css.quotaChipText}>{mark != null && <span className={css.quotaChipMark}>{mark}</span>}{text ?? `${fill}%`}</span>
+      <span className={css.quotaChipText}>{mark != null && <span className={css.quotaChipMark}>{mark}</span>}<span>{text ?? `${fill}%`}</span></span>
     </span>
   );
 }

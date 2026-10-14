@@ -59,6 +59,9 @@ export const quotaChipText = style({
   },
 });
 export const quotaChipMark = style({ color: vars.muted });
+// Its mark and number trimmed to their capitals and figures, so they sit in the middle of the box (as the font sets
+// them, lower by the room it keeps above for accents).
+globalStyle(`${quotaChipText} > span`, { display: "inline-block", textBoxTrim: "trim-both", textBoxEdge: "cap alphabetic" });
 /** A profile's own page: per window its number large, ten cells lit as far as is left, its name and when it refills. */
 export const quotaDials = style({
   display: "flex", flexWrap: "wrap", gap: "12px 36px",
