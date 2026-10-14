@@ -11,8 +11,9 @@ export const rail = style({
   display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "0 0 12px", flex: "none", width: 56,
   WebkitUserSelect: "none", userSelect: "none",
   // In the closed bar (shell.css.ts dock), as narrow as it, at the same pace.
-  transition: `width 380ms ${vars.easeOut}`,
-  selectors: { '[data-sidebar="closed"] &': { width: 44 } },
+  transition: `width 380ms ${vars.easeOut}, padding 380ms ${vars.easeOut}`,
+  // In the closed bar its places 3 px from its every edge, the bar's corner concentric with theirs.
+  selectors: { '[data-sidebar="closed"] &': { width: 44, paddingTop: 3, paddingBottom: 3 } },
   "@media": { [narrow]: { display: "none" }, "(prefers-reduced-motion: reduce)": { transition: "none" } },
 });
 /**
@@ -24,7 +25,8 @@ export const top = style({
   flex: "none", alignSelf: "stretch", height: 48, transition: `height 380ms ${vars.easeOut}`,
   selectors: {
     "[data-desktop] &": { height: 44, WebkitAppRegion: "drag" },
-    '[data-sidebar="closed"] &': { height: 6 },
+    // In the closed bar nothing: its places stand as far from its top as from its sides (rail's padding).
+    '[data-sidebar="closed"] &': { height: 0, marginBottom: -6 },
   },
 });
 /**
