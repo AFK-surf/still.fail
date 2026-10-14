@@ -666,12 +666,13 @@ export const activityStop = style({
 });
 
 /** Pasted text uses the regular attachment upload, with a local restore action while composing. */
-export const pasteSnippet = style({ display: "flex", alignItems: "flex-start", width: "300px", maxWidth: "100%", minWidth: 0, flexShrink: 0, border: `1px solid ${vars.line}`, borderRadius: "12px", background: vars.canvas });
+export const pasteSnippet = style({ display: "flex", alignItems: "flex-start", width: "236px", maxWidth: "100%", minWidth: 0, flexShrink: 0, borderRadius: `calc(8px * ${vars.cornerScale})`, background: vars.neutralBg, color: vars.text, cornerShape: vars.cornerShape });
 export const pasteSnippetBody = style({ display: "flex", flexDirection: "column", gap: "4px", padding: "10px 12px", flex: 1, minWidth: 0 });
-export const pasteSnippetOpen = style({ textAlign: "left", padding: 0, border: 0, background: "transparent", color: vars.subtle, textDecoration: "underline", cursor: "pointer" });
+export const pasteSnippetOpen = style({ textAlign: "left", padding: 0, border: 0, background: "transparent", color: vars.muted, textDecoration: "underline", cursor: "pointer" });
 export const pasteSnippetTitle = style({ padding: 0, border: 0, background: "transparent", textAlign: "left", cursor: "pointer", width: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 });
-export const pasteSnippetHint = style({ color: vars.subtle, fontSize: vars.textMeta });
-export const pasteSnippetRemove = style({ flexShrink: 0, padding: "10px", border: 0, background: "transparent", color: vars.subtle, cursor: "pointer" });
+export const pasteSnippetHint = style({ color: vars.muted, fontSize: vars.textMeta });
+/** With a file's remove button (fileCardRemove): here only its place. */
+export const pasteSnippetRemove = style({ margin: "10px" });
 /**
  * Inside the composer, files follow its curve as its quotes do: inner radius = the frame's radius less its padding.
  * Cards are as tall as an image's thumbnail beside them.
@@ -687,4 +688,4 @@ globalStyle(`${composerFiles} ${pasteSnippetBody}`, {
 });
 globalStyle(`${composerFiles} ${pasteSnippetTitle}`, { flexBasis: "100%", fontSize: vars.textUi, lineHeight: "20px" });
 globalStyle(`${composerFiles} :is(${pasteSnippetHint}, ${pasteSnippetOpen})`, { fontSize: vars.textCaption, lineHeight: "16px" });
-globalStyle(`${composerFiles} ${pasteSnippetRemove}`, { padding: "0", width: "22px", height: "22px", marginRight: "14px", display: "grid", placeItems: "center" });
+globalStyle(`${composerFiles} ${pasteSnippetRemove}`, { margin: "0 14px 0 0" });

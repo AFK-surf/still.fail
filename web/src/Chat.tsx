@@ -1894,7 +1894,7 @@ function PendingFile({ file: f, onRemove, onRestore, onRetry }: { file: Pending;
       {onRetry && <button type="button" className={css.pasteSnippetOpen} onClick={(e) => { e.stopPropagation(); onRetry(); }}>{t("web-main.composer.retryPaste")}</button>}
       {onRestore && <button type="button" className={css.pasteSnippetOpen} onClick={(e) => { e.stopPropagation(); onRestore(); }}>{t("web-main.composer.expandPaste")}</button>}
     </div>
-    {onRemove && <button type="button" className={css.pasteSnippetRemove} aria-label={t("web-main.composer.removePaste")} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
+    {onRemove && <button type="button" className={`${css.fileCardRemove} ${css.pasteSnippetRemove}`} aria-label={t("web-main.composer.removePaste")} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
   </div>{f.pastedFile && f.preview && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey="" file={shown} local={{ blob: f.pastedFile, url: f.preview }} />}</>;
   return f.preview ? (
     <Tip label={f.error ?? f.name}><span className={css.composerThumb} data-send-image={f.done ? sentImageKey(f.done.path) : f.error ? undefined : uploadImageKey(f.id)} data-error={f.error ? true : undefined}>
