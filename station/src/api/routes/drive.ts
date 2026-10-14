@@ -85,7 +85,7 @@ export function routes({ drive, config, home = homedir(), changed }: DriveRouteD
       pattern: /^\/drive\/folders$/,
       handle: answer(async (r) => {
         if (!manages(r)) throw new DriveError("permission", MANAGE);
-        return drive.folders(param(r, "path") ?? "", home);
+        return drive.folders(param(r, "path") ?? "", home, r.lang);
       }),
     },
     { method: "GET", pattern: /^\/drive\/list$/, handle: answer(async (r) => drive.list(at(r).root, at(r).path)) },

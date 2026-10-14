@@ -1113,5 +1113,12 @@
   "web-pages.drive.reader.night": "Night",
   "web-pages.drive.reader.paper.follow": "System",
   "web-pages.drive.reader.paper.green": "Green",
-  "web-pages.drive.reader.paper.grey": "Grey"
+  "web-pages.drive.reader.paper.grey": "Grey",
+  "web-pages.drive.places": "Places",
+  "web-pages.drive.foldersHere": "Folders",
+  "web-pages.drive.pickFilter": "Filter folders",
+  "web-pages.drive.pickNoMatch": "No folder's name has that in it",
+  "web-pages.drive.pickUnreadable": "The station can't read it",
+  "web-pages.drive.pickNeedsAccess": "The station can't read this folder. On macOS, turn on Full Disk Access for the station in System Settings → Privacy & Security",
+  "web-pages.drive.pickClear": "Clear"
 }

@@ -11,16 +11,17 @@ import { useStation } from "../station.tsx";
 import { useDoing } from "../doing.ts";
 import { useAct } from "../toast.tsx";
 import type { Attachment, DriveEntry, DriveRoot } from "../core/shapes.ts";
-import { ChevronRight, Close, Download, Edit, Folder, FolderPlus, More, Plus, Refresh, Retry, Trash, Upload } from "../icons.tsx";
+import { ChevronRight, Close, Disk, Download, Edit, Folder, FolderPlus, More, Plus, Refresh, Retry, Trash, Upload } from "../icons.tsx";
 import { FilePreview, FileSource, Gallery, type FileSourceOf, type Shown } from "../FilePreview.tsx";
 import { KindIcon } from "../drive/KindIcon.tsx";
 import { Reader } from "../drive/Reader.tsx";
 import { Player } from "../drive/Player.tsx";
 import { cancel, download, joinPath, nameOf, openerOf, parentOf, readKept, refresh, retry, rootLabel, settle, sizeOf, upload, useFolder, useUploads, type At, type Upload as Up } from "../drive/model.ts";
-import { childOf, drive, drivePath, nameProblem, rootTrouble, useDrive, type DriveState } from "../drive/useDrive.ts";
+import { childOf, drive, drivePath, filtered, nameProblem, rootTrouble, useDrive, type DriveState, type Folders, type PickFolder } from "../drive/useDrive.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { ask, confirm } from "./sheets.tsx";
-import { Button, ListCard, Loading, NavBar, NavButton, PickRow, Spinner } from "./parts.tsx";
+import { Button, ListCard, Loading, NavBar, NavButton, PickRow, SectionHeader, Spinner } from "./parts.tsx";
+import * as listsCss from "./styles/lists.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as sheetsCss from "./styles/sheets.css.ts";
@@ -343,31 +344,64 @@ function RootsSheet({ station, roots }: { station: string; roots: DriveRoot[] })
   );
 }
 
-/** The station's folders, from its home: entered by a tap, the one shown lent with 选这个文件夹. */
+/**
+ * The station's folders, from its home: the usual places first (the home's own folders, the disks), a filter for a
+ * folder full of them, the way back as crumbs; entered by a tap, the one shown lent with 选这个文件夹. One the station
+ * may not list says so, and is not lent.
+ */
 function PickerSheet({ station, roots }: { station: string; roots: DriveRoot[] }) {
   const app = useApp();
   const act = useAct();
   const picker = useFolders(station);
-  const taken = picker.value ? roots.some((r) => r.path === picker.value!.path) : false;
+  const v = picker.value;
+  const taken = v ? roots.some((r) => r.path === v.path) : false;
+  const unreadable = picker.unreadable;
+  const atHome = v !== null && v.path === v.home && picker.filter.trim() === "";
+  const here = () => (v === null ? [] : filtered(v.entries, picker.filter).filter((e) => !(atHome && v.places.some((p) => p.path === e.path))));
+  const row = (f: PickFolder) => (
+    <PickRow key={f.path} label={f.name} sub={f.unreadable ? t("web-pages.drive.pickUnreadable") : undefined} leading={f.disk ? <Disk size={20} /> : <Folder size={20} />} onClick={() => picker.go(f)} />
+  );
   return (
     <>
       <SheetGrab />
       <SheetHead title={t("web-pages.drive.pick")} />
-      <div className={css.mPickerPath}>{picker.value?.path ?? " "}</div>
+      <div className={`${css.mCrumbs} ${css.mPickerCrumbs}`} ref={(el) => { if (el) el.scrollLeft = el.scrollWidth; }}>
+        {picker.crumbs.map((c, i, all) => (
+          <span key={c.path} className={css.mCrumb}>
+            {i > 0 && <ChevronRight size={12} className={partsCss.mSubtle} />}
+            {i === all.length - 1 ? <b>{c.name}</b> : <button type="button" onClick={() => picker.go({ name: c.name, path: c.path, unreadable: false })}>{c.name}</button>}
+          </span>
+        ))}
+      </div>
+      {!picker.shut && (
+        <div className={css.mPickerFilter}>
+          <FilterField value={picker.filter} onChange={picker.setFilter} className={listsCss.mField} />
+        </div>
+      )}
       <div className={sheetsCss.mSheetScroll}>
-        {picker.error ? <p className={`${partsCss.mError} ${css.mSheetNote}`}>{picker.error}</p>
-          : !picker.value ? <Loading text={t("web-mobile.reading")} /> : (
-            <>
-              {picker.value.parent && <PickRow label={t("web-pages.drive.up")} leading={<ChevronRight size={18} className={css.mUp} />} onClick={() => picker.go(picker.value!.parent)} />}
-              {picker.value.folders.length === 0 && <p className={`${partsCss.mMuted} ${css.mSheetNote}`}>{t("web-pages.drive.noSubfolders")}</p>}
-              {picker.value.folders.map((f) => <PickRow key={f} label={f} leading={<Folder size={20} />} onClick={() => picker.go(childOf(picker.value!.path, f))} />)}
-            </>
-          )}
+        {picker.shut ? (
+          // There, but the station may not list it (macOS keeps Documents, Desktop, Downloads from a station it did not ask).
+          <div className={css.mPickerShut}>
+            <Folder size={36} strokeWidth={1.3} className={partsCss.mSubtle} />
+            <p>{picker.shut.unreadable ? t("web-pages.drive.pickNeedsAccess") : picker.shut.message}</p>
+          </div>
+        ) : !v ? <Loading text={t("web-mobile.reading")} /> : (
+          <>
+            {atHome && v.places.length > 1 && <>
+              <SectionHeader title={t("web-pages.drive.places")} />
+              {v.places.filter((p) => p.path !== v.home).map(row)}
+              <SectionHeader title={t("web-pages.drive.foldersHere")} />
+            </>}
+            {/* At home the usual places are above: not listed again under their names on disk. */}
+            {here().length === 0 && <p className={`${partsCss.mMuted} ${css.mSheetNote}`}>{picker.filter.trim() ? t("web-pages.drive.pickNoMatch") : t("web-pages.drive.noSubfolders")}</p>}
+            {here().map(row)}
+          </>
+        )}
       </div>
       <div className={css.mPickerFoot}>
         <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
-        <Button label={taken ? t("web-pages.drive.already") : t("web-pages.drive.pickThis")} primary enabled={!!picker.value && !taken} onClick={() => {
-          const path = picker.value!.path;
+        <Button label={taken ? t("web-pages.drive.already") : t("web-pages.drive.pickThis")} primary enabled={!!v && !taken && !unreadable} onClick={() => {
+          const path = v!.path;
           app.sheet(null);
           act(drive.setRoots(station, [...roots.map((r) => r.path), path]), t("web-pages.drive.rootsWhat"), t("web-pages.drive.shared", { name: path.split(/[/\\]/).filter(Boolean).at(-1) ?? path }));
         }} />
@@ -376,18 +410,57 @@ function PickerSheet({ station, roots }: { station: string; roots: DriveRoot[] }
   );
 }
 
-/** The station's folders at a path (its home first), for the picker: `go` to another. */
+/** The filter of a picker's folders: what is typed, and a ✕ to clear it (not the browser's own search field's). */
+export function FilterField({ value, onChange, className }: { value: string; onChange: (v: string) => void; className: string }) {
+  return (
+    <span className={css.filter}>
+      <input className={className} type="text" enterKeyHint="search" value={value} placeholder={t("web-pages.drive.pickFilter")} aria-label={t("web-pages.drive.pickFilter")} spellCheck={false}
+        autoComplete="off" onChange={(e) => onChange(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape" && value) { e.preventDefault(); e.stopPropagation(); onChange(""); } }} />
+      {value && <button type="button" className={css.filterClear} aria-label={t("web-pages.drive.pickClear")} onClick={() => onChange("")}><Close size={14} /></button>}
+    </span>
+  );
+}
+
+/** The way to `path` while the station has not said it (being read, or not readable): from the home as `near` names it,
+ *  else from the top. */
+function crumbsOf(path: string, near: Folders | null): Folders["crumbs"] {
+  const home = near?.home, first = near?.crumbs[0];
+  const under = (base: string, from: Folders["crumbs"]) => {
+    const parts = path.slice(base.length).split("/").filter(Boolean);
+    return [...from, ...parts.map((name, i) => ({ name, path: `${base.replace(/\/$/, "")}/${parts.slice(0, i + 1).join("/")}` }))];
+  };
+  if (home && first?.path === home && (path === home || path.startsWith(`${home}/`))) return under(home, [first]);
+  return under("/", [{ name: "/", path: "/" }]);
+}
+
+/**
+ * The station's folders at a path (its home first), for the picker: `go` to another; a filter on the names, let go as it
+ * goes. While the next is read, and when the station cannot read it (`failed`), the one before stays to show its places
+ * and the way there (`crumbs`, with the one asked for at their end).
+ */
 export function useFolders(station: string) {
-  const [path, setPath] = useState<string | null>(null);
-  const [value, setValue] = useState<{ path: string; parent: string | null; folders: string[] } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [asked, setAsked] = useState<PickFolder | null>(null);
+  const [value, setValue] = useState<Folders | null>(null);
+  const [last, setLast] = useState<Folders | null>(null);
+  const [failed, setFailed] = useState<{ path: string; message: string; unreadable: boolean } | null>(null);
+  const [filter, setFilter] = useState("");
   useEffect(() => {
     let live = true;
-    setError(null);
-    drive.folders(station, path).then((v) => { if (live) setValue(v); }, (e: unknown) => { if (live) setError(e instanceof Error ? e.message : String(e)); });
+    drive.folders(station, asked?.path ?? null).then((v) => { if (live) { setValue(v); setLast(v); } }, (e: unknown) => {
+      // A station from before `unreadable` refused such a folder (403).
+      if (live) setFailed({ path: asked?.path ?? "", message: e instanceof Error ? e.message : String(e), unreadable: asked?.unreadable === true || (e as { status?: number }).status === 403 });
+    });
     return () => { live = false; };
-  }, [station, path]);
-  return { value, error, go: (to: string | null) => { setValue(null); setPath(to); } };
+  }, [station, asked]);
+  const shown = value ?? last;
+  const crumbs = value ? value.crumbs : asked ? crumbsOf(asked.path, last) : [];
+  // Shut to the station: it says so of the folder (`unreadable`, its listing empty); one from before that refused it.
+  const shut = value?.unreadable ? { message: "", unreadable: true } : failed;
+  return {
+    value, last: shown, shut, crumbs, filter, setFilter,
+    unreadable: !!shut?.unreadable,
+    go: (to: PickFolder) => { setValue(null); setFailed(null); setFilter(""); setAsked(to); },
+  };
 }
 
 // ── what opens over the folder ─────────────────────────────────────────

@@ -335,5 +335,13 @@
   "station.drive.exists": "There's already one with that name",
   "station.drive.upload_lost": "The upload was interrupted and has to start over",
   "station.drive.too_large": "The station's disk is full",
-  "station.drive.io": "Couldn't read or write that"
+  "station.drive.io": "Couldn't read or write that",
+  "station.drive.place.home": "Home",
+  "station.drive.place.Desktop": "Desktop",
+  "station.drive.place.Documents": "Documents",
+  "station.drive.place.Downloads": "Downloads",
+  "station.drive.place.Movies": "Movies",
+  "station.drive.place.Videos": "Videos",
+  "station.drive.place.Music": "Music",
+  "station.drive.place.Pictures": "Pictures"
 }

@@ -87,9 +87,30 @@ export const drop = style({
 
 export const rootsList = style({ display: "grid", gap: "4px", maxHeight: "50vh", overflowY: "auto" });
 export const rootLine = style({ display: "grid", gridTemplateColumns: "16px minmax(0, 1fr) auto", alignItems: "center", gap: "12px", padding: "8px 4px" });
-export const pickerPath = style({ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", minWidth: "0" });
-globalStyle(`${pickerPath} code`, { minWidth: "0", fontFamily: vars.fontMono, fontSize: vars.textMeta, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-export const pickerList = style({ display: "grid", gap: "2px", height: "min(52vh, 420px)", overflowY: "auto", margin: "0 -8px" });
+/** The way to where the picker is (crumbs), and the filter at its end. */
+export const pickerPath = style({ display: "flex", alignItems: "center", gap: "12px", marginBottom: "10px", minWidth: "0", minHeight: "36px", fontSize: vars.textMeta, color: vars.muted });
+export const pickerCrumb = style({ display: "inline-flex", alignItems: "center", gap: "2px", flex: "none" });
+globalStyle(`${pickerCrumb} button`, { padding: "3px 4px", border: "0", borderRadius: "6px", background: "none", color: "inherit", font: "inherit", cursor: "pointer" });
+globalStyle(`${pickerCrumb} button:hover`, { color: vars.text });
+globalStyle(`${pickerCrumb} button[data-last]`, { color: vars.text, fontWeight: 600, cursor: "default" });
+/** The crumbs take what the filter leaves, and scroll sideways rather than wrap (the deepest kept in view). */
+export const pickerCrumbs = style({ display: "flex", alignItems: "center", gap: "2px", minWidth: "0", flex: "1", overflowX: "auto", scrollbarWidth: "none", whiteSpace: "nowrap" });
+export const pickerFilter = style({ width: "200px", flex: "none" });
+/** A folder the station may not read, opened: why, and where to let it. */
+export const pickerShut = style({ display: "grid", justifyItems: "center", alignContent: "center", gap: "12px", height: "100%", padding: "0 24px", color: vars.muted, textAlign: "center", fontSize: vars.textUi, lineHeight: "1.5" });
+globalStyle(`${pickerShut} p`, { margin: "0", maxWidth: "380px" });
+/** The usual places on the left, the folders where it is on the right. */
+export const picker = style({ display: "grid", gridTemplateColumns: "180px minmax(0, 1fr)", gap: "12px", height: "min(52vh, 420px)", margin: "0 -8px" });
+export const pickerPlaces = style({ display: "grid", alignContent: "start", gap: "2px", overflowY: "auto" });
+export const pickerHead = style({ padding: "4px 8px", fontSize: vars.textCaption, color: vars.muted });
+export const pickerList = style({ display: "grid", alignContent: "start", gap: "2px", overflowY: "auto" });
+export const pickRow = style({
+  display: "grid", gridTemplateColumns: "18px minmax(0, 1fr) auto", alignItems: "center", columnGap: "10px", boxSizing: "border-box", width: "100%",
+  minHeight: "40px", padding: "6px 10px", border: "0", background: "none", color: vars.text, textAlign: "left", fontSize: vars.textUi, cursor: "pointer",
+  borderRadius: vars.rField, cornerShape: vars.cornerShape,
+  selectors: { "&:hover": { background: vars.list }, "&[data-here]": { background: vars.list, fontWeight: 600 } },
+});
+globalStyle(`${pickRow} > span:last-child:not(:nth-child(2))`, { fontSize: vars.textCaption, whiteSpace: "nowrap" });
 
 /** A file opened: the reader or the player fills the pane. */
 export const opened = style({ position: "relative", flex: "1", minHeight: "0", overflow: "hidden" });

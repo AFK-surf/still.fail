@@ -329,5 +329,13 @@
   "station.drive.exists": "已经有同名的了",
   "station.drive.upload_lost": "上传断了，要从头传",
   "station.drive.too_large": "station 的磁盘满了",
-  "station.drive.io": "读写出错了"
+  "station.drive.io": "读写出错了",
+  "station.drive.place.home": "主目录",
+  "station.drive.place.Desktop": "桌面",
+  "station.drive.place.Documents": "文稿",
+  "station.drive.place.Downloads": "下载",
+  "station.drive.place.Movies": "影片",
+  "station.drive.place.Videos": "视频",
+  "station.drive.place.Music": "音乐",
+  "station.drive.place.Pictures": "图片"
 }

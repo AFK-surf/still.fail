@@ -36,7 +36,6 @@ import fail.still.android.data.WorkspaceView
 import fail.still.android.drive.DriveUpload
 import fail.still.android.drive.DriveUploads
 import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
@@ -120,12 +119,50 @@ class DriveTest {
                     put("bytes", Base64.encodeToString(bytes.copyOfRange(at, at + n), Base64.NO_WRAP))
                 }
             }
-            "drive.folders" -> buildJsonObject {
-                put("path", "/Users/alice"); put("parent", "/Users"); put("home", "/Users/alice")
-                put("folders", buildJsonArray { listOf("Desktop", "Documents", "Downloads", "Movies", "Music", "书").forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
-            }
+            "drive.folders" -> folders(p["path"]?.jsonPrimitive?.content)
             else -> JsonNull
         }
+    }
+
+    /**
+     * The station's folders as a Mac's home shows them to the picker: a heap of them at the home (the ones macOS keeps
+     * from a station without full disk access unreadable), the usual places and two disks, two levels of a project
+     * under it; Documents refused as the station refuses it.
+     */
+    private fun folders(asked: String?): kotlinx.serialization.json.JsonElement {
+        val home = "/Users/alice"
+        val path = asked ?: home
+        if (path == "$home/Documents") throw fail.still.core.CoreException("permission", "station 不能在这里这样做", 403)
+        val locked = setOf("Desktop", "Documents", "Downloads")
+        val names = when (path) {
+            home -> listOf(
+                "Applications", "code", "Creative Cloud Files", "Desktop", "Documents", "Downloads", "Dropbox", "go", "Library", "miniconda3", "Movies",
+                "Music", "node", "opt", "Parallels", "Pictures", "Projects", "Public", "Sites", "tmp", "VirtualBox VMs", "wechat-files", "Zotero",
+                "备份", "工作", "书", "影视资料", "照片",
+            )
+            "$home/Projects" -> listOf("blog", "dotfiles", "still.fail", "zdrive")
+            "$home/Projects/still.fail" -> listOf("apps", "client", "cloud", "design", "scripts", "station", "web")
+            else -> emptyList()
+        }
+        val entries = names.map { fail.still.android.data.PickFolder(it, "$path/$it", unreadable = path == home && it in locked) }
+        var at = home
+        val crumbs = listOf(fail.still.android.data.DriveCrumb("主目录", home)) +
+            path.removePrefix(home).split('/').filter { it.isNotEmpty() }.map { at = "$at/$it"; fail.still.android.data.DriveCrumb(it, at) }
+        val places = listOf(
+            fail.still.android.data.PickFolder("主目录", home),
+            fail.still.android.data.PickFolder("桌面", "$home/Desktop", unreadable = true),
+            fail.still.android.data.PickFolder("文稿", "$home/Documents", unreadable = true),
+            fail.still.android.data.PickFolder("下载", "$home/Downloads", unreadable = true),
+            fail.still.android.data.PickFolder("影片", "$home/Movies"),
+            fail.still.android.data.PickFolder("音乐", "$home/Music"),
+            fail.still.android.data.PickFolder("图片", "$home/Pictures"),
+            fail.still.android.data.PickFolder("media", "/Volumes/media", disk = true),
+            fail.still.android.data.PickFolder("Backup", "/Volumes/Backup", disk = true),
+        )
+        return kotlinx.serialization.json.Json.encodeToJsonElement(
+            fail.still.android.data.DriveFolders.serializer(),
+            fail.still.android.data.DriveFolders(path, path.substringBeforeLast('/').ifEmpty { "/" }, home, names, entries, crumbs, places),
+        )
     }
 
     /** A hard-wrapped novel with chapters, as such files come. */
@@ -164,8 +201,29 @@ class DriveTest {
         val tone = if (dark) "dark" else "light"
         val owner = launch(listOf(Screen.Stations, Screen.Station(st), Screen.Drive(st, null, "")), dark, roots = emptyList())
         owner.record("drive-empty-owner-$tone").end()
-        rule.onNodeWithText("选择文件夹").performClick(); owner.settle()
-        owner.record("drive-picker-$tone").end()
+    }
+
+    @Test fun pickerLight() = picker(false)
+    @Test fun pickerDark() = picker(true)
+
+    /** The folder picker: at the home (its places over its folders), a name typed to find one, two levels down, a folder the station may not read. */
+    private fun picker(dark: Boolean) {
+        val tone = if (dark) "dark" else "light"
+        val h = launch(listOf(Screen.Stations, Screen.Station(st), Screen.Drive(st, null, "")), dark, roots = emptyList())
+        rule.onNodeWithText("选择文件夹").performClick(); h.settle()
+        rule.onNodeWithText("常用位置").assertIsDisplayed()
+        h.record("drive-picker-home-$tone").end()
+        rule.onNode(hasSetTextAction()).performTextInput("pro"); h.settle()
+        h.record("drive-picker-filtered-$tone").end()
+        assertTrue(rule.onAllNodesWithText("常用位置").fetchSemanticsNodes().isEmpty())
+        rule.onNodeWithText("Projects").performClick(); h.settle()
+        rule.onNodeWithText("still.fail").performClick(); h.settle()
+        rule.onNodeWithText("design").assertIsDisplayed()
+        h.record("drive-picker-deeper-$tone").end()
+        rule.onNodeWithText("主目录").performClick(); h.settle()
+        rule.onNodeWithText("文稿").performClick(); h.settle()
+        rule.onNodeWithText("完全磁盘访问权限", substring = true).assertIsDisplayed()
+        h.record("drive-picker-denied-$tone").end()
     }
 
     @Test fun emptyMemberLight() = emptyMember(false)

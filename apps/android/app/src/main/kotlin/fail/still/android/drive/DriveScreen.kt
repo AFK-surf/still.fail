@@ -115,6 +115,17 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import fail.still.android.data.DriveCrumb
+import fail.still.android.data.PickFolder
+import fail.still.android.ui.SectionHeader
 
 // ── what an entry is ────────────────────────────────────────────────────
 
@@ -726,42 +737,131 @@ private fun openRoots(app: AppState, station: String) {
     }
 }
 
-/** The station's folders, from its home: entered by a tap, the one shown lent with 选这个文件夹; `lent`, those lent already. */
+/** Where the picker is: the folder asked for (null: the home), the way there as known before the station answers, whether its row said the station may not read it. */
+private class PickAt(val path: String?, val way: List<DriveCrumb>, val unreadable: Boolean)
+
+/** The way to `path` as the station would give it: from the home when it is under it (its name the station's word for it), else from the top. */
+private fun wayTo(path: String, here: DriveFolders): List<DriveCrumb> {
+    val home = here.home.trimEnd('/', '\\')
+    val homeName = here.crumbs?.firstOrNull()?.takeIf { it.path == here.home }?.name
+    val under = homeName != null && home.isNotEmpty() && (path == here.home || path.startsWith("$home/") || path.startsWith("$home\\"))
+    val top = if (under) DriveCrumb(homeName!!, here.home) else DriveCrumb("/", "/")
+    var at = if (under) home else ""
+    val rest = if (under) path.substring(home.length) else path
+    return listOf(top) + rest.split('/', '\\').filter { it.isNotEmpty() }.map { at = "$at/$it"; DriveCrumb(it, at) }
+}
+
+/**
+ * The station's folders, from its home: the way there on top (each step a way back), a filter for the names, then at the
+ * home the usual places (its own folders, the disks) over its folders. A folder the station may not read says so; it can
+ * be entered but not lent, and how to let the station read it is told. `lent`: the folders lent already.
+ */
 fun openFolderPicker(app: AppState, station: String, lent: List<String>) {
     app.sheet = SheetSpec(0.85f, draggable = true) {
+        var at by remember { mutableStateOf(PickAt(null, emptyList(), false)) }
         var shown by remember { mutableStateOf<DriveFolders?>(null) }
+        var denied by remember { mutableStateOf(false) }
         var error by remember { mutableStateOf<String?>(null) }
-        val scope = rememberCoroutineScope()
-        fun go(path: String?) {
-            shown = null; error = null
-            scope.launch { try { shown = app.api(station).driveFolders(path) } catch (e: CoreException) { error = e.message } }
+        var filter by remember { mutableStateOf("") }
+        val focus = LocalFocusManager.current
+        // Each place asked for anew; a later one supersedes what is still on its way.
+        LaunchedEffect(at) {
+            shown = null; error = null; denied = at.unreadable
+            try { shown = app.api(station).driveFolders(at.path).also { denied = it.unreadable } }
+            catch (e: CoreException) { if (e.code == "permission") denied = true else error = e.message }
         }
-        LaunchedEffect(Unit) { go(null) }
+        fun go(to: PickAt) { filter = ""; focus.clearFocus(); at = to }
         val here = shown
+        // A station from before gives neither the way nor where each folder is: made from the path.
+        val way = here?.let { it.crumbs ?: wayTo(it.path, it) } ?: at.way
+        val entries = here?.let { h -> h.entries ?: h.folders.map { PickFolder(it, h.path.trimEnd('/') + "/" + it) } }.orEmpty()
+        val wanted = filter.trim()
+        val places = if (here != null && here.path == here.home && wanted.isEmpty()) here.places.filter { it.path != here.home } else emptyList()
+        // At home the usual places are above: not listed again under their names on disk.
+        val listed = if (wanted.isEmpty()) entries.filter { e -> places.none { it.path == e.path } } else entries.filter { it.name.contains(wanted, ignoreCase = true) }
         SheetGrab()
         SheetHead(t("android-misc.drive.pick.title"))
-        Text(here?.path ?: " ", fontSize = 13.sp, color = C.muted, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 6.dp))
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+        PickCrumbs(way) { i, c -> go(PickAt(c.path, way.take(i + 1), false)) }
+        PickFilter(filter) { filter = it }
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 8.dp)) {
             when {
-                error != null -> Text(error!!, fontSize = 13.sp, color = C.red, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
-                here == null -> Note(t("android-misc.drive.reading"))
+                error != null -> item(key = "error") { Text(error!!, fontSize = 13.sp, color = C.red, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) }
+                denied -> item(key = "denied") { Note(t("android-misc.drive.pick.unreadable")) }
+                here == null -> item(key = "reading") { Note(t("android-misc.drive.reading")) }
                 else -> {
-                    here.parent?.let { up -> PickRow(t("android-misc.drive.pick.up"), leading = { IconIn(Icons.ChevronUp, 18.dp, C.ink) }) { go(up) } }
-                    if (here.folders.isEmpty()) Text(t("android-misc.drive.pick.empty"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
-                    here.folders.forEach { name -> PickRow(name, leading = { IconIn(Icons.Folder, 20.dp, C.ink) }) { go(here.path.trimEnd('/') + "/" + name) } }
+                    if (places.isNotEmpty()) {
+                        item(key = "places") { SectionHeader(t("android-misc.drive.pick.places")) }
+                        items(places, key = { "p:" + it.path }) { p -> PickFolderRow(p) { go(PickAt(p.path, wayTo(p.path, here), p.unreadable)) } }
+                        item(key = "folders") { SectionHeader(t("android-misc.drive.pick.folders")) }
+                    }
+                    if (listed.isEmpty()) item(key = "none") {
+                        Text(
+                            if (wanted.isEmpty()) t("android-misc.drive.pick.empty") else t("android-misc.drive.pick.noMatch", "q" to wanted),
+                            fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                        )
+                    }
+                    items(listed, key = { "f:" + it.path }) { e -> PickFolderRow(e) { go(PickAt(e.path, way + DriveCrumb(e.name, e.path), e.unreadable)) } }
                 }
             }
         }
+        if (denied) Text(t("android-misc.drive.pick.unreadableNote"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp))
         val taken = here != null && here.path in lent
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             Button(t("common.cancel"), primary = false) { app.sheet = null }
-            Button(if (taken) t("android-misc.drive.pick.already") else t("android-misc.drive.pick.choose"), primary = true, enabled = here != null && !taken) {
+            Button(if (taken) t("android-misc.drive.pick.already") else t("android-misc.drive.pick.choose"), primary = true, enabled = here != null && !taken && !denied) {
                 val p = here?.path ?: return@Button
                 app.sheet = null
                 app.act(t("android-misc.drive.roots.what"), done = t("android-misc.drive.roots.added", "name" to p.trimEnd('/').substringAfterLast('/').ifEmpty { p })) { app.api(station).driveSetRoots(lent + p) }
             }
         }
     }
+}
+
+/** The way to the folder shown, scrolled to its end: each step but the last a way back to it. */
+@Composable
+private fun PickCrumbs(way: List<DriveCrumb>, onPick: (Int, DriveCrumb) -> Unit) {
+    val scroll = rememberScrollState()
+    LaunchedEffect(way.lastOrNull()?.path, scroll.maxValue) { scroll.scrollTo(scroll.maxValue) }
+    Row(Modifier.fillMaxWidth().heightIn(min = 28.dp).horizontalScroll(scroll).padding(start = 17.dp, end = 20.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        way.forEachIndexed { i, c ->
+            if (i > 0) IconIn(Icons.ChevronRight, 12.dp, C.subtle)
+            val last = i == way.lastIndex
+            Text(
+                c.name, fontSize = 14.sp, color = if (last) C.ink else C.muted, fontWeight = if (last) FontWeight.SemiBold else null, maxLines = 1,
+                modifier = Modifier.clip(Smooth(6.dp)).clickable(enabled = !last) { onPick(i, c) }.padding(horizontal = 3.dp, vertical = 3.dp),
+            )
+        }
+    }
+}
+
+/** A pill to type a part of a folder's name in: only those with it are listed; × clears it. */
+@Composable
+private fun PickFilter(text: String, onChange: (String) -> Unit) {
+    Row(
+        Modifier.padding(horizontal = 20.dp).padding(bottom = 6.dp).fillMaxWidth().height(38.dp).clip(CircleShape).background(C.ink.copy(alpha = 0.06f)).padding(start = 12.dp, end = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        IconIn(Icons.Search, 16.dp, C.muted)
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (text.isEmpty()) Text(t("android-misc.drive.pick.filter"), fontSize = 15.sp, color = C.muted, maxLines = 1)
+            BasicTextField(
+                text, onChange, singleLine = true, cursorBrush = SolidColor(C.accent),
+                textStyle = TextStyle(fontSize = 15.sp, color = C.ink),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                modifier = Modifier.fillMaxWidth().semantics { contentDescription = t("android-misc.drive.pick.filter") },
+            )
+        }
+        if (text.isNotEmpty()) Box(
+            Modifier.size(28.dp).clip(CircleShape).clickable { onChange("") }.semantics { contentDescription = t("android-misc.drive.pick.filterClear") },
+            contentAlignment = Alignment.Center,
+        ) { IconIn(Icons.Close, 14.dp, C.muted) }
+    }
+}
+
+/** A folder or a place to go into: a disk's mark for a disk; whether the station may not read it, under its name. */
+@Composable
+private fun PickFolderRow(f: PickFolder, onClick: () -> Unit) {
+    PickRow(f.name, sub = if (f.unreadable) t("android-misc.drive.pick.unreadable") else null, leading = { IconIn(if (f.disk) Icons.Disk else Icons.Folder, 20.dp, C.ink) }, onClick = onClick)
 }
 
 /** What the station page's row says of a drive: how many folders it lends, or that it lends none. */

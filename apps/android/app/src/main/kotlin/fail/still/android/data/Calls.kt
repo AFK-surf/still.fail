@@ -33,9 +33,27 @@ const val DRIVE_PART = 4 * 1024 * 1024
 /** A part of a file of the drive (`drive.read`): its type, the whole file's size, the bytes. */
 class DriveRead(val type: String, val total: Long, val bytes: ByteArray)
 
-/** The folders in one on the station (`drive.folders`), to pick one to lend: where, its parent (none at the top), the home. */
+/**
+ * The folders in one on the station (`drive.folders`), to pick one to lend: where, its parent (none at the top), the home,
+ * the folders in it (`entries`; `folders`, their names alone, is all a station from before gives), the way there from the
+ * home or the top (`crumbs`), and where folders usually are (`places`: the home, its own folders, the disks). Each says
+ * whether the station may read it (macOS keeps some from a station it did not give full disk access).
+ */
 @kotlinx.serialization.Serializable
-data class DriveFolders(val path: String, val parent: String? = null, val home: String = "", val folders: List<String> = emptyList())
+data class DriveFolders(
+    val path: String, val parent: String? = null, val home: String = "", val folders: List<String> = emptyList(),
+    val entries: List<PickFolder>? = null, val crumbs: List<DriveCrumb>? = null, val places: List<PickFolder> = emptyList(),
+    /** The station may not list it (it answers so, with nothing in it; one from before refuses instead). */
+    val unreadable: Boolean = false,
+)
+
+/** A folder to pick from: its name (a place's in the asker's words), where it is, whether the station may read it, whether it is a disk. */
+@kotlinx.serialization.Serializable
+data class PickFolder(val name: String, val path: String, val unreadable: Boolean = false, val disk: Boolean = false)
+
+/** A step of the way to a folder: its name, where it is. */
+@kotlinx.serialization.Serializable
+data class DriveCrumb(val name: String, val path: String)
 
 class StationApi(private val core: StillFailCore, val station: String) {
     private val ops = StationOperations { name, params -> core.call(name, JsonObject(params + ("station" to JsonPrimitive(station)))) }

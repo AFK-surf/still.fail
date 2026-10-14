@@ -1,7 +1,7 @@
 // The station's drive (src/drive/drive.ts, api/routes/drive.ts): the roots it names, a path staying in its root (`..`,
 // links out, the station's own data), listings, parts of files read and written, and who may change what.
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -154,9 +154,26 @@ test("routes: roots named by owners and admins, kept in config.json; reads with 
   assert.deepEqual((await ask(table, request("GET", "/drive"))).json, { roots: [], manage: false, write: true });
   assert.equal((await ask(table, request("PUT", "/drive/roots", {}, { roots: [root] }))).status, 403);
   assert.equal((await ask(table, request("GET", "/drive/folders", {}, null))).status, 403);
+  mkdirSync(join(base, ".hidden"));
+  mkdirSync(join(base, "Movies"));
   const picked = await ask(table, request("GET", "/drive/folders", {}, null, "owner"));
-  assert.deepEqual(picked.json.folders, ["root"]);
+  // Hidden folders are left out; each says where it is and whether it can be listed; the way there starts at home.
+  assert.deepEqual(picked.json.folders, ["Movies", "root"]);
+  assert.deepEqual(picked.json.entries.map((e: any) => [e.name, e.path, e.unreadable]), [["Movies", join(base, "Movies"), false], ["root", root, false]]);
   assert.equal(picked.json.path, base);
+  assert.deepEqual(picked.json.crumbs, [{ name: "Home", path: base }]);
+  assert.deepEqual(picked.json.places.slice(0, 2).map((p: any) => [p.name, p.path]), [["Home", base], ["Movies", join(base, "Movies")]]);
+  const deeper = await ask(table, request("GET", "/drive/folders", { path: join(root, "Season 1") }, null, "owner"));
+  assert.deepEqual(deeper.json.crumbs.map((c: any) => c.name), ["Home", "root", "Season 1"]);
+  // One the station may not list: there, said so, nothing in it.
+  if (process.getuid?.() !== 0) {
+    mkdirSync(join(base, "Locked"));
+    chmodSync(join(base, "Locked"), 0);
+    const locked = await ask(table, request("GET", "/drive/folders", { path: join(base, "Locked") }, null, "owner"));
+    chmodSync(join(base, "Locked"), 0o755);
+    assert.deepEqual([locked.status, locked.json.unreadable, locked.json.entries], [200, true, []]);
+    assert.equal((await ask(table, request("GET", "/drive/folders", {}, null, "owner"))).json.entries.find((e: any) => e.name === "Locked")?.unreadable, false);
+  }
   // The station's data is not a root, nor a folder that is not there.
   assert.equal((await ask(table, request("PUT", "/drive/roots", {}, { roots: [data] }, "admin"))).json.code, "protected");
   assert.equal((await ask(table, request("PUT", "/drive/roots", {}, { roots: [join(base, "none")] }, "admin"))).json.code, "not_found");

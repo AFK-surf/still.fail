@@ -52,9 +52,31 @@ export function rootTrouble(root: DriveRoot): { text: string; hint: string } | n
 
 const call = (name: string, params: Record<string, unknown>) => core().call(name, params);
 
+/** A folder to pick a root from: where it is, whether the station may list it, whether it is a disk. */
+export type PickFolder = { name: string; path: string; unreadable: boolean; disk?: boolean };
+/** The station's folders at one place (`drive.folders`): its folders, the way there, the places to start from. */
+export type Folders = { path: string; parent: string | null; home: string; entries: PickFolder[]; unreadable: boolean; crumbs: { name: string; path: string }[]; places: PickFolder[] };
+
+/** What the station answered, whole: one from before places and crumbs gave the names alone. */
+function foldersOf(raw: unknown): Folders {
+  const v = raw as { path: string; parent: string | null; home: string; folders?: string[]; entries?: PickFolder[]; unreadable?: boolean; crumbs?: Folders["crumbs"]; places?: PickFolder[] };
+  return {
+    path: v.path, parent: v.parent, home: v.home, unreadable: v.unreadable === true,
+    entries: v.entries ?? (v.folders ?? []).map((name) => ({ name, path: childOf(v.path, name), unreadable: false })),
+    crumbs: v.crumbs ?? [{ name: v.path, path: v.path }],
+    places: v.places ?? [],
+  };
+}
+
+/** The folders whose name has `filter` in it, case aside. */
+export const filtered = (entries: readonly PickFolder[], filter: string) => {
+  const f = filter.trim().toLowerCase();
+  return f === "" ? entries : entries.filter((e) => e.name.toLowerCase().includes(f));
+};
+
 export const drive = {
   setRoots: (station: string, roots: string[]) => call("drive.setRoots", { station, roots }),
-  folders: (station: string, path: string | null) => call("drive.folders", { station, ...(path ? { path } : {}) }) as Promise<{ path: string; parent: string | null; home: string; folders: string[] }>,
+  folders: (station: string, path: string | null) => call("drive.folders", { station, ...(path ? { path } : {}) }).then(foldersOf),
   mkdir: (at: At, name: string) => call("drive.mkdir", { station: at.station, root: at.root, path: joinPath(at.path, name) }),
   rename: (at: At, entry: DriveEntry, to: string) => call("drive.rename", { station: at.station, root: at.root, from: joinPath(at.path, entry.name), to: joinPath(at.path, to) }),
   remove: (at: At, entry: DriveEntry) => call("drive.remove", { station: at.station, root: at.root, path: joinPath(at.path, entry.name) }),

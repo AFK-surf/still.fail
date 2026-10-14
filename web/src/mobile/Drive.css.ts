@@ -59,12 +59,18 @@ export const mRowButton = style({
 export const mEmpty = style({ display: "grid", justifyItems: "center", gap: "14px", padding: "56px 40px 24px", textAlign: "center", color: "var(--m-muted)", fontSize: vars.textUi });
 
 export const mSheetNote = style({ padding: "0 20px 10px" });
-/** Where the picker is on the station: one line, its end in view. */
-export const mPickerPath = style({
-  padding: "0 20px 8px", fontFamily: vars.fontMono, fontSize: vars.textCaption, color: "var(--m-muted)",
-  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+/** The way there, its words in line with the rows' marks below (each crumb's button has 4 px of its own). */
+export const mPickerCrumbs = style({ padding: "0 16px 8px" });
+/** A folder the station may not read, opened: why, and where to let it. */
+export const mPickerShut = style({ display: "grid", justifyItems: "center", gap: "12px", padding: "40px 32px", textAlign: "center", color: "var(--m-muted)", fontSize: vars.textUi, lineHeight: "1.5" });
+/** The filter's field, a ✕ at its end once something is typed. */
+export const filter = style({ position: "relative", display: "block" });
+export const filterClear = style({
+  position: "absolute", right: "6px", top: "50%", transform: "translateY(-50%)", display: "grid", placeItems: "center", width: "28px", height: "28px",
+  padding: "0", border: "0", borderRadius: "50%", background: "color-mix(in srgb, currentColor 10%, transparent)", color: "inherit", cursor: "pointer",
 });
-export const mUp = style({ transform: "rotate(-90deg)" });
+globalStyle(`${filter} input`, { paddingRight: "40px" });
+export const mPickerFilter = style({ padding: "0 16px 8px" });
 export const mPickerFoot = style({ display: "flex", gap: "10px", justifyContent: "flex-end", padding: "10px 16px calc(var(--m-foot) + 12px)" });
 
 /** A file opened: the page is the reader's or the player's own. */

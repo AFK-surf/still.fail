@@ -1044,5 +1044,12 @@
   "web-pages.drive.reader.night": "夜间",
   "web-pages.drive.reader.paper.follow": "跟随系统",
   "web-pages.drive.reader.paper.green": "护眼",
-  "web-pages.drive.reader.paper.grey": "浅灰"
+  "web-pages.drive.reader.paper.grey": "浅灰",
+  "web-pages.drive.places": "常用位置",
+  "web-pages.drive.foldersHere": "文件夹",
+  "web-pages.drive.pickFilter": "筛选文件夹",
+  "web-pages.drive.pickNoMatch": "没有名字里带这几个字的文件夹",
+  "web-pages.drive.pickUnreadable": "station 没有权限读",
+  "web-pages.drive.pickNeedsAccess": "station 读不了这个文件夹。macOS 上要在「系统设置 → 隐私与安全性 → 完全磁盘访问权限」里给 station 打开",
+  "web-pages.drive.pickClear": "清除"
 }

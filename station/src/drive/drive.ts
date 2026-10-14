@@ -9,6 +9,7 @@ import { lstat, mkdir, open, readdir, realpath, rename, rm, stat, unlink } from 
 import { basename, dirname, join } from "node:path";
 import { platform } from "../platform/index.ts";
 import { unreadableDir } from "../ops/files.ts";
+import { type Lang, tr } from "../ops/i18n.ts";
 
 /// Why a request was refused (zdrive's codes, and `protected` for the station's own data), each with its status.
 export const CODES = {
@@ -135,6 +136,28 @@ async function real(path: string): Promise<string> {
     const parent = dirname(path);
     return parent === path ? path : join(await real(parent), basename(path));
   }
+}
+
+/// A folder to pick a root from: its name, where it is, whether the station may list it, whether it is a disk.
+export type Folder = { name: string; path: string; unreadable: boolean; disk?: boolean };
+export type Folders = { path: string; parent: string | null; home: string; folders: string[]; entries: Folder[]; unreadable: boolean; crumbs: { name: string; path: string }[]; places: Folder[] };
+
+/// The home's own folders offered as places to start from, as they are named on disk (Videos: Linux and Windows).
+const PLACES = ["Desktop", "Documents", "Downloads", "Movies", "Videos", "Music", "Pictures"];
+
+const isDir = (path: string) => stat(path).then((s) => s.isDirectory(), () => false);
+
+/// The way to `at`: from the home when it is under it (the home first, in words), else from the top.
+function crumbs(at: string, home: string, lang: Lang): { name: string; path: string }[] {
+  const under = platform.paths.relativeIn(home, at);
+  const [top, rest] = under !== null ? [{ name: tr(lang, "station.drive.place.home"), path: home }, under] : [{ name: platform.paths.clean("/"), path: platform.paths.clean("/") }, at];
+  const out = [top];
+  let path = top.path;
+  for (const part of rest.split(/[\\/]/).filter((p) => p !== "")) {
+    path = join(path, part);
+    out.push({ name: part, path });
+  }
+  return out;
 }
 
 /// A path asked of the drive: where it is as asked, as found (links followed), the entry itself (its folder's links
@@ -367,26 +390,56 @@ export class Drive {
   }
 
   /// For the settings that name the roots: the folders in `path` (the home when none), for owners and admins to pick
-  /// one; what is protected left out.
-  async folders(path: string, home: string): Promise<{ path: string; parent: string | null; home: string; folders: string[] }> {
+  /// one. Hidden ones (a name starting with `.`) and what is protected are left out; each says whether the station may
+  /// list it (`unreadable`: macOS keeps Documents, Desktop, Downloads and removable volumes from a station launchd
+  /// runs). With it, the way there (`crumbs`, from the home when it is under it) and the usual places to start from
+  /// (`places`: the home's own folders, the disks mounted), in the asker's words. `folders`, the names alone, for the
+  /// pages from before.
+  async folders(path: string, home: string, lang: Lang = "zh"): Promise<Folders> {
     const at = platform.paths.clean(path === "" ? home : path);
     if (!platform.paths.rooted(path === "" ? home : path)) throw new DriveError("invalid_request", "an absolute path");
     try {
-      const dirents = await readdir(at, { withFileTypes: true });
+      // One the station may not list is still where the picker is: said so (`unreadable`), with nothing in it.
+      const listed = await readdir(at, { withFileTypes: true }).then((d) => ({ d, unreadable: false }), (e) => {
+        const code = (e as NodeJS.ErrnoException).code;
+        if (code === "EPERM" || code === "EACCES") return { d: [], unreadable: true };
+        throw e;
+      });
+      const dirents = listed.d;
       const protect = await this.protectedNow();
-      const folders: string[] = [];
+      const entries: Folder[] = [];
       for (const d of dirents) {
+        if (d.name.startsWith(".")) continue;
         const asked = join(at, d.name);
         let dir = d.isDirectory();
         if (d.isSymbolicLink()) dir = await stat(asked).then((s) => s.isDirectory(), () => false);
-        if (dir && !(await this.isProtected(asked, await real(asked), protect))) folders.push(d.name);
+        if (dir && !(await this.isProtected(asked, await real(asked), protect))) entries.push({ name: d.name, path: asked, unreadable: unreadableDir(asked) });
       }
-      folders.sort((a, b) => collator.compare(a, b));
+      entries.sort((a, b) => collator.compare(a.name, b.name));
       const parent = dirname(at);
-      return { path: at, parent: parent === at ? null : parent, home, folders };
+      return { path: at, parent: parent === at ? null : parent, home, folders: entries.map((e) => e.name), entries, unreadable: listed.unreadable, crumbs: crumbs(at, home, lang), places: await this.places(home, lang, protect) };
     } catch (e) {
       throw failed(e);
     }
+  }
+
+  /// Where a folder to lend usually is: the home's own folders that are there, then the disks mounted.
+  private async places(home: string, lang: Lang, protect: string[]): Promise<Folder[]> {
+    const found: Folder[] = [{ name: tr(lang, "station.drive.place.home"), path: home, unreadable: unreadableDir(home) }];
+    for (const name of PLACES) {
+      const path = join(home, name);
+      if (await isDir(path)) found.push({ name: tr(lang, `station.drive.place.${name}`), path, unreadable: unreadableDir(path) });
+    }
+    // Disks: macOS mounts them in /Volumes (the system's own there is a link to /), Linux in /media/<user> and /mnt.
+    for (const mounts of ["/Volumes", join("/media", basename(home)), "/mnt"]) {
+      for (const name of (await readdir(mounts).catch(() => [] as string[])).sort((a, b) => collator.compare(a, b))) {
+        if (name.startsWith(".")) continue;
+        const path = join(mounts, name);
+        if (!(await isDir(path)) || (await real(path)) === "/" || (await this.isProtected(path, await real(path), protect))) continue;
+        found.push({ name, path, unreadable: unreadableDir(path), disk: true });
+      }
+    }
+    return found;
   }
 
   /// Whether `path` may be a root: there, a folder, none of the station's own data.

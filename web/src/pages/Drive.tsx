@@ -13,13 +13,13 @@ import { useDoing } from "../doing.ts";
 import { useAct } from "../toast.tsx";
 import type { DriveEntry, DriveRoot } from "../core/shapes.ts";
 import { Button, Confirm, Dialog, ICON, IconButton, Menu, Tip, type MenuItem } from "../ui.tsx";
-import { ChevronLeft, ChevronRight, Close, Download, Edit, Folder, FolderPlus, Plus, Refresh, Retry, Trash, Upload } from "../icons.tsx";
+import { ChevronLeft, ChevronRight, Close, Disk, Download, Edit, Folder, FolderPlus, Plus, Refresh, Retry, Trash, Upload } from "../icons.tsx";
 import { KindIcon } from "../drive/KindIcon.tsx";
 import { Reader } from "../drive/Reader.tsx";
 import { Player } from "../drive/Player.tsx";
 import { cancel, download, joinPath, nameOf, openerOf, parentOf, refresh, retry, rootLabel, settle, sizeOf, upload, useFolder, useUploads, type At, type Upload as Up } from "../drive/model.ts";
-import { childOf, drive, drivePath, nameProblem, rootTrouble, useDrive, type DriveState } from "../drive/useDrive.ts";
-import { DrivePreview, useFolders } from "../mobile/Drive.tsx";
+import { childOf, drive, drivePath, filtered, nameProblem, rootTrouble, useDrive, type DriveState, type PickFolder } from "../drive/useDrive.ts";
+import { DrivePreview, FilterField, useFolders } from "../mobile/Drive.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as controlsCss from "../styles/controls.css.ts";
@@ -330,31 +330,72 @@ function RootsDialog({ station, roots, onAdd, onClose }: { station: string; root
   );
 }
 
-/** The station's folders from its home, entered by a click; the one shown lent with 选这个文件夹. */
+/**
+ * The station's folders from its home: the usual places beside them (the home's own folders, the disks), a filter,
+ * the way back as crumbs; entered by a click, the one shown lent with 选这个文件夹. One the station may not list says
+ * so, and is not lent.
+ */
 function PickerDialog({ station, roots, onClose }: { station: string; roots: DriveRoot[]; onClose: () => void }) {
   const act = useAct();
   const picker = useFolders(station);
-  const taken = picker.value ? roots.some((r) => r.path === picker.value!.path) : false;
+  const v = picker.value;
+  // Its places stay while the next folder is read, or when the station cannot read it.
+  const near = picker.last;
+  const taken = v ? roots.some((r) => r.path === v.path) : false;
+  const unreadable = picker.unreadable;
+  // At home with nothing typed, the usual places (on the left) are not listed again under their names on disk.
+  const shown = v ? filtered(v.entries, picker.filter).filter((e) => !(v.path === v.home && picker.filter.trim() === "" && v.places.some((p) => p.path === e.path))) : [];
+  const where = v?.path ?? picker.crumbs.at(-1)?.path;
+  const row = (f: PickFolder, here = false) => (
+    <button key={f.path} type="button" className={css.pickRow} data-here={here || undefined} onClick={() => picker.go(f)}>
+      {f.disk ? <Disk size={18} strokeWidth={1.6} className={css.icon} /> : <Folder size={18} strokeWidth={1.6} className={css.icon} />}
+      <span className={css.name}>{f.name}</span>
+      {f.unreadable && <span className={shellCss.muted}>{t("web-pages.drive.pickUnreadable")}</span>}
+    </button>
+  );
   return (
     <Dialog open wide onClose={onClose} title={t("web-pages.drive.pick")} description={t("web-pages.drive.pickNote")}
-      footer={<><Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button><Button variant="primary" disabled={!picker.value || taken} onClick={() => {
-        const path = picker.value!.path;
-        onClose();
-        act(drive.setRoots(station, [...roots.map((r) => r.path), path]), t("web-pages.drive.rootsWhat"), t("web-pages.drive.shared", { name: path.split(/[/\\]/).filter(Boolean).at(-1) ?? path }));
-      }}>{taken ? t("web-pages.drive.already") : t("web-pages.drive.pickThis")}</Button></>}>
+      footer={<>
+        <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
+        <Button variant="primary" disabled={!v || taken || unreadable} onClick={() => {
+          const path = v!.path;
+          onClose();
+          act(drive.setRoots(station, [...roots.map((r) => r.path), path]), t("web-pages.drive.rootsWhat"), t("web-pages.drive.shared", { name: path.split(/[/\\]/).filter(Boolean).at(-1) ?? path }));
+        }}>{taken ? t("web-pages.drive.already") : t("web-pages.drive.pickThis")}</Button>
+      </>}>
       <div className={css.pickerPath}>
-        <Tip label={t("web-pages.drive.up")}><span><IconButton label={t("web-pages.drive.up")} icon={ChevronLeft} disabled={!picker.value?.parent} onClick={() => picker.go(picker.value?.parent ?? null)} /></span></Tip>
-        <code>{picker.value?.path ?? "…"}</code>
-      </div>
-      <div className={css.pickerList}>
-        {picker.error ? <p className={controlsCss.fieldError}>{picker.error}</p>
-          : !picker.value ? <p className={shellCss.muted}>{t("web-pages.drive.reading")}</p>
-          : picker.value.folders.length === 0 ? <p className={shellCss.muted}>{t("web-pages.drive.noSubfolders")}</p>
-          : picker.value.folders.map((f) => (
-            <button key={f} type="button" className={css.row} onClick={() => picker.go(childOf(picker.value!.path, f))}>
-              <Folder size={18} strokeWidth={1.6} className={css.icon} /><span className={css.name}>{f}</span><ChevronRight {...ICON} className={shellCss.muted} />
-            </button>
+        <span className={css.pickerCrumbs} ref={(el) => { if (el) el.scrollLeft = el.scrollWidth; }}>
+          {picker.crumbs.map((c, i, all) => (
+            <span key={c.path} className={css.pickerCrumb}>
+              {i > 0 && <ChevronRight size={12} className={shellCss.muted} />}
+              <button type="button" data-last={i === all.length - 1 || undefined} onClick={() => i < all.length - 1 && picker.go({ name: c.name, path: c.path, unreadable: false })}>{c.name}</button>
+            </span>
           ))}
+        </span>
+        {!picker.shut && <span className={css.pickerFilter}><FilterField value={picker.filter} onChange={picker.setFilter} className={controlsCss.input} /></span>}
+      </div>
+      <div className={css.picker}>
+        {near && near.places.length > 0 && (
+          <div className={css.pickerPlaces}>
+            <div className={css.pickerHead}>{t("web-pages.drive.places")}</div>
+            {near.places.map((p) => row(p, p.path === where))}
+          </div>
+        )}
+        <div className={css.pickerList}>
+          {picker.shut ? (
+            <div className={css.pickerShut}>
+              <Folder size={32} strokeWidth={1.3} />
+              <p>{picker.shut.unreadable ? t("web-pages.drive.pickNeedsAccess") : picker.shut.message}</p>
+            </div>
+          ) : !v ? <p className={`${shellCss.muted} ${css.pickerHead}`}>{t("web-pages.drive.reading")}</p>
+            : shown.length === 0 ? <p className={`${shellCss.muted} ${css.pickerHead}`}>{picker.filter.trim() ? t("web-pages.drive.pickNoMatch") : t("web-pages.drive.noSubfolders")}</p>
+            : (
+              <>
+                <div className={css.pickerHead}>{t("web-pages.drive.foldersHere")}</div>
+                {shown.map((f) => row(f))}
+              </>
+            )}
+        </div>
       </div>
     </Dialog>
   );
