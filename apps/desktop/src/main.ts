@@ -16,6 +16,7 @@ import { pathToFileURL } from "node:url";
 import { FETCH_LINK, socketScript, withSocketTag } from "../../../cloud/src/previewSocket";
 import { applyDelta, type DeltaOp } from "../../../web/src/core/delta";
 import { LocalStation, type Place } from "./station";
+import { controlService, installedService, servicePath, updateInstalled } from "./installed";
 import { contextMenu, type Action } from "./context-menu.mts";
 import { Dock, dockHelper, type DockSettings } from "./dock.mts";
 import { moveUserData } from "./moves.mts";
@@ -612,6 +613,99 @@ function machineName(): string {
     return hostname().replace(/\.local$/, "");
   }
 }
+
+// The settings' 本机 Station page (web/src/pages/LocalStation.tsx): this machine's station whoever runs it (the app, a
+// service installed on its own: installed.ts, or a station started by hand), where it stands, and starting, stopping,
+// restarting it, an installed one brought up to the app's release in place. Which workspace it joins is not decided
+// here (the workspace's station settings, station:join).
+type LocalAction = "start" | "stop" | "restart" | "update" | "log" | "folder";
+let localDoing: LocalAction | null = null;
+
+/** run/station.json of a station running the data: the launcher's pid and the release it runs. */
+function runningStation(data: string): { pid: number; version?: string } | null {
+  try {
+    const s = JSON.parse(readFileSync(join(data, "run", "station.json"), "utf8")) as { pid?: unknown; version?: unknown };
+    if (typeof s.pid !== "number" || s.pid <= 0) return null;
+    process.kill(s.pid, 0);
+    return { pid: s.pid, ...(typeof s.version === "string" ? { version: s.version } : {}) };
+  } catch {
+    return null;
+  }
+}
+
+/** The release an installed station has, running or not (its app/BUILD, the installer's). */
+function installedVersion(data: string): string | undefined {
+  try {
+    return `0.1.${readFileSync(join(data, "app", "BUILD"), "utf8").trim()}`;
+  } catch {
+    return undefined;
+  }
+}
+
+/** 0.1.<n>'s n; -1 for one that does not say. */
+const buildOf = (version: string | undefined) => Number(/^0\.1\.(\d+)$/.exec(version ?? "")?.[1] ?? -1);
+
+/** What the page is told (web/src/core/client.ts, LocalStationState). */
+function localStation() {
+  const data = station.data;
+  const service = installedService();
+  const running = runningStation(data);
+  const runner = !running ? "none" : running.pid === station.pid ? "app" : service ? "service" : "other";
+  const version = running?.version ?? (service ? installedVersion(data) : undefined);
+  let workspace: { id: string; name?: string | undefined; station?: string | undefined; stationName?: string | undefined; removed: boolean } | undefined;
+  try {
+    const c = JSON.parse(readFileSync(join(data, "mesh", "cloud.json"), "utf8")) as Record<string, unknown>;
+    const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
+    const id = str(c.workspace);
+    if (id) workspace = { id, name: str(c.workspace_name), station: str(c.station), stationName: str(c.name), removed: c.removed_at != null };
+  } catch { /* in none */ }
+  return {
+    carried: station.carried,
+    carriedVersion: station.version,
+    data,
+    runner,
+    ...(version ? { version } : {}),
+    ...(service ? { service: { kind: service.kind, name: service.name } } : {}),
+    // An installed one behind the app's release (or saying none: one from before versions were said).
+    outdated: !!service && !!station.version && buildOf(version) < buildOf(station.version),
+    ...(workspace ? { workspace } : {}),
+    ...(localDoing ? { doing: localDoing } : {}),
+  };
+}
+
+ipcMain.handle("station:local", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? localStation() : null);
+
+ipcMain.handle("station:act", async (event, action: unknown) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof action !== "string") return null;
+  if (!["start", "stop", "restart", "update", "log", "folder"].includes(action)) return null;
+  const data = station.data;
+  if (action === "log") return { opened: (await shell.openPath(join(data, "stillfail.log"))) === "" };
+  if (action === "folder") return { opened: (await shell.openPath(data)) === "" };
+  if (localDoing) return { error: t("desktop.local.busy") };
+  localDoing = action as LocalAction;
+  try {
+    const service = installedService();
+    const running = runningStation(data);
+    if (action === "update") {
+      if (!service) throw new Error(t("desktop.local.noService"));
+      await updateInstalled(service, CLOUD_ORIGIN, { ...process.env, PATH: servicePath(service, station.path), STILLFAIL_CHANNEL: BETA ? "beta" : "stable" });
+    } else if (service) {
+      await controlService(service, action as "start" | "stop" | "restart");
+    } else if (running && running.pid !== station.pid) {
+      // Started by hand (`stillfail start`): only stopped from here, it has no service to start it again.
+      if (action !== "stop") throw new Error(t("desktop.local.byHand"));
+      process.kill(running.pid, "SIGTERM");
+    } else {
+      if (action !== "start") await station.stop();
+      if (action !== "stop") station.resume();
+    }
+    return { station: localStation() };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  } finally {
+    localDoing = null;
+  }
+});
 
 // Keeping the app current: the cloud has the latest build (scripts/release.sh desktop puts it in /releases/desktop/,
 // stillfail-mac.yml; the beta app's, stillfail-beta-mac.yml beside it), looked for at start and every few hours. A newer one is said to the pages, which show 更新

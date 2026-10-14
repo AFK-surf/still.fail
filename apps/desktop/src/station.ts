@@ -2,12 +2,14 @@
 // station in TypeScript, its launcher at mesh/target/release/stillfail-station with the command line the Rust station
 // had), started with the app, started again when it ends, stopped when the app quits. Its data
 // is ~/.stillfail, as an installed station's is, so the machine is one station whichever runs it; when one is installed
-// and running already (stillfail-station exits with HELD), the app leaves it be. A machine that ran it before the
+// as a service (installed.ts) the app runs none, and when another runs the data already (stillfail-station exits with
+// HELD) the app leaves it be. A machine that ran it before the
 // rename has it in ~/.ember: the station moves it to ~/.stillfail as it starts (station/native/launcher, data.rs).
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
+import { installedService } from "./installed";
 
 /** stillfail-station's exit when another station runs the data directory (station/native/launcher: HELD). */
 const HELD = 3;
@@ -140,8 +142,36 @@ export class LocalStation {
     return this.place.state === "running";
   }
 
+  /** The PATH the station is given (and an installed one updated from here, when its service says none). */
+  get path(): string {
+    return WINDOWS ? withPath(process.env, [join(homedir(), ".local", "bin")], []).PATH! : `${homedir()}/.local/bin:/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? ""}:/usr/bin:/bin`;
+  }
+
+  /** The release the app carries: 0.1.<commits> (scripts/station-bundle.sh BUILD); none in a build without one. */
+  get version(): string | undefined {
+    try {
+      return `0.1.${readFileSync(join(this.dir, "BUILD"), "utf8").trim()}`;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** The launcher's pid while the app runs it (run/station.json says the same of the station it runs). */
+  get pid(): number | undefined {
+    return this.#child?.pid;
+  }
+
+  /** Started again after a stop asked for on the 本机 Station page (not one of quitting: that one stays stopped). */
+  resume(): void {
+    this.#stopping = false;
+    this.held = false;
+    this.start();
+  }
+
   start(): void {
     if (!this.carried || this.#child || this.#starting || this.#stopping || this.held) return;
+    // An installed station's service runs this machine's: the app does not run one beside it, even while it is stopped.
+    if (installedService()) return;
     this.#starting = true;
     void proxyOfShell().then((proxy) => {
       this.#starting = false;
@@ -160,7 +190,7 @@ export class LocalStation {
       env: WINDOWS
         ? // Claude Code's own installer puts it in ~\.local\bin, which an app started from the Start menu may not have.
           withPath({ ...proxy, ...process.env, ...this.#node, STILLFAIL_DATA: data, EMBER_DATA: data }, [join(homedir(), ".local", "bin")], [])
-        : { ...proxy, ...process.env, ...this.#node, STILLFAIL_DATA: data, EMBER_DATA: data, PATH: `${homedir()}/.local/bin:/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? ""}:/usr/bin:/bin` },
+        : { ...proxy, ...process.env, ...this.#node, STILLFAIL_DATA: data, EMBER_DATA: data, PATH: this.path },
       stdio: ["ignore", log, log],
       windowsHide: true,
     });

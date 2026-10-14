@@ -7,6 +7,7 @@ import { Illustration } from "../brand.tsx";
 import { CHANGEABLE } from "../keymap.ts";
 import { CAN_NOTIFY } from "../notify.ts";
 import { HAS_VERSION } from "../pages/AppVersion.tsx";
+import { HAS_LOCAL_STATION } from "../pages/LocalStation.tsx";
 import { ArrowLeft, Bell, Brain, Chart, Check, ChevronRight, Folder, Info, Key, LogOut, Monitor, Plug, Plus, Refresh, Server, Settings, Sliders, Sparks, Command, Trash, User, UserPlus, Users, type IconProps } from "../icons.tsx";
 import { useCommands } from "../commands.ts";
 import { Fragment, useCallback, useEffect, useRef, useState, type ComponentType } from "react";
@@ -76,6 +77,7 @@ function settingsPages(entry: WorkspaceEntry, some: boolean): SettingsPage[] {
     ...page("client", "notifications", t("web-pages.settings.nav.notifications"), Bell, "notifications", CAN_NOTIFY),
     ...page("client", "shortcuts", t("web-pages.settings.nav.shortcuts"), Command, "shortcuts keys", CHANGEABLE),
     ...page("client", "version", t("web-pages.settings.nav.version"), Info, "version update", HAS_VERSION),
+    ...page("client", "local-station", t("web-pages.localStation.title"), Monitor, "local station this mac", HAS_LOCAL_STATION),
     ...page("client", "changelog", t("web-pages.settings.nav.changelog"), Sparks, "changelog"),
     ...page("station", "stations", "Station", Server, "station"),
     ...page("station", "connects", t("web-pages.settings.nav.connects"), Plug, "connects slack", some),

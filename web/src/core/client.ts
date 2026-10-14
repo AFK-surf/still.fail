@@ -537,6 +537,15 @@ export interface StillFailDesktop {
     /** Joins it to `workspace` as `account`, even if it joined one before (not over one it is in): its state after, or why not. */
     join(account: string, workspace: string): Promise<{ station: CarriedStation } | { error: string } | null>;
   };
+  /**
+   * This machine's station whoever runs it, for the settings' 本机 Station page (apps/desktop/src/main.ts, station:local):
+   * where it stands, and starting, stopping, restarting or updating it, its log or data directory opened. An app from
+   * before it has none.
+   */
+  local?: {
+    state(): Promise<LocalStationState | null>;
+    act(action: LocalStationAction): Promise<{ station: LocalStationState } | { error: string } | { opened: boolean } | null>;
+  };
   /** Shows a file of this machine in Finder (a directory opened): false when it is not there; an app from before it has none. */
   reveal?(path: string): Promise<boolean>;
   /**
@@ -616,6 +625,26 @@ export interface CarriedStation {
   workspace?: string;
   /** Its key in that workspace (an app from before it says none). */
   station?: string;
+}
+
+export type LocalStationAction = "start" | "stop" | "restart" | "update" | "log" | "folder";
+
+/**
+ * This machine's station (apps/desktop/src/main.ts, localStation): run by the app, by a service installed on its own
+ * (`service`: launchd, systemd or a scheduled task), by hand (`other`), or not running (`none`); the release it runs or
+ * has (`version`), `outdated` when an installed one is behind the app's (`carriedVersion`); the workspace its data is
+ * in, if any; what is being done to it (`doing`).
+ */
+export interface LocalStationState {
+  carried: boolean;
+  carriedVersion?: string;
+  data: string;
+  runner: "app" | "service" | "other" | "none";
+  version?: string;
+  service?: { kind: "launchd" | "systemd" | "task"; name: string };
+  outdated: boolean;
+  workspace?: { id: string; name?: string | undefined; station?: string | undefined; stationName?: string | undefined; removed: boolean };
+  doing?: LocalStationAction;
 }
 
 /** What a check asked for now found: the newer build (`latest`), none (neither), or why it could not tell. */

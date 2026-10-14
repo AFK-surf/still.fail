@@ -28,6 +28,7 @@ import { ArchivePage } from "../pages/Archive.tsx";
 import { AppearancePage } from "../pages/Appearance.tsx";
 import { NotificationsPage } from "../pages/Notifications.tsx";
 import { AppVersionPage, HAS_VERSION } from "../pages/AppVersion.tsx";
+import { HAS_LOCAL_STATION, LocalStationPage } from "../pages/LocalStation.tsx";
 import { ChangelogNews, ChangelogPage } from "../pages/Changelog.tsx";
 import { AddProfile } from "../pages/AddProfile.tsx";
 import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
@@ -102,6 +103,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
             <Route path="settings/notifications" element={<NotificationsPage back={`/w/${entry.id}/settings`} />} />
             {CHANGEABLE && <Route path="settings/shortcuts" element={<ShortcutsPage back={`/w/${entry.id}/settings`} />} />}
             {HAS_VERSION && <Route path="settings/version" element={<AppVersionPage back={`/w/${entry.id}/settings`} />} />}
+            {HAS_LOCAL_STATION && <Route path="settings/local-station" element={<LocalStationPage back={`/w/${entry.id}/settings`} />} />}
             <Route path="settings/changelog" element={<ChangelogPage back={`/w/${entry.id}/settings`} />} />
             <Route path="settings/account" element={<AccountSettings entry={entry} />} />
             <Route path="settings/workspace" element={<WorkspaceSettings entry={entry} />} />
