@@ -1,5 +1,6 @@
 // The rail at the wide screen's left (Rail.tsx): a column of the sidebar's own ground, the places as icons.
 import { globalStyle, style } from "@vanilla-extract/css";
+import { navFoot, stationRow, stationTrouble } from "./Sidebar.css.ts";
 import { vars } from "./styles/tokens.css.ts";
 
 const wide = "(min-width: 701px)";
@@ -17,7 +18,8 @@ export const rail = style({
       content: '""', position: "absolute", zIndex: -1, inset: 0, background: vars.sidebar, borderRadius: 0,
       cornerShape: vars.cornerShape, transition: `inset 240ms ${vars.easeOut}, border-radius 240ms ${vars.easeOut}`,
     },
-    '[data-sidebar="closed"] &::before': { inset: "8px 6px", borderRadius: vars.rCard },
+    // Concentric with what is lit in it (the items' 12 px corner, 3 px in from its sides).
+    '[data-sidebar="closed"] &::before': { inset: "8px 6px", borderRadius: `calc(12px * ${vars.cornerScale} + 3px)` },
     '[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] &::before': { top: 44 },
   },
   "@media": { [narrow]: { display: "none" }, "(prefers-reduced-motion: reduce)": { selectors: { "&::before": { transition: "none" } } } },
@@ -123,3 +125,9 @@ export const adder = style({
   selectors: { "&[data-side]": { vars: { "--panel-pad": "12px", "--panel-in": `calc(${vars.rMenu} - 12px)` } } },
 });
 export const zouSmall = style({ fontSize: vars.textBody, lineHeight: "18px", fontWeight: 600 });
+
+// Beside the rail the sidebar's foot has nothing of its own (the switcher and settings are the rail's, the stations' line
+// only for what is wrong): gone when there is nothing in it, not an empty frosted band under the list.
+globalStyle(`[data-rail] ${navFoot}:not(:has(:is(a, button):not(${narrowOnly} *, ${stationRow}:not(:has(${stationTrouble}[data-state])) *)))`, {
+  "@media": { [wide]: { display: "none" } },
+});
