@@ -258,22 +258,8 @@ export function StatusDot({ state, label }: { state: Presence; label?: string })
   return <span className={css.statusDot} data-state={state} role={label ? "img" : undefined} aria-label={label} />;
 }
 
-const AVATAR_TONES = ["#c9954c", "#6f8fbf", "#7d9a6f", "#b07a9c", "#8c83c7", "#c77d6a"];
-
-/** A lettered tile, coloured by id, like Zork's device avatars. */
-export function Avatar({ id, name, size = 20 }: { id: string; name: string; size?: number }) {
-  let hash = 0;
-  for (const c of id) hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
-  // "ember-gpt" → G: the distinguishing last word, since connects often share a prefix.
-  const word = name.trim().split(/[\s\-_./]+/).filter(Boolean).at(-1) ?? name;
-  const letter = ([...word][0] ?? "?").toUpperCase();
-  return (
-    <span className={css.avatar} aria-hidden="true"
-      style={{ width: size, height: size, fontSize: Math.round(size * .52), background: AVATAR_TONES[hash % AVATAR_TONES.length], borderRadius: `calc(${Math.min(size * .375, 12)}px * ${vars.cornerScale})` }}>
-      {letter}
-    </span>
-  );
-}
+// A lettered tile (Avatar.tsx): here too, where the app has always had it.
+export { Avatar } from "./Avatar.tsx";
 
 export function Dialog({ open, title, description, onClose, children, footer, wide }:
   { open: boolean; title: ReactNode; description?: ReactNode; onClose(): void; children: ReactNode; footer?: ReactNode; wide?: boolean }) {

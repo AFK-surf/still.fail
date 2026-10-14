@@ -185,6 +185,14 @@ export function useVizMessages(wins: () => Window[], { origin = "*", draftKey: g
 }
 
 /**
+ * Where a frame's document comes from instead of srcdoc: the URL of a document of the page's own origin that writes in
+ * the first document it is posted (`{stillfailVizDocument}`), with the frames' CSP in its own headers. A frame written
+ * from srcdoc has the page's CSP, which on a page that allows no inline scripts (the share page, cloud/src/share.ts)
+ * stops the frame's too. Sandboxed the same, so it has no origin of the page's either. None: srcdoc.
+ */
+export const FrameHost = createContext<string | null>(null);
+
+/**
  * The sandboxed frame itself. `state`: what the widget kept, given to it as it loads; `onState` keeps what it keeps
  * next; `onError` hears a failure the content reports (a mermaid chart that would not parse).
  */
@@ -193,6 +201,7 @@ function Frame({ html, title, heightKey, state = null, onState, onError }: {
 }) {
   const [height, setHeight] = useState(() => keptHeight(heightKey) ?? FIRST_HEIGHT);
   const frame = useRef<HTMLIFrameElement>(null);
+  const host = useContext(FrameHost);
   // A whole page sizes itself to its window (height:100%, a stage scaled to fit), so it has no height of its own to
   // be sized to: it gets a screen-shaped window instead (2026-09-30 a 1920×1080 player drawn 120 px tall, its
   // controls over all of it).
@@ -214,7 +223,17 @@ function Frame({ html, title, heightKey, state = null, onState, onError }: {
     if (last.times === 0) keepHeight(heightKey, h);
   };
   useVizMessages(() => (frame.current?.contentWindow ? [frame.current.contentWindow] : []), { onHeight, ...(onState ? { onState } : {}), ...(onError ? { onError } : {}) });
-  return <iframe ref={frame} className={page ? css.vizPage : css.vizFrame} sandbox="allow-scripts" srcDoc={srcDoc} title={title} style={page ? undefined : { height }} />;
+  // From a host: posted each time it loads (once its document is written in, nothing there listens for it any more).
+  const source = host === null
+    ? { srcDoc }
+    : { src: host, onLoad: () => frame.current?.contentWindow?.postMessage({ stillfailVizDocument: srcDoc }, "*") };
+  return <iframe ref={frame} className={page ? css.vizPage : css.vizFrame} sandbox="allow-scripts" {...source} title={title} style={page ? undefined : { height }} />;
+}
+
+/** An HTML file's content drawn as a visualization, where its file is not read through a station's session (the share
+ * page has it already): its frame alone, its height kept by `heightKey`. */
+export function VizHtml({ html, title, heightKey }: { html: string; title: string; heightKey: string }) {
+  return <div className={css.viz}><Frame html={html} title={title} heightKey={heightKey} /></div>;
 }
 
 /**

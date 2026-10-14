@@ -27,13 +27,9 @@ import * as controlsCss from "./styles/controls.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import { t } from "./i18n.ts";
+import { fileSize } from "./fileSize.ts";
 
-export function fileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
-}
+export { fileSize };
 
 /** The bars over a file (and a video's controls) fade out after the pointer has rested this long. */
 export const REST_MS = 2000;

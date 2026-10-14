@@ -1,0 +1,16 @@
+{
+  "web-share.title": "Shared on still.fail",
+  "web-share.connecting": "Connecting to the station…",
+  "web-share.malformed": "This link is incomplete",
+  "web-share.cloud": "Can't reach still.fail, try again later",
+  "web-share.offline": "Can't reach this station, it may be offline",
+  "web-share.gone": "This share doesn't exist or was taken down",
+  "web-share.busy": "The station is busy, try again later",
+  "web-share.broken": "Can't read what this station sent: {error}",
+  "web-share.published": "Published by {by}, {time}",
+  "web-share.redacted": { "one": "1 likely secret hidden", "other": "{n} likely secrets hidden" },
+  "web-share.from": "Shared with still.fail",
+  "web-share.download": "Download {name}",
+  "web-share.downloadFailed": "Couldn't download {name}: {error}",
+  "web-share.view": "View {name}"
+}
