@@ -156,7 +156,12 @@ export class Store {
     const cached = entry.sent;
     if (cached !== undefined) this.host.emit(client, to(whole(cached), id));
     if (started) this.#start(topic);
-    else if (resumed) this.#source?.resume?.(topic);
+    else {
+      if (resumed) this.#source?.resume?.(topic);
+      // A held topic only watched in the core so far (by a view) has never gone out: it does now, not when it next
+      // changes (#flush sends nothing of one that has no subscriber).
+      if (cached === undefined && this.#held !== null && holds(topic)) this.invalidate(topic);
+    }
     this.#tick();
   }
 
