@@ -30,7 +30,7 @@ export const quotaReset = style({ fontSize: vars.textMeta, color: vars.subtle })
 export const quotaChips = style({ display: "inline-flex", flexWrap: "wrap", alignItems: "center", gap: "6px 8px", flex: "none", minWidth: "0" });
 export const quotaChip = style({
   position: "relative", display: "inline-flex", alignItems: "center", flex: "none", whiteSpace: "nowrap", height: "20px", padding: "0 8px",
-  overflow: "hidden", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  overflow: "hidden", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: vars.neutralBg,
   color: vars.green, fontSize: vars.textCaption, fontWeight: "600", lineHeight: "1", fontVariantNumeric: "tabular-nums",
   cursor: "default",
   selectors: {
@@ -40,16 +40,14 @@ export const quotaChip = style({
     "&[data-small]": { height: "16px", padding: "0 5px", fontSize: vars.textCaption },
   },
 });
-export const quotaChipEdge = style({
-  position: "absolute", inset: "0", width: "100%", height: "100%", overflow: "visible", pointerEvents: "none",
-  // Its box's colour, over what a row gives the icons in it (a sidebar row's `svg` muted).
-  selectors: { [`${quotaChip} > &`]: { color: "inherit" } },
-});
-/** The track: in dark a step stronger than the line, which on a popped-up panel's raised grey does not show. */
-export const quotaChipTrack = style({ stroke: `light-dark(${vars.line}, ${vars.lineStrong})` });
-export const quotaChipLeft = style({
-  stroke: "currentColor", strokeLinecap: "round",
-  selectors: { [`${quotaChip}[data-level="progress"] &`]: { transition: "stroke-dasharray .5s ease-out" } },
+/** How full: a quiet grey while there is plenty, its level's colour faintly once it runs low (the accent, moving, for a
+ * download). */
+export const quotaChipFill = style({
+  position: "absolute", top: "0", bottom: "0", left: "0", background: vars.muted, opacity: 0.22, pointerEvents: "none",
+  selectors: {
+    [`${quotaChip}:is([data-level="amber"], [data-level="red"], [data-level="progress"]) > &`]: { background: "currentColor", opacity: 0.2 },
+    [`${quotaChip}[data-level="progress"] > &`]: { transition: "width .5s ease-out" },
+  },
 });
 /** Its number quiet while there is plenty; in its colour once it runs low. */
 export const quotaChipText = style({
@@ -89,13 +87,6 @@ export const quotaNote = style({});
 export const peopleStack = style({ display: "inline-flex", alignItems: "center", flex: "none" });
 export const peopleMore = style({
   fontSize: vars.textCaption, color: vars.muted, paddingLeft: "6px", boxShadow: "none !important",
-});
-globalStyle(`${quotaChipEdge} rect`, {
-  x: "1.25px", y: "1.25px", width: "calc(100% - 2.5px)", height: "calc(100% - 2.5px)",
-  rx: `calc(6px * ${vars.cornerScale} - 1.25px)`, fill: "none", strokeWidth: "2.5px",
-});
-globalStyle(`${quotaChip}[data-small] ${quotaChipEdge} rect`, {
-  x: "1px", y: "1px", width: "calc(100% - 2px)", height: "calc(100% - 2px)", rx: `calc(6px * ${vars.cornerScale} - 1px)`, strokeWidth: "2px",
 });
 globalStyle(`${quotaDialNumber} small`, { fontSize: "0.55em", fontWeight: "500", marginLeft: "1px", color: vars.muted });
 globalStyle(`${quotaDialCells} i`, { width: "8px", height: "14px", borderRadius: "2px", background: vars.neutralBg });

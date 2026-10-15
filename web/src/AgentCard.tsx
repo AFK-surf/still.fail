@@ -11,7 +11,7 @@ import { AgentMark, Tip } from "./ui.tsx";
 import { Stop } from "./icons.tsx";
 import { useAct } from "./toast.tsx";
 import { reducedMotion } from "./motion.ts";
-import { EdgeChip } from "./components.tsx";
+import { FillChip } from "./components.tsx";
 import { t } from "./i18n.ts";
 import { Elapsed, Waited } from "./Chat.tsx";
 import * as css from "./AgentCard.css.ts";
@@ -153,7 +153,7 @@ export function AgentCard({ agent }: { agent: ChatAgent }) {
           <span className={css.chips}>
             {quota.map((w) => (
               <Tip key={w.label} label={<>{t("web-main.quota.left", { label: w.label, left: w.left })}{w.refills && <><br />{w.refills}</>}</>}>
-                <EdgeChip fill={w.left} level={w.level} mark={quota.length > 1 ? w.mark : null} label={t("web-main.quota.left", { label: w.label, left: w.left })} small />
+                <FillChip fill={w.left} level={w.level} mark={quota.length > 1 ? w.mark : null} label={t("web-main.quota.left", { label: w.label, left: w.left })} small />
               </Tip>
             ))}
           </span>

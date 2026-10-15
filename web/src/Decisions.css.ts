@@ -41,12 +41,12 @@ export const choice = style({
   },
 });
 /**
- * Its number: a circle as tall as the label's line (a pixel lower, where Chinese sits), the digit drawn (icons
- * Option1…6, scripts/option-digits.py) rather than set, so that it is in the middle at any scale.
+ * Its number: a circle as tall as the label's line and level with it, the digit drawn (icons Option1…6,
+ * scripts/option-digits.py) rather than set, so that it is in the middle at any scale.
  */
 export const choiceNumber = style({
   gridRow: "1 / span 2", alignSelf: "start", display: "grid", placeItems: "center", width: "20px", height: "20px",
-  marginTop: "1px", borderRadius: "50%", background: `color-mix(in srgb, ${vars.text} 9%, transparent)`,
+  borderRadius: "50%", background: `color-mix(in srgb, ${vars.text} 9%, transparent)`,
   color: vars.muted, fontSize: vars.textCaption, fontWeight: "600", lineHeight: "20px", fontVariantNumeric: "tabular-nums",
   selectors: { [`${choice}[data-recommended] &`]: { background: accent, color: "#fff" } },
 });

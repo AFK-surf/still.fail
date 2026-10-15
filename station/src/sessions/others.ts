@@ -259,6 +259,9 @@ export function chatList(hub: Hub, key: string, args: Args): string {
     const hidden = t.thread.hiddenAt !== null ? ", archived" : "";
     let entry = `- ${address} (${place}${hidden}) "${title}"\n  agents: ${agents.length === 0 ? "none" : agents.join(", ")}; last message ${at}`;
     if (last !== "") entry += `: ${line(last, 120)}`;
+    // Its link: what to give people, who cannot open an address or a session key.
+    const link = t.sessions[0] ? hub.link(t.sessions[0].session) : undefined;
+    if (link) entry += `\n  link: ${link}`;
     lines.push(entry);
   }
   // Chats other workspaces share with this one: read with chat_read, written to with session_send where allowed.
@@ -293,7 +296,8 @@ export async function chatRead(hub: Hub, key: string, args: Args, seen?: Attachm
   const address = threadAddress(thread.channel, thread.threadTs);
   const text = await threadHistory(hub, key, thread, connect, address, args, seen);
   const agents = hub.store.threadSessions(thread.id).map((m) => m.session);
-  return `Conversation ${address}; its agents: ${agents.length === 0 ? "none" : agents.join(", ")}.\n${text}${note}`;
+  const link = agents[0] ? hub.link(agents[0]) : undefined;
+  return `Conversation ${address}${link ? ` (${link})` : ""}; its agents: ${agents.length === 0 ? "none" : agents.join(", ")}.\n${text}${note}`;
 }
 
 /// session_history: what a session's agent did (its execution history, as the pages show it), from its transcript.

@@ -29,9 +29,10 @@ export function refAt(text: string, caret: number): { start: number; query: stri
 
 /**
  * A reference in a message: a chip that opens the chat (ChatPage opens its link in the page); one on another station of
- * the workspace says which after its title, one of another workspace which workspace.
+ * the workspace says which after its title, one of another workspace which workspace. `title` null: a bare link, titled
+ * as the list names its chat.
  */
-export function RefChip({ title, href }: { title: ReactNode; href: string }) {
+export function RefChip({ title, href }: { title: ReactNode | null; href: string }) {
   const here = useStation().address;
   const there = stationOfLink(href);
   const elsewhere = there !== null && here.includes("/") && there !== here;
@@ -44,22 +45,18 @@ export function RefChip({ title, href }: { title: ReactNode; href: string }) {
   return (
     <Hover content={<RefPreview href={href} here={here} station={name} emoji={found?.emoji} icon={found?.icon} />}>
       <a className={css.refChip} href={href}>
-        <span className={css.refChipHash}>@</span>{title}
+        <span className={css.refChipHash}>@</span>{title ?? <RefTitle href={href} here={here} />}
         {name && <span className={css.refChipStation}>{!outside && <StationMark emoji={found?.emoji} icon={found?.icon} size={11} className={css.refChipStationIcon} />}{name}</span>}
       </a>
     </Hover>
   );
 }
 
-/**
- * What a reference's chat is, while it is pointed at: its title and state, where and when it was last active, and the
- * last thing said (or where it stands) — from the workspace's list, so a chat not in it (archived, or not this
- * workspace's) says only that.
- */
 /** The chats references' cards last showed, by link. */
 const seenChats = new Map<string, ChatItem>();
 
-function RefPreview({ href, here, station, emoji, icon }: { href: string; here: string; station: string | null; emoji?: string | null | undefined; icon?: string | null | undefined }) {
+/** The chat a link names, as the workspace's list has it (or, while the list comes, as last seen); `listed`: the list is in. */
+function useRefChat(href: string, here: string): { of: { station: string; id: string; history: string } | null; item: ChatItem | undefined; listed: boolean } {
   const relative = /\/chats\/([^/?#\s]+)/.exec(href);
   const of = chatOfLink(href) ?? (relative ? { station: here, id: safeDecode(relative[1]!), history: /[?&]history=/.test(href) ? "?" : "" } : null);
   const chats = useChats(scopeOf(here), false).value;
@@ -70,8 +67,23 @@ function RefPreview({ href, here, station, emoji, icon }: { href: string; here: 
     if (seenChats.size > 200) seenChats.delete(seenChats.keys().next().value!);
   }
   // While the list comes (the card opened again), the chat as last seen: no bars each time.
-  const item = found ?? (chats ? undefined : seenChats.get(href));
-  if (!item) return chats ? <p className={hover.note}>{t("web-main.chatRef.previewGone")}</p> : <CardSkeleton />;
+  return { of, item: found ?? (chats ? undefined : seenChats.get(href)), listed: !!chats };
+}
+
+/** A bare link's title (the link written as it is, not `[its title](link)`): the chat's, as the list has it; else its key. */
+function RefTitle({ href, here }: { href: string; here: string }) {
+  const { of, item } = useRefChat(href, here);
+  return <>{item?.title || of?.id || href}</>;
+}
+
+/**
+ * What a reference's chat is, while it is pointed at: its title and state, where and when it was last active, and the
+ * last thing said (or where it stands) — from the workspace's list, so a chat not in it (archived, or not this
+ * workspace's) says only that.
+ */
+function RefPreview({ href, here, station, emoji, icon }: { href: string; here: string; station: string | null; emoji?: string | null | undefined; icon?: string | null | undefined }) {
+  const { of, item, listed } = useRefChat(href, here);
+  if (!item) return listed ? <p className={hover.note}>{t("web-main.chatRef.previewGone")}</p> : <CardSkeleton />;
   const state = stateLine(item);
   return (
     <div className={hover.rich}>
