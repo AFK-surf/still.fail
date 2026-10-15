@@ -140,8 +140,9 @@ export function op(name: string): unknown {
   throw new NeedsReal();
 }
 
-/** The archive, as the core puts it together (client/core-ts/src/views/archive.ts): the station's archived chats by day. */
-export function archive(): ArchiveView {
+/** The archive, as the core puts it together (client/core-ts/src/views/archive.ts): the station's archived chats by day;
+ * with `q`, those that have it; with `limit`, the newest so many. */
+export function archive(q = "", limit = 0): ArchiveView {
   const days: ArchiveDay[] = [];
   const today = new Date().setHours(0, 0, 0, 0);
   for (const chat of now(data.archived).sort((a, b) => b.archived.at - a.archived.at)) {
@@ -155,7 +156,15 @@ export function archive(): ArchiveView {
     const last = days.at(-1);
     if (last?.label === label) last.items.push(item); else days.push({ label, items: [item] });
   }
-  return { days, errors: [], loading: false };
+  const needle = q.trim().toLowerCase();
+  const found = days.flatMap((d) => d.items.filter((i) => !needle || `${i.title}\n${i.last}`.toLowerCase().includes(needle)).map((i) => [d.label, i] as const));
+  const shown = limit > 0 ? found.slice(0, limit) : found;
+  const kept: ArchiveDay[] = [];
+  for (const [label, item] of shown) {
+    const last = kept.at(-1);
+    if (last?.label === label) last.items.push(item); else kept.push({ label, items: [item] });
+  }
+  return { days: kept, errors: [], loading: false, total: found.length, more: shown.length < found.length, ...(found.length === 0 ? { note: needle ? "没有匹配的归档对话" : "没有归档的对话。" } : {}) };
 }
 
 /** The workspace's profiles (the core's `profiles`, client/core-ts/src/views/profiles.ts): the station's one account. */

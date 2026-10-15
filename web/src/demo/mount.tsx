@@ -54,7 +54,7 @@ function valueOf(topic: Topic): unknown {
     case "host": return station.host();
     case "connects": return station.connects();
     case "stations": return [station.stationView()];
-    case "archive": return station.archive();
+    case "archive": return station.archive(topic.q, topic.limit);
     case "profiles": return station.profiles();
     case "usage": return station.usage(topic.days ?? 7);
     case "decisions": return station.decisions(chats);
