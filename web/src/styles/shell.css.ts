@@ -44,14 +44,13 @@ export const dock = style({
         // Concentric with what is lit in it (the rail's places' ground, its 9 px corner 6 px in from its every edge), and
         // as far from the window's edges as that ground from its own: 6 (its 56 column's other 8 the gutter by the page,
         // where its edge's bar is, Rail.css.ts).
-        // Closed, no longer the sidebar but floating over the page: a floating panel's ground (glass.ts panel, as menus
-        // and notices), its line (::after, below) and its shadow.
+        // Closed, the rail is of the page: its ground the page's, no line, no shadow. Only shown a while (below) does it
+        // float over the page.
         '[data-sidebar="closed"] &': {
           margin: "6px 8px 6px 6px", borderRadius: `calc(9px * ${vars.cornerScale} + 6px)`,
           // As the sidebar's ground for all in it (the list's frosted bands, the rings round marks), so none shows the
           // old one as it closes.
-          vars: { [vars.sidebar]: panel.background, "--dock-line": "1" },
-          boxShadow: `0 8px 24px ${vars.shadow}`,
+          vars: { [vars.sidebar]: vars.canvas, "--dock-line": "0" },
           // Over the page, its shadow too: under the page's frosted top bar it was blurred into a block that ended at the
           // bar's foot.
           zIndex: 20,
@@ -62,7 +61,13 @@ export const dock = style({
         "[data-sidebar-moving] &": { zIndex: 20 },
         // Folded but shown a while (Rail.tsx peekSidebar): the bar reaching over the page as wide as the rail and the
         // sidebar (its margin, eased as the bar's others), the page left where it is.
-        '[data-sidebar="closed"][data-sidebar-peek] &': { marginRight: "calc(8px - var(--sidebar-w, 240px))" },
+        // Over it, floating: a floating panel's ground (glass.ts panel, as menus and notices), its line (::after) and its
+        // shadow.
+        '[data-sidebar="closed"][data-sidebar-peek] &': {
+          marginRight: "calc(8px - var(--sidebar-w, 240px))",
+          vars: { [vars.sidebar]: panel.background, "--dock-line": "1" },
+          boxShadow: `0 8px 24px ${vars.shadow}`,
+        },
       },
     },
   },
