@@ -322,7 +322,14 @@
   ],
   "os": "macOS 26.6.2",
   "summary": "16 核 · 64 GB",
-  "uptimeSec": 1209600
+  "uptimeSec": 1209600,
+  "identity": "Apple M4 Max · 64 GB · macOS 26.6.2",
+  "details": [
+   { "label": "主机名", "value": "studio" },
+   { "label": "芯片", "value": "Apple M4 Max · 16 核 · arm64" },
+   { "label": "已运行", "value": "14 天 0 小时" },
+   { "label": "still.fail", "value": "进程占 38 MB" }
+  ]
  },
  "station": {
   "host": {
@@ -377,7 +384,14 @@
    ],
    "os": "macOS 26.6.2",
    "summary": "16 核 · 64 GB",
-   "uptimeSec": 1209600
+   "uptimeSec": 1209600,
+   "identity": "Apple M4 Max · 64 GB · macOS 26.6.2",
+   "details": [
+    { "label": "主机名", "value": "studio" },
+    { "label": "芯片", "value": "Apple M4 Max · 16 核 · arm64" },
+    { "label": "已运行", "value": "14 天 0 小时" },
+    { "label": "still.fail", "value": "进程占 38 MB" }
+   ]
   },
   "id": "local",
   "link": {
