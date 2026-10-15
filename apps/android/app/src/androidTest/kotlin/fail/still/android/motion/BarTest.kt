@@ -143,6 +143,13 @@ class BarTest {
         assertEquals(listOf<Screen>(Screen.Stations), h.app.stack)
         ballAtRest(1)
         shot(h, "bar-stations-light")
+        // Switched away from a page that has a back when pushed (the stations' 设置): it goes as it was, never shown
+        // with that back (or without its foot's room) while the place coming in gets what it shows.
+        val away = h.record("bar-tap-away")
+        rule.onNodeWithTag("bar-place-files").performClick()
+        repeat(12) { away.frame(); rule.onNodeWithText("设置").assertDoesNotExist() }
+        away.end()
+        assertEquals(listOf<Screen>(Screen.Files), h.app.stack)
         // Quick taps one after another, as the ball still moves: it ends where the last one sent it.
         rule.onNodeWithTag("bar-place-profiles").performClick()
         rule.onNodeWithTag("bar-place-chats").performClick()

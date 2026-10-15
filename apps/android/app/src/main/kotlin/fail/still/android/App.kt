@@ -839,15 +839,20 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         kept += app.pageOf(screen)
         // A place's top page: no back with the bar under it (room kept for the bar at its foot); on a wide screen, which
         // has no bar, back to the chats.
-        val placeRoot = when {
+        // A page going (switched away from on the bar, still drawn until the one coming has what it shows) stays as it
+        // was: not a pushed page all at once, its back showing and its foot's room gone for a moment.
+        val now = when {
             app.stack.firstOrNull() != screen || placeOf(screen) == null -> PlaceRoot.None
             wide -> PlaceRoot.Wide
             else -> PlaceRoot.Bar
         }
+        val held = remember { arrayOf(now) }
+        if (app.stack.contains(screen)) held[0] = now
+        val placeRoot = held[0]
         saved.SaveableStateProvider(app.pageOf(screen)) { CompositionLocalProvider(
             fail.still.android.data.LocalPageTopics provides topics,
             LocalPlaceRoot provides placeRoot,
-            LocalBarRoom provides if (placeRoot == PlaceRoot.Bar) BAR_ROOM else 0.dp,
+            LocalBarRoom provides if (placeRoot != PlaceRoot.Bar) 0.dp else if (placeOf(screen) in CHAT_FAMILY) BAR_ROOM_LING else BAR_ROOM,
         ) {
             // A message's page draws its own ground, coming in over its chat (Annotate.kt).
             Box(Modifier.fillMaxSize().then(if (screen is Screen.Annotate) Modifier else Modifier.background(C.bg))) {

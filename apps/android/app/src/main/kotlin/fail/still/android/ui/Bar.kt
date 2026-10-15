@@ -445,7 +445,8 @@ fun BottomBar(
     // The panel open: a press anywhere else closes it (and does nothing else).
     if (shown && m.mode) Box(Modifier.fillMaxSize().pointerInput(Unit) { awaitEachGesture { awaitFirstDown(); m.openPanel(false) } })
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val w = maxWidth.value - 32f
+        // 22 in from either side, as from the foot: the ball (6 past the bar) as far from the screen's sides as from its foot.
+        val w = maxWidth.value - 44f
         // A bar being chosen with a place in it: the notch already as that place will have it (no 令 coming up only to go).
         val landsOn = m.swap?.key?.let { it in chatFamily }
         val g = Geo(w, sets, cur, active, landsOn ?: chatsPage)
@@ -510,7 +511,8 @@ fun BottomBar(
         fun sx(x: Float) = w / 2 + (x - w / 2) * narrow()
         fun clipTop() = max(0f, OVER + g.reach * (1 - m.o.value))
         fun notchR() = (DROP / 2 + NOTCH_GAP) * kState.value
-        fun notchY() = -LIFT + (1 - kState.value) * 10f
+        // 令 and its notch shrink about one middle, which comes up to the bar's edge: the notch closes to nothing, no dent left.
+        fun notchY() = -LIFT * kState.value
         fun swapAt(s: Swap): Pair<FloatArray, Float>? {
             val into = g.sets.getOrNull(s.i) ?: return null
             val t = (1 - m.o.value / s.from).coerceIn(0f, 1f)

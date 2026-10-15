@@ -8,9 +8,12 @@ const dark = (rules: StyleRule): StyleRule => ({
   "@media": { "(prefers-color-scheme: dark)": { selectors: { ":root:not([data-theme=\"light\"]) &": rules as never } } },
 });
 
-/** Where it stands: over the foot of the top page, 16 in from the sides, 22 up from the safe area. */
+/**
+ * Where it stands: over the foot of the top page, 22 in from the sides and up from the safe area (the ball, 6 past it,
+ * as far from each).
+ */
 export const mBarHost = style({
-  position: "absolute", left: "16px", right: "16px", bottom: "calc(22px + var(--m-foot))", height: "56px", zIndex: 6,
+  position: "absolute", left: "22px", right: "22px", bottom: "calc(22px + var(--m-foot))", height: "56px", zIndex: 6,
   transition: "transform 380ms var(--m-ease), opacity 300ms",
   selectors: {
     // Over a page pushed over a place: gone down and out of the way, back as that page goes.

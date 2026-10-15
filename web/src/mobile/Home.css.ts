@@ -9,7 +9,7 @@ export const mHome = style({ position: "absolute", inset: "0" });
 export const mHomePanes = style({ position: "absolute", inset: "0", overflow: "hidden" });
 export const mHomePane = style({
   position: "absolute", inset: "0", overflowY: "auto", overscrollBehavior: "contain",
-  padding: "calc(var(--m-top) + 58px) 0 calc(var(--m-foot) + 100px)", transition: "transform 240ms var(--m-standard)",
+  padding: "calc(var(--m-top) + 58px) 0 calc(var(--m-foot) + 126px)", transition: "transform 240ms var(--m-standard)",
   selectors: {
     "&:nth-child(2)": { transform: "translateX(100%)" },
     "&:nth-child(3)": { transform: "translateX(200%)" },

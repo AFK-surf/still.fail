@@ -26,7 +26,7 @@ import { t } from "../i18n.ts";
 /** The places a bar can hold (the core's BAR_PLACES), and the chats' family: 令 and its notch are on their pages. */
 export type BarPlace = "chats" | "decisions" | "files" | "stations" | "profiles" | "connects" | "usage" | "archive";
 export const BAR_PLACES: BarPlace[] = ["chats", "decisions", "files", "stations", "profiles", "connects", "usage", "archive"];
-const CHAT_FAMILY: BarPlace[] = ["chats", "decisions", "archive"];
+export const CHAT_FAMILY: BarPlace[] = ["chats", "decisions", "archive"];
 
 /** Each place's page, under the workspace (`/w/<id>`): the address a place's top page is at. */
 export const PLACE_PATHS: Record<BarPlace, string> = {
@@ -334,7 +334,8 @@ export function BottomBar({ scope, place, shown, go, newChat, onPanel }: BottomB
 
   // ---- drawing
   const r = (DROP / 2 + GAP) * k;
-  const cy = -LIFT + (1 - k) * 10;
+  // 令 and its notch shrink about one middle, which comes up to the bar's edge: the notch closes to nothing, no dent left.
+  const cy = -LIFT * k;
   const notch = r > 0.5 && w ? notchCut(w / 2, 0, cy, r, FILLET) : null;
   const notchAt = r > 0.5 && w ? notchCut(w / 2, clipTop, cy, r, FILLET) : null;
   // The glass as tall as what shows of it (a taller frosted layer clipped short was drawn unblurred), the notch cut

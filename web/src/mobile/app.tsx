@@ -23,7 +23,7 @@ import * as rootCss from "./styles/root.css.ts";
 import * as css from "./app.css.ts";
 import { follower, type Follower } from "../motion.ts";
 import { useInWorkspace } from "../notify.ts";
-import { BottomBar, PLACE_PATHS, placeOfPath, type BarPlace } from "./Bar.tsx";
+import { BottomBar, CHAT_FAMILY, PLACE_PATHS, placeOfPath, type BarPlace } from "./Bar.tsx";
 import { t } from "../i18n.ts";
 
 /** The workspace in view and the signed-in account that reaches it. */
@@ -336,7 +336,8 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
             }
             return (
               <div key={p.key} ref={(el) => { if (el) pageEls.current.set(p.key, el); else pageEls.current.delete(p.key); }} className={css.mPage} data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
-                data-swiping={(swipe !== null && isTop) || undefined} data-root={(p.key === rootKey && placeOfPath(p.location.pathname, home) !== null) || undefined} style={style}>
+                data-swiping={(swipe !== null && isTop) || undefined} data-root={(p.key === rootKey && placeOfPath(p.location.pathname, home) !== null) || undefined}
+                data-ling={(p.key === rootKey && CHAT_FAMILY.includes(placeOfPath(p.location.pathname, home)!)) || undefined} style={style}>
                 <RootPage.Provider value={p.key === rootKey && placeOfPath(p.location.pathname, home) !== null}>
                   <PageBody location={p.location} routes={routes} />
                 </RootPage.Provider>

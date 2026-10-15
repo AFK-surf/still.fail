@@ -166,3 +166,5 @@ globalStyle(`${mMenu} button`, {
 
 // A place's top page has the bottom bar over its foot (Bar.tsx): what scrolls on it clears the bar (56 + 22 + 16).
 globalStyle(`${mPage}[data-root] ${mScroll}`, { paddingBottom: "calc(var(--m-foot) + 100px)" });
+// On the chats' pages, clear of 令 too, which stands 32 over the bar (Bar.tsx).
+globalStyle(`${mPage}[data-root][data-ling] ${mScroll}`, { paddingBottom: "calc(var(--m-foot) + 126px)" });

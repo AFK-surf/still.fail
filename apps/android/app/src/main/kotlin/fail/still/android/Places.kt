@@ -86,6 +86,8 @@ val LocalBarRoom = compositionLocalOf { 0.dp }
 
 /** The bar's height, its distance from the foot (over the navigation bar), and a little air over it: what a page keeps clear. */
 val BAR_ROOM: Dp = (56 + 22 + 16).dp
+/** On the chats' pages, clear of 令 too, which stands 32 over the bar (ui/Bar.kt: half of it, and its lift). */
+val BAR_ROOM_LING: Dp = BAR_ROOM + 32.dp
 
 /** A place's icon, 28 as the bar draws them. */
 @Composable
