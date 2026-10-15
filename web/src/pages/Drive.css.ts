@@ -119,8 +119,8 @@ export const pickRow = style({
   selectors: { "&:hover": { background: vars.list }, "&[data-here]": { background: vars.list, fontWeight: 600 } },
 });
 globalStyle(`${pickRow} > span:last-child:not(:nth-child(2))`, { fontSize: vars.textCaption, whiteSpace: "nowrap" });
-/** Why a folder to pick is not lent, under its name: the name keeps its room however narrow the column. */
-export const pickNote = style({ color: vars.muted, fontSize: vars.textCaption, fontWeight: "400", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+/** Why a folder to pick is not lent, under its name (wrapped, not cut): the name keeps its room however narrow the column. */
+export const pickNote = style({ color: vars.muted, fontSize: vars.textCaption, fontWeight: "400" });
 
 /** A file opened: the reader or the player fills the pane. */
 export const opened = style({ position: "relative", flex: "1", minHeight: "0", overflow: "hidden" });
