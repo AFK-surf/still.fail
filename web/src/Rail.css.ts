@@ -58,6 +58,8 @@ export const edge = style({
     '[data-sidebar="closed"] &': { cursor: "pointer", left: 46 },
     // By the folded sidebar shown a while (shell.css.ts dock): at its edge, pressed to keep it open.
     '[data-sidebar="closed"][data-sidebar-peek] &': { left: "calc(46px + var(--sidebar-w, 240px))" },
+    // A page with no sidebar of its own: no edge to open one by.
+    "[data-sidebar-none] &": { display: "none" },
     "&::after": {
       // Odd widths on whole pixels, the bar's middle and the line's one (left 6, 1 wide; left 4, 5 wide).
       content: '""', position: "absolute", top: "50%", left: 4, width: 5, height: 24, borderRadius: 999,

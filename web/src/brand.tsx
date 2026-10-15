@@ -143,6 +143,8 @@ export function useSidebarToggle(moved?: (closed: boolean) => void, { keys: owns
   const closed = useSidebarClosed();
   const toggle = () => {
     const next = !closed;
+    // A page with no sidebar of its own (Rail.tsx): nothing to open.
+    if (!next && "sidebarNone" in document.documentElement.dataset) return;
     chosen?.(next);
     moveSidebar(() => closeSidebar(next));
     moved?.(next);

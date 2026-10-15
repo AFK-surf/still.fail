@@ -207,6 +207,9 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
     cameFrom.current = place;
     if (!matchMedia("(min-width: 701px)").matches) return;
     if (moved) endPeek();
+    // A page with no sidebar of its own: none to open (its edge gone, its shortcut nothing; brand.tsx).
+    if (own) delete document.documentElement.dataset.sidebarNone;
+    else document.documentElement.dataset.sidebarNone = "";
     widthFor(group, moved && !shut());
     showSidebar(own && !folded(group));
     if (asked.current) { asked.current = false; reveal(); }
@@ -379,13 +382,17 @@ function RailWorkspaces({ scope, current }: { scope: string; current: ReactNode 
   );
 }
 
-/** Whether `group`'s sidebar was left folded (its own, on this device; the chats' first as the one sidebar was). */
+/** Whether `group`'s sidebar was left folded (its own, on this device). */
 function folded(group: SidebarGroup): boolean {
-  try {
-    const kept = localStorage.getItem(`stillfail.sidebar.${group}`);
-    return (kept ?? (group === "chats" ? localStorage.getItem("stillfail.sidebar") : null)) === "closed";
-  } catch { return false; }
+  try { return localStorage.getItem(`stillfail.sidebar.${group}`) === "closed"; } catch { return false; }
 }
+// The chats' as the one sidebar was left, before each had its own: read once, as the page loads, before a place without
+// a sidebar closes it (brand.tsx keeps that one for the page's first frame).
+try {
+  if (localStorage.getItem("stillfail.sidebar.chats") === null && localStorage.getItem("stillfail.sidebar") === "closed") {
+    localStorage.setItem("stillfail.sidebar.chats", "closed");
+  }
+} catch { /* private mode */ }
 function foldGroup(group: SidebarGroup, closed: boolean): void {
   try { localStorage.setItem(`stillfail.sidebar.${group}`, closed ? "closed" : "open"); } catch { /* private mode */ }
 }
