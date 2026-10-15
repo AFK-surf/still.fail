@@ -56,6 +56,28 @@ mountDemo(root);
       const name = s.className.toString().split(' ')[0];
       const outer = px(cs.borderTopLeftRadius);
       if (Math.abs(outer - (inner + pad)) > 0.5) wrong.push(`${name}: corner ${outer}, not ${inner} + ${pad}`);
+      // A small panel (all but ⌘K, a dialog) is padded 6 (docs/ui-panels.md).
+      const small = !/Switcher/.test(s.className.toString());
+      if (small && Math.abs(pad - 6) > 0.5) wrong.push(`${name}: padded ${pad}, not 6`);
+      const edgeLeft = s.getBoundingClientRect().left + px(cs.borderLeftWidth);
+      // A panel of words: each block not at its padding stands in by a row's padding (10).
+      if (small && cs.getPropertyValue('--panel-kind').trim() === 'card') {
+        for (const c of s.children) {
+          if (/panelEdge/.test(c.className.toString())) continue;
+          const pl = px(getComputedStyle(c).paddingLeft);
+          if (Math.abs(pl - 10) > 0.5) wrong.push(`${name} › ${c.className.toString().split(' ')[0] || c.tagName}: words in by ${pl}, not 10`);
+        }
+      }
+      // A row (as wide as the panel's room, at its padding, with words): its words in by a row's padding (10).
+      if (small) {
+        const room = s.getBoundingClientRect().width - 2 * px(cs.borderLeftWidth) - 2 * pad;
+        for (const d of s.querySelectorAll('button, a, [role=menuitem], [role=option], [role=menuitemradio], [role=menuitemcheckbox]')) {
+          const r = d.getBoundingClientRect();
+          if (!r.width || Math.abs(r.left - edgeLeft - pad) > 0.6 || r.width < room * 0.8 || !d.textContent.trim()) continue;
+          const pl = px(getComputedStyle(d).paddingLeft);
+          if (pl < 9.5) wrong.push(`${name} › ${d.className.toString().split(' ')[0] || d.tagName}: a row's words in by ${pl}, not 10`);
+        }
+      }
       // What sits at one of its corners (within its padding of two edges that meet): as far from both, and rounded as
       // the surface's corner less that distance.
       const box = s.getBoundingClientRect(), border = px(cs.borderRightWidth);
@@ -90,6 +112,10 @@ mountDemo(root);
     ['filter menu', async () => page.locator('[aria-label="筛选会话：全部"]').click()],
     ['chat info', async () => page.locator('[aria-label="对话信息"]').click()],
     ['⌘K', async () => { await page.locator('textarea').first().click(); await page.keyboard.press('Meta+k'); }],
+    ['jobs', async () => page.locator('[aria-label="服务和后台任务"]').click()],
+    ['workspace menu', async () => page.locator('[aria-label="新建 workspace、添加账号"]').click()],
+    ['rail menu', async () => page.locator('[aria-label="文件"]').first().click({ button: 'right' })],
+    ['rail adder', async () => { await page.locator('[aria-label="文件"]').first().click({ button: 'right' }); await page.waitForTimeout(300); await page.getByText('自定义侧边条').click(); }],
     ['station card', async () => { await page.mouse.move(1, 1); await page.locator('header').getByText(/Studio|这台机器/).first().hover(); await page.waitForTimeout(900); }],
   ];
   const failures = [];

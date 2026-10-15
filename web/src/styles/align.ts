@@ -113,10 +113,6 @@ export const columns = {
   navRow: 10,
 } as const;
 
-/** A surface's two numbers alone, for one whose padding and corner another class draws (a popover's). */
-export function surfaceVars(pad: number | string, innerCorner: number | string) {
-  return { [PAD]: px(pad), [IN]: px(innerCorner) };
-}
 
 /**
  * A row in a surface reaching `x` into its padding, its words where the surface's other words are (case 2 inside

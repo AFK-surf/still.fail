@@ -5,7 +5,6 @@ import { floatingThumb } from "./scrollbars.css.ts";
 import { dock } from "./styles/shell.css.ts";
 import { vars } from "./styles/tokens.css.ts";
 import { outsetBottom } from "./styles/align.ts";
-import { surfaceVars } from "./styles/align.ts";
 
 const wide = "(min-width: 701px)";
 const narrow = "(max-width: 700px)";
@@ -193,11 +192,7 @@ export const remove = style({
   borderRadius: "50%", background: vars.text, color: vars.sidebar, cursor: "pointer", boxShadow: `0 0 0 2px ${vars.sidebar}`,
 });
 /** The panel beside the rail of what can be added (ui.tsx Panel* parts), no button: pressing elsewhere ends it. */
-export const adder = style({
-  width: 248, display: "grid", gap: 8,
-  // More room than a menu: over the popover's own, whichever sheet comes first; its rows concentric with it.
-  selectors: { "&[data-side]": { vars: surfaceVars(6, `calc(${vars.rMenu} - 6px)`) } },
-});
+export const adder = style({ width: 248, display: "grid", gap: 8 });
 export const zouSmall = style({ fontSize: vars.textBody, lineHeight: "18px", fontWeight: 600 });
 
 // Beside the rail the sidebar's foot has nothing of its own (the switcher and settings are the rail's, the stations' line

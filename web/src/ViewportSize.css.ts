@@ -1,8 +1,9 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { panel as ground } from "./styles/glass.ts";
-import { fadeInKeyframes, mRiseInKeyframes, popKeyframes } from "./styles/keyframes.css.ts";
-import { TEXT_IN, inner, surface } from "./styles/align.ts";
+import { fadeInKeyframes, mRiseInKeyframes } from "./styles/keyframes.css.ts";
+import { TEXT_IN, inner } from "./styles/align.ts";
+import { popover as popover0 } from "./styles/controls.css.ts";
 
 /** The bar's button: its icon alone, or with the size the page is laid out at (and how much it is drawn at). */
 export const button = style({
@@ -23,12 +24,10 @@ export const buttonText = style({
 });
 export const buttonScale = style({ color: vars.muted, fontWeight: "400" });
 
-export const popover = style({
-  zIndex: "60", width: "256px", ...surface(6, `calc(${vars.rMenu} - 6px)`, vars.cornerShape),
-  ...ground, boxShadow: `0 12px 32px ${vars.shadow}`,
-  transformOrigin: "var(--radix-popper-transform-origin, top right)", animation: `${popKeyframes} 140ms ${vars.easeOut}`,
-  outline: "none",
-});
+/** A small panel's list (controls.css.ts popover, docs/ui-panels.md). */
+export const popover = style([popover0, {
+  width: "256px", transformOrigin: "var(--radix-popper-transform-origin, top right)", outline: "none",
+}]);
 
 /** On a touch screen: a sheet from the bottom, over the page dimmed. */
 export const sheetShade = style({
