@@ -103,12 +103,12 @@ class BarWorkspacesTest {
         for (i in 1..20) r.frame { rule.onRoot().performTouchInput { moveTo(Offset(x0, y0 + (top - y0) * i / 20f)) } }
         r.frames(20)
         val chip = bounds("bar-workspace-$other")
-        // In the columns a bar's places are in (two: at its ends), a bar's row under them.
+        // In a full bar's first two columns, side by side; a bar's row under them.
         val mine = bounds("bar-workspace-${Fixtures.WS}")
         val first = bounds("bar-place-decisions")
-        val last = bounds("bar-place-archive")
+        val last = bounds("bar-place-usage")
         assertTrue("the first workspace over the first column (${mine.center.x} vs ${first.center.x})", abs(mine.center.x - first.center.x) < 1.5f)
-        assertTrue("the other over the last column (${chip.center.x} vs ${last.center.x})", abs(chip.center.x - last.center.x) < 1.5f)
+        assertTrue("the other over the second column (${chip.center.x} vs ${last.center.x})", abs(chip.center.x - last.center.x) < 1.5f)
         assertTrue("a bar's row 56 under the workspaces' (${(first.center.y - mine.center.y) / d})", abs(first.center.y - mine.center.y - 56 * d) < 1.5f)
         // Across onto the other workspace.
         for (i in 1..20) r.frame { rule.onRoot().performTouchInput { moveTo(Offset(x0 + (chip.center.x - x0) * i / 20f, top + (chip.center.y - top) * i / 20f)) } }

@@ -197,9 +197,10 @@ private class Geo(val w: Float, val sets: List<List<String>>, val cur: Int, val 
     val topY = OVER + ROW / 2
     val slot = (w - 2 * C0) / 3
     fun rowMid(n: Int) = OVER + wsRow + n * ROW + ROW / 2
-    /** A workspace's row, and its middle in it: the columns a bar's places are in. */
+    /** A workspace's row, and its middle in it: four a row in a full bar's columns, from the left, side by side (not
+     *  spread to the ends as a bar of two places is: the finger had too far to go). */
     fun wsRowOf(j: Int) = j / 4
-    fun wsX(j: Int): Float { val row = j / 4; return centres(0f, min(4, spaces.size - row * 4))[j % 4] }
+    fun wsX(j: Int): Float = centres(0f, 4)[j % 4]
     /** The workspace a let-go at (x, y) would choose: in the row under it, the nearest. */
     fun wsAt(x: Float, y: Float): Int {
         val row = floor((y - OVER) / ROW).toInt().coerceIn(0, max(0, wsRows - 1))
@@ -1019,8 +1020,7 @@ private fun Place(
 }
 
 /**
- * A workspace in the panel's top rows, where a bar's place would be: its mark, else its letter on a grey rounded square,
- * as the desktop's rail draws them; grey, `on` (the one in use, or under the finger) in ink. What another has waiting a
+ * A workspace in the panel's top rows, where a bar's place would be: its mark, else its letter on a grey disc; grey, `on` (the one in use, or under the finger) in ink. What another has waiting a
  * dot at its corner, as a chat's (screens/Home.kt WorkspaceMark), where a place's dot is.
  */
 @Composable
@@ -1028,7 +1028,8 @@ private fun WorkspaceChip(s: BarWorkspace, on: Boolean, here: Boolean, idle: Col
     val tint by animateColorAsState(if (on) lit else idle, tween(300, easing = Ease.Css), label = "workspace")
     Box(modifier, contentAlignment = Alignment.Center) {
         val marked = hasStationMark(s.emoji, s.icon)
-        Box(Modifier.size(30.dp).clip(Smooth(9.dp)).then(if (marked) Modifier else Modifier.background(C.ink.copy(alpha = 0.08f))), contentAlignment = Alignment.Center) {
+        // Round: in the panel's corner its middle is the corner's, concentric with it (as the ball is).
+        Box(Modifier.size(30.dp).clip(CircleShape).then(if (marked) Modifier else Modifier.background(C.ink.copy(alpha = 0.08f))), contentAlignment = Alignment.Center) {
             if (marked) StationMark(s.emoji, s.icon, if (stationPicture(s.icon) != null) 30.dp else 22.dp, tint)
             else Text(s.name.trim().take(1).uppercase(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = tint)
         }

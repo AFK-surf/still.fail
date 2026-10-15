@@ -96,10 +96,10 @@ createRoot(root).render(<DemoApp phone />);
     assert.equal(await chips.count(), 2, 'both workspaces in the panel\'s top row');
     assert.notEqual(await page.locator('[data-ws=demo]').getAttribute('data-here'), null, 'the one in use is marked');
     assert.equal(await page.locator('[data-ws=side] [data-tone=alert]').count(), 1, 'Side\'s dot says something went wrong there');
-    // In the columns a bar's places are in (two: at its ends), a row as tall as a bar's.
-    const ends = [await page.locator('[data-bar=rows] [data-place]').first().boundingBox(), await page.locator('[data-bar=rows] [data-place]').nth(3).boundingBox()];
+    // In a full bar's first two columns, side by side; a row as tall as a bar's.
+    const ends = [await page.locator('[data-bar=rows] [data-place]').first().boundingBox(), await page.locator('[data-bar=rows] [data-place]').nth(1).boundingBox()];
     const ws = [await page.locator('[data-ws=demo]').boundingBox(), await page.locator('[data-ws=side]').boundingBox()];
-    for (const k of [0, 1]) assert.ok(Math.abs(centre(ws[k]).x - centre(ends[k]).x) < 1, `workspace ${k} in the column of a bar's place ${k * 3}`);
+    for (const k of [0, 1]) assert.ok(Math.abs(centre(ws[k]).x - centre(ends[k]).x) < 1, `workspace ${k} in the column of a bar's place ${k}`);
     assert.ok(Math.abs(centre(ends[0]).y - centre(ws[0]).y - 56) < 1, 'a bar\'s row under the workspaces\'');
     // The workspaces' row is above the other bar's.
     const row = await page.locator('[data-ws=side]').boundingBox(), bar = await page.getByRole('button', { name: '连接', exact: true }).first().boundingBox();

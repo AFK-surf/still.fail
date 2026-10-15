@@ -76,15 +76,15 @@ export const mBarSetRow = style({ position: "absolute", left: "0", right: "0", h
 
 /**
  * A workspace in the panel's top rows (a place's button, mBarPlace, holds it): its mark, else its letter on a grey
- * rounded square, as the desktop's rail draws them (Rail.css.ts workspaceItem); grey, the one in use (or under the
- * finger) in ink.
+ * disc; grey, the one in use (or under the finger) in ink. Round: in the panel's corner its middle is the corner's,
+ * so it is concentric with it (as the ball is), which a rounded square is not.
  */
 export const mBarWsMark = style({
-  width: "30px", height: "30px", borderRadius: "9px", display: "grid", placeItems: "center",
+  width: "30px", height: "30px", borderRadius: "50%", display: "grid", placeItems: "center",
   background: "color-mix(in srgb, var(--m-ink) 8%, transparent)", fontSize: vars.textUi, fontWeight: 600,
   selectors: { "&[data-marked]": { background: "none" } },
 });
-globalStyle(`${mBarWsMark} > img`, { borderRadius: "9px" });
+globalStyle(`${mBarWsMark} > img`, { borderRadius: "50%" });
 /** What another workspace has waiting: the core's tone as a chat's dot (ChatMark.css.ts), at its mark's top right. */
 export const mBarWsDot = style({ position: "absolute", top: "calc(50% - 19px)", left: "calc(50% + 9px)", display: "flex" });
 

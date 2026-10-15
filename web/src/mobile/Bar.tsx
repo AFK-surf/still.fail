@@ -13,7 +13,7 @@
 // - Choosing another bar, the panel closes like a window over a stack of bars: the stack slides down until the chosen
 //   bar is where the bar is, what is not chosen goes out at the glass's edges. Nothing fades.
 // - With more than one workspace, the panel's top rows are them (in the order the switcher lists them, so each stays where
-//   it was), laid out as a bar's places are (four a row, in the same columns): each its mark, else its letter, as the
+//   it was), four a row in a full bar's columns, from the left: each its mark, else its letter, as the
 //   desktop's rail has them; the one in use in ink, the others grey, what another has waiting for its person a dot at
 //   its corner (the core's tone, as the rail's). Let go on one (or tap it): the panel closes and the same place opens in
 //   it. The panel opens for them with a single bar too.
@@ -69,12 +69,11 @@ const friction = (tension: number) => 2 * ZETA * Math.sqrt(tension);
 
 const ICONS: Partial<Record<BarPlace, ComponentType<IconProps>>> = { chats: Chats, decisions: Zou, files: Folder, profiles: Quota, connects: Im, usage: Chart, archive: Archive };
 
-/** Where the `n` workspaces' middles are in the panel's top rows (four a row, as a bar's places), `w` wide. */
+/** Where the `n` workspaces' middles are in the panel's top rows: four a row in a full bar's columns, from the left,
+ *  side by side (not spread to the ends, as a bar of two places is: the user, the finger had too far to go). */
 function wsSpots(w: number, n: number): { x: number; row: number }[] {
-  return Array.from({ length: n }, (_, j) => {
-    const row = Math.floor(j / 4);
-    return { x: centres(w, 0, Math.min(4, n - row * 4))[j % 4]!, row };
-  });
+  const xs = centres(w, 0, 4);
+  return Array.from({ length: n }, (_, j) => ({ x: xs[j % 4]!, row: Math.floor(j / 4) }));
 }
 
 /** One number on a spring, stepped by the bar's frame loop (Hooke and a damper, the step a frame's time). */
