@@ -190,6 +190,8 @@ data class ArchiveCheck (
 @Serializable
 data class ArchiveItem (
 	val station: String,
+	/// Its chat's key in its station's list, as ChatItem `id`: its page is `chats/<id>`.
+	val id: String,
 	val session: String,
 	val thread: Long? = null,
 	val title: String,
@@ -198,7 +200,11 @@ data class ArchiveItem (
 	val clock: String,
 	val how: String,
 	val deletable: Boolean,
-	val place: String? = null
+	val place: String? = null,
+	/// Its station's emoji, as ChatItem's: only with more stations than it.
+	val stationEmoji: String? = null,
+	/// Its station's icon, as ChatItem's: only with more stations than it.
+	val stationIcon: String? = null
 )
 
 /// A day of the archive, headed as the chat list's (今天, 昨天, 星期三, 9月20日).
@@ -3283,7 +3289,7 @@ data class OpenChat (
 )
 
 /// What a workspace's chat list shows: all, the viewer's (我参与的), the watching ones (监控中), or on the wide
-/// screen the decisions waiting for the viewer (奏) in place of the chats.
+/// screen the decisions waiting for the viewer (奏) or the archived chats (已归档) in place of the chats.
 typealias ListFilter = String
 
 /// How the pages look: as the system does (the default), or always light, or always dark.

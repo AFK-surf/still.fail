@@ -184,6 +184,8 @@ export interface ArchiveCheck {
  */
 export interface ArchiveItem {
 	station: string;
+	/** Its chat's key in its station's list, as ChatItem `id`: its page is `chats/<id>`. */
+	id: string;
 	session: string;
 	thread?: number;
 	title: string;
@@ -193,6 +195,10 @@ export interface ArchiveItem {
 	how: string;
 	deletable: boolean;
 	place?: string;
+	/** Its station's emoji, as ChatItem's: only with more stations than it. */
+	stationEmoji?: string;
+	/** Its station's icon, as ChatItem's: only with more stations than it. */
+	stationIcon?: string;
 }
 
 /** A day of the archive, headed as the chat list's (今天, 昨天, 星期三, 9月20日). */
@@ -3267,9 +3273,9 @@ export interface OpenChat {
 
 /**
  * What a workspace's chat list shows: all, the viewer's (我参与的), the watching ones (监控中), or on the wide
- * screen the decisions waiting for the viewer (奏) in place of the chats.
+ * screen the decisions waiting for the viewer (奏) or the archived chats (已归档) in place of the chats.
  */
-export type ListFilter = "all" | "mine" | "watching" | "decisions";
+export type ListFilter = "all" | "mine" | "watching" | "decisions" | "archive";
 
 /** How the pages look: as the system does (the default), or always light, or always dark. */
 export type Appearance = "system" | "light" | "dark";

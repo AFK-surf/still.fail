@@ -41,6 +41,7 @@ export function archive(views: Views, local: Local, scope: string, host: Host): 
       const text = (x: J) => (typeof x === "string" ? x : "");
       items.push({
         station: s.address,
+        id: text(get(chat, "id")),
         session: text(get(chat, "session")),
         thread: get(chat, "thread") ?? null,
         title: text(get(chat, "title")),
@@ -50,6 +51,8 @@ export function archive(views: Views, local: Local, scope: string, host: Host): 
         how: get(mark, "by") === "auto" ? t("core-views.archive.auto") : t("core-views.archive.manual"),
         deletable: get(mark, "alone") !== true,
         place,
+        ...(named && s.emoji ? { stationEmoji: s.emoji } : {}),
+        ...(named && s.icon ? { stationIcon: s.icon } : {}),
       });
     }
   }

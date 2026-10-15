@@ -965,7 +965,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "What is being written in a chat (the `composer` topic, by the draft's key), as the core keeps it (composer.ts)." }),
   Appearance: words(["system","light","dark"], { doc: "How the pages look: as the system does (the default), or always light, or always dark.", default: "system" }),
   RowPictureSetting: words(["auto","agents","people"], { doc: "Whose pictures lead a chat's row: by how many people the scope has (the default), or always the agents', or the\npeople's.", default: "auto" }),
-  ListFilter: words(["all","mine","watching","decisions"], { doc: "What a workspace's chat list shows: all, the viewer's (我参与的), the watching ones (监控中), or on the wide\nscreen the decisions waiting for the viewer (奏) in place of the chats.", default: "all" }),
+  ListFilter: words(["all","mine","watching","decisions","archive"], { doc: "What a workspace's chat list shows: all, the viewer's (我参与的), the watching ones (监控中), or on the wide\nscreen the decisions waiting for the viewer (奏) or the archived chats (已归档) in place of the chats.", default: "all" }),
   Lead: words(["agents","people"], { doc: "Whose pictures lead the rows of a list (`ChatsView::leading`)." }),
   KeptTabs: struct([
     ["tabs", vec("String")],
@@ -1327,6 +1327,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "A day of the archive, headed as the chat list's (今天, 昨天, 星期三, 9月20日).", keepNone: true }),
   ArchiveItem: struct([
     ["station", "String"],
+    ["id", "String", { doc: "Its chat's key in its station's list, as ChatItem `id`: its page is `chats/<id>`." }],
     ["session", "String"],
     ["thread", opt("i64"), { client: opt("I54") }],
     ["title", "String"],
@@ -1336,6 +1337,8 @@ export const SHAPES: Record<string, Shape> = {
     ["how", "String"],
     ["deletable", "bool"],
     ["place", opt("String")],
+    ["stationEmoji", opt("String"), { doc: "Its station's emoji, as ChatItem's: only with more stations than it." }],
+    ["stationIcon", opt("String"), { doc: "Its station's icon, as ChatItem's: only with more stations than it." }],
   ], { doc: "An archived chat: its thread (or, an agent with no chat, only its session), its title and last line, when it was\narchived (`at`, and `clock` 14:05) and how (`how`: 手动归档, 空闲后自动归档). `place`: its station's name, where there\nis more than one to tell apart. Not `deletable` when archived alone (its agents still at work elsewhere)." }),
   ArchiveError: struct([
     ["station", "String"],

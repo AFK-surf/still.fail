@@ -91,7 +91,7 @@ class PlaceScrollTest {
         }, loading = false))
         h.fake.put(Topics.usage(Fixtures.WS, 7), UsageView(7u, false, true, emptyList(), emptyList(), emptyList(), 0.0, emptyList(), (0 until 60).map { "note-$it" }, "basis"))
         h.fake.put(Topics.archive(Fixtures.WS), ArchiveView(listOf(ArchiveDay("今天", (0 until 30).map {
-            ArchiveItem(Fixtures.STATION, "ember:a-$it", 300L + it, "archived-$it", "说过的话", Fixtures.NOW.toDouble(), "10:00", "手动归档", true)
+            ArchiveItem(Fixtures.STATION, "a-$it", "ember:a-$it", 300L + it, "archived-$it", "说过的话", Fixtures.NOW.toDouble(), "10:00", "手动归档", true)
         })), emptyList(), loading = false))
         h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, loading = false, working = (0 until 30).map {
             DecisionWorking(Fixtures.STATION, "st", null, null, "ember:w-$it", 400L + it, "work-$it", "在做")

@@ -87,11 +87,12 @@ export const navScroll = style({
  * whole sidebar's height. */
 export const navSlider = style({ position: "absolute", inset: 0, overflow: "hidden", display: "flex" });
 export const navTrack = style({
-  flex: "none", width: "400%", display: "flex", transition: `transform 240ms ${vars.easeOut}`,
+  flex: "none", width: "500%", display: "flex", transition: `transform 240ms ${vars.easeOut}`,
   selectors: {
-    "&[data-filter=mine]": { transform: "translateX(-25%)" },
-    "&[data-filter=watching]": { transform: "translateX(-50%)" },
-    "&[data-filter=decisions]": { transform: "translateX(-75%)" },
+    "&[data-filter=mine]": { transform: "translateX(-20%)" },
+    "&[data-filter=watching]": { transform: "translateX(-40%)" },
+    "&[data-filter=decisions]": { transform: "translateX(-60%)" },
+    "&[data-filter=archive]": { transform: "translateX(-80%)" },
     // To 奏 from its row in the sidebar's foot: its rows come out of that row instead (DecisionDesk.tsx).
     "&[data-instant]": { transition: "none" },
   },
@@ -99,7 +100,7 @@ export const navTrack = style({
 });
 // Each pane sized by the track alone: otherwise the track's height is its tallest pane's content, and any change in a
 // row (the time shown on hover) lays out every row of all the lists again, a frame dropped per row passed while scrolling.
-globalStyle(`${navTrack} > ${navScroll}`, { flex: "none", width: "25%", contain: "strict" });
+globalStyle(`${navTrack} > ${navScroll}`, { flex: "none", width: "20%", contain: "strict" });
 
 export const navFoot = style({ ...band, marginTop: "auto", padding: 8 });
 export const navFootRow = style({ display: "flex", alignItems: "center", gap: 4 });

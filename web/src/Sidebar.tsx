@@ -30,6 +30,7 @@ import { useWorkspaceMarks } from "./lastChat.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as decisionsCss from "./Decisions.css.ts";
 import { DecisionRows, openedAt, openedRecently } from "./DecisionDesk.tsx";
+import { ArchiveRows } from "./pages/Archive.tsx";
 import * as chatCss from "./styles/chat.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import { t } from "./i18n.ts";
@@ -38,8 +39,8 @@ import { t } from "./i18n.ts";
  * The chats of a workspace, newest first and
  * grouped by day, as the core's `chats` view has them; optionally only the
  * ones the viewer started or the watching ones, or in their place the decisions waiting for the viewer (奏,
- * DecisionRows: picked, one shows on `decisions`), with `newChat` above them and the way to the `archive` in the
- * filter's menu beside it. With no station its empty state leads to `stationsPage` (the page itself, where stations are
+ * DecisionRows: picked, one shows on `decisions`) or the archived chats (ArchiveRows, its page `archive`), with
+ * `newChat` above them and the filter's menu beside it. With no station its empty state leads to `stationsPage` (the page itself, where stations are
  * added: nothing is appended to it).
  */
 export function ChatList({ scope, newChat, stationsPage, archive, decisions, top, below }: { scope: string; newChat: string; stationsPage: string; archive: string; decisions: string; top?: ReactNode; below?: ReactNode }) {
@@ -67,6 +68,7 @@ export function ChatList({ scope, newChat, stationsPage, archive, decisions, top
           <ChatPane scope={scope} filter="mine" stationsPage={stationsPage} hidden={mode !== "mine"} />
           <ChatPane scope={scope} filter="watching" stationsPage={stationsPage} hidden={mode !== "watching"} />
           <DecisionRows active={mode === "decisions"} page={decisions} />
+          <ArchiveRows scope={scope} hidden={mode !== "archive"} />
         </div>
       </div>
     </>

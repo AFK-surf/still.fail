@@ -72,11 +72,10 @@ export const RAIL_ICONS: Partial<Record<RailItem, ComponentType<IconProps>>> = {
 };
 
 /** Which place the page is in, by its path: the files' and the settings' pages have the sidebar of their own. */
-export type Place = "chats" | "archive" | "files" | "stations" | "profiles" | "connects" | "usage" | "settings";
+export type Place = "chats" | "files" | "stations" | "profiles" | "connects" | "usage" | "settings";
 
 export function placeOf(path: string): Place {
   if (/^\/w\/[^/]+\/(files|s\/[^/]+\/files)(\/|$)/.test(path)) return "files";
-  if (/^\/w\/[^/]+\/archive$/.test(path)) return "archive";
   if (/^\/w\/[^/]+\/settings\/stations(\/|$)/.test(path)) return "stations";
   if (/^\/w\/[^/]+\/(settings\/profiles|s\/[^/]+\/settings\/accounts)(\/|$)/.test(path)) return "profiles";
   if (/^\/w\/[^/]+\/(settings\/connects|s\/[^/]+\/connects)(\/|$)/.test(path)) return "connects";
@@ -86,7 +85,7 @@ export function placeOf(path: string): Place {
 }
 
 /** The lists of chats the rail can lead to, by the sidebar's mode they are. */
-const LISTS: Partial<Record<RailItem, SidebarMode>> = { chats: "all", mine: "mine", watching: "watching", decisions: "decisions" };
+const LISTS: Partial<Record<RailItem, SidebarMode>> = { chats: "all", mine: "mine", watching: "watching", decisions: "decisions", archive: "archive" };
 
 /** What can be put in the rail, by its kind, as the panel that adds them groups them. */
 const KINDS: { title: string; items: RailItem[] }[] = [
@@ -253,7 +252,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   // Which sidebar it is, each as wide as it was made and open or folded as it was left.
   const group: SidebarGroup = place === "files" ? "files" : place === "profiles" && railed.includes("profiles") ? "profiles"
     : place === "stations" && railed.includes("stations") ? "stations"
-    : place === "chats" || place === "archive" || railed.includes(place as RailItem) ? "chats" : "settings";
+    : place === "chats" || railed.includes(place as RailItem) ? "chats" : "settings";
   const now = useRef({ own, group });
   now.current = { own, group };
   useEffect(() => {
@@ -290,6 +289,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
     setTimeout(() => { if (asked.current) { asked.current = false; reveal(); } }, 60);
   };
   const settings = `/w/${scope}/settings`;
+  const archive = `/w/${scope}/archive`;
   // The settings lit (in them, or a place left out of the rail), pressed again, go back to where they were come to from:
   // the page last shown with them unlit, the last chat when the settings were where the page was opened.
   const inSettings = place === "settings" || (place !== "chats" && !railed.includes(place as RailItem));
@@ -298,11 +298,13 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   // A list of chats lit while the sidebar shows it; 对话 for one not in the rail.
   const shownList = (Object.keys(LISTS) as RailItem[]).find((i) => LISTS[i] === mode && railed.includes(i)) ?? "chats";
   const on = (item: RailItem) => LISTS[item] ? place === "chats" && shownList === item : place === item;
-  const toList = (item: RailItem) => () => { setMode(LISTS[item]!); if (place !== "chats") navigate(last); revealPressed(); };
+  // From the archive's own page (the newest archived chat's, none being there), back to the chats.
+  const toList = (item: RailItem) => () => { setMode(LISTS[item]!); if (place !== "chats" || location.pathname === archive) navigate(last); revealPressed(); };
+  const toArchive = () => { setMode("archive"); navigate(archive); revealPressed(); };
   // A place left out of the rail in view: a list of chats or 奏 shown, the archive, the files. Station, Profile, 连接 and
   // 用量 left out are among the settings, so only as picked from the menu (go); gone once the page is elsewhere.
   const inView: RailItem | null = place === "chats" ? (Object.keys(LISTS) as RailItem[]).find((i) => LISTS[i] === mode) ?? null
-    : place === "archive" || place === "files" ? place : null;
+    : place === "files" ? place : null;
   const at = `${place} ${mode}`;
   const wasAt = useRef(at);
   useEffect(() => {
@@ -317,7 +319,8 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
     switch (item) {
       case "chats": case "mine": case "watching": return toList(item)();
       case "decisions": setMode("decisions"); navigate(`/w/${scope}/decisions`); return revealPressed();
-      case "archive": case "files": return navigate(`/w/${scope}/${item}`);
+      case "archive": return toArchive();
+      case "files": return navigate(`/w/${scope}/files`);
       case "stations": case "profiles": case "connects": case "usage": return navigate(`${settings}/${item}`);
       case "attention": return;
     }
@@ -354,7 +357,11 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
           </button>
         </Tip>
       );
-      case "archive": return link(item, `/w/${scope}/archive`);
+      case "archive": return (
+        <Tip key={item} label={railLabel(item)} side="right">
+          <button type="button" className={css.item} data-on={on(item) || undefined} aria-label={railLabel(item)} onClick={toArchive}><Archive size={20} /></button>
+        </Tip>
+      );
       case "attention": return <AttentionEntry key={item} scope={scope} rail={{ item: css.item, count: css.count, label: railLabel(item) }} />;
       case "files": return link(item, `/w/${scope}/files`);
       case "stations": return <RailStations key={item} scope={scope} to={`${settings}/stations`} on={on(item)} className={css.item} />;

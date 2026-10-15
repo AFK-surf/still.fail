@@ -149,7 +149,7 @@ export function archive(): ArchiveView {
     const ago = Math.round((today - new Date(at).setHours(0, 0, 0, 0)) / 86_400_000);
     const label = ago <= 0 ? "今天" : ago === 1 ? "昨天" : ago < 7 ? `星期${"日一二三四五六"[at.getDay()]}` : `${at.getMonth() + 1}月${at.getDate()}日`;
     const item = {
-      station: STATION, session: chat.session, thread: chat.thread, title: chat.title, last: chat.last?.text ?? "", at: chat.archived.at,
+      station: STATION, id: chat.id, session: chat.session, thread: chat.thread, title: chat.title, last: chat.last?.text ?? "", at: chat.archived.at,
       clock: at.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }), how: "手动归档", deletable: !chat.archived.alone,
     };
     const last = days.at(-1);

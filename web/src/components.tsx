@@ -5,7 +5,7 @@ import type { Level, PersonShown, Quota } from "./api.ts";
 import type { Meter } from "./core/shapes.ts";
 import { useOnlyMine, useSidebarMode, type SidebarMode } from "./station.tsx";
 import { Segmented, Tip } from "./ui.tsx";
-import { Archive, Check, Filter } from "./icons.tsx";
+import { Check, Filter } from "./icons.tsx";
 import { useLocation, useNavigate } from "react-router";
 import { DropdownMenu } from "radix-ui";
 import * as controlsCss from "./styles/controls.css.ts";
@@ -18,28 +18,31 @@ import { t } from "./i18n.ts";
 /**
  * A filter: 全部 or only the viewer's (我参与的 for chats, 我创建的 for connects), from a menu; for chats (`watching`)
  * also the watching ones (监控中). `compact`: a filter button alone, marked while it filters; else the filter's name
- * beside it. `archive`: the archive's page, the menu's last item under a line. Its words are the chats' with `watching`,
- * else the connects' (`label` and `mine`, which named them, are no longer read).
+ * beside it. `decisions` (奏) and `archive` (已归档, the archive's page, under a line): lists the sidebar shows in place
+ * of the chats, each with a page of its own; another list picked there goes back to the chats. Its words are the chats'
+ * with `watching`, else the connects' (`label` and `mine`, which named them, are no longer read).
  */
 export function MineFilter({ compact, archive, watching, decisions }: { label?: string; mine?: string; compact?: boolean; archive?: string | undefined; watching?: boolean; decisions?: { to: string; chats: string } }) {
   const [onlyMine, setOnlyMine] = useOnlyMine();
   const [mode, setMode] = useSidebarMode();
-  // Chats: one of three (the core keeps 我参与的 and 监控中 apart), or 奏 in their place; connects: all or mine.
-  const filter: SidebarMode = watching ? (decisions || mode !== "decisions" ? mode : "all") : onlyMine ? "mine" : "all";
+  // Chats: one of three (the core keeps 我参与的 and 监控中 apart), or 奏 or the archive in their place; connects: all or mine.
+  const shown = (mode === "decisions" && !decisions) || (mode === "archive" && !archive) ? "all" : mode;
+  const filter: SidebarMode = watching ? shown : onlyMine ? "mine" : "all";
   const setFilter = (value: SidebarMode) => watching ? setMode(value) : setOnlyMine(value === "mine");
   const of = watching ? "chats" : "connects";
   const mine = t(`web-main.filter.${of}.mine`);
-  const named = filter === "decisions" ? t("web-main.decisions.title") : filter === "mine" ? mine : filter === "watching" ? t("web-main.filter.watching") : t("web-main.filter.all");
+  const named = filter === "decisions" ? t("web-main.decisions.title") : filter === "archive" ? t("web-main.filter.archived")
+    : filter === "mine" ? mine : filter === "watching" ? t("web-main.filter.watching") : t("web-main.filter.all");
   const navigate = useNavigate();
-  // On the 奏 page, a list of chats in its place goes back to the chats.
-  const onDecisions = useLocation().pathname === decisions?.to;
-  // Gone to the archive, the focus is not brought back to the button (it would be ringed there, over the page left).
+  const path = useLocation().pathname;
+  // Gone to another page, the focus is not brought back to the button (it would be ringed there, over the page left).
   const leaving = useRef(false);
   const item = (value: SidebarMode, text: string) => (
     <DropdownMenu.Item className={`${controlsCss.menuItem} ${chatCss.chooserItem}`} onSelect={() => {
       setFilter(value);
-      if (value === "decisions" && decisions && !onDecisions) { leaving.current = true; navigate(decisions.to); }
-      else if (value !== "decisions" && decisions && onDecisions) { leaving.current = true; navigate(decisions.chats); }
+      const to = value === "decisions" ? decisions?.to : value === "archive" ? archive
+        : path === decisions?.to || path === archive ? decisions?.chats : undefined;
+      if (to && to !== path) { leaving.current = true; navigate(to); }
     }}>
       <span className={chatCss.chooserCheck}>{filter === value && <Check size={14} />}</span>{text}
     </DropdownMenu.Item>
@@ -58,9 +61,7 @@ export function MineFilter({ compact, archive, watching, decisions }: { label?: 
           {decisions && item("decisions", t("web-main.decisions.title"))}
           {archive && <>
             <DropdownMenu.Separator className={controlsCss.menuSep} />
-            <DropdownMenu.Item className={`${controlsCss.menuItem} ${chatCss.chooserItem}`} onSelect={() => { leaving.current = true; navigate(archive); }}>
-              <span className={chatCss.chooserCheck}><Archive size={14} /></span>{t("web-main.filter.archived")}
-            </DropdownMenu.Item>
+            {item("archive", t("web-main.filter.archived"))}
           </>}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>

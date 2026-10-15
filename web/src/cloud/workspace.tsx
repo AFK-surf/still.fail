@@ -87,7 +87,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
   const stations = useStationList(known, entry.id) ?? NO_STATIONS;
   const path = useLocation().pathname;
   const navigate = useGo();
-  const detail = /\/(s\/[^/]+\/.+|settings|new$|archive$|decisions$|files$)/.test(path);
+  const detail = /\/(s\/[^/]+\/.+|settings|new$|decisions$|files$)/.test(path);
   // Settings, a connect or a station's runtime accounts: the sidebar becomes the settings menu.
   // A place in the rail (Station, Profile, 连接, 用量) is a page of its own beside the chats, not one of the settings: those
   // left out of it are reached in the settings, and are among them there.
@@ -96,10 +96,10 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
   const place = placeOf(path);
   const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path)
     && !(place !== "settings" && place !== "files" && railed.includes(place as RailItem) && wide);
-  // Which sidebar is drawn. A page in the rail with none of its own (连接, 用量, the archive) closes it (Rail.tsx): the one
+  // Which sidebar is drawn. A page in the rail with none of its own (连接, 用量) closes it (Rail.tsx): the one
   // it had stays while it goes, not the chats' list first; opened again there, it is the chats'.
   const own = settings ? "settings" : place === "files" || place === "profiles" || place === "stations" ? place : "chats";
-  const bare = !settings && (place === "archive" || place === "connects" || place === "usage") && railed.includes(place as RailItem) && wide;
+  const bare = !settings && (place === "connects" || place === "usage") && railed.includes(place as RailItem) && wide;
   const closed = useSidebarClosed();
   const kept = useRef({ side: own, closed, reopened: false });
   if (!bare) kept.current = { side: own, closed, reopened: false };
@@ -111,6 +111,9 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
   const lock = useLock(entry.id);
   const waiting = lock?.me?.waiting === true;
   useEffect(() => { if (decisions && mode !== "decisions") setMode("decisions"); }, [decisions]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The archive's page, come to any way (a link, the phone's way): the sidebar shows the archive.
+  const archive = /^\/w\/[^/]+\/archive$/.test(path);
+  useEffect(() => { if (archive && mode !== "archive") setMode("archive"); }, [archive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // No station yet: nothing of the workspace's pages works, so none is shown; adding the first station is the page.
   if (known && known.length === 0 && !settings) return <><WorkspaceKept entry={entry} /><Onboarding entry={entry} /></>;
@@ -180,7 +183,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
             <Route path="settings/leave" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
             <Route path="s/:station/*" element={<StationPages stations={known && stations} />} />
             <Route path="files" element={<DriveHome scope={entry.id} />} />
-            <Route path="archive" element={<ArchivePage scope={entry.id} back={`/w/${entry.id}`} />} />
+            <Route path="archive" element={<ArchivePage scope={entry.id} wide={wide} />} />
             <Route path="decisions" element={<DecisionPage onOpen={(to) => navigate(to)} />} />
             <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, session) => toMadeChat(() => navigate(`${stationBase(station)}/chats/${encodeURIComponent(session)}`))} />} />
             <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
