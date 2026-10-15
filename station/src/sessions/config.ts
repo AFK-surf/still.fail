@@ -51,6 +51,9 @@ export type HubConfig = {
   maxWarmClaude: number;
   /// Chats idle this long, and done (auto archive), are archived by the station; 0: never.
   autoArchiveMs: number;
+  /// Sessions heard only in Slack idle this long are archived even when stopped at a block for someone (nobody sees
+  /// those in the station's lists); 0: never.
+  slackArchiveMs: number;
 };
 
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
@@ -106,6 +109,7 @@ export function hubConfig(raw: any, dataDir: string): HubConfig {
     warmMs: Math.trunc((typeof raw?.warmMinutes === "number" ? raw.warmMinutes : 30) * 60_000),
     maxWarmClaude: typeof raw?.maxWarmClaude === "number" ? raw.maxWarmClaude : 4,
     autoArchiveMs: Math.trunc(Math.max(0, typeof raw?.autoArchiveDays === "number" ? raw.autoArchiveDays : 1) * 86_400_000),
+    slackArchiveMs: Math.trunc(Math.max(0, typeof raw?.slackArchiveDays === "number" ? raw.slackArchiveDays : 3) * 86_400_000),
   };
 }
 

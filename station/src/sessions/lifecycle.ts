@@ -210,13 +210,15 @@ export function archiveChat(hub: Hub, thread: number, archived: boolean): void |
 /// not stopped at a block for someone, nothing its chat's starter has not read, and no single-session connect feeding
 /// it. Anything new said brings it back. Returns when the next one not idle long enough yet will have (null: none, or
 /// auto-archiving off): what is idle but not done by now is not on a clock, so it is looked at again after a while.
+/// A session heard only in Slack goes after slackArchiveMs even when stopped at a block: nobody answers it from here.
 export function autoArchive(hub: Hub, now: number): number | null {
   const { store } = hub;
-  const after = hub.config().autoArchiveMs;
-  if (after <= 0) return null;
+  const { autoArchiveMs: after, slackArchiveMs } = hub.config();
+  if (after <= 0 && slackArchiveMs <= 0) return null;
   let next: number | null = null;
-  const idle = (at: (number | null | undefined)[]) => {
-    const due = Math.max(0, ...at.filter((x): x is number => typeof x === "number")) + after;
+  const idle = (at: (number | null | undefined)[], wait = after) => {
+    if (wait <= 0) return false;
+    const due = Math.max(0, ...at.filter((x): x is number => typeof x === "number")) + wait;
     if (due > now && (next === null || due < next)) next = due;
     return due <= now;
   };
@@ -224,19 +226,24 @@ export function autoArchive(hub: Hub, now: number): number | null {
   const bound = store.listBindings();
   const stats = store.sessionStats(null);
   const jobs = new Set(store.listJobs(null).filter((j) => j.state === "running" || (j.port !== null && j.state === "exited")).map((j) => j.sessionKey));
-  const busy = (key: string) => {
+  const working = (key: string) => {
     const row = store.getSession(key);
     if (!row) return true;
     const stat = stats.get(key);
     const last = stat?.lastTurn ?? null;
-    return row.running || jobs.has(key) || hub.processState(key) === "running" || (stat?.pending ?? 0) > 0 || (last !== null && (last.declared === "block" || last.endedAt === null));
+    return row.running || jobs.has(key) || hub.processState(key) === "running" || (stat?.pending ?? 0) > 0 || (last !== null && last.endedAt === null);
   };
+  const busy = (key: string) => working(key) || stats.get(key)?.lastTurn?.declared === "block";
   // A chat someone pinned stays in the lists until put away by hand.
   const pinned = store.pinnedSessions();
   const kept = store.keptChats(null);
   for (const s of store.listSessions()) {
-    if (s.archivedAt !== null || !idle([s.lastActiveAt, s.shownAt]) || bound.has(s.key) || pinned.has(s.key) || busy(s.key)) continue;
-    if (store.sessionThreads(s.key).some((t) => kept.has(t.thread.id) || unread(t.thread))) continue;
+    if (s.archivedAt !== null || bound.has(s.key) || pinned.has(s.key)) continue;
+    const threads = store.sessionThreads(s.key);
+    const slack = threads.length > 0 && threads.every((t) => t.thread.surface !== STILLFAIL_SURFACE);
+    const done = idle([s.lastActiveAt, s.shownAt]) && !busy(s.key);
+    if (!done && !(slack && idle([s.lastActiveAt, s.shownAt], slackArchiveMs) && !working(s.key))) continue;
+    if (threads.some((t) => kept.has(t.thread.id) || unread(t.thread))) continue;
     log.info("hub", "archiving an idle session", { session: s.key });
     archiveBy(hub, s.key, true, AUTO);
   }

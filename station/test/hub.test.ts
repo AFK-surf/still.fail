@@ -1157,6 +1157,35 @@ test("idle chats that are done are archived by the station; busy, blocked, unrea
   await r.close();
 });
 
+test("a session heard only in Slack is archived after three idle days even when stopped at a block", async () => {
+  const r = new Rig();
+  const day = 86_400_000;
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const blocked = sessionKey("cl", "C1", m.threadTs);
+  await r.call(blocked, "chat_state", { kind: "block" });
+  r.claude.last().complete();
+  await settle();
+  const [web] = newSession(r.hub, chat());
+  await r.call(web, "chat_state", { kind: "block" });
+  r.claude.last().complete();
+  await settle();
+
+  const now = Date.now();
+  const due = autoArchive(r.hub, now + 2 * day);
+  assert.equal(r.session(blocked).archivedAt, null, "two days are not enough");
+  assert.ok(due !== null && due <= now + 3 * day + 60_000, `next due ${due}`);
+  autoArchive(r.hub, now + 4 * day);
+  assert.equal(r.session(blocked).archivedBy, AUTO);
+  assert.equal(r.session(web).archivedAt, null, "a still.fail chat's block waits for its starter");
+  // Someone answers in the Slack thread: it is back.
+  await r.accept(reply(m, "9999.5", "<@UBOT> here you go"));
+  assert.equal(r.session(blocked).archivedAt, null);
+  await settle();
+  await r.close();
+});
+
 test("kept chats survive idle archiving but can be archived by hand", async () => {
   const r = new Rig();
   const [key, thread] = newSession(r.hub, chat());
