@@ -192,8 +192,11 @@ private class Geo(val w: Float, val sets: List<List<String>>, val cur: Int, val 
 /** The place a let-go would choose while a finger has the ball: its middle, and which bar and place it is. */
 private class Cand(val x: Float, val y: Float, val set: Int, val key: String)
 
-/** A bar chosen in the panel, sliding down into the bar's place: which, its row, how open the panel was, the place tapped. */
-private class Swap(val i: Int, val n: Int, val from: Float, val key: String?) {
+/**
+ * A bar chosen in the panel, sliding down into the bar's place: which, its row, how open the panel was, the place tapped;
+ * the bars as they were then (`sets`, `cur` the one in view), which the stack sliding down is laid out by to its end.
+ */
+private class Swap(val i: Int, val n: Int, val from: Float, val key: String?, val sets: List<List<String>>, val cur: Int) {
     var done by mutableStateOf(false)
 }
 
@@ -447,7 +450,7 @@ private class BarModel(private val scope: CoroutineScope) {
         val g = geo ?: return
         val n = g.others.indexOf(i)
         if (n < 0) return
-        val s = Swap(i, n, max(0.2f, o.value), key)
+        val s = Swap(i, n, max(0.2f, o.value), key, g.sets, g.cur)
         swap = s
         mode = false
         // The place at once, under the glass closing over it: not once that has landed (the user: a delay).
@@ -563,14 +566,19 @@ fun BottomBar(
         fun notchR() = (DROP / 2 + NOTCH_GAP) * kState.value
         // The action and its notch shrink about one middle, which comes up to the bar's edge: the notch closes to nothing, no dent left.
         fun notchY() = -LIFT * kState.value
+        // The stack of bars as a bar is chosen, laid out by the bars as they were when it was (the bar in view is the
+        // chosen one in the frame it lands, before the stack is gone: laid out by that, the bar left was drawn over the
+        // chosen one's places for a frame, a flash).
+        val laid = swap?.let { Geo(w, it.sets, it.cur, active, g.notched) }
         fun swapAt(s: Swap): Pair<FloatArray, Float>? {
-            val into = g.sets.getOrNull(s.i) ?: return null
+            val sg = laid ?: return null
+            val into = sg.sets.getOrNull(s.i) ?: return null
             val t = (1 - m.o.value / s.from).coerceIn(0f, 1f)
             val lands = if (s.key != null) notches(s.key) else action != null
-            val from = g.centres(0f, into.size)
-            val to = g.centres(if (lands) 1f else 0f, into.size)
+            val from = sg.centres(0f, into.size)
+            val to = sg.centres(if (lands) 1f else 0f, into.size)
             val xs = FloatArray(into.size) { from[it] + (to[it] - from[it]) * t }
-            return xs to (g.rowMid(s.n) + (g.barMid - g.rowMid(s.n)) * t)
+            return xs to (sg.rowMid(s.n) + (sg.barMid - sg.rowMid(s.n)) * t)
         }
 
         val idle = if (dark) Color(0xFFD1D5DB) else Color(0xFF6B7280)
@@ -752,7 +760,7 @@ fun BottomBar(
             Box(
                 Modifier
                     .layout { measurable, _ ->
-                        val box = ballBox(g, swap, ::swapAt, ball, goalX, held, ballScale, ::sx)
+                        val box = ballBox(swap, ::swapAt, ball, goalX, held, ballScale, ::sx)
                         val p = measurable.measure(Constraints.fixed(box.width.dp.roundToPx().coerceAtLeast(1), box.height.dp.roundToPx().coerceAtLeast(1)))
                         layout(p.width, p.height) { p.place(box.left.dp.roundToPx(), box.top.dp.roundToPx()) }
                     }
@@ -817,22 +825,22 @@ fun BottomBar(
             }
             // A bar being chosen: the stack of bars slides down inside the closing glass, the chosen one into the bar's
             // place, what is not chosen cut off by the glass's edge. Nothing fades.
-            if (swap != null) Box(Modifier.matchParentSize().graphicsLayer { shape = Window(clipTop().dp.toPx(), RAD.dp.toPx()); clip = true }) {
-                fun shift() = swapAt(swap)?.let { (_, y) -> y - g.rowMid(swap.n) } ?: 0f
-                g.others.forEachIndexed { n, i ->
+            if (swap != null && laid != null) Box(Modifier.matchParentSize().graphicsLayer { shape = Window(clipTop().dp.toPx(), RAD.dp.toPx()); clip = true }) {
+                fun shift() = swapAt(swap)?.let { (_, y) -> y - laid.rowMid(swap.n) } ?: 0f
+                laid.others.forEachIndexed { n, i ->
                     if (i == swap.i) return@forEachIndexed
-                    val set = g.sets[i]
-                    val cs = g.centres(0f, set.size)
-                    set.forEachIndexed { j, key -> Flying(key, idle, icon) { IntOffset(sx(cs[j]).dp.roundToPx(), (g.rowMid(n) + shift()).dp.roundToPx()) } }
+                    val set = laid.sets[i]
+                    val cs = laid.centres(0f, set.size)
+                    set.forEachIndexed { j, key -> Flying(key, idle, icon) { IntOffset(sx(cs[j]).dp.roundToPx(), (laid.rowMid(n) + shift()).dp.roundToPx()) } }
                 }
-                g.sets.getOrNull(swap.i)?.forEachIndexed { j, key ->
+                laid.sets.getOrNull(swap.i)?.forEachIndexed { j, key ->
                     Flying(key, landing, icon) {
                         val (xs, y) = swapAt(swap) ?: return@Flying IntOffset.Zero
                         IntOffset(sx(xs[j]).dp.roundToPx(), y.dp.roundToPx())
                     }
                 }
-                g.items.forEachIndexed { j, key ->
-                    Flying(key, idle, icon) { IntOffset(sx(g.centres(kState.value, g.items.size)[j]).dp.roundToPx(), (g.barMid + shift()).dp.roundToPx()) }
+                laid.items.forEachIndexed { j, key ->
+                    Flying(key, idle, icon) { IntOffset(sx(laid.centres(kState.value, laid.items.size)[j]).dp.roundToPx(), (laid.barMid + shift()).dp.roundToPx()) }
                 }
             }
         }
@@ -886,13 +894,13 @@ private class BallMotion(x: Float, y: Float) {
 private class BallBox(val left: Float, val top: Float, val width: Float, val height: Float)
 
 private fun ballBox(
-    g: Geo, swap: Swap?, swapAt: (Swap) -> Pair<FloatArray, Float>?, ball: BallMotion,
+    swap: Swap?, swapAt: (Swap) -> Pair<FloatArray, Float>?, ball: BallMotion,
     goalX: Float, held: Float, shown: Float, sx: (Float) -> Float,
 ): BallBox {
     val scale = (1 + 0.06f * held) * shown
     // A bar being chosen with a place tapped in it: the ball rides on that place down into the bar.
     if (swap?.key != null) {
-        val into = g.sets.getOrNull(swap.i)
+        val into = swap.sets.getOrNull(swap.i)
         val j = into?.indexOf(swap.key) ?: -1
         val at = swapAt(swap)
         if (at != null && j >= 0) {
@@ -940,5 +948,5 @@ private fun Place(
 /** A place's icon as a bar is chosen, its middle where `at` says (px). */
 @Composable
 private fun Flying(key: String, tint: Color, icon: @Composable (String, Color) -> Unit, at: Density.() -> IntOffset) {
-    Box(Modifier.offset { at().let { IntOffset(it.x - 14.dp.roundToPx(), it.y - 14.dp.roundToPx()) } }.size(28.dp), contentAlignment = Alignment.Center) { icon(key, tint) }
+    Box(Modifier.offset { at().let { IntOffset(it.x - 14.dp.roundToPx(), it.y - 14.dp.roundToPx()) } }.size(28.dp).semantics { testTag = "bar-flying-$key" }, contentAlignment = Alignment.Center) { icon(key, tint) }
 }

@@ -1,10 +1,10 @@
 // The bottom bar (ui/Bar.kt, Places.kt) on the fake core: on Home in light and dark (the ball 6 past the bar on every
 // side at rest; the notch empty, the page's own paper showing there; no shadow above the bar), a place tapped (the page
 // switched in place, the ball over it), the panel of the other bars opened by a swipe up, one stroke from the bar into
-// a place of another bar (that bar and that place), the settings page's cards (a place taken out, one added, a bar
-// made and deleted, a place moved), and the notch's action: 令 on the chats' pages, a "+" on a page that adds (Station,
-// for a manager), none on 用量 (the notch closed), the notch staying open between two pages that have one, the icon in it
-// swapping. Pictures: settled.png under motion/bar-*.
+// a place of another bar (that bar and that place; it lands whole, the bar left never drawn over it), the settings
+// page's cards (a place taken out, one added, a bar made and deleted, a place moved), and the notch's action: 令 on the
+// chats' pages, a "+" on a page that adds (Station, for a manager), none on 用量 (the notch closed), the notch staying
+// open between two pages that have one, the icon in it swapping. Pictures: settled.png under motion/bar-*.
 package fail.still.android.motion
 
 import android.graphics.Bitmap
@@ -305,6 +305,48 @@ class BarTest {
         rule.onNodeWithTag("bar-place-usage").assertExists()
         rule.onNodeWithTag("bar-place-chats").assertDoesNotExist()
         shot(h, "bar-connects-light")
+    }
+
+    /**
+     * The same stroke, every frame stepped until well after the chosen bar has landed: once it is the bar in view, the
+     * bar left is never drawn in the bar's place. (The frame it became the one in view drew the stack of bars laid out
+     * by the bar then in view, the chosen one: the bar left landed over the chosen bar's places for that frame, a flash.)
+     * Frames: motion/bar-stroke-lands.
+     */
+    @Test fun strokeLandsWhole() {
+        val h = launch()
+        val g = bounds("bar-glass")
+        val w = g.width / d
+        val connectsX = g.left + (w - 28 - (w - 56) / 3) * d
+        val left = listOf("chats", "files", "profiles", "stations")
+        val r = h.record("bar-stroke-lands")
+        rule.onRoot().performTouchInput { down(Offset(g.left + 28 * d, g.top + 28 * d)) }
+        r.frames(2)
+        rule.onRoot().performTouchInput { moveTo(Offset(g.left + 40 * d, g.top - 12 * d)) }
+        r.frames(4)
+        rule.onRoot().performTouchInput { moveTo(Offset((g.left + 40 * d + connectsX) / 2, g.top - 24 * d)) }
+        r.frames(4)
+        rule.onRoot().performTouchInput { moveTo(Offset(connectsX, g.top - 28 * d)) }
+        r.frames(30)
+        rule.onRoot().performTouchInput { up() }
+        var landed = -1
+        var n = 0
+        while (n < 120 && (landed < 0 || n < landed + 4)) {
+            r.frame()
+            if (h.app.bars.current == 1L) {
+                if (landed < 0) landed = n
+                for (key in left) rule.onAllNodesWithTag("bar-flying-$key").fetchSemanticsNodes().forEach { node ->
+                    // Where it is drawn, not clipped to the bar (bounds clipped to nothing would sit on the bar's foot).
+                    val y = node.positionInRoot.y + node.size.height / 2f
+                    assertTrue("frame $n after the let-go, the bar in view the chosen one: $key, of the bar left, drawn in the bar ($y, the bar's middle ${g.center.y})", abs(y - g.center.y) > 14 * d)
+                }
+            }
+            n++
+        }
+        r.end()
+        assertTrue("the chosen bar landed within 120 frames", landed >= 0)
+        assertEquals(1L, h.app.bars.current)
+        rule.onNodeWithTag("bar-place-usage").assertExists()
     }
 
     /** 设置 · 下方栏: a place taken out and added back, a place moved, a bar made and deleted; the bar on Home follows. */
