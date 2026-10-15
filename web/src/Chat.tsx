@@ -46,7 +46,7 @@ import * as cloudCss from "./styles/cloud.css.ts";
 import * as composerCss from "./styles/composer.css.ts";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as dockCss from "./dock.css.ts";
-import { sendingHere, sentAfter, toMadeChat as toMadeChatOf } from "./madeChat.ts";
+import { sendingHere, sentAfter, toMadeChat as toMadeChatOf, whenLanded } from "./madeChat.ts";
 import { thumbId } from "./viewerFlight.ts";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { failure, useToast, useAct } from "./toast.tsx";
@@ -482,7 +482,9 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   for (const s of chat.elsewhere ?? []) items.push({ key: `e:${s.key}`, estimate: 64 });
   for (const m of messages) {
     if (m.seq === divider) items.push({ key: "line", estimate: 20 });
-    items.push({ key: `m:${m.seq}`, estimate: tallOf(m) });
+    // One waiting to come out of its avatar takes no room, not even the gap before it (the list measures it so): known,
+    // not guessed, so that nothing below it moves for a guess and back for the fact.
+    items.push(emissions.stateOf(m.seq) === "held" ? { key: `m:${m.seq}`, estimate: 0, exact: -gap } : { key: `m:${m.seq}`, estimate: tallOf(m) });
     for (const s of m.elsewhere ?? []) items.push({ key: `e:${s.key}`, estimate: 64 });
   }
   if (chat.newer) items.push({ key: "newer", estimate: 30, place: false });
@@ -2296,11 +2298,23 @@ function Activity({ agent, leaving, caught, pose, stoppable }: { agent: AgentAtW
   const row = useRef<HTMLDivElement>(null);
   const line = useRef<HTMLButtonElement>(null);
   const tail = useRef<HTMLSpanElement>(null);
-  // One there when the chat opened is there at once.
+  // One there when the chat opened is there at once. One that starts as the reader's message is on its way from the
+  // composer (madeChat.ts sendingHere) comes once that has landed, under it: not first, then pushed down by it.
   useLayoutEffect(() => {
     if (caught) return;
+    const el = row.current!;
     const move = { duration: FADE_MS / 1000, ease: EASE_OUT };
-    arrive([[row.current!, { "grid-template-rows": "0px", opacity: "0" }], [line.current!, { transform: "scale(0.5)" }]], move);
+    const come = () => arrive([[el, { "grid-template-rows": "0px", opacity: "0" }], [line.current!, { transform: "scale(0.5)" }]], move);
+    let came = false;
+    const stop = whenLanded(() => {
+      came = true;
+      el.style.removeProperty("grid-template-rows");
+      el.style.removeProperty("opacity");
+      come();
+    });
+    // Still on its way: held folded and unseen till it lands.
+    if (!came) Object.assign(el.style, { gridTemplateRows: "0px", opacity: "0" });
+    return stop;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Set here, not by React: the change is made where what shows before it can be read.
   const was = useRef({ leaving: false, folded: false });

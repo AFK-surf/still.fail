@@ -321,6 +321,14 @@ export function sentAfter(chat: { messages: readonly { seq: number }[]; outbox: 
 
 /** Words sent in an open chat, waiting for their row or on their way to it; `done` lets them go (at once). */
 let flying: { done(): void } | null = null;
+/** Told once the words now on their way have landed (or at once, none being). */
+const landing: (() => void)[] = [];
+/** Calls `then` once what the reader just sent has landed in its chat's list (sendingHere), or now if nothing flies. */
+export function whenLanded(then: () => void): () => void {
+  if (!flying) { then(); return () => {}; }
+  landing.push(then);
+  return () => { const i = landing.indexOf(then); if (i >= 0) landing.splice(i, 1); };
+}
 
 /**
  * A message is sent in an open chat from `field` (a composer's text box, still showing `text`) into `list` (the chat's
@@ -387,7 +395,10 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
   const done = () => {
     if (over) return;
     over = true;
-    if (flying?.done === done) flying = null;
+    if (flying?.done === done) {
+      flying = null;
+      for (const then of landing.splice(0)) then();
+    }
     observer.disconnect();
     clearTimeout(timeout);
     cancelAnimationFrame(frame);

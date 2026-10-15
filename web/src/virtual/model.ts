@@ -22,7 +22,8 @@
 
 /** `place: false`: not something a reader is at (a line that says more is loading, the list's first line): what comes
  *  in after it comes above the reader, whose place is the item after it. */
-export type Item = { key: string; estimate: number; place?: boolean };
+/** `exact`: how tall it is known to be before it is measured (a message held back: no room at all), not a guess. */
+export type Item = { key: string; estimate: number; place?: boolean; exact?: number };
 /** An item's height as measured, and the width of the pane it was measured in. */
 export type Size = { height: number; width: number };
 /** Where an item gone to stands: `pad` below what covers the pane's top, its middle at the pane's, or its top `pad` below the pane's. */
@@ -287,7 +288,7 @@ export class Virtual {
     let end = 0;
     this.guessing = false;
     for (const i of [...made].sort((a, b) => a - b)) {
-      if (this.sizes.get(this.items[i]!.key)?.width !== this.width) this.guessing = true;
+      if (this.items[i]!.exact === undefined && this.sizes.get(this.items[i]!.key)?.width !== this.width) this.guessing = true;
       rows.push({ key: this.items[i]!.key, index: i, space: this.tops[i]! - end });
       end = this.tops[i]! + this.heightOf(i);
     }
@@ -338,7 +339,7 @@ export class Virtual {
 
   private heightOf(i: number): number {
     const item = this.items[i]!;
-    return this.sizes.get(item.key)?.height ?? item.estimate * this.scale;
+    return this.sizes.get(item.key)?.height ?? item.exact ?? item.estimate * this.scale;
   }
   private topOf(i: number): number { return this.lead + this.tops[i]!; }
   private retop(): void {

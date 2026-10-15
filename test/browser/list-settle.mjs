@@ -41,6 +41,8 @@ function helpers() {
   const sample = (ms) => new Promise((done) => {
     const frames = [];
     const t0 = performance.now();
+    // The agents' lines there already (one starting now is new).
+    const before = new Set([...(pane()?.querySelectorAll(':scope > [data-vk^="a:"]') ?? [])].map((a) => a.dataset.vk));
     const beat = document.body.appendChild(document.createElement('div'));
     beat.style.cssText = 'position:fixed;left:0;top:0;height:1px;width:1px;pointer-events:none;opacity:0';
     let n = 0;
@@ -50,7 +52,10 @@ function helpers() {
       // Not one that shows nothing: a message waiting to come out of its avatar, an activity folded while its avatar flies,
       // a message sent covered by the copy flying from the composer.
       for (const el of p?.querySelectorAll(':scope > [data-vk]:not([data-held]):not([data-away]):not([data-send-covered])') ?? []) rows[el.dataset.vk] = Math.round(el.getBoundingClientRect().top * 10) / 10;
-      frames.push({ t: Math.round(performance.now() - t0), top: p ? Math.round(p.scrollTop) : null, rows });
+      // An agent's line showing while the reader's message is still on its way to the list (it comes once that lands).
+      const act = [...(p?.querySelectorAll(':scope > [data-vk^="a:"]') ?? [])].find((a) => !before.has(a.dataset.vk));
+      const early = !!act && !!p.querySelector(':scope > [data-send-covered]') && act.getBoundingClientRect().height > 4 && +getComputedStyle(act).opacity > 0.1;
+      frames.push({ t: Math.round(performance.now() - t0), top: p ? Math.round(p.scrollTop) : null, rows, early });
     });
     seen.observe(beat);
     const tick = () => {
@@ -84,7 +89,62 @@ function backAndForth(frames) {
   return found;
 }
 
+/**
+ * Rows jumping: in one frame by a lot (24px or more) while in the frames either side they move by less than a third of
+ * that: not a fast glide's step but a move at once, which reads as a jump however one way it goes. Only on screen.
+ */
+function jumps(frames, height) {
+  const found = [];
+  for (let i = 2; i < frames.length - 1; i++) {
+    for (const [key, top] of Object.entries(frames[i].rows)) {
+      const a = frames[i - 2].rows[key], b = frames[i - 1].rows[key], c = frames[i + 1].rows[key];
+      if (a === undefined || b === undefined || c === undefined) continue;
+      if ((b < 0 || b > height) && (top < 0 || top > height)) continue;
+      const d = top - b;
+      if (Math.abs(d) < 24) continue;
+      if (Math.abs(b - a) < Math.abs(d) / 3 && Math.abs(c - top) < Math.abs(d) / 3) found.push(`${key} ${d > 0 ? '+' : ''}${d.toFixed(1)}px at once at ${frames[i].t}ms`);
+    }
+  }
+  return found;
+}
+
 const CASES = {
+  // A message written in the composer and sent, nothing asked.
+  async send(page) {
+    await page.waitForTimeout(300);
+    const field = page.locator('textarea:not([aria-hidden])').filter({ visible: true }).last();
+    await field.fill('再看一下手机上的效果');
+    const watching = page.evaluate(() => check.sample(2600));
+    await field.press('Enter');
+    return watching;
+  },
+  // A message sent, and its agent at work at once (before the words have landed): its line comes after them.
+  async work(page) {
+    await page.evaluate(() => check.set((c) => { c.running = null; }));
+    await page.waitForTimeout(1200);
+    const field = page.locator('textarea:not([aria-hidden])').filter({ visible: true }).last();
+    await field.fill('先跑一下测试');
+    const watching = page.evaluate(() => check.sample(2600));
+    await field.press('Enter');
+    await page.evaluate(() => check.set((c) => { c.running = { activity: '运行 pnpm test', since: Date.now(), started: true }; }));
+    return watching;
+  },
+  // The agent says something, no line of its own at work showing: it comes in at the end, followed.
+  async arrive(page) {
+    await page.evaluate(() => check.set((c) => { c.running = null; }));
+    await page.waitForTimeout(1200);
+    const watching = page.evaluate(() => check.sample(1500));
+    await page.evaluate(() => check.set((c) => { c.messages = [...c.messages, check.message(c, 'agent', '改好了，截图在这：\n\n- 按钮撑满容器\n- 左右各 16px\n- 深色模式下也看得见')]; }));
+    return watching;
+  },
+  // One taller than the pane comes in: followed from its top.
+  async long(page) {
+    await page.evaluate(() => check.set((c) => { c.running = null; }));
+    await page.waitForTimeout(1200);
+    const watching = page.evaluate(() => check.sample(1500));
+    await page.evaluate(() => check.set((c) => { c.messages = [...c.messages, check.message(c, 'agent', Array.from({ length: 40 }, (_, i) => `- 第 ${i + 1} 项：登录页按钮、表单留白和深色模式都检查过了`).join('\n'))]; }));
+    return watching;
+  },
   // A reply written in the composer answers the card: its options settle into the line saying so.
   async reply(page) {
     await page.evaluate(() => check.set((c) => { c.messages = [...c.messages, check.card(c)]; }));
@@ -203,8 +263,13 @@ createRoot(root).render(<DemoApp phone={location.hash === '#phone'} />);
     assert.ok(frames.length > 20, `${where}: frames were sampled (${frames.length})`);
     const found = backAndForth(frames);
     if (found.length) failures.push(`${where}: moved and back\n    ${found.slice(0, 6).join('\n    ')}`);
-    if (end > 1) failures.push(`${where}: left ${Math.round(end)}px short of the list's end`);
-    console.log(found.length ? 'FAIL' : 'ok  ', where, `(${frames.length} frames)`);
+    const jumped = jumps(frames, phone ? 844 : 800);
+    const early = frames.filter((f) => f.early).map((f) => f.t);
+    if (early.length) failures.push(`${where}: an agent's line showed before the message sent had landed (at ${early.slice(0, 3).join(', ')}ms)`);
+    if (jumped.length) failures.push(`${where}: jumped\n    ${jumped.slice(0, 6).join('\n    ')}`);
+    // (One taller than the pane is read from its top: not followed to the end.)
+    if (end > 1 && name !== 'long') failures.push(`${where}: left ${Math.round(end)}px short of the list's end`);
+    console.log(found.length || jumped.length || early.length ? 'FAIL' : 'ok  ', where, `(${frames.length} frames)`);
     await context.close();
   }
   if (failures.length) { console.error(failures.join('\n')); process.exitCode = 1; }
