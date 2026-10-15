@@ -64,7 +64,7 @@ export function ChatList({ scope, newChat, stationsPage, archive, decisions, top
       <NavTop top={top} below={below}
         action={<SidebarActions newChat={newChat} archive={archive} workspace={`/w/${scope}`} showFilter={!none} />} />
       <div className={nav.navSlider}>
-        <div className={nav.navTrack} data-filter={mode} data-instant={instant.current || undefined}>
+        <div className={nav.navTrack} data-filter={mode} data-instant={instant.current || undefined} ref={sliding}>
           {/* Followed at once, side by side: switching slides from one to another with nothing to wait for. */}
           <ChatPane scope={scope} filter="all" stationsPage={stationsPage} hidden={mode !== "all"} />
           <ChatPane scope={scope} filter="mine" stationsPage={stationsPage} hidden={mode !== "mine"} />
@@ -76,6 +76,19 @@ export function ChatList({ scope, newChat, stationsPage, archive, decisions, top
       </div>
     </>
   );
+}
+
+/** Marks the track while it slides (`data-sliding`): the panes it passes are drawn then (Sidebar.css.ts navTrack). */
+function sliding(track: HTMLElement | null): (() => void) | undefined {
+  if (!track) return undefined;
+  const slid = (e: TransitionEvent) => {
+    if (e.target !== track || e.propertyName !== "transform") return;
+    if (e.type === "transitionrun") track.dataset.sliding = "";
+    else delete track.dataset.sliding;
+  };
+  const types = ["transitionrun", "transitionend", "transitioncancel"] as const;
+  for (const type of types) track.addEventListener(type, slid);
+  return () => { for (const type of types) track.removeEventListener(type, slid); };
 }
 
 /**
