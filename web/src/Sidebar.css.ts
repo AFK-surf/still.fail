@@ -137,9 +137,9 @@ globalStyle(`${navNew} > ${navRow}`, { flex: 1, minWidth: 0 });
 /**
  * Folded and shown a while, the bar floats with a corner (shell.css.ts dock: the rail's places' 9 px ground, 6 in): what
  * stands in its top right corner (the lists' filter) is 6 from its top and its side, rounded as the rail's places are,
- * concentric with it.
+ * concentric with it; the band ends 6 under it too, not 2 (the lists starting at once under the band).
  */
-globalStyle(`[data-sidebar="closed"] ${navNew}`, { paddingRight: 6 });
+globalStyle(`[data-sidebar="closed"] ${navNew}`, { paddingRight: 6, paddingBottom: 6 });
 globalStyle(`[data-sidebar="closed"] ${navNew} > :last-child:not(${navRow})`, { borderRadius: `calc(9px * ${vars.cornerScale})`, cornerShape: vars.cornerShape });
 /** 待处理, under 新建对话 (cloud/workspace.tsx): as inset as it; nothing when there is nothing to do. */
 export const navTodo = style({ padding: "2px 8px 8px", selectors: { "&:empty": { display: "none" } } });
