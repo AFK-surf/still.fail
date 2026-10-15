@@ -7,7 +7,7 @@ import { panelRow, resizeHandle } from "../ui.css.ts";
 import { sessionMain } from "../styles/jobs.css.ts";
 import { windowsEmoji } from "../StationMark.css.ts";
 import { pageBar } from "../styles/sidebar.css.ts";
-import { bleedX, outset, outsetBottom, outsetTop } from "../styles/align.ts";
+import { TEXT_IN, bleedX, outset, outsetTop, panelText } from "../styles/align.ts";
 import { surfaceVars } from "../styles/align.ts";
 
 export const agentMarkBtn = style({
@@ -84,7 +84,7 @@ export const sideTabText = style({
     },
   },
 });
-export const chatInfo = style({ width: "320px", vars: surfaceVars(12, `calc(${vars.rMenu} - 12px)`) });
+export const chatInfo = style({ width: "320px", vars: surfaceVars(6, `calc(${vars.rMenu} - 6px)`) });
 export const detailsList = style({
   selectors: {
     [`${chatInfo} &`]: { marginTop: "10px" },
@@ -175,14 +175,15 @@ export const detailRow = style({
 export const detailInline = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
 /**
  * Last in the chat's info: its sharing with other workspaces, then its public links, rows to press (ui.tsx PanelRow) as a
- * menu's: 6 from the panel's edge at the sides and below, rounded at the menu's corner less 6, concentric with it. Their
- * icons stand under the details' words (12 in: 6 + 3 + the 14 icon in the middle of its 20).
+ * menu's, at the panel's padding (6). Their icons stand under the details' words, which are in by a row's padding
+ * (align.ts panelText): the 14 icon in the middle of its 20, 3 back.
  */
-export const infoRows = style({
-  display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px", marginTop: "8px", ...outset(6), ...outsetBottom(6),
-  vars: { "--panel-in": `calc(${vars.rMenu} - 6px)` },
-});
-globalStyle(`${infoRows} ${panelRow}`, { padding: "0 6px 0 3px" });
+export const infoRows = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px", marginTop: "8px" });
+globalStyle(`${infoRows} ${panelRow}`, { padding: `0 6px 0 ${TEXT_IN - 3}px` });
+/** In the chat's info (a small panel padded 6): its words in by a row's padding, a little room above the first, under the last. */
+globalStyle(`${chatInfo} > :not(${infoRows})`, panelText);
+globalStyle(`${chatInfo} > :first-child`, { paddingTop: "6px" });
+globalStyle(`${chatInfo} > :last-child:not(${infoRows})`, { paddingBottom: "6px" });
 /** Where the chat is shared, at the end of its row. */
 export const shareText = style({
   minWidth: "0", color: vars.muted, fontSize: vars.textMeta, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",

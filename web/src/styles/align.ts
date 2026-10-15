@@ -131,3 +131,15 @@ export function edgeRow(x: number | string) {
     selectors: { "&:first-child": outsetTop(x), "&:last-child": outsetBottom(x) },
   } as const;
 }
+
+/**
+ * Words in a small panel have room of their own (2026-10-15): the panel is padded only as far as what has a ground
+ * (rows, buttons) stands from its edge (6, as a menu); its words stand in by a row's own padding more (TEXT_IN),
+ * so a card's words and a menu's rows' words are on one line, `PAD + TEXT_IN` from the edge.
+ */
+export const PANEL_PAD = 6;
+export const TEXT_IN = 10;
+/** A block of words in a small panel: in by a row's padding, and a little room above and below. */
+export const panelText = { paddingInline: px(TEXT_IN) } as const;
+/** A small panel's corner from what sits in it (6 in, the corner of what it holds): `surface(...smallPanel)`. */
+export const smallPanelInner = (outer: string) => `calc(${outer} - ${PANEL_PAD}px)`;

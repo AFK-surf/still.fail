@@ -2,7 +2,8 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { btn } from "../styles/controls.css.ts";
 import { cardLook } from "../styles/pages.css.ts";
-import { edgeRow } from "../styles/align.ts";
+import { TEXT_IN, inner, innerShape, panelText } from "../styles/align.ts";
+import { card as hoverCard } from "../Hover.css.ts";
 
 export const name = style({
   padding: "0", border: "0", background: "none", font: "inherit", cursor: "pointer",
@@ -87,12 +88,16 @@ globalStyle(`${peekNet} b[data-level="red"]`, { color: vars.red });
 export const peekNetHead = style({ display: "flex", gap: "8px", color: vars.text });
 /** ↑ and ↓ a row each: arrow, rate, and what went that way pushed to the right. */
 export const peekRates = style({ display: "grid", gridTemplateColumns: "auto 1fr auto", columnGap: "8px", rowGap: "2px", alignItems: "baseline" });
-/** Its settings, as a row that reads as one to click: the words and a chevron, a tint under it on hover. Last in the card
- * (Hover.css.ts `card`, a surface), it reaches 6 into the card's padding: as far from the foot as from the sides, its
- * corner the card's less that (align.ts edgeRow), whatever the card's padding is. */
-const peekEdge = edgeRow(6);
+/** Its settings, as a row that reads as one to click: the words and a chevron, a tint under it on hover. A row of the
+ * card (Hover.css.ts `card`, padded 6 as a menu): at its padding, its words in by its own, its corner the card's less 6. */
 export const peekLink = style({
-  ...peekEdge, display: "flex", alignItems: "center", justifyContent: "space-between", paddingBlock: "5px",
+  display: "flex", alignItems: "center", justifyContent: "space-between", padding: `5px ${TEXT_IN}px`,
+  borderRadius: inner, cornerShape: innerShape,
   fontSize: vars.textMeta, color: vars.muted, textDecoration: "none",
-  selectors: { ...peekEdge.selectors, "&:hover": { color: vars.text, background: vars.hover } },
+  selectors: { "&:hover": { color: vars.text, background: vars.hover } },
 });
+/** In the card: what it says in by a row's padding (align.ts panelText), the rows at the card's padding. */
+globalStyle(`${hoverCard} > ${peek}${peek}`, { paddingInline: 0, paddingBlock: 0 });
+globalStyle(`${hoverCard} ${peek} > :not(${peekLink})`, panelText);
+globalStyle(`${hoverCard} ${peek} > :first-child`, { paddingTop: "6px" });
+globalStyle(`${hoverCard} ${peek} > :last-child:not(${peekLink})`, { paddingBottom: "6px" });

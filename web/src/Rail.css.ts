@@ -196,7 +196,7 @@ export const remove = style({
 export const adder = style({
   width: 248, display: "grid", gap: 8,
   // More room than a menu: over the popover's own, whichever sheet comes first; its rows concentric with it.
-  selectors: { "&[data-side]": { vars: surfaceVars(12, `calc(${vars.rMenu} - 12px)`) } },
+  selectors: { "&[data-side]": { vars: surfaceVars(6, `calc(${vars.rMenu} - 6px)`) } },
 });
 export const zouSmall = style({ fontSize: vars.textBody, lineHeight: "18px", fontWeight: 600 });
 

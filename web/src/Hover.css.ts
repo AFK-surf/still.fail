@@ -2,16 +2,16 @@
 // in Cue's card language (clients/packages/app/src/styles.css `comma-recommendation-link-*`, ui hover-card.css): it
 // grows out of the edge facing its link with a light blur, and leaves faster than it came; moving straight to the next
 // link, the card moves with no fade at all.
-import { keyframes, style } from "@vanilla-extract/css";
+import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { panel } from "./styles/glass.ts";
-import { surface } from "./styles/align.ts";
+import { panelText, surface } from "./styles/align.ts";
 
 const enter = keyframes({ from: { opacity: "0", transform: "scale(.96)", filter: "blur(2px)" } });
 const exit = keyframes({ to: { opacity: "0", transform: "scale(.97)" } });
 
 export const card = style({
-  zIndex: "60", width: "320px", maxWidth: "calc(100vw - 16px)", ...surface(12, `calc(${vars.rMenu} - 12px)`, vars.cornerShape), ...panel,
+  zIndex: "60", width: "320px", maxWidth: "calc(100vw - 16px)", ...surface(6, `calc(${vars.rMenu} - 6px)`, vars.cornerShape), ...panel,
   boxShadow: `0 12px 32px ${vars.shadow}`, color: vars.text, fontSize: vars.textUi, lineHeight: "1.45",
   transformOrigin: "var(--radix-hover-card-content-transform-origin)", cornerShape: vars.cornerShape,
   selectors: {
@@ -22,6 +22,8 @@ export const card = style({
   "@media": { "(prefers-reduced-motion: reduce)": { animation: "none !important" } },
 });
 /** A card that only names where a link goes (no page read): narrower. */
+/** What it holds: its words in by a row's padding (align.ts panelText), room above and below; a station's card says its own. */
+globalStyle(`${card} > *`, { ...panelText, paddingBlock: "6px" });
 export const cardTile = style({ width: "auto", minWidth: "220px", maxWidth: "min(420px, calc(100vw - 16px))" });
 
 // ---- the generic card: a tile with the site's mark, the link's words, where it goes ----

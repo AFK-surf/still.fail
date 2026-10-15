@@ -8,6 +8,7 @@ import { pageBar } from "./styles/sidebar.css.ts";
 import { markdown } from "./styles/conversation.css.ts";
 import { card, listRow } from "./styles/pages.css.ts";
 import { outsetStart } from "./styles/align.ts";
+import { TEXT_IN } from "./styles/align.ts";
 
 export const firstOneTitle = style({
   textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere", margin: "12px 0 0", fontSize: vars.textTitle,
@@ -416,13 +417,14 @@ export const doneMark = style({ display: "inline-flex", width: 14, height: 14, v
 
 // ── a popped-up panel's parts (ui.tsx Panel*): inside styles/controls.css.ts popover, its rows concentric with it ──
 
-export const panelHead = style({ display: "grid", gap: 2, padding: "2px 4px 4px" });
+// Its words in by a row's padding (align.ts TEXT_IN), as the rows' icons and words are: one line from the panel's edge.
+export const panelHead = style({ display: "grid", gap: 2, padding: `6px ${TEXT_IN}px 4px` });
 export const panelTitle = style({ fontSize: vars.textUi, fontWeight: 600 });
 export const panelNote = style({ margin: 0, fontSize: vars.textMeta, lineHeight: vars.leadingMeta, color: vars.muted });
 export const panelGroup = style({ display: "grid", gap: 2 });
-export const panelLabel = style({ padding: "6px 4px 2px", fontSize: vars.textMeta, color: vars.muted });
+export const panelLabel = style({ padding: `6px ${TEXT_IN}px 2px`, fontSize: vars.textMeta, color: vars.muted });
 export const panelRow = style({
-  display: "flex", alignItems: "center", gap: 10, minHeight: 34, padding: "0 8px", border: 0, borderRadius: "var(--panel-in)",
+  display: "flex", alignItems: "center", gap: 10, minHeight: 34, padding: `0 ${TEXT_IN}px`, border: 0, borderRadius: "var(--panel-in)",
   cornerShape: vars.cornerShape, background: "none", color: vars.text, fontSize: vars.textUi, textAlign: "left", cursor: "pointer",
   selectors: { "&:is(button):hover": { background: vars.hover }, "&:not(button)": { cursor: "default" } },
 });

@@ -8,7 +8,7 @@ import { enrollWait } from "./cloud/settings.css.ts";
 import { sidePanel } from "./pages/ChatPage.css.ts";
 import { composerQuote, msgUnsent } from "./Chat.css.ts";
 import { hPhaseText } from "./History.css.ts";
-import { surface } from "./styles/align.ts";
+import { panelText, surface } from "./styles/align.ts";
 
 /** A web service on the station's machine, in the side panel: where it is, then the page. */
 export const preview = style({ flex: "1", minHeight: "0", display: "flex", flexDirection: "column" });
@@ -77,11 +77,15 @@ globalStyle(`${enrollWait} > span:last-child`, { display: "grid", gap: "2px", fo
 
 export const loadRing = style({ color: vars.muted, flex: "none", selectors: { '&[data-failed]': { color: vars.red } } });
 export const loadDetails = style({
-  zIndex: 1000, width: "min(420px, calc(100vw - 24px))", ...surface(12, `calc(${vars.rMenu} - 12px)`, vars.cornerShape),
+  zIndex: 1000, width: "min(420px, calc(100vw - 24px))", ...surface(6, `calc(${vars.rMenu} - 6px)`, vars.cornerShape),
   ...panel, color: vars.text,
   boxShadow: `0 12px 32px ${vars.shadow}`, fontSize: vars.textUi,
 });
 export const loadHeading = style({ fontWeight: "500", marginBottom: "4px" });
+/** Its words in by a row's padding (align.ts panelText), the panel padded only to its edge. */
+globalStyle(`${loadDetails} > *`, panelText);
+globalStyle(`${loadDetails} > :first-child`, { paddingTop: "6px" });
+globalStyle(`${loadDetails} > :last-child`, { paddingBottom: "6px" });
 export const loadHint = style({ color: vars.muted, fontSize: vars.textMeta });
 export const loadList = style({ maxHeight: "min(320px, 55vh)", overflowY: "auto", marginTop: "10px" });
 export const loadRow = style({
