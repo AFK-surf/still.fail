@@ -351,7 +351,8 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   const [askArchive, setAskArchive] = useState(false);
   useShortcut("chat.archive", chatView.value && !chatView.value.archived && !chatView.value.offline && keeper
     ? () => { if (chatView.value?.watch) setAskArchive(true); else void archive(); } : null);
-  // The chat's name, changed where it is shown: double-click it, or F2.
+  // The chat's name, changed where it is shown with F2 (or in the sidebar). Not by pressing it: the bar drags the window
+  // in the desktop app, the title with it.
   const [renaming, setRenaming] = useState(false);
   const renamable = !!(chatView.value && !chatView.value.archived && !chatView.value.offline && !chatView.value.pending && keeper);
   useShortcut("chat.rename", renamable && !renaming ? () => setRenaming(true) : null);
@@ -394,7 +395,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
         <div className={conversationCss.pageBarTitle}>
           {renaming
             ? <TitleInput value={chat.title} onDone={rename} className={renameCss.titleInputBar} />
-            : <ChatTitle station={station.address} session={keeper} title={chat.title} onRename={renamable ? () => setRenaming(true) : undefined} />}
+            : <ChatTitle station={station.address} session={keeper} title={chat.title} />}
           <StationUpdate station={station.address} notice={chat.stationUpdate} />
           {agents.length === 0 && <ChatStation />}
           {chat.people.length > 0 && <PeopleStack people={chat.people} max={5} />}
@@ -942,14 +943,12 @@ function ChatStation() {
  * The chat's name in its bar: while a new one goes (`chat.rename`), that one, a turning ring beside it; its own again if
  * it did not, a red mark there a few seconds saying why.
  */
-function ChatTitle({ station, session, title, onRename }: { station: string; session: string | null; title: string; onRename: (() => void) | undefined }) {
+function ChatTitle({ station, session, title }: { station: string; session: string | null; title: string }) {
   const renamingTo = useRenaming(station, session);
   const renameFailed = useDoingFailed("chat.rename", { station, session: session ?? "" });
   return (
     <>
-      {onRename
-        ? <h1><Tip label={t("web-pages.chat.rename")} shortcut="chat.rename"><button type="button" className={css.titleBtn} onClick={onRename}>{renamingTo ?? title}</button></Tip></h1>
-        : <h1>{renamingTo ?? title}</h1>}
+      <h1>{renamingTo ?? title}</h1>
       <DoingShown state={{ running: renamingTo !== undefined, error: session === null ? undefined : renameFailed }} className={controlsCss.iconSpinner} size={14} label={t("web-pages.settings.stations.renaming")} />
     </>
   );

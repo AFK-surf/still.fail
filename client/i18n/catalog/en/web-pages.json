@@ -243,7 +243,6 @@
   "web-pages.chat.openPanel": "Show panel",
   "web-pages.chat.pickSaved": "Applies from next turn",
   "web-pages.chat.profileDetails": "Profile details",
-  "web-pages.chat.rename": "Rename",
   "web-pages.chat.resizePanel": "Resize panel",
   "web-pages.chat.serviceFailed": "“{name}” couldn't start.",
   "web-pages.chat.serviceStopped": "“{name}” has stopped.",
