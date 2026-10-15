@@ -3,9 +3,9 @@
 // shown, which travels on a spring stretched by its speed and goes where a finger takes it; the page's primary action
 // standing in a notch cut out of the bar's top (令, a new chat, on the chats' pages; a "+" on a page that adds
 // something); with more than one bar, the glass grows upward into a panel of the other bars (a swipe up on the bar), one
-// row each, and a bar chosen there slides down into the bar's place. With more than one workspace, the panel's top row
-// is them (web mobile/Bar.tsx the same): let go on one (or tap it), the panel closes and the place shown opens in it; the
-// panel opens for them with a single bar too.
+// row each, and a bar chosen there slides down into the bar's place. With more than one workspace, the panel's top rows
+// are them, laid out as a bar's places are (web mobile/Bar.tsx the same): let go on one (or tap it), the panel closes and
+// the place shown opens in it; the panel opens for them with a single bar too.
 // Everything is glass of one source (Haze): the pages under it, frosted by the bar's glass, the action and the ball;
 // the action for the ball too.
 package fail.still.android.ui
@@ -23,9 +23,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -65,7 +63,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.compositeOver
-import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -93,7 +90,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.Text
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
@@ -131,8 +127,6 @@ private const val LIFT = 4f
 private const val FILLET = 8f
 /** A row of the panel: as tall as the bar, rows stacked with no gap. */
 private const val ROW = 56f
-/** The workspaces' row, at the panel's top: a mark of 28 and a name under it. */
-private const val WS_ROW = 64f
 /** Room above the panel's rows for its overshoot as it opens. */
 private const val OVER = 20f
 private const val RAD = BAR_TRACK / 2
@@ -174,10 +168,10 @@ class BarAction(val key: String, val label: String, val icon: androidx.compose.u
 }
 
 /**
- * A workspace in the panel's top row: its mark (`emoji`, `icon`; its letter where it has none) and name; `count` how many
- * there want its person (`alert`: any gone wrong), `unread` whether any is unread; `label` what that is in words.
+ * A workspace in the panel's top rows: its mark (`emoji`, `icon`; its letter where it has none), and what it has waiting
+ * for its person as the core marks it (`tone`: alert, wait, done; none for nothing), `label` that in words.
  */
-class BarWorkspace(val id: String, val name: String, val emoji: String?, val icon: String?, val count: Int, val alert: Boolean, val unread: Boolean, val label: String?)
+class BarWorkspace(val id: String, val name: String, val emoji: String?, val icon: String?, val tone: String?, val label: String?)
 
 /**
  * The bar's layout for what it holds, `w` wide (dp); `notched`: the page shown has an action in the notch; `spaces`: the
@@ -187,7 +181,9 @@ private class Geo(val w: Float, val sets: List<List<String>>, val cur: Int, val 
     val items: List<String> = sets.getOrNull(cur).orEmpty()
     /** The other bars, in the panel, top to bottom. */
     val others: List<Int> = sets.indices.filter { it != cur }
-    val wsRow = if (spaces.size > 1) WS_ROW else 0f
+    /** The workspaces' rows, four a row as a bar's places. */
+    private val wsRows = if (spaces.size > 1) (spaces.size + 3) / 4 else 0
+    val wsRow = wsRows * ROW
     /** The panel has something to show: other bars, or workspaces. */
     val multi = sets.size > 1 || wsRow > 0f
     val panel = BAR_TRACK + max(ROW, wsRow + others.size * ROW) + OVER
@@ -196,16 +192,21 @@ private class Geo(val w: Float, val sets: List<List<String>>, val cur: Int, val 
     /** How far the glass's top moves from the bar to the open panel. */
     val reach = rowTop - OVER
     val barMid = rowTop + BAR_TRACK / 2
-    val wsMid = OVER + wsRow / 2
+    fun wsMid(row: Int) = OVER + row * ROW + ROW / 2
     /** The highest the held ball goes: the top row's middle. */
-    val topY = if (wsRow > 0f) wsMid else OVER + ROW / 2
+    val topY = OVER + ROW / 2
     val slot = (w - 2 * C0) / 3
     fun rowMid(n: Int) = OVER + wsRow + n * ROW + ROW / 2
-    /** Each workspace's share of the row, and its middle. */
-    val wsCell = if (spaces.isEmpty()) 0f else w / spaces.size
-    fun wsX(j: Int) = wsCell * (j + 0.5f)
-    /** The workspace nearest `x`. */
-    fun wsAt(x: Float) = floor(x / max(1f, wsCell)).toInt().coerceIn(0, max(0, spaces.size - 1))
+    /** A workspace's row, and its middle in it: the columns a bar's places are in. */
+    fun wsRowOf(j: Int) = j / 4
+    fun wsX(j: Int): Float { val row = j / 4; return centres(0f, min(4, spaces.size - row * 4))[j % 4] }
+    /** The workspace a let-go at (x, y) would choose: in the row under it, the nearest. */
+    fun wsAt(x: Float, y: Float): Int {
+        val row = floor((y - OVER) / ROW).toInt().coerceIn(0, max(0, wsRows - 1))
+        var best = row * 4
+        for (j in row * 4 until min(spaces.size, row * 4 + 4)) if (abs(wsX(j) - x) < abs(wsX(best) - x)) best = j
+        return best.coerceIn(0, max(0, spaces.size - 1))
+    }
     /** `y` (as the rows lie with the panel open) is in the workspaces' row. */
     fun inWs(y: Float) = wsRow > 0f && (y < OVER + wsRow || others.isEmpty())
     fun centres(k: Float, n: Int) = barCentres(w, k, n)
@@ -428,7 +429,7 @@ private class BarModel(private val scope: CoroutineScope) {
         if (open && p.y < g.rowTop - 4f && g.multi) {
             // Let go over rows not yet where they go: the panel goes on opening and stays; nothing is chosen.
             if (o.value < 0.85f) { mode = true; return }
-            if (g.inWs(p.y)) return pickWorkspace(g.spaces[g.wsAt(p.x)])
+            if (g.inWs(p.y)) return pickWorkspace(g.spaces[g.wsAt(p.x, p.y)])
             if (g.others.isEmpty()) return
             val i = g.others[g.rowAt(p.y)]
             val set = g.sets[i]
@@ -455,7 +456,7 @@ private class BarModel(private val scope: CoroutineScope) {
             if (o.value <= 0.6f) return
             val y = p.y - rowsShift(g)
             if (g.inWs(y)) {
-                if (y >= OVER) pickWorkspace(g.spaces[g.wsAt(p.x)])
+                if (y >= OVER) pickWorkspace(g.spaces[g.wsAt(p.x, y)])
                 return
             }
             if (g.others.isEmpty()) return
@@ -563,8 +564,8 @@ fun BottomBar(
         // While held, the ball keeps to the place a let-go would choose, leaning a quarter of the way toward the finger.
         val cand = drag?.let { x ->
             if (dragY != null && dragY < g.rowTop - 4f && g.inWs(dragY)) {
-                val j = g.wsAt(x)
-                Cand(g.wsX(j), g.wsMid, -1, "", g.spaces[j])
+                val j = g.wsAt(x, dragY)
+                Cand(g.wsX(j), g.wsMid(g.wsRowOf(j)), -1, "", g.spaces[j])
             } else if (dragY != null && dragY < g.rowTop - 4f && g.others.isNotEmpty()) {
                 val n = g.rowAt(dragY)
                 val i = g.others[n]
@@ -861,8 +862,8 @@ fun BottomBar(
                 compositingStrategy = CompositingStrategy.ModulateAlpha
             }) {
                 if (g.wsRow > 0f) workspaces.forEachIndexed { j, s ->
-                    WorkspaceChip(s, s.id == workspace, cand?.ws == s.id, idle, lit, accent,
-                        Modifier.offset { IntOffset((sx(g.wsX(j)) - g.wsCell / 2).dp.roundToPx(), OVER.dp.roundToPx()) }.size(g.wsCell.dp, WS_ROW.dp)
+                    WorkspaceChip(s, if (cand != null) cand.ws == s.id else s.id == workspace, s.id == workspace, idle, lit,
+                        Modifier.offset { IntOffset((sx(g.wsX(j)) - g.slot / 2).dp.roundToPx(), (OVER + g.wsRowOf(j) * ROW + 4f).dp.roundToPx()) }.size(g.slot.dp, 48.dp)
                             .semantics {
                                 contentDescription = workspaceLabel(s)
                                 role = Role.Button
@@ -896,8 +897,8 @@ fun BottomBar(
                 fun shift() = swapAt(swap)?.let { (_, y) -> y - laid.rowMid(swap.n) } ?: 0f
                 // The workspaces' row goes down with the rest, out at the glass's foot.
                 if (laid.wsRow > 0f) workspaces.forEachIndexed { j, s ->
-                    WorkspaceChip(s, s.id == workspace, false, idle, lit, accent,
-                        Modifier.offset { IntOffset((sx(laid.wsX(j)) - laid.wsCell / 2).dp.roundToPx(), (OVER + shift()).dp.roundToPx()) }.size(laid.wsCell.dp, WS_ROW.dp))
+                    WorkspaceChip(s, s.id == workspace, s.id == workspace, idle, lit,
+                        Modifier.offset { IntOffset((sx(laid.wsX(j)) - laid.slot / 2).dp.roundToPx(), (OVER + laid.wsRowOf(j) * ROW + 4f + shift()).dp.roundToPx()) }.size(laid.slot.dp, 48.dp))
                 }
                 laid.others.forEachIndexed { n, i ->
                     if (i == swap.i) return@forEachIndexed
@@ -1018,40 +1019,23 @@ private fun Place(
 }
 
 /**
- * A workspace in the panel's top row: its mark in a rounded square (28) and its name under it, grey; under the finger in
- * ink; the one in use (`here`) ringed in the accent. What another has waiting at its mark's corner (as the switcher counts
- * it): how many want its person, red with any gone wrong, else blue; a blue dot for only unread.
+ * A workspace in the panel's top rows, where a bar's place would be: its mark, else its letter on a grey rounded square,
+ * as the desktop's rail draws them; grey, `on` (the one in use, or under the finger) in ink. What another has waiting a
+ * dot at its corner, as a chat's (screens/Home.kt WorkspaceMark), where a place's dot is.
  */
 @Composable
-private fun WorkspaceChip(s: BarWorkspace, here: Boolean, on: Boolean, idle: Color, lit: Color, accent: Color, modifier: Modifier) {
+private fun WorkspaceChip(s: BarWorkspace, on: Boolean, here: Boolean, idle: Color, lit: Color, modifier: Modifier) {
     val tint by animateColorAsState(if (on) lit else idle, tween(300, easing = Ease.Css), label = "workspace")
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
-        // The ring 2 out from the square, 2 thick (web: an outline, offset 2).
-        Box(Modifier.size(28.dp).then(if (here) Modifier.drawBehind {
-            val out = 3.dp.toPx()
-            drawOutline(smoothOutline(Rect(-out, -out, size.width + out, size.height + out), 8.dp.toPx() + out), accent, style = Stroke(2.dp.toPx()))
-        } else Modifier)) {
-            Box(
-                Modifier.matchParentSize().clip(Smooth(8.dp)).background(C.ink.copy(alpha = 0.08f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (hasStationMark(s.emoji, s.icon)) StationMark(s.emoji, s.icon, if (stationPicture(s.icon) != null) 28.dp else 18.dp, C.ink)
-                else Text(s.name.trim().take(1).uppercase(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-            }
-            if (!here && s.count > 0) Box(
-                Modifier.align(Alignment.TopStart).offset(20.dp, (-6).dp).size(height = 16.dp, width = if (s.count > 9) 22.dp else 16.dp)
-                    .clip(CircleShape).background(if (s.alert) WsRed else WsBlue),
-                contentAlignment = Alignment.Center,
-            ) { Text(if (s.count > 9) "9+" else "${s.count}", fontSize = 11.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White) }
-            else if (!here && s.unread) Box(Modifier.align(Alignment.TopStart).offset(24.dp, (-2).dp).size(7.dp).clip(CircleShape).background(WsBlue))
+    Box(modifier, contentAlignment = Alignment.Center) {
+        val marked = hasStationMark(s.emoji, s.icon)
+        Box(Modifier.size(30.dp).clip(Smooth(9.dp)).then(if (marked) Modifier else Modifier.background(C.ink.copy(alpha = 0.08f))), contentAlignment = Alignment.Center) {
+            if (marked) StationMark(s.emoji, s.icon, if (stationPicture(s.icon) != null) 30.dp else 22.dp, tint)
+            else Text(s.name.trim().take(1).uppercase(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = tint)
         }
-        Text(s.name, fontSize = 11.sp, lineHeight = 14.sp, color = tint, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp))
+        val tone = s.tone
+        if (!here && tone != null) Box(Modifier.align(Alignment.Center).offset(14.dp, (-14).dp)) { fail.still.android.screens.WorkspaceMark(tone, "") }
     }
 }
-
-/** A workspace's marks' colours (as a chat's: screens/Home.kt's MarkBlue, MarkRed). */
-private val WsBlue = Color(0xFF3B82F6)
-private val WsRed = Color(0xFFE5484D)
 
 /** A place's icon as a bar is chosen, its middle where `at` says (px). */
 @Composable

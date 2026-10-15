@@ -176,7 +176,7 @@ fun PlaceBar(app: AppState, current: WorkspaceEntry, haze: HazeState, shown: Boo
     val all by rememberTopic<List<AccountWorkspaces>>(app.core, Topics.workspaces)
     val workspaces = all.value.orEmpty().flatMap { it.workspaces }.distinctBy { it.id }.map { w ->
         val m = marks.value?.workspaces?.get(w.id)
-        BarWorkspace(w.id, w.name, w.emoji, w.icon, ((m?.alert ?: 0u) + (m?.wait ?: 0u)).toInt(), (m?.alert ?: 0u) > 0u, (m?.unread ?: 0u) > 0u, m?.label)
+        BarWorkspace(w.id, w.name, w.emoji, w.icon, m?.tone, m?.label)
     }
     var waited by remember(ws, active) { mutableStateOf(false) }
     LaunchedEffect(ws, active) { delay(1000); waited = true }

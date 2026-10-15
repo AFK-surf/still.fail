@@ -12,10 +12,11 @@
 //   rows. Let go on a place: it (in another bar: that bar too). Let go while the panel is still opening: it opens.
 // - Choosing another bar, the panel closes like a window over a stack of bars: the stack slides down until the chosen
 //   bar is where the bar is, what is not chosen goes out at the glass's edges. Nothing fades.
-// - With more than one workspace, the panel's top row is them (in the order the switcher lists them, so each stays where
-//   it was): its mark (or letter) and name, the one in use ringed, what another has waiting for its person at its mark's
-//   corner. Let go on one (or tap it): the panel closes and the same place opens in it. The panel opens for them with a
-//   single bar too.
+// - With more than one workspace, the panel's top rows are them (in the order the switcher lists them, so each stays where
+//   it was), laid out as a bar's places are (four a row, in the same columns): each its mark, else its letter, as the
+//   desktop's rail has them; the one in use in ink, the others grey, what another has waiting for its person a dot at
+//   its corner (the core's tone, as the rail's). Let go on one (or tap it): the panel closes and the same place opens in
+//   it. The panel opens for them with a single bar too.
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { ComponentType } from "react";
 import { Archive, Chart, Chats, Folder, Im, Ling, Plus, Quota, Zou, type IconProps } from "../icons.tsx";
@@ -23,7 +24,8 @@ import { railLabel } from "../Rail.tsx";
 import { setPrefs, usePrefs } from "../prefs.ts";
 import { useChats, useStatus } from "../api.ts";
 import { useWorkspaces } from "../cloud/api.ts";
-import { WorkspaceMark } from "../WorkspaceMark.tsx";
+import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
+import * as chatMarkCss from "../ChatMark.css.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
 import { StationGlyph, glyphCounts } from "../StationGlyph.tsx";
 import { reducedMotion } from "../motion.ts";
@@ -59,7 +61,6 @@ const GAP = 6; // between 令 and its notch, all round
 const LIFT = 4; // 令's middle above the bar's top
 const FILLET = 8; // the notch's shoulders
 const ROW = 56; // a bar in the panel: as tall as the bar
-const WS_ROW = 64; // the workspaces' row, at the panel's top: a mark of 28 and a name under it
 const OVER = 20; // room above the panel for its overshoot
 const LEAN = 0.25; // how far the held ball leans toward the finger
 const SLOT = 90; // a hop of one place: the distance that keeps the spring at tension 300
@@ -68,9 +69,12 @@ const friction = (tension: number) => 2 * ZETA * Math.sqrt(tension);
 
 const ICONS: Partial<Record<BarPlace, ComponentType<IconProps>>> = { chats: Chats, decisions: Zou, files: Folder, profiles: Quota, connects: Im, usage: Chart, archive: Archive };
 
-/** The workspaces' middles in their row, `n` of them, each in an equal share of the bar's width. */
-function wsCentres(w: number, n: number): number[] {
-  return Array.from({ length: n }, (_, j) => (w * (j + 0.5)) / n);
+/** Where the `n` workspaces' middles are in the panel's top rows (four a row, as a bar's places), `w` wide. */
+function wsSpots(w: number, n: number): { x: number; row: number }[] {
+  return Array.from({ length: n }, (_, j) => {
+    const row = Math.floor(j / 4);
+    return { x: centres(w, 0, Math.min(4, n - row * 4))[j % 4]!, row };
+  });
 }
 
 /** One number on a spring, stepped by the bar's frame loop (Hooke and a damper, the step a frame's time). */
@@ -144,7 +148,7 @@ export function BottomBar({ scope, place, shown, go, goWorkspace, onPanel }: Bot
     const seen = new Set<string>();
     return (byAccount ?? []).flatMap((a) => a.workspaces).filter((w) => !seen.has(w.id) && !!seen.add(w.id));
   }, [byAccount]);
-  const wsRow = workspaces.length > 1 ? WS_ROW : 0;
+  const wsRow = workspaces.length > 1 ? Math.ceil(workspaces.length / 4) * ROW : 0;
   const several = others.length > 0 || wsRow > 0;
 
   // What waits: 奏's dot, the stations' trouble (the core's, as Home shows them).
@@ -227,9 +231,15 @@ export function BottomBar({ scope, place, shown, go, goWorkspace, onPanel }: Bot
   const clipTop = Math.max(0, OVER + travel * (1 - o));
   const barMid = rowTop + R;
   const rowMid = (n: number) => OVER + wsRow + n * ROW + ROW / 2;
-  const wsMid = OVER + wsRow / 2;
-  const wsXs = w ? wsCentres(w, workspaces.length) : [];
-  const wsCell = workspaces.length ? w / workspaces.length : 0;
+  const wsMid = (row: number) => OVER + row * ROW + ROW / 2;
+  const spots = w ? wsSpots(w, workspaces.length) : [];
+  /** The workspace a let-go at (x, y) would choose: in the row under it, the nearest. */
+  const wsAt = (x: number, y: number) => {
+    const row = Math.max(0, Math.min(Math.ceil(workspaces.length / 4) - 1, Math.floor((y - OVER) / ROW)));
+    let best = -1;
+    spots.forEach((sp, j) => { if (sp.row === row && (best < 0 || Math.abs(sp.x - x) < Math.abs(spots[best]!.x - x))) best = j; });
+    return Math.max(0, best);
+  };
 
   // ---- the notch: open on a page with a primary action, the panel closed; the last one drawn as it goes
   const actions = usePlaceActions();
@@ -254,8 +264,8 @@ export function BottomBar({ scope, place, shown, go, goWorkspace, onPanel }: Bot
     if (!finger || !w) return null;
     if (finger.y !== null && finger.y < rowTop - 4 && several) {
       if (wsRow && (finger.y < OVER + wsRow || !others.length)) {
-        const j = nearest(wsXs, finger.x);
-        return { x: wsXs[j]!, y: wsMid, set: -1, key: null, ws: workspaces[j]!.id };
+        const j = wsAt(finger.x, finger.y);
+        return { x: spots[j]!.x, y: wsMid(spots[j]!.row), set: -1, key: null, ws: workspaces[j]!.id };
       }
       const n = Math.max(0, Math.min(others.length - 1, Math.floor((finger.y - OVER - wsRow) / ROW))), i = others[n]!;
       const xs = centres(w, 0, sets[i]!.length), j = nearest(xs, finger.x);
@@ -340,7 +350,7 @@ export function BottomBar({ scope, place, shown, go, goWorkspace, onPanel }: Bot
     if (!p.taken) return;
     const at = local(e);
     if (several && !open && !p.opening && at.y < rowTop - 8) { p.opening = true; panel(true); }
-    setFinger({ x: at.x, y: several && (open || p.opening) ? Math.max(wsRow ? wsMid : rowMid(0), Math.min(barMid, at.y)) : null });
+    setFinger({ x: at.x, y: several && (open || p.opening) ? Math.max(wsRow ? wsMid(0) : rowMid(0), Math.min(barMid, at.y)) : null });
   };
   const up = (e: ReactPointerEvent) => {
     const p = press.current;
@@ -354,7 +364,7 @@ export function BottomBar({ scope, place, shown, go, goWorkspace, onPanel }: Bot
     if (isOpen && at.y < rowTop - 4) {
       // Over the rows before they are where they go: nothing chosen, the panel opens and stays.
       if (sp.o.value < 0.85) return;
-      if (wsRow && (at.y < OVER + wsRow || !others.length)) { pickWorkspace(workspaces[nearest(wsXs, at.x)]!.id); return; }
+      if (wsRow && (at.y < OVER + wsRow || !others.length)) { pickWorkspace(workspaces[wsAt(at.x, at.y)]!.id); return; }
       if (!others.length) return;
       const n = Math.max(0, Math.min(others.length - 1, Math.floor((at.y - OVER - wsRow) / ROW))), i = others[n]!;
       const xs = centres(w, 0, sets[i]!.length);
@@ -397,25 +407,20 @@ export function BottomBar({ scope, place, shown, go, goWorkspace, onPanel }: Bot
   const ballW = BALL + stretch, ballH = BALL - Math.min(6, stretch * 0.2);
   const ballLeft = bx - BALL / 2 - (v < 0 ? stretch : 0);
   const lit = cand ? (cand.set === cur ? cand.key : null) : place;
-  // A workspace in the panel's top row: its mark (its letter where it has none) and name; the one in use ringed; what
-  // another has waiting for its person (as the switcher counts it): how many want them (red with any gone wrong, else
-  // blue), or a blue dot for only unread.
+  // A workspace in the panel's top rows, where a bar's place would be: its mark, else its letter on a grey square, as
+  // the desktop's rail has them; the one in use in ink, under the finger in ink; what another has waiting a dot at its
+  // corner.
   const wsChip = (ws: (typeof workspaces)[number], j: number, top: number, live: boolean) => {
     const m = ws.id === scope ? undefined : marks?.workspaces[ws.id];
-    const n = (m?.alert ?? 0) + (m?.wait ?? 0);
     const inner = <>
-      <span className={css.mBarWsMark}>
-        <WorkspaceMark w={ws} size={18} picture={28} />
-        {n > 0 ? <span className={css.mBarWsCount} data-tone={m!.alert ? "alert" : "wait"}>{n > 9 ? "9+" : n}</span>
-          : (m?.unread ?? 0) > 0 ? <span className={css.mBarWsDot} /> : null}
-      </span>
-      <span className={css.mBarWsName}>{ws.name}</span>
+      <span className={css.mBarWsMark} data-marked={marked(ws) || undefined}><WorkspaceMark w={ws} size={22} picture={30} /></span>
+      {m?.tone && <span className={css.mBarWsDot}><span className={chatMarkCss.chatMarkInline} data-tone={m.tone} /></span>}
     </>;
-    const style = { left: wsXs[j]! - wsCell / 2, width: wsCell, top, height: WS_ROW };
-    const on = (cand ? cand.ws === ws.id : false) || undefined, here = ws.id === scope || undefined;
-    if (!live) return <span key={`ws${ws.id}`} className={css.mBarWs} data-here={here} style={style}>{inner}</span>;
+    const style = { left: spots[j]!.x - slot / 2, width: slot, top: top + spots[j]!.row * ROW + 4 };
+    const here = ws.id === scope || undefined, on = (cand ? cand.ws === ws.id : here) || undefined;
+    if (!live) return <span key={`ws${ws.id}`} className={css.mBarPlace} data-on={here} style={style}>{inner}</span>;
     return (
-      <button key={ws.id} type="button" className={css.mBarWs} data-ws={ws.id} data-here={here} data-on={on} style={style}
+      <button key={ws.id} type="button" className={css.mBarPlace} data-ws={ws.id} data-here={here} data-on={on} style={style}
         aria-label={m?.label ? `${t("web-mobile.bar.workspace", { name: ws.name })} · ${m.label}` : t("web-mobile.bar.workspace", { name: ws.name })}
         aria-current={here && "true"} onClick={(e) => { e.stopPropagation(); if (!press.current.slid) pickWorkspace(ws.id); }}>
         {inner}

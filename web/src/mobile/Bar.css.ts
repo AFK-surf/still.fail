@@ -39,9 +39,12 @@ export const mBarScrim = style({ position: "absolute", inset: "0", zIndex: 5 });
 const rim = (a: number, b: number, c: number) =>
   `inset 0 0 0 .5px rgb(255 255 255 / ${a}), inset 1.5px 1.5px 1px -1px rgb(255 255 255 / ${b}), inset -1.5px -1.5px 1px -1px rgb(255 255 255 / ${c})`;
 
-/** The frosted glass (the composer's: raised 72%, blur 20), its rim lit as vaso's. As tall as what shows of it. */
+/**
+ * The frosted glass (the composer's: raised 72%, blur 20), its rim lit as vaso's. As tall as what shows of it, rounded as
+ * its outline is (Bar.tsx clips it to that): the inset rim goes round the corners with it, not off them along a square's.
+ */
 export const mBarGlass = style([{
-  position: "absolute", left: "0", right: "0", bottom: "0", pointerEvents: "none",
+  position: "absolute", left: "0", right: "0", bottom: "0", pointerEvents: "none", borderRadius: "28px",
   background: "color-mix(in srgb, var(--raised) 72%, transparent)",
   WebkitBackdropFilter: "blur(20px) saturate(1.6)", backdropFilter: "blur(20px) saturate(1.6)",
   boxShadow: rim(0.35, 0.8, 0.45),
@@ -72,31 +75,18 @@ export const mBarRows = style({ position: "absolute", left: "0", right: "0", zIn
 export const mBarSetRow = style({ position: "absolute", left: "0", right: "0", height: "56px", cursor: "pointer" });
 
 /**
- * A workspace in the panel's top row: its mark in a rounded square (28) and its name under it, grey; under the finger in
- * ink; the one in use ringed in the accent, 2 out from it.
+ * A workspace in the panel's top rows (a place's button, mBarPlace, holds it): its mark, else its letter on a grey
+ * rounded square, as the desktop's rail draws them (Rail.css.ts workspaceItem); grey, the one in use (or under the
+ * finger) in ink.
  */
-export const mBarWs = style({
-  position: "absolute", padding: "0", border: "0", background: "none", cursor: "pointer", zIndex: 6,
-  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "4px",
-  color: "var(--m-muted)", transition: "color 300ms",
-  selectors: { "&[data-on]": { color: "var(--m-ink)" } },
-});
 export const mBarWsMark = style({
-  position: "relative", width: "28px", height: "28px", borderRadius: "8px", display: "grid", placeItems: "center",
-  background: "color-mix(in srgb, var(--m-ink) 8%, transparent)", color: "var(--m-ink)", fontSize: vars.textUi, fontWeight: 600,
-  selectors: { [`${mBarWs}[data-here] &`]: { outline: "2px solid var(--m-accent)", outlineOffset: "2px" } },
+  width: "30px", height: "30px", borderRadius: "9px", display: "grid", placeItems: "center",
+  background: "color-mix(in srgb, var(--m-ink) 8%, transparent)", fontSize: vars.textUi, fontWeight: 600,
+  selectors: { "&[data-marked]": { background: "none" } },
 });
-globalStyle(`${mBarWsMark} > img`, { width: "28px", height: "28px", borderRadius: "8px", objectFit: "cover" });
-export const mBarWsName = style({
-  maxWidth: "calc(100% - 8px)", fontSize: vars.textCaption, lineHeight: "14px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-});
-/** What another workspace has waiting at its mark's corner: how many want its person (red with any gone wrong), or a dot for unread. */
-export const mBarWsCount = style({
-  position: "absolute", top: "-6px", left: "20px", minWidth: "16px", height: "16px", padding: "0 4px", boxSizing: "border-box",
-  borderRadius: "8px", background: "#3b82f6", color: "#fff", fontSize: vars.textCaption, fontWeight: 600, lineHeight: "16px", textAlign: "center",
-  selectors: { "&[data-tone=\"alert\"]": { background: "#e5484d" } },
-});
-export const mBarWsDot = style({ position: "absolute", top: "-2px", left: "24px", width: "7px", height: "7px", borderRadius: "50%", background: "#3b82f6" });
+globalStyle(`${mBarWsMark} > img`, { borderRadius: "9px" });
+/** What another workspace has waiting: the core's tone as a chat's dot (ChatMark.css.ts), at its mark's top right. */
+export const mBarWsDot = style({ position: "absolute", top: "calc(50% - 19px)", left: "calc(50% + 9px)", display: "flex" });
 
 /** The selection: a frosted ball of 68 under the icons, over 令. */
 export const mBarBall = style([{
@@ -137,6 +127,4 @@ globalStyle(`${mBarStackIcon} > svg`, { width: "28px", height: "28px" });
 // and 令's own, as strong and after it.
 globalStyle(`${mBarWrap} button${mBarPlace}`, { color: "var(--m-muted)" });
 globalStyle(`${mBarWrap} button${mBarPlace}[data-on]`, { color: "var(--m-ink)" });
-globalStyle(`${mBarWrap} button${mBarWs}`, { color: "var(--m-muted)" });
-globalStyle(`${mBarWrap} button${mBarWs}[data-on]`, { color: "var(--m-ink)" });
 globalStyle(`${mBarWrap} button${mBarLing}`, { color: "#fff" });
