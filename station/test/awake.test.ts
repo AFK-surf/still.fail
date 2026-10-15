@@ -54,15 +54,25 @@ test("a machine with no way to hold it: asked again, no failure", async () => {
 
 test("work is a running turn, a wait on what a session started, or a running job that is not a service on a port", () => {
   type Last = { declared: string | null; endedAt: number | null; waitSeconds: number | null };
-  const store = (sessions: { running: boolean }[], jobs: { state: string; watch: boolean; port: number | null }[], last: Last[] = []) =>
-    ({ listSessions: () => sessions, listJobs: () => jobs, sessionStats: () => new Map(last.map((l, i) => [String(i), { lastTurn: l }])) }) as never;
-  const now = 10_000_000;
+  type Job = { state: string; watch: boolean; port: number | null; sessionKey?: string; startedAt?: number };
+  const now = 100_000_000;
+  const store = (sessions: { running: boolean }[], jobs: Job[], last: Last[] = []) =>
+    ({
+      listSessions: () => sessions,
+      listJobs: () => jobs.map((j) => ({ sessionKey: "0", startedAt: now, ...j })),
+      sessionStats: () => new Map(last.map((l, i) => [String(i), { lastTurn: l }])),
+    }) as never;
   assert.equal(working(store([{ running: false }], []), now), false);
   assert.equal(working(store([{ running: true }], []), now), true);
   assert.equal(working(store([], [{ state: "running", watch: false, port: null }]), now), true);
   assert.equal(working(store([], [{ state: "running", watch: false, port: 5173 }]), now), false);
   assert.equal(working(store([], [{ state: "running", watch: true, port: 5173 }]), now), true);
   assert.equal(working(store([], [{ state: "exited", watch: false, port: null }]), now), false);
+  // A watch kept on forever counts for two hours after its session's last turn, no longer.
+  const done = (ago: number): Last => ({ declared: "all_done", endedAt: now - ago, waitSeconds: null });
+  assert.equal(working(store([], [{ state: "running", watch: true, port: null }], [done(60 * 60_000)]), now), true);
+  assert.equal(working(store([], [{ state: "running", watch: true, port: null }], [done(3 * 60 * 60_000)]), now), false);
+  assert.equal(working(store([], [{ state: "running", watch: true, port: null, startedAt: now - 3 * 60 * 60_000 }]), now), false);
   // Waiting on CI for up to 10 minutes, 5 minutes in: work; long past its wait (stopped, or nothing came of it): not.
   assert.equal(working(store([], [], [{ declared: "waiting", endedAt: now - 300_000, waitSeconds: 600 }]), now), true);
   assert.equal(working(store([], [], [{ declared: "waiting", endedAt: now - 3_600_000, waitSeconds: 600 }]), now), false);
