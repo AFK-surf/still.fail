@@ -25,6 +25,7 @@ import { follower, type Follower } from "../motion.ts";
 import { useInWorkspace } from "../notify.ts";
 import { BottomBar, PLACE_PATHS, placeOfPath, type BarPlace } from "./Bar.tsx";
 import { t } from "../i18n.ts";
+import { usePrefs } from "../prefs.ts";
 
 /** The workspace in view and the signed-in account that reaches it. */
 export interface Entry { id: string; name: string; account: Account }
@@ -151,6 +152,12 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
   // was left (where it was scrolled to, what it had read), not made anew. The order they were first drawn in, which
   // they keep (a page moved in the document loses where it was scrolled to).
   const placesKept = useRef(new Map<BarPlace, Page>());
+  // A place's page coming in (switched to on the bar): which, from how far across; gone once it is in.
+  const [placeIn, setPlaceIn] = useState<{ key: string; from: number; n: number } | null>(null);
+  useEffect(() => { if (!placeIn) return; const timer = setTimeout(() => setPlaceIn(null), 260); return () => clearTimeout(timer); }, [placeIn]);
+  const bars = usePrefs((p) => p.bars);
+  const barsNow = useRef(bars);
+  barsNow.current = bars;
   const drawnFirst = useRef(new Map<string, number>());
   useLayoutEffect(() => {
     if (location.key === top.location.key) return;
@@ -164,8 +171,17 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
     } else if (type === "REPLACE" && (location.state as { fresh?: boolean } | null)?.fresh) {
       // Another chat from the latest chats: a page of its own in place of the one that was open. A place switched to
       // on the bar: its page as it was left, if it was.
-      const kept = placesKept.current.get(placeOfPath(location.pathname, home)!);
-      next = [...pages.slice(0, -1), kept ? { ...page, key: kept.key } : page];
+      const to = placeOfPath(location.pathname, home);
+      const kept = to && placesKept.current.get(to);
+      const now = kept ? { ...page, key: kept.key } : page;
+      next = [...pages.slice(0, -1), now];
+      // Another place on the bar: the way its page comes in, as the ball goes (none from another bar's).
+      const from = placeOfPath(top.location.pathname, home);
+      if (to && from && pages.length === 1) {
+        const set = barsNow.current.sets[barsNow.current.current] ?? [];
+        const i = set.indexOf(from), j = set.indexOf(to);
+        setPlaceIn({ key: now.key, from: i >= 0 && j >= 0 ? Math.sign(j - i) * 30 : 0, n: Date.now() });
+      }
     } else if (type === "REPLACE") {
       // The page becoming another in place (a new chat its chat) stays the same page: what is on it that both have (the
       // composer, with what is typed) is kept.
@@ -347,6 +363,8 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
             // still reverses the page's original entry direction.
             const way = moving && !moving.forward && from.current > 0 ? "side" : moving ? (moving.forward ? moving.to : moving.from).way : "side";
             const style: React.CSSProperties & Record<string, string | number> = { zIndex: moving ? (p.key === (moving.forward ? moving.to.key : moving.from.key) ? 2 : 1) : isTop ? 1 : 0 };
+            const comingIn = placeIn && placeIn.key === p.key && isTop && !moving ? placeIn : null;
+            if (comingIn) style["--m-place-from"] = `${comingIn.from}px`;
             if (swipe !== null && isTop) style.transform = `translateX(${dragged.current}px)`;
             if (role === "peek") style.transform = `translateX(calc(-30% + ${dragged.current * 0.3}px))`;
             // A page swiped back leaves from where the finger let it go, the one under it comes on from where it showed,
@@ -358,7 +376,7 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
             }
             return (
               <div key={p.key} ref={(el) => { if (el) pageEls.current.set(p.key, el); else pageEls.current.delete(p.key); }} className={css.mPage} data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
-                data-swiping={(swipe !== null && isTop) || undefined} data-root={(p.key === rootKey && placeOfPath(p.location.pathname, home) !== null) || undefined} style={style}>
+                data-swiping={(swipe !== null && isTop) || undefined} data-place-in={comingIn ? comingIn.n : undefined} data-root={(p.key === rootKey && placeOfPath(p.location.pathname, home) !== null) || undefined} style={style}>
                 <RootPage.Provider value={p.key === rootKey && placeOfPath(p.location.pathname, home) !== null}>
                   <PageBody location={p.location} routes={routes} />
                 </RootPage.Provider>

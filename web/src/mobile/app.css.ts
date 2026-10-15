@@ -1,8 +1,11 @@
-import { globalStyle, style } from "@vanilla-extract/css";
+import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { mScroll } from "./styles/pages.css.ts";
 import { mFromLeftKeyframes, mFromRightKeyframes, mRiseInKeyframes, mRiseOutKeyframes, mToLeftKeyframes, mToRightKeyframes } from "../styles/keyframes.css.ts";
 
+// Another place on the bottom bar: its page comes in from 30 toward the way the ball goes (a place further right, from
+// the right), as it shows; from another bar, it only shows.
+const placeIn = keyframes({ from: { opacity: 0, transform: "translateX(var(--m-place-from, 0px))" }, to: { opacity: 1, transform: "none" } });
 export const mPage = style({
   position: "absolute", inset: "0", background: "var(--m-bg)",
   selectors: {
@@ -28,6 +31,7 @@ export const mPage = style({
     // A new chat rises from the bottom, over the page it leaves in place; closed, it goes down the way it came.
     "&[data-way=\"rise\"][data-forward][data-role=\"in\"]": { animation: `${mRiseInKeyframes} 380ms var(--m-ease) both` },
     "&[data-way=\"rise\"]:not([data-forward])[data-role=\"out\"]": { animation: `${mRiseOutKeyframes} 380ms var(--m-ease) both` },
+    "&[data-place-in]": { animation: `${placeIn} 220ms var(--m-ease) both` },
   },
   "@media": {
     "(prefers-reduced-motion: reduce)": {
