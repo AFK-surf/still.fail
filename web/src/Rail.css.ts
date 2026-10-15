@@ -124,11 +124,15 @@ export const count = style({
 
 /**
  * What wants the person in a list of chats (Rail.tsx), as their rows' marks: on its icon's corner, cut out of the rail's
- * ground, only while the sidebar is closed (open, the rows show it).
+ * ground, only while the sidebar is closed (open, the rows show it); shown a while over the page (peek) it stays. Grown
+ * in as the sidebar closes, shrunk away as it opens.
  */
 export const listMark = style({
   position: "absolute", top: 2, right: 3, display: "flex", padding: 2, borderRadius: "50%", background: vars.sidebar,
-  selectors: { ':root:is(:not([data-sidebar="closed"]), [data-sidebar-peek]) &': { display: "none" } },
+  pointerEvents: "none", transformOrigin: "center",
+  transition: `transform 260ms ${vars.easeOut}, opacity 200ms ${vars.easeOut}`,
+  selectors: { ':root:not([data-sidebar="closed"]) &': { opacity: 0, transform: "scale(0.4)" } },
+  "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } },
 });
 
 /**
