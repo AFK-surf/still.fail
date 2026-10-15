@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { Effect, Fiber, Layer, SubscriptionRef } from "effect";
 import { enroll, id, lockCommand, status } from "./cli.ts";
 import { MeshLive } from "./mesh/mesh.ts";
+import { AwakeLive } from "./ops/awake.ts";
 import { AgentsLive } from "./sessions/agents.ts";
 import { dataDir, flag, ownData } from "./ops/files.ts";
 import { setStationLang } from "./ops/i18n.ts";
@@ -116,7 +117,7 @@ function run() {
   const paths = Layer.succeed(Paths)({ data, app });
   const base = Layer.mergeAll(Key.layer, Readers.layer, Store.layer, MeshNative.layer, Up.layer).pipe(Layer.provideMerge(paths));
   const parts = ControlPlane.layer.pipe(Layer.provideMerge(base));
-  const station = Layer.mergeAll(MeshLive, Loopback(control)).pipe(
+  const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive).pipe(
     Layer.provideMerge(AdminApi.layer),
     Layer.provideMerge(AgentsLive(control)),
     Layer.provideMerge(Events.layer),

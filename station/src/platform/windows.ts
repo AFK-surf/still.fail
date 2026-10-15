@@ -7,7 +7,7 @@ import { cpus as cpuList, freemem, release, totalmem, uptime as osUptime, versio
 import { delimiter, dirname, join, win32 } from "node:path";
 import { createConnection } from "node:net";
 import { promisify } from "node:util";
-import { pidAlive, runnerBinary } from "./processes.ts";
+import { holder, pidAlive, runnerBinary } from "./processes.ts";
 import type { Env, Found, Host, Platform } from "./index.ts";
 import { trim } from "./text.ts";
 
@@ -431,6 +431,20 @@ export const windows: Platform = {
   },
   // Its installer is a shell script (install.sh).
   codexStandalone: false,
+
+  /// A PowerShell that asks SetThreadExecutionState for the system (ES_CONTINUOUS | ES_SYSTEM_REQUIRED: the screen may
+  /// still go off) and holds it while it reads its stdin, which ends with the station. Windows names no reason here
+  /// (powercfg /requests shows the process).
+  holdAwake() {
+    const script = [
+      `Add-Type -Namespace StillFail -Name Power -MemberDefinition '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint flags);'`,
+      "if ([StillFail.Power]::SetThreadExecutionState([uint32]2147483649) -eq 0) { exit 1 }",
+      "[void][Console]::In.ReadToEnd()",
+    ].join("\r\n");
+    return holder(spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], {
+      stdio: ["pipe", "ignore", "ignore"], windowsHide: true,
+    }));
+  },
 
   hasKeychain: false,
   hasQuickLook: false,

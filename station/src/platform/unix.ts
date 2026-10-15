@@ -7,6 +7,7 @@ import { delimiter, join } from "node:path";
 import { promisify } from "node:util";
 import { wall } from "../ops/fibers.ts";
 import type { Env, Found, Host, Platform } from "./index.ts";
+import { holder } from "./processes.ts";
 import { field, firstWord, output, parseF64, parseU64, procStatTicks, trim } from "./text.ts";
 
 const MACOS = process.platform === "darwin";
@@ -300,6 +301,14 @@ export const unix: Platform = {
   },
   shimUpdate: () => null,
   codexStandalone: true,
+
+  /// macOS: caffeinate against idle sleep, for as long as the station's process is there (-w). Linux: systemd-inhibit
+  /// around a `cat` of the station's pipe (none without systemd).
+  holdAwake(why) {
+    if (MACOS) return holder(spawn("caffeinate", ["-i", "-w", String(process.pid)], { stdio: "ignore" }));
+    if (unix.findCommand("systemd-inhibit", process.env) === null) return null;
+    return holder(spawn("systemd-inhibit", ["--what=idle:sleep", "--who=still.fail", `--why=${why}`, "--mode=block", "cat"], { stdio: ["pipe", "ignore", "ignore"] }));
+  },
 
   hasKeychain: MACOS,
   hasQuickLook: MACOS,
