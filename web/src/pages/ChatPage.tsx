@@ -32,13 +32,12 @@ import { ComposerSlot } from "../dock.tsx";
 import { chatOpening, track } from "../telemetry.ts";
 import { useReady, useTopicSelect } from "../core/react.ts";
 import { chatPage, useChatPageActions } from "../chatPage.ts";
-import { failure, useAct, useToast } from "../toast.tsx";
+import { useAct, useToast } from "../toast.tsx";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
 import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, Empty, ICON, IconButton, keptWidth, Loading, MobileBack, ModelLogo, PanelRow, ResizeHandle, SlackLogo, SwitchRow, Time, Tip } from "../ui.tsx";
 import { StatusLine } from "../Status.tsx";
-import { TitleInput, useRenaming } from "../Rename.tsx";
-import * as renameCss from "../Rename.css.ts";
+import { useRenaming } from "../Rename.tsx";
 import * as sessionCss from "../styles/session.css.ts";
 import * as jobsCss from "../styles/jobs.css.ts";
 import * as sidebarCss from "../styles/sidebar.css.ts";
@@ -351,16 +350,6 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   const [askArchive, setAskArchive] = useState(false);
   useShortcut("chat.archive", chatView.value && !chatView.value.archived && !chatView.value.offline && keeper
     ? () => { if (chatView.value?.watch) setAskArchive(true); else void archive(); } : null);
-  // The chat's name, changed where it is shown with F2 (or in the sidebar). Not by pressing it: the bar drags the window
-  // in the desktop app, the title with it.
-  const [renaming, setRenaming] = useState(false);
-  const renamable = !!(chatView.value && !chatView.value.archived && !chatView.value.offline && !chatView.value.pending && keeper);
-  useShortcut("chat.rename", renamable && !renaming ? () => setRenaming(true) : null);
-  const rename = (title: string | null) => {
-    setRenaming(false);
-    if (title === null || !keeper) return;
-    api.rename({ thread, session: keeper }, title).catch((error: unknown) => toast(t("web-pages.settings.workspace.renameFailed", { error: failure(error) })));
-  };
   if (!chatView.value) {
     if (chatView.error) return <Empty><p>{t("web-pages.chat.loadFailed", { error: chatView.error.message })}</p></Empty>;
     // Laid out as the chat will be, its composer already in its place: coming from another chat page, the composer
@@ -393,9 +382,8 @@ function ChatScreen({ session: chatSession }: { session: string }) {
         <MobileBack to={link("/chats")} label={t("web-pages.decisions.back")} />
         {/* The chat's title, then who is in it: its people, then its agents (each opens its history). */}
         <div className={conversationCss.pageBarTitle}>
-          {renaming
-            ? <TitleInput value={chat.title} onDone={rename} className={renameCss.titleInputBar} />
-            : <ChatTitle station={station.address} session={keeper} title={chat.title} />}
+          {/* Text only, under the bar's drag in the desktop app: a chat is renamed in the sidebar. */}
+          <ChatTitle station={station.address} session={keeper} title={chat.title} />
           <StationUpdate station={station.address} notice={chat.stationUpdate} />
           {agents.length === 0 && <ChatStation />}
           {chat.people.length > 0 && <PeopleStack people={chat.people} max={5} />}

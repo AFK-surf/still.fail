@@ -340,7 +340,6 @@
   "web-main.keymap.chat.new": "New chat",
   "web-main.keymap.chat.next": "Next chat",
   "web-main.keymap.chat.prev": "Previous chat",
-  "web-main.keymap.chat.rename": "Rename chat",
   "web-main.keymap.chat.stop": "Stop current turn",
   "web-main.keymap.chat.switch": "Switch chat",
   "web-main.keymap.composer.file": "Attach file",
