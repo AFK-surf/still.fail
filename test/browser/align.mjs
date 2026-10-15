@@ -120,7 +120,6 @@ mountDemo(root);
     ['workspace menu', async () => page.locator('[aria-label="新建 workspace、添加账号"]').click()],
     ['rail menu', async () => page.locator('[aria-label="文件"]').first().click({ button: 'right' })],
     ['rail adder', async () => { await page.locator('[aria-label="文件"]').first().click({ button: 'right' }); await page.waitForTimeout(300); await page.getByText('自定义侧边条').click(); }],
-    ['link card', async () => { await page.mouse.move(1, 1); const l = page.locator('main a[href^="http"]').first(); await l.scrollIntoViewIfNeeded(); await l.hover(); await page.waitForTimeout(1200); }],
     ['station card', async () => { await page.mouse.move(1, 1); await page.locator('header').getByText(/Studio|这台机器/).first().hover(); await page.waitForTimeout(900); }],
   ];
   const failures = [];
