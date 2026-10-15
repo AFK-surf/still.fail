@@ -552,6 +552,20 @@ export interface AutomaticDecisionView {
 	policy?: ArchivePolicyView;
 }
 
+/** What the badge counts (`prefs.set {badgeKinds}`, always whole): each kind of chat that wants them, on or off. */
+export interface BadgeKinds {
+	/** The badge shown at all. */
+	on?: boolean;
+	/** A card waits for them, or an agent needs them. */
+	wait?: boolean;
+	/** A chat of theirs went wrong. */
+	failed?: boolean;
+	/** An agent said something they have not read. */
+	done?: boolean;
+	/** Someone else said something they have not read. */
+	message?: boolean;
+}
+
 /**
  * A phone's bottom bars (web/src/mobile/Bar.tsx, the Android app's ui/Bar.kt): several bars of up to four places,
  * one of them in view; with more than one, a swipe up on the bar shows the others.
@@ -3317,6 +3331,8 @@ export interface NotifyView {
 	asked: boolean;
 	push: boolean;
 	kinds?: NotifyKinds;
+	/** Notices say what was said (on by default); off, only what kind of thing happened. */
+	preview?: boolean;
 	show: Notice[];
 }
 
@@ -3413,9 +3429,11 @@ export interface PrefsView {
 	stationUpdatesDismissed?: Record<string, string>;
 	/**
 	 * What the app's badge counts: decisions (the cards waiting for them), attention (those and the chats of
-	 * theirs that went wrong; none: this), all (those and the unread).
+	 * theirs that went wrong; none: this), all (those and the unread). `badgeKinds`, when kept, says it instead.
 	 */
 	badge?: string;
+	/** What the app's badge counts, kind by kind (the notifications page); none: as `badge` says. */
+	badgeKinds?: BadgeKinds;
 	/** The invite code a page was opened with, kept through signing in until a workspace is made with it. */
 	invite?: string;
 	device?: DeviceView;
@@ -3835,7 +3853,12 @@ export interface WorkspaceMarksView {
 	othersLabel?: string;
 	/** What the app's badge says (the Dock's): every workspace's `badge`. */
 	badge?: number;
-	/** What the badge counts, as the prefs' `badge` has it: decisions | attention | all. */
+	/**
+	 * What the badge counts, as the prefs' `badge` has it: decisions | attention | all (with `badgeKinds`:
+	 * decisions when it counts only the cards, else attention).
+	 */
 	badgeCounts?: string;
+	/** What the badge counts, kind by kind: the prefs' `badgeKinds`, or as their `badge` says. */
+	badgeKinds?: BadgeKinds;
 }
 

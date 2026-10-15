@@ -8,7 +8,7 @@ import { fromLocale, follows, setCurrent, t, tr, type Lang } from "./i18n.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "resume", "invite", "badge", "reader", "lockNotice", "rail", "rails", "bars"];
+const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars"];
 const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "resume", "lockNotice", "rails"];
 const TABS_KEPT = 200;
 const DEFERRED_KEPT = 200;
@@ -37,6 +37,18 @@ export function readerOf(v: unknown): Map_ {
     indent: typeof r.indent === "boolean" ? r.indent : true,
     paper: PAPERS.includes(r.paper as string) ? r.paper : "follow",
   };
+}
+
+export type BadgeKinds = { on: boolean; wait: boolean; failed: boolean; done: boolean; message: boolean };
+
+/// What the badge counts, kind by kind: as kept (`badgeKinds`, what it does not say as before), or as the older
+/// `badge` says (decisions: the cards; attention, the default: and what went wrong; all: and the unread).
+export function badgeKindsOf(prefs: unknown): BadgeKinds {
+  const by = isObject(prefs) ? prefs.badge : null;
+  const base = { on: true, wait: true, failed: by !== "decisions", done: by === "all", message: by === "all" };
+  const k = isObject(prefs) && isObject(prefs.badgeKinds) ? prefs.badgeKinds : {};
+  const flag = (name: keyof BadgeKinds) => (typeof k[name] === "boolean" ? k[name] as boolean : base[name]);
+  return { on: flag("on"), wait: flag("wait"), failed: flag("failed"), done: flag("done"), message: flag("message") };
 }
 
 /// The places a phone's bottom bar can hold (web/src/mobile/Bar.tsx, the Android app's ui/Bar.kt), in no order.
@@ -84,6 +96,9 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
     } else if (field === "reader" && isObject(value)) {
       // Only what is said changes: one setting of the 排版 sheet at a time.
       prefs.reader = readerOf({ ...(isObject(prefs.reader) ? prefs.reader : {}), ...value });
+    } else if (field === "badgeKinds" && isObject(value)) {
+      // Kept whole: what is not said stays as the badge counts now (as the older `badge` says, first).
+      prefs.badgeKinds = badgeKindsOf({ ...prefs, badgeKinds: { ...(isObject(prefs.badgeKinds) ? prefs.badgeKinds : {}), ...value } });
     } else if (isObject(value) && MAPS.includes(field)) {
       if (!(field in prefs)) prefs[field] = {};
       const map = prefs[field];
@@ -119,6 +134,7 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
   }
   if ("badge" in prefs && !["decisions", "attention", "all"].includes(prefs.badge as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "badge" }));
   if ("dropAs" in prefs && prefs.dropAs !== "file" && prefs.dropAs !== "path") throw CoreError.invalid(t("core-misc.params.invalid", { error: "dropAs" }));
+  if ("badgeKinds" in prefs && prefs.badgeKinds !== null && !isObject(prefs.badgeKinds)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "badgeKinds" }));
   if ("language" in prefs && !(prefs.language === "zh" || prefs.language === "en")) throw CoreError.invalid(t("core-misc.params.language"));
   withLang(prefs);
   const shaped = conform("PrefsView", prefs);

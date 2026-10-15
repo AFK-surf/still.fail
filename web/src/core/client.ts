@@ -526,7 +526,10 @@ export function workerOpener(): Opener {
 
 /** What the desktop app's preload (apps/desktop/src/preload.ts) gives the page. */
 /** The desktop dock's settings (docs/desktop-dock.md): shown at all, new ones peeking out, plain unread ones in it. */
-export interface DockSettings { on: boolean; peek: boolean; unread: boolean }
+/** Which chats the desktop dock holds (apps/desktop/src/dock.mts `DockKinds`). */
+export interface DockKinds { wait: boolean; failed: boolean; done: boolean; message: boolean }
+/** `kinds`: none from an app before them (`unread` then says both kinds of unread). */
+export interface DockSettings { on: boolean; peek: boolean; unread: boolean; kinds?: DockKinds }
 
 export interface StillFailDesktop {
   /** Asks for a port to the core; it arrives as a window message `{ stillfailCore: "port", id }`. */

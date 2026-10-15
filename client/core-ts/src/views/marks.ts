@@ -4,6 +4,7 @@
 import { decodeComponent } from "../accounts.ts";
 import * as decisions from "../decisions.ts";
 import { tr, current, type Lang } from "../i18n.ts";
+import { badgeKindsOf, type BadgeKinds } from "../prefs.ts";
 import * as present from "../present.ts";
 import type { Value } from "../store.ts";
 import { arr as arrU, get as getU, isObject } from "../util.ts";
@@ -48,14 +49,26 @@ function stateText(row: J): string {
 
 const str = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
 
-/// What the badge counts (the prefs' `badge`), of what came since the person last looked (`c`): the cards waiting for
-/// them (decisions), those and the chats of theirs that went wrong (attention, the default), or those and the unread too
-/// (all). A chat looked at stays on the list (`items`, `seen`) but is not counted until it wants them anew.
-export function badgeOf(prefs: J, c: Counts): number {
-  const by = get(prefs, "badge");
-  if (by === "decisions") return c.wait;
-  if (by === "all") return c.alert + c.wait + c.unread;
-  return c.alert + c.wait;
+/// What the badge counts (the prefs' `badgeKinds`, or as their `badge` says), of what came since the person last looked
+/// (`c`; `said`: of its unread, those someone else said last): the cards waiting for them, the chats of theirs that went
+/// wrong, the unread an agent said last, the unread someone else did. A chat looked at stays on the list (`items`,
+/// `seen`) but is not counted until it wants them anew.
+export function badgeOf(prefs: J, c: Counts, said = 0): number {
+  const k = badgeKindsOf(prefs);
+  if (!k.on) return 0;
+  return (k.wait ? c.wait : 0) + (k.failed ? c.alert : 0) + (k.done ? c.unread - said : 0) + (k.message ? said : 0);
+}
+
+/// Whether the last thing said in a row is someone else's (not an agent's or the station's): what the badge's `message`
+/// counts of the unread.
+function saidByPerson(row: J): boolean {
+  const last = get(row, "last");
+  return isObject(last) && (str(last.authorKind) ?? "person") === "person";
+}
+
+/// What `badgeCounts` says for the kinds: `decisions` when only the cards count (the 待处理 list then has only them).
+function counted(k: BadgeKinds): string {
+  return k.wait && !k.failed && !k.done && !k.message ? "decisions" : "attention";
 }
 
 /// The chat last open in a workspace, from the prefs.
@@ -112,6 +125,7 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
     const watching = new Counts();
     // Of those, the ones not looked at since they came to want them: what the badge counts.
     const fresh = new Counts();
+    let said = 0;
     let waiting = 0;
     let elsewhere = 0;
     const items: J[] = [];
@@ -136,6 +150,7 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
         else if (tone === "done") c.unread++;
       }
       if (!seen && (tone === "alert" || tone === "wait" || tone === "done")) fresh[tone === "done" ? "unread" : tone]++;
+      if (!seen && tone === "done" && saidByPerson(row)) said++;
       else if (get(row, "mine") === true && present.rowState(arr(get(row, "agents"))) === "block") elsewhere++;
       if (tone === "alert" || tone === "wait") {
         const item: J = {
@@ -162,7 +177,7 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
       others.wait += counts.wait;
       others.unread += counts.unread;
     }
-    const badge = badgeOf(prefs, fresh);
+    const badge = badgeOf(prefs, fresh, said);
     total += badge;
     const mark: J = { alert: counts.alert, unread: counts.unread, badge, items };
     if (counts.wait > 0) mark.wait = counts.wait;
@@ -179,7 +194,10 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
     if (chat !== null) mark.chat = chat;
     all[id] = mark;
   }
-  const value: J = { workspaces: all, badge: total, badgeCounts: ["decisions", "all"].includes(get(prefs, "badge")) ? prefs.badge : "attention" };
+  const kinds = badgeKindsOf(prefs);
+  const by = get(prefs, "badge");
+  const badgeCounts = isObject(get(prefs, "badgeKinds")) ? counted(kinds) : ["decisions", "all"].includes(by) ? by : "attention";
+  const value: J = { workspaces: all, badge: total, badgeCounts, badgeKinds: kinds };
   const tone = others.tone();
   if (tone !== null) {
     value.others = tone;

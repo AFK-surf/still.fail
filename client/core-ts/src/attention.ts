@@ -121,7 +121,7 @@ export class Attention implements Owner {
           });
         case "set":
           return Effect.gen(function* () {
-            yield* attend.set(c.on, c.asked, c.kinds);
+            yield* attend.set(c.on, c.asked, c.kinds, c.preview);
             store.invalidateAll((t) => t.topic === "notify");
             if (c.on === false && handlers.pushUnregister) yield* handlers.pushUnregister(core, { kind: "pushUnregister" }, progress, at, ctx);
             return attend.value(null);

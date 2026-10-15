@@ -155,7 +155,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
             <Route index element={<WorkspaceHome id={entry.id} stations={known && stations} />} />
             <Route path="settings" element={<Navigate to="appearance" replace />} />
             <Route path="settings/appearance" element={<AppearancePage back={`/w/${entry.id}/settings`} />} />
-            <Route path="settings/notifications" element={<NotificationsPage back={`/w/${entry.id}/settings`} />} />
+            <Route path="settings/notifications" element={<NotificationsPage back={`/w/${entry.id}/settings`} workspace={entry.id} />} />
             {CHANGEABLE && <Route path="settings/shortcuts" element={<ShortcutsPage back={`/w/${entry.id}/settings`} />} />}
             {HAS_VERSION && <Route path="settings/version" element={<AppVersionPage back={`/w/${entry.id}/settings`} />} />}
             {HAS_LOCAL_STATION && <Route path="settings/local-station" element={<LocalStationPage back={`/w/${entry.id}/settings`} />} />}

@@ -571,6 +571,21 @@ data class AutomaticDecisionView (
 	val policy: ArchivePolicyView? = null
 )
 
+/// What the badge counts (`prefs.set {badgeKinds}`, always whole): each kind of chat that wants them, on or off.
+@Serializable
+data class BadgeKinds (
+	/// The badge shown at all.
+	val on: Boolean? = null,
+	/// A card waits for them, or an agent needs them.
+	val wait: Boolean? = null,
+	/// A chat of theirs went wrong.
+	val failed: Boolean? = null,
+	/// An agent said something they have not read.
+	val done: Boolean? = null,
+	/// Someone else said something they have not read.
+	val message: Boolean? = null
+)
+
 /// A phone's bottom bars (web/src/mobile/Bar.tsx, the Android app's ui/Bar.kt): several bars of up to four places,
 /// one of them in view; with more than one, a swipe up on the bar shows the others.
 @Serializable
@@ -3329,6 +3344,8 @@ data class NotifyView (
 	val asked: Boolean,
 	val push: Boolean,
 	val kinds: NotifyKinds? = null,
+	/// Notices say what was said (on by default); off, only what kind of thing happened.
+	val preview: Boolean? = null,
 	val show: List<Notice>
 )
 
@@ -3413,8 +3430,10 @@ data class PrefsView (
 	/// Versions dismissed on this device, by workspace/station.
 	val stationUpdatesDismissed: Map<String, String>? = null,
 	/// What the app's badge counts: decisions (the cards waiting for them), attention (those and the chats of
-	/// theirs that went wrong; none: this), all (those and the unread).
+	/// theirs that went wrong; none: this), all (those and the unread). `badgeKinds`, when kept, says it instead.
 	val badge: String? = null,
+	/// What the app's badge counts, kind by kind (the notifications page); none: as `badge` says.
+	val badgeKinds: BadgeKinds? = null,
 	/// The invite code a page was opened with, kept through signing in until a workspace is made with it.
 	val invite: String? = null,
 	val device: DeviceView? = null,
@@ -3837,7 +3856,10 @@ data class WorkspaceMarksView (
 	val othersLabel: String? = null,
 	/// What the app's badge says (the Dock's): every workspace's `badge`.
 	val badge: UInt? = null,
-	/// What the badge counts, as the prefs' `badge` has it: decisions | attention | all.
-	val badgeCounts: String? = null
+	/// What the badge counts, as the prefs' `badge` has it: decisions | attention | all (with `badgeKinds`:
+	/// decisions when it counts only the cards, else attention).
+	val badgeCounts: String? = null,
+	/// What the badge counts, kind by kind: the prefs' `badgeKinds`, or as their `badge` says.
+	val badgeKinds: BadgeKinds? = null
 )
 

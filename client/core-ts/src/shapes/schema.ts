@@ -1183,7 +1183,8 @@ export const SHAPES: Record<string, Shape> = {
     ["dropAs", opt("String"), { doc: "How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path." }],
     ["resume", map("String"), { default: true, doc: "A Slack app made for a new connect, to go on with, by station (the Android app's)." }],
     ["stationUpdatesDismissed", map("String"), { default: true, doc: "Versions dismissed on this device, by workspace/station." }],
-    ["badge", opt("String"), { default: true, doc: "What the app's badge counts: decisions (the cards waiting for them), attention (those and the chats of\ntheirs that went wrong; none: this), all (those and the unread)." }],
+    ["badge", opt("String"), { default: true, doc: "What the app's badge counts: decisions (the cards waiting for them), attention (those and the chats of\ntheirs that went wrong; none: this), all (those and the unread). `badgeKinds`, when kept, says it instead." }],
+    ["badgeKinds", opt("BadgeKinds"), { default: true, doc: "What the app's badge counts, kind by kind (the notifications page); none: as `badge` says." }],
     ["invite", opt("String"), { default: true, doc: "The invite code a page was opened with, kept through signing in until a workspace is made with it." }],
     ["device", "DeviceView", { default: true }],
     ["reader", "ReaderPrefs", { default: true, doc: "How the drive's reader lays text out (always whole: the core fills in what is not kept)." }],
@@ -1191,6 +1192,13 @@ export const SHAPES: Record<string, Shape> = {
     ["rails", map(vec("String")), { default: true, doc: "The rail as each workspace has it, by workspace (as `rail`); one not there goes by `rail` (one rail for all,\nas devices kept it before)." }],
     ["bars", "BarPrefs", { default: true, doc: "A phone's bottom bars (always whole: the core fills in what is not kept)." }],
   ], { doc: "What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is." }),
+  BadgeKinds: struct([
+    ["on", "bool", { default: true, doc: "The badge shown at all." }],
+    ["wait", "bool", { default: true, doc: "A card waits for them, or an agent needs them." }],
+    ["failed", "bool", { default: true, doc: "A chat of theirs went wrong." }],
+    ["done", "bool", { default: true, doc: "An agent said something they have not read." }],
+    ["message", "bool", { default: true, doc: "Someone else said something they have not read." }],
+  ], { doc: "What the badge counts (`prefs.set {badgeKinds}`, always whole): each kind of chat that wants them, on or off." }),
   BarPrefs: struct([
     ["sets", vec(vec("String")), { doc: "The bars, each its places in order (one to four of chats, decisions, files, stations, profiles, connects,\nusage, archive)." }],
     ["current", "i64", { client: "I54", doc: "The bar in view: an index into `sets`." }],
@@ -1214,7 +1222,8 @@ export const SHAPES: Record<string, Shape> = {
     ["others", opt("String"), { doc: "alert | wait | done: the others' mark; none when nothing there wants anyone." }],
     ["othersLabel", opt("String"), { doc: "其他 workspace：1 个出错了 · 2 个有新消息" }],
     ["badge", "u32", { default: true, doc: "What the app's badge says (the Dock's): every workspace's `badge`." }],
-    ["badgeCounts", "String", { default: true, doc: "What the badge counts, as the prefs' `badge` has it: decisions | attention | all." }],
+    ["badgeCounts", "String", { default: true, doc: "What the badge counts, as the prefs' `badge` has it: decisions | attention | all (with `badgeKinds`:\ndecisions when it counts only the cards, else attention)." }],
+    ["badgeKinds", "BadgeKinds", { default: true, doc: "What the badge counts, kind by kind: the prefs' `badgeKinds`, or as their `badge` says." }],
   ], { doc: "What each workspace has waiting for its person, for where workspaces are switched (the `workspaceMarks` view):\nby workspace id; and of those other than the one in view, the most urgent." }),
   WorkspaceMark: struct([
     ["alert", "u32"],
@@ -1318,6 +1327,7 @@ export const SHAPES: Record<string, Shape> = {
     ["asked", "bool"],
     ["push", "bool"],
     ["kinds", "NotifyKinds", { default: true }],
+    ["preview", "bool", { default: true, doc: "Notices say what was said (on by default); off, only what kind of thing happened." }],
     ["show", vec("Notice")],
   ], { doc: "Notifications on this device (the `notify` topic; `notify.set`, `notice.claim`): whether they are on, whether the\nsystem was asked to allow them, whether the device should hold a push registration, and the notices a page is to\nshow now, each taken by one page (`notice.claim`).", keepNone: true }),
   NotifyKinds: struct([

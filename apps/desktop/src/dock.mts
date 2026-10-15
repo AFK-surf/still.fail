@@ -24,8 +24,21 @@ export interface DockItem {
 /** Where an item's chat is and what it is at: for opening it, reading it and answering its card. */
 interface Place { url: string; station: string; thread?: number; seq?: number; card?: number }
 
-/** The dock's settings (main.ts dock.json): shown at all; new ones peeking out; plain unread ones in it. */
-export interface DockSettings { on: boolean; peek: boolean; unread: boolean }
+/** Which chats the dock holds, by what they want: a card or an agent waiting on the person, something gone wrong, unread
+ * that an agent said last, unread that someone else did. */
+export interface DockKinds { wait: boolean; failed: boolean; done: boolean; message: boolean }
+
+/** The dock's settings (main.ts dock.json): shown at all; new ones peeking out; which chats it holds (`kinds`; `unread`,
+ * as pages before kinds set it: both kinds of unread). */
+export interface DockSettings { on: boolean; peek: boolean; unread: boolean; kinds: DockKinds }
+
+/** The kinds as kept, or as `unread` says (kept before kinds were). */
+export function dockKinds(kept: Partial<DockSettings>): DockKinds {
+  const k = (kept.kinds ?? {}) as Partial<DockKinds>;
+  const unread = kept.unread !== false;
+  const flag = (v: unknown, base: boolean) => (typeof v === "boolean" ? v : base);
+  return { wait: flag(k.wait, true), failed: flag(k.failed, true), done: flag(k.done, unread), message: flag(k.message, unread) };
+}
 
 export interface DockHost {
   /** Holds a topic of the core's (the app's own link); the value each time it changes. Returns the letting go. */
@@ -41,7 +54,7 @@ export interface DockHost {
 // The shapes of what the core sends that the dock reads (web/src/core/shapes.ts ChatsView, ChatItem, DecisionsView).
 interface ChatRow {
   id: string; session?: string; thread?: number; title?: string; station: string; stationName?: string; unread?: boolean;
-  tone?: string; lastActiveAt?: number; last?: { seq?: number; text?: string; preview?: string; createdAt?: number; by?: { name?: string } };
+  tone?: string; lastActiveAt?: number; last?: { seq?: number; text?: string; preview?: string; createdAt?: number; by?: { name?: string; kind?: string } };
 }
 interface Decision {
   station: string; stationName?: string; session: string; thread: number; seq: number; title?: string; question?: string; text?: string;
@@ -56,8 +69,8 @@ const oneLine = (s: string | undefined) => {
 };
 
 /** The workspace's chats that want the person, as the dock shows them, with where each is. */
-export function dockItems(workspace: string, chats: unknown, decisions: unknown): { item: DockItem; place: Place }[] {
-  const out = new Map<string, { item: DockItem; place: Place }>();
+export function dockItems(workspace: string, chats: unknown, decisions: unknown): { item: DockItem; place: Place; kind: keyof DockKinds }[] {
+  const out = new Map<string, { item: DockItem; place: Place; kind: keyof DockKinds }>();
   const days = (chats as { days?: { items?: ChatRow[] }[] } | undefined)?.days ?? [];
   const asked = (decisions as { items?: Decision[] } | undefined)?.items ?? [];
   const url = (station: string, session: string) => `/o/${workspace}/${station.split("/").pop()}/${encode(session)}`;
@@ -75,6 +88,7 @@ export function dockItems(workspace: string, chats: unknown, decisions: unknown)
         ...(options.length ? { options } : {}), at: d.message?.createdAt ?? Date.now(),
       },
       place: { url: url(d.station, d.session), station: d.station, thread: d.thread, card: d.seq },
+      kind: "wait",
     });
   }
   for (const day of days) {
@@ -92,6 +106,7 @@ export function dockItems(workspace: string, chats: unknown, decisions: unknown)
           at: c.last?.createdAt ?? c.lastActiveAt ?? 0,
         },
         place: { url: url(c.station, session), station: c.station, ...(c.thread !== undefined ? { thread: c.thread } : {}), ...(c.last?.seq !== undefined ? { seq: c.last.seq } : {}) },
+        kind: tone === "alert" ? "failed" : (c.last?.by?.kind ?? "person") === "person" ? "message" : "done",
       });
     }
   }
@@ -114,7 +129,7 @@ export class Dock {
   #places = new Map<string, Place>();
   #restarts = 0;
   #on = false;
-  #options = { peek: true, unread: true };
+  #options: { peek: boolean; kinds: DockKinds } = { peek: true, kinds: { wait: true, failed: true, done: true, message: true } };
 
   readonly path: string;
   readonly host: DockHost;
@@ -146,8 +161,8 @@ export class Dock {
     this.#held.push(this.host.subscribe({ topic: "workspaces" }, (value) => this.#workspaces(value)));
   }
 
-  /** New ones peeking out or not; plain unread ones in it or only what waits on the person and what failed. */
-  settings(options: { peek: boolean; unread: boolean }): void {
+  /** New ones peeking out or not; which chats it holds. */
+  settings(options: { peek: boolean; kinds: DockKinds }): void {
     this.#options = options;
     this.#send({ type: "settings", peek: options.peek });
     this.#items();
@@ -185,8 +200,8 @@ export class Dock {
     const all: DockItem[] = [];
     this.#places.clear();
     for (const [id, w] of this.#perWorkspace) {
-      for (const { item, place } of dockItems(id, w.chats, w.decisions)) {
-        if (!this.#options.unread && item.tone === "done") continue;
+      for (const { item, place, kind } of dockItems(id, w.chats, w.decisions)) {
+        if (!this.#options.kinds[kind]) continue;
         all.push(item);
         this.#places.set(item.id, place);
       }

@@ -19,7 +19,7 @@ import { verifyDesktop } from "../../../station/src/updates/signed.ts";
 import { LocalStation, type Place } from "./station";
 import { controlService, installedService, servicePath, updateInstalled } from "./installed";
 import { contextMenu, type Action } from "./context-menu.mts";
-import { Dock, dockHelper, type DockSettings } from "./dock.mts";
+import { Dock, dockHelper, dockKinds, type DockKinds, type DockSettings } from "./dock.mts";
 import { moveUserData } from "./moves.mts";
 import { attachWindowControls, loadSnapTarget } from "./window-controls.ts";
 import { exportOriginStorage, importOriginStorage, type OriginSnapshot } from "./origin-storage";
@@ -280,12 +280,18 @@ function dockWords(): Record<string, string> {
 function dockSettings(): DockSettings {
   let kept: Partial<DockSettings> = {};
   try { kept = JSON.parse(readFileSync(DOCK_FILE(), "utf8")) as Partial<DockSettings>; } catch { /* none kept: the defaults */ }
-  return { on: kept.on === true, peek: kept.peek !== false, unread: kept.unread !== false };
+  const kinds = dockKinds(kept);
+  return { on: kept.on === true, peek: kept.peek !== false, unread: kinds.done || kinds.message, kinds };
 }
 
-function setDock(change: Partial<DockSettings>): DockSettings | null {
+type DockChange = Omit<Partial<DockSettings>, "kinds"> & { kinds?: Partial<DockKinds> };
+
+function setDock(change: DockChange): DockSettings | null {
   if (!dockPath) return null;
-  const settings = { ...dockSettings(), ...change };
+  const now = dockSettings();
+  // A page from before kinds says only `unread`: both kinds of unread.
+  const kinds = { ...now.kinds, ...(change.unread !== undefined && !change.kinds ? { done: change.unread, message: change.unread } : {}), ...change.kinds };
+  const settings = { ...now, ...change, kinds, unread: kinds.done || kinds.message };
   writeFileSync(DOCK_FILE(), JSON.stringify(settings));
   if (settings.on) {
     dock ??= new Dock(dockPath, {
@@ -295,7 +301,7 @@ function setDock(change: Partial<DockSettings>): DockSettings | null {
       words: dockWords,
       turnedOff: () => setDock({ on: false }),
     });
-    dock.settings({ peek: settings.peek, unread: settings.unread });
+    dock.settings({ peek: settings.peek, kinds: settings.kinds });
     dock.start();
   } else {
     dock?.stop();
@@ -307,10 +313,19 @@ function setDock(change: Partial<DockSettings>): DockSettings | null {
 ipcMain.handle("dock:get", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) && dockPath ? dockSettings() : null);
 ipcMain.handle("dock:set", (event, change: unknown) => {
   if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof change !== "object" || change === null) return null;
-  const valid: Partial<DockSettings> = {};
+  const valid: DockChange = {};
   for (const key of ["on", "peek", "unread"] as const) {
     const v = (change as Record<string, unknown>)[key];
     if (typeof v === "boolean") valid[key] = v;
+  }
+  const kinds = (change as Record<string, unknown>).kinds;
+  if (typeof kinds === "object" && kinds !== null) {
+    const given: Partial<DockKinds> = {};
+    for (const key of ["wait", "failed", "done", "message"] as const) {
+      const v = (kinds as Record<string, unknown>)[key];
+      if (typeof v === "boolean") given[key] = v;
+    }
+    valid.kinds = given;
   }
   return setDock(valid);
 });

@@ -12,7 +12,7 @@ export type FocusCall = { visible: boolean | null; focused: boolean | null; chat
 
 export type AttendCall =
   | { kind: "focus"; focus: FocusCall }
-  | { kind: "set"; on: boolean | null; asked: boolean | null; kinds: unknown }
+  | { kind: "set"; on: boolean | null; asked: boolean | null; kinds: unknown; preview: boolean | null }
   | { kind: "claim"; id: string }
   | { kind: "pushed"; workspace: string | null; notice: string | null };
 
@@ -47,9 +47,10 @@ export function parseAttend(name: string, params: unknown): AttendCall | null {
         ["on", "bool", "opt"],
         ["asked", "bool", "opt"],
         ["kinds", "value", "opt"],
+        ["preview", "bool", "opt"],
       ]);
       if (f.kinds !== null && !isObject(f.kinds)) throw CoreError.invalid(t("core-misc.params.not_object"));
-      return { kind: "set", on: f.on as boolean | null, asked: f.asked as boolean | null, kinds: f.kinds ?? null };
+      return { kind: "set", on: f.on as boolean | null, asked: f.asked as boolean | null, kinds: f.kinds ?? null, preview: f.preview as boolean | null };
     }
     case "notice.claim":
       return { kind: "claim", id: read(p, [["id", "string", "req"]]).id as string };

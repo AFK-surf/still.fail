@@ -6,6 +6,7 @@ import { Effect } from "effect";
 import type { ChatOf, FocusCall } from "./attend-parse.ts";
 import type { Host } from "./host.ts";
 import type { ClientId } from "./protocol.ts";
+import { t } from "./i18n.ts";
 import { parseJson, toJsonBytes } from "./util.ts";
 import { ofAddress } from "./workspace.ts";
 
@@ -22,13 +23,19 @@ const SHOW_FOR_MS = 30_000;
 export type Kinds = { wait: boolean; failed: boolean; done: "off" | "away" | "always"; message: boolean };
 export const ALL_KINDS: Kinds = { wait: true, failed: true, done: "away", message: true };
 
-type Settings = { on: boolean; asked: boolean; kinds: Kinds };
+/// `preview`: a notice says what was said; off, only what kind of thing happened (as a phone's 「显示预览」).
+type Settings = { on: boolean; asked: boolean; kinds: Kinds; preview: boolean };
 
 /// Kinds as given (or kept): what is not given stays as `base` has it.
 export function kindsOf(v: J, base: Kinds = ALL_KINDS): Kinds {
   const k = v !== null && typeof v === "object" ? v : {};
   const flag = (name: "wait" | "failed" | "message") => (typeof k[name] === "boolean" ? k[name] : base[name]);
   return { wait: flag("wait"), failed: flag("failed"), done: ["off", "away", "always"].includes(k.done) ? k.done : base.done, message: flag("message") };
+}
+
+/// A notice's body with `preview` off: what kind of thing happened, not what was said.
+function hidden(kind: unknown): string {
+  return t(kind === "wait" || kind === "block" ? "core-misc.notice.hidden.wait" : kind === "failed" ? "core-misc.notice.hidden.failed" : kind === "message" ? "core-misc.notice.hidden.message" : "core-misc.notice.hidden.done");
 }
 
 function is(c: ChatOf, station: string, thread: number | null, session: string | null): boolean {
@@ -75,7 +82,7 @@ export class Attend {
   static load(host: Host): Effect.Effect<Attend> {
     return Effect.map(Effect.orElseSucceed(host.storageGet(KEY), () => null), (bytes) => {
       const kept = parseJson(bytes) as J;
-      const settings = kept && typeof kept.on === "boolean" ? { on: kept.on, asked: kept.asked === true, kinds: kindsOf(kept.kinds) } : { on: true, asked: false, kinds: { ...ALL_KINDS } };
+      const settings = kept && typeof kept.on === "boolean" ? { on: kept.on, asked: kept.asked === true, kinds: kindsOf(kept.kinds), preview: kept.preview !== false } : { on: true, asked: false, kinds: { ...ALL_KINDS }, preview: true };
       return new Attend(host, settings);
     });
   }
@@ -87,13 +94,13 @@ export class Attend {
   /// The `notify` topic: the settings, whether this device should hold a push registration, what to show now.
   value(workspace: string | null): J {
     const now = this.#host.nowMs();
-    const show = this.#show.filter(([n, at]) => now - at < SHOW_FOR_MS && (workspace === null || of(n) === workspace)).map(([n]) => structuredClone(n));
-    return { on: this.#settings.on, asked: this.#settings.asked, push: this.#settings.on, kinds: { ...this.#settings.kinds }, show };
+    const show = this.#show.filter(([n, at]) => now - at < SHOW_FOR_MS && (workspace === null || of(n) === workspace)).map(([n]) => this.#settings.preview ? structuredClone(n) : { ...structuredClone(n), body: hidden(n.kind) });
+    return { on: this.#settings.on, asked: this.#settings.asked, push: this.#settings.on, kinds: { ...this.#settings.kinds }, preview: this.#settings.preview, show };
   }
 
   /// Changes the settings and keeps them.
-  set(on: boolean | null, asked: boolean | null, kinds: J = null): Effect.Effect<void> {
-    const s = { on: on ?? this.#settings.on, asked: asked ?? this.#settings.asked, kinds: kinds === null ? this.#settings.kinds : kindsOf(kinds, this.#settings.kinds) };
+  set(on: boolean | null, asked: boolean | null, kinds: J = null, preview: boolean | null = null): Effect.Effect<void> {
+    const s = { on: on ?? this.#settings.on, asked: asked ?? this.#settings.asked, kinds: kinds === null ? this.#settings.kinds : kindsOf(kinds, this.#settings.kinds), preview: preview ?? this.#settings.preview };
     this.#settings = s;
     if (!s.on) this.#show = [];
     return Effect.ignore(this.#host.storageSet(KEY, toJsonBytes(s)));
