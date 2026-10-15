@@ -47,6 +47,9 @@ export const dock = style({
           // old one as it closes.
           vars: { [vars.sidebar]: panel.background },
           boxShadow: `inset 0 0 0 1px ${vars.line}, 0 8px 24px ${vars.shadow}`,
+          // Over the page, its shadow too: under the page's frosted top bar it was blurred into a block that ended at the
+          // bar's foot.
+          zIndex: 20,
         },
         '[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] &': { marginTop: 44 },
       },
