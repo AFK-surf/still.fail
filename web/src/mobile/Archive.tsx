@@ -7,9 +7,9 @@ import { LOCAL_MS } from "../motion.ts";
 import { Retry, Trash } from "../icons.tsx";
 import type { ArchiveItem } from "../core/shapes.ts";
 import { useDoing, useDoingFailed } from "../doing.ts";
-import { DELETE_TEXT, itemKey, useArchive } from "../pages/Archive.tsx";
+import { ABOUT, DELETE_TEXT, itemKey, useArchive } from "../pages/Archive.tsx";
 import { useApp } from "./app.tsx";
-import { FailedMark, PlaceHead, SectionHeader, Spinner } from "./parts.tsx";
+import { FailedMark, PlaceHead, PlaceNote, SectionHeader, Spinner } from "./parts.tsx";
 import { confirm } from "./sheets.tsx";
 import * as css from "./Archive.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -31,6 +31,8 @@ export function ArchiveScreen() {
           {day.items.map((item) => <Row key={itemKey(item)} item={item} restore={restore} remove={remove} />)}
         </section>
       ))}
+      {/* Nothing archived: what the archive is, said then (the page says it nowhere else). */}
+      {days.length === 0 && <PlaceNote>{ABOUT}</PlaceNote>}
       <div style={{ height: 24 }} />
     </div>
   );

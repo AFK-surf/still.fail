@@ -55,6 +55,9 @@ function valueOf(topic: Topic): unknown {
     case "connects": return station.connects();
     case "stations": return [station.stationView()];
     case "archive": return station.archive();
+    case "profiles": return station.profiles();
+    case "usage": return station.usage(topic.days ?? 7);
+    case "decisions": return station.decisions(chats);
     case "drive": return station.driveFolder(topic.root, topic.path);
     case "drivePlace": return null;
     // What the core puts together of them (client/core-ts/src/choose.ts), as a new chat and a model control start.

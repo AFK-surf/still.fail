@@ -79,7 +79,8 @@ function isHere(e: WorkspaceProfile, path: string, scope: string): boolean {
   return (e.members ?? []).some((m) => path === `${stationBase(m.station)}/settings/accounts/${encodeURIComponent(m.profileId)}`);
 }
 
-function ProfileRow({ entry, scope }: { entry: WorkspaceProfile; scope: string }) {
+/** `onClick`: how its page is opened (the phone's own pages, mobile/Profiles.tsx); else a link to profilePath. */
+export function ProfileRow({ entry, scope, onClick }: { entry: WorkspaceProfile; scope: string; onClick?: (() => void) | undefined }) {
   const path = useLocation().pathname;
   const p = entry.profile;
   // Only what is wrong is in colour: one nobody can use now, one whose check did not pass.
@@ -92,7 +93,7 @@ function ProfileRow({ entry, scope }: { entry: WorkspaceProfile; scope: string }
   // What is left of its allowance has the second line to itself; where it is and who uses it, on the tip then.
   const windows = Windows({ quota: p.quota });
   return (
-    <NavItem to={profilePath(entry)} current={isHere(entry, path, scope)} away={!entry.usable} tip={windows ? facts || undefined : several ? entry.where : undefined}
+    <NavItem {...(onClick ? { onClick } : { to: profilePath(entry), current: isHere(entry, path, scope) })} away={!entry.usable} tip={windows ? facts || undefined : several ? entry.where : undefined}
       mark={<ProviderLogo runtime={p.runtime} kind={p.access.kind} mark={p.providerMark} size={16} />} title={p.name}>
       <NavLine>
         {trouble && <span className={css.trouble} data-tone={entry.usable ? p.checkTone : "red"}>{trouble}</span>}
@@ -122,21 +123,22 @@ function Windows({ quota }: { quota: Quota | null | undefined }) {
 const RUNTIME: Record<MachineLogin["runtime"], string> = { claude: "Claude Code", codex: "Codex" };
 
 /** A station's own logins not made profiles yet (as the list page offers them, pages/Accounts.tsx MachineLoginOffers):
- * used as they are, or signed in again for still.fail where the station cannot read them. */
-function MachineLogins({ station, scope }: { station: StationView; scope: string }) {
+ * used as they are, or signed in again for still.fail where the station cannot read them (`onSignIn`: where the phone signs
+ * in, mobile/Profiles.tsx). */
+export function MachineLogins({ station, scope, onSignIn }: { station: StationView; scope: string; onSignIn?: ((runtime: MachineLogin["runtime"]) => void) | undefined }) {
   const offers = (station.overview?.machineLogins ?? []).filter((l) => l.offered && l.quota?.state !== "blocked");
   if (offers.length === 0) return null;
   const at: Station = { id: station.id, name: station.name, online: station.online, address: station.station, base: stationBase(station.station), settings: `/w/${scope}/settings` };
   return (
     <StationContext.Provider value={at}>
       <NavSection title={t("web-pages.profiles.machineSignedIn", { station: station.name })}>
-        {offers.map((l) => <MachineLoginRow key={l.runtime} login={l} scope={scope} station={station.station} />)}
+        {offers.map((l) => <MachineLoginRow key={l.runtime} login={l} scope={scope} station={station.station} onSignIn={onSignIn} />)}
       </NavSection>
     </StationContext.Provider>
   );
 }
 
-function MachineLoginRow({ login, scope, station }: { login: MachineLogin; scope: string; station: string }) {
+function MachineLoginRow({ login, scope, station, onSignIn }: { login: MachineLogin; scope: string; station: string; onSignIn: ((runtime: MachineLogin["runtime"]) => void) | undefined }) {
   const api = useApi();
   const navigate = useNavigate();
   const toast = useToast();
@@ -144,7 +146,7 @@ function MachineLoginRow({ login, scope, station }: { login: MachineLogin; scope
     toast(t("web-pages.profiles.machineAdded"));
     navigate(`${stationBase(station)}/settings/accounts/${encodeURIComponent(id)}`);
   });
-  const signIn = () => navigate(addProfilePath(scope, station, login.runtime === "claude" ? "anthropic" : "openai", "plan"));
+  const signIn = () => (onSignIn ? onSignIn(login.runtime) : navigate(addProfilePath(scope, station, login.runtime === "claude" ? "anthropic" : "openai", "plan")));
   return (
     <Tip label={login.usable ? t("web-pages.profiles.useMachineTip") : t("web-pages.profiles.keychainTip", { name: NAME })} side="right">
       <NavItem disabled={use.busy} onClick={() => (login.usable ? void use.run() : signIn())}

@@ -3,13 +3,13 @@
 // or an sp a pixel here.
 import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Badge as BadgeKind, Maker, Quota, RuntimeKind } from "../api.ts";
-import { Check, ChevronLeft, Plug, Plus, Settings, type IconProps } from "../icons.tsx";
+import { Check, ChevronLeft, Filter, Plug, Plus, Settings, type IconProps } from "../icons.tsx";
 import { Mark as BrandMark, illustrationUrl } from "../brand.tsx";
 import { SlackLogo } from "../ui.tsx";
 import { QuotaBars } from "../components.tsx";
 import { doingMatches, failed as itFailed, useDoing, useDoingFailed } from "../doing.ts";
 import type { DoingItem } from "../core/shapes.ts";
-import { useApp, useRootPage } from "./app.tsx";
+import { useApp, useRootPage, type MenuItem } from "./app.tsx";
 import * as css from "./parts.css.ts";
 import { vars } from "../styles/tokens.css.ts";
 import * as waitingCss from "../styles/waiting.css.ts";
@@ -249,6 +249,32 @@ export function PlaceHead({ title, back, onBack, trailing, primary }: {
       <h1 className={css.mPlaceTitle}>{title}</h1>
       {trailing}
     </header>
+  );
+}
+
+/** What a place is, said where its list would be while that has nothing (its top page says it nowhere else). */
+export function PlaceNote({ children }: { children: ReactNode }) {
+  return <p className={css.mPlaceNote}>{children}</p>;
+}
+
+/** A choice of a filter's menu, ticked when it is the one; the others keep its room. */
+export const ticked = (on: boolean) => (on ? <Check size={16} /> : <span style={{ width: 16 }} />);
+
+/**
+ * A list's filter in a head (the chats', the connects'): its icon, in the accent while it narrows the list (`on`);
+ * tapped, its menu under it (`items`, the one chosen ticked). `label` says what it is set to.
+ */
+export function FilterMenu({ on, label, items }: { on: boolean; label: string; items: MenuItem[] }) {
+  const app = useApp();
+  return (
+    <button type="button" className={`${barsCss.mNavButton} ${css.mFilterMenu}`} data-on={on || undefined} aria-label={label}
+      onClick={(e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        // The menu is 180 wide (app.tsx MenuHost): its right edge under the button's.
+        app.menu({ anchor: new DOMRect(r.right - 180, r.top, 0, r.height), items });
+      }}>
+      <Filter size={20} />
+    </button>
   );
 }
 

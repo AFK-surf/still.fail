@@ -57,9 +57,6 @@ export const mHomeWorkspace = style({
   cursor: "pointer",
 });
 
-/** The list's filter in the head: the accent while it narrows the list (over root.css.ts's `button { color: inherit }`). */
-export const mFilter = style({});
-globalStyle(`${mHomeBar} button${mFilter}[data-on]`, { color: "var(--m-accent)" });
 export const mNewChat = style({
   display: "grid", placeItems: "center", flex: "none", width: "56px", height: "56px", padding: "0", border: "0",
   borderRadius: "50%", background: "var(--m-accent)", color: "#fff !important", cursor: "pointer", boxShadow: "0 2px 6px rgb(0 0 0 / .16)",

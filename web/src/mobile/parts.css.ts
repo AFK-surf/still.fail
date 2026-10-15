@@ -114,6 +114,11 @@ export const mPlaceTitle = style({
   flex: "1", minWidth: "0", margin: "0", fontSize: vars.textDisplay, lineHeight: "34px", fontWeight: "600", letterSpacing: "-0.4px",
   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
+/** What a place is, under its empty list on its page: as inset as the rows' marks (SidebarList phone rows, 22). */
+export const mPlaceNote = style({ margin: "0", padding: "8px 22px", fontSize: vars.textMeta, lineHeight: "20px", color: "var(--m-muted)" });
+/** A list's filter in a head (FilterMenu): in the accent while it narrows the list, over root.css.ts's `button { color: inherit }`. */
+export const mFilterMenu = style({});
+globalStyle(`${m} button${mFilterMenu}[data-on]`, { color: "var(--m-accent)" });
 export const mSection = style({ display: "flex", alignItems: "flex-end", padding: "14px 20px 6px" });
 export const mListCard = style({
   margin: "0 12px 10px", borderRadius: `calc(16px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,

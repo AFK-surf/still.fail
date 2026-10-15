@@ -14,7 +14,9 @@ import { ChevronRight, Close, ImageUpload, More } from "../icons.tsx";
 import { cloud, useWorkspace } from "../cloud/api.ts";
 import { track } from "../telemetry.ts";
 import { useDark } from "../theme.ts";
-import { SheetGrab, SheetHead, useApp } from "./app.tsx";
+import { SheetGrab, SheetHead, useApp, useRootPage } from "./app.tsx";
+import { StationRow } from "../cloud/StationPage.tsx";
+import { NavPhone } from "../SidebarList.tsx";
 import { GoRow } from "./Settings.tsx";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import { Versions } from "./Versions.tsx";
@@ -52,6 +54,7 @@ export function StationsScreen() {
   const stations = useStations(app.entry.id);
   const list = stations.value;
   const actions = usePlaceActions();
+  const root = useRootPage();
   // No station yet: adding the first one is the page.
   if (list && list.length === 0) {
     return (
@@ -64,7 +67,10 @@ export function StationsScreen() {
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       <PlaceHead title="Station" back={t("web-mobile.settings.title")} onBack={app.pop} primary={actions.stations} />
-      {!list ? <p className={`${partsCss.mMuted} ${css.mPad20}`}>{stations.error?.message ?? t("web-mobile.memory.readingStations")}</p> : list.map((s) => (
+      {!list ? <p className={`${partsCss.mMuted} ${css.mPad20}`}>{stations.error?.message ?? t("web-mobile.memory.readingStations")}</p>
+        // The bar's place (its top page): the wide screen's sidebar rows (../cloud/StationPage.tsx), each opening its page.
+        : root ? <NavPhone>{list.map((s) => <StationRow key={s.id} s={s} onClick={() => app.push(app.at(`/s/${s.id}/overview`))} />)}</NavPhone>
+        : list.map((s) => (
         <Card key={s.station} onClick={() => app.push(app.at(`/s/${s.id}/overview`))}>
           <span className={css.mStationHead}>
             <Buddy s={s} />

@@ -2,10 +2,20 @@
 // them in the frosted top band (新建对话, 添加 Station, …), the list under it, its sections each under a heading (the
 // chats' days, the profiles' kinds), and a row of a station, a folder or a profile: its mark, its title and what is at
 // the end of that line, then any lines under them (a chat's row is its own, ChatRow).
-import type { HTMLAttributes, MouseEvent, ReactNode, Ref } from "react";
+import { createContext, useContext, type HTMLAttributes, type MouseEvent, type ReactNode, type Ref } from "react";
 import { Link, NavLink } from "react-router";
 import * as nav from "./Sidebar.css.ts";
 import * as css from "./SidebarList.css.ts";
+
+/** Rows drawn for the phone (the bottom bar's places' top pages, mobile/): the same row, laid out as a phone's list
+ * (as wide as the screen, a chat row's insets and type, pressed rather than pointed at), always a button;
+ * a section's heading as the phone's are. */
+const Phone = createContext(false);
+export function NavPhone({ children }: { children: ReactNode }) {
+  return <Phone.Provider value={true}>{children}</Phone.Provider>;
+}
+/** Whether a row is drawn for the phone (what it says may be shorter there: cloud/StationPage.tsx StationRow). */
+export const useNavPhone = (): boolean => useContext(Phone);
 
 /** The top band over a list: `top` the brand, then the list's action (NavAction), `below` anything under it. */
 export function NavTop({ top, action, below }: { top?: ReactNode; action?: ReactNode; below?: ReactNode }) {
@@ -45,9 +55,10 @@ export function NavList({ children }: { children: ReactNode }) {
 
 /** A section of a list, under its heading. */
 export function NavSection({ title, flip, children }: { title: string; flip?: string; children: ReactNode }) {
+  const phone = useContext(Phone);
   return (
     <section aria-label={title}>
-      <div className={nav.navHeading} data-flip={flip}>{title}</div>
+      {phone ? <div className={css.phoneHeading}><b>{title}</b></div> : <div className={nav.navHeading} data-flip={flip}>{title}</div>}
       {children}
     </section>
   );
@@ -58,8 +69,9 @@ export function NavSection({ title, flip, children }: { title: string; flip?: st
  * (`onClick`); the rest goes on the element (a Tip round it). `away`: what it is is not there now (its title faint). */
 export function NavItem({ mark, title, end, away, tip, children, to, current, disabled, ...rest }: Omit<HTMLAttributes<HTMLElement>, "title" | "style" | "className"> & {
   mark: ReactNode; title: ReactNode; end?: ReactNode; away?: boolean; tip?: string | undefined; children?: ReactNode;
-  to?: string; current?: boolean; disabled?: boolean; ref?: Ref<never>;
+  to?: string | undefined; current?: boolean; disabled?: boolean; ref?: Ref<never>;
 }) {
+  const phone = useContext(Phone);
   const body = (
     <>
       <span className={css.mark}>{mark}</span>
@@ -72,8 +84,8 @@ export function NavItem({ mark, title, end, away, tip, children, to, current, di
       </span>
     </>
   );
-  const shared = { ...rest, className: `${nav.navRow} ${css.button} ${css.item}`, title: tip, "data-away": away ? "" : undefined };
-  if (to === undefined) return <button type="button" {...shared} disabled={disabled}>{body}</button>;
+  const shared = { ...rest, className: phone ? `${css.button} ${css.item} ${css.phone}` : `${nav.navRow} ${css.button} ${css.item}`, title: tip, "data-away": away ? "" : undefined };
+  if (to === undefined || phone) return <button type="button" {...shared} disabled={disabled}>{body}</button>;
   // A Link where the caller says which is lit (rows differing in their query alone, which a NavLink does not look at).
   if (current !== undefined) return <Link {...shared} to={to} aria-current={current ? "page" : undefined}>{body}</Link>;
   return <NavLink {...shared} to={to}>{body}</NavLink>;

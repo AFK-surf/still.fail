@@ -23,7 +23,8 @@ export function UsageScreen() {
       {!view ? <Loading text={usage.error ? t("web-mobile.usage.failed", { error: usage.error.message }) : t("web-mobile.reading")} /> : (
         <div className={`${css.usage} ${css.mobile}`}>
           <Tiles view={view} pricesPath={`/w/${app.entry.id}/settings/usage/prices?days=${days}`} />
-          {view.empty ? <p className={css.empty}>{view.loading ? t("web-mobile.reading") : t("web-mobile.usage.empty")}</p> : (
+          {/* Nothing spent: what the page counts, said then (the page says it nowhere else). */}
+          {view.empty ? <><p className={css.empty}>{view.loading ? t("web-mobile.reading") : t("web-mobile.usage.empty")}</p>{!view.loading && <p className={css.empty}>{t("web-mobile.usage.note")}</p>}</> : (
             <>
               <div className={css.card}><DaysChart view={view} /></div>
               {list && (

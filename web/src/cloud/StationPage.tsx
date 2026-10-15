@@ -20,7 +20,7 @@ import { WorkspaceMark } from "../WorkspaceMark.tsx";
 import { HostDetails, Net, problems, state, useLong } from "./StationCards.tsx";
 import { MarkPick } from "./MarkPick.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
-import { NavAction, NavList, NavItem, NavLine, NavTop, navFill } from "../SidebarList.tsx";
+import { NavAction, NavList, NavItem, NavLine, NavTop, navFill, useNavPhone } from "../SidebarList.tsx";
 import { AddStationDialog, useStationEdits, useWorkspace } from "./settings.tsx";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import * as railCss from "../Rail.css.ts";
@@ -60,15 +60,21 @@ export function StationsNav({ entry, top }: { entry: WorkspaceEntry; top?: React
 /** A station in the sidebar: its mark and name, how it is at the end of that line (its agents at work, when it was last
  * seen while away); what the machine is under them; then, while it is up, what is left of its CPU, memory and disk in
  * small boxes (as in a chat's bar: their edge in their level's colour), and how this device reaches it, a newer version
- * there said too. Nothing in colour but what is off. */
-function StationRow({ s, to }: { s: StationView; to: string }) {
-  const meters = s.online ? s.host?.meters ?? [] : [];
+ * there said too. Nothing in colour but what is off. The phone's Station (mobile/Stations.tsx) has the same rows,
+ * `onClick` opening its page there. */
+export function StationRow({ s, to, onClick }: { s: StationView; to?: string | undefined; onClick?: (() => void) | undefined }) {
+  // On the phone (narrower; the Android app's rows the same): only what of the machine runs low, its agents at work in
+  // grey before the dot at the line's very end, and an offline station said as the core sums it up (when it was last
+  // seen) rather than as the machine it was.
+  const phone = useNavPhone();
+  const meters = (s.online ? s.host?.meters ?? [] : []).filter((m) => !phone || m.level !== "ok");
   const newer = s.online && (s.overview?.updates ?? []).some((v) => v.installed && v.updatable && (v.newer || v.downgrade));
+  const dot = <span className={railCss.dot} data-online={s.online || undefined} />;
   return (
-    <NavItem to={to} title={s.name}
+    <NavItem to={to} onClick={onClick} title={s.name}
       mark={s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={16} /> : <WorkspaceMark w={{ name: s.name }} size={16} />}
-      end={<><span className={railCss.dot} data-online={s.online || undefined} />{brief(s)}</>}>
-      <NavLine><span className={navFill}>{s.host?.identity ?? (s.online ? t("web-pages.stations.connecting") : t("web-pages.stations.offline"))}</span></NavLine>
+      end={phone ? <>{s.online && running(s) > 0 && t("web-pages.stations.page.runningShort", { n: running(s) })}{dot}</> : <>{dot}{brief(s)}</>}>
+      <NavLine><span className={navFill}>{phone && !s.online ? s.summary : s.host?.identity ?? (s.online ? t("web-pages.stations.connecting") : t("web-pages.stations.offline"))}</span></NavLine>
       {meters.length > 0 && (
         <span className={css.rowMeters}>
           {meters.map((m) => <EdgeChip key={m.label} small bare fill={m.left} level={m.level} mark={m.short} text={`${m.big}${m.unit === "%" ? "%" : m.unit.slice(0, 1)}`} label={`${m.label} ${m.remaining}`} />)}
@@ -90,9 +96,10 @@ function StationRow({ s, to }: { s: StationView; to: string }) {
 /** How it is in a word or two: its agents at work, else when it was last seen while away; nothing while idle. */
 function brief(s: StationView): ReactNode {
   if (!s.online) return <Time stamp={stamp(s, "lastSeen")} />;
-  const running = s.overview?.counts.running ?? 0;
-  return running > 0 ? <span className={css.busy}>{t("web-pages.stations.page.runningShort", { n: running })}</span> : null;
+  const n = running(s);
+  return n > 0 ? <span className={css.busy}>{t("web-pages.stations.page.runningShort", { n })}</span> : null;
 }
+const running = (s: StationView) => s.overview?.counts.running ?? 0;
 
 /** `settings/stations` with the sidebar of their own: the first of them (there is no page of them all). */
 export function StationsFirst({ entry }: { entry: WorkspaceEntry }) {

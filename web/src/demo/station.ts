@@ -34,11 +34,26 @@ export const overview = () => {
   return {
     ...base, connects: [slack()], drive: DRIVE,
     // The station's own Claude Code login is the subscription's profile, not offered again.
-    machineLogins: base.machineLogins.filter((l) => l.runtime !== "claude"),
+    // Its Codex login, not a profile yet: offered (the profiles' last section).
+    machineLogins: base.machineLogins.filter((l) => l.runtime !== "claude").map((l) => ({ ...l, offered: true })),
     profiles: [subscription(base.profiles[0]!)],
   };
 };
-export const host = () => now(data.host);
+export const host = () => withMeters(now(data.host));
+
+/** What is left of the machine in the words and figures a station gives its meters (the small boxes in a station's row,
+ * the large figures on its page): station.json has their older words only. */
+function withMeters<T extends { meters: { short: string; percent: number }[] }>(h: T): T {
+  const more: Record<string, { remaining: string; big: string; unit: string; title: string; total: string }> = {
+    CPU: { remaining: "空闲 81%", big: "81", unit: "%", title: "CPU 空闲", total: "负载 3.1" },
+    内存: { remaining: "剩 36.6 G", big: "36.6", unit: "GB", title: "内存剩", total: "共 64 GB" },
+    磁盘: { remaining: "剩 612 G", big: "612", unit: "GB", title: "磁盘剩", total: "共 994 GB" },
+  };
+  return { ...h, meters: h.meters.map((m) => ({ ...m, left: 100 - m.percent, ...more[m.short] })) };
+}
+
+/** How this device reaches the station: straight, quick. */
+const NET = { path: "直连", rtt: { text: "12 ms", level: "ok" as const }, rttHistory: [11, 12, 14, 12, 11, 12], down: "1.2 KB/s", up: "0.4 KB/s", total: "今天共 ↓ 48 MB · ↑ 3.1 MB" };
 
 /** The folders the station lends (docs/drive.md), its downloads with what the chats made in them. */
 const DRIVE = { roots: [
@@ -76,7 +91,7 @@ export function driveFolder(root: string, path: string): DriveFolder {
 }
 export const stationView = () => {
   const base = now(data.station);
-  return { ...base, station: STATION, overview: overview() };
+  return { ...base, station: STATION, host: withMeters(base.host), net: NET, overview: overview() };
 };
 /** What a Claude agent's model control offers and the account it runs on. */
 export const runs = (): Runs => ({ choices: stationView().models as Runs["choices"], profile: overview().profiles[0] as unknown as Runs["profile"] });
@@ -141,6 +156,85 @@ export function archive(): ArchiveView {
     if (last?.label === label) last.items.push(item); else days.push({ label, items: [item] });
   }
   return { days, errors: [], loading: false };
+}
+
+/** The workspace's profiles (the core's `profiles`, client/core-ts/src/views/profiles.ts): the station's one account. */
+export function profiles() {
+  // The subscription as the station shows it (station.json's, refused by Anthropic: subscription() above).
+  const p = overview().profiles[0] as typeof data.overview.profiles[number] & ReturnType<typeof subscription>;
+  return {
+    loading: false,
+    items: [{
+      key: `${STATION}/${p.id}`, group: "claude", groupTitle: "Claude 订阅", station: STATION, stationId: "local", stationName: "Studio",
+      profile: p, shared: false, host: "local", hostName: "Studio", hostOnline: true, usable: true, where: "只在 Studio",
+      stations: [], editable: true, canShare: true,
+      members: [{ station: STATION, stationId: "local", stationName: "Studio", online: true, profileId: p.id, role: "own", about: "自己登录", usable: true, checkText: p.checkText, checkTone: p.checkTone, usedBy: 1 }],
+    }],
+  };
+}
+
+/** What the agents spent (the core's `usage`, client/core-ts/src/views/usage.ts), made up: the last `days`, each day's
+ * cost split by the three people who spent most. */
+export function usage(days: number) {
+  const today = new Date();
+  const people = [LIN, CHEN, ZHOU];
+  // Each day's dollars per person, the same pattern however many days (weekends quieter).
+  const daily = Array.from({ length: days }, (_, i) => {
+    const d = new Date(today.getTime() - (days - 1 - i) * 86_400_000);
+    const quiet = d.getDay() === 0 || d.getDay() === 6 ? 0.3 : 1;
+    const parts = people.map((_, k) => Math.round((8 + ((i * 7 + k * 5) % 11) * 1.9) * quiet * (3 - k) * 10) / 30);
+    const cost = parts.reduce((a, b) => a + b, 0);
+    return {
+      day: d.toISOString().slice(0, 10), label: `${d.getMonth() + 1}/${d.getDate()}`, today: i === days - 1, cost, costText: money(cost),
+      calls: Math.round(cost * 41), callsText: `${Math.round(cost * 41).toLocaleString("en-US")} 次调用`, parts, partsText: parts.map(money),
+    };
+  });
+  const total = daily.reduce((a, d) => a + d.cost, 0);
+  const item = (key: string, title: string, share: number, sub?: string, extra: object = {}) => ({
+    key, title, ...(sub ? { sub } : {}), cost: total * share, costText: money(total * share), share, shareText: `${Math.round(share * 100)}%`,
+    calls: Math.round(total * share * 41), callsText: `${Math.round(total * share * 41).toLocaleString("en-US")} 次`, tokensText: `${(total * share * 0.52).toFixed(1)}M`,
+    detail: `${Math.round(total * share * 41).toLocaleString("en-US")} 次 · ${(total * share * 0.52).toFixed(1)}M token`, ...extra,
+  });
+  return {
+    days, loading: false, empty: false,
+    tiles: [
+      { label: "折算费用", value: money(total), sub: "按 API 价算" },
+      { label: "token", value: `${(total * 0.52).toFixed(1)}M`, sub: `${Math.round(total * 41).toLocaleString("en-US")} 次调用` },
+    ],
+    series: people.map((p) => ({ key: p.email ?? p.id, name: p.name })),
+    daily, max: Math.max(...daily.map((d) => d.cost)),
+    lists: [
+      { key: "chats", title: "按对话", items: [
+        item("deps", "每周依赖升级", 0.31, "Studio · Sonnet 5.5", { chat: { station: STATION, session: "ember:c-demo-deps" } }),
+        item("p99", "排查 API p99 变慢", 0.24, "Studio · Opus 5.5", { chat: { station: STATION, session: "ember:c-demo-p99" } }),
+        item("csv", "订单导出支持 CSV", 0.19, "Studio · GPT-5.5", { chat: { station: STATION, session: "ember:c-demo-csv" } }),
+        item("safari", "把那个弄一下", 0.15, "Studio · Opus 5.5", { chat: { station: STATION, session: "ember:c-demo-safari" } }),
+        item("docs", "补一下部署文档", 0.11, "Studio · Opus 5.5"),
+      ] },
+      { key: "people", title: "按人", items: people.map((p, k) => item(p.id, p.name, [0.5, 0.33, 0.17][k]!, undefined, { person: p })) },
+      { key: "models", title: "按模型", items: [item("opus", "Opus 5.5", 0.5, "Anthropic"), item("sonnet", "Sonnet 5.5", 0.31, "Anthropic"), item("gpt", "GPT-5.5", 0.19, "OpenAI")] },
+    ],
+    notes: [], basis: "按各家 API 的公开价格折算，订阅实际不按此计费",
+  };
+}
+const money = (dollars: number) => `$${dollars.toFixed(2)}`;
+
+/** 奏 with nothing waiting (the core's `decisions`): the day in numbers, the viewer's chats at work, what was answered today. */
+export function decisions(chats: { key: string; thread: number; title: string; running: { activity: string; since: number } | null; blocked: boolean }[]) {
+  const where = { station: STATION, stationName: "Studio" };
+  const working = chats.filter((c) => c.running || c.blocked).map((c) => ({
+    ...where, session: c.key, thread: c.thread, title: c.title, line: c.running ? `在做 · ${c.running.activity}` : "在等：你决定要不要一起升 React Router 8",
+    time: { lastActiveAt: stamp(c.running?.since ?? Date.now() - 58 * 60_000) },
+  }));
+  const at = (minutes: number) => new Date(Date.now() - minutes * 60_000).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+  return {
+    items: [], count: 0, loading: false, working,
+    answered: [
+      { ...where, session: "ember:c-demo-csv", thread: 5, title: "订单导出支持 CSV", seq: 3, text: "导出的文件名要带上日期吗？", answer: "选了「带日期」", clock: at(40) },
+      { ...where, session: "ember:c-demo-p99", thread: 4, title: "排查 API p99 变慢", seq: 4, text: "索引迁移现在上线，还是等晚上？", answer: "回复：现在上", clock: at(150) },
+    ],
+    today: { count: 2, waited: "6 分钟", working: working.length },
+  };
 }
 
 // ---- still.fail cloud ----

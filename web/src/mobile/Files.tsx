@@ -5,7 +5,9 @@ import { useStations } from "../api.ts";
 import { stationBase } from "../station.tsx";
 import { drivePath } from "../drive/useDrive.ts";
 import { ChevronRight, Folder } from "../icons.tsx";
-import { useApp } from "./app.tsx";
+import { useApp, useRootPage } from "./app.tsx";
+import { NavItem, NavPhone } from "../SidebarList.tsx";
+import * as railCss from "../Rail.css.ts";
 import { ListCard, ListRow, Loading, PlaceHead } from "./parts.tsx";
 import { usePlaceActions } from "./placeActions.tsx";
 import * as listsCss from "./styles/lists.css.ts";
@@ -18,12 +20,21 @@ export function FilesScreen() {
   const app = useApp();
   const stations = useStations(app.entry.id).value;
   const folders = (stations ?? []).flatMap((s) => (s.overview?.drive?.roots ?? []).map((root) => ({ station: s, root })));
+  const root = useRootPage();
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       <PlaceHead title={t("web-pages.drive.title")} back={t("web-mobile.settings.title")} onBack={app.pop} primary={usePlaceActions().files} />
       {!stations ? <Loading text={t("web-mobile.reading")} />
         : folders.length === 0 ? <p className={css.mNone}>{t("web-main.rail.filesNone")}</p>
-        : (
+        // The bar's place (its top page): the wide screen's sidebar rows (../cloud/workspace.tsx FilesNav), whose each is at the end.
+        : root ? (
+          <NavPhone>
+            {folders.map(({ station, root: r }) => (
+              <NavItem key={`${station.station}/${r.path}`} onClick={() => app.push(drivePath(stationBase(station.station), r.path))} mark={<Folder size={16} />} title={r.name}
+                end={<>{station.name}<span className={railCss.dot} data-online={station.online || undefined} /></>} />
+            ))}
+          </NavPhone>
+        ) : (
           <ListCard>
             {folders.map(({ station, root }) => (
               <ListRow key={`${station.station}/${root.path}`} onClick={() => app.push(drivePath(stationBase(station.station), root.path))}>

@@ -13,9 +13,11 @@ import type { Choice } from "../pages/Accounts.tsx";
 import { useProfileFlow } from "../profileFlow.ts";
 import { QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, useStation } from "../station.tsx";
-import { SheetGrab, SheetHead, useApp, type SheetSpec } from "./app.tsx";
+import { SheetGrab, SheetHead, useApp, useRootPage, type SheetSpec } from "./app.tsx";
+import { MachineLogins, ProfileRow as NavProfileRow } from "../ProfilesNav.tsx";
+import { NavPhone, NavSection } from "../SidebarList.tsx";
 import { Presence } from "./Connects.tsx";
-import { Button, failedIn, FailedMark, Field, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, PlaceHead, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, tNodes } from "./parts.tsx";
+import { Button, failedIn, FailedMark, Field, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, PlaceHead, PlaceNote, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, tNodes } from "./parts.tsx";
 import { useAct } from "../toast.tsx";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
@@ -58,6 +60,7 @@ export function ProfilesScreen() {
   const stations = only ? listed?.filter((s) => s.id === only) : listed;
   const one = only ? stations?.[0] : undefined;
   const online = stations?.filter((s) => s.online) ?? [];
+  const root = useRootPage();
   const add = () => online.length === 1
     ? app.push(app.at(`/s/${online[0]!.id}/profiles/new`))
     : app.sheet({ height: 0.5, content: () => <PickStation title={t("web-mobile.newChat.addProfile")} stations={online} to={(s) => `/s/${s.id}/profiles/new`} /> });
@@ -65,8 +68,9 @@ export function ProfilesScreen() {
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       <PlaceHead title="Profile" back={one?.name ?? t("web-mobile.settings.title")} onBack={app.pop}
         primary={online.length > 0 ? { key: "profile", label: t("web-mobile.newChat.addProfile"), run: add } : null} />
-      {/* The workspace's: one list, each shared profile once (the core's `profiles`); a station's own: as before. */}
-      {!one && <WorkspaceList scope={app.entry.id} />}
+      {/* The workspace's: one list, each shared profile once (the core's `profiles`); a station's own: as before. As the
+          bar's place (its top page), the wide screen's sidebar (../ProfilesNav.tsx): its rows, then the machines' own logins. */}
+      {!one && (root ? <WorkspaceRows scope={app.entry.id} /> : <WorkspaceList scope={app.entry.id} />)}
       {!stations ? <Loading text={t("web-mobile.memory.readingStations")} /> : stations.filter(() => !!one).map((s) => (
         <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
           {!one && <SectionHeader title={s.online ? s.name : t("web-mobile.connects.stationOfflineTitle", { station: s.name })} start={24} />}
@@ -85,7 +89,10 @@ export function ProfilesScreen() {
           {s.online && s.overview && <MachineLoginOffers logins={s.overview.machineLogins} onSignIn={(kind) => app.push(app.at(`/s/${s.id}/profiles/new?kind=${kind}`))} />}
         </StationContext.Provider>
       ))}
-      {!one && online.map((s) => s.overview && (
+      {!one && root && <NavPhone>{online.map((s) => (
+        <MachineLogins key={s.id} station={s} scope={app.entry.id} onSignIn={(runtime) => app.push(app.at(`/s/${s.id}/profiles/new?kind=${runtime === "claude" ? "claude-sub" : "chatgpt-sub"}`))} />
+      ))}</NavPhone>}
+      {!one && !root && online.map((s) => s.overview && (
         <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
           <MachineLoginOffers logins={s.overview.machineLogins} onSignIn={(kind) => app.push(app.at(`/s/${s.id}/profiles/new?kind=${kind}`))} />
         </StationContext.Provider>
@@ -105,6 +112,8 @@ function WorkspaceList({ scope }: { scope: string }) {
   return (
     <>
       {view.items.length === 0 && <ListCard><ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.none")}</span></ListRow></ListCard>}
+      {/* What Profile is, said while there is none (the page says it nowhere else). */}
+      {view.items.length === 0 && !view.loading && <PlaceNote>{t("web-mobile.profiles.note")}</PlaceNote>}
       {/* A section each kind of account (the core's order). */}
       {groups.map((g) => (
         <Fragment key={g[0]!.group}>
@@ -125,6 +134,26 @@ function WorkspaceList({ scope }: { scope: string }) {
       ))}
       {view.loading && <ListCard><ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.reading")}</span></ListRow></ListCard>}
     </>
+  );
+}
+
+/** The workspace's profiles as the bar's place lists them: the wide screen's rows (../ProfilesNav.tsx ProfileRow), a
+ * section each kind of account, each opening the phone's page of it (an account on several stations: the page across
+ * them); what Profile is, said while there is none. */
+function WorkspaceRows({ scope }: { scope: string }) {
+  const app = useApp();
+  const view = useProfiles(scope).value;
+  if (!view) return <Loading text={t("web-mobile.reading")} />;
+  return (
+    <NavPhone>
+      {view.items.length === 0 && !view.loading && <><PlaceNote>{t("web-pages.settings.profiles.none")}</PlaceNote><PlaceNote>{t("web-mobile.profiles.note")}</PlaceNote></>}
+      {profileGroups(view.items).map((g) => (
+        <NavSection key={g[0]!.group} title={g[0]!.groupTitle}>
+          {g.map((e) => <NavProfileRow key={e.key} entry={e} scope={scope} onClick={() => app.push(app.at(hosts(e).length > 1 ? `/settings/profiles/account/${encodeURIComponent(e.key)}` : `/s/${e.stationId}/settings/accounts/${encodeURIComponent(e.profile.id)}`))} />)}
+        </NavSection>
+      ))}
+      {view.loading && <PlaceNote>{t("web-mobile.reading")}</PlaceNote>}
+    </NavPhone>
   );
 }
 

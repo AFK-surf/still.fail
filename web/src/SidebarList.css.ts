@@ -1,5 +1,5 @@
 // The sidebar's lists' own parts (SidebarList.tsx): a row of a station, a folder, a profile, laid out as a chat's.
-import { style } from "@vanilla-extract/css";
+import { globalStyle, style } from "@vanilla-extract/css";
 import { navRow } from "./Sidebar.css.ts";
 import { vars } from "./styles/tokens.css.ts";
 
@@ -40,3 +40,26 @@ export const line = style({
 });
 /** A line's words that give way first. */
 export const fill = style({ flex: 1, ...ellipsis });
+
+/**
+ * The same row on the phone (NavPhone: a bottom bar place's top page, mobile/; the Android app's PlacePage.kt the same):
+ * the screen's width, 22 in on the left and 16 on the right (a chat row's), 10 over and under; the mark's column 16,
+ * 8 before the title; its type a size up (the title 16 on a line of 22, what is under it 13, as a chat row's second
+ * line); pressed, it darkens as a chat row does.
+ */
+export const phone = style({
+  display: "flex", alignItems: "flex-start", gap: 8, boxSizing: "border-box", minHeight: 0, padding: "10px 16px 10px 22px",
+  color: "var(--m-ink)", lineHeight: "22px", WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none",
+  "@media": {
+    "(pointer: coarse)": { selectors: { "&:active": { background: "color-mix(in srgb, var(--m-ink) 5%, transparent)" } } },
+    "(hover: hover) and (pointer: fine)": { selectors: { "&:hover": { background: "color-mix(in srgb, var(--m-ink) 4%, transparent)" } } },
+  },
+});
+globalStyle(`${phone} ${mark}`, { height: 22, color: "var(--m-muted)" });
+globalStyle(`${phone} ${head}`, { height: 22 });
+globalStyle(`${phone} ${title}`, { fontSize: vars.textTitle, lineHeight: "22px" });
+globalStyle(`${phone} ${end}`, { color: "var(--m-muted)" });
+globalStyle(`${phone} ${line}`, { minHeight: 20, lineHeight: "20px", color: "var(--m-muted)" });
+/** A section's heading on the phone: as the chats' days are (mobile/parts.tsx SectionHeader). */
+export const phoneHeading = style({ display: "flex", alignItems: "flex-end", padding: "14px 20px 6px", color: "var(--m-ink)" });
+globalStyle(`${phoneHeading} b`, { fontSize: vars.textBody, fontWeight: 600 });

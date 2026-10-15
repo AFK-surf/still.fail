@@ -10,12 +10,12 @@ import type { FoundMessage } from "../core/shapes.ts";
 import { jumpTo } from "../jumpTo.ts";
 import { Marked } from "../Marked.tsx";
 import { useWorkspaces } from "../cloud/api.ts";
-import { Archive, Check, Copy, ChevronDown, ChevronRight, Edit, Filter, Ling, Pin, Refresh, Search, Settings, Unplug } from "../icons.tsx";
+import { Archive, Copy, ChevronDown, ChevronRight, Edit, Ling, Pin, Refresh, Search, Settings, Unplug } from "../icons.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { useCopyChatLink } from "../ChatRef.tsx";
 import { setSidebarMode, stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
 import { useApp, useOpenPage } from "./app.tsx";
-import { FailedMark, Illustration, SectionHeader, SlackMark, Spinner } from "./parts.tsx";
+import { FailedMark, FilterMenu, Illustration, SectionHeader, SlackMark, Spinner, ticked } from "./parts.tsx";
 import { ChatMark, chatTone, jumpFromLine, stateLine, WaitingText } from "../ChatMark.tsx";
 import * as chatMarkCss from "../ChatMark.css.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
@@ -239,22 +239,15 @@ export function Recent() {
 const FilterButton = memo(function FilterButton({ filter }: { filter: ChatFilter }) {
   const app = useApp();
   const setFilter = (value: ChatFilter) => setSidebarMode(app.entry.id, value);
-  const mark = (on: boolean) => on ? <Check size={16} /> : <span style={{ width: 16 }} />;
   return (
-    <button type="button" className={`${barsCss.mNavButton} ${css.mFilter}`} data-on={filter !== "all" || undefined}
-      aria-label={t("web-mobile.home.filterLabel", { filter: filter === "mine" ? t("web-mobile.home.filterMine") : filter === "watching" ? t("web-mobile.home.filterWatching") : t("web-mobile.home.filterAll") })}
-      onClick={(e) => {
-        const r = e.currentTarget.getBoundingClientRect();
-        // The menu is 180 wide (app.tsx MenuHost): its right edge under the button's.
-        app.menu({ anchor: new DOMRect(r.right - 180, r.top, 0, r.height), items: [
-          { label: t("web-mobile.home.filterAll"), icon: mark(filter === "all"), action: () => setFilter("all") },
-          { label: t("web-mobile.home.filterMine"), icon: mark(filter === "mine"), action: () => setFilter("mine") },
-          { label: t("web-mobile.home.filterWatching"), icon: mark(filter === "watching"), action: () => setFilter("watching") },
-          { label: t("web-mobile.archive.title"), icon: <Archive size={16} />, action: () => app.push(app.at("/archive")) },
-        ] });
-      }}>
-      <Filter size={20} />
-    </button>
+    <FilterMenu on={filter !== "all"}
+      label={t("web-mobile.home.filterLabel", { filter: filter === "mine" ? t("web-mobile.home.filterMine") : filter === "watching" ? t("web-mobile.home.filterWatching") : t("web-mobile.home.filterAll") })}
+      items={[
+        { label: t("web-mobile.home.filterAll"), icon: ticked(filter === "all"), action: () => setFilter("all") },
+        { label: t("web-mobile.home.filterMine"), icon: ticked(filter === "mine"), action: () => setFilter("mine") },
+        { label: t("web-mobile.home.filterWatching"), icon: ticked(filter === "watching"), action: () => setFilter("watching") },
+        { label: t("web-mobile.archive.title"), icon: <Archive size={16} />, action: () => app.push(app.at("/archive")) },
+      ]} />
   );
 });
 
