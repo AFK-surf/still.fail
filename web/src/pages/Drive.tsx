@@ -393,8 +393,12 @@ function PickerDialog({ station, roots, onClose }: { station: string; roots: Dri
   const row = (f: PickFolder, here = false) => (
     <button key={f.path} type="button" className={css.pickRow} data-here={here || undefined} onClick={() => picker.go(f)}>
       {f.disk ? <Disk size={18} strokeWidth={1.6} className={css.icon} /> : <Folder size={18} strokeWidth={1.6} className={css.icon} />}
-      <span className={css.name}>{f.name}</span>
-      {f.unreadable && <span className={shellCss.muted}>{t("web-pages.drive.pickUnreadable")}</span>}
+      {f.unreadable ? (
+        <span className={css.text}>
+          <span className={css.name}>{f.name}</span>
+          <span className={css.pickNote}>{t("web-pages.drive.pickUnreadable")}</span>
+        </span>
+      ) : <span className={css.name}>{f.name}</span>}
     </button>
   );
   return (
