@@ -16,7 +16,6 @@ import { edgeColour, MAKERS, NEW_APP, renderAvatar, toIcon, useBuddies, type Ava
 import { useSlackTokens, type TokenCheck } from "../slack.tsx";
 import { StationContext, stationBase, useOnlyMine, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp, useRootPage, type MobileApp } from "./app.tsx";
-import { NavItem, NavLine, NavPhone, NavSection, navFill } from "../SidebarList.tsx";
 import { AccountList, ModelList, SettingRow } from "./History.tsx";
 import { Button, Field, FilterMenu, GroupLabel, LinkButton, ListCard, ListRow, Loading, MakerIcon, NavBar, NavButton, PickRow, PlaceHead, PlaceNote, SectionHeader, Seg, SlackMark, Spinner, ticked, tNodes } from "./parts.tsx";
 import { ask, confirm } from "./sheets.tsx";
@@ -60,17 +59,6 @@ export function ConnectRow({ connect: c, onClick }: { connect: Connect; onClick:
   );
 }
 
-/** A connect as the bar's place lists it (a wide screen's sidebar row, ../SidebarList.tsx): its mark, its name and team, how
- * it is at that line's end (its dot; in words too when it is not up, as the Android app's); how it runs under them. */
-function ConnectNavRow({ connect: c, onClick }: { connect: Connect; onClick: () => void }) {
-  return (
-    <NavItem onClick={onClick} mark={c.botImage ? <ConnectAvatar connect={c} size={16} /> : <SlackMark size={14} />} title={c.team ? `${c.name} · ${c.team}` : c.name}
-      end={<>{c.presence !== "online" && c.presence !== "busy" && c.statusText}<Presence state={c.presence} /></>}>
-      <NavLine><span className={navFill}>{c.modeText} · {c.runtimeText}{c.bind.model ? ` · ${c.modelName ?? c.bind.model}` : ""}</span></NavLine>
-    </NavItem>
-  );
-}
-
 /** Where a Slack app made and not connected yet stands, in words. */
 function waitingText(made: MadeSlackApp): string {
   return made.installed ? t("web-mobile.connects.waiting.installed", { team: made.installedTeam ?? made.team ?? t("web-mobile.connects.slackWorkspace") }) : made.install ? t("web-mobile.connects.waiting.install") : t("web-mobile.connects.waiting.token");
@@ -82,19 +70,8 @@ function waitingText(made: MadeSlackApp): string {
  */
 export function WaitingAppRow({ made, online }: { made: MadeSlackApp; online: boolean }) {
   const app = useApp();
-  const root = useRootPage();
-  const open = () => app.sheet({ height: 0.4, content: () => <WaitingAppSheet made={made} online={online} /> });
-  // On the bar's place: a row as the connects' there.
-  if (root) {
-    return (
-      <NavItem onClick={open} mark={<SlackMark size={14} />} title={made.team ? `${made.name} · ${made.team}` : made.name}
-        end={online ? <span className={partsCss.mAccent}>{t("web-mobile.connects.continue")}</span> : t("web-mobile.connects.stationOffline")}>
-        <NavLine><span className={navFill}>{waitingText(made)}</span></NavLine>
-      </NavItem>
-    );
-  }
   return (
-    <ListRow onClick={open}>
+    <ListRow onClick={() => app.sheet({ height: 0.4, content: () => <WaitingAppSheet made={made} online={online} /> })}>
       <SlackMark size={16} />
       <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
         <span className={listsCss.mRowTitle}>{made.name}{made.team && <span className={settingsCss.mRowAside}> · {made.team}</span>}</span>
@@ -163,42 +140,18 @@ export function ConnectsScreen() {
   const add = () => online.length === 1
     ? app.push(app.at(`/s/${online[0]!.id}/connects/new`))
     : app.sheet({ height: 0.5, content: () => <PickStation title={t("web-mobile.connects.add")} stations={online} to={(s) => `/s/${s.id}/connects/new`} /> });
-  // As the bar's place (its top page): all or the viewer's from a filter in its head (the chats'), each station's
-  // connects under its name, a row each (the wide screen's sidebar rows); what a connect is, said while there is none.
-  if (root && !one) {
-    const shown = (stations ?? []).map((s) => ({ s, here: items.filter((i) => i.station === s.station), waiting: s.overview?.slackApps ?? [] }))
-      .filter(({ s, here, waiting }) => here.length > 0 || waiting.length > 0 || !s.online);
-    const none = !!connects.value && !!stations && shown.every(({ here, waiting }) => here.length === 0 && waiting.length === 0);
-    return (
-      <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-        <PlaceHead title={t("web-mobile.settings.connects")} back={t("web-mobile.settings.title")} onBack={app.pop} trailing={(
+  return (
+    <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
+      {/* As the bar's place (its top page): all or the viewer's from a filter in its head, the chats'; pushed, the segments. */}
+      <PlaceHead title={t("web-mobile.settings.connects")} back={one?.name ?? t("web-mobile.settings.title")} onBack={app.pop}
+        primary={online.length > 0 ? { key: "connect", label: t("web-mobile.connects.add"), run: add } : null}
+        trailing={root && !one ? (
           <FilterMenu on={mine} label={mine ? t("web-mobile.connects.mine") : t("web-mobile.home.filterAll")} items={[
             { label: t("web-mobile.home.filterAll"), icon: ticked(!mine), action: () => setMine(false) },
             { label: t("web-mobile.connects.mine"), icon: ticked(mine), action: () => setMine(true) },
           ]} />
-        )} />
-        {!stations || !connects.value ? <Loading text={connects.error?.message ?? t("web-mobile.connects.reading")} /> : (
-          <NavPhone>
-            {shown.map(({ s, here, waiting }) => (
-              <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
-                <NavSection title={s.online ? s.name : t("web-mobile.connects.stationOfflineTitle", { station: s.name })}>
-                  {!s.online && here.length === 0 && <PlaceNote>{t("web-mobile.connects.offlineList")}</PlaceNote>}
-                  {here.map((i) => <ConnectNavRow key={i.connect.id} connect={i.connect} onClick={() => app.push(`${stationBase(i.station)}/connects/${encodeURIComponent(i.connect.id)}`)} />)}
-                  {waiting.map((a) => <WaitingAppRow key={a.appId} made={a} online={s.online} />)}
-                </NavSection>
-              </StationContext.Provider>
-            ))}
-            {none && <><PlaceNote>{mine ? t("web-pages.connects.noneMine") : t("web-pages.connects.none")}</PlaceNote><PlaceNote>{t("web-mobile.connects.note", { name: NAME })}</PlaceNote></>}
-          </NavPhone>
-        )}
-      </div>
-    );
-  }
-  return (
-    <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <PlaceHead title={t("web-mobile.settings.connects")} back={one?.name ?? t("web-mobile.settings.title")} onBack={app.pop}
-        primary={online.length > 0 ? { key: "connect", label: t("web-mobile.connects.add"), run: add } : null} />
-      <div className={css.mListSeg}><Seg options={[t("web-mobile.home.filterAll"), t("web-mobile.connects.mine")]} selected={mine ? 1 : 0} onSelect={(i) => setMine(i === 1)} height={34} fill /></div>
+        ) : undefined} />
+      {!(root && !one) && <div className={css.mListSeg}><Seg options={[t("web-mobile.home.filterAll"), t("web-mobile.connects.mine")]} selected={mine ? 1 : 0} onSelect={(i) => setMine(i === 1)} height={34} fill /></div>}
       {!stations || !connects.value ? <Loading text={connects.error?.message ?? t("web-mobile.connects.reading")} /> : stations.map((s) => {
         const here = items.filter((i) => i.station === s.station);
         const waiting = s.overview?.slackApps ?? [];

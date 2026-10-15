@@ -2,7 +2,7 @@
 // (StationSettings), everything of it in one place: how it is, what is left of the machine, what runs on it (agents,
 // profiles, connects, folders lent), its software and the machine itself. Elsewhere (no rail, or Station not in it) the
 // settings' list of cards stays, each name opening this page.
-import { Fragment, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Link, Navigate, NavLink, useParams } from "react-router";
 import { stamp, useStations, type StationView } from "../api.ts";
 import { useGo } from "../go.ts";
@@ -20,7 +20,7 @@ import { WorkspaceMark } from "../WorkspaceMark.tsx";
 import { HostDetails, Net, problems, state, useLong } from "./StationCards.tsx";
 import { MarkPick } from "./MarkPick.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
-import { NavAction, NavList, NavItem, NavLine, NavTop, navFill, useNavPhone } from "../SidebarList.tsx";
+import { NavAction, NavList, NavItem, NavLine, NavTop, navFill } from "../SidebarList.tsx";
 import { AddStationDialog, useStationEdits, useWorkspace } from "./settings.tsx";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import * as railCss from "../Rail.css.ts";
@@ -60,29 +60,21 @@ export function StationsNav({ entry, top }: { entry: WorkspaceEntry; top?: React
 /** A station in the sidebar: its mark and name, how it is at the end of that line (its agents at work, when it was last
  * seen while away); what the machine is under them; then, while it is up, what is left of its CPU, memory and disk in
  * small boxes (as in a chat's bar: their edge in their level's colour), and how this device reaches it, a newer version
- * there said too. Nothing in colour but what is off. The phone's Station (mobile/Stations.tsx) has the same rows,
- * `onClick` opening its page there. */
-export function StationRow({ s, to, onClick }: { s: StationView; to?: string | undefined; onClick?: (() => void) | undefined }) {
-  // On the phone (narrower; the Android app's rows the same): its agents at work in grey before the dot at the line's
-  // very end, an offline station said as the core sums it up (when it was last seen) rather than as the machine it was,
-  // and always three lines: the third (how it is reached, what runs low, a newer version) kept while it is empty, so
-  // no row grows or shrinks as states change (the user: nothing in the list moves).
-  const phone = useNavPhone();
+ * there said too. Nothing in colour but what is off. */
+function StationRow({ s, to }: { s: StationView; to: string }) {
   const meters = s.online ? s.host?.meters ?? [] : [];
   const newer = s.online && (s.overview?.updates ?? []).some((v) => v.installed && v.updatable && (v.newer || v.downgrade));
-  const dot = <span className={railCss.dot} data-online={s.online || undefined} />;
   return (
-    <NavItem to={to} onClick={onClick} title={s.name}
+    <NavItem to={to} title={s.name}
       mark={s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={16} /> : <WorkspaceMark w={{ name: s.name }} size={16} />}
-      end={phone ? <>{s.online && running(s) > 0 && t("web-pages.stations.page.runningShort", { n: running(s) })}{dot}</> : <>{dot}{brief(s)}</>}>
-      <NavLine><span className={navFill}>{phone && !s.online ? s.summary : s.host?.identity ?? (s.online ? t("web-pages.stations.connecting") : t("web-pages.stations.offline"))}</span></NavLine>
-      {phone && <PhoneThird s={s} newer={newer} />}
-      {!phone && meters.length > 0 && (
+      end={<><span className={railCss.dot} data-online={s.online || undefined} />{brief(s)}</>}>
+      <NavLine><span className={navFill}>{s.host?.identity ?? (s.online ? t("web-pages.stations.connecting") : t("web-pages.stations.offline"))}</span></NavLine>
+      {meters.length > 0 && (
         <span className={css.rowMeters}>
           {meters.map((m) => <EdgeChip key={m.label} small bare fill={m.left} level={m.level} mark={m.short} text={`${m.big}${m.unit === "%" ? "%" : m.unit.slice(0, 1)}`} label={`${m.label} ${m.remaining}`} />)}
         </span>
       )}
-      {!phone && s.online && (s.net || newer) && (
+      {s.online && (s.net || newer) && (
         <NavLine>
           <span className={navFill}>
             {s.net && <>{s.net.path}{s.net.rtt && <>{" · "}<span className={css.low} data-level={s.net.rtt.level}>{s.net.rtt.text}</span></>}</>}
@@ -95,34 +87,12 @@ export function StationRow({ s, to, onClick }: { s: StationView; to?: string | u
   );
 }
 
-/** A station's third line on the phone: how it is reached and its round trip, what of the machine runs low (磁盘剩 183 G),
- * a newer version; only what is off in colour. Its room kept while it says nothing (a line's height whatever). */
-function PhoneThird({ s, newer }: { s: StationView; newer: boolean }) {
-  const net = s.online ? s.net : undefined;
-  const low = (s.online ? s.host?.meters ?? [] : []).filter((m) => m.level !== "ok");
-  const parts: ReactNode[] = [];
-  if (net) {
-    parts.push(net.path);
-    if (net.rtt) parts.push(<span className={css.low} data-level={net.rtt.level}>{net.rtt.text}</span>);
-  }
-  for (const m of low) parts.push(<span className={css.low} data-level={m.level}>{m.short}{m.remaining}</span>);
-  if (newer) parts.push(t("web-pages.stations.page.newer"));
-  return (
-    <NavLine>
-      <span className={navFill}>
-        {parts.length === 0 ? "\u00a0" : parts.map((p, i) => <Fragment key={i}>{i > 0 && " · "}{p}</Fragment>)}
-      </span>
-    </NavLine>
-  );
-}
-
 /** How it is in a word or two: its agents at work, else when it was last seen while away; nothing while idle. */
 function brief(s: StationView): ReactNode {
   if (!s.online) return <Time stamp={stamp(s, "lastSeen")} />;
-  const n = running(s);
-  return n > 0 ? <span className={css.busy}>{t("web-pages.stations.page.runningShort", { n })}</span> : null;
+  const running = s.overview?.counts.running ?? 0;
+  return running > 0 ? <span className={css.busy}>{t("web-pages.stations.page.runningShort", { n: running })}</span> : null;
 }
-const running = (s: StationView) => s.overview?.counts.running ?? 0;
 
 /** `settings/stations` with the sidebar of their own: the first of them (there is no page of them all). */
 export function StationsFirst({ entry }: { entry: WorkspaceEntry }) {

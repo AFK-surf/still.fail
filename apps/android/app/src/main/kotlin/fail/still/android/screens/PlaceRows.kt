@@ -91,18 +91,6 @@ fun PlaceRow(
 private val MARK = 16.dp
 private val GAP = 8.dp
 
-/** A line under a row's title: muted, one line; `color` only for what is off. */
-@Composable
-fun PlaceLine(text: String, color: Color = C.muted) {
-    Text(text, fontSize = 14.sp, lineHeight = 20.sp, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
-}
-
-/** What is at the end of a row's first line: small and muted; `color` only for what is off. */
-@Composable
-fun PlaceEnd(text: String, color: Color = C.muted) {
-    Text(text, fontSize = 13.sp, lineHeight = 18.sp, color = color, maxLines = 1)
-}
-
 /** A station's dot at a row's end: green while up, grey while away. */
 @Composable
 fun OnlineDot(online: Boolean) {
