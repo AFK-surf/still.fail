@@ -305,21 +305,29 @@ private class VizView(context: Context) : WebView(context) {
  * In a list, an upright drag on the page moves the list, as it would over anything else in the message: the page
  * keeps taps and sideways drags (its own controls, a chart's slider). Taken in the first pass, before the page sees
  * the move; the page is told the touch is over, and the drag goes on to the list as nested scrolling, fling included.
+ *
+ * The fling's speed is the finger's on the screen, as the list's own drag measures it: the page moves with the list
+ * under the finger, so where the finger is on the page hardly changes while it drags and says nothing of its speed.
+ * It is taken from what the finger moved (each move's samples included), added up from where it went down.
  */
 private fun Modifier.passVerticalDrags(dispatcher: NestedScrollDispatcher): Modifier = pointerInput(Unit) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
         val tracker = VelocityTracker()
-        tracker.addPosition(down.uptimeMillis, down.position)
+        var moved = Offset.Zero
+        tracker.addPosition(down.uptimeMillis, moved)
         var total = Offset.Zero
         var dragging = false
         var sideways = false
         while (true) {
             val event = awaitPointerEvent(PointerEventPass.Initial)
             val change = event.changes.firstOrNull { it.id == down.id } ?: break
-            if (!change.pressed) break
-            tracker.addPosition(change.uptimeMillis, change.position)
+            // Both ends of a move are where the page is now, so their difference is the finger's own.
+            change.historical.forEach { tracker.addPosition(it.uptimeMillis, moved + (it.position - change.previousPosition)) }
             val delta = change.position - change.previousPosition
+            moved += delta
+            tracker.addPosition(change.uptimeMillis, moved)
+            if (!change.pressed) break
             if (!dragging && !sideways) {
                 total += delta
                 if (abs(total.y) > viewConfiguration.touchSlop && abs(total.y) > abs(total.x)) dragging = true
@@ -333,7 +341,8 @@ private fun Modifier.passVerticalDrags(dispatcher: NestedScrollDispatcher): Modi
             }
         }
         if (dragging) {
-            val velocity = Velocity(0f, tracker.calculateVelocity().y)
+            val most = viewConfiguration.maximumFlingVelocity
+            val velocity = Velocity(0f, tracker.calculateVelocity(Velocity(most, most)).y)
             dispatcher.coroutineScope.launch {
                 val pre = dispatcher.dispatchPreFling(velocity)
                 dispatcher.dispatchPostFling(Velocity.Zero, velocity - pre)
