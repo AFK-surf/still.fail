@@ -149,9 +149,12 @@ createRoot(root).render(<DemoApp phone />);
   await touch('touchEnd');
   // A finger on the bar as the switch lands: it lands untouched (closing all the way, never back up or held).
   await page.waitForTimeout(30);
+  const glassW = () => page.evaluate(() => document.querySelector('[data-bar=glass]').getBoundingClientRect().width);
+  const wide = await glassW(), widths = [];
   const landing = [await openness()];
   await touch('touchStart', sx, sy);
-  for (let k = 0; k < 8; k++) { await page.waitForTimeout(25); landing.push(await openness()); }
+  for (let k = 0; k < 8; k++) { await page.waitForTimeout(25); landing.push(await openness()); widths.push(await glassW()); }
+  assert.ok(widths.every((v) => Math.abs(v - wide) < 1), `the glass keeps its width as it closes (${wide}: ${widths.map(Math.round).join(' ')})`);
   await touch('touchEnd');
   assert.ok(landing.every((v, k) => k === 0 || v <= landing[k - 1] + 0.01) && landing.at(-1) < landing[0] - 0.5, `a touch does not stop the landing (${landing.map((v) => v.toFixed(2)).join(' ')})`);
   await page.waitForTimeout(1500);

@@ -611,6 +611,9 @@ class BarTest {
             assertTrue("frame $n after the let-go: places of both bars at the bar's middle: $both", both.first.isEmpty() || both.second.isEmpty())
             val b = bounds("bar-ball").center
             val k = notchW()
+            // The glass as wide as it was, all the way down (it narrowed with the panel's speed, going off to the side).
+            val gw = bounds("bar-glass").width
+            assertTrue("frame $n: the glass ${gw / d} dp wide, not ${g.width / d}", abs(gw - g.width) < 1f)
             maxBall = max(maxBall, (b - ball).getDistance() / d)
             maxNotch = max(maxNotch, abs(k - notch) / d)
             assertTrue("frame $n: the ball jumped ${(b - ball).getDistance() / d} dp", (b - ball).getDistance() < 16 * d)
