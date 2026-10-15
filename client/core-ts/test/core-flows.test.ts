@@ -1063,6 +1063,17 @@ test("the_archive_is_its_stations_archived_chats_newest_first_by_day_and_one_res
   // One station: which one is not said.
   assert.equal(first.place, undefined);
   assert.deepEqual([a.days[1].items[0].how, a.days[1].items[0].deletable], ["空闲后自动归档", false]);
+  assert.deepEqual([first.id, a.total, a.more], ["k1", 2, false]);
+  // Looked for by words in its title, or only the newest so many: the rest said to be left out.
+  subscribe(core, ui, 4, { topic: "archive", scope: "ws", q: "K2" });
+  subscribe(core, ui, 5, { topic: "archive", scope: "ws", limit: 1 });
+  subscribe(core, ui, 6, { topic: "archive", scope: "ws", q: "nothing like it" });
+  await host.settle();
+  answersOf(host, values);
+  const ids = (n: number) => v(values, n).days.flatMap((d: J) => d.items.map((i: J) => i.id));
+  assert.deepEqual([ids(4), v(values, 4).total, v(values, 4).more], [["k2"], 1, false]);
+  assert.deepEqual([ids(5), v(values, 5).total, v(values, 5).more], [["k1"], 2, true]);
+  assert.deepEqual([ids(6), v(values, 6).note], [[], "没有匹配的归档对话"]);
   // Put back in the list: it leaves the archive before the call answers.
   call(core, ui, 2, "chat.archive", { station: "ws/st", thread: 7, session: "k1", archived: false });
   await host.settle();
