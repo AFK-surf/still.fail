@@ -52,15 +52,21 @@ test("a machine with no way to hold it: asked again, no failure", async () => {
   await awake.close();
 });
 
-test("work is a running turn, or a running job that is not a service on a port", () => {
-  const store = (sessions: { running: boolean }[], jobs: { state: string; watch: boolean; port: number | null }[]) =>
-    ({ listSessions: () => sessions, listJobs: () => jobs }) as never;
-  assert.equal(working(store([{ running: false }], [])), false);
-  assert.equal(working(store([{ running: true }], [])), true);
-  assert.equal(working(store([], [{ state: "running", watch: false, port: null }])), true);
-  assert.equal(working(store([], [{ state: "running", watch: false, port: 5173 }])), false);
-  assert.equal(working(store([], [{ state: "running", watch: true, port: 5173 }])), true);
-  assert.equal(working(store([], [{ state: "exited", watch: false, port: null }])), false);
+test("work is a running turn, a wait on what a session started, or a running job that is not a service on a port", () => {
+  type Last = { declared: string | null; endedAt: number | null; waitSeconds: number | null };
+  const store = (sessions: { running: boolean }[], jobs: { state: string; watch: boolean; port: number | null }[], last: Last[] = []) =>
+    ({ listSessions: () => sessions, listJobs: () => jobs, sessionStats: () => new Map(last.map((l, i) => [String(i), { lastTurn: l }])) }) as never;
+  const now = 10_000_000;
+  assert.equal(working(store([{ running: false }], []), now), false);
+  assert.equal(working(store([{ running: true }], []), now), true);
+  assert.equal(working(store([], [{ state: "running", watch: false, port: null }]), now), true);
+  assert.equal(working(store([], [{ state: "running", watch: false, port: 5173 }]), now), false);
+  assert.equal(working(store([], [{ state: "running", watch: true, port: 5173 }]), now), true);
+  assert.equal(working(store([], [{ state: "exited", watch: false, port: null }]), now), false);
+  // Waiting on CI for up to 10 minutes, 5 minutes in: work; long past its wait (stopped, or nothing came of it): not.
+  assert.equal(working(store([], [], [{ declared: "waiting", endedAt: now - 300_000, waitSeconds: 600 }]), now), true);
+  assert.equal(working(store([], [], [{ declared: "waiting", endedAt: now - 3_600_000, waitSeconds: 600 }]), now), false);
+  assert.equal(working(store([], [], [{ declared: "all_done", endedAt: now - 1000, waitSeconds: null }]), now), false);
 });
 
 /// Windows' system-wide execution state (CallNtPowerInformation SystemExecutionState): ES_SYSTEM_REQUIRED is 0x1.
