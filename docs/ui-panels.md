@@ -43,8 +43,11 @@
 
 - `scripts/check.sh`：
   - 「no hand-written negative margins」：样式里不能手写负 margin。
+  - 「no corner of its own (in what this adds)」：这次改动新增的样式行里不能写死圆角（5px 及以上），用 tokens（`vars.r*`）或 `align.ts` 的 `surface`/`inner` 算出来；圆、胶囊（`999px`）和 4px 以内的小记号除外，确实要自定的在同一行注释 `own corner: <为什么>`。已有的不追究，改到哪行就顺手改掉。
   - 「small panels on one ground」：`surface()` 只允许出现在 popover、通知气泡、⌘K、composer 引用列表四处，其它小面板必须组合 `popover`。
   - 「web: stories measured, the message list's motion watched」（完整检查，CI 的 Linux runner 用自带 Chrome）：`test/browser/stories.mjs` 打开每个 story，走完它的 `steps`，用 `test/browser/measure.mjs` 量两件事，有一处不对就挂：
     - 所有圆角（`corners`）：每个有底色或能按的圆角元素，落在外面圆角容器的角落里时，离两边一样远，圆角同心；
     - 所有小面板（`panels`）：内边距 6，卡片文字四边 16，行的文字缩进 10，角落元素同心。
+    - 量完再把每个滚动区滚到底量一遍：列表最后一行（⌘K 的最后一项）只有滚到底才在角落里。
+- 开发版（`pnpm dev:web`、`pnpm stories`）一边用一边量（`web/src/dev/offs.ts`，量法同上）：不对的地方画红框，指上去说哪里不对，控制台打一行 `off (docs/ui-panels.md): …`。写界面时第一眼就看得到，不用等 CI，也不只限于 story 走得到的状态。
 - 本机跑：`PLAYWRIGHT_MODULE=<playwright> node test/browser/stories.mjs`；`ONLY=<id,…>` 只跑几个，`REPORT=1` 列出全部问题而不是直接失败，`SHOTS=<目录>` 每个 story 存一张图。

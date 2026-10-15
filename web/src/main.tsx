@@ -16,6 +16,8 @@ import { WindowControls } from "./WindowControls.tsx";
 import { webUpdates } from "./core/webUpdates.ts";
 
 if (import.meta.env.PROD) webUpdates.start();
+// In development, what is off (a corner, a small panel's padding) outlined in red as it shows (dev/offs.ts).
+if (import.meta.env.DEV) void import("./dev/offs.ts").then((m) => m.watchOffs());
 followAppearance();
 startScrollbars();
 followWindowColors();

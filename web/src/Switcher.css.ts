@@ -29,7 +29,8 @@ export const search = style({
   fontSize: vars.textTitle,
   selectors: { "&::placeholder": { color: vars.subtle } },
 });
-export const results = style({ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 0" });
+// Under the search, a little room; at its foot none: the last row's ground is as far from the foot as from the sides.
+export const results = style({ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 0 0" });
 export const row = style({
   display: "flex", alignItems: "center", gap: 10, minHeight: 38, padding: `8px ${DIALOG_PAD - EDGE}px`, borderRadius: inner,
   fontSize: vars.textUi, cursor: "pointer", userSelect: "none", cornerShape: vars.cornerShape,

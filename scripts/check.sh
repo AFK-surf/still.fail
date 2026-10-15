@@ -32,8 +32,8 @@ mode=${1:-commit}
 full=0
 case "$mode" in
   commit) changed=$(git diff --cached --name-only --diff-filter=ACMRD) ;;
-  push) changed=$(git diff --name-only "${2:?push needs a range}") ;;
-  full) full=1; changed=$(git diff --name-only "${2:?full needs a range}") ;;
+  push) range=${2:?push needs a range}; changed=$(git diff --name-only "$range") ;;
+  full) full=1; range=${2:?full needs a range}; changed=$(git diff --name-only "$range") ;;
   all) full=1; changed=$(git ls-files) ;;
   *) echo "usage: sh scripts/check.sh commit | push <range> | full <range> | all" >&2; exit 2 ;;
 esac
@@ -41,6 +41,14 @@ esac
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 touches() { printf '%s\n' "$changed" | grep -qE "$1"; }
+# The lines this run's change adds to the files given (none for `all`, which checks what is, not what changed).
+added() {
+  case "$mode" in
+    commit) git diff --cached -U0 -- "$@" ;;
+    push|full) git diff -U0 "$range" -- "$@" ;;
+    *) ;;
+  esac | grep -E '^\+[^+]' || true
+}
 # Whether this run does a part (STILLFAIL_CHECK_PART): any when it says none.
 part() { [ -z "${STILLFAIL_CHECK_PART:-}" ] || case " $STILLFAIL_CHECK_PART " in *" $1 "*) true ;; *) false ;; esac; }
 
@@ -209,6 +217,12 @@ if part ts; then
     # The safe area is read through --safe-top … (styles/global.css.ts), never env() itself: the stories put the page on
     # each phone's by setting those.
     step "safe area through its vars" sh -c '! git grep -n "env(safe-area-inset" -- "web/src/*.ts" "web/src/*.tsx" ":!web/src/styles/global.css.ts"'
+    # No corner of its own in what a change adds: a corner is a token (vars.r*) or follows what it sits in (align.ts
+    # surface/inner, docs/ui-panels.md); circles, capsules and marks of 4 or less may say theirs, as may a line that says
+    # why with "own corner:".
+    added 'web/src/*.css.ts' | grep -E '[bB]order[A-Za-z]*Radius: *([`"][^`"]*([5-9]|[1-9][0-9]+)(\.[0-9]+)?px|([5-9]|[1-9][0-9]+)\b)' \
+      | grep -vE 'Radius: *("999px"|999\b)|own corner:' > "$tmp/corners" || true
+    step "no corner of its own (in what this adds)" sh -c "! grep . '$tmp/corners'"
     # No margin taken back by hand: a ground reaching past its words, a corner, a column, a centring is one of
     # styles/align.ts's (bleedX, surface, columns, centred…), so its numbers are said once (a var's own negative may be).
     step "no hand-written negative margins" sh -c '! git grep -nE "margin[A-Za-z]*: *(-[0-9]|[\"\`][^\"\`]*[ (]-[0-9]|[\"\`]-[0-9])" -- "web/src/*.css.ts" | grep -v "calc(-1 \* var("'

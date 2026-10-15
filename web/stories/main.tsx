@@ -51,6 +51,9 @@ if (id) {
     );
   }
   if (story && query.get("play")) void play(story.steps ?? []);
+  // In development (the gallery), what is off outlined in red, as in the app (src/dev/offs.ts); the tests' build measures
+  // it itself.
+  if (import.meta.env.DEV) void import("../src/dev/offs.ts").then((m) => m.watchOffs());
 } else {
   createRoot(root).render(<StrictMode><Tooltip.Provider delayDuration={300}><Gallery /></Tooltip.Provider></StrictMode>);
 }

@@ -64,9 +64,26 @@ try {
     if (reached) {
       const c = await page.evaluate(corners);
       const p = await page.evaluate(panels);
-      console.log(`${story.id}: ${c.measured} corner(s), ${p.surfaces} panel(s) measured; ${c.wrong.length + p.wrong.length} off`);
       for (const w of [...c.wrong, ...p.wrong]) wrong.push(`${story.id}: ${w}`);
       if (out) await page.screenshot({ path: `${out}/${story.id}.png` });
+      // Then each list scrolled to its end, and measured again: what is at a list's foot (⌘K's last row) shows only so.
+      const scrolled = await page.evaluate(() => {
+        let n = 0;
+        for (const el of document.querySelectorAll('body *')) {
+          const o = getComputedStyle(el);
+          if (/auto|scroll/.test(o.overflowY) && el.scrollHeight > el.clientHeight + 1) { el.scrollTop = el.scrollHeight; n++; }
+          if (/auto|scroll/.test(o.overflowX) && el.scrollWidth > el.clientWidth + 1) { el.scrollLeft = el.scrollWidth; n++; }
+        }
+        return n;
+      });
+      let more = 0;
+      if (scrolled) {
+        await settle(page, 300);
+        const c2 = await page.evaluate(corners), p2 = await page.evaluate(panels);
+        for (const w of [...c2.wrong, ...p2.wrong]) { wrong.push(`${story.id} (scrolled to the end): ${w}`); more++; }
+        if (out && more) await page.screenshot({ path: `${out}/${story.id}-end.png` });
+      }
+      console.log(`${story.id}: ${c.measured} corner(s), ${p.surfaces} panel(s) measured${scrolled ? `, again scrolled to the end` : ''}; ${c.wrong.length + p.wrong.length + more} off`);
     }
     for (const e of errors) console.log(`${story.id}: page error ${e}`);
     await page.close();
