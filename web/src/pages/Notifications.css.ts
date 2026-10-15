@@ -57,9 +57,9 @@ export const tile = style({
   transition: `border-color ${vars.dur} ${vars.easeOut}`,
   selectors: { "&[data-on]": { borderColor: vars.accent }, "&[data-refused]": { borderColor: "transparent" }, "&:disabled": { cursor: "default", opacity: "0.5" } },
 });
-// What the system refused: a settings card's row under the tiles, its reason in red (what is wrong is).
-export const refused = style({ marginTop: "10px" });
-export const refusedWhy = style({ color: vars.red });
+// What the system refused: the page's first card, one row, as a type's; its way on in red (what is wrong is).
+export const refused = style({ marginBottom: "16px" });
+export const refusedGo = style({ flex: "none", color: vars.red, fontSize: vars.textMeta, fontWeight: "500" });
 export const tilePicture = style({
   position: "relative", width: "72px", height: "46px", marginBottom: "4px", overflow: "hidden",
   borderRadius: "8px", background: vars.canvas, border: `1px solid ${vars.line}`,

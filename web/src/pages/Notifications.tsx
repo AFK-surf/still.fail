@@ -8,8 +8,8 @@ import { core, useTopic } from "../core/react.ts";
 import { CAN_NOTIFY, setNotify, useNotifyState, type NotifyState } from "../notify.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
 import { setPrefs } from "../prefs.ts";
-import { ArrowUpRight, ChevronRight } from "../icons.tsx";
-import { Button, MobileBack, Section, Segmented, Switch, SwitchRow } from "../ui.tsx";
+import { ChevronRight } from "../icons.tsx";
+import { MobileBack, Section, Segmented, Switch, SwitchRow } from "../ui.tsx";
 import { failure, useToast } from "../toast.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./Notifications.css.ts";
@@ -33,6 +33,7 @@ export function NotificationsPage({ back, workspace }: { back: string; workspace
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={back} label={t("web-pages.settings.title")} />
       <header className={pagesCss.pageHead}><div><h1>{t("web-pages.settings.nav.notifications")}</h1></div></header>
+      {s.state === "denied" && <Refused browser={!window.stillfailDesktop} onOpen={s.openSettings} />}
       <Preview s={s} kind={open ?? KINDS_SHOWN.find((k) => s.banner(k)) ?? "wait"} />
       <Section title={t("web-pages.notifications.ways.title")} description={s.note}>
         <div className={css.tiles}>
@@ -41,7 +42,6 @@ export function NotificationsPage({ back, workspace }: { back: string; workspace
           <Tile way="badge" on={s.badge.on} onChange={(on) => s.setBadge({ on })} />
           {s.dock && <Tile way="dock" on={s.dock.on} onChange={(on) => s.setDock({ on })} />}
         </div>
-        {s.state === "denied" && <Refused browser={!window.stillfailDesktop} onOpen={s.openSettings} />}
       </Section>
       <Section title={t("web-pages.notifications.kinds.title")}>
         <div className={`${pagesCss.card} ${css.kinds}`}>
@@ -140,16 +140,25 @@ function useDock() {
 
 export type Way = "banner" | "badge" | "dock";
 
-/** The system refused them: a row of the settings' cards under the tiles, as the others are, with the way to its
- * settings where the app can open them (a browser's site settings it cannot). */
+/** The system refused them: first on the page, as the system's own settings and other apps say it (a status, and the
+ * way to turn it on), the whole row the way to the system's settings where the app can open them (a browser's site
+ * settings it cannot: there it says where). What the system does not hold back (the badge, the dock) goes on. */
 export function Refused({ browser, onOpen }: { browser: boolean; onOpen: (() => void) | null }) {
+  const text = (
+    <span className={css.kindText}>
+      <span>{t("web-pages.notifications.permission.title")}</span>
+      <span className={css.muted}>{browser ? t("web-pages.notifications.permission.deniedBrowser", { name: NAME }) : t("web-pages.notifications.permission.denied", { name: NAME })}</span>
+    </span>
+  );
   return (
-    <div className={`${pagesCss.card} ${pagesCss.cardRow} ${css.refused}`} role="status">
-      <div className={pagesCss.cardRowText}>
-        <strong>{t("web-pages.notifications.permission.title")}</strong>
-        <span className={css.refusedWhy}>{browser ? t("web-pages.notifications.permission.deniedBrowser", { name: NAME }) : t("web-pages.notifications.permission.denied", { name: NAME })}</span>
-      </div>
-      {onOpen && <Button icon={ArrowUpRight} onClick={onOpen}>{t("web-pages.notifications.permission.open")}</Button>}
+    <div className={`${pagesCss.card} ${css.kinds} ${css.refused}`} role="status">
+      {onOpen ? (
+        <button type="button" className={css.kindHead} onClick={onOpen}>
+          {text}
+          <span className={css.refusedGo}>{t("web-pages.notifications.permission.open")}</span>
+          <ChevronRight size={16} className={css.chevron} aria-hidden="true" />
+        </button>
+      ) : <div className={css.kindHead}>{text}</div>}
     </div>
   );
 }

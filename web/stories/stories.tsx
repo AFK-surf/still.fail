@@ -221,11 +221,11 @@ export const stories: Story[] = [
   {
     id: "settings-notifications-refused", group: "设置", title: "通知 · 系统没允许",
     render: () => stage(<div style={{ display: "grid", gap: 10, padding: 32, maxWidth: 720 }}>
+      <Refused browser={false} onOpen={noop} />
+      <Refused browser onOpen={null} />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
         <Tile way="banner" on={false} refused onChange={noop} /><Tile way="badge" on onChange={noop} /><Tile way="dock" on onChange={noop} />
       </div>
-      <Refused browser={false} onOpen={noop} />
-      <Refused browser onOpen={null} />
     </div>),
   },
   { id: "settings-changelog", group: "设置", title: "更新日志", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "更新日志" }] },
