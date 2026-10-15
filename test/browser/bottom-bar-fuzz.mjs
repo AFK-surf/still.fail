@@ -72,9 +72,18 @@ createRoot(root).render(<DemoApp phone />);
     let backs = 0;
     for (let i = 0; i < N; i++) {
       const away = await page.locator('[data-bar=host][data-away]').count();
-      // A page pushed over the place (令 opened a new chat, a tap let through to the page): back from it, not a gesture
-      // of the count. Its back is its first button (返回, 取消, or the name of the page under it).
-      if (away) { await page.locator('[data-role=top] button').first().tap({ timeout: 3000 }).catch(() => {}); await page.waitForTimeout(900); i--; if (++backs > 5) throw new Error('could not get back to a place'); continue; }
+      // A page pushed over the place (令 opened a new chat, a tap let through to the page: a chat from 用量's or 奏's
+      // rows): back from it, not a gesture of the count. Its back is the top bar's button furthest up and left (返回, 取消,
+      // or the name of the page under it); a chat's bar has its agent's activity before it in the page.
+      if (away) {
+        const back = await page.locator('[data-role=top] button').evaluateAll((es) => {
+          const shown = es.map((e, i) => ({ i, r: e.getBoundingClientRect() })).filter(({ r }) => r.width > 0 && r.height > 0);
+          shown.sort((a, b) => (Math.round(a.r.top / 8) - Math.round(b.r.top / 8)) || (a.r.left - b.r.left));
+          return shown[0]?.i ?? 0;
+        });
+        await page.locator('[data-role=top] button').nth(back).tap({ timeout: 3000 }).catch(() => {});
+        await page.waitForTimeout(900); i--; if (++backs > 5) throw new Error('could not get back to a place'); continue;
+      }
       backs = 0;
       const row = await page.locator('[role=tablist]').boundingBox();
       const open = await page.locator('[data-bar=scrim]').count();
