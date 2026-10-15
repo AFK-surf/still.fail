@@ -225,8 +225,9 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
     // would put the new page on the sheet's entry, which the back then leaves for the old page.
     replace: (path, state) => void transitionTo(() => afterBack(() => now.current.navigate(path, { replace: true, state }))),
     home: () => afterBack(() => now.current.navigate(home)),
-    // A page of its own (scrolled to its top), in place of the one in view, without the side's slide.
-    tab: (place) => afterBack(() => now.current.navigate(`${home}${PLACE_PATHS[place]}`, { replace: true, state: { fresh: true } })),
+    // A page of its own (scrolled to its top), in place of the one in view, without the side's slide. Only from a place's
+    // top page: one pushed meanwhile (令 tapped while a bar switch was landing) stays, and is not made the place.
+    tab: (place) => afterBack(() => { if (now.current.pages.length === 1) now.current.navigate(`${home}${PLACE_PATHS[place]}`, { replace: true, state: { fresh: true } }); }),
     sheet: setSheet,
     menu: setMenu,
     toast: showToast,

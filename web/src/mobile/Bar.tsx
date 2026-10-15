@@ -251,9 +251,10 @@ export function BottomBar({ scope, place, shown, go, newChat, onPanel }: BottomB
       if (key && key !== place) go(key);
     }, [200, 28]);
   };
-  // Landed and drawn as the chosen bar: the ball put where it is (it was carried there), the stack gone.
+  // Landed and drawn as the chosen bar: the ball put where it is (it was carried there), the stack gone. Away (a page
+  // opened over the place as the switch landed, which the place does not take the stead of), it has landed too.
   useLayoutEffect(() => {
-    if (swap?.done && cur === swap.i && (!swap.key || place === swap.key)) {
+    if (swap?.done && cur === swap.i && (!swap.key || place === swap.key || !shown)) {
       setSwap(null);
       if (ai >= 0) { sp.x.jump(final[ai]!); sp.y.jump(barMid); }
     }

@@ -1,7 +1,8 @@
 // The phone's bottom bar (web/src/mobile/Bar.tsx): on a place's top page, the ball 6 past the bar on every side over
 // the place in view; a tap goes to another place (in place, no page pushed), 令 only on the chats' pages; one stroke
 // up from the bar opens the panel and lets go on a place of the other bar (that bar, and that place); a page pushed
-// over a place sends the bar away; Settings · 下方栏 lists the bars. Runs its own Vite fixture with the demo core.
+// over a place sends the bar away, and one opened while a switch lands stays; Settings · 下方栏 lists the bars. Runs its
+// own Vite fixture with the demo core.
 // PLAYWRIGHT_MODULE selects Playwright; SHOTS optionally keeps pictures.
 import assert from 'node:assert/strict';
 import { mkdir, writeFile, rm } from 'node:fs/promises';
@@ -117,6 +118,34 @@ createRoot(root).render(<DemoApp phone />);
   await touch('touchMove', chatsThere.x + chatsThere.width / 2, chatsThere.y + chatsThere.height / 2);
   await page.waitForTimeout(300);
   await touch('touchEnd');
+  await page.waitForTimeout(1500);
+  await tab('对话').waitFor();
+
+  // A page opened while a bar switch is landing (the panel shut, the stack still sliding): it stays, over the place;
+  // the switch does not put its place in the page's stead.
+  const gear = await page.getByRole('button', { name: '设置' }).first().boundingBox();
+  const stroke = async (from, to) => {
+    const r = await tab(from).boundingBox(), x = r.x + r.width / 2, y = r.y + r.height / 2;
+    await touch('touchStart', x, y);
+    for (let k = 1; k <= 12; k++) { await touch('touchMove', x, y - 8 * k); await page.waitForTimeout(16); }
+    await page.waitForTimeout(700);
+    const t = await page.locator(`[data-bar=rows] [data-place=${to}]`).boundingBox();
+    await touch('touchMove', t.x + t.width / 2, t.y + t.height / 2);
+    await page.waitForTimeout(300);
+    await touch('touchEnd');
+  };
+  await stroke('对话', 'connects');
+  await page.waitForTimeout(80);
+  await page.touchscreen.tap(gear.x + gear.width / 2, gear.y + gear.height / 2);
+  await page.waitForTimeout(1500);
+  assert.ok(await page.getByText('下方栏', { exact: true }).isVisible(), 'settings is in view');
+  assert.ok((await bar()).away, 'the bar is away over it');
+  await page.getByRole('button', { name: /^(返回|对话|会话)$/ }).first().tap();
+  await rest();
+  assert.ok(!(await bar()).away, 'back from it, a place\'s top page again');
+  assert.ok(await tab('连接').isVisible(), 'the bar switched all the same');
+  // To the chats in the bar it is now, then settings.
+  await stroke('Profile', 'chats');
   await page.waitForTimeout(1500);
   await tab('对话').waitFor();
   await page.getByRole('button', { name: '设置' }).first().tap();
