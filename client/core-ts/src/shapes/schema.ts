@@ -1158,6 +1158,7 @@ export const SHAPES: Record<string, Shape> = {
     ["device", "DeviceView", { default: true }],
     ["reader", "ReaderPrefs", { default: true, doc: "How the drive's reader lays text out (always whole: the core fills in what is not kept)." }],
     ["rail", opt(vec("String")), { default: true, doc: "What the wide screen's rail shows, in its order (web/src/Rail.tsx RAIL_ITEMS: chats, mine, watching, archive,\ndecisions, attention, files, stations, profiles, connects, usage); none: its default ones." }],
+    ["rails", map(vec("String")), { default: true, doc: "The rail as each workspace has it, by workspace (as `rail`); one not there goes by `rail` (one rail for all,\nas devices kept it before)." }],
     ["bars", "BarPrefs", { default: true, doc: "A phone's bottom bars (always whole: the core fills in what is not kept)." }],
   ], { doc: "What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is." }),
   BarPrefs: struct([

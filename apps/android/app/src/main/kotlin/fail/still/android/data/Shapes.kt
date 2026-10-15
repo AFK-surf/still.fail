@@ -3371,6 +3371,9 @@ data class PrefsView (
 	/// What the wide screen's rail shows, in its order (web/src/Rail.tsx RAIL_ITEMS: chats, mine, watching, archive,
 	/// decisions, attention, files, stations, profiles, connects, usage); none: its default ones.
 	val rail: List<String>? = null,
+	/// The rail as each workspace has it, by workspace (as `rail`); one not there goes by `rail` (one rail for all,
+	/// as devices kept it before).
+	val rails: Map<String, List<String>>? = null,
 	/// A phone's bottom bars (always whole: the core fills in what is not kept).
 	val bars: BarPrefs? = null
 )

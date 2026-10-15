@@ -3368,6 +3368,11 @@ export interface PrefsView {
 	 * decisions, attention, files, stations, profiles, connects, usage); none: its default ones.
 	 */
 	rail?: string[];
+	/**
+	 * The rail as each workspace has it, by workspace (as `rail`); one not there goes by `rail` (one rail for all,
+	 * as devices kept it before).
+	 */
+	rails?: Record<string, string[]>;
 	/** A phone's bottom bars (always whole: the core fills in what is not kept). */
 	bars?: BarPrefs;
 }

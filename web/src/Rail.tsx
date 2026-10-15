@@ -121,9 +121,18 @@ function useExtra(): RailItem | null {
   return useSyncExternalStore((f) => { extraWatchers.add(f); return () => extraWatchers.delete(f); }, () => extra, () => null);
 }
 
+/** The workspace in view, by the page's path (`/w/<scope>/…`): each has its own rail and sidebars. */
+function useScope(): string {
+  return /^\/w\/([^/]+)/.exec(useLocation().pathname)?.[1] ?? "";
+}
+/** The rail kept for `scope`: its own, else the one all had before each had its own. */
+function useKeptRail(scope: string): string[] | undefined {
+  return usePrefs((p) => p.rails[scope] ?? p.rail);
+}
+
 /** What the rail has now, as the pages in it go by: the places kept, and the one left out of it in view. */
 export function useRailItems(): RailItem[] {
-  const items = railItems(usePrefs((p) => p.rail));
+  const items = railItems(useKeptRail(useScope()));
   const shown = useExtra();
   return shown && !items.includes(shown) ? [...items, shown] : items;
 }
@@ -138,9 +147,12 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   const waiting = here?.decisions ?? 0;
   // What wants the person in each list of chats (the core's marks), on its icon while the sidebar is closed.
   const tones: Partial<Record<RailItem, string | undefined>> = { chats: here?.tone, mine: here?.mineTone, watching: here?.watchingTone };
-  const kept = usePrefs((p) => p.rail);
+  const kept = useKeptRail(scope);
   // The places kept (what is changed), and with them the one left out in view (what the pages go by).
   const items = railItems(kept);
+  // Changed from the default (恢复默认 offered).
+  const changed = items.join() !== RAIL_DEFAULT.join();
+  sidebarScope = scope;
   const railed = useRailItems();
   const added = railed.find((i) => !items.includes(i)) ?? null;
   const changing = useEditing();
@@ -154,7 +166,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   // the pointer.
   const [menu, setMenu] = useState<{ item: RailItem | null; box: { left: number; top: number; width: number; height: number } } | null>(null);
   const pointed = menu?.item ?? null;
-  const keep = (next: RailItem[]) => setPrefs({ rail: next });
+  const keep = (next: RailItem[]) => setPrefs({ rails: { [scope]: next } });
   // The place dragged under the pointer, lifted; the others moving out of its way (each from where it was drawn to its
   // new place), and it, let go of, to its own. Its place among them by their places, not where they are drawn moving.
   const pointerY = useRef(0);
@@ -259,10 +271,12 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
     onSidebarChosen((closed) => { foldGroup(now.current.group, closed); if (!closed) endPeek(); });
     return () => onSidebarChosen(null);
   }, []);
-  const cameFrom = useRef<Place | null>(null);
+  const cameFrom = useRef<string | null>(null);
   useEffect(() => {
-    const moved = cameFrom.current !== null && cameFrom.current !== place;
-    cameFrom.current = place;
+    // Another place, or another workspace's (its sidebars as it left them).
+    const at = `${scope}/${place}`;
+    const moved = cameFrom.current !== null && cameFrom.current !== at;
+    cameFrom.current = at;
     if (!matchMedia("(min-width: 701px)").matches) return;
     if (moved) endPeek();
     // A page with no sidebar of its own: none to open (its edge gone, its shortcut nothing; brand.tsx).
@@ -279,7 +293,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
     const apply = () => { width?.(); if (peeks) markPeek(); };
     if (shut() !== open) { if (width || peeks) (peeks || (moved && !shut()) ? moveSidebar(apply) : apply()); }
     else showSidebar(open, apply);
-  }, [place, own, group]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scope, place, own, group]); // eslint-disable-line react-hooks/exhaustive-deps
   // Its tab pressed or pointed at, the place's own sidebar shown: open as it is, or a while if folded. Pressed, once its
   // place has come (the effect above), or soon if it was already there.
   const reveal = () => { if (now.current.own && folded(now.current.group)) peekSidebar(); };
@@ -470,7 +484,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
               <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => keep(items.filter((i) => i !== pointed))}><Minus {...ICON} />{t("web-main.rail.remove", { name: railLabel(pointed) })}</DropdownMenu.Item>
             )}
             <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => editRail(true)}><Sliders {...ICON} />{t("web-main.rail.customize")}</DropdownMenu.Item>
-            {kept && <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => setPrefs({ rail: null })}><Retry {...ICON} />{t("web-main.rail.reset")}</DropdownMenu.Item>}
+            {changed && <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => keep([...RAIL_DEFAULT])}><Retry {...ICON} />{t("web-main.rail.reset")}</DropdownMenu.Item>}
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
@@ -568,7 +582,10 @@ function RailWorkspaces({ scope, current }: { scope: string; current: ReactNode 
 
 /** Whether `group`'s sidebar was left folded (its own, on this device). */
 function folded(group: SidebarGroup): boolean {
-  try { return localStorage.getItem(`stillfail.sidebar.${group}`) === "closed"; } catch { return false; }
+  try {
+    const own = localStorage.getItem(`stillfail.sidebar.${sidebarScope}.${group}`);
+    return (own ?? localStorage.getItem(`stillfail.sidebar.${group}`)) === "closed";
+  } catch { return false; }
 }
 // The chats' as the one sidebar was left, before each had its own: read once, as the page loads, before a place without
 // a sidebar closes it (brand.tsx keeps that one for the page's first frame).
@@ -578,7 +595,7 @@ try {
   }
 } catch { /* private mode */ }
 function foldGroup(group: SidebarGroup, closed: boolean): void {
-  try { localStorage.setItem(`stillfail.sidebar.${group}`, closed ? "closed" : "open"); } catch { /* private mode */ }
+  try { localStorage.setItem(`stillfail.sidebar.${sidebarScope}.${group}`, closed ? "closed" : "open"); } catch { /* private mode */ }
 }
 
 /**
@@ -636,15 +653,19 @@ const SIDEBAR = { min: 180, max: 480, own: 240, stations: 280 } as const;
 
 /** The sidebars, each its own width: the chats' (and the pages beside them), the settings', the files', the profiles', the stations'. */
 type SidebarGroup = "chats" | "settings" | "files" | "profiles" | "stations";
+/** The workspace in view (Rail): each has its sidebars open or folded and as wide as it left them, on this device. */
+let sidebarScope = "";
 /** The one shown, whose width the edge drags. */
 let shownGroup: SidebarGroup = "chats";
 /** Where each is kept: the chats' where the one sidebar's was. */
-const widthKey = (group: SidebarGroup) => group === "chats" ? "--sidebar-w" : `--sidebar-w.${group}`;
+const oldWidthKey = (group: SidebarGroup) => group === "chats" ? "--sidebar-w" : `--sidebar-w.${group}`;
+/** Each workspace's own (the one all had before read where it has none). */
+const widthKey = (group: SidebarGroup) => `--sidebar-w.${sidebarScope}.${group}`;
 /** What makes the sidebar as wide as `group`'s was made (its own width, none made); null if it is already. */
 function widthFor(group: SidebarGroup): (() => void) | null {
   shownGroup = group;
   const root = document.documentElement.style;
-  const saved = Number(localStorage.getItem(`stillfail.width.${widthKey(group)}`));
+  const saved = Number(localStorage.getItem(`stillfail.width.${widthKey(group)}`) ?? localStorage.getItem(`stillfail.width.${oldWidthKey(group)}`));
   // The stations' a little wider by itself: each row has a line of meters.
   const px = saved ? `${Math.min(SIDEBAR.max, Math.max(SIDEBAR.min, saved))}px` : group === "stations" ? `${SIDEBAR.stations}px` : "";
   if (root.getPropertyValue("--sidebar-w") === px) return null;
