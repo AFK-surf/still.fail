@@ -56,7 +56,8 @@ export const brand = style({
     // No rail on a narrow window: the buttons are all in this row.
     [narrow]: { selectors: { '[data-desktop="inset"] [data-rail] &': { paddingLeft: 86 } } },
     // Beside the rail on the web, nothing is left in it (no name, no buddy, no window to drag): a margin only.
-    [wide]: { selectors: { ':root:not([data-desktop]) [data-rail] &': { height: 8 } } },
+    // Nor in the desktop app full screen, its window's buttons gone.
+    [wide]: { selectors: { ':root:is(:not([data-desktop]), [data-fullscreen]) [data-rail] &': { height: 8 } } },
   },
 });
 /** 云端侧边栏：lockup 在 workspace 切换器上方（always with `brand`, whose desktop top row still wins） */

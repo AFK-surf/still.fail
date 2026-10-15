@@ -35,7 +35,8 @@ export const top = style({
   // the sidebar's first row (新对话, 32 from 14 down there): its middle at 30, 3 above the gap's 6 and its 4 within.
   flex: "none", alignSelf: "stretch", height: 5, transition: `height 380ms ${vars.easeOut}, margin-bottom 380ms ${vars.easeOut}`,
   selectors: {
-    "[data-desktop] &": { height: 41, WebkitAppRegion: "drag" },
+    // Full screen the window has no buttons nor a frame to drag: as on the web.
+    "[data-desktop]:not([data-fullscreen]) &": { height: 41, WebkitAppRegion: "drag" },
     // In the closed bar nothing: its places stand as far from its top as from its sides (rail's padding).
     '[data-sidebar="closed"] &': { height: 0, ...outsetBottom(6) },
   },
