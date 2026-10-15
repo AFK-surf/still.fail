@@ -1979,8 +1979,8 @@ function useActivityGlide(list: RefObject<HTMLDivElement | null>, virtual: Virtu
       kept += shift;
       if (shift) for (const row of rows.values()) row.at += shift;
       const layout = model.layout();
-      // A row just made stands at a guessed height until the page reports it: what an activity is moved by meanwhile is
-      // taken as it comes (the pane glides there from now), and from the guess to the fact after it too.
+      // A row just made stands at a guessed height until the page reports it: what moves an activity is taken as the
+      // pane takes it, the guess and then the fact (below).
       const anew = pending || performance.now() - rewrapped < REWRAP_MS;
       pending = false;
       const seen = new Set<string>();
@@ -2004,9 +2004,10 @@ function useActivityGlide(list: RefObject<HTMLDivElement | null>, virtual: Virtu
         row.closed = closed;
         if (Math.abs(moved) < 0.01) continue;
         // One folded to its avatar, out flying, shows nothing: it is where it is laid out, for the avatar to fly to.
-        if (anew || document.visibilityState !== "visible" || el.hasAttribute("data-away")) row.y.jump(0);
+        // Moved as the pane is not gliding (it took the change at once, or the reader holds it): where it is laid out.
+        if (anew || !model.glides || document.visibilityState !== "visible" || el.hasAttribute("data-away")) row.y.jump(0);
         else {
-          // Laid out elsewhere at once, it is drawn where it was, and glides from there.
+          // Laid out elsewhere at once as the pane glides, it is drawn where it was, and glides from there with it.
           row.y.jump(row.y.value - moved);
           row.y.to(0);
         }

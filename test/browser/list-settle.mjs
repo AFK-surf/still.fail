@@ -6,7 +6,8 @@
 // Each case is played on the wide pages and on the phone's. Not a check of timing: frames dropped or slow change how
 // many samples there are, never which way anything moves.
 // PLAYWRIGHT_MODULE selects Playwright; SHOTS keeps each case's samples (JSON), and with RECORD=1 its frames as drawn
-// (JPEG, from the browser's screencast); ONLY=<case> plays one.
+// (JPEG, from the browser's screencast); ONLY=<case> plays one; THROTTLE=<n> slows the page's CPU n times (a slower
+// machine than the one at hand: what moves must not depend on it).
 import assert from 'node:assert/strict';
 import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -171,6 +172,7 @@ createRoot(root).render(<DemoApp phone={location.hash === '#phone'} />);
       ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'zh-CN' }
       : { viewport: { width: 1280, height: 800 }, locale: 'zh-CN' });
     const page = await context.newPage();
+    if (process.env.THROTTLE) await (await context.newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.THROTTLE) });
     page.on('pageerror', (e) => failures.push(`${name}: page error ${e.message}`));
     await page.goto(base + '/list-settle-check.html' + (phone ? '#phone' : ''));
     await page.waitForFunction(() => !!window.demo && !!document.querySelector('[data-vk^="m:"]'), null, { timeout: 30000 });

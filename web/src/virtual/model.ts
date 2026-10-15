@@ -305,6 +305,8 @@ export class Virtual {
   get toStart(): number { return this.top; }
   /** Where the pane is, by the items' own places (what is held under a scroll counted in). */
   get where(): number { return this.top; }
+  /** Whether it goes to where it follows by the page's steps (`glide`), not at once. */
+  get glides(): boolean { return this.gliding; }
   /** How tall the pane is, and whether all there is fits in it (nothing to scroll). */
   get paneHeight(): number { return this.height; }
   get paneWidth(): number { return this.width; }
