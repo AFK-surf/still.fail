@@ -30,9 +30,9 @@ export const dock = style({
     "(max-width: 700px)": { display: "contents" },
     "(min-width: 701px)": {
       position: "relative", display: "flex", minWidth: 0, minHeight: 0, overflow: "hidden", background: vars.sidebar, margin: 0, borderRadius: 0,
-      // The closed bar's line and shadow, there but clear while open: the same shadows either way, so they ease in
-      // (from none, or another kind, they would come at once).
-      boxShadow: "inset 0 0 0 1px transparent, 0 8px 24px transparent",
+      // The closed bar's shadow, there but clear while open: the same shadow either way, so it eases in (from none it
+      // would come at once).
+      boxShadow: "0 8px 24px transparent",
       cornerShape: vars.cornerShape,
       transition: ["margin", "border-radius", "background-color", "box-shadow"].map((p) => `${p} 380ms ${vars.easeOut}`).join(", "),
       selectors: {
@@ -40,13 +40,13 @@ export const dock = style({
         // as far from the window's edges as that ground from its own: 6 (its 56 column's other 8 the gutter by the page,
         // where its edge's bar is, Rail.css.ts).
         // Closed, no longer the sidebar but floating over the page: a floating panel's ground (glass.ts panel, as menus
-        // and notices), its line drawn within (a border would take from the rail's 42) and its shadow.
+        // and notices), its line (::after, below) and its shadow.
         '[data-sidebar="closed"] &': {
           margin: "6px 8px 6px 6px", borderRadius: `calc(9px * ${vars.cornerScale} + 6px)`,
           // As the sidebar's ground for all in it (the list's frosted bands, the rings round marks), so none shows the
           // old one as it closes.
           vars: { [vars.sidebar]: panel.background },
-          boxShadow: `inset 0 0 0 1px ${vars.line}, 0 8px 24px ${vars.shadow}`,
+          boxShadow: `0 8px 24px ${vars.shadow}`,
           // Over the page, its shadow too: under the page's frosted top bar it was blurred into a block that ended at the
           // bar's foot.
           zIndex: 20,
@@ -57,6 +57,18 @@ export const dock = style({
     "(prefers-reduced-motion: reduce)": { transition: "none" },
   },
 });
+
+// The closed bar's line, drawn within (a border would take from the rail's 42) and over all in it: an inset shadow is
+// under its children, and the sidebar's top row and frosted band, still in it as it closes, covered it.
+globalStyle(`${dock}::after`, {
+  "@media": {
+    "(min-width: 701px)": {
+      content: '""', position: "absolute", inset: 0, zIndex: 3, borderRadius: "inherit", cornerShape: "inherit", pointerEvents: "none",
+      boxShadow: `inset 0 0 0 1px ${vars.line}`, opacity: 0, transition: `opacity 380ms ${vars.easeOut}`,
+    },
+  },
+});
+globalStyle(`[data-sidebar="closed"] ${dock}::after`, { "@media": { "(min-width: 701px)": { opacity: 1 } } });
 
 export const main = style({
   position: "relative", minWidth: "0", minHeight: "0", overflow: "hidden", display: "flex", flexDirection: "column",
