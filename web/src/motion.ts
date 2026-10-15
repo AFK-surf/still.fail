@@ -22,6 +22,31 @@ export const LOCAL_MS = 100;
 export const reducedMotion = (): boolean => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /**
+ * A motion that plays for `duration` ms in every `period` and rests the rest of it (a blink, a beat, a breath and then
+ * still), starting `at` ms into the period, on one beat for every such loop (performance.now()'s): played once a period,
+ * the rest waited out on a timer. As one infinite CSS animation, one the compositor can't run (anything inside an SVG)
+ * had the whole page drawn anew every frame, its rests too, at the screen's rate for as long as it showed. Stopped by
+ * what it returns; with motion reduced, never played.
+ */
+export function restingLoop(el: Element, frames: Keyframe[], { period, at = 0, duration }: { period: number; at?: number; duration: number }): () => void {
+  if (reducedMotion()) return () => undefined;
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let run: Animation | undefined;
+  const next = () => {
+    if (stopped) return;
+    const now = performance.now();
+    timer = setTimeout(() => {
+      run = el.animate(frames, { duration });
+      // Cut short (cancelled) it goes on all the same, till stopped.
+      run.finished.then(next, next);
+    }, Math.ceil((now - at) / period) * period + at - now);
+  };
+  next();
+  return () => { stopped = true; clearTimeout(timer); run?.cancel(); };
+}
+
+/**
  * A number drawn by `draw` whenever it changes: `to` goes there from where it is (at the speed it has, if it is still
  * on its way), `jump` is there at once. Going to where it is already going changes nothing.
  */
