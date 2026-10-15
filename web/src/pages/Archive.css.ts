@@ -29,3 +29,4 @@ globalStyle(`${search} input`, {
 globalStyle(`${search} input::placeholder`, { color: vars.subtle });
 /** Where the list asks for more as it comes near. */
 export const end = style({ height: 1 });
+globalStyle(`${search} input::-webkit-search-cancel-button`, { appearance: "none" });
