@@ -111,6 +111,9 @@ private fun markdownParser(): Parser = Parser.builder()
     .extensions(listOf(TablesExtension.create(), StrikethroughExtension.create(), TaskListItemsExtension.create()))
     .build()
 
+/** A message's text as a document: [tablesApart] first, wherever it is parsed (as a chat is decoded, or as it is drawn). */
+internal fun parseMarkdown(text: String): Node = markdownParser().parse(tablesApart(text))
+
 /** A table's delimiter row: `|---|:--:|`, or `--- | ---` without the outer pipes. */
 private val tableDelimiter = Regex("""^ {0,3}\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$""")
 
@@ -147,7 +150,7 @@ private val documents = object : android.util.LruCache<String, Node>(256 * 1024)
  */
 fun prepareMarkdown(text: String) {
     if (text.isEmpty() || documents.get(text) != null) return
-    documents.put(text, markdownParser().parse(text))
+    documents.put(text, parseMarkdown(text))
 }
 
 private fun Node.children(): List<Node> = generateSequence(firstChild) { it.next }.toList()
@@ -237,7 +240,7 @@ fun Markdown(text: String, modifier: Modifier = Modifier, size: Int = 15, placin
     val ready by androidx.compose.runtime.produceState(cached?.let { text to it }, text) {
         value = cached?.let { text to it }
         if (cached == null) {
-            val doc = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { markdownParser().parse(tablesApart(text)) }
+            val doc = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { parseMarkdown(text) }
             documents.put(text, doc)
             value = text to doc
         }
