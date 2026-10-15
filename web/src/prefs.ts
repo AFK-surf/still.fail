@@ -23,6 +23,8 @@ const DEFAULTS: Prefs = {
   onlyMine: false, onlyWatching: false, onlyDecisions: false, listFilter: {}, appearance: "system", rowPicture: "auto", absoluteTime: false, keys: {}, lastChat: {}, openChat: {}, chatTabs: {}, resume: {}, stationUpdatesDismissed: {},
   // As the core fills it in (prefs.ts readerOf), before it has answered.
   reader: { size: 18, line: 1.7, margin: 22, face: "sans", indent: true, paper: "follow" },
+  // As the core fills it in (prefs.ts barsOf).
+  bars: { sets: [["chats", "decisions", "files", "stations"], ["profiles", "connects", "usage", "archive"]], current: 0 },
   device: { app: "", phone: false, handoff: false },
 };
 

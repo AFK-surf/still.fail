@@ -9,6 +9,7 @@ import { Doing } from "../src/doing.ts";
 import { conformTy } from "../src/conform.ts";
 import { merge } from "../src/entries.ts";
 import { badgeOf, Counts, lastChat, rowTone } from "../src/views/marks.ts";
+import { barsOf } from "../src/prefs.ts";
 import { FakeHost } from "../src/testing.ts";
 import "./helpers.ts";
 
@@ -152,6 +153,16 @@ test("the_badge_counts_as_the_prefs_say", () => {
   assert.equal(badgeOf(null, c), 3);
   assert.equal(badgeOf({ badge: "decisions" }, c), 2);
   assert.equal(badgeOf({ badge: "all" }, c), 7);
+});
+
+test("a_phones_bottom_bars_read_whole_from_what_is_kept", () => {
+  const two = { sets: [["chats", "decisions", "files", "stations"], ["profiles", "connects", "usage", "archive"]], current: 0 };
+  assert.deepEqual(barsOf(undefined), two, "nothing kept: the two default bars");
+  assert.deepEqual(barsOf({ sets: [], current: 0 }), two, "no bar left: the default");
+  assert.deepEqual(barsOf({ sets: [["files", "nope", "files", "chats", "usage", "archive", "stations"]], current: 3 }), { sets: [["files", "chats", "usage", "archive"]] , current: 0 },
+    "unknown places and repeats left out, four at most, the bar in view one there is");
+  assert.deepEqual(barsOf({ sets: [["x"], ["decisions"]], current: 1 }), { sets: [["decisions"]], current: 0 }, "a bar with nothing known goes");
+  assert.deepEqual(barsOf({ sets: [["chats"], ["files"]], current: 1 }), { sets: [["chats"], ["files"]], current: 1 });
 });
 
 test("the_chat_last_open_is_the_cores_else_the_path_a_page_kept", () => {

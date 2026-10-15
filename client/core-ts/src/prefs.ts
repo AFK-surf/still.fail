@@ -8,7 +8,7 @@ import { fromLocale, follows, setCurrent, t, tr, type Lang } from "./i18n.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "resume", "invite", "badge", "reader", "lockNotice", "rail"];
+const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "resume", "invite", "badge", "reader", "lockNotice", "rail", "bars"];
 const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "resume", "lockNotice"];
 const TABS_KEPT = 200;
 const DEFERRED_KEPT = 200;
@@ -39,9 +39,28 @@ export function readerOf(v: unknown): Map_ {
   };
 }
 
-/// The prefs as they go out: the reader's settings whole.
+/// The places a phone's bottom bar can hold (web/src/mobile/Bar.tsx, the Android app's ui/Bar.kt), in no order.
+export const BAR_PLACES = ["chats", "decisions", "files", "stations", "profiles", "connects", "usage", "archive"];
+/// At most this many places in one bar.
+export const BAR_SIZE = 4;
+const BARS_DEFAULT = { sets: [["chats", "decisions", "files", "stations"], ["profiles", "connects", "usage", "archive"]], current: 0 };
+
+/// A phone's bottom bars as kept, whole: each bar one to four known places, none twice in a bar; at least one bar; the
+/// one in view one of them. What is not that (nothing kept, a place this build does not know) reads as the default or
+/// is left out.
+export function barsOf(v: unknown): { sets: string[][]; current: number } {
+  if (!isObject(v) || !Array.isArray(v.sets)) return { sets: BARS_DEFAULT.sets.map((s) => [...s]), current: BARS_DEFAULT.current };
+  const sets = v.sets
+    .map((set) => (Array.isArray(set) ? [...new Set(set.filter((k): k is string => typeof k === "string" && BAR_PLACES.includes(k)))].slice(0, BAR_SIZE) : []))
+    .filter((set) => set.length > 0);
+  if (!sets.length) return { sets: BARS_DEFAULT.sets.map((s) => [...s]), current: BARS_DEFAULT.current };
+  const n = typeof v.current === "number" && Number.isFinite(v.current) ? Math.round(v.current) : 0;
+  return { sets, current: Math.min(sets.length - 1, Math.max(0, n)) };
+}
+
+/// The prefs as they go out: the reader's settings whole, and the bottom bars.
 export function shown(v: unknown): unknown {
-  return isObject(v) ? { ...v, reader: readerOf(v.reader) } : v;
+  return isObject(v) ? { ...v, reader: readerOf(v.reader), bars: barsOf(v.bars) } : v;
 }
 
 /// What is kept, as kept (no defaults filled in).
@@ -59,7 +78,10 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
   for (const field of Object.keys(patch).sort()) {
     const value = patch[field];
     if (!FIELDS.includes(field)) throw CoreError.invalid(t("core-misc.params.unknown_field", { field }));
-    if (field === "reader" && isObject(value)) {
+    if (field === "bars" && value !== null) {
+      // Kept as it reads: what this build does not know is not kept.
+      prefs.bars = barsOf(value);
+    } else if (field === "reader" && isObject(value)) {
       // Only what is said changes: one setting of the 排版 sheet at a time.
       prefs.reader = readerOf({ ...(isObject(prefs.reader) ? prefs.reader : {}), ...value });
     } else if (isObject(value) && MAPS.includes(field)) {

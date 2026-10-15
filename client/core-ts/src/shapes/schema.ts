@@ -1158,7 +1158,12 @@ export const SHAPES: Record<string, Shape> = {
     ["device", "DeviceView", { default: true }],
     ["reader", "ReaderPrefs", { default: true, doc: "How the drive's reader lays text out (always whole: the core fills in what is not kept)." }],
     ["rail", opt(vec("String")), { default: true, doc: "What the wide screen's rail shows, in its order (web/src/Rail.tsx RAIL_ITEMS: chats, mine, watching, archive,\ndecisions, attention, files, stations, profiles, connects, usage); none: its default ones." }],
+    ["bars", "BarPrefs", { default: true, doc: "A phone's bottom bars (always whole: the core fills in what is not kept)." }],
   ], { doc: "What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is." }),
+  BarPrefs: struct([
+    ["sets", vec(vec("String")), { doc: "The bars, each its places in order (one to four of chats, decisions, files, stations, profiles, connects,\nusage, archive)." }],
+    ["current", "i64", { client: "I54", doc: "The bar in view: an index into `sets`." }],
+  ], { default: true, doc: "A phone's bottom bars (web/src/mobile/Bar.tsx, the Android app's ui/Bar.kt): several bars of up to four places,\none of them in view; with more than one, a swipe up on the bar shows the others." }),
   ReaderPrefs: struct([
     ["size", "i64", { client: "I54", doc: "The text's size (sp/px), 12 to 32." }],
     ["line", "f64", { doc: "Line height as a multiple of the size, 1.2 to 2.4." }],

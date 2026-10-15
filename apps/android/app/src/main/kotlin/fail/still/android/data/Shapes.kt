@@ -561,6 +561,17 @@ data class AutomaticDecisionView (
 	val policy: ArchivePolicyView? = null
 )
 
+/// A phone's bottom bars (web/src/mobile/Bar.tsx, the Android app's ui/Bar.kt): several bars of up to four places,
+/// one of them in view; with more than one, a swipe up on the bar shows the others.
+@Serializable
+data class BarPrefs (
+	/// The bars, each its places in order (one to four of chats, decisions, files, stations, profiles, connects,
+	/// usage, archive).
+	val sets: List<List<String>>,
+	/// The bar in view: an index into `sets`.
+	val current: Long
+)
+
 @Serializable
 data class Bind (
 	val runtime: RuntimeKind,
@@ -3349,7 +3360,9 @@ data class PrefsView (
 	val reader: ReaderPrefs? = null,
 	/// What the wide screen's rail shows, in its order (web/src/Rail.tsx RAIL_ITEMS: chats, mine, watching, archive,
 	/// decisions, attention, files, stations, profiles, connects, usage); none: its default ones.
-	val rail: List<String>? = null
+	val rail: List<String>? = null,
+	/// A phone's bottom bars (always whole: the core fills in what is not kept).
+	val bars: BarPrefs? = null
 )
 
 /// Providers of one group, as the picker lists them.

@@ -542,6 +542,20 @@ export interface AutomaticDecisionView {
 	policy?: ArchivePolicyView;
 }
 
+/**
+ * A phone's bottom bars (web/src/mobile/Bar.tsx, the Android app's ui/Bar.kt): several bars of up to four places,
+ * one of them in view; with more than one, a swipe up on the bar shows the others.
+ */
+export interface BarPrefs {
+	/**
+	 * The bars, each its places in order (one to four of chats, decisions, files, stations, profiles, connects,
+	 * usage, archive).
+	 */
+	sets: string[][];
+	/** The bar in view: an index into `sets`. */
+	current: number;
+}
+
 export interface Bind {
 	runtime: RuntimeKind;
 	model?: string;
@@ -3344,6 +3358,8 @@ export interface PrefsView {
 	 * decisions, attention, files, stations, profiles, connects, usage); none: its default ones.
 	 */
 	rail?: string[];
+	/** A phone's bottom bars (always whole: the core fills in what is not kept). */
+	bars?: BarPrefs;
 }
 
 /** Providers of one group, as the picker lists them. */
