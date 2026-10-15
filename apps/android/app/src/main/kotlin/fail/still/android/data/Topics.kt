@@ -234,8 +234,13 @@ object Topics {
     fun stations(scope: String) = buildJsonObject { put("topic", "stations"); put("scope", scope) }
     /** The workspace's profiles in one list: each shared one once (client/core-ts/src/views/profiles.ts). */
     fun profiles(scope: String) = buildJsonObject { put("topic", "profiles"); put("scope", scope) }
-    /** The archived chats of a scope's stations online, newest first by the day archived (client/core-ts/src/views/archive.ts). */
-    fun archive(scope: String) = buildJsonObject { put("topic", "archive"); put("scope", scope) }
+    /** The archived chats of a scope's stations online, newest first by the day archived (client/core-ts/src/views/archive.ts):
+     *  those with `q` in their title or last line, the newest `limit` of them (the list's first page by default). */
+    fun archive(scope: String, q: String = "", limit: Int = ARCHIVE_PAGE) = buildJsonObject {
+        put("topic", "archive"); put("scope", scope); if (q.isNotEmpty()) put("q", q); if (limit > 0) put("limit", limit)
+    }
+    /** How many archived chats the archive's list shows at first, and how many more as it is scrolled near its end (web pages/Archive.tsx). */
+    const val ARCHIVE_PAGE = 60
     fun connects(scope: String, mine: Boolean) = buildJsonObject { put("topic", "connects"); put("scope", scope); put("mine", mine) }
     fun workspace(id: String) = buildJsonObject { put("topic", "workspace"); put("workspace", id) }
     fun loginSessions(account: String) = buildJsonObject { put("topic", "loginSessions"); put("account", account) }

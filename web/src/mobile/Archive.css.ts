@@ -7,7 +7,12 @@ export const mArchiveNote = style({
   selectors: { "&[data-error]": { padding: "8px 20px", fontSize: vars.textMeta, color: "var(--m-red)" } },
 });
 /** A row: its title with when (and where) at the end of its line, then what can be done; its last message under it. */
-export const mArchiveRow = style({ display: "flex", flexDirection: "column", padding: "6px 10px 6px 20px" });
+export const mArchiveRow = style({
+  display: "flex", flexDirection: "column", padding: "6px 10px 6px 20px", cursor: "pointer", WebkitTapHighlightColor: "transparent",
+  selectors: { "&:active": { background: "var(--m-chip)" } },
+});
+/** Looking for one: the chats' search field, over the list, at its rows' inset. */
+export const mArchiveSearch = style({ display: "flex", padding: "4px 16px 8px" });
 export const mArchiveHead = style({ display: "flex", alignItems: "center", gap: "10px", height: "34px" });
 export const mArchiveTitle = style({
   flex: "1", minWidth: "0", fontSize: vars.textTitle, lineHeight: "22px", color: "var(--m-ink)", overflow: "hidden",

@@ -82,8 +82,9 @@ export function ArchivePage({ scope, wide }: { scope: string; wide: boolean }) {
   );
 }
 
-/** How many rows the archive's list shows at first, and how many more each time it is scrolled near its end. */
-const PAGE = 60;
+/** How many rows the archive's list shows at first, and how many more each time it is scrolled near its end (both screens'). */
+export const ARCHIVE_PAGE = 60;
+const PAGE = ARCHIVE_PAGE;
 
 /**
  * The archive as one of the sidebar's lists (Sidebar.tsx ChatList), in place of the chats: a field to look for one by
