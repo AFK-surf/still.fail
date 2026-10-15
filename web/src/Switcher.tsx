@@ -150,8 +150,13 @@ function Finder({ scope, onClose, onCommand }: { scope: string; onClose(): void;
   const firstMessage = actions.length + chats.length;
   const [at, setAt] = useState(0);
   const list = useRef<HTMLDivElement>(null);
+  // Brought into view when the keys or a new query choose it, not when the pointer does: it is in view under the
+  // pointer already, and scrolling it there (the list keeps clear of its corner, scroll-padding) moved the next row
+  // under the pointer, which chose that one, and the list scrolled on by itself.
+  const pointed = useRef(false);
   useEffect(() => setAt(0), [query]);
   useEffect(() => {
+    if (pointed.current) { pointed.current = false; return; }
     list.current?.querySelector(`[data-at="${at}"]`)?.scrollIntoView({ block: "nearest" });
   }, [at]);
   const go = (pick: Found | undefined) => {
@@ -163,7 +168,7 @@ function Finder({ scope, onClose, onCommand }: { scope: string; onClose(): void;
   };
   const option = (i: number) => ({
     role: "option", "aria-selected": i === at, "data-at": i,
-    onMouseMove: () => { if (i !== at) setAt(i); }, onClick: () => go(found[i]),
+    onMouseMove: () => { if (i !== at) { pointed.current = true; setAt(i); } }, onClick: () => go(found[i]),
   });
   const actionRows = actions.map((command, k) => (
     <Fragment key={command.id}>
