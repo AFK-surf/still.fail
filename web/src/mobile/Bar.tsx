@@ -328,6 +328,8 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
   };
   const up = (e: ReactPointerEvent) => {
     const p = press.current;
+    // Held as it went and let go without moving: let go still, where it was held.
+    if (!p.taken && p.panel) { p.panel = false; if (sp.o.value > 0.02) { sp.o.velocity = 0; panel(sp.o.value > 0.5); } return; }
     if (!p.taken) return;
     p.taken = false;
     p.slid = true;
