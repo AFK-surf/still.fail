@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { SystemBubbles } from "../src/SystemBubbles.tsx";
 import { StationUpdate } from "../src/StationUpdate.tsx";
 import { Reader } from "../src/drive/Reader.tsx";
+import { Refused, Tile } from "../src/pages/Notifications.tsx";
 import { Player } from "../src/drive/Player.tsx";
 import { DrivePreview } from "../src/mobile/Drive.tsx";
 import { useToast } from "../src/toast.tsx";
@@ -216,6 +217,17 @@ export const stories: Story[] = [
   // ── settings ──
   { id: "settings-appearance", group: "设置", title: "外观", app: true, steps: [{ click: '[aria-label="设置"]' }] },
   { id: "settings-notifications", group: "设置", title: "通知", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "通知" }] },
+  { id: "settings-notifications-type", group: "设置", title: "通知 · 展开一个类别", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "通知" }, { click: 'button:has-text("有人说话")' }] },
+  {
+    id: "settings-notifications-refused", group: "设置", title: "通知 · 系统没允许",
+    render: () => stage(<div style={{ display: "grid", gap: 10, padding: 32, maxWidth: 720 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+        <Tile way="banner" on={false} refused onChange={noop} /><Tile way="badge" on onChange={noop} /><Tile way="dock" on onChange={noop} />
+      </div>
+      <Refused browser={false} onOpen={noop} />
+      <Refused browser onOpen={null} />
+    </div>),
+  },
   { id: "settings-changelog", group: "设置", title: "更新日志", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "更新日志" }] },
   { id: "settings-decisions", group: "设置", title: "自动决策", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "自动决策" }] },
   { id: "settings-memory", group: "设置", title: "记忆", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }] },

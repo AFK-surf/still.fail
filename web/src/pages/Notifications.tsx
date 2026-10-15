@@ -42,12 +42,7 @@ export function NotificationsPage({ back, workspace }: { back: string; workspace
           <Tile way="badge" on={s.badge.on} onChange={(on) => s.setBadge({ on })} />
           {s.dock && <Tile way="dock" on={s.dock.on} onChange={(on) => s.setDock({ on })} />}
         </div>
-        {s.state === "denied" && (
-          <div className={css.refused} role="status">
-            <span className={css.refusedText}>{window.stillfailDesktop ? t("web-pages.notifications.permission.denied", { name: NAME }) : t("web-pages.notifications.permission.deniedBrowser", { name: NAME })}</span>
-            {s.openSettings && <button type="button" className={`${controlsCss.btn} ${css.refusedAction}`} onClick={s.openSettings}>{t("web-pages.notifications.permission.open")}</button>}
-          </div>
-        )}
+        {s.state === "denied" && <Refused browser={!window.stillfailDesktop} onOpen={s.openSettings} />}
       </Section>
       <Section title={t("web-pages.notifications.kinds.title")}>
         <div className={`${pagesCss.card} ${css.kinds}`}>
@@ -144,10 +139,21 @@ function useDock() {
   return { settings: bridge ? settings : null, change };
 }
 
-type Way = "banner" | "badge" | "dock";
+export type Way = "banner" | "badge" | "dock";
+
+/** The system refused them: said under the tiles, with the way to its settings where the app can open them (a
+ * browser's site settings it cannot). */
+export function Refused({ browser, onOpen }: { browser: boolean; onOpen: (() => void) | null }) {
+  return (
+    <div className={css.refused} role="status">
+      <span className={css.refusedText}>{browser ? t("web-pages.notifications.permission.deniedBrowser", { name: NAME }) : t("web-pages.notifications.permission.denied", { name: NAME })}</span>
+      {onOpen && <button type="button" className={`${controlsCss.btn} ${css.refusedAction}`} onClick={onOpen}>{t("web-pages.notifications.permission.open")}</button>}
+    </div>
+  );
+}
 
 /** One way of telling, as a tile with a picture of it: pressed, on or off. */
-function Tile({ way, on, onChange, busy, disabled, refused }: { way: Way; on: boolean; onChange(on: boolean): void; busy?: boolean; disabled?: boolean; refused?: boolean }) {
+export function Tile({ way, on, onChange, busy, disabled, refused }: { way: Way; on: boolean; onChange(on: boolean): void; busy?: boolean; disabled?: boolean; refused?: boolean }) {
   return (
     <button type="button" className={css.tile} aria-pressed={on} data-on={on || undefined} data-refused={refused || undefined} disabled={busy || disabled} onClick={() => onChange(!on)}>
       <span className={css.tilePicture} aria-hidden="true">
