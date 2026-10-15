@@ -159,6 +159,28 @@ class BarTest {
     }
 
     /**
+     * A finger moving along the bar every frame, as a real one does: the ball goes along with it. (Its spring was started
+     * over at each move and never got past its first frame: it stayed where it was until the finger stopped.)
+     */
+    @Test fun slideFollows() {
+        val h = launch()
+        val g = bounds("bar-glass")
+        val y = g.top + 28 * d
+        val x0 = g.left + 28 * d
+        val x1 = g.right - 28 * d
+        val r = h.record("bar-slide")
+        rule.onRoot().performTouchInput { down(Offset(x0, y)) }
+        r.frame()
+        val start = bounds("bar-ball").center.x
+        for (i in 1..30) r.frame { rule.onRoot().performTouchInput { moveTo(Offset(x0 + (x1 - x0) * i / 30f, y)) } }
+        val moved = bounds("bar-ball").center.x - start
+        rule.onRoot().performTouchInput { up() }
+        r.frames(30)
+        r.end()
+        assertTrue("the ball went along with the finger (${moved / d} dp of ${(x1 - x0) / d})", moved > (x1 - x0) * 0.6f)
+    }
+
+    /**
      * A page pushed over a place's top hides the bar (and its back is there again); back, the bar is back. Back on a
      * place's top other than the chats goes to the chats, in place.
      */

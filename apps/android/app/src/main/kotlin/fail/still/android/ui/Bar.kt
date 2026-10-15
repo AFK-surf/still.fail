@@ -10,7 +10,6 @@ import android.graphics.BlurMaskFilter
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -39,6 +38,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -87,6 +88,7 @@ import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -480,20 +482,29 @@ fun BottomBar(
         val ai = g.items.indexOf(active)
         val goalX = if (cand != null) cand.x + (drag - cand.x) * LEAN else final[max(0, ai)]
         val goalY = if (cand != null) cand.y + ((dragY ?: g.barMid) - cand.y) * LEAN else g.barMid
-        val bx = remember { Animatable(goalX, 0.01f) }
-        val by = remember { Animatable(goalY, 0.01f) }
+        val ball = remember { BallMotion(goalX, goalY) }
         val sliding = drag != null
         // Sent to a place, its spring is as stiff as the way is short (one place over: tension 300).
         var trip by remember { mutableFloatStateOf(SLOT_PX) }
-        LaunchedEffect(active, sliding) { if (!sliding) trip = max(8f, abs(goalX - bx.value)) }
+        LaunchedEffect(active, sliding) { if (!sliding) trip = max(8f, abs(goalX - ball.x)) }
         val tension = if (sliding) 300f else (300f * SLOT_PX / trip).coerceIn(90f, 700f)
         var width by remember { mutableFloatStateOf(w) }
-        LaunchedEffect(goalX, tension) {
+        SideEffect {
+            ball.goX = goalX
+            ball.goY = goalY
+            ball.tension = tension
             // A new width (turned): there at once, not sent across.
-            if (width != w) { width = w; bx.snapTo(goalX); return@LaunchedEffect }
-            bx.animateTo(goalX, springOf(tension, 2 * 0.635f * sqrt(tension)))
+            if (width != w) { width = w; ball.snapTo(goalX, ball.y) }
         }
-        LaunchedEffect(goalY) { by.animateTo(goalY, springOf(300f, 2 * 0.635f * sqrt(300f))) }
+        // One spring each way, stepped every frame while it is not where it is sent: a goal moved meanwhile (by a
+        // finger, every frame) changes where it goes on the way.
+        LaunchedEffect(ball) {
+            while (true) {
+                snapshotFlow { ball.resting }.first { !it }
+                var last = withFrameNanos { it }
+                while (!ball.resting) withFrameNanos { now -> ball.step(((now - last) / 1e9f).coerceIn(0f, 0.05f)); last = now }
+            }
+        }
         val held by animateFloatAsState(if (sliding) 1f else 0f, springOf(420f, 16f, 0.001f), label = "held")
         val swap = m.swap
         val ballShown = ai >= 0 || sliding || swap?.key != null
@@ -501,8 +512,7 @@ fun BottomBar(
         val ballScale by animateFloatAsState(if (ballShown) 1f else 0.6f, tween(250, easing = Ease.Css), label = "ball-scale")
         // Landed: the bar is the chosen one, and the ball is put (not sent) where it is.
         if (swap != null && swap.done) LaunchedEffect(swap) {
-            if (ai >= 0) bx.snapTo(final[ai])
-            by.snapTo(g.barMid)
+            ball.snapTo(if (ai >= 0) final[ai] else ball.x, g.barMid)
             if (m.swap === swap) m.swap = null
         }
 
@@ -670,7 +680,7 @@ fun BottomBar(
             Box(
                 Modifier
                     .layout { measurable, _ ->
-                        val box = ball(g, swap, ::swapAt, bx, by, goalX, held, ballScale, ::sx)
+                        val box = ballBox(g, swap, ::swapAt, ball, goalX, held, ballScale, ::sx)
                         val p = measurable.measure(Constraints.fixed(box.width.dp.roundToPx().coerceAtLeast(1), box.height.dp.roundToPx().coerceAtLeast(1)))
                         layout(p.width, p.height) { p.place(box.left.dp.roundToPx(), box.top.dp.roundToPx()) }
                     }
@@ -756,11 +766,54 @@ fun BottomBar(
     }
 }
 
+/**
+ * Where the ball is (dp in the panel's frame) and how fast it goes, a spring each way toward where it is sent (`goX`,
+ * `goY`), stepped a frame at a time (BottomBar's loop). Where it is sent may change every frame (a finger moving on the
+ * bar): it goes on from where it is at the speed it has, toward the new goal. (An animation started over at each move,
+ * as it was, never got past its first frame under a real finger: the ball stayed where it was until the finger stopped.)
+ */
+@Stable
+private class BallMotion(x: Float, y: Float) {
+    var x by mutableFloatStateOf(x)
+    var y by mutableFloatStateOf(y)
+    /** Its speed (dp a second), read with where it is. */
+    var vx = 0f
+    var vy = 0f
+    var goX by mutableFloatStateOf(x)
+    var goY by mutableFloatStateOf(y)
+    /** Across, as stiff as the way is short; down and up, 300. Damped as the web's (ZETA 0.635). */
+    var tension = 300f
+    val resting: Boolean get() = abs(goX - x) < 0.01f && abs(goY - y) < 0.01f && abs(vx) < 0.01f && abs(vy) < 0.01f
+
+    fun snapTo(x0: Float, y0: Float) { x = x0; y = y0; vx = 0f; vy = 0f }
+
+    fun step(dt: Float) {
+        val cx = 2 * 0.635f * sqrt(tension)
+        val cy = 2 * 0.635f * sqrt(300f)
+        var nx = x
+        var ny = y
+        var left = dt
+        // In steps of 4 ms at most: steady however stiff.
+        while (left > 0f) {
+            val h = min(left, 0.004f)
+            left -= h
+            vx += (-tension * (nx - goX) - cx * vx) * h
+            nx += vx * h
+            vy += (-300f * (ny - goY) - cy * vy) * h
+            ny += vy * h
+        }
+        if (abs(goX - nx) < 0.01f && abs(vx) < 0.01f) { nx = goX; vx = 0f }
+        if (abs(goY - ny) < 0.01f && abs(vy) < 0.01f) { ny = goY; vy = 0f }
+        x = nx
+        y = ny
+    }
+}
+
 /** Where the ball is drawn (dp in the panel's frame): its box, stretched by its speed toward where it goes, or riding a bar being chosen. */
 private class BallBox(val left: Float, val top: Float, val width: Float, val height: Float)
 
-private fun ball(
-    g: Geo, swap: Swap?, swapAt: (Swap) -> Pair<FloatArray, Float>?, bx: Animatable<Float, AnimationVector1D>, by: Animatable<Float, AnimationVector1D>,
+private fun ballBox(
+    g: Geo, swap: Swap?, swapAt: (Swap) -> Pair<FloatArray, Float>?, ball: BallMotion,
     goalX: Float, held: Float, shown: Float, sx: (Float) -> Float,
 ): BallBox {
     val scale = (1 + 0.06f * held) * shown
@@ -774,15 +827,15 @@ private fun ball(
             return BallBox(sx(at.first[j]) - d / 2, at.second - d / 2, d, d)
         }
     }
-    val x = bx.value
-    val v = if (abs(goalX - x) < 0.5f) 0f else bx.velocity / 60f
+    val x = ball.x
+    val v = if (abs(goalX - x) < 0.5f) 0f else ball.vx / 60f
     val stretch = min(MAX_STRETCH, abs(v) * 1.6f)
     val w = BALL + stretch
     val h = BALL - min(6f, stretch * 0.2f)
     // Its leading edge reaches ahead, toward where it goes.
     val left = x - BALL / 2 - (if (v < 0) stretch else 0f)
     val cx = sx(left + w / 2)
-    val cy = by.value
+    val cy = ball.y
     val sw = w * scale
     val sh = h * scale
     return BallBox(cx - sw / 2, cy - sh / 2, sw, sh)
