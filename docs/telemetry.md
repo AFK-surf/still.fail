@@ -40,7 +40,7 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 `apps/android/.../Crashes.kt`（`Tombstone.kt`）报闪退，`BarTiming.kt` 报下方栏切换的耗时，和网页版的错误进同一个项目（`$exception`，`app: android`，`release` 是版本号 `0.1.<n>`，`distinct_id` 是登录账号的 id，和网页版标识的人一样）。
 
 - Kotlin 层未捕获的异常：崩溃时把异常（PostHog 的 `$exception_list` 格式，带 java 帧）写到 app 目录 `files/crashes/<ms>.json`，系统自己不留。
-- 每次启动、有账号登录后：读系统的进程退出记录（ApplicationExitInfo，Android 11 起），从上次报到的地方（`crashes.since`；第一次往回看 7 天）起，把闪退、native 崩溃（Hermes、JNI 的 abort）和 ANR 一批发到 `/batch/`。native 崩溃带系统给的 tombstone 解成的文字（崩溃线程的堆栈、abort message、进程最后 50 条 warning/error 日志），ANR 带线程 dump，都放在 `trace` 属性里；这两种没有 PostHog 认的帧，用 `$exception_fingerprint`（信号或 ANR 加栈顶几帧）归 issue。每条的 `uuid` 由时间和 pid 定，重发不会重复。
+- 每次启动、有账号登录后：读系统的进程退出记录（ApplicationExitInfo，Android 11 起），从上次报到的地方（`crashes.since`；第一次往回看 7 天）起，把闪退、native 崩溃（Hermes、JNI 的 abort）和 ANR 一批发到 `/batch/`。native 崩溃带系统给的 tombstone 解成的文字（崩溃线程的堆栈、abort message、进程最后 50 条 warning/error 日志），ANR 带线程 dump，都放在 `trace` 属性里；native 崩溃另带 `webview`（系统 WebView 的包名和版本，崩在 WebView 里时看是哪个 Chromium）和 `logcat`（报告时从系统日志里读到的那个进程最后 80 条 warning 及以上，有的手机 tombstone 里不带日志）；这两种没有 PostHog 认的帧，用 `$exception_fingerprint`（信号或 ANR 加栈顶几帧）归 issue。每条的 `uuid` 由时间和 pid 定，重发不会重复。
 - 核心死掉重启（`StillFailCore.onFailed`）也当场报一条 `CoreFailed`（`$exception_level: error`，`reason: core_failed`，值是核心给的原因），和网页版的 CoreFailed 一样；用的是最近一次上报时的账号，还没有就是 `android-anonymous`。
 - 下方栏切换一次地方发一条 `bar_switch`（`BarTiming.kt`；攒 20 条或一分钟一批发到 `/batch/`，`distinct_id` 同上，没有账号就不发）。设备上同时写一行 `adb logcat -s StillfailTiming`，没有 key 的构建也写。时间都从手指抬起算（`MotionEvent.eventTime`；`touched: false` 是不是点出来的，比如返回手势）：
 

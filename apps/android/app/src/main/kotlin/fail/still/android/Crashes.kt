@@ -44,6 +44,9 @@ object Crashes {
     const val LOGS = 60 * 1024
     /** A tombstone read at most this far (they carry memory dumps). */
     private const val TOMBSTONE = 4 * 1024 * 1024
+    /** What goes up of the log a native crash left, as the `logcat` property. */
+    private const val LOGGED = 80
+    private const val LOGGED_BYTES = 16 * 1024
 
     /** Keeps a Kotlin crash's exception in the app's files before the system's handler ends the process. */
     fun install(context: Context) {
@@ -241,6 +244,12 @@ object Crashes {
             put("importance", exit.importance)
             put("pss_kb", exit.pss)
             put("rss_kb", exit.rss)
+            if (exit.reason == ApplicationExitInfo.REASON_CRASH_NATIVE) {
+                // The system's WebView draws in the app's own render thread, and a crash in it has no symbols to read:
+                // its version says which Chromium it was, and what it logged before it ended says why.
+                webView()?.let { put("webview", it) }
+                logged(exit.pid)?.let { put("logcat", it) }
+            }
         }
         val description = exit.description ?: ""
         return when (exit.reason) {
@@ -255,6 +264,29 @@ object Crashes {
             }
             else -> Report(exit.timestamp, exit.pid, one("ANR", description, "anr"), fingerprint("ANR", trace?.let(::mainFrames).orEmpty()), trace, facts, null)
         }
+    }
+
+    /** The system WebView's package and version now (as it was at the crash, unless it was updated since). */
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun webView(): String? = try {
+        android.webkit.WebView.getCurrentWebViewPackage()?.let { "${it.packageName} ${it.versionName}" }
+    } catch (_: Exception) {
+        null
+    }
+
+    /**
+     * What an ended process logged last, warnings and up, while the log still has it (an app reads its own lines; a
+     * tombstone carries none of them on some phones): the process's last [LOGGED] lines, at most [LOGGED_BYTES].
+     */
+    private fun logged(pid: Int): String? = try {
+        val p = ProcessBuilder("logcat", "-d", "-v", "threadtime", "--pid=$pid", "*:W").redirectErrorStream(true).start()
+        val lines = ArrayDeque<String>()
+        p.inputStream.bufferedReader().useLines { all -> all.forEach { lines.addLast(it); if (lines.size > LOGGED) lines.removeFirst() } }
+        p.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+        p.destroy()
+        lines.filter { !it.startsWith("--------- beginning of") }.joinToString("\n").takeLast(LOGGED_BYTES).ifEmpty { null }
+    } catch (_: Exception) {
+        null
     }
 
     private fun javaOnly(at: Long, file: File): Report {
