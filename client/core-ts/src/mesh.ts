@@ -662,7 +662,8 @@ export class Mesh {
     });
   }
 
-  /// Puts `next` in place of `old` (if `old` still is), and closes `old` after RETIRE_MS.
+  /// Puts `next` in place of `old` (if `old` still is), and retires `old`: no more a way to go back to (its link lost
+  /// meanwhile, requests went back on it and it was closed under them, 2026-10-15), closed RETIRE_MS later.
   #switch(stationId: string, old: Link, next: Link): void {
     if (!this.#isCurrent(stationId, old)) {
       next.close();
@@ -673,15 +674,7 @@ export class Mesh {
     Deferred.doneUnsafe(done, Effect.succeed(next));
     this.#links.set(stationId, { done, result: { ok: next } });
     this.#notify();
-    this.#env.runner.fork(
-      Effect.andThen(
-        Effect.sleep(RETIRE_MS),
-        Effect.sync(() => {
-          old.conn.close(0, "replaced");
-          this.#count(stationId, old);
-        }),
-      ),
-    );
+    this.#retire(stationId, (this.#ways.get(stationId) ?? []).find((w) => w.link === old) ?? new Way(old));
   }
 
   deviceId(): string {

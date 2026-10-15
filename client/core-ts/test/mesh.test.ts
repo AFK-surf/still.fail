@@ -14,7 +14,7 @@ import { CoreError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Iroh } from "../src/iroh.ts";
-import { ALPN, clearlyBetter, cost, DEVICE_KEY, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, Mesh, MeshWire, PROBE_MS, RENEW_MS, SPEED_MIN_BYTES, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
+import { ALPN, clearlyBetter, cost, DEVICE_KEY, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, Mesh, MeshWire, PROBE_MS, RENEW_MS, RETIRE_MS, SPEED_MIN_BYTES, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -277,6 +277,33 @@ sim("a_link_gone_quiet_is_replaced_by_one_opened_beside_it_at_once", async (s) =
   const next = mesh.current(id)!;
   assert.notEqual(old, next);
   assert.equal((await request(s, next, head("/admin/api/overview"))).status, 200);
+  await close(s, station, mesh);
+});
+
+/// The side run, seed 705982920 (2026-10-15): a link gone quiet was replaced, and the new one lost within RETIRE_MS; the
+/// read asked then went back on the old, which was closed under it as it retired.
+sim("a_link_lost_soon_after_it_replaced_one_gone_quiet_is_not_traded_for_that_one", async (s) => {
+  const { mesh, station } = await setup(s);
+  const id = station.id();
+  const wire = wireOf(s, mesh);
+  const addr = StationAddr.parse(`w/${id}`);
+  const get: RequestHead = { method: "GET", path: "/admin/api/overview", headers: [] };
+  const ask = () => s.runner.run(Effect.scoped(Effect.flatMap(wire.request(addr, get, new Uint8Array()), (r) => Effect.map(readAll(r.body), () => r.status))));
+  const old = await s.run(mesh.link(id, grants("ok", { n: 0 })));
+  await request(s, old, head("/admin/api/overview"));
+  station.deadBelow = station.conns.length;
+  const replaced = s.runner.run(mesh.replaced(id, old));
+  s.wakes.wake(network(s.host));
+  await s.settle(replaced);
+  const next = mesh.current(id)!;
+  // The old one answers again (it was only slow to): a way, for all the mesh knows.
+  station.deadBelow = 0;
+  // Lost as a read is asked on it, near the end of RETIRE_MS.
+  await s.time.pass(RETIRE_MS - 200);
+  station.conns.at(-1)!.close(0, "restart");
+  assert.equal(await s.settle(ask()), 200);
+  assert.ok(next.closed() !== null);
+  assert.notEqual(mesh.current(id), old);
   await close(s, station, mesh);
 });
 
