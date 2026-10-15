@@ -35,8 +35,9 @@ export const top = style({
   flex: "none", alignSelf: "stretch", height: 5, transition: `height 380ms ${vars.easeOut}, margin-bottom 380ms ${vars.easeOut}`,
   selectors: {
     // Only macOS's window has its buttons here; full screen, or on Windows (its buttons at the right, the page's bar
-    // dragging the window), as on the web.
-    '[data-desktop="inset"]:not([data-fullscreen]) &': { height: 41, WebkitAppRegion: "drag" },
+    // dragging the window), as on the web. Not in the closed bar (below), which starts under the buttons' row: this
+    // selector outweighs that one, so it says so itself.
+    '[data-desktop="inset"]:not([data-fullscreen]):not([data-sidebar="closed"]) &': { height: 41, WebkitAppRegion: "drag" },
     // In the closed bar nothing: its places stand as far from its top as from its sides (rail's padding).
     '[data-sidebar="closed"] &': { height: 0, ...outsetBottom(6) },
   },
