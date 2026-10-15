@@ -10,10 +10,12 @@
 #   sh scripts/check.sh full <range>  full, on what the range changed
 #   sh scripts/check.sh all           full, as if every file changed
 #
-# STILLFAIL_CHECK_PART="<part> …" (ts, station, core, android) runs only those parts of it: ts the icons, the clients' types and
-# bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the core: client/core-ts); station
-# the station (station/, its typecheck and tests) and its native parts' own tests (station/native); core client/'s Rust
-# (the core's native shells: iroh for the web and Android's IO); android the app. Unset: all of them.
+# STILLFAIL_CHECK_PART="<part> …" (ts, browser, station, core, android) runs only those parts of it: ts the icons, the clients'
+# types and bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the core: client/core-ts);
+# browser the web in Chrome (its stories measured, the message list's motion watched; STILLFAIL_BROWSER="stories <i>/<n>"
+# or "motion" one share of it); station the station (station/, its typecheck and tests) and its native parts' own tests
+# (station/native); core client/'s Rust (the core's native shells: iroh for the web and Android's IO); android the app.
+# Unset: all of them.
 #
 # The steps run side by side, each as soon as what it needs is there (a directory's node_modules: `prep`); each one's
 # output is kept to itself, and they are reported in the order they are listed here, as each is done, with the seconds
@@ -244,17 +246,7 @@ if part ts; then
     prep core deps client/core-ts
     step "typecheck: web" after root after core pnpm exec tsgo -p web/tsconfig.json
     [ -f web/src/core/iroh-pkg/.stand-in ] && later "web against the real iroh wasm"
-  fi
-  # Every story (web/stories) opened and every corner and small panel in it measured (test/browser/stories.mjs,
-  # docs/ui-panels.md), then what moves in a chat's message list watched frame by frame (test/browser/list-settle.mjs,
-  # docs/list-motion.md): in the full check, on a Chrome the machine has (CI's Linux runner has one), one at a time.
-  if [ $full = 1 ] && { touches "$ts_web" || touches '^test/browser/(stories|measure|list-settle)\.mjs$'; }; then
-    if command -v google-chrome >/dev/null 2>&1; then
-      prep core deps client/core-ts
-      step "web: stories measured, the message list's motion watched" after root after core sh -c 'export PLAYWRIGHT_MODULE=playwright-core PLAYWRIGHT_CHANNEL=chrome; node test/browser/stories.mjs && node test/browser/list-settle.mjs'
-    else
-      later "web: stories measured, the message list's motion watched (no Chrome here)"
-    fi
+    # The web in Chrome (its stories, its message list's motion): the browser part, with the full check's steps below.
   fi
   if touches "$ts_cloud"; then
     prep cloud deps cloud
@@ -270,6 +262,25 @@ if part ts; then
 fi
 
 if [ $full = 1 ]; then
+  # Every story (web/stories) opened and every corner and small panel in it measured (test/browser/stories.mjs,
+  # docs/ui-panels.md), then what moves in a chat's message list watched frame by frame (test/browser/list-settle.mjs,
+  # docs/list-motion.md): on a Chrome the machine has (CI's Linux runners have one). On CI shared out between jobs side by
+  # side (STILLFAIL_BROWSER): on one of GitHub's four cores it all took ~3 minutes (2026-10-15).
+  if part browser && { touches '^web/' || touches '^test/browser/(stories|measure|list-settle)\.mjs$'; }; then
+    if command -v google-chrome >/dev/null 2>&1; then
+      prep root deps .
+      wasm_pkg
+      prep core deps client/core-ts
+      chrome='export PLAYWRIGHT_MODULE=playwright-core PLAYWRIGHT_CHANNEL=chrome'
+      case "${STILLFAIL_BROWSER:-}" in
+        stories*) step "web: stories measured (${STILLFAIL_BROWSER#stories })" after root after core sh -c "$chrome SHARD='${STILLFAIL_BROWSER#stories }'; node test/browser/stories.mjs" ;;
+        motion) step "web: the message list's motion watched" after root after core sh -c "$chrome; node test/browser/list-settle.mjs" ;;
+        *) step "web: stories measured, the message list's motion watched" after root after core sh -c "$chrome; node test/browser/stories.mjs && node test/browser/list-settle.mjs" ;;
+      esac
+    else
+      later "web: stories measured, the message list's motion watched (no Chrome here)"
+    fi
+  fi
   # The tests drive the web core itself (test/core-client.test.ts): only with a real build of it.
   if part ts && [ $core_tests = 1 ]; then
     if [ -f web/src/core/iroh-pkg/.stand-in ] || [ ! -f web/src/core/iroh-pkg/built.js ]; then later "tests (need the iroh wasm)"; else step "tests" after root pnpm test; fi

@@ -3,7 +3,7 @@
 // here. Builds the stories once (as a page, not module by module: the dev server's per-module transforms were most of
 // the time on CI's four cores) and serves the build. PLAYWRIGHT_MODULE selects Playwright (PLAYWRIGHT_CHANNEL a Chrome the
 // machine has, as CI's); SHOTS keeps a picture of each story; ONLY=<id,…> opens only those; REPORT=1 lists what is off
-// instead of failing; PAGES how many are opened at once (6).
+// instead of failing; PAGES how many are opened at once (6); SHARD=<i>/<n> only the i-th of every n (CI's jobs side by side).
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -28,7 +28,8 @@ try {
   const index = await browser.newPage();
   await index.goto(base);
   await index.waitForFunction(() => Array.isArray(window.stories));
-  const stories = (await index.evaluate(() => window.stories)).filter((s) => !only || only.includes(s.id));
+  const [shard, shards] = (process.env.SHARD || '1/1').split('/').map(Number);
+  const stories = (await index.evaluate(() => window.stories)).filter((s, i) => (!only || only.includes(s.id)) && i % shards === shard - 1);
   await index.close();
 
   // Settled: fonts in, every transition and finite animation over (spinners go on), after `ms` for what starts late.
