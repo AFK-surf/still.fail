@@ -1,7 +1,7 @@
 import * as css from "./scrollbars.css.ts";
 // Scrollbars that float over what scrolls and take no room from it. With a mouse the system's bars are hidden
-// (styles/global.css.ts) and one thin thumb per axis, drawn here, shows on the pane under the pointer and on any pane while it
-// scrolls, and can be dragged. Touch screens keep the system's own, which already float.
+// (styles/global.css.ts) and one thin thumb per axis, drawn here, shows on any pane while it scrolls and while the pointer is
+// where the pane's bar runs (along its right edge, or its foot), and can be dragged. Touch screens keep the system's own, which already float.
 // A thumb is put beside the pane it is for (in the pane's parent), so it is layered as the pane is: a menu, a popover
 // or a dialog over the pane is over its bar too.
 // A pane with something floating over its foot (a chat's composer) or its top (the sidebar's frosted bands) says so with
@@ -14,6 +14,8 @@ const HIDE_AFTER = 900;
 const MIN_THUMB = 28;
 const INSET = 2;
 const SIZE = 3;
+/** How far in from the pane's edge the pointer brings out its bar. */
+const NEAR = 12;
 
 /** A corner's radius in px (one given in % is left as none). */
 function radius(value: string): number {
@@ -73,12 +75,14 @@ export function startScrollbars(): void {
   if (!window.matchMedia("(pointer: fine)").matches) return;
   document.documentElement.dataset.floatingScrollbars = "";
 
-  /** One pane's pair of thumbs. Two at most are out: the pane under the pointer keeps its own while another pane
+  /** One pane's pair of thumbs. Two at most are out: the pane under the pointer (at its bar) keeps its own while another pane
    * scrolls by itself (a chat opened from the sidebar going to its foot), rather than giving it up to that one and
    * coming back a moment later. */
   type Bar = { thumbs: Record<Axis, HTMLDivElement>; el: Element | null; resize: ResizeObserver; timer?: ReturnType<typeof setTimeout> };
-  /** The pane under the pointer: its bar stays while the pointer does. */
+  /** The pane under the pointer. */
   let hover: Element | null = null;
+  /** Whether the pointer is where that pane's bar runs: its bar stays while the pointer does. */
+  let near = false;
   /** Where the pointer was last seen over the page: the pane under it is found again when the one it was over is
    * taken out of the page (another chat opened in its place) without the pointer moving. */
   let pointer: { x: number; y: number } | null = null;
@@ -131,16 +135,41 @@ export function startScrollbars(): void {
   /** The bar of a pane scrolled away from the pointer goes HIDE_AFTER its last move; the pointer's, once it has left. */
   function linger(b: Bar) {
     clearTimeout(b.timer);
-    b.timer = setTimeout(() => { if (dragging?.bar !== b) show(b, b === under ? hover : null); }, HIDE_AFTER);
+    b.timer = setTimeout(() => { if (dragging?.bar !== b) show(b, b === under && near ? hover : null); }, HIDE_AFTER);
+  }
+
+  /** Whether the pointer is along the pane's right edge or its foot, where its bars run. */
+  function nearBar(el: Element): boolean {
+    if (!pointer) return false;
+    const page = el === document.scrollingElement;
+    const r = page ? { left: 0, top: 0, right: el.clientWidth, bottom: el.clientHeight } : el.getBoundingClientRect();
+    const right = page ? r.right : r.left + el.clientLeft + el.clientWidth - rightOf(el);
+    const bottom = page ? r.bottom : r.top + el.clientTop + el.clientHeight;
+    const { x, y } = pointer;
+    if (x < r.left || x > r.right || y < r.top || y > r.bottom) return false;
+    return (el.scrollHeight > el.clientHeight + 1 && x >= right - NEAR) || (el.scrollWidth > el.clientWidth + 1 && y >= bottom - NEAR);
+  }
+
+  /** The pointer's pane brings out its bar while the pointer is at it, and lets it go a moment after it leaves. */
+  function follow() {
+    const was = near;
+    near = !!hover && nearBar(hover);
+    if (near) {
+      clearTimeout(under.timer);
+      // The pane had its bar out as it scrolled: one bar for it, the pointer's.
+      if (moving.el === hover) { clearTimeout(moving.timer); show(moving, null); }
+      show(under, hover);
+    } else if (was) linger(under);
   }
 
   function draw() {
     if (hover && !hover.isConnected) {
       hover = pointer ? scrollerOf(document.elementFromPoint(pointer.x, pointer.y)) : null;
-      if (hover === moving.el) moving.el = null;
+      near = !!hover && nearBar(hover);
+      if (near && hover === moving.el) moving.el = null;
       if (under.el) under.resize.unobserve(under.el);
-      under.el = hover;
-      if (hover) under.resize.observe(hover);
+      under.el = near ? hover : null;
+      if (under.el) under.resize.observe(under.el);
     }
     drawBar(under);
     drawBar(moving);
@@ -219,20 +248,24 @@ export function startScrollbars(): void {
       reading = 0;
       if (dragging) return;
       hover = scrollerOf(over);
-      if (!hover) { linger(under); return; }
-      clearTimeout(under.timer);
-      // The pane come under the pointer had its bar out as it scrolled: one bar for it, the pointer's.
-      if (moving.el === hover) { clearTimeout(moving.timer); show(moving, null); }
-      show(under, hover);
+      follow();
     }));
   }, { passive: true });
-  document.documentElement.addEventListener("pointerleave", () => { hover = null; pointer = null; linger(under); });
+  // Over the pane, whether the pointer has come to its bar is read once a frame.
+  let moved = 0;
+  document.addEventListener("pointermove", (e) => {
+    if (dragging || e.pointerType !== "mouse") return;
+    pointer = { x: e.clientX, y: e.clientY };
+    if (!hover || moved) return;
+    moved = requestAnimationFrame(() => { moved = 0; if (!dragging && hover) follow(); });
+  }, { passive: true });
+  document.documentElement.addEventListener("pointerleave", () => { hover = null; near = false; pointer = null; linger(under); });
   // Whatever scrolls (a wheel over a pane, a chat following new messages) shows its bar for a moment; the pane under
   // the pointer keeps its own meanwhile.
   document.addEventListener("scroll", (e) => {
     if (dragging) { schedule(); return; }
     const el = e.target instanceof Element ? e.target : document.scrollingElement;
-    if (el && el === under.el) { schedule(); if (el !== hover) linger(under); return; }
+    if (el && el === under.el) { schedule(); if (el !== hover || !near) linger(under); return; }
     show(moving, el);
     linger(moving);
   }, { capture: true, passive: true });

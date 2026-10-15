@@ -1,5 +1,5 @@
 // Run against pnpm dev:web --host 127.0.0.1 --port 5187. The floating scrollbars (scrollbars.ts) over two panes: a
-// sidebar under the pointer and a chat opened beside it.
+// sidebar (x 0–300) with the pointer at its bar and a chat (x 300–900) opened beside it.
 import { writeFileSync, rmSync } from 'node:fs';
 import assert from 'node:assert/strict';
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
@@ -38,10 +38,30 @@ Object.assign(window, {
   const settle = async (ms = 100) => { await page.clock.runFor(ms); await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))); };
   const owner = () => page.evaluate(() => [...document.querySelectorAll('[data-axis="y"][data-on]')].map(t => t.parentElement === document.body ? 'side' : 'chat').sort().join(','));
 
-  // A chat opened from the sidebar: the sidebar's bar stays all along, the chat's shows for its scroll and goes.
+  // Over a pane but away from its edge: no bar until it scrolls, and it goes again after.
   await page.mouse.move(100, 250);
   await settle();
-  assert.equal(await owner(), 'side', 'the bar of the pane under the pointer');
+  assert.equal(await owner(), '', 'no bar for a pane the pointer is only over');
+  await page.evaluate(() => { document.getElementById('side').scrollTop = 200; });
+  await settle();
+  assert.equal(await owner(), 'side', 'the bar shows as the pane scrolls');
+  await settle(1000);
+  assert.equal(await owner(), '', 'and goes once it stops');
+  // At the pane's right edge: the bar shows and stays; leaving the edge, it goes.
+  await page.mouse.move(294, 250);
+  await settle();
+  assert.equal(await owner(), 'side', 'the bar shows with the pointer where it runs');
+  await settle(2000);
+  assert.equal(await owner(), 'side', 'and stays while the pointer does');
+  await page.mouse.move(150, 250);
+  await settle(1000);
+  assert.equal(await owner(), '', 'and goes once the pointer leaves the edge');
+  console.log('PASS shown on scroll and at the edge');
+
+  // A chat opened from the sidebar: the sidebar's bar stays all along, the chat's shows for its scroll and goes.
+  await page.mouse.move(294, 250);
+  await settle();
+  assert.equal(await owner(), 'side', 'the bar of the pane the pointer is at');
   await page.evaluate(() => window.open());
   for (let t = 0; t < 600; t += 100) {
     await settle();
@@ -52,7 +72,7 @@ Object.assign(window, {
   console.log('PASS opened from the sidebar');
 
   // Another chat opened under the pointer (a shortcut): its bar stays, as the last one's did.
-  await page.mouse.move(600, 250);
+  await page.mouse.move(894, 250);
   await settle();
   assert.equal(await owner(), 'chat');
   await page.evaluate(() => window.open());
