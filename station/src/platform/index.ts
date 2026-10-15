@@ -136,6 +136,12 @@ export type Platform = {
   /// Whether Codex's standalone install updates by its installer here (a shell script: not on Windows).
   codexStandalone: boolean;
 
+  // Sleep (ops/awake.ts).
+  /// Keeps the machine from going to sleep for want of use, `why` said where the system shows it: a process of its own
+  /// holds the system's say-so (Windows' SetThreadExecutionState, macOS's caffeinate, systemd-inhibit) until the
+  /// returned function lets go, or the station is gone; none where there is no way to.
+  holdAwake(why: string): (() => void) | null;
+
   // What only some machines have.
   /// The macOS keychain (Claude Code keeps its login there).
   hasKeychain: boolean;

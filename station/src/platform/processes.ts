@@ -1,5 +1,6 @@
 // What the platforms and the rest of the station both use and that is the same on every machine, in a module that
 // imports nothing of the station's (so platform/windows.ts can use it without importing platform/index.ts back).
+import type { ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -24,4 +25,18 @@ export function pidAlive(pid: number): boolean {
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === "EPERM";
   }
+}
+
+/// A holder (platform `holdAwake`): `child` kept until the returned function ends it. Its stdin, when a pipe, is the
+/// station's end: the holder reads it to its end, so it goes when the station does, however that ends. It keeps the
+/// station's process up no more than a timer of `wall`'s would.
+export function holder(child: ChildProcess): () => void {
+  child.on("error", () => {});
+  child.unref();
+  (child.stdin as unknown as { unref?: () => void } | null)?.unref?.();
+  child.stdin?.on("error", () => {});
+  return () => {
+    child.stdin?.end();
+    child.kill();
+  };
 }
