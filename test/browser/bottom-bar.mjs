@@ -74,40 +74,34 @@ createRoot(root).render(<DemoApp phone />);
   await shot('home');
   await shot('home-dark', true);
 
-  // The panel under the finger (one other bar: 56 of travel): as open as it is drawn, held there, never going on its
-  // own; let go under half way, closed; over half way, open; a finger on it as it goes, held where it is.
+  // The panel snaps as the ball does (one other bar: 56 of travel): held a little way above the bar, it opens of itself
+  // (but for a quarter's lean toward the finger) and stays so while held; back down below the line, it closes while
+  // still held; let go, it is as the line left it, never resting between.
   const openness = () => page.evaluate(() => {
     const g = document.querySelector('[data-bar=glass]').getBoundingClientRect(), r = document.querySelector('[role=tablist]').getBoundingClientRect();
     return (r.top - g.top) / 56;
   });
-  const drawUp = async (by, still = 300) => {
-    const r = await tab('对话').boundingBox(), x = r.x + r.width / 2, y = r.y + r.height / 2;
-    await touch('touchStart', x, y);
-    for (let k = 1; k <= 8; k++) { await touch('touchMove', x, y - 8 - by * k / 8); await page.waitForTimeout(16); }
-    await page.waitForTimeout(still);
-    return { x, y };
-  };
-  await drawUp(22, 400);
-  const held1 = await openness();
-  await page.waitForTimeout(400);
-  const held2 = await openness();
-  assert.ok(held1 > 0.3 && held1 < 0.5 && Math.abs(held1 - held2) < 0.02, `held where the finger drew it (${held1.toFixed(2)}, then ${held2.toFixed(2)})`);
-  await touch('touchEnd');
-  await page.waitForTimeout(900);
-  assert.ok(await openness() < 0.03, 'let go under half way: closed');
-  await drawUp(42);
-  await touch('touchEnd');
-  await page.waitForTimeout(900);
-  assert.ok(await openness() > 0.97 && await page.locator('[data-bar=scrim]').count(), 'let go over half way: open');
-  // Closing (the scrim tapped), a finger on the bar as it goes: held where it was.
-  await page.touchscreen.tap(195, 120);
-  await page.waitForTimeout(60);
-  const c0 = await tab('对话').boundingBox();
-  await touch('touchStart', c0.x + c0.width / 2, c0.y + c0.height / 2);
-  const grabbed = await openness();
+  const c0 = await tab('对话').boundingBox(), px = c0.x + c0.width / 2, top = c0.y;
+  const at = async (y) => { await touch('touchMove', px, y); await page.waitForTimeout(16); };
+  await touch('touchStart', px, top + 28);
+  for (let k = 1; k <= 8; k++) await at(top + 28 - (28 + 30) * k / 8); // 30 over the bar's top: over the line
+  await page.waitForTimeout(700);
+  const up1 = await openness();
   await page.waitForTimeout(300);
-  assert.ok(grabbed > 0.05 && Math.abs(await openness() - grabbed) < 0.02, `a finger on it as it closes holds it (${grabbed.toFixed(2)})`);
+  assert.ok(up1 > 0.95 && Math.abs(await openness() - up1) < 0.01, `over the line, held: open, and stays (${up1.toFixed(2)})`);
+  for (let k = 1; k <= 6; k++) await at(top - 30 + 30 * k / 6); // back down to the bar's top: under the line
+  await page.waitForTimeout(700);
+  const down1 = await openness();
+  assert.ok(down1 < 0.2, `back under the line, still held: closed but for the lean (${down1.toFixed(2)})`);
   await touch('touchEnd');
+  await page.waitForTimeout(700);
+  assert.ok(await openness() < 0.02, 'let go under the line: closed');
+  await touch('touchStart', px, top + 28);
+  for (let k = 1; k <= 8; k++) await at(top + 28 - 58 * k / 8);
+  await touch('touchEnd');
+  await page.waitForTimeout(900);
+  assert.ok(await openness() > 0.97 && await page.locator('[data-bar=scrim]').count(), 'let go over the line: open');
+  await page.touchscreen.tap(195, 120);
   await page.waitForTimeout(900);
 
   // The list scrolled a little (on a shorter screen, for the demo's few chats to run past it), to be found so again.
@@ -153,6 +147,13 @@ createRoot(root).render(<DemoApp phone />);
   for (let k = 1; k <= 10; k++) { await touch('touchMove', sx + (tx - sx) * k / 10, sy - 90 + (ty - sy + 90) * k / 10); await page.waitForTimeout(16); }
   await page.waitForTimeout(400);
   await touch('touchEnd');
+  // A finger on the bar as the switch lands: it lands untouched (closing all the way, never back up or held).
+  await page.waitForTimeout(30);
+  const landing = [await openness()];
+  await touch('touchStart', sx, sy);
+  for (let k = 0; k < 8; k++) { await page.waitForTimeout(25); landing.push(await openness()); }
+  await touch('touchEnd');
+  assert.ok(landing.every((v, k) => k === 0 || v <= landing[k - 1] + 0.01) && landing.at(-1) < 0.05, `a touch does not stop the landing (${landing.map((v) => v.toFixed(2)).join(' ')})`);
   await page.waitForTimeout(1500);
   assert.ok(await tab('连接').count() > 0 && await tab('连接').isVisible(), 'the bar is now the other bar');
   assert.ok(page.url().includes('/connects') || await page.getByText('连接', { exact: true }).count() > 0, '连接\'s page');
