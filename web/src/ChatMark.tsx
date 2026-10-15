@@ -78,14 +78,18 @@ export function WaitingText({ text, className, slot = false }: { text: string; c
   const turn = lead !== "" || /^(?:要你帮忙|Needs you:)/.test(text);
   const watch = slot && !need ? WATCH.exec(text) : null;
   const icon = slot ? need ?? DONE.exec(text) ?? WAIT.exec(text) ?? watch : null;
+  const motion = icon && !need && !DONE.test(text) ? (watch ? "watch" : "wait") : undefined;
   if (icon) {
     const label = watch ? text : t(need ? "web-main.chatMark.alert" : DONE.test(text) ? "web-main.status.done" : "web-main.status.waiting");
     // Watching keeps its words after its radar.
     const rest = watch ? text : text.slice(icon[0].length);
+    const Moving = watch ? Watch : Wait;
     return (
       <span className={`${className} ${css.leadLine}`} data-turn={turn || undefined} data-state-line="" aria-label={text}>
-        <Tip label={label}><span className={css.leadSlot} role="img" aria-label={label} data-motion={need || DONE.test(text) ? undefined : watch ? "watch" : "wait"}>
+        <Tip label={label}><span className={css.leadSlot} role="img" aria-label={label} data-motion={motion}>
           {need ? <Bell size={14} /> : DONE.test(text) ? <Check size={14} strokeWidth={1.7} /> : watch ? <Watch size={14} strokeWidth={1.7} /> : <Wait size={14} strokeWidth={1.7} />}
+          {/* What moves, each part on a copy of its own (ChatMark.css.ts leadSlot). */}
+          {motion && MOVING[motion].map((n) => <span key={n} data-part={n}><Moving size={14} strokeWidth={1.7} /></span>)}
         </span></Tip>
         {rest && <span className={css.leadRest}>{rest}</span>}
       </span>
@@ -97,6 +101,9 @@ export function WaitingText({ text, className, slot = false }: { text: string; c
     </span>
   );
 }
+
+/** The parts of the icons that move, by their place among the icon's children: waiting's three dots; watching's dot and arcs. */
+const MOVING = { wait: [2, 3, 4], watch: [1, 2, 3] } as const;
 
 /** The core's done and waiting leads, in either language (as ui.tsx StatusText reads them). */
 const DONE = /^(?:做完了(?:：|$)|Done(?:: |$))/;
