@@ -351,6 +351,8 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal((await s.call("PUT", "/profiles/machine-claude", { name: "renamed", models: ["claude-x"], access: { kind: "opencode-go", key: "k" } }))[0], 200);
     assert.deepEqual([profile().name, profile().models, (profile().access as any).kind, profile().machine], ["b@x.com", ["claude-x"], "subscription", true]);
     assert.equal(s.view("machine-claude")!.machine, true);
+    // Its account, as the same one signed in on another station is: the workspace's list makes them one row.
+    assert.equal(s.view("machine-claude")!.email, "b@x.com");
     // And how it runs: on by default, turned off and on here; other edits keep it.
     assert.equal(profile().backgroundOnMessage, true);
     assert.equal((await s.call("PUT", "/profiles/machine-claude", { backgroundOnMessage: false }))[0], 200);

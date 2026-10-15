@@ -966,7 +966,7 @@ export class Accounts {
       }
       return {
         id: p.id, name: p.name, runtime: p.runtime, runtimes: p.runtimes,
-        email: kind === "subscription" && p.machine !== true ? (borrowed(p) ? (typeof (p.share as Json)?.email === "string" ? (p.share as Json).email : null) : accountEmail(p.runtime, p.home)) : null,
+        email: kind === "subscription" ? this.email(p) : null,
         // A provider's key says `env` where an older core reads it; the provider next to it tells a newer core it is not.
         access: {
           kind: kind === "api-provider" ? "env" : kind, key: mask(String(a.key ?? "").trim()),
@@ -987,6 +987,15 @@ export class Accounts {
         share: this.deps.shared?.view(p) ?? null,
       };
     });
+  }
+
+  /// The account a subscription profile is signed in as: a borrowed one's as its host said, one on the machine's login
+  /// the machine's (Claude's is in the keychain, not its home), the rest their home's. The workspace's list tells the
+  /// same account on several stations by it.
+  private email(p: Json): string | null {
+    if (borrowed(p)) return typeof (p.share as Json)?.email === "string" ? (p.share as Json).email : null;
+    if (p.machine === true) return this.machineLogins().find((l) => l.runtime === p.runtime)?.email ?? accountEmail(p.runtime, p.home);
+    return accountEmail(p.runtime, p.home);
   }
 
   /// The overview's `logins`: sign-ins for new profiles.
