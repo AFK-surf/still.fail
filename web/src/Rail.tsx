@@ -285,6 +285,8 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   // place has come (the effect above), or soon if it was already there.
   const reveal = () => { if (now.current.own && folded(now.current.group)) peekSidebar(); };
   const asked = useRef(false);
+  // The sidebar just closed by its lit place pressed again: not shown by the pointer until it leaves the rail.
+  const quiet = useRef(false);
   const revealPressed = () => {
     asked.current = true;
     setTimeout(() => { if (asked.current) { asked.current = false; reveal(); } }, 60);
@@ -366,7 +368,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   const hidden = KINDS.map((k) => ({ ...k, items: k.items.filter((i) => !items.includes(i)) })).filter((k) => k.items.length > 0);
   const rail = (
     <nav className={css.rail} aria-label={t("web-main.rail.label")} data-editing={changing || undefined}
-      // A tab pressed (after its place has come), or the lit one pointed at: its sidebar shown (reveal).
+      // A tab pressed (after its place has come), or the pointer anywhere on the rail: the place's sidebar shown (reveal).
       onClickCapture={(e) => {
         const pressed = changing ? null : (e.target as Element).closest(`.${css.item}`);
         if (!pressed) return;
@@ -376,12 +378,15 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
           e.preventDefault();
           e.stopPropagation();
           asked.current = false;
+          // Closed so, not shown again over the page at once by the pointer still on the rail: only once it has left.
+          if (!sidebar.closed) quiet.current = true;
           sidebar.toggle();
           return;
         }
         revealPressed();
       }}
-      onPointerOver={(e) => { if (!changing && e.pointerType === "mouse" && (e.target as Element).closest(`.${css.item}[data-on]`)) reveal(); }}
+      onPointerOver={(e) => { if (!changing && e.pointerType === "mouse" && !quiet.current) reveal(); }}
+      onPointerLeave={() => { quiet.current = false; }}
       onContextMenu={(e) => {
         if (changing) return;
         e.preventDefault();
