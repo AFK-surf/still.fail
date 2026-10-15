@@ -40,6 +40,13 @@ export function surface(pad: number | string, innerCorner: number | string, shap
   } as const;
 }
 
+/**
+ * The corner a surface's own corner leaves for what sits `pad` in from it, when that is a pill `height` high: the
+ * surface's corner is the pill's half height and the pad together, drawn as the app draws corners (× corner-scale
+ * where they are squarer), so a pill too short for a larger corner never leaves a crescent beside it.
+ */
+export const pillInner = (pad: number, height: number, scale: string) => `calc(${pad + height / 2}px * ${scale} - ${pad}px)`;
+
 /** A surface's corner as a value, for one whose padding is drawn otherwise (rows reaching its edge, a bar on top). */
 export const surfaceCorner = (pad: number | string, innerCorner: number | string) => `calc(${px(innerCorner)} + ${px(pad)})`;
 
@@ -135,6 +142,8 @@ export function edgeRow(x: number | string) {
  */
 export const PANEL_PAD = 6;
 export const TEXT_IN = 10;
+/** A small panel's buttons: pills this high (ui.css.ts panelButton, panelIcon). */
+export const PANEL_PILL = 24;
 /** A block of words in a small panel: in by a row's padding, and a little room above and below. */
 export const panelText = { paddingInline: px(TEXT_IN) } as const;
 /** A small panel's corner from what sits in it (6 in, the corner of what it holds): `surface(...smallPanel)`. */

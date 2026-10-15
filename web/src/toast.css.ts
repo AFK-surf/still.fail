@@ -12,6 +12,7 @@ import { slackTeamIcon } from "./pages/Connect.css.ts";
 import { appearanceSetting, chooserCheck, modelPoolList, msgAvatar } from "./styles/chat.css.ts";
 import { groupHead } from "./cloud/settings.css.ts";
 import { details, detailsList, jobsPanel } from "./pages/ChatPage.css.ts";
+import { COMPOSER_BUTTON } from "./styles/composer.css.ts";
 import { activityLine, attachBtn, fileCard, fileCardOpen, msgFiles, msgImage, msgUnsentNote, quoteCards, sendBtn } from "./Chat.css.ts";
 import { hPlace } from "./History.css.ts";
 import { bleedX, bleedY, overlap } from "./styles/align.ts";
@@ -72,7 +73,7 @@ globalStyle(spinner, {
 globalStyle(`${composerWrap} > *`, { maxWidth: "760px", marginLeft: "auto", marginRight: "auto" });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(sendBtn, {
-  display: "grid", placeItems: "center", width: "32px", height: "32px", padding: "0", border: "0", borderRadius: "50%",
+  display: "grid", placeItems: "center", width: COMPOSER_BUTTON, height: COMPOSER_BUTTON, padding: "0", border: "0", borderRadius: "50%",
   background: vars.primary, color: vars.onPrimary, cursor: "pointer",
   transition: `background ${vars.dur} ${vars.easeOut}`,
 });
@@ -90,7 +91,7 @@ globalStyle(detailsList, {
 });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(attachBtn, {
-  display: "grid", placeItems: "center", width: "32px", height: "32px", padding: "0", border: "0", borderRadius: "50%",
+  display: "grid", placeItems: "center", width: COMPOSER_BUTTON, height: COMPOSER_BUTTON, padding: "0", border: "0", borderRadius: "50%",
   background: "none", color: vars.muted, cursor: "pointer",
 });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */

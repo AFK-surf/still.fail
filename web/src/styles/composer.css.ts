@@ -1,6 +1,11 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./tokens.css.ts";
 import { glass } from "./glass.ts";
+import { pillInner } from "./align.ts";
+
+const COMPOSER_PAD = 12;
+/** The attach and send buttons' size (toast.css.ts sendBtn, attachBtn). */
+export const COMPOSER_BUTTON = 32;
 
 export const composerBox = style({
   selectors: {
@@ -13,9 +18,10 @@ export const composerBox = style({
 /** Here rather than with its class: it comes after .composer-box[data-dragging], and wins over it. */
 globalStyle(`${composerBox}:focus-within`, { borderColor: vars.fieldFocus });
 /** Here rather than with its class: it comes after .composer-box:not([data-multiline]), and wins over it. */
+// Its corner from the buttons in its corners (attach, send: 32, 12 in), as a pill's (align.ts pillInner).
 globalStyle(`${composerBox}[data-multiline]`, {
-  flexDirection: "column", alignItems: "stretch", gap: "8px", padding: "12px",
-  borderRadius: `calc(32px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  flexDirection: "column", alignItems: "stretch", gap: "8px", padding: `${COMPOSER_PAD}px`,
+  borderRadius: `calc(${pillInner(COMPOSER_PAD, COMPOSER_BUTTON, vars.cornerScale)} + ${COMPOSER_PAD}px)`, cornerShape: vars.cornerShape,
 });
 /** Composer: one line sits on the frame's centre line; files ride above the text. */
 /** Here rather than with its class: it comes after .composer-box[data-multiline], and wins over it. */

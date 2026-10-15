@@ -8,7 +8,7 @@ import { pageBar } from "./styles/sidebar.css.ts";
 import { markdown } from "./styles/conversation.css.ts";
 import { card, iconBtn, listRow } from "./styles/pages.css.ts";
 import { outsetStart } from "./styles/align.ts";
-import { TEXT_IN } from "./styles/align.ts";
+import { PANEL_PILL, TEXT_IN } from "./styles/align.ts";
 
 export const firstOneTitle = style({
   textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere", margin: "12px 0 0", fontSize: vars.textTitle,
@@ -449,9 +449,9 @@ export const panelText = style({ paddingInline: TEXT_IN });
  * must be seen). In a corner it stands as far from both edges (align.ts).
  */
 export const panelButton = style({
-  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4, height: 24, padding: "0 10px", border: 0,
+  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4, height: PANEL_PILL, padding: "0 10px", border: 0,
   borderRadius: 999, background: "none", color: vars.text, font: "inherit",
-  fontSize: vars.textMeta, fontWeight: 500, lineHeight: "24px", textDecoration: "none", whiteSpace: "nowrap", cursor: "pointer", flex: "none",
+  fontSize: vars.textMeta, fontWeight: 500, lineHeight: `${PANEL_PILL}px`, textDecoration: "none", whiteSpace: "nowrap", cursor: "pointer", flex: "none",
   selectors: {
     "&:hover:not(:disabled)": { background: vars.hover },
     '&[data-tone="accent"]': { color: vars.accentText },
@@ -464,7 +464,7 @@ export const panelButton = style({
 });
 /** An icon to press in a small panel (close, stop, step): a 24 circle, as panelButton is a pill. */
 export const panelIcon = style({
-  display: "grid", placeItems: "center", width: 24, height: 24, padding: 0, border: 0, flex: "none",
+  display: "grid", placeItems: "center", width: PANEL_PILL, height: PANEL_PILL, padding: 0, border: 0, flex: "none",
   borderRadius: "50%", background: "none", color: vars.muted, cursor: "pointer",
   selectors: { "&:hover:not(:disabled)": { background: vars.hover, color: vars.text }, "&:disabled": { opacity: .35, cursor: "default" } },
 });

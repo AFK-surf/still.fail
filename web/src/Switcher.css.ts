@@ -1,14 +1,16 @@
-// ⌘K's switcher (Switcher.tsx): a dialog high on the window, the search on top, the chats under it. Its corner and its
-// words' place are a dialog's (ui.css.ts: 42, 24 in); a row's ground reaches to 12 from its edge, rounded 30 to follow it.
+// ⌘K's switcher (Switcher.tsx): a dialog high on the window, the search on top, the chats under it. Its words stand
+// where a dialog's do (ui.css.ts: 24 in); a row's ground reaches to 12 from its edge, a pill, and the switcher's corner
+// is from it (12 + its half height, align.ts pillInner), not a dialog's 42: a 38 high row cannot round 30 to follow that.
 import { style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { panel } from "./styles/glass.ts";
 import { DIALOG_PAD } from "./ui.css.ts";
 
 const EDGE = 12;
+const ROW = 38;
 import { fadeKeyframes, popKeyframes } from "./styles/keyframes.css.ts";
 import { centredX } from "./styles/align.ts";
-import { inner, surface } from "./styles/align.ts";
+import { inner, outset, pillInner, surface } from "./styles/align.ts";
 
 const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
 
@@ -19,7 +21,7 @@ export const overlay = style({
 export const switcher = style({
   position: "fixed", top: "14vh", zIndex: "50", ...centredX,
   display: "flex", flexDirection: "column", width: "min(560px, calc(100vw - 32px))", maxHeight: "min(480px, 72vh)",
-  ...surface(EDGE, `calc(${DIALOG_PAD + 18}px * ${vars.cornerScale} - ${EDGE}px)`, vars.cornerShape), color: vars.text, ...panel,
+  ...surface(EDGE, pillInner(EDGE, ROW, vars.cornerScale), vars.cornerShape), color: vars.text, ...panel,
   boxShadow: `0 24px 64px ${vars.shadow}`, transformOrigin: "top", animation: `${popKeyframes} 140ms ${vars.easeOut}`,
   cornerShape: vars.cornerShape, outline: "none",
 });
@@ -30,9 +32,13 @@ export const search = style({
   selectors: { "&::placeholder": { color: vars.subtle } },
 });
 // Under the search, a little room; at its foot none: the last row's ground is as far from the foot as from the sides.
-export const results = style({ flex: 1, minHeight: 0, overflowY: "auto", padding: "4px 0 0" });
+// It reaches out to the switcher's edge (its rows where they were, in by its padding), so its scrollbar runs in the
+// room beside the rows, not over them, and stops short of the corner (scroll-padding-bottom: scrollbars.ts).
+export const results = style({
+  flex: 1, minHeight: 0, overflowY: "auto", ...outset(EDGE), padding: `4px ${EDGE}px 0`, scrollPaddingBottom: inner,
+});
 export const row = style({
-  display: "flex", alignItems: "center", gap: 10, minHeight: 38, padding: `8px ${DIALOG_PAD - EDGE}px`, borderRadius: inner,
+  display: "flex", alignItems: "center", gap: 10, minHeight: ROW, padding: `8px ${DIALOG_PAD - EDGE}px`, borderRadius: inner,
   fontSize: vars.textUi, cursor: "pointer", userSelect: "none", cornerShape: vars.cornerShape,
   // A shade of the text, as the menus' rows are lit.
   selectors: { '&[aria-selected="true"]': { background: `color-mix(in srgb, ${vars.text} 7%, transparent)` } },

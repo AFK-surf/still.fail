@@ -4,7 +4,8 @@
 
 /**
  * Every corner: each rounded thing with a ground of its own or to press, standing in a corner of the rounded box drawn
- * round it, is as far from both edges of that corner and rounded as the box less that distance (concentric).
+ * round it, is as far from both edges of that corner and rounded as the box less that distance (concentric), and no
+ * shorter than that rounding asks.
  */
 export function corners(mark = false) {
   const say = (el, why) => { wrong.push(why); if (mark) el.setAttribute('data-off', why); };
@@ -68,6 +69,11 @@ export function corners(mark = false) {
       measured++;
       const who = `${name(box)} › ${name(el)} (${where})`;
       if (Math.abs(g1 - g2) > 1) { say(el, `${who}: ${g1.toFixed(1)} from the side, ${g2.toFixed(1)} from the ${where.split(' ')[0]}`); continue; }
+      // Short enough to round as far as the corner asks (a pill: its half height): else a crescent stands beside it. In
+      // round terms: a squarer corner (superellipse) is drawn larger by --corner-scale than the round one it matches.
+      const scale = /superellipse/.test(bs.cornerShape || '') ? px(bs.getPropertyValue('--corner-scale')) || 1 : 1;
+      const asks = rbc / scale - g1, half = Math.min(r.height, r.width) / 2;
+      if (asks > half + 1) { say(el, `${who}: too short to follow the corner (it asks ${asks.toFixed(1)}, half its side is ${half.toFixed(1)})`); continue; }
       const own = Math.min(px(cs[prop]), r.height / 2, r.width / 2), want = Math.min(Math.max(rbc - g1, 0), r.height / 2, r.width / 2);
       if (Math.abs(own - want) > 1) say(el, `${who}: rounded ${own.toFixed(1)}, ${g1.toFixed(1)} in from a corner of ${rbc.toFixed(1)} (wants ${want.toFixed(1)})`);
     }
