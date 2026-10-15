@@ -442,4 +442,21 @@ class BarTest {
         android.util.Log.i("bartap", "stations again, its rows $m frames after the tap")
         assertTrue("Station's rows shown again $m frames after the tap", m <= 2)
     }
+
+    /**
+     * Chats to 文件 (to its right in the bar): the page coming in is there the frame after the tap, moving in from the
+     * right as it fades in, and comes to rest where it is; the chats' list fades out. Frames: motion/bar-switch-files.
+     */
+    @Test fun switchMotion() {
+        val h = launch()
+        val r = h.record("bar-switch-files")
+        rule.onNodeWithTag("bar-place-files").performClick()
+        r.frames(2)
+        val coming = rule.onAllNodesWithText("文件").fetchSemanticsNodes().first().boundsInRoot.left
+        r.frames(20)
+        r.end()
+        val rest = rule.onAllNodesWithText("文件").fetchSemanticsNodes().first().boundsInRoot.left
+        assertTrue("文件 comes in from the right ($coming, at rest $rest)", coming > rest + 4 * d)
+        assertEquals(listOf<Screen>(Screen.Files), h.app.stack)
+    }
 }

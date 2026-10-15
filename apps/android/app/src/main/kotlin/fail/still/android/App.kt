@@ -766,6 +766,8 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         app.place(Screen.Home)
     }
     val saved = rememberSaveableStateHolder()
+    val still = fail.still.android.ui.reducedMotion()
+    val density = androidx.compose.ui.platform.LocalDensity.current
     // Each page's topics, followed while it is in the stack (data/Topics.kt: PageTopics); those of the pages gone from it
     // let go, once they are not drawn either (a page going away is drawn until it has).
     val followed = remember { HashMap<String, fail.still.android.data.PageTopics>() }
@@ -802,8 +804,9 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
             val topics = followed.getOrPut(keyOf(top)) { fail.still.android.data.PageTopics() }
             @Suppress("UNCHECKED_CAST") opening(top, workspace).forEach { (topic, serializer) -> topics.of(app.core, topic, serializer as kotlinx.serialization.KSerializer<Any?>) }
             BarTiming.snapped(waited = false, timedOut = false)
-            pages.snapTo(top)
             swiped = false
+            // In at once, with the switch's own short motion (placeSwitch, below), not a push's.
+            pages.animateTo(top)
             return@LaunchedEffect
         }
         // A page opened slides in once the core has given what it shows, from what is on the device (LOCAL_MS at most,
@@ -829,7 +832,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
     transition.AnimatedContent(
         transitionSpec = {
             // Switched on the bar: in place, nothing slides.
-            if (app.switched) return@AnimatedContent (EnterTransition.None togetherWith ExitTransition.None).apply { targetContentZIndex = 0f }
+            if (app.switched) return@AnimatedContent placeSwitch(initialState, targetState, app.bars, still, with(density) { 30.dp.roundToPx() })
             // A message's page and its chat are one place (Annotate.kt): no slide either way, the page's own parts move.
             // Layered by depth in the stack, the deeper page over: a page's zIndex is fixed when it comes in (AnimatedContent
             // keeps the first spec's), so by the way it came it was wrong later (one come back to, then swiped away, went under).
@@ -946,6 +949,24 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
 private val PLACE_PAGES = PLACES.map { screenOf(it).id }.toSet()
 /** Each place's top page's id, to its place. */
 private val PLACE_OF_PAGE = PLACES.associateBy { screenOf(it).id }
+
+/**
+ * Switched on the bar from one place's page to another's (not a push: nothing to go back to): a shared axis along the
+ * bar. The page coming in moves 30dp in from the side the ball goes to, fading in (220 ms); the one going fades out in
+ * the first 90 ms, moving 30dp the other way. To a place not in the bar in view (chosen through the panel of the other
+ * bars), no side to come from: it only fades in over the page going (180 ms). Reduced motion: at once.
+ */
+private fun placeSwitch(from: Screen, to: Screen, bars: fail.still.android.data.BarPrefs, still: Boolean, shift: Int): ContentTransform {
+    if (still) return (EnterTransition.None togetherWith ExitTransition.None).apply { targetContentZIndex = 0f }
+    val bar = bars.sets.getOrNull(bars.current.toInt()).orEmpty()
+    val a = bar.indexOf(placeOf(from))
+    val b = bar.indexOf(placeOf(to))
+    if (a < 0 || b < 0 || a == b) return (fadeIn(tween(180, easing = fail.still.android.ui.Ease.Arrive)) togetherWith fadeOut(tween(180), 0.99f)).apply { targetContentZIndex = 0f }
+    val way = if (b > a) 1 else -1
+    val move = tween<IntOffset>(220, easing = fail.still.android.ui.Ease.Arrive)
+    return ((slideInHorizontally(move) { way * shift } + fadeIn(tween(220, easing = fail.still.android.ui.Ease.Arrive))) togetherWith
+        (slideOutHorizontally(move) { -way * shift } + fadeOut(tween(90, easing = LinearEasing)))).apply { targetContentZIndex = 0f }
+}
 
 /** Out of a swipe let go: starts moving, no ease in (easeOutQuad). */
 private val EaseOut = CubicBezierEasing(0.25f, 0.46f, 0.45f, 0.94f)
