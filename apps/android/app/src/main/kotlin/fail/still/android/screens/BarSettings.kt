@@ -190,7 +190,7 @@ private fun BarCard(app: AppState, i: Int, set: List<String>, only: Boolean, onA
                     contentAlignment = Alignment.TopCenter,
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Box(Modifier.height(30.dp), contentAlignment = Alignment.Center) { PlaceIcon(key, C.ink, RobotOnly) }
+                        Box(Modifier.height(30.dp), contentAlignment = Alignment.Center) { PlaceIcon(key, C.ink, Still) }
                         Text(placeLabel(key), fontSize = 12.sp, color = C.muted, maxLines = 1)
                     }
                     if (!only) CompositionLocalProvider(LocalViewConfiguration provides LocalViewConfiguration.current.exact()) {
@@ -232,11 +232,11 @@ private fun openPick(app: AppState, i: Int, picked: (String) -> Unit) {
             val there = key in set
             PickRow(
                 placeLabel(key), sub = if (there) t("android-misc.bar.pick.there") else null, enabled = !there && !full,
-                leading = { Box(Modifier.size(28.dp).graphicsLayer { alpha = if (there || full) 0.4f else 1f }, contentAlignment = Alignment.Center) { PlaceIcon(key, C.ink, RobotOnly) } },
+                leading = { Box(Modifier.size(28.dp).graphicsLayer { alpha = if (there || full) 0.4f else 1f }, contentAlignment = Alignment.Center) { PlaceIcon(key, C.ink, Still) } },
             ) { app.sheet = null; picked(key) }
         } }
     }
 }
 
-/** The stations' icon where no station is meant (the settings' cards, the picker): the robot alone. */
-private val RobotOnly = fail.still.android.ui.GlyphCounts(0, 0, 0, 0, false)
+/** The stations' icon where no station is meant (the settings' cards, the picker): one station on, as the web's. */
+private val Still = fail.still.android.ui.GlyphCounts(1, 0, 0, 0, false)

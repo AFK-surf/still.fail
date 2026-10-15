@@ -528,6 +528,7 @@ fun BottomBar(
         val raised = Raised
         val accent = C.accent
         val shadowPaint = remember { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG) }
+        val fadePaint = remember { android.graphics.Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_IN) } }
         val navBottom = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
 
         if (vis <= 0f && !shown) return@BoxWithConstraints
@@ -540,8 +541,8 @@ fun BottomBar(
                     compositingStrategy = CompositingStrategy.ModulateAlpha
                 },
         ) {
-            // The shadow of the glass, cast below it and to its sides only: none under it, none above its middle (so none
-            // in the notch or over the edge 令 stands on).
+            // The shadow of the glass, cast below it and to its sides only: none under it, none above its top (so none in
+            // the notch or over the edge 令 stands on), coming in down its rounded ends.
             Box(Modifier.matchParentSize().drawBehind {
                 val top = clipTop().dp.toPx()
                 val gw = w * narrow()
@@ -553,12 +554,16 @@ fun BottomBar(
                 shadowPaint.maskFilter = BlurMaskFilter(density.maskRadius(6f), BlurMaskFilter.Blur.NORMAL)
                 drawIntoCanvas { c ->
                     val nc = c.nativeCanvas
-                    nc.save()
-                    nc.clipRect(-size.width, top + r, size.width * 2, size.height + 80.dp.toPx())
+                    val foot = size.height + 80.dp.toPx()
+                    val layer = nc.saveLayer(-size.width, top, size.width * 2, foot, null)
                     nc.clipOutPath(out)
                     nc.translate(0f, 4.dp.toPx())
                     nc.drawRoundRect(rect, r, r, shadowPaint)
-                    nc.restore()
+                    nc.translate(0f, -4.dp.toPx())
+                    // Faded in down its rounded ends, from nothing at its top: no step where it begins.
+                    fadePaint.shader = android.graphics.LinearGradient(0f, top, 0f, top + r, 0, android.graphics.Color.BLACK, android.graphics.Shader.TileMode.CLAMP)
+                    nc.drawRect(-size.width, top, size.width * 2, foot, fadePaint)
+                    nc.restoreToCount(layer)
                 }
             })
             // The glass: exactly as tall as what shows of it, the notch cut out of it by a clip of its outline (nothing
