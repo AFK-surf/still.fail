@@ -149,9 +149,10 @@ fun StationsScreen(current: WorkspaceEntry) {
 
 /**
  * A station in the list, as in the desktop's sidebar (web cloud/StationPage.tsx StationRow): its mark and name, at that
- * line's end its agents at work and whether it is up; what the machine is under them (offline, since when); while it
- * is up, its CPU, memory or disk in a small box when one runs low, and how this device reaches it, a newer version
- * there said too. Nothing in colour but what is off.
+ * line's end its agents at work and whether it is up; what the machine is under them (offline, since when); then how
+ * this device reaches it, what of the machine runs low and a newer version there. Three lines whatever state it is in
+ * (that last one kept, empty, while there is nothing to say): no row grows, shrinks or pushes the ones below it as
+ * states change. Nothing in colour but what is off; reconnecting, the figures as last heard, faded.
  */
 @Composable
 private fun StationRow(s: StationView, onClick: () -> Unit) {
@@ -159,6 +160,7 @@ private fun StationRow(s: StationView, onClick: () -> Unit) {
     val net = s.net?.takeIf { s.online }
     val running = s.overview?.counts?.running ?: 0
     val newer = s.online && s.overview?.updates.orEmpty().any { it.installed && it.updatable && (it.newer || it.downgrade == true) }
+    val low = host?.meters.orEmpty().filter { it.level != "ok" }
     PlaceRow(
         s.name, onClick = onClick, away = !s.online,
         mark = { if (hasStationMark(s.emoji, s.icon)) StationMark(s.emoji, s.icon, 16.dp, C.ink) else IconIn(Icons.Server, 16.dp, C.muted) },
@@ -169,20 +171,21 @@ private fun StationRow(s: StationView, onClick: () -> Unit) {
         },
     ) {
         PlaceLine(if (s.online) host?.identity?.takeIf { it.isNotEmpty() } ?: s.summary else s.summary)
-        // Only what runs low: a row of green boxes says nothing.
-        if (host != null && host.meters.any { it.level != "ok" }) MeterChips(host.meters, Modifier.padding(vertical = 4.dp).alpha(if (s.reconnecting == true) 0.45f else 1f), alerts = true)
-        if (net != null || newer) {
-            val c = C
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (net != null) {
-                    Text(net.path, fontSize = 14.sp, lineHeight = 20.sp, color = C.muted, maxLines = 1)
-                    net.rtt?.let { rtt ->
-                        Text(" · ", fontSize = 14.sp, lineHeight = 20.sp, color = C.muted)
-                        Text(rtt.text, fontSize = 14.sp, lineHeight = 20.sp, maxLines = 1, color = when (rtt.level) { "red" -> c.red; "amber" -> c.warn; else -> c.muted })
-                    }
-                }
-                if (newer) Text((if (net != null) " · " else "") + t("android-settings.stations.newer"), fontSize = 14.sp, lineHeight = 20.sp, color = C.muted, maxLines = 1)
+        val c = C
+        val tone = { level: String -> when (level) { "red" -> c.red; "amber" -> c.warn; else -> c.muted } }
+        val line = androidx.compose.ui.text.buildAnnotatedString {
+            fun part(text: String, color: androidx.compose.ui.graphics.Color = c.muted) {
+                if (length > 0) append(" · ")
+                pushStyle(androidx.compose.ui.text.SpanStyle(color = color)); append(text); pop()
             }
+            if (net != null) { part(net.path); net.rtt?.let { part(it.text, tone(it.level)) } }
+            low.forEach { m -> part(m.short + m.remaining, tone(m.level)) }
+            if (newer) part(t("android-settings.stations.newer"))
+        }
+        // Its room kept, as tall as a line in Chinese, while there is nothing on it.
+        Box {
+            Text("直连", fontSize = 14.sp, lineHeight = 20.sp, maxLines = 1, modifier = Modifier.alpha(0f))
+            Text(line, fontSize = 14.sp, lineHeight = 20.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.alpha(if (s.reconnecting == true) 0.45f else 1f))
         }
     }
 }

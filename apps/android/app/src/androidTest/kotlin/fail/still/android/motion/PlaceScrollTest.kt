@@ -16,9 +16,13 @@ import fail.still.android.Screen
 import fail.still.android.data.ArchiveDay
 import fail.still.android.data.ArchiveItem
 import fail.still.android.data.ArchiveView
+import fail.still.android.data.Bind
 import fail.still.android.data.ChatDay
 import fail.still.android.data.ChatItem
 import fail.still.android.data.ChatsView
+import fail.still.android.data.Connect
+import fail.still.android.data.ConnectItem
+import fail.still.android.data.ConnectState
 import fail.still.android.data.ConnectsView
 import fail.still.android.data.Counts
 import fail.still.android.data.DecisionWorking
@@ -27,6 +31,10 @@ import fail.still.android.data.DriveRoot
 import fail.still.android.data.DriveRoots
 import fail.still.android.data.Me
 import fail.still.android.data.Overview
+import fail.still.android.data.Owner
+import fail.still.android.data.PersonShown
+import fail.still.android.data.SlackIdentity
+import fail.still.android.data.SlackTokens
 import fail.still.android.data.StationState
 import fail.still.android.data.Topics
 import fail.still.android.data.UsageView
@@ -58,6 +66,14 @@ class PlaceScrollTest {
         drive = DriveRoots((0 until folders).map { DriveRoot("/Users/alice/f$it", "folder-$it", "ok") }),
     )
 
+    private fun connect(id: String, name: String) = Connect(
+        id = id, name = name, team = "Acme", enabled = true, kind = "slack", mode = "multi-session", requireMention = true,
+        bind = Bind(runtime = "claude", model = "claude-opus-5-5", effort = "high"), slack = SlackTokens("", ""),
+        connection = ConnectState(state = "connected", workspace = SlackIdentity("Acme", "T0$id", "https://$id.slack.com/", "U0$id", name)),
+        createdBy = Owner("alice", "Alice", PersonShown("Alice", "Alice", mine = true)), sessions = 0,
+        statusText = "在线", presence = "online", modeText = "多会话", modeShort = "多会话", runtimeText = "Claude Code", runText = "Claude Code · Opus 5.5 · high", modelName = "Opus 5.5",
+    )
+
     /** Twelve stations, the first lending forty folders. */
     private val stations = (0 until 12).map { i ->
         Fixtures.station.copy(station = if (i == 0) Fixtures.STATION else "${Fixtures.WS}/s$i", id = if (i == 0) "st" else "s$i", name = "st-$i", overview = if (i == 0) overview(40) else null)
@@ -69,7 +85,10 @@ class PlaceScrollTest {
         h.fake.put(Topics.chats(Fixtures.WS, true), chats(40))
         h.fake.put(Topics.chats(Fixtures.WS, false, watching = true), chats(0))
         h.fake.put(Topics.workspace(Fixtures.WS), WorkspaceView(id = Fixtures.WS, name = "Dev", role = "owner"))
-        h.fake.put(Topics.connects(Fixtures.WS, false), ConnectsView(Me("alice", "alice@example.com"), emptyList(), loading = false))
+        // Two connects on each station: the list is a row each (stations with none are left out of it).
+        h.fake.put(Topics.connects(Fixtures.WS, false), ConnectsView(Me("alice", "alice@example.com"), stations.flatMap { st ->
+            (0 until 2).map { j -> ConnectItem(st.station, st.name, connect("${st.id}-$j", "conn-${st.id}-$j"), emptyList(), null, emptyList(), 0) }
+        }, loading = false))
         h.fake.put(Topics.usage(Fixtures.WS, 7), UsageView(7u, false, true, emptyList(), emptyList(), emptyList(), 0.0, emptyList(), (0 until 60).map { "note-$it" }, "basis"))
         h.fake.put(Topics.archive(Fixtures.WS), ArchiveView(listOf(ArchiveDay("今天", (0 until 30).map {
             ArchiveItem(Fixtures.STATION, "ember:a-$it", 300L + it, "archived-$it", "说过的话", Fixtures.NOW.toDouble(), "10:00", "手动归档", true)
@@ -97,7 +116,7 @@ class PlaceScrollTest {
     @Test fun decisions() = kept("decisions", "work-")
     @Test fun files() = kept("files", "folder-")
     @Test fun stations() = kept("stations", "st-")
-    @Test fun connects() = kept("connects", "st-")
+    @Test fun connects() = kept("connects", "conn-")
     @Test fun usage() = kept("usage", "note-")
     @Test fun archive() = kept("archive", "archived-")
 
