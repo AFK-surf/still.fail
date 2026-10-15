@@ -74,6 +74,42 @@ createRoot(root).render(<DemoApp phone />);
   await shot('home');
   await shot('home-dark', true);
 
+  // The panel under the finger (one other bar: 56 of travel): as open as it is drawn, held there, never going on its
+  // own; let go under half way, closed; over half way, open; a finger on it as it goes, held where it is.
+  const openness = () => page.evaluate(() => {
+    const g = document.querySelector('[data-bar=glass]').getBoundingClientRect(), r = document.querySelector('[role=tablist]').getBoundingClientRect();
+    return (r.top - g.top) / 56;
+  });
+  const drawUp = async (by, still = 300) => {
+    const r = await tab('对话').boundingBox(), x = r.x + r.width / 2, y = r.y + r.height / 2;
+    await touch('touchStart', x, y);
+    for (let k = 1; k <= 8; k++) { await touch('touchMove', x, y - 8 - by * k / 8); await page.waitForTimeout(16); }
+    await page.waitForTimeout(still);
+    return { x, y };
+  };
+  await drawUp(22, 400);
+  const held1 = await openness();
+  await page.waitForTimeout(400);
+  const held2 = await openness();
+  assert.ok(held1 > 0.3 && held1 < 0.5 && Math.abs(held1 - held2) < 0.02, `held where the finger drew it (${held1.toFixed(2)}, then ${held2.toFixed(2)})`);
+  await touch('touchEnd');
+  await page.waitForTimeout(900);
+  assert.ok(await openness() < 0.03, 'let go under half way: closed');
+  await drawUp(42);
+  await touch('touchEnd');
+  await page.waitForTimeout(900);
+  assert.ok(await openness() > 0.97 && await page.locator('[data-bar=scrim]').count(), 'let go over half way: open');
+  // Closing (the scrim tapped), a finger on the bar as it goes: held where it was.
+  await page.touchscreen.tap(195, 120);
+  await page.waitForTimeout(60);
+  const c0 = await tab('对话').boundingBox();
+  await touch('touchStart', c0.x + c0.width / 2, c0.y + c0.height / 2);
+  const grabbed = await openness();
+  await page.waitForTimeout(300);
+  assert.ok(grabbed > 0.05 && Math.abs(await openness() - grabbed) < 0.02, `a finger on it as it closes holds it (${grabbed.toFixed(2)})`);
+  await touch('touchEnd');
+  await page.waitForTimeout(900);
+
   // The list scrolled a little (on a shorter screen, for the demo's few chats to run past it), to be found so again.
   await page.setViewportSize({ width: 390, height: 520 });
   await page.waitForTimeout(300);
