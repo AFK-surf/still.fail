@@ -24,7 +24,7 @@ export const bannerIcon = style({ flex: "none" });
 export const bannerText = style({ flex: "1", minWidth: "0", display: "grid", gap: "2px", fontSize: vars.textMeta, lineHeight: vars.leadingMeta });
 export const bannerHead = style({ display: "flex", gap: "8px", justifyContent: "space-between", minWidth: "0" });
 export const bannerBody = style({ overflow: "hidden", display: "-webkit-box", WebkitLineClamp: "2", WebkitBoxOrient: "vertical" });
-export const edge = style({ position: "absolute", right: "0", top: "84px", display: "grid", gap: "4px", justifyItems: "end" });
+export const edge = style({ position: "absolute", right: "0", bottom: "16px", display: "grid", gap: "4px", justifyItems: "end" });
 export const edgeItem = style({
   padding: "2px 10px 2px 12px", borderRadius: "999px 0 0 999px", background: vars.raised, color: vars.muted,
   fontSize: vars.textCaption, lineHeight: vars.leadingCaption,
@@ -35,7 +35,7 @@ export const dockBar = style({
   display: "flex", gap: "10px", padding: "7px 10px", borderRadius: `calc(16px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: `color-mix(in oklab, ${vars.raised} 70%, transparent)`,
 });
-export const appIcon = style({ width: "30px", height: "30px", borderRadius: "8px", background: vars.neutralBg });
+export const appIcon = style({ width: "30px", height: "30px", borderRadius: "8px", background: vars.line });
 export const appIconMine = style({ position: "relative", width: "30px", height: "30px", display: "grid", placeItems: "center" });
 export const badge = style({
   position: "absolute", top: "-6px", right: "-8px", minWidth: "18px", height: "18px", padding: "0 5px",
@@ -81,4 +81,4 @@ export const chevron = style({
 });
 export const kindWays = style({ display: "grid", gap: "4px", padding: "0 0 12px 14px" });
 export const wayRow = style({ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", minHeight: "32px", fontSize: vars.textUi, cursor: "pointer" });
-export const sound = style({ margin: "8px 0", color: vars.muted, fontSize: vars.textMeta });
+export const sound = style({ margin: "0", color: vars.muted, fontSize: vars.textMeta });

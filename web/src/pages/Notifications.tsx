@@ -48,7 +48,7 @@ export function NotificationsPage({ back, workspace }: { back: string; workspace
         </div>
       </Section>
       <Section title={t("web-pages.notifications.more.title")}>
-        <div className={`${pagesCss.card} ${css.kinds}`}>
+        <div className={pagesCss.card}>
           {window.stillfailDesktop && <SwitchRow title={t("web-pages.notifications.preview")} description={t("web-pages.notifications.previewNote")}
             checked={s.preview} disabled={s.state !== "on"} onChange={s.setPreview} />}
           {s.dock && <SwitchRow title={t("web-pages.dock.peek")} description={t("web-pages.dock.peekNote")} checked={s.dock.peek} disabled={!s.dock.on} onChange={(peek) => s.setDock({ peek })} />}
