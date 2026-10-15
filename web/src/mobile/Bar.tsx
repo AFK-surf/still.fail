@@ -131,6 +131,10 @@ export function BottomBar({ scope, place, shown, go, newChat, onPanel }: BottomB
   if ((marks?.workspaces[scope]?.decisions ?? 0) > 0) dots.decisions = "accent";
   if (chats?.trouble) dots.stations = "red";
   const glyph = glyphCounts({ glyph: chats?.glyph }, status?.state === "trouble");
+  // The stations in words (the core's), as the glyph draws them, and what is wrong with them: what Home's corner said.
+  const said = glyph.asleep ? status?.text ?? "" : chats?.glyph?.label ?? "";
+  const stationsSaid = chats?.trouble ? t("web-mobile.home.stationTrouble", { said, trouble: chats.trouble.text }) : t("web-mobile.home.station", { said });
+  const labelOf = (key: BarPlace) => (key === "stations" && said ? stationsSaid : railLabel(key));
   const icon = (key: BarPlace, size = 28) => {
     if (key === "stations") return <StationGlyph counts={glyph} size={size} />;
     const I = ICONS[key]!;
@@ -394,7 +398,7 @@ export function BottomBar({ scope, place, shown, go, newChat, onPanel }: BottomB
           <div className={css.mBarRow} role="tablist" style={{ top: rowTop, pointerEvents: "auto" }}>
             {w > 0 && !swap && items.map((key, j) => (
               <button key={key} type="button" role="tab" data-tab={key} aria-selected={place === key} className={css.mBarPlace} style={{ left: now[j]! - slot / 2, width: slot }}
-                data-on={lit === key || undefined} aria-label={railLabel(key)} onClick={() => tapPlace(key)}>
+                data-on={lit === key || undefined} aria-label={labelOf(key)} onClick={() => tapPlace(key)}>
                 {icon(key)}
                 {dots[key] && <span className={css.mBarDot} data-tone={dots[key]} />}
               </button>

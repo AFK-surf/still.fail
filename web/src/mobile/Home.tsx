@@ -5,7 +5,7 @@ import { StationMark } from "../StationMark.tsx";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motionValue } from "motion";
 import { animate, MOVE, reducedMotion, type AnimationPlaybackControls } from "../motion.ts";
-import { stationApi, useChats, useChatSearch, useStationCall, useStations, useStatus, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
+import { stationApi, useChats, useChatSearch, useStationCall, useStations, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
 import type { FoundMessage } from "../core/shapes.ts";
 import { jumpTo } from "../jumpTo.ts";
 import { Marked } from "../Marked.tsx";
@@ -24,7 +24,6 @@ import { FirstStation } from "./Stations.tsx";
 import { OpenJobs } from "./OpenJobs.tsx";
 import { ChangelogNews } from "./Changelog.tsx";
 import { LoadingPill, PlaceholderRows } from "./Loading.tsx";
-import { StationGlyph, glyphCounts } from "../StationGlyph.tsx";
 import * as barsCss from "./styles/bars.css.ts";
 import { openWorkspaces } from "./Workspaces.tsx";
 import { usePullToReload } from "./pull.ts";
@@ -69,19 +68,19 @@ export function Home() {
       <div ref={pull.mark} className={`${css.mPull} ${pagesCss.mFloating}`} aria-hidden="true"><Refresh size={18} /></div>
       {/* The lists run under both bars, which are frosted glass over them. */}
       <HomeBar others={marks?.others} othersLabel={marks?.othersLabel} invited={invited} filtering={(all.value?.stations.length ?? 0) > 0}
-        filter={filter} glyph={all.value?.glyph} trouble={all.value?.trouble} />
+        filter={filter} />
       {searching && <SearchPage from={searching} onLeave={() => setAway(false)} onClose={() => setSearching(null)} />}
     </div>
   );
 }
 
 /**
- * The list's top bar: the viewer's settings, the workspace (and whether others have something waiting), the filter and
- * the stations at a glance. Drawn again only when what it shows changes, not with each change of the lists under it.
+ * The list's top bar: the viewer's settings, the workspace (and whether others have something waiting), the filter (the
+ * stations are on the bottom bar). Drawn again only when what it shows changes, not with each change of the lists under it.
  */
-const HomeBar = memo(function HomeBar({ others, othersLabel, invited, filtering, filter, glyph, trouble }: {
+const HomeBar = memo(function HomeBar({ others, othersLabel, invited, filtering, filter }: {
   others: string | null | undefined; othersLabel: string | null | undefined; invited: boolean; filtering: boolean;
-  filter: ChatFilter; glyph: ChatsView["glyph"]; trouble: ChatsView["trouble"];
+  filter: ChatFilter;
 }) {
   const app = useApp();
   return (
@@ -98,8 +97,6 @@ const HomeBar = memo(function HomeBar({ others, othersLabel, invited, filtering,
       </button>
       {/* The filter, and the archive in its menu, as on the wide screen: nothing to narrow or look back on with no station. */}
       {filtering && <FilterButton filter={filter} />}
-      {/* The stations at a glance (../StationGlyph.tsx); its page says which is which. */}
-      <StationButton glyph={glyph} trouble={trouble} />
     </header>
   );
 });
@@ -260,21 +257,6 @@ const FilterButton = memo(function FilterButton({ filter }: { filter: ChatFilter
     </button>
   );
 });
-
-/** The bar's way to the stations, drawn as how they are: what the core cannot reach at all (`status` in trouble) puts it to sleep. */
-function StationButton({ glyph, trouble }: { glyph: ChatsView["glyph"]; trouble: ChatsView["trouble"] }) {
-  const app = useApp();
-  const status = useStatus(app.entry.id);
-  const counts = glyphCounts({ glyph }, status?.state === "trouble");
-  // Asleep, what the core cannot reach says it; else the stations in words (the core's), and what is wrong with them.
-  const said = counts.asleep ? status?.text ?? "" : glyph?.label ?? "";
-  const label = trouble ? t("web-mobile.home.stationTrouble", { said, trouble: trouble.text }) : t("web-mobile.home.station", { said });
-  return (
-    <button type="button" className={barsCss.mNavButton} onClick={() => app.push(app.at("/settings/stations"))} aria-label={label}>
-      <StationGlyph counts={counts} />
-    </button>
-  );
-}
 
 /** One of the two lists, all or the viewer's: its states (connecting, failing, empty) and its days. */
 // Each list drawn again only when its own chats change: Home draws for any of the three (and the rest of what it shows).

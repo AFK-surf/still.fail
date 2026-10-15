@@ -144,7 +144,7 @@ class BarTest {
         ballAtRest(1)
         shot(h, "bar-stations-light")
         // Quick taps one after another, as the ball still moves: it ends where the last one sent it.
-        rule.onNodeWithTag("bar-place-decisions").performClick()
+        rule.onNodeWithTag("bar-place-usage").performClick()
         rule.onNodeWithTag("bar-place-chats").performClick()
         h.settle()
         assertEquals(listOf<Screen>(Screen.Home), h.app.stack)
@@ -191,41 +191,41 @@ class BarTest {
         h.settle()
         shot(h, if (dark) "bar-panel-dark" else "bar-panel-light")
         // The other bar's places are there, over the bar.
-        val usage = bounds("bar-place-usage")
-        assertTrue("the panel's row is above the bar", usage.bottom <= g.top)
+        val connects = bounds("bar-place-connects")
+        assertTrue("the panel's row is above the bar", connects.bottom <= g.top)
         assertEquals(listOf<Screen>(Screen.Home), h.app.stack)
         rule.onRoot().performTouchInput { click(Offset(g.center.x, g.top - 300 * d)) }
         h.settle()
-        rule.onNodeWithTag("bar-place-usage").assertDoesNotExist()
+        rule.onNodeWithTag("bar-place-connects").assertDoesNotExist()
         assertEquals(listOf<Screen>(Screen.Home), h.app.stack)
     }
 
-    /** One stroke from the bar's first place up into the other bar's row and across to 用量: that bar and that place. */
+    /** One stroke from the bar's first place up into the other bar's row and across to 连接: that bar and that place. */
     @Test fun strokeToAnotherBar() {
         val h = launch()
         val g = bounds("bar-glass")
         val w = g.width / d
         // The other bar's places sit where a bar of four's do with the notch closed.
-        val usageX = g.left + (w - 28 - (w - 56) / 3) * d
+        val connectsX = g.left + (w - 28 - (w - 56) / 3) * d
         val r = h.record("bar-stroke")
         rule.onRoot().performTouchInput { down(Offset(g.left + 28 * d, g.top + 28 * d)) }
         r.frames(2)
         rule.onRoot().performTouchInput { moveTo(Offset(g.left + 40 * d, g.top - 12 * d)) }
         r.frames(4)
-        rule.onRoot().performTouchInput { moveTo(Offset((g.left + 40 * d + usageX) / 2, g.top - 24 * d)) }
+        rule.onRoot().performTouchInput { moveTo(Offset((g.left + 40 * d + connectsX) / 2, g.top - 24 * d)) }
         r.frames(4)
-        rule.onRoot().performTouchInput { moveTo(Offset(usageX, g.top - 28 * d)) }
+        rule.onRoot().performTouchInput { moveTo(Offset(connectsX, g.top - 28 * d)) }
         r.frames(30)
         rule.onRoot().performTouchInput { up() }
         r.frames(40)
         r.end()
         assertEquals(1L, h.app.bars.current)
-        assertEquals(listOf<Screen>(Screen.Usage), h.app.stack)
+        assertEquals(listOf<Screen>(Screen.Connects()), h.app.stack)
         ballAtRest(0)
         // The bar is the other one now: its places, not the first one's.
         rule.onNodeWithTag("bar-place-profiles").assertExists()
         rule.onNodeWithTag("bar-place-chats").assertDoesNotExist()
-        shot(h, "bar-usage-light")
+        shot(h, "bar-connects-light")
     }
 
     /** 设置 · 下方栏: a place taken out and added back, a place moved, a bar made and deleted; the bar on Home follows. */
@@ -237,14 +237,14 @@ class BarTest {
         shot(h, "bar-settings")
         rule.onNodeWithTag("bar-remove-0-files").performClick()
         h.settle()
-        assertEquals(listOf("chats", "decisions", "stations"), h.app.bars.sets[0])
+        assertEquals(listOf("chats", "usage", "stations"), h.app.bars.sets[0])
         rule.onNodeWithTag("bar-add-0").performClick()
         h.settle()
         shot(h, "bar-settings-picker")
         rule.onAllNodesWithText("文件").filter(hasClickAction()).onFirst().performClick()
         h.settle()
-        assertEquals(listOf("chats", "decisions", "stations", "files"), h.app.bars.sets[0])
-        // Held and moved one slot right: 对话 after 奏.
+        assertEquals(listOf("chats", "usage", "stations", "files"), h.app.bars.sets[0])
+        // Held and moved one slot right: 对话 after 用量.
         val slot = bounds("bar-slot-0-chats")
         rule.onRoot().performTouchInput {
             down(slot.center)
@@ -252,7 +252,7 @@ class BarTest {
             up()
         }
         h.settle()
-        assertEquals(listOf("decisions", "chats", "stations", "files"), h.app.bars.sets[0])
+        assertEquals(listOf("usage", "chats", "stations", "files"), h.app.bars.sets[0])
         // A new bar: empty until a place is picked for it, then kept.
         rule.onNodeWithText("新建一栏").performScrollTo().performClick()
         h.settle()

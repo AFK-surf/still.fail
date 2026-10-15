@@ -156,7 +156,7 @@ test("the_badge_counts_as_the_prefs_say", () => {
 });
 
 test("a_phones_bottom_bars_read_whole_from_what_is_kept", () => {
-  const two = { sets: [["chats", "decisions", "files", "stations"], ["profiles", "connects", "usage", "archive"]], current: 0 };
+  const two = { sets: [["chats", "files", "usage", "stations"], ["decisions", "profiles", "connects", "archive"]], current: 0 };
   assert.deepEqual(barsOf(undefined), two, "nothing kept: the two default bars");
   assert.deepEqual(barsOf({ sets: [], current: 0 }), two, "no bar left: the default");
   assert.deepEqual(barsOf({ sets: [["files", "nope", "files", "chats", "usage", "archive", "stations"]], current: 3 }), { sets: [["files", "chats", "usage", "archive"]] , current: 0 },

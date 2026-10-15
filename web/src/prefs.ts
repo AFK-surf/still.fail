@@ -24,7 +24,7 @@ const DEFAULTS: Prefs = {
   // As the core fills it in (prefs.ts readerOf), before it has answered.
   reader: { size: 18, line: 1.7, margin: 22, face: "sans", indent: true, paper: "follow" },
   // As the core fills it in (prefs.ts barsOf).
-  bars: { sets: [["chats", "decisions", "files", "stations"], ["profiles", "connects", "usage", "archive"]], current: 0 },
+  bars: { sets: [["chats", "files", "usage", "stations"], ["decisions", "profiles", "connects", "archive"]], current: 0 },
   device: { app: "", phone: false, handoff: false },
 };
 

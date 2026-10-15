@@ -11,7 +11,6 @@ import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import fail.still.android.data.BarPrefs
 import fail.still.android.data.ChatsView
-import fail.still.android.data.StationView
 import fail.still.android.data.StatusView
 import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
@@ -34,7 +33,7 @@ const val BAR_SIZE = 4
 val CHAT_FAMILY = setOf("chats", "decisions", "archive")
 
 /** The bars before the core has said (the core's BARS_DEFAULT). */
-val DEFAULT_BARS = BarPrefs(listOf(listOf("chats", "decisions", "files", "stations"), listOf("profiles", "connects", "usage", "archive")), 0)
+val DEFAULT_BARS = BarPrefs(listOf(listOf("chats", "files", "usage", "stations"), listOf("decisions", "profiles", "connects", "archive")), 0)
 
 /**
  * The bars whole, as the core keeps them (barsOf): each bar one to four known places, none twice; empty bars dropped;
@@ -120,20 +119,22 @@ fun PlaceBar(app: AppState, current: WorkspaceEntry, haze: HazeState, shown: Boo
     val active = placeOf(root)
     val marks by rememberTopic<fail.still.android.data.WorkspaceMarksView>(app.core, Topics.workspaceMarks(ws))
     val decisions = marks.value?.workspaces?.get(ws)?.decisions?.toInt() ?: 0
-    val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(ws))
-    val troubled = stations.value?.any { !it.online } ?: false
     val chats by rememberTopic<ChatsView>(app.core, Topics.chats(ws, false))
     val status by rememberTopic<StatusView>(app.core, Topics.status(ws))
     val glyph = glyphCounts(chats.value, status.value?.state == "trouble")
+    // The stations in trouble as the core says it (web mobile/Bar.tsx the same); in words, what Home's corner said.
+    val trouble = chats.value?.trouble
+    val said = if (glyph.asleep) status.value?.text.orEmpty() else chats.value?.glyph?.label.orEmpty()
+    val stationsSaid = trouble?.let { t("android-chat.home.stations.trouble", "said" to said, "trouble" to it.text) } ?: t("android-chat.home.stations", "said" to said)
     val accent = C.accent
     val red = C.red
     val dots = buildMap {
         if (decisions > 0) put("decisions", accent)
-        if (troubled) put("stations", red)
+        if (trouble != null) put("stations", red)
     }
     BottomBar(
         sets = bars.sets, cur = bars.current.toInt(), active = active, chatsPage = active in CHAT_FAMILY, shown = shown,
-        haze = haze, dots = dots, labelOf = ::placeLabel, lingLabel = t("android-chat.newChat"), chatFamily = CHAT_FAMILY,
+        haze = haze, dots = dots, labelOf = { key -> if (key == "stations" && said.isNotEmpty()) stationsSaid else placeLabel(key) }, lingLabel = t("android-chat.newChat"), chatFamily = CHAT_FAMILY,
         icon = { place, tint -> PlaceIcon(place, tint, glyph) },
         onTab = { place -> if (app.stack.size == 1) app.place(screenOf(place)) },
         onLing = { app.push(Screen.NewChat) },

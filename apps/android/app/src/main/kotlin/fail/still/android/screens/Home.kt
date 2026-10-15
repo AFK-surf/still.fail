@@ -240,14 +240,17 @@ fun HomeScreen(current: WorkspaceEntry) {
                 ) { IconIn(Icons.Filter, 20.dp, if (filter != "all") C.accent else C.ink) }
             }
             // The stations at a glance (ui/StationGlyph.kt); its page says which is which. The core reaching nothing
-            // at all (`status` in trouble) puts it to sleep.
-            val status by rememberTopic<StatusView>(app.core, Topics.status(scope))
-            val counts = glyphCounts(all.value, status.value?.state == "trouble")
-            // Asleep, what the core cannot reach says it; else the stations in words (the core's), and what is wrong with them.
-            val said = if (counts.asleep) status.value?.text.orEmpty() else all.value?.glyph?.label.orEmpty()
-            val label = all.value?.trouble?.let { t("android-chat.home.stations.trouble", "said" to said, "trouble" to it.text) } ?: t("android-chat.home.stations", "said" to said)
-            Box(Modifier.size(34.dp).clip(CircleShape).clickable { app.push(Screen.Stations) }.semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
-                StationGlyph(counts)
+            // at all (`status` in trouble) puts it to sleep. Only on a wide screen: under the bottom bar they are a place
+            // of it (Places.kt PlaceBar), drawn and said the same.
+            if (room == 0.dp) {
+                val status by rememberTopic<StatusView>(app.core, Topics.status(scope))
+                val counts = glyphCounts(all.value, status.value?.state == "trouble")
+                // Asleep, what the core cannot reach says it; else the stations in words (the core's), and what is wrong with them.
+                val said = if (counts.asleep) status.value?.text.orEmpty() else all.value?.glyph?.label.orEmpty()
+                val label = all.value?.trouble?.let { t("android-chat.home.stations.trouble", "said" to said, "trouble" to it.text) } ?: t("android-chat.home.stations", "said" to said)
+                Box(Modifier.size(34.dp).clip(CircleShape).clickable { app.push(Screen.Stations) }.semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+                    StationGlyph(counts)
+                }
             }
         }
         searchFrom?.let { from -> SearchPage(scope, from, searchWidth, onLeave = { searchOpen = false }) { searchFrom = null } }
