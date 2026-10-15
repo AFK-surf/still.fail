@@ -113,7 +113,7 @@ mountDemo(root);
     ['rail menu', wide, [click('[aria-label="文件"]', { button: 'right' })]],
     ['rail adder', wide, [click('[aria-label="文件"]', { button: 'right' }), click('text=自定义侧边条')]],
     ['station card', wide, [async (p) => { await p.locator('header').getByText(/Studio|这台机器/).first().hover(); await p.waitForTimeout(900); }]],
-    ['⌘K', wide, [key('Meta+k')]],
+    ['⌘K', wide, [key('ControlOrMeta+k')]],
     ['sidebar folded', wide, [click('[aria-label="对话"]')]],
     ['sidebar shown a while', wide, [click('[aria-label="对话"]'), hover('[aria-label="对话"]'), async (p) => { await p.mouse.move(150, 60); await p.waitForTimeout(600); }]],
     ['files', wide, [click('[aria-label="文件"]')]],

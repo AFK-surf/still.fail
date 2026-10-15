@@ -116,7 +116,7 @@ mountDemo(root);
   const checks = [
     ['filter menu', async () => page.locator('[aria-label="筛选会话：全部"]').click()],
     ['chat info', async () => page.locator('[aria-label="对话信息"]').click()],
-    ['⌘K', async () => { await page.locator('textarea').first().click(); await page.keyboard.press('Meta+k'); }],
+    ['⌘K', async () => { await page.locator('textarea').first().click(); await page.keyboard.press('ControlOrMeta+k'); }],
     ['jobs', async () => page.locator('[aria-label="服务和后台任务"]').click()],
     ['workspace menu', async () => page.locator('[aria-label="新建 workspace、添加账号"]').click()],
     ['rail menu', async () => page.locator('[aria-label="文件"]').first().click({ button: 'right' })],
