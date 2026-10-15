@@ -72,8 +72,10 @@ createRoot(root).render(<DemoApp phone />);
     let backs = 0;
     for (let i = 0; i < N; i++) {
       const away = await page.locator('[data-bar=host][data-away]').count();
-      // A page pushed over the place (令 opened a new chat): back from it, not a gesture of the count.
-      if (away) { await page.getByRole('button', { name: /^(返回|取消)$/ }).last().tap({ timeout: 3000 }).catch(() => {}); await page.waitForTimeout(900); i--; if (++backs > 20) throw new Error('could not get back to a place'); continue; }
+      // A page pushed over the place (令 opened a new chat, a tap let through to the page): back from it, not a gesture
+      // of the count. Its back is the header's first button (返回, 取消, or the name of the page under it).
+      if (away) { await page.locator('[data-role=top] header button').first().tap({ timeout: 3000 }).catch(() => {}); await page.waitForTimeout(900); i--; if (++backs > 5) throw new Error('could not get back to a place'); continue; }
+      backs = 0;
       const row = await page.locator('[role=tablist]').boundingBox();
       const open = await page.locator('[data-bar=scrim]').count();
       const kind = pick(open ? ['tapRow', 'tapRowPlace', 'tapBar', 'stroke', 'scrim'] : ['tapBar', 'tapBar', 'stroke', 'swipeHalf', 'swipeFull', 'slide', 'ling']);
