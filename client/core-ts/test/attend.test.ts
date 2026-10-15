@@ -209,7 +209,7 @@ test("notices_show_unless_off_looked_at_or_left_to_a_push_and_each_once", async 
   assert.ok(!attend.noticed([n("n6")], true));
   assert.deepEqual(shown(attend), []);
   const again = await run(Attend.load(host));
-  assert.deepEqual(again.value(null), { on: false, asked: true, push: false, kinds: { wait: true, failed: true, done: "away", message: true }, show: [] });
+  assert.deepEqual(again.value(null), { on: false, asked: true, push: false, kinds: { wait: true, failed: true, done: "away", message: true }, preview: true, permission: "unknown", show: [] });
   attend.gone(2);
   assert.ok(!attend.seen());
 });
