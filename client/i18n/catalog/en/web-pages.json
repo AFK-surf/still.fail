@@ -1189,7 +1189,7 @@
   "web-pages.drive.foldersHere": "Folders",
   "web-pages.drive.pickFilter": "Filter folders",
   "web-pages.drive.pickNoMatch": "No folder's name has that in it",
-  "web-pages.drive.pickUnreadable": "The station can't read it",
+  "web-pages.drive.pickUnreadable": "Station can't read",
   "web-pages.drive.pickNeedsAccess": "The station can't read this folder. On macOS, turn on Full Disk Access for the station in System Settings → Privacy & Security",
   "web-pages.drive.pickClear": "Clear",
   "web-pages.security.app": "app",
