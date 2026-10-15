@@ -170,10 +170,26 @@ fun ConnectsScreen(current: WorkspaceEntry, only: String? = null) {
         else openPickStation(app, t("android-settings.flow.title"), online) { openNewConnect(app, it.station) }
     } else null
     // A station's own (from its page): back to it.
-    PlacePage(current, "connects", add, known = topic.value != null || topic.error != null, back = one?.name ?: t("android-settings.title")) { top ->
+    val filters = listOf(t("android-settings.connects.all"), t("android-settings.connects.mine"))
+    // All or the viewer's, as the chats' filter: a menu in the top bar.
+    PlacePage(current, "connects", add, known = topic.value != null || topic.error != null, back = one?.name ?: t("android-settings.title"),
+        actions = { BandFilter(t("android-settings.connects.title"), filters, if (mine) 1 else 0) { mine = it == 1 } }) { top ->
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = top)) {
-        Seg(listOf(t("android-settings.connects.all"), t("android-settings.connects.mine")), if (mine) 1 else 0, { mine = it == 1 }, Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 2.dp).fillMaxWidth(), height = 34.dp, fill = true)
         if (stations == null || view == null) Text(connects.error?.message ?: t("android-settings.connects.reading"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
+        else if (one == null) {
+            // The workspace's: each station's under its name, flat rows as the desktop sidebar's; what a connect is, only while there is none.
+            if (view.items.isEmpty() && stations.all { it.overview?.slackApps.isNullOrEmpty() } && !view.loading)
+                PlaceEmpty(t("android-settings.connects.noneYet"), t("android-settings.connects.note", "app" to BuildConfig.APP_NAME))
+            stations.forEach { s ->
+                val here = view.items.filter { it.station == s.station }
+                val waiting = s.overview?.slackApps.orEmpty()
+                if (here.isEmpty() && waiting.isEmpty() && (s.online || mine)) return@forEach
+                SectionHeader(if (s.online) s.name else t("android-settings.connects.offline", "name" to s.name))
+                if (!s.online && here.isEmpty()) Text(t("android-settings.connects.stationOffline"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(start = 46.dp, end = 16.dp, top = 4.dp, bottom = 8.dp))
+                here.forEach { ConnectPlaceRow(it.station, it.connect) }
+                waiting.forEach { a -> WaitingPlaceRow(app, s.station, a, s.online) }
+            }
+        }
         else stations.forEach { s ->
             val here = view.items.filter { it.station == s.station }
             val waiting = s.overview?.slackApps.orEmpty()
@@ -191,6 +207,38 @@ fun ConnectsScreen(current: WorkspaceEntry, only: String? = null) {
         BarRoom()
     }
     }
+}
+
+/** A connect in the workspace's list (PlaceRows.kt): Slack's mark, its name and team, its presence at the end (in words unless it is up); how it runs under them. */
+@Composable
+private fun ConnectPlaceRow(station: String, c: Connect) {
+    val app = LocalApp.current
+    PlaceRow(
+        c.name + (c.team?.let { " · $it" } ?: ""), onClick = { app.push(Screen.Connect(station, c.id)) },
+        mark = { SlackMark(16.dp) },
+        end = {
+            // Up, the dot says it; anything else in words too.
+            if (c.presence != "online") fail.still.android.ui.StatusText(c.statusText, fontSize = 13.sp, color = if (c.presence == "error") C.red else C.muted, maxLines = 1)
+            PresenceDot(c.presence)
+        },
+    ) {
+        PlaceLine(listOfNotNull(c.modeText, c.runtimeText, c.bind.model?.let { c.modelName ?: it }).joinToString(" · "))
+    }
+}
+
+/** A Slack app made and not connected yet, in the workspace's list: 继续 at its end (offline, said so), where it stands under it. */
+@Composable
+private fun WaitingPlaceRow(app: AppState, station: String, a: MadeSlackApp, online: Boolean) {
+    val where = if (a.installed) t("android-settings.waiting.installed", "team" to (a.installedTeam ?: a.team ?: t("android-settings.flow.team"))) else if (a.install != null) t("android-settings.waiting.notInstalled") else t("android-settings.waiting.noTokens")
+    PlaceRow(
+        a.name + (a.team?.let { " · $it" } ?: ""), onClick = if (online) ({ openWaitingMenu(app, station, a) }) else null, away = !online,
+        mark = { SlackMark(16.dp) },
+        end = {
+            DoingMark(app.isDoing("slack.dropApp", "station" to station, "appId" to a.appId), app.failedOf("slack.dropApp", "station" to station, "appId" to a.appId))
+            if (online) Text(t("android-settings.waiting.continue"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { openNewConnect(app, station, a.appId) })
+            else PlaceEnd(t("android-settings.waiting.offline"))
+        },
+    ) { PlaceLine(where) }
 }
 
 @Composable

@@ -20,7 +20,9 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
+import fail.still.android.screens.OnlineDot
+import fail.still.android.screens.PlaceRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -83,30 +85,23 @@ fun FilesScreen(current: WorkspaceEntry) {
                 Text(if (lenders.isNotEmpty()) t("android-misc.files.none.manager") else t("android-misc.files.none.member"), fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
             }
             else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = top, bottom = foot)) {
-                itemsIndexed(lent, key = { _, l -> "${l.s.station}|${l.root.path}" }) { i, l -> FolderRow(app, l, i == 0, i == lent.lastIndex) }
+                items(lent, key = { l -> "${l.s.station}|${l.root.path}" }) { l -> FolderRow(app, l) }
             }
         }
     }
 }
 
-/** A folder: its mark, its name, the station it is on in grey at its end; a station offline dims its folders. */
+/** A folder, as the desktop sidebar's: its mark, its name, the station it is on at its end with its dot (grey, and the folder faint, while away). */
 @Composable
-private fun FolderRow(app: AppState, l: Lent, first: Boolean, last: Boolean) {
-    val shape = Smooth(
-        topStart = if (first) 16.dp else 0.dp, topEnd = if (first) 16.dp else 0.dp,
-        bottomEnd = if (last) 16.dp else 0.dp, bottomStart = if (last) 16.dp else 0.dp,
+private fun FolderRow(app: AppState, l: Lent) {
+    PlaceRow(
+        l.root.name, onClick = { app.push(Screen.Drive(l.s.station, l.root.path, "")) }, away = !l.s.online,
+        mark = { IconIn(Icons.Folder, 16.dp, C.muted) },
+        end = {
+            Text(l.s.name, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 140.dp))
+            OnlineDot(l.s.online)
+        },
     )
-    Row(
-        Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(shape).background(C.surface)
-            .clickable { app.push(Screen.Drive(l.s.station, l.root.path, "")) }
-            .padding(horizontal = 16.dp, vertical = 14.dp)
-            .alpha(if (l.s.online) 1f else 0.45f),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        IconIn(Icons.Folder, 22.dp, C.muted)
-        Text(l.root.name, fontSize = 15.sp, lineHeight = 20.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        Text(l.s.name, fontSize = 13.sp, color = C.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 140.dp))
-    }
 }
 
 @Composable

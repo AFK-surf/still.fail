@@ -597,5 +597,8 @@
   "android-settings.workspace.stations": {
     "one": "1 station",
     "other": "{n} stations"
-  }
+  },
+  "android-settings.stations.runningShort": "{n} running",
+  "android-settings.stations.newer": "Update available",
+  "android-settings.connects.noneYet": "No connects yet"
 }

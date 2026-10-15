@@ -82,6 +82,7 @@ import fail.still.android.ui.Loading
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.NavButton
 import fail.still.android.ui.ProviderMark
+import fail.still.android.ui.QuotaChips
 import fail.still.android.ui.QuotaDials
 import fail.still.android.ui.QuotaRings
 import fail.still.android.ui.SectionHeader
@@ -163,39 +164,37 @@ fun ProfilesScreen(current: WorkspaceEntry, only: String? = null) {
     }
 }
 
-/** The workspace's profiles, a section each kind of account: a shared one once, where it is under it; one whose
- * subscription's station is away dimmed, said why (as the narrow web's WorkspaceList). */
+/**
+ * The workspace's profiles, as the desktop's sidebar (web ProfilesNav.tsx): a section each kind of account (the core
+ * lists them by kind, in order), a shared one once; each its provider's mark and name (faint while nobody can use it),
+ * under it what is wrong in colour, then what is left of its allowance, else where it is and how many connects use it.
+ * What a profile is, said only while there is none.
+ */
 @Composable
 private fun WorkspaceList(scope: String) {
     val app = LocalApp.current
     val topic by rememberTopic<ProfilesView>(app.core, Topics.profiles(scope))
     val view = topic.value ?: return Text(topic.error?.message ?: t("android-settings.reading"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
-    if (view.items.isEmpty()) ListCard { ListRow { Text(t("android-settings.profiles.empty"), fontSize = 15.sp, color = C.muted) } }
-    // A section each kind of account (the core lists them by kind, in order).
+    if (view.items.isEmpty() && !view.loading) PlaceEmpty(t("web-pages.settings.profiles.none"), t("android-settings.profiles.note"))
     view.items.groupBy { it.group }.forEach { (_, g) ->
-        SectionHeader(g.first().groupTitle, start = 24.dp)
-        ListCard {
-            g.forEach { e ->
-                val p = e.profile
-                ListRow(onClick = { app.push(if (e.members.orEmpty().count { it.role != "user" } > 1) Screen.ProfileAccount(e.key) else Screen.Profile(e.station, p.id)) }) {
-                    Column(Modifier.weight(1f).then(if (e.usable) Modifier else Modifier.alpha(0.55f))) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            PresenceDot(if (e.usable) toneDot(p.checkTone) else "error")
-                            Text(p.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        Text(
-                            if (!e.usable) t("web-pages.settings.profiles.hostAway", "station" to e.hostName)
-                            else e.where.ifEmpty { listOfNotNull(p.checkText, p.usesText?.ifEmpty { null } ?: ACCESS_LABEL[p.access.kind] ?: p.access.kind).joinToString(" · ") },
-                            fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    if (e.usable) QuotaRings(p.quota)
-                    IconIn(Icons.ChevronRight, 14.dp, C.subtle)
-                }
+        SectionHeader(g.first().groupTitle)
+        g.forEach { e ->
+            val p = e.profile
+            val trouble = if (!e.usable) t("web-pages.settings.profiles.hostAway", "station" to e.hostName) else if (p.checkTone != "green") p.checkText else null
+            val facts = listOfNotNull(e.where.ifEmpty { null }, if (p.usedBy.isNotEmpty()) t("web-pages.settings.profiles.usedBy", "n" to p.usedBy.size) else null).joinToString(" · ")
+            val windows = p.quota?.takeIf { it.state == "ok" }?.windows.orEmpty()
+            PlaceRow(
+                p.name, away = !e.usable,
+                onClick = { app.push(if (e.members.orEmpty().count { it.role != "user" } > 1) Screen.ProfileAccount(e.key) else Screen.Profile(e.station, p.id)) },
+                mark = { ProviderMark(p.runtime, p.access.kind, 16.dp, p.providerMark) },
+            ) {
+                if (trouble != null) PlaceLine(trouble, if (e.usable) toneColor(p.checkTone) else C.red)
+                if (windows.isNotEmpty()) Box(Modifier.padding(vertical = 3.dp)) { QuotaChips(p.quota) }
+                else if (facts.isNotEmpty()) PlaceLine(facts)
             }
         }
     }
-    if (view.loading) ListCard { ListRow { Text(t("android-settings.reading"), fontSize = 15.sp, color = C.muted) } }
+    if (view.loading) PlaceEmpty(t("android-settings.reading"))
 }
 
 /** An account on several stations (as the narrow web's ProfileAccountScreen): what they have in common, then each

@@ -138,24 +138,8 @@ fun StationsScreen(current: WorkspaceEntry) {
         if (list == null) {
             Text(stations.error?.message ?: t("android-settings.stations.reading"), color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(20.dp))
         } else {
-            list.forEach { s ->
-                Card(onClick = { app.push(Screen.Station(s.station)) }) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Buddy(s)
-                        Column(Modifier.weight(1f)) {
-                            // Line heights set: a line in Chinese is otherwise a little taller than one in Latin.
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                if (hasStationMark(s.emoji, s.icon)) StationMark(s.emoji, s.icon, 16.dp, C.ink)
-                                Text(s.name, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
-                            Text(s.summary, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        if (s.reconnecting == true) Reconnecting()
-                        IconIn(Icons.ChevronRight, 14.dp, C.subtle)
-                    }
-                    StationBody(s)
-                }
-            }
+            // As the desktop's sidebar (web cloud/StationPage.tsx StationRow): a flat row each.
+            list.forEach { s -> StationRow(s) { app.push(Screen.Station(s.station)) } }
         }
         Spacer(Modifier.height(30.dp))
         BarRoom()
@@ -163,38 +147,48 @@ fun StationsScreen(current: WorkspaceEntry) {
     }
 }
 
-/** Laid out unseen while a station has no network to show, so that its card keeps the room (its path in Chinese, as tall as a real one). */
-private val noNet = StationNet(path = "直连", rtt = NetFigure("0 ms", "ok"), rttHistory = emptyList(), down = " ", up = " ", total = "")
-
 /**
- * Under a station's name in the list: what of its load runs low (as the web's cards: none while all is well) and its network, in the same room whatever state it is in —
- * online, offline, or not yet read — so no card grows, shrinks or pushes the ones below it as states change.
- * Offline, a small picture of it asleep and a line saying so are there; not read yet, grey bars where the figures go.
+ * A station in the list, as in the desktop's sidebar (web cloud/StationPage.tsx StationRow): its mark and name, at that
+ * line's end its agents at work and whether it is up; what the machine is under them (offline, since when); while it
+ * is up, its CPU, memory or disk in a small box when one runs low, and how this device reaches it, a newer version
+ * there said too. Nothing in colour but what is off.
  */
 @Composable
-private fun StationBody(s: StationView) {
+private fun StationRow(s: StationView, onClick: () -> Unit) {
     val host = s.host?.takeIf { s.online }
     val net = s.net?.takeIf { s.online }
-    Box(Modifier.fillMaxWidth().padding(top = 10.dp)) {
-        // Reconnecting: the figures as last heard, faded.
-        Column(Modifier.fillMaxWidth().alpha(if (s.reconnecting == true) 0.45f else 1f)) {
-            Box(Modifier.height(20.dp).alpha(if (host != null) 1f else 0f)) { MeterChips(host?.meters.orEmpty(), alerts = true) }
-            NetLine(net ?: noNet, Modifier.padding(top = 10.dp).alpha(if (net != null) 1f else 0f))
-        }
-        if (!s.online) {
-            Row(Modifier.matchParentSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Image(painterResource(if (C.dark) R.drawable.illus_station_offline_dark else R.drawable.illus_station_offline), null, Modifier.fillMaxHeight())
-                Text(t("android-settings.stations.silent", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 3, overflow = TextOverflow.Ellipsis)
-            }
-        } else {
-            if (host == null) Row(Modifier.height(20.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { listOf(46, 52, 50).forEach { Bar(it.dp, 20.dp, 6.dp) } }
-            if (net == null) Row(Modifier.matchParentSize().padding(top = 30.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) { Bar(34.dp); Bar(96.dp) }
-                Column(verticalArrangement = Arrangement.spacedBy(9.dp)) { Bar(132.dp); Bar(132.dp) }
+    val running = s.overview?.counts?.running ?: 0
+    val newer = s.online && s.overview?.updates.orEmpty().any { it.installed && it.updatable && (it.newer || it.downgrade == true) }
+    PlaceRow(
+        s.name, onClick = onClick, away = !s.online,
+        mark = { if (hasStationMark(s.emoji, s.icon)) StationMark(s.emoji, s.icon, 16.dp, C.ink) else IconIn(Icons.Server, 16.dp, C.muted) },
+        end = {
+            if (s.reconnecting == true) Reconnecting()
+            else if (s.online && running > 0) PlaceEnd(t("android-settings.stations.runningShort", "n" to running))
+            OnlineDot(s.online)
+        },
+    ) {
+        PlaceLine(if (s.online) host?.identity?.takeIf { it.isNotEmpty() } ?: s.summary else s.summary)
+        // Only what runs low: a row of green boxes says nothing.
+        if (host != null && host.meters.any { it.level != "ok" }) MeterChips(host.meters, Modifier.padding(vertical = 4.dp).alpha(if (s.reconnecting == true) 0.45f else 1f), alerts = true)
+        if (net != null || newer) {
+            val c = C
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (net != null) {
+                    Text(net.path, fontSize = 14.sp, lineHeight = 20.sp, color = C.muted, maxLines = 1)
+                    net.rtt?.let { rtt ->
+                        Text(" · ", fontSize = 14.sp, lineHeight = 20.sp, color = C.muted)
+                        Text(rtt.text, fontSize = 14.sp, lineHeight = 20.sp, maxLines = 1, color = when (rtt.level) { "red" -> c.red; "amber" -> c.warn; else -> c.muted })
+                    }
+                }
+                if (newer) Text((if (net != null) " · " else "") + t("android-settings.stations.newer"), fontSize = 14.sp, lineHeight = 20.sp, color = C.muted, maxLines = 1)
             }
         }
     }
 }
+
+/** Laid out unseen while a station has no network to show, so that its figures keep the room (its path in Chinese, as tall as a real one). */
+private val noNet = StationNet(path = "直连", rtt = NetFigure("0 ms", "ok"), rttHistory = emptyList(), down = " ", up = " ", total = "")
 
 /**
  * An online station's machine on its page, as the web's MachineDetails (web/src/cloud/StationCards.tsx): what it is,

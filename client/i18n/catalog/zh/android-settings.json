@@ -552,5 +552,8 @@
   "android-settings.workspace.namePlaceholder": "例如：产品团队",
   "android-settings.workspace.reading": "正在读取 workspace…",
   "android-settings.workspace.renameWhat": "给 workspace 改名",
-  "android-settings.workspace.stations": "{n} 台 station"
+  "android-settings.workspace.stations": "{n} 台 station",
+  "android-settings.stations.runningShort": "{n} 个在跑",
+  "android-settings.stations.newer": "有更新",
+  "android-settings.connects.noneYet": "还没有连接"
 }

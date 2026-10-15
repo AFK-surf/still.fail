@@ -87,8 +87,10 @@ fun UsageScreen(current: WorkspaceEntry) {
             Text(topic.error?.let { t("android-misc.usage.loadFailed", "error" to it.message) } ?: t("android-misc.reading"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(24.dp))
         } else {
             Tiles(view) { app.push(Screen.UsagePrices(days)) }
-            if (view.empty) {
-                Text(if (view.loading) t("android-misc.reading") else t("android-misc.usage.none"), fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(28.dp))
+            // None yet: what the page counts, said with it.
+            if (view.empty && !view.loading) PlaceEmpty(t("android-misc.usage.none"), t("android-misc.usage.note"))
+            else if (view.empty) {
+                Text(t("android-misc.reading"), fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(28.dp))
             } else {
                 Card { Days(view) }
                 Lists(view) { item ->

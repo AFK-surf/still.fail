@@ -64,6 +64,8 @@ fun ArchiveScreen(current: WorkspaceEntry) {
         val note = if (view != null) view.note else archive.error?.message ?: t("android-misc.stations.loading")
         view?.errors?.forEach { Text(it.text, fontSize = 13.sp, color = C.red, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) }
         if (note != null) Text(note, fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
+        // What lands here, said only while nothing has.
+        if (view != null && view.days.isEmpty()) PlaceEmpty(t("android-misc.archive.note"))
         view?.days?.forEach { day ->
             SectionHeader(day.label)
             day.items.forEach { item ->
