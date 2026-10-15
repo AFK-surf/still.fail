@@ -51,7 +51,8 @@ export const dock = style({
           // As the sidebar's ground for all in it (the list's frosted bands, the rings round marks), so none shows the
           // old one as it closes.
           vars: { [vars.sidebar]: panel.background, "--dock-line": "1" },
-          boxShadow: `0 8px 24px ${vars.shadow}`,
+          // A faint one: by the page, not over it.
+          boxShadow: `0 2px 10px color-mix(in srgb, ${vars.shadow} 30%, transparent)`,
           // Over the page, its shadow too: under the page's frosted top bar it was blurred into a block that ended at the
           // bar's foot.
           zIndex: 20,
@@ -62,7 +63,11 @@ export const dock = style({
         "[data-sidebar-moving] &": { zIndex: 20 },
         // Folded but shown a while (Rail.tsx peekSidebar): the bar reaching over the page as wide as the rail and the
         // sidebar (its margin, eased as the bar's others), the page left where it is.
-        '[data-sidebar="closed"][data-sidebar-peek] &': { marginRight: "calc(8px - var(--sidebar-w, 240px))" },
+        '[data-sidebar="closed"][data-sidebar-peek] &': {
+          marginRight: "calc(8px - var(--sidebar-w, 240px))",
+          // Over the page now: a floating panel's shadow.
+          boxShadow: `0 8px 24px ${vars.shadow}`,
+        },
       },
     },
   },
