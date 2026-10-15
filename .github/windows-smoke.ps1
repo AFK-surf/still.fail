@@ -40,6 +40,9 @@ $mesh = Join-Path $resources "mesh.node"
 Run-Node "mesh" "const m = require(process.argv[2]); console.log('mesh.node:', Object.keys(m).sort().join(' '));" @($mesh)
 $controls = Join-Path $resources "window-controls.node"
 Run-Node "window-controls" "const m = require(process.argv[2]); const assert = require('node:assert/strict'); assert.equal(typeof m.setBounds, 'function'); assert.equal(typeof m.detach, 'function'); assert.throws(() => m.setBounds(Buffer.alloc(8), 0, 0, 32, 32)); console.log('window-controls.node: loaded, rejects foreign/invalid HWND');" @($controls)
+# Whether Windows lets the app notify (its AppUserModelID, package.json build.appId): one of the four answers, not a crash.
+$notify = Join-Path $resources "notify-permission.node"
+Run-Node "notify-permission" "const m = require(process.argv[2]); const s = m.status('fail.still.desktop'); if (!['granted', 'denied', 'default', 'unknown'].includes(s)) throw new Error(s); console.log('notify-permission.node:', s);" @($notify)
 
 # The core (apps/desktop/src/core.ts's start), a page connected to it, for a few seconds: nothing thrown.
 $core = Join-Path $resources "app.asar/build/app/core-ts.js"

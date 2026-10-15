@@ -143,6 +143,11 @@ const PARTS: Record<string, Part> = {
     ...stationCrate("apps/desktop/window-controls", () => "stillfail_window_controls.dll", "window-controls.node"),
     targets: ["win32-x64"],
   },
+  // Whether the system lets the desktop app show notifications (its notification settings show it).
+  "notify-permission": {
+    ...stationCrate("apps/desktop/notify-permission", (t) => (t === "win32-x64" ? "stillfail_notify_permission.dll" : "libstillfail_notify_permission.dylib"), "notify-permission.node"),
+    targets: ["darwin-arm64", "win32-x64"],
+  },
   // The station's iroh and image codecs, a Node addon (docs/station-ts-native.md §3); the desktop's core uses it too.
   mesh: {
     ...stationCrate("station/native/mesh", MESH_LIB, "mesh.node", VENDORED),

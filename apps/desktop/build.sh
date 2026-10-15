@@ -5,11 +5,13 @@
 # .dat, the web app's assets, which the app's own signature seals anyway); signing each, with Apple's timestamp, made a
 # release take some fifty minutes.
 # Into out/mac-arm64/still.fail.app: the core (client/core-ts, bundled as build/app/core-ts.js) with its iroh
-# (station/native/mesh's addon) as build/mesh.node, the web app (`pnpm run build:cloud`, dist/cloud-web) as build/web,
-# a station (the station in TypeScript with its Node and native parts: scripts/station-bundle.sh) as build/station, the
-# app's own code as build/app, then electron-builder puts them together.
-# The native parts (the mesh addon, the station's launcher and runner, the web's iroh, the dock) are prebuilt
-# (scripts/native.ts): no Rust or Swift is compiled here unless one of them changed and is not published yet.
+# (station/native/mesh's addon) as build/mesh.node, whether the system lets the app notify (notify-permission's addon)
+# as build/notify-permission.node, the web app (`pnpm run build:cloud`, dist/cloud-web) as build/web, a station (the
+# station in TypeScript with its Node and native parts: scripts/station-bundle.sh) as build/station, the app's own code
+# as build/app, then electron-builder puts them together.
+# The native parts (the mesh and notify-permission addons, the station's launcher and runner, the web's iroh, the
+# dock) are prebuilt (scripts/native.ts): no Rust or Swift is compiled here unless one of them changed and is not
+# published yet.
 # SKIP_WEB=1 takes dist/cloud-web as it is. SKIP_STATION=1 leaves the station out (the app then runs none). DEV=1 stops
 # at build/: no packing, no signing, for Electron's own app to run as it is (dev.sh).
 # UNSIGNED=1 makes either channel's package without the maintainer's signing certificate, for local testing.
@@ -43,6 +45,8 @@ target=darwin-arm64
 [ -z "$win" ] || target=win32-x64
 mesh=$(node "$root/scripts/native.ts" file mesh "$target")
 [ -z "$win" ] || controls=$(node "$root/scripts/native.ts" file window-controls win32-x64)
+# Whether the system lets the app notify (src/notify-permission.ts): macOS's and Windows'.
+notify=$(node "$root/scripts/native.ts" file notify-permission "$target")
 # The dock (docs/desktop-dock.md), SwiftUI: prebuilt too, built only when its sources changed. macOS's only.
 [ -n "$win" ] || dock=$(node "$root/scripts/native.ts" file dock darwin-arm64)
 (cd "$root/client/core-ts" && pnpm install --frozen-lockfile --silent)
@@ -61,6 +65,7 @@ if [ -z "${SKIP_STATION:-}" ]; then
 fi
 cp "$mesh" "$here/build/mesh.node"
 [ -z "$win" ] || cp "$controls" "$here/build/window-controls.node"
+cp "$notify" "$here/build/notify-permission.node"
 mkdir -p "$here/build/dock" && [ -n "$win" ] || cp "$dock" "$here/build/dock/StillfailDock"
 rsync -a "$root/dist/cloud-web/" "$here/build/web/"
 cd "$here"

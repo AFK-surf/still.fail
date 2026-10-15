@@ -38,6 +38,10 @@
         "to": "mesh.node"
       },
       {
+        "from": "build/notify-permission.node",
+        "to": "notify-permission.node"
+      },
+      {
         "from": "build/dock",
         "to": "dock"
       },
