@@ -366,12 +366,10 @@ fn serve(station: &mut Lifecycle<System>, signals: OwnedFd) -> i32 {
                 if fd.revents == 0 {
                     continue;
                 }
-                let Some((slot, said)) = station.processes_mut().into_iter().find(|(_, node)| node.pid == *pid).map(|(slot, node)| (slot, node.read())) else {
+                let Some(said) = station.processes_mut().into_iter().find(|(_, node)| node.pid == *pid).map(|(_, node)| node.read()) else {
                     continue;
                 };
-                for message in said {
-                    station.said(slot, message);
-                }
+                station.heard(*pid as u32, said);
             }
             if fds[0].revents != 0 {
                 for signal in drain_signals(&signals) {

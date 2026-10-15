@@ -324,6 +324,18 @@ impl<O: Os> Lifecycle<O> {
         }
     }
 
+    /// Lines from Node `pid`, read together: each one the word of the slot it is in by then. A Node starting beside that
+    /// is ready serves from that line on, and the lines after it in the same read (where it serves) are the serving
+    /// one's: taken with the slot they were read in, they went to no Node, and the new one never took over (CI,
+    /// 2026-10-15).
+    pub fn heard(&mut self, pid: u32, lines: Vec<Value>) {
+        for message in lines {
+            if let Some(slot) = self.slot_of(pid) {
+                self.said(slot, message);
+            }
+        }
+    }
+
     /// A line from the Node in `slot`.
     pub fn said(&mut self, slot: Slot, message: Value) {
         if message["ready"] == true {
@@ -748,6 +760,23 @@ mod tests {
         station.pass(s(3600));
         assert_eq!(station.os.killed, [old]);
         assert_eq!(station.serving(), new);
+    }
+
+    #[test]
+    fn a_new_node_ready_and_serving_in_one_read_takes_over() {
+        let mut station = station("oneread", false);
+        let old = station.last();
+        station.up(Slot::Current, "0.1.0", 5000);
+        station.start_next();
+        let new = station.last();
+        // Its ready and where it serves come in one read: the lines after ready are the serving one's.
+        station.heard(new, vec![ready("0.2.0"), serving("admin", 6002), serving("mcp", 6001)]);
+        assert_eq!(station.told(old), ["handover"]);
+        station.ended(old, EXITED_0);
+        assert_eq!(station.station_json()["version"], "0.2.0");
+        assert_eq!(station.serving(), new);
+        station.pass(s(3600));
+        assert!(station.os.killed.is_empty());
     }
 
     #[test]

@@ -298,11 +298,7 @@ fn serve(station: &mut Lifecycle<System>, rx: Receiver<Event>) -> i32 {
             },
         };
         match event {
-            Some(Event::Said(pid, message)) => {
-                if let Some(slot) = station.slot_of(pid) {
-                    station.said(slot, message);
-                }
-            }
+            Some(Event::Said(pid, message)) => station.heard(pid, vec![message]),
             Some(Event::Exited(pid, code)) => station.ended(pid, &code.map_or("exited (no code)".into(), |c| format!("exited with {c}"))),
             Some(Event::Stop(why)) => {
                 log::info(&format!("stopping ({why})"));
