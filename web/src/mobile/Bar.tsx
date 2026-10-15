@@ -394,7 +394,7 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
       {open && <div className={css.mBarScrim} data-bar="scrim" onPointerDown={() => panel(false)} />}
       <div className={css.mBarHost} data-bar="host" data-open={open || undefined} data-away={shown ? undefined : ""} inert={!shown}>
         <div ref={wrap} className={css.mBarWrap}
-          style={{ height: PANEL, transform: `scaleX(${1 - Math.min(0.05, Math.abs(sp.o.velocity) * 0.008)})`, pointerEvents: open ? "auto" : "none" }}
+          style={{ height: PANEL, pointerEvents: open ? "auto" : "none" }}
           onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={lost}
           onLostPointerCapture={() => { if (press.current.taken) lost(); }} onContextMenu={(e) => e.preventDefault()}>
           {w > 0 && (

@@ -764,8 +764,6 @@ fun BottomBar(
         }
 
         // What moves with the panel, read where it is drawn (not as the bar is composed).
-        fun narrow() = 1f - min(0.05f, abs(m.o.velocity) * 0.008f)
-        fun sx(x: Float) = w / 2 + (x - w / 2) * narrow()
         fun clipTop() = max(0f, OVER + g.reach * (1 - m.o.value))
         fun notchR() = (DROP / 2 + NOTCH_GAP) * m.kNow()
         // The action and its notch shrink about one middle, which comes up to the bar's edge: the notch closes to nothing, no dent left.
@@ -813,7 +811,7 @@ fun BottomBar(
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                 .drawBehind { val pad = SHADOW_PAD.dp.toPx(); val size = Size(size.width - 2 * pad, size.height - 2 * pad); translate(pad, pad) {
                 val top = clipTop().dp.toPx()
-                val gw = w * narrow()
+                val gw = w
                 val left = (w - gw) / 2 * density.density
                 val rect = android.graphics.RectF(left, top, left + gw.dp.toPx(), size.height)
                 val r = RAD.dp.toPx()
@@ -841,7 +839,7 @@ fun BottomBar(
             Box(
                 Modifier
                     .layout { measurable, constraints ->
-                        val gw = (w * narrow()).dp.roundToPx()
+                        val gw = (w).dp.roundToPx()
                         val top = clipTop().dp.roundToPx()
                         val h = (g.panel.dp.roundToPx() - top).coerceAtLeast(1)
                         val p = measurable.measure(Constraints.fixed(gw, h))
@@ -894,7 +892,7 @@ fun BottomBar(
             Box(Modifier.matchParentSize().drawBehind {
                 val r = notchR()
                 if (r <= 0.5f) return@drawBehind
-                val gw = w * narrow()
+                val gw = w
                 // The notch's own outline alone. (It was drawn from the bar's left end along its edge, the half of the
                 // stroke below the edge showing: a line over the ball and past the bar's rounded end.)
                 val p = Path()
@@ -959,7 +957,7 @@ fun BottomBar(
             Box(
                 Modifier
                     .layout { measurable, _ ->
-                        val box = ballBox(ball, goalX, m.held.value, m.ballScale.value, ::sx)
+                        val box = ballBox(ball, goalX, m.held.value, m.ballScale.value)
                         val p = measurable.measure(Constraints.fixed(box.width.dp.roundToPx().coerceAtLeast(1), box.height.dp.roundToPx().coerceAtLeast(1)))
                         layout(p.width, p.height) { p.place(box.left.dp.roundToPx(), box.top.dp.roundToPx()) }
                     }
@@ -1009,7 +1007,7 @@ fun BottomBar(
                     set.forEachIndexed { j, key ->
                         val on = if (cand != null) cand.set == i && cand.key == key else active == key
                         Place(m, "row:$key", key, labelOf(key), on, idle, lit, dots[key], icon,
-                            Modifier.offset { IntOffset((sx(cs[j]) - g.slot / 2).dp.roundToPx(), (OVER + n * ROW + 4f).dp.roundToPx()) }
+                            Modifier.offset { IntOffset((cs[j] - g.slot / 2).dp.roundToPx(), (OVER + n * ROW + 4f).dp.roundToPx()) }
                                 .size(g.slot.dp, 48.dp),
                             role = Role.Button, onA11y = { m.pick(i, key) })
                     }
@@ -1018,7 +1016,7 @@ fun BottomBar(
             // The bar's places, over the ball.
             if (swap == null) g.items.forEachIndexed { j, key ->
                 Place(m, "bar:$key", key, labelOf(key), (under ?: active) == key, idle, lit, dots[key], icon,
-                    Modifier.offset { IntOffset((sx(g.centres(m.kNow(), g.items.size)[j]) - g.slot / 2).dp.roundToPx(), (g.rowTop + 4f).dp.roundToPx()) }
+                    Modifier.offset { IntOffset((g.centres(m.kNow(), g.items.size)[j] - g.slot / 2).dp.roundToPx(), (g.rowTop + 4f).dp.roundToPx()) }
                         .size(g.slot.dp, 48.dp),
                     role = Role.Tab, onA11y = { onTab(key) })
             }
@@ -1036,7 +1034,7 @@ fun BottomBar(
                     if (i == swap.i) return@forEachIndexed
                     val set = laid.sets[i]
                     val cs = laid.centres(0f, set.size)
-                    set.forEachIndexed { j, key -> Flying(key, was("row:$key"), dots[key], icon, g.slot, rowAlpha, rowDrop) { Offset(sx(cs[j]), laid.rowMid(n) + shift()) } }
+                    set.forEachIndexed { j, key -> Flying(key, was("row:$key"), dots[key], icon, g.slot, rowAlpha, rowDrop) { Offset(cs[j], laid.rowMid(n) + shift()) } }
                 }
                 val t = m.t(swap)
                 laid.sets.getOrNull(swap.i)?.forEachIndexed { j, key ->
@@ -1044,11 +1042,11 @@ fun BottomBar(
                     val end = if (key == active) lit else idle
                     Flying(key, if (t >= 1f) end else if (t <= 0f) from else lerp(from, end, t), dots[key], icon, g.slot, rowAlpha, rowDrop) {
                         val (xs, y) = m.swapAt(swap) ?: return@Flying Offset.Zero
-                        Offset(sx(xs[j]), y)
+                        Offset(xs[j], y)
                     }
                 }
                 laid.items.forEachIndexed { j, key ->
-                    Flying(key, was("bar:$key"), dots[key], icon, g.slot) { Offset(sx(laid.centres(m.kNow(), laid.items.size)[j]), laid.barMid + shift()) }
+                    Flying(key, was("bar:$key"), dots[key], icon, g.slot) { Offset(laid.centres(m.kNow(), laid.items.size)[j], laid.barMid + shift()) }
                 }
             }
         }
@@ -1101,7 +1099,7 @@ private class BallMotion(x: Float, y: Float) {
 /** Where the ball is drawn (dp in the panel's frame): its box, stretched by its speed toward where it goes, or riding a bar being chosen. */
 private class BallBox(val left: Float, val top: Float, val width: Float, val height: Float)
 
-private fun ballBox(ball: BallMotion, goalX: Float, held: Float, shown: Float, sx: (Float) -> Float): BallBox {
+private fun ballBox(ball: BallMotion, goalX: Float, held: Float, shown: Float): BallBox {
     val scale = (1 + 0.06f * held) * shown
     val x = ball.x
     val v = if (abs(goalX - x) < 0.5f) 0f else ball.vx / 60f
@@ -1110,7 +1108,7 @@ private fun ballBox(ball: BallMotion, goalX: Float, held: Float, shown: Float, s
     val h = BALL - min(6f, stretch * 0.2f)
     // Its leading edge reaches ahead, toward where it goes.
     val left = x - BALL / 2 - (if (v < 0) stretch else 0f)
-    val cx = sx(left + w / 2)
+    val cx = left + w / 2
     val cy = ball.y
     val sw = w * scale
     val sh = h * scale
