@@ -110,6 +110,9 @@ export function moveSidebar(change: () => void): void {
     ...moves(`.${css.sidebarBuddy}`, ["left"]),
     ...moves(`.${css.sidebarUpdate}`, ["left", "transform"]),
     ...moves(`.${railCss.edge}`, ["left"]),
+    // The block's margins (closed, it stands off the window's edges; shown a while, it reaches over the page) at the same
+    // pace as its column, not a transition of their own that would run ahead of it.
+    ...moves(`.${shellCss.dock}`, ["margin-top", "margin-right", "margin-bottom", "margin-left"]),
     ...moves(`.${sidebarCss.pageBar}`, ["padding-left"]),
   ], change).then(() => { if (turn === moving) delete document.documentElement.dataset.sidebarMoving; });
 }
@@ -133,10 +136,11 @@ export function onSidebarChosen(told: ((closed: boolean) => void) | null): void 
   chosen = told;
 }
 
-/** The sidebar shown or not as a place has it (Rail.tsx), moving as when toggled; not the person's choice. */
-export function showSidebar(open: boolean): void {
-  if ((document.documentElement.dataset.sidebar === "closed") !== open) return;
-  moveSidebar(() => closeSidebar(!open));
+/** The sidebar shown or not as a place has it (Rail.tsx), moving as when toggled (with `also` in the same move: its new
+ * width); not the person's choice. */
+export function showSidebar(open: boolean, also?: () => void): void {
+  if ((document.documentElement.dataset.sidebar === "closed") !== open) { also?.(); return; }
+  moveSidebar(() => { also?.(); closeSidebar(!open); });
 }
 
 export function useSidebarToggle(moved?: (closed: boolean) => void, { keys: owns = true }: { keys?: boolean } = {}): { closed: boolean; toggle: () => void; label: string } {

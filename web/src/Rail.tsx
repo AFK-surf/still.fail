@@ -210,9 +210,17 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
     // A page with no sidebar of its own: none to open (its edge gone, its shortcut nothing; brand.tsx).
     if (own) delete document.documentElement.dataset.sidebarNone;
     else document.documentElement.dataset.sidebarNone = "";
-    widthFor(group, moved && !shut());
-    showSidebar(own && !folded(group));
-    if (asked.current) { asked.current = false; reveal(); }
+    // Pressed into a folded sidebar from an open one, it is shown a while from the start: the block stays out over the
+    // page as the page takes the room back, not closing to the bar and opening again.
+    const pressed = asked.current;
+    asked.current = false;
+    const open = own && !folded(group);
+    const peeks = pressed && own && !open && !("sidebarPeek" in document.documentElement.dataset);
+    // Its width with it, in the same move (or by itself, gliding if shown).
+    const width = widthFor(group);
+    const apply = () => { width?.(); if (peeks) markPeek(); };
+    if (shut() !== open) { if (width || peeks) (peeks || (moved && !shut()) ? moveSidebar(apply) : apply()); }
+    else showSidebar(open, apply);
   }, [place, own, group]); // eslint-disable-line react-hooks/exhaustive-deps
   // Its tab pressed or pointed at, the place's own sidebar shown: open as it is, or a while if folded. Pressed, once its
   // place has come (the effect above), or soon if it was already there.
@@ -399,17 +407,23 @@ function foldGroup(group: SidebarGroup, closed: boolean): void {
 
 /**
  * A folded sidebar shown a while over the page (shell.css.ts dock, data-sidebar-peek on the root): until the pointer has
- * been off it (and its edge, and a menu from it) a second.
+ * been off it (and its edge, and a menu from it) a moment (PEEK_LEAVE).
  */
 let leaving: ReturnType<typeof setTimeout> | undefined;
+/** How long off it before it folds again. */
+const PEEK_LEAVE = 400;
 function onPeekMove(e: PointerEvent) {
   const on = e.target instanceof Element && e.target.closest(`.${shellCss.dock}, .${css.edge}, [data-radix-popper-content-wrapper]`);
-  if (on) { clearTimeout(leaving); leaving = undefined; } else if (!leaving) leaving = setTimeout(endPeek, 1000);
+  if (on) { clearTimeout(leaving); leaving = undefined; } else if (!leaving) leaving = setTimeout(endPeek, PEEK_LEAVE);
 }
-function onPeekAway() { if (!leaving) leaving = setTimeout(endPeek, 1000); }
+function onPeekAway() { if (!leaving) leaving = setTimeout(endPeek, PEEK_LEAVE); }
 export function peekSidebar(): void {
   const root = document.documentElement;
-  if (root.dataset.sidebar !== "closed" || "sidebarPeek" in root.dataset) return;
+  if (root.dataset.sidebar === "closed" && !("sidebarPeek" in root.dataset)) moveSidebar(markPeek);
+}
+/** Shown a while, closed or about to be (in the move that closes it). */
+function markPeek(): void {
+  const root = document.documentElement;
   root.dataset.sidebarPeek = "";
   document.addEventListener("pointermove", onPeekMove, { passive: true });
   root.addEventListener("pointerleave", onPeekAway);
@@ -417,7 +431,7 @@ export function peekSidebar(): void {
 function endPeek(): void {
   clearTimeout(leaving);
   leaving = undefined;
-  delete document.documentElement.dataset.sidebarPeek;
+  if ("sidebarPeek" in document.documentElement.dataset) moveSidebar(() => { delete document.documentElement.dataset.sidebarPeek; });
   document.removeEventListener("pointermove", onPeekMove);
   document.documentElement.removeEventListener("pointerleave", onPeekAway);
 }
@@ -431,16 +445,15 @@ type SidebarGroup = "chats" | "settings" | "files" | "profiles" | "stations";
 let shownGroup: SidebarGroup = "chats";
 /** Where each is kept: the chats' where the one sidebar's was. */
 const widthKey = (group: SidebarGroup) => group === "chats" ? "--sidebar-w" : `--sidebar-w.${group}`;
-/** The sidebar as wide as `group`'s was made (its own width, none made); moved there with the page, if `glide`. */
-function widthFor(group: SidebarGroup, glide: boolean): void {
+/** What makes the sidebar as wide as `group`'s was made (its own width, none made); null if it is already. */
+function widthFor(group: SidebarGroup): (() => void) | null {
   shownGroup = group;
   const root = document.documentElement.style;
   const saved = Number(localStorage.getItem(`stillfail.width.${widthKey(group)}`));
   // The stations' a little wider by itself: each row has a line of meters.
   const px = saved ? `${Math.min(SIDEBAR.max, Math.max(SIDEBAR.min, saved))}px` : group === "stations" ? `${SIDEBAR.stations}px` : "";
-  if (root.getPropertyValue("--sidebar-w") === px) return;
-  const put = () => { if (px) root.setProperty("--sidebar-w", px); else root.removeProperty("--sidebar-w"); };
-  if (glide) moveSidebar(put); else put();
+  if (root.getPropertyValue("--sidebar-w") === px) return null;
+  return () => { if (px) root.setProperty("--sidebar-w", px); else root.removeProperty("--sidebar-w"); };
 }
 
 /**

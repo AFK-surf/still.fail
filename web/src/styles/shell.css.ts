@@ -34,7 +34,8 @@ export const dock = style({
       // would come at once).
       boxShadow: "0 8px 24px transparent",
       cornerShape: vars.cornerShape,
-      transition: ["margin", "border-radius", "background-color", "box-shadow"].map((p) => `${p} 380ms ${vars.easeOut}`).join(", "),
+      // Its margins moved with its column (brand.tsx moveSidebar), the rest eased here.
+      transition: ["border-radius", "background-color", "box-shadow"].map((p) => `${p} 380ms ${vars.easeOut}`).join(", "),
       selectors: {
         // Concentric with what is lit in it (the rail's places' ground, its 9 px corner 6 px in from its every edge), and
         // as far from the window's edges as that ground from its own: 6 (its 56 column's other 8 the gutter by the page,
