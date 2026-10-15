@@ -45,12 +45,12 @@ const floating = {
 /** One bar at the top, as wide as what it holds: the file's name, its own tools (zoom, source or rendered), how far it has come, download and close. */
 export const fpHead = style({
   ...floating,
-  top: "max(16px, env(safe-area-inset-top))", width: "max-content", maxWidth: "min(100% - 32px, 1080px)", height: "44px", gap: "12px",
+  top: "max(16px, var(--safe-top))", width: "max-content", maxWidth: "min(100% - 32px, 1080px)", height: "44px", gap: "12px",
   padding: "0 6px 0 16px",
   // Under the Windows app's window buttons, which the system draws over the page's top right (styles/global.css.ts).
   selectors: { ':is([data-desktop="overlay"], [data-desktop="custom"]):not([data-fullscreen]) &': { top: "calc(env(titlebar-area-height, 44px) + 8px)" } },
   "@media": {
-    "(max-width: 640px)": { top: "max(8px, env(safe-area-inset-top))", maxWidth: "calc(100% - 16px)", gap: "4px", padding: "0 2px 0 12px" },
+    "(max-width: 640px)": { top: "max(8px, var(--safe-top))", maxWidth: "calc(100% - 16px)", gap: "4px", padding: "0 2px 0 12px" },
     "(prefers-reduced-motion: reduce)": { transition: "none" },
   },
 });
@@ -258,3 +258,5 @@ globalStyle(`${enrollWait} ${spinner}`, { width: "18px", height: "18px", borderT
 
 /** Room for the widest it says ("15.0 MB / 15.0 MB"), so the bar does not grow as the numbers do. */
 globalStyle(`${fpHeadProgress} ${fpProgressText}`, { minWidth: "172px", textAlign: "right" });
+/** The bar's buttons (its close in its right end): 6 in from its edges, rounded as the bar less that (concentric). */
+globalStyle(`${fpHead} ${iconBtn}`, { borderRadius: `calc(14px * ${vars.cornerScale} - 6px)`, cornerShape: vars.cornerShape });

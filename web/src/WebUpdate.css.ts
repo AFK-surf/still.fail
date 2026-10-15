@@ -2,7 +2,7 @@ import { style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 
 export const notice = style({
-  position: "fixed", zIndex: 150, bottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)", left: "calc(env(safe-area-inset-left, 0px) + 12px)",
+  position: "fixed", zIndex: 150, bottom: "calc(var(--safe-bottom) + 12px)", left: "calc(var(--safe-left) + 12px)",
   display: "flex", alignItems: "center", gap: 12,
   width: "max-content", maxWidth: "calc(100vw - 24px)", padding: "8px 10px 8px 16px",
   borderRadius: vars.rCard, cornerShape: vars.cornerShape, background: `color-mix(in srgb, ${vars.raised} 92%, transparent)`,

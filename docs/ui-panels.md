@@ -27,15 +27,24 @@
 - 放在容器角落里的东西（容器圆角范围内、离两条边都很近的按钮、行、输入框、带底色的块），离那两条边一样远，自己的圆角 = 容器圆角 − 这段距离（同心）。
 - 容器用 `surface()` / `popover` 声明内边距和内圆角的，角落里的东西直接用 `inner`；容器圆角是别处算出来的（比如侧栏浮起时的 9 + 6），角落里的东西照同一个式子算，不另写一个数。
 
+## 组件画廊（stories）
+
+`web/stories`：app 的每个部分、每种状态各是一个 story（`web/stories/stories.tsx`），用的是官网 demo 的假 core，再加上 `web/stories/data.ts` 里补的数据（小说、Markdown、视频、图片、更新说明），不进任何发布的包。
+
+- `pnpm stories` 打开画廊：左边列出所有 story，右边按选的设备和主题（浅色/深色）显示，打开时自己点到那个状态。`?story=<id>&theme=light|dark&device=<id>` 单独打开一个。
+- 设备（`web/stories/devices.ts`）：Mac 窗口（红绿灯在 app 让 macOS 放的位置）、Mac 全屏，几款 iPhone（灵动岛、刘海、Home 键）和 Android（挖孔，手势或三键导航），各有自己的安全区域，状态栏、Home 条、导航键画在屏幕上面。
+- 安全区域只通过 `--safe-top` / `--safe-bottom` / `--safe-left` / `--safe-right`（`styles/global.css.ts`）读，不直接写 `env(safe-area-inset-*)`，画廊靠设这几个变量把页面放到各个手机上（`scripts/check.sh` 检查）。
+- story 有两种：
+  - 整个 app（`app: true`），用 `steps` 点到对应状态；
+  - 单独画一个部件（`render`）。
+- 加新界面就加一个 story：测试会自动打开它、量它，不用另写测试。
+
 ## 检查
 
 - `scripts/check.sh`：
   - 「no hand-written negative margins」：样式里不能手写负 margin。
   - 「small panels on one ground」：`surface()` 只允许出现在 popover、通知气泡、⌘K、composer 引用列表四处，其它小面板必须组合 `popover`。
-- `test/browser/corners.mjs`：在 demo 里打开各种页面和状态（宽屏、手机，侧栏展开、收起、临时展开，各个弹层），对每个有自己底色、或者可以按的带圆角元素，找它外面最近的带圆角容器；落在容器角落里的，量两条边的距离是否相等、圆角是否同心。不按面板列清单，新加的东西也会被量到。
-- `test/browser/align.mjs`：在 demo 里打开各个小面板，量四件事：
-  - 小面板的内边距是不是 6；
-  - 角落元素横竖距离是否相等、圆角是否同心；
-  - `panelCard` 里文字是否在 16 那条线上；
-  - 行的左内边距是不是 10。
-- 这两个测试在完整检查里跑（`scripts/check.sh` 的「web: corners and panels measured」，CI 的 Linux runner 用它自带的 Chrome）；本机要跑就设 `PLAYWRIGHT_MODULE` 指向 Playwright。
+  - 「web: stories measured」（完整检查，CI 的 Linux runner 用自带 Chrome）：`test/browser/stories.mjs` 打开每个 story，走完它的 `steps`，用 `test/browser/measure.mjs` 量两件事，有一处不对就挂：
+    - 所有圆角（`corners`）：每个有底色或能按的圆角元素，落在外面圆角容器的角落里时，离两边一样远，圆角同心；
+    - 所有小面板（`panels`）：内边距 6，卡片文字四边 16，行的文字缩进 10，角落元素同心。
+- 本机跑：`PLAYWRIGHT_MODULE=<playwright> node test/browser/stories.mjs`；`ONLY=<id,…>` 只跑几个，`REPORT=1` 列出全部问题而不是直接失败，`SHOTS=<目录>` 每个 story 存一张图。

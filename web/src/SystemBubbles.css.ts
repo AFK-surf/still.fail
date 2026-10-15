@@ -7,7 +7,7 @@ import { PANEL_PAD, TEXT_IN, surface } from "./styles/align.ts";
 import { panelButton, panelIcon } from "./ui.css.ts";
 
 export const stack = style({
-  position: "fixed", zIndex: 150, left: "calc(env(safe-area-inset-left, 0px) + 12px)", bottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)",
+  position: "fixed", zIndex: 150, left: "calc(var(--safe-left) + 12px)", bottom: "calc(var(--safe-bottom) + 12px)",
   display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8, maxWidth: "min(420px, calc(100vw - 24px))",
   pointerEvents: "none",
   "@media": {
@@ -16,7 +16,7 @@ export const stack = style({
         ":root:has([data-rail]) &": { left: 68 },
         // Beside the closed bar (styles/shell.css.ts dock: 6 to 48), as far from it and from the window's foot as it
         // is from the window's edges (6), moved with it (brand.tsx moveSidebar).
-        ':root:has([data-rail])[data-sidebar="closed"] &': { left: 54, bottom: "calc(env(safe-area-inset-bottom, 0px) + 6px)" },
+        ':root:has([data-rail])[data-sidebar="closed"] &': { left: 54, bottom: "calc(var(--safe-bottom) + 6px)" },
       },
     },
   },

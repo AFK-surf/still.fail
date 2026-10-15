@@ -9,6 +9,7 @@
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "build": "node scripts/native.ts iroh-pkg && node scripts/posthog-key.ts",
+    "stories": "vite --config web/vite.stories.config.ts",
     "build:cloud": "node scripts/native.ts iroh-pkg && (cd client/core-ts && pnpm install --frozen-lockfile) && vite build --config web/vite.config.ts --mode cloud && vite build --config web/vite.config.ts --mode cloud-admin && vite build --config web/vite.share.config.ts && node cloud/build-static.ts",
     "build:share": "node scripts/native.ts iroh-pkg && vite build --config web/vite.share.config.ts && node cloud/build-static.ts",
     "dev:web": "vite --config web/vite.config.ts --mode cloud",

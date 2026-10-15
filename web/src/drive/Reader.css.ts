@@ -251,7 +251,7 @@ export const sizeRow = style({
 });
 globalStyle(`${sizeRow} b`, { textAlign: "center", fontWeight: "600", fontVariantNumeric: "tabular-nums" });
 export const sizeKey = style({
-  height: "32px", minWidth: "44px", padding: "0 10px", border: "0", borderRadius: `calc(10px * ${vars.cornerScale})`, background: "none", color: "inherit",
+  height: "32px", minWidth: "44px", padding: "0 10px", border: "0", borderRadius: `calc(12px * ${vars.cornerScale} - 4px)`, cornerShape: vars.cornerShape, background: "none", color: "inherit",
   fontSize: vars.textUi, fontWeight: "600", cursor: "pointer",
   selectors: { "&:disabled": { opacity: ".35", cursor: "default" }, "&:hover:not(:disabled)": { background: "color-mix(in srgb, currentColor 8%, transparent)" } },
 });

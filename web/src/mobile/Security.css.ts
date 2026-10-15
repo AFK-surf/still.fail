@@ -22,7 +22,7 @@ export const mWaiting = style({ minHeight: "100%", display: "grid", alignContent
 export const mWaitingTitle = style({ fontSize: vars.textHeading, lineHeight: vars.leadingHeading });
 /** The page's main action, along the bottom of the screen, as wide as it: the page scrolls above it. */
 export const mFoot = style({
-  flex: "none", padding: "10px 16px calc(10px + env(safe-area-inset-bottom))", display: "grid",
+  flex: "none", padding: "10px 16px calc(10px + var(--safe-bottom))", display: "grid",
   background: "color-mix(in srgb, var(--m-bg) 80%, transparent)", WebkitBackdropFilter: "blur(24px)", backdropFilter: "blur(24px)",
   boxShadow: "inset 0 0.5px 0 var(--m-line)",
 });

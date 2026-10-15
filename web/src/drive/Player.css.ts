@@ -21,7 +21,7 @@ globalStyle(`${cover} span`, { color: vars.text, fontSize: vars.textTitle, fontW
 /** The way back and its name, floating at the top as a preview's bar does; it fades with the controls. */
 export const head = style({
   ...glass,
-  position: "absolute", zIndex: "3", top: "calc(var(--m-top, 0px) + max(12px, env(safe-area-inset-top)))", left: "50%", transform: "translateX(-50%)",
+  position: "absolute", zIndex: "3", top: "calc(var(--m-top, 0px) + max(12px, var(--safe-top)))", left: "50%", transform: "translateX(-50%)",
   display: "flex", alignItems: "center", gap: "8px", width: "max-content", maxWidth: "min(100% - 24px, 1080px)", height: "44px", boxSizing: "border-box",
   padding: "0 16px 0 6px", borderRadius: `calc(14px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, color: vars.text,
   opacity: "0", pointerEvents: "none", transition: `opacity 320ms ${vars.easeOut}`,

@@ -34,7 +34,16 @@ const chats = openingChats();
 const subs = new Map<number, Topic>();
 let post: (message: unknown) => void = () => undefined;
 
+/**
+ * What a page that is not the site adds to the made-up core (web/stories: the data a story shows), asked before the
+ * demo's own: a topic's value or a call's answer, undefined for the demo's. The site adds none.
+ */
+export interface DemoExtension { topic?(topic: Topic): unknown; call?(name: string, params: Record<string, unknown>): unknown }
+const extensions: DemoExtension[] = [];
+export function extendDemo(extension: DemoExtension): void { extensions.push(extension); }
+
 function valueOf(topic: Topic): unknown {
+  for (const e of extensions) { const v = e.topic?.(topic); if (v !== undefined) return v; }
   const chat = "key" in topic ? chats.find((c) => c.key === topic.key) : "session" in topic ? chats.find((c) => c.key === topic.session) : undefined;
   switch (topic.topic) {
     case "overview": return station.overview();
@@ -118,6 +127,7 @@ const BANNED = `⚠️ 认证失败，需要管理员检查账号：${station.BA
 const prefs: Record<string, unknown> = {};
 
 function answer(name: string, params: Record<string, unknown>): unknown {
+  for (const e of extensions) { const v = e.call?.(name, params); if (v !== undefined) return v; }
   if (name === "prefs.set") {
     for (const [field, value] of Object.entries(params)) {
       const before = prefs[field];

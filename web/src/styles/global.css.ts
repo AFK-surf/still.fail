@@ -15,6 +15,17 @@ globalStyle(":root", {
   },
 });
 /**
+ * The screen's safe area (a phone's status bar, notch or island, its home indicator or navigation buttons), as every
+ * style reads it: through these, never env() itself (scripts/check.sh), so the stories (web/stories) can put the page
+ * on each phone's.
+ */
+globalStyle(":root", {
+  vars: {
+    "--safe-top": "env(safe-area-inset-top, 0px)", "--safe-bottom": "env(safe-area-inset-bottom, 0px)",
+    "--safe-left": "env(safe-area-inset-left, 0px)", "--safe-right": "env(safe-area-inset-right, 0px)",
+  },
+});
+/**
  * The Windows app's window buttons (apps/desktop/src/main.ts): the system draws them over the page's top right, as
  * wide as the title bar area leaves (Window Controls Overlay). What sits there keeps this much room; full screen, none.
  */

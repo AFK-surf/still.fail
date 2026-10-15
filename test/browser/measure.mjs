@@ -1,39 +1,84 @@
-// Surfaces measured as drawn (web/src/styles/align.ts, case 1): in the demo's pages, every surface open (a menu, a
-// popover, ⌘K) has its corner its padding and its inner corner together, and what sits at one of its corners is
-// rounded by the inner corner and stands as far from both edges. Runs its own Vite fixture with the demo core, as
-// agent-sheet.mjs does. PLAYWRIGHT_MODULE selects Playwright; SHOTS optionally keeps pictures.
-import assert from 'node:assert/strict';
-import { mkdir, writeFile, rm } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
-import { createServer } from 'vite';
-const playwright = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
-const out = process.env.SHOTS;
-const fixture = new URL('../../web/align-check.tsx', import.meta.url);
-const html = new URL('../../web/align-check.html', import.meta.url);
-let server, browser;
-const made = [];
-try {
-  await writeFile(fixture, `import './src/styles/index.ts';
-import { mountDemo } from './src/demo/mount.tsx';
-const root = document.getElementById('app')!;
-root.style.cssText = 'position:fixed;inset:0';
-mountDemo(root);
-`, { flag: 'wx' });
-  made.push(fixture);
-  await writeFile(html, '<!doctype html><html lang="zh"><div id="app"></div><script type="module" src="/align-check.tsx"></script></html>', { flag: 'wx' });
-  made.push(html);
-  server = await createServer({ configFile: fileURLToPath(new URL('../../web/vite.demo.config.ts', import.meta.url)), root: fileURLToPath(new URL('../../web', import.meta.url)), server: { host: '127.0.0.1', port: 0, hmr: false }, logLevel: 'error' });
-  await server.listen();
-  const base = `http://127.0.0.1:${server.httpServer.address().port}`;
-  if (out) await mkdir(out, { recursive: true });
-  // A Chrome the machine has (CI's Linux runner: PLAYWRIGHT_CHANNEL=chrome), or Playwright's own.
-  browser = await playwright.chromium.launch(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {});
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2, locale: 'zh-CN' });
-  await page.goto(base + '/align-check.html');
-  await page.waitForTimeout(2500);
+// What the stories are measured by (docs/ui-panels.md; test/browser/stories.mjs runs them in each story's page): each
+// a function run in the page, returning what it measured and what is off.
 
-  /** Every open surface's corner and what sits at its corners, as drawn: the mismatches, said. */
-  const measure = () => page.evaluate(() => {
+/**
+ * Every corner: each rounded thing with a ground of its own or to press, standing in a corner of the rounded box drawn
+ * round it, is as far from both edges of that corner and rounded as the box less that distance (concentric).
+ */
+export function corners() {
+  const px = (v) => parseFloat(v) || 0;
+  const drawn = (cs) => {
+    const bg = cs.backgroundColor;
+    const hasBg = bg && bg !== 'transparent' && !/rgba\([^)]*,\s*0\)$/.test(bg);
+    return hasBg || px(cs.borderTopWidth) > 0 || (cs.boxShadow && cs.boxShadow !== 'none') || cs.backdropFilter !== 'none';
+  };
+  const radius = (cs) => Math.max(px(cs.borderTopLeftRadius), px(cs.borderTopRightRadius), px(cs.borderBottomLeftRadius), px(cs.borderBottomRightRadius));
+  const name = (el) => (el.className && el.className.toString().split(' ').find((c) => /__/.test(c))?.replace(/__.*/, '')) || el.tagName.toLowerCase();
+  /** What shows of it: cut by what clips between it and `upTo`. */
+  const shown = (el, upTo) => {
+    const b = el.getBoundingClientRect();
+    const r = { left: b.left, right: b.right, top: b.top, bottom: b.bottom };
+    for (let a = el.parentElement; a && a !== upTo; a = a.parentElement) {
+      const o = getComputedStyle(a);
+      if (o.overflowX === 'visible' && o.overflowY === 'visible') continue;
+      const c = a.getBoundingClientRect();
+      r.left = Math.max(r.left, c.left); r.right = Math.min(r.right, c.right); r.top = Math.max(r.top, c.top); r.bottom = Math.min(r.bottom, c.bottom);
+    }
+    return r.right - r.left >= b.width - 0.5 && r.bottom - r.top >= b.height - 0.5 ? b : null;
+  };
+  const wrong = [];
+  let measured = 0;
+  for (const el of document.querySelectorAll('body *')) {
+    const cs = getComputedStyle(el);
+    if (cs.visibility === 'hidden' || cs.display === 'none' || px(cs.opacity) === 0 && cs.opacity !== '') continue;
+    const re = radius(cs);
+    if (re < 0.5) continue;
+    // What shows a ground of its own (now, or while pointed at: what is pressed); not a picture or a mark.
+    if (/^(IMG|SVG|VIDEO|CANVAS)$/i.test(el.tagName)) continue;
+    // A slider's knob goes where the value is: not set in a corner.
+    if (el.closest('[role=slider]')) continue;
+    const pressed = el.matches('button, a[href], [role=button], [role=menuitem], [role=menuitemradio], [role=menuitemcheckbox], [role=option], [role=tab], input, textarea, select, summary');
+    if (!drawn(cs) && !pressed) continue;
+    const b = el.getBoundingClientRect();
+    if (b.width < 8 || b.height < 8) continue;
+    // The rounded box drawn round it.
+    let box = el.parentElement, bs = null;
+    while (box && box !== document.body) {
+      bs = getComputedStyle(box);
+      if (radius(bs) >= 0.5 && drawn(bs)) break;
+      box = box.parentElement;
+    }
+    if (!box || box === document.body) continue;
+    const r = shown(el, box);
+    if (!r) continue;
+    const c = box.getBoundingClientRect();
+    const rb = radius(bs);
+    const inL = c.left + px(bs.borderLeftWidth), inR = c.right - px(bs.borderRightWidth), inT = c.top + px(bs.borderTopWidth), inB = c.bottom - px(bs.borderBottomWidth);
+    const gl = r.left - inL, gr = inR - r.right, gt = r.top - inT, gb = inB - r.bottom;
+    if (Math.min(gl, gr, gt, gb) < -0.5) continue; // reaching out of it (a badge on its edge): not in its corner
+    // In a corner: within the box's curve of both edges that meet there.
+    const corners = [['top left', gl, gt, 'borderTopLeftRadius'], ['top right', gr, gt, 'borderTopRightRadius'], ['bottom left', gl, gb, 'borderBottomLeftRadius'], ['bottom right', gr, gb, 'borderBottomRightRadius']];
+    for (const [where, g1, g2, prop] of corners) {
+      // Its corner as drawn (no more than half its side), and what stands in it: within a little over half of that from
+      // both edges (further in, it is beside the corner, not in it).
+      const rbc = Math.min(px(bs[prop]), c.width / 2, c.height / 2);
+      if (rbc < 0.5 || g1 > rbc * 0.6 || g2 > rbc * 0.6) continue;
+      measured++;
+      const who = `${name(box)} › ${name(el)} (${where})`;
+      if (Math.abs(g1 - g2) > 1) { wrong.push(`${who}: ${g1.toFixed(1)} from the side, ${g2.toFixed(1)} from the ${where.split(' ')[0]}`); continue; }
+      const own = Math.min(px(cs[prop]), r.height / 2, r.width / 2), want = Math.min(Math.max(rbc - g1, 0), r.height / 2, r.width / 2);
+      if (Math.abs(own - want) > 1) wrong.push(`${who}: rounded ${own.toFixed(1)}, ${g1.toFixed(1)} in from a corner of ${rbc.toFixed(1)} (wants ${want.toFixed(1)})`);
+    }
+  }
+  return { measured, wrong };
+}
+
+/**
+ * Every small panel (a surface saying its --panel-pad): its corner its inner one and its padding together; padded 6
+ * (all but ⌘K, a dialog); a panel of words' blocks in by 10 and as far from its top and foot; its rows' words in by 10;
+ * what sits in its corners as far from both edges and concentric.
+ */
+export function panels() {
     const px = (v) => parseFloat(v) || 0;
     const resolve = (el, value) => {
       const probe = document.createElement('div');
@@ -111,34 +156,4 @@ mountDemo(root);
       }
     }
     return { surfaces, corners, wrong };
-  });
-
-  const checks = [
-    ['filter menu', async () => page.locator('[aria-label="筛选会话：全部"]').click()],
-    ['chat info', async () => page.locator('[aria-label="对话信息"]').click()],
-    ['⌘K', async () => { await page.locator('textarea').first().click(); await page.keyboard.press('ControlOrMeta+k'); }],
-    ['jobs', async () => page.locator('[aria-label="服务和后台任务"]').click()],
-    ['workspace menu', async () => page.locator('[aria-label="新建 workspace、添加账号"]').click()],
-    ['rail menu', async () => page.locator('[aria-label="文件"]').first().click({ button: 'right' })],
-    ['rail adder', async () => { await page.locator('[aria-label="文件"]').first().click({ button: 'right' }); await page.waitForTimeout(300); await page.getByText('自定义侧边条').click(); }],
-    ['station card', async () => { await page.mouse.move(1, 1); await page.locator('header').getByText(/Studio|这台机器/).first().hover(); await page.waitForTimeout(900); }],
-  ];
-  const failures = [];
-  for (const [name, open] of checks) {
-    await open();
-    await page.waitForTimeout(500);
-    const got = await measure();
-    console.log(`${name}: ${got.surfaces} surface(s), ${got.corners} thing(s) at a corner`);
-    if (out) await page.screenshot({ path: `${out}/align-${name.replace(/\W+/g, '-')}.png` });
-    assert.ok(got.surfaces > 0, `${name}: no surface found open`);
-    failures.push(...got.wrong.map((w) => `${name}: ${w}`));
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(300);
-  }
-  assert.deepEqual(failures, []);
-  console.log('ok: every surface concentric with what sits at its corners');
-} finally {
-  await browser?.close();
-  await server?.close();
-  for (const f of made) await rm(f);
 }

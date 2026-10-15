@@ -34,10 +34,10 @@ export const handle = style({ fill: "#fff", stroke: INK, pointerEvents: "auto" }
 
 /** The tools, at the bottom over the image, frosted as the top bar. */
 export const toolbar = style({
-  ...glass, position: "absolute", zIndex: "3", left: "50%", bottom: "max(16px, env(safe-area-inset-bottom))", transform: "translateX(-50%)",
+  ...glass, position: "absolute", zIndex: "3", left: "50%", bottom: "max(16px, var(--safe-bottom))", transform: "translateX(-50%)",
   display: "flex", alignItems: "center", gap: "2px", height: "44px", padding: "0 6px", boxSizing: "border-box",
   borderRadius: `calc(14px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, color: vars.text, whiteSpace: "nowrap",
-  "@media": { "(max-width: 640px)": { bottom: "max(8px, env(safe-area-inset-bottom))", padding: "0 2px" } },
+  "@media": { "(max-width: 640px)": { bottom: "max(8px, var(--safe-bottom))", padding: "0 2px" } },
 });
 export const gap = style({ width: "1px", height: "18px", margin: "0 4px", background: vars.line, flex: "none" });
 globalStyle(`${toolbar} ${iconBtn}[aria-pressed="true"]`, { background: vars.selected, color: vars.text });
@@ -92,9 +92,9 @@ globalStyle(`${note} input::placeholder, ${note} span`, { color: "rgba(255, 255,
 
 /** A phone's foot while marking (as a message's notes page's): the notes' cards over the tools, or the note being written. */
 export const foot = style({
-  position: "absolute", zIndex: "3", left: "0", right: "0", bottom: "max(16px, env(safe-area-inset-bottom))", display: "flex",
+  position: "absolute", zIndex: "3", left: "0", right: "0", bottom: "max(16px, var(--safe-bottom))", display: "flex",
   flexDirection: "column", alignItems: "stretch", gap: "10px", padding: "0 12px", pointerEvents: "none", color: "var(--m-ink)",
-  "@media": { "(max-width: 640px)": { bottom: "max(8px, env(safe-area-inset-bottom))" } },
+  "@media": { "(max-width: 640px)": { bottom: "max(8px, var(--safe-bottom))" } },
 });
 globalStyle(`${foot} > *`, { pointerEvents: "auto" });
 globalStyle(`${foot} ${toolbar}[data-in-foot]`, { position: "static", transform: "none", alignSelf: "center" });

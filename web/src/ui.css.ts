@@ -6,7 +6,7 @@ import { appearKeyframes, dialogInKeyframes, fadeKeyframes, pulseKeyframes, spin
 import { gate, muted } from "./styles/shell.css.ts";
 import { pageBar } from "./styles/sidebar.css.ts";
 import { markdown } from "./styles/conversation.css.ts";
-import { card, listRow } from "./styles/pages.css.ts";
+import { card, iconBtn, listRow } from "./styles/pages.css.ts";
 import { outsetStart } from "./styles/align.ts";
 import { TEXT_IN } from "./styles/align.ts";
 
@@ -166,7 +166,8 @@ export const choice = style({
 });
 export const choiceHit = style({
   display: "flex", alignItems: "center", gap: "12px", width: "100%", padding: "12px 14px", border: "0",
-  borderRadius: `calc(16px * ${vars.cornerScale})`, background: "none", textAlign: "left", cursor: "pointer",
+  // Its card's own corner, whatever the card is rounded to (a dialog's cards: DIALOG_INNER).
+  borderRadius: "inherit", background: "none", textAlign: "left", cursor: "pointer",
   cornerShape: vars.cornerShape,
   selectors: {
     "&:disabled": { cursor: "default" },
@@ -221,6 +222,8 @@ export const command = style({
   display: "flex", alignItems: "center", gap: "8px", padding: "6px 6px 6px 14px", borderRadius: vars.rField,
   background: vars.paper, cornerShape: vars.cornerShape,
 });
+/** Its copy button at its right end, 6 in: rounded as it less that (concentric). */
+globalStyle(`${command} ${iconBtn}`, { borderRadius: `calc(${vars.rField} - 6px)`, cornerShape: vars.cornerShape });
 export const overlay = style({
   position: "fixed", inset: "0", zIndex: "40", background: vars.overlay,
   animation: `${fadeKeyframes} 180ms ${vars.easeOut}`,
@@ -245,7 +248,7 @@ export const dialogWide = style({ width: "min(640px, calc(100vw - 32px))" });
 export const dialogAlert = style({ width: "min(420px, calc(100vw - 32px))", padding: `${DIALOG_PAD + 4}px ${DIALOG_PAD}px ${DIALOG_PAD}px`, gap: "8px" });
 /** Its title, and the close button in the corner: round (half width 16), its centre the corner's radius from the edges. */
 export const dialogHead = style({
-  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", padding: `${DIALOG_PAD - 2}px ${DIALOG_PAD + 2}px 0 ${DIALOG_PAD}px`,
+  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", padding: `${DIALOG_PAD + 1}px ${DIALOG_PAD + 2}px 0 ${DIALOG_PAD}px`,
 });
 export const dialogTitle = style({});
 export const dialogBody = style({
@@ -390,6 +393,7 @@ globalStyle(`${dialogHead} > button`, { borderRadius: "999px", cornerShape: "rou
 globalStyle(`${dialogBody} ${listRow}`, { borderRadius: `calc(${DIALOG_PAD + 18 - 12}px * ${vars.cornerScale})` });
 /** Cards, choices and command lines in a dialog sit at its padding: their corners are the dialog's, less it. */
 globalStyle(`${dialogBody} :is(${card}, ${choice}, ${command})`, { borderRadius: DIALOG_INNER });
+globalStyle(`${dialogBody} ${command} ${iconBtn}`, { borderRadius: `calc(${DIALOG_INNER} - 6px)` });
 /** Here rather than with its class: it comes after .empty p, and wins over it. */
 globalStyle(`${markdown} p`, { margin: "0 0 8px" });
 /** Here rather than with its class: it comes after .empty h2, and wins over it. */

@@ -47,8 +47,9 @@ export const codeLang = style({
   color: vars.subtle,
 });
 export const codeCopy = style({
+  // In the block's top right corner, 4 in (codeBar): rounded as the block less that, concentric with it.
   display: "inline-flex", alignItems: "center", gap: "4px", border: "0",
-  borderRadius: `calc(6px * ${vars.cornerScale})`, color: vars.muted, cursor: "pointer", cornerShape: vars.cornerShape,
+  borderRadius: `calc(12px * ${vars.cornerScale} - 4px)`, color: vars.muted, cursor: "pointer", cornerShape: vars.cornerShape,
   height: "24px", padding: "0 7px", fontSize: vars.textCaption,
   background: `color-mix(in srgb, ${vars.canvas} 80%, transparent)`,
   selectors: {

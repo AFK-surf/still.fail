@@ -206,6 +206,9 @@ if part ts; then
     step "type sizes from tokens" sh -c '! git grep -nE "fontSize: *(\"[0-9.]+(px|rem)|[0-9])|font: *\"[^\"]*[0-9.]+px" -- "web/src/*.css.ts"'
     # Three weights: 400, 500 to stand out, 600 for titles (the official site's hero aside).
     step "three type weights" sh -c '! git grep -nE "fontWeight: *\"?(100|200|300|[5-6][1-9]0|[5-6][0-9][1-9]|7[0-9]{2}|8[0-9]{2}|9[0-9]{2}|bold|bolder|lighter)\b" -- "web/src/*.css.ts" ":!web/src/site/"'
+    # The safe area is read through --safe-top … (styles/global.css.ts), never env() itself: the stories put the page on
+    # each phone's by setting those.
+    step "safe area through its vars" sh -c '! git grep -n "env(safe-area-inset" -- "web/src/*.ts" "web/src/*.tsx" ":!web/src/styles/global.css.ts"'
     # No margin taken back by hand: a ground reaching past its words, a corner, a column, a centring is one of
     # styles/align.ts's (bleedX, surface, columns, centred…), so its numbers are said once (a var's own negative may be).
     step "no hand-written negative margins" sh -c '! git grep -nE "margin[A-Za-z]*: *(-[0-9]|[\"\`][^\"\`]*[ (]-[0-9]|[\"\`]-[0-9])" -- "web/src/*.css.ts" | grep -v "calc(-1 \* var("'
@@ -228,14 +231,14 @@ if part ts; then
     step "typecheck: web" after root after core pnpm exec tsgo -p web/tsconfig.json
     [ -f web/src/core/iroh-pkg/.stand-in ] && later "web against the real iroh wasm"
   fi
-  # Every corner and small panel as drawn, measured in the demo's pages (test/browser/corners.mjs and align.mjs,
+  # Every story (web/stories) opened and every corner and small panel in it measured (test/browser/stories.mjs,
   # docs/ui-panels.md): in the full check, on a Chrome the machine has (CI's Linux runner has one).
-  if [ $full = 1 ] && { touches "$ts_web" || touches '^test/browser/(corners|align)\.mjs$'; }; then
+  if [ $full = 1 ] && { touches "$ts_web" || touches '^test/browser/(stories|measure)\.mjs$'; }; then
     if command -v google-chrome >/dev/null 2>&1; then
       prep core deps client/core-ts
-      step "web: corners and panels measured" after root after core sh -c 'export PLAYWRIGHT_MODULE=playwright-core PLAYWRIGHT_CHANNEL=chrome; node test/browser/corners.mjs && node test/browser/align.mjs'
+      step "web: stories measured" after root after core sh -c 'PLAYWRIGHT_MODULE=playwright-core PLAYWRIGHT_CHANNEL=chrome node test/browser/stories.mjs'
     else
-      later "web: corners and panels measured (no Chrome here)"
+      later "web: stories measured (no Chrome here)"
     fi
   fi
   if touches "$ts_cloud"; then

@@ -34,7 +34,7 @@ export const sheetShade = style({
   position: "fixed", inset: "0", zIndex: "80", background: vars.overlay, animation: `${fadeInKeyframes} 160ms ${vars.easeOut}`,
 });
 export const sheet = style({
-  position: "fixed", left: "0", right: "0", bottom: "0", zIndex: "81", padding: "8px 12px calc(12px + env(safe-area-inset-bottom))",
+  position: "fixed", left: "0", right: "0", bottom: "0", zIndex: "81", padding: "8px 12px calc(12px + var(--safe-bottom))",
   borderRadius: `${vars.rDialog} ${vars.rDialog} 0 0`, cornerShape: vars.cornerShape, ...ground,
   boxShadow: `0 -8px 32px ${vars.shadow}`, outline: "none",
   animation: `${mRiseInKeyframes} 260ms ${vars.easeOut}`,

@@ -61,8 +61,8 @@ export const m = style({
     "--m-thumb": "#FFFFFF",
     "--m-ease": "cubic-bezier(.2, .8, .2, 1)",
     "--m-standard": "cubic-bezier(.4, 0, .2, 1)",
-    "--m-top": "env(safe-area-inset-top, 0px)",
-    "--m-foot": "env(safe-area-inset-bottom, 0px)",
+    "--m-top": "var(--safe-top)",
+    "--m-foot": "var(--safe-bottom)",
   },
   selectors: {
     ":root[data-theme=\"dark\"] &": {
@@ -109,7 +109,7 @@ export const mDark = style({
   colorScheme: "dark",
   vars: {
     ...darkVars, "--m-ease": "cubic-bezier(.2, .8, .2, 1)", "--m-standard": "cubic-bezier(.4, 0, .2, 1)",
-    "--m-top": "env(safe-area-inset-top, 0px)", "--m-foot": "env(safe-area-inset-bottom, 0px)",
+    "--m-top": "var(--safe-top)", "--m-foot": "var(--safe-bottom)",
   },
 });
 

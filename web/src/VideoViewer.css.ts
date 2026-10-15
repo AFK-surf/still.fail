@@ -16,14 +16,14 @@ export const vvPicture = style({
 
 export const vvBar = style({
   ...glass,
-  position: "absolute", zIndex: "2", left: "50%", bottom: "max(16px, env(safe-area-inset-bottom))", width: "min(100% - 32px, 1080px)",
-  transform: "translateX(-50%)", display: "grid", padding: "2px 10px 6px", borderRadius: `calc(16px * ${vars.cornerScale})`,
+  position: "absolute", zIndex: "2", left: "50%", bottom: "max(16px, var(--safe-bottom))", width: "min(100% - 32px, 1080px)",
+  transform: "translateX(-50%)", display: "grid", padding: "2px 6px 6px", borderRadius: `calc(16px * ${vars.cornerScale})`,
   cornerShape: vars.cornerShape, opacity: "0", pointerEvents: "none", transition: `opacity 320ms ${vars.easeOut}`,
   selectors: {
     "&[data-awake]": { opacity: "1", pointerEvents: "auto", transitionDuration: "120ms" },
   },
   "@media": {
-    "(max-width: 640px)": { width: "calc(100% - 16px)", bottom: "max(8px, env(safe-area-inset-bottom))", padding: "2px 4px 4px" },
+    "(max-width: 640px)": { width: "calc(100% - 16px)", bottom: "max(8px, var(--safe-bottom))", padding: "2px 4px 4px" },
     "(prefers-reduced-motion: reduce)": { transition: "none" },
   },
 });
@@ -68,7 +68,7 @@ export const vvRate = style({
 export const vvTurn = style({ "@media": { "(pointer: fine)": { display: "none" } } });
 
 export const vvTimeline = style({
-  position: "relative", height: "22px", display: "grid", alignItems: "center", margin: "0 6px", cursor: "pointer",
+  position: "relative", height: "22px", display: "grid", alignItems: "center", margin: "0 10px", cursor: "pointer",
   touchAction: "none",
 });
 export const vvTrack = style({
@@ -92,3 +92,9 @@ globalStyle(`${fp}:has(${vv}) ${fpHead}`, glass);
 globalStyle(`${fp}:has(${vvBar}[data-awake]) ${fpHead}`, { opacity: "1", transitionDuration: "120ms" });
 /** On a phone, pinching zooms: its buttons would crowd the frame's facts out. */
 globalStyle(`${vv} ${fpZoom}`, { "@media": { "(max-width: 640px)": { display: "none" } } });
+/** The bar's buttons at its foot's corners: 6 in from both edges, rounded as the bar less that (concentric). */
+globalStyle(`${vvBar} ${iconBtn}`, {
+  borderRadius: `calc(16px * ${vars.cornerScale} - 6px)`, cornerShape: vars.cornerShape,
+  // On a phone the bar is padded 4: 4 less.
+  "@media": { "(max-width: 640px)": { borderRadius: `calc(16px * ${vars.cornerScale} - 4px)` } },
+});
