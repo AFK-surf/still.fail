@@ -68,7 +68,20 @@ class MainActivity : ComponentActivity() {
         app?.inFront = true
         listen()
         app?.let { lifecycleScope.launch { it.checkUpdates() } }
+        tellPermission()
         wake()
+    }
+
+    /** What the system allows now, to the core: again each time the app comes back (from the system's settings, say). */
+    private fun tellPermission() {
+        val app = app ?: return
+        lifecycleScope.launch {
+            try {
+                app.core.call("notify.permission", buildJsonObject { put("state", Notifier.permission(applicationContext, app.notifyAsked)) })
+            } catch (_: CoreException) {
+                // An older core without it.
+            }
+        }
     }
 
     override fun onStop() {
@@ -132,6 +145,7 @@ class MainActivity : ComponentActivity() {
             made.moveNotify()
             made.inFront = Notifier.inFront
             app = made
+            tellPermission()
             launch { made.followNotify() }
             launch { made.followPrefs() }
             launch { made.followDoing() }

@@ -4,8 +4,10 @@ On a Mac (14 or later, Apple silicon), the desktop app keeps the chats that want
 screen, also with no window open: a half circle of Liquid Glass (macOS 26; a material before it) drawn by a SwiftUI
 helper, `apps/desktop/dock`, which the app starts and feeds (`apps/desktop/src/dock.mts`). It is off until turned on
 (2026-10-15): the app menu's 「桌面浮窗」 turns it on and off, the sliver's own right-click menu off. Settings → 通知 has
-its settings (2026-10-08 「缺了设置」): shown at all, new ones peeking out (off: they only wait at the edge), plain unread
-chats in it (off: only what waits on the person and what failed); kept in `userData/dock.json` (main.ts `dock:get`, `dock:set`).
+its settings (2026-10-08 「缺了设置」): shown at all, new ones peeking out (off: they only wait at the edge), and which chats
+it holds by kind (`kinds`: waiting on the person, failed, unread an agent said last, unread someone else did; 2026-10-16,
+the notifications page's types); kept in `userData/dock.json` (main.ts `dock:get`, `dock:set`). `unread` (both kinds of
+unread) is still kept and taken beside `kinds`, for pages and apps from before it.
 
 ## What it shows
 

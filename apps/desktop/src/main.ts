@@ -19,6 +19,7 @@ import { verifyDesktop } from "../../../station/src/updates/signed.ts";
 import { LocalStation, type Place } from "./station";
 import { controlService, installedService, servicePath, updateInstalled } from "./installed";
 import { contextMenu, type Action } from "./context-menu.mts";
+import { systemPermission } from "./notify-permission.ts";
 import { Dock, dockHelper, dockKinds, type DockKinds, type DockSettings } from "./dock.mts";
 import { moveUserData } from "./moves.mts";
 import { attachWindowControls, loadSnapTarget } from "./window-controls.ts";
@@ -94,7 +95,8 @@ function carryOverUserData(): void {
 if (process.env.STILLFAIL_USER_DATA) app.setPath("userData", process.env.STILLFAIL_USER_DATA);
 else if (!BETA) carryOverUserData();
 // Windows shows an app's notices under its AppUserModelID, the installer's shortcut's (package.json build.appId).
-if (process.platform === "win32") app.setAppUserModelId(BETA ? "fail.still.desktop.beta" : "fail.still.desktop");
+const APP_ID = BETA ? "fail.still.desktop.beta" : "fail.still.desktop";
+if (process.platform === "win32") app.setAppUserModelId(APP_ID);
 
 // A standard, secure origin: the page's absolute paths, storage and clipboard work as on https://.
 protocol.registerSchemesAsPrivileged([
@@ -1241,8 +1243,15 @@ const shownNotices = new Map<string, Notification>();
 
 interface Notice { id: string; title: string; body: string; tag: string; url: string; workspace: string; stationId: string; session: string }
 
+/** What the system lets the app show (notify-permission.ts), told to the core: what the notifications page shows of it,
+ * on every client of this device. Said again whenever the app comes to the front (back from the system's settings). */
+function tellPermission(): void {
+  void coreCall("notify.permission", { state: systemPermission(APP_ID) }).catch(() => undefined);
+}
+
 function followNotices(): void {
   if (noticesHeld !== null && own?.topics.has(noticesHeld)) return;
+  tellPermission();
   const link = ownLink();
   const id = link.next++;
   const taken = new Set<string>();
@@ -1293,6 +1302,14 @@ function show(n: Notice): void {
   shownNotices.set(n.tag, notification);
   notification.show();
 }
+
+// The system's own notification settings for the app, to allow what it refused.
+ipcMain.handle("notify:settings", (event) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`)) return;
+  if (process.platform === "darwin") void shell.openExternal(`x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=${APP_ID}`);
+  else if (process.platform === "win32") void shell.openExternal("ms-settings:notifications");
+});
+app.on("browser-window-focus", tellPermission);
 
 ipcMain.handle("notify:get", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? notifyOn : null);
 ipcMain.handle("notify:set", (event, on: unknown) => {

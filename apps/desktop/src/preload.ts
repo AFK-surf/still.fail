@@ -76,6 +76,8 @@ const desktop = {
   notify: {
     get: (): Promise<boolean | null> => ipcRenderer.invoke("notify:get"),
     set: (on: boolean): Promise<void> => ipcRenderer.invoke("notify:set", on),
+    /** Opens the system's notification settings for the app. */
+    settings: (): Promise<void> => ipcRenderer.invoke("notify:settings"),
   },
   /** The menu bar's items for the page's actions (main.ts setMenu, web/src/keymap.ts): their keys and which can be done now, and one chosen. */
   menu: {

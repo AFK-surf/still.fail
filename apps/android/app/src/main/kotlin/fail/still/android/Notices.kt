@@ -30,6 +30,7 @@ import fail.still.android.data.I18n
 import fail.still.core.CoreException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
@@ -70,6 +71,16 @@ object Notifier {
         context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
     private fun manager(context: Context) = context.getSystemService(NotificationManager::class.java)
+
+    /**
+     * What the system lets the app show, as the core's `notify.permission` takes it (what every client's notifications
+     * page shows): the app's notifications on, off, or not asked yet (`asked`: whether it was, as the core keeps it).
+     */
+    fun permission(context: Context, asked: Boolean?): String = when {
+        manager(context).areNotificationsEnabled() -> "granted"
+        Build.VERSION.SDK_INT >= 33 && asked == false -> "default"
+        else -> "denied"
+    }
 
     /** A tap opens the chat (`url`) at the message it is about (`seq`; at its usual place without one: an older station or cloud). */
     fun show(context: Context, tag: String, title: String, body: String, url: String, seq: Long?) {
@@ -124,6 +135,10 @@ fun rememberNotificationAsk(app: AppState, once: Boolean): () -> Unit {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (!granted && !once) app.toast = t("android-misc.notify.allowInSettings", "app" to BuildConfig.APP_NAME)
+        // The answer, to the core at once (the activity was not stopped for the system's dialog).
+        app.scope.launch {
+            try { app.core.call("notify.permission", buildJsonObject { put("state", if (granted) "granted" else "denied") }) } catch (_: CoreException) {}
+        }
     }
     val ask = { if (!Notifier.allowed(context) && Build.VERSION.SDK_INT >= 33) launcher.launch(Manifest.permission.POST_NOTIFICATIONS) }
     // Once the core says whether it was asked.
