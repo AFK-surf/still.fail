@@ -67,9 +67,11 @@ export function SettingsScreen() {
   const bars = usePrefs((p) => p.bars);
   const lock = useLock(app.entry.id);
   const at = (path: string) => () => app.push(app.at(path));
+  const under = app.under();
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label={t("web-mobile.nav.chats")} onBack={app.pop} />
+      {/* Back to the place it was opened from (the gear of each place's head). */}
+      <TopBack label={under && under !== "chats" ? railLabel(under) : t("web-mobile.nav.chats")} onBack={app.pop} />
       <LargeTitle small="" big={t("web-mobile.settings.title")} />
       <Card onClick={at("/settings/account")}>
         <span className={css.mMe}>

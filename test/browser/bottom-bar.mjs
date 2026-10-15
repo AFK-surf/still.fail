@@ -74,7 +74,9 @@ createRoot(root).render(<DemoApp phone />);
   await shot('home');
   await shot('home-dark', true);
 
-  // The list scrolled a little, to be found so again when back.
+  // The list scrolled a little (on a shorter screen, for the demo's few chats to run past it), to be found so again.
+  await page.setViewportSize({ width: 390, height: 520 });
+  await page.waitForTimeout(300);
   const scrolled = () => page.evaluate(() => Math.max(...[...document.querySelectorAll('[data-role=top] *')].map((e) => e.scrollTop)));
   await page.evaluate(() => { for (const e of document.querySelectorAll('[data-role=top] *')) if (e.scrollHeight > e.clientHeight + 40 && getComputedStyle(e).overflowY === 'auto') e.scrollTop = 120; });
   await page.waitForTimeout(200);
@@ -99,6 +101,8 @@ createRoot(root).render(<DemoApp phone />);
   await rest();
   assert.equal(await scrolled(), at, 'the list as it was scrolled');
   assert.equal(await page.locator('[data-action]').getAttribute('aria-label'), NEW_CHAT, '令 in the notch');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(300);
 
   // One stroke: from 对话 up into the panel, onto 连接 in the other bar, let go: that bar, and 连接's page.
   const from = await tab('文件').boundingBox();

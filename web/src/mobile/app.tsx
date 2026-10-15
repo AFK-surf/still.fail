@@ -52,6 +52,8 @@ export interface MobileApp {
   home: () => void;
   /** To a place's top page from the bottom bar: in place of the place's page in view, no page pushed. */
   tab: (place: BarPlace) => void;
+  /** The place whose page is under the one in view (what its back goes to), if one is. */
+  under: () => BarPlace | null;
   sheet: (spec: SheetSpec | null) => void;
   menu: (spec: MenuSpec | null) => void;
   toast: (text: string) => void;
@@ -234,6 +236,7 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
     home: () => afterBack(() => now.current.navigate(home)),
     // A page of its own (scrolled to its top), in place of the one in view, without the side's slide. Only from a place's
     // top page: one pushed meanwhile (令 tapped while a bar switch was landing) stays, and is not made the place.
+    under: () => { const p = now.current.pages.at(-2); return p ? placeOfPath(p.location.pathname, home) : null; },
     tab: (place) => afterBack(() => { if (now.current.pages.length === 1) now.current.navigate(`${home}${PLACE_PATHS[place]}`, { replace: true, state: { fresh: true } }); }),
     sheet: setSheet,
     menu: setMenu,
