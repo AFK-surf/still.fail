@@ -55,6 +55,9 @@ export const dock = style({
           zIndex: 20,
         },
         '[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] &': { marginTop: 44 },
+        // Over the page while it moves too: opened from shown a while, it was under the page (no longer closed) at once,
+        // the part reaching over the page cut off until the page had moved out from under it.
+        "[data-sidebar-moving] &": { zIndex: 20 },
         // Folded but shown a while (Rail.tsx peekSidebar): the bar reaching over the page as wide as the rail and the
         // sidebar (its margin, eased as the bar's others), the page left where it is.
         '[data-sidebar="closed"][data-sidebar-peek] &': { marginRight: "calc(8px - var(--sidebar-w, 240px))" },
