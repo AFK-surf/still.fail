@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
+import { mScroll } from "./styles/pages.css.ts";
 import { mFromLeftKeyframes, mFromRightKeyframes, mRiseInKeyframes, mRiseOutKeyframes, mToLeftKeyframes, mToRightKeyframes } from "../styles/keyframes.css.ts";
 
 export const mPage = style({
@@ -162,3 +163,6 @@ globalStyle(`${mMenu} button`, {
   minHeight: "46px", padding: "12px 16px", border: "0", background: "none", color: "var(--m-ink)", fontSize: `${vars.textBody} !important`,
   cursor: "pointer",
 });
+
+// A place's top page has the bottom bar over its foot (Bar.tsx): what scrolls on it clears the bar (56 + 22 + 16).
+globalStyle(`${mPage}[data-root] ${mScroll}`, { paddingBottom: "calc(var(--m-foot) + 100px)" });

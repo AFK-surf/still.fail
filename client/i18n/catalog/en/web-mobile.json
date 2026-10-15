@@ -665,5 +665,18 @@
   "web-mobile.settings.securityWaiting": {
     "one": "{n} waiting",
     "other": "{n} waiting"
-  }
+  },
+  "web-mobile.bar.title": "Bottom bar",
+  "web-mobile.bar.note": "Keep several bars of up to 4 places; the one in use is at the bottom. With more than one, swipe up on the bar to switch. Hold an icon and move it sideways to reorder.",
+  "web-mobile.bar.nth": "Bar {n}",
+  "web-mobile.bar.current": "In use",
+  "web-mobile.bar.use": "Use",
+  "web-mobile.bar.new": "New bar",
+  "web-mobile.bar.add": "Add",
+  "web-mobile.bar.addTo": "Add to bar {n}",
+  "web-mobile.bar.already": "Already in this bar",
+  "web-mobile.bar.remove": "Remove {place} from this bar",
+  "web-mobile.bar.count": "{n} bars",
+  "web-mobile.bar.oneLeft": "With only one bar left, swiping up on the bar does nothing.",
+  "web-mobile.bar.onlyOne": "There is only one bar, so swiping up on it does nothing."
 }

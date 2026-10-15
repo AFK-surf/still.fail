@@ -9,7 +9,7 @@ export const mHome = style({ position: "absolute", inset: "0" });
 export const mHomePanes = style({ position: "absolute", inset: "0", overflow: "hidden" });
 export const mHomePane = style({
   position: "absolute", inset: "0", overflowY: "auto", overscrollBehavior: "contain",
-  padding: "calc(var(--m-top) + 58px) 0 calc(var(--m-foot) + 84px)", transition: "transform 240ms var(--m-standard)",
+  padding: "calc(var(--m-top) + 58px) 0 calc(var(--m-foot) + 100px)", transition: "transform 240ms var(--m-standard)",
   selectors: {
     "&:nth-child(2)": { transform: "translateX(100%)" },
     "&:nth-child(3)": { transform: "translateX(200%)" },
@@ -56,24 +56,7 @@ export const mHomeWorkspace = style({
   borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none", textAlign: "left",
   cursor: "pointer",
 });
-export const mHomeToolbar = style({
-  position: "absolute", left: "0", right: "0", bottom: "0", zIndex: "3",
-  display: "flex", justifyContent: "flex-end", padding: "10px 16px calc(10px + var(--m-foot))", pointerEvents: "none",
-  "@media": {
-    // Wider (app.tsx WIDE): at the screen's corner, not the column's.
-    "(min-width: 680px)": { position: "fixed", left: "auto", right: "10px", padding: "0 0 calc(10px + var(--m-foot))" },
-  },
-});
-/** 奏 N: a frosted capsule as tall as the new-chat one, left of it. */
-export const mDecisions = style({
-  display: "flex", alignItems: "center", gap: "6px", height: "56px", padding: "0 22px 0 10px", marginRight: "10px",
-  borderRadius: "999px", color: "var(--m-ink)", cursor: "pointer", pointerEvents: "auto",
-  // 奏 alone (none waiting): as much room on its right as on its left.
-  selectors: { "&[data-alone]": { paddingRight: "10px" } },
-});
-export const mHomeCapsule = style({
-  display: "flex", alignItems: "center", gap: "6px", borderRadius: "999px", pointerEvents: "auto",
-});
+
 /** The list's filter in the head: the accent while it narrows the list (over root.css.ts's `button { color: inherit }`). */
 export const mFilter = style({});
 globalStyle(`${mHomeBar} button${mFilter}[data-on]`, { color: "var(--m-accent)" });
@@ -211,7 +194,6 @@ export const mSwipeUnder = style({
   whiteSpace: "nowrap",
 });
 globalStyle(`${mSwipeUnder} span`, { paddingLeft: "24px" });
-globalStyle(`${mDecisions} svg`, { flex: "none" });
 
 // The search (Home.tsx SearchPage): a field at the top of each list, there once it is scrolled to its top; tapped, the
 // list goes up and away, the bars with it, and the field comes up to the top, the chats and messages it finds under it.
@@ -226,8 +208,8 @@ globalStyle(`${mSearchField} svg`, { flex: "none" });
 globalStyle(`${mHome}[data-away] ${mHomePanes}`, { transform: "translateY(-56px)", opacity: "0", pointerEvents: "none" });
 globalStyle(`${mHomePanes}`, { transition: "transform 240ms var(--m-standard), opacity 200ms var(--m-standard)" });
 globalStyle(`${mHome}[data-away] ${mHomePanes}`, { transition: "transform 280ms var(--m-ease), opacity 200ms var(--m-standard)" });
-globalStyle(`${mHome}[data-away] ${mHomeBar}, ${mHome}[data-away] ${mHomeToolbar}`, { opacity: "0", pointerEvents: "none" });
-globalStyle(`${mHomeBar}, ${mHomeToolbar}`, { transition: "opacity 200ms var(--m-standard)" });
+globalStyle(`${mHome}[data-away] ${mHomeBar}`, { opacity: "0", pointerEvents: "none" });
+globalStyle(`${mHomeBar}`, { transition: "opacity 200ms var(--m-standard)" });
 export const mSearchPage = style({ position: "absolute", inset: "0", zIndex: "4", display: "flex", flexDirection: "column" });
 export const mSearchBar = style({
   flex: "none", display: "flex", alignItems: "center", gap: "12px", padding: "calc(var(--m-top) + 8px) 16px 8px",

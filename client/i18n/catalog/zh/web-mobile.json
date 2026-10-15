@@ -632,5 +632,18 @@
   "web-mobile.settings.securityWaiting": {
     "one": "{n} 件等你",
     "other": "{n} 件等你"
-  }
+  },
+  "web-mobile.bar.title": "下方栏",
+  "web-mobile.bar.note": "可以设好几栏，每栏最多 4 个地方，底下显示当前那一栏。不止一栏时，在下方栏上往上滑就能换一栏。按住图标左右拖可以排顺序。",
+  "web-mobile.bar.nth": "第 {n} 栏",
+  "web-mobile.bar.current": "当前",
+  "web-mobile.bar.use": "设为当前",
+  "web-mobile.bar.new": "新建一栏",
+  "web-mobile.bar.add": "添加",
+  "web-mobile.bar.addTo": "加到第 {n} 栏",
+  "web-mobile.bar.already": "已在这一栏",
+  "web-mobile.bar.remove": "从这一栏拿掉{place}",
+  "web-mobile.bar.count": "{n} 栏",
+  "web-mobile.bar.oneLeft": "删到只剩一栏时，下方栏上就不能往上滑了。",
+  "web-mobile.bar.onlyOne": "现在只有一栏，下方栏上不能往上滑。"
 }

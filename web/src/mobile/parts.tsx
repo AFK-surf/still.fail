@@ -9,7 +9,7 @@ import { SlackLogo } from "../ui.tsx";
 import { QuotaBars } from "../components.tsx";
 import { doingMatches, failed as itFailed, useDoing, useDoingFailed } from "../doing.ts";
 import type { DoingItem } from "../core/shapes.ts";
-import { useApp } from "./app.tsx";
+import { useApp, useRootPage } from "./app.tsx";
 import * as css from "./parts.css.ts";
 import { vars } from "../styles/tokens.css.ts";
 import * as waitingCss from "../styles/waiting.css.ts";
@@ -197,6 +197,8 @@ export function DoingMark({ calls, on, size = 14, color }: { calls: string | rea
 }
 
 export function NavBack({ label, onClick }: { label: string; onClick: () => void }) {
+  // A place's top page (the bottom bar under it) has nowhere to go back to: its room kept, nothing drawn in it.
+  if (useRootPage()) return <span className={css.mNavBack} aria-hidden="true" style={{ visibility: "hidden" }}><ChevronLeft size={22} /></span>;
   return <button type="button" className={css.mNavBack} onClick={onClick}><ChevronLeft size={22} />{label}</button>;
 }
 

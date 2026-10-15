@@ -1,5 +1,6 @@
-// The app on a narrow screen, as the Android app is (apps/android/…/App.kt): the chats of one workspace are home, and
-// everything else is a page pushed over it (no tab bar), or a sheet from the bottom. Pages move side by side: the new
+// The app on a narrow screen, as the Android app is (apps/android/…/App.kt): the chats of one workspace are home, its
+// places (奏, 文件, Station…) the other top pages, gone to from the bottom bar under them (Bar.tsx) in place of the one
+// in view; everything else is a page pushed over them, or a sheet from the bottom. Pages move side by side: the new
 // one pushes in whole from the right and the old goes out to the left (and back the other way); settings (from the
 // gear at the top left) come from the left instead, a new chat rises from the bottom. Each page is an address, so the browser's back and a
 // link work as the desktop's do; pages under the top one stay as they were left (their scroll, what was typed). What
@@ -22,6 +23,7 @@ import * as rootCss from "./styles/root.css.ts";
 import * as css from "./app.css.ts";
 import { follower, type Follower } from "../motion.ts";
 import { useInWorkspace } from "../notify.ts";
+import { BottomBar, PLACE_PATHS, placeOfPath, type BarPlace } from "./Bar.tsx";
 import { t } from "../i18n.ts";
 
 /** The workspace in view and the signed-in account that reaches it. */
@@ -48,6 +50,8 @@ export interface MobileApp {
   /** The top page gives way to another (a new chat becomes the chat it made); `state`, the history's for it. */
   replace: (path: string, state?: unknown) => void;
   home: () => void;
+  /** To a place's top page from the bottom bar: in place of the place's page in view, no page pushed. */
+  tab: (place: BarPlace) => void;
   sheet: (spec: SheetSpec | null) => void;
   menu: (spec: MenuSpec | null) => void;
   toast: (text: string) => void;
@@ -84,6 +88,15 @@ const hearShown = (heard: () => void) => { shownHeard.add(heard); return () => {
 /** Whether `path` is the page in view (the latest chats mark its row): redrawn only when that changes. */
 export function useOpenPage(path: string): boolean {
   return useSyncExternalStore(hearShown, () => shown === path, () => false);
+}
+
+/**
+ * Whether the page is a place's top page with the bottom bar under it (Bar.tsx): the first page of the stack, at a
+ * place's address. Its back button is not drawn (there is no page under it to go back to; the bar goes elsewhere).
+ */
+const RootPage = createContext(false);
+export function useRootPage(): boolean {
+  return useContext(RootPage);
 }
 
 export function useApp(): MobileApp {
@@ -212,6 +225,8 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
     // would put the new page on the sheet's entry, which the back then leaves for the old page.
     replace: (path, state) => void transitionTo(() => afterBack(() => now.current.navigate(path, { replace: true, state }))),
     home: () => afterBack(() => now.current.navigate(home)),
+    // A page of its own (scrolled to its top), in place of the one in view, without the side's slide.
+    tab: (place) => afterBack(() => now.current.navigate(`${home}${PLACE_PATHS[place]}`, { replace: true, state: { fresh: true } })),
     sheet: setSheet,
     menu: setMenu,
     toast: showToast,
@@ -222,7 +237,11 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
 
   // With a finger, the page is swiped back from the screen's left edge: it follows the finger, the page under it shows,
   // and past a third of the way (or flung) it goes, from where the finger left it.
-  const home_ = isHome(top);
+  // A place's top page (the first of the stack, at a place's address): the bottom bar under it, no swipe back from it.
+  const place = placeOfPath(top.location.pathname, home);
+  const rootKey = pages[0]!.key;
+  const atRoot = pages.length === 1 && place !== null;
+  const home_ = isHome(top) || atRoot;
   const swiping = useRef<{ x: number; y: number; at: number; dx: number; tapped: boolean } | null>(null);
   // Where the finger has the page now. Each move puts it (and the page under it) there itself, once a frame, rather than
   // through a render of the shell; a render meanwhile draws them where this says.
@@ -316,8 +335,10 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
             }
             return (
               <div key={p.key} ref={(el) => { if (el) pageEls.current.set(p.key, el); else pageEls.current.delete(p.key); }} className={css.mPage} data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
-                data-swiping={(swipe !== null && isTop) || undefined} style={style}>
-                <PageBody location={p.location} routes={routes} />
+                data-swiping={(swipe !== null && isTop) || undefined} data-root={(p.key === rootKey && placeOfPath(p.location.pathname, home) !== null) || undefined} style={style}>
+                <RootPage.Provider value={p.key === rootKey && placeOfPath(p.location.pathname, home) !== null}>
+                  <PageBody location={p.location} routes={routes} />
+                </RootPage.Provider>
               </div>
             );
           })}
@@ -332,6 +353,8 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
               <div className={css.mRecent}>{drawer && recent()}</div>
             </div>
           </>}
+          {/* The bottom bar: under a place's top page; away (down and out) while a page is pushed over it. */}
+          <BottomBar scope={entry.id} place={place} shown={atRoot && !moving} go={app.tab} newChat={() => app.open(app.at("/new"))} />
           <SheetHost spec={sheet} close={() => { sheet?.onClose?.(); setSheet(null); }} />
           <ReaderHost spec={reader} close={() => setReader(null)} />
           <MenuHost spec={menu} close={() => { menu?.onDismiss?.(); setMenu(null); }} />

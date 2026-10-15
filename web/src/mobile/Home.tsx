@@ -10,7 +10,7 @@ import type { FoundMessage } from "../core/shapes.ts";
 import { jumpTo } from "../jumpTo.ts";
 import { Marked } from "../Marked.tsx";
 import { useWorkspaces } from "../cloud/api.ts";
-import { Archive, Check, Copy, ChevronDown, ChevronRight, Edit, Filter, Ling, Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9, NumMore, Pin, Refresh, Search, Settings, Unplug, Zou } from "../icons.tsx";
+import { Archive, Check, Copy, ChevronDown, ChevronRight, Edit, Filter, Ling, Pin, Refresh, Search, Settings, Unplug } from "../icons.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { useCopyChatLink } from "../ChatRef.tsx";
 import { setSidebarMode, stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
@@ -46,7 +46,6 @@ export function Home() {
   const invited = useWorkspaces().value?.some((a) => a.invitations.length > 0) ?? false;
   // The other workspaces have something waiting: its dot by the name, before an invitation's.
   const marks = useWorkspaceMarks(scope);
-  const decisions = marks?.workspaces[scope]?.decisions ?? 0;
   // No station yet: nothing of the workspace's lists works, so adding the first station is the page.
   const none = useStations(scope).value?.length === 0;
   // Searching: where the field at the list's top was when it was tapped (the search's field comes from there).
@@ -71,8 +70,6 @@ export function Home() {
       {/* The lists run under both bars, which are frosted glass over them. */}
       <HomeBar others={marks?.others} othersLabel={marks?.othersLabel} invited={invited} filtering={(all.value?.stations.length ?? 0) > 0}
         filter={filter} glyph={all.value?.glyph} trouble={all.value?.trouble} />
-      {/* The new-chat button alone, floating over the list at the bottom right: a disc in the accent. */}
-      {!none && <HomeToolbar decisions={decisions} />}
       {searching && <SearchPage from={searching} onLeave={() => setAway(false)} onClose={() => setSearching(null)} />}
     </div>
   );
@@ -104,23 +101,6 @@ const HomeBar = memo(function HomeBar({ others, othersLabel, invited, filtering,
       {/* The stations at a glance (../StationGlyph.tsx); its page says which is which. */}
       <StationButton glyph={glyph} trouble={trouble} />
     </header>
-  );
-});
-
-/** The decisions waiting for the viewer and a new chat, floating over the list at the bottom. */
-const HomeToolbar = memo(function HomeToolbar({ decisions }: { decisions: number }) {
-  const app = useApp();
-  return (
-    <div className={css.mHomeToolbar}>
-      {/* The decisions waiting for the viewer (奏 N): a frosted capsule beside it, there at 0 too (奏 alone). */}
-      <button type="button" className={`${pagesCss.mFloating} ${css.mDecisions}`} data-alone={decisions > 0 ? undefined : ""} onClick={() => app.push(app.at("/decisions"))} aria-label={t("web-mobile.home.decisions", { n: decisions })}>
-        <Zou size={40} />{decisions > 0 && <Count n={decisions} />}
-      </button>
-      <div className={css.mHomeCapsule}>
-        {/* A disc in the accent. */}
-        <button type="button" className={css.mNewChat} onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Ling size={44} /></button>
-      </div>
-    </div>
   );
 });
 
@@ -589,9 +569,4 @@ function LastMessage({ item }: { item: ChatItem }) {
   return <span className={css.mLast}><span className={css.mLastText}>{item.last!.preview}</span></span>;
 }
 
-/** How many decisions wait, drawn (design/icons num-*): 1 to 9, and + past that. */
-const NUMS = [Num1, Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9];
-function Count({ n }: { n: number }) {
-  const Shown = n > 9 ? NumMore : NUMS[n - 1] ?? NumMore;
-  return <Shown size={24} />;
-}
+

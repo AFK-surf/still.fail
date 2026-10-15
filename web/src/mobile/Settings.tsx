@@ -17,6 +17,8 @@ import { setPrefs, usePrefs } from "../prefs.ts";
 import { useChangelog } from "../changelog.ts";
 import { standalone } from "../standalone.ts";
 import { Presence } from "./Connects.tsx";
+import { railLabel } from "../Rail.tsx";
+import type { BarPlace } from "./Bar.tsx";
 import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, Seg, Spinner, TopBack } from "./parts.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -61,6 +63,7 @@ export function SettingsScreen() {
   const profiles = stations?.flatMap((s) => s.overview?.profiles ?? []) ?? [];
   const short = profiles.filter((p) => p.trouble != null).length;
   const language = usePrefs((p) => p.language) ?? null;
+  const bars = usePrefs((p) => p.bars);
   const lock = useLock(app.entry.id);
   const at = (path: string) => () => app.push(app.at(path));
   return (
@@ -88,6 +91,7 @@ export function SettingsScreen() {
       <SectionHeader title={t("web-mobile.settings.device")} start={24} />
       <ListCard>
         <GoRow title={t("web-mobile.settings.appearance.title")} value={themes().find(([v]) => v === appearance)?.[1]} onClick={at("/settings/appearance")} />
+        <GoRow title={t("web-mobile.bar.title")} value={bars.sets.length > 1 ? t("web-mobile.bar.count", { n: bars.sets.length }) : bars.sets[0]!.map((k) => railLabel(k as BarPlace)).join("、")} onClick={at("/settings/bar")} />
         <GoRow title={t("common.language")} value={languages().find(([v]) => v === language)?.[1]} onClick={at("/settings/language")} />
         <Notify />
         <GoRow title={t("web-mobile.settings.changelog")} value={build != null ? `0.1.${build}` : undefined} onClick={at("/settings/changelog")} />
@@ -153,6 +157,7 @@ export function AppearanceScreen() {
 export function LanguageScreen() {
   const app = useApp();
   const language = usePrefs((p) => p.language) ?? null;
+  const bars = usePrefs((p) => p.bars);
   const options = languages();
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>

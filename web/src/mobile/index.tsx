@@ -16,6 +16,8 @@ import { Home, Recent } from "./Home.tsx";
 import { MeScreen } from "./Me.tsx";
 import { MemoriesScreen, MemoryScreen } from "./Memory.tsx";
 import { DrivePlayScreen, DriveReadScreen, DriveScreen } from "./Drive.tsx";
+import { FilesScreen } from "./Files.tsx";
+import { BarSettingsScreen } from "./BarSettings.tsx";
 import { UsageScreen, UsagePricesScreen } from "./Usage.tsx";
 import { PreviewScreen } from "./Preview.tsx";
 import { Loading } from "./parts.tsx";
@@ -43,10 +45,13 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="new" element={<ChatHost stations={stations} />} />
       <Route path="archive" element={<ArchiveScreen />} />
       <Route path="decisions" element={<DecisionsScreen />} />
+      {/* 文件 as a place (the bottom bar's): every station's folders in one list. */}
+      <Route path="files" element={<FilesScreen />} />
       {/* Settings: one page from the gear on Home, and a page for each of its rows, at the desktop's addresses. */}
       <Route path="settings" element={<SettingsScreen />} />
       <Route path="settings/account" element={<MeScreen />} />
       <Route path="settings/appearance" element={<AppearanceScreen />} />
+      <Route path="settings/bar" element={<BarSettingsScreen />} />
       <Route path="settings/language" element={<LanguageScreen />} />
       <Route path="settings/changelog" element={<ChangelogScreen />} />
       <Route path="settings/workspace" element={<WorkspaceScreen />} />
