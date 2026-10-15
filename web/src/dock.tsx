@@ -36,6 +36,20 @@ const DockContext = createContext<Dock | null>(null);
 /** Frames its place stays put before it stops following it. */
 const STILL_FRAMES = 30;
 
+/** Properties whose change moves nothing anywhere: how a thing looks (a row's hover ground, a colour, a fade). */
+const LOOKS = /^(?:opacity|visibility|color|caret-color|accent-color|fill(?:-opacity)?|stroke(?:-opacity|-dashoffset)?|filter|(?:-webkit-)?backdrop-filter|box-shadow|text-shadow|clip-path|(?:-webkit-)?mask(?:-[a-z]+)*|background(?:-[a-z]+)*|border(?:-[a-z]+)?-color|outline(?:-[a-z]+)*|text-decoration(?:-[a-z]+)*)$/;
+/** Properties that move a thing and what is in it only. */
+const CARRIES = /^(?:transform|translate|scale|rotate|transform-origin)$/;
+const kebab = (property: string) => property.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+/** What a CSS animation that just started changes; null when it can't be told. */
+function animated(e: AnimationEvent): string[] | null {
+  if (!(e.target instanceof Element)) return null;
+  const run = e.target.getAnimations({ subtree: e.pseudoElement !== "" })
+    .find((a) => a instanceof CSSAnimation && a.animationName === e.animationName && ((a.effect as KeyframeEffect | null)?.pseudoElement ?? "") === e.pseudoElement);
+  if (!(run?.effect instanceof KeyframeEffect)) return null;
+  return [...new Set(run.effect.getKeyframes().flatMap((k) => Object.keys(k)))].filter((p) => !["offset", "computedOffset", "easing", "composite"].includes(p)).map(kebab);
+}
+
 export function ComposerDock({ children }: { children: ReactNode }) {
   const [spec, setSpec] = useState<ComposerSpec | null>(null);
   const [height, setHeight] = useState(0);
@@ -91,9 +105,11 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     carryTo(key) { carry.current = key; },
   }));
   // Where its place is, now and as the page lays out anew (it moves with it, at once). It is followed frame by frame
-  // only while something may be moving it (the window or its place resized, a transition or animation starting, a new
-  // place), until it has stayed still a moment: a loop every frame kept the page from ever being idle, and cost
-  // scrolling frames.
+  // only while something may be moving it (the window or its place resized, a transition or animation starting that
+  // can move it, a new place), until it has stayed still a moment: a loop every frame kept the page from ever being
+  // idle, and cost scrolling frames. One of how something looks (a row's hover ground) can't move it, nor a transform
+  // of what its place is not in: woken by those too, a pointer passing over the sidebar kept it reading the layout every
+  // frame.
   const wake = useRef(() => {});
   useLayoutEffect(() => { put(); });
   useLayoutEffect(() => {
@@ -107,6 +123,10 @@ export function ComposerDock({ children }: { children: ReactNode }) {
       still = 0;
       if (!frame) frame = requestAnimationFrame(follow);
     };
+    const moves = (target: EventTarget | null, properties: string[] | null) => !properties
+      || properties.some((p) => !LOOKS.test(p) && (!CARRIES.test(p) || (target instanceof Node && !!slot.current && target.contains(slot.current))));
+    const transition = (e: TransitionEvent) => { if (moves(e.target, [e.propertyName])) start(); };
+    const animation = (e: AnimationEvent) => { if (moves(e.target, animated(e))) start(); };
     const resize = new ResizeObserver(start);
     wake.current = () => {
       resize.disconnect();
@@ -116,15 +136,15 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     };
     wake.current();
     window.addEventListener("resize", start);
-    document.addEventListener("transitionrun", start, true);
-    document.addEventListener("animationstart", start, true);
+    document.addEventListener("transitionrun", transition, true);
+    document.addEventListener("animationstart", animation, true);
     return () => {
       cancelAnimationFrame(frame);
       resize.disconnect();
       wake.current = () => {};
       window.removeEventListener("resize", start);
-      document.removeEventListener("transitionrun", start, true);
-      document.removeEventListener("animationstart", start, true);
+      document.removeEventListener("transitionrun", transition, true);
+      document.removeEventListener("animationstart", animation, true);
     };
   }, []);
   // Laid out for another page (a new chat becoming its chat, a chat left for a new one), the box goes from where and how
