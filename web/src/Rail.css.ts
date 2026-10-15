@@ -56,6 +56,8 @@ export const edge = style({
     // frame it closes the sidebar, and moves it there with the column (brand.tsx moveState), not after it, at once.
     // By the closed bar (6 to 48), its bar (4 in, 5 wide) in the gutter to the page (48 to 56): 50 to 55.
     '[data-sidebar="closed"] &': { cursor: "pointer", left: 46 },
+    // By the folded sidebar shown a while (shell.css.ts dock): at its edge, pressed to keep it open.
+    '[data-sidebar="closed"][data-sidebar-peek] &': { left: "calc(46px + var(--sidebar-w, 240px))" },
     "&::after": {
       // Odd widths on whole pixels, the bar's middle and the line's one (left 6, 1 wide; left 4, 5 wide).
       content: '""', position: "absolute", top: "50%", left: 4, width: 5, height: 24, borderRadius: 999,
@@ -78,7 +80,7 @@ export const edge = style({
 globalStyle(`${dock} *`, { "@media": { [wide]: { scrollPaddingRight: 1 } } });
 // Its scrollbar gone as the sidebar starts to close (fixed, the bar's clipping does not cut it), not left a moment over
 // the closing bar or the page.
-globalStyle(`:root[data-sidebar="closed"] ${dock} ${floatingThumb}`, { "@media": { [wide]: { visibility: "hidden" } } });
+globalStyle(`:root[data-sidebar="closed"]:not([data-sidebar-peek]) ${dock} ${floatingThumb}`, { "@media": { [wide]: { visibility: "hidden" } } });
 export const grow = style({ flex: 1 });
 
 /**

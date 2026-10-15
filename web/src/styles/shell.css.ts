@@ -52,6 +52,9 @@ export const dock = style({
           zIndex: 20,
         },
         '[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] &': { marginTop: 44 },
+        // Folded but shown a while (Rail.tsx peekSidebar): the bar reaching over the page as wide as the rail and the
+        // sidebar (its margin, eased as the bar's others), the page left where it is.
+        '[data-sidebar="closed"][data-sidebar-peek] &': { marginRight: "calc(8px - var(--sidebar-w, 240px))" },
       },
     },
     "(prefers-reduced-motion: reduce)": { transition: "none" },

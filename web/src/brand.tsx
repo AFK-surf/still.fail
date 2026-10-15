@@ -127,10 +127,23 @@ export function useSidebarClosed(): boolean {
   }, () => document.documentElement.dataset.sidebar === "closed", () => false);
 }
 
+/** Told when the person opens or closes the sidebar (its edge, its shortcut), not when a place shows or hides it. */
+let chosen: ((closed: boolean) => void) | null = null;
+export function onSidebarChosen(told: ((closed: boolean) => void) | null): void {
+  chosen = told;
+}
+
+/** The sidebar shown or not as a place has it (Rail.tsx), moving as when toggled; not the person's choice. */
+export function showSidebar(open: boolean): void {
+  if ((document.documentElement.dataset.sidebar === "closed") !== open) return;
+  moveSidebar(() => closeSidebar(!open));
+}
+
 export function useSidebarToggle(moved?: (closed: boolean) => void, { keys: owns = true }: { keys?: boolean } = {}): { closed: boolean; toggle: () => void; label: string } {
   const closed = useSidebarClosed();
   const toggle = () => {
     const next = !closed;
+    chosen?.(next);
     moveSidebar(() => closeSidebar(next));
     moved?.(next);
   };

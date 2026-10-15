@@ -28,7 +28,8 @@ import { RailStations } from "./Sidebar.tsx";
 import { isPicture } from "./StationMark.tsx";
 import { marked, WorkspaceMark } from "./WorkspaceMark.tsx";
 import { openedAt } from "./DecisionDesk.tsx";
-import { moveSidebar, useSidebarToggle } from "./brand.tsx";
+import { moveSidebar, onSidebarChosen, showSidebar, useSidebarToggle } from "./brand.tsx";
+import * as shellCss from "./styles/shell.css.ts";
 import { reducedMotion } from "./motion.ts";
 import * as css from "./Rail.css.ts";
 import { t } from "./i18n.ts";
@@ -183,29 +184,41 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
   };
-  const sidebar = useSidebarToggle();
-  // By the page's root, not as last drawn: a list asked for from the rail opens it, and so may its place's change in
-  // the same click, once.
+  // Holds the sidebar's shortcut (its toggle, as the edge's, is the person's choice: kept for the place's sidebar).
+  useSidebarToggle();
   const shut = () => document.documentElement.dataset.sidebar === "closed";
-  const openSidebar = () => { if (shut()) sidebar.toggle(); };
-  // The places with a sidebar of their own (the settings, the files and the stations their way round, the profiles their
-  // list, the chats their lists) open it, come to with it closed; a page in the rail (连接, 用量) or the archive has none
-  // (only the chats beside it), and closes it: the page the whole width. On the page's load the chats as they were left.
-  // Only on a wide screen: on a narrow one the sidebar is a page of its own.
+  // The place's sidebar as its tab was left: open, or folded (shown a while over the page as its tab is pressed or
+  // pointed at, then folded again: peekSidebar). A page in the rail with none of its own (连接, 用量) or the archive has it
+  // closed: the page the whole width. Only on a wide screen: on a narrow one the sidebar is a page of its own.
   const own = place === "settings" || place === "files" || place === "stations" || place === "profiles" || place === "chats" || !items.includes(place as RailItem);
-  // Which sidebar it is, each as wide as it was made.
+  // Which sidebar it is, each as wide as it was made and open or folded as it was left.
   const group: SidebarGroup = place === "files" ? "files" : place === "profiles" && items.includes("profiles") ? "profiles"
     : place === "stations" && items.includes("stations") ? "stations"
     : place === "chats" || place === "archive" || items.includes(place as RailItem) ? "chats" : "settings";
+  const now = useRef({ own, group });
+  now.current = { own, group };
+  useEffect(() => {
+    onSidebarChosen((closed) => { foldGroup(now.current.group, closed); if (!closed) endPeek(); });
+    return () => onSidebarChosen(null);
+  }, []);
   const cameFrom = useRef<Place | null>(null);
   useEffect(() => {
     const moved = cameFrom.current !== null && cameFrom.current !== place;
     cameFrom.current = place;
     if (!matchMedia("(min-width: 701px)").matches) return;
+    if (moved) endPeek();
     widthFor(group, moved && !shut());
-    if (own && (moved || place !== "chats")) openSidebar();
-    else if (!own && !shut()) sidebar.toggle();
+    showSidebar(own && !folded(group));
+    if (asked.current) { asked.current = false; reveal(); }
   }, [place, own, group]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Its tab pressed or pointed at, the place's own sidebar shown: open as it is, or a while if folded. Pressed, once its
+  // place has come (the effect above), or soon if it was already there.
+  const reveal = () => { if (now.current.own && folded(now.current.group)) peekSidebar(); };
+  const asked = useRef(false);
+  const revealPressed = () => {
+    asked.current = true;
+    setTimeout(() => { if (asked.current) { asked.current = false; reveal(); } }, 60);
+  };
   const settings = `/w/${scope}/settings`;
   // The settings lit (in them, or a place left out of the rail), pressed again, go back to where they were come to from:
   // the page last shown with them unlit, the last chat when the settings were where the page was opened.
@@ -215,7 +228,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   // A list of chats lit while the sidebar shows it; 对话 for one not in the rail.
   const shownList = (Object.keys(LISTS) as RailItem[]).find((i) => LISTS[i] === mode && items.includes(i)) ?? "chats";
   const on = (item: RailItem) => LISTS[item] ? place === "chats" && shownList === item : place === item;
-  const toList = (item: RailItem) => () => { setMode(LISTS[item]!); openSidebar(); if (place !== "chats") navigate(last); };
+  const toList = (item: RailItem) => () => { setMode(LISTS[item]!); if (place !== "chats") navigate(last); revealPressed(); };
   const link = (item: RailItem, to: string) => {
     const Icon = RAIL_ICONS[item]!;
     return (
@@ -237,7 +250,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
       case "decisions": return (
         <Tip key={item} label={waiting > 0 ? t("web-main.decisions.entry", { n: waiting }) : railLabel(item)} side="right">
           <button type="button" className={css.item} data-on={on(item) || undefined} aria-label={railLabel(item)}
-            onClick={(e) => { openedAt(e.currentTarget); setMode("decisions"); openSidebar(); navigate(`/w/${scope}/decisions`); }}>
+            onClick={(e) => { openedAt(e.currentTarget); setMode("decisions"); navigate(`/w/${scope}/decisions`); revealPressed(); }}>
             <span className={css.zou} aria-hidden="true">奏</span>
             {waiting > 0 && <span className={css.count} />}
           </button>
@@ -255,6 +268,9 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   const hidden = KINDS.map((k) => ({ ...k, items: k.items.filter((i) => !items.includes(i)) })).filter((k) => k.items.length > 0);
   const rail = (
     <nav className={css.rail} aria-label={t("web-main.rail.label")} data-editing={changing || undefined}
+      // A tab pressed (after its place has come), or the lit one pointed at: its sidebar shown (reveal).
+      onClickCapture={(e) => { if (!changing && (e.target as Element).closest(`.${css.item}`)) revealPressed(); }}
+      onPointerOver={(e) => { if (!changing && e.pointerType === "mouse" && (e.target as Element).closest(`.${css.item}[data-on]`)) reveal(); }}
       onContextMenu={(e) => {
         if (changing) return;
         e.preventDefault();
@@ -361,6 +377,42 @@ function RailWorkspaces({ scope, current }: { scope: string; current: ReactNode 
       })}
     </div>
   );
+}
+
+/** Whether `group`'s sidebar was left folded (its own, on this device; the chats' first as the one sidebar was). */
+function folded(group: SidebarGroup): boolean {
+  try {
+    const kept = localStorage.getItem(`stillfail.sidebar.${group}`);
+    return (kept ?? (group === "chats" ? localStorage.getItem("stillfail.sidebar") : null)) === "closed";
+  } catch { return false; }
+}
+function foldGroup(group: SidebarGroup, closed: boolean): void {
+  try { localStorage.setItem(`stillfail.sidebar.${group}`, closed ? "closed" : "open"); } catch { /* private mode */ }
+}
+
+/**
+ * A folded sidebar shown a while over the page (shell.css.ts dock, data-sidebar-peek on the root): until the pointer has
+ * been off it (and its edge, and a menu from it) a second.
+ */
+let leaving: ReturnType<typeof setTimeout> | undefined;
+function onPeekMove(e: PointerEvent) {
+  const on = e.target instanceof Element && e.target.closest(`.${shellCss.dock}, .${css.edge}, [data-radix-popper-content-wrapper]`);
+  if (on) { clearTimeout(leaving); leaving = undefined; } else if (!leaving) leaving = setTimeout(endPeek, 1000);
+}
+function onPeekAway() { if (!leaving) leaving = setTimeout(endPeek, 1000); }
+export function peekSidebar(): void {
+  const root = document.documentElement;
+  if (root.dataset.sidebar !== "closed" || "sidebarPeek" in root.dataset) return;
+  root.dataset.sidebarPeek = "";
+  document.addEventListener("pointermove", onPeekMove, { passive: true });
+  root.addEventListener("pointerleave", onPeekAway);
+}
+function endPeek(): void {
+  clearTimeout(leaving);
+  leaving = undefined;
+  delete document.documentElement.dataset.sidebarPeek;
+  document.removeEventListener("pointermove", onPeekMove);
+  document.documentElement.removeEventListener("pointerleave", onPeekAway);
 }
 
 /** The sidebar's width, its least and most (the sidebar's own, styles' --sidebar-w). */
