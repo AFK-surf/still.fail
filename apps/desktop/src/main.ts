@@ -264,8 +264,8 @@ function coreSubscribe(topic: Record<string, unknown>, onValue: (value: unknown)
 }
 
 // The dock (dock.mts, docs/desktop-dock.md): on a Mac, the chats that want the person on the screen's edge, also with no
-// window open. Its settings (on; new ones peeking out; plain unread ones in it: all on unless turned off) are kept in
-// userData/dock.json, set from the settings page (dock:set) or the app menu (on or off).
+// window open. Its settings (on: off until turned on, 2026-10-15; new ones peeking out and plain unread ones in it: on
+// unless turned off) are kept in userData/dock.json, set from the settings page (dock:set) or the app menu (on or off).
 const DOCK_FILE = () => join(app.getPath("userData"), "dock.json");
 const dockPath = dockHelper(resources);
 let dock: Dock | null = null;
@@ -279,8 +279,8 @@ function dockWords(): Record<string, string> {
 
 function dockSettings(): DockSettings {
   let kept: Partial<DockSettings> = {};
-  try { kept = JSON.parse(readFileSync(DOCK_FILE(), "utf8")) as Partial<DockSettings>; } catch { /* none kept: all on */ }
-  return { on: kept.on !== false, peek: kept.peek !== false, unread: kept.unread !== false };
+  try { kept = JSON.parse(readFileSync(DOCK_FILE(), "utf8")) as Partial<DockSettings>; } catch { /* none kept: the defaults */ }
+  return { on: kept.on === true, peek: kept.peek !== false, unread: kept.unread !== false };
 }
 
 function setDock(change: Partial<DockSettings>): DockSettings | null {
