@@ -64,7 +64,7 @@ export const enable = style({
 });
 export const enableIcon = style({ width: "56px", height: "56px", borderRadius: "22%", marginBottom: "6px" });
 export const enableTitle = style({ margin: "0", fontSize: vars.textTitle, lineHeight: vars.leadingTitle, fontWeight: "600" });
-export const enableText = style({ margin: "0", maxWidth: "400px", color: vars.muted, fontSize: vars.textUi, lineHeight: vars.leadingUi });
+export const enableText = style({ margin: "0", maxWidth: "420px", textWrap: "balance", color: vars.muted, fontSize: vars.textUi, lineHeight: vars.leadingUi });
 export const enableSample = style({ position: "static", width: "min(340px, 100%)", margin: "14px 0 18px", textAlign: "left" });
 export const enablePath = style({ margin: "4px 0 0", color: vars.muted, fontSize: vars.textMeta });
 export const tilePicture = style({

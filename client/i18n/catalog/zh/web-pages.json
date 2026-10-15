@@ -1134,7 +1134,7 @@
   "web-pages.notifications.browserNote": "浏览器关着时，通知由系统推送；声音在浏览器和系统的通知设置里。",
   "web-pages.notifications.enable.allow": "允许通知",
   "web-pages.notifications.enable.open": "打开系统设置",
-  "web-pages.notifications.enable.text": "{name} 在后台时，agent 等你决定、出错、有人找你，都靠横幅告诉你",
+  "web-pages.notifications.enable.text": "{name} 在后台时，等你决定、出错、有人找你，都靠横幅告诉你",
   "web-pages.notifications.enable.title": "打开系统通知",
   "web-pages.notifications.hidden.done": "做完了",
   "web-pages.notifications.hidden.failed": "出错了",
