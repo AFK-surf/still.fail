@@ -45,8 +45,9 @@ export const line = style({
   display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2,
 });
 /** Its one thing to do: a small panel's words to press (ui.css.ts panelButton, accent), by the last line of the words. */
-export const action = style([panelButton, { gridArea: "act", alignSelf: "end" }]);
-export const close = style([panelIcon, { gridArea: "close", alignSelf: "start", justifySelf: "end" }]);
+export const action = style([panelButton, { gridArea: "act", alignSelf: "end", margin: "0 2px 2px 0" }]);
+/** Both small (24) in rows 28 high: 2 in, so each stands as far from both edges of its corner (8), in the middle of its row. */
+export const close = style([panelIcon, { gridArea: "close", alignSelf: "start", justifySelf: "end", margin: "2px 2px 0 0" }]);
 
 // With words under its title: its close at the top right and what can be done under it, at the right of the last line.
 globalStyle(`${bubble}:has(${line})`, { gridTemplateColumns: "auto minmax(0, 1fr) auto", gridTemplateAreas: '"icon text close" "icon text act"' });

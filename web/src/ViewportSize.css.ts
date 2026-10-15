@@ -2,7 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { panel as ground } from "./styles/glass.ts";
 import { fadeInKeyframes, mRiseInKeyframes, popKeyframes } from "./styles/keyframes.css.ts";
-import { inner, innerOr, surface } from "./styles/align.ts";
+import { inner, surface } from "./styles/align.ts";
 
 /** The bar's button: its icon alone, or with the size the page is laid out at (and how much it is drawn at). */
 export const button = style({
@@ -66,7 +66,7 @@ export const row = style({
 export const label = style({ flex: "1", fontSize: vars.textUi, color: vars.text });
 export const fields = style({ display: "flex", alignItems: "center", gap: "4px" });
 export const field = style({
-  width: "52px", height: "28px", padding: "0 6px", border: "0", borderRadius: innerOr(vars.rField), cornerShape: vars.cornerShape,
+  width: "52px", height: "28px", padding: "0 6px", border: "0", borderRadius: vars.rField, cornerShape: vars.cornerShape,
   background: vars.neutralBg, color: vars.text, font: "inherit", fontSize: vars.textUi, textAlign: "center",
   fontVariantNumeric: "tabular-nums", outline: "none",
   transition: `box-shadow ${vars.dur} ${vars.easeOut}, background ${vars.dur} ${vars.easeOut}`,
@@ -78,7 +78,7 @@ export const field = style({
 });
 export const times = style({ color: vars.subtle, fontSize: vars.textMeta });
 export const turn = style({
-  display: "grid", placeItems: "center", width: "28px", height: "28px", border: "0", borderRadius: innerOr("50%"), cornerShape: vars.cornerShape,
+  display: "grid", placeItems: "center", width: "28px", height: "28px", border: "0", borderRadius: "50%",
   background: "none", color: vars.muted, cursor: "pointer",
   selectors: {
     "&:hover:not(:disabled)": { background: vars.hover, color: vars.text },

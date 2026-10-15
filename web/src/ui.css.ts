@@ -8,7 +8,6 @@ import { pageBar } from "./styles/sidebar.css.ts";
 import { markdown } from "./styles/conversation.css.ts";
 import { card, listRow } from "./styles/pages.css.ts";
 import { outsetStart } from "./styles/align.ts";
-import { innerOr, innerShape } from "./styles/align.ts";
 
 export const firstOneTitle = style({
   textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere", margin: "12px 0 0", fontSize: vars.textTitle,
@@ -436,16 +435,16 @@ export const panelRowLabel = style({
 export const panelRowEnd = style({ display: "flex", alignItems: "center", gap: 6, minWidth: 0, color: vars.subtle, flex: "0 1 auto" });
 export const panelFoot = style({ display: "flex", justifyContent: "flex-end", gap: 6, paddingTop: 4 });
 
-// ── a small panel's buttons (notices, popovers, cards): its corner less its padding, never a pill of their own ──
+// ── a small panel's buttons (notices, popovers, cards): small pills, whatever the panel's corner (2026-10-15) ──
 /**
- * Words to press in a small panel: 28 high, rounded as what sits in the panel is (its corner less its padding:
- * styles/align.ts `inner`), in its corners' shape; a ground only while pointed at. `data-tone`: accent (the one thing
- * to do), quiet (a lesser one), filled (the accent's ground always, for one that must be seen).
+ * Words to press in a small panel: a small pill, 24 high, in the meta size; a ground only while pointed at.
+ * `data-tone`: accent (the one thing to do), quiet (a lesser one), filled (the accent's ground always, for one that
+ * must be seen). In a corner it stands as far from both edges (align.ts).
  */
 export const panelButton = style({
-  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4, height: 28, padding: "0 10px", border: 0,
-  borderRadius: innerOr("14px"), cornerShape: innerShape, background: "none", color: vars.text, font: "inherit",
-  fontSize: vars.textUi, fontWeight: 500, lineHeight: "28px", textDecoration: "none", whiteSpace: "nowrap", cursor: "pointer", flex: "none",
+  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4, height: 24, padding: "0 10px", border: 0,
+  borderRadius: 999, background: "none", color: vars.text, font: "inherit",
+  fontSize: vars.textMeta, fontWeight: 500, lineHeight: "24px", textDecoration: "none", whiteSpace: "nowrap", cursor: "pointer", flex: "none",
   selectors: {
     "&:hover:not(:disabled)": { background: vars.hover },
     '&[data-tone="accent"]': { color: vars.accentText },
@@ -456,9 +455,9 @@ export const panelButton = style({
     "&:disabled": { opacity: .5, cursor: "default" },
   },
 });
-/** An icon to press in a small panel (close, stop, step): 28 square, rounded as panelButton. */
+/** An icon to press in a small panel (close, stop, step): a 24 circle, as panelButton is a pill. */
 export const panelIcon = style({
-  display: "grid", placeItems: "center", width: 28, height: 28, padding: 0, border: 0, flex: "none",
-  borderRadius: innerOr("14px"), cornerShape: innerShape, background: "none", color: vars.muted, cursor: "pointer",
+  display: "grid", placeItems: "center", width: 24, height: 24, padding: 0, border: 0, flex: "none",
+  borderRadius: "50%", background: "none", color: vars.muted, cursor: "pointer",
   selectors: { "&:hover:not(:disabled)": { background: vars.hover, color: vars.text }, "&:disabled": { opacity: .35, cursor: "default" } },
 });

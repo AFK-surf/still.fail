@@ -5,7 +5,7 @@
 import { keyframes, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { panel } from "./styles/glass.ts";
-import { inner, surface } from "./styles/align.ts";
+import { surface } from "./styles/align.ts";
 
 const enter = keyframes({ from: { opacity: "0", transform: "scale(.96)", filter: "blur(2px)" } });
 const exit = keyframes({ to: { opacity: "0", transform: "scale(.97)" } });
@@ -61,7 +61,7 @@ export const filePath = style({
 export const actions = style({ display: "inline-flex", gap: "2px", marginLeft: "auto" });
 export const action = style({
   display: "inline-flex", alignItems: "center", gap: "4px", padding: "2px 6px", border: "0",
-  borderRadius: inner, cornerShape: vars.cornerShape, background: "transparent",
+  borderRadius: "999px", background: "transparent",
   color: vars.muted, font: "inherit", cursor: "pointer", whiteSpace: "nowrap",
   selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
