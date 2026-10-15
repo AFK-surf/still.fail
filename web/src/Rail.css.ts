@@ -4,7 +4,7 @@ import { navFoot, stationRow, stationTrouble } from "./Sidebar.css.ts";
 import { floatingThumb } from "./scrollbars.css.ts";
 import { dock } from "./styles/shell.css.ts";
 import { vars } from "./styles/tokens.css.ts";
-import { outsetBottom } from "./styles/align.ts";
+import { outsetBottom, TEXT_IN } from "./styles/align.ts";
 
 const wide = "(min-width: 701px)";
 const narrow = "(max-width: 700px)";
@@ -211,7 +211,8 @@ export const downloadRow = style({
 export const downloadName = style({ fontWeight: 600, marginRight: 6 });
 export const downloadNote = style({ color: vars.muted });
 /** Android's: the code to scan, on white whatever the theme (it is drawn black on nothing), and what to do with it. */
-export const downloadScan = style({ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", minHeight: 0 });
+// The code's white square in by its own padding less than the rows' words, its drawing on their line.
+export const downloadScan = style({ display: "flex", alignItems: "center", gap: 10, padding: `8px ${TEXT_IN}px 8px ${TEXT_IN - 5}px`, minHeight: 0 });
 export const downloadQr = style({
   width: 72, height: 72, padding: 5, flex: "none", background: "#fff", borderRadius: `calc(8px * ${vars.cornerScale})`,
   cornerShape: vars.cornerShape,
