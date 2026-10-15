@@ -17,6 +17,7 @@ import { ChevronRight } from "../icons.tsx";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { tx } from "./words.tsx";
+import * as controlsCss from "../styles/controls.css.ts";
 
 /** `manager`: may update a station and its runtimes (a workspace owner or admin); `onMark`: may give it an icon or emoji. */
 /** `page`: where its own page is, opened by its name. */
@@ -32,9 +33,11 @@ export function StationList({ stations, menu, page, manager = false, onMark, mar
  * and disk, this device's connection to it, and its settings (`settings`, a path; the phone's sheet gives its own way
  * there, `footer`).
  */
-export function StationPeek({ s, settings, footer }: { s: StationView; settings?: string; footer?: ReactNode }) {
+export function StationPeek({ s, settings, footer, panel = false }: { s: StationView; settings?: string; footer?: ReactNode; panel?: boolean }) {
+  // In a small panel (a hover card): the card's whole room, its words in by a row's padding, its rows at the card's
+  // padding (docs/ui-panels.md).
   return (
-    <div className={css.peek}>
+    <div className={panel ? `${css.peek} ${controlsCss.panelCard} ${controlsCss.panelEdge}` : css.peek}>
       <div className={css.peekHead}>
         <StatusDot state={s.online ? "online" : "offline"} label={s.online ? t("web-pages.stations.online") : t("web-pages.stations.offline")} />
         {(s.emoji || s.icon) && <StationMark emoji={s.emoji} icon={s.icon} size={16} />}
@@ -45,8 +48,8 @@ export function StationPeek({ s, settings, footer }: { s: StationView; settings?
       {s.online && s.host && <div className={css.peekSection}><MeterChips meters={s.host.meters} /></div>}
       {s.online && s.net && <div className={css.peekSection}><PeekNet net={s.net} /></div>}
       {/* Its drive (docs/drive.md), where it has one: beside its settings, a way there from where it is named. */}
-      {settings !== undefined && s.overview?.drive && <Link className={css.peekLink} to={`${stationBase(s.station)}/files`}><span>{t("web-pages.drive.title")}</span><ChevronRight size={14} /></Link>}
-      {settings !== undefined && <Link className={css.peekLink} to={settings}><span>{t("web-pages.stations.peekSettings")}</span><ChevronRight size={14} /></Link>}
+      {settings !== undefined && s.overview?.drive && <Link className={`${css.peekLink} ${controlsCss.panelEdge}`} to={`${stationBase(s.station)}/files`}><span>{t("web-pages.drive.title")}</span><ChevronRight size={14} /></Link>}
+      {settings !== undefined && <Link className={`${css.peekLink} ${controlsCss.panelEdge}`} to={settings}><span>{t("web-pages.stations.peekSettings")}</span><ChevronRight size={14} /></Link>}
       {footer}
     </div>
   );

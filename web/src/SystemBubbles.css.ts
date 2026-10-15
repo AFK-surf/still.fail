@@ -3,7 +3,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { panel } from "./styles/glass.ts";
-import { surface } from "./styles/align.ts";
+import { PANEL_PAD, TEXT_IN, surface } from "./styles/align.ts";
 import { panelButton, panelIcon } from "./ui.css.ts";
 
 export const stack = style({
@@ -34,8 +34,8 @@ export const bubble = style({
   // Its mark and its close on its first line; what can be done by the last line of its words, at their right.
   ...panel, display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto auto", gridTemplateAreas: '"icon text act close"',
   columnGap: 6, maxWidth: "100%",
-  // Its corner its close's (14) and its padding (6): concentric; its words start further in.
-  ...surface(6, 14), paddingInlineStart: 14, boxShadow: `0 8px 24px ${vars.shadow}`,
+  // A small panel (docs/ui-panels.md): padded 6, its mark and words in by a row's padding more.
+  ...surface(PANEL_PAD, 14), paddingInlineStart: PANEL_PAD + TEXT_IN, boxShadow: `0 8px 24px ${vars.shadow}`,
   color: vars.text, fontSize: vars.textUi, lineHeight: "20px", pointerEvents: "auto",
 });
 export const icon = style({ gridArea: "icon", alignSelf: "start", display: "grid", placeItems: "center", height: 28, marginRight: 4, color: vars.accent });

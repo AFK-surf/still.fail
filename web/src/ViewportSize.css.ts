@@ -2,7 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { panel as ground } from "./styles/glass.ts";
 import { fadeInKeyframes, mRiseInKeyframes, popKeyframes } from "./styles/keyframes.css.ts";
-import { inner, surface } from "./styles/align.ts";
+import { TEXT_IN, inner, surface } from "./styles/align.ts";
 
 /** The bar's button: its icon alone, or with the size the page is laid out at (and how much it is drawn at). */
 export const button = style({
@@ -43,11 +43,11 @@ export const sheet = style({
 export const sheetGrab = style({
   display: "block", width: "36px", height: "5px", margin: "0 auto 10px", borderRadius: "3px", background: vars.lineStrong,
 });
-export const sheetTitle = style({ margin: "0 8px 8px", fontSize: vars.textTitle, fontWeight: "600" });
+export const sheetTitle = style({ margin: `0 ${TEXT_IN}px 8px`, fontSize: vars.textTitle, fontWeight: "600" });
 
 export const panel = style({ display: "flex", flexDirection: "column" });
 export const option = style({
-  display: "flex", alignItems: "center", gap: "8px", width: "100%", height: "34px", padding: "0 10px 0 8px",
+  display: "flex", alignItems: "center", gap: "8px", width: "100%", height: "34px", padding: `0 ${TEXT_IN}px`,
   border: "0", borderRadius: inner, cornerShape: vars.cornerShape, background: "none", color: vars.text,
   font: "inherit", fontSize: vars.textUi, textAlign: "left", cursor: "pointer", outline: "none",
   selectors: {
@@ -60,7 +60,7 @@ export const optionName = style({ flex: "1" });
 export const optionNote = style({ color: vars.muted, fontSize: vars.textMeta, fontVariantNumeric: "tabular-nums" });
 export const sep = style({ height: "1px", margin: "6px 4px", background: vars.line });
 export const row = style({
-  display: "flex", alignItems: "center", gap: "8px", minHeight: "36px", padding: "0 4px 0 32px",
+  display: "flex", alignItems: "center", gap: "8px", minHeight: "36px", padding: `0 4px 0 ${TEXT_IN + 24}px`,
   selectors: { [`${panel}[data-touch] &`]: { minHeight: "52px" } },
 });
 export const label = style({ flex: "1", fontSize: vars.textUi, color: vars.text });
@@ -78,7 +78,7 @@ export const field = style({
 });
 export const times = style({ color: vars.subtle, fontSize: vars.textMeta });
 export const turn = style({
-  display: "grid", placeItems: "center", width: "28px", height: "28px", border: "0", borderRadius: "50%",
+  display: "grid", placeItems: "center", width: "24px", height: "24px", border: "0", borderRadius: "50%",
   background: "none", color: vars.muted, cursor: "pointer",
   selectors: {
     "&:hover:not(:disabled)": { background: vars.hover, color: vars.text },
@@ -100,7 +100,7 @@ export const fit = style({
     "&:disabled": { color: vars.subtle, cursor: "default", background: "none" },
   },
 });
-export const hint = style({ margin: "2px 8px 4px 32px", fontSize: vars.textMeta, lineHeight: "1.5", color: vars.muted });
+export const hint = style({ margin: `2px ${TEXT_IN}px 4px ${TEXT_IN + 24}px`, fontSize: vars.textMeta, lineHeight: "1.5", color: vars.muted });
 /** The bar's turn, beside the size. */
 export const turnBar = style({
   flex: "none", display: "grid", placeItems: "center", width: "28px", height: "28px", border: "0", borderRadius: "50%",

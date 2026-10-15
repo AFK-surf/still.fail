@@ -2,8 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { btn } from "../styles/controls.css.ts";
 import { cardLook } from "../styles/pages.css.ts";
-import { TEXT_IN, inner, innerShape, panelText } from "../styles/align.ts";
-import { card as hoverCard } from "../Hover.css.ts";
+import { TEXT_IN, inner, innerShape } from "../styles/align.ts";
 
 export const name = style({
   padding: "0", border: "0", background: "none", font: "inherit", cursor: "pointer",
@@ -96,8 +95,4 @@ export const peekLink = style({
   fontSize: vars.textMeta, color: vars.muted, textDecoration: "none",
   selectors: { "&:hover": { color: vars.text, background: vars.hover } },
 });
-/** In the card: what it says in by a row's padding (align.ts panelText), the rows at the card's padding. */
-globalStyle(`${hoverCard} > ${peek}${peek}`, { paddingInline: 0, paddingBlock: 0 });
-globalStyle(`${hoverCard} ${peek} > :not(${peekLink})`, panelText);
-globalStyle(`${hoverCard} ${peek} > :first-child`, { paddingTop: "6px" });
-globalStyle(`${hoverCard} ${peek} > :last-child:not(${peekLink})`, { paddingBottom: "6px" });
+

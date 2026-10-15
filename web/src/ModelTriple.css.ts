@@ -12,7 +12,7 @@ import { onboardingRow } from "./cloud/settings.css.ts";
 import { sessionHead } from "./pages/ChatPage.css.ts";
 import { composerChoices } from "./Chat.css.ts";
 import { spinner } from "./styles/waiting.css.ts";
-import { columns, outsetStart, outsetTop } from "./styles/align.ts";
+import { PANEL_PAD, TEXT_IN, columns, outsetStart, outsetTop } from "./styles/align.ts";
 
 /** A series of models in the control's list: its models one under another, each as wide as the list. */
 export const series = style({ display: "flex", flexDirection: "column", gap: 1 });
@@ -31,7 +31,7 @@ export const runPickerPanel = style({ padding: "0", overflow: "hidden" });
 const inner = `calc(${vars.rMenu} - 6px)`;
 export const runPickerAccountsPanel = style({ padding: "6px" });
 export const runPickerSearch = style({
-  display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px", borderBottom: rule, color: vars.subtle,
+  display: "flex", alignItems: "center", gap: "8px", padding: `10px ${PANEL_PAD + TEXT_IN}px`, borderBottom: rule, color: vars.subtle,
   cursor: "text",
 });
 globalStyle(`${runPickerSearch} input`, {
@@ -54,7 +54,7 @@ export const runCheck = style({ marginLeft: "auto", flex: "none", color: vars.ac
 export const runPickerAccounts = style({
   display: "flex", flexDirection: "column", gap: "1px", minWidth: "220px", maxWidth: "320px", maxHeight: "420px", overflowY: "auto",
 });
-globalStyle(`${runPickerAccounts} h4`, { margin: "4px 8px 6px", fontSize: vars.textMeta, lineHeight: "18px", fontWeight: "500", color: vars.muted });
+globalStyle(`${runPickerAccounts} h4`, { margin: `4px ${TEXT_IN}px 6px`, fontSize: vars.textMeta, lineHeight: "18px", fontWeight: "500", color: vars.muted });
 /** Under an account's name: what is left of it, gray unless running low. */
 export const runAccountNote = style({
   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: vars.textMeta, fontWeight: 400, color: vars.muted,
@@ -64,8 +64,8 @@ export const runAccountNote = style({
 export const runPickerWhoRoom = style({ flex: "1 1 0", width: 0, minWidth: 0, display: "flex" });
 /** The foot's line that says who runs it, and opens the accounts. */
 export const runPickerWho = style({
-  display: "inline-flex", alignItems: "center", gap: "4px", minWidth: 0, maxWidth: "100%", height: "28px", padding: "0 8px",
-  border: 0, borderRadius: inner, cornerShape: vars.cornerShape, background: "none",
+  display: "inline-flex", alignItems: "center", gap: "4px", minWidth: 0, maxWidth: "100%", height: "24px", padding: `0 ${TEXT_IN}px`,
+  border: 0, borderRadius: "999px", background: "none",
   color: vars.muted, font: "inherit", fontSize: vars.textMeta, cursor: "pointer",
   selectors: {
     "&:hover, &[data-state=open]": { background: vars.hover, color: vars.text },
@@ -79,7 +79,7 @@ export const runPickerWhoChevron = style({
 });
 export const runPickerEfforts = style({ minWidth: "136px" });
 export const runPickerOption = style({
-  display: "flex", alignItems: "center", gap: "6px", minHeight: "30px", padding: "4px 8px", border: "0",
+  display: "flex", alignItems: "center", gap: "6px", minHeight: "30px", padding: `4px ${TEXT_IN}px`, border: "0",
   borderRadius: inner, background: "none", color: vars.text, font: "inherit",
   fontSize: vars.textUi, textAlign: "left", cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
@@ -88,7 +88,7 @@ export const runPickerOption = style({
   },
 });
 globalStyle(`${runPickerOption}[aria-pressed="true"] > ${runCheck}, ${runPickerOption}[aria-pressed="true"] ${runCheck}`, { visibility: "visible" });
-export const runPickerNote = style({ margin: "0 8px 6px", fontSize: vars.textMeta, color: vars.amber });
+export const runPickerNote = style({ margin: `0 ${TEXT_IN}px 6px`, fontSize: vars.textMeta, color: vars.amber });
 /** The picker's own buttons: a small panel's small pills (ui.css.ts panelButton). */
 export const btnSm = style({ height: "24px", padding: "0 10px", fontSize: vars.textMeta, borderRadius: "999px", cornerShape: "round" });
 export const modelTriple = style({
@@ -175,7 +175,7 @@ globalStyle(`${composerChoices} > :not(${modelTripleFit})`, { flex: "none" });
 globalStyle(`${modelPoolItem} ${mono}`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 globalStyle(`${modelTriple} ${quotaChips}`, { marginLeft: "2px" });
 globalStyle(`${modelTriple} ${chooserChevron}`, { color: vars.muted, flex: "none" });
-globalStyle(`${runPickerGroup} h5`, { margin: "8px 8px 2px", fontSize: vars.textMeta, lineHeight: "18px", fontWeight: "500", color: vars.subtle });
+globalStyle(`${runPickerGroup} h5`, { margin: `8px ${TEXT_IN}px 2px`, fontSize: vars.textMeta, lineHeight: "18px", fontWeight: "500", color: vars.subtle });
 /** Here rather than with its class: it comes after .composer-choices > :not(.model-triple-fit), and wins over it. */
 globalStyle(`${runCardRow} > ${modelTripleFit}`, { flex: "1 1 auto", ...outsetTop(5) });
 /** Here rather than with its class: it comes after .composer-choices > :not(.model-triple-fit), and wins over it. */

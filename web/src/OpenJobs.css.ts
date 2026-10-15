@@ -55,3 +55,5 @@ export const openJobsChipDot = style({ width: "7px", height: "7px", borderRadius
 export const openJobsPop = style({ width: "280px", maxWidth: "calc(100vw - 16px)", maxHeight: "min(420px, 60vh)", overflowY: "auto" });
 /** In the list it opens, the rows follow its corner as a menu's do. */
 globalStyle(`${openJobsPop} ${openJobRow}`, { borderRadius: "var(--panel-in)" });
+/** Its stop, a small panel's icon button: a circle. */
+globalStyle(`${openJobsPop} ${openJobStop}`, { borderRadius: "50%" });

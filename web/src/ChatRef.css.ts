@@ -2,23 +2,25 @@ import { style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { popKeyframes } from "./styles/keyframes.css.ts";
 import { glass } from "./styles/glass.ts";
+import { PANEL_PAD, TEXT_IN, inner, surface } from "./styles/align.ts";
 
 /** Where the menu hangs from: the composer's top edge. */
 export const refAnchor = style({ position: "relative", height: "0" });
 /** The composer's own look (styles/composer.css.ts, focused): glass, no border, its corners, its shadow. */
 export const refMenu = style({
   position: "absolute", left: "0", right: "0", bottom: "8px", zIndex: "60", maxHeight: "320px", overflowY: "auto",
-  padding: "12px", border: "0", borderRadius: `calc(32px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  // A small panel's list (docs/ui-panels.md) in the composer's corner: padded 6, its rows rounded as it less that.
+  ...surface(PANEL_PAD, `calc(32px * ${vars.cornerScale} - ${PANEL_PAD}px)`, vars.cornerShape), border: "0",
   ...glass,
   boxShadow: "0 4px 12px rgb(0 0 0 / .07), 0 1px 3px rgb(0 0 0 / .05)",
   transformOrigin: "bottom", animation: `${popKeyframes} 140ms ${vars.easeOut}`,
 });
-export const refHead = style({ display: "flex", gap: "6px", padding: "0 12px 6px", fontSize: vars.textMeta, color: vars.muted });
+export const refHead = style({ display: "flex", gap: "6px", padding: `6px ${TEXT_IN}px 6px`, fontSize: vars.textMeta, color: vars.muted });
 export const refQuery = style({ color: vars.text });
-export const refEmpty = style({ margin: "0", padding: "6px 12px 4px", fontSize: vars.textUi, color: vars.muted });
+export const refEmpty = style({ margin: "0", padding: `6px ${TEXT_IN}px`, fontSize: vars.textUi, color: vars.muted });
 export const refItem = style({
   display: "grid", gridTemplateColumns: "16px minmax(0, 1fr) auto", alignItems: "center", gap: "10px", width: "100%",
-  minHeight: "38px", padding: "8px 12px", border: "0", borderRadius: `calc(20px * ${vars.cornerScale})`, background: "none", color: vars.text,
+  minHeight: "38px", padding: `8px ${TEXT_IN}px`, border: "0", borderRadius: inner, background: "none", color: vars.text,
   textAlign: "left", fontSize: vars.textUi, cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
     "&[data-active]": { background: vars.hover },

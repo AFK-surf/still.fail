@@ -39,7 +39,7 @@ globalStyle(`${item}[data-seen] ${itemTitle}`, { color: vars.muted });
 export const itemLine = style({ fontSize: vars.textMeta, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 /** 忽略: small words, only on the row pointed at (or focused); out of the row otherwise, so the titles run to the edge. */
 export const dismiss = style({
-  flex: "none", padding: "1px 4px", border: "0", borderRadius: vars.rOption, cornerShape: vars.cornerShape, background: "none",
+  flex: "none", padding: "1px 6px", border: "0", borderRadius: "999px", background: "none",
   color: vars.muted,
   font: "inherit", fontSize: vars.textMeta, cursor: "pointer", display: "none",
   selectors: { "&:hover": { color: vars.text, background: vars.hover } },

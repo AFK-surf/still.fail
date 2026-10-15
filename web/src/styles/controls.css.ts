@@ -10,7 +10,7 @@ import { stepActions } from "../pages/Connect.css.ts";
 import { spinner } from "./waiting.css.ts";
 import { card } from "./pages.css.ts";
 import { bleedX } from "./align.ts";
-import { inner, surface } from "./align.ts";
+import { PANEL_PAD, TEXT_IN, inner, surface } from "./align.ts";
 
 export const btn = style({
   display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", height: "36px",
@@ -81,20 +81,29 @@ export const input = style({
 /** A one-line field is a pill, as the buttons beside it are; a textarea keeps --r-field (its lines in a pill would not sit right). */
 globalStyle(`input${input}`, { borderRadius: "999px", paddingLeft: "16px", paddingRight: "16px", cornerShape: "round" });
 /**
- * Every popped-up panel (menus, popovers, the rail's adder): its corner is its inner corner (`--panel-in`) and its padding
- * (`--panel-pad`) together, so what sits in it rounded by `--panel-in` (ui.tsx's Panel* parts) is concentric with it
- * whoever draws it. The panel's corner follows them: one with a button (a pill, half its height) in its corner sets
- * `--panel-in` to that; one wanting more room sets `--panel-pad`. By default the menus' corner, as it was.
+ * Every small panel (docs/ui-panels.md): menus, selects, popovers, hover cards, the station's cards. One ground, padded
+ * PANEL_PAD (6) as far as what has a ground of its own (rows, buttons) stands from its edge, its corner what sits in it
+ * (`--panel-in`) and that together. A panel of words (`panelCard`) gives them room of their own; a list's rows carry theirs.
  */
 export const popover = style({
-  ...surface(6, `calc(${vars.rMenu} - 6px)`, vars.cornerShape),
+  ...surface(PANEL_PAD, `calc(${vars.rMenu} - ${PANEL_PAD}px)`, vars.cornerShape),
   zIndex: "60", ...panel,
   boxShadow: `0 12px 32px ${vars.shadow}`, transformOrigin: "var(--radix-popper-transform-origin, top)",
   animation: `${popKeyframes} 140ms ${vars.easeOut}`, cornerShape: vars.cornerShape,
 });
+/**
+ * A small panel of words (a card): each block in it stands in by a row's padding (TEXT_IN) and the first and last have
+ * room above and below, so its words are on the line a list's rows' words are (PANEL_PAD + TEXT_IN from the edge). What
+ * sits at the panel's padding instead (a row, a group of rows, a foot of buttons) is marked `panelEdge`.
+ */
+export const panelCard = style({ vars: { "--panel-kind": "card" } });
+export const panelEdge = style({});
+globalStyle(`${panelCard} > :not(${panelEdge})`, { paddingInline: `${TEXT_IN}px` });
+globalStyle(`${panelCard} > :first-child:not(${panelEdge})`, { paddingTop: "6px" });
+globalStyle(`${panelCard} > :last-child:not(${panelEdge})`, { paddingBottom: "6px" });
 export const menuList = style({ minWidth: "180px" });
 export const menuItem = style({
-  display: "flex", alignItems: "center", gap: "8px", width: "100%", minHeight: "34px", padding: "7px 10px", lineHeight: "20px",
+  display: "flex", alignItems: "center", gap: "8px", width: "100%", minHeight: "34px", padding: `7px ${TEXT_IN}px`, lineHeight: "20px",
   border: "0", borderRadius: inner, background: "none", textAlign: "left", fontSize: vars.textUi,
   cursor: "pointer", outline: "none", userSelect: "none", cornerShape: vars.cornerShape,
   selectors: {
@@ -106,7 +115,7 @@ export const menuItem = style({
 // A tint of the text rather than the page's line: in dark the panel is lighter than the page, and the line would read
 // as a dark groove on it.
 export const menuSep = style({ height: "1px", margin: "6px 4px", background: `color-mix(in srgb, ${vars.text} 12%, transparent)` });
-export const menuLabel = style({ padding: "6px 10px 4px", fontSize: vars.textMeta, color: vars.muted });
+export const menuLabel = style({ padding: `6px ${TEXT_IN}px 4px`, fontSize: vars.textMeta, color: vars.muted });
 export const steps = style({
   margin: "0", paddingLeft: "20px", display: "grid", gap: "8px", fontSize: vars.textUi,
   selectors: {

@@ -9,6 +9,7 @@ import { Close, Download } from "./icons.tsx";
 import { useCommands } from "./commands.ts";
 import { t } from "./i18n.ts";
 import * as css from "./StationUpdate.css.ts";
+import * as controlsCss from "./styles/controls.css.ts";
 
 export function StationUpdate({ station, notice }: { station: string; notice?: StationUpdateNotice | null | undefined }) {
   const api = stationApi(useStationCall(station));
@@ -25,7 +26,7 @@ export function StationUpdate({ station, notice }: { station: string; notice?: S
     </Popover.Trigger>
     <Popover.Portal>
       <Popover.Content className={css.popover} data-tone={notice.tone} side="bottom" align="center" sideOffset={6} collisionPadding={12} onOpenAutoFocus={(e) => e.preventDefault()}>
-        <div className={css.head}>
+        <div className={`${css.head} ${controlsCss.panelEdge}`}>
           <div className={css.words}>
             {notice.station
               ? <span className={css.title}><span className={css.name}>{notice.station}</span>{notice.label && <span className={css.state}>{notice.label}</span>}</span>
@@ -34,10 +35,10 @@ export function StationUpdate({ station, notice }: { station: string; notice?: S
           </div>
           <button className={css.dismiss} aria-label={notice.dismissible ? t("web-main.stationUpdate.dismiss") : t("web-main.stationUpdate.collapse")} title={notice.dismissible ? t("web-main.stationUpdate.dismiss") : t("web-main.stationUpdate.collapse")} onClick={() => control(notice.dismissible ? "dismiss" : "close")}><Close size={14} /></button>
         </div>
-        {notice.tone === "busy" && notice.station && <div className={css.bar}>
+        {notice.tone === "busy" && notice.station && <div className={`${css.bar} ${controlsCss.panelEdge}`}>
           {notice.percent != null ? <span className={css.fill} style={{ width: `${notice.percent}%` }} /> : <span className={`${css.fill} ${css.sweeping}`} />}
         </div>}
-        {(notice.from || notice.to || notice.canUpdate) && <div className={css.foot}>
+        {(notice.from || notice.to || notice.canUpdate) && <div className={`${css.foot} ${controlsCss.panelEdge}`}>
           {(notice.from || notice.to) && <span className={css.versions}>{[notice.from, notice.to].filter(Boolean).join(" → ")}</span>}
           {notice.canUpdate && <button className={css.update} data-tone="filled" disabled={busy} onClick={update}>
             <DoingMark calls="software.update" on={{ station, id: "station" }} size={12} />{busy ? t("web-main.stationUpdate.updating") : notice.tone === "trouble" ? t("common.retry") : t("web-main.stationUpdate.updateNow")}

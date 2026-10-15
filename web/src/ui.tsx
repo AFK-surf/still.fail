@@ -311,9 +311,11 @@ export function Confirm({ open, title, description, action, onConfirm, onClose, 
 export interface MenuItem { label: string; icon?: IconType; danger?: boolean; disabled?: boolean | undefined; onSelect(): void }
 
 /**
- * A popped-up panel's parts, for what is put in styles/controls.css.ts `popover`: its head (a title, a line under it),
- * groups under a small label, rows (an icon, the words, something at the end) and a foot of buttons. Their corners are
- * the panel's inner one (the popover's `--panel-in`), so a panel made of them is right whoever makes it.
+ * A small panel's parts (docs/ui-panels.md), for what is put in styles/controls.css.ts `popover`: its head (a title, a
+ * line under it), groups under a small label, rows (an icon, the words, something at the end), blocks of words
+ * (PanelText), a foot of buttons, and its buttons (PanelButton, a small pill; PanelIconButton, a small circle). The
+ * panel is padded 6; rows sit there, their words in by a row's padding, as a block of words' are; corners are the
+ * panel's inner one (`--panel-in`), so a panel made of them is right whoever makes it.
  */
 export function PanelHead({ title, note }: { title: ReactNode; note?: ReactNode }) {
   return <div className={css.panelHead}><div className={css.panelTitle}>{title}</div>{note && <p className={css.panelNote}>{note}</p>}</div>;
@@ -337,6 +339,20 @@ export function PanelNote({ children }: { children: ReactNode }) {
 }
 export function PanelFoot({ children }: { children: ReactNode }) {
   return <div className={css.panelFoot}>{children}</div>;
+}
+/** A block of words in a small panel: in by a row's padding, on the line its rows' words are. */
+export function PanelText({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={className ? `${css.panelText} ${className}` : css.panelText}>{children}</div>;
+}
+/** Words to press in a small panel: a small pill. `tone`: accent (the one thing to do), quiet, filled (always seen). */
+export const PanelButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & { tone?: "accent" | "quiet" | "filled" }>(
+  function PanelButton({ tone, className, type = "button", ...rest }, ref) {
+    return <button ref={ref} type={type} className={className ? `${css.panelButton} ${className}` : css.panelButton} data-tone={tone} {...rest} />;
+  },
+);
+/** An icon to press in a small panel (close, stop, step): a small circle, named on hover. */
+export function PanelIconButton({ label, children, className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; children: ReactNode }) {
+  return <Tip label={label}><button type="button" aria-label={label} className={className ? `${css.panelIcon} ${className}` : css.panelIcon} {...rest}>{children}</button></Tip>;
 }
 
 /** "…" menu: a list of actions on the thing it sits beside. */

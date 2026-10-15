@@ -436,6 +436,7 @@ export const panelRowLabel = style({
 });
 export const panelRowEnd = style({ display: "flex", alignItems: "center", gap: 6, minWidth: 0, color: vars.subtle, flex: "0 1 auto" });
 export const panelFoot = style({ display: "flex", justifyContent: "flex-end", gap: 6, paddingTop: 4 });
+export const panelText = style({ paddingInline: TEXT_IN });
 
 // ── a small panel's buttons (notices, popovers, cards): small pills, whatever the panel's corner (2026-10-15) ──
 /**

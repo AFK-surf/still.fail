@@ -655,7 +655,7 @@ function ChatInfo({ station, session }: { station: string; session: string }) {
         </Popover.Trigger>
       </Tip>
       <Popover.Portal>
-        <Popover.Content className={`${controlsCss.popover} ${css.chatInfo}`} align="end" sideOffset={6} collisionPadding={8}>
+        <Popover.Content className={`${controlsCss.popover} ${controlsCss.panelCard} ${css.chatInfo}`} align="end" sideOffset={6} collisionPadding={8}>
           <ChatInfoBody station={station} session={session} onShare={() => { setOpen(false); setSharing(true); }}
             onPublish={(thread) => { setOpen(false); setPublishing(thread); }} onRevoke={(thread, id) => { setOpen(false); setRevoking({ thread, id }); }} />
         </Popover.Content>
@@ -703,7 +703,7 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke }: { stat
         </ul>
       )}
       {(share || publish) && (
-        <div className={css.infoRows}>
+        <div className={`${css.infoRows} ${controlsCss.panelEdge}`}>
           {share && <ShareRow share={share} onOpen={onShare} />}
           {publish && <PublishRow publish={publish} onOpen={() => onPublish(thread.id)} />}
           {publish && <PublishedLinks links={publish.links} onRevoke={(id) => onRevoke(thread.id, id)} />}
@@ -910,7 +910,7 @@ function StationHover({ where, children }: { where: NonNullable<ReturnType<typeo
 /** The station's card, as its view is now: read only while it shows. */
 function StationCard({ address, settings }: { address: string; settings: string }) {
   const view = useStations(scopeOf(address)).value?.find((s) => s.station === address);
-  return view ? <StationPeek s={view} settings={settings} /> : null;
+  return view ? <StationPeek s={view} settings={settings} panel /> : null;
 }
 
 /** The station's part of its agent's tile: its icon, or its name where it has none. */

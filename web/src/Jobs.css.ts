@@ -7,7 +7,7 @@ import { segmented, segmentedOption } from "./ui.css.ts";
 import { detailsList, jobsPanel } from "./pages/ChatPage.css.ts";
 import { activityLine, agentActivity, composerThumb, msgFlash, msgWaitingLate } from "./Chat.css.ts";
 import { tokenGuide } from "./pages/SlackApp.css.ts";
-import { outsetStart } from "./styles/align.ts";
+import { TEXT_IN, outsetStart } from "./styles/align.ts";
 
 export const jobDot = style({
   position: "relative", flex: "none", width: "8px", height: "8px", borderRadius: "50%", background: vars.lineStrong,
@@ -234,5 +234,9 @@ globalStyle(`${tokenGuide} li`, {
 /** Here rather than with its class: it comes after [data-enter], and wins over it. */
 globalStyle(msgWaitingLate, { animation: `${msgWaitingInKeyframes} 0s linear 1s both` });
 globalStyle(`${jobSpinner}${spinner}`, { width: "12px", height: "12px", borderWidth: "1.5px" });
-/** In the title bar's popover, the rows and its foot's buttons follow its corner as a menu's do. */
-globalStyle(`${jobsPanel} :is(${jobRow}, ${jobsAll}, ${jobsClear})`, { borderRadius: "var(--panel-in)" });
+/** In the title bar's popover (a small panel's list, docs/ui-panels.md): its rows' words in by a row's padding, its rows
+ * at the panel's, rounded as it less that; "all of them" a row with its words in the jobs' names' column; clearing a
+ * small pill. */
+globalStyle(`${jobsPanel} :is(${jobRow}, ${jobsAll})`, { borderRadius: "var(--panel-in)", paddingInline: `${TEXT_IN}px` });
+globalStyle(`${jobsPanel} ${jobsAll}`, { paddingLeft: `${TEXT_IN + 20}px` });
+globalStyle(`${jobsPanel} ${jobsClear}`, { height: "24px", padding: `0 ${TEXT_IN}px`, borderRadius: "999px", alignSelf: "center", fontSize: vars.textMeta });

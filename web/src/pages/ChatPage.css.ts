@@ -7,8 +7,7 @@ import { panelRow, resizeHandle } from "../ui.css.ts";
 import { sessionMain } from "../styles/jobs.css.ts";
 import { windowsEmoji } from "../StationMark.css.ts";
 import { pageBar } from "../styles/sidebar.css.ts";
-import { TEXT_IN, bleedX, outset, outsetTop, panelText } from "../styles/align.ts";
-import { surfaceVars } from "../styles/align.ts";
+import { TEXT_IN, bleedX, outset, outsetTop } from "../styles/align.ts";
 
 export const agentMarkBtn = style({
   display: "inline-grid", padding: "0", border: "0", background: "none", cursor: "pointer",
@@ -84,7 +83,8 @@ export const sideTabText = style({
     },
   },
 });
-export const chatInfo = style({ width: "320px", vars: surfaceVars(6, `calc(${vars.rMenu} - 6px)`) });
+/** A small panel of words (with controls.css.ts popover and panelCard, docs/ui-panels.md): its sharing rows at its padding. */
+export const chatInfo = style({ width: "320px" });
 export const detailsList = style({
   selectors: {
     [`${chatInfo} &`]: { marginTop: "10px" },
@@ -180,10 +180,7 @@ export const detailInline = style({ display: "inline-flex", alignItems: "center"
  */
 export const infoRows = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px", marginTop: "8px" });
 globalStyle(`${infoRows} ${panelRow}`, { padding: `0 6px 0 ${TEXT_IN - 3}px` });
-/** In the chat's info (a small panel padded 6): its words in by a row's padding, a little room above the first, under the last. */
-globalStyle(`${chatInfo} > :not(${infoRows})`, panelText);
-globalStyle(`${chatInfo} > :first-child`, { paddingTop: "6px" });
-globalStyle(`${chatInfo} > :last-child:not(${infoRows})`, { paddingBottom: "6px" });
+
 /** Where the chat is shared, at the end of its row. */
 export const shareText = style({
   minWidth: "0", color: vars.muted, fontSize: vars.textMeta, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
