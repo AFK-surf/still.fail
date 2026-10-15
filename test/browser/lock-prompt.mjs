@@ -12,7 +12,8 @@ const playwright = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const out = process.env.SHOTS;
 const fixture = new URL('../../web/lock-prompt-check.tsx', import.meta.url);
 const html = new URL('../../web/lock-prompt-check.html', import.meta.url);
-// The demo's core, with the workspace's lock (window.__lock) and the lock calls kept (window.__calls).
+// The demo's core, with the workspace's lock (window.__lock) and the lock calls kept (window.__calls); `lock.shown`
+// puts it up no more, as the core does.
 const withLock = {
   name: 'demo-lock',
   enforce: 'pre',
@@ -20,7 +21,7 @@ const withLock = {
     if (!id.endsWith('/src/demo/mount.tsx')) return;
     return code
       .replace('    default:\n      if (import.meta.env.DEV)', '    case "lock": return (globalThis as any).__lock ?? null;\n    default:\n      if (import.meta.env.DEV)')
-      .replace('function answer(name: string, params: Record<string, unknown>): unknown {', 'function answer(name: string, params: Record<string, unknown>): unknown {\n  if (name.startsWith("lock.")) { ((globalThis as any).__calls ??= []).push([name, params]); return null; }')
+      .replace('function answer(name: string, params: Record<string, unknown>): unknown {', 'function answer(name: string, params: Record<string, unknown>): unknown {\n  if (name.startsWith("lock.")) { ((globalThis as any).__calls ??= []).push([name, params]); if (name === "lock.shown") { (globalThis as any).__lock = { ...(globalThis as any).__lock, prompt: null }; setTimeout(publish, 0); } return null; }')
       .replace('setTopicSource(valueOf);', 'setTopicSource(valueOf);\n(globalThis as any).__publish = () => publish();');
   },
 };
