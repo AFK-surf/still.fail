@@ -986,8 +986,8 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
 
 /**
  * What an agent of the chat said in Slack rather than here, or a person's Slack message it was given (the core reads
- * them from its transcript; the chat does not keep them): drawn as a message of theirs, Slack's mark on the avatar, with
- * where it went or came from after its name, and its words beside a bar, as the execution history has them.
+ * them from its transcript; the chat does not keep them): drawn as a message of theirs, Slack's mark on the avatar and
+ * where it went or came from after its name telling it apart.
  */
 const SentElsewhere = memo(function SentElsewhere({ sent: s }: { sent: ChatSentElsewhere }) {
   const chat = useContext(DraftKey);
@@ -1014,9 +1014,7 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s }: { sent: ChatSentE
           {s.failed && <Pill tone="red">{t("web-main.history.sendFailed")}</Pill>}
         </span>
       }>
-      <div className={historyCss.hPost} data-failed={s.failed ?? false}>
-        <div className={`${historyCss.hQuote} ${historyCss.hQuoteMd} ${conversationCss.markdown}`}><Prose>{s.text}</Prose></div>
-      </div>
+      <div className={conversationCss.markdown}><Prose>{s.text}</Prose></div>
     </OthersMessage>
   );
 }, (a, b) => JSON.stringify(a.sent) === JSON.stringify(b.sent));
