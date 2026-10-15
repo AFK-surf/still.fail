@@ -249,10 +249,11 @@ export function BottomBar({ scope, place, shown, go, newChat, onPanel }: BottomB
   const pickSet = (i: number, key: BarPlace | null) => {
     if (swap) return;
     setSwap({ i, n: others.indexOf(i), from: Math.max(0.2, sp.o.value), key });
+    // The place at once, under the glass closing over it: not once that has landed (the user: a delay).
+    if (key && key !== place) go(key);
     panel(false, () => {
       setSwap((was) => was && { ...was, done: true });
       setPrefs({ bars: { sets: bars.sets, current: i } });
-      if (key && key !== place) go(key);
     }, [200, 28]);
   };
   // Landed and drawn as the chosen bar: the ball put where it is (it was carried there), the stack gone. Away (a page

@@ -246,7 +246,11 @@ class BarTest {
         rule.onRoot().performTouchInput { moveTo(Offset(connectsX, g.top - 28 * d)) }
         r.frames(30)
         rule.onRoot().performTouchInput { up() }
-        r.frames(40)
+        // The place at once, the glass still closing over it (the bar it is in not yet the one in view).
+        r.frames(2)
+        assertEquals(listOf<Screen>(Screen.Connects()), h.app.stack)
+        assertEquals(0L, h.app.bars.current)
+        r.frames(38)
         r.end()
         assertEquals(1L, h.app.bars.current)
         assertEquals(listOf<Screen>(Screen.Connects()), h.app.stack)

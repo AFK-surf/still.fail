@@ -415,6 +415,8 @@ private class BarModel(private val scope: CoroutineScope) {
         val s = Swap(i, n, max(0.2f, o.value), key)
         swap = s
         mode = false
+        // The place at once, under the glass closing over it: not once that has landed (the user: a delay).
+        if (key != null && key != g.active) onTab(key)
         springTo(0f, o.velocity, then = { s.done = true; onSwitch(i, key) }, spec = SWITCH)
     }
 }
