@@ -337,6 +337,8 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
     if (p.panel) {
       p.panel = false;
       const o = sp.o.value;
+      // Held still a moment before letting go: let go still, not flung.
+      if (e.timeStamp - p.at > 80) p.vo = 0;
       // Let go on a place in the rows, the panel open: that bar, that place.
       if (at.y < rowTop - 4 && o >= 0.85) {
         const n = Math.max(0, Math.min(others.length - 1, Math.floor((at.y - OVER) / ROW))), i = others[n]!;
