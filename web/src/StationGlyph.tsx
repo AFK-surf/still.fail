@@ -6,6 +6,7 @@
 // eye while one station works and both while more do; with the phone itself offline it sleeps and the whole fades.
 import { useId } from "react";
 import type { ChatsView } from "./api.ts";
+import { restingLoop } from "./motion.ts";
 import * as css from "./StationGlyph.css.ts";
 
 /** `connecting` is of `dim`: those whose link is on its way. */
@@ -45,6 +46,18 @@ export function glyphCounts(view: { glyph?: ChatsView["glyph"] | undefined } | u
   return { online: g?.online ?? 0, dim: g?.dim ?? 0, failing: g?.failing ?? 0, working: g?.working ?? 0, asleep, connecting: g?.connecting ?? 0 };
 }
 
+/**
+ * A blink: the eye stays open most of the time and shuts for a moment at the end of every 2.6s, easing in and out. A
+ * motion of the mask's (an SVG's inside) is drawn on the main thread, so only the moment it shuts is played
+ * (motion.ts restingLoop): looped in CSS, the page was drawn anew every frame for as long as a station worked.
+ */
+const BLINK: Keyframe[] = [
+  { transform: "scaleY(1)", easing: "ease-in-out" },
+  { transform: "scaleY(0.1)", offset: 5 / 12, easing: "ease-in-out" },
+  { transform: "scaleY(1)" },
+];
+const blink = (eye: SVGEllipseElement | null) => (eye ? restingLoop(eye, BLINK, { period: 2600, at: 2288, duration: 312 }) : undefined);
+
 const at = (deg: number, r = R) => [CX + r * Math.sin(deg * Math.PI / 180), CY - r * Math.cos(deg * Math.PI / 180)] as const;
 const n = (v: number) => +v.toFixed(3);
 function arcPath(from: number, to: number) {
@@ -65,7 +78,7 @@ export function StationGlyph({ counts, size = 24 }: { counts: GlyphCounts; size?
           {counts.asleep
             ? <path d="M9.2 12.1H10.8M13.2 12.1H14.8" stroke="#000" strokeWidth="1.2" strokeLinecap="round" />
             : [10.3, 13.7].map((x, i) => <ellipse key={x} className={css.glyphEye} cx={x} cy="12" rx="1.1" ry="1.25" fill="#000"
-                data-blink={blinking >= (i ? 1 : 2) || undefined} />)}
+                ref={blinking >= (i ? 1 : 2) ? blink : undefined} />)}
         </mask>
       </defs>
       <g className={css.glyphPart} opacity={counts.asleep ? 0.4 : 1}>
