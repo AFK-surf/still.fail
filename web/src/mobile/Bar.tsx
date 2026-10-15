@@ -9,9 +9,9 @@
 // - One stroke: a finger set on the bar and moved any way takes the ball, which keeps to the place a let-go would
 //   choose, leaning a quarter of the way toward the finger. With more than one bar, leaving the bar upward opens the
 //   panel: the glass grows up into a rectangle, a row per other bar above the bar, and the ball goes on into those
-//   rows. The panel is as open as the finger has drawn it up (and the notch as closed), never opening on its own; let go
-//   on a place: it (in another bar: that bar too); elsewhere, it opens if drawn more than half way or flung up, else
-//   closes, from where it is at the finger's speed. A finger on it as it goes takes it from there.
+//   rows. The panel snaps as the ball does: open once the finger is a little way above the bar, closed once it comes
+//   back below, never resting between (but for a quarter's lean toward the finger), each from where it is; let go on a
+//   place: it (in another bar: that bar too); elsewhere, as the finger left it. A bar switch lands untouched.
 // - Choosing another bar, the panel closes like a window over a stack of bars: the stack slides down until the chosen
 //   bar is where the bar is, what is not chosen goes out at the glass's edges. Nothing fades.
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
@@ -208,6 +208,9 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
   const clipTop = Math.max(0, OVER + travel * (1 - o));
   const barMid = rowTop + R;
   const rowMid = (n: number) => OVER + n * ROW + ROW / 2;
+  // How the rows are drawn as the panel is open: faded in from a third open, a little low until open, up with its
+  // overshoot past it.
+  const rowsLook = (at: number) => ({ alpha: Math.max(0, Math.min(1, (at - 0.35) / 0.65)), dy: (1 - Math.min(1, at)) * 14 - Math.max(0, at - 1) * travel });
 
   // ---- the notch: open on a page with a primary action, the panel closed; the last one drawn as it goes
   const actions = usePlaceActions();
@@ -266,12 +269,11 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
       setPrefs({ bars: { sets: bars.sets, current: i } });
     }, [200, 28]);
   };
-  // Landed and drawn as the chosen bar: the ball put where it is (it was carried there), the stack gone. Away (a page
+  // Landed and drawn as the chosen bar: the stack gone (it is where the bar's places are), the ball going on. Away (a page
   // opened over the place as the switch landed, which the place does not take the stead of), it has landed too.
   useLayoutEffect(() => {
     if (swap?.done && cur === swap.i && (!swap.key || place === swap.key || !shown)) {
       setSwap(null);
-      if (ai >= 0) { sp.x.jump(final[ai]!); sp.y.jump(barMid); }
     }
   });
   const swapAt = swap && w ? (() => {
@@ -280,31 +282,27 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
     const into = sets[swap.i]!;
     const landsOnChats = swap.key ? !!actions[swap.key] : inChats;
     const from = centres(w, 0, into.length), to = centres(w, landsOnChats ? 1 : 0, into.length);
-    return { shift, into, xs: into.map((_, j) => from[j]! + (to[j]! - from[j]!) * t), y: rowMid(swap.n) + shift };
+    // In its first frame the rows as they were drawn (faded in and low by as much as the panel was open, rowsLook), going
+    // to what the bar is as it slides: no change of look at the moment a bar is chosen.
+    const was = rowsLook(swap.from), dy = was.dy * (1 - t), alpha = was.alpha + (1 - was.alpha) * t;
+    return { shift, into, dy, alpha, xs: into.map((_, j) => from[j]! + (to[j]! - from[j]!) * t), y: rowMid(swap.n) + shift + dy };
   })() : null;
+  // The ball rides the place chosen: sent there on a stiff spring from where it was, not put there.
   const ballOn = swapAt && swap!.key ? { x: swapAt.xs[swapAt.into.indexOf(swap!.key)]!, y: swapAt.y } : null;
+  if (ballOn) { sp.x.to(ballOn.x, 700); sp.y.to(ballOn.y, 700); }
 
   // ---- the finger
-  // `panel`: the finger has the panel, which is as open as it has been drawn up (o0 at the finger's start, from y0), not
-  // opened on its own; `vo`, how fast it opens (a second), for where it goes once let go.
-  const press = useRef({ x: 0, y: 0, taken: false, panel: false, o0: 0, vo: 0, at: 0, slid: false });
+  // `panel`: the finger has the panel: open above a line over the bar, closed below it, leaning a quarter of the way
+  // toward the finger (o0 at the finger's start, from its y), as the ball keeps to a place.
+  const press = useRef({ x: 0, y: 0, taken: false, panel: false, o0: 0, slid: false });
+  const UP = 24, DOWN = 16; // the line: crossed upward 24 over the bar's top, back below 16 over it
   const local = (e: ReactPointerEvent) => { const b = wrap.current!.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
-  const finishSwap = () => {
-    // A finger down while a bar is being chosen: it is chosen now, then the finger is the finger's.
-    if (!panelDone.current) return;
-    sp.o.jump(0);
-    const done = panelDone.current;
-    panelDone.current = null;
-    done();
-  };
   const down = (e: ReactPointerEvent) => {
-    finishSwap();
-    // The panel opening or closing: held where it is, the finger's from here (not left to go on its own).
-    const o0 = sp.o.value;
-    if (sp.o.moving) sp.o.jump(o0);
-    press.current = { x: e.clientX, y: e.clientY, taken: false, panel: o0 > 0.02, o0, vo: 0, at: e.timeStamp, slid: false };
+    press.current = { x: e.clientX, y: e.clientY, taken: false, panel: sp.o.value > 0.02 || open, o0: sp.o.value, slid: false };
   };
   const move = (e: ReactPointerEvent) => {
+    // A bar switch landing: it lands untouched; the finger is the finger's once it has.
+    if (swap) return;
     const p = press.current;
     if (!p.taken && e.buttons !== 0 && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 8) {
       p.taken = true;
@@ -313,23 +311,25 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
     if (!p.taken) return;
     const at = local(e), several = others.length > 0;
     if (several) {
-      // As open as the finger has drawn it up, from where it was: 1 to 1, past open a little give, never on its own.
-      const raw = p.o0 + (p.y - e.clientY - (p.o0 > 0.02 ? 0 : 8)) / travel;
-      if (!p.panel && raw > 0) { p.panel = true; if (!open) { setOpenState(true); onPanel?.(true); } }
+      const above = rowTop - at.y;
+      if (!p.panel && above > UP) p.panel = true;
       if (p.panel) {
-        const o = raw > 1 ? 1 + Math.min(0.1, (raw - 1) * 0.25) : Math.max(0, raw);
-        const dt = Math.max(0.004, (e.timeStamp - p.at) / 1000);
-        p.vo = p.vo * 0.4 + ((o - sp.o.value) / dt) * 0.6;
-        p.at = e.timeStamp;
-        sp.o.jump(o);
+        // Open or closed by the line (a little apart each way, so it does not flicker on it); never in between but
+        // for the lean toward the finger.
+        const snapped = open ? (above < DOWN ? 0 : 1) : (above > UP ? 1 : 0);
+        if ((snapped === 1) !== open) { setOpenState(snapped === 1); onPanel?.(snapped === 1); }
+        const raw = p.o0 + (p.y - e.clientY - (p.o0 > 0.02 ? 0 : 8)) / travel;
+        const lean = Math.max(0, Math.min(1.1, snapped + (raw - snapped) * LEAN));
+        const [tension, damping] = snapped ? [260, 17] : [320, 26];
+        sp.o.to(lean, tension, damping);
+        run();
       }
     }
     setFinger({ x: at.x, y: several && p.panel ? Math.max(rowMid(0), Math.min(barMid, at.y)) : null });
   };
   const up = (e: ReactPointerEvent) => {
+    if (swap) return;
     const p = press.current;
-    // Held as it went and let go without moving: let go still, where it was held.
-    if (!p.taken && p.panel) { p.panel = false; if (sp.o.value > 0.02) { sp.o.velocity = 0; panel(sp.o.value > 0.5); } return; }
     if (!p.taken) return;
     p.taken = false;
     p.slid = true;
@@ -338,24 +338,16 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
     setFinger(null);
     if (p.panel) {
       p.panel = false;
-      const o = sp.o.value;
-      // Held still a moment before letting go: let go still, not flung.
-      if (e.timeStamp - p.at > 80) p.vo = 0;
       // Let go on a place in the rows, the panel open: that bar, that place.
-      if (at.y < rowTop - 4 && o >= 0.85) {
+      if (open && at.y < rowTop - 4 && sp.o.value >= 0.85) {
         const n = Math.max(0, Math.min(others.length - 1, Math.floor((at.y - OVER) / ROW))), i = others[n]!;
         const xs = centres(w, 0, sets[i]!.length);
-        sp.o.velocity = p.vo;
         pickSet(i, sets[i]![nearest(xs, at.x)]!);
         return;
       }
-      // Elsewhere: open if drawn more than half way or flung up, else closed (the place under the finger, let go on
-      // the bar); from where it is, as fast as it went.
-      const stays = at.y < rowTop - 4 && (p.vo > 1.5 || (p.vo > -1.5 && o > 0.5));
-      sp.o.velocity = p.vo;
-      panel(stays);
-      if (stays) return;
-      if (at.y >= rowTop - 4) { const key = items[nearest(final, at.x)]!; if (key !== place) go(key); }
+      // Elsewhere: as the line left it, without the lean (on the bar, closed, and the place under the finger).
+      panel(open);
+      if (!open && at.y >= rowTop - 4) { const key = items[nearest(final, at.x)]!; if (key !== place) go(key); }
       return;
     }
     const key = items[nearest(final, at.x)]!;
@@ -363,12 +355,12 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
     if (key !== place) go(key);
   };
   // The finger taken from the bar without its lifting (the browser took the gesture): let go of, nothing chosen; the
-  // panel where it was drawn to, as if let go there.
+  // panel as the line left it.
   function lost() {
     const p = press.current;
     p.taken = false;
     setFinger(null);
-    if (p.panel) { p.panel = false; panel(sp.o.value > 0.5); }
+    if (p.panel) { p.panel = false; panel(open); }
   }
   const tapPlace = (key: BarPlace) => {
     if (press.current.slid) return;
@@ -389,9 +381,9 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
   const shadowMask = useId().replace(/[^\w-]/g, "");
   const held = sp.held.value;
   const ballShown = ai >= 0 || finger !== null || ballOn !== null;
-  const bx = ballOn?.x ?? sp.x.value, by = ballOn?.y ?? sp.y.value;
+  const bx = sp.x.value, by = sp.y.value;
   // Stretched along its way by its speed (px a frame), its leading edge ahead; round as it stops.
-  const v = ballOn ? 0 : sp.x.velocity / 60;
+  const v = sp.x.velocity / 60;
   const stretch = Math.min(36, Math.abs(v) * 1.6);
   const ballW = BALL + stretch, ballH = BALL - Math.min(6, stretch * 0.2);
   const ballLeft = bx - BALL / 2 - (v < 0 ? stretch : 0);
@@ -422,7 +414,7 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
           )}
           <div className={css.mBarGlass} data-bar="glass" style={{ top: clipTop, clipPath: shape ? `path("${shape}")` : undefined }} />
           {w > 0 && others.length > 0 && (
-            <div className={css.mBarRows} data-bar="rows" style={{ top: 0, height: rowTop, opacity: swap ? 0 : Math.max(0, Math.min(1, (o - 0.35) / 0.65)), transform: `translateY(${(1 - Math.min(1, o)) * 14 - Math.max(0, o - 1) * travel}px)`, pointerEvents: open && o > 0.6 ? "auto" : "none" }}>
+            <div className={css.mBarRows} data-bar="rows" style={{ top: 0, height: rowTop, opacity: swap ? 0 : rowsLook(o).alpha, transform: `translateY(${rowsLook(o).dy}px)`, pointerEvents: open && o > 0.6 ? "auto" : "none" }}>
               {others.map((i, n) => {
                 const xs = centres(w, 0, sets[i]!.length);
                 return (
@@ -459,10 +451,10 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
           {swapAt && (
             <div className={css.mBarStack} data-bar="stack" style={{ top: clipTop, height: PANEL - clipTop, clipPath: `path("${shape}")` }}>
               {others.flatMap((i, n) => i === swap!.i ? [] : sets[i]!.map((key, j) => (
-                <span key={`r${i}${key}`} className={css.mBarStackIcon} style={{ left: centres(w, 0, sets[i]!.length)[j]! - 24, top: rowMid(n) + swapAt.shift - 24 - clipTop }}>{icon(key)}</span>
+                <span key={`r${i}${key}`} className={css.mBarStackIcon} style={{ left: centres(w, 0, sets[i]!.length)[j]! - 24, top: rowMid(n) + swapAt.shift + swapAt.dy - 24 - clipTop, opacity: swapAt.alpha }}>{icon(key)}</span>
               )))}
               {swapAt.into.map((key, j) => (
-                <span key={`in${key}`} className={css.mBarStackIcon} data-on={swap!.key === key || undefined} style={{ left: swapAt.xs[j]! - 24, top: swapAt.y - 24 - clipTop }}>{icon(key)}</span>
+                <span key={`in${key}`} className={css.mBarStackIcon} data-on={swap!.key === key || undefined} style={{ left: swapAt.xs[j]! - 24, top: swapAt.y - 24 - clipTop, opacity: swapAt.alpha }}>{icon(key)}</span>
               ))}
               {items.map((key, j) => (
                 <span key={`out${key}`} className={css.mBarStackIcon} style={{ left: now[j]! - 24, top: barMid + swapAt.shift - 24 - clipTop }}>{icon(key)}</span>
@@ -471,8 +463,8 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
           )}
           {w > 0 && (
             <div className={css.mBarBall} data-bar="ball" style={{
-              left: ballOn ? ballOn.x - BALL / 2 : ballLeft, top: by - (ballOn ? BALL : ballH) / 2, width: ballOn ? BALL : ballW, height: ballOn ? BALL : ballH,
-              borderRadius: (ballOn ? BALL : ballH) / 2, opacity: ballShown ? 1 : 0, transform: `scale(${(1 + 0.06 * held) * (ballShown ? 1 : 0.6)})`,
+              left: ballLeft, top: by - ballH / 2, width: ballW, height: ballH,
+              borderRadius: ballH / 2, opacity: ballShown ? 1 : 0, transform: `scale(${(1 + 0.06 * held) * (ballShown ? 1 : 0.6)})`,
             }} />
           )}
         </div>
