@@ -8,10 +8,9 @@ import { core, useTopic } from "../core/react.ts";
 import { CAN_NOTIFY, setNotify, useNotifyState, type NotifyState } from "../notify.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
 import { setPrefs } from "../prefs.ts";
-import { ChevronRight } from "../icons.tsx";
-import { MobileBack, Section, Segmented, Switch, SwitchRow } from "../ui.tsx";
+import { ArrowUpRight, ChevronRight } from "../icons.tsx";
+import { Button, MobileBack, Section, Segmented, Switch, SwitchRow } from "../ui.tsx";
 import { failure, useToast } from "../toast.tsx";
-import * as controlsCss from "../styles/controls.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./Notifications.css.ts";
 
@@ -141,13 +140,16 @@ function useDock() {
 
 export type Way = "banner" | "badge" | "dock";
 
-/** The system refused them: said under the tiles, with the way to its settings where the app can open them (a
- * browser's site settings it cannot). */
+/** The system refused them: a row of the settings' cards under the tiles, as the others are, with the way to its
+ * settings where the app can open them (a browser's site settings it cannot). */
 export function Refused({ browser, onOpen }: { browser: boolean; onOpen: (() => void) | null }) {
   return (
-    <div className={css.refused} role="status">
-      <span className={css.refusedText}>{browser ? t("web-pages.notifications.permission.deniedBrowser", { name: NAME }) : t("web-pages.notifications.permission.denied", { name: NAME })}</span>
-      {onOpen && <button type="button" className={`${controlsCss.btn} ${css.refusedAction}`} onClick={onOpen}>{t("web-pages.notifications.permission.open")}</button>}
+    <div className={`${pagesCss.card} ${pagesCss.cardRow} ${css.refused}`} role="status">
+      <div className={pagesCss.cardRowText}>
+        <strong>{t("web-pages.notifications.permission.title")}</strong>
+        <span className={css.refusedWhy}>{browser ? t("web-pages.notifications.permission.deniedBrowser", { name: NAME }) : t("web-pages.notifications.permission.denied", { name: NAME })}</span>
+      </div>
+      {onOpen && <Button icon={ArrowUpRight} onClick={onOpen}>{t("web-pages.notifications.permission.open")}</Button>}
     </div>
   );
 }

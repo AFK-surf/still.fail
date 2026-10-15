@@ -57,16 +57,9 @@ export const tile = style({
   transition: `border-color ${vars.dur} ${vars.easeOut}`,
   selectors: { "&[data-on]": { borderColor: vars.accent }, "&[data-refused]": { borderColor: "transparent" }, "&:disabled": { cursor: "default", opacity: "0.5" } },
 });
-// What the system refused, under the tiles, with the way to its settings: the button in its right corner as far from
-// the edges as it is all round (8), the strip's corner the button's half height and that (concentric); its words
-// indented to the line of a row's (8 + 6 = 14).
-const REFUSED_PAD = 8;
-export const refused = style({
-  display: "flex", alignItems: "center", gap: "12px", marginTop: "10px", padding: `${REFUSED_PAD}px`,
-  borderRadius: surfaceCorner(REFUSED_PAD, 18), background: vars.redBg, color: vars.red, fontSize: vars.textUi,
-});
-export const refusedText = style({ flex: "1", minWidth: "0", paddingInlineStart: "6px" });
-export const refusedAction = style({ flex: "none" });
+// What the system refused: a settings card's row under the tiles, its reason in red (what is wrong is).
+export const refused = style({ marginTop: "10px" });
+export const refusedWhy = style({ color: vars.red });
 export const tilePicture = style({
   position: "relative", width: "72px", height: "46px", marginBottom: "4px", overflow: "hidden",
   borderRadius: "8px", background: vars.canvas, border: `1px solid ${vars.line}`,
