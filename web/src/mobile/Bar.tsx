@@ -358,9 +358,12 @@ export function BottomBar({ scope, place, shown, go, newChat, onPanel }: BottomB
           {w > 0 && (
             <svg className={css.mBarShadow} width={w} height={PANEL} aria-hidden="true">
               <defs>
+                <linearGradient id={`${shadowMask}f`} gradientUnits="userSpaceOnUse" x1={0} y1={clipTop} x2={0} y2={clipTop + R}>
+                  <stop offset={0} stopColor="#000" />
+                  <stop offset={1} stopColor="#fff" />
+                </linearGradient>
                 <mask id={shadowMask} maskUnits="userSpaceOnUse" x={-40} y={-40} width={w + 80} height={PANEL + 80}>
-                  <rect x={-40} y={-40} width={w + 80} height={PANEL + 80} fill="#fff" />
-                  <rect x={-40} y={-40} width={w + 80} height={clipTop + R + 40} fill="#000" />
+                  <rect x={-40} y={-40} width={w + 80} height={PANEL + 80} fill={`url(#${shadowMask}f)`} />
                   <rect x={0} y={clipTop} width={w} height={PANEL - clipTop} rx={R} fill="#000" />
                 </mask>
               </defs>
