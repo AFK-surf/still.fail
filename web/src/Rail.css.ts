@@ -128,10 +128,9 @@ export const count = style({
  */
 export const listMark = style({
   position: "absolute", top: 3, right: 3, display: "flex", padding: 2, borderRadius: "50%", background: vars.sidebar,
-  pointerEvents: "none", transformOrigin: "center",
-  transition: `transform 260ms ${vars.easeOut}, opacity 200ms ${vars.easeOut}`,
+  pointerEvents: "none", transformOrigin: "center", opacity: 1, transform: "scale(1)",
+  // Moved with the sidebar (brand.tsx moveSidebar).
   selectors: { ':root:not([data-sidebar="closed"]) &': { opacity: 0, transform: "scale(0.4)" } },
-  "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } },
 });
 
 /**

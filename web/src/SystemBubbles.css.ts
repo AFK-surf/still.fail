@@ -10,17 +10,15 @@ export const stack = style({
   position: "fixed", zIndex: 150, left: "calc(env(safe-area-inset-left, 0px) + 12px)", bottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)",
   display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8, maxWidth: "min(420px, calc(100vw - 24px))",
   pointerEvents: "none",
-  transition: `bottom 380ms ${vars.easeOut}, left 380ms ${vars.easeOut}`,
   "@media": {
     "(min-width: 701px)": {
       selectors: {
         ":root:has([data-rail]) &": { left: 68 },
         // Beside the closed bar (styles/shell.css.ts dock: 6 to 48), as far from it and from the window's foot as it
-        // is from the window's edges (6), at the same pace.
+        // is from the window's edges (6), moved with it (brand.tsx moveSidebar).
         ':root:has([data-rail])[data-sidebar="closed"] &': { left: 54, bottom: "calc(env(safe-area-inset-bottom, 0px) + 6px)" },
       },
     },
-    "(prefers-reduced-motion: reduce)": { transition: "none" },
   },
 });
 /** A bubble's room in the stack, opened and closed as it comes and goes (SystemBubbles.tsx): the bubble at its foot,

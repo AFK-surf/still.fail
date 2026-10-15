@@ -7,6 +7,8 @@ import * as css from "./brand.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import * as sidebarCss from "./styles/sidebar.css.ts";
 import * as railCss from "./Rail.css.ts";
+import * as listCss from "./Sidebar.css.ts";
+import * as bubblesCss from "./SystemBubbles.css.ts";
 import { moveState } from "./motion.ts";
 import { Tip } from "./ui.tsx";
 import { NAME } from "./channel.ts";
@@ -116,7 +118,14 @@ export function moveSidebar(change: () => void): void {
     ...moves(`.${railCss.top}`, ["height", "margin-bottom"]),
     // The block's margins (closed, it stands off the window's edges; shown a while, it reaches over the page) at the same
     // pace as its column, not a transition of their own that would run ahead of it.
-    ...moves(`.${shellCss.dock}`, ["margin-top", "margin-right", "margin-bottom", "margin-left"]),
+    // Its corner, ground, shadow and line as well: every part of it on one clock and ease (Motion), no CSS transitions.
+    ...moves(`.${shellCss.dock}`, ["margin-top", "margin-right", "margin-bottom", "margin-left", "border-radius", "background-color", "box-shadow", "--dock-line"]),
+    // The sidebar in it (open, reaching 8 into the rail; its width the group's) and its frosted bands' ground.
+    ...moves(`.${shellCss.dock} > .${listCss.sidebar}`, ["margin-inline-start", "width"]),
+    ...moves(`.${listCss.navTop}, .${listCss.navFoot}`, ["background-color"]),
+    // The lists' marks on the rail, and the app's bubbles beside it.
+    ...moves(`.${railCss.listMark}`, ["opacity", "transform"]),
+    ...moves(`.${bubblesCss.stack}`, ["left", "bottom"]),
     ...moves(`.${sidebarCss.pageBar}`, ["padding-left"]),
   ], change).then(() => { if (turn === moving) delete document.documentElement.dataset.sidebarMoving; });
 }

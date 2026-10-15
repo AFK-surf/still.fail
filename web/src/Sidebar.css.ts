@@ -27,7 +27,6 @@ export const sidebar = style({
 // In the block with the rail (shell.css.ts dock): its ground is the block's, its width its own, cut as the block closes.
 globalStyle(`${dock} > ${sidebar}`, {
   background: "none", flex: "none", width: fallbackVar(vars.sidebarW, "240px"),
-  "@media": { [wide]: { transition: `margin-inline-start 380ms ${vars.easeOut}, width 380ms ${vars.easeOut}` } },
 });
 // Open, reaching 8 into the rail's 56 (empty there, right of its places): its rows 13 from the rail's ground, as that
 // ground is from the window's edge, not 21; its right edge where it was. Closed, after the rail, cut by the bar.
@@ -68,8 +67,7 @@ export const brandCompact = style({ height: 48, padding: "0 16px" });
 const band = {
   position: "relative", zIndex: 1, flex: "none",
   background: `color-mix(in srgb, ${vars.sidebar} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)",
-  // With the sidebar's ground as it closes to the bar (shell.css.ts dock), at its pace.
-  transition: `background-color 380ms ${vars.easeOut}`,
+  // With the sidebar's ground as it closes to the bar (shell.css.ts dock): moved with it (brand.tsx moveSidebar).
 } as const;
 export const navTop = style(band);
 

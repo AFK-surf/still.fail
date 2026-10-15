@@ -30,12 +30,14 @@ export const dock = style({
     "(max-width: 700px)": { display: "contents" },
     "(min-width: 701px)": {
       position: "relative", display: "flex", minWidth: 0, minHeight: 0, overflow: "hidden", background: vars.sidebar, margin: 0, borderRadius: 0,
-      // The closed bar's shadow, there but clear while open: the same shadow either way, so it eases in (from none it
+      // The closed bar's shadow, there but clear while open: the same shadow either way, so it moves in (from none it
       // would come at once).
       boxShadow: "0 8px 24px transparent",
       cornerShape: vars.cornerShape,
-      // Its margins moved with its column (brand.tsx moveSidebar), the rest eased here.
-      transition: ["border-radius", "background-color", "box-shadow"].map((p) => `${p} 380ms ${vars.easeOut}`).join(", "),
+      // How much of its line (::after) is drawn: a number, so it is moved as the rest.
+      vars: { "--dock-line": "0" },
+      // Its margins, corner, ground, shadow and line all moved with its column (brand.tsx moveSidebar, Motion), none by a
+      // transition of its own: on another clock and ease, switching between shown a while and open they came apart.
       selectors: {
         // Concentric with what is lit in it (the rail's places' ground, its 9 px corner 6 px in from its every edge), and
         // as far from the window's edges as that ground from its own: 6 (its 56 column's other 8 the gutter by the page,
@@ -46,7 +48,7 @@ export const dock = style({
           margin: "6px 8px 6px 6px", borderRadius: `calc(9px * ${vars.cornerScale} + 6px)`,
           // As the sidebar's ground for all in it (the list's frosted bands, the rings round marks), so none shows the
           // old one as it closes.
-          vars: { [vars.sidebar]: panel.background },
+          vars: { [vars.sidebar]: panel.background, "--dock-line": "1" },
           boxShadow: `0 8px 24px ${vars.shadow}`,
           // Over the page, its shadow too: under the page's frosted top bar it was blurred into a block that ended at the
           // bar's foot.
@@ -58,7 +60,6 @@ export const dock = style({
         '[data-sidebar="closed"][data-sidebar-peek] &': { marginRight: "calc(8px - var(--sidebar-w, 240px))" },
       },
     },
-    "(prefers-reduced-motion: reduce)": { transition: "none" },
   },
 });
 
@@ -68,11 +69,10 @@ globalStyle(`${dock}::after`, {
   "@media": {
     "(min-width: 701px)": {
       content: '""', position: "absolute", inset: 0, zIndex: 3, borderRadius: "inherit", cornerShape: "inherit", pointerEvents: "none",
-      boxShadow: `inset 0 0 0 1px ${vars.line}`, opacity: 0, transition: `opacity 380ms ${vars.easeOut}`,
+      boxShadow: `inset 0 0 0 1px ${vars.line}`, opacity: "var(--dock-line)",
     },
   },
 });
-globalStyle(`[data-sidebar="closed"] ${dock}::after`, { "@media": { "(min-width: 701px)": { opacity: 1 } } });
 
 export const main = style({
   position: "relative", minWidth: "0", minHeight: "0", overflow: "hidden", display: "flex", flexDirection: "column",
