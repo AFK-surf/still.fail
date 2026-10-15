@@ -2,10 +2,10 @@
 // proto/vbar/vbar.jsx `Bar`, frosted only): a floating capsule of the places of one bar; a frosted ball over the place
 // shown, which travels on a spring stretched by its speed and goes where a finger takes it; the page's primary action
 // standing in a notch cut out of the bar's top (令, a new chat, on the chats' pages; a "+" on a page that adds
-// something); with more than one bar, the glass grows upward into a panel of the other bars, one row each, as far as a
-// finger draws it up (let go, it opens or closes from there), and a bar chosen there slides down into the bar's place.
-// All of it moves under the finger or on springs stepped a frame at a time by one loop (BarModel), nothing playing out
-// on its own: a finger on it as it goes holds it there.
+// something); with more than one bar, the glass grows upward into a panel of the other bars, one row each, snapping
+// open once a finger on the bar is drawn high enough and closed once it comes back down (leaning toward the finger, as
+// the ball does to a place), and a bar chosen there slides down into the bar's place. All of it moves on springs
+// stepped a frame at a time by one loop (BarModel), retargeted by the finger as it goes, nothing playing out on its own.
 // Everything is glass of one source (Haze): the pages under it, frosted by the bar's glass, the action and the ball;
 // the action for the ball too.
 package fail.still.android.ui
@@ -35,7 +35,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -141,8 +141,9 @@ internal fun barCentres(w: Float, k: Float, n: Int): FloatArray {
     }
 }
 
-/** A finger let go having been still this long (ms) was not flinging: no speed carried on. */
-private const val STILL = 80L
+/** The panel snaps open once a finger is this far over the bar's top, and closed once it is back under `CLOSES`. */
+private const val OPENS = 24f
+private const val CLOSES = 16f
 
 /**
  * A page's primary action, which the notch holds on a place's top page: `key` tells one from another (the icon swaps
@@ -186,14 +187,14 @@ private class Cand(val x: Float, val y: Float, val set: Int, val key: String)
 
 /**
  * A bar chosen in the panel, sliding down into the bar's place: which, its row, how open the panel was, the place tapped;
- * the bars as they were then (`sets`, `cur` the one in view), which the stack sliding down is laid out by to its end
- * (the chosen bar is the one in view from the moment it is chosen).
+ * `laid`: the bars as they were then, which the stack sliding down is laid out by to its end (the chosen bar is the one
+ * in view from the moment it is chosen); the rows' fade and offset then (`alpha`, `drop`) and how lit each place was
+ * (`lit`, by slot), which the stack starts from; `still`: chosen from a panel at rest (its first frame is as it was).
  */
-private class Swap(val i: Int, val n: Int, val from: Float, val key: String?, val sets: List<List<String>>, val cur: Int) {
-    /** Where the ball was from the place it rides, as it was chosen. */
-    var dx = 0f
-    var dy = 0f
-}
+private class Swap(
+    val i: Int, val n: Int, val from: Float, val key: String?, val laid: Geo,
+    val alpha: Float, val drop: Float, val lit: Map<String, Float>, var still: Boolean,
+)
 
 /** The rounded bar (or panel) `w`×`h` with the notch cut into its top edge: a circle of radius `r` about (cx, cy). */
 private fun outline(w: Float, h: Float, cx: Float, cy: Float, r: Float, d: Float): Path {
@@ -373,16 +374,17 @@ private class Glide(start: Float) {
 /**
  * What the bar keeps between frames and what its gestures do (vbar.jsx's refs and handlers; the web's mobile/Bar.tsx
  * the same rules): every motion of the bar is a number here (the panel's openness, the notch's, the ball, the bar
- * shown, the notch's icon swapping, the places lit), stepped by one loop a frame at a time while any moves (`run`). The
- * panel is the finger's while it is held, as open as the finger has drawn it; let go, it springs from there at the
- * finger's speed; a finger on it as it goes holds it there. What is chosen (a place, a bar) is chosen at the gesture,
- * not once a motion has ended.
+ * shown, the notch's icon swapping, the places lit), stepped by one loop a frame at a time while any moves (`run`).
+ * The panel snaps, as the ball does to a place: while a finger has it, it is open once the finger is high enough over
+ * the bar and closed once it is back down (a little apart, so it does not flicker between), leaning a quarter of the way
+ * toward where the finger draws it, on its springs, retargeted at every move from where it is; let go, it stays as the
+ * finger left it. What is chosen (a place, a bar) is chosen at the gesture, not once a motion has ended.
  */
 @Stable
 private class BarModel(shown: Boolean, notched: Boolean, ballShown: Boolean) {
     /** The panel of the other bars open (or opening, or the finger's). */
     var mode by mutableStateOf(false)
-    /** How open the panel is: 0 the bar, 1 the panel (past 1 a little as a finger draws it on, or as it overshoots). */
+    /** How open the panel is: 0 the bar, 1 the panel (past 1 a little as it overshoots or a finger draws it on). */
     val o = BarSpring(0f, 260f, 17f)
     /** The notch as the place has it (open on a page with an action), a spring as the place changes. */
     val k = BarSpring(if (notched) 1f else 0f, 300f, 30f)
@@ -396,8 +398,8 @@ private class BarModel(shown: Boolean, notched: Boolean, ballShown: Boolean) {
     var icon by mutableStateOf<ImageVector?>(null)
     var iconWas by mutableStateOf<ImageVector?>(null)
     val iconSwap = Glide(1f)
-    /** Each place drawn: how lit it is. */
-    val tints = mutableStateListOf<Glide>()
+    /** Each place drawn (by its slot, `bar:<place>` or `row:<place>`): how lit it is. */
+    val tints = mutableStateMapOf<String, Glide>()
     var ball: BallMotion? = null
 
     /** The finger's place while it has the ball (dp in the panel's frame); its height only once the panel is the finger's. */
@@ -413,23 +415,23 @@ private class BarModel(shown: Boolean, notched: Boolean, ballShown: Boolean) {
     var frame: LayoutCoordinates? = null
 
     // The finger: where it went down, whether it has the ball (moved past SLOP) and the panel (`holds`; from `o0`, the
-    // panel as open as that when it went down, `fromOpen`: it was held there, so no slop to take up), how fast it opens
-    // the panel (`vo`, a second) as of its last move (at `at`, ms).
+    // panel as open as that when it went down, `fromOpen`: it had it from there, so no slop to take up), which way the
+    // panel snaps (`open`). `waits`: it went down as a bar chosen was landing, and is the finger's only once it has.
     private var dragging = false
     private var holds = false
     private var fromOpen = false
+    private var open = false
+    private var waits = false
     private var x0 = 0f
     private var y0 = 0f
     private var o0 = 0f
-    private var vo = 0f
-    private var at = 0L
 
     /** The notch's openness as drawn: as its place has it, closed as far as the panel is drawn up (fully by half open). */
     fun kNow(): Float = k.value * (1f - (2f * o.value).coerceIn(0f, 1f))
 
     val moving: Boolean
         get() = o.moving || k.moving || held.moving || vis.moving || ballAlpha.moving || ballScale.moving || iconSwap.moving ||
-            iconWas != null || swap != null || ball?.resting == false || tints.any { it.moving }
+            iconWas != null || swap != null || ball?.resting == false || tints.values.any { it.moving }
 
     /** The loop: a frame at a time while anything moves, asleep otherwise. */
     suspend fun run() {
@@ -444,13 +446,49 @@ private class BarModel(shown: Boolean, notched: Boolean, ballShown: Boolean) {
     }
 
     fun step(dt: Float) {
-        for (s in arrayOf(o, k, held)) if (s.moving) s.step(dt)
+        val s = swap
+        // The frame a bar is chosen from a panel at rest, the stack is drawn as the rows were: it slides from the next.
+        if (s != null && s.still) s.still = false else if (o.moving) o.step(dt)
+        for (sp in arrayOf(k, held)) if (sp.moving) sp.step(dt)
         for (g in arrayOf(vis, ballAlpha, ballScale, iconSwap)) if (g.moving) g.step(dt)
-        for (g in tints) if (g.moving) g.step(dt)
-        ball?.let { if (!it.resting) it.step(dt) }
+        for (g in tints.values) if (g.moving) g.step(dt)
+        // Riding a bar chosen: the ball goes on its spring after the place it rides, from wherever it was.
+        val b = ball
+        if (b != null && s != null) ride(s)?.let { b.goX = it.x; b.goY = it.y; b.tension = 300f }
+        if (b != null && !b.resting) b.step(dt)
         if (iconWas != null && !iconSwap.moving) iconWas = null
         // A bar chosen: landed, the stack is where the bar is, drawn as the bar will be; it goes in this same frame.
-        if (swap != null && !o.moving && o.value <= 0f) land()
+        if (s != null && !o.moving && o.value <= 0f) swap = null
+    }
+
+    /** How far a bar chosen has come down: 0 as the panel was, 1 landed. */
+    fun t(s: Swap) = (1 - o.value / s.from).coerceIn(0f, 1f)
+
+    /** The stack's rows' look as they come down: from the rows' fade and offset as the bar was chosen, to none. */
+    fun rowAlpha(s: Swap) = s.alpha + (1 - s.alpha) * t(s)
+    fun rowDrop(s: Swap) = s.drop * (1 - t(s))
+
+    /** The chosen bar's places' middles and their height (dp in the panel's frame) as it comes down. */
+    fun swapAt(s: Swap): Pair<FloatArray, Float>? {
+        val sg = s.laid
+        val into = sg.sets.getOrNull(s.i) ?: return null
+        val t = t(s)
+        val from = sg.centres(0f, into.size)
+        if (t <= 0f) return from to sg.rowMid(s.n)
+        val to = sg.centres(kNow(), into.size)
+        // Landed: exactly where the bar's places are drawn.
+        if (t >= 1f) return to to sg.barMid
+        val xs = FloatArray(into.size) { from[it] + (to[it] - from[it]) * t }
+        return xs to (sg.rowMid(s.n) + (sg.barMid - sg.rowMid(s.n)) * t)
+    }
+
+    /** Where the place tapped in a bar chosen is as it comes down (null: none tapped). */
+    private fun ride(s: Swap): Offset? {
+        val key = s.key ?: return null
+        val j = s.laid.sets.getOrNull(s.i)?.indexOf(key) ?: return null
+        if (j < 0) return null
+        val (xs, y) = swapAt(s) ?: return null
+        return Offset(xs[j], y + rowDrop(s))
     }
 
     /** The notch's icon: another one swaps in (the circle staying), as it is when the notch is closed (nothing to see). */
@@ -474,16 +512,6 @@ private class BarModel(shown: Boolean, notched: Boolean, ballShown: Boolean) {
         if (open) o.to(1f, 260f, 17f) else o.to(0f, 320f, 26f)
     }
 
-    /** The bar chosen landed (or a finger down before it has): it is the bar, the ball put where it rode, the stack gone. */
-    private fun land() {
-        val s = swap ?: return
-        val g = geo
-        val into = s.sets.getOrNull(s.i)
-        val j = if (s.key != null && into != null) into.indexOf(s.key) else -1
-        if (g != null && into != null && j >= 0) ball?.snapTo(barCentres(g.w, kNow(), into.size)[j], Geo(g.w, s.sets, s.cur, null, false).barMid)
-        swap = null
-    }
-
     /** Where a touch on the glass is in the panel's frame (dp). */
     fun at(local: Offset, density: Density): Offset {
         val g = glass
@@ -492,60 +520,69 @@ private class BarModel(shown: Boolean, notched: Boolean, ballShown: Boolean) {
         return Offset(p.x / density.density, p.y / density.density)
     }
 
-    fun down(p: Offset, t: Long) {
-        // A bar being chosen: chosen now (it lands at once), then the finger is the finger's.
-        if (swap != null) { o.jump(0f); land() }
+    fun down(p: Offset) {
+        // A bar chosen landing: it lands on its own spring, untouched; the finger is the finger's once it has.
+        waits = swap != null
         dragging = false
+        holds = false
+        if (waits) return
         x0 = p.x
         y0 = p.y
-        // The panel open, opening or closing: held where it is, the finger's from here (not left to go on its own).
+        // The panel open, opening or closing: the finger has it from here, not stopping it (it goes on as it was going
+        // until the finger moves).
         val o0 = o.value
         holds = geo?.multi == true && (o0 > 0.02f || (o.moving && o.target > 0f))
         fromOpen = holds
-        if (holds) { o.jump(o0); mode = true }
+        open = o.target > 0.5f
+        if (holds) mode = true
         this.o0 = o0
-        vo = 0f
-        at = t
     }
 
     /** One stroke: a finger set on the bar (or the open panel) and moved any way takes the ball; up, the panel. */
-    fun move(p: Offset, t: Long): Boolean {
+    fun move(p: Offset): Boolean {
         val g = geo ?: return false
+        if (waits) {
+            if (swap != null) return true
+            // Landed, the finger still down: a stroke of its own from here.
+            down(p)
+        }
         if (!dragging && hypot(p.x - x0, p.y - y0) > SLOP) dragging = true
         if (g.multi && (holds || dragging)) {
-            // As open as the finger has drawn it up, from where it was: 1 to 1, past open a little give, never on its own.
+            // How open the finger draws it (1 to 1, from where it was).
             val raw = o0 + (y0 - p.y - (if (fromOpen) 0f else SLOP)) / g.reach
             if (!holds && raw > 0f) { holds = true; mode = true }
             if (holds) {
-                val next = if (raw > 1f) 1f + min(0.1f, (raw - 1f) * 0.25f) else max(0f, raw)
-                val dt = max(0.004f, (t - at) / 1000f)
-                vo = vo * 0.4f + (next - o.value) / dt * 0.6f
-                at = t
-                o.jump(next)
+                // Open once the finger is 24 over the bar, closed once it is back under 16; a quarter of the way toward
+                // where the finger draws it, as the ball leans toward the finger.
+                val over = g.rowTop - p.y
+                if (!open && over > OPENS) open = true else if (open && over < CLOSES) open = false
+                val snap = if (open) 1f else 0f
+                val goal = (snap + LEAN * (raw - snap)).coerceIn(0f, 1.1f)
+                if (open) o.to(goal, 260f, 17f) else o.to(goal, 320f, 26f)
             }
         }
         if (!dragging) return holds
         drag = p.x
-        // The ball goes on into the rows of the other bars once the panel is the finger's.
-        dragY = if (g.multi && holds) p.y.coerceIn(g.topY, g.barMid) else null
+        // The ball goes on into the rows of the other bars once the finger has the panel open (closed, it keeps to the bar).
+        dragY = if (g.multi && holds && open) p.y.coerceIn(g.topY, g.barMid) else null
         return true
     }
 
-    fun up(p: Offset, t: Long) {
+    fun up(p: Offset) {
         val g = geo ?: return lost()
+        // Lifted as a bar chosen was landing (or before the finger was its own): nothing.
+        if (waits) { waits = false; return }
         val had = holds
         holds = false
         if (!dragging) {
-            // A tap; the panel held and nothing tapped there: it goes on as it stands (open past half way, else closed).
-            if (!tap(p) && had) openPanel(o.value > 0.5f)
+            // A tap; the panel's and nothing tapped there: it goes on as it was going.
+            if (!tap(p) && had) mode = o.target > 0.5f
             return
         }
         dragging = false
         drag = null
         dragY = null
         if (had) {
-            // Still a while before the let-go: no fling.
-            if (t - at > STILL) vo = 0f
             letGo(g, p)
             return
         }
@@ -556,31 +593,30 @@ private class BarModel(shown: Boolean, notched: Boolean, ballShown: Boolean) {
     }
 
     /**
-     * The panel let go: on a place in the rows, the panel open (0.85), that bar and that place; elsewhere it opens if
-     * flung up or drawn more than half way (and not flung down), else it closes (let go on the bar: the place under the
-     * finger too); from where it is, as fast as the finger went.
+     * The panel let go: on a place in the rows, the panel open (0.85), that bar and that place; elsewhere (on the bar, above
+     * the panel, or the panel not yet open) it ends as the finger left it, open or closed, the lean gone (let go on the
+     * bar, closed: the place under the finger too).
      */
     private fun letGo(g: Geo, p: Offset) {
-        val now = o.value
-        val inRows = p.y < g.rowTop - 4f && g.others.isNotEmpty()
-        o.velocity = vo
-        if (inRows && now >= 0.85f) {
+        // Over the rows (not above the panel, where it is let go open with nothing chosen).
+        val inRows = p.y >= OVER && p.y < g.rowTop - 4f && g.others.isNotEmpty()
+        if (inRows && o.value >= 0.85f) {
             val i = g.others[g.rowAt(p.y)]
             val set = g.sets[i]
             pick(i, set[g.nearest(g.centres(0f, set.size), set.size, p.x)])
             return
         }
-        val stays = inRows && (vo > 1.5f || (vo > -1.5f && now > 0.5f))
-        val j = if (!inRows && g.items.isNotEmpty()) min(g.items.size - 1, g.nearest(g.final(mode), 4, p.x)) else -1
-        openPanel(stays)
-        if (j >= 0 && g.items[j] != g.active) onTab(g.items[j])
+        val j = if (p.y >= g.rowTop - 4f && g.items.isNotEmpty()) min(g.items.size - 1, g.nearest(g.final(mode), 4, p.x)) else -1
+        openPanel(open)
+        if (!open && j >= 0 && g.items[j] != g.active) onTab(g.items[j])
     }
 
     /** The gesture gone without its end being heard: as if let go where it was, nothing chosen. */
     fun lost() {
+        waits = false
         dragY = null
         if (dragging) { dragging = false; drag = null }
-        if (holds) { holds = false; openPanel(o.value > 0.5f) }
+        if (holds) { holds = false; openPanel(open) }
     }
 
     /** A tap (moved less than SLOP): a place on the bar; with the panel open, a row (that bar) or a place in it. */
@@ -597,7 +633,8 @@ private class BarModel(shown: Boolean, notched: Boolean, ballShown: Boolean) {
             pick(i, if (abs(cs[j] - p.x) <= g.slot / 2) set[j] else null)
             return true
         }
-        if (g.items.isEmpty()) return false
+        // The bar's places only on the bar (not on a panel going, above it).
+        if (g.items.isEmpty() || p.y < g.rowTop - 4f) return false
         val now = g.centres(kNow(), g.items.size)
         val j = g.nearest(now, g.items.size, p.x)
         if (abs(now[j] - p.x) > g.slot / 2) return false
@@ -612,22 +649,23 @@ private class BarModel(shown: Boolean, notched: Boolean, ballShown: Boolean) {
         return (1 - min(1f, v)) * 14f - max(0f, v - 1) * g.reach
     }
 
+    /** How the rows show as the panel opens: they come in over 0.35 to 1. */
+    fun rowsAlpha(): Float = ((o.value - 0.35f) / 0.65f).coerceIn(0f, 1f)
+
     /**
      * Another bar chosen (and a place in it, when one was tapped): it is the bar, and the place opens, now; the panel
      * closes like a window over a stack of bars, the chosen one sliding down into the bar's place, as the panel's
-     * openness goes to 0 (from where it was, at the finger's speed).
+     * openness goes to 0 from where it is. The stack starts as the rows and the bar were drawn (their fade, offset and
+     * how lit each place was), and comes to the bar's look as it lands.
      */
     fun pick(i: Int, key: String?) {
         if (swap != null) return
         val g = geo ?: return
         val n = g.others.indexOf(i)
         if (n < 0) return
-        val s = Swap(i, n, max(0.2f, o.value), key, g.sets, g.cur)
-        val into = g.sets[i]
-        val j = if (key != null) into.indexOf(key) else -1
-        val b = ball
-        if (j >= 0 && b != null) { s.dx = b.x - g.centres(0f, into.size)[j]; s.dy = b.y - g.rowMid(n) }
-        swap = s
+        val lit = HashMap<String, Float>()
+        for ((id, shade) in tints) lit[id] = shade.value
+        swap = Swap(i, n, max(0.2f, o.value), key, Geo(g.w, g.sets, g.cur, null, false), rowsAlpha(), rowsShift(g), lit, still = !o.moving)
         mode = false
         o.to(0f, 200f, 28f)
         onSwitch(i, key)
@@ -712,9 +750,12 @@ fun BottomBar(
         // Where the ball and its look go: one spring each way toward where it is sent (a goal moved meanwhile, by a
         // finger every frame, changes where it goes on the way), stepped by the bar's loop with the rest.
         SideEffect {
-            ball.goX = goalX
-            ball.goY = goalY
-            ball.tension = tension
+            // Riding a bar chosen, the bar's loop sends it (after the place it rides).
+            if (swap?.key == null) {
+                ball.goX = goalX
+                ball.goY = goalY
+                ball.tension = tension
+            }
             // A new width (turned): there at once, not sent across.
             if (width != w) { width = w; ball.snapTo(goalX, ball.y) }
             m.held.to(if (sliding) 1f else 0f)
@@ -733,23 +774,10 @@ fun BottomBar(
         // chosen one from then: laid out by that, the bar left was drawn over the chosen one's places, a flash). The
         // chosen bar lands where the bar's places are drawn as the notch is then (kNow): when the panel is closed, the
         // stack is the bar, place for place.
-        val laid = swap?.let { Geo(w, it.sets, it.cur, active, g.notched) }
-        fun swapT(s: Swap) = (1 - m.o.value / s.from).coerceIn(0f, 1f)
-        fun swapAt(s: Swap): Pair<FloatArray, Float>? {
-            val sg = laid ?: return null
-            val into = sg.sets.getOrNull(s.i) ?: return null
-            val t = swapT(s)
-            val from = sg.centres(0f, into.size)
-            val to = sg.centres(m.kNow(), into.size)
-            // Landed: exactly where the bar's places are drawn.
-            if (t >= 1f) return to to sg.barMid
-            val xs = FloatArray(into.size) { from[it] + (to[it] - from[it]) * t }
-            return xs to (sg.rowMid(s.n) + (sg.barMid - sg.rowMid(s.n)) * t)
-        }
+        val laid = swap?.laid
 
         val idle = if (dark) Color(0xFFD1D5DB) else Color(0xFF6B7280)
         val lit = if (dark) Color.White else Color(0xFF111827)
-        val landing = if (dark) Color(0xFFE5E7EB) else Color(0xFF374151)
         val bg = C.bg
         val raised = Raised
         val accent = C.accent
@@ -845,14 +873,14 @@ fun BottomBar(
                         if (!shown) return@pointerInput
                         awaitEachGesture {
                             val first = awaitFirstDown(requireUnconsumed = false)
-                            m.down(m.at(first.position, this@pointerInput), first.uptimeMillis)
+                            m.down(m.at(first.position, this@pointerInput))
                             var ended = false
                             try {
                                 while (true) {
                                     val change = awaitPointerEvent().changes.firstOrNull { it.id == first.id } ?: break
                                     val p = m.at(change.position, this@pointerInput)
-                                    if (!change.pressed) { ended = true; change.consume(); m.up(p, change.uptimeMillis); break }
-                                    if (m.move(p, change.uptimeMillis)) change.consume()
+                                    if (!change.pressed) { ended = true; change.consume(); m.up(p); break }
+                                    if (m.move(p)) change.consume()
                                 }
                             } catch (e: CancellationException) {
                                 throw e
@@ -931,7 +959,7 @@ fun BottomBar(
             Box(
                 Modifier
                     .layout { measurable, _ ->
-                        val box = ballBox(swap, ::swapAt, ::swapT, ball, goalX, m.held.value, m.ballScale.value, ::sx)
+                        val box = ballBox(ball, goalX, m.held.value, m.ballScale.value, ::sx)
                         val p = measurable.measure(Constraints.fixed(box.width.dp.roundToPx().coerceAtLeast(1), box.height.dp.roundToPx().coerceAtLeast(1)))
                         layout(p.width, p.height) { p.place(box.left.dp.roundToPx(), box.top.dp.roundToPx()) }
                     }
@@ -971,7 +999,7 @@ fun BottomBar(
             // the bar's are from the bar's).
             val panelOut by remember { derivedStateOf { m.mode || m.o.value > 0.001f } }
             if (panelOut && swap == null) Box(Modifier.matchParentSize().graphicsLayer {
-                alpha = ((m.o.value - 0.35f) / 0.65f).coerceIn(0f, 1f)
+                alpha = m.rowsAlpha()
                 translationY = m.rowsShift(g).dp.toPx()
                 compositingStrategy = CompositingStrategy.ModulateAlpha
             }) {
@@ -980,7 +1008,7 @@ fun BottomBar(
                     val cs = g.centres(0f, set.size)
                     set.forEachIndexed { j, key ->
                         val on = if (cand != null) cand.set == i && cand.key == key else active == key
-                        Place(m, key, labelOf(key), on, idle, lit, dots[key], icon,
+                        Place(m, "row:$key", key, labelOf(key), on, idle, lit, dots[key], icon,
                             Modifier.offset { IntOffset((sx(cs[j]) - g.slot / 2).dp.roundToPx(), (OVER + n * ROW + 4f).dp.roundToPx()) }
                                 .size(g.slot.dp, 48.dp),
                             role = Role.Button, onA11y = { m.pick(i, key) })
@@ -989,33 +1017,38 @@ fun BottomBar(
             }
             // The bar's places, over the ball.
             if (swap == null) g.items.forEachIndexed { j, key ->
-                Place(m, key, labelOf(key), (under ?: active) == key, idle, lit, dots[key], icon,
+                Place(m, "bar:$key", key, labelOf(key), (under ?: active) == key, idle, lit, dots[key], icon,
                     Modifier.offset { IntOffset((sx(g.centres(m.kNow(), g.items.size)[j]) - g.slot / 2).dp.roundToPx(), (g.rowTop + 4f).dp.roundToPx()) }
                         .size(g.slot.dp, 48.dp),
                     role = Role.Tab, onA11y = { onTab(key) })
             }
             // A bar being chosen: the stack of bars slides down inside the closing glass, the chosen one into the bar's
-            // place, what is not chosen cut off by the glass's edge. Nothing fades. The chosen bar's places go from the
-            // look of a bar landing to the bar's own (the place shown lit) as they come down: landed, they are the bar's
-            // places as drawn the next frame, and the stack goes with nothing changing.
+            // place, what is not chosen cut off by the glass's edge. Nothing fades out. It starts as the rows and the bar
+            // were drawn (the rows' fade and offset, each place as lit as it was), and comes to the bar's look as it
+            // lands (the place shown lit): landed, it is the bar's places as drawn the next frame, and goes with nothing
+            // changing.
             if (swap != null && laid != null) Box(Modifier.matchParentSize().graphicsLayer { shape = Window(clipTop().dp.toPx(), RAD.dp.toPx()); clip = true }) {
-                fun shift() = swapAt(swap)?.let { (_, y) -> y - laid.rowMid(swap.n) } ?: 0f
+                fun shift() = m.swapAt(swap)?.let { (_, y) -> y - laid.rowMid(swap.n) } ?: 0f
+                fun was(id: String) = shade(idle, lit, swap.lit[id] ?: 0f)
+                val rowAlpha = { m.rowAlpha(swap) }
+                val rowDrop = { m.rowDrop(swap) }
                 laid.others.forEachIndexed { n, i ->
                     if (i == swap.i) return@forEachIndexed
                     val set = laid.sets[i]
                     val cs = laid.centres(0f, set.size)
-                    set.forEachIndexed { j, key -> Flying(key, idle, dots[key], icon, g.slot) { Offset(sx(cs[j]), laid.rowMid(n) + shift()) } }
+                    set.forEachIndexed { j, key -> Flying(key, was("row:$key"), dots[key], icon, g.slot, rowAlpha, rowDrop) { Offset(sx(cs[j]), laid.rowMid(n) + shift()) } }
                 }
+                val t = m.t(swap)
                 laid.sets.getOrNull(swap.i)?.forEachIndexed { j, key ->
-                    val t = swapT(swap)
+                    val from = was("row:$key")
                     val end = if (key == active) lit else idle
-                    Flying(key, if (t >= 1f) end else lerp(landing, end, t), dots[key], icon, g.slot) {
-                        val (xs, y) = swapAt(swap) ?: return@Flying Offset.Zero
+                    Flying(key, if (t >= 1f) end else if (t <= 0f) from else lerp(from, end, t), dots[key], icon, g.slot, rowAlpha, rowDrop) {
+                        val (xs, y) = m.swapAt(swap) ?: return@Flying Offset.Zero
                         Offset(sx(xs[j]), y)
                     }
                 }
                 laid.items.forEachIndexed { j, key ->
-                    Flying(key, idle, dots[key], icon, g.slot) { Offset(sx(laid.centres(m.kNow(), laid.items.size)[j]), laid.barMid + shift()) }
+                    Flying(key, was("bar:$key"), dots[key], icon, g.slot) { Offset(sx(laid.centres(m.kNow(), laid.items.size)[j]), laid.barMid + shift()) }
                 }
             }
         }
@@ -1068,23 +1101,8 @@ private class BallMotion(x: Float, y: Float) {
 /** Where the ball is drawn (dp in the panel's frame): its box, stretched by its speed toward where it goes, or riding a bar being chosen. */
 private class BallBox(val left: Float, val top: Float, val width: Float, val height: Float)
 
-private fun ballBox(
-    swap: Swap?, swapAt: (Swap) -> Pair<FloatArray, Float>?, swapT: (Swap) -> Float, ball: BallMotion,
-    goalX: Float, held: Float, shown: Float, sx: (Float) -> Float,
-): BallBox {
+private fun ballBox(ball: BallMotion, goalX: Float, held: Float, shown: Float, sx: (Float) -> Float): BallBox {
     val scale = (1 + 0.06f * held) * shown
-    // A bar being chosen with a place tapped in it: the ball rides on that place down into the bar, from where it was
-    // as it was chosen (leaning toward the finger), onto the place by the time it lands.
-    if (swap?.key != null) {
-        val into = swap.sets.getOrNull(swap.i)
-        val j = into?.indexOf(swap.key) ?: -1
-        val at = swapAt(swap)
-        if (at != null && j >= 0) {
-            val d = BALL * scale
-            val off = 1f - swapT(swap)
-            return BallBox(sx(at.first[j] + swap.dx * off) - d / 2, at.second + swap.dy * off - d / 2, d, d)
-        }
-    }
     val x = ball.x
     val v = if (abs(goalX - x) < 0.5f) 0f else ball.vx / 60f
     val stretch = min(MAX_STRETCH, abs(v) * 1.6f)
@@ -1105,18 +1123,17 @@ private fun ballBox(
  */
 @Composable
 private fun Place(
-    m: BarModel, key: String, label: String, on: Boolean, idle: Color, lit: Color, dot: Color?, icon: @Composable (String, Color) -> Unit,
+    m: BarModel, id: String, key: String, label: String, on: Boolean, idle: Color, lit: Color, dot: Color?, icon: @Composable (String, Color) -> Unit,
     modifier: Modifier, role: Role, onA11y: () -> Unit,
 ) {
     // As it is when it comes, not lit up as it comes.
     val shade = remember { Glide(if (on) 1f else 0f) }
-    DisposableEffect(shade) {
-        m.tints += shade
-        onDispose { m.tints -= shade }
+    DisposableEffect(id, shade) {
+        m.tints[id] = shade
+        onDispose { if (m.tints[id] === shade) m.tints.remove(id) }
     }
     SideEffect { shade.to(if (on) 1f else 0f, 300, Ease.Css) }
-    val v = shade.value
-    val tint = if (v >= 1f) lit else if (v <= 0f) idle else lerp(idle, lit, v)
+    val tint = shade(idle, lit, shade.value)
     Box(
         // Its taps are the glass's (the gestures read where they land): here only what a screen reader says and does.
         modifier.semantics {
@@ -1136,11 +1153,25 @@ private fun PlaceFace(key: String, tint: Color, dot: Color?, icon: @Composable (
     if (dot != null) Box(Modifier.offset(13.5.dp, (-12.5).dp).size(7.dp).clip(CircleShape).drawBehind { drawRect(dot) })
 }
 
-/** A place's icon as a bar is chosen, its middle where `at` says (dp), in a slot as the bar's places are (to the pixel). */
+/** A place `v` lit: `lit` at 1, `idle` at 0. */
+private fun shade(idle: Color, lit: Color, v: Float) = if (v >= 1f) lit else if (v <= 0f) idle else lerp(idle, lit, v)
+
+/**
+ * A place's icon as a bar is chosen, its middle where `at` says (dp), in a slot as the bar's places are (to the pixel);
+ * faded and dropped (dp) as the rows were (`alpha`, `drop`) when it comes from them.
+ */
 @Composable
-private fun Flying(key: String, tint: Color, dot: Color?, icon: @Composable (String, Color) -> Unit, slot: Float, at: () -> Offset) {
+private fun Flying(
+    key: String, tint: Color, dot: Color?, icon: @Composable (String, Color) -> Unit, slot: Float,
+    alpha: () -> Float = { 1f }, drop: () -> Float = { 0f }, at: () -> Offset,
+) {
     Box(
         Modifier.offset { at().let { IntOffset((it.x - slot / 2).dp.roundToPx(), (it.y - 24f).dp.roundToPx()) } }.size(slot.dp, 48.dp)
+            .graphicsLayer {
+                this.alpha = alpha()
+                translationY = drop().dp.toPx()
+                compositingStrategy = CompositingStrategy.ModulateAlpha
+            }
             .semantics { testTag = "bar-flying-$key" },
         contentAlignment = Alignment.Center,
     ) { PlaceFace(key, tint, dot, icon) }

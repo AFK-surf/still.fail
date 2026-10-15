@@ -1,9 +1,10 @@
 // The bottom bar (ui/Bar.kt, Places.kt) on the fake core: on Home in light and dark (the ball 6 past the bar on every
 // side at rest; the notch empty, the page's own paper showing there; no shadow above the bar), a place tapped (the page
-// switched in place, the ball over it), the panel of the other bars drawn up by a finger (as open as it is drawn, held
-// still where it is held, let go: open past half way or flung up, else closed; a finger on it as it goes holds it), one
-// stroke from the bar into a place of another bar (that bar and that place at once; it lands whole, the bar left never
-// drawn over it, the ball and the notch never jumping), the settings
+// switched in place, the ball over it), the panel of the other bars snapping open and closed under a finger by how high
+// it is (leaning toward it; let go, as the finger left it; a finger on it as it goes has it from there, a tap changes
+// nothing), one stroke from the bar into a place of another bar (that bar and that place at once; the frame it is chosen
+// drawn as the frame before; it lands whole, the bar left never drawn over it, the ball and the notch never jumping, a
+// finger on it as it lands changing nothing), the settings
 // page's cards (a place taken out, one added, a bar made and deleted, a place moved), and the notch's action: 令 on the
 // chats' pages, a "+" on a page that adds (Station, for a manager), none on 用量 (the notch closed), the notch staying
 // open between two pages that have one, the icon in it swapping. Pictures: settled.png under motion/bar-*.
@@ -198,8 +199,9 @@ class BarTest {
     }
 
     /**
-     * The same up into the panel of the other bars and across its row, the finger moving every frame: the ball goes up
-     * into the row and along it with the finger; brought back down and let go where it began, nothing is chosen.
+     * The same up into the panel of the other bars and across its row, the finger moving every frame: the panel open,
+     * the ball goes up into the row and along it with the finger; brought back down and let go where it began, nothing
+     * is chosen.
      */
     @Test fun panelSlideFollows() {
         val h = launch()
@@ -213,6 +215,8 @@ class BarTest {
         r.frame()
         val start = bounds("bar-ball").center
         for (i in 1..15) r.frame { rule.onRoot().performTouchInput { moveTo(Offset(x0, y0 + (row - y0) * i / 15f)) } }
+        // The panel open once the finger is 24 over the bar (the last frames): the ball goes up with it from then.
+        for (i in 1..12) r.frame { rule.onRoot().performTouchInput { moveTo(Offset(x0, row)) } }
         val up = start.y - bounds("bar-ball").center.y
         val from = bounds("bar-ball").center.x
         for (i in 1..30) r.frame { rule.onRoot().performTouchInput { moveTo(Offset(x0 + (x1 - x0) * i / 30f, row)) } }
@@ -254,7 +258,7 @@ class BarTest {
         assertEquals(false, rule.activity.isFinishing)
     }
 
-    /** A quick swipe up on the bar (a fling): the panel opens and stays open; a press beside it closes it. */
+    /** A swipe up on the bar past 24 over it, let go above the rows: the panel opens and stays open; a press beside it closes it. */
     @Test fun panelOpen() = panel(false)
     @Test fun panelOpenDark() = panel(true)
 
@@ -264,7 +268,7 @@ class BarTest {
         rule.onRoot().performTouchInput {
             down(Offset(g.left + 28 * d, g.top + 28 * d))
             moveTo(Offset(g.left + 30 * d, g.top + 10 * d))
-            moveTo(Offset(g.left + 32 * d, g.top - 20 * d))
+            moveTo(Offset(g.left + 32 * d, g.top - 60 * d))
             up()
         }
         h.settle()
@@ -321,183 +325,238 @@ class BarTest {
     private fun openness(closed: Float) = (closed - glassTop()) / (56 * d)
 
     /**
-     * A finger down near the bar's top and drawn straight up by the slop (8) and `rise` (dp) over `n` frames, moving
-     * every frame; then still `still` frames (moving to where it is); let go. Answers how open the panel was as it was
-     * let go.
+     * A finger on a recording: moved every frame, from where it last was, each move in its frame (no time of its own
+     * besides: a frame a move, as a finger's).
      */
-    private fun drawUp(r: Recording, closed: Float, rise: Float, n: Int, still: Int): Float {
-        val x = bounds("bar-glass").left + 28 * d
-        val y0 = closed + 6 * d
-        val to = y0 - (8 + rise) * d
-        r.touch { down(Offset(x, y0)) }
-        for (i in 1..n) r.touch { moveTo(Offset(x, y0 + (to - y0) * i / n)) }
-        for (i in 1..still) r.touch { moveTo(Offset(x, to)) }
-        val o = openness(closed)
-        r.touch { up() }
-        return o
+    private inner class Finger(val r: Recording, var at: Offset) {
+        fun down() = r.touch { down(at) }
+        fun to(p: Offset, frames: Int) {
+            val from = at
+            for (i in 1..frames) r.touch { moveTo(from + (p - from) * (i / frames.toFloat()), delayMillis = 0) }
+            at = p
+        }
+        /** Still `frames` frames (moving to where it is, as a finger on glass does): how open the panel is each frame. */
+        fun hold(frames: Int, closed: Float) = (1..frames).map { r.touch { moveTo(at, delayMillis = 0) }; openness(closed) }
+        fun up() = r.touch { up() }
     }
 
-    /** Drawn up half way and held there 30 frames, the finger still: the panel stays where the finger put it. */
-    @Test fun panelHeldStill() {
+    /** Where the panel leans to, drawn by a finger from the bar's middle to `over` dp above its top, open or closed. */
+    private fun lean(open: Boolean, over: Float): Float {
+        val raw = (28 + over - 8) / 56
+        val snap = if (open) 1f else 0f
+        return (snap + 0.25f * (raw - snap)).coerceIn(0f, 1.1f)
+    }
+
+    /** Held still, once settled (its last 30 frames): where it rests, and that it rests there. */
+    private fun settled(name: String, path: List<Float>, expect: Float) {
+        val rest = path.takeLast(30)
+        assertTrue("$name: settled at $expect (${rest.min()}..${rest.max()})", rest.all { abs(it - expect) < 0.012f })
+    }
+
+    /**
+     * The panel snaps as the ball does: a finger drawn up from the bar and held, the panel is closed (leaning a quarter of
+     * the way toward the finger) under 24 above the bar, open (leaning) once over it, and stays open back down to 16, closed
+     * under it; held still, it rests there. Let go above the panel: open, the lean gone. Frames: motion/bar-panel-snap.
+     */
+    @Test fun panelSnapsWhileHeld() {
         val h = launch()
-        val closed = glassTop()
-        val x = bounds("bar-glass").left + 28 * d
-        val y0 = closed + 6 * d
-        val to = y0 - (8 + 25) * d
-        val r = h.record("bar-panel-held")
-        r.touch { down(Offset(x, y0)) }
-        for (i in 1..14) {
-            r.touch { moveTo(Offset(x, y0 + (to - y0) * i / 14)) }
-            // As open as the finger has drawn it (past the slop), frame by frame.
-            val drawn = max(0f, ((y0 - (y0 + (to - y0) * i / 14)) / d - 8) / 56)
-            assertEquals("frame $i: as open as drawn", drawn, openness(closed), 0.03f)
+        val g = bounds("bar-glass")
+        val closed = g.top
+        fun over(dp: Float) = Offset(g.left + 28 * d, closed - dp * d)
+        val f = Finger(h.record("bar-panel-snap"), Offset(g.left + 28 * d, closed + 28 * d))
+        f.down()
+        f.to(over(10f), 8)
+        settled("10 over the bar", f.hold(60, closed), lean(false, 10f))
+        f.to(over(40f), 8)
+        val opening = f.hold(60, closed)
+        assertTrue("open while held: ${opening.max()}", opening.max() > 0.98f)
+        settled("40 over", opening, lean(true, 40f))
+        f.to(over(20f), 6)
+        settled("back to 20 over: still open", f.hold(60, closed), lean(true, 20f))
+        f.to(over(10f), 6)
+        val closing = f.hold(60, closed)
+        assertTrue("closed while held: ${closing.min()}", closing.min() < 0.15f)
+        settled("back to 10 over: closed", closing, lean(false, 10f))
+        f.to(over(60f), 10)
+        settled("60 over", f.hold(60, closed), lean(true, 60f))
+        f.up()
+        f.r.frames(40)
+        f.r.end()
+        assertEquals("let go above the panel: open", 1f, openness(closed), 0.01f)
+        assertEquals(listOf<Screen>(Screen.Home), h.app.stack)
+        assertEquals(0L, h.app.bars.current)
+    }
+
+    /** Opened, drawn back under 16 and let go there: closed, nothing chosen. */
+    @Test fun panelLetGoBelow() {
+        val h = launch()
+        val g = bounds("bar-glass")
+        val closed = g.top
+        val f = Finger(h.record("bar-panel-below"), Offset(g.left + 28 * d, closed + 28 * d))
+        f.down()
+        f.to(Offset(f.at.x, closed - 40 * d), 8)
+        f.hold(30, closed)
+        f.to(Offset(f.at.x, closed - 10 * d), 6)
+        f.hold(10, closed)
+        f.up()
+        val after = (1..40).map { f.r.frame(); openness(closed) }
+        f.r.end()
+        assertEquals("closed", 0f, after.last(), 0.01f)
+        rule.onNodeWithTag("bar-place-connects").assertDoesNotExist()
+        assertEquals(listOf<Screen>(Screen.Home), h.app.stack)
+        assertEquals(0L, h.app.bars.current)
+    }
+
+    /**
+     * A finger put on the panel as it goes: a tap changes nothing (frame for frame as if none); one that moves has it by
+     * where it is, from there, not stopping it (closing, drawn up past 24 over the bar: it opens again, held).
+     */
+    @Test fun panelTouchedAsItGoes() {
+        val h = launch()
+        val g = bounds("bar-glass")
+        val closed = g.top
+        fun open(name: String, tap: Boolean): List<Float> {
+            val f = Finger(h.record(name), Offset(g.left + 28 * d, closed + 28 * d))
+            f.down()
+            f.to(Offset(f.at.x, closed - 60 * d), 6)
+            f.up()
+            val path = ArrayList<Float>()
+            for (i in 1..30) {
+                when {
+                    tap && i == 1 -> f.r.touch { down(Offset(g.left + 60 * d, glassTop() + 10 * d)) }
+                    tap && i == 2 -> f.r.touch { up() }
+                    else -> f.r.frame()
+                }
+                path += glassTop()
+            }
+            f.r.end()
+            assertEquals("$name: open", 1f, openness(closed), 0.01f)
+            rule.onRoot().performTouchInput { click(Offset(g.center.x, closed - 300 * d)) }
+            h.settle()
+            return path
         }
-        val top = glassTop()
-        val o = openness(closed)
-        for (i in 1..30) {
-            r.touch { moveTo(Offset(x, to)) }
-            assertEquals("held still, frame $i: where the finger put it (${openness(closed)} of $o)", top, glassTop(), 0.5f)
-        }
-        r.touch { up() }
+        val alone = open("bar-panel-opening", false)
+        val tapped = open("bar-panel-opening-tapped", true)
+        alone.zip(tapped).forEachIndexed { i, (a, b) -> assertEquals("frame $i: tapped as it opened, as if not", a, b, 0.5f) }
+        // Open; drawn down under 16 and let go: closing; two frames on, a finger on it drawn up past 24: open again.
+        val r = h.record("bar-panel-closing-taken")
+        val f = Finger(r, Offset(g.left + 28 * d, closed + 28 * d))
+        f.down()
+        f.to(Offset(f.at.x, closed - 40 * d), 8)
+        f.hold(40, closed)
+        f.to(Offset(f.at.x, closed - 5 * d), 8)
+        f.up()
+        r.frames(2)
+        val o0 = openness(closed)
+        val g2 = Finger(r, Offset(g.left + 60 * d, glassTop() + 10 * d))
+        g2.down()
+        val goes = openness(closed)
+        assertTrue("not stopped by the finger: $o0 then $goes", goes < o0 - 0.01f)
+        val y0 = g2.at.y
+        g2.to(Offset(g2.at.x, g2.at.y - 30 * d), 10)
+        val held = g2.hold(60, closed)
+        val raw = o0 + (y0 - g2.at.y) / (56 * d)
+        settled("drawn up past 24 as it closed: open, leaning", held, 1f + 0.25f * (raw - 1f))
+        g2.to(Offset(g2.at.x, closed - 60 * d), 6)
+        g2.up()
         r.frames(40)
         r.end()
-        assertTrue("drawn up 25 of 56: $o", abs(o - 25f / 56) < 0.03f)
-        // Let go still under half way: closed.
-        assertEquals(0f, openness(closed), 0.02f)
-        rule.onNodeWithTag("bar-place-connects").assertDoesNotExist()
-    }
-
-    /** Drawn under half way and let go slowly: it closes; over half way: it opens and stays; nothing chosen either way. */
-    @Test fun panelLetGoSlowly() {
-        val h = launch()
-        val closed = glassTop()
-        val under = h.record("bar-panel-under-half")
-        val o1 = drawUp(under, closed, 0.4f * 56, 12, 10)
-        val after1 = (1..40).map { under.frame(); openness(closed) }
-        under.end()
-        assertTrue("let go at $o1", abs(o1 - 0.4f) < 0.03f)
-        assertTrue("it went no further open: ${after1.max()}", after1.max() <= o1 + 0.01f)
-        assertEquals("closed", 0f, openness(closed), 0.02f)
-        rule.onNodeWithTag("bar-place-connects").assertDoesNotExist()
-        val over = h.record("bar-panel-over-half")
-        val o2 = drawUp(over, closed, 0.6f * 56, 12, 10)
-        val after2 = (1..40).map { over.frame(); openness(closed) }
-        over.end()
-        assertTrue("let go at $o2", abs(o2 - 0.6f) < 0.03f)
-        assertTrue("it went no further closed: ${after2.min()}", after2.min() >= o2 - 0.01f)
-        assertEquals("open", 1f, openness(closed), 0.02f)
-        rule.onNodeWithTag("bar-place-connects").assertExists()
+        assertEquals(1f, openness(closed), 0.01f)
         assertEquals(listOf<Screen>(Screen.Home), h.app.stack)
         assertEquals(0L, h.app.bars.current)
     }
 
-    /** A quick flick up from a small drag opens it; a flick down from open closes it (drawn only a third of the way). */
-    @Test fun panelFlicks() {
-        val h = launch()
-        val closed = glassTop()
-        val up = h.record("bar-panel-flick-up")
-        val o1 = drawUp(up, closed, 0.2f * 56, 2, 0)
-        up.frames(40)
-        up.end()
-        assertTrue("let go at $o1", o1 < 0.3f)
-        assertEquals("flung up: open", 1f, openness(closed), 0.02f)
-        val x = bounds("bar-glass").left + 28 * d
-        // On the open panel's row, flung down by 20 (of 56).
-        val y0 = closed - 36 * d
-        val down = h.record("bar-panel-flick-down")
-        down.touch { down(Offset(x, y0)) }
-        for (i in 1..2) down.touch { moveTo(Offset(x, y0 + 10 * d * i)) }
-        val o2 = openness(closed)
-        down.touch { up() }
-        down.frames(40)
-        down.end()
-        assertTrue("let go at $o2", o2 > 0.6f)
-        assertEquals("flung down: closed", 0f, openness(closed), 0.02f)
-        assertEquals(listOf<Screen>(Screen.Home), h.app.stack)
-        assertEquals(0L, h.app.bars.current)
+    /** From the bar's first place up into the other bar's row to 连接, held there `still` frames (the finger moving every frame). */
+    private fun strokeToConnects(f: Finger, still: Int) {
+        val g = bounds("bar-glass")
+        val w = g.width / d
+        val connectsX = g.left + (w - 28 - (w - 56) / 3) * d
+        f.down()
+        f.to(Offset(connectsX, g.top - 34 * d), 20)
+        f.hold(still, g.top)
     }
 
     /**
-     * Let go and on its way (opening, then closing), a finger put on it: it stops where it is that frame, stays there
-     * while the finger is still (moving to where it is), and goes with the finger after, 1 to 1, from there. Frames:
-     * motion/bar-panel-grab-{opening,closing}.
+     * A finger put on the bar as a bar chosen lands, moved and lifted: the landing goes on untouched, frame for frame as
+     * one nobody touched; the bar and the place stay chosen.
      */
-    @Test fun panelGrabbed() {
+    @Test fun touchDuringLanding() {
         val h = launch()
-        val closed = glassTop()
-        val x = bounds("bar-glass").left + 28 * d
-        /** Three frames after it was let go, a finger on it at `at` (dp from the glass's top): held, then moved `by` (dp) a frame. */
-        fun grab(r: Recording, name: String, by: Float, opening: Boolean) {
-            r.frames(3)
-            val going = openness(closed)
-            assertTrue("$name: on its way when held ($going)", if (opening) going > 0.62f && going < 0.95f else going < 0.38f && going > 0.02f)
-            val top = glassTop()
-            val at = Offset(x, top + 20 * d)
-            r.touch { down(at) }
-            assertEquals("$name: the frame the finger is put on it, where it was ($going)", top, glassTop(), 0.5f)
-            for (i in 1..10) {
-                r.touch { moveTo(at) }
-                assertEquals("$name: held, frame $i", top, glassTop(), 0.5f)
+        val g = bounds("bar-glass")
+        fun land(name: String, touch: Boolean): List<Float> {
+            val r = h.record(name)
+            val f = Finger(r, Offset(g.left + 28 * d, g.top + 28 * d))
+            strokeToConnects(f, 40)
+            f.up()
+            assertEquals(1L, h.app.bars.current)
+            val path = ArrayList<Float>()
+            var t: Finger? = null
+            for (i in 1..50) {
+                when {
+                    touch && i == 3 -> t = Finger(r, Offset(g.left + 60 * d, glassTop() + 20 * d)).also { it.down() }
+                    touch && i in 4..18 -> t!!.to(Offset(t.at.x, t.at.y + 2 * d), 1)
+                    touch && i == 19 -> t!!.up()
+                    else -> r.frame()
+                }
+                path += glassTop()
             }
-            for (i in 1..10) {
-                r.touch { moveTo(Offset(at.x, at.y + by * d * i)) }
-                assertEquals("$name: with the finger, frame $i", top + by * d * i, glassTop(), 1.5f)
-            }
-            r.touch { up() }
-            r.frames(40)
             r.end()
+            assertEquals(1L, h.app.bars.current)
+            assertEquals(listOf<Screen>(Screen.Connects()), h.app.stack)
+            return path
         }
-        // Let go over half way: opening; held, then drawn down onto the bar (where it was let go: closed, on 对话 still).
-        val opening = h.record("bar-panel-grab-opening")
-        drawUp(opening, closed, 0.6f * 56, 12, 10)
-        grab(opening, "opening", 2f, true)
-        assertEquals("let go on the bar: closed", 0f, openness(closed), 0.02f)
-        // Opened, drawn down under half way and let go: closing; held, then drawn up again and flung open.
-        val open = h.record("bar-panel-open")
-        drawUp(open, closed, 0.6f * 56, 12, 10)
-        open.frames(40)
-        open.end()
-        assertEquals(1f, openness(closed), 0.02f)
-        val closing = h.record("bar-panel-grab-closing")
-        val y0 = closed - 36 * d
-        closing.touch { down(Offset(x, y0)) }
-        for (i in 1..12) closing.touch { moveTo(Offset(x, y0 + 0.6f * 56 * d * i / 12)) }
-        for (i in 1..10) closing.touch { moveTo(Offset(x, y0 + 0.6f * 56 * d)) }
-        closing.touch { up() }
-        grab(closing, "closing", -2f, false)
-        assertEquals("flung up: open", 1f, openness(closed), 0.02f)
-        assertEquals(listOf<Screen>(Screen.Home), h.app.stack)
-        assertEquals(0L, h.app.bars.current)
+        val alone = land("bar-landing", false)
+        rule.runOnUiThread { h.app.setBars(h.app.bars.sets, 0); h.app.place(Screen.Home) }
+        h.settle()
+        val touched = land("bar-landing-touched", true)
+        android.util.Log.i("bartest", "landing, glass top a frame: ${alone.joinToString(" ")} / touched ${touched.joinToString(" ")}")
+        alone.zip(touched).forEachIndexed { i, (a, b) -> assertEquals("frame $i of the landing, touched as not", a, b, 0.5f) }
+        rule.onNodeWithTag("bar-place-usage").assertExists()
     }
 
     /**
-     * A finger put on the panel as it goes and lifted without moving: let go still where it was held (open past half
-     * way, else closed), not left there.
+     * The frame a bar is chosen (the panel at rest, the finger held still on 连接 and let go): the stack is drawn as the
+     * rows and the bar were the frame before, every place where it was (to a pixel), as faded and as lit; the ball goes
+     * on from where it was. Frames: motion/bar-pick.
      */
-    @Test fun panelTappedAsItGoes() {
+    @Test fun pickSeamless() {
         val h = launch()
-        val closed = glassTop()
-        for ((name, rise, end) in listOf(Triple("opening", 0.52f, 1f), Triple("closing", 0.45f, 0f))) {
-            val r = h.record("bar-panel-tap-$name")
-            // Tapped the frame after: under 0.6 (over it, a tap on a row chooses that bar).
-            drawUp(r, closed, rise * 56, 12, 10)
-            val top = glassTop()
-            val at = Offset(bounds("bar-glass").right - 40 * d, top + 16 * d)
-            r.touch { down(at) }
-            for (i in 1..5) {
-                r.touch { moveTo(at) }
-                assertEquals("$name: held, frame $i", top, glassTop(), 0.5f)
+        val g = bounds("bar-glass")
+        val chosen = listOf("decisions", "usage", "connects", "archive")
+        val left = listOf("chats", "files", "profiles", "stations")
+        val r = h.record("bar-pick")
+        val f = Finger(r, Offset(g.left + 28 * d, g.top + 28 * d))
+        strokeToConnects(f, 90)
+        fun centre(tag: String) = rule.onNodeWithTag(tag).fetchSemanticsNode().let { it.positionInRoot + Offset(it.size.width / 2f, it.size.height / 2f) }
+        val before = (chosen + left).associateWith { centre("bar-place-$it") }
+        val ball0 = bounds("bar-ball").center
+        val bmp0 = rule.onRoot().captureToImage().asAndroidBitmap()
+        f.up()
+        assertEquals(1L, h.app.bars.current)
+        val after = (chosen + left).associateWith { centre("bar-flying-$it") }
+        val ball1 = bounds("bar-ball").center
+        val bmp1 = rule.onRoot().captureToImage().asAndroidBitmap()
+        r.frames(40)
+        r.end()
+        /** An icon's ink: the mean of the darkest sixth of its box (28 dp about its middle). */
+        fun ink(b: Bitmap, c: Offset): Float {
+            val half = (14 * d).toInt()
+            val l = ArrayList<Int>()
+            for (y in c.y.toInt() - half until c.y.toInt() + half) for (x in c.x.toInt() - half until c.x.toInt() + half) {
+                val p = b.getPixel(x, y)
+                l += (android.graphics.Color.red(p) * 299 + android.graphics.Color.green(p) * 587 + android.graphics.Color.blue(p) * 114) / 1000
             }
-            r.touch { up() }
-            r.frames(40)
-            r.end()
-            assertEquals("$name: let go still, it went on", end, openness(closed), 0.02f)
-            // Closed again by a press beside it.
-            if (end > 0f) rule.onRoot().performTouchInput { click(Offset(bounds("bar-glass").center.x, closed - 300 * d)) }
-            h.settle()
+            l.sort()
+            return l.take(l.size / 6).average().toFloat()
         }
-        assertEquals(listOf<Screen>(Screen.Home), h.app.stack)
-        assertEquals(0L, h.app.bars.current)
+        val moved = (chosen + left).associateWith { (after[it]!! - before[it]!!).getDistance() }
+        // Under 连接 the ball (it moves on its spring): its icon's ink is not compared.
+        val inks = (chosen + left).filter { it != "connects" }.associateWith { abs(ink(bmp1, after[it]!!) - ink(bmp0, before[it]!!)) }
+        android.util.Log.i("bartest", "pick: moved (px) $moved; ink change $inks; ball ${(ball1 - ball0).getDistance() / d} dp")
+        moved.forEach { (k, v) -> assertTrue("$k moved $v px at the pick", v <= 1f) }
+        // 0.02 of the icons' alpha is about 3 of the ink's levels.
+        inks.forEach { (k, v) -> assertTrue("$k changed by $v levels at the pick", v <= 3f) }
+        assertTrue("the ball moved ${(ball1 - ball0).getDistance() / d} dp at the pick", (ball1 - ball0).getDistance() <= 3 * d)
     }
 
     /**
@@ -518,7 +577,7 @@ class BarTest {
         val r = h.record("bar-stroke-lands")
         r.touch { down(from) }
         for (i in 1..20) r.touch { moveTo(from + (to - from) * (i / 20f)) }
-        for (i in 1..5) r.touch { moveTo(to) }
+        for (i in 1..30) r.touch { moveTo(to) }
         r.touch { up() }
         assertEquals(1L, h.app.bars.current)
         assertEquals(listOf<Screen>(Screen.Connects()), h.app.stack)
