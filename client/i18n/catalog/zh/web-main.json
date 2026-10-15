@@ -652,6 +652,10 @@
   "web-main.rail.kind.lists": "对话列表",
   "web-main.rail.kind.attention": "提醒",
   "web-main.rail.addWorkspace": "新建 workspace、添加账号",
+  "web-main.download.title": "下载客户端",
+  "web-main.download.mac": "Apple 芯片",
+  "web-main.download.windows": "x64",
+  "web-main.download.android": "手机扫码下载",
   "web-main.system.label": "系统通知",
   "web-main.system.changelog": "看看"
 }

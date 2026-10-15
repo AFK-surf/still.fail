@@ -199,3 +199,20 @@ export const zouSmall = style({ fontSize: vars.textBody, lineHeight: "18px", fon
 globalStyle(`[data-rail] ${navFoot}:not(:has(:is(a, button):not(${narrowOnly} *, ${stationRow} *))):not(:has(${stationTrouble}[data-state]:not(${narrowOnly} *)))`, {
   "@media": { [wide]: { display: "none" } },
 });
+
+// ── 下载客户端 (Rail.tsx RailDownload): on the web only, its panel the site's download card in the app's panel ──
+
+export const download = style({ width: 232, display: "grid", gap: 2 });
+/** An app's row: its name, a word on which build, the download arrow at the end; a link, its ground on hover. */
+export const downloadRow = style({
+  textDecoration: "none",
+  selectors: { "&:hover": { background: vars.hover }, "&:focus-visible": { outline: `2px solid ${vars.fieldFocus}`, outlineOffset: -2 } },
+});
+export const downloadName = style({ fontWeight: 600, marginRight: 6 });
+export const downloadNote = style({ color: vars.muted });
+/** Android's: the code to scan, on white whatever the theme (it is drawn black on nothing), and what to do with it. */
+export const downloadScan = style({ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", minHeight: 0 });
+export const downloadQr = style({
+  width: 72, height: 72, padding: 5, flex: "none", background: "#fff", borderRadius: `calc(8px * ${vars.cornerScale})`,
+  cornerShape: vars.cornerShape,
+});

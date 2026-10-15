@@ -443,6 +443,7 @@
   "web-mobile.settings.appearance.theme": "主题",
   "web-mobile.settings.appearance.title": "外观",
   "web-mobile.settings.changelog": "更新日志",
+  "web-mobile.settings.downloadAndroid": "下载 Android 客户端",
   "web-mobile.settings.connects": "连接",
   "web-mobile.settings.connectsCount": "{n} 个",
   "web-mobile.settings.connectsFailing": "{n} 个出错",

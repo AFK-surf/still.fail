@@ -15,7 +15,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ComponentType, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { DropdownMenu, Popover } from "radix-ui";
 import { NavLink, useLocation, useNavigate } from "react-router";
-import { Archive, Bell, Chart, Chats, Folder, Im, Minus, Plus, Quota, Retry, Settings, Sliders, User, Watch, type IconProps } from "./icons.tsx";
+import { Archive, Bell, Chart, Chats, Download, Folder, Im, Minus, Plus, Quota, Retry, Settings, Sliders, User, Watch, type IconProps } from "./icons.tsx";
 import { ICON, PanelGroup, PanelHead, PanelNote, PanelRow, setKeptWidth, Tip, usePointerTip } from "./ui.tsx";
 import { lastChatOf, useLastChat, useWorkspaceMarks } from "./lastChat.ts";
 import { useSidebarMode, type SidebarMode } from "./station.tsx";
@@ -32,6 +32,8 @@ import { moveSidebar, onSidebarChosen, showSidebar, useSidebarToggle } from "./b
 import * as shellCss from "./styles/shell.css.ts";
 import { reducedMotion } from "./motion.ts";
 import * as css from "./Rail.css.ts";
+import * as uiCss from "./ui.css.ts";
+import { androidQr, download, downloadsOffered } from "./downloads.ts";
 import { t } from "./i18n.ts";
 
 /** Every place the rail can show, in the order the settings list them when none was chosen. */
@@ -306,6 +308,8 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
       <div className={css.grow} />
       {/* Every workspace at the foot, always, not one of the places chosen: the one in view its switcher. */}
       <RailWorkspaces scope={scope} current={workspace} />
+      {/* In a browser, the apps to download (the desktop app has itself). */}
+      {downloadsOffered() && <RailDownload />}
       {/* A place left out of the rail is reached in the settings: they are lit while in it. */}
       <Tip label={t("web-pages.settings.title")} side="right">
         <NavLink className={css.item} to={settings} data-on={inSettings || undefined} aria-label={t("web-pages.settings.title")}
@@ -352,6 +356,41 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
               })}
             </PanelGroup>
           ))}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+/**
+ * 下载客户端, over the settings in a browser: this channel's apps (downloads.ts), as the site's card has them: the Mac's
+ * and Windows' to download, a code to scan for Android.
+ */
+function RailDownload() {
+  const label = t("web-main.download.title");
+  const [open, setOpen] = useState(false);
+  const app = (href: string, name: string, note: string) => (
+    <a className={`${uiCss.panelRow} ${css.downloadRow}`} href={href}>
+      <span className={uiCss.panelRowLabel}><span className={css.downloadName}>{name}</span><span className={css.downloadNote}>{note}</span></span>
+      <span className={uiCss.panelRowEnd}><Download size={16} /></span>
+    </a>
+  );
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Tip label={label} side="right">
+        <Popover.Trigger asChild>
+          <button type="button" className={css.item} data-on={open || undefined} aria-label={label}><Download size={20} /></button>
+        </Popover.Trigger>
+      </Tip>
+      <Popover.Portal>
+        <Popover.Content className={`${controlsCss.popover} ${css.download}`} side="right" align="end" sideOffset={8} collisionPadding={8}>
+          <PanelHead title={label} />
+          {app(download("mac"), "Mac", t("web-main.download.mac"))}
+          {app(download("win"), "Windows", t("web-main.download.windows"))}
+          <div className={`${uiCss.panelRow} ${css.downloadScan}`}>
+            <img className={css.downloadQr} src={androidQr()} alt="" width={72} height={72} />
+            <span className={uiCss.panelRowLabel}><span className={css.downloadName}>Android</span><br /><span className={css.downloadNote}>{t("web-main.download.android")}</span></span>
+          </div>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

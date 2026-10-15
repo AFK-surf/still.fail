@@ -455,6 +455,7 @@
   "web-mobile.settings.appearance.theme": "Theme",
   "web-mobile.settings.appearance.title": "Appearance",
   "web-mobile.settings.changelog": "What's new",
+  "web-mobile.settings.downloadAndroid": "Get the Android app",
   "web-mobile.settings.connects": "Connects",
   "web-mobile.settings.connectsCount": "{n}",
   "web-mobile.settings.connectsFailing": "{n} failing",

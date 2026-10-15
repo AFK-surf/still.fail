@@ -16,6 +16,7 @@ import { t } from "../i18n.ts";
 import { setPrefs, usePrefs } from "../prefs.ts";
 import { useChangelog } from "../changelog.ts";
 import { standalone } from "../standalone.ts";
+import { download, downloadsOffered, onAndroid } from "../downloads.ts";
 import { Presence } from "./Connects.tsx";
 import { railLabel } from "../Rail.tsx";
 import type { BarPlace } from "./Bar.tsx";
@@ -95,6 +96,8 @@ export function SettingsScreen() {
         <GoRow title={t("common.language")} value={languages().find(([v]) => v === language)?.[1]} onClick={at("/settings/language")} />
         <Notify />
         <GoRow title={t("web-mobile.settings.changelog")} value={build != null ? `0.1.${build}` : undefined} onClick={at("/settings/changelog")} />
+        {/* On an Android phone's browser, this channel's app. */}
+        {downloadsOffered() && onAndroid() && <GoRow title={t("web-mobile.settings.downloadAndroid")} onClick={() => { location.href = download("android"); }} />}
         {/* An app on the home screen has no browser round it to reload the page: here it can. */}
         {standalone() && <ListRow onClick={() => location.reload()}><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("common.reload")}</span></ListRow>}
       </ListCard>

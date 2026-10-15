@@ -721,6 +721,10 @@
   "web-main.rail.kind.lists": "Chat lists",
   "web-main.rail.kind.attention": "Alerts",
   "web-main.rail.addWorkspace": "New workspace, add account",
+  "web-main.download.title": "Download the app",
+  "web-main.download.mac": "Apple silicon",
+  "web-main.download.windows": "x64",
+  "web-main.download.android": "Scan with your phone",
   "web-main.system.label": "From the app",
   "web-main.system.changelog": "See what's new"
 }

@@ -8,6 +8,7 @@ import { createRoot } from "react-dom/client";
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router";
 import "@fontsource-variable/inter";
 import { setPageRoot } from "../brand.tsx";
+import { withoutDownloads } from "../downloads.ts";
 import { Tooltip } from "radix-ui";
 import { ToastProvider } from "../toast.tsx";
 import { MobileWorkspace } from "../mobile/index.tsx";
@@ -274,6 +275,7 @@ export function mountDemo(element: HTMLElement): void {
   // What the page was built with (its opening frame, as HTML) gives way to the demo itself.
   root.replaceChildren();
   setPageRoot(root);
+  withoutDownloads();
   const app = root.appendChild(document.createElement("div"));
   app.style.height = "100%";
   startScrollbars();
