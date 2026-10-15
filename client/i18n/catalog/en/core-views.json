@@ -132,6 +132,7 @@
   "core-views.archive.day_with_year": "{day}, {year}",
   "core-views.archive.empty": "No archived chats.",
   "core-views.archive.manual": "Archived manually",
+  "core-views.archive.no_match": "No archived chats match.",
   "core-views.archive.none_online": "No station is online.",
   "core-views.archive.reading": "Reading…",
   "core-views.archive.reading_stations": "Reading stations…",

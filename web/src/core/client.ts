@@ -66,7 +66,7 @@ export type Topic =
   // composer's `@` menu and the switcher. A core from before it answers an error.
   | { topic: "chatSearch"; scope: string; query: string; station?: string; exclude?: string; limit?: number; messages?: number }
   // The archived chats of a scope's stations online, newest first by day (client/core-ts/src/views/archive.ts).
-  | { topic: "archive"; scope: string }
+  | { topic: "archive"; scope: string; q?: string; limit?: number }
   // A new chat's page in a scope: its stations, the one it starts on and what it runs there, as last picked here.
   | { topic: "newChat"; scope: string }
   // A model control: what it runs on now and what its panel picked (`of`: new, session:<key>, connect:<id>, connect-new).

@@ -106,9 +106,10 @@ export function useStatus(workspace?: string): StatusView | undefined {
 }
 const STATUS = { topic: "status" } as const;
 
-/** The archive of a scope's stations online (client/core-ts/src/views/archive.ts). */
-export function useArchiveView(scope: string): TopicState<ArchiveView> {
-  return useTopic<ArchiveView>({ topic: "archive", scope });
+/** The archive of a scope's stations online (client/core-ts/src/views/archive.ts): with `q`, those that have it; with
+ * `limit`, only the newest so many. */
+export function useArchiveView(scope: string, q = "", limit = 0): TopicState<ArchiveView> {
+  return useTopic<ArchiveView>({ topic: "archive", scope, ...(q ? { q } : {}), ...(limit ? { limit } : {}) });
 }
 
 export function useStations(scope: string): TopicState<StationView[]> {

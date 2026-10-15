@@ -99,6 +99,7 @@
   "core-views.archive.day_with_year": "{year}年{day}",
   "core-views.archive.empty": "没有归档的对话。",
   "core-views.archive.manual": "手动归档",
+  "core-views.archive.no_match": "没有匹配的归档对话",
   "core-views.archive.none_online": "没有在线的 station。",
   "core-views.archive.reading": "正在读取…",
   "core-views.archive.reading_stations": "正在读取 station…",

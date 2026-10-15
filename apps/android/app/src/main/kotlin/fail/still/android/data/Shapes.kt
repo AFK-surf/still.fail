@@ -306,7 +306,11 @@ data class ArchiveView (
 	/// A station's archive that could not be read, in a line (named where there are several).
 	val errors: List<ArchiveError>,
 	val loading: Boolean,
-	val note: String? = null
+	val note: String? = null,
+	/// How many archived chats there are (with `q`, that have it), shown or not.
+	val total: UInt? = null,
+	/// Older ones past the topic's `limit` are left out.
+	val more: Boolean? = null
 )
 
 @Serializable

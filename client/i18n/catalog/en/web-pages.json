@@ -119,6 +119,7 @@
   "web-pages.archive.restoreFailed": "Couldn't restore: {error}",
   "web-pages.archive.restoreNamed": "Restore “{title}”",
   "web-pages.archive.restored": "Restored",
+  "web-pages.archive.search": "Search the archive",
   "web-pages.archive.title": "Archived",
   "web-pages.archivePolicy.add": "Add one",
   "web-pages.archivePolicy.archive": "Suggest archiving",

@@ -1320,6 +1320,8 @@ export const SHAPES: Record<string, Shape> = {
     ["errors", vec("ArchiveError"), { doc: "A station's archive that could not be read, in a line (named where there are several)." }],
     ["loading", "bool"],
     ["note", opt("String")],
+    ["total", opt("u32"), { doc: "How many archived chats there are (with `q`, that have it), shown or not." }],
+    ["more", opt("bool"), { doc: "Older ones past the topic's `limit` are left out." }],
   ], { doc: "The archive of a scope's stations online (the `archive` topic): chats archived by hand or by their station once\nidle, newest first by the day they were archived; what could not be read of it; and what the page says in place\nof rows (reading, none), if anything. Restored (`chat.archive` with `archived` false) or deleted (`session.delete`),\na chat leaves it." }),
   ArchiveDay: struct([
     ["label", "String"],

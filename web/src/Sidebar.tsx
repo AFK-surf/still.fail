@@ -50,6 +50,8 @@ export function ChatList({ scope, newChat, stationsPage, archive, decisions, top
   // No station at all: nothing to filter (the lists themselves follow their own topics, ChatPane).
   const none = useTopicSelect<ChatsView, boolean>(chatsTopic(scope, "all"), (s) => !!s.value && !s.value.loading && s.value.stations.length === 0);
   // To 奏 from its row in the sidebar's foot, its rows come out of that row (DecisionDesk.tsx): no sliding then.
+  const archiveSeen = useRef(false);
+  if (mode === "archive") archiveSeen.current = true;
   const was = useRef(mode);
   const instant = useRef(false);
   if (was.current !== mode) {
@@ -68,7 +70,8 @@ export function ChatList({ scope, newChat, stationsPage, archive, decisions, top
           <ChatPane scope={scope} filter="mine" stationsPage={stationsPage} hidden={mode !== "mine"} />
           <ChatPane scope={scope} filter="watching" stationsPage={stationsPage} hidden={mode !== "watching"} />
           <DecisionRows active={mode === "decisions"} page={decisions} />
-          <ArchiveRows scope={scope} hidden={mode !== "archive"} />
+          {/* Made once first shown (it can be long, and is rarely looked at), kept then for sliding back to it. */}
+          {archiveSeen.current ? <ArchiveRows scope={scope} hidden={mode !== "archive"} /> : <div className={nav.navScroll} />}
         </div>
       </div>
     </>

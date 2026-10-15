@@ -1,5 +1,6 @@
 // The archive (views/archive.rs): the archived chats of a scope's stations online in one list, newest first by the
-// day they were archived. One on its way out of the archive from here is gone from it at once (local.ts).
+// day they were archived; only those whose title or last line has `q` in it, and only the newest `limit` of them (it
+// can be very long: the page asks for more as it is scrolled to its end). One on its way out of the archive from here is gone from it at once (local.ts).
 import * as format from "../format.ts";
 import type { Host } from "../host.ts";
 import { t } from "../i18n.ts";
@@ -13,9 +14,9 @@ type J = any;
 const arr = (v: unknown): J[] => arrU(v) ?? [];
 const get = (v: unknown, k: string): J => getU(v, k);
 
-export function archive(views: Views, local: Local, scope: string, host: Host): Value {
+export function archive(views: Views, local: Local, scope: string, host: Host, q = "", limit = 0): Value {
   const ws = views.value({ topic: "workspace", workspace: scope });
-  if (ws === undefined) return { ok: { days: [], errors: [], loading: true, note: t("core-views.archive.reading_stations") } };
+  if (ws === undefined) return { ok: { days: [], errors: [], loading: true, note: t("core-views.archive.reading_stations"), total: 0, more: false } };
   if ("err" in ws) return ws;
   const online = (views.stations(scope) ?? []).filter((s) => s.online);
   const named = online.length > 1;
@@ -57,10 +58,13 @@ export function archive(views: Views, local: Local, scope: string, host: Host): 
     }
   }
   items.sort((a, b) => b.at - a.at);
+  const needle = q.trim().toLowerCase();
+  const found = needle ? items.filter((i) => i.title.toLowerCase().includes(needle) || i.last.toLowerCase().includes(needle)) : items;
+  const shown = limit > 0 ? found.slice(0, limit) : found;
   const now = host.nowMs();
   const offset = host.utcOffsetMin(now);
   const days: [string, J[]][] = [];
-  for (const item of items) {
+  for (const item of shown) {
     const label = dayLabel(item.at, now, offset);
     const last = days[days.length - 1];
     if (last && last[0] === label) last[1].push(item);
@@ -72,9 +76,9 @@ export function archive(views: Views, local: Local, scope: string, host: Host): 
       : days.length === 0 && loading
         ? t("core-views.archive.reading")
         : days.length === 0 && errors.length === 0
-          ? t("core-views.archive.empty")
+          ? t(needle && items.length > 0 ? "core-views.archive.no_match" : "core-views.archive.empty")
           : null;
-  return { ok: { days: days.map(([label, list]) => ({ label, items: list })), errors, loading, note } };
+  return { ok: { days: days.map(([label, list]) => ({ label, items: list })), errors, loading, note, total: found.length, more: shown.length < found.length } };
 }
 
 /// The chat list's day headings, with the year before this one's.

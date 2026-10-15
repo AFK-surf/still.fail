@@ -1,4 +1,4 @@
-import { style } from "@vanilla-extract/css";
+import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { navSessionWrap } from "../Sidebar.css.ts";
 
@@ -17,3 +17,15 @@ export const actions = style({
 });
 export const action = style({ width: 24, height: 24 });
 export const remove = style({ selectors: { "&:hover": { color: vars.red } } });
+
+/** Looking for one: a field as tall as a row, at the list's top, the rows' inset. */
+export const search = style({
+  display: "flex", alignItems: "center", gap: 8, height: 32, padding: "0 10px", marginBottom: 4, borderRadius: vars.rNav,
+  cornerShape: vars.cornerShape, background: vars.hover, color: vars.muted, cursor: "text",
+});
+globalStyle(`${search} input`, {
+  flex: 1, minWidth: 0, border: "none", outline: "none", background: "none", padding: 0, color: vars.text, fontSize: vars.textUi,
+});
+globalStyle(`${search} input::placeholder`, { color: vars.subtle });
+/** Where the list asks for more as it comes near. */
+export const end = style({ height: 1 });

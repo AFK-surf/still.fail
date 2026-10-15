@@ -781,7 +781,7 @@ export class Views implements Owner {
         return { ok: brief.card(agent, live !== undefined && "ok" in live ? live.ok : null) };
       }
       case "archive":
-        return archive(this, this.local, view.scope as string, this.#core.host);
+        return archive(this, this.local, view.scope as string, this.#core.host, typeof view.q === "string" ? view.q : "", typeof view.limit === "number" ? view.limit : 0);
       case "workspaceMarks":
         return marks.marks(this, this.local, typeof view.workspace === "string" ? view.workspace : null);
       case "decisions":

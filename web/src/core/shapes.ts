@@ -293,6 +293,10 @@ export interface ArchiveView {
 	errors: ArchiveError[];
 	loading: boolean;
 	note?: string;
+	/** How many archived chats there are (with `q`, that have it), shown or not. */
+	total?: number;
+	/** Older ones past the topic's `limit` are left out. */
+	more?: boolean;
 }
 
 export interface Attachment {

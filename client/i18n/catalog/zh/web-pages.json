@@ -110,6 +110,7 @@
   "web-pages.archive.restoreFailed": "没能恢复：{error}",
   "web-pages.archive.restoreNamed": "恢复「{title}」",
   "web-pages.archive.restored": "已恢复到列表",
+  "web-pages.archive.search": "搜索归档",
   "web-pages.archive.title": "已归档",
   "web-pages.archivePolicy.add": "加一个",
   "web-pages.archivePolicy.archive": "推荐归档",
