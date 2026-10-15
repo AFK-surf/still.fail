@@ -70,6 +70,11 @@ export class Virtual {
    *  item so that it stays there as what is below it gets shorter. */
   private eye: { key: string; offset: number } | null = null;
   private held = 0;
+  /** By item, how much shorter it is going to be, closing something in one motion (rowHeights.ts): followed at once,
+   *  rather than frame by frame as it closes. */
+  private coming = new Map<string, number>();
+  /** By item, how much it has got shorter, all told, as things closed in it (`closing` in rowHeights.ts). */
+  private closed = new Map<string, number>();
   private pins = new Set<string>();
   /** The pane shows a window short of the list's end: its bottom is not followed. */
   private short = false;
@@ -117,10 +122,19 @@ export class Virtual {
     this.settle();
   }
   /** Heights measured (an observer's report), in the pane as wide as it is now. */
-  measured(heights: Iterable<readonly [key: string, height: number]>): void {
+  measured(heights: Iterable<readonly [key: string, height: number, toward?: number]>): void {
     let changed = false;
     let guessed = false;
-    for (const [key, height] of heights) {
+    for (const [key, height, toward] of heights) {
+      const lose = toward === undefined ? 0 : Math.max(0, height - toward);
+      // Shorter as what closes in it closes: by as much, in all (what goes along with it, `closedBefore`).
+      const was0 = this.sizes.get(key);
+      if ((toward !== undefined || this.coming.has(key)) && was0 && height < was0.height) this.closed.set(key, (this.closed.get(key) ?? 0) + was0.height - height);
+      if (lose !== (this.coming.get(key) ?? 0)) {
+        if (lose) this.coming.set(key, lose);
+        else this.coming.delete(key);
+        changed = changed || this.at.has(key);
+      }
       const was = this.sizes.get(key);
       if (was && was.height === height && was.width === this.width) continue;
       const i = this.at.get(key);
@@ -239,7 +253,7 @@ export class Virtual {
   target(): number {
     const a = this.anchor;
     if (a.kind === "follow") {
-      const end = this.bottom();
+      const end = Math.max(0, this.bottom() - this.closing());
       const i = a.to === null ? undefined : this.at.get(a.to);
       return i === undefined ? end : Math.min(end, Math.max(0, this.topOf(i) - this.cover - UNDER));
     }
@@ -382,6 +396,21 @@ export class Virtual {
   }
   /** The furthest the pane scrolls. */
   private bottom(): number { return Math.max(0, this.total() - this.height); }
+  /** How much shorter the items before `key` have got, all told, as things closed in them: what is below them went
+   *  along with that as it closed, as rows do, and did not move of its own. */
+  closedBefore(key: string): number {
+    const i = this.at.get(key);
+    if (i === undefined) return 0;
+    let all = 0;
+    for (const [k, by] of this.closed) { const j = this.at.get(k); if (j !== undefined && j < i) all += by; }
+    return all;
+  }
+  /** How much shorter the items are going to be, as what closes in them closes (`coming`). */
+  private closing(): number {
+    let all = 0;
+    for (const [key, by] of this.coming) if (this.at.has(key)) all += by;
+    return all;
+  }
   /** The reader's place as the pane stands: the first item reaching below what covers its top. */
   private note(): void {
     const i = this.placeFrom(this.firstReaching(this.top + this.cover + 1));
@@ -422,8 +451,9 @@ export class Virtual {
       const here = i === undefined ? this.top : Math.max(0, this.topOf(i) - this.eye!.offset);
       if (i !== undefined && this.holds) this.held = Math.max(0, here - Math.max(0, this.natural() - this.height));
       const to = this.target();
-      // On from there to where it follows: by the page's steps while it glides, else at once.
-      this.top = !this.gliding || to < here ? to : here;
+      // On from there to where it follows: by the page's steps while it glides, else at once. Back toward it (what is
+      // below closing), by steps as well: still as far as there is to go (`bottom`), it goes down as that closes.
+      this.top = !this.gliding || (to < here && !this.closing()) ? to : Math.min(here, this.bottom());
       this.arrived();
     } else {
       this.release();
@@ -456,7 +486,8 @@ export class Virtual {
     const i = this.at.get(a.to);
     if (i === undefined) { this.anchor = { kind: "follow", to: null }; return; }
     const to = this.target();
-    if (to < this.bottom() - 0.5 && Math.abs(this.top - to) < 1) this.anchor = { kind: "read", key: a.to, offset: this.topOf(i) - this.top };
+    // Short of the end it is going to (what closes above it closing), not of the end it has while that closes.
+    if (to < this.bottom() - this.closing() - 0.5 && Math.abs(this.top - to) < 1) this.anchor = { kind: "read", key: a.to, offset: this.topOf(i) - this.top };
   }
   /** Never a pane of held room alone: with items, one of them shows, or what is held is let go. */
   private guard(): void {

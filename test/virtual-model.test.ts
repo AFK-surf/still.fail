@@ -478,3 +478,33 @@ test("virtual_a_reader_looking_for_something_is_not_moved_by_what_comes_at_the_e
   v.reads(false);
   assert.equal(kind(), "read");
 });
+
+test("virtual_following_goes_once_to_where_what_closes_leaves_it_and_keeps_following", () => {
+  const items = list(0, 30);
+  const v = made(new Virtual({ gap: GAP, overscan: 300 }));
+  v.setItems(items);
+  v.measured(items.map((i) => [i.key, 100] as const));
+  const end = v.layout().scrollTop;
+  // The last row is going to be 60 shorter (something in it closing): the pane is sent there at once, gliding down,
+  // still as far as there is to go now; a message come meanwhile, followed from its top, as it closes.
+  v.glide(true);
+  v.measured([["m:29", 100, 40]]);
+  assert.equal(v.target(), end - 60);
+  assert.equal(v.where, end, "not ahead of what is there yet");
+  const more = [...items, { key: "m:30", estimate: 40 }];
+  v.setItems(more);
+  v.measured([["m:30", 40]]);
+  v.follow("m:30");
+  assert.equal(v.target(), end - 60 + 40 + GAP);
+  // Step by step there, as it closes: each row's share closed, the pane placed on toward where it goes.
+  for (let h = 100; h > 40; h -= 10) {
+    v.measured([["m:29", h, 40]]);
+    v.place(v.where + (v.target() - v.where) / 2);
+  }
+  v.measured([["m:29", 40]]);
+  v.place(v.target());
+  assert.equal(v.mode.kind, "follow", "the message come is short: the list goes on following its end");
+  assert.equal(v.where, v.target());
+  // What the activity below went along with: the closing, all of it.
+  assert.equal(v.closedBefore("m:30"), 60);
+});

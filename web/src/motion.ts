@@ -8,9 +8,32 @@ export { animate, type AnimationPlaybackControls };
 
 /** The page's --ease-out. */
 export const EASE_OUT = [0.2, 0.7, 0.2, 1] as const;
+/** The page's --ease-out, as CSS. */
+export const EASE_OUT_CSS = "cubic-bezier(0.2, 0.7, 0.2, 1)";
+/**
+ * One way in and one way out for what comes and goes in the message list (a message, what settles under it): coming,
+ * up from a little below as it fades in (as `[data-enter]` draws a new message); going, a copy where it was shrinking a
+ * little as it fades (as a sidebar's row goes, listMotion.ts). Their room opens and closes by the list's law (GLIDE_*),
+ * not by these.
+ */
+export const ENTER = { duration: 220, easing: EASE_OUT_CSS } as const;
+export const ENTER_FROM = { opacity: 0, transform: "translateY(6px)" } as const;
+export const LEAVE = { duration: 200, easing: "ease-out" } as const;
+export const LEAVE_TO = { opacity: 0, transform: "scale(0.9)" } as const;
+
 /** How the small web services and what makes way for them move (Previews.tsx): a spring, so a goal that moves on while
  * they are on their way (a slot easing in, the room changing again) is followed smoothly, not restarted. */
 export const MOVE = { type: "spring", visualDuration: 0.28, bounce: 0 } as const;
+
+/**
+ * How a message list's pane goes to where it follows (virtual/list.tsx): each frame a share of what is left, at this
+ * rate (e^(-t/τ): about 90% in a quarter second). What changes size in its rows moves by the same law (settling.tsx),
+ * so the pane and the row go together: one way, never ahead of the other and back.
+ */
+export const GLIDE_TAU = 100;
+/** That law as a motion of fixed length (to 99.75% of the way at its end), and as its easing. */
+export const GLIDE_MS = 600;
+export const GLIDE_EASE = `linear(${Array.from({ length: 31 }, (_, i) => ((1 - Math.exp(-(i / 30) * GLIDE_MS / GLIDE_TAU)) / (1 - Math.exp(-GLIDE_MS / GLIDE_TAU))).toFixed(4)).join(", ")})`;
 
 /**
  * The most a motion, or a page moved to, waits for what is here already: the core's answer from what it holds, a picture
@@ -74,6 +97,84 @@ export function follower(start: number, draw: (value: number) => void): Follower
       draw(next);
     },
     stop() { run?.stop(); run = null; value.destroy(); },
+  };
+}
+
+/**
+ * A value going from `from` to `to` by the message list's law, stepped each frame as the list's pane steps, from this
+ * frame (what changes size in a row as the pane goes along with it: settling.tsx). `set` draws it; done once there
+ * (`finished`), or stopped where it is (`cancel`, `finished` then never settles).
+ */
+export function glideValue(from: number, to: number, set: (value: number) => void): { finished: Promise<void>; cancel(): void } {
+  let value = from;
+  let last = glideClock();
+  let frame = 0;
+  let done: () => void = () => {};
+  const finished = new Promise<void>((resolve) => { done = resolve; });
+  const step = (now: number) => {
+    const dt = Math.max(0, Math.min(64, now - last));
+    last = now;
+    const left = to - value;
+    value = Math.abs(left) < 0.25 ? to : value + left * (1 - Math.exp(-dt / GLIDE_TAU));
+    set(value);
+    if (value === to) { frame = 0; done(); }
+    else frame = requestAnimationFrame(step);
+  };
+  set(value);
+  frame = requestAnimationFrame(step);
+  return { finished, cancel() { cancelAnimationFrame(frame); frame = 0; } };
+}
+
+/** The frame the list's pane last stepped in while it glides. */
+let paneStep: number | null = null;
+/** Said by the list (virtual/list.tsx) at each step of a glide, and null once it stops. */
+export function glided(at: number | null): void { paneStep = at; }
+/**
+ * The time what goes along with the pane starts its clock at: the pane's last step while it glides, else this frame.
+ * Both then take their next step in the same frame, by the same law, from the same time: they go together.
+ */
+export function glideClock(): number {
+  const now = (document.timeline.currentTime as number | null) ?? performance.now();
+  // A glide stopped without saying so: not a clock to start on.
+  return paneStep !== null && now - paneStep < 100 ? paneStep : now;
+}
+
+/**
+ * A number drawn by `draw` going to its goal by the message list's law (GLIDE_TAU): each frame a share of what is
+ * left, from where it is. Never past its goal, nor back: what goes along with the list's pane (an activity keeping its
+ * place) moves as the pane does, one way, from the same moment.
+ */
+export function glider(start: number, draw: (value: number) => void): Follower {
+  let value = start;
+  let goal = start;
+  let frame = 0;
+  let last = 0;
+  const step = (now: number) => {
+    const dt = Math.max(0, Math.min(64, now - last));
+    last = now;
+    const left = goal - value;
+    value = Math.abs(left) < 0.5 ? goal : value + left * (1 - Math.exp(-dt / GLIDE_TAU));
+    draw(value);
+    frame = value === goal ? 0 : requestAnimationFrame(step);
+  };
+  return {
+    get value() { return value; },
+    get moving() { return frame !== 0; },
+    to(next) {
+      goal = next;
+      if (reducedMotion()) return this.jump(next);
+      if (frame || value === next) return;
+      // On the pane's clock: its next step and this one are taken together.
+      last = glideClock();
+      frame = requestAnimationFrame(step);
+    },
+    jump(next) {
+      cancelAnimationFrame(frame);
+      frame = 0;
+      goal = value = next;
+      draw(next);
+    },
+    stop() { cancelAnimationFrame(frame); frame = 0; },
   };
 }
 

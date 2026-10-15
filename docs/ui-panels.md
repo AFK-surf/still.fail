@@ -44,7 +44,7 @@
 - `scripts/check.sh`：
   - 「no hand-written negative margins」：样式里不能手写负 margin。
   - 「small panels on one ground」：`surface()` 只允许出现在 popover、通知气泡、⌘K、composer 引用列表四处，其它小面板必须组合 `popover`。
-  - 「web: stories measured」（完整检查，CI 的 Linux runner 用自带 Chrome）：`test/browser/stories.mjs` 打开每个 story，走完它的 `steps`，用 `test/browser/measure.mjs` 量两件事，有一处不对就挂：
+  - 「web: stories measured, the message list's motion watched」（完整检查，CI 的 Linux runner 用自带 Chrome）：`test/browser/stories.mjs` 打开每个 story，走完它的 `steps`，用 `test/browser/measure.mjs` 量两件事，有一处不对就挂：
     - 所有圆角（`corners`）：每个有底色或能按的圆角元素，落在外面圆角容器的角落里时，离两边一样远，圆角同心；
     - 所有小面板（`panels`）：内边距 6，卡片文字四边 16，行的文字缩进 10，角落元素同心。
 - 本机跑：`PLAYWRIGHT_MODULE=<playwright> node test/browser/stories.mjs`；`ONLY=<id,…>` 只跑几个，`REPORT=1` 列出全部问题而不是直接失败，`SHOTS=<目录>` 每个 story 存一张图。

@@ -4,13 +4,13 @@
 // chat with a new message) passes over them on a ground of its own.
 import { useLayoutEffect, useRef, useState, type PointerEvent, type RefObject } from "react";
 import { animate, motionValue, type AnimationPlaybackControls, type MotionValue } from "motion";
-import { MOVE, reducedMotion } from "./motion.ts";
+import { LEAVE, LEAVE_TO, MOVE, reducedMotion } from "./motion.ts";
 import { vars } from "./styles/tokens.css.ts";
 
 interface Placed { el: HTMLElement; top: number; left: number; width: number; y: MotionValue<number>; run?: AnimationPlaybackControls | undefined }
 
-/** The departing row fades while its neighbours close the gap in the same motion. */
-const LEAVE_MS = 200;
+/** The departing row fades while its neighbours close the gap in the same motion (motion.ts LEAVE). */
+const LEAVE_MS = LEAVE.duration;
 
 /**
  * Moves the children of `list` marked `data-flip="<key>"` from where they were at the last render to where this one
@@ -113,7 +113,7 @@ function leave(box: HTMLElement, p: Placed) {
     transform: "", zIndex: "-1", pointerEvents: "none",
   });
   box.appendChild(ghost);
-  const run = ghost.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(0.9)" }], { duration: LEAVE_MS, easing: "ease-out", fill: "forwards" });
+  const run = ghost.animate([{ opacity: 1, transform: "none" }, LEAVE_TO], { ...LEAVE, fill: "forwards" });
   void run.finished.then(() => ghost.remove(), () => ghost.remove());
 }
 

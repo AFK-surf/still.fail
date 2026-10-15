@@ -232,13 +232,14 @@ if part ts; then
     [ -f web/src/core/iroh-pkg/.stand-in ] && later "web against the real iroh wasm"
   fi
   # Every story (web/stories) opened and every corner and small panel in it measured (test/browser/stories.mjs,
-  # docs/ui-panels.md): in the full check, on a Chrome the machine has (CI's Linux runner has one).
-  if [ $full = 1 ] && { touches "$ts_web" || touches '^test/browser/(stories|measure)\.mjs$'; }; then
+  # docs/ui-panels.md), then what moves in a chat's message list watched frame by frame (test/browser/list-settle.mjs,
+  # docs/list-motion.md): in the full check, on a Chrome the machine has (CI's Linux runner has one), one at a time.
+  if [ $full = 1 ] && { touches "$ts_web" || touches '^test/browser/(stories|measure|list-settle)\.mjs$'; }; then
     if command -v google-chrome >/dev/null 2>&1; then
       prep core deps client/core-ts
-      step "web: stories measured" after root after core sh -c 'PLAYWRIGHT_MODULE=playwright-core PLAYWRIGHT_CHANNEL=chrome node test/browser/stories.mjs'
+      step "web: stories measured, the message list's motion watched" after root after core sh -c 'export PLAYWRIGHT_MODULE=playwright-core PLAYWRIGHT_CHANNEL=chrome; node test/browser/stories.mjs && node test/browser/list-settle.mjs'
     else
-      later "web: stories measured (no Chrome here)"
+      later "web: stories measured, the message list's motion watched (no Chrome here)"
     fi
   fi
   if touches "$ts_cloud"; then

@@ -18,6 +18,7 @@ import { createContext, createElement, useContext, useEffect, useLayoutEffect, u
 import { flushSync } from "react-dom";
 import { sizesOf, Virtual, type Align, type Item, type Layout, type Row } from "./model.ts";
 import * as css from "./list.css.ts";
+import { GLIDE_TAU, glideClock, glided } from "../motion.ts";
 
 export type VirtualList = {
   model: Virtual;
@@ -145,16 +146,19 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
     const step = (el: HTMLElement) => {
       if (made.frame) return;
       // Nothing to glide to: what comes next is taken at once, until something glides again.
-      if (model.mode.kind !== "follow" || !(model.target() > model.where + 0.5)) { model.glide(false); return; }
-      made.last = performance.now();
+      if (model.mode.kind !== "follow" || !(Math.abs(model.target() - model.where) > 0.5)) { model.glide(false); return; }
+      // On the clock what closes in a row starts on (rowHeights.ts): the two go as one.
+      made.last = glideClock();
       const glide = (now: number) => {
         // Keep this frame owned while a synchronous render runs its layout effects.
         // Those effects call step too: clearing it here starts a second glide, resets
         // last after this frame's timestamp, and lets the two chains pull backwards.
+        // Down as well as up: back toward it as what is below closes (model.ts `coming`).
         const left = model.target() - model.where;
-        if (model.mode.kind !== "follow" || left < 0.5) {
+        if (model.mode.kind !== "follow" || Math.abs(left) < 0.5) {
           // There: what came meanwhile is taken at once.
           made.frame = 0;
+          glided(null);
           model.glide(false);
           if (signature(model.layout()) !== made.drawn) flushSync(redraw);
           else put(el);
@@ -162,8 +166,9 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
           return;
         }
         const dt = Math.max(0, Math.min(64, now - made.last));
+        glided(now);
         made.last = now;
-        model.place(left < 1 ? model.target() : model.where + left * (1 - Math.exp(-dt / 100)));
+        model.place(Math.abs(left) < 1 ? model.target() : model.where + left * (1 - Math.exp(-dt / GLIDE_TAU)));
         made.stepping = true;
         if (signature(model.layout()) !== made.drawn) flushSync(redraw);
         else put(el);
@@ -236,6 +241,7 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       if (!made.wide) { made.wide = true; model.widen(); }
       cancelAnimationFrame(made.frame);
       made.frame = 0;
+      glided(null);
       model.glide(false);
       made.written = top;
       model.scrolled(top);
@@ -252,7 +258,7 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       // doing as it laid the page out (what left the list's end left the pane past its end). The model puts it back.
       const at = el.scrollTop;
       if (!Number.isNaN(made.written) && Math.abs(at - made.written) >= 1) { made.pulled = at; made.written = at; }
-      const heights: [string, number][] = [];
+      const heights: ([string, number] | [string, number, number])[] = [];
       for (const entry of entries) {
         const box = entry.borderBoxSize[0];
         if (!box) continue;
@@ -269,8 +275,11 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
         }
         const row = entry.target as HTMLElement;
         const key = row.dataset.vk;
-        // A row held back takes no room, not even the gap before it (its own negative margin).
-        if (key !== undefined && row.isConnected) heights.push([key, box.blockSize - (row.hasAttribute("data-held") ? gap : 0)]);
+        // A row held back takes no room, not even the gap before it (its own negative margin). One closing something in it
+        // says what it is going to stand at (rowHeights.ts): the pane goes toward that once, along with it.
+        const to = row.dataset.settlesTo;
+        const less = row.hasAttribute("data-held") ? gap : 0;
+        if (key !== undefined && row.isConnected) heights.push(to === undefined ? [key, box.blockSize - less] : [key, box.blockSize - less, Number(to) - less]);
       }
       // What a click in the pane just grew or shrank is the reader's doing, nothing new: their place is kept from here.
       if (opening && heights.length) model.stay();
@@ -294,6 +303,36 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       }
     });
     rows.observe(el, { childList: true });
+    // A row says what it is going to stand at as it starts closing something (rowHeights.ts), before any frame of it:
+    // the pane is sent there with what else comes in the same frame (a message sent as a card's options close), not
+    // first toward that alone and then back.
+    // Done (or undone), it stands at what it is.
+    const settling = new MutationObserver((records) => {
+      const heights: ([string, number] | [string, number, number])[] = [];
+      for (const r of records) {
+        const row = r.target as HTMLElement;
+        const key = row.dataset.vk;
+        const size = key === undefined ? undefined : model.sizes.get(key);
+        if (row.parentElement !== el || !size) continue;
+        const to = row.dataset.settlesTo;
+        const less = row.hasAttribute("data-held") ? gap : 0;
+        heights.push(to === undefined ? [key!, size.height] : [key!, size.height, Number(to) - less]);
+      }
+      if (!heights.length) return;
+      // A glide under way is brought up to this frame first, toward where it was going: what closes starts from this
+      // frame (settling.tsx), and the pane's share of it from here too, not from its last step before.
+      const now = (document.timeline.currentTime as number | null) ?? performance.now();
+      if (made.frame && now > made.last && model.mode.kind === "follow") {
+        const left = model.target() - model.where;
+        model.place(model.where + left * (1 - Math.exp(-Math.min(64, now - made.last) / GLIDE_TAU)));
+        glided(now);
+        made.last = now;
+      }
+      if (performance.now() - made.born > OPENING_MS && model.mode.kind === "follow") model.glide(true);
+      model.measured(heights);
+      self.sync(el);
+    });
+    settling.observe(el, { subtree: true, attributes: true, attributeFilter: ["data-settles-to"] });
     // A row that holds the focus stays made while it does, and so do the rows a selection runs through, from the one
     // it starts in to the one it ends in: what is copied is all of it, however far the pane has gone on meanwhile.
     let held: string[] = [];
@@ -325,9 +364,11 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
     el.addEventListener("focusout", hold);
     document.addEventListener("selectionchange", hold);
     return () => {
+      settling.disconnect();
       clearTimeout(rest);
       cancelAnimationFrame(made.frame);
       made.frame = 0;
+      glided(null);
       el.removeEventListener("scroll", scrolled);
       for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) el.removeEventListener(type, touched);
       el.removeEventListener("click", clicked, true);
@@ -357,6 +398,7 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       const el = pane.current;
       cancelAnimationFrame(made.frame);
       made.frame = 0;
+      glided(null);
       model.glide(false);
       const there = model.goto(key, align, pad);
       if (el) self.sync(el);

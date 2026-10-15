@@ -25,7 +25,7 @@ import { thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
 import { useVirtualList, useVirtualModel, type VirtualList } from "./virtual/list.tsx";
 import type { Align, Item } from "./virtual/model.ts";
-import { animate, arrive, EASE_OUT, follower, moveState, type AnimationPlaybackControls, type Follower } from "./motion.ts";
+import { animate, arrive, EASE_OUT, follower, glider, moveState, type AnimationPlaybackControls, type Follower } from "./motion.ts";
 import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
 import { DraftKey, offerToDraft, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
@@ -1948,10 +1948,10 @@ export function useLinger(atWork: AgentAtWork[], keep: ReadonlySet<string>): { a
 
 /**
  * An activity keeps its place on screen as what is above it changes at once (a message arriving, one coming out of an
- * avatar, an image loading): it glides from where it showed to where it is laid out now, and a change while it is on
- * its way goes on from where it is and the speed it has. What the pane's width lays out anew is taken at once.
+ * avatar, an image loading): it glides from where it showed to where it is laid out now, by the pane's own law
+ * (motion.ts glider), so that it and the pane gliding to the end move together, one way; a change while it is on its
+ * way goes on from where it is. What the pane's width lays out anew is taken at once.
  */
-const GLIDE = { type: "spring", visualDuration: 0.3, bounce: 0 } as const;
 /** How long after the pane's width last changed its rows may still come to stand as they wrap now. */
 const REWRAP_MS = 200;
 
@@ -1960,7 +1960,10 @@ function useActivityGlide(list: RefObject<HTMLDivElement | null>, virtual: Virtu
     const pane = list.current;
     if (!pane) return;
     const { model } = virtual;
-    const rows = new Map<string, { el: HTMLElement; top: number; y: Follower }>();
+    // `at`: where it is laid out in the pane's content; `closed`: how much shorter what is above it has got as things
+    // closed in it (model.ts `closedBefore`), which it simply went along with, as every row below does; `y`: how far
+    // it is drawn from where it is laid out, gliding to nothing after a move at once.
+    const rows = new Map<string, { el: HTMLElement; at: number; closed: number; y: Follower }>();
     let width = model.paneWidth;
     let rewrapped = -Infinity;
     let pending = false;
@@ -1974,11 +1977,10 @@ function useActivityGlide(list: RefObject<HTMLDivElement | null>, virtual: Virtu
       if (model.paneWidth !== width) { width = model.paneWidth; rewrapped = performance.now(); pending = true; }
       const shift = virtual.kept() - kept;
       kept += shift;
-      if (shift) for (const row of rows.values()) { row.top += shift; if (!row.y.moving) row.y.jump(row.top); }
+      if (shift) for (const row of rows.values()) row.at += shift;
       const layout = model.layout();
-      // A row just made stands at a guessed height until the page reports it: where an activity is below it is not
-      // known yet, and from the guess to the fact is not a move.
-      if (model.guessed) return;
+      // A row just made stands at a guessed height until the page reports it: what an activity is moved by meanwhile is
+      // taken as it comes (the pane glides there from now), and from the guess to the fact after it too.
       const anew = pending || performance.now() - rewrapped < REWRAP_MS;
       pending = false;
       const seen = new Set<string>();
@@ -1988,22 +1990,25 @@ function useActivityGlide(list: RefObject<HTMLDivElement | null>, virtual: Virtu
         if (!el) continue;
         seen.add(key);
         // Where it stands in the pane's content.
-        const top = model.offsetOf(key)! + layout.scrollTop;
+        const at = model.offsetOf(key)! + layout.scrollTop;
+        const closed = model.closedBefore(key);
         let row = rows.get(key);
         if (row && row.el !== el) { row.y.stop(); rows.delete(key); row = undefined; }
         if (!row) {
-          const made = { el, top, y: follower(top, (v) => { el.style.transform = Math.abs(v - made.top) < 0.01 ? "" : `translateY(${v - made.top}px)`; }) };
-          rows.set(key, made);
+          rows.set(key, { el, at, closed, y: glider(0, (v) => { el.style.transform = Math.abs(v) < 0.01 ? "" : `translateY(${v}px)`; }) });
           continue;
         }
-        if (Math.abs(top - row.top) < 0.01) continue;
-        row.top = top;
+        // What closes above it as it closes moves it as it moves every row below: not a move of its own.
+        const moved = at - row.at + (closed - row.closed);
+        row.at = at;
+        row.closed = closed;
+        if (Math.abs(moved) < 0.01) continue;
         // One folded to its avatar, out flying, shows nothing: it is where it is laid out, for the avatar to fly to.
-        if (anew || document.visibilityState !== "visible" || el.hasAttribute("data-away")) row.y.jump(top);
+        if (anew || document.visibilityState !== "visible" || el.hasAttribute("data-away")) row.y.jump(0);
         else {
-          row.y.to(top, GLIDE);
-          // Laid out elsewhere, it is drawn where it was until the glide takes it.
-          el.style.transform = `translateY(${row.y.value - top}px)`;
+          // Laid out elsewhere at once, it is drawn where it was, and glides from there.
+          row.y.jump(row.y.value - moved);
+          row.y.to(0);
         }
       }
       for (const [key, row] of rows) if (!seen.has(key)) { row.y.stop(); rows.delete(key); }
@@ -2302,11 +2307,8 @@ function Activity({ agent, leaving, caught, pose, stoppable }: { agent: AgentAtW
     const el = row.current!;
     if (leaving !== was.current.leaving) {
       // Reading where it goes lays the list out with its room folded for a moment, shorter than the pane scrolled to its
-      // end: the browser pulls the pane up then, and it is put back (the list is held where it was while it folds).
-      const pane = el.parentElement;
-      const top = pane?.scrollTop ?? 0;
+      // end: the browser pulls the pane up then, and moveState puts it back (the list is held where it was as it folds).
       void moveState([[el, ["grid-template-rows", "opacity"]]], () => el.toggleAttribute("data-leaving", leaving), { duration: FADE_MS / 1000, ease: EASE_OUT });
-      if (pane && pane.scrollTop !== top) pane.scrollTop = top;
     }
     if (pose.folded !== was.current.folded) {
       void moveState([[tail.current!, ["width", "opacity"]]], () => el.toggleAttribute("data-folded", pose.folded), { duration: FOLD_MS / 1000, ease: EASE_OUT });

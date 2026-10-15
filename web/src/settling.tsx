@@ -4,14 +4,16 @@
 // The pane it is in follows its end (virtual/list.tsx), and the browser keeps a pane's scroll within what it holds: the
 // box is never laid out shorter than it is drawn, not even for a moment to be measured (a pane at its end would be
 // pulled up, and put back a frame later). And what it takes in its parent's grid is all taken as it goes, the gap before
-// it too (a grid row can't be pulled up into the gap: the item before gives it up instead).
+// it too (a grid row can't be pulled up into the gap: the item before gives it up instead). The list is told where its
+// row is going as it starts (rowHeights.ts), and its pane goes there along with it, by the same law (motion.ts GLIDE_*)
+// from the same frame: what is above and what is below move one way each, never there and back.
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { reducedMotion } from "./motion.ts";
+import { ENTER, ENTER_FROM, GLIDE_EASE, GLIDE_MS, glideValue, LEAVE, LEAVE_TO, reducedMotion } from "./motion.ts";
 import * as css from "./Chat.css.ts";
+import { closing as rowClosing } from "./rowHeights.ts";
 
-const CLOSE = { duration: 320, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)" };
-/** As a row leaving a list (listMotion.ts LEAVE_MS). */
-const LEAVE = { duration: 200, easing: "ease-out" };
+/** Its room opening, by the list's law (motion.ts GLIDE_*), as its pane goes along with it. */
+const CLOSE = { duration: GLIDE_MS, easing: GLIDE_EASE };
 
 const moving = () => !reducedMotion() && document.visibilityState === "visible";
 
@@ -31,13 +33,12 @@ const contentHeight = (el: HTMLElement) => {
   return Math.max(0, end - top) + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
 };
 
-/** The gap before `el` given up by the item before it (its margin drawn in), `taking` it or giving it back. */
-const takeGap = (el: HTMLElement, taking: boolean, fill: FillMode) => {
+/** The gap before `el`, given up by the item before it until then, opening as `el` opens. */
+const giveGap = (el: HTMLElement) => {
   const gap = gapBefore(el);
   const before = el.previousElementSibling;
   if (!gap || !(before instanceof HTMLElement)) return null;
-  const frames = [{ marginBottom: "0px" }, { marginBottom: `${-gap}px` }];
-  return before.animate(taking ? frames : frames.reverse(), { ...CLOSE, fill });
+  return before.animate([{ marginBottom: `${-gap}px` }, { marginBottom: "0px" }], CLOSE);
 };
 
 /**
@@ -49,11 +50,14 @@ const takeGap = (el: HTMLElement, taking: boolean, fill: FillMode) => {
 export function useSettling(box: RefObject<HTMLElement | null>, open: boolean, drawnOpen: boolean, setDrawnOpen: (open: boolean) => void,
   to: { arriving?: string; gone?: () => void } = {}) {
   const leaving = useRef<{ height: number; copy: HTMLElement; at: DOMRect } | null>(null);
-  // The item before giving up the gap as the box goes: given back once the box is gone (in the same commit), or back.
-  const taken = useRef<Animation | null>(null);
+  // Closing: stopped and let go of if it opens again (an answer that failed); the item before giving up the gap as the
+  // box goes, given back once the box is gone (in the same commit), or back.
+  const closing = useRef<{ stop(): void } | null>(null);
+  const taken = useRef<HTMLElement | null>(null);
   const { arriving, gone } = to;
   useLayoutEffect(() => {
     if (open) {
+      closing.current?.stop();
       if (!drawnOpen) setDrawnOpen(true);
       return;
     }
@@ -63,8 +67,8 @@ export function useSettling(box: RefObject<HTMLElement | null>, open: boolean, d
     if (el && el.childElementCount > 0 && moving()) {
       const rect = el.getBoundingClientRect();
       leaving.current = { height: rect.height, copy: el.cloneNode(true) as HTMLElement, at: rect };
-      // Held as tall as it is while what takes its place is drawn in it, until the closing below holds it instead.
-      el.style.height = `${rect.height}px`;
+      // Held as tall as it is while what takes its place is drawn in it, and then closed from there.
+      Object.assign(el.style, { height: `${rect.height}px`, overflow: "clip" });
     }
     setDrawnOpen(false);
     if (!leaving.current) gone?.();
@@ -76,12 +80,25 @@ export function useSettling(box: RefObject<HTMLElement | null>, open: boolean, d
     leaving.current = null;
     const now = el.getBoundingClientRect();
     const end = gone ? 0 : contentHeight(el);
-    const closing = el.animate([{ height: `${was.height}px`, overflow: "clip" }, { height: `${end}px`, overflow: "clip" }], { ...CLOSE, fill: gone ? "forwards" : "none" });
-    el.style.height = "";
-    if (gone) {
-      taken.current = takeGap(el, true, "forwards");
-      void closing.finished.then(gone, () => {});
-    }
+    // Going to nothing, the gap before it goes too: the item before draws it in (a grid row is never less than none).
+    const gap = gone ? gapBefore(el) : 0;
+    const before = gap && el.previousElementSibling instanceof HTMLElement ? el.previousElementSibling : null;
+    taken.current = before;
+    // The list told where its row is going, as it starts; its pane goes there by the same steps (motion.ts glideValue).
+    const told = rowClosing(el, was.height - end + (before ? gap : 0));
+    const run = glideValue(was.height, end, (h) => {
+      el.style.height = `${h}px`;
+      if (before) before.style.marginBottom = `${-gap * (was.height - h) / Math.max(1, was.height - end)}px`;
+    });
+    const letGo = () => { el.style.removeProperty("height"); el.style.removeProperty("overflow"); };
+    closing.current = { stop() { run.cancel(); closing.current = null; told(); letGo(); if (taken.current) { taken.current.style.removeProperty("margin-bottom"); taken.current = null; } } };
+    void run.finished.then(() => {
+      closing.current = null;
+      told();
+      // Gone: held at nothing until it is taken away (`gone`), the gap given back then.
+      if (gone) gone();
+      else letGo();
+    });
     const { copy } = was;
     copy.removeAttribute("class");
     copy.removeAttribute("style");
@@ -89,23 +106,24 @@ export function useSettling(box: RefObject<HTMLElement | null>, open: boolean, d
     copy.inert = true;
     Object.assign(copy.style, { position: "absolute", left: "0", top: `${was.at.top - now.top}px`, width: `${was.at.width}px`, pointerEvents: "none", transformOrigin: "50% 0" });
     el.append(copy);
-    void copy.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(0.9)" }], { ...LEAVE, fill: "forwards" })
+    void copy.animate([{ opacity: 1, transform: "none" }, LEAVE_TO], { ...LEAVE, fill: "forwards" })
       .finished.then(() => copy.remove(), () => copy.remove());
     // What takes its place comes as what was there has nearly gone, rather than over it.
     if (arriving) el.querySelector<HTMLElement>(`:scope > ${arriving}`)
-      ?.animate([{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { ...CLOSE, duration: 220, delay: 120, fill: "backwards" });
+      ?.animate([ENTER_FROM, { opacity: 1, transform: "none" }], { ...ENTER, delay: 120, fill: "backwards" });
   }, [box, drawnOpen, arriving, gone]);
   // Gone (or back): the gap given back to the item before, in the commit that took the box away.
   useLayoutEffect(() => {
     if (!taken.current || (box.current?.isConnected && !drawnOpen)) return;
-    taken.current.cancel();
+    taken.current.style.removeProperty("margin-bottom");
     taken.current = null;
   });
 }
 
 /**
- * `children` while `shown`, under a message: coming after the message is there, they open their space and grow in from
- * a little smaller; going, they leave as useSettling has them, their space closing to nothing. Nothing while not shown.
+ * `children` while `shown`, under a message: coming after the message is there, they open their space and come in as
+ * anything new in the list does (motion.ts ENTER); going, they leave as useSettling has them, their space closing to
+ * nothing. Nothing while not shown.
  */
 export function Settles({ shown, children }: { shown: boolean; children: ReactNode }) {
   const box = useRef<HTMLDivElement>(null);
@@ -129,9 +147,9 @@ export function Settles({ shown, children }: { shown: boolean; children: ReactNo
     const height = el.getBoundingClientRect().height;
     el.animate([{ height: "0px", overflow: "clip" }, { height: `${height}px`, overflow: "clip" }], CLOSE);
     // The gap before it opens with it, given up by the item before until then.
-    given.current = takeGap(el, false, "none");
+    given.current = giveGap(el);
     for (const child of el.children) {
-      (child as HTMLElement).animate([{ opacity: 0, transform: "scale(0.9)", transformOrigin: "50% 0" }, { opacity: 1, transform: "none", transformOrigin: "50% 0" }], { ...CLOSE, duration: 280 });
+      (child as HTMLElement).animate([ENTER_FROM, { opacity: 1, transform: "none" }], { ...ENTER, fill: "backwards" });
     }
   }, [shown]);
   if (!kept) return null;

@@ -15,6 +15,7 @@ import { MobileWorkspace } from "../mobile/index.tsx";
 import { WorkspaceShell, type WorkspaceEntry } from "../cloud/workspace.tsx";
 import { CoreClient, type Topic } from "../core/client.ts";
 import type { ModelOption } from "../api.ts";
+import type { ChatMessage } from "../core/shapes.ts";
 import { setCore, setTopicSource } from "../core/react.ts";
 import { addItem, agentCardView, chatView, newChat, received, VISITOR, chatsView, historyView, liveView, marked, message, outgoing, SAFARI_KEY } from "./fixtures.ts";
 import { makeStory, openingChats } from "./story.ts";
@@ -126,6 +127,9 @@ const BANNED = `⚠️ 认证失败，需要管理员检查账号：${station.BA
 /** The prefs as the visitor set them here (the sidebar's list, …), kept for the page's life as a core keeps them. */
 const prefs: Record<string, unknown> = {};
 
+/** A message no longer asking anything of the viewer. */
+const withoutAsked = ({ asked: _, ...m }: ChatMessage): ChatMessage => m;
+
 function answer(name: string, params: Record<string, unknown>): unknown {
   for (const e of extensions) { const v = e.call?.(name, params); if (v !== undefined) return v; }
   if (name === "prefs.set") {
@@ -156,9 +160,25 @@ function answer(name: string, params: Record<string, unknown>): unknown {
   if (name === "chat.newer" || name === "chat.latest" || name === "chat.place" || name === "chat.around") return name === "chat.newer" ? { more: false } : null;
   if (name === "chat.find") return { words: [], hits: [], held: 0, of: 0, whole: true };
   const chat = chats.find((c) => c.thread === params.thread || c.key === params.session);
+  // A card's option picked: its label sent, quoting the post, as the core sends it (and the card answered at once).
+  if (name === "decision.answer" && chat && typeof params.option === "string") {
+    answer("chat.send", { thread: chat.thread, text: params.option, chose: params.option });
+    return null;
+  }
+  // Let go of here: not asked any more (its options still there).
+  if (name === "decision.dismiss" && chat) {
+    chat.messages = chat.messages.map((m) => (m.seq === params.seq ? withoutAsked(m) : m));
+    setTimeout(publish, 0);
+    return null;
+  }
   if (name === "chat.send" && chat && typeof params.text === "string" && params.text.trim()) {
     const text = params.text;
     story.end(chat.key);
+    // What is sent answers the card still waiting, at once, as the core has it (decisions.ts inMessages).
+    const chose = typeof params.chose === "string" ? params.chose : undefined;
+    chat.messages = chat.messages.map((m) => (m.decision && !m.decision.resolved
+      ? { ...withoutAsked(m), decision: { resolved: true, answeredBy: "你", ...(chose ? { chosen: chose, text: `你 选了「${chose}」` } : { text: "你 回复了" }) } }
+      : m));
     // As the core does: on its way at once (the outbox), then the station's own copy in its place, taken by the agent.
     chat.outbox = [outgoing(text)];
     // A new chat takes its first message's words as its title, as a station does.
@@ -292,6 +312,10 @@ export function DemoApp({ phone }: { phone: boolean }) {
     </ToastProvider>
   );
 }
+
+/** The made-up core's chats, and telling the page they changed: for the browser checks (test/browser), which play
+ * what a station would say into a chat. */
+export const demoCore = { chats, publish };
 
 /** Runs the demo in `element` (once): the app, its made-up core, and the story played when it comes into view. */
 export function mountDemo(element: HTMLElement): void {
