@@ -4,22 +4,23 @@ import { navFoot, stationRow, stationTrouble } from "./Sidebar.css.ts";
 import { floatingThumb } from "./scrollbars.css.ts";
 import { dock } from "./styles/shell.css.ts";
 import { vars } from "./styles/tokens.css.ts";
-import { outsetBottom, TEXT_IN } from "./styles/align.ts";
+import { TEXT_IN } from "./styles/align.ts";
 
 const wide = "(min-width: 701px)";
 const narrow = "(max-width: 700px)";
 
 export const rail = style({
-  // Its last place's ground (30 in 38) as far from its foot as from its sides: 13.
-  display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "0 0 9px", flex: "none", width: 56,
+  // Its last place's ground (30 in 36) as far from its foot as from its sides: 13. The places touch: their grounds 6
+  // apart (3 of each within it), as far as the closed bar's from its edges.
+  display: "flex", flexDirection: "column", alignItems: "center", gap: 0, padding: "0 0 10px", flex: "none", width: 56,
   WebkitUserSelect: "none", userSelect: "none",
   // A window too short for every place: they scroll (its bar floating, scrollbars.ts), not squashed.
   overflowY: "auto", scrollbarWidth: "none",
   // In the closed bar (shell.css.ts dock), as narrow as it, at the same pace.
   transition: `width 380ms ${vars.easeOut}, padding 380ms ${vars.easeOut}`,
-  // In the closed bar (42 wide) its places' ground 6 px from its every edge (4 of it within the place), the bar's
-  // corner concentric with theirs.
-  selectors: { '[data-sidebar="closed"] &': { width: 42, paddingTop: 2, paddingBottom: 2 } },
+  // In the closed bar (42 wide) its places' ground 6 px from its every edge (3 of it within the place, above and below),
+  // the bar's corner concentric with theirs. Changed, its places apart (their dashed frames not touching).
+  selectors: { '[data-sidebar="closed"] &': { width: 42, paddingTop: 3, paddingBottom: 3 }, "&[data-editing]": { gap: 6 } },
   "@media": { [narrow]: { display: "none" }, "(prefers-reduced-motion: reduce)": { transition: "none" } },
 });
 // Each place its own 38 (its ground 30 square), however short the window; a place's slot is display: contents.
@@ -31,15 +32,15 @@ globalStyle(`${rail} > *, ${rail} > [data-rail-item] > *`, { flexShrink: 0 });
  */
 export const top = style({
   // On the web nothing is in the sidebar's top row either: a margin, as there. Its first place's ground (30) level with
-  // the sidebar's first row (新对话, 32 from 14 down there): its middle at 30, 3 above the gap's 6 and its 4 within.
-  flex: "none", alignSelf: "stretch", height: 5, transition: `height 380ms ${vars.easeOut}, margin-bottom 380ms ${vars.easeOut}`,
+  // the sidebar's first row (新对话, 32 from 14 down there): its middle at 30, 12 above its 3 within.
+  flex: "none", alignSelf: "stretch", height: 12, transition: `height 380ms ${vars.easeOut}, margin-bottom 380ms ${vars.easeOut}`,
   selectors: {
     // Only macOS's window has its buttons here; full screen, or on Windows (its buttons at the right, the page's bar
     // dragging the window), as on the web. Not in the closed bar (below), which starts under the buttons' row: this
     // selector outweighs that one, so it says so itself.
-    '[data-desktop="inset"]:not([data-fullscreen]):not([data-sidebar="closed"]) &': { height: 41, WebkitAppRegion: "drag" },
+    '[data-desktop="inset"]:not([data-fullscreen]):not([data-sidebar="closed"]) &': { height: 48, WebkitAppRegion: "drag" },
     // In the closed bar nothing: its places stand as far from its top as from its sides (rail's padding).
-    '[data-sidebar="closed"] &': { height: 0, ...outsetBottom(6) },
+    '[data-sidebar="closed"] &': { height: 0 },
   },
 });
 /**
@@ -88,16 +89,16 @@ globalStyle(`:root[data-sidebar="closed"]:not([data-sidebar-peek]) ${dock} ${flo
 export const grow = style({ flex: 1 });
 
 /**
- * A place: 38 to press, its ground (hovered, lit) as large as a workspace's square (30, the same corner) and drawn
+ * A place: 38 by 36 to press, its ground (hovered, lit) as large as a workspace's square (30, the same corner) and drawn
  * under the icon.
  */
 export const item = style({
-  position: "relative", display: "grid", placeItems: "center", width: 38, height: 38, padding: 0, border: 0,
+  position: "relative", display: "grid", placeItems: "center", width: 38, height: 36, padding: 0, border: 0,
   background: "none", color: vars.muted, cursor: "pointer", isolation: "isolate",
   transition: `color ${vars.dur} ${vars.easeOut}`,
   selectors: {
     "&::before": {
-      content: '""', position: "absolute", inset: 4, zIndex: -1, borderRadius: `calc(9px * ${vars.cornerScale})`,
+      content: '""', position: "absolute", inset: "3px 4px", zIndex: -1, borderRadius: `calc(9px * ${vars.cornerScale})`,
       cornerShape: vars.cornerShape, transition: `background ${vars.dur} ${vars.easeOut}`,
     },
     "&:hover": { color: vars.text },
@@ -117,7 +118,7 @@ export const item = style({
 export const zou = style({ fontSize: vars.textTitle, lineHeight: "20px", fontWeight: 600 });
 /** What waits on a place: a small dot on the icon's corner (how many is in its tip), cut out of the rail's ground. */
 export const count = style({
-  position: "absolute", top: 6, right: 6, width: 8, height: 8, borderRadius: "50%", background: vars.red,
+  position: "absolute", top: 5, right: 6, width: 8, height: 8, borderRadius: "50%", background: vars.red,
   boxShadow: `0 0 0 2px ${vars.sidebar}`,
 });
 
@@ -126,7 +127,7 @@ export const count = style({
  * ground, only while the sidebar is closed (open, the rows show it).
  */
 export const listMark = style({
-  position: "absolute", top: 3, right: 3, display: "flex", padding: 2, borderRadius: "50%", background: vars.sidebar,
+  position: "absolute", top: 2, right: 3, display: "flex", padding: 2, borderRadius: "50%", background: vars.sidebar,
   selectors: { ':root:is(:not([data-sidebar="closed"]), [data-sidebar-peek]) &': { display: "none" } },
 });
 
@@ -136,7 +137,7 @@ export const listMark = style({
  * places' ground; the one in view, a short bar at its left and no ground (a ground under a mark greyed an icon's colours
  * and showed round a picture).
  */
-export const workspaces = style({ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "4px 0" });
+export const workspaces = style({ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "3px 0" });
 export const workspaceItem = style({
   position: "relative", display: "grid", placeItems: "center", width: 30, height: 30, padding: 0, border: 0,
   borderRadius: `calc(9px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: vars.hover, color: vars.muted,
