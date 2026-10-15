@@ -728,7 +728,7 @@ export function host(h: J): J {
   o.summary = summary;
   o.line = `${os} · ${summary} · ${t("core-views.present.host.up_days", { n: days })}`;
   const arch = str(src.arch) ?? "";
-  // Each as the allowances are drawn: how much is left (`left`, its edge and cells) and that in words; on a machine's
+  // Each as the allowances are drawn: how much is left (`left`, its fill and cells) and that in words; on a machine's
   // own page, that large (`big` `unit`), what it is (`title`) and what it is out of (`total`).
   const meter = (label: string, short: string, percent: number, value: string, note: string | null, room: { remaining: string; big: string; unit: string; title: string; total: string }) => {
     const p = format.round(Math.min(Math.max(percent, 0), 100));

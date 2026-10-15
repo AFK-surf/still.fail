@@ -70,6 +70,12 @@ function fillAt(picture: Picture, to: HTMLElement, end: { width: number; height:
   return { width: `${a.width + (b.width - a.width) * p}px`, height: `${a.height + (b.height - a.height) * p}px` };
 }
 
+/** `to` given the shape of `from`'s corners (their radius is copied apart): without it a squircle's radius is drawn
+ * round, and one as large as the composer thumbnail's is near a circle. */
+function corners(to: HTMLElement, from: Element) {
+  to.style.setProperty("corner-shape", getComputedStyle(from).getPropertyValue("corner-shape"));
+}
+
 /** The images going with the message, drawn in `layer` (at `z`) where their thumbnails are in `composer`, cropped as there. */
 function picturesIn(composer: Element, layer: HTMLElement, z: string): Picture[] {
   const base = layer.getBoundingClientRect();
@@ -85,6 +91,7 @@ function picturesIn(composer: Element, layer: HTMLElement, z: string): Picture[]
       width: `${rect.width}px`, height: `${rect.height}px`, overflow: "hidden",
       borderRadius: getComputedStyle(source).borderRadius, zIndex: z, pointerEvents: "none",
     });
+    corners(picture, source);
     // Sized and centred by hand rather than by object-fit: on the way its box changes shape, and where it lands it may
     // be letterboxed rather than cropped.
     const ratio = img.naturalWidth / img.naturalHeight;
@@ -194,7 +201,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
     const frame = into.getBoundingClientRect();
     // Capture image destinations before translating the list itself.
     const destinations = new Map([...first.querySelectorAll<HTMLElement>("[data-send-image]")].map((el) =>
-      [el.dataset.sendImage!, { el, rect: el.getBoundingClientRect(), radius: getComputedStyle(el).borderRadius }]));
+      [el.dataset.sendImage!, { el, rect: el.getBoundingClientRect(), radius: getComputedStyle(el).borderRadius, corner: getComputedStyle(el).getPropertyValue("corner-shape") }]));
     const { from, top } = now;
     const timing = { duration: 480, delay: wait, easing: EASE, fill: "backwards" } as const;
     // The rest of the list comes up with it, out of the composer's top edge: cut there, wherever it has got to.
@@ -238,6 +245,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
         width: `${end.width}px`, height: `${end.height}px`, transformOrigin: "0 0",
         borderRadius: target.radius,
       });
+      picture.stand.style.setProperty("corner-shape", target.corner);
       moves.push(picture.stand.animate([
         { transform: `translate(${picture.rect.left - end.left}px, ${picture.rect.top - end.top}px)`, width: `${picture.rect.width}px`, height: `${picture.rect.height}px` },
         { transform: "none", width: `${end.width}px`, height: `${end.height}px` },
@@ -448,6 +456,7 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
       if (!picture.stand.dataset.flying) {
         picture.stand.dataset.flying = "";
         picture.stand.style.borderRadius = getComputedStyle(target).borderRadius;
+        corners(picture.stand, target);
       }
       Object.assign(picture.stand.style, {
         left: `${a.left + (end.left - a.left) * across - box.left}px`, top: `${a.top + (end.top - a.top) * up - box.top}px`,

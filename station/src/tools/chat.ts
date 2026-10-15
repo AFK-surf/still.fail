@@ -238,7 +238,7 @@ export const CHAT_HISTORY = {
 export const CHAT_LIST = {
   name: "chat_list",
   description:
-    "List the conversations on this station (still.fail chats and Slack threads), the latest first: each with its address, title, agents (session keys) and last message; then the chats other workspaces share with this one, by their links. Use it to find a chat people refer to.",
+    "List the conversations on this station (still.fail chats and Slack threads), the latest first: each with its address, title, agents (session keys), last message and, on a station of a workspace, its link (the one to give people); then the chats other workspaces share with this one, by their links. Use it to find a chat people refer to.",
   inputSchema: {
     "type": "object",
     "properties": {

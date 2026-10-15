@@ -149,7 +149,8 @@ function inlineCode(words: string, code: ReactNode, children: ReactNode): ReactN
  * a tab of its own, not in place of the app (the desktop app's opens in the browser, as before). */
 function link(props: ComponentProps<"a">) {
   const href = props.href ?? "";
-  if (isChatLink(href)) return <RefChip title={props.children} href={href} />;
+  // A bare link (its words the link itself): the chip says the chat's title, not the link.
+  if (isChatLink(href)) return <RefChip title={[href, safeDecode(href)].includes(textOf(props.children).trim()) ? null : props.children} href={href} />;
   if (/^https?:\/\//i.test(href)) return <LinkHover href={href} label={textOf(props.children)}><a {...props} title={undefined} target="_blank" rel="noopener noreferrer" /></LinkHover>;
   const file = /^[a-z][\w+.-]*:/i.test(href) ? null : pathIn(safeDecode(href));
   if (file) return <FileRef path={file.path} line={file.line} words={props.children}>{props.children}</FileRef>;

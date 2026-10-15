@@ -95,7 +95,7 @@ export function OwnerLabel({ owner }: { owner: { id: string; shown?: PersonShown
 
 /**
  * A profile's allowance, as the core puts its windows (shortest first, each marked): compact, a rounded box per window
- * with what is left written in it (its mark too when there is more than one), its edge drawn as far as is left.
+ * with what is left written in it (its mark too when there is more than one), its ground filled as far as is left.
  * `small`: where a line is lower than a row (the model control).
  */
 export function QuotaBars({ quota, compact, small, bare }: { quota: Quota | null | undefined; compact?: boolean; small?: boolean; bare?: boolean }) {
@@ -108,7 +108,7 @@ export function QuotaBars({ quota, compact, small, bare }: { quota: Quota | null
         {quota.windows.map((w) => (
           // Bare: inside a control, so not a stop of their own for the keyboard; the tip still shows on hover.
           <Tip key={w.label} label={<>{t("web-main.quota.left", { label: w.label, left: w.left })}{w.refills && <><br />{w.refills}</>}</>}>
-            <EdgeChip fill={w.left} level={w.level} mark={lone ? null : w.mark} label={t("web-main.quota.left", { label: w.label, left: w.left })} small={small} bare={bare} />
+            <FillChip fill={w.left} level={w.level} mark={lone ? null : w.mark} label={t("web-main.quota.left", { label: w.label, left: w.left })} small={small} bare={bare} />
           </Tip>
         ))}
       </span>
@@ -143,31 +143,28 @@ export function MeterDials({ meters, row = false }: { meters: Meter[]; row?: boo
   return <div className={css.quotaDials} data-row={row || undefined}>{meters.map((m) => <Dial key={m.label} number={m.big} unit={m.unit} left={m.left} level={m.level} label={m.title} note={m.total} aria={`${m.title} ${m.big} ${m.unit}`} />)}</div>;
 }
 
-/** A rounded box with a figure in it (its mark before it, when given) and its edge drawn as far as `fill` (0–100),
- * clockwise from the top left, in the colour of the core's `level`: an allowance's window, a machine's meter; or, as
- * level `progress`, how much of a download is in (in the accent, its edge moving smoothly to each new share). What else
- * it is given (a tip's trigger props and ref) goes on the box. */
-export function EdgeChip({ fill, level, mark, label, text, small, bare, ...rest }: { fill: number; level: Level | string; mark?: ReactNode; label: string; text?: string | undefined; small?: boolean | undefined; bare?: boolean | undefined } & Omit<ComponentProps<"span">, "children">) {
+/** A rounded box with a figure in it (its mark before it, when given) and its ground filled from the left as far as
+ * `fill` (0–100): grey while there is plenty, in the colour of the core's `level` once it runs low: an allowance's
+ * window, a machine's meter; or, as level `progress`, how much of a download is in (in the accent, its fill moving
+ * smoothly to each new share). What else it is given (a tip's trigger props and ref) goes on the box. */
+export function FillChip({ fill, level, mark, label, text, small, bare, ...rest }: { fill: number; level: Level | string; mark?: ReactNode; label: string; text?: string | undefined; small?: boolean | undefined; bare?: boolean | undefined } & Omit<ComponentProps<"span">, "children">) {
   const p = Math.max(0, Math.min(100, fill));
   return (
     <span {...rest} className={css.quotaChip} data-level={level} data-small={small || undefined} tabIndex={bare ? undefined : 0} role="img" aria-label={label}>
-      <svg className={css.quotaChipEdge} aria-hidden="true">
-        <rect className={css.quotaChipTrack} pathLength={100} />
-        {p > 0 && <rect className={css.quotaChipLeft} pathLength={100} strokeDasharray={`${p} 100`} />}
-      </svg>
+      <i className={css.quotaChipFill} style={{ width: `${p}%` }} aria-hidden="true" />
       <span className={css.quotaChipText}>{mark != null && <span className={css.quotaChipMark}>{mark}</span>}<span>{text ?? `${fill}%`}</span></span>
     </span>
   );
 }
 
-/** A machine's CPU, memory and disk as the allowance's boxes are drawn: each its name and what is left, its edge drawn as
- * far as that; what it is in the tip. `alerts`: only those running low. */
+/** A machine's CPU, memory and disk as the allowance's boxes are drawn: each its name and what is left, its ground filled
+ * as far as that; what it is in the tip. `alerts`: only those running low. */
 export function MeterChips({ meters, bare, alerts = false }: { meters: Meter[]; bare?: boolean; alerts?: boolean }) {
   return (
     <span className={css.quotaChips}>
       {meters.filter((m) => !alerts || m.level !== "ok").map((m) => (
         <Tip key={m.label} label={`${m.label} ${m.value}${m.note ? ` · ${m.note}` : ""}`}>
-          <EdgeChip fill={m.left} level={m.level} mark={m.short} text={m.remaining} label={`${m.label} ${m.remaining}`} bare={bare} />
+          <FillChip fill={m.left} level={m.level} mark={m.short} text={m.remaining} label={`${m.label} ${m.remaining}`} bare={bare} />
         </Tip>
       ))}
     </span>
