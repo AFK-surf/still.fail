@@ -174,6 +174,9 @@ export const dot = style({
 
 /** A place in the rail as it is: nothing of its own in the layout (its menu finds it by `data-rail-item`). */
 export const slot = style({ display: "contents" });
+// Dragged with ⌘ held (Rail.tsx moves it with the pointer): lifted, over the others.
+globalStyle(`${slot}[data-dragged] > *`, { zIndex: 1, cursor: "grabbing", color: vars.text });
+globalStyle(`${slot}[data-dragged] > *::before`, { background: vars.selected, boxShadow: `0 6px 16px ${vars.shadow}` });
 /** A place while the rail is changed: dragged up or down to where it goes, a − at its corner to take it out. */
 export const editing = style({
   position: "relative", borderRadius: `calc(12px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, cursor: "grab", touchAction: "none",

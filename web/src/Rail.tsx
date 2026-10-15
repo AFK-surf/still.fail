@@ -6,7 +6,7 @@
 // a dot while some wait for the viewer), 待处理 (what wants them in every workspace), 文件, the stations' glyph, Profile,
 // 连接, 用量; at its foot every workspace to switch to (each with what waits in it; a ＋ over them, as the pointer comes,
 // for making one, another account, invitations) and under them the settings, which are not among what is chosen. It is
-// changed where it is: its menu's 自定义侧边条 (or 外观's) has its places dragged up and down, taken out with their −,
+// changed where it is: its menu's 自定义侧边条 (or 外观's) has its places dragged up and down (any time, held with ⌘), taken out with their −,
 // added from a panel beside it by kind; a place's own menu takes it out. Station, 连接 and 用量 in it are pages of their
 // own beside the chats, Profile its list in the sidebar (ProfilesNav.tsx) and the one picked beside; left out of it,
 // they are among the settings. The sidebar beside shows the chats (or 奏, one of their lists), the folders the stations
@@ -132,41 +132,61 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   const pointerY = useRef(0);
   const grabbed = useRef(0);
   const drawnAt = useRef(new Map<RailItem, number>());
-  const follow = (item: RailItem) => {
+  // What moves: the place's slot while the rail is changed; otherwise (held with ⌘) the place itself, its slot being
+  // nothing of its own in the layout.
+  const box = (item: RailItem) => {
     const el = slots.current.get(item);
+    return changing ? el : (el?.firstElementChild as HTMLElement | null | undefined);
+  };
+  const follow = (item: RailItem) => {
+    const el = box(item);
     if (el) el.style.transform = `translateY(${pointerY.current - grabbed.current - el.offsetTop}px) scale(1.06)`;
   };
+  const drawnChanging = useRef(changing);
   useLayoutEffect(() => {
-    const was = drawnAt.current;
+    // Changed or no longer: other boxes (the slots, or the places), not where these were.
+    const was = drawnChanging.current === changing ? drawnAt.current : new Map<RailItem, number>();
+    drawnChanging.current = changing;
     const now = new Map<RailItem, number>();
-    for (const [item, el] of slots.current) {
+    for (const item of slots.current.keys()) {
+      const el = box(item);
+      if (!el) continue;
       now.set(item, el.offsetTop);
       if (item === dragged?.item) continue;
       const from = was.get(item);
-      if (from !== undefined && from !== el.offsetTop && !reducedMotion()) {
+      // Only while they are moved about (or changed): the rail's own changes of length move them too.
+      if ((changing || dragged) && from !== undefined && from !== el.offsetTop && !reducedMotion()) {
         el.animate([{ transform: `translateY(${from - el.offsetTop}px)` }, { transform: "none" }], { duration: 220, easing: "cubic-bezier(.2, .7, .2, 1)" });
       }
     }
     drawnAt.current = now;
     if (dragged?.item) follow(dragged.item);
   });
+  // While the rail is changed, a place pressed is dragged; otherwise one pressed with ⌘ held, once the pointer has moved
+  // (⌘ pressed and let go of where it was is the place's own ⌘-press), and then let go of it is not pressed.
   const drag = (item: RailItem) => (e: ReactPointerEvent) => {
-    if (e.button !== 0) return;
-    e.preventDefault();
+    if (e.button !== 0 || !(changing || e.metaKey)) return;
+    if (changing) e.preventDefault();
     let order = items;
-    const el = slots.current.get(item);
+    const el = box(item);
     const top = (el?.offsetParent as HTMLElement | null)?.getBoundingClientRect().top ?? 0;
     pointerY.current = e.clientY - top;
     grabbed.current = pointerY.current - (el?.offsetTop ?? 0);
-    setDragged({ item, order });
+    let started = changing;
+    if (started) setDragged({ item, order });
     const move = (ev: PointerEvent) => {
+      if (!started) {
+        if (Math.abs(ev.clientY - e.clientY) < 4) return;
+        started = true;
+        setDragged({ item, order });
+      }
       pointerY.current = ev.clientY - top;
       follow(item);
       // Where the pointer is among the others' middles.
       const rest = order.filter((i) => i !== item);
       let at = rest.length;
       for (let i = 0; i < rest.length; i++) {
-        const other = slots.current.get(rest[i]!);
+        const other = box(rest[i]!);
         if (other && pointerY.current < other.offsetTop + other.offsetHeight / 2) { at = i; break; }
       }
       const next = [...rest.slice(0, at), item, ...rest.slice(at)];
@@ -175,7 +195,13 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
-      const held = slots.current.get(item);
+      if (!started) return;
+      if (!changing) {
+        const swallow = (ev: MouseEvent) => { ev.preventDefault(); ev.stopPropagation(); };
+        window.addEventListener("click", swallow, { capture: true, once: true });
+        setTimeout(() => window.removeEventListener("click", swallow, { capture: true }));
+      }
+      const held = box(item);
       if (held) {
         const from = held.style.transform;
         held.style.transform = "";
@@ -304,7 +330,11 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
               onPointerDown={(e) => e.stopPropagation()} onClick={() => keep(items.filter((i) => i !== item))}><Minus size={12} strokeWidth={2.5} /></button>
           )}
         </div>
-      ) : <div key={item} data-rail-item={item} className={css.slot}>{drawn(item)}</div>)}
+      ) : (
+        <div key={item} ref={(el) => { if (el) slots.current.set(item, el); else slots.current.delete(item); }} data-rail-item={item}
+          className={css.slot} data-dragged={dragged?.item === item || undefined} onPointerDown={drag(item)}
+          onDragStart={(e) => { if (e.metaKey) e.preventDefault(); }}>{drawn(item)}</div>
+      ))}
       <div className={css.grow} />
       {/* Every workspace at the foot, always, not one of the places chosen: the one in view its switcher. */}
       <RailWorkspaces scope={scope} current={workspace} />
