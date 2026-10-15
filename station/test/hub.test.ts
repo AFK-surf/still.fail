@@ -1167,10 +1167,13 @@ test("a session heard only in Slack is archived after three idle days even when 
   await r.call(blocked, "chat_state", { kind: "block" });
   r.claude.last().complete();
   await settle();
-  const [web] = newSession(r.hub, chat());
+  const [web, thread] = newSession(r.hub, chat());
+  sayIn(r.hub, thread.id, "local", "hi");
+  await settle();
   await r.call(web, "chat_state", { kind: "block" });
   r.claude.last().complete();
   await settle();
+  r.store.setRead("local", thread.id, r.store.lastEntry(thread.id));
 
   const now = Date.now();
   const due = autoArchive(r.hub, now + 2 * day);
