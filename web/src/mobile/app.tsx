@@ -23,7 +23,7 @@ import * as rootCss from "./styles/root.css.ts";
 import * as css from "./app.css.ts";
 import { follower, type Follower } from "../motion.ts";
 import { useInWorkspace } from "../notify.ts";
-import { BottomBar, CHAT_FAMILY, PLACE_PATHS, placeOfPath, type BarPlace } from "./Bar.tsx";
+import { BottomBar, PLACE_PATHS, placeOfPath, type BarPlace } from "./Bar.tsx";
 import { t } from "../i18n.ts";
 
 /** The workspace in view and the signed-in account that reaches it. */
@@ -145,6 +145,11 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
   // on from (`from`), the page held there until the back lands.
   const [swipe, setSwipe] = useState<number | null>(null);
   const from = useRef(0);
+  // The places' top pages switched away from on the bottom bar, kept drawn out of sight: switched back to, each is as it
+  // was left (where it was scrolled to, what it had read), not made anew. The order they were first drawn in, which
+  // they keep (a page moved in the document loses where it was scrolled to).
+  const placesKept = useRef(new Map<BarPlace, Page>());
+  const drawnFirst = useRef(new Map<string, number>());
   useLayoutEffect(() => {
     if (location.key === top.location.key) return;
     const page = { key: location.key, location, way: wayOf(location.pathname) };
@@ -155,8 +160,10 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
       next = pages.slice(0, at + 1);
       forward = false;
     } else if (type === "REPLACE" && (location.state as { fresh?: boolean } | null)?.fresh) {
-      // Another chat from the latest chats: a page of its own in place of the one that was open.
-      next = [...pages.slice(0, -1), page];
+      // Another chat from the latest chats: a page of its own in place of the one that was open. A place switched to
+      // on the bar: its page as it was left, if it was.
+      const kept = placesKept.current.get(placeOfPath(location.pathname, home)!);
+      next = [...pages.slice(0, -1), kept ? { ...page, key: kept.key } : page];
     } else if (type === "REPLACE") {
       // The page becoming another in place (a new chat its chat) stays the same page: what is on it that both have (the
       // composer, with what is typed) is kept.
@@ -310,6 +317,11 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
 
   // The page leaving on the way back is no longer in the list; it is drawn until it has gone.
   const shown = moving && !moving.forward && !pages.some((p) => p.key === moving.from.key) ? [...pages, moving.from] : pages;
+  if (atRoot && place) placesKept.current.set(place, pages[0]!);
+  const away = [...placesKept.current.values()].filter((k) => !shown.some((p) => p.key === k.key));
+  for (const p of [...shown, ...away]) if (!drawnFirst.current.has(p.key)) drawnFirst.current.set(p.key, drawnFirst.current.size);
+  const drawn = [...shown, ...away].sort((a, b) => drawnFirst.current.get(a.key)! - drawnFirst.current.get(b.key)!);
+  const kept = (p: Page) => away.includes(p);
   const below = pages.at(-2)?.key;
   return (
     <Context.Provider value={app}>
@@ -317,7 +329,14 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
       {/* What shared parts say (../toast.tsx useToast, useAct) shows as the phone's own toast. */}
       <ToastTo show={showToast}>
         <div className={rootCss.m}>
-          {shown.map((p) => {
+          {drawn.map((p) => {
+            if (kept(p)) {
+              return (
+                <div key={p.key} className={css.mPage} data-role="kept" data-root="" style={{ visibility: "hidden", pointerEvents: "none" }} inert aria-hidden="true">
+                  <RootPage.Provider value><PageBody location={p.location} routes={routes} /></RootPage.Provider>
+                </div>
+              );
+            }
             const isTop = p.key === top.key;
             const inMove = moving && (p.key === moving.from.key || p.key === moving.to.key);
             const role = !moving ? (isTop ? "top" : swipe !== null && p.key === below ? "peek" : "under") : p.key === moving.to.key ? "in" : p.key === moving.from.key ? "out" : "under";
@@ -336,8 +355,7 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
             }
             return (
               <div key={p.key} ref={(el) => { if (el) pageEls.current.set(p.key, el); else pageEls.current.delete(p.key); }} className={css.mPage} data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
-                data-swiping={(swipe !== null && isTop) || undefined} data-root={(p.key === rootKey && placeOfPath(p.location.pathname, home) !== null) || undefined}
-                data-ling={(p.key === rootKey && CHAT_FAMILY.includes(placeOfPath(p.location.pathname, home)!)) || undefined} style={style}>
+                data-swiping={(swipe !== null && isTop) || undefined} data-root={(p.key === rootKey && placeOfPath(p.location.pathname, home) !== null) || undefined} style={style}>
                 <RootPage.Provider value={p.key === rootKey && placeOfPath(p.location.pathname, home) !== null}>
                   <PageBody location={p.location} routes={routes} />
                 </RootPage.Provider>
@@ -356,7 +374,7 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
             </div>
           </>}
           {/* The bottom bar: under a place's top page; away (down and out) while a page is pushed over it. */}
-          <BottomBar scope={entry.id} place={place} shown={atRoot && !moving} go={app.tab} newChat={() => app.open(app.at("/new"))} />
+          <BottomBar scope={entry.id} place={place} shown={atRoot && !moving} go={app.tab} />
           <SheetHost spec={sheet} close={() => { sheet?.onClose?.(); setSheet(null); }} />
           <ReaderHost spec={reader} close={() => setReader(null)} />
           <MenuHost spec={menu} close={() => { menu?.onDismiss?.(); setMenu(null); }} />

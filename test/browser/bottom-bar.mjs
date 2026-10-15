@@ -1,8 +1,8 @@
 // The phone's bottom bar (web/src/mobile/Bar.tsx): on a place's top page, the ball 6 past the bar on every side over
-// the place in view; a tap goes to another place (in place, no page pushed), 令 only on the chats' pages; one stroke
-// up from the bar opens the panel and lets go on a place of the other bar (that bar, and that place: its page at once,
-// under the glass closing); a page pushed over a place sends the bar away; Settings · 下方栏 lists the bars. Runs its
-// own Vite fixture with the demo core.
+// the place in view; a tap goes to another place (in place, no page pushed, its scroll kept), the page's primary
+// action (令 on the chats' pages, a ＋) in the notch; one stroke up from the bar opens the panel and lets go on a place
+// of the other bar (that bar, and that place: its page at once, under the glass closing); a page pushed over a place
+// sends the bar away; Settings · 下方栏 lists the bars. Runs its own Vite fixture with the demo core.
 // PLAYWRIGHT_MODULE selects Playwright; SHOTS optionally keeps pictures.
 import assert from 'node:assert/strict';
 import { mkdir, writeFile, rm } from 'node:fs/promises';
@@ -74,20 +74,33 @@ createRoot(root).render(<DemoApp phone />);
   await shot('home');
   await shot('home-dark', true);
 
-  // A tap on 文件: its page in place (no back), 令 sunk into the bar, the ball over 文件.
+  // The list scrolled a little, to be found so again when back.
+  const scrolled = () => page.evaluate(() => Math.max(...[...document.querySelectorAll('[data-role=top] *')].map((e) => e.scrollTop)));
+  await page.evaluate(() => { for (const e of document.querySelectorAll('[data-role=top] *')) if (e.scrollHeight > e.clientHeight + 40 && getComputedStyle(e).overflowY === 'auto') e.scrollTop = 120; });
+  await page.waitForTimeout(200);
+  const at = await scrolled();
+  assert.ok(at > 0, 'the list scrolls');
+
+  // A tap on 文件: its page in place, a place's own (its head the gear and its name, no back), its primary action (the
+  // demo's viewer is an admin: lend a folder) in the notch where 令 was, the ball over 文件.
   await tab('文件').tap();
   await rest();
-  assert.ok(page.url().includes('/files') || await page.getByRole('heading', { name: '文件' }).count() > 0, 'the files\' page');
-  const ling = await page.getByRole('button', { name: NEW_CHAT }).last().evaluate((e) => +getComputedStyle(e).opacity);
-  assert.ok(ling < 0.1, `令 is gone off a page not the chats' (${ling})`);
+  assert.ok(await page.locator('[data-role=top] h1', { hasText: '文件' }).isVisible(), 'the files\' page, its name in its head');
+  assert.equal(await page.locator('[data-role=top]').getByRole('button', { name: '返回' }).count(), 0, 'no back on a place\'s own page');
+  const action = await page.locator('[data-action]').evaluate((e) => ({ label: e.getAttribute('aria-label'), key: e.dataset.action, opacity: +getComputedStyle(e).opacity }));
+  assert.deepEqual([action.label, action.key, action.opacity > 0.9], ['添加文件夹', 'folder', true], `the notch holds 添加文件夹 (${JSON.stringify(action)})`);
   b = await bar();
   const files = await tab('文件').boundingBox();
   assert.ok(Math.abs((b.ball.left + b.ball.right) / 2 - (files.x + files.width / 2)) < 2, 'the ball is over 文件');
   await shot('files');
 
-  // One stroke: from 对话 up into the panel, onto 连接 in the other bar, let go: that bar, and 连接's page.
+  // Back on 对话: the list where it was left, 令 in the notch again.
   await tab('对话').tap();
   await rest();
+  assert.equal(await scrolled(), at, 'the list as it was scrolled');
+  assert.equal(await page.locator('[data-action]').getAttribute('aria-label'), NEW_CHAT, '令 in the notch');
+
+  // One stroke: from 对话 up into the panel, onto 连接 in the other bar, let go: that bar, and 连接's page.
   const from = await tab('文件').boundingBox();
   const sx = from.x + from.width / 2, sy = from.y + from.height / 2;
   await touch('touchStart', sx, sy);

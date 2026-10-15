@@ -7,9 +7,9 @@ import { LOCAL_MS } from "../motion.ts";
 import { Retry, Trash } from "../icons.tsx";
 import type { ArchiveItem } from "../core/shapes.ts";
 import { useDoing, useDoingFailed } from "../doing.ts";
-import { ABOUT, DELETE_TEXT, itemKey, useArchive } from "../pages/Archive.tsx";
+import { DELETE_TEXT, itemKey, useArchive } from "../pages/Archive.tsx";
 import { useApp } from "./app.tsx";
-import { FailedMark, LargeTitle, SectionHeader, Spinner, TopBack } from "./parts.tsx";
+import { FailedMark, PlaceHead, SectionHeader, Spinner } from "./parts.tsx";
 import { confirm } from "./sheets.tsx";
 import * as css from "./Archive.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -22,9 +22,7 @@ export function ArchiveScreen() {
   const { days, errors, note, restore, remove } = useArchive(app.entry.id, app.toast);
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label={t("web-mobile.nav.chats")} onBack={app.pop} />
-      <LargeTitle small={app.entry.name} big={t("web-mobile.archive.title")} />
-      <p className={css.mArchiveAbout}>{ABOUT}</p>
+      <PlaceHead title={t("web-mobile.archive.title")} back={t("web-mobile.nav.chats")} onBack={app.pop} />
       {errors.map((e) => <p key={e.station} className={css.mArchiveNote} data-error>{e.text}</p>)}
       {note && <p className={css.mArchiveNote}>{note}</p>}
       {days.map((day) => (

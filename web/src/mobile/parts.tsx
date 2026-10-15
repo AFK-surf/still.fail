@@ -3,7 +3,7 @@
 // or an sp a pixel here.
 import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Badge as BadgeKind, Maker, Quota, RuntimeKind } from "../api.ts";
-import { Check, ChevronLeft, Plug, type IconProps } from "../icons.tsx";
+import { Check, ChevronLeft, Plug, Plus, Settings, type IconProps } from "../icons.tsx";
 import { Mark as BrandMark, illustrationUrl } from "../brand.tsx";
 import { SlackLogo } from "../ui.tsx";
 import { QuotaBars } from "../components.tsx";
@@ -15,6 +15,7 @@ import { vars } from "../styles/tokens.css.ts";
 import * as waitingCss from "../styles/waiting.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
+import * as pagesCss from "./styles/pages.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import { t } from "../i18n.ts";
 
@@ -221,6 +222,34 @@ export function NavBar({ back, onBack, title, sub, trailing }: { back: string; o
 /** Back to the chats, at the top of a large-title page. */
 export function TopBack({ label, onBack, trailing }: { label: string; onBack: () => void; trailing?: ReactNode }) {
   return <div className={`${css.mTopBack} ${trailing !== undefined ? css.mTopBackRow : ""}`}><NavBack label={label} onClick={onBack} />{trailing}</div>;
+}
+
+/** A place's primary action (placeActions.tsx): in the bottom bar's notch on its top page, at its head's end when pushed. */
+export interface PlaceAction { key: string; label: string; run: () => void }
+
+/**
+ * A place's page's head (文件, Station, Profile, 连接, 用量, 已归档, 奏). Its top page, the bottom bar under it: Home's
+ * top bar, the gear to the settings and the page's name, what else it does at its end (its primary action is in the
+ * bar's notch). Opened from elsewhere (the settings, a link): a page like any other, back to where it came from, with
+ * its primary action at its end too.
+ */
+export function PlaceHead({ title, back, onBack, trailing, primary }: {
+  title: string; back: string; onBack: () => void; trailing?: ReactNode; primary?: PlaceAction | null | undefined;
+}) {
+  const app = useApp();
+  if (!useRootPage()) {
+    const plus = primary ? <NavButton icon={Plus} iconSize={20} label={primary.label} onClick={primary.run} /> : null;
+    return <NavBar back={back} onBack={onBack} title={title} trailing={trailing || plus ? <>{trailing}{plus}</> : undefined} />;
+  }
+  return (
+    <header className={`${css.mPlaceHead} ${pagesCss.mGlass}`}>
+      <button type="button" className={barsCss.mNavButton} onClick={() => app.push(app.at("/settings"))} aria-label={t("web-mobile.settings.title")}>
+        <Settings size={22} />
+      </button>
+      <h1 className={css.mPlaceTitle}>{title}</h1>
+      {trailing}
+    </header>
+  );
 }
 
 /** A page's large title (stations, settings): a small line over a big word. */

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { DAYS, DaysChart, Notes, PriceTables, Ranking, Tiles, usageCss as css, useUsage, type UsageDays } from "../Usage.tsx";
 import { useApp } from "./app.tsx";
-import { LargeTitle, Loading, Seg, TopBack } from "./parts.tsx";
+import { LargeTitle, Loading, PlaceHead, Seg, TopBack } from "./parts.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as settingsCss from "./styles/settings.css.ts";
 import { t } from "../i18n.ts";
@@ -18,9 +18,8 @@ export function UsageScreen() {
   const list = view?.lists[shown] ?? view?.lists[0];
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} trailing={<Seg options={DAYS.map((d) => d.label)} selected={DAYS.findIndex((d) => d.value === days)} onSelect={(i) => setDays(DAYS[i]!.value)} />} />
-      <LargeTitle small="" big={t("web-mobile.settings.usage")} />
-      <p className={settingsCss.mPageNote}>{t("web-mobile.usage.note")}</p>
+      <PlaceHead title={t("web-mobile.settings.usage")} back={t("web-mobile.settings.title")} onBack={app.pop}
+        trailing={<Seg options={DAYS.map((d) => d.label)} selected={DAYS.findIndex((d) => d.value === days)} onSelect={(i) => setDays(DAYS[i]!.value)} />} />
       {!view ? <Loading text={usage.error ? t("web-mobile.usage.failed", { error: usage.error.message }) : t("web-mobile.reading")} /> : (
         <div className={`${css.usage} ${css.mobile}`}>
           <Tiles view={view} pricesPath={`/w/${app.entry.id}/settings/usage/prices?days=${days}`} />

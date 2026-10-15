@@ -2,8 +2,9 @@
 // device's bars (prefs `bars`, kept whole by the core), floating over the foot of a place's top page.
 //
 // - A frosted glass, its rim lit; a frosted ball of 68 over the place in view (under its icon, over 令), 6 past the
-//   bar on every side. On a chat page (对话, 奏, 已归档) 令 sits in a notch cut into the bar's top, as far from it all
-//   round, the notch's shoulders rounded into the edge; elsewhere 令 sinks into the bar and the notch closes.
+//   bar on every side. The page's primary action (placeActions.tsx: 令 on a chat page, 对话 奏 已归档; a page's ＋)
+//   sits in a notch cut into the bar's top, as far from it all round, the notch's shoulders rounded into the edge;
+//   between two pages that have one, only its icon changes; on a page without, it shrinks away and the notch closes.
 // - A tap on a place goes there; the ball travels on a spring as quick as the way is long (time ∝ √distance).
 // - One stroke: a finger set on the bar and moved any way takes the ball, which keeps to the place a let-go would
 //   choose, leaning a quarter of the way toward the finger. With more than one bar, leaving the bar upward opens the
@@ -13,7 +14,7 @@
 //   bar is where the bar is, what is not chosen goes out at the glass's edges. Nothing fades.
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { ComponentType } from "react";
-import { Archive, Chart, Chats, Folder, Im, Ling, Quota, Zou, type IconProps } from "../icons.tsx";
+import { Archive, Chart, Chats, Folder, Im, Ling, Plus, Quota, Zou, type IconProps } from "../icons.tsx";
 import { railLabel } from "../Rail.tsx";
 import { setPrefs, usePrefs } from "../prefs.ts";
 import { useChats, useStatus } from "../api.ts";
@@ -21,9 +22,11 @@ import { useWorkspaceMarks } from "../lastChat.ts";
 import { StationGlyph, glyphCounts } from "../StationGlyph.tsx";
 import { reducedMotion } from "../motion.ts";
 import * as css from "./Bar.css.ts";
+import { usePlaceActions } from "./placeActions.tsx";
+import type { PlaceAction } from "./parts.tsx";
 import { t } from "../i18n.ts";
 
-/** The places a bar can hold (the core's BAR_PLACES), and the chats' family: 令 and its notch are on their pages. */
+/** The places a bar can hold (the core's BAR_PLACES), and the chats' family: 令 is their primary action. */
 export type BarPlace = "chats" | "decisions" | "files" | "stations" | "profiles" | "connects" | "usage" | "archive";
 export const BAR_PLACES: BarPlace[] = ["chats", "decisions", "files", "stations", "profiles", "connects", "usage", "archive"];
 export const CHAT_FAMILY: BarPlace[] = ["chats", "decisions", "archive"];
@@ -111,12 +114,11 @@ export interface BottomBarProps {
   /** Shown: the top page is a place's top page. Otherwise it goes down out of the way. */
   shown: boolean;
   go: (place: BarPlace) => void;
-  newChat: () => void;
   /** Told when the panel opens and closes (the shell keeps a page's swipe back out of it). */
   onPanel?: (open: boolean) => void;
 }
 
-export function BottomBar({ scope, place, shown, go, newChat, onPanel }: BottomBarProps) {
+export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) {
   const bars = usePrefs((p) => p.bars);
   const sets = bars.sets as BarPlace[][];
   const cur = Math.min(bars.current, sets.length - 1);
@@ -205,8 +207,12 @@ export function BottomBar({ scope, place, shown, go, newChat, onPanel }: BottomB
   const barMid = rowTop + R;
   const rowMid = (n: number) => OVER + n * ROW + ROW / 2;
 
-  // ---- the notch: open on a chat page with the panel closed
-  const inChats = place !== null && CHAT_FAMILY.includes(place) && !open;
+  // ---- the notch: open on a page with a primary action, the panel closed; the last one drawn as it goes
+  const actions = usePlaceActions();
+  const action = (place && actions[place]) || null;
+  const drawn = useRef<PlaceAction | null>(null);
+  if (action) drawn.current = action;
+  const inChats = action !== null && !open;
   sp.k.to(inChats ? 1 : 0, 300, 30);
   if (!w) sp.k.jump(inChats ? 1 : 0); // as it is when first drawn, not opened as the page comes
   const k = sp.k.value;
@@ -268,7 +274,7 @@ export function BottomBar({ scope, place, shown, go, newChat, onPanel }: BottomB
     const t = Math.max(0, Math.min(1, 1 - o / swap.from));
     const shift = (barMid - rowMid(swap.n)) * t;
     const into = sets[swap.i]!;
-    const landsOnChats = swap.key ? CHAT_FAMILY.includes(swap.key) : inChats;
+    const landsOnChats = swap.key ? !!actions[swap.key] : inChats;
     const from = centres(w, 0, into.length), to = centres(w, landsOnChats ? 1 : 0, into.length);
     return { shift, into, xs: into.map((_, j) => from[j]! + (to[j]! - from[j]!) * t), y: rowMid(swap.n) + shift };
   })() : null;
@@ -407,9 +413,12 @@ export function BottomBar({ scope, place, shown, go, newChat, onPanel }: BottomB
             ))}
           </div>
           {notchAt && <svg className={css.mBarNotchRim} width={w} height={PANEL} aria-hidden="true"><path d={notchAt.edge} /></svg>}
-          <button type="button" className={css.mBarLing} aria-label={t("web-mobile.home.newChat")}
-            style={{ top: rowTop, transform: `translate(-50%, ${cy - DROP / 2}px) scale(${Math.max(0.001, k)})`, opacity: Math.min(1, k * 3), pointerEvents: k > 0.9 ? "auto" : "none" }}
-            onPointerDown={(e) => e.stopPropagation()} onClick={newChat}><Ling size={40} /></button>
+          <button type="button" className={css.mBarLing} aria-label={drawn.current?.label ?? t("web-mobile.home.newChat")} data-action={drawn.current?.key}
+            style={{ top: rowTop, transform: `translate(-50%, ${cy - DROP / 2}px) scale(${Math.max(0.001, k)})`, opacity: Math.min(1, k * 3), pointerEvents: k > 0.9 && action ? "auto" : "none" }}
+            onPointerDown={(e) => e.stopPropagation()} onClick={() => action?.run()}>
+            {/* A new icon for another page's action pops in, the circle staying. */}
+            <span key={drawn.current?.key ?? "ling"} className={css.mBarAction}>{drawn.current && drawn.current.key !== "ling" ? <Plus size={30} /> : <Ling size={40} />}</span>
+          </button>
           {swapAt && (
             <div className={css.mBarStack} data-bar="stack" style={{ top: clipTop, height: PANEL - clipTop, clipPath: `path("${shape}")` }}>
               {others.flatMap((i, n) => i === swap!.i ? [] : sets[i]!.map((key, j) => (

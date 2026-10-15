@@ -2,7 +2,6 @@ import { style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 
 /** What the archive is: no hover to explain it on a phone, so said at the top. */
-export const mArchiveAbout = style({ margin: "0", padding: "4px 16px", fontSize: vars.textMeta, color: "var(--m-muted)" });
 export const mArchiveNote = style({
   margin: "0", padding: "12px 20px", fontSize: vars.textMeta, color: "var(--m-muted)",
   selectors: { "&[data-error]": { padding: "8px 20px", fontSize: vars.textMeta, color: "var(--m-red)" } },

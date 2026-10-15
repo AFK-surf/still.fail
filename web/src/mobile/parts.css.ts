@@ -102,6 +102,18 @@ export const mTopBack = style({ padding: "calc(var(--m-top) + 6px) 0 4px 10px" }
 /** A top bar with a button at its end as well (a page's ＋). */
 export const mTopBackRow = style({ display: "flex", alignItems: "center", justifyContent: "space-between", paddingRight: "10px" });
 export const mLargeTitle = style({ padding: "0 16px 6px" });
+/**
+ * A place's own page's head (parts.tsx PlaceHead), the bottom bar under it: Home's top bar (Home.css.ts mHomeBar), the
+ * page's name where Home has the workspace's; what is under it scrolls under its glass.
+ */
+export const mPlaceHead = style({
+  position: "sticky", top: "0", zIndex: 3, flex: "none", display: "flex", alignItems: "center", gap: "10px",
+  padding: "calc(var(--m-top) + 8px) 16px 8px", marginBottom: "8px",
+});
+export const mPlaceTitle = style({
+  flex: "1", minWidth: "0", margin: "0", fontSize: vars.textDisplay, lineHeight: "34px", fontWeight: "600", letterSpacing: "-0.4px",
+  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+});
 export const mSection = style({ display: "flex", alignItems: "flex-end", padding: "14px 20px 6px" });
 export const mListCard = style({
   margin: "0 12px 10px", borderRadius: `calc(16px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
@@ -196,8 +208,8 @@ globalStyle(`${mChatBarTitle} b`, {
 globalStyle(`${mMessages} > *`, { flex: "none" });
 /** Here rather than with its class: it comes after .m-pick-text > span, and wins over it. */
 globalStyle(`${mAttach} span`, { fontSize: vars.textMeta });
-globalStyle(`:root[data-desktop] :is(${mHomeBar}, ${mChatBar}, ${mNavbar}, ${mTopBack}, ${mReaderBar})`, { WebkitAppRegion: "drag" });
-globalStyle(`:root[data-desktop] :is(${mHomeBar}, ${mChatBar}, ${mNavbar}, ${mTopBack}, ${mReaderBar}) :is(button, a)`, { WebkitAppRegion: "no-drag" });
+globalStyle(`:root[data-desktop] :is(${mHomeBar}, ${mPlaceHead}, ${mChatBar}, ${mNavbar}, ${mTopBack}, ${mReaderBar})`, { WebkitAppRegion: "drag" });
+globalStyle(`:root[data-desktop] :is(${mHomeBar}, ${mPlaceHead}, ${mChatBar}, ${mNavbar}, ${mTopBack}, ${mReaderBar}) :is(button, a)`, { WebkitAppRegion: "no-drag" });
 globalStyle(`${mListRow} ${mRunLabel}`, { width: "32px", flex: "none", fontSize: vars.textMeta, color: "var(--m-muted)" });
 /** Here rather than with its class: it comes after .m-quote-source > span, and wins over it. */
 globalStyle(`${mJobHead} span`, { display: "flex", flexDirection: "column", minWidth: "0" });

@@ -9,7 +9,7 @@ import { stationApi, useConnects, useOverview, useStationCall, useStations, type
 import { useWorkspace } from "../cloud/api.ts";
 import { MODE, RUNTIME_LABEL } from "../format.ts";
 import { illustrationUrl } from "../brand.tsx";
-import { ChevronRight, More, Plus } from "../icons.tsx";
+import { ChevronRight, More } from "../icons.tsx";
 import { usePick } from "../pick.ts";
 import { consequences } from "../pages/Connect.tsx";
 import { edgeColour, MAKERS, NEW_APP, renderAvatar, toIcon, useBuddies, type Avatar } from "../pages/SlackApp.tsx";
@@ -17,7 +17,7 @@ import { useSlackTokens, type TokenCheck } from "../slack.tsx";
 import { StationContext, stationBase, useOnlyMine, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { AccountList, ModelList, SettingRow } from "./History.tsx";
-import { Button, Field, GroupLabel, LargeTitle, LinkButton, ListCard, ListRow, Loading, MakerIcon, NavBar, NavButton, PickRow, SectionHeader, Seg, SlackMark, Spinner, tNodes, TopBack } from "./parts.tsx";
+import { Button, Field, GroupLabel, LinkButton, ListCard, ListRow, Loading, MakerIcon, NavBar, NavButton, PickRow, PlaceHead, SectionHeader, Seg, SlackMark, Spinner, tNodes } from "./parts.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { PickStation } from "./Profiles.tsx";
 import * as settingsCss from "./styles/settings.css.ts";
@@ -141,9 +141,8 @@ export function ConnectsScreen() {
     : app.sheet({ height: 0.5, content: () => <PickStation title={t("web-mobile.connects.add")} stations={online} to={(s) => `/s/${s.id}/connects/new`} /> });
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label={one?.name ?? t("web-mobile.settings.title")} onBack={app.pop} trailing={online.length > 0 ? <NavButton icon={Plus} iconSize={20} label={t("web-mobile.connects.add")} onClick={add} /> : undefined} />
-      <LargeTitle small={one ? t("web-mobile.connects.on", { station: one.name }) : ""} big={t("web-mobile.settings.connects")} />
-      <p className={settingsCss.mPageNote}>{t("web-mobile.connects.note", { name: NAME })}</p>
+      <PlaceHead title={t("web-mobile.settings.connects")} back={one?.name ?? t("web-mobile.settings.title")} onBack={app.pop}
+        primary={online.length > 0 ? { key: "connect", label: t("web-mobile.connects.add"), run: add } : null} />
       <div className={css.mListSeg}><Seg options={[t("web-mobile.home.filterAll"), t("web-mobile.connects.mine")]} selected={mine ? 1 : 0} onSelect={(i) => setMine(i === 1)} height={34} fill /></div>
       {!stations || !connects.value ? <Loading text={connects.error?.message ?? t("web-mobile.connects.reading")} /> : stations.map((s) => {
         const here = items.filter((i) => i.station === s.station);

@@ -1,6 +1,6 @@
 // The bottom bar (Bar.tsx): one frosted glass for the bar and the panel it grows into, the ball over the place in
 // view, 令 in a notch cut into the bar's top. The places' icons are drawn over the ball (frosted, it would blur them).
-import { globalStyle, style, type StyleRule } from "@vanilla-extract/css";
+import { globalStyle, keyframes, style, type StyleRule } from "@vanilla-extract/css";
 
 /** Rules for the dark theme: chosen, or the device's while none is chosen (as styles/root.css.ts goes). */
 const dark = (rules: StyleRule): StyleRule => ({
@@ -86,6 +86,10 @@ export const mBarLing = style({
   WebkitBackdropFilter: "blur(20px) saturate(1.6)", backdropFilter: "blur(20px) saturate(1.6)",
   boxShadow: rim(0.4, 0.75, 0.4),
 });
+
+/** The action's icon in it: another page's, coming in, pops (the circle stays). */
+const pop = keyframes({ from: { transform: "scale(.5)", opacity: 0 }, to: { transform: "none", opacity: 1 } });
+export const mBarAction = style({ display: "grid", placeItems: "center", animation: `${pop} 220ms var(--m-ease)` });
 
 /** The notch's edge, lit as the glass's own rim. */
 export const mBarNotchRim = style([{

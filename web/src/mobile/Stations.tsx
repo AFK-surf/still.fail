@@ -10,7 +10,7 @@ import { useParams } from "react-router";
 import { useStations, type StationView } from "../api.ts";
 import type { Host, StationNet } from "../core/shapes.ts";
 import { illustrationUrl } from "../brand.tsx";
-import { ChevronRight, Close, ImageUpload, More, Plus } from "../icons.tsx";
+import { ChevronRight, Close, ImageUpload, More } from "../icons.tsx";
 import { cloud, useWorkspace } from "../cloud/api.ts";
 import { track } from "../telemetry.ts";
 import { useDark } from "../theme.ts";
@@ -25,7 +25,8 @@ import { emojiMark, firstEmoji, glyphMark, kindOf, NO_MARK, pictureMark, picture
 import * as markCss from "../StationMark.css.ts";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
-import { Button, Card, Field, Illustration, LargeTitle, ListCard, Loading, NavBar, NavButton, PickRow, SectionHeader, Seg, Spinner, TopBack } from "./parts.tsx";
+import { Button, Card, Field, Illustration, ListCard, Loading, NavBar, NavButton, PickRow, PlaceHead, SectionHeader, Seg, Spinner } from "./parts.tsx";
+import { usePlaceActions } from "./placeActions.tsx";
 import * as css from "./Stations.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -50,20 +51,19 @@ export function StationsScreen() {
   const app = useApp();
   const stations = useStations(app.entry.id);
   const list = stations.value;
-  const manager = useManager();
+  const actions = usePlaceActions();
   // No station yet: adding the first one is the page.
   if (list && list.length === 0) {
     return (
       <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-        <TopBack label={t("web-mobile.nav.chats")} onBack={app.pop} />
+        <PlaceHead title="Station" back={t("web-mobile.settings.title")} onBack={app.pop} />
         <FirstStation />
       </div>
     );
   }
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} trailing={manager && list ? <NavButton icon={Plus} iconSize={20} label={t("web-mobile.stations.add")} onClick={() => app.sheet({ height: 0.72, draggable: true, content: () => <AddStationSheet known={list.map((s) => s.id)} /> })} /> : undefined} />
-      <LargeTitle small={list ? t("web-mobile.stations.small", { workspace: app.entry.name, online: list.filter((s) => s.online).length, n: list.length }) : app.entry.name} big="Station" />
+      <PlaceHead title="Station" back={t("web-mobile.settings.title")} onBack={app.pop} primary={actions.stations} />
       {!list ? <p className={`${partsCss.mMuted} ${css.mPad20}`}>{stations.error?.message ?? t("web-mobile.memory.readingStations")}</p> : list.map((s) => (
         <Card key={s.station} onClick={() => app.push(app.at(`/s/${s.id}/overview`))}>
           <span className={css.mStationHead}>
@@ -152,7 +152,7 @@ function StationBody({ s }: { s: StationView }) {
  * Adding a station: a name, then the command to run on that machine (which installs ember and joins it); the sheet
  * waits for it to join.
  */
-function AddStationSheet({ known }: { known: string[] }) {
+export function AddStationSheet({ known }: { known: string[] }) {
   const app = useApp();
   const me = app.entry.account;
   const stations = useStations(app.entry.id).value ?? [];
@@ -283,7 +283,7 @@ export function FirstStation() {
 }
 
 /** Whether the viewer may add, rename and remove stations: the workspace's owner and admins. */
-function useManager(): boolean {
+export function useManager(): boolean {
   const app = useApp();
   const role = useWorkspace(app.entry.id).value?.role;
   return role === "owner" || role === "admin";

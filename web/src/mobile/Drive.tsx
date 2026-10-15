@@ -349,7 +349,7 @@ function RootsSheet({ station, roots }: { station: string; roots: DriveRoot[] })
  * folder full of them, the way back as crumbs; entered by a tap, the one shown lent with 选这个文件夹. One the station
  * may not list says so, and is not lent.
  */
-function PickerSheet({ station, roots }: { station: string; roots: DriveRoot[] }) {
+export function PickerSheet({ station, roots }: { station: string; roots: DriveRoot[] }) {
   const app = useApp();
   const act = useAct();
   const picker = useFolders(station);

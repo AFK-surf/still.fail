@@ -82,7 +82,7 @@ createRoot(root).render(<DemoApp phone />);
       log.push(kind);
       const cy = row.y + row.height / 2, x0 = row.x + 30 + rnd() * (row.width - 60);
       if (kind === 'tapBar') { const tabs = page.locator('[data-tab]'); const n = await tabs.count(); const r = await tabs.nth(Math.floor(rnd() * n)).boundingBox(); await page.touchscreen.tap(r.x + r.width / 2, r.y + r.height / 2); }
-      if (kind === 'ling') { const l = page.getByRole('button', { name: '新建对话' }).last(); if (+(await l.evaluate((e) => getComputedStyle(e).opacity)) > 0.5) { const r = await l.boundingBox(); await page.touchscreen.tap(r.x + r.width / 2, r.y + r.height / 2); } }
+      if (kind === 'ling') { const l = page.locator('[data-action=ling]'); if (await l.count() && +(await l.evaluate((e) => getComputedStyle(e).opacity)) > 0.5) { const r = await l.boundingBox(); await page.touchscreen.tap(r.x + r.width / 2, r.y + r.height / 2); } }
       if (kind === 'scrim') await page.touchscreen.tap(195, 120);
       if (kind === 'tapRow' || kind === 'tapRowPlace') {
         const places = page.locator('[data-bar=rows] [data-place]');

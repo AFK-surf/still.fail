@@ -8,14 +8,14 @@ import { stationApi, useAction, useOverview, useProfiles, useStationCall, useSta
 import type { MachineLogin, ProfileFlowView, WorkspaceProfile } from "../core/shapes.ts";
 import { hosts, profileGroups } from "../cloud/settings.tsx";
 import { ACCESS, KEYED } from "../format.ts";
-import { Check, ChevronRight, More, Plus } from "../icons.tsx";
+import { Check, ChevronRight, More } from "../icons.tsx";
 import type { Choice } from "../pages/Accounts.tsx";
 import { useProfileFlow } from "../profileFlow.ts";
 import { QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp, type SheetSpec } from "./app.tsx";
 import { Presence } from "./Connects.tsx";
-import { Button, FailedMark, failedIn, Field, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, TopBack, tNodes } from "./parts.tsx";
+import { Button, failedIn, FailedMark, Field, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, PlaceHead, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, tNodes } from "./parts.tsx";
 import { useAct } from "../toast.tsx";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
@@ -63,9 +63,8 @@ export function ProfilesScreen() {
     : app.sheet({ height: 0.5, content: () => <PickStation title={t("web-mobile.newChat.addProfile")} stations={online} to={(s) => `/s/${s.id}/profiles/new`} /> });
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label={one?.name ?? t("web-mobile.settings.title")} onBack={app.pop} trailing={online.length > 0 ? <NavButton icon={Plus} iconSize={20} label={t("web-mobile.newChat.addProfile")} onClick={add} /> : undefined} />
-      <LargeTitle small={one ? t("web-mobile.connects.on", { station: one.name }) : ""} big="Profile" />
-      <p className={settingsCss.mPageNote}>{t("web-mobile.profiles.note")}</p>
+      <PlaceHead title="Profile" back={one?.name ?? t("web-mobile.settings.title")} onBack={app.pop}
+        primary={online.length > 0 ? { key: "profile", label: t("web-mobile.newChat.addProfile"), run: add } : null} />
       {/* The workspace's: one list, each shared profile once (the core's `profiles`); a station's own: as before. */}
       {!one && <WorkspaceList scope={app.entry.id} />}
       {!stations ? <Loading text={t("web-mobile.memory.readingStations")} /> : stations.filter(() => !!one).map((s) => (
