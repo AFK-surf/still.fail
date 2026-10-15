@@ -51,6 +51,7 @@ import androidx.compose.foundation.layout.width
 import fail.still.android.screens.WideCorners
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -177,6 +178,10 @@ sealed interface Screen {
     data object Archive : Screen { override val id = "archive" }
     /** The decisions waiting for the viewer in the workspace's chats, one at a time (奏 N on the home page). */
     data object Decisions : Screen { override val id = "decisions" }
+    /** Every station's lent folders in one list (the bottom bar's 文件, drive/Files.kt). */
+    data object Files : Screen { override val id = "files" }
+    /** This device's bottom bars, to change (screens/BarSettings.kt). */
+    data object BarSettings : Screen { override val id = "bar-settings" }
 
     /** The agents' memory on a station. */
     data class Memory(val station: String) : Screen { override val id = "memory/$station" }
@@ -286,6 +291,19 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
     /** The workspace chosen last; the first one when it is gone. */
     val workspace: String? get() = kept.workspace
     fun pickWorkspace(id: String) { if (id != kept.workspace) setPrefs(kept.copy(workspace = id), buildJsonObject { put("workspace", id) }) }
+
+    /** The bottom bars (Places.kt, ui/Bar.kt), whole: the core's, or the default ones before it says. */
+    val bars: fail.still.android.data.BarPrefs get() = kept.bars?.let { barsOf(it.sets, it.current.toInt()) } ?: DEFAULT_BARS
+    /** The bars changed (`sets`, `current` the one in view): shown at once, kept whole (`prefs.set {bars}`). */
+    fun setBars(sets: List<List<String>>, current: Int) {
+        val whole = barsOf(sets, current)
+        setPrefs(kept.copy(bars = whole), buildJsonObject {
+            putJsonObject("bars") {
+                put("sets", kotlinx.serialization.json.JsonArray(whole.sets.map { set -> kotlinx.serialization.json.JsonArray(set.map { kotlinx.serialization.json.JsonPrimitive(it) }) }))
+                put("current", whole.current)
+            }
+        })
+    }
 
     /** 外观: "system" (the default), "light" or "dark". */
     val theme: String get() = kept.appearance ?: "system"
@@ -397,6 +415,23 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
         val topic = Topics.chat(station, of)
         scope.launch { withTimeoutOrNull(PRIME_MS) { core.topic(topic).first { it.value != null || it.error != null } } }
     }
+
+    /**
+     * A place from the bottom bar: its page takes the bottom of the stack, in place (no slide, nothing to go back to);
+     * the same place again changes nothing.
+     */
+    fun place(screen: Screen) {
+        if (stack.size == 1 && stack[0] == screen) return
+        sheet = null; menu = null; forward = false
+        val to = listOf(screen)
+        placed = to
+        stack = to
+    }
+    /** The stack as a place from the bar last made it: while it is that very list, the page shown was switched to, not pushed. */
+    private var placed: List<Screen>? = null
+    val switched: Boolean get() = stack === placed
+    /** Something over a place's top page (Home's search) has the bottom bar out of the way. */
+    var barAway by mutableStateOf(false)
 
     fun push(screen: Screen) { sheet = null; menu = null; forward = true; if (screen == Screen.NewChat || screen == madeChat) madeChat = null; stack = stack + screen }
     fun pop() { if (stack.size > 1) { sheet = null; menu = null; forward = false; stack = stack.dropLast(1) } }
@@ -670,6 +705,7 @@ private fun opening(screen: Screen, workspace: String): List<Pair<JsonObject, ko
     is Screen.Drive -> listOfNotNull(screen.root?.let { Topics.drive(screen.station, it, screen.path) to fail.still.android.data.DriveFolder.serializer() })
     Screen.Archive -> listOf(Topics.archive(workspace) to fail.still.android.data.ArchiveView.serializer())
     Screen.Decisions -> listOf(Topics.decisions(workspace) to fail.still.android.data.DecisionsView.serializer())
+    Screen.Files, Screen.Stations -> listOf(Topics.stations(workspace) to kotlinx.serialization.builtins.ListSerializer(fail.still.android.data.StationView.serializer()))
     else -> emptyList()
 }
 
@@ -720,6 +756,12 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
             throw e
         }
     }
+    // A place's top page other than the chats, with nothing over it: back goes to the chats (the app's first place),
+    // in place as the bar switches, rather than out of the app.
+    val root = app.stack.singleOrNull()
+    androidx.activity.compose.BackHandler(enabled = root != null && root != Screen.Home && placeOf(root) != null && app.sheet == null && app.menu == null && app.reader == null && !fail.still.android.screens.FileViewers.open) {
+        app.place(Screen.Home)
+    }
     val saved = rememberSaveableStateHolder()
     // Each page's topics, followed while it is in the stack (data/Topics.kt: PageTopics); those of the pages gone from it
     // let go, once they are not drawn either (a page going away is drawn until it has).
@@ -734,10 +776,20 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         val stacked = app.stack.mapTo(HashSet(), ::keyOf) + keyOf(pages.currentState)
         letGo { it in stacked }
         val pagesIn = app.stack.mapTo(HashSet(), app::pageOf)
-        kept.filterNot { it in pagesIn }.forEach { kept.remove(it); saved.removeState(it) }
+        // The places' top pages keep theirs (where the list was scrolled to), switched away from and back on the bar.
+        kept.filterNot { it in pagesIn || it in PLACE_PAGES }.forEach { kept.remove(it); saved.removeState(it) }
     }
     LaunchedEffect(top) {
         if (pages.currentState == top && pages.targetState == top) return@LaunchedEffect
+        // A place switched to on the bar: in place, no slide, once it has what it shows from the device (as below).
+        if (app.switched) {
+            val topics = followed.getOrPut(keyOf(top)) { fail.still.android.data.PageTopics() }
+            @Suppress("UNCHECKED_CAST") val states = opening(top, workspace).map { (topic, serializer) -> topics.of(app.core, topic, serializer as kotlinx.serialization.KSerializer<Any?>) }
+            if (states.isNotEmpty()) withTimeoutOrNull(LOCAL_MS) { snapshotFlow { states.all { it.value.value != null || it.value.error != null } }.first { it } }
+            pages.snapTo(top)
+            swiped = false
+            return@LaunchedEffect
+        }
         // A page opened slides in once the core has given what it shows, from what is on the device (LOCAL_MS at most,
         // as web mobile/Chat.tsx useReady): not first as its loading look swapped for it a frame or two later. What has
         // to come from a station is not waited for: the page slides in, showing it coming.
@@ -751,12 +803,17 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         swiped = false
     }
     // Wider than a phone (screens/Wide.kt): the pages the screen's whole width, the latest chats and the new-chat button at its corners.
+    // What the bottom bar frosts: the pages (and, for the ball and 令, the bar's own glass: ui/Bar.kt).
+    val barHaze = remember { dev.chrisbanes.haze.HazeState() }
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
     val wide = maxWidth >= fail.still.android.screens.WideAt
     Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().hazeSource(barHaze)) {
     CompositionLocalProvider(fail.still.android.screens.LocalWide provides wide) {
     transition.AnimatedContent(
         transitionSpec = {
+            // Switched on the bar: in place, nothing slides.
+            if (app.switched) return@AnimatedContent (EnterTransition.None togetherWith ExitTransition.None).apply { targetContentZIndex = 0f }
             // A message's page and its chat are one place (Annotate.kt): no slide either way, the page's own parts move.
             // Layered by depth in the stack, the deeper page over: a page's zIndex is fixed when it comes in (AnimatedContent
             // keeps the first spec's), so by the way it came it was wrong later (one come back to, then swiped away, went under).
@@ -780,7 +837,18 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
             onDispose { topics.drawn = false; if (app.stack.none { keyOf(it) == page }) letGo { it != page } }
         }
         kept += app.pageOf(screen)
-        saved.SaveableStateProvider(app.pageOf(screen)) { CompositionLocalProvider(fail.still.android.data.LocalPageTopics provides topics) {
+        // A place's top page: no back with the bar under it (room kept for the bar at its foot); on a wide screen, which
+        // has no bar, back to the chats.
+        val placeRoot = when {
+            app.stack.firstOrNull() != screen || placeOf(screen) == null -> PlaceRoot.None
+            wide -> PlaceRoot.Wide
+            else -> PlaceRoot.Bar
+        }
+        saved.SaveableStateProvider(app.pageOf(screen)) { CompositionLocalProvider(
+            fail.still.android.data.LocalPageTopics provides topics,
+            LocalPlaceRoot provides placeRoot,
+            LocalBarRoom provides if (placeRoot == PlaceRoot.Bar) BAR_ROOM else 0.dp,
+        ) {
             // A message's page draws its own ground, coming in over its chat (Annotate.kt).
             Box(Modifier.fillMaxSize().then(if (screen is Screen.Annotate) Modifier else Modifier.background(C.bg))) {
                 when (screen) {
@@ -818,6 +886,8 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     is Screen.NewProfile -> fail.still.android.screens.NewProfileScreen(current, screen.station)
                     Screen.Archive -> fail.still.android.screens.ArchiveScreen(current)
                     Screen.Decisions -> fail.still.android.screens.DecisionsScreen(current)
+                    Screen.Files -> fail.still.android.drive.FilesScreen(current)
+                    Screen.BarSettings -> fail.still.android.screens.BarSettingsScreen()
                     is Screen.Memory -> fail.still.android.screens.MemoryScreen(current, screen.station)
                     is Screen.SlackApp -> fail.still.android.screens.SlackAppScreen(screen.station, screen.connect)
                     is Screen.Drive -> fail.still.android.drive.DriveScreen(current, screen.station, screen.root, screen.path)
@@ -837,9 +907,22 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
     }
     }
     }
+    // The bottom bar (Places.kt): a phone's, on a place's top page with nothing over it.
+    if (!wide) {
+        // The keyboard up (a field on the page): out of its way.
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val ime = androidx.compose.foundation.layout.WindowInsets.ime
+        val keyboardUp by remember(density) { androidx.compose.runtime.derivedStateOf { ime.getBottom(density) > 0 } }
+        val root = app.stack.singleOrNull()
+        PlaceBar(app, current, barHaze, shown = root != null && placeOf(root) != null && !keyboardUp && !app.barAway)
+    }
+    }
     if (wide) WideCorners(current, top)
     }
 }
+
+/** The places' top pages (Places.kt): their state is kept while they are not in the stack, as the bar switches between them. */
+private val PLACE_PAGES = PLACES.map { screenOf(it).id }.toSet()
 
 /** Out of a swipe let go: starts moving, no ease in (easeOutQuad). */
 private val EaseOut = CubicBezierEasing(0.25f, 0.46f, 0.45f, 0.94f)

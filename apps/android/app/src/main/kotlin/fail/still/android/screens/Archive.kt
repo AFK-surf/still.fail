@@ -81,6 +81,7 @@ fun ArchiveScreen(current: WorkspaceEntry) {
                 ArchiveRow(item, busy, failed, { restore(item) }, { delete(item) })
             }
         }
+        BarRoom()
     }
 }
 

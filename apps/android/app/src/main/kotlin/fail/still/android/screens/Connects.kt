@@ -190,6 +190,7 @@ fun ConnectsScreen(current: WorkspaceEntry, only: String? = null) {
             }
         }
         Spacer(Modifier.height(30.dp))
+        BarRoom()
     }
 }
 

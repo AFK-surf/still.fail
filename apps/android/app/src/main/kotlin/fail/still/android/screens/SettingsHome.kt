@@ -132,6 +132,8 @@ fun SettingsScreen(current: WorkspaceEntry) {
         SectionHeader(t("android-settings.home.device"), start = 24.dp)
         ListCard {
             GoRow(t("android-settings.appearance.title"), themes().firstOrNull { it.first == app.theme }?.second) { app.push(Screen.Appearance) }
+            // The bottom bar's places (BarSettings.kt): a phone's only, a wide screen has none.
+            if (!LocalWide.current) GoRow(t("android-misc.bar.title"), barsValue(app)) { app.push(Screen.BarSettings) }
             KeptFilesRow()
             Notify()
             Version()

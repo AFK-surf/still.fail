@@ -160,6 +160,7 @@ fun ProfilesScreen(current: WorkspaceEntry, only: String? = null) {
             if (s.online && overview != null) MachineLoginOffers(s.station, overview)
         }
         Spacer(Modifier.height(30.dp))
+        BarRoom()
     }
 }
 

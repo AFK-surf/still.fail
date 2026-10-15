@@ -81,9 +81,9 @@ fun glyphCounts(view: ChatsView?, asleep: Boolean): GlyphCounts {
 }
 
 @Composable
-fun StationGlyph(counts: GlyphCounts, size: Dp = 24.dp) {
+fun StationGlyph(counts: GlyphCounts, size: Dp = 24.dp, tint: androidx.compose.ui.graphics.Color = C.ink) {
     val (arcs, dots) = glyphLayout(counts)
-    val ink = C.ink
+    val ink = tint
     val red = C.red
     val blinking = if (counts.asleep) 0 else counts.working
     val still = reducedMotion()

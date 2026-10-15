@@ -103,6 +103,7 @@ fun UsageScreen(current: WorkspaceEntry) {
             }
         }
         Spacer(Modifier.height(30.dp))
+        BarRoom()
     }
 }
 

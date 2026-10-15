@@ -52,6 +52,7 @@ import fail.still.android.ui.keyboard
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.add
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.constrainHeight
@@ -299,7 +300,9 @@ fun DecisionsScreen(current: WorkspaceEntry) {
     SideEffect { local.caughtUp(items) }
     val shown = local.shown(items)
     // With none left the page stays, for the next to come.
-    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars))) {
+    // Its foot over the bottom bar when it is there (the keyboard, when up, is higher: the bar steps aside for it).
+    val room = fail.still.android.LocalBarRoom.current
+    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars.add(WindowInsets(bottom = room))))) {
         TopBack(t("android-misc.chats"), app::pop)
         if (shown.isEmpty()) {
             // What has come so far, at once: stations still being read add theirs as they come.

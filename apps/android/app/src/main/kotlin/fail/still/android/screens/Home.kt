@@ -1,7 +1,7 @@
 // Home is the `chats` view as the web's sidebar lists it: one kind of item (an
 // agent with its chat, or an agent with no chat yet), newest first and grouped
-// by day. A fixed head (settings · workspace · the filter · stations) and
-// the new-chat button floating at the bottom.
+// by day. A fixed head (settings · workspace · the filter · stations); at
+// the bottom the bar of places floats over it (ui/Bar.kt: 奏 and 令 are there).
 package fail.still.android.screens
 
 import fail.still.android.data.t
@@ -167,8 +167,10 @@ fun HomeScreen(current: WorkspaceEntry) {
     // list's top is not drawn under the bar until it has been measured (which a busy start can take a while to do).
     val statusTop = WindowInsets.statusBars.getTop(density)
     var topBar by rememberSaveable { mutableIntStateOf(statusTop + with(density) { 50.dp.roundToPx() }) }
-    var bottomBar by rememberSaveable { mutableIntStateOf(0) }
-    val padding = with(density) { PaddingValues(top = topBar.toDp() + 8.dp, bottom = bottomBar.toDp() + 8.dp) }
+    // At the foot, room for the bottom bar (App.kt Pages: none on a wide screen, whose corners have 奏 and 令).
+    val room = fail.still.android.LocalBarRoom.current
+    val foot = if (room > 0.dp) with(density) { WindowInsets.navigationBars.getBottom(density).toDp() } + room else 8.dp
+    val padding = with(density) { PaddingValues(top = topBar.toDp() + 8.dp, bottom = foot) }
     // Searching (Search.kt): where the field at the list's top was when tapped, and how wide. The lists go up and away,
     // the bars fade.
     var searchFrom by rememberSaveable { mutableStateOf<Float?>(null) }
@@ -178,6 +180,9 @@ fun HomeScreen(current: WorkspaceEntry) {
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     val away by animateFloatAsState(if (searchOpen) 1f else 0f, tween(if (searchOpen) 280 else 240, easing = if (searchOpen) Ease.Arrive else Ease.Standard), label = "search")
     val awayBy = with(density) { 56.dp.toPx() }
+    // The bottom bar out of the search's way while it is open.
+    LaunchedEffect(searchOpen) { app.barAway = searchOpen }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { app.barAway = false } }
     Box(Modifier.fillMaxSize()) {
         BoxWithConstraints(Modifier.fillMaxSize().clipToBounds().hazeSource(haze).graphicsLayer { translationY = -awayBy * away; alpha = 1f - away }) {
             val width = constraints.maxWidth
@@ -245,8 +250,6 @@ fun HomeScreen(current: WorkspaceEntry) {
                 StationGlyph(counts)
             }
         }
-        // Wide (Wide.kt), the new-chat button is at the screen's corner instead, not the column's.
-        if (!LocalWide.current) Toolbar(app, decisionsWaiting(current), haze, Modifier.align(Alignment.BottomCenter).onSizeChanged { bottomBar = it.height }.graphicsLayer { alpha = 1f - away })
         searchFrom?.let { from -> SearchPage(scope, from, searchWidth, onLeave = { searchOpen = false }) { searchFrom = null } }
     }
 }
@@ -793,23 +796,5 @@ internal fun DecisionsCapsule(n: Int, ground: Modifier) {
         IconIn(Icons.Zou, 40.dp, C.ink)
         // How many, drawn (design/icons num-*): 1 to 9, and + past that.
         IconIn(if (n in 1..9) listOf(Icons.Num1, Icons.Num2, Icons.Num3, Icons.Num4, Icons.Num5, Icons.Num6, Icons.Num7, Icons.Num8, Icons.Num9)[n - 1] else Icons.NumMore, 24.dp, C.ink)
-    }
-}
-
-@Composable
-private fun Toolbar(app: AppState, decisions: Int, haze: HazeState, modifier: Modifier) {
-    // Floating over the list at the bottom right: 奏 N (奏 alone at 0, a disc), and the new-chat button, a disc of
-    // the same glass in the accent, 令 white.
-    Row(
-        modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically,
-    ) {
-        DecisionsCapsule(decisions, Modifier.floating(haze, CircleShape))
-        Box(
-            Modifier.floating(haze, CircleShape, C.accent).size(56.dp)
-                .clickable { app.push(Screen.NewChat) }.semantics { contentDescription = t("android-chat.newChat") },
-            contentAlignment = Alignment.Center,
-        ) { IconIn(Icons.Ling, 44.dp, Color.White) }
     }
 }

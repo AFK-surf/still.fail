@@ -107,17 +107,30 @@ internal fun Buddy(s: StationView, size: Int = 40) {
     Image(painterResource(face), null, Modifier.size(size.dp))
 }
 
-/** Back, at the top of a large-title page; `trailing`, an action at its other end (a ＋). */
+/**
+ * Back, at the top of a large-title page; `trailing`, an action at its other end (a ＋). A place's top page has none
+ * with the bottom bar under it (its line kept, the title where it is on any page), and on a wide screen goes back to
+ * the chats (Places.kt LocalPlaceRoot).
+ */
 @Composable
 fun TopBack(label: String, onBack: () -> Unit, trailing: (@Composable () -> Unit)? = null) {
+    val app = LocalApp.current
     Row(
         Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.statusBars).padding(start = 10.dp, end = 10.dp, top = 6.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        NavBack(label, onBack)
+        when (fail.still.android.LocalPlaceRoot.current) {
+            fail.still.android.PlaceRoot.Bar -> Spacer(Modifier.height(30.dp))
+            fail.still.android.PlaceRoot.Wide -> NavBack(t("android-misc.chats")) { app.place(Screen.Home) }
+            fail.still.android.PlaceRoot.None -> NavBack(label, onBack)
+        }
         trailing?.invoke()
     }
 }
+
+/** The room a place's top page keeps at its foot for the bottom bar (none elsewhere). */
+@Composable
+fun BarRoom() = Spacer(Modifier.height(fail.still.android.LocalBarRoom.current))
 
 @Composable
 fun StationsScreen(current: WorkspaceEntry) {
@@ -128,7 +141,7 @@ fun StationsScreen(current: WorkspaceEntry) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
         TopBack(t("android-settings.title"), app::pop, trailing = if (list != null && list.isNotEmpty() && isManager(current)) ({ NavButton(Icons.Plus, { openAddStation(app, current, list.map { it.id }) }, 20.dp) }) else null)
         // No station yet: adding the first one is the page.
-        if (list != null && list.isEmpty()) { FirstStation(current); return@Column }
+        if (list != null && list.isEmpty()) { FirstStation(current); BarRoom(); return@Column }
         LargeTitle(if (list != null) t("android-settings.stations.online", "name" to ws.name, "online" to list.count { it.online }, "total" to list.size) else ws.name, "Station")
         if (list == null) {
             Text(stations.error?.message ?: t("android-settings.stations.reading"), color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(20.dp))
@@ -153,6 +166,7 @@ fun StationsScreen(current: WorkspaceEntry) {
             }
         }
         Spacer(Modifier.height(30.dp))
+        BarRoom()
     }
 }
 
