@@ -17,7 +17,7 @@ export const count = style({
 export const quiet = style({ color: vars.muted, fontSize: vars.textMeta, fontVariantNumeric: "tabular-nums" });
 
 export const panel = style({
-  width: "var(--radix-popover-trigger-width)", minWidth: "240px", maxWidth: "calc(100vw - 16px)", maxHeight: "min(480px, 70vh)",
+  width: "var(--radix-popover-trigger-width)", minWidth: "300px", maxWidth: "calc(100vw - 16px)", maxHeight: "min(480px, 70vh)",
   overflowY: "auto", display: "flex", flexDirection: "column", gap: "2px",
 });
 export const group = style({ display: "flex", flexDirection: "column", gap: "1px", selectors: { "& + &": { marginTop: "6px" } } });
@@ -37,14 +37,14 @@ export const itemTitle = style({ fontSize: vars.textUi, overflow: "hidden", text
 globalStyle(`${item}:not([data-seen]) ${itemTitle}`, { fontWeight: "500" });
 globalStyle(`${item}[data-seen] ${itemTitle}`, { color: vars.muted });
 export const itemLine = style({ fontSize: vars.textMeta, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-/** 忽略: small words, only on the row pointed at (or focused). */
+/** 忽略: small words, only on the row pointed at (or focused); out of the row otherwise, so the titles run to the edge. */
 export const dismiss = style({
   flex: "none", padding: "1px 4px", border: "0", borderRadius: vars.rOption, cornerShape: vars.cornerShape, background: "none",
   color: vars.muted,
-  font: "inherit", fontSize: vars.textMeta, cursor: "pointer", visibility: "hidden",
+  font: "inherit", fontSize: vars.textMeta, cursor: "pointer", display: "none",
   selectors: { "&:hover": { color: vars.text, background: vars.hover } },
 });
-globalStyle(`${item}:hover ${dismiss}, ${item}:focus-visible ${dismiss}, ${dismiss}:focus-visible`, { visibility: "visible" });
-export const foot = style({ display: "flex", gap: "12px", padding: "8px 10px 4px", marginTop: "4px", borderTop: `1px solid ${vars.line}`, fontSize: vars.textMeta });
+globalStyle(`${item}:hover ${dismiss}, ${item}:focus-visible ${dismiss}, ${dismiss}:focus-visible`, { display: "block" });
+export const foot = style({ display: "flex", gap: "12px", padding: "8px 10px 4px", marginTop: "4px", fontSize: vars.textMeta });
 export const link = style({ color: vars.muted, textDecoration: "none", selectors: { "&:hover": { color: vars.text } } });
 export const empty = style({ padding: "10px", fontSize: vars.textUi, color: vars.muted });
