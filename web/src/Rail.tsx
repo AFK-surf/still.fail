@@ -285,8 +285,6 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   // place has come (the effect above), or soon if it was already there.
   const reveal = () => { if (now.current.own && folded(now.current.group)) peekSidebar(); };
   const asked = useRef(false);
-  // The sidebar just closed by its lit place pressed again: not shown by the pointer until it leaves the rail.
-  const quiet = useRef(false);
   const revealPressed = () => {
     asked.current = true;
     setTimeout(() => { if (asked.current) { asked.current = false; reveal(); } }, 60);
@@ -372,21 +370,22 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
       onClickCapture={(e) => {
         const pressed = changing ? null : (e.target as Element).closest(`.${css.item}`);
         if (!pressed) return;
-        // The lit place pressed again (not 待处理, a panel): its sidebar opened or closed, as by the edge, not gone to.
+        // The lit place pressed again (not 待处理, a panel): its sidebar open, or folded, as by the edge, not gone to. With
+        // the pointer, folded it is still shown a while (the pointer is on the rail), so pressing again and again goes
+        // between shown a while and open; it closes only as the pointer leaves.
         const slot = pressed.closest("[data-rail-item]");
         if (pressed.hasAttribute("data-on") && slot && slot.getAttribute("data-rail-item") !== "attention" && now.current.own) {
           e.preventDefault();
           e.stopPropagation();
           asked.current = false;
-          // Closed so, not shown again over the page at once by the pointer still on the rail: only once it has left.
-          if (!sidebar.closed) quiet.current = true;
+          const folding = !sidebar.closed;
           sidebar.toggle();
+          if (folding && e.detail > 0) peekSidebar();
           return;
         }
         revealPressed();
       }}
-      onPointerOver={(e) => { if (!changing && e.pointerType === "mouse" && !quiet.current) reveal(); }}
-      onPointerLeave={() => { quiet.current = false; }}
+      onPointerOver={(e) => { if (!changing && e.pointerType === "mouse") reveal(); }}
       onContextMenu={(e) => {
         if (changing) return;
         e.preventDefault();
@@ -641,7 +640,8 @@ export function SidebarEdge() {
           let moved = false;
           handle.setPointerCapture(e.pointerId);
           const move = (ev: PointerEvent) => {
-            if (sidebar.closed || (!moved && Math.abs(ev.clientX - from) < 3)) return;
+            // Closed, only while shown a while (peek): its width the same one as open.
+            if ((sidebar.closed && !("sidebarPeek" in document.documentElement.dataset)) || (!moved && Math.abs(ev.clientX - from) < 3)) return;
             if (!moved) { moved = true; setDragging(true); document.body.dataset.resizing = "true"; }
             setKeptWidth("--sidebar-w", Math.round(Math.min(SIDEBAR.max, Math.max(SIDEBAR.min, start + ev.clientX - from))), widthKey(shownGroup));
           };
