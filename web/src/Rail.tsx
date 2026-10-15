@@ -244,7 +244,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
     window.addEventListener("pointerup", up);
   };
   // Holds the sidebar's shortcut (its toggle, as the edge's, is the person's choice: kept for the place's sidebar).
-  useSidebarToggle();
+  const sidebar = useSidebarToggle();
   const shut = () => document.documentElement.dataset.sidebar === "closed";
   // The place's sidebar as its tab was left: open, or folded (shown a while over the page as its tab is pressed or
   // pointed at, then folded again: peekSidebar). A page in the rail with none of its own (连接, 用量) or the archive has it
@@ -367,7 +367,20 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   const rail = (
     <nav className={css.rail} aria-label={t("web-main.rail.label")} data-editing={changing || undefined}
       // A tab pressed (after its place has come), or the lit one pointed at: its sidebar shown (reveal).
-      onClickCapture={(e) => { if (!changing && (e.target as Element).closest(`.${css.item}`)) revealPressed(); }}
+      onClickCapture={(e) => {
+        const pressed = changing ? null : (e.target as Element).closest(`.${css.item}`);
+        if (!pressed) return;
+        // The lit place pressed again (not 待处理, a panel): its sidebar opened or closed, as by the edge, not gone to.
+        const slot = pressed.closest("[data-rail-item]");
+        if (pressed.hasAttribute("data-on") && slot && slot.getAttribute("data-rail-item") !== "attention" && now.current.own) {
+          e.preventDefault();
+          e.stopPropagation();
+          asked.current = false;
+          sidebar.toggle();
+          return;
+        }
+        revealPressed();
+      }}
       onPointerOver={(e) => { if (!changing && e.pointerType === "mouse" && (e.target as Element).closest(`.${css.item}[data-on]`)) reveal(); }}
       onContextMenu={(e) => {
         if (changing) return;

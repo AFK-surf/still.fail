@@ -16,24 +16,24 @@ export const rail = style({
   WebkitUserSelect: "none", userSelect: "none",
   // A window too short for every place: they scroll (its bar floating, scrollbars.ts), not squashed.
   overflowY: "auto", scrollbarWidth: "none",
-  // In the closed bar (shell.css.ts dock), as narrow as it, at the same pace.
-  transition: `width 380ms ${vars.easeOut}, padding 380ms ${vars.easeOut}`,
+  // In the closed bar (shell.css.ts dock), as narrow as it: moved with it (brand.tsx moveSidebar), not by a transition of
+  // its own, which starting a frame later and eased apart from the bar's margins shook the places as it went.
   // In the closed bar (42 wide) its places' ground 6 px from its every edge (3 of it within the place, above and below),
   // the bar's corner concentric with theirs. Changed, its places apart (their dashed frames not touching).
   selectors: { '[data-sidebar="closed"] &': { width: 42, paddingTop: 3, paddingBottom: 3 }, "&[data-editing]": { gap: 6 } },
-  "@media": { [narrow]: { display: "none" }, "(prefers-reduced-motion: reduce)": { transition: "none" } },
+  "@media": { [narrow]: { display: "none" } },
 });
 // Each place its own 38 (its ground 30 square), however short the window; a place's slot is display: contents.
 globalStyle(`${rail} > *, ${rail} > [data-rail-item] > *`, { flexShrink: 0 });
 /**
  * Level with the sidebar's top row (empty: its brand is gone beside the rail). In the macOS app the row drags the
  * window; its buttons are in it (main.ts puts them 16 px in, reaching past the rail). In the closed bar (shell.css.ts
- * dock), which starts under that row, no more than a margin; it shrinks with the bar, as long and eased.
+ * dock), which starts under that row, no more than a margin; it shrinks with the bar (moved with it, as the rail).
  */
 export const top = style({
   // On the web nothing is in the sidebar's top row either: a margin, as there. Its first place's ground (30) level with
   // the sidebar's first row (新对话, 32 from 14 down there): its middle at 30, 12 above its 3 within.
-  flex: "none", alignSelf: "stretch", height: 12, transition: `height 380ms ${vars.easeOut}, margin-bottom 380ms ${vars.easeOut}`,
+  flex: "none", alignSelf: "stretch", height: 12,
   selectors: {
     // Only macOS's window has its buttons here; full screen, or on Windows (its buttons at the right, the page's bar
     // dragging the window), as on the web. Not in the closed bar (below), which starts under the buttons' row: this

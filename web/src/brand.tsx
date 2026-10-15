@@ -110,6 +110,10 @@ export function moveSidebar(change: () => void): void {
     ...moves(`.${css.sidebarBuddy}`, ["left"]),
     ...moves(`.${css.sidebarUpdate}`, ["left", "transform"]),
     ...moves(`.${railCss.edge}`, ["left"]),
+    // The rail as narrow as the closed bar and its places as far from its edges, with its margins (no transitions of
+    // their own: on other clocks and eases they shook the places).
+    ...moves(`.${railCss.rail}`, ["width", "padding-top", "padding-bottom"]),
+    ...moves(`.${railCss.top}`, ["height"]),
     // The block's margins (closed, it stands off the window's edges; shown a while, it reaches over the page) at the same
     // pace as its column, not a transition of their own that would run ahead of it.
     ...moves(`.${shellCss.dock}`, ["margin-top", "margin-right", "margin-bottom", "margin-left"]),
