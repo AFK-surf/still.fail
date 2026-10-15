@@ -113,6 +113,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         Crashes.install(applicationContext)
+        BarTiming.start(applicationContext)
         StillFailCore.onFailed = { reason -> Crashes.coreFailed(applicationContext, reason) }
         StillFailCore.restartedText = { t("android-misc.core.restarted") }
         fail.still.android.data.I18n.load(applicationContext)
@@ -170,6 +171,11 @@ class MainActivity : ComponentActivity() {
                 else CompositionLocalProvider(LocalApp provides current, LocalUi provides current) { StillFailApp(current) }
             }
         }
+    }
+
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        BarTiming.touched(ev)
+        return super.dispatchTouchEvent(ev)
     }
 
     override fun onNewIntent(intent: Intent) {

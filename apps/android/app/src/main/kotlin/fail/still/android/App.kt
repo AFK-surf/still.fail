@@ -424,6 +424,7 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
         if (stack.size == 1 && stack[0] == screen) return
         sheet = null; menu = null; forward = false
         val to = listOf(screen)
+        BarTiming.placed(stack.firstOrNull(), screen)
         placed = to
         stack = to
     }
@@ -783,9 +784,11 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         if (pages.currentState == top && pages.targetState == top) return@LaunchedEffect
         // A place switched to on the bar: in place, no slide, once it has what it shows from the device (as below).
         if (app.switched) {
+            BarTiming.effect()
             val topics = followed.getOrPut(keyOf(top)) { fail.still.android.data.PageTopics() }
             @Suppress("UNCHECKED_CAST") val states = opening(top, workspace).map { (topic, serializer) -> topics.of(app.core, topic, serializer as kotlinx.serialization.KSerializer<Any?>) }
-            if (states.isNotEmpty()) withTimeoutOrNull(LOCAL_MS) { snapshotFlow { states.all { it.value.value != null || it.value.error != null } }.first { it } }
+            val got = if (states.isNotEmpty()) withTimeoutOrNull(LOCAL_MS) { snapshotFlow { states.all { it.value.value != null || it.value.error != null } }.first { it } } else true
+            BarTiming.snapped(states.isNotEmpty(), got == null)
             pages.snapTo(top)
             swiped = false
             return@LaunchedEffect
@@ -855,7 +858,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
             LocalBarRoom provides if (placeRoot != PlaceRoot.Bar) 0.dp else if (placeOf(screen) in CHAT_FAMILY) BAR_ROOM_LING else BAR_ROOM,
         ) {
             // A message's page draws its own ground, coming in over its chat (Annotate.kt).
-            Box(Modifier.fillMaxSize().then(if (screen is Screen.Annotate) Modifier else Modifier.background(C.bg))) {
+            Box(Modifier.fillMaxSize().then(if (screen is Screen.Annotate) Modifier else Modifier.background(C.bg)).then(BarTiming.page(screen))) {
                 when (screen) {
                     Screen.Home -> fail.still.android.screens.LockGate(current) { HomeScreen(current) }
                     is Screen.Chat, Screen.NewChat -> fail.still.android.screens.ChatHost(current, screen)

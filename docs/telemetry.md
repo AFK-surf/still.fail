@@ -37,11 +37,25 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 
 ## 安卓
 
-`apps/android/.../Crashes.kt`（`Tombstone.kt`），只报闪退，和网页版的错误进同一个项目（`$exception`，`app: android`，`release` 是版本号 `0.1.<n>`，`distinct_id` 是登录账号的 id，和网页版标识的人一样）。
+`apps/android/.../Crashes.kt`（`Tombstone.kt`）报闪退，`BarTiming.kt` 报下方栏切换的耗时，和网页版的错误进同一个项目（`$exception`，`app: android`，`release` 是版本号 `0.1.<n>`，`distinct_id` 是登录账号的 id，和网页版标识的人一样）。
 
 - Kotlin 层未捕获的异常：崩溃时把异常（PostHog 的 `$exception_list` 格式，带 java 帧）写到 app 目录 `files/crashes/<ms>.json`，系统自己不留。
 - 每次启动、有账号登录后：读系统的进程退出记录（ApplicationExitInfo，Android 11 起），从上次报到的地方（`crashes.since`；第一次往回看 7 天）起，把闪退、native 崩溃（Hermes、JNI 的 abort）和 ANR 一批发到 `/batch/`。native 崩溃带系统给的 tombstone 解成的文字（崩溃线程的堆栈、abort message、进程最后 50 条 warning/error 日志），ANR 带线程 dump，都放在 `trace` 属性里；这两种没有 PostHog 认的帧，用 `$exception_fingerprint`（信号或 ANR 加栈顶几帧）归 issue。每条的 `uuid` 由时间和 pid 定，重发不会重复。
 - 核心死掉重启（`StillFailCore.onFailed`）也当场报一条 `CoreFailed`（`$exception_level: error`，`reason: core_failed`，值是核心给的原因），和网页版的 CoreFailed 一样；用的是最近一次上报时的账号，还没有就是 `android-anonymous`。
+- 下方栏切换一次地方发一条 `bar_switch`（`BarTiming.kt`；攒 20 条或一分钟一批发到 `/batch/`，`distinct_id` 同上，没有账号就不发）。设备上同时写一行 `adb logcat -s StillfailTiming`，没有 key 的构建也写。时间都从手指抬起算（`MotionEvent.eventTime`；`touched: false` 是不是点出来的，比如返回手势）：
+
+  | 属性 | |
+  |---|---|
+  | `from`、`to` | 地方的名字（`chats`、`files`…） |
+  | `first` | 这次启动后第一次到这个地方；`away_ms` 离开它多久了 |
+  | `place_ms` | 到页面放进栈（`AppState.place`） |
+  | `effect_ms`、`snap_ms`、`wait_ms` | 到 Pages 的切换开始（栈变后的那一帧）、到页面换上；中间等页面打开要的数据（最多 `LOCAL_MS`） |
+  | `waited`、`timed_out` | 这个页面有没有要等的数据；等到了上限 |
+  | `composed_ms`、`drawn_ms`、`frame_ms` | 到新页面开始组合、第一次画、画完后的下一帧（交给屏幕了） |
+  | `frames`、`longest_frame_ms`、`frame_gaps_ms` | 从点到 `frame_ms` 之间的帧和间隔：主线程卡没卡 |
+  | `cut` | 3 秒内没走完，或被下一次切换打断 |
+  | `topics` | 页面新订阅的每个 topic：`topic`（名字，不带参数）、`opening`（切换要等它）、`held`（订阅时已有值）、`core_ms`（订阅到核心的第一个值到 app）、`decode_ms`、`shown_ms`（订阅到在主线程显示）、`tap_shown_ms`、`bytes`（第一个值的 JSON 大小） |
+
 - release 包关了 R8 的混淆（`proguard-rules.pro` 的 `-dontobfuscate`，保留行号），堆栈里是原名，不用上传 mapping。
 - 构建时由 `STILLFAIL_POSTHOG` 指向的文件给 key（`app/build.gradle.kts` → `BuildConfig.POSTHOG_KEY`）；CI 的安卓发布从 `POSTHOG_JSON` 写这个文件（`.github/release.sh`）。没有 key 的构建（本地、开发）什么都不发。
 

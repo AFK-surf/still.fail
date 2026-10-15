@@ -110,7 +110,7 @@ object Crashes {
      *  own bug. Sent at once, as the web's CoreFailed is. */
     fun coreFailed(context: Context, reason: String) {
         if (BuildConfig.POSTHOG_KEY.isEmpty()) return
-        val account = context.getSharedPreferences("stillfail", Context.MODE_PRIVATE).getString(ACCOUNT, null) ?: "android-anonymous"
+        val account = account(context) ?: "android-anonymous"
         val at = System.currentTimeMillis()
         Thread {
             val r = Report(at, android.os.Process.myPid(), buildJsonArray {
@@ -125,6 +125,22 @@ object Crashes {
             } catch (_: Exception) {
             }
         }.start()
+    }
+
+    /** The account the last report went as (the signed-in one's id): what the app's other events go as (BarTiming.kt). */
+    fun account(context: Context): String? = context.getSharedPreferences("stillfail", Context.MODE_PRIVATE).getString(ACCOUNT, null)
+
+    /** What every event of the app carries: its build, and the device. */
+    fun device() = buildJsonObject {
+        put("release", BuildConfig.VERSION_NAME)
+        put("app", "android")
+        put("beta", BuildConfig.BETA)
+        put("\$app_version", BuildConfig.VERSION_NAME)
+        put("\$os", "Android")
+        put("\$os_version", Build.VERSION.RELEASE)
+        put("\$device_manufacturer", Build.MANUFACTURER)
+        put("\$device_model", Build.MODEL)
+        put("\$lib", "stillfail-android")
     }
 
     /** Sends what crashed since the last start, as `account` (the signed-in account's id, the web's distinct id); what
@@ -157,20 +173,12 @@ object Crashes {
             put("\$exception_level", level)
             r.fingerprint?.let { put("\$exception_fingerprint", it) }
             r.trace?.let { put("trace", it) }
-            put("release", BuildConfig.VERSION_NAME)
-            put("app", "android")
-            put("beta", BuildConfig.BETA)
-            put("\$app_version", BuildConfig.VERSION_NAME)
-            put("\$os", "Android")
-            put("\$os_version", Build.VERSION.RELEASE)
-            put("\$device_manufacturer", Build.MANUFACTURER)
-            put("\$device_model", Build.MODEL)
-            put("\$lib", "stillfail-android")
+            for ((k, v) in device()) put(k, v)
             for ((k, v) in r.facts) put(k, v)
         }
     }
 
-    private fun send(batch: List<JsonObject>) {
+    fun send(batch: List<JsonObject>) {
         val body = buildJsonObject { put("api_key", BuildConfig.POSTHOG_KEY); put("batch", JsonArray(batch)) }.toString().toByteArray()
         val c = URL("${BuildConfig.POSTHOG_HOST.trimEnd('/')}/batch/").openConnection() as HttpURLConnection
         try {
@@ -280,7 +288,7 @@ object Crashes {
         dump.lineSequence().dropWhile { !it.startsWith("\"main\"") }.drop(1).takeWhile { it.isNotBlank() }
             .map { it.trim() }.filter { it.startsWith("at ") }.map { it.removePrefix("at ").substringBefore('(') }.toList()
 
-    private fun iso(ms: Long): String =
+    fun iso(ms: Long): String =
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(ms))
 
     private fun readAtMost(input: InputStream, most: Int): ByteArray {

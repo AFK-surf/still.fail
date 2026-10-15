@@ -66,12 +66,15 @@ private fun <T> follow(core: StillFailCore, topic: JsonObject, serializer: KSeri
     val chat = if (serializer.descriptor == ChatView.serializer().descriptor) ChatDecoder() else null
     val chats = if (serializer.descriptor == ChatsView.serializer().descriptor) ChatsDecoder() else null
     return core.topic(topic).conflate().map<TopicState, Topic<T>> { state ->
+        val arrived = System.nanoTime()
         try {
             @Suppress("UNCHECKED_CAST")
             Topic(state.value?.takeIf { it !is JsonNull }?.let { if (chat != null) chat.read(it) as T else if (chats != null) chats.read(it) as T else decode(serializer, it) }, state.error, state.loading)
+                .also { fail.still.android.BarTiming.decoded(topic, arrived, state.value, state.error != null) }
         } catch (e: CoreException) {
             // What this app cannot read is its bug or the core's: recorded with the rest of the trace, not only shown.
             core.reportError("android.decode", "${topic["topic"]}: ${e.message}")
+            fail.still.android.BarTiming.decoded(topic, arrived, state.value, true)
             Topic(null, e, false)
         }
     }
@@ -149,7 +152,8 @@ class PageTopics {
     fun <T> of(core: StillFailCore, topic: JsonObject, serializer: KSerializer<T>): State<Topic<T>> =
         followed.getOrPut(topic to serializer.descriptor) {
             val state = mutableStateOf(latestOf(topic, serializer))
-            val job = scope.launch { followShown(core, topic, serializer, state.value) { state.value = it } }
+            fail.still.android.BarTiming.followed(topic, state.value.value != null)
+            val job = scope.launch { followShown(core, topic, serializer, state.value) { state.value = it; fail.still.android.BarTiming.shown(topic, it.value, it.error != null) } }
             Followed(state as State<Topic<*>>, job)
         }.state as State<Topic<T>>
 
