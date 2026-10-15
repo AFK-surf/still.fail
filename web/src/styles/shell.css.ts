@@ -29,7 +29,9 @@ export const dock = style({
   "@media": {
     "(max-width: 700px)": { display: "contents" },
     "(min-width: 701px)": {
-      position: "relative", display: "flex", minWidth: 0, minHeight: 0, overflow: "hidden", background: vars.sidebar, margin: 0, borderRadius: 0,
+      position: "relative", display: "flex", minWidth: 0, minHeight: 0,
+      // Clipped, not a scroller: a field focused in the cut-off sidebar cannot scroll the block sideways and leave it so.
+      overflow: "clip", background: vars.sidebar, margin: 0, borderRadius: 0,
       // The closed bar's shadow, there but clear while open: the same shadow either way, so it moves in (from none it
       // would come at once).
       boxShadow: "0 8px 24px transparent",

@@ -564,16 +564,32 @@ function foldGroup(group: SidebarGroup, closed: boolean): void {
 
 /**
  * A folded sidebar shown a while over the page (shell.css.ts dock, data-sidebar-peek on the root): until the pointer has
- * been off it (and its edge, and a menu from it) a moment (PEEK_LEAVE).
+ * been off it (and its edge, and a menu from it) a moment (PEEK_LEAVE), and nothing in it is being written in (a chat
+ * renamed in place) nor a dialog from it open.
  */
 let leaving: ReturnType<typeof setTimeout> | undefined;
+let pointerOn = true;
 /** How long off it before it folds again. */
 const PEEK_LEAVE = 400;
-function onPeekMove(e: PointerEvent) {
-  const on = e.target instanceof Element && e.target.closest(`.${shellCss.dock}, .${css.edge}, [data-radix-popper-content-wrapper]`);
-  if (on) { clearTimeout(leaving); leaving = undefined; } else if (!leaving) leaving = setTimeout(endPeek, PEEK_LEAVE);
+const PEEK_ON = `.${shellCss.dock}, .${css.edge}, [data-radix-popper-content-wrapper]`;
+/** Something in the sidebar written in, or a dialog open (one of its rows' asks): it stays. */
+function held(): boolean {
+  const focused = document.activeElement;
+  const writing = focused instanceof HTMLElement && focused.closest(`.${shellCss.dock}`) !== null
+    && (focused.isContentEditable || focused.matches("input, textarea, select"));
+  return writing || document.querySelector('[role="dialog"], [role="alertdialog"]') !== null;
 }
-function onPeekAway() { if (!leaving) leaving = setTimeout(endPeek, PEEK_LEAVE); }
+function foldSoon() {
+  if (leaving) return;
+  leaving = setTimeout(() => { leaving = undefined; if (!pointerOn && !held()) endPeek(); }, PEEK_LEAVE);
+}
+function onPeekMove(e: PointerEvent) {
+  pointerOn = e.target instanceof Element && e.target.closest(PEEK_ON) !== null;
+  if (pointerOn) { clearTimeout(leaving); leaving = undefined; } else foldSoon();
+}
+function onPeekAway() { pointerOn = false; foldSoon(); }
+/** Done writing (or a dialog closed) with the pointer away: it folds then. */
+function onPeekFocus() { setTimeout(() => { if (!pointerOn) foldSoon(); }, 0); }
 export function peekSidebar(): void {
   const root = document.documentElement;
   if (root.dataset.sidebar === "closed" && !("sidebarPeek" in root.dataset)) moveSidebar(markPeek);
@@ -582,7 +598,9 @@ export function peekSidebar(): void {
 function markPeek(): void {
   const root = document.documentElement;
   root.dataset.sidebarPeek = "";
+  pointerOn = true;
   document.addEventListener("pointermove", onPeekMove, { passive: true });
+  document.addEventListener("focusout", onPeekFocus);
   root.addEventListener("pointerleave", onPeekAway);
 }
 function endPeek(): void {
@@ -590,6 +608,7 @@ function endPeek(): void {
   leaving = undefined;
   if ("sidebarPeek" in document.documentElement.dataset) moveSidebar(() => { delete document.documentElement.dataset.sidebarPeek; });
   document.removeEventListener("pointermove", onPeekMove);
+  document.removeEventListener("focusout", onPeekFocus);
   document.documentElement.removeEventListener("pointerleave", onPeekAway);
 }
 
