@@ -178,6 +178,8 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
       if (!started) {
         if (Math.abs(ev.clientY - e.clientY) < 4) return;
         started = true;
+        // Not left focused by the press (its ring round it as it moves).
+        if (el?.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
         setDragged({ item, order });
       }
       pointerY.current = ev.clientY - top;
