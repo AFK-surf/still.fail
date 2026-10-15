@@ -10,7 +10,7 @@ import { CAN_NOTIFY, requestPermission, setNotify, useNotifyState, type NotifySt
 import { useWorkspaceMarks } from "../lastChat.ts";
 import { setPrefs } from "../prefs.ts";
 import { ChevronRight } from "../icons.tsx";
-import { Button, MobileBack, Section, Segmented, Switch, SwitchRow } from "../ui.tsx";
+import { MobileBack, Section, Segmented, Switch, SwitchRow } from "../ui.tsx";
 import { failure, useToast } from "../toast.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./Notifications.css.ts";
@@ -35,12 +35,12 @@ export function NotificationsPage({ back, workspace }: { back: string; workspace
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={back} label={t("web-pages.settings.title")} />
       <header className={pagesCss.pageHead}><div><h1>{t("web-pages.settings.nav.notifications")}</h1></div></header>
-      {s.asking ? <Enable denied={s.permission === "denied"} />
-        : <Preview s={s} kind={open ?? KINDS_SHOWN.find((k) => s.banner(k)) ?? "wait"} />}
+      <Preview s={s} kind={open ?? KINDS_SHOWN.find((k) => s.banner(k)) ?? "wait"} />
       <Section title={t("web-pages.notifications.ways.title")} description={s.note}>
         <div className={css.tiles}>
-          {CAN_NOTIFY && <Tile way="banner" on={s.state === "on"} busy={s.busy} refused={s.state === "denied"} disabled={s.state === "unsupported"}
-            onChange={(on) => (s.state === "denied" ? void window.stillfailDesktop?.notify?.settings?.() : s.setBanner(on))} />}
+          {CAN_NOTIFY && <Tile way="banner" on={s.state === "on"} busy={s.busy} disabled={s.state === "unsupported" || (s.permission === "denied" && !s.openSettings)}
+            action={s.permission === "denied" ? t("web-pages.notifications.enable.open") : s.permission === "default" ? t("web-pages.notifications.enable.allow") : undefined}
+            onChange={(on) => (s.permission === "denied" ? s.openSettings?.() : s.permission === "default" ? void requestPermission() : s.setBanner(on))} />}
           <Tile way="badge" on={s.badge.on} onChange={(on) => s.setBadge({ on })} />
           {s.dock && <Tile way="dock" on={s.dock.on} onChange={(on) => s.setDock({ on })} />}
         </div>
@@ -96,8 +96,8 @@ function useSettings(workspace: string) {
     notices, preview: preview ?? notify?.preview ?? true,
     count: marks?.badge ?? 0,
     permission: notify?.permission ?? "unknown",
-    /** The system has to allow them first (refused, or not asked yet): the page leads with that, not the preview. */
-    asking: CAN_NOTIFY && (notify?.permission === "denied" || notify?.permission === "default"),
+    /** The system's notification settings for the app, where the app can open them (not a browser's). */
+    openSettings: window.stillfailDesktop?.notify?.settings ? () => { void window.stillfailDesktop?.notify?.settings?.(); } : null,
     kinds: k, badge: b, dock: dock.settings,
     /** Whether a kind comes as a banner now. */
     banner: (kind: Kind) => state === "on" && (kind === "done" ? k.done !== "off" : k[kind] !== false),
@@ -143,33 +143,18 @@ function useDock() {
 
 export type Way = "banner" | "badge" | "dock";
 
-/** The system has not allowed them yet (refused, or never asked): in the preview's place, what a banner would be and
- * the one thing to do for it: ask the system (not asked yet), or its settings (refused; a browser's site settings the
- * page cannot open, so where they are). */
-export function Enable({ denied }: { denied: boolean }) {
-  const open = window.stillfailDesktop?.notify?.settings;
-  const browser = !window.stillfailDesktop;
+/** One way of telling, as a tile with a picture of it: pressed, on or off. `action`: the system has to allow it first,
+ * the tile is the way to (its words on a button in it, the picture marked): pressed, it goes there. */
+export function Tile({ way, on, onChange, busy, disabled, action }: { way: Way; on: boolean; onChange(on: boolean): void; busy?: boolean; disabled?: boolean; action?: string | undefined }) {
   return (
-    <section className={css.enable}>
-      <img src={ICON} alt="" className={css.enableIcon} />
-      <h2 className={css.enableTitle}>{denied ? t("web-pages.notifications.enable.title") : t("web-pages.notifications.enable.titleAsk")}</h2>
-      <p className={css.enableText}>{t("web-pages.notifications.enable.text", { name: NAME })}</p>
-      {!denied ? <Button variant="primary" onClick={() => { void requestPermission(); }}>{t("web-pages.notifications.enable.allow")}</Button>
-        : open ? <Button variant="primary" onClick={() => { void open(); }}>{t("web-pages.notifications.enable.open")}</Button> : null}
-      {denied && <p className={css.enablePath}>{browser ? t("web-pages.permissions.where.browser") : /Win/.test(navigator.platform) ? t("web-pages.permissions.where.windows", { name: NAME }) : t("web-pages.permissions.where.mac", { name: NAME })}</p>}
-    </section>
-  );
-}
-
-/** One way of telling, as a tile with a picture of it: pressed, on or off. */
-export function Tile({ way, on, onChange, busy, disabled, refused }: { way: Way; on: boolean; onChange(on: boolean): void; busy?: boolean; disabled?: boolean; refused?: boolean }) {
-  return (
-    <button type="button" className={css.tile} aria-pressed={on} data-on={on || undefined} data-refused={refused || undefined} disabled={busy || disabled} onClick={() => onChange(!on)}>
+    <button type="button" className={css.tile} aria-pressed={action ? undefined : on} data-on={(on && !action) || undefined} data-action={action ? true : undefined} disabled={busy || disabled} onClick={() => onChange(!on)}>
       <span className={css.tilePicture} aria-hidden="true">
+        {action && <span className={css.picAlert}>!</span>}
         {way === "banner" ? <span className={css.picBanner} /> : way === "badge" ? <span className={css.picApp}><span className={css.picBadge} /></span> : <><span className={css.picEdge} /><span className={css.picEdge} /></>}
       </span>
       <span className={css.tileName}>{t(`web-pages.notifications.ways.${way}`)}</span>
-      <span className={css.tileState}>{refused ? t("web-pages.notifications.permission.refused") : on ? t("web-pages.notifications.on") : t("web-pages.notifications.off")}</span>
+      {action ? <span className={css.tileAction}>{action}<ChevronRight size={14} aria-hidden="true" /></span>
+        : <span className={css.tileState}>{on ? t("web-pages.notifications.on") : t("web-pages.notifications.off")}</span>}
     </button>
   );
 }

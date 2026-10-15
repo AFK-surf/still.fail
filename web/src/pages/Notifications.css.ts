@@ -55,17 +55,22 @@ export const tile = style({
   ...cardLook, display: "grid", justifyItems: "center", gap: "4px", padding: "14px 10px 12px",
   border: "2px solid transparent", color: vars.text, font: "inherit", fontSize: vars.textUi, cursor: "pointer",
   transition: `border-color ${vars.dur} ${vars.easeOut}`,
-  selectors: { "&[data-on]": { borderColor: vars.accent }, "&[data-refused]": { borderColor: "transparent" }, "&:disabled": { cursor: "default", opacity: "0.5" } },
+  selectors: {
+    "&[data-on]": { borderColor: vars.accent },
+    "&[data-action]": { borderColor: `color-mix(in srgb, ${vars.red} 55%, transparent)` },
+    "&[data-action]:hover": { background: vars.redBg },
+    "&:disabled": { cursor: "default", opacity: "0.5" },
+  },
 });
-// The system has not allowed them yet: a settings card in the preview's place, everything centred: the app's icon, what
-// to do and why, a banner as it would come, the one button, and where in the system's settings when refused.
-export const enable = style({
-  ...cardLook, display: "grid", justifyItems: "center", gap: "8px", padding: "32px 24px 24px", marginBottom: "28px", textAlign: "center",
+// The system has to allow it first: the tile is the way there, ringed in red, its picture marked, a red button in it.
+export const tileAction = style({
+  display: "inline-flex", alignItems: "center", gap: "2px", marginTop: "4px", padding: "4px 10px 4px 12px", borderRadius: "999px",
+  background: vars.red, color: vars.onPrimary, fontSize: vars.textMeta, fontWeight: "500",
 });
-export const enableIcon = style({ width: "56px", height: "56px", borderRadius: "22%", marginBottom: "6px" });
-export const enableTitle = style({ margin: "0", fontSize: vars.textTitle, lineHeight: vars.leadingTitle, fontWeight: "600" });
-export const enableText = style({ margin: "0 0 14px", maxWidth: "420px", textWrap: "balance", color: vars.muted, fontSize: vars.textUi, lineHeight: vars.leadingUi });
-export const enablePath = style({ margin: "4px 0 0", color: vars.muted, fontSize: vars.textMeta });
+export const picAlert = style({
+  position: "absolute", top: "50%", left: "50%", translate: "-50% -30%", width: "18px", height: "18px", borderRadius: "50%",
+  display: "grid", placeItems: "center", background: vars.red, color: vars.onPrimary, fontSize: vars.textCaption, fontWeight: "600", lineHeight: "1",
+});
 export const tilePicture = style({
   position: "relative", width: "72px", height: "46px", marginBottom: "4px", overflow: "hidden",
   borderRadius: "8px", background: vars.canvas, border: `1px solid ${vars.line}`,
@@ -80,7 +85,7 @@ export const picEdge = style({
   selectors: { "&:first-child": { top: "13px" }, "&:last-child": { top: "24px" } },
 });
 export const tileName = style({ fontWeight: "500" });
-export const tileState = style({ color: vars.muted, fontSize: vars.textMeta, selectors: { [`${tile}[data-refused] &`]: { color: vars.red } } });
+export const tileState = style({ color: vars.muted, fontSize: vars.textMeta });
 
 // The kinds: rows in a card, each opening to its ways.
 export const kinds = style({ gap: "0", paddingTop: "6px", paddingBottom: "6px" });
