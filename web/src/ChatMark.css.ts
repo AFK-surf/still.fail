@@ -77,12 +77,22 @@ globalStyle(`${leadSlot} svg`, { flex: "none" });
 /**
  * Waiting's dots breathe once, one after another, then rest; watching's dot beats and its arcs light up after it, inner
  * then outer, then rest (icons wait, watch: one path each). Every 3.1s.
+ *
+ * Each part that moves is a copy of the icon showing that part alone, in a box of its own (`data-part`, the part's place
+ * among the icon's children) laid over the icon and moved whole; the icon shows what stays. A part inside an SVG, or an
+ * <svg> scaled, is moved on the main thread: the whole page drawn anew every frame, rests too, for as long as one shows.
+ * A box the compositor moves alone.
  */
-globalStyle(`${leadSlot}[data-motion="wait"] path:not(:first-child)`, { animation: `${leadBreatheKeyframes} 3.1s ease-in-out infinite` });
-globalStyle(`${leadSlot}[data-motion="wait"] path:nth-child(3)`, { animationDelay: ".3s" });
-globalStyle(`${leadSlot}[data-motion="wait"] path:nth-child(4)`, { animationDelay: ".6s" });
-globalStyle(`${leadSlot}[data-motion="watch"] circle`, { transformBox: "view-box", transformOrigin: "12px 12px", animation: `${leadBeatKeyframes} 3.1s ease-out infinite` });
-globalStyle(`${leadSlot}[data-motion="watch"] path`, { opacity: .3, animation: `${leadLitKeyframes} 3.1s ease-out .18s infinite` });
-globalStyle(`${leadSlot}[data-motion="watch"] path:nth-child(3)`, { animationDelay: ".42s" });
-globalStyle(`${leadSlot}[data-motion] path, ${leadSlot}[data-motion] circle`, { "@media": { "(prefers-reduced-motion: reduce)": { animation: "none", opacity: 1 } } });
+globalStyle(`${leadSlot}[data-motion]`, { position: "relative" });
+globalStyle(`${leadSlot}[data-motion] > [data-part]`, { position: "absolute", left: "calc(50% - 7px)", top: "calc(50% - 7px)", width: 14, height: 14 });
+globalStyle(`${leadSlot}[data-motion] > [data-part] > svg`, { display: "block" });
+globalStyle(`${leadSlot}[data-motion="wait"] > svg > :not(:first-child), ${leadSlot}[data-motion="watch"] > svg > *, ${leadSlot}[data-motion] > [data-part] > svg > *`, { visibility: "hidden" });
+for (const n of [1, 2, 3, 4]) globalStyle(`${leadSlot}[data-motion] > [data-part="${n}"] > svg > :nth-child(${n})`, { visibility: "visible" });
+globalStyle(`${leadSlot}[data-motion="wait"] > [data-part]`, { opacity: .35, animation: `${leadBreatheKeyframes} 3.1s ease-in-out infinite` });
+globalStyle(`${leadSlot}[data-motion="wait"] > [data-part="3"]`, { animationDelay: ".3s" });
+globalStyle(`${leadSlot}[data-motion="wait"] > [data-part="4"]`, { animationDelay: ".6s" });
+globalStyle(`${leadSlot}[data-motion="watch"] > [data-part="1"]`, { animation: `${leadBeatKeyframes} 3.1s ease-out infinite` });
+globalStyle(`${leadSlot}[data-motion="watch"] > :is([data-part="2"], [data-part="3"])`, { opacity: .3, animation: `${leadLitKeyframes} 3.1s ease-out .18s infinite` });
+globalStyle(`${leadSlot}[data-motion="watch"] > [data-part="3"]`, { animationDelay: ".42s" });
+globalStyle(`${leadSlot}[data-motion] > [data-part]`, { "@media": { "(prefers-reduced-motion: reduce)": { animation: "none", opacity: 1 } } });
 export const leadRest = style({ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
