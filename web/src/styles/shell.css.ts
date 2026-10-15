@@ -91,6 +91,13 @@ export const main = style({
     },
   },
 });
+// The window takes a click on a drag region for itself and the page never sees it, so a menu, popover or select left open
+// would stay open when the top of the window is clicked. While one is open nothing drags: the click reaches the page and
+// closes it like a click anywhere else. Tooltips (data-state "delayed-open"/"instant-open") don't count.
+globalStyle(
+  `:root[data-desktop]:has([data-radix-popper-content-wrapper] > [data-state="open"], [data-radix-select-viewport]) :is(*, *::before, *::after)`,
+  { WebkitAppRegion: "no-drag !important" as "no-drag" },
+);
 export const gate = style({
   height: "100%", display: "grid", placeContent: "center", justifyItems: "center", gap: "8px", padding: "24px",
   textAlign: "center",
