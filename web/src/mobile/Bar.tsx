@@ -9,7 +9,9 @@
 // - One stroke: a finger set on the bar and moved any way takes the ball, which keeps to the place a let-go would
 //   choose, leaning a quarter of the way toward the finger. With more than one bar, leaving the bar upward opens the
 //   panel: the glass grows up into a rectangle, a row per other bar above the bar, and the ball goes on into those
-//   rows. Let go on a place: it (in another bar: that bar too). Let go while the panel is still opening: it opens.
+//   rows. The panel is as open as the finger has drawn it up (and the notch as closed), never opening on its own; let go
+//   on a place: it (in another bar: that bar too); elsewhere, it opens if drawn more than half way or flung up, else
+//   closes, from where it is at the finger's speed. A finger on it as it goes takes it from there.
 // - Choosing another bar, the panel closes like a window over a stack of bars: the stack slides down until the chosen
 //   bar is where the bar is, what is not chosen goes out at the glass's edges. Nothing fades.
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
@@ -213,9 +215,11 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
   const drawn = useRef<PlaceAction | null>(null);
   if (action) drawn.current = action;
   const inChats = action !== null && !open;
-  sp.k.to(inChats ? 1 : 0, 300, 30);
-  if (!w) sp.k.jump(inChats ? 1 : 0); // as it is when first drawn, not opened as the page comes
-  const k = sp.k.value;
+  // Its place has one (a spring as the place changes); the panel drawn up closes it, as far as it is drawn (the finger's,
+  // not a motion of its own).
+  sp.k.to(action !== null ? 1 : 0, 300, 30);
+  if (!w) sp.k.jump(action !== null ? 1 : 0); // as it is when first drawn, not opened as the page comes
+  const k = sp.k.value * (1 - Math.min(1, o * 2));
 
   const final = centres(w, inChats ? 1 : 0, items.length);
   const now = centres(w, k, items.length);
@@ -281,7 +285,9 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
   const ballOn = swapAt && swap!.key ? { x: swapAt.xs[swapAt.into.indexOf(swap!.key)]!, y: swapAt.y } : null;
 
   // ---- the finger
-  const press = useRef({ x: 0, y: 0, taken: false, opening: false, slid: false });
+  // `panel`: the finger has the panel, which is as open as it has been drawn up (o0 at the finger's start, from y0), not
+  // opened on its own; `vo`, how fast it opens (a second), for where it goes once let go.
+  const press = useRef({ x: 0, y: 0, taken: false, panel: false, o0: 0, vo: 0, at: 0, slid: false });
   const local = (e: ReactPointerEvent) => { const b = wrap.current!.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
   const finishSwap = () => {
     // A finger down while a bar is being chosen: it is chosen now, then the finger is the finger's.
@@ -293,7 +299,10 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
   };
   const down = (e: ReactPointerEvent) => {
     finishSwap();
-    press.current = { x: e.clientX, y: e.clientY, taken: false, opening: false, slid: false };
+    // The panel opening or closing: held where it is, the finger's from here (not left to go on its own).
+    const o0 = sp.o.value;
+    if (sp.o.moving) sp.o.jump(o0);
+    press.current = { x: e.clientX, y: e.clientY, taken: false, panel: o0 > 0.02, o0, vo: 0, at: e.timeStamp, slid: false };
   };
   const move = (e: ReactPointerEvent) => {
     const p = press.current;
@@ -303,8 +312,19 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
     }
     if (!p.taken) return;
     const at = local(e), several = others.length > 0;
-    if (several && !open && !p.opening && at.y < rowTop - 8) { p.opening = true; panel(true); }
-    setFinger({ x: at.x, y: several && (open || p.opening) ? Math.max(rowMid(0), Math.min(barMid, at.y)) : null });
+    if (several) {
+      // As open as the finger has drawn it up, from where it was: 1 to 1, past open a little give, never on its own.
+      const raw = p.o0 + (p.y - e.clientY - (p.o0 > 0.02 ? 0 : 8)) / travel;
+      if (!p.panel && raw > 0) { p.panel = true; if (!open) { setOpenState(true); onPanel?.(true); } }
+      if (p.panel) {
+        const o = raw > 1 ? 1 + Math.min(0.1, (raw - 1) * 0.25) : Math.max(0, raw);
+        const dt = Math.max(0.004, (e.timeStamp - p.at) / 1000);
+        p.vo = p.vo * 0.4 + ((o - sp.o.value) / dt) * 0.6;
+        p.at = e.timeStamp;
+        sp.o.jump(o);
+      }
+    }
+    setFinger({ x: at.x, y: several && p.panel ? Math.max(rowMid(0), Math.min(barMid, at.y)) : null });
   };
   const up = (e: ReactPointerEvent) => {
     const p = press.current;
@@ -312,26 +332,39 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
     p.taken = false;
     p.slid = true;
     setTimeout(() => { p.slid = false; });
-    const at = local(e), isOpen = open || p.opening;
-    p.opening = false;
+    const at = local(e);
     setFinger(null);
-    if (isOpen && at.y < rowTop - 4) {
-      // Over the rows before they are where they go: nothing chosen, the panel opens and stays.
-      if (sp.o.value < 0.85) return;
-      const n = Math.max(0, Math.min(others.length - 1, Math.floor((at.y - OVER) / ROW))), i = others[n]!;
-      const xs = centres(w, 0, sets[i]!.length);
-      pickSet(i, sets[i]![nearest(xs, at.x)]!);
+    if (p.panel) {
+      p.panel = false;
+      const o = sp.o.value;
+      // Let go on a place in the rows, the panel open: that bar, that place.
+      if (at.y < rowTop - 4 && o >= 0.85) {
+        const n = Math.max(0, Math.min(others.length - 1, Math.floor((at.y - OVER) / ROW))), i = others[n]!;
+        const xs = centres(w, 0, sets[i]!.length);
+        sp.o.velocity = p.vo;
+        pickSet(i, sets[i]![nearest(xs, at.x)]!);
+        return;
+      }
+      // Elsewhere: open if drawn more than half way or flung up, else closed (the place under the finger, let go on
+      // the bar); from where it is, as fast as it went.
+      const stays = at.y < rowTop - 4 && (p.vo > 1.5 || (p.vo > -1.5 && o > 0.5));
+      sp.o.velocity = p.vo;
+      panel(stays);
+      if (stays) return;
+      if (at.y >= rowTop - 4) { const key = items[nearest(final, at.x)]!; if (key !== place) go(key); }
       return;
     }
     const key = items[nearest(final, at.x)]!;
-    if (isOpen) panel(false);
+    if (open) panel(false);
     if (key !== place) go(key);
   };
-  // The finger taken from the bar without its lifting (the browser took the gesture): let go of, nothing chosen.
+  // The finger taken from the bar without its lifting (the browser took the gesture): let go of, nothing chosen; the
+  // panel where it was drawn to, as if let go there.
   function lost() {
-    press.current.taken = false;
-    press.current.opening = false;
+    const p = press.current;
+    p.taken = false;
     setFinger(null);
+    if (p.panel) { p.panel = false; panel(sp.o.value > 0.5); }
   }
   const tapPlace = (key: BarPlace) => {
     if (press.current.slid) return;
