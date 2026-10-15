@@ -1,6 +1,7 @@
 // The bottom bar (Bar.tsx): one frosted glass for the bar and the panel it grows into, the ball over the place in
 // view, 令 in a notch cut into the bar's top. The places' icons are drawn over the ball (frosted, it would blur them).
 import { globalStyle, keyframes, style, type StyleRule } from "@vanilla-extract/css";
+import { vars } from "../styles/tokens.css.ts";
 
 /** Rules for the dark theme: chosen, or the device's while none is chosen (as styles/root.css.ts goes). */
 const dark = (rules: StyleRule): StyleRule => ({
@@ -38,9 +39,12 @@ export const mBarScrim = style({ position: "absolute", inset: "0", zIndex: 5 });
 const rim = (a: number, b: number, c: number) =>
   `inset 0 0 0 .5px rgb(255 255 255 / ${a}), inset 1.5px 1.5px 1px -1px rgb(255 255 255 / ${b}), inset -1.5px -1.5px 1px -1px rgb(255 255 255 / ${c})`;
 
-/** The frosted glass (the composer's: raised 72%, blur 20), its rim lit as vaso's. As tall as what shows of it. */
+/**
+ * The frosted glass (the composer's: raised 72%, blur 20), its rim lit as vaso's. As tall as what shows of it, rounded as
+ * its outline is (Bar.tsx clips it to that): the inset rim goes round the corners with it, not off them along a square's.
+ */
 export const mBarGlass = style([{
-  position: "absolute", left: "0", right: "0", bottom: "0", pointerEvents: "none",
+  position: "absolute", left: "0", right: "0", bottom: "0", pointerEvents: "none", borderRadius: "28px",
   background: "color-mix(in srgb, var(--raised) 72%, transparent)",
   WebkitBackdropFilter: "blur(20px) saturate(1.6)", backdropFilter: "blur(20px) saturate(1.6)",
   boxShadow: rim(0.35, 0.8, 0.45),
@@ -69,6 +73,20 @@ export const mBarDot = style({
 /** The other bars, one row each above the bar, in the panel. */
 export const mBarRows = style({ position: "absolute", left: "0", right: "0", zIndex: 6 });
 export const mBarSetRow = style({ position: "absolute", left: "0", right: "0", height: "56px", cursor: "pointer" });
+
+/**
+ * A workspace in the panel's top rows (a place's button, mBarPlace, holds it): its mark, else its letter on a grey
+ * disc; grey, the one in use (or under the finger) in ink. Round: in the panel's corner its middle is the corner's,
+ * so it is concentric with it (as the ball is), which a rounded square is not.
+ */
+export const mBarWsMark = style({
+  width: "30px", height: "30px", borderRadius: "50%", display: "grid", placeItems: "center",
+  background: "color-mix(in srgb, var(--m-ink) 8%, transparent)", fontSize: vars.textUi, fontWeight: 600,
+  selectors: { "&[data-marked]": { background: "none" } },
+});
+globalStyle(`${mBarWsMark} > img`, { borderRadius: "50%" });
+/** What another workspace has waiting: the core's tone as a chat's dot (ChatMark.css.ts), at its mark's top right. */
+export const mBarWsDot = style({ position: "absolute", top: "calc(50% - 19px)", left: "calc(50% + 9px)", display: "flex" });
 
 /** The selection: a frosted ball of 68 under the icons, over 令. */
 export const mBarBall = style([{

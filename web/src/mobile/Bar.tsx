@@ -12,12 +12,20 @@
 //   rows. Let go on a place: it (in another bar: that bar too). Let go while the panel is still opening: it opens.
 // - Choosing another bar, the panel closes like a window over a stack of bars: the stack slides down until the chosen
 //   bar is where the bar is, what is not chosen goes out at the glass's edges. Nothing fades.
+// - With more than one workspace, the panel's top rows are them (in the order the switcher lists them, so each stays where
+//   it was), four a row in a full bar's columns, from the left: each its mark, else its letter, as the
+//   desktop's rail has them; the one in use in ink, the others grey, what another has waiting for its person a dot at
+//   its corner (the core's tone, as the rail's). Let go on one (or tap it): the panel closes and the same place opens in
+//   it. The panel opens for them with a single bar too.
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { ComponentType } from "react";
 import { Archive, Chart, Chats, Folder, Im, Ling, Plus, Quota, Zou, type IconProps } from "../icons.tsx";
 import { railLabel } from "../Rail.tsx";
 import { setPrefs, usePrefs } from "../prefs.ts";
 import { useChats, useStatus } from "../api.ts";
+import { useWorkspaces } from "../cloud/api.ts";
+import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
+import * as chatMarkCss from "../ChatMark.css.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
 import { StationGlyph, glyphCounts } from "../StationGlyph.tsx";
 import { reducedMotion } from "../motion.ts";
@@ -60,6 +68,13 @@ const ZETA = 0.635;
 const friction = (tension: number) => 2 * ZETA * Math.sqrt(tension);
 
 const ICONS: Partial<Record<BarPlace, ComponentType<IconProps>>> = { chats: Chats, decisions: Zou, files: Folder, profiles: Quota, connects: Im, usage: Chart, archive: Archive };
+
+/** Where the `n` workspaces' middles are in the panel's top rows: four a row in a full bar's columns, from the left,
+ *  side by side (not spread to the ends, as a bar of two places is: the user, the finger had too far to go). */
+function wsSpots(w: number, n: number): { x: number; row: number }[] {
+  const xs = centres(w, 0, 4);
+  return Array.from({ length: n }, (_, j) => ({ x: xs[j % 4]!, row: Math.floor(j / 4) }));
+}
 
 /** One number on a spring, stepped by the bar's frame loop (Hooke and a damper, the step a frame's time). */
 class Spring {
@@ -114,16 +129,26 @@ export interface BottomBarProps {
   /** Shown: the top page is a place's top page. Otherwise it goes down out of the way. */
   shown: boolean;
   go: (place: BarPlace) => void;
+  /** Another workspace chosen in the panel. */
+  goWorkspace: (id: string) => void;
   /** Told when the panel opens and closes (the shell keeps a page's swipe back out of it). */
   onPanel?: (open: boolean) => void;
 }
 
-export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) {
+export function BottomBar({ scope, place, shown, go, goWorkspace, onPanel }: BottomBarProps) {
   const bars = usePrefs((p) => p.bars);
   const sets = bars.sets as BarPlace[][];
   const cur = Math.min(bars.current, sets.length - 1);
   const items = sets[cur] ?? [];
   const others = useMemo(() => sets.map((_, i) => i).filter((i) => i !== cur), [sets, cur]);
+  // Every workspace of every account signed in, once each, as the switcher lists them.
+  const byAccount = useWorkspaces().value;
+  const workspaces = useMemo(() => {
+    const seen = new Set<string>();
+    return (byAccount ?? []).flatMap((a) => a.workspaces).filter((w) => !seen.has(w.id) && !!seen.add(w.id));
+  }, [byAccount]);
+  const wsRow = workspaces.length > 1 ? Math.ceil(workspaces.length / 4) * ROW : 0;
+  const several = others.length > 0 || wsRow > 0;
 
   // What waits: 奏's dot, the stations' trouble (the core's, as Home shows them).
   const marks = useWorkspaceMarks(scope);
@@ -181,7 +206,7 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
   };
   useEffect(() => () => cancelAnimationFrame(loop.current.raf), []);
 
-  // ---- the panel (only with more than one bar)
+  // ---- the panel (only with more than one bar, or workspace)
   const [open, setOpenState] = useState(false);
   const panel = (next: boolean, then?: () => void, config?: [number, number]) => {
     const before = panelDone.current;
@@ -193,19 +218,27 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
     sp.o.to(next ? 1 : 0, tension, damping);
     run();
   };
-  // Fewer bars than the panel had rows (one taken away in settings): closed.
-  useEffect(() => { if (others.length === 0 && open) panel(false); }, [others.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Nothing left for the panel to hold (a bar taken away in settings): closed.
+  useEffect(() => { if (!several && open) panel(false); }, [several]); // eslint-disable-line react-hooks/exhaustive-deps
   // Away (a page pushed over the place): closed, the ball let go.
   useEffect(() => { if (!shown) { if (open) panel(false); lost(); } }, [shown]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const rows = Math.max(1, others.length);
-  const PANEL = H + rows * ROW + OVER;
+  const PANEL = H + Math.max(ROW, wsRow + others.length * ROW) + OVER;
   const rowTop = PANEL - H; // the bar's top, in the panel
   const travel = rowTop - OVER; // how far the glass's top goes up as it opens
   const o = sp.o.value;
   const clipTop = Math.max(0, OVER + travel * (1 - o));
   const barMid = rowTop + R;
-  const rowMid = (n: number) => OVER + n * ROW + ROW / 2;
+  const rowMid = (n: number) => OVER + wsRow + n * ROW + ROW / 2;
+  const wsMid = (row: number) => OVER + row * ROW + ROW / 2;
+  const spots = w ? wsSpots(w, workspaces.length) : [];
+  /** The workspace a let-go at (x, y) would choose: in the row under it, the nearest. */
+  const wsAt = (x: number, y: number) => {
+    const row = Math.max(0, Math.min(Math.ceil(workspaces.length / 4) - 1, Math.floor((y - OVER) / ROW)));
+    let best = -1;
+    spots.forEach((sp, j) => { if (sp.row === row && (best < 0 || Math.abs(sp.x - x) < Math.abs(spots[best]!.x - x))) best = j; });
+    return Math.max(0, best);
+  };
 
   // ---- the notch: open on a page with a primary action, the panel closed; the last one drawn as it goes
   const actions = usePlaceActions();
@@ -224,11 +257,16 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
   // ---- the ball
   const [finger, setFinger] = useState<{ x: number; y: number | null } | null>(null);
   sp.held.to(finger ? 1 : 0, 420, 16);
-  // The place a let-go would choose: in the bar, or (the panel open) in the row under the finger.
-  const cand = (() => {
+  // The place a let-go would choose: in the bar, or (the panel open) in the row under the finger: a bar's place, or a
+  // workspace (`set` -1).
+  const cand = ((): { x: number; y: number; set: number; key: BarPlace | null; ws?: string } | null => {
     if (!finger || !w) return null;
-    if (finger.y !== null && finger.y < rowTop - 4 && others.length) {
-      const n = Math.max(0, Math.min(others.length - 1, Math.floor((finger.y - OVER) / ROW))), i = others[n]!;
+    if (finger.y !== null && finger.y < rowTop - 4 && several) {
+      if (wsRow && (finger.y < OVER + wsRow || !others.length)) {
+        const j = wsAt(finger.x, finger.y);
+        return { x: spots[j]!.x, y: wsMid(spots[j]!.row), set: -1, key: null, ws: workspaces[j]!.id };
+      }
+      const n = Math.max(0, Math.min(others.length - 1, Math.floor((finger.y - OVER - wsRow) / ROW))), i = others[n]!;
       const xs = centres(w, 0, sets[i]!.length), j = nearest(xs, finger.x);
       return { x: xs[j]!, y: rowMid(n), set: i, key: sets[i]![j]! };
     }
@@ -280,6 +318,13 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
   })() : null;
   const ballOn = swapAt && swap!.key ? { x: swapAt.xs[swapAt.into.indexOf(swap!.key)]!, y: swapAt.y } : null;
 
+  // ---- another workspace: the panel closes, and the place in view opens in it (the one in use: only closed)
+  const pickWorkspace = (id: string) => {
+    if (swap) return;
+    panel(false);
+    if (id !== scope) goWorkspace(id);
+  };
+
   // ---- the finger
   const press = useRef({ x: 0, y: 0, taken: false, opening: false, slid: false });
   const local = (e: ReactPointerEvent) => { const b = wrap.current!.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
@@ -302,9 +347,9 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
       wrap.current!.setPointerCapture(e.pointerId);
     }
     if (!p.taken) return;
-    const at = local(e), several = others.length > 0;
+    const at = local(e);
     if (several && !open && !p.opening && at.y < rowTop - 8) { p.opening = true; panel(true); }
-    setFinger({ x: at.x, y: several && (open || p.opening) ? Math.max(rowMid(0), Math.min(barMid, at.y)) : null });
+    setFinger({ x: at.x, y: several && (open || p.opening) ? Math.max(wsRow ? wsMid(0) : rowMid(0), Math.min(barMid, at.y)) : null });
   };
   const up = (e: ReactPointerEvent) => {
     const p = press.current;
@@ -318,7 +363,9 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
     if (isOpen && at.y < rowTop - 4) {
       // Over the rows before they are where they go: nothing chosen, the panel opens and stays.
       if (sp.o.value < 0.85) return;
-      const n = Math.max(0, Math.min(others.length - 1, Math.floor((at.y - OVER) / ROW))), i = others[n]!;
+      if (wsRow && (at.y < OVER + wsRow || !others.length)) { pickWorkspace(workspaces[wsAt(at.x, at.y)]!.id); return; }
+      if (!others.length) return;
+      const n = Math.max(0, Math.min(others.length - 1, Math.floor((at.y - OVER - wsRow) / ROW))), i = others[n]!;
       const xs = centres(w, 0, sets[i]!.length);
       pickSet(i, sets[i]![nearest(xs, at.x)]!);
       return;
@@ -359,6 +406,26 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
   const ballW = BALL + stretch, ballH = BALL - Math.min(6, stretch * 0.2);
   const ballLeft = bx - BALL / 2 - (v < 0 ? stretch : 0);
   const lit = cand ? (cand.set === cur ? cand.key : null) : place;
+  // A workspace in the panel's top rows, where a bar's place would be: its mark, else its letter on a grey square, as
+  // the desktop's rail has them; the one in use in ink, under the finger in ink; what another has waiting a dot at its
+  // corner.
+  const wsChip = (ws: (typeof workspaces)[number], j: number, top: number, live: boolean) => {
+    const m = ws.id === scope ? undefined : marks?.workspaces[ws.id];
+    const inner = <>
+      <span className={css.mBarWsMark} data-marked={marked(ws) || undefined}><WorkspaceMark w={ws} size={22} picture={30} /></span>
+      {m?.tone && <span className={css.mBarWsDot}><span className={chatMarkCss.chatMarkInline} data-tone={m.tone} /></span>}
+    </>;
+    const style = { left: spots[j]!.x - slot / 2, width: slot, top: top + spots[j]!.row * ROW + 4 };
+    const here = ws.id === scope || undefined, on = (cand ? cand.ws === ws.id : here) || undefined;
+    if (!live) return <span key={`ws${ws.id}`} className={css.mBarPlace} data-on={here} style={style}>{inner}</span>;
+    return (
+      <button key={ws.id} type="button" className={css.mBarPlace} data-ws={ws.id} data-here={here} data-on={on} style={style}
+        aria-label={m?.label ? `${t("web-mobile.bar.workspace", { name: ws.name })} · ${m.label}` : t("web-mobile.bar.workspace", { name: ws.name })}
+        aria-current={here && "true"} onClick={(e) => { e.stopPropagation(); if (!press.current.slid) pickWorkspace(ws.id); }}>
+        {inner}
+      </button>
+    );
+  };
 
   return (
     <>
@@ -384,12 +451,13 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
             </svg>
           )}
           <div className={css.mBarGlass} data-bar="glass" style={{ top: clipTop, clipPath: shape ? `path("${shape}")` : undefined }} />
-          {w > 0 && others.length > 0 && (
+          {w > 0 && several && (
             <div className={css.mBarRows} data-bar="rows" style={{ top: 0, height: rowTop, opacity: swap ? 0 : Math.max(0, Math.min(1, (o - 0.35) / 0.65)), transform: `translateY(${(1 - Math.min(1, o)) * 14 - Math.max(0, o - 1) * travel}px)`, pointerEvents: open && o > 0.6 ? "auto" : "none" }}>
+              {wsRow > 0 && workspaces.map((ws, j) => wsChip(ws, j, OVER, true))}
               {others.map((i, n) => {
                 const xs = centres(w, 0, sets[i]!.length);
                 return (
-                  <div key={i} className={css.mBarSetRow} style={{ top: OVER + n * ROW }} onClick={() => { if (!press.current.slid) pickSet(i, null); }}>
+                  <div key={i} className={css.mBarSetRow} style={{ top: OVER + wsRow + n * ROW }} onClick={() => { if (!press.current.slid) pickSet(i, null); }}>
                     {sets[i]!.map((key, j) => (
                       <button key={key} type="button" className={css.mBarPlace} data-place={key} data-set={i} style={{ left: xs[j]! - slot / 2, width: slot }}
                         data-on={(cand ? cand.set === i && cand.key === key : place === key) || undefined} aria-label={railLabel(key)}
@@ -421,6 +489,7 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
           </button>
           {swapAt && (
             <div className={css.mBarStack} data-bar="stack" style={{ top: clipTop, height: PANEL - clipTop, clipPath: `path("${shape}")` }}>
+              {wsRow > 0 && workspaces.map((ws, j) => wsChip(ws, j, OVER + swapAt.shift - clipTop, false))}
               {others.flatMap((i, n) => i === swap!.i ? [] : sets[i]!.map((key, j) => (
                 <span key={`r${i}${key}`} className={css.mBarStackIcon} style={{ left: centres(w, 0, sets[i]!.length)[j]! - 24, top: rowMid(n) + swapAt.shift - 24 - clipTop }}>{icon(key)}</span>
               )))}

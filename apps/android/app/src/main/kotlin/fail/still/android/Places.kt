@@ -22,7 +22,9 @@ import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
 import fail.still.android.data.rememberTopic
 import fail.still.android.data.t
+import fail.still.android.data.AccountWorkspaces
 import fail.still.android.ui.BarAction
+import fail.still.android.ui.BarWorkspace
 import fail.still.android.ui.BottomBar
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
@@ -140,7 +142,9 @@ private fun placeIcon(place: String) = when (place) {
 
 /**
  * The bottom bar on the pages of `current` (App.kt Pages): shown on a place's top page with nothing over it; its dots
- * as Home and Settings say them (奏 waiting for the viewer, a station in trouble).
+ * as Home and Settings say them (奏 waiting for the viewer, a station in trouble). With more than one workspace, the
+ * panel's top row is them, as the switcher lists them (screens/Workspaces.kt), with what each has waiting; one chosen
+ * there is switched to on the place shown.
  */
 @Composable
 fun PlaceBar(app: AppState, current: WorkspaceEntry, haze: HazeState, shown: Boolean) {
@@ -169,6 +173,11 @@ fun PlaceBar(app: AppState, current: WorkspaceEntry, haze: HazeState, shown: Boo
     val ling = remember(lingLabel) { BarAction("ling", lingLabel, Icons.Ling) { app.push(Screen.NewChat) } }
     val actions = app.placeActions
     val held = remember { arrayOf<BarAction?>(null) }
+    val all by rememberTopic<List<AccountWorkspaces>>(app.core, Topics.workspaces)
+    val workspaces = all.value.orEmpty().flatMap { it.workspaces }.distinctBy { it.id }.map { w ->
+        val m = marks.value?.workspaces?.get(w.id)
+        BarWorkspace(w.id, w.name, w.emoji, w.icon, m?.tone, m?.label)
+    }
     var waited by remember(ws, active) { mutableStateOf(false) }
     LaunchedEffect(ws, active) { delay(1000); waited = true }
     val action = when {
@@ -191,5 +200,9 @@ fun PlaceBar(app: AppState, current: WorkspaceEntry, haze: HazeState, shown: Boo
             // Only from a place's top: a page pushed meanwhile (a notification opened) stays.
             if (place != null && app.stack.size == 1 && placeOf(app.stack.first()) != place) app.place(screenOf(place))
         },
+        workspaces = workspaces, workspace = ws,
+        // The place shown stays, in the workspace chosen.
+        onWorkspace = { id -> app.pickWorkspace(id) },
+        workspaceLabel = { w -> listOfNotNull(t("android-misc.bar.workspace", "name" to w.name), w.label?.takeIf { w.id != ws }).joinToString(" · ") },
     )
 }
