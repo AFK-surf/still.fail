@@ -101,6 +101,11 @@ export const navTrack = style({
 // Each pane sized by the track alone: otherwise the track's height is its tallest pane's content, and any change in a
 // row (the time shown on hover) lays out every row of all the lists again, a frame dropped per row passed while scrolling.
 globalStyle(`${navTrack} > ${navScroll}`, { flex: "none", width: "20%", contain: "strict" });
+// The panes not shown (inert) are not drawn, nor their rows' motions run: drawn, they cost every frame that changed
+// anything as much as the one shown (their rings went on turning off to the side). Only while the track rests: sliding
+// (data-sliding, Sidebar.tsx), the panes it passes are drawn from its start, and the one it leaves stays a slide's time
+// before it goes (it gets inert before the slide starts); the one it goes to shows at once (that has no transition).
+globalStyle(`${navTrack}:not([data-sliding]) > ${navScroll}[inert]`, { contentVisibility: "hidden", transition: "content-visibility 0s 240ms allow-discrete" });
 
 export const navFoot = style({ ...band, marginTop: "auto", padding: 8 });
 export const navFootRow = style({ display: "flex", alignItems: "center", gap: 4 });

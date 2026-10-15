@@ -22,6 +22,13 @@ export function useListMotion(list: RefObject<HTMLElement | null>): void {
     const box = list.current;
     if (!box) return;
     const was = placed.current;
+    // A list not shown (inert: one the sidebar's track has slid away from, not drawn then: Sidebar.css.ts) keeps no
+    // places, which would lay it out at every change of its rows; shown again, its rows are where they are.
+    if (box.inert) {
+      for (const p of was.values()) { p.run?.stop(); p.y.clearListeners(); p.el.style.transform = ""; }
+      placed.current = new Map();
+      return;
+    }
     const now = new Map<string, Placed>();
     const els = [...box.querySelectorAll<HTMLElement>(":scope [data-flip]:not([data-leaving])")];
     // Nothing to move from (the list's first rows), or no motion wanted: only where they are is kept.
