@@ -648,6 +648,7 @@
   "web-main.rail.customizeLead": "在侧边条上拖动换位置，点 − 拿掉，点别处结束",
   "web-main.rail.away": "不在侧边条上",
   "web-main.rail.allIn": "能放的都在侧边条上了",
+  "web-main.rail.add": "把{name}放到侧边条上",
   "web-main.rail.remove": "从侧边条移除{name}",
   "web-main.rail.kind.places": "页面",
   "web-main.rail.kind.lists": "对话列表",

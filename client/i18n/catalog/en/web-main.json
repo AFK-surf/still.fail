@@ -717,6 +717,7 @@
   "web-main.rail.customizeLead": "Drag in the rail to move, press − to take out, press elsewhere when done",
   "web-main.rail.away": "Not in the rail",
   "web-main.rail.allIn": "Everything is in the rail",
+  "web-main.rail.add": "Add {name} to the rail",
   "web-main.rail.remove": "Remove {name} from the rail",
   "web-main.rail.kind.places": "Pages",
   "web-main.rail.kind.lists": "Chat lists",

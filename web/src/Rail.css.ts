@@ -208,6 +208,9 @@ export const still = style({ pointerEvents: "none" });
 export const remove = style({
   position: "absolute", top: -5, left: -5, display: "grid", placeItems: "center", width: 18, height: 18, padding: 0, border: 0,
   borderRadius: "50%", background: vars.text, color: vars.sidebar, cursor: "pointer", boxShadow: `0 0 0 2px ${vars.sidebar}`,
+  // In the closed bar (42) a place's slot is 2 from the rail's edge, which cuts what stands past it (the rail scrolls in a
+  // short window): the − within its slot's corner there, its ring too.
+  selectors: { '[data-sidebar="closed"] &': { top: 1, left: 1 } },
 });
 /** The panel beside the rail of what can be added (ui.tsx Panel* parts), no button: pressing elsewhere ends it. */
 export const adder = style({ width: 248, display: "grid", gap: 8 });
@@ -237,4 +240,11 @@ export const downloadScan = style({ display: "flex", alignItems: "center", gap: 
 export const downloadQr = style({
   width: 72, height: 72, padding: 5, flex: "none", background: "#fff", borderRadius: `calc(8px * ${vars.cornerScale})`,
   cornerShape: vars.cornerShape,
+});
+
+/** A place's + in the rail's menu (Rail.tsx), at its row's end: put in the rail and the rail's change begun. */
+export const menuAdd = style({
+  display: "grid", placeItems: "center", width: 24, height: 24, marginLeft: "auto", padding: 0, border: 0, borderRadius: 999,
+  background: "none", color: vars.muted, cursor: "pointer",
+  selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });

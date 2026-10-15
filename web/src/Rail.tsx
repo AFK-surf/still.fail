@@ -449,6 +449,18 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
                 return (
                   <DropdownMenu.Item key={i} className={controlsCss.menuItem} onSelect={() => go(i)}>
                     {Icon ? <Icon {...ICON} /> : i === "decisions" ? <span className={css.zouSmall}>奏</span> : <span style={{ width: ICON.size }} />}{railLabel(i)}
+                    {/* Put in the rail, where it can be moved at once: the rail's change begins with it. */}
+                    <button type="button" className={css.menuAdd} aria-label={t("web-main.rail.add", { name: railLabel(i) })} title={t("web-main.rail.add", { name: railLabel(i) })}
+                      // Its own press, not the row's (going there): the menu selects on the pointer's up.
+                      onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      onClick={(e) => {
+                        e.preventDefault(); e.stopPropagation();
+                        setMenu(null); keep([...items, i]);
+                        // Once the menu has gone (its closing would end the change it opens).
+                        setTimeout(() => editRail(true), 0);
+                      }}>
+                      <Plus size={14} />
+                    </button>
                   </DropdownMenu.Item>
                 );
               })}
