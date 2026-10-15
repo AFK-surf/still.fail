@@ -41,7 +41,7 @@ import { HAS_LOCAL_STATION, LocalStationPage } from "../pages/LocalStation.tsx";
 import { ChangelogNews, ChangelogPage } from "../pages/Changelog.tsx";
 import { AddProfile } from "../pages/AddProfile.tsx";
 import { ProfilesNav } from "../ProfilesNav.tsx";
-import { NavAction, NavItem, NavTop } from "../SidebarList.tsx";
+import { NavAction, NavList, NavItem, NavTop } from "../SidebarList.tsx";
 import { SecurityOpen, SecurityPrompt, SecuritySettings, SecurityWaiting, useLock } from "./Security.tsx";
 import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, useSidebarMode, useStationList, type Station } from "../station.tsx";
@@ -387,7 +387,7 @@ function FilesNav({ scope, top }: { scope: string; top?: ReactNode }) {
   return (
     <>
       <NavTop top={top} action={add.can && <NavAction icon={<Plus {...ICON} />} label={t("web-pages.drive.addRoot")} onClick={add.start} />} />
-      <div className={nav.navScroll}>
+      <NavList>
         {folders.length === 0 && <p className={nav.navEmpty}>{t("web-main.rail.filesNone")}</p>}
         {folders.map(({ s, r }) => {
           const base = stationBase(s.station);
@@ -399,7 +399,7 @@ function FilesNav({ scope, top }: { scope: string; top?: ReactNode }) {
           );
         })}
         {add.dialogs}
-      </div>
+      </NavList>
     </>
   );
 }

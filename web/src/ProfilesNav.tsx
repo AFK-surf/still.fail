@@ -15,7 +15,7 @@ import { hosts, profileGroups } from "./cloud/settings.tsx";
 import { StationContext, stationBase, type Station } from "./station.tsx";
 import { useToast } from "./toast.tsx";
 import { Dialog, ICON, ProviderLogo, StatusDot, Tip } from "./ui.tsx";
-import { NavAction, NavItem, NavLine, NavSection, NavTop, navFill } from "./SidebarList.tsx";
+import { NavAction, NavList, NavItem, NavLine, NavSection, NavTop, navFill } from "./SidebarList.tsx";
 import * as nav from "./Sidebar.css.ts";
 import * as css from "./ProfilesNav.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -52,7 +52,7 @@ export function ProfilesNav({ scope, top }: { scope: string; top?: ReactNode }) 
   return (
     <>
       <NavTop top={top} action={online.length > 0 && <NavAction icon={<Plus {...ICON} />} label={t("web-pages.settings.profiles.add")} onClick={add} />} />
-      <div className={nav.navScroll}>
+      <NavList>
         {profiles && items.length === 0 && !profiles.loading && <p className={nav.navEmpty}>{t("web-pages.settings.profiles.none")}</p>}
         {profileGroups(items).map((g) => (
           <NavSection key={g[0]!.group} title={g[0]!.groupTitle}>
@@ -69,7 +69,7 @@ export function ProfilesNav({ scope, top }: { scope: string; top?: ReactNode }) 
             ))}
           </ul>
         </Dialog>
-      </div>
+      </NavList>
     </>
   );
 }

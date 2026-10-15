@@ -5,9 +5,11 @@ import { vars } from "./styles/tokens.css.ts";
 
 const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
 
-/** A row that is a button, as one that is a link. */
+/** A list (NavList): as wide as the sidebar. */
+export const list = style({ flex: 1 });
+/** A row that is a button, as one that is a link (its size and line the row's: no `font` shorthand over them). */
 export const button = style({
-  width: "100%", textAlign: "left", font: "inherit", border: 0, background: "none", cursor: "pointer", textDecoration: "none",
+  width: "100%", textAlign: "left", fontFamily: "inherit", border: 0, background: "none", cursor: "pointer", textDecoration: "none",
 });
 /** As a chat's row: its mark beside the first line, not between the lines. */
 export const item = style({

@@ -34,6 +34,15 @@ export function NavAction({ icon, label, beside, ...target }: { icon: ReactNode;
   );
 }
 
+/** The list under the band, as the chats' are: the sidebar's whole height, scrolling on under the band and the foot. */
+export function NavList({ children }: { children: ReactNode }) {
+  return (
+    <div className={nav.navSlider}>
+      <div className={`${nav.navScroll} ${css.list}`}>{children}</div>
+    </div>
+  );
+}
+
 /** A section of a list, under its heading. */
 export function NavSection({ title, flip, children }: { title: string; flip?: string; children: ReactNode }) {
   return (

@@ -21,10 +21,9 @@ import { WorkspaceMark } from "../WorkspaceMark.tsx";
 import { HostDetails, Net, problems, state, useLong } from "./StationCards.tsx";
 import { MarkPick } from "./MarkPick.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
-import { NavAction, NavItem, NavLine, NavTop, navFill } from "../SidebarList.tsx";
+import { NavAction, NavList, NavItem, NavLine, NavTop, navFill } from "../SidebarList.tsx";
 import { AddStationDialog, useStationEdits, useWorkspace } from "./settings.tsx";
 import type { WorkspaceEntry } from "./workspace.tsx";
-import * as nav from "../Sidebar.css.ts";
 import * as railCss from "../Rail.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
@@ -51,10 +50,10 @@ export function StationsNav({ entry, top }: { entry: WorkspaceEntry; top?: React
   return (
     <>
       <NavTop top={top} action={manager && view && <NavAction icon={<Plus {...ICON} />} label={t("web-pages.settings.stations.add")} onClick={() => setAdding(true)} />} />
-      <div className={nav.navScroll}>
+      <NavList>
         {stations.map((s) => <StationRow key={s.id} s={s} to={stationPage(entry.id, s.id)} />)}
         {adding && view && <AddStationDialog view={view} account={entry.account} stations={stations} onClose={() => setAdding(false)} thisMac />}
-      </div>
+      </NavList>
     </>
   );
 }
