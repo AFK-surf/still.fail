@@ -61,7 +61,17 @@ mountDemo(root);
       const box = s.getBoundingClientRect(), border = px(cs.borderRightWidth);
       const near = pad + 1;
       for (const d of s.querySelectorAll('*')) {
-        const r = d.getBoundingClientRect();
+        // As much of it as shows: cut by what scrolls or clips between it and the surface.
+        const b = d.getBoundingClientRect();
+        const r = { left: b.left, right: b.right, top: b.top, bottom: b.bottom };
+        for (let a = d.parentElement; a && a !== s; a = a.parentElement) {
+          const o = getComputedStyle(a);
+          if (o.overflowX === 'visible' && o.overflowY === 'visible') continue;
+          const c = a.getBoundingClientRect();
+          r.left = Math.max(r.left, c.left); r.right = Math.min(r.right, c.right); r.top = Math.max(r.top, c.top); r.bottom = Math.min(r.bottom, c.bottom);
+        }
+        r.width = r.right - r.left; r.height = r.bottom - r.top;
+        if (r.width <= 0 || r.height <= 0 || r.height < b.height - 0.5 || r.width < b.width - 0.5) continue;
         const dr = px(getComputedStyle(d).borderBottomRightRadius);
         if (!r.width || !r.height || !dr) continue;
         const gl = r.left - box.left - border, gr = box.right - border - r.right, gt = r.top - box.top - border, gb = box.bottom - border - r.bottom;
@@ -70,7 +80,7 @@ mountDemo(root);
         corners++;
         const who = `${name} › ${d.className.toString().split(' ')[0] || d.tagName}`;
         if (Math.abs(side - end) > 0.75) wrong.push(`${who}: ${side.toFixed(1)} from the side, ${end.toFixed(1)} from the top or foot`);
-        else if (Math.abs(dr - Math.min(outer - side, r.height / 2, r.width / 2)) > 0.75) wrong.push(`${who}: corner ${dr} ${side.toFixed(1)} in from a corner of ${outer}`);
+        else if (Math.abs(Math.min(dr, r.height / 2, r.width / 2) - Math.min(outer - side, r.height / 2, r.width / 2)) > 0.75) wrong.push(`${who}: corner ${dr} ${side.toFixed(1)} in from a corner of ${outer}`);
       }
     }
     return { surfaces, corners, wrong };
