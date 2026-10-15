@@ -99,7 +99,7 @@ class BarTest {
     private fun hex(c: Int) = "#%06X".format(c and 0xFFFFFF)
 
     /** The notch shows the page's paper (nothing frosted, no shadow), as does what is just above the bar; the glass does not. */
-    private fun notchEmpty(paper: Int) {
+    private fun notchEmpty(paper: Int, dark: Boolean = false) {
         val g = bounds("bar-glass")
         val bmp = rule.onRoot().captureToImage().asAndroidBitmap()
         val cx = g.center.x
@@ -107,6 +107,12 @@ class BarTest {
         val gap = pixel(bmp, cx + 19.6f * d, g.top + 20 * d)
         val above = pixel(bmp, cx + 60 * d, g.top - 3 * d)
         val glass = pixel(bmp, cx + 40 * d, g.top + 50 * d)
+        // Past the bar's rounded left end, in the row of its top (and clear of the ball): no line drawn there. (In the dark,
+        // where a lit line shows most and the shadow least.)
+        if (dark) {
+            val corner = pixel(bmp, g.left + 3 * d, g.top + 0.5f)
+            assertTrue("past the bar's rounded end ${hex(corner)} is the paper ${hex(paper)}", near(corner, paper, 8))
+        }
         assertTrue("the notch's gap ${hex(gap)} is the paper ${hex(paper)}", near(gap, paper, 4))
         assertTrue("above the bar ${hex(above)} is the paper ${hex(paper)}", near(above, paper, 4))
         assertTrue("the glass ${hex(glass)} is not the paper ${hex(paper)}", !near(glass, paper, 3))
@@ -124,7 +130,7 @@ class BarTest {
         val h = launch(dark = true)
         shot(h, "bar-home-dark")
         ballAtRest(-1)
-        notchEmpty(0xFF1B1C1F.toInt())
+        notchEmpty(0xFF1B1C1F.toInt(), dark = true)
     }
 
     /** A place tapped: its page in place of the one shown (nothing to go back to), the ball over it, 令 gone. */

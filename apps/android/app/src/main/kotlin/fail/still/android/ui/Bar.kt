@@ -203,10 +203,10 @@ private fun outline(w: Float, h: Float, cx: Float, cy: Float, r: Float, d: Float
 
 /**
  * The cut a notch makes in a top edge at y 0: a circle of radius `r` about (cx, c0), met by the edge through two fillets
- * of radius `f` (each touching the edge and the circle). Adds it to `p` from the edge's left meeting to its right, or
- * nothing when there is none (closed); answers whether it did.
+ * of radius `f` (each touching the edge and the circle). Adds it to `p` from the edge's left meeting to its right (`alone`:
+ * starting there, not along the edge to it), or nothing when there is none (closed); answers whether it did.
  */
-private fun notch(p: Path, cx: Float, c0: Float, r: Float, f: Float): Boolean {
+private fun notch(p: Path, cx: Float, c0: Float, r: Float, f: Float, alone: Boolean = false): Boolean {
     if (r <= 0.5f) return false
     val dy = f - c0
     val reach = (r + f) * (r + f) - dy * dy
@@ -215,7 +215,7 @@ private fun notch(p: Path, cx: Float, c0: Float, r: Float, f: Float): Boolean {
     val l = cx - xf
     val rr = cx + xf
     val deg = (180.0 / Math.PI).toFloat()
-    p.lineTo(l, 0f)
+    if (alone) p.moveTo(l, 0f) else p.lineTo(l, 0f)
     // The left fillet, from its top round to where it meets the circle (clockwise).
     val a1 = atan2(c0 - f, cx - l) * deg
     p.arcTo(Rect(l - f, 0f, l + f, 2 * f), -90f, a1 + 90f, false)
@@ -638,10 +638,10 @@ fun BottomBar(
                 val r = notchR()
                 if (r <= 0.5f) return@drawBehind
                 val gw = w * narrow()
+                // The notch's own outline alone. (It was drawn from the bar's left end along its edge, the half of the
+                // stroke below the edge showing: a line over the ball and past the bar's rounded end.)
                 val p = Path()
-                p.moveTo(0f, 0f)
-                if (!notch(p, gw.dp.toPx() / 2, notchY().dp.toPx(), r.dp.toPx(), FILLET.dp.toPx())) return@drawBehind
-                // Only what is below the edge: the notch's own outline, not the line along the edge to it.
+                if (!notch(p, gw.dp.toPx() / 2, notchY().dp.toPx(), r.dp.toPx(), FILLET.dp.toPx(), alone = true)) return@drawBehind
                 val edge = Path().apply { addPath(p, Offset(((w - gw) / 2).dp.toPx(), clipTop().dp.toPx())) }
                 clipPath(Path().apply { addRect(Rect(0f, clipTop().dp.toPx() + 0.5f, size.width, size.height)) }) {
                     drawPath(edge, Color.White.copy(alpha = if (dark) 0.22f else 0.7f), style = Stroke(1.dp.toPx()))
