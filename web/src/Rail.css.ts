@@ -25,8 +25,8 @@ export const rail = style({
 // Each place its own 38 (its ground 30 square), however short the window; a place's slot is display: contents.
 globalStyle(`${rail} > *, ${rail} > [data-rail-item] > *`, { flexShrink: 0 });
 /**
- * Level with the sidebar's top row (empty: its brand is gone beside the rail). In the desktop app the row drags the
- * window; on macOS its buttons are in it (main.ts puts them 16 px in, reaching past the rail). In the closed bar (shell.css.ts
+ * Level with the sidebar's top row (empty: its brand is gone beside the rail). In the macOS app the row drags the
+ * window; its buttons are in it (main.ts puts them 16 px in, reaching past the rail). In the closed bar (shell.css.ts
  * dock), which starts under that row, no more than a margin; it shrinks with the bar, as long and eased.
  */
 export const top = style({
@@ -34,8 +34,9 @@ export const top = style({
   // the sidebar's first row (新对话, 32 from 14 down there): its middle at 30, 3 above the gap's 6 and its 4 within.
   flex: "none", alignSelf: "stretch", height: 5, transition: `height 380ms ${vars.easeOut}, margin-bottom 380ms ${vars.easeOut}`,
   selectors: {
-    // Full screen the window has no buttons nor a frame to drag: as on the web.
-    "[data-desktop]:not([data-fullscreen]) &": { height: 41, WebkitAppRegion: "drag" },
+    // Only macOS's window has its buttons here; full screen, or on Windows (its buttons at the right, the page's bar
+    // dragging the window), as on the web.
+    '[data-desktop="inset"]:not([data-fullscreen]) &': { height: 41, WebkitAppRegion: "drag" },
     // In the closed bar nothing: its places stand as far from its top as from its sides (rail's padding).
     '[data-sidebar="closed"] &': { height: 0, ...outsetBottom(6) },
   },
