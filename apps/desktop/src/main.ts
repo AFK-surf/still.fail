@@ -1309,6 +1309,18 @@ ipcMain.handle("notify:settings", (event) => {
   if (process.platform === "darwin") void shell.openExternal(`x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=${APP_ID}`);
   else if (process.platform === "win32") void shell.openExternal("ms-settings:notifications");
 });
+// The permissions page asks again each second while it shows, so a change in the system's settings shows at once.
+ipcMain.handle("notify:check", (event) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`)) return null;
+  const state = systemPermission(APP_ID);
+  void coreCall("notify.permission", { state }).catch(() => undefined);
+  return state;
+});
+// Not asked yet: macOS asks the person the first time the app shows a notification, so it shows one.
+ipcMain.handle("notify:request", (event) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || !Notification.isSupported()) return;
+  new Notification({ title: NAME, body: t("desktop.notify.allowed") }).show();
+});
 app.on("browser-window-focus", tellPermission);
 
 ipcMain.handle("notify:get", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? notifyOn : null);

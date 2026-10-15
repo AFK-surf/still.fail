@@ -2,6 +2,7 @@
 // phone's notification settings are: a preview that follows the settings, the ways it tells (a banner, the badge, the
 // desktop dock), and each kind of thing that happens with which of those it uses.
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import type { DockKinds, DockSettings } from "../core/client.ts";
 import type { BadgeKinds, Notice, NotifyKinds, NotifyView } from "../core/shapes.ts";
 import { core, useTopic } from "../core/react.ts";
@@ -28,17 +29,18 @@ const ICON = BETA || window.stillfailDesktop?.beta ? "/icon-beta-192.png" : "/ic
 
 export function NotificationsPage({ back, workspace }: { back: string; workspace: string }) {
   const s = useSettings(workspace);
+  const navigate = useNavigate();
   const [open, setOpen] = useState<Kind | null>(null);
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={back} label={t("web-pages.settings.title")} />
       <header className={pagesCss.pageHead}><div><h1>{t("web-pages.settings.nav.notifications")}</h1></div></header>
-      {s.state === "denied" && <Refused browser={!window.stillfailDesktop} onOpen={s.openSettings} />}
+      {s.state === "denied" && <Refused onGo={() => navigate(`/w/${workspace}/settings/permissions`)} />}
       <Preview s={s} kind={open ?? KINDS_SHOWN.find((k) => s.banner(k)) ?? "wait"} />
       <Section title={t("web-pages.notifications.ways.title")} description={s.note}>
         <div className={css.tiles}>
-          {CAN_NOTIFY && <Tile way="banner" on={s.state === "on"} busy={s.busy} refused={s.state === "denied"} disabled={s.state === "unsupported" || (s.state === "denied" && !s.openSettings)}
-            onChange={(on) => (s.state === "denied" ? s.openSettings?.() : s.setBanner(on))} />}
+          {CAN_NOTIFY && <Tile way="banner" on={s.state === "on"} busy={s.busy} refused={s.state === "denied"} disabled={s.state === "unsupported"}
+            onChange={(on) => (s.state === "denied" ? navigate(`/w/${workspace}/settings/permissions`) : s.setBanner(on))} />}
           <Tile way="badge" on={s.badge.on} onChange={(on) => s.setBadge({ on })} />
           {s.dock && <Tile way="dock" on={s.dock.on} onChange={(on) => s.setDock({ on })} />}
         </div>
@@ -87,13 +89,11 @@ function useSettings(workspace: string) {
   const desktop = !!window.stillfailDesktop;
   const note = state === "unsupported" ? t("web-pages.notifications.unsupported")
     : desktop ? t("web-pages.notifications.noteDevice") : t("web-pages.notifications.noteBrowser");
-  const settings = window.stillfailDesktop?.notify?.settings;
   const failed = (e: unknown) => toast(t("web-pages.notifications.kindsFailed", { error: failure(e) }));
 
   return {
     state: state as NotifyState, busy, note,
-    /** The system's notification settings for the app, where the app can open them (not a browser's). */
-    openSettings: settings ? () => { void settings(); } : null, notices, preview: preview ?? notify?.preview ?? true,
+    notices, preview: preview ?? notify?.preview ?? true,
     count: marks?.badge ?? 0,
     kinds: k, badge: b, dock: dock.settings,
     /** Whether a kind comes as a banner now. */
@@ -140,25 +140,19 @@ function useDock() {
 
 export type Way = "banner" | "badge" | "dock";
 
-/** The system refused them: first on the page, as the system's own settings and other apps say it (a status, and the
- * way to turn it on), the whole row the way to the system's settings where the app can open them (a browser's site
- * settings it cannot: there it says where). What the system does not hold back (the badge, the dock) goes on. */
-export function Refused({ browser, onOpen }: { browser: boolean; onOpen: (() => void) | null }) {
-  const text = (
-    <span className={css.kindText}>
-      <span>{t("web-pages.notifications.permission.title")}</span>
-      <span className={css.muted}>{browser ? t("web-pages.notifications.permission.deniedBrowser", { name: NAME }) : t("web-pages.notifications.permission.denied", { name: NAME })}</span>
-    </span>
-  );
+/** The system refused them: first on the page, the whole row leading to the permissions page (Permissions.tsx), where
+ * each permission says how to give it. What the system does not hold back (the badge, the dock) goes on. */
+export function Refused({ onGo }: { onGo(): void }) {
   return (
-    <div className={`${pagesCss.card} ${css.kinds} ${css.refused}`} role="status">
-      {onOpen ? (
-        <button type="button" className={css.kindHead} onClick={onOpen}>
-          {text}
-          <span className={css.refusedGo}>{t("web-pages.notifications.permission.open")}</span>
-          <ChevronRight size={16} className={css.chevron} aria-hidden="true" />
-        </button>
-      ) : <div className={css.kindHead}>{text}</div>}
+    <div className={`${pagesCss.card} ${css.kinds} ${css.refused}`}>
+      <button type="button" className={css.kindHead} onClick={onGo}>
+        <span className={css.kindText}>
+          <span>{t("web-pages.notifications.permission.title")}</span>
+          <span className={css.muted}>{t("web-pages.notifications.permission.denied")}</span>
+        </span>
+        <span className={css.refusedGo}>{t("web-pages.notifications.permission.open")}</span>
+        <ChevronRight size={16} className={css.chevron} aria-hidden="true" />
+      </button>
     </div>
   );
 }

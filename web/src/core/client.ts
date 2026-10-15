@@ -604,6 +604,10 @@ export interface StillFailDesktop {
     set(on: boolean): Promise<void>;
     /** Opens the system's notification settings for the app; an app from before it has none. */
     settings?(): Promise<void>;
+    /** What the system allows now, told to the core too; an app from before it has none. */
+    check?(): Promise<string | null>;
+    /** Has the system ask the person (macOS: the first notification shown asks); an app from before it has none. */
+    request?(): Promise<void>;
   };
   /**
    * The computer woke from sleep after `away` ms (the window may have stayed visible all along, so the page is not

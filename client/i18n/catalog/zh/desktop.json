@@ -74,6 +74,7 @@
   "desktop.local.busy": "上一个操作还没做完",
   "desktop.local.noService": "这台机器上没有单独安装的 station",
   "desktop.local.byHand": "这个 station 是手动启动的，这里只能停止它",
+  "desktop.notify.allowed": "通知已经打开",
   "desktop.update.available": "有新版本 {version}",
   "desktop.update.availableDetail": "当前是 {current}。更新会下载新版本，然后重启 {app}",
   "desktop.update.checkFailed": "检查更新失败",

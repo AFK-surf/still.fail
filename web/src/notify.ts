@@ -67,6 +67,19 @@ function watch(): void {
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") tellPermission(); });
 }
 
+/** What the system allows, found again now and told to the core (the permissions page asks each second). */
+export function checkPermission(): void {
+  if (DESKTOP) void DESKTOP.check?.().catch(() => undefined);
+  else if (NOTIFIES) tellPermission();
+}
+
+/** Has the system ask the person to allow them (only while it has not been asked). */
+export async function requestPermission(): Promise<void> {
+  if (DESKTOP) await DESKTOP.request?.();
+  else if (NOTIFIES) await Notification.requestPermission();
+  checkPermission();
+}
+
 /** What this browser allows (the site's notification permission), to the core: what every page shows of it. */
 function tellPermission(): void {
   void core().call("notify.permission", { state: Notification.permission }).catch(() => undefined);

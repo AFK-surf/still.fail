@@ -74,6 +74,7 @@
   "desktop.local.busy": "The last action isn't done yet",
   "desktop.local.noService": "No separately installed station on this machine",
   "desktop.local.byHand": "This station was started by hand; it can only be stopped here",
+  "desktop.notify.allowed": "Notifications are on",
   "desktop.update.available": "{version} is available",
   "desktop.update.availableDetail": "You have {current}. Updating downloads it and restarts {app}",
   "desktop.update.checkFailed": "Update check failed",

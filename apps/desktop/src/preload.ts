@@ -78,6 +78,10 @@ const desktop = {
     set: (on: boolean): Promise<void> => ipcRenderer.invoke("notify:set", on),
     /** Opens the system's notification settings for the app. */
     settings: (): Promise<void> => ipcRenderer.invoke("notify:settings"),
+    /** What the system allows now (said to the core too). */
+    check: (): Promise<string | null> => ipcRenderer.invoke("notify:check"),
+    /** Has the system ask the person, when it has not yet. */
+    request: (): Promise<void> => ipcRenderer.invoke("notify:request"),
   },
   /** The menu bar's items for the page's actions (main.ts setMenu, web/src/keymap.ts): their keys and which can be done now, and one chosen. */
   menu: {

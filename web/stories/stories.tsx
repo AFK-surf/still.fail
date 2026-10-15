@@ -7,6 +7,7 @@ import { SystemBubbles } from "../src/SystemBubbles.tsx";
 import { StationUpdate } from "../src/StationUpdate.tsx";
 import { Reader } from "../src/drive/Reader.tsx";
 import { Refused, Tile } from "../src/pages/Notifications.tsx";
+import { PermissionRow } from "../src/pages/Permissions.tsx";
 import { Player } from "../src/drive/Player.tsx";
 import { DrivePreview } from "../src/mobile/Drive.tsx";
 import { useToast } from "../src/toast.tsx";
@@ -18,7 +19,7 @@ import {
   PanelHead, PanelIconButton, PanelRow, PanelText, Pill, RuntimeTags, Section, Segmented, Select, SkeletonRows, StatusDot, StatusText,
   Switch, SwitchRow, Tip,
 } from "../src/ui.tsx";
-import { Archive, Close, Copy, Download, Edit, Folder, Plus, Refresh, Search, Trash } from "../src/icons.tsx";
+import { Archive, Bell, Close, Copy, Download, Edit, Folder, Plus, Refresh, Search, Trash } from "../src/icons.tsx";
 import * as controlsCss from "../src/styles/controls.css.ts";
 import { vars } from "../src/styles/tokens.css.ts";
 import { AT, clips, folder, note, novel, picture } from "./data.ts";
@@ -221,11 +222,20 @@ export const stories: Story[] = [
   {
     id: "settings-notifications-refused", group: "设置", title: "通知 · 系统没允许",
     render: () => stage(<div style={{ display: "grid", gap: 10, padding: 32, maxWidth: 720 }}>
-      <Refused browser={false} onOpen={noop} />
-      <Refused browser onOpen={null} />
+      <Refused onGo={noop} />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
         <Tile way="banner" on={false} refused onChange={noop} /><Tile way="badge" on onChange={noop} /><Tile way="dock" on onChange={noop} />
       </div>
+    </div>),
+  },
+  { id: "settings-permissions", group: "设置", title: "权限", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "权限" }] },
+  {
+    id: "settings-permissions-states", group: "设置", title: "权限 · 各种状态",
+    render: () => stage(<div style={{ display: "grid", gap: 10, padding: 32, maxWidth: 720 }}>
+      {(["granted", "default", "denied", "unknown"] as const).map((state) => (
+        <PermissionRow key={state} icon={Bell} name="通知" purpose="等你决定、出错、有人说话时弹横幅" without="没有它：横幅弹不出来，红点和桌面浮窗照常"
+          where="系统设置 → 通知 → still.fail → 允许通知" state={state} onAllow={noop} onOpen={noop} />
+      ))}
     </div>),
   },
   { id: "settings-changelog", group: "设置", title: "更新日志", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "更新日志" }] },
