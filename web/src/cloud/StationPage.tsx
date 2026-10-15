@@ -2,7 +2,7 @@
 // (StationSettings), everything of it in one place: how it is, what is left of the machine, what runs on it (agents,
 // profiles, connects, folders lent), its software and the machine itself. Elsewhere (no rail, or Station not in it) the
 // settings' list of cards stays, each name opening this page.
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Fragment, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Link, Navigate, NavLink, useParams } from "react-router";
 import { stamp, useStations, type StationView } from "../api.ts";
 import { useGo } from "../go.ts";
@@ -63,11 +63,12 @@ export function StationsNav({ entry, top }: { entry: WorkspaceEntry; top?: React
  * there said too. Nothing in colour but what is off. The phone's Station (mobile/Stations.tsx) has the same rows,
  * `onClick` opening its page there. */
 export function StationRow({ s, to, onClick }: { s: StationView; to?: string | undefined; onClick?: (() => void) | undefined }) {
-  // On the phone (narrower; the Android app's rows the same): only what of the machine runs low, its agents at work in
-  // grey before the dot at the line's very end, and an offline station said as the core sums it up (when it was last
-  // seen) rather than as the machine it was.
+  // On the phone (narrower; the Android app's rows the same): its agents at work in grey before the dot at the line's
+  // very end, an offline station said as the core sums it up (when it was last seen) rather than as the machine it was,
+  // and always three lines: the third (how it is reached, what runs low, a newer version) kept while it is empty, so
+  // no row grows or shrinks as states change (the user: nothing in the list moves).
   const phone = useNavPhone();
-  const meters = (s.online ? s.host?.meters ?? [] : []).filter((m) => !phone || m.level !== "ok");
+  const meters = s.online ? s.host?.meters ?? [] : [];
   const newer = s.online && (s.overview?.updates ?? []).some((v) => v.installed && v.updatable && (v.newer || v.downgrade));
   const dot = <span className={railCss.dot} data-online={s.online || undefined} />;
   return (
@@ -75,12 +76,13 @@ export function StationRow({ s, to, onClick }: { s: StationView; to?: string | u
       mark={s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={16} /> : <WorkspaceMark w={{ name: s.name }} size={16} />}
       end={phone ? <>{s.online && running(s) > 0 && t("web-pages.stations.page.runningShort", { n: running(s) })}{dot}</> : <>{dot}{brief(s)}</>}>
       <NavLine><span className={navFill}>{phone && !s.online ? s.summary : s.host?.identity ?? (s.online ? t("web-pages.stations.connecting") : t("web-pages.stations.offline"))}</span></NavLine>
-      {meters.length > 0 && (
+      {phone && <PhoneThird s={s} newer={newer} />}
+      {!phone && meters.length > 0 && (
         <span className={css.rowMeters}>
           {meters.map((m) => <EdgeChip key={m.label} small bare fill={m.left} level={m.level} mark={m.short} text={`${m.big}${m.unit === "%" ? "%" : m.unit.slice(0, 1)}`} label={`${m.label} ${m.remaining}`} />)}
         </span>
       )}
-      {s.online && (s.net || newer) && (
+      {!phone && s.online && (s.net || newer) && (
         <NavLine>
           <span className={navFill}>
             {s.net && <>{s.net.path}{s.net.rtt && <>{" · "}<span className={css.low} data-level={s.net.rtt.level}>{s.net.rtt.text}</span></>}</>}
@@ -90,6 +92,27 @@ export function StationRow({ s, to, onClick }: { s: StationView; to?: string | u
         </NavLine>
       )}
     </NavItem>
+  );
+}
+
+/** A station's third line on the phone: how it is reached and its round trip, what of the machine runs low (磁盘剩 183 G),
+ * a newer version; only what is off in colour. Its room kept while it says nothing (a line's height whatever). */
+function PhoneThird({ s, newer }: { s: StationView; newer: boolean }) {
+  const net = s.online ? s.net : undefined;
+  const low = (s.online ? s.host?.meters ?? [] : []).filter((m) => m.level !== "ok");
+  const parts: ReactNode[] = [];
+  if (net) {
+    parts.push(net.path);
+    if (net.rtt) parts.push(<span className={css.low} data-level={net.rtt.level}>{net.rtt.text}</span>);
+  }
+  for (const m of low) parts.push(<span className={css.low} data-level={m.level}>{m.short}{m.remaining}</span>);
+  if (newer) parts.push(t("web-pages.stations.page.newer"));
+  return (
+    <NavLine>
+      <span className={navFill}>
+        {parts.length === 0 ? "\u00a0" : parts.map((p, i) => <Fragment key={i}>{i > 0 && " · "}{p}</Fragment>)}
+      </span>
+    </NavLine>
   );
 }
 
