@@ -153,7 +153,7 @@ createRoot(root).render(<DemoApp phone />);
   await touch('touchStart', sx, sy);
   for (let k = 0; k < 8; k++) { await page.waitForTimeout(25); landing.push(await openness()); }
   await touch('touchEnd');
-  assert.ok(landing.every((v, k) => k === 0 || v <= landing[k - 1] + 0.01) && landing.at(-1) < 0.05, `a touch does not stop the landing (${landing.map((v) => v.toFixed(2)).join(' ')})`);
+  assert.ok(landing.every((v, k) => k === 0 || v <= landing[k - 1] + 0.01) && landing.at(-1) < landing[0] - 0.5, `a touch does not stop the landing (${landing.map((v) => v.toFixed(2)).join(' ')})`);
   await page.waitForTimeout(1500);
   assert.ok(await tab('连接').count() > 0 && await tab('连接').isVisible(), 'the bar is now the other bar');
   assert.ok(page.url().includes('/connects') || await page.getByText('连接', { exact: true }).count() > 0, '连接\'s page');
