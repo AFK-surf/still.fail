@@ -123,6 +123,8 @@ export function moveSidebar(change: () => void): void {
     // The sidebar in it (open, reaching 8 into the rail; its width the group's) and its frosted bands' ground.
     ...moves(`.${shellCss.dock} > .${listCss.sidebar}`, ["margin-inline-start", "width"]),
     ...moves(`.${listCss.navTop}, .${listCss.navFoot}`, ["background-color"]),
+    // Its top row, none in the closed bar (under the window's buttons).
+    ...moves(`.${listCss.brand}`, ["height"]),
     // The lists' marks on the rail, and the app's bubbles beside it.
     ...moves(`.${railCss.listMark}`, ["opacity", "transform"]),
     ...moves(`.${bubblesCss.stack}`, ["left", "bottom"]),

@@ -56,7 +56,12 @@ export const brand = style({
     [narrow]: { selectors: { '[data-desktop="inset"] [data-rail] &': { paddingLeft: 86 } } },
     // Beside the rail on the web, nothing is left in it (no name, no buddy, no window to drag): a margin only.
     // Nor in the desktop app full screen, its window's buttons gone, nor on Windows, whose buttons are at the right.
-    [wide]: { selectors: { ':root:is(:not([data-desktop="inset"]), [data-fullscreen]) [data-rail] &': { height: 8 } } },
+    // Closed (shown a while over the page, Rail.tsx peekSidebar), none either: the bar starts under the window's buttons,
+    // its first row level with the rail's first place.
+    [wide]: { selectors: {
+      ':root:is(:not([data-desktop="inset"]), [data-fullscreen]) [data-rail] &': { height: 8 },
+      ':root[data-sidebar="closed"] [data-rail] &': { height: 0 },
+    } },
   },
 });
 /** 云端侧边栏：lockup 在 workspace 切换器上方（always with `brand`, whose desktop top row still wins） */
