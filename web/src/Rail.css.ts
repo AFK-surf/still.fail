@@ -245,6 +245,10 @@ export const downloadQr = style({
 /** A place's + in the rail's menu (Rail.tsx), at its row's end: put in the rail and the rail's change begun. */
 export const menuAdd = style({
   display: "grid", placeItems: "center", width: 24, height: 24, marginLeft: "auto", padding: 0, border: 0, borderRadius: 999,
-  background: "none", color: vars.muted, cursor: "pointer",
-  selectors: { "&:hover": { background: vars.hover, color: vars.text } },
+  background: "none", color: vars.muted, cursor: "pointer", opacity: 0,
+  // Only on its row pointed at (or reached from the keyboard).
+  selectors: {
+    "[data-highlighted] > &, &:focus-visible": { opacity: 1 },
+    "&:hover": { background: vars.hover, color: vars.text },
+  },
 });
