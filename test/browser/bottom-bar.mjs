@@ -82,14 +82,14 @@ createRoot(root).render(<DemoApp phone />);
     return (r.top - g.top) / 56;
   });
   const c0 = await tab('对话').boundingBox(), px = c0.x + c0.width / 2, top = c0.y;
-  const at = async (y) => { await touch('touchMove', px, y); await page.waitForTimeout(16); };
+  const fingerTo = async (y) => { await touch('touchMove', px, y); await page.waitForTimeout(16); };
   await touch('touchStart', px, top + 28);
-  for (let k = 1; k <= 8; k++) await at(top + 28 - (28 + 30) * k / 8); // 30 over the bar's top: over the line
+  for (let k = 1; k <= 8; k++) await fingerTo(top + 28 - (28 + 30) * k / 8); // 30 over the bar's top: over the line
   await page.waitForTimeout(700);
   const up1 = await openness();
   await page.waitForTimeout(300);
   assert.ok(up1 > 0.95 && Math.abs(await openness() - up1) < 0.01, `over the line, held: open, and stays (${up1.toFixed(2)})`);
-  for (let k = 1; k <= 6; k++) await at(top - 30 + 30 * k / 6); // back down to the bar's top: under the line
+  for (let k = 1; k <= 6; k++) await fingerTo(top - 30 + 30 * k / 6); // back down to the bar's top: under the line
   await page.waitForTimeout(700);
   const down1 = await openness();
   assert.ok(down1 < 0.2, `back under the line, still held: closed but for the lean (${down1.toFixed(2)})`);
@@ -97,7 +97,7 @@ createRoot(root).render(<DemoApp phone />);
   await page.waitForTimeout(700);
   assert.ok(await openness() < 0.02, 'let go under the line: closed');
   await touch('touchStart', px, top + 28);
-  for (let k = 1; k <= 8; k++) await at(top + 28 - 58 * k / 8);
+  for (let k = 1; k <= 8; k++) await fingerTo(top + 28 - 58 * k / 8);
   await touch('touchEnd');
   await page.waitForTimeout(900);
   assert.ok(await openness() > 0.97 && await page.locator('[data-bar=scrim]').count(), 'let go over the line: open');
