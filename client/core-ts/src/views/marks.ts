@@ -107,6 +107,9 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
   for (const a of arr(views.ok({ topic: "workspaces" }))) for (const w of arr(get(a, "workspaces"))) if (typeof get(w, "id") === "string") names.set(w.id, str(get(w, "name")) ?? w.id);
   for (const id of workspaceIds(views.ok({ topic: "workspaces" }))) {
     const counts = new Counts();
+    // The same of the lists the rail leads to besides the whole one (我参与的, 监控中).
+    const mine = new Counts();
+    const watching = new Counts();
     // Of those, the ones not looked at since they came to want them: what the badge counts.
     const fresh = new Counts();
     let waiting = 0;
@@ -124,9 +127,14 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
       const tone = waits ? "wait" : rowTone(row, me);
       if (waits) waiting++;
       const seen = get(row, "unread") !== true;
-      if (tone === "alert") counts.alert++;
-      else if (tone === "wait") counts.wait++;
-      else if (tone === "done") counts.unread++;
+      const lists = [counts];
+      if (get(row, "mine") === true) lists.push(mine);
+      if (present.rowWatch(arr(get(row, "agents"))) !== null) lists.push(watching);
+      for (const c of lists) {
+        if (tone === "alert") c.alert++;
+        else if (tone === "wait") c.wait++;
+        else if (tone === "done") c.unread++;
+      }
       if (!seen && (tone === "alert" || tone === "wait" || tone === "done")) fresh[tone === "done" ? "unread" : tone]++;
       else if (get(row, "mine") === true && present.rowState(arr(get(row, "agents"))) === "block") elsewhere++;
       if (tone === "alert" || tone === "wait") {
@@ -165,6 +173,8 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
       mark.tone = tone;
       mark.label = counts.label();
     }
+    if (mine.tone() !== null) mark.mineTone = mine.tone();
+    if (watching.tone() !== null) mark.watchingTone = watching.tone();
     const chat = lastChat(prefs, id);
     if (chat !== null) mark.chat = chat;
     all[id] = mark;

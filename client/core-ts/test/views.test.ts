@@ -414,6 +414,8 @@ test("a_rows_decision_is_its_line_and_mark_and_counts_for_the_workspace", async 
   const m = marks.value;
   assert.equal(m.workspaces.ws.decisions, 2);
   assert.deepEqual([m.workspaces.ws.wait, m.workspaces.ws.alert, m.workspaces.ws.label], [2, 0, "2 个在等你"]);
+  // Of the lists the rail leads to: 我参与的 has the one of theirs waiting, 监控中 nothing.
+  assert.deepEqual([m.workspaces.ws.tone, m.workspaces.ws.mineTone, m.workspaces.ws.watchingTone], ["wait", "wait", undefined]);
   // The list under the badge is the cards waiting for them, no more; the badge counts those not looked at since.
   assert.deepEqual([m.badge, m.badgeCounts, m.workspaces.ws.badge], [1, "attention", 1]);
   assert.deepEqual(m.workspaces.ws.items.map((i: J) => [i.kind, i.session, i.seq, i.stationName, i.seen ?? false]), [["wait", "k1", 5, "studio", false], ["wait", "k3", 4, "studio", true]]);

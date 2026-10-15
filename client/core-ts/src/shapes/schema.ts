@@ -1196,6 +1196,8 @@ export const SHAPES: Record<string, Shape> = {
     ["badge", "u32", { default: true, doc: "What it adds to the badge, as the prefs' `badge` counts: `wait` (decisions), and `alert` (attention, the\ndefault), and `unread` (all)." }],
     ["items", vec("MarkItem"), { default: true, doc: "The chats `alert` and `wait` count, the failed first, the latest first within: what the badge is made of." }],
     ["elsewhere", opt("u32"), { doc: "Chats they take part in whose agent waits for someone else (not counted). Absent for 0." }],
+    ["mineTone", opt("String"), { doc: "`tone` of only the chats they take part in (the 我参与的 list's; the whole list's is `tone`)." }],
+    ["watchingTone", opt("String"), { doc: "`tone` of only the watching chats (the 监控中 list's)." }],
   ], { doc: "A workspace's mark: of the chats its person takes part in, how many want them (blocked or failed) and how many\nhave something unread; of all its chats, how many have a decision waiting (`wait`); its `tone` (alert | wait | done, as a\nchat's mark) and in words, none when it is 0 and 0; the chat last\nopen in it." }),
   MarkItem: struct([
     ["kind", "String", { doc: "alert (an agent of a chat they started went wrong) | wait (a card or need waiting for them)" }],

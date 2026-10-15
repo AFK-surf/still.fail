@@ -3727,6 +3727,10 @@ export interface WorkspaceMark {
 	items?: MarkItem[];
 	/** Chats they take part in whose agent waits for someone else (not counted). Absent for 0. */
 	elsewhere?: number;
+	/** `tone` of only the chats they take part in (the 我参与的 list's; the whole list's is `tone`). */
+	mineTone?: string;
+	/** `tone` of only the watching chats (the 监控中 list's). */
+	watchingTone?: string;
 }
 
 /**

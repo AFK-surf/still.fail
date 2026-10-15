@@ -112,7 +112,10 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   const [mode, setMode] = useSidebarMode();
   const navigate = useNavigate();
   const last = useLastChat(scope, `/w/${scope}/new`) ?? `/w/${scope}`;
-  const waiting = useWorkspaceMarks(scope)?.workspaces[scope]?.decisions ?? 0;
+  const here = useWorkspaceMarks(scope)?.workspaces[scope];
+  const waiting = here?.decisions ?? 0;
+  // What wants the person in each list of chats (the core's marks), on its icon while the sidebar is closed.
+  const tones: Partial<Record<RailItem, string | undefined>> = { chats: here?.tone, mine: here?.mineTone, watching: here?.watchingTone };
   const kept = usePrefs((p) => p.rail);
   const items = railItems(kept);
   const changing = useEditing();
@@ -284,7 +287,10 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
         const Icon = RAIL_ICONS[item]!;
         return (
           <Tip key={item} label={railLabel(item)} side="right">
-            <button type="button" className={css.item} data-on={on(item) || undefined} aria-label={railLabel(item)} onClick={toList(item)}><Icon size={20} /></button>
+            <button type="button" className={css.item} data-on={on(item) || undefined} aria-label={railLabel(item)} onClick={toList(item)}>
+              <Icon size={20} />
+              {tones[item] && <span className={css.listMark}><span className={chatMarkCss.chatMarkInline} data-tone={tones[item]} /></span>}
+            </button>
           </Tip>
         );
       }

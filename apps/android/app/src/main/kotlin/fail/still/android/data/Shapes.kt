@@ -3736,7 +3736,11 @@ data class WorkspaceMark (
 	/// The chats `alert` and `wait` count, the failed first, the latest first within: what the badge is made of.
 	val items: List<MarkItem>? = null,
 	/// Chats they take part in whose agent waits for someone else (not counted). Absent for 0.
-	val elsewhere: UInt? = null
+	val elsewhere: UInt? = null,
+	/// `tone` of only the chats they take part in (the 我参与的 list's; the whole list's is `tone`).
+	val mineTone: String? = null,
+	/// `tone` of only the watching chats (the 监控中 list's).
+	val watchingTone: String? = null
 )
 
 /// What each workspace has waiting for its person, for where workspaces are switched (the `workspaceMarks` view):

@@ -122,6 +122,15 @@ export const count = style({
 });
 
 /**
+ * What wants the person in a list of chats (Rail.tsx), as their rows' marks: on its icon's corner, cut out of the rail's
+ * ground, only while the sidebar is closed (open, the rows show it).
+ */
+export const listMark = style({
+  position: "absolute", top: 3, right: 3, display: "flex", padding: 2, borderRadius: "50%", background: vars.sidebar,
+  selectors: { ':root:is(:not([data-sidebar="closed"]), [data-sidebar-peek]) &': { display: "none" } },
+});
+
+/**
  * The workspaces to switch to (Rail.tsx RailWorkspaces), each on a square as large as the places' ground above them: a
  * letter on one of its own, a mark (an icon, an emoji, a picture a little smaller) on nothing. Under the pointer, the
  * places' ground; the one in view, a short bar at its left and no ground (a ground under a mark greyed an icon's colours
