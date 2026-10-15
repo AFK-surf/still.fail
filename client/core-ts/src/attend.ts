@@ -3,7 +3,7 @@
 // and the workspace the viewer is in. Whether notifications are on, and whether the system was asked, are kept on the
 // device.
 import { Effect } from "effect";
-import type { ChatOf, FocusCall } from "./attend-parse.ts";
+import type { ChatOf, FocusCall, Permission } from "./attend-parse.ts";
 import type { Host } from "./host.ts";
 import type { ClientId } from "./protocol.ts";
 import { t } from "./i18n.ts";
@@ -69,6 +69,8 @@ export class Attend {
   readonly #host: Host;
   #settings: Settings;
   #pushing = false;
+  /// What the system lets this device do, as its app last said (`notify.permission`); not kept: said again each start.
+  #permission: Permission = "unknown";
   readonly #focus = new Map<ClientId, Focus>();
   readonly visits = new Map<string, Visit>();
   readonly #reads = new Map<string, number>();
@@ -95,7 +97,7 @@ export class Attend {
   value(workspace: string | null): J {
     const now = this.#host.nowMs();
     const show = this.#show.filter(([n, at]) => now - at < SHOW_FOR_MS && (workspace === null || of(n) === workspace)).map(([n]) => this.#settings.preview ? structuredClone(n) : { ...structuredClone(n), body: hidden(n.kind) });
-    return { on: this.#settings.on, asked: this.#settings.asked, push: this.#settings.on, kinds: { ...this.#settings.kinds }, preview: this.#settings.preview, show };
+    return { on: this.#settings.on, asked: this.#settings.asked, push: this.#settings.on, kinds: { ...this.#settings.kinds }, preview: this.#settings.preview, permission: this.#permission, show };
   }
 
   /// Changes the settings and keeps them.
@@ -104,6 +106,13 @@ export class Attend {
     this.#settings = s;
     if (!s.on) this.#show = [];
     return Effect.ignore(this.#host.storageSet(KEY, toJsonBytes(s)));
+  }
+
+  /// The app found what the system allows; whether that changed.
+  permit(state: Permission): boolean {
+    if (state === this.#permission) return false;
+    this.#permission = state;
+    return true;
   }
 
   setPushing(on: boolean): void {

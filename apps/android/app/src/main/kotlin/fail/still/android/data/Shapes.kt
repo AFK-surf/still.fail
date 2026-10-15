@@ -3346,6 +3346,9 @@ data class NotifyView (
 	val kinds: NotifyKinds? = null,
 	/// Notices say what was said (on by default); off, only what kind of thing happened.
 	val preview: Boolean? = null,
+	/// Whether the system lets this device show them, as its app found (`notify.permission`): granted | denied |
+	/// default (not asked yet) | unknown (none said, or no way to tell).
+	val permission: String? = null,
 	val show: List<Notice>
 )
 

@@ -8,14 +8,14 @@ import { core, useTopic } from "../core/react.ts";
 import { CAN_NOTIFY, setNotify, useNotifyState, type NotifyState } from "../notify.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
 import { setPrefs } from "../prefs.ts";
-import { Mark } from "../brand.tsx";
 import { ChevronRight } from "../icons.tsx";
 import { MobileBack, Section, Segmented, Switch, SwitchRow } from "../ui.tsx";
 import { failure, useToast } from "../toast.tsx";
+import * as controlsCss from "../styles/controls.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./Notifications.css.ts";
 
-import { NAME } from "../channel.ts";
+import { BETA, NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 
 type Kind = "wait" | "failed" | "done" | "message";
@@ -24,6 +24,8 @@ const NOTIFY_DEFAULT: NotifyKinds = { wait: true, failed: true, done: "away", me
 const BADGE_DEFAULT: BadgeKinds = { on: true, wait: true, failed: true, done: false, message: false };
 const DOCK_DEFAULT: DockKinds = { wait: true, failed: true, done: true, message: true };
 const MAC_APP = !!window.stillfailDesktop && /Mac/.test(navigator.platform);
+/** The app's own icon, as the system shows it beside its notifications and in the Dock. */
+const ICON = BETA || window.stillfailDesktop?.beta ? "/icon-beta-192.png" : "/icon-192.png";
 
 export function NotificationsPage({ back, workspace }: { back: string; workspace: string }) {
   const s = useSettings(workspace);
@@ -35,10 +37,17 @@ export function NotificationsPage({ back, workspace }: { back: string; workspace
       <Preview s={s} kind={open ?? KINDS_SHOWN.find((k) => s.banner(k)) ?? "wait"} />
       <Section title={t("web-pages.notifications.ways.title")} description={s.note}>
         <div className={css.tiles}>
-          {CAN_NOTIFY && <Tile way="banner" on={s.state === "on"} busy={s.busy} disabled={s.state === "denied" || s.state === "unsupported"} onChange={s.setBanner} />}
+          {CAN_NOTIFY && <Tile way="banner" on={s.state === "on"} busy={s.busy} refused={s.state === "denied"} disabled={s.state === "unsupported" || (s.state === "denied" && !s.openSettings)}
+            onChange={(on) => (s.state === "denied" ? s.openSettings?.() : s.setBanner(on))} />}
           <Tile way="badge" on={s.badge.on} onChange={(on) => s.setBadge({ on })} />
           {s.dock && <Tile way="dock" on={s.dock.on} onChange={(on) => s.setDock({ on })} />}
         </div>
+        {s.state === "denied" && (
+          <div className={css.refused} role="status">
+            <span>{window.stillfailDesktop ? t("web-pages.notifications.permission.denied", { name: NAME }) : t("web-pages.notifications.permission.deniedBrowser", { name: NAME })}</span>
+            {s.openSettings && <button type="button" className={`${controlsCss.btn} ${css.refusedAction}`} onClick={s.openSettings}>{t("web-pages.notifications.permission.open")}</button>}
+          </div>
+        )}
       </Section>
       <Section title={t("web-pages.notifications.kinds.title")}>
         <div className={`${pagesCss.card} ${css.kinds}`}>
@@ -83,12 +92,14 @@ function useSettings(workspace: string) {
   const b = { on: kept.on !== false, wait: kept.wait === true, failed: kept.failed === true, done: kept.done === true, message: kept.message === true };
   const desktop = !!window.stillfailDesktop;
   const note = state === "unsupported" ? t("web-pages.notifications.unsupported")
-    : state === "denied" ? t("web-pages.notifications.denied")
-    : desktop ? t("web-pages.notifications.noteDevice", { name: NAME }) : t("web-pages.notifications.noteBrowser");
+    : desktop ? t("web-pages.notifications.noteDevice") : t("web-pages.notifications.noteBrowser");
+  const settings = window.stillfailDesktop?.notify?.settings;
   const failed = (e: unknown) => toast(t("web-pages.notifications.kindsFailed", { error: failure(e) }));
 
   return {
-    state: state as NotifyState, busy, note, notices, preview: preview ?? notify?.preview ?? true,
+    state: state as NotifyState, busy, note,
+    /** The system's notification settings for the app, where the app can open them (not a browser's). */
+    openSettings: settings ? () => { void settings(); } : null, notices, preview: preview ?? notify?.preview ?? true,
     count: marks?.badge ?? 0,
     kinds: k, badge: b, dock: dock.settings,
     /** Whether a kind comes as a banner now. */
@@ -136,14 +147,14 @@ function useDock() {
 type Way = "banner" | "badge" | "dock";
 
 /** One way of telling, as a tile with a picture of it: pressed, on or off. */
-function Tile({ way, on, onChange, busy, disabled }: { way: Way; on: boolean; onChange(on: boolean): void; busy?: boolean; disabled?: boolean }) {
+function Tile({ way, on, onChange, busy, disabled, refused }: { way: Way; on: boolean; onChange(on: boolean): void; busy?: boolean; disabled?: boolean; refused?: boolean }) {
   return (
-    <button type="button" className={css.tile} aria-pressed={on} data-on={on || undefined} disabled={busy || disabled} onClick={() => onChange(!on)}>
+    <button type="button" className={css.tile} aria-pressed={on} data-on={on || undefined} data-refused={refused || undefined} disabled={busy || disabled} onClick={() => onChange(!on)}>
       <span className={css.tilePicture} aria-hidden="true">
         {way === "banner" ? <span className={css.picBanner} /> : way === "badge" ? <span className={css.picApp}><span className={css.picBadge} /></span> : <><span className={css.picEdge} /><span className={css.picEdge} /></>}
       </span>
       <span className={css.tileName}>{t(`web-pages.notifications.ways.${way}`)}</span>
-      <span className={css.tileState}>{on ? t("web-pages.notifications.on") : t("web-pages.notifications.off")}</span>
+      <span className={css.tileState}>{refused ? t("web-pages.notifications.permission.refused") : on ? t("web-pages.notifications.on") : t("web-pages.notifications.off")}</span>
     </button>
   );
 }
@@ -214,7 +225,7 @@ function Preview({ s, kind }: { s: Settings; kind: Kind }) {
   return (
     <div className={css.screen} aria-label={t("web-pages.notifications.previewLabel")} role="img">
       <div className={css.banner} data-off={!banner || undefined}>
-        <Mark size={28} className={css.bannerIcon} />
+        <img src={ICON} alt="" className={css.bannerIcon} />
         <span className={css.bannerText}>
           <span className={css.bannerHead}><b>{shown.title}</b><span className={css.muted}>{t("web-pages.notifications.now")}</span></span>
           <span className={css.bannerBody}>{body}</span>
@@ -229,7 +240,7 @@ function Preview({ s, kind }: { s: Settings; kind: Kind }) {
         <span className={css.appIcon} />
         <span className={css.appIcon} />
         <span className={css.appIconMine}>
-          <Mark size={30} />
+          <img src={ICON} alt="" className={css.appIconImage} />
           {badge && <span className={css.badge}>{s.count > 99 ? "99+" : s.count}</span>}
         </span>
         <span className={css.appIcon} />

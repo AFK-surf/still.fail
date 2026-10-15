@@ -826,13 +826,20 @@ test("notifications_are_on_until_turned_off_and_kept_so_with_no_pushes", async (
   subscribe(core, ui, 1, { topic: "notify" });
   await host.settle();
   apply(host, values);
-  assert.deepEqual(v(values, 1), { on: true, asked: false, push: true, kinds: { wait: true, failed: true, done: "away", message: true }, show: [] });
+  assert.deepEqual(v(values, 1), { on: true, asked: false, push: true, kinds: { wait: true, failed: true, done: "away", message: true }, preview: true, permission: "unknown", show: [] });
+  // What the system allows, as the app finds it: shown to every UI, not kept.
+  call(core, ui, 4, "notify.permission", { state: "denied" });
+  call(core, ui, 5, "notify.set", { preview: false });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).permission, "denied");
+  assert.equal(v(values, 1).preview, false);
   // Off (and asked, as Android moves its old settings over): pushes go, and are not taken while off.
   call(core, ui, 2, "notify.set", { on: false, asked: true });
   call(core, ui, 3, "push.register", { kind: "fcm", token: "t" });
   await host.settle();
   apply(host, values);
-  assert.deepEqual(v(values, 1), { on: false, asked: true, push: false, kinds: { wait: true, failed: true, done: "away", message: true }, show: [] });
+  assert.deepEqual(v(values, 1), { on: false, asked: true, push: false, kinds: { wait: true, failed: true, done: "away", message: true }, preview: false, permission: "denied", show: [] });
   assert.equal(host.stored(PUSH_KEY), undefined);
   // Kept across a restart.
   core.close();
@@ -845,7 +852,8 @@ test("notifications_are_on_until_turned_off_and_kept_so_with_no_pushes", async (
   const emitted = host.takeEmitted().map(([, m]) => m as J);
   const ok = (id: number) => emitted.find((m) => m.id === id && "ok" in m)?.ok;
   assert.deepEqual([ok(2), ok(3)], [{ show: false }, { show: false }]);
-  assert.equal(emitted.find((m) => m.id === 1 && "value" in m).value.on, false);
+  const after = emitted.find((m) => m.id === 1 && "value" in m).value;
+  assert.deepEqual([after.on, after.preview, after.permission], [false, false, "unknown"], "the setting kept, the system's answer asked again");
   again.close();
 });
 

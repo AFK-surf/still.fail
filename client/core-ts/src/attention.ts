@@ -126,6 +126,11 @@ export class Attention implements Owner {
             if (c.on === false && handlers.pushUnregister) yield* handlers.pushUnregister(core, { kind: "pushUnregister" }, progress, at, ctx);
             return attend.value(null);
           });
+        case "permission":
+          return Effect.sync(() => {
+            if (attend.permit(c.state)) store.invalidateAll((t) => t.topic === "notify");
+            return null;
+          });
         case "claim":
           return Effect.sync(() => {
             const show = attend.claim(c.id);

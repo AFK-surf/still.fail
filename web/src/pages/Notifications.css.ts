@@ -20,7 +20,8 @@ export const banner = style({
   transition: `opacity ${vars.dur} ${vars.easeOut}, transform ${vars.dur} ${vars.easeOut}`,
   selectors: { "&[data-off]": { opacity: "0", transform: "translateY(-12px)" } },
 });
-export const bannerIcon = style({ flex: "none" });
+// The app's icon drawn as the system draws it: its square in a rounded corner.
+export const bannerIcon = style({ flex: "none", width: "28px", height: "28px", borderRadius: "22%" });
 export const bannerText = style({ flex: "1", minWidth: "0", display: "grid", gap: "2px", fontSize: vars.textMeta, lineHeight: vars.leadingMeta });
 export const bannerHead = style({ display: "flex", gap: "8px", justifyContent: "space-between", minWidth: "0" });
 export const bannerBody = style({ overflow: "hidden", display: "-webkit-box", WebkitLineClamp: "2", WebkitBoxOrient: "vertical" });
@@ -36,7 +37,8 @@ export const dockBar = style({
   background: `color-mix(in oklab, ${vars.raised} 70%, transparent)`,
 });
 export const appIcon = style({ width: "30px", height: "30px", borderRadius: "8px", background: vars.line });
-export const appIconMine = style({ position: "relative", width: "30px", height: "30px", display: "grid", placeItems: "center" });
+export const appIconMine = style({ position: "relative", width: "30px", height: "30px" });
+export const appIconImage = style({ display: "block", width: "100%", height: "100%", borderRadius: "22%" });
 export const badge = style({
   position: "absolute", top: "-6px", right: "-8px", minWidth: "18px", height: "18px", padding: "0 5px",
   borderRadius: "999px", background: vars.red, color: vars.onPrimary, fontSize: vars.textCaption, lineHeight: "18px", textAlign: "center",
@@ -49,8 +51,14 @@ export const tile = style({
   borderRadius: `calc(18px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: cardGround,
   border: "2px solid transparent", color: vars.text, font: "inherit", fontSize: vars.textUi, cursor: "pointer",
   transition: `border-color ${vars.dur} ${vars.easeOut}`,
-  selectors: { "&[data-on]": { borderColor: vars.accent }, "&:disabled": { cursor: "default", opacity: "0.5" } },
+  selectors: { "&[data-on]": { borderColor: vars.accent }, "&[data-refused]": { borderColor: "transparent" }, "&:disabled": { cursor: "default", opacity: "0.5" } },
 });
+// What the system refused, under the tiles, with the way to its settings.
+export const refused = style({
+  display: "flex", alignItems: "center", gap: "12px", marginTop: "10px", padding: "10px 14px",
+  borderRadius: vars.rField, cornerShape: vars.cornerShape, background: vars.redBg, color: vars.red, fontSize: vars.textUi,
+});
+export const refusedAction = style({ marginLeft: "auto", flex: "none" });
 export const tilePicture = style({
   position: "relative", width: "72px", height: "46px", marginBottom: "4px", overflow: "hidden",
   borderRadius: "8px", background: vars.canvas, border: `1px solid ${vars.line}`,
@@ -64,7 +72,7 @@ export const picEdge = style({
   selectors: { "&:first-child": { top: "13px" }, "&:last-child": { top: "24px" } },
 });
 export const tileName = style({ fontWeight: "500" });
-export const tileState = style({ color: vars.muted, fontSize: vars.textMeta });
+export const tileState = style({ color: vars.muted, fontSize: vars.textMeta, selectors: { [`${tile}[data-refused] &`]: { color: vars.red } } });
 
 // The kinds: rows in a card, each opening to its ways.
 export const kinds = style({ gap: "0", paddingTop: "6px", paddingBottom: "6px" });

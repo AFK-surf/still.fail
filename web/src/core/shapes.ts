@@ -3333,6 +3333,11 @@ export interface NotifyView {
 	kinds?: NotifyKinds;
 	/** Notices say what was said (on by default); off, only what kind of thing happened. */
 	preview?: boolean;
+	/**
+	 * Whether the system lets this device show them, as its app found (`notify.permission`): granted | denied |
+	 * default (not asked yet) | unknown (none said, or no way to tell).
+	 */
+	permission?: string;
 	show: Notice[];
 }
 

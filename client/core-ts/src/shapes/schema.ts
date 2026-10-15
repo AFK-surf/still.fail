@@ -1328,6 +1328,7 @@ export const SHAPES: Record<string, Shape> = {
     ["push", "bool"],
     ["kinds", "NotifyKinds", { default: true }],
     ["preview", "bool", { default: true, doc: "Notices say what was said (on by default); off, only what kind of thing happened." }],
+    ["permission", "String", { default: true, doc: "Whether the system lets this device show them, as its app found (`notify.permission`): granted | denied |\ndefault (not asked yet) | unknown (none said, or no way to tell)." }],
     ["show", vec("Notice")],
   ], { doc: "Notifications on this device (the `notify` topic; `notify.set`, `notice.claim`): whether they are on, whether the\nsystem was asked to allow them, whether the device should hold a push registration, and the notices a page is to\nshow now, each taken by one page (`notice.claim`).", keepNone: true }),
   NotifyKinds: struct([

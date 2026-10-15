@@ -53,13 +53,23 @@ let migrating: Promise<void> | null = null;
 /** The old setting moved into the core (or given up on for now): only then is the core's taken. */
 const migrated = () => (migrating ??= migrate());
 
-/** Follows the core's `notify` while the page runs. */
+/** Follows the core's `notify` while the page runs; a browser tells the core what it allows, now and as it changes. */
 function watch(): void {
-  if (watching || !NOTIFIES) return;
+  if (watching || !CAN_NOTIFY) return;
   watching = true;
   void migrated().then(() => {
     core().subscribe({ topic: "notify" }, (value) => { kept = value as NotifyView; changed(); }, () => {});
   });
+  if (!NOTIFIES) return;
+  tellPermission();
+  // Changed in the site's settings while the page is open (Chrome, Firefox say so), or back from them (the others).
+  void navigator.permissions?.query({ name: "notifications" }).then((status) => { status.onchange = tellPermission; }, () => undefined);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") tellPermission(); });
+}
+
+/** What this browser allows (the site's notification permission), to the core: what every page shows of it. */
+function tellPermission(): void {
+  void core().call("notify.permission", { state: Notification.permission }).catch(() => undefined);
 }
 
 /** The setting as this browser kept it before the core did (off, or nothing), into the core once. */
@@ -73,9 +83,11 @@ async function migrate(): Promise<void> {
 }
 
 function state(): NotifyState {
-  if (DESKTOP) return desktopOn === null ? "unsupported" : desktopOn ? "on" : "off";
+  // What the system allows, as the app found it (the core's; this page's own browser before the core has said).
+  const permission = kept?.permission && kept.permission !== "unknown" ? kept.permission : NOTIFIES ? Notification.permission : "unknown";
+  if (DESKTOP) return desktopOn === null ? "unsupported" : permission === "denied" ? "denied" : desktopOn ? "on" : "off";
   if (!NOTIFIES) return "unsupported";
-  if (Notification.permission === "denied") return "denied";
+  if (permission === "denied") return "denied";
   const on = kept?.on ?? localStorage.getItem(OLD_KEY) !== "off";
   return Notification.permission === "granted" && on ? "on" : "off";
 }
@@ -99,6 +111,7 @@ export async function setNotify(on: boolean): Promise<NotifyState> {
   };
   if (on) {
     const permission = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
+    tellPermission();
     if (permission === "granted") await set(true);
   } else {
     // The core takes this device's pushes off the accounts too.

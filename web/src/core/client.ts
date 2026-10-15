@@ -602,6 +602,8 @@ export interface StillFailDesktop {
   notify?: {
     get(): Promise<boolean | null>;
     set(on: boolean): Promise<void>;
+    /** Opens the system's notification settings for the app; an app from before it has none. */
+    settings?(): Promise<void>;
   };
   /**
    * The computer woke from sleep after `away` ms (the window may have stayed visible all along, so the page is not
