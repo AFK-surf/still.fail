@@ -92,15 +92,15 @@ export const popover = style({
   animation: `${popKeyframes} 140ms ${vars.easeOut}`, cornerShape: vars.cornerShape,
 });
 /**
- * A small panel of words (a card): each block in it stands in by a row's padding (TEXT_IN) and the first and last have
- * room above and below, so its words are on the line a list's rows' words are (PANEL_PAD + TEXT_IN from the edge). What
+ * A small panel of words (a card): each block in it stands in by a row's padding (TEXT_IN), and as much above the first
+ * and under the last: its words as far from every edge (PANEL_PAD + TEXT_IN), on the line a list's rows' words are. What
  * sits at the panel's padding instead (a row, a group of rows, a foot of buttons) is marked `panelEdge`.
  */
 export const panelCard = style({ vars: { "--panel-kind": "card" } });
 export const panelEdge = style({});
 globalStyle(`${panelCard} > :not(${panelEdge})`, { paddingInline: `${TEXT_IN}px` });
-globalStyle(`${panelCard} > :first-child:not(${panelEdge})`, { paddingTop: "6px" });
-globalStyle(`${panelCard} > :last-child:not(${panelEdge})`, { paddingBottom: "6px" });
+globalStyle(`${panelCard} > :first-child:not(${panelEdge})`, { paddingTop: `${TEXT_IN}px` });
+globalStyle(`${panelCard} > :last-child:not(${panelEdge})`, { paddingBottom: `${TEXT_IN}px` });
 export const menuList = style({ minWidth: "180px" });
 export const menuItem = style({
   display: "flex", alignItems: "center", gap: "8px", width: "100%", minHeight: "34px", padding: `7px ${TEXT_IN}px`, lineHeight: "20px",

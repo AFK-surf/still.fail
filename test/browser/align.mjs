@@ -64,8 +64,12 @@ mountDemo(root);
       if (small && cs.getPropertyValue('--panel-kind').trim() === 'card') {
         for (const c of s.children) {
           if (/panelEdge/.test(c.className.toString())) continue;
-          const pl = px(getComputedStyle(c).paddingLeft);
-          if (Math.abs(pl - 10) > 0.5) wrong.push(`${name} › ${c.className.toString().split(' ')[0] || c.tagName}: words in by ${pl}, not 10`);
+          const cc = getComputedStyle(c), who = `${name} › ${c.className.toString().split(' ')[0] || c.tagName}`;
+          const pl = px(cc.paddingLeft);
+          if (Math.abs(pl - 10) > 0.5) wrong.push(`${who}: words in by ${pl}, not 10`);
+          // As far from the top and the foot as from the sides.
+          if (c === s.firstElementChild && Math.abs(px(cc.paddingTop) - 10) > 0.5) wrong.push(`${who}: ${px(cc.paddingTop)} above the words, not 10`);
+          if (c === s.lastElementChild && Math.abs(px(cc.paddingBottom) - 10) > 0.5) wrong.push(`${who}: ${px(cc.paddingBottom)} under the words, not 10`);
         }
       }
       // A row (as wide as the panel's room, at its padding, with words): its words in by a row's padding (10).
@@ -116,6 +120,7 @@ mountDemo(root);
     ['workspace menu', async () => page.locator('[aria-label="新建 workspace、添加账号"]').click()],
     ['rail menu', async () => page.locator('[aria-label="文件"]').first().click({ button: 'right' })],
     ['rail adder', async () => { await page.locator('[aria-label="文件"]').first().click({ button: 'right' }); await page.waitForTimeout(300); await page.getByText('自定义侧边条').click(); }],
+    ['link card', async () => { await page.mouse.move(1, 1); const l = page.locator('main a[href^="http"]').first(); await l.scrollIntoViewIfNeeded(); await l.hover(); await page.waitForTimeout(1200); }],
     ['station card', async () => { await page.mouse.move(1, 1); await page.locator('header').getByText(/Studio|这台机器/).first().hover(); await page.waitForTimeout(900); }],
   ];
   const failures = [];

@@ -12,7 +12,7 @@ export const dot = style({ width: "6px", height: "6px", borderRadius: "50%", bac
 export const popover = style([popover0, panelCard, { display: "flex", flexDirection: "column", gap: "8px", width: "min(288px, calc(100vw - 24px))", boxSizing: "border-box", zIndex: 100, color: vars.text, fontSize: vars.textUi, lineHeight: "19px", outline: "none", animation: "none" }]);
 /** Its words in by a row's padding and a little down (align.ts panelText); its close in the top right corner, at the padding. */
 export const head = style({ display: "flex", alignItems: "flex-start", gap: "8px", paddingLeft: TEXT_IN });
-export const words = style({ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0, flex: 1, paddingTop: "6px", selectors: { [`${head}:last-child &`]: { paddingBottom: "6px" } } });
+export const words = style({ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0, flex: 1, paddingTop: TEXT_IN, selectors: { [`${head}:last-child &`]: { paddingBottom: TEXT_IN } } });
 export const title = style({ display: "flex", alignItems: "baseline", gap: "8px", minWidth: 0 });
 export const name = style({ fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 });
 export const state = style({ flexShrink: 0, fontSize: vars.textMeta, color: vars.accentText, selectors: { '[data-tone="trouble"] &': { color: vars.red } } });
