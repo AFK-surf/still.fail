@@ -6,7 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { SystemBubbles } from "../src/SystemBubbles.tsx";
 import { StationUpdate } from "../src/StationUpdate.tsx";
 import { Reader } from "../src/drive/Reader.tsx";
-import { Refused, Tile } from "../src/pages/Notifications.tsx";
+import { Enable, Tile } from "../src/pages/Notifications.tsx";
 import { PermissionRow } from "../src/pages/Permissions.tsx";
 import { Player } from "../src/drive/Player.tsx";
 import { DrivePreview } from "../src/mobile/Drive.tsx";
@@ -222,7 +222,8 @@ export const stories: Story[] = [
   {
     id: "settings-notifications-refused", group: "设置", title: "通知 · 系统没允许",
     render: () => stage(<div style={{ display: "grid", gap: 10, padding: 32, maxWidth: 720 }}>
-      <Refused onGo={noop} />
+      <Enable denied sample={null} preview />
+      <Enable denied={false} sample={null} preview />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
         <Tile way="banner" on={false} refused onChange={noop} /><Tile way="badge" on onChange={noop} /><Tile way="dock" on onChange={noop} />
       </div>

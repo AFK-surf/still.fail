@@ -6,11 +6,11 @@ import { useNavigate } from "react-router";
 import type { DockKinds, DockSettings } from "../core/client.ts";
 import type { BadgeKinds, Notice, NotifyKinds, NotifyView } from "../core/shapes.ts";
 import { core, useTopic } from "../core/react.ts";
-import { CAN_NOTIFY, setNotify, useNotifyState, type NotifyState } from "../notify.ts";
+import { CAN_NOTIFY, requestPermission, setNotify, useNotifyState, type NotifyState } from "../notify.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
 import { setPrefs } from "../prefs.ts";
 import { ChevronRight } from "../icons.tsx";
-import { MobileBack, Section, Segmented, Switch, SwitchRow } from "../ui.tsx";
+import { Button, MobileBack, Section, Segmented, Switch, SwitchRow } from "../ui.tsx";
 import { failure, useToast } from "../toast.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./Notifications.css.ts";
@@ -35,8 +35,8 @@ export function NotificationsPage({ back, workspace }: { back: string; workspace
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={back} label={t("web-pages.settings.title")} />
       <header className={pagesCss.pageHead}><div><h1>{t("web-pages.settings.nav.notifications")}</h1></div></header>
-      {s.state === "denied" && <Refused onGo={() => navigate(`/w/${workspace}/settings/permissions`)} />}
-      <Preview s={s} kind={open ?? KINDS_SHOWN.find((k) => s.banner(k)) ?? "wait"} />
+      {s.asking ? <Enable denied={s.permission === "denied"} sample={s.notices.at(-1) ?? null} preview={s.preview} />
+        : <Preview s={s} kind={open ?? KINDS_SHOWN.find((k) => s.banner(k)) ?? "wait"} />}
       <Section title={t("web-pages.notifications.ways.title")} description={s.note}>
         <div className={css.tiles}>
           {CAN_NOTIFY && <Tile way="banner" on={s.state === "on"} busy={s.busy} refused={s.state === "denied"} disabled={s.state === "unsupported"}
@@ -95,6 +95,9 @@ function useSettings(workspace: string) {
     state: state as NotifyState, busy, note,
     notices, preview: preview ?? notify?.preview ?? true,
     count: marks?.badge ?? 0,
+    permission: notify?.permission ?? "unknown",
+    /** The system has to allow them first (refused, or not asked yet): the page leads with that, not the preview. */
+    asking: CAN_NOTIFY && (notify?.permission === "denied" || notify?.permission === "default"),
     kinds: k, badge: b, dock: dock.settings,
     /** Whether a kind comes as a banner now. */
     banner: (kind: Kind) => state === "on" && (kind === "done" ? k.done !== "off" : k[kind] !== false),
@@ -140,20 +143,29 @@ function useDock() {
 
 export type Way = "banner" | "badge" | "dock";
 
-/** The system refused them: first on the page, the whole row leading to the permissions page (Permissions.tsx), where
- * each permission says how to give it. What the system does not hold back (the badge, the dock) goes on. */
-export function Refused({ onGo }: { onGo(): void }) {
+/** The system has not allowed them yet (refused, or never asked): in the preview's place, what a banner would be and
+ * the one thing to do for it: ask the system (not asked yet), or its settings (refused; a browser's site settings the
+ * page cannot open, so where they are). */
+export function Enable({ denied, sample, preview }: { denied: boolean; sample: Notice | null; preview: boolean }) {
+  const shown = sample ? { title: sample.title, body: preview ? sample.body : t(`web-pages.notifications.hidden.${sample.kind === "block" ? "wait" : sample.kind}`) } : SAMPLE.wait();
+  const open = window.stillfailDesktop?.notify?.settings;
+  const browser = !window.stillfailDesktop;
   return (
-    <div className={`${pagesCss.card} ${css.kinds} ${css.refused}`}>
-      <button type="button" className={css.kindHead} onClick={onGo}>
-        <span className={css.kindText}>
-          <span>{t("web-pages.notifications.permission.title")}</span>
-          <span className={css.muted}>{t("web-pages.notifications.permission.denied")}</span>
+    <section className={css.enable}>
+      <img src={ICON} alt="" className={css.enableIcon} />
+      <h2 className={css.enableTitle}>{t("web-pages.notifications.enable.title")}</h2>
+      <p className={css.enableText}>{t("web-pages.notifications.enable.text", { name: NAME })}</p>
+      <div className={`${css.banner} ${css.enableSample}`} aria-hidden="true">
+        <img src={ICON} alt="" className={css.bannerIcon} />
+        <span className={css.bannerText}>
+          <span className={css.bannerHead}><b>{shown.title}</b><span className={css.muted}>{t("web-pages.notifications.now")}</span></span>
+          <span className={css.bannerBody}>{shown.body}</span>
         </span>
-        <span className={css.refusedGo}>{t("web-pages.notifications.permission.open")}</span>
-        <ChevronRight size={16} className={css.chevron} aria-hidden="true" />
-      </button>
-    </div>
+      </div>
+      {!denied ? <Button variant="primary" onClick={() => { void requestPermission(); }}>{t("web-pages.notifications.enable.allow")}</Button>
+        : open ? <Button variant="primary" onClick={() => { void open(); }}>{t("web-pages.notifications.enable.open")}</Button> : null}
+      {denied && <p className={css.enablePath}>{browser ? t("web-pages.permissions.where.browser") : /Win/.test(navigator.platform) ? t("web-pages.permissions.where.windows", { name: NAME }) : t("web-pages.permissions.where.mac", { name: NAME })}</p>}
+    </section>
   );
 }
 

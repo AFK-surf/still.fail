@@ -57,9 +57,16 @@ export const tile = style({
   transition: `border-color ${vars.dur} ${vars.easeOut}`,
   selectors: { "&[data-on]": { borderColor: vars.accent }, "&[data-refused]": { borderColor: "transparent" }, "&:disabled": { cursor: "default", opacity: "0.5" } },
 });
-// What the system refused: the page's first card, one row, as a type's; its way on in red (what is wrong is).
-export const refused = style({ marginBottom: "16px" });
-export const refusedGo = style({ flex: "none", color: vars.red, fontSize: vars.textMeta, fontWeight: "500" });
+// The system has not allowed them yet: a settings card in the preview's place, everything centred: the app's icon, what
+// to do and why, a banner as it would come, the one button, and where in the system's settings when refused.
+export const enable = style({
+  ...cardLook, display: "grid", justifyItems: "center", gap: "8px", padding: "32px 24px 24px", marginBottom: "28px", textAlign: "center",
+});
+export const enableIcon = style({ width: "56px", height: "56px", borderRadius: "22%", marginBottom: "6px" });
+export const enableTitle = style({ margin: "0", fontSize: vars.textTitle, lineHeight: vars.leadingTitle, fontWeight: "600" });
+export const enableText = style({ margin: "0", maxWidth: "400px", color: vars.muted, fontSize: vars.textUi, lineHeight: vars.leadingUi });
+export const enableSample = style({ position: "static", width: "min(340px, 100%)", margin: "14px 0 18px", textAlign: "left" });
+export const enablePath = style({ margin: "4px 0 0", color: vars.muted, fontSize: vars.textMeta });
 export const tilePicture = style({
   position: "relative", width: "72px", height: "46px", marginBottom: "4px", overflow: "hidden",
   borderRadius: "8px", background: vars.canvas, border: `1px solid ${vars.line}`,
