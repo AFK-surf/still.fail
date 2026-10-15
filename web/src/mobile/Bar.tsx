@@ -416,8 +416,8 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
           <button type="button" className={css.mBarLing} aria-label={drawn.current?.label ?? t("web-mobile.home.newChat")} data-action={drawn.current?.key}
             style={{ top: rowTop, transform: `translate(-50%, ${cy - DROP / 2}px) scale(${Math.max(0.001, k)})`, opacity: Math.min(1, k * 3), pointerEvents: k > 0.9 && action ? "auto" : "none" }}
             onPointerDown={(e) => e.stopPropagation()} onClick={() => action?.run()}>
-            {/* A new icon for another page's action pops in, the circle staying. */}
-            <span key={drawn.current?.key ?? "ling"} className={css.mBarAction}>{drawn.current && drawn.current.key !== "ling" ? <Plus size={30} /> : <Ling size={40} />}</span>
+            {/* Another icon (令, a ＋) for another page's action pops in, the circle staying; another ＋ is the same icon, still. */}
+            <span key={drawn.current && drawn.current.key !== "ling" ? "plus" : "ling"} className={css.mBarAction}>{drawn.current && drawn.current.key !== "ling" ? <Plus size={30} /> : <Ling size={40} />}</span>
           </button>
           {swapAt && (
             <div className={css.mBarStack} data-bar="stack" style={{ top: clipTop, height: PANEL - clipTop, clipPath: `path("${shape}")` }}>

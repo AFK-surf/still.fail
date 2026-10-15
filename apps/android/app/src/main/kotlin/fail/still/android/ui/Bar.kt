@@ -735,17 +735,18 @@ fun BottomBar(
                     .then(if (actionOn && shown && action != null) Modifier.clickable { action.run() }.semantics { contentDescription = action.label } else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
-                // From one action to another: the icon swaps (a short scale and fade), the circle stays.
+                // From one action to another with another icon (令 and a "+"): the icon swaps (a short scale and fade), the
+                // circle stays. Another "+" (文件's to Profile's) is the same icon: nothing moves.
                 androidx.compose.animation.AnimatedContent(
                     shownAction,
                     transitionSpec = {
                         (androidx.compose.animation.fadeIn(tween(180, 60, Ease.Css)) + androidx.compose.animation.scaleIn(tween(240, 60, Ease.Arrive), 0.5f)) togetherWith
                             (androidx.compose.animation.fadeOut(tween(120, easing = Ease.Css)) + androidx.compose.animation.scaleOut(tween(120, easing = Ease.Css), 0.5f))
                     },
-                    contentKey = { it.key },
+                    contentKey = { it.icon },
                     contentAlignment = Alignment.Center,
                     label = "bar-action-icon",
-                ) { a -> IconIn(a.icon, if (a.icon == Icons.Ling) 40.dp else 30.dp, Color.White) }
+                ) { a -> Box(Modifier.semantics { testTag = "bar-action-icon" }) { IconIn(a.icon, if (a.icon == Icons.Ling) 40.dp else 30.dp, Color.White) } }
             }
             // The ball: under the places (they stay sharp over it), over the action.
             Box(

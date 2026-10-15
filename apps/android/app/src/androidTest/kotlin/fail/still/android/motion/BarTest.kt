@@ -20,6 +20,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -414,6 +415,23 @@ class BarTest {
         open(back, 30)
         back.end()
         rule.onNode(hasTestTag("bar-action") and hasContentDescription("新建对话")).assertExists()
+    }
+
+    /** From one "+" to another (Station's to 文件's): the same icon, which stays as it is, nothing popping in. */
+    @Test fun plusToPlusStill() {
+        val h = launch()
+        rule.onNodeWithTag("bar-place-stations").performClick()
+        h.settle()
+        val r = h.record("bar-plus-to-plus")
+        rule.onNodeWithTag("bar-place-files").performClick()
+        repeat(20) {
+            r.frame()
+            val icons = rule.onAllNodesWithTag("bar-action-icon", useUnmergedTree = true).fetchSemanticsNodes()
+            assertEquals("one icon in the notch", 1, icons.size)
+            assertTrue("the icon at its size (${icons[0].boundsInRoot.width})", icons[0].boundsInRoot.width >= 29 * d)
+        }
+        r.end()
+        rule.onNode(hasTestTag("bar-action") and hasContentDescription("添加文件夹")).assertExists()
     }
 
     /**
