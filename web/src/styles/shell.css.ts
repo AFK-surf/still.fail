@@ -15,6 +15,9 @@ export const shell = style({
         // A workspace's: the rail (Rail.tsx) and the sidebar beside it in one block (dock), which closes to the rail.
         "&[data-rail]": { gridTemplateColumns: "calc(56px + var(--sidebar-w, 240px)) minmax(0, 1fr)" },
         "[data-sidebar=\"closed\"] &[data-rail]": { gridTemplateColumns: "56px minmax(0, 1fr)" },
+        // Folded but shown a while (Rail.tsx peekSidebar): the page makes room for it as when open (moved with it,
+        // brand.tsx moveSidebar), the block still the floating bar's, reaching to the sidebar's width.
+        "[data-sidebar=\"closed\"][data-sidebar-peek] &[data-rail]": { gridTemplateColumns: "calc(56px + var(--sidebar-w, 240px)) minmax(0, 1fr)" },
       },
     },
   },
@@ -61,13 +64,9 @@ export const dock = style({
         // Over the page while it moves too: opened from shown a while, it was under the page (no longer closed) at once,
         // the part reaching over the page cut off until the page had moved out from under it.
         "[data-sidebar-moving] &": { zIndex: 20 },
-        // Folded but shown a while (Rail.tsx peekSidebar): the bar reaching over the page as wide as the rail and the
-        // sidebar (its margin, eased as the bar's others), the page left where it is.
-        '[data-sidebar="closed"][data-sidebar-peek] &': {
-          marginRight: "calc(8px - var(--sidebar-w, 240px))",
-          // Over the page now: a floating panel's shadow.
-          boxShadow: `0 8px 24px ${vars.shadow}`,
-        },
+        // Folded but shown a while (Rail.tsx peekSidebar), the page making room for it (shell, above): a floating
+        // panel's shadow.
+        '[data-sidebar="closed"][data-sidebar-peek] &': { boxShadow: `0 8px 24px ${vars.shadow}` },
       },
     },
   },
