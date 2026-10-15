@@ -56,17 +56,21 @@ mountDemo(root);
       const name = s.className.toString().split(' ')[0];
       const outer = px(cs.borderTopLeftRadius);
       if (Math.abs(outer - (inner + pad)) > 0.5) wrong.push(`${name}: corner ${outer}, not ${inner} + ${pad}`);
+      // What sits at one of its corners (within its padding of two edges that meet): as far from both, and rounded as
+      // the surface's corner less that distance.
       const box = s.getBoundingClientRect(), border = px(cs.borderRightWidth);
-      const right = box.right - border - pad, bottom = box.bottom - border - pad, left = box.left + border + pad, top = box.top + border + pad;
+      const near = pad + 1;
       for (const d of s.querySelectorAll('*')) {
         const r = d.getBoundingClientRect();
         const dr = px(getComputedStyle(d).borderBottomRightRadius);
-        if (!r.width || !dr) continue;
-        const atRight = Math.abs(r.right - right) < 0.75, atBottom = Math.abs(r.bottom - bottom) < 0.75;
-        const atLeft = Math.abs(r.left - left) < 0.75, atTop = Math.abs(r.top - top) < 0.75;
-        if (!((atRight || atLeft) && (atTop || atBottom))) continue;
+        if (!r.width || !r.height || !dr) continue;
+        const gl = r.left - box.left - border, gr = box.right - border - r.right, gt = r.top - box.top - border, gb = box.bottom - border - r.bottom;
+        const side = gl <= near ? gl : gr <= near ? gr : null, end = gt <= near ? gt : gb <= near ? gb : null;
+        if (side === null || end === null || side < -0.5 || end < -0.5) continue;
         corners++;
-        if (Math.abs(dr - inner) > 0.5) wrong.push(`${name} › ${d.className.toString().split(' ')[0] || d.tagName}: corner ${dr} at the surface's corner, not ${inner}`);
+        const who = `${name} › ${d.className.toString().split(' ')[0] || d.tagName}`;
+        if (Math.abs(side - end) > 0.75) wrong.push(`${who}: ${side.toFixed(1)} from the side, ${end.toFixed(1)} from the top or foot`);
+        else if (Math.abs(dr - Math.min(outer - side, r.height / 2, r.width / 2)) > 0.75) wrong.push(`${who}: corner ${dr} ${side.toFixed(1)} in from a corner of ${outer}`);
       }
     }
     return { surfaces, corners, wrong };
@@ -76,6 +80,7 @@ mountDemo(root);
     ['filter menu', async () => page.locator('[aria-label="筛选会话：全部"]').click()],
     ['chat info', async () => page.locator('[aria-label="对话信息"]').click()],
     ['⌘K', async () => { await page.locator('textarea').first().click(); await page.keyboard.press('Meta+k'); }],
+    ['station card', async () => { await page.mouse.move(1, 1); await page.locator('header').getByText(/Studio|这台机器/).first().hover(); await page.waitForTimeout(900); }],
   ];
   const failures = [];
   for (const [name, open] of checks) {

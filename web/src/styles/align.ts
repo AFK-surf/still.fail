@@ -117,3 +117,17 @@ export const columns = {
 export function surfaceVars(pad: number | string, innerCorner: number | string) {
   return { [PAD]: px(pad), [IN]: px(innerCorner) };
 }
+
+/**
+ * A row in a surface reaching `x` into its padding, its words where the surface's other words are (case 2 inside
+ * case 1): as far from the surface's sides as from its top or foot when it is first or last, and its corner the
+ * surface's less that distance (concentric), whatever the surface's padding is.
+ */
+export function edgeRow(x: number | string) {
+  return {
+    ...bleedX(x),
+    borderRadius: `calc(var(${IN}) + ${px(x)})`,
+    cornerShape: innerShape,
+    selectors: { "&:first-child": outsetTop(x), "&:last-child": outsetBottom(x) },
+  } as const;
+}

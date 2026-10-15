@@ -2,7 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { btn } from "../styles/controls.css.ts";
 import { cardLook } from "../styles/pages.css.ts";
-import { bleedX, outsetBottom } from "../styles/align.ts";
+import { edgeRow } from "../styles/align.ts";
 
 export const name = style({
   padding: "0", border: "0", background: "none", font: "inherit", cursor: "pointer",
@@ -88,11 +88,11 @@ export const peekNetHead = style({ display: "flex", gap: "8px", color: vars.text
 /** ↑ and ↓ a row each: arrow, rate, and what went that way pushed to the right. */
 export const peekRates = style({ display: "grid", gridTemplateColumns: "auto 1fr auto", columnGap: "8px", rowGap: "2px", alignItems: "baseline" });
 /** Its settings, as a row that reads as one to click: the words and a chevron, a tint under it on hover. Last in the card
- * (Hover.css.ts `card`, padded 10px 12px), it sits as far from the bottom as from the sides, its corners the card's own
- * shape less that distance: a fixed small radius left a wedge against the card's rounder corner. */
+ * (Hover.css.ts `card`, a surface), it reaches 6 into the card's padding: as far from the foot as from the sides, its
+ * corner the card's less that (align.ts edgeRow), whatever the card's padding is. */
+const peekEdge = edgeRow(6);
 export const peekLink = style({
-  display: "flex", alignItems: "center", justifyContent: "space-between", marginBlock: "0", paddingBlock: "5px", ...bleedX(6),
-  borderRadius: `calc(${vars.rMenu} - 6px)`, cornerShape: vars.cornerShape,
+  ...peekEdge, display: "flex", alignItems: "center", justifyContent: "space-between", paddingBlock: "5px",
   fontSize: vars.textMeta, color: vars.muted, textDecoration: "none",
-  selectors: { "&:hover": { color: vars.text, background: vars.hover }, "&:last-child": outsetBottom(4) },
+  selectors: { ...peekEdge.selectors, "&:hover": { color: vars.text, background: vars.hover } },
 });
