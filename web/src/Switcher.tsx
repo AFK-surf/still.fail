@@ -12,7 +12,7 @@ import { jumpTo } from "./jumpTo.ts";
 import { Mark, useAppUpdate } from "./brand.tsx";
 import { commands, useCommands, type Command } from "./commands.ts";
 import { webUpdates } from "./core/webUpdates.ts";
-import { Archive, Command as CommandIcon, Compose, Download, Edit, File, PanelOpen, Refresh, Settings, Stop, Thread, Web, type IconProps } from "./icons.tsx";
+import { Archive, Command as CommandIcon, Compose, Download, File, PanelOpen, Refresh, Settings, Stop, Thread, Web, type IconProps } from "./icons.tsx";
 import { ACTIONS, availableActions, labelOf, runAction, shortcutOf, useShortcut, type Action } from "./keymap.ts";
 import { ShortcutsDialog } from "./Shortcuts.tsx";
 import { stationBase } from "./station.tsx";
@@ -106,7 +106,7 @@ const UNLISTED: Action[] = ["chat.switch", "panel.close", "nav.back", "nav.forwa
 
 const ACTION_ICON: Partial<Record<Action, ComponentType<IconProps>>> = {
   "chat.new": Compose, "settings": Settings, "shortcuts": CommandIcon, "sidebar.toggle": PanelOpen,
-  "composer.file": File, "chat.stop": Stop, "chat.history": Thread, "chat.jobs": Web, "chat.archive": Archive, "chat.rename": Edit,
+  "composer.file": File, "chat.stop": Stop, "chat.history": Thread, "chat.jobs": Web, "chat.archive": Archive,
 };
 
 const keyCommand = (action: Action): Listed => ({

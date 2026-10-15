@@ -228,7 +228,6 @@
   "web-pages.chat.openPanel": "打开侧栏",
   "web-pages.chat.pickSaved": "已改，下一轮起生效",
   "web-pages.chat.profileDetails": "Profile 详情",
-  "web-pages.chat.rename": "重命名",
   "web-pages.chat.resizePanel": "调整侧栏宽度",
   "web-pages.chat.serviceFailed": "「{name}」没能启动。",
   "web-pages.chat.serviceStopped": "「{name}」已经停了。",

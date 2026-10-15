@@ -304,7 +304,6 @@
   "web-main.keymap.chat.new": "新建对话",
   "web-main.keymap.chat.next": "下一个对话",
   "web-main.keymap.chat.prev": "上一个对话",
-  "web-main.keymap.chat.rename": "重命名对话",
   "web-main.keymap.chat.stop": "停止当前任务",
   "web-main.keymap.chat.switch": "快速切换对话",
   "web-main.keymap.composer.file": "发送文件",

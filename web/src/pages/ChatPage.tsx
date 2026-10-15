@@ -32,13 +32,12 @@ import { ComposerSlot } from "../dock.tsx";
 import { chatOpening, track } from "../telemetry.ts";
 import { useReady, useTopicSelect } from "../core/react.ts";
 import { chatPage, useChatPageActions } from "../chatPage.ts";
-import { failure, useAct, useToast } from "../toast.tsx";
+import { useAct, useToast } from "../toast.tsx";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
 import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, Empty, ICON, IconButton, keptWidth, Loading, MobileBack, ModelLogo, PanelRow, ResizeHandle, SlackLogo, SwitchRow, Time, Tip } from "../ui.tsx";
 import { StatusLine } from "../Status.tsx";
-import { TitleInput, useRenaming } from "../Rename.tsx";
-import * as renameCss from "../Rename.css.ts";
+import { useRenaming } from "../Rename.tsx";
 import * as sessionCss from "../styles/session.css.ts";
 import * as jobsCss from "../styles/jobs.css.ts";
 import * as sidebarCss from "../styles/sidebar.css.ts";
@@ -351,15 +350,6 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   const [askArchive, setAskArchive] = useState(false);
   useShortcut("chat.archive", chatView.value && !chatView.value.archived && !chatView.value.offline && keeper
     ? () => { if (chatView.value?.watch) setAskArchive(true); else void archive(); } : null);
-  // The chat's name, changed where it is shown: double-click it, or F2.
-  const [renaming, setRenaming] = useState(false);
-  const renamable = !!(chatView.value && !chatView.value.archived && !chatView.value.offline && !chatView.value.pending && keeper);
-  useShortcut("chat.rename", renamable && !renaming ? () => setRenaming(true) : null);
-  const rename = (title: string | null) => {
-    setRenaming(false);
-    if (title === null || !keeper) return;
-    api.rename({ thread, session: keeper }, title).catch((error: unknown) => toast(t("web-pages.settings.workspace.renameFailed", { error: failure(error) })));
-  };
   if (!chatView.value) {
     if (chatView.error) return <Empty><p>{t("web-pages.chat.loadFailed", { error: chatView.error.message })}</p></Empty>;
     // Laid out as the chat will be, its composer already in its place: coming from another chat page, the composer
@@ -392,9 +382,8 @@ function ChatScreen({ session: chatSession }: { session: string }) {
         <MobileBack to={link("/chats")} label={t("web-pages.decisions.back")} />
         {/* The chat's title, then who is in it: its people, then its agents (each opens its history). */}
         <div className={conversationCss.pageBarTitle}>
-          {renaming
-            ? <TitleInput value={chat.title} onDone={rename} className={renameCss.titleInputBar} />
-            : <ChatTitle station={station.address} session={keeper} title={chat.title} onRename={renamable ? () => setRenaming(true) : undefined} />}
+          {/* Text only, under the bar's drag in the desktop app: a chat is renamed in the sidebar. */}
+          <ChatTitle station={station.address} session={keeper} title={chat.title} />
           <StationUpdate station={station.address} notice={chat.stationUpdate} />
           {agents.length === 0 && <ChatStation />}
           {chat.people.length > 0 && <PeopleStack people={chat.people} max={5} />}
@@ -942,14 +931,12 @@ function ChatStation() {
  * The chat's name in its bar: while a new one goes (`chat.rename`), that one, a turning ring beside it; its own again if
  * it did not, a red mark there a few seconds saying why.
  */
-function ChatTitle({ station, session, title, onRename }: { station: string; session: string | null; title: string; onRename: (() => void) | undefined }) {
+function ChatTitle({ station, session, title }: { station: string; session: string | null; title: string }) {
   const renamingTo = useRenaming(station, session);
   const renameFailed = useDoingFailed("chat.rename", { station, session: session ?? "" });
   return (
     <>
-      {onRename
-        ? <h1><Tip label={t("web-pages.chat.rename")} shortcut="chat.rename"><button type="button" className={css.titleBtn} onClick={onRename}>{renamingTo ?? title}</button></Tip></h1>
-        : <h1>{renamingTo ?? title}</h1>}
+      <h1>{renamingTo ?? title}</h1>
       <DoingShown state={{ running: renamingTo !== undefined, error: session === null ? undefined : renameFailed }} className={controlsCss.iconSpinner} size={14} label={t("web-pages.settings.stations.renaming")} />
     </>
   );

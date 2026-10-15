@@ -7,7 +7,7 @@ import { panelRow, resizeHandle } from "../ui.css.ts";
 import { sessionMain } from "../styles/jobs.css.ts";
 import { windowsEmoji } from "../StationMark.css.ts";
 import { pageBar } from "../styles/sidebar.css.ts";
-import { TEXT_IN, bleedX, outset, outsetTop } from "../styles/align.ts";
+import { TEXT_IN, outset, outsetTop } from "../styles/align.ts";
 
 export const agentMarkBtn = style({
   display: "inline-grid", padding: "0", border: "0", background: "none", cursor: "pointer",
@@ -247,16 +247,5 @@ globalStyle(`${sidePanel} ${resizeHandle}`, {
   },
 });
 globalStyle(`${sideBar} ${sideTabList}`, { flex: "1", minWidth: "0", height: "auto", padding: "0", borderBottom: "0" });
-/** The chat's title when it can be renamed: pressed, it turns into the field (Rename.css.ts titleInputBar) in the same box. */
-export const titleBtn = style({
-  display: "block", width: "calc(100% + 16px)", height: "28px", marginBlock: "0", paddingBlock: "0", ...bleedX(8), border: "0",
-  borderRadius: `calc(6px * ${vars.cornerScale})`, background: "transparent", color: "inherit", font: "inherit", lineHeight: "28px",
-  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer", cornerShape: vars.cornerShape,
-  transition: `background ${vars.dur} ${vars.easeOut}`,
-  selectors: { "&:hover, &:focus-visible": { background: vars.hover } },
-});
-// The title keeps its width; its button's box reaches 8px past it each side (cut short with it), and a little more room
-// before what follows.
-globalStyle(`${pageBarTitle} h1:has(> ${titleBtn})`, { overflow: "visible", marginRight: "4px" });
 /** Ending its warm process, in its details' line: a link's look, as the profile's beside it. */
 export const evict = style({ padding: "0", border: "0", background: "none", color: "inherit", font: "inherit", cursor: "pointer" });
