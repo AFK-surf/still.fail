@@ -144,7 +144,7 @@ class BarTest {
         ballAtRest(1)
         shot(h, "bar-stations-light")
         // Quick taps one after another, as the ball still moves: it ends where the last one sent it.
-        rule.onNodeWithTag("bar-place-usage").performClick()
+        rule.onNodeWithTag("bar-place-profiles").performClick()
         rule.onNodeWithTag("bar-place-chats").performClick()
         h.settle()
         assertEquals(listOf<Screen>(Screen.Home), h.app.stack)
@@ -223,7 +223,7 @@ class BarTest {
         assertEquals(listOf<Screen>(Screen.Connects()), h.app.stack)
         ballAtRest(0)
         // The bar is the other one now: its places, not the first one's.
-        rule.onNodeWithTag("bar-place-profiles").assertExists()
+        rule.onNodeWithTag("bar-place-usage").assertExists()
         rule.onNodeWithTag("bar-place-chats").assertDoesNotExist()
         shot(h, "bar-connects-light")
     }
@@ -237,14 +237,14 @@ class BarTest {
         shot(h, "bar-settings")
         rule.onNodeWithTag("bar-remove-0-files").performClick()
         h.settle()
-        assertEquals(listOf("chats", "usage", "stations"), h.app.bars.sets[0])
+        assertEquals(listOf("chats", "profiles", "stations"), h.app.bars.sets[0])
         rule.onNodeWithTag("bar-add-0").performClick()
         h.settle()
         shot(h, "bar-settings-picker")
         rule.onAllNodesWithText("文件").filter(hasClickAction()).onFirst().performClick()
         h.settle()
-        assertEquals(listOf("chats", "usage", "stations", "files"), h.app.bars.sets[0])
-        // Held and moved one slot right: 对话 after 用量.
+        assertEquals(listOf("chats", "profiles", "stations", "files"), h.app.bars.sets[0])
+        // Held and moved one slot right: 对话 after Profile.
         val slot = bounds("bar-slot-0-chats")
         rule.onRoot().performTouchInput {
             down(slot.center)
@@ -252,7 +252,7 @@ class BarTest {
             up()
         }
         h.settle()
-        assertEquals(listOf("usage", "chats", "stations", "files"), h.app.bars.sets[0])
+        assertEquals(listOf("profiles", "chats", "stations", "files"), h.app.bars.sets[0])
         // A new bar: empty until a place is picked for it, then kept.
         rule.onNodeWithText("新建一栏").performScrollTo().performClick()
         h.settle()
@@ -270,7 +270,7 @@ class BarTest {
         assertEquals(1L, h.app.bars.current)
         rule.runOnUiThread { h.app.home() }
         h.settle()
-        rule.onNodeWithTag("bar-place-profiles").assertExists()
+        rule.onNodeWithTag("bar-place-usage").assertExists()
         // On Home, which is not in this bar: no ball.
         shot(h, "bar-home-other-bar")
     }

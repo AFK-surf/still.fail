@@ -107,10 +107,10 @@ createRoot(root).render(<DemoApp phone />);
 
   // Settings · 下方栏: its bars as cards.
   await page.evaluate(() => history.length);
-  await tab('Profile').tap();
+  await tab('用量').tap();
   await rest();
   // Back to the chats' bar from the panel, then settings (a page pushed: the bar goes away).
-  const p0 = await tab('Profile').boundingBox();
+  const p0 = await tab('用量').boundingBox();
   await touch('touchStart', p0.x + p0.width / 2, p0.y + p0.height / 2);
   for (let k = 1; k <= 12; k++) { await touch('touchMove', p0.x + p0.width / 2, p0.y - 8 * k); await page.waitForTimeout(16); }
   await page.waitForTimeout(600);
@@ -145,7 +145,7 @@ createRoot(root).render(<DemoApp phone />);
   assert.ok(!(await bar()).away, 'back from it, a place\'s top page again');
   assert.ok(await tab('连接').isVisible(), 'the bar switched all the same');
   // To the chats in the bar it is now, then settings.
-  await stroke('Profile', 'chats');
+  await stroke('用量', 'chats');
   await page.waitForTimeout(1500);
   await tab('对话').waitFor();
   await page.getByRole('button', { name: '设置' }).first().tap();

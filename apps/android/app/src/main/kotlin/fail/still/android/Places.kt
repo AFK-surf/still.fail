@@ -33,7 +33,7 @@ const val BAR_SIZE = 4
 val CHAT_FAMILY = setOf("chats", "decisions", "archive")
 
 /** The bars before the core has said (the core's BARS_DEFAULT). */
-val DEFAULT_BARS = BarPrefs(listOf(listOf("chats", "files", "usage", "stations"), listOf("decisions", "profiles", "connects", "archive")), 0)
+val DEFAULT_BARS = BarPrefs(listOf(listOf("chats", "files", "profiles", "stations"), listOf("decisions", "usage", "connects", "archive")), 0)
 
 /**
  * The bars whole, as the core keeps them (barsOf): each bar one to four known places, none twice; empty bars dropped;

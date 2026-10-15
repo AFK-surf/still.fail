@@ -43,7 +43,7 @@ export function readerOf(v: unknown): Map_ {
 export const BAR_PLACES = ["chats", "decisions", "files", "stations", "profiles", "connects", "usage", "archive"];
 /// At most this many places in one bar.
 export const BAR_SIZE = 4;
-const BARS_DEFAULT = { sets: [["chats", "files", "usage", "stations"], ["decisions", "profiles", "connects", "archive"]], current: 0 };
+const BARS_DEFAULT = { sets: [["chats", "files", "profiles", "stations"], ["decisions", "usage", "connects", "archive"]], current: 0 };
 
 /// A phone's bottom bars as kept, whole: each bar one to four known places, none twice in a bar; at least one bar; the
 /// one in view one of them. What is not that (nothing kept, a place this build does not know) reads as the default or
