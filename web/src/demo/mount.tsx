@@ -40,8 +40,8 @@ function valueOf(topic: Topic): unknown {
     case "overview": return station.overview();
     case "status": return { items: [] };
     case "connection": return { items: [] };
-    // Nothing chosen: the defaults (the core's shape leaves them out).
-    case "prefs": return {};
+    // What the visitor chose (prefs.set, below): the defaults till then (the core's shape leaves them out).
+    case "prefs": return prefs;
     case "doing": return { doing: [] };
     // What is written stays the page's here (draft.ts shows what it did): no core keeps it.
     case "composer": return null;
@@ -114,7 +114,20 @@ function publish() {
 // the chat, and the agent is marked failed — the station's own words (session.rs failure_notice, quota.rs).
 const BANNED = `⚠️ 认证失败，需要管理员检查账号：${station.BAN_DETAIL}`;
 
+/** The prefs as the visitor set them here (the sidebar's list, …), kept for the page's life as a core keeps them. */
+const prefs: Record<string, unknown> = {};
+
 function answer(name: string, params: Record<string, unknown>): unknown {
+  if (name === "prefs.set") {
+    for (const [field, value] of Object.entries(params)) {
+      const before = prefs[field];
+      if (value !== null && typeof value === "object" && !Array.isArray(value) && before && typeof before === "object") prefs[field] = { ...before, ...value };
+      else if (value === null) delete prefs[field];
+      else prefs[field] = value;
+    }
+    setTimeout(publish, 0);
+    return null;
+  }
   if (name === "chat.create" || name === "newChat.create") {
     // 新建对话: made at once, under the key answered; what is sent to it follows.
     const made = newChat(Math.max(...chats.map((c) => c.thread)) + 1, typeof params.model === "string" ? params.model : undefined);
