@@ -131,6 +131,13 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     await alice("PATCH", `/v1/workspaces/${w}/members/${bobSub}`, { role: "admin" });
     await expect(on, { alice: [ws], bob: [list, ws] }, "role");
 
+    // Let into the test channel or out of it: its `/v1/me` changed (user.beta), so its devices read it again.
+    const aliceAdmin = h.as(tokens.alice, "admin");
+    await aliceAdmin("POST", `/v1/admin/users/${bobSub}/beta`, { on: true });
+    await expect(on, { bob: [list] }, "beta on");
+    await aliceAdmin("POST", `/v1/admin/users/${bobSub}/beta`, { on: false });
+    await expect(on, { bob: [list] }, "beta off");
+
     const station = await enrollStation(h, alice, w, "studio");
     await expect(on, { alice: [list, ws], bob: [list, ws] }, "enroll");
 

@@ -923,6 +923,8 @@ export class Directory extends DurableObject<Env> {
   setBeta(sub: string, on: boolean): { sub: string; beta: boolean } {
     if (!this.#one("SELECT 1 AS x FROM users WHERE sub = ?", sub)) fail(404, "user_not_found");
     this.#run("UPDATE users SET beta = ? WHERE sub = ?", on ? 1 : null, sub);
+    // Its `/v1/me` says so: its devices read it again (the 测试版 switch of its stations comes or goes at once).
+    this.#tell([sub], LIST);
     return { sub, beta: on };
   }
 
