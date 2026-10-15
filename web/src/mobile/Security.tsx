@@ -166,15 +166,15 @@ function JoinSheet({ s }: { s: LockView["stations"][number] }) {
   );
 }
 
-/** A device waiting on this one, put up once wherever in the workspace this device is (the core's `prompt`). */
+/** A device waiting on this one, put up wherever in the workspace this device is (the core's `prompt`) and kept up
+ * as pages change, until it is answered or closed by hand (`lock.shown`: then it stays in 设置 › 安全). */
 export function SecurityPrompt() {
   const app = useApp();
   const call = useCall();
   const r = useLock(app.entry.id)?.prompt ?? null;
   useEffect(() => {
     if (!r) return;
-    app.sheet({ height: 0.5, content: () => <ConfirmSheet r={r} /> });
-    void call("lock.shown", { workspace: app.entry.id, device: r.device });
+    app.sheet({ height: 0.5, keep: true, onClose: () => void call("lock.shown", { workspace: app.entry.id, device: r.device }), content: () => <ConfirmSheet r={r} /> });
   }, [r?.device]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }

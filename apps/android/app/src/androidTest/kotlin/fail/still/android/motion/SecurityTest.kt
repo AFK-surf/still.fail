@@ -119,6 +119,11 @@ class SecurityTest {
         rule.onNodeWithText("确认李二的新设备").assertIsDisplayed()
         rule.onNodeWithText("K7F-2QX").assertIsDisplayed()
         picture(h, "security-prompt")
+        rule.runOnIdle { assertTrue(h.fake.calls.none { it.first == "lock.shown" }) }
+        // Closed by hand: said shown, so the core puts it up no more.
+        rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
+        h.settle()
+        rule.onNodeWithText("确认李二的新设备").assertDoesNotExist()
         rule.runOnIdle { assertTrue(h.fake.calls.any { it.first == "lock.shown" && it.second["device"]!!.jsonPrimitive.content == "cc".repeat(32) }) }
     }
 

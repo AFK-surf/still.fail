@@ -2906,7 +2906,7 @@ data class LockView (
 	/// Devices waiting on the viewer: their own, anyone's for owners and admins.
 	val requests: List<LockRequest>,
 	/// The waiting device to put up on its own (a dialog, a sheet) wherever this device is: one it signs for, not
-	/// put up here before (`lock.shown`, said as it is).
+	/// closed here before (`lock.shown`, said as it is closed by hand).
 	val prompt: LockRequest? = null,
 	/// The viewer's own web devices running out soon.
 	val renew: List<LockDevice>,

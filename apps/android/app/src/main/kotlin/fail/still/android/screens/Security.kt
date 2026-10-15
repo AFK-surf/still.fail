@@ -57,6 +57,7 @@ import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -242,8 +243,8 @@ private fun joinSheet(app: AppState, ws: String, station: String, name: String) 
 }
 
 /** A waiting device: confirmed once its code is the one on its screen. */
-private fun confirmSheet(app: AppState, ws: String, r: LockRequest) {
-    app.sheet = SheetSpec(0.55f) {
+private fun confirmSheet(app: AppState, ws: String, r: LockRequest, onClose: (() -> Unit)? = null) {
+    app.sheet = SheetSpec(0.55f, onClose = onClose) {
         val who = r.name.ifEmpty { r.email }
         // Answered on another device: gone here too.
         val lock by rememberTopic<LockView>(app.core, Topics.lock(ws))
@@ -337,12 +338,15 @@ fun LockGate(current: WorkspaceEntry, content: @Composable () -> Unit) {
     val app = LocalApp.current
     val topic by rememberTopic<LockView>(app.core, Topics.lock(current.workspace.id))
     val lock = topic.value
-    // A device waiting on this one, put up once wherever in the workspace this device is (the core's `prompt`).
+    // A device waiting on this one, put up wherever in the workspace this device is (the core's `prompt`), and again
+    // after a page change took the sheet away, until it is answered or closed by hand (`lock.shown`).
     val prompt = lock?.prompt
-    LaunchedEffect(prompt?.device) {
-        if (prompt == null) return@LaunchedEffect
-        confirmSheet(app, current.workspace.id, prompt)
-        runCatching { app.core.call("lock.shown", buildJsonObject { put("workspace", current.workspace.id); put("device", prompt.device) }) }
+    val free = app.sheet == null
+    LaunchedEffect(prompt?.device, free) {
+        if (prompt == null || !free) return@LaunchedEffect
+        confirmSheet(app, current.workspace.id, prompt) {
+            app.scope.launch { runCatching { app.core.call("lock.shown", buildJsonObject { put("workspace", current.workspace.id); put("device", prompt.device) }) } }
+        }
     }
     if (lock?.me?.waiting == true) SecurityWaitingScreen(current, lock) else content()
 }

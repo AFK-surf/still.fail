@@ -62,7 +62,7 @@ type Part = {
   probes: Map<string, "ok" | "old" | "offline">;
   /// The base key of this device (the mesh's), once known.
   base: string | null;
-  /// Waiting devices put up on their own here already: not again this run.
+  /// Waiting devices whose prompt was closed by hand here: not put up again this run.
   shown: Set<string>;
 };
 
@@ -320,7 +320,7 @@ export function lockView(inner: Inner, ws: string): J {
     // What waits on the viewer: devices to confirm (their own, or anyone's for owners and admins), their own web
     // devices running out.
     requests,
-    // The waiting device to put up on its own wherever this device is: one it can confirm, not put up here before.
+    // The waiting device to put up on its own wherever this device is: one it can confirm, not closed here before.
     prompt: locked && signs ? (requests.find((r) => !p.shown.has(r.device)) ?? null) : null,
     renew,
     attention: requests.length + renew.length,
@@ -410,7 +410,7 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         inner.store.invalidate({ topic: "prefs" });
         inner.store.invalidateAll((t) => t.topic === "lock" && t.workspace === c.workspace);
         return null;
-      // A waiting device put up on its own: not again on this device (closed, it stays in 设置 › 安全).
+      // A waiting device's prompt closed by hand: not put up again on this device (it stays in 设置 › 安全).
       case "shown":
         part(inner, c.workspace).shown.add(param("device"));
         inner.store.invalidateAll((t) => t.topic === "lock" && t.workspace === c.workspace);

@@ -89,9 +89,10 @@ import fail.still.android.data.t
 
 /**
  * A sheet: how much of the screen it takes at first, and whether its grabber drags it. `fit`: as tall as what it shows
- * instead (that much, over the navigation bar), for one whose content is a known few lines.
+ * instead (that much, over the navigation bar), for one whose content is a known few lines. `onClose`: told when it is
+ * closed by hand (a tap beside it, dragged down, back), not otherwise.
  */
-class SheetSpec(val height: Float, val draggable: Boolean = false, val fit: Dp? = null, val content: @Composable ColumnScope.() -> Unit)
+class SheetSpec(val height: Float, val draggable: Boolean = false, val fit: Dp? = null, val onClose: (() -> Unit)? = null, val content: @Composable ColumnScope.() -> Unit)
 
 /** Drags the open sheet by its top; `release` has the finger's speed (px/s of height, up is positive). */
 class SheetDrag(val draggable: Boolean, val drag: (Float) -> Unit, val release: (Float) -> Unit, val tap: () -> Unit)

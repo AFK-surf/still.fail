@@ -1,7 +1,7 @@
 // The workspace's security mode (its lock, docs/workspace-lock.md) in the settings: whether it is on, turning it on,
 // the devices waiting to be confirmed, and what a device waiting itself shows. All of it is the core's (`lock`,
 // `lockDraft` topics, `lock.*` calls, client/core-ts/src/views/lock.ts): this only draws.
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Close, Devices, Key, Monitor, Server, ShieldCheck, Web } from "../icons.tsx";
 import { useCall, useTopic } from "../core/react.ts";
@@ -196,20 +196,12 @@ function ConfirmDevice({ entry, request, onClose }: { entry: WorkspaceEntry; req
   );
 }
 
-/** A device waiting on this one, put up once wherever in the workspace this device is (the core's `prompt`): closed,
- * it stays in 设置 › 安全; answered on another device, it goes. */
+/** A device waiting on this one, put up wherever in the workspace this device is (the core's `prompt`) until it is
+ * answered (here or on another device) or closed (`lock.shown`: then it stays in 设置 › 安全). */
 export function SecurityPrompt({ entry }: { entry: WorkspaceEntry }) {
-  const lock = useLock(entry.id);
   const call = useCall();
-  const [shown, setShown] = useState<LockRequest | null>(null);
-  const r = lock?.prompt ?? null;
-  useEffect(() => {
-    if (!r) return;
-    setShown(r);
-    void call("lock.shown", { workspace: entry.id, device: r.device });
-  }, [r?.device]); // eslint-disable-line react-hooks/exhaustive-deps
-  const open = shown && lock?.requests.some((x) => x.device === shown.device) ? shown : null;
-  return <ConfirmDevice entry={entry} request={open} onClose={() => setShown(null)} />;
+  const r = useLock(entry.id)?.prompt ?? null;
+  return <ConfirmDevice entry={entry} request={r} onClose={() => { if (r) void call("lock.shown", { workspace: entry.id, device: r.device }); }} />;
 }
 
 /** 开启安全模式: what it will sign, everything ticked but what is left out. */

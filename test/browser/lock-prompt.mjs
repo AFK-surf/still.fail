@@ -1,7 +1,8 @@
 // A device waiting to be confirmed into the workspace's lock puts itself up on a device that signs for it, wherever that
 // device is (web/src/cloud/Security.tsx SecurityPrompt, web/src/mobile/Security.tsx): a dialog on the desktop, a sheet
-// on a phone, each said put up (`lock.shown`) at once; answered on another device, it goes. Runs the demo's app with
-// its made-up core (a `lock` topic added to it here), without a station or network data.
+// on a phone, kept up as pages change; answered on another device, it goes; closed by hand, it is said shown
+// (`lock.shown`). Runs the demo's app with its made-up core (a `lock` topic added to it here), without a station or
+// network data.
 // PLAYWRIGHT_MODULE selects Playwright; SHOTS optionally keeps pictures.
 import assert from 'node:assert/strict';
 import { mkdir, writeFile, rm } from 'node:fs/promises';
@@ -14,6 +15,7 @@ const html = new URL('../../web/lock-prompt-check.html', import.meta.url);
 // The demo's core, with the workspace's lock (window.__lock) and the lock calls kept (window.__calls).
 const withLock = {
   name: 'demo-lock',
+  enforce: 'pre',
   transform(code, id) {
     if (!id.endsWith('/src/demo/mount.tsx')) return;
     return code
@@ -60,23 +62,32 @@ createRoot(root).render(<DemoApp phone={location.search.includes('phone')} />);
     await page.addInitScript((l) => { globalThis.__lock = l; }, lock([request], request));
     await page.goto(`${base}/lock-prompt-check.html${phone ? '?phone' : ''}`);
     const title = page.getByText('确认李二的新设备', { exact: true });
-    await title.waitFor({ timeout: 30000 });
+    await title.waitFor({ timeout: 30000 }).catch(async (e) => {
+      if (out) await page.screenshot({ path: `${out}/failed-${phone ? 'phone' : 'desktop'}.png` });
+      console.error('core patched:', await page.evaluate(() => typeof globalThis.__publish), 'calls:', JSON.stringify(await page.evaluate(() => globalThis.__calls ?? null)));
+      throw e;
+    });
     await page.waitForTimeout(600);
     assert.ok(await page.getByText('K7F-2QX', { exact: true }).isVisible(), 'it shows the code to compare');
-    const calls = await page.evaluate(() => globalThis.__calls ?? []);
-    assert.deepEqual(calls.filter(([n]) => n === 'lock.shown').map(([, p]) => p.device), [request.device], 'said put up, once');
+    const shown = async () => (await page.evaluate(() => globalThis.__calls ?? [])).filter(([n]) => n === 'lock.shown').map(([, p]) => p.device);
+    assert.deepEqual(await shown(), [], 'not said shown just for coming up');
     if (out) await page.screenshot({ path: `${out}/${phone ? 'phone' : 'desktop'}.png` });
     if (out) {
       await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
       await page.screenshot({ path: `${out}/${phone ? 'phone' : 'desktop'}-dark.png` });
       await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
     }
-    // The core no longer puts it up (it was said shown); confirmed on another device, it is no longer waiting: gone.
-    await page.evaluate((l) => { globalThis.__lock = l; globalThis.__publish(); }, lock([request], null));
-    await page.waitForTimeout(600);
-    assert.ok(await title.isVisible(), 'still up while it waits');
+    // Confirmed on another device: no longer waiting, gone here.
     await page.evaluate((l) => { globalThis.__lock = l; globalThis.__publish(); }, lock([], null));
     await title.waitFor({ state: 'hidden', timeout: 5000 });
+    // Another comes: up again; closed by hand, it is said shown.
+    await page.evaluate((l) => { globalThis.__lock = l; globalThis.__publish(); }, lock([request], request));
+    await title.waitFor({ timeout: 5000 });
+    await page.waitForTimeout(600);
+    if (phone) await page.touchscreen.tap(195, 60);
+    else await page.keyboard.press('Escape');
+    await title.waitFor({ state: 'hidden', timeout: 5000 });
+    assert.deepEqual(await shown(), [request.device], 'closed by hand: said shown');
     assert.deepEqual(errors, []);
     await context.close();
     console.log(`ok: ${phone ? 'phone' : 'desktop'}`);

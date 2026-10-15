@@ -631,7 +631,7 @@ private fun AppContent(app: AppState) {
         LaunchedEffect(app.inFront, lookedAt) { app.core.focus(buildJsonObject { put("visible", app.inFront); put("focused", lookedAt) }) }
         // An image or a video opened, over the pages (it grows out of its thumbnail in the chat); sheets and notes over it.
         fail.still.android.screens.ViewerHost()
-        SheetHost(app.sheet, app.haze) { app.sheet = null }
+        SheetHost(app.sheet, app.haze) { app.sheet?.onClose?.invoke(); app.sheet = null }
         ReaderHost(app.reader) { app.reader = null }
         MenuHost(app.menu) { app.menu = null }
         ToastHost(app.toast) { app.toast = null }

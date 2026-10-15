@@ -27,8 +27,11 @@ import { t } from "../i18n.ts";
 /** The workspace in view and the signed-in account that reaches it. */
 export interface Entry { id: string; name: string; account: Account }
 
-/** A sheet: how much of the screen it takes at first, and whether its grabber drags it. */
-export interface SheetSpec { height: number; draggable?: boolean; content: () => ReactNode }
+/**
+ * A sheet: how much of the screen it takes at first, and whether its grabber drags it. `keep`: it stays as the page
+ * changes under it; `onClose`: told when it is closed by hand (a tap beside it, dragged down, back), not otherwise.
+ */
+export interface SheetSpec { height: number; draggable?: boolean; keep?: boolean; onClose?: () => void; content: () => ReactNode }
 export interface MenuItem { label: string; icon: ReactNode; action: () => void }
 export interface MenuSpec { anchor: DOMRect; items: MenuItem[]; onDismiss?: () => void }
 /** One thing in full over everything: what it is (a line, as the history labels it), then all of it. */
@@ -177,7 +180,7 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
   // Folded below WIDE with them open: they go, and back off their entry of the history with them.
   useEffect(() => { if (!wide) setDrawer(false); }, [wide]);
   // A move to another page leaves what lay over this one.
-  useEffect(() => { setSheet(null); setMenu(null); setReader(null); setDrawer(false); }, [location.key]);
+  useEffect(() => { setSheet((s) => (s?.keep ? s : null)); setMenu(null); setReader(null); setDrawer(false); }, [location.key]);
   const isHome = (p: Page) => p.location.pathname.replace(/\/$/, "") === home;
 
   // The same object while the page in view is: everything under it reads it (every row of a chat), and a new one each
@@ -329,7 +332,7 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
               <div className={css.mRecent}>{drawer && recent()}</div>
             </div>
           </>}
-          <SheetHost spec={sheet} close={() => setSheet(null)} />
+          <SheetHost spec={sheet} close={() => { sheet?.onClose?.(); setSheet(null); }} />
           <ReaderHost spec={reader} close={() => setReader(null)} />
           <MenuHost spec={menu} close={() => { menu?.onDismiss?.(); setMenu(null); }} />
           <ToastHost toast={toast} />
