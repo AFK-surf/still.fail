@@ -42,8 +42,8 @@ export const top = style({
 });
 /**
  * The sidebar's edge (Rail.tsx SidebarEdge), as Cue's rail handle: a strip over the sidebar's block's edge,
- * with a short bar at its middle: shown as the pointer is over the sidebar, longer on the strip, darker pressed; by the
- * closed bar, shown a second as the mouse moves.
+ * with a short bar at its middle: shown only with the pointer on the strip (not anywhere over the sidebar, nor as the
+ * mouse moves), darker pressed.
  */
 export const edge = style({
   // On the sidebar's edge, its bar on the line itself; by the closed bar, between it and the page. Moved with the
@@ -69,7 +69,6 @@ export const edge = style({
       opacity: 0, transition: `opacity 140ms ${vars.easeOut}`,
     },
     "&:not([data-closed]):hover::before, &[data-active]::before": { opacity: 1 },
-    "&[data-moving]::after": { opacity: 1 },
     "&:hover::after, &:focus-visible::after, &[data-active]::after": { height: 48, opacity: 1 },
     "&:active::after, &[data-active]::after": { background: vars.fieldHover },
   },
@@ -80,8 +79,6 @@ globalStyle(`${dock} *`, { "@media": { [wide]: { scrollPaddingRight: 1 } } });
 // Its scrollbar gone as the sidebar starts to close (fixed, the bar's clipping does not cut it), not left a moment over
 // the closing bar or the page.
 globalStyle(`:root[data-sidebar="closed"] ${dock} ${floatingThumb}`, { "@media": { [wide]: { visibility: "hidden" } } });
-// The pointer over the sidebar (its block, before the page): the bar is there to find.
-globalStyle(`${dock}:hover ~ ${edge}::after`, { opacity: 1 });
 export const grow = style({ flex: 1 });
 
 /**

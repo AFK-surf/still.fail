@@ -387,27 +387,14 @@ function widthFor(group: SidebarGroup, glide: boolean): void {
 /**
  * The sidebar's edge, as Cue's rail handle: a strip in the page's gutter by the sidebar's block (shell.css.ts dock), a
  * short bar at its middle shown as the pointer is over the sidebar and longer on the strip itself. Dragged, the sidebar's
- * width; pressed without moving, the sidebar closes, and by the closed bar, opens (its bar shown a second as the mouse
- * moves anywhere). Its words follow the pointer along it.
+ * width; pressed without moving, the sidebar closes, and by the closed bar, opens (its bar shown only with the pointer
+ * on the strip). Its words follow the pointer along it.
  */
 export function SidebarEdge() {
   const sidebar = useSidebarToggle(undefined, { keys: false });
   const tip = usePointerTip();
   const [dragging, setDragging] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!sidebar.closed || !el) return;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const reveal = (e: PointerEvent) => {
-      if (e.pointerType !== "mouse") return;
-      el.dataset.moving = "";
-      clearTimeout(timer);
-      timer = setTimeout(() => { delete el.dataset.moving; }, 1000);
-    };
-    window.addEventListener("pointermove", reveal, { passive: true });
-    return () => { window.removeEventListener("pointermove", reveal); clearTimeout(timer); delete el.dataset.moving; };
-  }, [sidebar.closed]);
   const words = sidebar.closed ? t("web-main.sidebar.open") : `${t("web-pages.workspace.resizeSidebar")} · ${t("web-main.sidebar.close")}`;
   return (
     <>
