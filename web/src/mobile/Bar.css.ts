@@ -1,6 +1,7 @@
 // The bottom bar (Bar.tsx): one frosted glass for the bar and the panel it grows into, the ball over the place in
 // view, 令 in a notch cut into the bar's top. The places' icons are drawn over the ball (frosted, it would blur them).
 import { globalStyle, keyframes, style, type StyleRule } from "@vanilla-extract/css";
+import { vars } from "../styles/tokens.css.ts";
 
 /** Rules for the dark theme: chosen, or the device's while none is chosen (as styles/root.css.ts goes). */
 const dark = (rules: StyleRule): StyleRule => ({
@@ -70,6 +71,33 @@ export const mBarDot = style({
 export const mBarRows = style({ position: "absolute", left: "0", right: "0", zIndex: 6 });
 export const mBarSetRow = style({ position: "absolute", left: "0", right: "0", height: "56px", cursor: "pointer" });
 
+/**
+ * A workspace in the panel's top row: its mark in a rounded square (28) and its name under it, grey; under the finger in
+ * ink; the one in use ringed in the accent, 2 out from it.
+ */
+export const mBarWs = style({
+  position: "absolute", padding: "0", border: "0", background: "none", cursor: "pointer", zIndex: 6,
+  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "4px",
+  color: "var(--m-muted)", transition: "color 300ms",
+  selectors: { "&[data-on]": { color: "var(--m-ink)" } },
+});
+export const mBarWsMark = style({
+  position: "relative", width: "28px", height: "28px", borderRadius: "8px", display: "grid", placeItems: "center",
+  background: "color-mix(in srgb, var(--m-ink) 8%, transparent)", color: "var(--m-ink)", fontSize: vars.textUi, fontWeight: 600,
+  selectors: { [`${mBarWs}[data-here] &`]: { outline: "2px solid var(--m-accent)", outlineOffset: "2px" } },
+});
+globalStyle(`${mBarWsMark} > img`, { width: "28px", height: "28px", borderRadius: "8px", objectFit: "cover" });
+export const mBarWsName = style({
+  maxWidth: "calc(100% - 8px)", fontSize: vars.textCaption, lineHeight: "14px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+});
+/** What another workspace has waiting at its mark's corner: how many want its person (red with any gone wrong), or a dot for unread. */
+export const mBarWsCount = style({
+  position: "absolute", top: "-6px", left: "20px", minWidth: "16px", height: "16px", padding: "0 4px", boxSizing: "border-box",
+  borderRadius: "8px", background: "#3b82f6", color: "#fff", fontSize: vars.textCaption, fontWeight: 600, lineHeight: "16px", textAlign: "center",
+  selectors: { "&[data-tone=\"alert\"]": { background: "#e5484d" } },
+});
+export const mBarWsDot = style({ position: "absolute", top: "-2px", left: "24px", width: "7px", height: "7px", borderRadius: "50%", background: "#3b82f6" });
+
 /** The selection: a frosted ball of 68 under the icons, over 令. */
 export const mBarBall = style([{
   position: "absolute", zIndex: 5, pointerEvents: "none", transition: "opacity 200ms, transform 250ms",
@@ -109,4 +137,6 @@ globalStyle(`${mBarStackIcon} > svg`, { width: "28px", height: "28px" });
 // and 令's own, as strong and after it.
 globalStyle(`${mBarWrap} button${mBarPlace}`, { color: "var(--m-muted)" });
 globalStyle(`${mBarWrap} button${mBarPlace}[data-on]`, { color: "var(--m-ink)" });
+globalStyle(`${mBarWrap} button${mBarWs}`, { color: "var(--m-muted)" });
+globalStyle(`${mBarWrap} button${mBarWs}[data-on]`, { color: "var(--m-ink)" });
 globalStyle(`${mBarWrap} button${mBarLing}`, { color: "#fff" });

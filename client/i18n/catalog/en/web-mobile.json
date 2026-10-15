@@ -668,7 +668,7 @@
     "other": "{n} waiting"
   },
   "web-mobile.bar.title": "Bottom bar",
-  "web-mobile.bar.note": "Keep several bars of up to 4 places; the one in use is at the bottom. With more than one, swipe up on the bar to switch. Hold an icon and move it sideways to reorder.",
+  "web-mobile.bar.note": "Keep several bars of up to 4 places; the one in use is at the bottom. Swipe up on the bar to switch bars or workspaces. Hold an icon and move it sideways to reorder.",
   "web-mobile.bar.nth": "Bar {n}",
   "web-mobile.bar.current": "In use",
   "web-mobile.bar.use": "Use",
@@ -676,6 +676,7 @@
   "web-mobile.bar.add": "Add",
   "web-mobile.bar.addTo": "Add to bar {n}",
   "web-mobile.bar.already": "Already in this bar",
+  "web-mobile.bar.workspace": "Switch to {name}",
   "web-mobile.bar.remove": "Remove {place} from this bar",
   "web-mobile.bar.count": "{n} bars",
   "web-mobile.bar.oneLeft": "With only one bar left, swiping up on the bar does nothing.",

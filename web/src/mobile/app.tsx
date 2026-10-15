@@ -395,7 +395,8 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
             </div>
           </>}
           {/* The bottom bar: under a place's top page; away (down and out) while a page is pushed over it. */}
-          <BottomBar scope={entry.id} place={place} shown={atRoot && !moving} go={app.tab} />
+          <BottomBar scope={entry.id} place={place} shown={atRoot && !moving} go={app.tab}
+            goWorkspace={(id) => app.replace(`/w/${id}${place ? PLACE_PATHS[place] : ""}`)} />
           <SheetHost spec={sheet} close={() => { sheet?.onClose?.(); setSheet(null); }} />
           <ReaderHost spec={reader} close={() => setReader(null)} />
           <MenuHost spec={menu} close={() => { menu?.onDismiss?.(); setMenu(null); }} />
