@@ -82,6 +82,11 @@ export const edge = style({
 });
 // A scrollbar in the sidebar (scrollbars.ts) a pixel clear of the edge's line, not on it.
 globalStyle(`${dock} *`, { "@media": { [wide]: { scrollPaddingRight: 1 } } });
+// In the closed bar (shown a while too) its panes end in its rounded corner: their bars stop short of it (scrollbars.ts
+// endOf), not running out past the curve when scrolled to the end. Its foot band, when there is one, is taller.
+globalStyle(`:root[data-sidebar="closed"] ${dock} *`, {
+  "@media": { [wide]: { scrollPaddingBottom: `max(var(--nav-foot, 0px), calc(9px * ${vars.cornerScale} + 6px))` } },
+});
 // Its scrollbar gone as the sidebar starts to close (fixed, the bar's clipping does not cut it), not left a moment over
 // the closing bar or the page.
 globalStyle(`:root[data-sidebar="closed"]:not([data-sidebar-peek]) ${dock} ${floatingThumb}`, { "@media": { [wide]: { visibility: "hidden" } } });
