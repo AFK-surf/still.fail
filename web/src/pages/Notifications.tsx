@@ -44,7 +44,7 @@ export function NotificationsPage({ back, workspace }: { back: string; workspace
         </div>
         {s.state === "denied" && (
           <div className={css.refused} role="status">
-            <span>{window.stillfailDesktop ? t("web-pages.notifications.permission.denied", { name: NAME }) : t("web-pages.notifications.permission.deniedBrowser", { name: NAME })}</span>
+            <span className={css.refusedText}>{window.stillfailDesktop ? t("web-pages.notifications.permission.denied", { name: NAME }) : t("web-pages.notifications.permission.deniedBrowser", { name: NAME })}</span>
             {s.openSettings && <button type="button" className={`${controlsCss.btn} ${css.refusedAction}`} onClick={s.openSettings}>{t("web-pages.notifications.permission.open")}</button>}
           </div>
         )}

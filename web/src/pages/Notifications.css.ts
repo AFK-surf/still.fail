@@ -1,21 +1,25 @@
 // The notifications page (Notifications.tsx): the preview screen, the ways of telling as tiles, the kinds as rows that
 // open to their ways.
 import { style } from "@vanilla-extract/css";
-import { cardGround } from "../styles/pages.css.ts";
+import { centredY, surfaceCorner } from "../styles/align.ts";
+import { cardLook } from "../styles/pages.css.ts";
 import { vars } from "../styles/tokens.css.ts";
 
 export const muted = style({ color: vars.muted });
 
-// The preview: a small screen with the banner at its top right, the dock on its right edge, the app's icon below.
+// The preview: a small screen with the banner in its top right corner, the dock on its right edge, the app's icon below.
+/** How far the banner stands from the screen's edges, and its corner: the screen's is the two (concentric). */
+const BANNER_IN = 12;
+const BANNER_CORNER = 16;
 export const screen = style({
   position: "relative", height: "200px", marginBottom: "28px", overflow: "hidden",
-  borderRadius: `calc(22px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  borderRadius: surfaceCorner(BANNER_IN, BANNER_CORNER), cornerShape: vars.cornerShape,
   background: `linear-gradient(150deg, ${vars.blueBg}, ${vars.accentBg})`,
 });
 export const banner = style({
-  position: "absolute", top: "14px", right: "14px", width: "min(320px, calc(100% - 28px))",
+  position: "absolute", top: `${BANNER_IN}px`, right: `${BANNER_IN}px`, width: `min(320px, calc(100% - ${2 * BANNER_IN}px))`,
   display: "flex", gap: "10px", alignItems: "flex-start", padding: "10px 12px",
-  borderRadius: `calc(16px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  borderRadius: `${BANNER_CORNER}px`, cornerShape: vars.cornerShape,
   background: vars.raised, boxShadow: `0 1px 6px ${vars.shadow}`,
   transition: `opacity ${vars.dur} ${vars.easeOut}, transform ${vars.dur} ${vars.easeOut}`,
   selectors: { "&[data-off]": { opacity: "0", transform: "translateY(-12px)" } },
@@ -25,7 +29,8 @@ export const bannerIcon = style({ flex: "none", width: "28px", height: "28px", b
 export const bannerText = style({ flex: "1", minWidth: "0", display: "grid", gap: "2px", fontSize: vars.textMeta, lineHeight: vars.leadingMeta });
 export const bannerHead = style({ display: "flex", gap: "8px", justifyContent: "space-between", minWidth: "0" });
 export const bannerBody = style({ overflow: "hidden", display: "-webkit-box", WebkitLineClamp: "2", WebkitBoxOrient: "vertical" });
-export const edge = style({ position: "absolute", right: "0", bottom: "16px", display: "grid", gap: "4px", justifyItems: "end" });
+// Half way down the right edge: clear of the banner above and of the screen's corner below.
+export const edge = style({ position: "absolute", right: "0", ...centredY, top: "60%", display: "grid", gap: "4px", justifyItems: "end" });
 export const edgeItem = style({
   padding: "2px 10px 2px 12px", borderRadius: "999px 0 0 999px", background: vars.raised, color: vars.muted,
   fontSize: vars.textCaption, lineHeight: vars.leadingCaption,
@@ -33,7 +38,7 @@ export const edgeItem = style({
 });
 export const dockBar = style({
   position: "absolute", bottom: "10px", left: "50%", transform: "translateX(-50%)",
-  display: "flex", gap: "10px", padding: "7px 10px", borderRadius: `calc(16px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  display: "flex", gap: "10px", padding: "7px", borderRadius: surfaceCorner(7, 8), cornerShape: vars.cornerShape,
   background: `color-mix(in oklab, ${vars.raised} 70%, transparent)`,
 });
 export const appIcon = style({ width: "30px", height: "30px", borderRadius: "8px", background: vars.line });
@@ -47,24 +52,28 @@ export const badge = style({
 // The ways of telling: tiles side by side, each with its picture.
 export const tiles = style({ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "10px" });
 export const tile = style({
-  display: "grid", justifyItems: "center", gap: "4px", padding: "14px 10px 12px",
-  borderRadius: `calc(18px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: cardGround,
+  ...cardLook, display: "grid", justifyItems: "center", gap: "4px", padding: "14px 10px 12px",
   border: "2px solid transparent", color: vars.text, font: "inherit", fontSize: vars.textUi, cursor: "pointer",
   transition: `border-color ${vars.dur} ${vars.easeOut}`,
   selectors: { "&[data-on]": { borderColor: vars.accent }, "&[data-refused]": { borderColor: "transparent" }, "&:disabled": { cursor: "default", opacity: "0.5" } },
 });
-// What the system refused, under the tiles, with the way to its settings.
+// What the system refused, under the tiles, with the way to its settings: the button in its right corner as far from
+// the edges as it is all round (8), the strip's corner the button's half height and that (concentric); its words
+// indented to the line of a row's (8 + 6 = 14).
+const REFUSED_PAD = 8;
 export const refused = style({
-  display: "flex", alignItems: "center", gap: "12px", marginTop: "10px", padding: "10px 14px",
-  borderRadius: vars.rField, cornerShape: vars.cornerShape, background: vars.redBg, color: vars.red, fontSize: vars.textUi,
+  display: "flex", alignItems: "center", gap: "12px", marginTop: "10px", padding: `${REFUSED_PAD}px`,
+  borderRadius: surfaceCorner(REFUSED_PAD, 18), background: vars.redBg, color: vars.red, fontSize: vars.textUi,
 });
-export const refusedAction = style({ marginLeft: "auto", flex: "none" });
+export const refusedText = style({ flex: "1", minWidth: "0", paddingInlineStart: "6px" });
+export const refusedAction = style({ flex: "none" });
 export const tilePicture = style({
   position: "relative", width: "72px", height: "46px", marginBottom: "4px", overflow: "hidden",
   borderRadius: "8px", background: vars.canvas, border: `1px solid ${vars.line}`,
 });
 const shape = { position: "absolute", display: "block", background: vars.lineStrong } as const;
-export const picBanner = style({ ...shape, top: "5px", right: "5px", width: "38px", height: "11px", borderRadius: "4px" });
+// In the picture's top right corner: as far from both edges, its corner the picture's less that (8 − 5).
+export const picBanner = style({ ...shape, top: "5px", right: "5px", width: "38px", height: "11px", borderRadius: "3px" });
 export const picApp = style({ ...shape, bottom: "5px", left: "26px", width: "18px", height: "18px", borderRadius: "5px", background: vars.accent });
 export const picBadge = style({ position: "absolute", top: "-4px", right: "-5px", width: "9px", height: "9px", borderRadius: "50%", background: vars.red });
 export const picEdge = style({
@@ -87,6 +96,7 @@ export const chevron = style({
   flex: "none", color: vars.muted, transition: `transform ${vars.dur} ${vars.easeOut}`,
   selectors: { [`${kind}[data-open] &`]: { transform: "rotate(90deg)" } },
 });
-export const kindWays = style({ display: "grid", gap: "4px", padding: "0 0 12px 14px" });
+// Its switches end as far from the card's edge below as from its side (the card's 6 and these 14 make its 20).
+export const kindWays = style({ display: "grid", gap: "4px", padding: "0 0 14px 14px" });
 export const wayRow = style({ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", minHeight: "32px", fontSize: vars.textUi, cursor: "pointer" });
 export const sound = style({ margin: "0", color: vars.muted, fontSize: vars.textMeta });
