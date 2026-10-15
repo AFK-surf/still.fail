@@ -20,8 +20,7 @@ import * as nav from "./Sidebar.css.ts";
 import * as css from "./ProfilesNav.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as accountsCss from "./pages/Accounts.css.ts";
-import { usePrefs } from "./prefs.ts";
-import { railItems } from "./Rail.tsx";
+import { useRailItems } from "./Rail.tsx";
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
 
@@ -29,7 +28,7 @@ const WIDE = "(min-width: 701px)";
 
 /** Whether the profiles have this sidebar: Profile in the rail, on a wide screen (on a narrow one the list is a page). */
 export function useProfilesSidebar(): boolean {
-  const railed = railItems(usePrefs((p) => p.rail)).includes("profiles");
+  const railed = useRailItems().includes("profiles");
   const wide = useSyncExternalStore((f) => {
     const query = window.matchMedia(WIDE);
     query.addEventListener("change", f);

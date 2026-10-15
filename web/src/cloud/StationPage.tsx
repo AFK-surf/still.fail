@@ -10,8 +10,7 @@ import { EdgeChip, MeterDials } from "../components.tsx";
 import { RetryPill } from "../Connection.tsx";
 import { drivePath } from "../drive/useDrive.ts";
 import { ChevronRight, Folder, Plus } from "../icons.tsx";
-import { usePrefs } from "../prefs.ts";
-import { railItems } from "../Rail.tsx";
+import { useRailItems } from "../Rail.tsx";
 import { stationBase } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { same } from "../stationPick.ts";
@@ -35,7 +34,7 @@ const WIDE = typeof window === "undefined" ? null : window.matchMedia("(min-widt
 
 /** Whether the stations have the sidebar of their own: Station in the rail, and the rail there (a wide screen). */
 export function useStationsSide(): boolean {
-  const railed = railItems(usePrefs((p) => p.rail)).includes("stations");
+  const railed = useRailItems().includes("stations");
   const wide = useSyncExternalStore((f) => { WIDE?.addEventListener("change", f); return () => WIDE?.removeEventListener("change", f); }, () => WIDE?.matches ?? true, () => true);
   return railed && wide;
 }

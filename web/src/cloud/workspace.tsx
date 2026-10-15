@@ -19,9 +19,8 @@ import { ConnectPage } from "../pages/Connect.tsx";
 import { DriveHome, DrivePage, useAddFolder, DrivePlayPage, DriveReadPage } from "../pages/Drive.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ChatList, StationTrouble, useGlassBands } from "../Sidebar.tsx";
-import { Rail, SidebarEdge, placeOf, railItems, type RailItem } from "../Rail.tsx";
+import { Rail, SidebarEdge, placeOf, useRailItems, type RailItem } from "../Rail.tsx";
 import { SystemBubbles } from "../SystemBubbles.tsx";
-import { usePrefs } from "../prefs.ts";
 import * as railCss from "../Rail.css.ts";
 import { drivePath } from "../drive/useDrive.ts";
 import { Folder } from "../icons.tsx";
@@ -92,7 +91,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
   // Settings, a connect or a station's runtime accounts: the sidebar becomes the settings menu.
   // A place in the rail (Station, Profile, 连接, 用量) is a page of its own beside the chats, not one of the settings: those
   // left out of it are reached in the settings, and are among them there.
-  const railed = railItems(usePrefs((p) => p.rail));
+  const railed = useRailItems();
   const wide = useWide();
   const place = placeOf(path);
   const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path)
@@ -316,13 +315,13 @@ const WorkspaceSidebar = memo(function WorkspaceSidebar({ entry }: { entry: Work
 
 /** 待处理 under 新建对话; with it in the rail (Rail.tsx), only on a narrow screen (no rail there). */
 function SidebarTodo({ scope }: { scope: string }) {
-  const railed = railItems(usePrefs((p) => p.rail)).includes("attention");
+  const railed = useRailItems().includes("attention");
   return <div className={railed ? `${nav.navTodo} ${railCss.narrowOnly}` : nav.navTodo}><AttentionEntry scope={scope} /></div>;
 }
 
 /** Under the sidebar's lists: workspace controls, and what wants the viewer (奏 among it). */
 function WorkspaceSidebarFooter({ entry }: { entry: WorkspaceEntry }) {
-  const railed = railItems(usePrefs((p) => p.rail)).includes("attention");
+  const railed = useRailItems().includes("attention");
   return (
       <div className={nav.navFoot}>
         {/* Beside the rail the app's own news is its bubbles (SystemBubbles.tsx); on a narrow screen, here. */}

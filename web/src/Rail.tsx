@@ -7,7 +7,8 @@
 // 连接, 用量; at its foot every workspace to switch to (each with what waits in it; a ＋ over them, as the pointer comes,
 // for making one, another account, invitations) and under them the settings, which are not among what is chosen. It is
 // changed where it is: its menu's 自定义侧边条 (or 外观's) has its places dragged up and down (any time, held with ⌘), taken out with their −,
-// added from a panel beside it by kind; a place's own menu takes it out. Station, 连接 and 用量 in it are pages of their
+// added from a panel beside it by kind; a place's own menu takes it out. Its menu goes to those left out too, the one in
+// view shown at the foot of its places while it is (useRailItems). Station, 连接 and 用量 in it are pages of their
 // own beside the chats, Profile its list in the sidebar (ProfilesNav.tsx) and the one picked beside; left out of it,
 // they are among the settings. The sidebar beside shows the chats (or 奏, one of their lists), the folders the stations
 // lend (FilesNav, cloud/workspace.tsx), the profiles or the settings; coming to the last three with it closed opens it.
@@ -42,11 +43,10 @@ export type RailItem = (typeof RAIL_ITEMS)[number];
 /** What it shows when none was chosen. */
 export const RAIL_DEFAULT: readonly RailItem[] = ["attention", "chats", "files", "stations", "profiles", "connects", "usage"];
 
-/** What the rail shows, in its order: as kept (what this build does not know left out), the chats always among them. */
+/** What the rail shows, in its order: as kept (what this build does not know left out). */
 export function railItems(kept: readonly string[] | null | undefined): RailItem[] {
   if (!kept) return [...RAIL_DEFAULT];
-  const items = [...new Set(kept.filter((k): k is RailItem => (RAIL_ITEMS as readonly string[]).includes(k)))];
-  return items.includes("chats") ? items : ["chats", ...items];
+  return [...new Set(kept.filter((k): k is RailItem => (RAIL_ITEMS as readonly string[]).includes(k)))];
 }
 
 /** A place's name, as the rail's tip and the settings say it. */
@@ -91,7 +91,7 @@ const LISTS: Partial<Record<RailItem, SidebarMode>> = { chats: "all", mine: "min
 /** What can be put in the rail, by its kind, as the panel that adds them groups them. */
 const KINDS: { title: string; items: RailItem[] }[] = [
   { title: "web-main.rail.kind.places", items: ["files", "stations", "profiles", "connects", "usage"] },
-  { title: "web-main.rail.kind.lists", items: ["mine", "watching", "archive", "decisions"] },
+  { title: "web-main.rail.kind.lists", items: ["chats", "mine", "watching", "archive", "decisions"] },
   { title: "web-main.rail.kind.attention", items: ["attention"] },
 ];
 
@@ -106,6 +106,29 @@ function useEditing(): boolean {
   return useSyncExternalStore((f) => { editors.add(f); return () => editors.delete(f); }, () => editing, () => false);
 }
 
+/**
+ * A place left out of the rail but in view, shown at the foot of its places as one of them until the page goes elsewhere:
+ * picked from the rail's menu, or (a list of chats, 奏, the archive, the files) come to some other way. The page's, not
+ * kept.
+ */
+let extra: RailItem | null = null;
+const extraWatchers = new Set<() => void>();
+function setExtra(item: RailItem | null): void {
+  if (extra === item) return;
+  extra = item;
+  for (const f of extraWatchers) f();
+}
+function useExtra(): RailItem | null {
+  return useSyncExternalStore((f) => { extraWatchers.add(f); return () => extraWatchers.delete(f); }, () => extra, () => null);
+}
+
+/** What the rail has now, as the pages in it go by: the places kept, and the one left out of it in view. */
+export function useRailItems(): RailItem[] {
+  const items = railItems(usePrefs((p) => p.rail));
+  const shown = useExtra();
+  return shown && !items.includes(shown) ? [...items, shown] : items;
+}
+
 export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode }) {
   const location = useLocation();
   const place = placeOf(location.pathname);
@@ -117,7 +140,10 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   // What wants the person in each list of chats (the core's marks), on its icon while the sidebar is closed.
   const tones: Partial<Record<RailItem, string | undefined>> = { chats: here?.tone, mine: here?.mineTone, watching: here?.watchingTone };
   const kept = usePrefs((p) => p.rail);
+  // The places kept (what is changed), and with them the one left out in view (what the pages go by).
   const items = railItems(kept);
+  const railed = useRailItems();
+  const added = railed.find((i) => !items.includes(i)) ?? null;
   const changing = useEditing();
   // Dragged in the rail: the order as it would be let go of now (and, let go of, until the kept order is it: no frame of
   // the old one between).
@@ -223,11 +249,11 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   // The place's sidebar as its tab was left: open, or folded (shown a while over the page as its tab is pressed or
   // pointed at, then folded again: peekSidebar). A page in the rail with none of its own (连接, 用量) or the archive has it
   // closed: the page the whole width. Only on a wide screen: on a narrow one the sidebar is a page of its own.
-  const own = place === "settings" || place === "files" || place === "stations" || place === "profiles" || place === "chats" || !items.includes(place as RailItem);
+  const own = place === "settings" || place === "files" || place === "stations" || place === "profiles" || place === "chats" || !railed.includes(place as RailItem);
   // Which sidebar it is, each as wide as it was made and open or folded as it was left.
-  const group: SidebarGroup = place === "files" ? "files" : place === "profiles" && items.includes("profiles") ? "profiles"
-    : place === "stations" && items.includes("stations") ? "stations"
-    : place === "chats" || place === "archive" || items.includes(place as RailItem) ? "chats" : "settings";
+  const group: SidebarGroup = place === "files" ? "files" : place === "profiles" && railed.includes("profiles") ? "profiles"
+    : place === "stations" && railed.includes("stations") ? "stations"
+    : place === "chats" || place === "archive" || railed.includes(place as RailItem) ? "chats" : "settings";
   const now = useRef({ own, group });
   now.current = { own, group };
   useEffect(() => {
@@ -266,13 +292,38 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   const settings = `/w/${scope}/settings`;
   // The settings lit (in them, or a place left out of the rail), pressed again, go back to where they were come to from:
   // the page last shown with them unlit, the last chat when the settings were where the page was opened.
-  const inSettings = place === "settings" || (place !== "chats" && !items.includes(place as RailItem));
+  const inSettings = place === "settings" || (place !== "chats" && !railed.includes(place as RailItem));
   const before = useRef<string | null>(null);
   useEffect(() => { if (!inSettings) before.current = location.pathname + location.search; }, [inSettings, location.pathname, location.search]);
   // A list of chats lit while the sidebar shows it; 对话 for one not in the rail.
-  const shownList = (Object.keys(LISTS) as RailItem[]).find((i) => LISTS[i] === mode && items.includes(i)) ?? "chats";
+  const shownList = (Object.keys(LISTS) as RailItem[]).find((i) => LISTS[i] === mode && railed.includes(i)) ?? "chats";
   const on = (item: RailItem) => LISTS[item] ? place === "chats" && shownList === item : place === item;
   const toList = (item: RailItem) => () => { setMode(LISTS[item]!); if (place !== "chats") navigate(last); revealPressed(); };
+  // A place left out of the rail in view: a list of chats or 奏 shown, the archive, the files. Station, Profile, 连接 and
+  // 用量 left out are among the settings, so only as picked from the menu (go); gone once the page is elsewhere.
+  const inView: RailItem | null = place === "chats" ? (Object.keys(LISTS) as RailItem[]).find((i) => LISTS[i] === mode) ?? null
+    : place === "archive" || place === "files" ? place : null;
+  const at = `${place} ${mode}`;
+  const wasAt = useRef(at);
+  useEffect(() => {
+    const moved = wasAt.current !== at;
+    wasAt.current = at;
+    if (inView && !items.includes(inView)) setExtra(inView);
+    else if (moved && extra && !(LISTS[extra] ? place === "chats" && mode === LISTS[extra] : place === extra)) setExtra(null);
+  }, [at, inView, items.join()]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Picked from the rail's menu, one left out of it: there, and it at the rail's foot while it is.
+  const go = (item: RailItem) => {
+    setExtra(item);
+    switch (item) {
+      case "chats": case "mine": case "watching": return toList(item)();
+      case "decisions": setMode("decisions"); navigate(`/w/${scope}/decisions`); return revealPressed();
+      case "archive": case "files": return navigate(`/w/${scope}/${item}`);
+      case "stations": case "profiles": case "connects": case "usage": return navigate(`${settings}/${item}`);
+      case "attention": return;
+    }
+  };
+  // What the menu offers to go to: what is left out of the rail, but the attention (a panel, not a place).
+  const away = RAIL_ITEMS.filter((i) => !items.includes(i) && i !== "attention" && i !== added);
   const link = (item: RailItem, to: string) => {
     const Icon = RAIL_ICONS[item]!;
     return (
@@ -333,16 +384,16 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
         <div key={item} ref={(el) => { if (el) slots.current.set(item, el); else slots.current.delete(item); }} className={css.editing}
           data-dragged={dragged?.item === item || undefined} onPointerDown={drag(item)} title={railLabel(item)}>
           <div className={css.still}>{drawn(item)}</div>
-          {item !== "chats" && (
-            <button type="button" className={css.remove} aria-label={t("web-main.rail.remove", { name: railLabel(item) })}
-              onPointerDown={(e) => e.stopPropagation()} onClick={() => keep(items.filter((i) => i !== item))}><Minus size={12} strokeWidth={2.5} /></button>
-          )}
+          <button type="button" className={css.remove} aria-label={t("web-main.rail.remove", { name: railLabel(item) })}
+            onPointerDown={(e) => e.stopPropagation()} onClick={() => keep(items.filter((i) => i !== item))}><Minus size={12} strokeWidth={2.5} /></button>
         </div>
       ) : (
         <div key={item} ref={(el) => { if (el) slots.current.set(item, el); else slots.current.delete(item); }} data-rail-item={item}
           className={css.slot} data-dragged={dragged?.item === item || undefined} onPointerDown={drag(item)}
           onDragStart={(e) => { if (e.metaKey) e.preventDefault(); }}>{drawn(item)}</div>
       ))}
+      {/* Left out of it but in view: at the foot of the places, not moved or taken out (it is not kept). */}
+      {!changing && added && <div key={`added-${added}`} data-rail-item={added} className={css.slot}>{drawn(added)}</div>}
       <div className={css.grow} />
       {/* Every workspace at the foot, always, not one of the places chosen: the one in view its switcher. */}
       <RailWorkspaces scope={scope} current={workspace} />
@@ -367,7 +418,19 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
             collisionPadding={{ top: 52, right: 8, bottom: 8, left: 8 }}
             // Not back to its anchor (by the rail, not in it): the change it opens would take that for going elsewhere.
             onCloseAutoFocus={(e) => e.preventDefault()}>
-            {pointed && pointed !== "chats" && (
+            {away.length > 0 && <>
+              <DropdownMenu.Label className={controlsCss.menuLabel}>{t("web-main.rail.away")}</DropdownMenu.Label>
+              {away.map((i) => {
+                const Icon = RAIL_ICONS[i];
+                return (
+                  <DropdownMenu.Item key={i} className={controlsCss.menuItem} onSelect={() => go(i)}>
+                    {Icon ? <Icon {...ICON} /> : i === "decisions" ? <span className={css.zouSmall}>奏</span> : <span style={{ width: ICON.size }} />}{railLabel(i)}
+                  </DropdownMenu.Item>
+                );
+              })}
+              <DropdownMenu.Separator className={controlsCss.menuSep} />
+            </>}
+            {pointed && items.includes(pointed) && (
               <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => keep(items.filter((i) => i !== pointed))}><Minus {...ICON} />{t("web-main.rail.remove", { name: railLabel(pointed) })}</DropdownMenu.Item>
             )}
             <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => editRail(true)}><Sliders {...ICON} />{t("web-main.rail.customize")}</DropdownMenu.Item>

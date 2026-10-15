@@ -45,8 +45,7 @@ import { track } from "../telemetry.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import type { CarriedStation } from "../core/client.ts";
 import * as nav from "../Sidebar.css.ts";
-import { usePrefs } from "../prefs.ts";
-import { railItems, type RailItem } from "../Rail.tsx";
+import { useRailItems, type RailItem } from "../Rail.tsx";
 import * as railCss from "../Rail.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
@@ -124,7 +123,7 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
   const some = (useStations(entry.id).value?.length ?? 0) > 0;
   const back = useLastChat(entry.id, `/w/${entry.id}`) ?? `/w/${entry.id}`;
   const pages = settingsPages(entry, some);
-  const railed = railItems(usePrefs((p) => p.rail));
+  const railed = useRailItems();
   const heading = { client: t("web-pages.settings.nav.client"), station: "Station", cloud: "Cloud" };
   return (
     <div className={nav.navScroll}>
