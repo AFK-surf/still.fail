@@ -494,10 +494,14 @@ fun Devices(current: WorkspaceEntry) {
 
 /** Whether the viewer may add, rename and remove stations: the workspace's owner and admins. */
 @Composable
-fun isManager(current: WorkspaceEntry): Boolean {
+fun isManager(current: WorkspaceEntry): Boolean = managerOf(current) == true
+
+/** Whether the viewer is one of the workspace's owners or admins; null until the workspace is read (not, if it cannot be). */
+@Composable
+fun managerOf(current: WorkspaceEntry): Boolean? {
     val app = LocalApp.current
     val topic by rememberTopic<WorkspaceView>(app.core, Topics.workspace(current.workspace.id))
-    return topic.value?.manager == true
+    return topic.value?.manager ?: if (topic.error != null) false else null
 }
 
 /** Adding a station: a name, then the command to run on that machine (which installs still.fail and joins it); the sheet waits for it to join. */

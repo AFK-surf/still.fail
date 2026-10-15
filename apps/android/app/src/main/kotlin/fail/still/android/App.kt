@@ -433,6 +433,8 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
     val switched: Boolean get() = stack === placed
     /** Something over a place's top page (Home's search) has the bottom bar out of the way. */
     var barAway by mutableStateOf(false)
+    /** Each place's primary action as its top page last said it, for the bar's notch (Places.kt PlaceAction): by "<workspace>|<place>", null for none. */
+    val placeActions = androidx.compose.runtime.mutableStateMapOf<String, fail.still.android.ui.BarAction?>()
 
     fun push(screen: Screen) { sheet = null; menu = null; forward = true; if (screen == Screen.NewChat || screen == madeChat) madeChat = null; stack = stack + screen }
     fun pop() { if (stack.size > 1) { sheet = null; menu = null; forward = false; stack = stack.dropLast(1) } }
@@ -769,7 +771,17 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
     val followed = remember { HashMap<String, fail.still.android.data.PageTopics>() }
     val workspace = current.workspace.id
     fun keyOf(screen: Screen) = "$workspace|${app.pageOf(screen)}"
-    fun letGo(keep: (String) -> Boolean) = followed.keys.filterNot(keep).forEach { followed.remove(it)?.close() }
+    // A place's top page of this workspace, switched away from on the bar, keeps its state (PLACE_PAGES, below), and
+    // its topics: still followed while its place is in one of the bars (coming back, what it shows is there and up to
+    // date at once); paused otherwise, what they showed kept, so it comes back drawn as it was left and followed again
+    // from there. Any other page's are let go.
+    fun letGo(keep: (String) -> Boolean) = followed.keys.filterNot(keep).forEach { key ->
+        val place = if (key.startsWith("$workspace|")) PLACE_OF_PAGE[key.removePrefix("$workspace|")] else null
+        when {
+            place == null -> followed.remove(key)?.close()
+            app.bars.sets.none { place in it } -> followed[key]?.pause()
+        }
+    }
     // A page's own state (its scroll place, what is open on it) is kept while it is in the stack, and forgotten once it
     // leaves: a chat closed and opened again starts afresh.
     val kept = remember { HashSet<String>() }
@@ -782,13 +794,14 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
     }
     LaunchedEffect(top) {
         if (pages.currentState == top && pages.targetState == top) return@LaunchedEffect
-        // A place switched to on the bar: in place, no slide, once it has what it shows from the device (as below).
+        // A place switched to on the bar: in place, no slide, at once (the frame after the tap): what it shows is there
+        // if it was shown before (its topics kept, above), else it comes in on the page; not waited for (up to LOCAL_MS,
+        // which could hold the page back while the ball was on its way).
         if (app.switched) {
             BarTiming.effect()
             val topics = followed.getOrPut(keyOf(top)) { fail.still.android.data.PageTopics() }
-            @Suppress("UNCHECKED_CAST") val states = opening(top, workspace).map { (topic, serializer) -> topics.of(app.core, topic, serializer as kotlinx.serialization.KSerializer<Any?>) }
-            val got = if (states.isNotEmpty()) withTimeoutOrNull(LOCAL_MS) { snapshotFlow { states.all { it.value.value != null || it.value.error != null } }.first { it } } else true
-            BarTiming.snapped(states.isNotEmpty(), got == null)
+            @Suppress("UNCHECKED_CAST") opening(top, workspace).forEach { (topic, serializer) -> topics.of(app.core, topic, serializer as kotlinx.serialization.KSerializer<Any?>) }
+            BarTiming.snapped(waited = false, timedOut = false)
             pages.snapTo(top)
             swiped = false
             return@LaunchedEffect
@@ -855,7 +868,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         saved.SaveableStateProvider(app.pageOf(screen)) { CompositionLocalProvider(
             fail.still.android.data.LocalPageTopics provides topics,
             LocalPlaceRoot provides placeRoot,
-            LocalBarRoom provides if (placeRoot != PlaceRoot.Bar) 0.dp else if (placeOf(screen) in CHAT_FAMILY) BAR_ROOM_LING else BAR_ROOM,
+            LocalBarRoom provides if (placeRoot != PlaceRoot.Bar) 0.dp else BAR_ROOM,
         ) {
             // A message's page draws its own ground, coming in over its chat (Annotate.kt).
             Box(Modifier.fillMaxSize().then(if (screen is Screen.Annotate) Modifier else Modifier.background(C.bg)).then(BarTiming.page(screen))) {
@@ -906,9 +919,9 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     }
                 }
                 // The page scrolls under the status bar; it keeps the paper behind its icons, moving with its page (the
-                // list and a chat have frosted bars there instead, which show what runs under them).
-                // A book and a film draw their own paper (or black) there.
-                if (screen !is Screen.Home && screen !is Screen.Chat && screen != Screen.NewChat && screen !is Screen.Annotate && screen !is Screen.DriveRead && screen !is Screen.DrivePlay)
+                // list, a place's top page with the bar and a chat have frosted bars there instead, which show what runs
+                // under them). A book and a film draw their own paper (or black) there.
+                if (screen !is Screen.Home && placeRoot != PlaceRoot.Bar && screen !is Screen.Chat && screen != Screen.NewChat && screen !is Screen.Annotate && screen !is Screen.DriveRead && screen !is Screen.DrivePlay)
                     Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(C.bg))
             }
         } }
@@ -931,6 +944,8 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
 
 /** The places' top pages (Places.kt): their state is kept while they are not in the stack, as the bar switches between them. */
 private val PLACE_PAGES = PLACES.map { screenOf(it).id }.toSet()
+/** Each place's top page's id, to its place. */
+private val PLACE_OF_PAGE = PLACES.associateBy { screenOf(it).id }
 
 /** Out of a swipe let go: starts moving, no ease in (easeOutQuad). */
 private val EaseOut = CubicBezierEasing(0.25f, 0.46f, 0.45f, 0.94f)

@@ -79,7 +79,6 @@ import fail.still.android.ui.C
 import fail.still.android.ui.CodeFont
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
-import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.Loading
@@ -165,15 +164,14 @@ fun ConnectsScreen(current: WorkspaceEntry, only: String? = null) {
     val one = if (only != null) stations?.firstOrNull() else null
     val online = stations.orEmpty().filter { it.online }
     val view = connects.value
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack(one?.name ?: t("android-settings.title"), app::pop, trailing = if (online.isNotEmpty()) ({
-            NavButton(Icons.Plus, {
-                if (online.size == 1) openNewConnect(app, online[0].station)
-                else openPickStation(app, t("android-settings.flow.title"), online) { openNewConnect(app, it.station) }
-            }, 20.dp)
-        }) else null)
-        LargeTitle(one?.let { t("android-settings.connects.on", "name" to it.name) } ?: "", t("android-settings.connects.title"))
-        PageNote(t("android-settings.connects.note", "app" to BuildConfig.APP_NAME))
+    // A connect is added on a station online (the only one, without asking).
+    val add = if (online.isNotEmpty()) fail.still.android.ui.BarAction("add-connect", t("android-misc.bar.action.connects"), Icons.Plus) {
+        if (online.size == 1) openNewConnect(app, online[0].station)
+        else openPickStation(app, t("android-settings.flow.title"), online) { openNewConnect(app, it.station) }
+    } else null
+    // A station's own (from its page): back to it.
+    PlacePage(current, "connects", add, known = topic.value != null || topic.error != null, back = one?.name ?: t("android-settings.title")) { top ->
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = top)) {
         Seg(listOf(t("android-settings.connects.all"), t("android-settings.connects.mine")), if (mine) 1 else 0, { mine = it == 1 }, Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 2.dp).fillMaxWidth(), height = 34.dp, fill = true)
         if (stations == null || view == null) Text(connects.error?.message ?: t("android-settings.connects.reading"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
         else stations.forEach { s ->
@@ -191,6 +189,7 @@ fun ConnectsScreen(current: WorkspaceEntry, only: String? = null) {
         }
         Spacer(Modifier.height(30.dp))
         BarRoom()
+    }
     }
 }
 

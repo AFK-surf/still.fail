@@ -1,8 +1,10 @@
 // The bottom bar (ui/Bar.kt, Places.kt) on the fake core: on Home in light and dark (the ball 6 past the bar on every
 // side at rest; the notch empty, the page's own paper showing there; no shadow above the bar), a place tapped (the page
 // switched in place, the ball over it), the panel of the other bars opened by a swipe up, one stroke from the bar into
-// a place of another bar (that bar and that place), and the settings page's cards (a place taken out, one added, a bar
-// made and deleted, a place moved). Pictures: settled.png under motion/bar-*.
+// a place of another bar (that bar and that place), the settings page's cards (a place taken out, one added, a bar
+// made and deleted, a place moved), and the notch's action: 令 on the chats' pages, a "+" on a page that adds (Station,
+// for a manager), none on 用量 (the notch closed), the notch staying open between two pages that have one, the icon in it
+// swapping. Pictures: settled.png under motion/bar-*.
 package fail.still.android.motion
 
 import android.graphics.Bitmap
@@ -14,6 +16,10 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.filter
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -187,23 +193,56 @@ class BarTest {
     }
 
     /**
-     * A page pushed over a place's top hides the bar (and its back is there again); back, the bar is back. Back on a
-     * place's top other than the chats goes to the chats, in place.
+     * The same up into the panel of the other bars and across its row, the finger moving every frame: the ball goes up
+     * into the row and along it with the finger; brought back down and let go where it began, nothing is chosen.
+     */
+    @Test fun panelSlideFollows() {
+        val h = launch()
+        val g = bounds("bar-glass")
+        val y0 = g.top + 28 * d
+        val x0 = g.left + 28 * d
+        val x1 = g.right - 28 * d
+        val row = y0 - 56 * d
+        val r = h.record("bar-panel-slide")
+        rule.onRoot().performTouchInput { down(Offset(x0, y0)) }
+        r.frame()
+        val start = bounds("bar-ball").center
+        for (i in 1..15) r.frame { rule.onRoot().performTouchInput { moveTo(Offset(x0, y0 + (row - y0) * i / 15f)) } }
+        val up = start.y - bounds("bar-ball").center.y
+        val from = bounds("bar-ball").center.x
+        for (i in 1..30) r.frame { rule.onRoot().performTouchInput { moveTo(Offset(x0 + (x1 - x0) * i / 30f, row)) } }
+        val across = bounds("bar-ball").center.x - from
+        for (i in 1..20) r.frame { rule.onRoot().performTouchInput { moveTo(Offset(x1 + (x0 - x1) * i / 20f, row + (y0 - row) * i / 20f)) } }
+        rule.onRoot().performTouchInput { up() }
+        r.frames(40)
+        r.end()
+        assertTrue("the ball went up into the row with the finger (${up / d} dp)", up > 35 * d)
+        assertTrue("the ball went along the row with the finger (${across / d} dp of ${(x1 - x0) / d})", across > (x1 - x0) * 0.6f)
+        assertEquals(listOf<Screen>(Screen.Home), h.app.stack)
+        assertEquals(0L, h.app.bars.current)
+    }
+
+    /**
+     * A page pushed over a place's top hides the bar (and its back is there again, to the page under it, with its "+");
+     * back, the bar is back. Back on a place's top other than the chats goes to the chats, in place.
      */
     @Test fun pushedAndBack() {
         val h = launch()
         rule.runOnUiThread { h.app.push(Screen.Stations) }
         h.settle()
         rule.onNodeWithTag("bar-glass").assertDoesNotExist()
-        rule.onNodeWithText("设置").assertExists()
+        rule.onNodeWithText("对话").assertExists()
+        rule.onNodeWithContentDescription("添加 station").assertExists()
         rule.runOnUiThread { h.app.pop() }
         h.settle()
         rule.onNodeWithTag("bar-glass").assertExists()
         ballAtRest(-1)
         rule.onNodeWithTag("bar-place-stations").performClick()
         h.settle()
-        // A place's top: no back to anywhere.
-        rule.onNodeWithText("设置").assertDoesNotExist()
+        // A place's top: no back to anywhere; its "+" in the notch, not in its top bar too.
+        rule.onNodeWithText("对话").assertDoesNotExist()
+        rule.onAllNodesWithContentDescription("添加 station").assertCountEquals(1)
+        rule.onNode(hasTestTag("bar-action") and hasContentDescription("添加 station")).assertExists()
         rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
         h.settle()
         assertEquals(listOf<Screen>(Screen.Home), h.app.stack)
@@ -312,5 +351,95 @@ class BarTest {
         rule.onNodeWithTag("bar-place-usage").assertExists()
         // On Home, which is not in this bar: no ball.
         shot(h, "bar-home-other-bar")
+    }
+
+    /** On Station, for a manager: a "+" in the notch (named as what it adds; none in the top bar), which adds a station. */
+    @Test fun stationsPlus() = stationsPlus(false)
+    @Test fun stationsPlusDark() = stationsPlus(true)
+
+    private fun stationsPlus(dark: Boolean) {
+        val h = launch(dark = dark)
+        rule.onNodeWithTag("bar-place-stations").performClick()
+        h.settle()
+        shot(h, if (dark) "bar-stations-plus-dark" else "bar-stations-plus-light")
+        rule.onNode(hasTestTag("bar-action") and hasContentDescription("添加 station")).assertExists()
+        rule.onAllNodesWithContentDescription("添加 station").assertCountEquals(1)
+        rule.onNodeWithContentDescription("新建对话").assertDoesNotExist()
+        rule.onNodeWithContentDescription("添加 station").performClick()
+        h.settle()
+        rule.runOnIdle { assertTrue("the sheet adding a station is open", h.app.sheet != null) }
+    }
+
+    /** Not a manager: no "+" on Station, the notch closed; on 用量 (nothing to add) closed too. */
+    @Test fun noActionClosed() {
+        val h = launch()
+        h.fake.put(Topics.workspace(Fixtures.WS), WorkspaceView(id = Fixtures.WS, name = "Dev", role = "member"))
+        h.settle()
+        rule.onNodeWithTag("bar-place-stations").performClick()
+        h.settle()
+        rule.onNodeWithTag("bar-action").assertDoesNotExist()
+        rule.onNodeWithContentDescription("添加 station").assertDoesNotExist()
+        // The other bar: 连接 (a station online: a "+"), then 用量 (none): the notch closes.
+        rule.runOnUiThread { h.app.setBars(h.app.bars.sets, 1) }
+        h.settle()
+        rule.onNodeWithTag("bar-place-connects").performClick()
+        h.settle()
+        rule.onNode(hasTestTag("bar-action") and hasContentDescription("添加连接")).assertExists()
+        rule.onNodeWithTag("bar-place-usage").performClick()
+        h.settle()
+        assertEquals(listOf<Screen>(Screen.Usage), h.app.stack)
+        rule.onNodeWithTag("bar-action").assertDoesNotExist()
+        shot(h, "bar-usage-closed")
+    }
+
+    /**
+     * Home to Station and back (Station not drawn before: what it adds not said yet as the bar switches): the notch stays
+     * open the whole way, frame by frame, the icon in it swapping (令 to "+", and back).
+     */
+    @Test fun homeStationsSwap() {
+        val h = launch()
+        val full = 56 * d
+        fun open(r: Recording, frames: Int) = repeat(frames) {
+            r.frame()
+            val b = rule.onNodeWithTag("bar-action").fetchSemanticsNode().boundsInRoot
+            assertTrue("the notch's action stays (${b.width} of $full)", b.width >= 0.9f * full)
+        }
+        val there = h.record("bar-swap-to-stations")
+        rule.onNodeWithTag("bar-place-stations").performClick()
+        open(there, 30)
+        there.end()
+        rule.onNode(hasTestTag("bar-action") and hasContentDescription("添加 station")).assertExists()
+        val back = h.record("bar-swap-to-chats")
+        rule.onNodeWithTag("bar-place-chats").performClick()
+        open(back, 30)
+        back.end()
+        rule.onNode(hasTestTag("bar-action") and hasContentDescription("新建对话")).assertExists()
+    }
+
+    /**
+     * A place tapped shows its page at once, within two frames of the tap, not once what it shows has come (its
+     * stations here take a while to come from the core) or the ball has arrived: the page's name in its top bar, then
+     * its rows as they come. Back to a place already shown, at once too, with what it showed.
+     */
+    @Test fun tapShowsAtOnce() {
+        val h = launch()
+        h.fake.lags[Topics.stations(Fixtures.WS)] = 1500L
+        val r = h.record("bar-tap-at-once")
+        rule.onNodeWithTag("bar-place-stations").performClick()
+        var n = 0
+        r.framesUntil(30) { (rule.onAllNodesWithText("Station").fetchSemanticsNodes().isNotEmpty()).also { if (!it) n++ } }
+        android.util.Log.i("bartap", "stations shown $n frames after the tap")
+        assertTrue("Station shown $n frames after the tap", n <= 2)
+        r.frames(10)
+        r.end()
+        rule.onNodeWithTag("bar-place-files").performClick()
+        h.settle()
+        val back = h.record("bar-tap-back")
+        rule.onNodeWithTag("bar-place-stations").performClick()
+        var m = 0
+        back.framesUntil(30) { (rule.onAllNodesWithText("在线").fetchSemanticsNodes().isNotEmpty()).also { if (!it) m++ } }
+        back.end()
+        android.util.Log.i("bartap", "stations again, its rows $m frames after the tap")
+        assertTrue("Station's rows shown again $m frames after the tap", m <= 2)
     }
 }

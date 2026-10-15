@@ -42,7 +42,6 @@ import fail.still.android.data.rememberTopic
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
-import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.SectionHeader
 
 @Composable
@@ -59,14 +58,9 @@ fun ArchiveScreen(current: WorkspaceEntry) {
         }
     }
     val view = archive.value
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 24.dp)) {
-        TopBack(t("android-misc.chats"), app::pop)
-        LargeTitle(current.workspace.name, t("android-misc.archive.title"))
-        // No hover to explain it on a phone: said at the top instead.
-        Text(
-            t("android-misc.archive.note"),
-            fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-        )
+    // 令 in the bar's notch, as on the chats' list; nothing of its own to add.
+    PlacePage(current, "archive", null, back = fail.still.android.placeLabel("chats")) { top ->
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = top, bottom = 24.dp)) {
         val note = if (view != null) view.note else archive.error?.message ?: t("android-misc.stations.loading")
         view?.errors?.forEach { Text(it.text, fontSize = 13.sp, color = C.red, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) }
         if (note != null) Text(note, fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
@@ -82,6 +76,7 @@ fun ArchiveScreen(current: WorkspaceEntry) {
             }
         }
         BarRoom()
+    }
     }
 }
 

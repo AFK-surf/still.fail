@@ -76,7 +76,6 @@ import fail.still.android.ui.Card
 import fail.still.android.ui.CodeFont
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
-import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.Loading
@@ -128,15 +127,14 @@ fun ProfilesScreen(current: WorkspaceEntry, only: String? = null) {
     val stations = topic.value?.let { all -> if (only == null) all else all.filter { it.station == only } }
     val one = if (only != null) stations?.firstOrNull() else null
     val online = stations.orEmpty().filter { it.online }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack(one?.name ?: t("android-settings.title"), app::pop, trailing = if (online.isNotEmpty()) ({
-            NavButton(Icons.Plus, {
-                if (online.size == 1) app.push(Screen.NewProfile(online[0].station))
-                else openPickStation(app, t("android-settings.profile.add"), online) { app.push(Screen.NewProfile(it.station)) }
-            }, 20.dp)
-        }) else null)
-        LargeTitle(one?.let { t("android-settings.connects.on", "name" to it.name) } ?: "", "Profile")
-        PageNote(t("android-settings.profiles.note"))
+    // A profile is added on a station online (the only one, without asking).
+    val add = if (online.isNotEmpty()) fail.still.android.ui.BarAction("add-profile", t("android-misc.bar.action.profiles"), Icons.Plus) {
+        if (online.size == 1) app.push(Screen.NewProfile(online[0].station))
+        else openPickStation(app, t("android-settings.profile.add"), online) { app.push(Screen.NewProfile(it.station)) }
+    } else null
+    // A station's own (from its page): back to it.
+    PlacePage(current, "profiles", add, known = topic.value != null || topic.error != null, back = one?.name ?: t("android-settings.title")) { top ->
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = top)) {
         // The workspace's: one list, each shared profile once (the core's `profiles`); a station's own: as before.
         if (one == null) WorkspaceList(current.workspace.id)
         if (stations == null) Text(topic.error?.message ?: t("android-settings.stations.reading"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
@@ -161,6 +159,7 @@ fun ProfilesScreen(current: WorkspaceEntry, only: String? = null) {
         }
         Spacer(Modifier.height(30.dp))
         BarRoom()
+    }
     }
 }
 

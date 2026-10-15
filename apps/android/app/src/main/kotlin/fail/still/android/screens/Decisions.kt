@@ -302,21 +302,25 @@ fun DecisionsScreen(current: WorkspaceEntry) {
     // With none left the page stays, for the next to come.
     // Its foot over the bottom bar when it is there (the keyboard, when up, is higher: the bar steps aside for it).
     val room = fail.still.android.LocalBarRoom.current
+    // 令 in the bar's notch, as on the chats' list; nothing of its own to add.
+    PlacePage(current, "decisions", null, back = fail.still.android.placeLabel("chats")) { top ->
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars.add(WindowInsets(bottom = room))))) {
-        TopBack(t("android-misc.chats"), app::pop)
         if (shown.isEmpty()) {
-            // What has come so far, at once: stations still being read add theirs as they come.
+            // What has come so far, at once: stations still being read add theirs as they come. It scrolls under the top bar.
             if (view != null) {
-                Idle(view, Modifier.weight(1f))
+                Idle(view, top, Modifier.weight(1f))
                 return@Column
             }
+            Spacer(Modifier.height(top))
             val note = topic.error?.message ?: t("android-misc.reading")
             Box(Modifier.weight(1f).fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                 Text(note, fontSize = 15.sp, color = if (topic.error != null) C.red else C.muted, textAlign = TextAlign.Center)
             }
             return@Column
         }
+        Spacer(Modifier.height(top))
         Deck(shown, local, Modifier.weight(1f))
+    }
     }
 }
 
@@ -326,12 +330,12 @@ fun DecisionsScreen(current: WorkspaceEntry) {
  * an agent at work or waiting) and what was answered today. Each opens its chat.
  */
 @Composable
-private fun Idle(view: DecisionsView, modifier: Modifier) {
+private fun Idle(view: DecisionsView, top: androidx.compose.ui.unit.Dp, modifier: Modifier) {
     val app = LocalApp.current
     val today = view.today
     val working = view.working.orEmpty()
     val answered = view.answered.orEmpty()
-    Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 24.dp)) {
+    Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = top + 16.dp, bottom = 24.dp)) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Image(painterResource(if (C.dark) R.drawable.buddy_idle_dark else R.drawable.buddy_idle), null, Modifier.size(72.dp))
             Text(t("android-misc.decisions.idle.title"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink, modifier = Modifier.padding(top = 8.dp))

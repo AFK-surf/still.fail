@@ -421,6 +421,10 @@
   "android-misc.bar.place.connects": "连接",
   "android-misc.bar.place.usage": "用量",
   "android-misc.bar.place.archive": "已归档",
+  "android-misc.bar.action.stations": "添加 station",
+  "android-misc.bar.action.profiles": "添加 Profile",
+  "android-misc.bar.action.connects": "添加连接",
+  "android-misc.bar.action.files": "添加文件夹",
   "android-misc.bar.title": "下方栏",
   "android-misc.bar.small": "这台设备",
   "android-misc.bar.note": "可以设好几栏，每栏最多 4 个地方，底下显示当前那一栏。不止一栏时，在栏上往上滑就能换一栏。按住图标左右拖可以排顺序。",
@@ -442,7 +446,7 @@
   "android-misc.bar.sep": "、",
   "android-misc.bar.moveLeft": "往左移",
   "android-misc.bar.moveRight": "往右移",
-  "android-misc.files.none.manager": "还没有借出的文件夹。点右上角的 + 选一台 station 上的文件夹，workspace 的成员就能在这里浏览它",
+  "android-misc.files.none.manager": "还没有借出的文件夹。点 + 选一台 station 上的文件夹，workspace 的成员就能在这里浏览它",
   "android-misc.files.none.member": "workspace 的管理员还没有借出文件夹",
   "android-misc.files.lendOn": "在哪台 station 上选文件夹"
 }

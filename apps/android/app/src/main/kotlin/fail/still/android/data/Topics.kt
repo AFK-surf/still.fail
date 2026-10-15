@@ -4,6 +4,7 @@
 package fail.still.android.data
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.State
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
@@ -141,21 +142,31 @@ suspend fun preread(scope: CoroutineScope, core: StillFailCore, topics: List<Pai
 class PageTopics {
     private companion object { const val UNREAD_MS = 10_000L }
 
-    private class Followed(val state: State<Topic<*>>, val job: Job) { var readers = 0 }
+    private class Followed(val state: MutableState<Topic<*>>, var job: Job) { var readers = 0 }
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val followed = HashMap<Pair<JsonObject, SerialDescriptor>, Followed>()
     /** Whether the page is drawn now (App.kt). */
     var drawn = false
 
     @Suppress("UNCHECKED_CAST")
-    fun <T> of(core: StillFailCore, topic: JsonObject, serializer: KSerializer<T>): State<Topic<T>> =
-        followed.getOrPut(topic to serializer.descriptor) {
-            val state = mutableStateOf(latestOf(topic, serializer))
-            fail.still.android.BarTiming.followed(topic, state.value.value != null)
-            val job = scope.launch { followShown(core, topic, serializer, state.value) { state.value = it; fail.still.android.BarTiming.shown(topic, it.value, it.error != null) } }
-            Followed(state as State<Topic<*>>, job)
-        }.state as State<Topic<T>>
+    fun <T> of(core: StillFailCore, topic: JsonObject, serializer: KSerializer<T>): State<Topic<T>> {
+        val key = topic to serializer.descriptor
+        val f = followed[key]
+        if (f != null) {
+            // Paused (its page switched away from): followed again from what it last showed.
+            if (!f.job.isActive) {
+                fail.still.android.BarTiming.followed(topic, f.state.value.value != null)
+                f.job = scope.launch { followShown(core, topic, serializer, f.state.value as Topic<T>) { f.state.value = it; fail.still.android.BarTiming.shown(topic, it.value, it.error != null) } }
+            }
+            return f.state as State<Topic<T>>
+        }
+        val state = mutableStateOf(latestOf(topic, serializer))
+        fail.still.android.BarTiming.followed(topic, state.value.value != null)
+        val job = scope.launch { followShown(core, topic, serializer, state.value) { state.value = it; fail.still.android.BarTiming.shown(topic, it.value, it.error != null) } }
+        followed[key] = Followed(state as MutableState<Topic<*>>, job)
+        return state as State<Topic<T>>
+    }
 
     fun read(topic: JsonObject, serializer: KSerializer<*>) { followed[topic to serializer.descriptor]?.let { it.readers++ } }
 
@@ -171,6 +182,16 @@ class PageTopics {
             delay(UNREAD_MS)
             if (drawn && it.readers == 0 && followed[key] === it) followed.remove(key)?.job?.cancel()
         }
+    }
+
+    /**
+     * A place's top page switched away from on the bar (App.kt), its state kept: its topics are let go in the core, what
+     * they last showed kept. Coming back, the page is drawn from that at once, as it was left (its list as long, so its
+     * scroll place stays where it was, not clamped to a list still being read), and each is followed again from it.
+     */
+    fun pause() {
+        scope.cancel()
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     }
 
     /** The page left the stack: its topics are let go. */

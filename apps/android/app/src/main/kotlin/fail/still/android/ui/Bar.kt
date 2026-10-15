@@ -1,14 +1,17 @@
 // The phone's bottom bar (下方栏), as the prototype agreed with the user has it (session c-1c78bb4403's
 // proto/vbar/vbar.jsx `Bar`, frosted only): a floating capsule of the places of one bar; a frosted ball over the place
-// shown, which travels on a spring stretched by its speed and goes where a finger takes it; 令 (a new chat) standing in
-// a notch cut out of the bar's top on the chats' pages; with more than one bar, the glass grows upward into a panel of
-// the other bars (a swipe up on the bar), one row each, and a bar chosen there slides down into the bar's place.
-// Everything is glass of one source (Haze): the pages under it, the bar's glass for the ball and 令, 令 for the ball.
+// shown, which travels on a spring stretched by its speed and goes where a finger takes it; the page's primary action
+// standing in a notch cut out of the bar's top (令, a new chat, on the chats' pages; a "+" on a page that adds
+// something); with more than one bar, the glass grows upward into a panel of the other bars (a swipe up on the bar), one
+// row each, and a bar chosen there slides down into the bar's place.
+// Everything is glass of one source (Haze): the pages under it, the bar's glass for the ball and the action, the action
+// for the ball.
 package fail.still.android.ui
 
 import android.graphics.BlurMaskFilter
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.animateFloatAsState
@@ -148,8 +151,17 @@ private val OPEN = springOf(260f, 17f, 0.001f)
 private val CLOSE = springOf(320f, 26f, 0.001f)
 private val SWITCH = springOf(200f, 28f, 0.001f)
 
-/** The bar's layout for what it holds, `w` wide (dp). */
-private class Geo(val w: Float, val sets: List<List<String>>, val cur: Int, val active: String?, val chatsPage: Boolean) {
+/**
+ * A page's primary action, which the notch holds on a place's top page: `key` tells one from another (the icon swaps
+ * between two, the notch staying open), `label` is what a screen reader says, `run` what a tap does (the page's latest).
+ */
+@Stable
+class BarAction(val key: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, run: () -> Unit) {
+    var run: () -> Unit = run
+}
+
+/** The bar's layout for what it holds, `w` wide (dp); `notched`: the page shown has an action in the notch. */
+private class Geo(val w: Float, val sets: List<List<String>>, val cur: Int, val active: String?, val notched: Boolean) {
     val items: List<String> = sets.getOrNull(cur).orEmpty()
     /** The other bars, in the panel, top to bottom. */
     val others: List<Int> = sets.indices.filter { it != cur }
@@ -165,8 +177,8 @@ private class Geo(val w: Float, val sets: List<List<String>>, val cur: Int, val 
     val slot = (w - 2 * C0) / 3
     fun rowMid(n: Int) = OVER + n * ROW + ROW / 2
     fun centres(k: Float, n: Int) = barCentres(w, k, n)
-    /** Where the bar's places will be, notch open on a chats' page with the panel closed. */
-    fun final(mode: Boolean) = centres(if (chatsPage && !mode) 1f else 0f, items.size)
+    /** Where the bar's places will be, notch open on a page with an action, the panel closed. */
+    fun final(mode: Boolean) = centres(if (notched && !mode) 1f else 0f, items.size)
     fun nearest(cs: FloatArray, n: Int, x: Float): Int {
         var best = 0
         for (j in 0 until n) if (abs(cs[j] - x) < abs(cs[best] - x)) best = j
@@ -423,15 +435,17 @@ private class BarModel(private val scope: CoroutineScope) {
 
 /**
  * The bottom bar over the pages that `haze` is the source of. `sets`: the bars (`cur` the one in view); `active`: the
- * place shown (null: none); `chatsPage`: it is one of the chats' (令 in the notch); `shown`: on a place's top page, with
- * nothing over it. `dots`: a place's status dot and its colour; `icon`: a place's icon in a colour.
+ * place shown (null: none); `action`: its page's primary action, in the notch (null: none, the notch closed); `notches`:
+ * whether a place's page has one (a bar chosen with a place in it lands with the notch as that place will have it);
+ * `shown`: on a place's top page, with nothing over it. `dots`: a place's status dot and its colour; `icon`: a place's
+ * icon in a colour.
  */
 @Composable
 fun BottomBar(
-    sets: List<List<String>>, cur: Int, active: String?, chatsPage: Boolean, shown: Boolean, haze: HazeState,
-    dots: Map<String, Color>, labelOf: (String) -> String, lingLabel: String, chatFamily: Set<String>,
+    sets: List<List<String>>, cur: Int, active: String?, action: BarAction?, shown: Boolean, haze: HazeState,
+    dots: Map<String, Color>, labelOf: (String) -> String, notches: (String) -> Boolean,
     icon: @Composable (String, Color) -> Unit,
-    onTab: (String) -> Unit, onLing: () -> Unit, onSwitch: (Int, String?) -> Unit,
+    onTab: (String) -> Unit, onSwitch: (Int, String?) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val m = remember { BarModel(scope) }
@@ -451,12 +465,13 @@ fun BottomBar(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // 22 in from either side, as from the foot: the ball (6 past the bar) as far from the screen's sides as from its foot.
         val w = maxWidth.value - 44f
-        // A bar being chosen with a place in it: the notch already as that place will have it (no 令 coming up only to go).
-        val landsOn = m.swap?.key?.let { it in chatFamily }
-        val g = Geo(w, sets, cur, active, landsOn ?: chatsPage)
-        val chats = g.chatsPage && !m.mode
-        // The notch's openness: 令 grows out of the bar with it.
-        val kState = animateFloatAsState(if (chats) 1f else 0f, springOf(300f, 30f, 0.001f), label = "notch")
+        // A bar being chosen with a place in it: the notch already as that place will have it (no action coming up only to go).
+        val landsOn = m.swap?.key?.let(notches)
+        val g = Geo(w, sets, cur, active, landsOn ?: (action != null))
+        val open = g.notched && !m.mode
+        // The notch's openness: the action grows out of the bar with it. From one page with an action to another it
+        // stays open, only the icon in it changing.
+        val kState = animateFloatAsState(if (open) 1f else 0f, springOf(300f, 30f, 0.001f), label = "notch")
         SideEffect {
             m.geo = g
             m.k = { kState.value }
@@ -523,12 +538,12 @@ fun BottomBar(
         fun sx(x: Float) = w / 2 + (x - w / 2) * narrow()
         fun clipTop() = max(0f, OVER + g.reach * (1 - m.o.value))
         fun notchR() = (DROP / 2 + NOTCH_GAP) * kState.value
-        // 令 and its notch shrink about one middle, which comes up to the bar's edge: the notch closes to nothing, no dent left.
+        // The action and its notch shrink about one middle, which comes up to the bar's edge: the notch closes to nothing, no dent left.
         fun notchY() = -LIFT * kState.value
         fun swapAt(s: Swap): Pair<FloatArray, Float>? {
             val into = g.sets.getOrNull(s.i) ?: return null
             val t = (1 - m.o.value / s.from).coerceIn(0f, 1f)
-            val lands = if (s.key != null) s.key in chatFamily else chatsPage
+            val lands = if (s.key != null) notches(s.key) else action != null
             val from = g.centres(0f, into.size)
             val to = g.centres(if (lands) 1f else 0f, into.size)
             val xs = FloatArray(into.size) { from[it] + (to[it] - from[it]) * t }
@@ -556,7 +571,7 @@ fun BottomBar(
                 },
         ) {
             // The shadow of the glass, cast below it and to its sides only: none under it, none above its top (so none in
-            // the notch or over the edge 令 stands on), coming in down its rounded ends.
+            // the notch or over the edge the action stands on), coming in down its rounded ends.
             Box(Modifier.matchParentSize().drawBehind {
                 val top = clipTop().dp.toPx()
                 val gw = w * narrow()
@@ -581,7 +596,7 @@ fun BottomBar(
                 }
             })
             // The glass: exactly as tall as what shows of it, the notch cut out of it by a clip of its outline (nothing
-            // blurred there); the source of what the ball and 令 frost too. The gestures are its.
+            // blurred there); the source of what the ball and the action frost too. The gestures are its.
             Box(
                 Modifier
                     .layout { measurable, constraints ->
@@ -647,11 +662,15 @@ fun BottomBar(
                     drawPath(edge, Color.White.copy(alpha = if (dark) 0.22f else 0.7f), style = Stroke(1.dp.toPx()))
                 }
             })
-            // 令: a new chat, accent glass in the notch; it grows out of the bar as the notch opens.
-            // Its glass is what the ball frosts too, only while it is there (closed, its content would still be drawn there).
-            val lingOn by remember { derivedStateOf { kState.value > 0.9f } }
-            val lingOut by remember { derivedStateOf { kState.value > 0.001f } }
-            if (lingOut) Box(
+            // The page's primary action (令, a new chat; a "+"): accent glass in the notch; it grows out of the bar as the
+            // notch opens. Its glass is what the ball frosts too, only while it is there (closed, its content would still
+            // be drawn there). Closing, it keeps the last action's icon as it shrinks.
+            val actionOn by remember { derivedStateOf { kState.value > 0.9f } }
+            val actionOut by remember { derivedStateOf { kState.value > 0.001f } }
+            val face = remember { arrayOf(action) }
+            if (action != null) face[0] = action
+            val shownAction = face[0]
+            if (actionOut && shownAction != null) Box(
                 Modifier
                     .offset { IntOffset(((w - DROP) / 2).dp.roundToPx(), (g.rowTop + notchY() - DROP / 2).dp.roundToPx()) }
                     .size(DROP.dp)
@@ -661,7 +680,7 @@ fun BottomBar(
                         alpha = min(1f, k * 3)
                         compositingStrategy = CompositingStrategy.ModulateAlpha
                     }
-                    .then(if (lingOn) Modifier.hazeSource(haze, zIndex = 2f) else Modifier)
+                    .then(if (actionOn) Modifier.hazeSource(haze, zIndex = 2f) else Modifier)
                     .clip(CircleShape)
                     .drawBehind { drawRect(accent.copy(alpha = 0.86f).compositeOver(bg)) }
                     .hazeEffect(haze) {
@@ -675,10 +694,23 @@ fun BottomBar(
                         val path = Path().apply { addOval(Rect(Offset.Zero, size)) }
                         rim(path, 0.4f, 0.75f, 0.4f)
                     }
-                    .then(if (lingOn && shown) Modifier.clickable(onClick = onLing).semantics { contentDescription = lingLabel } else Modifier),
+                    .semantics { testTag = "bar-action" }
+                    .then(if (actionOn && shown && action != null) Modifier.clickable { action.run() }.semantics { contentDescription = action.label } else Modifier),
                 contentAlignment = Alignment.Center,
-            ) { IconIn(Icons.Ling, 40.dp, Color.White) }
-            // The ball: under the places (they stay sharp over it), over 令.
+            ) {
+                // From one action to another: the icon swaps (a short scale and fade), the circle stays.
+                androidx.compose.animation.AnimatedContent(
+                    shownAction,
+                    transitionSpec = {
+                        (androidx.compose.animation.fadeIn(tween(180, 60, Ease.Css)) + androidx.compose.animation.scaleIn(tween(240, 60, Ease.Arrive), 0.5f)) togetherWith
+                            (androidx.compose.animation.fadeOut(tween(120, easing = Ease.Css)) + androidx.compose.animation.scaleOut(tween(120, easing = Ease.Css), 0.5f))
+                    },
+                    contentKey = { it.key },
+                    contentAlignment = Alignment.Center,
+                    label = "bar-action-icon",
+                ) { a -> IconIn(a.icon, if (a.icon == Icons.Ling) 40.dp else 30.dp, Color.White) }
+            }
+            // The ball: under the places (they stay sharp over it), over the action.
             Box(
                 Modifier
                     .layout { measurable, _ ->

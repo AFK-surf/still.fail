@@ -192,15 +192,12 @@ fun HomeScreen(current: WorkspaceEntry) {
             ChatPane(current, mine, "mine", mineList, padding, onSearch, searching, Modifier.width(maxWidth).offset { IntOffset(((1 - shift) * width).roundToInt(), 0) })
             ChatPane(current, watching, "watching", watchingList, padding, onSearch, searching, Modifier.width(maxWidth).offset { IntOffset(((2 - shift) * width).roundToInt(), 0) })
         }
-        Row(
-            Modifier.align(Alignment.TopCenter).fillMaxWidth().onSizeChanged { topBar = it.height }.graphicsLayer { alpha = 1f - away }.glass(haze)
-                .windowInsetsPadding(WindowInsets.statusBars).padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
+        // The top bar (PlacePage.kt has every place's page wear it too).
+        TopGlassBar(haze, Modifier.align(Alignment.TopCenter).onSizeChanged { topBar = it.height }.graphicsLayer { alpha = 1f - away }) {
             // Settings, at the top left (SettingsHome.kt): the account, the workspace's things, this device's.
-            Box(Modifier.semantics { contentDescription = t("android-chat.home.settings") }) { NavButton(Icons.Settings, { app.push(Screen.Settings) }, 22.dp) }
+            SettingsGear()
             Row(Modifier.weight(1f).clip(Smooth(8.dp)).clickable { openWorkspaces(app) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(current.workspace.name, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = C.ink, letterSpacing = (-0.4).sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                TopBarTitle(current.workspace.name, Modifier.weight(1f, fill = false))
                 // The other workspaces have something waiting: its dot by the name, before an invitation's.
                 val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(current.workspace.id))
                 val others = marks.value?.others

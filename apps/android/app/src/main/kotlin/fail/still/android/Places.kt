@@ -3,8 +3,14 @@
 package fail.still.android
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -16,6 +22,7 @@ import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
 import fail.still.android.data.rememberTopic
 import fail.still.android.data.t
+import fail.still.android.ui.BarAction
 import fail.still.android.ui.BottomBar
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
@@ -29,7 +36,7 @@ val PLACES = listOf("chats", "decisions", "files", "stations", "profiles", "conn
 /** At most this many places in one bar (the core's BAR_SIZE). */
 const val BAR_SIZE = 4
 
-/** The chats' family: on their pages 令 (a new chat) stands in the bar's notch. */
+/** The chats' family: on their pages 令 (a new chat) stands in the bar's notch; the other places' pages say theirs (PlaceAction). */
 val CHAT_FAMILY = setOf("chats", "decisions", "archive")
 
 /** The bars before the core has said (the core's BARS_DEFAULT). */
@@ -84,10 +91,12 @@ val LocalPlaceRoot = compositionLocalOf { PlaceRoot.None }
 /** The room a place's top page keeps at its foot (over the navigation bar) for the bar to float over: none without it. */
 val LocalBarRoom = compositionLocalOf { 0.dp }
 
-/** The bar's height, its distance from the foot (over the navigation bar), and a little air over it: what a page keeps clear. */
-val BAR_ROOM: Dp = (56 + 22 + 16).dp
-/** On the chats' pages, clear of 令 too, which stands 32 over the bar (ui/Bar.kt: half of it, and its lift). */
-val BAR_ROOM_LING: Dp = BAR_ROOM + 32.dp
+/**
+ * The bar's height, its distance from the foot (over the navigation bar), a little air over it, and the action in its
+ * notch, which stands 32 over the bar (ui/Bar.kt: half of it, and its lift): what a page keeps clear. Every place's page
+ * keeps it, with an action or not, so nothing moves as one comes and goes.
+ */
+val BAR_ROOM: Dp = (56 + 22 + 16 + 32).dp
 
 /** A place's icon, 28 as the bar draws them. */
 @Composable
@@ -95,6 +104,26 @@ fun PlaceIcon(place: String, tint: Color, glyph: fail.still.android.ui.GlyphCoun
     when (place) {
         "stations" -> if (glyph != null) StationGlyph(glyph, 28.dp, tint) else IconIn(Icons.Server, 28.dp, tint)
         else -> IconIn(placeIcon(place), 28.dp, tint)
+    }
+}
+
+/**
+ * A place's top page says its primary action (null: none) for the bar's notch (PlaceBar), while it is the bar's page; on
+ * the chats' pages it is always 令. Kept once said, by workspace and place, so coming back to a place the notch is as it
+ * will be at once. `known` false: what decides it is not read yet, and the notch stays as it is meanwhile, rather than
+ * closing only to open again.
+ */
+@Composable
+fun PlaceAction(workspace: String, place: String, action: BarAction?, known: Boolean = true) {
+    val app = LocalApp.current
+    if (LocalPlaceRoot.current != PlaceRoot.Bar || place in CHAT_FAMILY) return
+    SideEffect {
+        if (!known) return@SideEffect
+        val key = "$workspace|$place"
+        val was = app.placeActions[key]
+        // The same action: its latest doing, nothing for the bar to redraw.
+        if (action != null && was != null && was.key == action.key && was.label == action.label) was.run = action.run
+        else if (was != action || key !in app.placeActions) app.placeActions[key] = action
     }
 }
 
@@ -134,12 +163,28 @@ fun PlaceBar(app: AppState, current: WorkspaceEntry, haze: HazeState, shown: Boo
         if (decisions > 0) put("decisions", accent)
         if (trouble != null) put("stations", red)
     }
+    // The notch's action: 令 on the chats' pages, else what the place's page said (PlaceAction); a page not drawn yet
+    // that has not said, the notch as it was until it does (from 令 to a "+", it stays open), a second at most.
+    val lingLabel = t("android-chat.newChat")
+    val ling = remember(lingLabel) { BarAction("ling", lingLabel, Icons.Ling) { app.push(Screen.NewChat) } }
+    val actions = app.placeActions
+    val held = remember { arrayOf<BarAction?>(null) }
+    var waited by remember(ws, active) { mutableStateOf(false) }
+    LaunchedEffect(ws, active) { delay(1000); waited = true }
+    val action = when {
+        active == null -> null
+        active in CHAT_FAMILY -> ling
+        "$ws|$active" in actions -> actions["$ws|$active"]
+        waited -> null
+        else -> held[0]
+    }
+    held[0] = action
     BottomBar(
-        sets = bars.sets, cur = bars.current.toInt(), active = active, chatsPage = active in CHAT_FAMILY, shown = shown,
-        haze = haze, dots = dots, labelOf = { key -> if (key == "stations" && said.isNotEmpty()) stationsSaid else placeLabel(key) }, lingLabel = t("android-chat.newChat"), chatFamily = CHAT_FAMILY,
+        sets = bars.sets, cur = bars.current.toInt(), active = active, action = action, shown = shown,
+        haze = haze, dots = dots, labelOf = { key -> if (key == "stations" && said.isNotEmpty()) stationsSaid else placeLabel(key) },
+        notches = { place -> place in CHAT_FAMILY || actions["$ws|$place"] != null },
         icon = { place, tint -> PlaceIcon(place, tint, glyph) },
         onTab = { place -> if (app.stack.size == 1) app.place(screenOf(place)) },
-        onLing = { app.push(Screen.NewChat) },
         onSwitch = { i, place ->
             val now = app.bars
             app.setBars(now.sets, i)

@@ -78,12 +78,11 @@ fun UsageScreen(current: WorkspaceEntry) {
     var days by rememberSaveable { mutableIntStateOf(7) }
     val topic by rememberTopic<UsageView>(app.core, Topics.usage(current.workspace.id, days))
     val view = topic.value
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
-        TopBack(t("android-misc.settings"), app::pop) {
-            Seg(DAYS.map { it.second }, DAYS.indexOfFirst { it.first == days }.coerceAtLeast(0), { days = DAYS[it].first })
-        }
-        LargeTitle("", t("android-misc.usage.title"))
-        PageNote(t("android-misc.usage.note"))
+    // Its days are its own action, at the top bar's right; nothing to add.
+    PlacePage(current, "usage", null, actions = {
+        Seg(DAYS.map { it.second }, DAYS.indexOfFirst { it.first == days }.coerceAtLeast(0), { days = DAYS[it].first })
+    }) { top ->
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = top)) {
         if (view == null) {
             Text(topic.error?.let { t("android-misc.usage.loadFailed", "error" to it.message) } ?: t("android-misc.reading"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(24.dp))
         } else {
@@ -104,6 +103,7 @@ fun UsageScreen(current: WorkspaceEntry) {
         }
         Spacer(Modifier.height(30.dp))
         BarRoom()
+    }
     }
 }
 

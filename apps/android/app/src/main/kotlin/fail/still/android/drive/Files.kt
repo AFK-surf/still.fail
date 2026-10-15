@@ -1,5 +1,6 @@
 // 文件 as a place of the bottom bar (Places.kt): every station's lent folders in one flat list (docs/drive.md), each
-// opening its folder's page (DriveScreen.kt); a "+" lends another, on a station the viewer may name folders on.
+// opening its folder's page (DriveScreen.kt); a "+" (in the bar's notch) lends another, on a station the viewer may name
+// folders on.
 package fail.still.android.drive
 
 import androidx.compose.foundation.background
@@ -43,12 +44,11 @@ import fail.still.android.data.WorkspaceView
 import fail.still.android.data.rememberTopic
 import fail.still.android.data.t
 import fail.still.android.screens.PickRow
-import fail.still.android.screens.TopBack
+import fail.still.android.screens.PlacePage
+import fail.still.android.ui.BarAction
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
-import fail.still.android.ui.LargeTitle
-import fail.still.android.ui.NavButton
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
@@ -68,21 +68,21 @@ fun FilesScreen(current: WorkspaceEntry) {
     // Where another folder can be lent: a station online that has a drive (a station from before it has none), by
     // whoever may name its folders (the workspace's owners and admins).
     val lenders = if (workspace.value?.manager == true) list.orEmpty().filter { it.online && it.overview?.drive != null } else emptyList()
+    val add = if (lenders.isNotEmpty()) BarAction("lend-folder", t("android-misc.bar.action.files"), Icons.Plus) { lend(app, lenders) } else null
     val room = LocalBarRoom.current
     val foot = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 30.dp + room
-    Column(Modifier.fillMaxSize().background(C.bg)) {
-        TopBack(t("android-misc.settings"), app::pop, trailing = if (lenders.isNotEmpty()) ({ NavButton(Icons.Plus, { lend(app, lenders) }, 20.dp) }) else null)
-        LargeTitle(ws.name, t("android-misc.drive.title"))
+    val known = (list != null || stations.error != null) && (workspace.value != null || workspace.error != null)
+    PlacePage(current, "files", add, known) { top ->
         when {
-            list == null -> Note(stations.error?.message ?: t("android-misc.drive.reading"))
+            list == null -> Box(Modifier.padding(top = top)) { Note(stations.error?.message ?: t("android-misc.drive.reading")) }
             lent.isEmpty() -> Column(
-                Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 56.dp),
+                Modifier.fillMaxWidth().padding(top = top).padding(horizontal = 32.dp, vertical = 56.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 IconIn(Icons.Folder, 40.dp, C.subtle)
                 Text(if (lenders.isNotEmpty()) t("android-misc.files.none.manager") else t("android-misc.files.none.member"), fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
             }
-            else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 4.dp, bottom = foot)) {
+            else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = top, bottom = foot)) {
                 itemsIndexed(lent, key = { _, l -> "${l.s.station}|${l.root.path}" }) { i, l -> FolderRow(app, l, i == 0, i == lent.lastIndex) }
             }
         }
