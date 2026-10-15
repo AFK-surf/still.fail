@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -244,6 +245,10 @@ private fun joinSheet(app: AppState, ws: String, station: String, name: String) 
 private fun confirmSheet(app: AppState, ws: String, r: LockRequest) {
     app.sheet = SheetSpec(0.55f) {
         val who = r.name.ifEmpty { r.email }
+        // Answered on another device: gone here too.
+        val lock by rememberTopic<LockView>(app.core, Topics.lock(ws))
+        val gone = lock.value?.requests?.none { it.device == r.device } == true
+        LaunchedEffect(gone) { if (gone) app.sheet = null }
         SheetGrab()
         SheetHead(t("web-pages.security.confirmTitle", "name" to who))
         Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -332,5 +337,12 @@ fun LockGate(current: WorkspaceEntry, content: @Composable () -> Unit) {
     val app = LocalApp.current
     val topic by rememberTopic<LockView>(app.core, Topics.lock(current.workspace.id))
     val lock = topic.value
+    // A device waiting on this one, put up once wherever in the workspace this device is (the core's `prompt`).
+    val prompt = lock?.prompt
+    LaunchedEffect(prompt?.device) {
+        if (prompt == null) return@LaunchedEffect
+        confirmSheet(app, current.workspace.id, prompt)
+        runCatching { app.core.call("lock.shown", buildJsonObject { put("workspace", current.workspace.id); put("device", prompt.device) }) }
+    }
     if (lock?.me?.waiting == true) SecurityWaitingScreen(current, lock) else content()
 }

@@ -62,6 +62,8 @@ type Part = {
   probes: Map<string, "ok" | "old" | "offline">;
   /// The base key of this device (the mesh's), once known.
   base: string | null;
+  /// Waiting devices put up on their own here already: not again this run.
+  shown: Set<string>;
 };
 
 /// What the signing key of this device is, as loaded (undefined: not loaded yet), per core.
@@ -112,7 +114,7 @@ export function fold(entries: Entry[]): Folded {
 }
 
 const part = (inner: Inner, ws: string): Part =>
-  inner.workspaces.of(ws).part<Part>("lock", () => ({ refused: new Map(), requested: undefined, excluded: new Set(), devices: null, probes: new Map(), base: null }));
+  inner.workspaces.of(ws).part<Part>("lock", () => ({ refused: new Map(), requested: undefined, excluded: new Set(), devices: null, probes: new Map(), base: null, shown: new Set() }));
 
 const held = (inner: Inner, ws: string): Held | null => {
   const h = inner.data.record("lock", ws);
@@ -226,7 +228,7 @@ function waiting(inner: Inner, ws: string, station: string): CoreError | null {
 }
 
 /// What a control plane that keeps no lock shows.
-const NONE = { available: false, locked: false, notice: false, role: "member", manages: false, owner: false, canSign: false, signs: false, signers: 0, members: [], stations: [], protected: 0, requests: [], renew: [], attention: 0 };
+const NONE = { available: false, locked: false, notice: false, role: "member", manages: false, owner: false, canSign: false, signs: false, signers: 0, members: [], stations: [], protected: 0, requests: [], prompt: null, renew: [], attention: 0 };
 const NO_DRAFT = { available: false, loading: false, canSign: false, owner: false, ready: false, members: [], devices: [], stations: [] };
 
 /// The topics.
@@ -293,6 +295,7 @@ export function lockView(inner: Inner, ws: string): J {
     .filter((r) => r.device !== p.base && (manages || r.yours));
   const renew = members.flatMap((m) => (m.you ? m.devices.filter((d) => d.renewSoon) : []));
   const dismissed = get(get(inner.data.shared({ topic: "prefs" }), "lockNotice"), ws) === true;
+  const signs = mine !== undefined && typeof mine.sign_key === "string" && mine.sign_key === signer;
   return {
     available: true,
     locked,
@@ -303,7 +306,7 @@ export function lockView(inner: Inner, ws: string): J {
     owner: role === "owner",
     // Whether this device signs (an app whose key the lock names), whether it could (an app).
     canSign: inner.host.appKeys === true,
-    signs: mine !== undefined && typeof mine.sign_key === "string" && mine.sign_key === signer,
+    signs,
     me: {
       device: p.base, code: p.base ? shortCode(p.base) : null, kind: inner.host.appKeys ? "app" : "web",
       confirmed: mine !== undefined, daysLeft: typeof mine?.exp === "number" ? daysLeft(mine.exp - t) : null,
@@ -317,6 +320,8 @@ export function lockView(inner: Inner, ws: string): J {
     // What waits on the viewer: devices to confirm (their own, or anyone's for owners and admins), their own web
     // devices running out.
     requests,
+    // The waiting device to put up on its own wherever this device is: one it can confirm, not put up here before.
+    prompt: locked && signs ? (requests.find((r) => !p.shown.has(r.device)) ?? null) : null,
     renew,
     attention: requests.length + renew.length,
   };
@@ -403,6 +408,11 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
       case "dismiss":
         prefs.set(inner.data, { lockNotice: { [c.workspace]: true } }, false, inner.host.nowMs());
         inner.store.invalidate({ topic: "prefs" });
+        inner.store.invalidateAll((t) => t.topic === "lock" && t.workspace === c.workspace);
+        return null;
+      // A waiting device put up on its own: not again on this device (closed, it stays in 设置 › 安全).
+      case "shown":
+        part(inner, c.workspace).shown.add(param("device"));
         inner.store.invalidateAll((t) => t.topic === "lock" && t.workspace === c.workspace);
         return null;
       case "toggle": {

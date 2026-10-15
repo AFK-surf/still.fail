@@ -24,7 +24,7 @@ import { NewProfileScreen, ProfileAccountScreen, ProfileScreen, ProfilesScreen }
 import { AppearanceScreen, LanguageScreen, SettingsScreen } from "./Settings.tsx";
 import { ChangelogScreen } from "./Changelog.tsx";
 import { WorkspaceScreen } from "./WorkspacePage.tsx";
-import { SecurityOpenScreen, SecurityScreen, SecurityWaitingScreen } from "./Security.tsx";
+import { SecurityOpenScreen, SecurityPrompt, SecurityScreen, SecurityWaitingScreen } from "./Security.tsx";
 import { useLock } from "../cloud/Security.tsx";
 import { identify } from "../telemetry.ts";
 import { t } from "../i18n.ts";
@@ -87,7 +87,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
     </Routes>
     </LockGate>
   ), [stations, entry.id]);
-  return <MobileShell entry={entry} routes={routes} recent={() => <Recent />} />;
+  return <MobileShell entry={entry} routes={routes} recent={() => <Recent />} over={<SecurityPrompt />} />;
 }
 
 /** A device waiting to be confirmed into the workspace's lock sees that instead of its pages (but the settings). */

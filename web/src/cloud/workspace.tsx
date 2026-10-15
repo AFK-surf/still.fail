@@ -41,7 +41,7 @@ import { HAS_LOCAL_STATION, LocalStationPage } from "../pages/LocalStation.tsx";
 import { ChangelogNews, ChangelogPage } from "../pages/Changelog.tsx";
 import { AddProfile } from "../pages/AddProfile.tsx";
 import { ProfilesNav } from "../ProfilesNav.tsx";
-import { SecurityOpen, SecuritySettings, SecurityWaiting, useLock } from "./Security.tsx";
+import { SecurityOpen, SecurityPrompt, SecuritySettings, SecurityWaiting, useLock } from "./Security.tsx";
 import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, useSidebarMode, useStationList, type Station } from "../station.tsx";
 import { useToast } from "../toast.tsx";
@@ -146,6 +146,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
         </div>
         <SidebarEdge />
         <SystemBubbles scope={entry.id} />
+        <SecurityPrompt entry={entry} />
         <main className={shellCss.main}>
           <ComposerDock>
           <Routes>

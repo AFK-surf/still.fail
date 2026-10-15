@@ -114,8 +114,8 @@ function wayOf(path: string): Way {
 /** `way`: how the page came in, and so how it goes (a new chat become its chat still sinks back down). */
 interface Page { key: string; location: Location; way: Way }
 
-/** The workspace's pages, one route each; `routes` draws the one a location is. */
-export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (location: Location) => ReactNode; recent: () => ReactNode }) {
+/** The workspace's pages, one route each; `routes` draws the one a location is. `over`: what puts itself up over any page. */
+export function MobileShell({ entry, routes, recent, over }: { entry: Entry; routes: (location: Location) => ReactNode; recent: () => ReactNode; over?: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const type = useNavigationType();
@@ -290,6 +290,7 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
   const below = pages.at(-2)?.key;
   return (
     <Context.Provider value={app}>
+      {over}
       {/* What shared parts say (../toast.tsx useToast, useAct) shows as the phone's own toast. */}
       <ToastTo show={showToast}>
         <div className={rootCss.m}>

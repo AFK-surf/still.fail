@@ -2871,6 +2871,11 @@ export interface LockView {
 	protected: number;
 	/** Devices waiting on the viewer: their own, anyone's for owners and admins. */
 	requests: LockRequest[];
+	/**
+	 * The waiting device to put up on its own (a dialog, a sheet) wherever this device is: one it signs for, not
+	 * put up here before (`lock.shown`, said as it is).
+	 */
+	prompt?: LockRequest;
 	/** The viewer's own web devices running out soon. */
 	renew: LockDevice[];
 	attention: number;

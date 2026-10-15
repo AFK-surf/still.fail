@@ -226,10 +226,14 @@ async function main() {
   const waits = await phone.call("tools.access", { station: `${ws}/${A.id}` }).then(() => "admitted", (e) => `${e.code}: ${e.message}`);
   const asked = await phone.call("lock.request", { workspace: ws });
   const listed = await until(async () => (await owner.call("lock.state", { workspace: ws })).requests.find((r: any) => r.device === asked.device), "request listed");
+  // Put up by itself on the owner's signing device, once.
+  const prompted = (await owner.call("lock.state", { workspace: ws })).prompt?.device === asked.device;
+  await owner.call("lock.shown", { workspace: ws, device: asked.device });
+  const promptedAgain = (await owner.call("lock.state", { workspace: ws })).prompt?.device === asked.device;
   const wrong = await owner.call("lock.confirm", { workspace: ws, device: asked.device, code: "AAA-AAA" }).then(() => "confirmed", (e) => `refused: ${e.message}`);
   await owner.call("lock.confirm", { workspace: ws, device: asked.device, code: listed.code });
   const after = await until(async () => phone.call("tools.access", { station: `${ws}/${A.id}` }).then(() => "admitted", () => null), "phone admitted", 50);
-  check("a new device: refused, asks, confirmed by its code", `${A.name}: before ${waits}; code on the phone ${asked.code}, listed for the owner ${listed?.code}; a wrong code ${wrong}; after ${after}`, "-", waits.startsWith("lock_unconfirmed") && asked.code === listed?.code && wrong.startsWith("refused") && after === "admitted");
+  check("a new device: refused, asks, confirmed by its code", `${A.name}: before ${waits}; code on the phone ${asked.code}, listed for the owner ${listed?.code}, put up ${prompted ? "once" : "never"}${promptedAgain ? " and again" : ""}; a wrong code ${wrong}; after ${after}`, "-", waits.startsWith("lock_unconfirmed") && asked.code === listed?.code && prompted && !promptedAgain && wrong.startsWith("refused") && after === "admitted");
 
   say("a new station joins with the lock's hash and is confirmed by the code it printed");
   const made = await owner.call("workspace.enroll", { account: alice.sub, workspace: ws, name: "joined-d" });

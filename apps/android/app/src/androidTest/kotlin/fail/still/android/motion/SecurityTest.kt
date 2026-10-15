@@ -1,5 +1,6 @@
 // The workspace's security mode (Security.kt): its row in the settings, its page off and on, a waiting device confirmed
-// from a bottom sheet once its code is compared, turning it on, and what a device waiting itself shows.
+// from a bottom sheet once its code is compared (and that sheet put up by itself wherever the app is), turning it on,
+// and what a device waiting itself shows.
 package fail.still.android.motion
 
 import androidx.activity.ComponentActivity
@@ -108,6 +109,17 @@ class SecurityTest {
         val call = h.fake.calls.first { it.first == "lock.confirm" }.second
         assertEquals("cc".repeat(32), call["device"]!!.jsonPrimitive.content)
         assertEquals("K7F-2QX", call["code"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun aDeviceWaitingOnThisOnePutsItselfUp() {
+        val h = Harness(rule)
+        val lock = on()
+        h.fake.put(Topics.lock(ws), lock.copy(prompt = lock.requests.first()))
+        h.launch(listOf(Screen.Home))
+        rule.onNodeWithText("确认李二的新设备").assertIsDisplayed()
+        rule.onNodeWithText("K7F-2QX").assertIsDisplayed()
+        picture(h, "security-prompt")
+        rule.runOnIdle { assertTrue(h.fake.calls.any { it.first == "lock.shown" && it.second["device"]!!.jsonPrimitive.content == "cc".repeat(32) }) }
     }
 
     @Test fun aWaitingDeviceShowsItsCodeInsteadOfTheWorkspace() {

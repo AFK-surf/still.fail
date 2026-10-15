@@ -1084,6 +1084,7 @@ export const SHAPES: Record<string, Shape> = {
     ["stations", vec("LockStation")],
     ["protected", "u32"],
     ["requests", vec("LockRequest"), { doc: "Devices waiting on the viewer: their own, anyone's for owners and admins." }],
+    ["prompt", opt("LockRequest"), { doc: "The waiting device to put up on its own (a dialog, a sheet) wherever this device is: one it signs for, not\nput up here before (`lock.shown`, said as it is)." }],
     ["renew", vec("LockDevice"), { doc: "The viewer's own web devices running out soon." }],
     ["attention", "u32"],
   ], { doc: "The workspace's security mode, its lock (the `lock` topic; client/core-ts/src/views/lock.ts, docs/workspace-lock.md)." }),

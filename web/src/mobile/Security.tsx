@@ -1,6 +1,7 @@
 // The workspace's security mode on a narrow screen (as the Android app has it, screens/Security.kt): its page from
 // the settings, turning it on, a device to confirm in a bottom sheet, and what a device waiting itself shows. The
 // core's (`lock`, `lockDraft`; client/core-ts/src/views/lock.ts): this only draws.
+import { useEffect } from "react";
 import { useCall, useTopic } from "../core/react.ts";
 import { useDoing } from "../doing.ts";
 import { stamp } from "../api.ts";
@@ -165,12 +166,29 @@ function JoinSheet({ s }: { s: LockView["stations"][number] }) {
   );
 }
 
+/** A device waiting on this one, put up once wherever in the workspace this device is (the core's `prompt`). */
+export function SecurityPrompt() {
+  const app = useApp();
+  const call = useCall();
+  const r = useLock(app.entry.id)?.prompt ?? null;
+  useEffect(() => {
+    if (!r) return;
+    app.sheet({ height: 0.5, content: () => <ConfirmSheet r={r} /> });
+    void call("lock.shown", { workspace: app.entry.id, device: r.device });
+  }, [r?.device]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
 /** A waiting device: confirmed once its code is the one on its screen. */
 function ConfirmSheet({ r }: { r: LockRequest }) {
   const app = useApp();
   const run = useRun();
   const ws = app.entry.id;
   const close = (then: () => void) => () => { app.sheet(null); then(); };
+  // Answered on another device: gone here too.
+  const lock = useLock(ws);
+  const gone = lock !== undefined && !lock.requests.some((x) => x.device === r.device);
+  useEffect(() => { if (gone) app.sheet(null); }, [gone]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className={css.mSheet}>
       <b className={css.mSheetTitle}>{t("web-pages.security.confirmTitle", { name: r.name || r.email })}</b>
