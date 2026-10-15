@@ -41,6 +41,7 @@ import { HAS_LOCAL_STATION, LocalStationPage } from "../pages/LocalStation.tsx";
 import { ChangelogNews, ChangelogPage } from "../pages/Changelog.tsx";
 import { AddProfile } from "../pages/AddProfile.tsx";
 import { ProfilesNav } from "../ProfilesNav.tsx";
+import { NavAction, NavItem, NavTop } from "../SidebarList.tsx";
 import { SecurityOpen, SecurityPrompt, SecuritySettings, SecurityWaiting, useLock } from "./Security.tsx";
 import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, useSidebarMode, useStationList, type Station } from "../station.tsx";
@@ -57,7 +58,6 @@ import { useInWorkspace } from "../notify.ts";
 import * as nav from "../Sidebar.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./workspace.css.ts";
-import * as stationCss from "./StationPage.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as controlsCss from "../styles/controls.css.ts";
@@ -345,8 +345,7 @@ function WorkspaceSidebarFooter({ entry }: { entry: WorkspaceEntry }) {
 function FilesSidebar({ entry }: { entry: WorkspaceEntry }) {
   return (
     <nav ref={useGlassBands()} className={nav.sidebar} aria-label={t("web-pages.drive.title")}>
-      <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div>
-      <FilesNav scope={entry.id} />
+      <FilesNav scope={entry.id} top={<div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div>} />
       <WorkspaceSidebarFooter entry={entry} />
     </nav>
   );
@@ -356,8 +355,7 @@ function FilesSidebar({ entry }: { entry: WorkspaceEntry }) {
 function ProfilesSidebar({ entry }: { entry: WorkspaceEntry }) {
   return (
     <nav ref={useGlassBands()} className={nav.sidebar} aria-label="Profile">
-      <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div>
-      <ProfilesNav scope={entry.id} />
+      <ProfilesNav scope={entry.id} top={<div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div>} />
       <WorkspaceSidebarFooter entry={entry} />
     </nav>
   );
@@ -367,8 +365,7 @@ function ProfilesSidebar({ entry }: { entry: WorkspaceEntry }) {
 function StationsSidebar({ entry }: { entry: WorkspaceEntry }) {
   return (
     <nav ref={useGlassBands()} className={nav.sidebar} aria-label="Station">
-      <div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div>
-      <StationsNav entry={entry} />
+      <StationsNav entry={entry} top={<div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div>} />
       <WorkspaceSidebarFooter entry={entry} />
     </nav>
   );
@@ -381,30 +378,29 @@ function StationsIndex({ entry }: { entry: WorkspaceEntry }) {
 
 /** Every folder the stations lend (docs/drive.md), one list, each with whose it is at its end (quiet; its dot grey while the
  * station is away). */
-function FilesNav({ scope }: { scope: string }) {
+function FilesNav({ scope, top }: { scope: string; top?: ReactNode }) {
   const stations = useStations(scope).value ?? [];
   const where = useLocation();
   const root = new URLSearchParams(where.search).get("root");
   const folders = stations.flatMap((s) => (s.overview?.drive?.roots ?? []).map((r) => ({ s, r })));
   const add = useAddFolder(scope);
   return (
-    <div className={nav.navScroll}>
-      {add.can && <button type="button" className={`${nav.navRow} ${stationCss.navAdd}`} onClick={add.start}><Plus {...ICON} />{t("web-pages.drive.addRoot")}</button>}
-      {folders.length === 0 && <p className={nav.navEmpty}>{t("web-main.rail.filesNone")}</p>}
-      {folders.map(({ s, r }) => {
-        const base = stationBase(s.station);
-        const roots = s.overview?.drive?.roots ?? [];
-        const here = where.pathname.startsWith(`${base}/files`) && (root === r.path || (!root && roots.length === 1));
-        // A Link, not a NavLink: they differ in their query alone, which a NavLink does not look at.
-        return (
-          <Link key={`${s.station} ${r.path}`} className={nav.navRow} to={drivePath(base, r.path)} title={r.path} aria-current={here ? "page" : undefined}>
-            <Folder {...ICON} /><span className={nav.navText}>{r.name}</span>
-            <span className={railCss.station}><span className={railCss.dot} data-online={s.online || undefined} />{s.name}</span>
-          </Link>
-        );
-      })}
-      {add.dialogs}
-    </div>
+    <>
+      <NavTop top={top} action={add.can && <NavAction icon={<Plus {...ICON} />} label={t("web-pages.drive.addRoot")} onClick={add.start} />} />
+      <div className={nav.navScroll}>
+        {folders.length === 0 && <p className={nav.navEmpty}>{t("web-main.rail.filesNone")}</p>}
+        {folders.map(({ s, r }) => {
+          const base = stationBase(s.station);
+          const roots = s.overview?.drive?.roots ?? [];
+          const here = where.pathname.startsWith(`${base}/files`) && (root === r.path || (!root && roots.length === 1));
+          return (
+            <NavItem key={`${s.station} ${r.path}`} to={drivePath(base, r.path)} current={here} tip={r.path} mark={<Folder {...ICON} />} title={r.name}
+              end={<><span className={railCss.dot} data-online={s.online || undefined} />{s.name}</>} />
+          );
+        })}
+        {add.dialogs}
+      </div>
+    </>
   );
 }
 

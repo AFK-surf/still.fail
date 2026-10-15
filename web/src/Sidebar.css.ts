@@ -127,13 +127,13 @@ export const navRow = style({
 });
 globalStyle(`${navRow} svg`, { color: vars.muted, flex: "none" });
 export const navText = style(ellipsis);
-/** 新建对话, with the filter beside it. */
+/** The action over a list (SidebarList.tsx NavAction): 新建对话, with the filter beside it; 添加 Station, …. */
 export const navNew = style({ display: "flex", alignItems: "center", gap: 4, padding: "6px 8px 2px" });
 globalStyle(`${navNew} > ${navRow}`, { flex: 1, minWidth: 0 });
 /** 待处理, under 新建对话 (cloud/workspace.tsx): as inset as it; nothing when there is nothing to do. */
 export const navTodo = style({ padding: "2px 8px 8px", selectors: { "&:empty": { display: "none" } } });
-// Align the compose icon with the 14px completion check below.
-globalStyle(`${navNew} > ${navRow} > svg`, { transform: "translateX(-1px)" });
+/** 新建对话's icon: aligned with the 14px completion check below. */
+export const navCompose = style({ transform: "translateX(-1px)" });
 
 // ── a chat's row ──
 

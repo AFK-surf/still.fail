@@ -3,6 +3,7 @@ import { StationMark } from "./StationMark.tsx";
 import { useCopyChatLink } from "./ChatRef.tsx";
 import { stationBase, useSidebarMode, type ChatFilter } from "./station.tsx";
 import { SidebarActions } from "./SidebarActions.tsx";
+import { NavSection, NavTop } from "./SidebarList.tsx";
 import { NavLink, useLocation } from "react-router";
 import { useGo, useHere } from "./go.ts";
 import { stationApi, useStationCall, useStatus, type ChatItem, type ChatsView } from "./api.ts";
@@ -57,12 +58,8 @@ export function ChatList({ scope, newChat, stationsPage, archive, decisions, top
   return (
     <>
       <GoingArrived />
-      <div className={nav.navTop}>
-        {top}
-        <SidebarActions newChat={newChat} archive={archive} workspace={`/w/${scope}`}
-          showFilter={!none} />
-        {below}
-      </div>
+      <NavTop top={top} below={below}
+        action={<SidebarActions newChat={newChat} archive={archive} workspace={`/w/${scope}`} showFilter={!none} />} />
       <div className={nav.navSlider}>
         <div className={nav.navTrack} data-filter={mode} data-instant={instant.current || undefined}>
           {/* Followed at once, side by side: switching slides from one to another with nothing to wait for. */}
@@ -206,10 +203,9 @@ const ChatPane = memo(function ChatPane({ scope, filter, stationsPage, hidden }:
           : <>{t("web-main.sidebar.noStation.before")}<NavLink className={chatCss.inlineLink} to={stationsPage}>{t("web-main.sidebar.noStation.link")}</NavLink>{t("web-main.sidebar.noStation.after")}</>}</p>
       )}
       {days.map((day) => (
-        <section key={day.daysAgo} aria-label={day.label}>
-          <div className={nav.navHeading} data-flip={`day:${day.daysAgo}`}>{day.label}</div>
+        <NavSection key={day.daysAgo} title={day.label} flip={`day:${day.daysAgo}`}>
           {day.items.map((item) => <ChatRow key={rowKey(item)} scope={scope} filter={filter} row={rowKey(item)} lead={lead} />)}
-        </section>
+        </NavSection>
       ))}
     </div>
   );

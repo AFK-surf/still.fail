@@ -21,6 +21,7 @@ import { WorkspaceMark } from "../WorkspaceMark.tsx";
 import { HostDetails, Net, problems, state, useLong } from "./StationCards.tsx";
 import { MarkPick } from "./MarkPick.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
+import { NavAction, NavItem, NavLine, NavTop, navFill } from "../SidebarList.tsx";
 import { AddStationDialog, useStationEdits, useWorkspace } from "./settings.tsx";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import * as nav from "../Sidebar.css.ts";
@@ -42,21 +43,19 @@ export function useStationsSide(): boolean {
 
 export const stationPage = (workspace: string, id: string) => `/w/${workspace}/settings/stations/${encodeURIComponent(id)}`;
 
-/** The sidebar's list: adding one at its top (a manager), then each station, how it is at its row's end. */
-export function StationsNav({ entry }: { entry: WorkspaceEntry }) {
+/** The sidebar's list: adding one in the band over it (a manager), then each station, how it is at its row's end. */
+export function StationsNav({ entry, top }: { entry: WorkspaceEntry; top?: ReactNode }) {
   const stations = useStations(entry.id).value ?? [];
   const { view, manager } = useWorkspace(entry);
   const [adding, setAdding] = useState(false);
   return (
-    <div className={nav.navScroll}>
-      {manager && view && (
-        <button type="button" className={`${nav.navRow} ${css.navAdd}`} onClick={() => setAdding(true)}><Plus {...ICON} />{t("web-pages.settings.stations.add")}</button>
-      )}
-      <div className={css.navList}>
+    <>
+      <NavTop top={top} action={manager && view && <NavAction icon={<Plus {...ICON} />} label={t("web-pages.settings.stations.add")} onClick={() => setAdding(true)} />} />
+      <div className={nav.navScroll}>
         {stations.map((s) => <StationRow key={s.id} s={s} to={stationPage(entry.id, s.id)} />)}
+        {adding && view && <AddStationDialog view={view} account={entry.account} stations={stations} onClose={() => setAdding(false)} thisMac />}
       </div>
-      {adding && view && <AddStationDialog view={view} account={entry.account} stations={stations} onClose={() => setAdding(false)} thisMac />}
-    </div>
+    </>
   );
 }
 
@@ -68,28 +67,25 @@ function StationRow({ s, to }: { s: StationView; to: string }) {
   const meters = s.online ? s.host?.meters ?? [] : [];
   const newer = s.online && (s.overview?.updates ?? []).some((v) => v.installed && v.updatable && (v.newer || v.downgrade));
   return (
-    <NavLink className={`${nav.navRow} ${css.row}`} to={to}>
-      <span className={css.rowMark}>{s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={16} /> : <WorkspaceMark w={{ name: s.name }} size={18} />}</span>
-      <span className={css.rowText}>
-        <span className={css.rowHead}>
-          <span className={nav.navText}>{s.name}</span>
-          <span className={css.rowState}><span className={railCss.dot} data-online={s.online || undefined} />{brief(s)}</span>
+    <NavItem to={to} title={s.name}
+      mark={s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={16} /> : <WorkspaceMark w={{ name: s.name }} size={16} />}
+      end={<><span className={railCss.dot} data-online={s.online || undefined} />{brief(s)}</>}>
+      <NavLine><span className={navFill}>{s.host?.identity ?? (s.online ? t("web-pages.stations.connecting") : t("web-pages.stations.offline"))}</span></NavLine>
+      {meters.length > 0 && (
+        <span className={css.rowMeters}>
+          {meters.map((m) => <EdgeChip key={m.label} small bare fill={m.left} level={m.level} mark={m.short} text={`${m.big}${m.unit === "%" ? "%" : m.unit.slice(0, 1)}`} label={`${m.label} ${m.remaining}`} />)}
         </span>
-        <span className={css.rowSub}>{s.host?.identity ?? (s.online ? t("web-pages.stations.connecting") : t("web-pages.stations.offline"))}</span>
-        {meters.length > 0 && (
-          <span className={css.rowMeters}>
-            {meters.map((m) => <EdgeChip key={m.label} small bare fill={m.left} level={m.level} mark={m.short} text={`${m.big}${m.unit === "%" ? "%" : m.unit.slice(0, 1)}`} label={`${m.label} ${m.remaining}`} />)}
-          </span>
-        )}
-        {s.online && (s.net || newer) && (
-          <span className={css.rowSub}>
+      )}
+      {s.online && (s.net || newer) && (
+        <NavLine>
+          <span className={navFill}>
             {s.net && <>{s.net.path}{s.net.rtt && <>{" · "}<span className={css.low} data-level={s.net.rtt.level}>{s.net.rtt.text}</span></>}</>}
             {s.net && newer && " · "}
             {newer && t("web-pages.stations.page.newer")}
           </span>
-        )}
-      </span>
-    </NavLink>
+        </NavLine>
+      )}
+    </NavItem>
   );
 }
 

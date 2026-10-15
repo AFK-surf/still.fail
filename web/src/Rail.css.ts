@@ -163,11 +163,7 @@ export const wideOnly = style({ "@media": { [narrow]: { display: "none" } } });
 /** What the rail holds, on a narrow screen (no rail there) in the sidebar's foot as before. */
 export const narrowOnly = style({ "@media": { [wide]: { display: "none" } } });
 
-/** A folder lent (FilesNav): whose it is, at its row's end. */
-export const station = style({
-  flex: "none", display: "flex", alignItems: "center", gap: 5, marginLeft: "auto", maxWidth: "45%", overflow: "hidden",
-  fontSize: vars.textMeta, color: vars.muted, whiteSpace: "nowrap",
-});
+/** A station's dot, at the end of its row and of a folder's it lends (SidebarList.tsx NavItem `end`): grey while away. */
 export const dot = style({
   width: 6, height: 6, borderRadius: "50%", background: vars.subtle, flex: "none",
   selectors: { "&[data-online]": { background: vars.online } },
