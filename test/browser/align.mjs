@@ -36,7 +36,7 @@ mountDemo(root);
     const px = (v) => parseFloat(v) || 0;
     const resolve = (el, value) => {
       const probe = document.createElement('div');
-      probe.style.cssText = `position:absolute;visibility:hidden;width:${value}`;
+      probe.style.cssText = `position:absolute;visibility:hidden;padding:0;border:0;margin:0;width:${value}`;
       el.appendChild(probe);
       const w = probe.getBoundingClientRect().width;
       probe.remove();
