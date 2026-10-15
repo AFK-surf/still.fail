@@ -1,5 +1,5 @@
 // The share host (share.still.fail, docs/public-share.md): where someone given a link to a published chat reads it. A
-// static Worker of its own (stillfail-share, wrangler.share.jsonc): the page (web/share, `vite build --config
+// static Worker of its own (stillfail-share, wrangler.share.jsonc): the page (web/share, `vp build --config
 // web/vite.share.config.ts`) and these files beside it, written out by build-static.ts. Like the preview host it is not
 // the app's origin, so nothing on it reaches a sign-in; nothing on it keeps anything either. What it shows never passes
 // through still.fail: the page asks the cloud for the relays (/v1/relays) and reads the snapshot from the station itself,

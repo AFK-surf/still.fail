@@ -9,13 +9,13 @@
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "build": "node scripts/native.ts iroh-pkg && node scripts/posthog-key.ts",
-    "stories": "vite --config web/vite.stories.config.ts",
-    "build:cloud": "node scripts/native.ts iroh-pkg && (cd client/core-ts && pnpm install --frozen-lockfile) && vite build --config web/vite.config.ts --mode cloud && vite build --config web/vite.config.ts --mode cloud-admin && vite build --config web/vite.share.config.ts && node cloud/build-static.ts",
-    "build:share": "node scripts/native.ts iroh-pkg && vite build --config web/vite.share.config.ts && node cloud/build-static.ts",
-    "dev:web": "vite --config web/vite.config.ts --mode cloud",
-    "build:site": "vite build --config web/vite.demo.config.ts && vite build --config web/vite.demo.config.ts --ssr ../web/src/site/prerender.tsx --outDir ../dist/site-ssr && node web/site-prerender.mjs",
+    "stories": "vp dev --config web/vite.stories.config.ts",
+    "build:cloud": "node scripts/native.ts iroh-pkg && (cd client/core-ts && pnpm install --frozen-lockfile) && vp build --config web/vite.config.ts --mode cloud && vp build --config web/vite.config.ts --mode cloud-admin && vp build --config web/vite.share.config.ts && node cloud/build-static.ts",
+    "build:share": "node scripts/native.ts iroh-pkg && vp build --config web/vite.share.config.ts && node cloud/build-static.ts",
+    "dev:web": "vp dev --config web/vite.config.ts --mode cloud",
+    "build:site": "vp build --config web/vite.demo.config.ts && vp build --config web/vite.demo.config.ts --ssr ../web/src/site/prerender.tsx --outDir ../dist/site-ssr && node web/site-prerender.mjs",
     "build:site-beta": "STILLFAIL_SITE=beta pnpm run build:site",
-    "dev:site": "vite --config web/vite.demo.config.ts",
+    "dev:site": "vp dev --config web/vite.demo.config.ts",
     "typecheck": "node client/core-ts/scripts/shapes.ts --check && node client/core-ts/scripts/operations.ts --check && python3 scripts/icons.py --check && tsgo -p tsconfig.json && tsgo -p web/tsconfig.json",
     "test": "node --test --test-timeout=60000 \"test/**/*.test.ts\"",
     "perf:chat": "node test/perf/chat.mjs",
@@ -48,6 +48,7 @@
     "shiki": "^4.4.3",
     "thumbhash": "^0.1.1",
     "typescript": "^5.9.0",
-    "vite": "^7.1.0"
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.2.0",
+    "vite-plus": "1.2.0"
   }
 }

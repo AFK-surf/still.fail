@@ -9,7 +9,7 @@
 // open), and typing in the composer. Phone (--phone): a message coming in, a history entry coming in (its page open),
 // typing, and to the chats' list and back.
 //
-// It needs a build made to be measured, `STILLFAIL_PROFILE=1 vite build --config web/vite.config.ts --mode cloud`
+// It needs a build made to be measured, `STILLFAIL_PROFILE=1 vp build --config web/vite.config.ts --mode cloud`
 // (into dist/profile/cloud-web: React's profiling build, names not minified), and a dev cloud on studio with a station
 // and chats on it (docs: the dev cloud in cloud/test/dev.ts), and two commands that make something come in: --say (a
 // message in --chat) and --step (an entry in its agent's history).

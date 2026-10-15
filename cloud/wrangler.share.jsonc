@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   // The share host (src/share.ts, docs/public-share.md): where a link to a published chat opens. Static files only
-  // (`vite build --config web/vite.share.config.ts` and build-static.ts → dist/cloud-share), headers in its _headers:
+  // (`vp build --config web/vite.share.config.ts` and build-static.ts → dist/cloud-share), headers in its _headers:
   // the page at /, the frame its visualizations are drawn in at /frame. An origin of its own, as the preview host's:
   // nothing on it reaches a sign-in.
   "name": "stillfail-share",
