@@ -26,7 +26,8 @@ mountDemo(root);
   await server.listen();
   const base = `http://127.0.0.1:${server.httpServer.address().port}`;
   if (out) await mkdir(out, { recursive: true });
-  browser = await playwright.chromium.launch();
+  // A Chrome the machine has (CI's Linux runner: PLAYWRIGHT_CHANNEL=chrome), or Playwright's own.
+  browser = await playwright.chromium.launch(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {});
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2, locale: 'zh-CN' });
   await page.goto(base + '/align-check.html');
   await page.waitForTimeout(2500);

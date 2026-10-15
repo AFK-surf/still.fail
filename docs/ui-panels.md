@@ -20,13 +20,22 @@
 - `tone`：`accent` 是唯一要做的事，`quiet` 是次要的，`filled` 是必须一直被看到的（底色常驻）。
 - 放在面板角落时，离两条边一样远（都是 6）。
 
+## 所有带圆角的东西
+
+不止小面板：侧栏（包括收起后临时展开时浮起来的那条）、卡片、composer、工具条、弹窗，凡是带圆角的容器都守同一条规则。
+
+- 放在容器角落里的东西（容器圆角范围内、离两条边都很近的按钮、行、输入框、带底色的块），离那两条边一样远，自己的圆角 = 容器圆角 − 这段距离（同心）。
+- 容器用 `surface()` / `popover` 声明内边距和内圆角的，角落里的东西直接用 `inner`；容器圆角是别处算出来的（比如侧栏浮起时的 9 + 6），角落里的东西照同一个式子算，不另写一个数。
+
 ## 检查
 
 - `scripts/check.sh`：
   - 「no hand-written negative margins」：样式里不能手写负 margin。
   - 「small panels on one ground」：`surface()` 只允许出现在 popover、通知气泡、⌘K、composer 引用列表四处，其它小面板必须组合 `popover`。
-- `test/browser/align.mjs`（在 studio 上手动跑，CI 没有浏览器）：在 demo 里打开各个小面板，量四件事：
+- `test/browser/corners.mjs`：在 demo 里打开各种页面和状态（宽屏、手机，侧栏展开、收起、临时展开，各个弹层），对每个有自己底色、或者可以按的带圆角元素，找它外面最近的带圆角容器；落在容器角落里的，量两条边的距离是否相等、圆角是否同心。不按面板列清单，新加的东西也会被量到。
+- `test/browser/align.mjs`：在 demo 里打开各个小面板，量四件事：
   - 小面板的内边距是不是 6；
   - 角落元素横竖距离是否相等、圆角是否同心；
   - `panelCard` 里文字是否在 16 那条线上；
   - 行的左内边距是不是 10。
+- 这两个测试在完整检查里跑（`scripts/check.sh` 的「web: corners and panels measured」，CI 的 Linux runner 用它自带的 Chrome）；本机要跑就设 `PLAYWRIGHT_MODULE` 指向 Playwright。

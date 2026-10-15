@@ -227,6 +227,11 @@ if part ts; then
     prep core deps client/core-ts
     step "typecheck: web" after root after core pnpm exec tsgo -p web/tsconfig.json
     [ -f web/src/core/iroh-pkg/.stand-in ] && later "web against the real iroh wasm"
+    # Every corner and small panel as drawn, measured in the demo's pages (test/browser/corners.mjs and align.mjs,
+    # docs/ui-panels.md): in the full check, on a Chrome the machine has (CI's Linux runner has one).
+    if [ $full = 1 ] && command -v google-chrome >/dev/null 2>&1; then
+      step "web: corners and panels measured" after root after core sh -c 'export PLAYWRIGHT_MODULE=playwright-core PLAYWRIGHT_CHANNEL=chrome; node test/browser/corners.mjs && node test/browser/align.mjs'
+    fi
   fi
   if touches "$ts_cloud"; then
     prep cloud deps cloud
