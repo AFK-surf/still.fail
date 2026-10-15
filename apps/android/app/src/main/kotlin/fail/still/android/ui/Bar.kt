@@ -4,8 +4,8 @@
 // standing in a notch cut out of the bar's top (令, a new chat, on the chats' pages; a "+" on a page that adds
 // something); with more than one bar, the glass grows upward into a panel of the other bars (a swipe up on the bar), one
 // row each, and a bar chosen there slides down into the bar's place.
-// Everything is glass of one source (Haze): the pages under it, the bar's glass for the ball and the action, the action
-// for the ball.
+// Everything is glass of one source (Haze): the pages under it, frosted by the bar's glass, the action and the ball;
+// the action for the ball too.
 package fail.still.android.ui
 
 import android.graphics.BlurMaskFilter
@@ -64,6 +64,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -256,17 +257,39 @@ private data class Window(val top: Float, val radius: Float) : Shape {
 }
 
 /**
+ * A piece of glass's outline and its rim's two lit edges, made once for each shape it takes (`key`): the glass is drawn
+ * again with every frame of what it frosts (a list scrolling under it), and cutting the edges (Path.op) every time was
+ * much of what a frame took.
+ */
+private class Rim {
+    private var key: Any? = null
+    var path = Path(); private set
+    val lit = Path()
+    val back = Path()
+
+    fun of(key: Any, px: Float, make: () -> Path): Rim {
+        if (key == this.key) return this
+        this.key = key
+        path = make()
+        lit.reset(); lit.op(path, Path().apply { addPath(path, Offset(px, px)) }, PathOperation.Difference)
+        back.reset(); back.op(path, Path().apply { addPath(path, Offset(-px, -px)) }, PathOperation.Difference)
+        return this
+    }
+}
+
+/**
  * Glass's lit rim, as inset shadows on the web: a hairline all round inside its edge (`edge`), light along its top and
  * left (`lit`) and less along its foot and right (`back`).
  */
-private fun DrawScope.rim(path: Path, edge: Float, lit: Float, back: Float) {
+private fun DrawScope.rim(r: Rim, edge: Float, lit: Float, back: Float) {
     val px = 0.5.dp.toPx()
-    clipPath(path) { drawPath(path, Color.White.copy(alpha = edge), style = Stroke(width = 2 * px)) }
-    val down = Path().apply { addPath(path, Offset(px, px)) }
-    drawPath(Path().apply { op(path, down, PathOperation.Difference) }, Color.White.copy(alpha = lit))
-    val up = Path().apply { addPath(path, Offset(-px, -px)) }
-    drawPath(Path().apply { op(path, up, PathOperation.Difference) }, Color.White.copy(alpha = back))
+    clipPath(r.path) { drawPath(r.path, Color.White.copy(alpha = edge), style = Stroke(width = 2 * px)) }
+    drawPath(r.lit, Color.White.copy(alpha = lit))
+    drawPath(r.back, Color.White.copy(alpha = back))
 }
+
+/** Room round the bar for its shadow, in the layer the shadow is kept in. */
+private const val SHADOW_PAD = 32f
 
 /** A CSS blur's deviation (dp) as BlurMaskFilter's radius (px). */
 private fun Density.maskRadius(sigma: Float) = ((sigma.dp.toPx() - 0.5f) / 0.57735f).coerceAtLeast(0.1f)
@@ -557,6 +580,9 @@ fun BottomBar(
         val raised = Raised
         val accent = C.accent
         val shadowPaint = remember { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG) }
+        val glassRim = remember { Rim() }
+        val actionRim = remember { Rim() }
+        val ballRim = remember { Rim() }
         val fadePaint = remember { android.graphics.Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_IN) } }
         val navBottom = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
 
@@ -572,7 +598,16 @@ fun BottomBar(
         ) {
             // The shadow of the glass, cast below it and to its sides only: none under it, none above its top (so none in
             // the notch or over the edge the action stands on), coming in down its rounded ends.
-            Box(Modifier.matchParentSize().drawBehind {
+            // Kept in a layer of its own (with room round it for the blur), drawn again only as the panel moves: blurred
+            // anew with every frame, it cost each frame of a list scrolling under the bar.
+            Box(Modifier.matchParentSize()
+                .layout { measurable, constraints ->
+                    val pad = SHADOW_PAD.dp.roundToPx()
+                    val p = measurable.measure(Constraints.fixed(constraints.maxWidth + 2 * pad, constraints.maxHeight + 2 * pad))
+                    layout(constraints.maxWidth, constraints.maxHeight) { p.place(-pad, -pad) }
+                }
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawBehind { val pad = SHADOW_PAD.dp.toPx(); val size = Size(size.width - 2 * pad, size.height - 2 * pad); translate(pad, pad) {
                 val top = clipTop().dp.toPx()
                 val gw = w * narrow()
                 val left = (w - gw) / 2 * density.density
@@ -594,9 +629,11 @@ fun BottomBar(
                     nc.drawRect(-size.width, top, size.width * 2, foot, fadePaint)
                     nc.restoreToCount(layer)
                 }
-            })
+            } })
             // The glass: exactly as tall as what shows of it, the notch cut out of it by a clip of its outline (nothing
-            // blurred there); the source of what the ball and the action frost too. The gestures are its.
+            // blurred there). Not a source of what the ball frosts: the ball frosts the pages as the glass does, with the
+            // glass's tint under its own (blurring the glass's blur again was a whole blur more in every frame of a list
+            // scrolling under the bar, for next to no difference). The gestures are its.
             Box(
                 Modifier
                     .layout { measurable, constraints ->
@@ -609,7 +646,6 @@ fun BottomBar(
                     .onPlaced { m.glass = it }
                     .systemGestureExclusion()
                     .semantics { testTag = "bar-glass" }
-                    .hazeSource(haze, zIndex = 1f)
                     .graphicsLayer {
                         val gw = size.width
                         shape = Glass(gw, size.height, gw / 2, notchY().dp.toPx(), notchR().dp.toPx(), density.density)
@@ -624,8 +660,10 @@ fun BottomBar(
                     }
                     .drawWithContent {
                         drawContent()
-                        val path = outline(size.width, size.height, size.width / 2, notchY().dp.toPx(), notchR().dp.toPx(), density.density)
-                        if (dark) rim(path, 0.14f, 0.3f, 0.16f) else rim(path, 0.35f, 0.8f, 0.45f)
+                        val cy = notchY().dp.toPx()
+                        val r = notchR().dp.toPx()
+                        val shape = glassRim.of(Glass(size.width, size.height, size.width / 2, cy, r, density.density), 0.5.dp.toPx()) { outline(size.width, size.height, size.width / 2, cy, r, density.density) }
+                        if (dark) rim(shape, 0.14f, 0.3f, 0.16f) else rim(shape, 0.35f, 0.8f, 0.45f)
                     }
                     .pointerInput(shown) {
                         if (!shown) return@pointerInput
@@ -691,8 +729,7 @@ fun BottomBar(
                     }
                     .drawWithContent {
                         drawContent()
-                        val path = Path().apply { addOval(Rect(Offset.Zero, size)) }
-                        rim(path, 0.4f, 0.75f, 0.4f)
+                        rim(actionRim.of(size, 0.5.dp.toPx()) { Path().apply { addOval(Rect(Offset.Zero, size)) } }, 0.4f, 0.75f, 0.4f)
                     }
                     .semantics { testTag = "bar-action" }
                     .then(if (actionOn && shown && action != null) Modifier.clickable { action.run() }.semantics { contentDescription = action.label } else Modifier),
@@ -736,17 +773,18 @@ fun BottomBar(
                         }
                     }
                     .clip(CircleShape)
+                    // The glass's frost and tint under its own (as a blur of the glass looked: the two blurs' as one).
                     .hazeEffect(haze) {
                         backgroundColor = bg
-                        tints = listOf(HazeTint(Color.White.copy(alpha = if (dark) 0.12f else 0.42f)))
-                        blurRadius = cssBlur(14f)
+                        tints = listOf(HazeTint(raised.copy(alpha = 0.72f)), HazeTint(Color.White.copy(alpha = if (dark) 0.12f else 0.42f)))
+                        blurRadius = cssBlur(24f)
                         noiseFactor = 0f
                     }
                     .drawWithContent {
                         drawContent()
                         val r = size.minDimension / 2
-                        val path = Path().apply { addRoundRect(RoundRect(Rect(Offset.Zero, size), CornerRadius(r))) }
-                        if (dark) rim(path, 0.22f, 0.45f, 0.25f) else rim(path, 0.5f, 0.95f, 0.55f)
+                        val shape = ballRim.of(size, 0.5.dp.toPx()) { Path().apply { addRoundRect(RoundRect(Rect(Offset.Zero, size), CornerRadius(r))) } }
+                        if (dark) rim(shape, 0.22f, 0.45f, 0.25f) else rim(shape, 0.5f, 0.95f, 0.55f)
                     },
             )
             // The other bars, above this one, as the panel opens (each a row, every place as far from its row's edges as
