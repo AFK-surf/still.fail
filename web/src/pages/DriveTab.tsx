@@ -4,7 +4,8 @@
 // folders pinned on it). A file or folder is added to the message from its … or dragged onto the chat, named by its
 // path on its station until switched to a file there; its path is copied from its … (or a right click), or dragged
 // anywhere that takes text. A folder is entered, or pinned. Images, PDFs and code open in the chat's preview over the
-// page; what reads or plays opens on the files' page.
+// page; what reads or plays opens on the files' page. Come back to (from another page, as from another tab), it is where
+// it was, each folder scrolled as far (../drive/kept.ts).
 import { useMemo, useState } from "react";
 import { stationBase, useStation } from "../station.tsx";
 import { useStations } from "../api.ts";
@@ -15,6 +16,7 @@ import type { DriveEntry, StationView } from "../core/shapes.ts";
 import { Button, IconButton, ICON, type MenuItem } from "../ui.tsx";
 import { ChevronRight, Copy, Download, Folder, Pin, Refresh, Retry, Send, Server } from "@stillfail/ui/icons.tsx";
 import { download, joinPath, openerOf, refresh, useFolder, type At } from "../drive/model.ts";
+import { keepOpened, keepTab, keptTab, lastOpened, useKeptScroll, type Owner } from "../drive/kept.ts";
 import { absoluteOf, drive, drivePath, folderName, rootTrouble, trailOf, useDrive } from "../drive/useDrive.ts";
 import { draggedOf, droppedFrom } from "../drive/drag.ts";
 import { DrivePreview } from "../mobile/Drive.tsx";
@@ -37,7 +39,10 @@ export function DriveTab({ chat }: {
   const d = useDrive(here.address);
   const go = useGo();
   const act = useAct();
-  const [asked, setAsked] = useState<Place | undefined>(undefined);
+  const scope = here.address.split("/")[0] ?? "";
+  const [asked, ask] = useState<Place | undefined>(() => keptTab<Place>(scope));
+  const setAsked = (place: Place) => { keepTab(scope, place); ask(place); };
+  const owner: Owner = "tab";
   // Where nothing was chosen yet: the chat's station's home (every folder browsed), or its one folder pinned.
   const start: Place = d.anywhere && d.home ? { station: here.address, root: d.home, path: "" } : d.roots.length === 1 ? { station: here.address, root: d.roots[0]!.path, path: "" } : null;
   const place = asked === undefined ? start : asked;
@@ -46,11 +51,12 @@ export function DriveTab({ chat }: {
   return (
     <div className={css.tab}>
       {place === null
-        ? <Places scope={here.address.split("/")[0] ?? ""} onGo={(station, root) => setAsked({ station, root, path: "" })} />
-        : <FolderList key={`${place.station}\n${place.root}\n${place.path}`} station={place.station} root={place.root} path={place.path} chat={chat}
+        ? <Places scope={scope} onGo={(station, root) => setAsked({ station, root, path: "" })} />
+        : <FolderList key={`${place.station}\n${place.root}`} owner={owner} station={place.station} root={place.root} path={place.path} chat={chat}
           onGo={(root, path) => setAsked({ station: place.station, root, path })} onPlaces={() => setAsked(null)}
           onOpen={(at, entries, entry) => {
             const full = joinPath(at.path, entry.name);
+            keepOpened(owner, at, entry.name);
             switch (openerOf(entry.kind)) {
               case "folder": return setAsked({ station: at.station, root: at.root, path: full });
               case "read": return go(drivePath(stationBase(at.station), at.root, full, "read"));
@@ -104,8 +110,8 @@ function StationPlaces({ s, onGo }: { s: StationView; onGo: (root: string) => vo
   );
 }
 
-function FolderList({ station, root, path, chat, onGo, onPlaces, onOpen }: {
-  station: string; root: string; path: string; chat: string;
+function FolderList({ owner, station, root, path, chat, onGo, onPlaces, onOpen }: {
+  owner: Owner; station: string; root: string; path: string; chat: string;
   onGo: (root: string, path: string) => void; onPlaces: () => void;
   onOpen: (at: At, entries: readonly DriveEntry[], entry: DriveEntry) => void;
 }) {
@@ -120,6 +126,8 @@ function FolderList({ station, root, path, chat, onGo, onPlaces, onOpen }: {
   const pinned = d.roots.some((r) => r.path === here);
   const [refreshing, setRefreshing] = useState(false);
   const [view, setView] = useDriveView("tab");
+  const scroller = useKeptScroll<HTMLDivElement>(owner, at, view, folder.value !== undefined || folder.error !== null);
+  const last = lastOpened(owner, at);
   const rowOf: RowOf = (in_, e) => ({ items: items(in_, e), open: () => onOpen(in_, folderOf(in_), e) });
   // A folder's entries as read (for a preview to step through the pictures beside it): the one shown's, else the file alone.
   const folderOf = (in_: At) => (in_.path === path ? entries : []);
@@ -169,14 +177,14 @@ function FolderList({ station, root, path, chat, onGo, onPlaces, onOpen }: {
           <span className={driveCss.spin} data-on={refreshing || undefined}><IconButton label={t("web-pages.drive.refresh")} icon={Refresh} onClick={reload} /></span>
         </span>
       </div>
-      <div className={`${driveCss.list} ${css.list}`} data-view={view}>
-        {view === "columns" ? <ColumnsView at={{ ...at, path: "" }} open={path} onGo={(p) => onGo(root, p)} rowOf={rowOf} />
-          : view === "tree" ? <TreeView key={path} at={at} rowOf={rowOf} compact />
+      <div ref={scroller} className={`${driveCss.list} ${css.list}`} data-view={view}>
+        {view === "columns" ? <ColumnsView owner={owner} at={{ ...at, path: "" }} open={path} onGo={(p) => onGo(root, p)} rowOf={rowOf} />
+          : view === "tree" ? <TreeView key={path} owner={owner} at={at} rowOf={rowOf} compact />
           : folder.error ? (
           <div className={driveCss.problem}><p className={controlsCss.fieldError}>{folder.error.message}</p><Button variant="ghost" icon={Retry} onClick={reload}>{t("web-pages.drive.retry")}</Button></div>
         ) : !folder.value ? <p className={`${shellCss.muted} ${css.note}`}>{t("web-pages.drive.reading")}</p>
           : entries.length === 0 ? <p className={`${shellCss.muted} ${css.note}`}>{t("web-pages.drive.emptyFolder")}</p>
-          : entries.map((e) => <DriveRow key={e.name} at={at} entry={e} items={items(at, e)} compact onOpen={() => onOpen(at, entries, e)} />)}
+          : entries.map((e) => <DriveRow key={e.name} at={at} entry={e} items={items(at, e)} compact selected={e.name === last} onOpen={() => onOpen(at, entries, e)} />)}
       </div>
     </>
   );
