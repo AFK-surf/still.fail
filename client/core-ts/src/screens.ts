@@ -189,10 +189,19 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
     const width = size(get(s, "width"));
     const height = size(get(s, "height"));
     const title = typeof get(s, "title") === "string" && get(s, "title") !== "" ? (get(s, "title") as string) : kind === "browser" ? t("core-views.screen.kind.browser") : t("core-views.screen.kind.desktop");
-    const item = { id, kind, title, width, height, viewers: names(get(s, "viewers")) };
-    return [{ ...item, line: itemLine(item), link: screenPath(station, id) }];
+    const item = { id, kind, title, width, height, viewers: names(get(s, "viewers")), controlledBy: names(get(s, "controlledBy")) };
+    const access = accessOf(get(s, "access"));
+    return [{ ...item, ...(access ? { access } : {}), line: access?.message ?? itemLine(item), link: screenPath(station, id) }];
   });
   return { screens, outdated: false, control, known: true };
+}
+
+/// What a station says it lacks for a screen (its `access`), as the clients show it; null when nothing is said.
+export function accessOf(v: unknown): J | null {
+  if (!isObject(v)) return null;
+  const out: J = { capture: v.capture !== false, control: v.control !== false };
+  for (const k of ["message", "app", "path"]) if (typeof v[k] === "string" && v[k] !== "") out[k] = v[k];
+  return out;
 }
 
 // ── views ──
@@ -230,15 +239,16 @@ export function screensChanged(inner: Inner, station: string): void {
 /// How a view's stream ended (`dropped`: it went, `seen` whether a frame came on it first), or why it could not open.
 type Outcome = { ended: string | null } | { reopen: true } | { dropped: true; seen: boolean } | { failed: CoreError };
 
-/// What a failure to open a view says the view is now: done for good (a phase), or worth trying again (null).
+/// What a failure to open a view says the view is now: done for good (a phase), or worth trying again (null). The
+/// station's statuses (docs/remote-screens.md): 404 no such screen, 400/415 no codec in common, 501 not supported here,
+/// 503 not now (no grant, the capture failed), 403 not this member's.
 function verdict(error: CoreError, outdated: boolean): { phase: string; message: string } | null {
   if (error.status === 404) {
     if (outdated || error.message.startsWith("no route ")) return { phase: "outdated", message: t("core-views.screen.outdated") };
     return { phase: "gone", message: t("core-views.screen.gone") };
   }
-  if (error.status === 401 || error.status === 403) return { phase: "denied", message: error.message || t("core-views.screen.denied") };
-  if (error.status !== undefined && error.status >= 400 && error.status < 500) return { phase: "denied", message: error.message || t("core-views.screen.denied") };
-  if (error.status !== undefined && error.status >= 500) return { phase: "failed", message: error.message };
+  if (error.status === 401 || error.status === 403 || error.status === 501 || error.status === 503) return { phase: "denied", message: error.message || t("core-views.screen.denied") };
+  if (error.status !== undefined && error.status >= 400) return { phase: "failed", message: error.message };
   if (error.code === "unsupported" || error.code === "invalid_params" || error.code === "gone") return { phase: "failed", message: error.message };
   return null;
 }
@@ -279,7 +289,8 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
     const mine = myNames(inner, station);
     /// What the page is told (ScreenViewState), as it is now.
     const state: J = { phase: "connecting", title: "", control: false, may, others: [], line: "" };
-    let controlledBy: string[] = [];
+    // Who is on it as the view's own stream says (else as the station's list does).
+    let onIt: string[] | null = null;
     let wanted = c.ask.control && may;
     // The stream open now: where acks, key frames and input go (in order, one writer); null between streams.
     let out: Queue.Queue<Uint8Array> | null = null;
@@ -293,7 +304,7 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       const item = listedItem();
       if (state.title === "" && typeof get(item, "title") === "string") state.title = get(item, "title");
       if (state.kind === undefined && typeof get(item, "kind") === "string") state.kind = get(item, "kind");
-      const others = othersOf([...controlledBy, ...names(get(item, "viewers"))], mine);
+      const others = othersOf(onIt ?? names(get(item, "viewers")), mine);
       state.others = others;
       const mode = state.control ? t("core-views.screen.control") : t("core-views.screen.watch");
       state.line = others.length > 0 ? `${mode} · ${t("core-views.screen.alsoOn", { names: listed(others) })}` : mode;
@@ -328,6 +339,15 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
     if (inner.stations.screens(station)?.outdated) {
       state.phase = "outdated";
       state.message = t("core-views.screen.outdated");
+      tell();
+      return null;
+    }
+    // A view is opened only of a screen the station listed (docs/remote-screens.md): not listed as it was held, its
+    // list is read again first.
+    if (listedItem() === undefined) yield* Effect.ignore(inner.stations.readScreens(station));
+    if (listedItem() === undefined && inner.stations.screens(station) !== undefined) {
+      state.phase = "gone";
+      state.message = t("core-views.screen.gone");
       tell();
       return null;
     }
@@ -392,8 +412,16 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                 if (isObject(s.cursor) && finite(s.cursor.x) && finite(s.cursor.y)) state.cursor = { x: unit(s.cursor.x), y: unit(s.cursor.y), ...(typeof s.cursor.shape === "string" ? { shape: s.cursor.shape } : {}) };
                 else if (s.cursor === null) delete state.cursor;
                 if (typeof s.title === "string" && s.title !== "") state.title = s.title;
-                if (Array.isArray(s.controlledBy)) controlledBy = names(s.controlledBy);
-                if (s.ended !== undefined && s.ended !== null && s.ended !== false) return { ended: typeof s.ended === "string" && s.ended !== "" ? s.ended : null } as Outcome;
+                // Whether this view's input is taken, as the station says (a read-only member's is not).
+                if (typeof s.control === "boolean") state.control = s.control && control;
+                const access = accessOf(s.access);
+                if (access) state.access = access;
+                if (Array.isArray(s.viewers)) onIt = names(s.viewers);
+                if (s.ended !== undefined && s.ended !== null && s.ended !== false) {
+                  // The station stopping (an update, a restart): opened again once it is back.
+                  if (s.ended === "stopping") return { dropped: true, seen } as Outcome;
+                  return { ended: s.ended === "gone" ? t("core-views.screen.gone") : typeof s.ended === "string" && s.ended !== "" && s.ended !== "finished" ? s.ended : null } as Outcome;
+                }
                 tell();
               }
             }
@@ -417,6 +445,8 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
         if (final !== null) {
           state.phase = final.phase;
           state.message = final.message;
+          const access = accessOf((outcome.failed as CoreError & { access?: unknown }).access);
+          if (access) state.access = access;
           delete state.cursor;
           tell();
           return null;

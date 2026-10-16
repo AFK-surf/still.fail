@@ -467,7 +467,10 @@ export class Requests {
       if (view.reply.status !== 200) {
         const bytes = yield* Effect.orElseSucceed(readAll(view.reply.body), () => empty);
         const data = parseJson(bytes);
-        return yield* Effect.fail(httpError(view.reply.status, data === undefined ? {} : data));
+        const error: CoreError & { access?: unknown } = httpError(view.reply.status, data === undefined ? {} : data);
+        // What the station lacks for it (macOS's grants), said with a 503.
+        if (isObject(get(data, "access"))) error.access = get(data, "access");
+        return yield* Effect.fail(error);
       }
       return view;
     });
