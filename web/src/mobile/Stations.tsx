@@ -20,7 +20,7 @@ import { ask, CommandBox, confirm } from "./sheets.tsx";
 import { Versions } from "./Versions.tsx";
 import { joinedText, MachineDetails, Net } from "../cloud/StationCards.tsx";
 import { ColorRow, EmojiGrid, GlyphGrid } from "../cloud/MarkPick.tsx";
-import { glyphColor, isPicture, StationMark, stationGlyph } from "../StationMark.tsx";
+import { glyphColor, isPicture, MarkOrLetter, StationMark, stationGlyph } from "../StationMark.tsx";
 import { emojiMark, firstEmoji, glyphMark, kindOf, NO_MARK, pictureMark, pictureOf, same, type Kind, type Mark } from "../stationPick.ts";
 import * as markCss from "../StationMark.css.ts";
 import { RetryPill } from "../Connection.tsx";
@@ -70,7 +70,7 @@ export function StationsScreen() {
         <Card key={s.station} onClick={() => app.push(app.at(`/s/${s.id}/overview`))}>
           <span className={css.mStationHead}>
             <Buddy s={s} />
-            <span className={partsCss.mGrow}><b className={css.mStationName}>{(s.emoji || s.icon) && <StationMark emoji={s.emoji} icon={s.icon} size={16} className={markCss.inline} />}{s.name}</b><span className={css.mStationSummary}>{[s.summary, joinedText(s)].filter(Boolean).join(" · ")}</span></span>
+            <span className={partsCss.mGrow}><b className={css.mStationName}>{(s.emoji || s.icon) && <StationMark emoji={s.emoji} icon={s.icon} size={16} className={markCss.inline} />}{s.name}</b><span className={css.mStationSummary}>{[joinedText(s), s.summary].filter(Boolean).join(" · ")}</span></span>
             {s.reconnecting && <Reconnecting />}
             <ChevronRight size={14} className={partsCss.mSubtle} />
           </span>
@@ -223,12 +223,12 @@ function JoinStation({ joinable }: { joinable: JoinableView }) {
     <>
       <p className={partsCss.mMuted}>{t("web-pages.settings.stations.existingLead")}</p>
       {joinable.items.length > 0 ? (
-        <ListCard>
+        <div>
           {joinable.items.map((s) => (
             <PickRow key={s.station} label={s.name} sub={s.line} checked={s.station === chosen?.station}
-              leading={s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={20} /> : undefined} onClick={() => setPicked(s.station)} />
+              leading={<MarkOrLetter emoji={s.emoji} icon={s.icon} name={s.name} />} onClick={() => setPicked(s.station)} />
           ))}
-        </ListCard>
+        </div>
       ) : <p className={partsCss.mMuted}>{joinable.loading ? t("web-mobile.reading") : t("web-pages.settings.stations.existingNone")}</p>}
       <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-pages.settings.stations.softIsolation")}</p>
       {error && <p className={partsCss.mError}>{error}</p>}
@@ -254,7 +254,7 @@ export function StationScreen() {
   const manager = useManager();
   return (
     <div className={pagesCss.mScreen}>
-      <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s?.reconnecting ? <Reconnecting /> : s ? <span className={barsCss.mNavbarNote}>{[s.host?.identity || (s.online ? t("web-mobile.stations.online") : t("web-mobile.stations.offline")), joinedText(s)].filter(Boolean).join(" · ")}</span> : undefined}
+      <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s?.reconnecting ? <Reconnecting /> : s ? <span className={barsCss.mNavbarNote}>{[joinedText(s), s.host?.identity || (s.online ? t("web-mobile.stations.online") : t("web-mobile.stations.offline"))].filter(Boolean).join(" · ")}</span> : undefined}
         trailing={s && manager ? <NavButton icon={More} label={t("common.more")} onClick={() => app.sheet({ height: 0.34, content: () => <StationMenu s={s} /> })} /> : undefined} />
       {!s ? <Loading text={stations.error?.message ?? t("web-mobile.reading")} /> : (
         <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
@@ -294,7 +294,7 @@ function Workspaces({ s }: { s: StationView }) {
         {m.workspaces.map((w) => (
           <ListRow key={w.workspace}>
             <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{w.name}</span>
-            <span className={settingsPageCss.mValue}>{w.line}</span>
+            <span className={settingsPageCss.mValue}><span className={css.mMembershipLine}>{w.line}</span></span>
           </ListRow>
         ))}
       </ListCard>

@@ -23,6 +23,8 @@ export const windowsGlyph = style({
   // Centre the font's cap-to-baseline box, without the extra leading that puts Segoe's pictures below SVG icons.
   textBoxTrim: "trim-both", textBoxEdge: "cap alphabetic",
 });
+/** A station with no mark, in a column of marks: its first letter, as wide as the marks (MarkOrLetter). */
+export const letter = style({ display: "inline-grid", placeItems: "center", flex: "none", fontWeight: "500", lineHeight: "1" });
 /** A picture put up: a rounded square as large as the icon it stands for. */
 export const picture = style({ display: "inline-block", flex: "none", objectFit: "cover", borderRadius: "24%", cornerShape: vars.cornerShape });
 

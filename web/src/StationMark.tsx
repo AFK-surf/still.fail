@@ -31,6 +31,13 @@ export function isPicture(icon: string | null | undefined): icon is string {
   return !!icon && icon.startsWith("data:image/");
 }
 
+/** A station's mark where stations are listed to pick from: its icon or emoji, else its first letter in a box as large,
+ * so their names line up either way. */
+export function MarkOrLetter({ emoji, icon, name, size = 20 }: { emoji?: string | null | undefined; icon?: string | null | undefined; name: string; size?: number }) {
+  if (emoji || icon) return <StationMark emoji={emoji} icon={icon} size={size} />;
+  return <span className={css.letter} style={{ width: size, height: size }} aria-hidden="true">{[...name.trim()][0]?.toUpperCase() ?? "·"}</span>;
+}
+
 export function StationMark({ emoji, icon, size = 14, className }: { emoji?: string | null | undefined; icon?: string | null | undefined; size?: number; className?: string | undefined }) {
   const glyph = stationGlyph(icon);
   if (glyph) return <glyph.Icon size={size} className={className} style={{ color: markColor(glyphColor(icon)) }} />;

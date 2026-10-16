@@ -715,7 +715,7 @@
   "web-pages.settings.stations.rename": "改名",
   "web-pages.settings.stations.renameFailed": "没能给「{name}」改名：{error}",
   "web-pages.settings.stations.renaming": "正在改名",
-  "web-pages.settings.stations.softIsolation": "那台机器上的 agent 用同一个系统用户运行：各 workspace 的对话、记忆、Slack 和文件夹分开，但这不是沙盒",
+  "web-pages.settings.stations.softIsolation": "那台机器上的 agent 用同一个系统用户运行：各 workspace 的对话、记忆、Slack 和文件夹分开，但不是沙盒",
   "web-pages.settings.thisMac.add": "添加这台 Mac",
   "web-pages.settings.thisMac.failed": "没能添加这台 Mac：{error}",
   "web-pages.settings.thisMac.joined": "这台 Mac 已加入，稍等它出现在列表里",

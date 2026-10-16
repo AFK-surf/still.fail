@@ -69,3 +69,5 @@ export const mUnread = style({ display: "grid" });
 export const mUnreadLaid = style({ gridArea: "1 / 1", visibility: "hidden" });
 export const mUnreadBars = style({ gridArea: "1 / 1", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: "10px" });
 globalStyle(`${mUnreadBars} > i`, { display: "block", height: "10px", borderRadius: "5px", background: "color-mix(in srgb, var(--m-line) 70%, transparent)" });
+/** What a workspace has of the station, at its row's end: cut short with an ellipsis (the value's box is a flex one). */
+export const mMembershipLine = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: "0" });

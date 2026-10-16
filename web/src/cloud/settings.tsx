@@ -18,7 +18,7 @@ import { same, type Mark } from "../stationPick.ts";
 import { MarkPick } from "./MarkPick.tsx";
 import { WorkspaceMark } from "../WorkspaceMark.tsx";
 import type { JoinableView, WorkspaceProfile } from "../core/shapes.ts";
-import { StationMark } from "../StationMark.tsx";
+import { MarkOrLetter } from "../StationMark.tsx";
 import { ConnectList } from "../pages/Connects.tsx";
 import { ACCESS, RUNTIME_LABEL } from "../format.ts";
 import { stamp } from "../api.ts";
@@ -687,7 +687,7 @@ export function JoinStationDialog({ view, joinable, onKind, onClose }: { view: W
           <Choices<string> label={t("web-pages.settings.stations.existingLabel")} value={chosen?.station ?? ""} onChange={setPicked}
             options={joinable.items.map((s) => ({
               value: s.station, title: s.name, description: s.line,
-              icon: s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={20} /> : <WorkspaceMark w={{ name: s.name }} size={20} />,
+              icon: <MarkOrLetter emoji={s.emoji} icon={s.icon} name={s.name} />,
             }))} />
         </Field>
       ) : joinable.loading ? <Loading label={t("web-pages.settings.workspace.loading")} fill={false} />

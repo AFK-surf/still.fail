@@ -68,7 +68,7 @@ function StationRow({ s, to }: { s: StationView; to: string }) {
     <NavItem to={to} title={s.name}
       mark={s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={16} /> : <WorkspaceMark w={{ name: s.name }} size={16} />}
       end={<><span className={railCss.dot} data-online={s.online || undefined} />{brief(s)}</>}>
-      <NavLine><span className={navFill}>{[s.host?.identity ?? (s.online ? t("web-pages.stations.connecting") : t("web-pages.stations.offline")), joinedText(s)].filter(Boolean).join(" · ")}</span></NavLine>
+      <NavLine><span className={navFill}>{/* Where it is from first: the machine's line is long, and the narrow row cuts it short at its end. */}{[joinedText(s), s.host?.identity ?? (s.online ? t("web-pages.stations.connecting") : t("web-pages.stations.offline"))].filter(Boolean).join(" · ")}</span></NavLine>
       {meters.length > 0 && (
         <span className={css.rowMeters}>
           {meters.map((m) => <MeterChip key={m.label} meter={m} brief bare />)}

@@ -113,6 +113,8 @@ export type Topic =
   // A core from before it has neither.
   | { topic: "lock"; workspace: string }
   | { topic: "lockDraft"; workspace: string }
+  // A station in several workspaces (client/core-ts/src/views/memberships.ts): the stations of the viewer's other
+  // workspaces that could be added to this one, and the workspaces a station is in. A core from before has neither.
   | { topic: "joinable"; workspace: string }
   | { topic: "memberships"; station: string };
 
