@@ -52,6 +52,8 @@ export function answered(span: Span, reply: WireReply): void {
 }
 
 const empty = new Uint8Array();
+/// How often a part on its way says how much of it has come (a part is 4 MB).
+const PART_STEP = 64 * 1024;
 
 /// A reply's body as the station wrote it: decompressed as it comes when it came compressed (fzstd, the same on every
 /// host), each piece as soon as it is whole (an event stream's, event by event).
@@ -122,7 +124,8 @@ export class Requests {
   }
 
   /// One whole request: its status, its reply's head, its body. `quiet`: in the background, not said to be waited on.
-  exchange(station: StationAddr, method: string, path: string, headers: [string, string][], body: Uint8Array, quiet: boolean, ctx: SpanContext | null): Effect.Effect<{ status: number; headers: [string, string][]; body: Uint8Array }, CoreError> {
+  /// `heard`: how much of the body has come, now and then as it comes (every PART_STEP).
+  exchange(station: StationAddr, method: string, path: string, headers: [string, string][], body: Uint8Array, quiet: boolean, ctx: SpanContext | null, heard?: (loaded: number) => void): Effect.Effect<{ status: number; headers: [string, string][]; body: Uint8Array }, CoreError> {
     return Effect.scoped(
       Effect.gen({ self: this }, function* () {
         const status = this.#status(station);
@@ -135,7 +138,12 @@ export class Requests {
             // What came over the link is counted (and said in the span); what it says, decompressed.
             let came = 0;
             const counted = { ...reply, body: { take: Effect.tap(reply.body.take, (chunk) => Effect.sync(() => chunk && ((came += chunk.length), waiting ? waiting.received(chunk.length) : status.received(null, chunk.length)))) } };
-            const bytes = yield* readAll(plain(counted));
+            let loaded = 0;
+            let told = 0;
+            const bytes = yield* readAll(plain(counted), heard && ((chunk) => {
+              loaded += chunk.length;
+              if (loaded - told >= PART_STEP) heard((told = loaded));
+            }));
             span.set("http.response.body.size", came);
             if (came !== bytes.length) span.set("stillfail.body.decompressed", bytes.length);
             if (reply.status >= 200 && reply.status < 300) this.onAnswered(station);
@@ -295,9 +303,10 @@ export class Requests {
 
   /// GET /sessions/:key/parts?name=&offset=&length=: a part of a file and its whole size, for a big one fetched a part at
   /// a time (onto the disk) rather than whole. `unsupported` from a station from before parts (it has no such route).
-  filePart(station: StationAddr, key: string, name: string, offset: number, length: number, ctx: SpanContext | null): Effect.Effect<{ type: string; total: number; bytes: Uint8Array }, CoreError> {
+  /// `heard`: the part's bytes so far, as they come.
+  filePart(station: StationAddr, key: string, name: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void): Effect.Effect<{ type: string; total: number; bytes: Uint8Array }, CoreError> {
     const path = `/sessions/${encode(key)}/parts?name=${encode(name)}&offset=${offset}&length=${length}`;
-    return Effect.flatMap(this.exchange(station, "GET", path, [], empty, false, ctx), (r) => {
+    return Effect.flatMap(this.exchange(station, "GET", path, [], empty, false, ctx, heard), (r) => {
       if (r.status === 404 && isNoRoute(r.body)) return Effect.fail(new CoreError("unsupported", t("station.core.fileOldStation"), 404));
       if (r.status !== 200) {
         const data = parseJson(r.body);
@@ -310,9 +319,9 @@ export class Requests {
   }
 
   /// GET /drive/read?root=&path=&offset=&length=: a part of a file of the station's drive, its whole size and time.
-  driveRead(station: StationAddr, root: string, path: string, offset: number, length: number, ctx: SpanContext | null): Effect.Effect<{ type: string; total: number; mtime: number | null; bytes: Uint8Array }, CoreError> {
+  driveRead(station: StationAddr, root: string, path: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void): Effect.Effect<{ type: string; total: number; mtime: number | null; bytes: Uint8Array }, CoreError> {
     const asked = `/drive/read?root=${encode(root)}&path=${encode(path)}&offset=${offset}&length=${length}`;
-    return Effect.flatMap(this.exchange(station, "GET", asked, [], empty, false, ctx), (r) => {
+    return Effect.flatMap(this.exchange(station, "GET", asked, [], empty, false, ctx, heard), (r) => {
       if (r.status === 404 && isNoRoute(r.body)) return Effect.fail(new CoreError("unsupported", t("station.core.driveOldStation"), 404));
       if (r.status !== 200) {
         const data = parseJson(r.body);

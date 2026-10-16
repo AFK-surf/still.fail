@@ -103,10 +103,11 @@ export function install(): void {
       ),
     );
   };
-  handlers.stationFilePart = (inner, call, _p, _a, ctx) => {
+  // `progress`: the bytes of the part so far, as they come (a part is megabytes: its end alone is too seldom to show).
+  handlers.stationFilePart = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationFilePart" }>;
     return Effect.flatMap(parse(c.station), (addr) =>
-      Effect.map(inner.stations.requests.filePart(addr, c.key, c.name, c.offset, c.length, ctx), (got) => ({ type: got.type, total: got.total, bytes: base64(got.bytes) })),
+      Effect.map(inner.stations.requests.filePart(addr, c.key, c.name, c.offset, c.length, ctx, c.progress ? (loaded) => progress({ loaded }) : undefined), (got) => ({ type: got.type, total: got.total, bytes: base64(got.bytes) })),
     );
   };
   handlers.stationPoster = (inner, call, _p, _a, ctx) => {
@@ -123,10 +124,10 @@ export function install(): void {
       }),
     );
   };
-  handlers.driveRead = (inner, call, _p, _a, ctx) => {
+  handlers.driveRead = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "driveRead" }>;
     return Effect.flatMap(parse(c.station), (addr) =>
-      Effect.map(inner.stations.requests.driveRead(addr, c.root, c.path, c.offset, c.length, ctx), (got) => ({ type: got.type, total: got.total, mtime: got.mtime, bytes: base64(got.bytes) })),
+      Effect.map(inner.stations.requests.driveRead(addr, c.root, c.path, c.offset, c.length, ctx, c.progress ? (loaded) => progress({ loaded }) : undefined), (got) => ({ type: got.type, total: got.total, mtime: got.mtime, bytes: base64(got.bytes) })),
     );
   };
   handlers.driveUploadPart = (inner, call, _p, _a, ctx) => {

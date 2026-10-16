@@ -315,7 +315,7 @@ private suspend fun fetched(app: AppState, context: Context, station: String, ro
     part.delete()
     DriveFetches.progress[id] = 0
     try {
-        app.api(station).driveToDisk(root, path, part) { at, total -> DriveFetches.progress[id] = if (total > 0) at * 100 / total else 0 }
+        app.api(station).driveToDisk(root, path, part, entry.size) { at, total -> DriveFetches.progress[id] = if (total > 0) at * 100 / total else 0 }
         withContext(Dispatchers.IO) { part.renameTo(file) }
     } finally {
         DriveFetches.progress.remove(id)

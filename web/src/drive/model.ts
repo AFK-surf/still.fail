@@ -46,9 +46,10 @@ export const READ_PART = 4 * 1024 * 1024;
 
 export interface Part { type: string; total: number; bytes: Uint8Array<ArrayBuffer> }
 
-/** `length` bytes of a file from `offset` (fewer at its end). */
-export async function readPart(at: At, offset: number, length: number, signal?: AbortSignal): Promise<Part> {
-  const got = await core().call("drive.read", { station: at.station, root: at.root, path: at.path, offset, length }, undefined, signal) as { type: string; total: number; bytes: string };
+/** `length` bytes of a file from `offset` (fewer at its end); `heard`: how many of them have come, as they come. */
+export async function readPart(at: At, offset: number, length: number, signal?: AbortSignal, heard?: (loaded: number) => void): Promise<Part> {
+  const got = await core().call("drive.read", { station: at.station, root: at.root, path: at.path, offset, length, ...(heard ? { progress: true } : {}) },
+    heard && ((p) => heard((p as { loaded: number }).loaded)), signal) as { type: string; total: number; bytes: string };
   return { type: got.type, total: got.total, bytes: fromBase64(got.bytes) };
 }
 
@@ -64,8 +65,11 @@ export async function readWhole(at: At, size: number, opts: { type?: string; max
   let type = opts.type ?? "";
   let total = size;
   const end = () => Math.min(total, opts.max ?? Infinity);
+  // Said at once (nothing yet, out of how much), then as each part comes.
+  opts.onProgress?.({ loaded: 0, total: end() });
   for (let offset = 0; offset < end();) {
-    const got = await readPart(at, offset, Math.min(READ_PART, end() - offset), opts.signal);
+    const from = offset;
+    const got = await readPart(at, offset, Math.min(READ_PART, end() - offset), opts.signal, opts.onProgress && ((n) => opts.onProgress!({ loaded: from + n, total: end() })));
     if (got.bytes.length === 0) break;
     parts.push(new Blob([got.bytes]));
     if (!opts.type) type = got.type;

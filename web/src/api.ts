@@ -304,10 +304,14 @@ export function stationCall(call: ReturnType<typeof useCall>, station: string): 
       // memory at once on its way.
       const parts: Blob[] = [];
       let type = "";
+      // Said at once (nothing yet, out of how much), then as each part comes.
+      onProgress?.({ loaded: 0, total: size });
       for (let at = 0, total = size; at < total;) {
         let got: { type: string; total: number; bytes: string };
+        const from = at;
         try {
-          got = await call("station.file.part", { station, key, name, offset: at, length: FILE_PART }) as typeof got;
+          got = await call("station.file.part", { station, key, name, offset: at, length: FILE_PART, ...(onProgress ? { progress: true } : {}) },
+            onProgress && ((p) => onProgress({ loaded: from + (p as { loaded: number }).loaded, total }))) as typeof got;
         } catch (e) {
           // A station from before parts sends it whole, as long as it is not too big for that.
           if (at === 0 && e instanceof CoreError && e.code === "unsupported" && size <= WHOLE_FILE_MAX) return whole();

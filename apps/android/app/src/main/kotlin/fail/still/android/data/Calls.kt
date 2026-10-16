@@ -25,6 +25,10 @@ import kotlinx.serialization.json.putJsonArray
 /** The admin API of one station, by what each call does. */
 /** The bytes of a file in one `station.upload.part` (web/src/api.ts UPLOAD_PART). */
 private const val UPLOAD_PART = 4 * 1024 * 1024
+/** How much of a part has come, as a part read with `progress` says while it comes. */
+private fun partLoaded(heard: kotlinx.serialization.json.JsonElement): Long? =
+    ((heard as? JsonObject)?.get("loaded") as? JsonPrimitive)?.content?.toDoubleOrNull()?.toLong()
+
 /** The bytes of a file in one `station.file.part`. */
 private const val FILE_PART = 4 * 1024 * 1024
 /** The most of a file of the drive one `drive.read` asks for (the station gives at most 8 MB). */
@@ -249,18 +253,22 @@ class StationApi(private val core: StillFailCore, val station: String) {
 
     /**
      * A big file sent to the session, onto the disk at `into` a part at a time (`station.file.part`), never all in
-     * memory; `onProgress` hears the bytes so far and the whole size. What is already in `into` is gone on from. Throws
-     * `unsupported` from a station from before parts.
+     * memory; `onProgress` hears the bytes so far and the whole size (`size`, as its message says, until the station
+     * says), at once and then as each part comes. What is already in `into` is gone on from. Throws `unsupported` from a
+     * station from before parts.
      */
-    suspend fun fileToDisk(key: String, name: String, into: java.io.File, onProgress: (Long, Long) -> Unit = { _, _ -> }) {
+    suspend fun fileToDisk(key: String, name: String, into: java.io.File, size: Long, onProgress: (Long, Long) -> Unit = { _, _ -> }) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             java.io.FileOutputStream(into, true).use { out ->
                 var at = into.length()
                 var total = Long.MAX_VALUE
+                onProgress(at, size)
                 while (at < total) {
+                    val from = at
+                    val of = if (total == Long.MAX_VALUE) size else total
                     val got = core.call("station.file.part", buildJsonObject {
-                        put("station", station); put("key", key); put("name", name); put("offset", at); put("length", FILE_PART)
-                    }).jsonObject
+                        put("station", station); put("key", key); put("name", name); put("offset", at); put("length", FILE_PART); put("progress", true)
+                    }) { heard -> partLoaded(heard)?.let { onProgress(from + it, of) } }.jsonObject
                     total = got["total"]?.jsonPrimitive?.long ?: total
                     val bytes = Base64.decode(got["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT)
                     if (bytes.isEmpty()) break
@@ -462,23 +470,30 @@ class StationApi(private val core: StillFailCore, val station: String) {
         core.call("drive.place", buildJsonObject { put("station", station); put("root", root); put("path", path); put("at", at); if (of != null) put("of", of) })
     }
 
-    /** A part of a file of the drive (at most DRIVE_PART), with the file's whole size as the station has it now. */
-    suspend fun driveRead(root: String, path: String, offset: Long, length: Int): DriveRead {
-        val got = core.call("drive.read", buildJsonObject {
+    /** A part of a file of the drive (at most DRIVE_PART), with the file's whole size as the station has it now; `heard`: its bytes so far, as they come. */
+    suspend fun driveRead(root: String, path: String, offset: Long, length: Int, heard: ((Long) -> Unit)? = null): DriveRead {
+        val params = buildJsonObject {
             put("station", station); put("root", root); put("path", path); put("offset", offset); put("length", length.coerceAtMost(DRIVE_PART))
-        }).jsonObject
+            if (heard != null) put("progress", true)
+        }
+        val got = (if (heard == null) core.call("drive.read", params) else core.call("drive.read", params) { p -> partLoaded(p)?.let(heard) }).jsonObject
         val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Base64.decode(got["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT) }
         val total = got["total"]?.jsonPrimitive?.content?.toDoubleOrNull()?.toLong() ?: (offset + bytes.size)
         return DriveRead((got["type"] as? JsonPrimitive)?.content ?: "", total, bytes)
     }
 
-    /** The first `limit` bytes of a file of the drive (the whole of it when shorter), a part at a time; `onProgress` hears bytes so far and its size. */
-    suspend fun driveBytes(root: String, path: String, limit: Long = Long.MAX_VALUE, onProgress: (Long, Long) -> Unit = { _, _ -> }): ByteArray {
+    /**
+     * The first `limit` bytes of a file of the drive (the whole of it when shorter), a part at a time; `onProgress` hears
+     * bytes so far and its size (`size`, as its folder said, until the station says), as each part comes.
+     */
+    suspend fun driveBytes(root: String, path: String, limit: Long = Long.MAX_VALUE, size: Long = Long.MAX_VALUE, onProgress: (Long, Long) -> Unit = { _, _ -> }): ByteArray {
         val out = java.io.ByteArrayOutputStream()
         var at = 0L
         var total = Long.MAX_VALUE
         while (at < minOf(total, limit)) {
-            val got = driveRead(root, path, at, minOf(DRIVE_PART.toLong(), minOf(total, limit) - at).toInt())
+            val from = at
+            val of = minOf(if (total == Long.MAX_VALUE) size else total, limit)
+            val got = driveRead(root, path, at, minOf(DRIVE_PART.toLong(), minOf(total, limit) - at).toInt(), if (of == Long.MAX_VALUE) null else { n -> onProgress(from + n, of) })
             total = got.total
             if (got.bytes.isEmpty()) break
             out.write(got.bytes)
@@ -488,13 +503,18 @@ class StationApi(private val core: StillFailCore, val station: String) {
         return out.toByteArray()
     }
 
-    /** A file of the drive onto the phone's disk at `into`, a part at a time, never all in memory; what is in `into` already is gone on from. */
-    suspend fun driveToDisk(root: String, path: String, into: java.io.File, onProgress: (Long, Long) -> Unit = { _, _ -> }) {
+    /**
+     * A file of the drive onto the phone's disk at `into`, a part at a time, never all in memory; what is in `into`
+     * already is gone on from. `onProgress` as driveBytes's.
+     */
+    suspend fun driveToDisk(root: String, path: String, into: java.io.File, size: Long = Long.MAX_VALUE, onProgress: (Long, Long) -> Unit = { _, _ -> }) {
         java.io.FileOutputStream(into, true).use { out ->
             var at = into.length()
             var total = Long.MAX_VALUE
             while (at < total) {
-                val got = driveRead(root, path, at, DRIVE_PART)
+                val from = at
+                val of = if (total == Long.MAX_VALUE) size else total
+                val got = driveRead(root, path, at, DRIVE_PART, if (of == Long.MAX_VALUE) null else { n -> onProgress(from + n, of) })
                 total = got.total
                 if (got.bytes.isEmpty()) break
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { out.write(got.bytes) }

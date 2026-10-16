@@ -177,7 +177,7 @@ internal object FileData {
             try {
                 val root = DriveKey.rootOf(key)
                 // A file of a station's drive (the viewer opened from its page): read from its root, a part at a time.
-                if (root != null) app.api(station).driveBytes(root, file.path) { loaded, total -> on?.invoke(loaded, total) }.also { kept.put(id, it) }
+                if (root != null) app.api(station).driveBytes(root, file.path, size = file.size.takeIf { it > 0 } ?: Long.MAX_VALUE) { loaded, total -> on?.invoke(loaded, total) }.also { kept.put(id, it) }
                 else app.api(station).file(key, file.path.substringAfterLast('/'), thumb, on).second.also { kept.put(id, it) }
             } finally {
                 coming.remove(id)
@@ -230,8 +230,8 @@ internal object FileData {
                 val name = file.path.substringAfterLast('/')
                 try {
                     val root = DriveKey.rootOf(key)
-                    if (root != null) app.api(station).driveToDisk(root, file.path, part) { loaded, total -> scope.launch { if (id in comingToDisk) progress[id] = loaded to total } }
-                    else app.api(station).fileToDisk(key, name, part) { loaded, total -> scope.launch { if (id in comingToDisk) progress[id] = loaded to total } }
+                    if (root != null) app.api(station).driveToDisk(root, file.path, part, file.size) { loaded, total -> scope.launch { if (id in comingToDisk) progress[id] = loaded to total } }
+                    else app.api(station).fileToDisk(key, name, part, file.size) { loaded, total -> scope.launch { if (id in comingToDisk) progress[id] = loaded to total } }
                 } catch (e: CoreException) {
                     if (e.code != "unsupported" || file.size > WHOLE_FILE_MAX) throw e
                     return@async onDisk(context, id, file.name, app.api(station).file(key, name, false, null).second)

@@ -146,6 +146,16 @@ test("tells_how_far_a_file_has_come", async () => {
   core.close();
 });
 
+test("tells_how_far_a_part_has_come", async () => {
+  const big = "x".repeat(300 * 1024);
+  const { core } = await started({ ...base(), "GET /sessions/k/parts?name=big&offset=0&length=4194304": big });
+  const heard: number[] = [];
+  const got = await run(core.inner.stations.requests.filePart(remote(), "k", "big", 0, 4194304, null, (loaded) => heard.push(loaded)));
+  // Past 64 KB (it comes in one chunk here); nothing heard without asking.
+  assert.deepEqual(heard, [got.bytes.length]);
+  core.close();
+});
+
 void stationReplies;
 
 const linkOf = (values: Map<number, unknown>, id: number) => (values.get(id) as J)?.state;

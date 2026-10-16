@@ -65,8 +65,9 @@ part that leaves a gap is refused `upload_lost` with `have`, where to go on from
   `drive.mkdir {root, path}`, `drive.rename {root, from, to}`,
   `drive.remove {root, path}`; each change reads its folders again before it
   answers.
-- Calls: `drive.read {station, root, path, offset, length}` →
-  `{type, total, mtime, bytes}` (base64); `drive.upload.part {station, root,
+- Calls: `drive.read {station, root, path, offset, length, progress?}` →
+  `{type, total, mtime, bytes}` (base64; with `progress`, values `{loaded}`,
+  the part's bytes so far, as it comes); `drive.upload.part {station, root,
   path, id, offset, total, replace?, bytes}` → `{have, entry}` (a gap answers
   with `have`, the next part starts there; the last reads its folder again);
   `drive.refresh {station, root, path}`; `drive.place {station, root, path, at,

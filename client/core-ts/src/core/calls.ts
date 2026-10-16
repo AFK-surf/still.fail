@@ -57,9 +57,9 @@ export type Call =
   | { kind: "stationUpload"; station: string; name: string; bytes: Uint8Array }
   | { kind: "stationUploadPart"; station: string; id: string; name: string; size: number; offset: number; bytes: Uint8Array }
   | { kind: "stationFile"; station: string; key: string; name: string; thumb: boolean; progress: boolean }
-  | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number }
+  | { kind: "stationFilePart"; station: string; key: string; name: string; offset: number; length: number; progress: boolean }
   | { kind: "stationPoster"; station: string; key: string; name: string }
-  | { kind: "driveRead"; station: string; root: string; path: string; offset: number; length: number }
+  | { kind: "driveRead"; station: string; root: string; path: string; offset: number; length: number; progress: boolean }
   | { kind: "driveUploadPart"; station: string; root: string; path: string; id: string; offset: number; total: number; replace: boolean; bytes: Uint8Array }
   | { kind: "driveRefresh"; station: string; root: string; path: string }
   | { kind: "drivePlace"; station: string; root: string; path: string; at: number; of: number | null }
@@ -609,8 +609,9 @@ export function parseCall(name: string, params: unknown): Call {
         ["name", S, "req"],
         ["offset", "u64", "req"],
         ["length", "u64", "req"],
+        ["progress", "bool", "default"],
       ]);
-      return { kind: "stationFilePart", station: p.station as string, key: p.key as string, name: p.name as string, offset: p.offset as number, length: p.length as number };
+      return { kind: "stationFilePart", station: p.station as string, key: p.key as string, name: p.name as string, offset: p.offset as number, length: p.length as number, progress: p.progress as boolean };
     }
     // The station's drive (docs/drive.md): a part of a file read, a part of one written, a folder read again.
     case "drive.read": {
@@ -620,8 +621,9 @@ export function parseCall(name: string, params: unknown): Call {
         ["path", S, "req"],
         ["offset", "u64", "req"],
         ["length", "u64", "req"],
+        ["progress", "bool", "default"],
       ]);
-      return { kind: "driveRead", station: p.station as string, root: p.root as string, path: p.path as string, offset: p.offset as number, length: p.length as number };
+      return { kind: "driveRead", station: p.station as string, root: p.root as string, path: p.path as string, offset: p.offset as number, length: p.length as number, progress: p.progress as boolean };
     }
     case "drive.upload.part": {
       const p = read(params, [
