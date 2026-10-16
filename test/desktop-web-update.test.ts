@@ -192,10 +192,11 @@ describe("the desktop app's web app without a new app", () => {
     assert.equal(app(dir, 3000, fetch, () => now).stale(HOUR), false);
     assert.equal(app(dir, 3005, fetch, () => now).stale(HOUR), true);
     // More bytes than signed: not read on.
+    web.progress = null;
     const long = release(3020, 3000);
     served.feed = long.feed;
     served.files[long.file] = Buffer.concat([long.bytes, Buffer.from("more")]);
-    await assert.rejects(web.check(), /longer than the one signed/);
+    await assert.rejects(web.check(), /not the one signed: longer/);
   });
 
   test("a build for a newer app, or not the bytes signed, is not taken; one that did not come up is put away", async () => {

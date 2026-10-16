@@ -190,7 +190,7 @@ export class WebUpdates {
     let received = 0;
     for await (const chunk of response.body as AsyncIterable<Uint8Array>) {
       received += chunk.length;
-      if (received > size) throw new Unverified(`build ${build} is longer than the one signed`);
+      if (received > size) throw new Unverified(`build ${build} is not the one signed: longer`);
       chunks.push(chunk);
       tell(received);
     }
