@@ -82,10 +82,10 @@ sequenceDiagram
   P->>S: 授权（密文、签名、有效期、使用次数）
   S->>S: keeper 验签、解封，值只放在 keeper 的内存里
   S-->>A: 授权号（不是原值）
-  A->>S: 用授权号：走代理 / ssh-agent / stillfail-secret run
+  A->>S: secret_run(授权号, 命令)：走代理 / ssh-agent / 环境变量
 ```
 
-- **keeper**：station 里一个单独的进程，只做三件事：管授权、做代理、做 ssh-agent。值只在它的内存里，不写盘，不进日志，也不交给 station 主进程（主进程连着网页和远程任务，暴露面大）。macOS 上同一用户的进程默认不能读别的进程内存（要调试权限），Linux 上要开 `PR_SET_DUMPABLE=0`。
+- **keeper**：station 里管授权、做代理、做 ssh-agent 的那一块（`station/src/vault/`）。值只在 station 进程的内存里，不写盘，不进日志，station 重启就忘（agent 重新申请）。没有拆成单独的进程：agent 和 station 是同一个系统用户，拆出去的进程和 station 进程对 agent 来说一样读不到（都要调试权限），多一个进程只多一份打包和交接的麻烦。
 - **工具**：`secret_list`（agent 能看到的条目名和允许的方式，不含值）和 `secret_use`。申请卡片用现有的卡片和奏列表，申请发给条目所在库的成员；`card.assignee` 是库的 owner，或者是这个 chat 的发起人，只要他是库成员。
 - **批准的范围**：「只这一次」「这个 chat 一小时内」「这个 chat 里同一个命令以后都行」三档，默认第一档。上限由条目里的 `agent` 设置决定。
 
@@ -93,9 +93,9 @@ sequenceDiagram
 
 | 方式 | 怎么做 | agent 看得到原值吗 | 适合 |
 |---|---|---|---|
-| 代理（默认） | `stillfail-secret run <授权号> --env GH_TOKEN -- gh pr list`：只给这一个命令设 `HTTPS_PROXY`（keeper 的本机代理，带这次授权的代理口令）和信任 keeper CA 的变量（`NODE_EXTRA_CA_CERTS`、`SSL_CERT_FILE`、`REQUESTS_CA_BUNDLE`、`GIT_SSL_CAINFO`、`CURL_CA_BUNDLE`），`GH_TOKEN` 的值是占位符 `stillfail-secret:<授权号>`。请求发往条目允许的域名时，代理把请求头里的占位符换成原值；占位符发往别的域名就拒绝。不在 agent 的全局环境里设代理：keeper 出问题不能连累 agent 自己的 API 请求 | 看不到 | API key、Bearer token、GitHub token（`gh` 走 HTTPS） |
-| ssh-agent | `stillfail-secret run <授权号> -- git push`：给这个命令一个 keeper 的 `SSH_AUTH_SOCK`，只列出这次授权的那把钥匙，每次签名检查授权 | 看不到，私钥不离开 keeper | git over ssh、登其他机器 |
-| 环境变量 | `stillfail-secret run <授权号> -- <命令>`：keeper 用这个值作为环境变量启动这一个进程，stdout/stderr 经过 keeper 输出，原值和它的 base64、URL 编码写法逐字换成 `[已隐藏]` | 子进程看得到；agent 只能从输出里拿到，而输出已经遮掉了 | 只认环境变量、不走 HTTP 的工具（数据库客户端之类） |
+| 代理（默认） | `secret_run {grant, command: "gh pr list"}`：只给这一个命令设 `HTTPS_PROXY`（keeper 的本机代理，带这次授权的代理口令）和信任 keeper CA 的变量（`NODE_EXTRA_CA_CERTS`、`SSL_CERT_FILE`、`REQUESTS_CA_BUNDLE`、`GIT_SSL_CAINFO`、`CURL_CA_BUNDLE`），`GH_TOKEN` 的值是占位符 `stillfail-secret:<授权号>`。请求发往条目允许的域名时，代理把请求头里的占位符换成原值；占位符发往别的域名就拒绝。不在 agent 的全局环境里设代理：keeper 出问题不能连累 agent 自己的 API 请求 | 看不到 | API key、Bearer token、GitHub token（`gh` 走 HTTPS） |
+| ssh-agent | `secret_run {grant, command: "git push"}`：给这个命令一个 keeper 的 `SSH_AUTH_SOCK`，只列出这次授权的那把钥匙，每次签名检查授权 | 看不到，私钥不离开 keeper | git over ssh、登其他机器 |
+| 环境变量 | `secret_run {grant, command}`：station 用这个值作为环境变量启动这一个进程，stdout/stderr 经过 station 返回给 agent，原值和它的 base64、URL 编码写法逐字换成 `[已隐藏]` | 子进程看得到；agent 只能从输出里拿到，而输出已经遮掉了 | 只认环境变量、不走 HTTP 的工具（数据库客户端之类） |
 
 - 环境变量方式的输出遮挡是按**确切的值**遮，比 `redact.ts` 按长相猜靠谱得多。但它防不住命令自己把值发出去，所以界面上把这一档标成「agent 能拿到」，条目默认不开这一档。
 - 代理只拦 HTTPS，并且只换占位符：agent 发出的其他请求原样通过，不影响它干别的事。
@@ -198,8 +198,8 @@ Grant（批准的设备生成）= {v: 1, ws, request, vault, item, mode, hosts, 
 Deny = {v: 1, ws, request, at, sig}
 ```
 
-- 批准的人必须是库的成员，`sig.key` 是他锁里设备的 `sign_key`。`scope`：`once` 只能用一次（一次 `stillfail-secret run`）、`hour` 一小时内、`chat` 这个 chat 里直到 `exp`（最长 24 小时）。
-- 授权号就是 `request` 的 id。只有发起申请的那个 session 能用（凭 `STILLFAIL_MCP_TOKEN`）。
+- 批准的人必须是库的成员，`sig.key` 是他锁里设备的 `sign_key`。`scope`：`once` 只能用一次（一次 `secret_run`）、`hour` 一小时内、`chat` 这个 chat 里直到 `exp`（最长 24 小时）。
+- 授权号就是 `request` 的 id。只有发起申请的那个 session 能用（MCP 调用本来就按 session 认人，Claude 和 Codex 一样）。
 
 ### station 的接口
 
@@ -218,15 +218,18 @@ agent → station（MCP 工具，在 `stillfail` 服务器里）：
 |---|---|
 | `secret_list` | 有 `listing` 的条目：id、名字、方式、域名，加上这个 session 手上还能用的授权 |
 | `secret_use {item, mode, reason, command?, hosts?}` | 建申请，往这个 chat 发一张申请卡片（库 owner 是 assignee），推送。等最多 2 分钟：批准了回授权号和用法，没批准回「等批准」，之后批准或拒绝时往 session 里发一条消息 |
+| `secret_run {grant, command, env?, cwd?, timeout_seconds?}` | station 在 session 的工作目录里 `sh -c` 跑这个命令，按授权的方式给它密钥，返回退出码和遮过的输出（太长时留头 4KB、尾 28KB）。默认 10 分钟超时 |
 
-`stillfail-secret run <授权号> [--env NAME] -- <命令…>`：keeper 的命令行，连 keeper 的 unix socket，凭 `STILLFAIL_MCP_TOKEN` 证明是哪个 session。
+先不做命令行（`stillfail-secret run`）：要往 agent 的 PATH 里放东西、还要让 Codex 的进程也能证明自己是哪个 session，MCP 工具这两件都现成。以后需要在管道里用再加。
+
+申请卡片就是普通的 options 卡片（「批准这一次 / 这个 chat 一小时内都行 / 拒绝」，assignee 是库 owner），多一个字段 `vault: {request}`。新客户端看到这个字段就换成批准界面（选项 → 指纹 → `vault.approve`/`vault.deny`）；老客户端照普通卡片显示，点了只是发一句话，agent 不会因此拿到授权（工具说明里写了只认授权）。批准或拒绝后 station 收回这张卡片。
 
 ### keeper
 
-- station 起的子进程（`station/src/vault/keeper.ts`），station 退出它也退出；和 station 之间走一个只有 station 知道口令的 unix socket。station 把 Grant 原样交给 keeper，keeper 自己验签、用这次申请的临时私钥（只在 keeper 内存里）解封。
-- 代理：`127.0.0.1` 上的 HTTP 代理，`CONNECT` 到授权允许的域名时做中间人（keeper 的 CA，私钥存 station 数据目录 `vault/ca.key`，0600），只在请求头里换占位符；其他 `CONNECT` 原样转发。代理口令（`Proxy-Authorization`）对应授权，没有口令的请求只转发不替换。
+- 在 station 进程里（`station/src/vault/keeper.ts`）：station 把 Grant 原样交给 keeper，keeper 自己验签、用这次申请的临时私钥（只在内存里）解封。
+- 代理：`127.0.0.1` 上的 HTTP 代理，`CONNECT` 到授权允许的域名时做中间人（keeper 的 CA，私钥存 station 数据目录 `vault/ca.key`，0600），只在请求头里换占位符；其他 `CONNECT` 原样转发。代理口令（`Proxy-Authorization`）对应一次 `secret_run`，命令结束就作废；没有口令的连接一律 407。明文 HTTP 一律 405，密钥不走明文。
 - ssh-agent：每次 `run` 开一个临时 socket，只认这次授权的钥匙，命令结束就关。
-- 环境变量方式：keeper 自己起子进程，stdout/stderr 经 keeper 输出，原值、base64、base64url、URL 编码的写法都换成 `[已隐藏]`（跨块边界也要遮）。
+- 环境变量方式：station 自己起子进程，stdout/stderr 经 keeper 输出，原值、base64、base64url、URL 编码的写法都换成 `[已隐藏]`（跨块边界也要遮）。
 
 ### 设备上的钥匙
 
