@@ -38,6 +38,7 @@ jobs:
     # deployment jobs use production secrets; local signing stays isolated.
     if: github.repository == 'AFK-surf/still.fail' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     outputs:
       range: ${{ steps.plan.outputs.range }}
       parts: ${{ steps.plan.outputs.parts }}
@@ -122,7 +123,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.natives == 'needed'
     runs-on: [self-hosted, mini1]
-    timeout-minutes: 60
+    timeout-minutes: 10
     permissions:
       contents: write # the release native-artifacts' assets, on main only
     steps:
@@ -153,6 +154,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: "natives-${{ github.sha }}", path: "${{ runner.temp }}/natives", if-no-files-found: ignore, retention-days: 7 }
 
+  # No job may take over 10 minutes (2026-10-16, as asked: none should; the longest, a stable Android release, ~7):
+  # one that does is stuck, and on mini1 it holds one of four runners every run waits on.
   # The full check (scripts/check.sh) in two jobs: the parts that need a Mac (the station with its native parts' own
   # tests, client/'s Rust) here on mini1, the rest beside it on Linux (check-linux). In each, the steps run side by
   # side, so a part the range leaves alone costs nothing. Rust builds in targets under the job's own (setup-mac,
@@ -164,7 +167,7 @@ jobs:
     # Usually under 2 minutes, all of it with Rust built anew a few: a test that hangs (one waiting on what never comes,
     # up to its 10 minutes each) held one of mini1's four runners for most of an hour, and every run behind it waited
     # (2026-10-16, station/test/mesh-handover.test.ts on branches whose mesh needed a service it did not give).
-    timeout-minutes: 20
+    timeout-minutes: 10
     env:
       STILLFAIL_CHECK_PART: station core
     steps:
@@ -204,7 +207,7 @@ jobs:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 10
     env:
       STILLFAIL_CHECK_PART: ts
     steps:
@@ -229,7 +232,7 @@ jobs:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -255,7 +258,7 @@ jobs:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && needs.plan.outputs.android == 'true' }}
     runs-on: [self-hosted, mini1]
-    timeout-minutes: 45
+    timeout-minutes: 10
     env:
       STILLFAIL_CHECK_PART: android
       # A branch: the debug app made in the check's Gradle run (main releases its own: android).
@@ -277,7 +280,7 @@ jobs:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && (needs.plan.outputs.api == 'true' || needs.plan.outputs.static == 'true') }}
     runs-on: [self-hosted, mini1]
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-mac
@@ -291,7 +294,7 @@ jobs:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && (needs.plan.outputs.desktop == 'true' || needs.plan.outputs.station == 'true') }}
     runs-on: [self-hosted, mini1]
-    timeout-minutes: 60
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
@@ -316,7 +319,7 @@ jobs:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && needs.plan.outputs.windows == 'true' }}
     runs-on: [self-hosted, mini1]
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
@@ -337,7 +340,7 @@ jobs:
     needs: [plan, windows-build]
     if: ${{ !cancelled() && needs.windows-build.result == 'success' }}
     runs-on: windows-2025
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { sparse-checkout: .github }
@@ -357,7 +360,7 @@ jobs:
     if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) }}
     runs-on: ubuntu-24.04
     environment: production
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
@@ -380,7 +383,7 @@ jobs:
     if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result)
     runs-on: [self-hosted, mini1]
     environment: production
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # the web app's build number (__BUILD__, build.json) is the commits in the history
@@ -406,7 +409,7 @@ jobs:
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.station == 'true' }}
     runs-on: [self-hosted, mini1]
     environment: production
-    timeout-minutes: 60
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # the release's number is the commits in the history
@@ -429,7 +432,7 @@ jobs:
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.android == 'true' }}
     runs-on: [self-hosted, mini1]
     environment: production
-    timeout-minutes: 60
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # versionCode is the commits in the history
@@ -457,7 +460,7 @@ jobs:
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop == 'true' }}
     runs-on: [self-hosted, mini1]
     environment: production
-    timeout-minutes: 90
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
@@ -485,7 +488,7 @@ jobs:
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop == 'true' }}
     runs-on: [self-hosted, mini1]
     environment: production
-    timeout-minutes: 60
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
@@ -515,7 +518,7 @@ jobs:
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop_web == 'true' && needs.plan.outputs.desktop != 'true' }}
     runs-on: ubuntu-24.04
     environment: production
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # its build number, and the oldest app it works in (the last commit changing the shell)
@@ -548,7 +551,7 @@ jobs:
     if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result) && (needs.station.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-web.result == 'success')
     runs-on: ubuntu-24.04
     environment: production
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # the changelog's entries are numbered by the commits up to them
@@ -601,6 +604,7 @@ jobs:
     needs: [plan, natives, check, check-linux, check-browser, check-android, api, static, station, android, desktop, desktop-win, desktop-web, put]
     if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result)
     runs-on: [self-hosted, mini1]
+    timeout-minutes: 10
     permissions:
       contents: write # only this job updates the tag deployed/beta
     steps:

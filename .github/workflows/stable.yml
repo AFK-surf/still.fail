@@ -17,6 +17,7 @@ jobs:
   plan:
     if: github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     outputs:
       sha: ${{ steps.plan.outputs.sha }}
       version: ${{ steps.plan.outputs.version }}
@@ -35,7 +36,7 @@ jobs:
     needs: plan
     runs-on: [self-hosted, mini1]
     environment: production
-    timeout-minutes: 60
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
@@ -51,7 +52,7 @@ jobs:
     needs: plan
     runs-on: [self-hosted, mini1]
     environment: production
-    timeout-minutes: 90
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
@@ -69,7 +70,7 @@ jobs:
     needs: [plan, android, desktop]
     runs-on: ubuntu-24.04
     environment: production
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
@@ -87,7 +88,7 @@ jobs:
     needs: [plan, web]
     runs-on: [self-hosted, mini1]
     environment: production
-    timeout-minutes: 60
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
@@ -106,7 +107,7 @@ jobs:
     needs: [plan, web]
     runs-on: [self-hosted, mini1]
     environment: production
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
@@ -119,6 +120,7 @@ jobs:
   done:
     needs: [plan, android, desktop, web, station, site]
     runs-on: [self-hosted, mini1]
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
