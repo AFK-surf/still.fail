@@ -67,7 +67,7 @@ test("Web Push encryption gives RFC 8291's example, byte for byte", async () => 
 
 test("a pushed message decrypts with the subscription's keys, and not with another's", async () => {
   const ua = await browser();
-  const message = JSON.stringify({ type: "notice", body: "需要处理 · 看一下 🔥" });
+  const message = JSON.stringify({ type: "notice", body: "需要你处理 · 看一下 🔥" });
   const body = await encrypt(encoder.encode(message), ua.p256dh, ua.auth);
   assert.equal(await decrypt(body, ua), message);
   assert.notEqual(toB64url(await encrypt(encoder.encode(message), ua.p256dh, ua.auth)), toB64url(body), "a fresh key and salt each time");

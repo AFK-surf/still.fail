@@ -59,7 +59,7 @@ class ArchiveTest {
     private val busy = row("ember:c-1", "侧栏和设置的几处间距", "在改", stateText = "在等：CI 跑完", tone = "wait")
     private val done = row("ember:c-2", "README 里的命令", "改好了，已推到 main", stateText = "已完成", settled = true)
     private val alsoDone = row("ember:c-3", "换掉旧的图标", "都换好了", stateText = "已完成", settled = true)
-    private val rest = (4..14).map { row("ember:c-$it", "第 $it 件事", "还在做", stateText = "在等：Alice 看截图") }
+    private val rest = (4..14).map { row("ember:c-$it", "第 $it 件事", "还在做", stateText = "等待：Alice 看截图") }
 
     private fun chats(items: List<ChatItem>) = ChatsView(
         me = fail.still.android.data.Me(id = Fixtures.account.email), stations = listOf(StationState(Fixtures.STATION, "st", "studio", "online")),

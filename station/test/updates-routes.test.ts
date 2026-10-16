@@ -93,7 +93,7 @@ test("an update asked for is refused with what is wrong", async (t) => {
   t.after(() => updates.close());
   const ask = rig(updates);
   await ask("POST", "/updates/check");
-  assert.deepEqual(await ask("POST", "/updates", { id: "nope" }), [400, { error: "没有 nope 这一项" }]);
+  assert.deepEqual(await ask("POST", "/updates", { id: "nope" }), [400, { error: "不存在 nope" }]);
   assert.deepEqual(await ask("POST", "/updates", {}), [400, { error: "没有  这一项" }]);
   // Codex is not there and there is neither npm nor Homebrew to install it with.
   assert.deepEqual(await ask("POST", "/updates", { id: "codex" }), [400, { error: "Codex：这台机器上没有 npm 也没有 Homebrew：先装 Node（带 npm），再回来安装 Codex" }]);

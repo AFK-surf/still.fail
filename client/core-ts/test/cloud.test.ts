@@ -93,9 +93,9 @@ test("says_nothing_until_a_wait_is_slow_then_what_and_how_fast", () => {
   status.skew += 3_000;
   const v = () => status.value() as { state: unknown; text: string; items: { detail: string; text: string }[] };
   assert.equal(v().text, "studio 读取对话 · 3 秒");
-  assert.equal(v().items[0].detail, "已等 3 秒，还没收到数据");
+  assert.equal(v().items[0].detail, "已等待 3 秒，尚未收到数据");
   wait.received(300 * 1024);
-  assert.equal(v().items[0].detail, "已收 300 KB，3 秒");
+  assert.equal(v().items[0].detail, "已接收 300 KB，用时 3 秒");
   assert.equal(v().text, "studio 读取对话 · 3 秒 · 300 KB/s");
   wait.end();
   assert.equal(v().state, null);
@@ -116,9 +116,9 @@ test("a_connection_goes_first_and_a_socket_down_is_trouble", () => {
   assert.equal(v().state, "slow", "not yet: it may be back at once");
   status.skew += 2_000;
   assert.equal(v().state, "trouble");
-  assert.equal(v().text, "连不上 still.fail cloud，2 秒后重试 · 共 3 项");
+  assert.equal(v().text, "无法连接 still.fail cloud，2 秒后重试 · 共 3 项");
   status.socketDown("a", "网络错误", now + 8_000);
-  assert.equal(v().items[0].text, "连不上 still.fail cloud，6 秒后重试（第 2 次）");
+  assert.equal(v().items[0].text, "无法连接 still.fail cloud，6 秒后重试（第 2 次）");
   status.socketUp("a");
   assert.equal(v().state, "slow");
 });
@@ -135,10 +135,10 @@ test("a_workspaces_status_is_its_own_waits_its_accounts_socket_and_the_relay", (
   device.socketDown("a2", "网络错误", now + 4_000);
   for (const s of [w1, w2, device]) s.skip(2_500);
   const texts = (v: unknown) => (v as { items: { text: string }[] }).items.map((i) => i.text);
-  assert.deepEqual(texts(value([[w2, "all"], [device, { for: ["a2"] }]])), ["连不上 still.fail cloud，2 秒后重试", "正在连接 relay"]);
+  assert.deepEqual(texts(value([[w2, "all"], [device, { for: ["a2"] }]])), ["无法连接 still.fail cloud，2 秒后重试", "正在连接 relay"]);
   assert.deepEqual(texts(value([[w1, "all"], [device, { for: ["a1"] }]])), ["连不上 still.fail cloud，7 秒后重试", "正在连接 relay", "读取对话"]);
   assert.deepEqual(texts(value([[w2, "all"], [device, { for: [] }]])), ["正在连接 relay"]);
-  assert.deepEqual(texts(value([[w1, "all"], [w2, "all"], [device, "all"]])), ["连不上 still.fail cloud，2 秒后重试", "正在连接 relay", "读取对话", "still.fail cloud 读取 workspace"]);
+  assert.deepEqual(texts(value([[w1, "all"], [w2, "all"], [device, "all"]])), ["无法连接 still.fail cloud，2 秒后重试", "正在连接 relay", "读取对话", "still.fail cloud 读取 workspace"]);
 });
 
 /// docs/multi-workspace.md: one station in two workspaces, named the same in each. Said together (the `status` topic of
@@ -166,7 +166,7 @@ test("waits_that_say_the_same_are_one_line_with_how_many", () => {
   status.skew += 2_000;
   const v = status.value() as { text: string; items: { text: string; detail: string }[] };
   assert.deepEqual(v.items.map((i) => i.text), ["studio 读取网页服务 ×12", "studio 读取 station 概况"]);
-  assert.equal(v.items[0].detail, "已等 4 秒，还没收到数据");
+  assert.equal(v.items[0].detail, "已等待 4 秒，尚未收到数据");
   assert.equal(v.text, "studio 读取网页服务 ×12 · 4 秒 · 共 13 项");
 });
 

@@ -120,7 +120,7 @@ test("a_chat_of_mine_is_noticed_as_it_changes_and_not_for_how_it_was_at_first", 
   rows.set("ws/st", [row("block", 7, true, agent)]);
   notices.look(stations);
   assert.deepEqual(kinds(notices), ["done", "block"]);
-  assert.ok(notices.value(null).items[1].body.startsWith("要你帮忙 · 修好了"));
+  assert.ok(notices.value(null).items[1].body.startsWith("需要你处理 · 修好了"));
   rows.set("ws/st", [row(null, 8, true, ["person", "you@x.y"])]);
   notices.look(stations);
   assert.deepEqual(kinds(notices), ["done", "block", "message"]);
@@ -174,7 +174,7 @@ test("a_decision_newly_waiting_for_me_is_noticed_once", () => {
   rows.set("ws/st", [w(asked(5, "**合吗？**\n细节"), 5)]);
   notices.look(stations);
   assert.deepEqual(kinds(notices), ["wait"]);
-  assert.equal(notices.value(null).items[0].body, "等你决定 · 合吗？");
+  assert.equal(notices.value(null).items[0].body, "待你决定 · 合吗？");
   notices.look(stations);
   assert.equal(kinds(notices).length, 1);
   const dismissed = { ...asked(6, "这个？"), dismissed: true };
@@ -188,7 +188,7 @@ test("a_decision_newly_waiting_for_me_is_noticed_once", () => {
   rows.set("ws/st", [typed]);
   notices.look(stations);
   assert.deepEqual(kinds(notices), ["wait", "wait", "wait"]);
-  assert.equal(notices.value(null).items[2].body, "等你决定 · 域名填哪个？");
+  assert.equal(notices.value(null).items[2].body, "待你决定 · 域名填哪个？");
   assert.deepEqual(notices.value(null).items.map((i: J) => i.seq), [5, 7, 8], "about its card");
 });
 
@@ -202,13 +202,13 @@ test("needing_help_is_told_by_what_it_needs", () => {
   rows.set("ws/st", [needs]);
   notices.look(stations);
   assert.deepEqual(kinds(notices), ["block"]);
-  assert.equal(notices.value(null).items[0].body, "要你帮忙 · 要 Stripe 的测试 key");
+  assert.equal(notices.value(null).items[0].body, "需要你处理 · 要 Stripe 的测试 key");
 });
 
 test("bodies_are_one_short_line", () => {
   assert.equal(body("done", "Claude", "a\n\n b"), "Claude: a b");
   assert.equal(body("failed", "Claude", ""), "出错");
-  assert.equal(body("wait", "", "设置页间距"), "等你决定 · 设置页间距");
+  assert.equal(body("wait", "", "设置页间距"), "待你决定 · 设置页间距");
   const long = body("message", "x", "字".repeat(300));
   assert.equal(Array.from(long).length, BODY);
   assert.ok(long.endsWith("…"));

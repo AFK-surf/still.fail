@@ -56,12 +56,12 @@ class PublishSheetTest {
     private val preview = PublishPreview(
         upto = 9, title = "部署登录页",
         messages = listOf(
-            PublishMessage(n = 4, author = "Alice", agent = false, text = "帮我把登录页部署到预发，token 是 [已隐藏]", files = emptyList(), hidden = 1u, hiddenText = "隐藏了 1 处", createdAt = Fixtures.NOW, time = ago("12 分钟前")),
+            PublishMessage(n = 4, author = "Alice", agent = false, text = "帮我把登录页部署到预发，token 是 [已隐藏]", files = emptyList(), hidden = 1u, hiddenText = "已隐藏 1 处", createdAt = Fixtures.NOW, time = ago("12 分钟前")),
             PublishMessage(n = 6, author = "Opus 5.5", agent = true, text = "部署好了：**登录后跳回原页面**，`npm run deploy:staging` 跑了 42 秒。", files = emptyList(), hidden = 0u, createdAt = Fixtures.NOW, time = ago("10 分钟前")),
             PublishMessage(n = 9, author = "Alice", agent = false, text = "截图、日志和构建缓存都附上了", files = files, hidden = 0u, createdAt = Fixtures.NOW, time = ago("8 分钟前")),
         ),
         files = files,
-        hidden = 1u, hiddenText = "共隐藏了 1 处疑似机密",
+        hidden = 1u, hiddenText = "共隐藏 1 处疑似机密",
     )
 
     private fun open(publish: ChatPublish, dark: Boolean = false): Harness {
@@ -104,7 +104,7 @@ class PublishSheetTest {
         rule.onNodeWithText("公开分享").performClick()
         h.settle()
         rule.onNodeWithText("持有链接的任何人都可查看这些消息；station 离线时无法打开").assertIsDisplayed()
-        rule.onNodeWithText("隐藏了 1 处").assertIsDisplayed()
+        rule.onNodeWithText("已隐藏 1 处").assertIsDisplayed()
         picture(h, "publish-sheet$suffix")
         // The log and the cache unticked, where their message has them.
         rule.onNodeWithText("deploy.log").performScrollTo().performClick()

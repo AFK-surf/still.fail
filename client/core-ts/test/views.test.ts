@@ -375,8 +375,8 @@ test("the_decisions_page_says_what_was_answered_today_and_where_agents_are_at_wo
   // Today's only: as the viewer's clock has it (the host's offset here).
   const sameDay = (ms: number) => format.localDay(ms, t.host.utcOffsetMin(ms)) === format.localDay(now, t.host.utcOffsetMin(now));
   const expected = [
-    ["选了「不需要部署」", now - 2 * 60_000],
-    ["选了「先发测试版」", now - 10 * 60_000],
+    ["选择了「不需要部署」", now - 2 * 60_000],
+    ["选择了「先发测试版」", now - 10 * 60_000],
   ].filter(([, at]) => sameDay(at as number)).map(([a]) => a);
   assert.deepEqual(answered.map((a: J) => a.answer), expected);
   if (expected.length === 2) {
@@ -413,7 +413,7 @@ test("a_rows_decision_is_its_line_and_mark_and_counts_for_the_workspace", async 
   assert.deepEqual([of("k2").tone, of("k2").decision.dismissed, of("k2").decision.text], [undefined, true, undefined]);
   const m = marks.value;
   assert.equal(m.workspaces.ws.decisions, 2);
-  assert.deepEqual([m.workspaces.ws.wait, m.workspaces.ws.alert, m.workspaces.ws.label], [2, 0, "2 个在等你"]);
+  assert.deepEqual([m.workspaces.ws.wait, m.workspaces.ws.alert, m.workspaces.ws.label], [2, 0, "2 个待你处理"]);
   // Of the lists the rail leads to: 我参与的 has the one of theirs waiting, 监控中 nothing.
   assert.deepEqual([m.workspaces.ws.tone, m.workspaces.ws.mineTone, m.workspaces.ws.watchingTone], ["wait", "wait", undefined]);
   // The list under the badge is the cards waiting for them, no more; the badge counts those not looked at since.
@@ -462,7 +462,7 @@ test("a_text_card_is_on_the_page_and_its_row_whatever_its_agent_does", async () 
   assert.deepEqual([k1.stateText, k1.stateAbout, k1.tone], ["奏 · Stripe 的测试 key 是多少？", undefined, "wait"]);
   assert.deepEqual([k1.decision.card.type, k1.card], ["text", undefined]);
   const k2 = of("k2");
-  assert.deepEqual([k2.stateText, k2.stateAbout, k2.tone], ["要你帮忙：要 key", undefined, "wait"]);
+  assert.deepEqual([k2.stateText, k2.stateAbout, k2.tone], ["需要你处理：要 key", undefined, "wait"]);
 });
 
 test("what_is_worth_a_look_about_a_session_is_its_account_its_quota_running_out_and_the_disk_filling_up", () => {
@@ -473,7 +473,7 @@ test("what_is_worth_a_look_about_a_session_is_its_account_its_quota_running_out_
   const s = { profile: "a" };
   assert.deepEqual(attention(ov("ok", 50, 500e9), s, 0), []);
   assert.deepEqual(attention(ov("login", 92, 5e9), s, 0), [
-    { kind: "account", text: "「A」要重新登录" },
+    { kind: "account", text: "「A」需要重新登录" },
     { kind: "quota", text: "每周剩余 8%", more: "即将刷新", quota: { left: 8, mark: "W", level: "red", until: 2 } },
     { kind: "disk", text: "磁盘剩 5 GB" },
   ]);

@@ -200,7 +200,7 @@ class DecisionsTest {
         val h = page()
         val view = DecisionsView(
             emptyList(), 0u, loading = false,
-            answered = listOf(DecisionAnswered("ws/st", "studio", null, null, "k1", 7, "安卓发版", 3, "先发测试版吗？", "选了「先发测试版」", "10:42")),
+            answered = listOf(DecisionAnswered("ws/st", "studio", null, null, "k1", 7, "安卓发版", 3, "先发测试版吗？", "选择了「先发测试版」", "10:42")),
             working = listOf(DecisionWorking("ws/st", "studio", null, null, "k2", 8, "官网首屏", "在做 · 截三种首屏")),
             today = DecisionsToday(1u, "6 分钟", 1u),
         )
@@ -208,7 +208,7 @@ class DecisionsTest {
         h.settle()
         rule.onNodeWithText("6 分钟").assertExists()
         rule.onNodeWithText("在做 · 截三种首屏").assertExists()
-        rule.onNodeWithText("安卓发版 · 选了「先发测试版」").assertExists()
+        rule.onNodeWithText("安卓发版 · 选择了「先发测试版」").assertExists()
         rule.onNodeWithText("官网首屏").performClick()
         h.settle()
         rule.runOnIdle { assertEquals(Screen.Chat("ws/st", ChatOf.Session("k2")), h.app.stack.last()) }
@@ -447,7 +447,7 @@ class DecisionsTest {
 
     private val resolved = post(
         2, "设置页的标题要不要加粗？", listOf(DecisionOption("加粗"), DecisionOption("先不改", recommended = true)),
-        MessageDecision(resolved = true, answeredBy = "林晓", chosen = "先不改", text = "林晓 选了「先不改」"),
+        MessageDecision(resolved = true, answeredBy = "林晓", chosen = "先不改", text = "林晓 选择了「先不改」"),
     )
     private val chatTalk = listOf(Fixtures.mine(1, "设置页再看一下"), resolved, Fixtures.mine(3, "先不改"), Fixtures.agent(4, "好，标题不动。"), gap.copy(seq = 5, ts = "t5"))
 
@@ -476,7 +476,7 @@ class DecisionsTest {
 
     @Test fun inChatAnsweredHasItsLineNoButtons() {
         chat()
-        rule.onNodeWithText("林晓 选了「先不改」").assertExists()
+        rule.onNodeWithText("林晓 选择了「先不改」").assertExists()
         rule.onNodeWithText("加粗").assertDoesNotExist()
     }
 
@@ -491,14 +491,14 @@ class DecisionsTest {
         h.deliver()
         assertEquals("one answer", 1, h.acted().size)
         h.fake.put(Topics.chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD)), Fixtures.chat(
-            chatTalk.map { if (it.seq == 5L) it.copy(decision = MessageDecision(resolved = true, text = "王一 选了「两处一起改」")) else it },
+            chatTalk.map { if (it.seq == 5L) it.copy(decision = MessageDecision(resolved = true, text = "王一 选择了「两处一起改」")) else it },
             title = "侧栏和设置的几处间距",
         ))
         h.deliver()
         rec.frames(60)
         rec.end()
         rule.onNodeWithText(both.label, substring = false).assertDoesNotExist()
-        rule.onNodeWithText("王一 选了「两处一起改」").assertExists()
+        rule.onNodeWithText("王一 选择了「两处一起改」").assertExists()
     }
 
     @Test fun answerMotionLight() { answerMotion(false) }
@@ -525,7 +525,7 @@ class DecisionsTest {
         val h = Harness(rule)
         val items = listOf(
             row("ember:c-1", "侧栏和设置的几处间距", "改好了", stateText = "奏 · 间距那三处，前后对比在上面", tone = "wait", decision = RowDecision(3, listOf(change, both), text = "奏 · 间距那三处，前后对比在上面")),
-            row("ember:c-3", "登录页 Safari 点不动", "表单提交前被吞掉了", stateText = "在等：CI 跑完"),
+            row("ember:c-3", "登录页 Safari 点不动", "表单提交前被吞掉了", stateText = "等待：CI 跑完"),
             row("ember:c-4", "归档页时间", "挪到行尾了", stateText = "奏 · 归档页的时间要不要往右挪", tone = "wait"),
             row("ember:c-5", "README 里的命令", "改好了，已推到 main", stateText = "已完成", settled = true),
             row("ember:c-6", "换掉旧的图标", "都换好了", stateText = "已完成", settled = true),

@@ -1243,7 +1243,7 @@ test("a session changes profile, model and effort by hand, and is taken on by an
   await settle();
   assert.ok((await refused(configure(r.hub, key, { profile: "cx" }))).includes("不能跑 Claude Code"));
   r.edit(withProfile("cc3", "third", []));
-  assert.ok((await refused(configure(r.hub, key, { profile: "cc3" }))).includes("「third」没有启用 opus"), "only one with its model enabled");
+  assert.ok((await refused(configure(r.hub, key, { profile: "cc3" }))).includes("「third」未启用 opus"), "only one with its model enabled");
   // Its model and effort change too, to what a profile of its runtime runs.
   assert.ok((await refused(configure(r.hub, key, { model: "gpt-5" }))).includes("没有能跑 gpt-5 的 Claude Code Profile"));
   assert.ok((await refused(configure(r.hub, key, { effort: "ultra" }))).includes("思考深度只有"));

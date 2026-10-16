@@ -91,14 +91,14 @@ test("signed out, not installed and keychain only are said as such", async () =>
   let logins = new MachineLogins(m.env, undefined, () => "zh");
   await logins.refresh();
   let got = logins.get();
-  assert.deepEqual([got[0]!.installed, got[0]!.loggedIn, got[0]!.text], [true, false, "Claude Code 没有登录"]);
-  assert.deepEqual([got[1]!.installed, got[1]!.text], [false, "没有装 Codex"]);
+  assert.deepEqual([got[0]!.installed, got[0]!.loggedIn, got[0]!.text], [true, false, "Claude Code 未登录"]);
+  assert.deepEqual([got[1]!.installed, got[1]!.text], [false, "未安装 Codex"]);
   m = machine({ claude: `echo '{"loggedIn":true,"email":"a@x.com","subscriptionType":"pro"}'`, codex: `echo "Logged in using ChatGPT"` });
   logins = new MachineLogins(m.env, undefined, () => "zh");
   await logins.refresh();
   got = logins.get();
-  assert.deepEqual([got[0]!.usable, got[0]!.text], [false, "Claude Code 已登录 a@x.com（Pro），登录在钥匙串里，station 读不到"]);
-  assert.deepEqual([got[1]!.usable, got[1]!.text], [false, "Codex 已登录，登录存在钥匙串里"]);
+  assert.deepEqual([got[0]!.usable, got[0]!.text], [false, "Claude Code 已登录 a@x.com（Pro），登录信息在钥匙串中，station 无法读取"]);
+  assert.deepEqual([got[1]!.usable, got[1]!.text], [false, "Codex 已登录，登录信息保存在钥匙串中"]);
 });
 
 test("a machine profile's codex home links the machine's auth.json", () => {

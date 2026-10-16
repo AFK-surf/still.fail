@@ -202,10 +202,10 @@ class StationJoinTest {
     private fun showsProfile(dark: Boolean) {
         val h = profilePage(dark, manages = true, workspaces = null)
         // Off: a switch for Lab, its chats not on this account.
-        rule.onNodeWithText("也给 Lab 用").assertIsDisplayed()
+        rule.onNodeWithText("同时用于 Lab").assertIsDisplayed()
         rule.onNodeWithText("Lab 中的对话无法使用此账号").assertIsDisplayed()
         // A tap opens it to Lab: profile.put with the whole list.
-        rule.onNodeWithText("也给 Lab 用").performClick()
+        rule.onNodeWithText("同时用于 Lab").performClick()
         h.settle()
         val (_, params) = h.fake.calls.last { it.first == "profile.put" }
         assertEquals(home, params["station"]!!.jsonPrimitive.content)
@@ -215,10 +215,10 @@ class StationJoinTest {
         rule.runOnUiThread { h.fake.put(Topics.stations(ws), listOf(station("studio", "studio").copy(overview = overview(listOf(profile(listOf("lab"))))))) }
         h.settle()
         rule.onNodeWithText("Lab 中的对话可使用此账号运行 agent").assertIsDisplayed()
-        rule.onNodeWithText("也给 Lab 用").performScrollTo()
+        rule.onNodeWithText("同时用于 Lab").performScrollTo()
         h.settle()
         picture(h, "join-profile-workspaces-${if (dark) "dark" else "light"}")
-        rule.onNodeWithText("也给 Lab 用").performClick()
+        rule.onNodeWithText("同时用于 Lab").performClick()
         h.settle()
         val (_, closing) = h.fake.calls.last { it.first == "profile.put" }
         assertEquals(emptyList<String>(), closing["input"]!!.jsonObject["workspaces"]!!.jsonArray.map { it.jsonPrimitive.content })
@@ -230,12 +230,12 @@ class StationJoinTest {
     /** Not its home's manager: no switches (the core says so with `manages`). */
     @Test fun profileWorkspacesNotManaged() {
         profilePage(false, manages = false, workspaces = null)
-        rule.onNodeWithText("也给 Lab 用").assertDoesNotExist()
+        rule.onNodeWithText("同时用于 Lab").assertDoesNotExist()
     }
 
     // ── a new chat on a joined station with no profile open to this workspace ──
 
-    private val shared = "Studio 来自 Lab，它的 Profile 还没开放给这个 workspace：请 Lab 的管理员在 Profile 页打开「也给 Acme 用」"
+    private val shared = "Studio 属于 Lab，其 Profile 尚未对此 workspace 开放：请 Lab 的管理员在 Profile 页开启「同时用于 Acme」"
 
     private fun notShared(dark: Boolean) {
         val joined = station("lab-studio", "Studio", joined = true, home = "Lab").copy(overview = overview(emptyList()))

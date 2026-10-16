@@ -146,7 +146,7 @@ test("a_session_stands_where_its_process_and_last_turn_say", () => {
   const waits = { process: "warm", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5, waitSeconds: 600 } };
   assert.deepEqual(p.waiting(waits), { since: 5, seconds: 600, text: "等待中" });
   assert.deepEqual(p.waiting({ process: "warm", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5 } }), { since: 5, seconds: null, text: "等待中" });
-  assert.equal(p.waiting({ process: "warm", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5, waitFor: "CI 跑完" } }).text, "在等：CI 跑完");
+  assert.equal(p.waiting({ process: "warm", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5, waitFor: "CI 跑完" } }).text, "等待：CI 跑完");
   let watching: J = { process: "warm", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5, waitSeconds: 600 }, watch: { names: ["盯 CI"], since: 1, at: 5 } };
   watching = p.session(watching);
   assert.deepEqual([watching.statusText, watching.mark], ["监控中", null]);
@@ -155,7 +155,7 @@ test("a_session_stands_where_its_process_and_last_turn_say", () => {
   assert.equal(plain.statusText, "等待中");
   let said: J = { process: "warm", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5, waitSeconds: 600, waitFor: "CI 跑完" } };
   said = p.session(said);
-  assert.equal(said.statusText, "在等：CI 跑完");
+  assert.equal(said.statusText, "等待：CI 跑完");
   assert.equal(p.waiting({ process: "running", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5 } }), null);
   assert.equal(p.waiting({ process: "warm", pending: 1, lastTurn: { declared: "waiting", endedAt: 5 } }), null);
   assert.equal(st({}), "idle");
@@ -213,13 +213,13 @@ test("how_a_turn_ended_says_itself_in_words", () => {
     return s.statusText;
   };
   assert.equal(words({ declared: "final", ending: "all_done", outcome: "completed" }), "已完成");
-  assert.equal(words({ declared: "block", ending: "need_help", need: "要 Stripe 的测试 key", outcome: "completed" }), "要你帮忙：要 Stripe 的测试 key");
+  assert.equal(words({ declared: "block", ending: "need_help", need: "要 Stripe 的测试 key", outcome: "completed" }), "需要你处理：要 Stripe 的测试 key");
   assert.equal(words({ declared: "block", outcome: "completed" }), "需要你处理");
   assert.equal(words({ declared: "block", ending: "need_decision", outcome: "completed" }), "需要你处理");
-  assert.equal(words({ outcome: "failed", detail: "rate_limit: You've hit your limit" }), "出问题：额度用完");
-  assert.equal(words({ outcome: "failed", detail: "auth: 401" }), "出问题：登录失效");
+  assert.equal(words({ outcome: "failed", detail: "rate_limit: You've hit your limit" }), "出错：额度用完");
+  assert.equal(words({ outcome: "failed", detail: "auth: 401" }), "出错：登录失效");
   assert.equal(words({ outcome: "aborted" }), "出错：被停止");
-  assert.equal(words({ outcome: "completed" }), "出问题：意外停止");
+  assert.equal(words({ outcome: "completed" }), "出错：意外停止");
   let decided: J = { process: "warm", lastTurn: { declared: "block", ending: "need_decision", outcome: "completed" } };
   decided = p.session(decided);
   assert.equal(decided.mark, "block");
@@ -268,12 +268,12 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   assert.ok(p.archivable(reviewed));
   assert.ok(!p.archivable(kept));
   const merged = agent({ declared: "final", ending: "all_done", need: "已合并所有代码", outcome: "completed" }, "warm");
-  assert.equal(merged.statusText, "做完了：已合并所有代码");
-  assert.equal(p.rowStateText(row([merged], false)), "做完了：已合并所有代码");
+  assert.equal(merged.statusText, "已完成：已合并所有代码");
+  assert.equal(p.rowStateText(row([merged], false)), "已完成：已合并所有代码");
   assert.ok(!p.settled(row([done], true)));
   assert.ok(!p.settled(row([done, helped], false)));
-  assert.equal(p.rowStateText(row([done, helped], false)), "要你帮忙：要 key");
-  assert.equal(p.rowStateText(row([done, waits], false)), "在等：CI 跑完");
+  assert.equal(p.rowStateText(row([done, helped], false)), "需要你处理：要 key");
+  assert.equal(p.rowStateText(row([done, waits], false)), "等待：CI 跑完");
   assert.equal(p.rowStateText(row([done, works], false)), null);
   assert.ok(!p.settled(row([], false)));
   const card = { seq: 4, card: { type: "text" }, message: { seq: 4, text: "**域名用哪个？**\n细节" } };
@@ -286,9 +286,9 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   asked.agents = [waits];
   assert.equal(p.rowStateText(asked), "奏 · 域名用哪个？");
   asked.agents = [helped];
-  assert.deepEqual(p.rowStateLine(asked), ["要你帮忙：要 key", null]);
+  assert.deepEqual(p.rowStateLine(asked), ["需要你处理：要 key", null]);
   asked.agents = [agent({ outcome: "failed", detail: "auth: 401" }, "warm")];
-  assert.equal(p.rowStateText(asked), "出问题：登录失效");
+  assert.equal(p.rowStateText(asked), "出错：登录失效");
   asked.agents = [agent({ declared: "block", ending: "need_decision", outcome: "completed" }, "warm")];
   assert.equal(p.rowStateText(asked), "奏 · 域名用哪个？");
   // Let go by the viewer: the row says nothing of it, its agent asking still.
@@ -296,7 +296,7 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   assert.equal(p.rowStateText(asked), null);
   const needing = row([helped], false);
   needing.need = { seq: 9, message: { seq: 9, text: "要 key" }, before: [] };
-  assert.equal(p.rowStateText(needing), "要你帮忙：要 key");
+  assert.equal(p.rowStateText(needing), "需要你处理：要 key");
   needing.need.dismissed = true;
   assert.equal(p.rowStateText(needing), null);
   asked.agents = [done];
@@ -304,12 +304,12 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   const about = (a: J) => agent({ declared: "final", ending: "all_done", need: "已合进 main", about: a, outcome: "completed" }, "warm");
   const here = row([about({ thread: 7, seq: 12, ts: "1.2" })], false);
   here.thread = 7;
-  assert.deepEqual(p.rowStateLine(here), ["做完了：已合进 main", 12]);
+  assert.deepEqual(p.rowStateLine(here), ["已完成：已合进 main", 12]);
   here.agents = [about({ thread: 8, seq: 12, ts: "1.2" })];
-  assert.deepEqual(p.rowStateLine(here), ["做完了：已合进 main", null]);
+  assert.deepEqual(p.rowStateLine(here), ["已完成：已合进 main", null]);
   const waiting = row([agent({ declared: "waiting", ending: "waiting", waitFor: "CI", about: { thread: 7, seq: 3, ts: "1.1" }, outcome: "completed", endedAt: 5 }, "warm")], false);
   waiting.thread = 7;
-  assert.deepEqual(p.rowStateLine(waiting), ["在等：CI", 3]);
+  assert.deepEqual(p.rowStateLine(waiting), ["等待：CI", 3]);
 });
 
 test("what_a_profile_can_enable_and_which_machine_logins_are_offered", () => {
@@ -419,7 +419,7 @@ test("what_the_clients_show_is_put_in_here", () => {
   h = p.host(h);
   const cpu = h.meters[0];
   assert.deepEqual([cpu.label, cpu.percent, cpu.level, cpu.value, cpu.note], ["CPU", 93, "red", "93%", "负载 4.0 · Apple M2 Max"]);
-  assert.deepEqual([h.meters[2].level, h.meters[2].value, h.emberText], ["red", "剩 50.0 GB / 1000 GB", "still.fail 100 MB"]);
+  assert.deepEqual([h.meters[2].level, h.meters[2].value, h.emberText], ["red", "剩余 50.0 GB / 1000 GB", "still.fail 100 MB"]);
   assert.match(h.usage, /^内存 .+ · 磁盘 剩 50\.0 GB \/ 1000 GB$/);
   assert.equal(h.identity, "Apple M2 Max · 32 GB · macOS 26");
   assert.deepEqual(h.details.map((d: J) => `${d.label} ${d.value}`), ["主机名 studio", "芯片 Apple M2 Max · 8 核 · arm64", "已运行 1 天 1 小时", "still.fail 进程占用 100 MB"]);

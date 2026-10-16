@@ -38,7 +38,7 @@ test("only_the_assignee_gets_a_card_but_anyone_can_answer_in_chat", () => {
   assert.equal(d.forViewer(dismissed, { email: "owner@x.com" }), null);
   let card = structuredClone(c.card);
   card = d.labelAssignee(card, { email: "helper@x.com" }, [{ email: "owner@x.com", name: "小王" }], null);
-  assert.equal(card.assigneeText, "需要小王决策");
+  assert.equal(card.assigneeText, "待小王决策");
   card = d.labelAssignee(card, { email: "owner@x.com" }, [], null);
   assert.equal(d.cardShown(card).assigneeText, "待你决策");
   let old: J = { type: "text" };
@@ -57,7 +57,7 @@ test("a_card_no_one_was_assigned_is_its_starters", () => {
   assert.notEqual(d.forViewer(assigned, { email: "helper@x.com" }), null);
   let card: J = { type: "text" };
   card = d.labelAssignee(card, { email: "helper@x.com" }, [], starter);
-  assert.equal(card.assigneeText, "需要小王决策");
+  assert.equal(card.assigneeText, "待小王决策");
   card = d.labelAssignee(card, { email: "owner@x.com" }, [], starter);
   assert.equal(card.assigneeText, "待你决策");
 });
@@ -199,7 +199,7 @@ test("what_the_viewer_sent_answers_the_last_card_before_the_station_has_it", () 
   // A picked option on its way says which.
   messages = [askedMsg(2)];
   messages = d.inMessages(messages, null, [{ text: "B", quotes: [{ author: "Claude", text: "选哪个？", ts: "9.000002", role: "agent" }] }]);
-  assert.equal(messages[0].decision.text, "你 选了「B」");
+  assert.equal(messages[0].decision.text, "你 选择了「B」");
   // The row not known yet: what is sent settles it too; an older card stays replaced.
   messages = [askedMsg(2), said(3, "agent", "进度"), typed(4)];
   messages = d.inMessages(messages, undefined, [{ text: "sk_test_1" }]);

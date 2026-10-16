@@ -181,7 +181,7 @@ export function profiles() {
     loading: false,
     items: [{
       key: `${STATION}/${p.id}`, group: "claude", groupTitle: "Claude 订阅", station: STATION, stationId: "local", stationName: "Studio",
-      profile: p, shared: false, host: "local", hostName: "Studio", hostOnline: true, usable: true, where: "只在 Studio",
+      profile: p, shared: false, host: "local", hostName: "Studio", hostOnline: true, usable: true, where: "仅在 Studio",
       stations: [], editable: true, canShare: true,
       members: [{ station: STATION, stationId: "local", stationName: "Studio", online: true, profileId: p.id, role: "own", about: "自己登录", usable: true, checkText: p.checkText, checkTone: p.checkTone, usedBy: 1 }],
     }],
@@ -238,14 +238,14 @@ const money = (dollars: number) => `$${dollars.toFixed(2)}`;
 export function decisions(chats: { key: string; thread: number; title: string; running: { activity: string; since: number } | null; blocked: boolean }[]) {
   const where = { station: STATION, stationName: "Studio" };
   const working = chats.filter((c) => c.running || c.blocked).map((c) => ({
-    ...where, session: c.key, thread: c.thread, title: c.title, line: c.running ? `在做 · ${c.running.activity}` : "在等：你决定要不要一起升 React Router 8",
+    ...where, session: c.key, thread: c.thread, title: c.title, line: c.running ? `在做 · ${c.running.activity}` : "等待：你决定要不要一起升 React Router 8",
     time: { lastActiveAt: stamp(c.running?.since ?? Date.now() - 58 * 60_000) },
   }));
   const at = (minutes: number) => new Date(Date.now() - minutes * 60_000).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
   return {
     items: [], count: 0, loading: false, working,
     answered: [
-      { ...where, session: "ember:c-demo-csv", thread: 5, title: "订单导出支持 CSV", seq: 3, text: "导出的文件名要带上日期吗？", answer: "选了「带日期」", clock: at(40) },
+      { ...where, session: "ember:c-demo-csv", thread: 5, title: "订单导出支持 CSV", seq: 3, text: "导出的文件名要带上日期吗？", answer: "选择了「带日期」", clock: at(40) },
       { ...where, session: "ember:c-demo-p99", thread: 4, title: "排查 API p99 变慢", seq: 4, text: "索引迁移现在上线，还是等晚上？", answer: "回复：现在上", clock: at(150) },
     ],
     today: { count: 2, waited: "6 分钟", working: working.length },

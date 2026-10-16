@@ -154,7 +154,7 @@ test("a_preview_is_asked_with_the_workspaces_names_and_a_station_from_before_say
   await host.settle();
   const answered = answerOf(host, values, 3);
   assert.equal(answered.ok.upto, 3);
-  assert.equal(answered.ok.messages[0].hiddenText, "隐藏了 1 处");
+  assert.equal(answered.ok.messages[0].hiddenText, "已隐藏 1 处");
   // Members by their names (one with none is left to the station), nothing kept, nothing under way.
   assert.deepEqual(asked(host, "/threads/7/publish"), [{ method: "POST", path: "/threads/7/publish/preview", body: { names: { "a@x.com": "安", "b@x.com": "Bo" } } }]);
   assert.deepEqual(v(values, 2).doing, []);

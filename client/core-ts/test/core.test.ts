@@ -53,7 +53,7 @@ test("answers_take_the_shapes_of_the_protocol", () => {
   assert.deepEqual(wire(answer(7, { ok: null })), { id: 7, ok: null });
   assert.deepEqual(wire(answer(7, { err: new CoreError("forbidden", "没有权限", 403) })), { id: 7, error: { code: "forbidden", message: "没有权限", status: 403 } });
   assert.deepEqual(wire({ id: 8, delta: diff({ t: [1] }, { t: [1, 2] }) }), { id: 8, delta: [{ path: ["t"], append: [2] }] });
-  assert.deepEqual(wire(answer(9, { err: new CoreError("unknown_call", "没有这个调用：x") })), { id: 9, error: { code: "unknown_call", message: "没有这个调用：x" } });
+  assert.deepEqual(wire(answer(9, { err: new CoreError("unknown_call", "未知调用：x") })), { id: 9, error: { code: "unknown_call", message: "未知调用：x" } });
 });
 
 test("unknown_calls_are_refused", () => {

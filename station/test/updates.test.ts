@@ -220,16 +220,16 @@ describe("updates", { concurrency: true }, () => {
     assert.deepEqual([station(updates).state, station(updates).progress], ["updating", "正在交接给新版本（agent 不中断）…"]);
     // Had it had to restart: what the drain waits on.
     writeFileSync(join(runDir, "update.step"), "drain\n");
-    await until("draining", () => station(updates).progress === "等 2 个 agent 跑完这一轮再重启（新消息先排队）…");
+    await until("draining", () => station(updates).progress === "等待 2 个 agent 完成本轮后重启（新消息将排队）…");
     writeFileSync(join(runDir, "update.step"), "handoff\n");
     writeFileSync(join(runDir, "update.exit"), "0\n");
     await until("done", () => station(updates).state === "idle");
     const line = station(updates);
-    assert.deepEqual([line.state, line.progress, line.done], ["idle", undefined, "已更新到 0.1.1300，agent 没有中断"]);
+    assert.deepEqual([line.state, line.progress, line.done], ["idle", undefined, "已更新到 0.1.1300，agent 未中断"]);
     assert.ok(!existsSync(join(runDir, "update.started")) && !existsSync(join(runDir, "update.step")));
     // Read again (the next check), it still says so; and in English to an English page.
     await updates.check();
-    assert.equal(station(updates).done, "已更新到 0.1.1300，agent 没有中断");
+    assert.equal(station(updates).done, "已更新到 0.1.1300，agent 未中断");
     assert.equal(updates.get("en")[0]!.done?.includes("0.1.1300"), true);
   });
 
@@ -424,7 +424,7 @@ describe("updates", { concurrency: true }, () => {
     await assert.rejects(updates.update("station", "zh"), (e: Error) => e.message === "Station 正在更新");
     finish();
     await until("ended", () => station(updates).state === "idle");
-    assert.equal(station(updates).done, "已更新到 0.1.1310，agent 没有中断");
+    assert.equal(station(updates).done, "已更新到 0.1.1310，agent 未中断");
     // Never the cloud's installer.
     assert.ok(!asked.some((a) => a.startsWith("/install")), asked.join());
     assert.equal(readFileSync(join(dir, "installer-saw"), "utf8").trim(), `stable ${dir} ${dir}\n${origin} ${SHA_A} ${SHA_B} zh`);
@@ -505,7 +505,7 @@ describe("updates", { concurrency: true }, () => {
     await until("read", () => station(updates).latest === "0.1.1310");
     await steps(50, () => station(updates).state === "updating");
     await until("the installer ended", () => existsSync(join(dir, "run", "update.exit")));
-    await steps(200, () => station(updates).done === "已更新到 0.1.1310，agent 没有中断");
+    await steps(200, () => station(updates).done === "已更新到 0.1.1310，agent 未中断");
     // Then reads what is out again: the feed still says 0.1.1310 and the release is 0.1.1310, so nothing more (its
     // decision taken as the reading ends), nor on its rounds after.
     await until("read again", () => readAgain);

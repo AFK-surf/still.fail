@@ -611,7 +611,7 @@ test("a_new_chat_runs_on_what_was_last_picked_there_as_far_as_the_station_still_
   assert.equal(n.accounts.length, 2);
   assert.equal(n.pickAccount, true);
   assert.deepEqual(n.accounts[0].quotaLine, { text: "5 小时 90%" });
-  assert.deepEqual(n.accounts[1].quotaLine, { text: "5 小时只剩 20%", level: "amber" });
+  assert.deepEqual(n.accounts[1].quotaLine, { text: "5 小时剩余 20%", level: "amber" });
   // A model on another runtime takes it, and its default depth.
   await ask(host, core, ui, 4, "newChat.pick", { scope: "ws", model: "gpt-6-astra" });
   apply(host, values);
@@ -906,7 +906,7 @@ test("a_chats_jobs_are_shown_as_the_core_puts_them_and_a_jobs_output_says_when_i
   // Restarting first, then alive, then what is over; each with its dot and its line; the heads' notes.
   const jobs = v(values, 1);
   assert.deepEqual(jobs.jobs.map((j: J) => j.id), ["s", "w", "done"]);
-  assert.deepEqual([jobs.alarm, jobs.servicesNote, jobs.jobsNote], ["restart", "1 个在重启", "1 个在盯着"]);
+  assert.deepEqual([jobs.alarm, jobs.servicesNote, jobs.jobsNote], ["restart", "1 个在重启", "1 个运行中"]);
   assert.deepEqual([jobs.ended, jobs.clear, jobs.clearText], [1, ["k1"], "清掉 1 个已结束的"]);
   const w = jobs.jobs[1];
   assert.deepEqual([w.tone, w.meta[0].text, w.meta[1].text, w.detail], ["live", "CI 还在跑", " · 2 分钟前", "在盯着 · 1 分钟 · 1 条通知"]);

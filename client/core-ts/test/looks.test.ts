@@ -14,9 +14,9 @@ test("the_glyph_counts_stations_by_their_links_and_says_who_works", () => {
   const days = [{ items: [{ station: "w/a", state: "run" }, { station: "w/c", state: "run" }, { station: "w/b", state: null }] }];
   let g = glyph(stations, days);
   assert.deepEqual([g.online, g.dim, g.failing, g.working], [2, 1, 1, 1]);
-  assert.equal(g.summary, "4 台 station · 1 台在干活");
+  assert.equal(g.summary, "4 台 station · 1 台运行中");
   assert.equal(g.label, "4 台 station，2 台在线，1 台在干活，1 台离线，1 台出错");
-  assert.equal(glyph([station("w/a", "Studio", "online")], days).summary, "Studio · 在干活");
+  assert.equal(glyph([station("w/a", "Studio", "online")], days).summary, "Studio · 运行中");
   assert.equal(glyph([], []).label, "0 台 station，0 台在线");
   g = glyph([station("w/a", "A", "connecting"), station("w/b", "B", "offline")], []);
   assert.deepEqual([g.dim, g.connecting], [2, 1]);
@@ -32,12 +32,12 @@ test("a_list_with_no_rows_says_it_reads_fails_or_has_none", () => {
   assert.equal(listNote([station("w/a", "A", "online")], [], true, []).reading, true);
   assert.equal(listNote([station("w/a", "A", "connecting")], [], false, []).reading, true);
   const failing = listNote([station("w/a", "A", "error"), station("w/b", "B", "online")], [], false, []);
-  assert.equal(failing.failing[0].text, "连不上「A」，正在重试…");
+  assert.equal(failing.failing[0].text, "无法连接「A」，正在重试…");
   assert.equal(failing.empty, false);
   assert.equal(listNote([station("w/b", "B", "online")], [], false, []).empty, true);
   assert.equal(listNote([], [], false, []).empty, true);
   const unread = listNote([station("w/a", "A", "offline")], [], false, ["w/a"]);
-  assert.deepEqual([unread.empty, unread.failing[0].text], [false, "A 离线 · 还没读到会话"]);
+  assert.deepEqual([unread.empty, unread.failing[0].text], [false, "A 离线 · 尚未读取会话"]);
   assert.equal(listNote([station("w/a", "A", "offline")], [], false, []).empty, true);
 });
 
@@ -74,7 +74,7 @@ test("the_memory_reads_in_parts_with_how_long_each_is", () => {
 });
 
 test("a_chat_link_is_said_only_while_down_or_coming_back", () => {
-  assert.deepEqual(linkShown({ state: "error", message: "连不上这台 station：超时" }, "Studio"), { tone: "trouble", text: "连不上「Studio」", detail: "超时" });
+  assert.deepEqual(linkShown({ state: "error", message: "无法连接此 station：超时" }, "Studio"), { tone: "trouble", text: "无法连接「Studio」", detail: "超时" });
   assert.equal(linkShown({ state: "offline", message: "别的：原因" }, "").detail, "别的：原因");
   assert.equal(linkShown({ state: "offline" }, "").text, "无法连接 station");
   assert.deepEqual(linkShown({ state: "reconnecting" }, "S"), { tone: "busy", text: "正在重连「S」" });

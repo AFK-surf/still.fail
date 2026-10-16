@@ -28,7 +28,7 @@ test("jobs_at_work_by_what_they_are", () => {
 test("the_card_says_what_it_did_cost_and_used", () => {
   const agent = {
     turns: [turn(0, 5), turn(10 * MIN, 7)],
-    attention: [{ kind: "quota", text: "5 小时剩余 12%", quota: { level: "red" } }, { kind: "disk", text: "磁盘剩 8 GB" }, { kind: "account", text: "「lin」要重新登录" }],
+    attention: [{ kind: "quota", text: "5 小时剩余 12%", quota: { level: "red" } }, { kind: "disk", text: "磁盘剩 8 GB" }, { kind: "account", text: "「lin」需要重新登录" }],
     jobs: [{ name: "web", state: "running", port: 5173 }],
   };
   const live = { usage: { modelCalls: 40, inputTokens: 1_200_000, cachedTokens: 1_080_000, outputTokens: 34_000, contextTokens: 190_000, contextWindow: 200_000, cost: 4.2, unpricedCalls: 0 } };
@@ -40,7 +40,7 @@ test("the_card_says_what_it_did_cost_and_used", () => {
   assert.deepEqual(c.context, { percent: 95, text: "190K / 200K", level: "red" });
   assert.equal(c.jobs, "服务在线：web");
   // A quota running out is its account's windows' to say.
-  assert.deepEqual(c.attention, [{ text: "磁盘剩 8 GB", level: "amber" }, { text: "「lin」要重新登录", level: "red" }]);
+  assert.deepEqual(c.attention, [{ text: "磁盘剩 8 GB", level: "amber" }, { text: "「lin」需要重新登录", level: "red" }]);
   // Before its first turn and its usage is read: nothing.
   const none = card({ turns: [], attention: [], jobs: [] }, null);
   assert.deepEqual([none.work, none.cost, none.cache, none.context, none.jobs, none.latest, none.attention], [null, undefined, undefined, undefined, null, [], []]);

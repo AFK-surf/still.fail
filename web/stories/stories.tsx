@@ -83,7 +83,7 @@ const profileFor = (on: boolean): DemoExtension => ({
 /** A new chat on a station this workspace joined that has no profile open to it (the core's `blocked: shared`). */
 const notShared: DemoExtension = {
   then: (t, value) => (t.topic === "newChat" && value && typeof value === "object"
-    ? { ...(value as object), blocked: "shared", problem: "Studio 来自 Lab，它的 Profile 还没开放给这个 workspace：请 Lab 的管理员在 Profile 页打开「也给 Acme 用」" }
+    ? { ...(value as object), blocked: "shared", problem: "Studio 属于 Lab，其 Profile 尚未对此 workspace 开放：请 Lab 的管理员在 Profile 页开启「同时用于 Acme」" }
     : undefined),
 };
 /** The demo's station in Lab too (the core's `memberships`), and, with `joined`, Lab's Mini1 in this workspace. */
@@ -375,7 +375,7 @@ export const stories: Story[] = [
     }} /></div>),
   },
   { id: "panel-bubble", group: "小面板", title: "通知气泡", news: true, render: () => stage(<SystemBubbles scope="demo" />) },
-  { id: "panel-bubble-hover", group: "小面板", title: "通知气泡 · 悬停按钮", news: true, render: () => stage(<SystemBubbles scope="demo" />), steps: [{ hover: "text=看看" }] },
+  { id: "panel-bubble-hover", group: "小面板", title: "通知气泡 · 悬停按钮", news: true, render: () => stage(<SystemBubbles scope="demo" />), steps: [{ hover: "text=查看" }] },
 
   // ── files ──
   { id: "reader-txt", group: "文件", title: "阅读器 · 小说", render: () => stage(<Reader file={driveFile(at(novel.name), novel)} markdown={false} backLabel="下载" onBack={noop} />) },

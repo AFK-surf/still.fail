@@ -29,7 +29,7 @@ test("a_job_is_shown_by_its_dot_its_word_and_its_line", () => {
   assert.deepEqual([texts(said), said.meta[0].kind], ["CI 绿了 · 1 分钟前", "notice"]);
   assert.deepEqual([said.notices[0].ago, said.notices[0].clock, said.detail], ["1 分钟前", "07:59", "在盯着 · 3 秒 · 1 条通知"]);
   const quiet = shown(job("w", { outputAt: NOW - 20_000 }), c());
-  assert.deepEqual([texts(quiet), quiet.outputSaid], ["还没通知过 · 最后输出 20 秒前", "最后输出 · 20 秒前"]);
+  assert.deepEqual([texts(quiet), quiet.outputSaid], ["暂无通知 · 最后输出 20 秒前", "最后输出 · 20 秒前"]);
   const died = shown(job("w", { state: "exited", exitCode: 2, endedAt: NOW - 7_200_000 }), c());
   assert.deepEqual([died.tone, texts(died), died.ended, died.current], ["fail", "意外退出 · 退出码 2 · 2 小时前", true, true]);
   const old = shown(job("w", { state: "exited", endedAt: NOW - 2 * NEWS }), c());
@@ -51,9 +51,9 @@ test("a_chats_jobs_put_what_matters_first_and_say_how_many", () => {
   };
   const [v, next] = chatJobs(chat, c());
   assert.deepEqual(v.jobs.map((j: J) => j.id), ["x", "r", "w", "s", "old"]);
-  assert.deepEqual([v.alarm, v.servicesNote, v.jobsNote], ["fail", "1 个在线，1 个在重启", "1 个在盯着"]);
+  assert.deepEqual([v.alarm, v.servicesNote, v.jobsNote], ["fail", "1 个在线，1 个在重启", "1 个运行中"]);
   assert.deepEqual([v.current, v.ended, v.clear], [4, 2, ["b", "a"]]);
-  assert.deepEqual([v.allText, v.clearText, v.hiddenText], ["全部 5 个", "清掉 2 个已结束的", "另有 1 个已停止或结束"]);
+  assert.deepEqual([v.allText, v.clearText, v.hiddenText], ["全部 5 个", "清除 2 个已结束的", "另有 1 个已停止或结束"]);
   assert.ok(next <= 1000);
   const [none, next2] = chatJobs({ agents: [] }, c());
   assert.deepEqual([none.alarm, none.jobs, next2], [null, [], Infinity]);

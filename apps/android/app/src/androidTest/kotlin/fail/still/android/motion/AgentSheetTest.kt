@@ -78,7 +78,7 @@ class AgentSheetTest {
     )
 
     private fun card(running: Boolean, context: Double = 61.0, notes: List<AgentCardNote> = emptyList()) = AgentCardView(
-        work = "8 轮 · 共干了 1 小时 12 分", cost = "$4.20", tokens = "输入 1.2M · 输出 34K",
+        work = "8 轮 · 共工作 1 小时 12 分", cost = "$4.20", tokens = "输入 1.2M · 输出 34K",
         cache = AgentCardMeter(92.0, "92%", "ok"),
         context = AgentCardMeter(context, "122K / 200K", if (context >= 95) "red" else if (context >= 80) "amber" else "ok"),
         jobs = "服务在线：web · 在盯着：CI",
@@ -127,7 +127,7 @@ class AgentSheetTest {
         // Not at work: nothing to stop.
         rule.onNodeWithText("停止").assertDoesNotExist()
         picture(h, "agent-card")
-        rule.onNodeWithText("8 轮 · 共干了 1 小时 12 分").assertIsDisplayed().performClick()
+        rule.onNodeWithText("8 轮 · 共工作 1 小时 12 分").assertIsDisplayed().performClick()
         h.settle()
         rule.runOnIdle { assertEquals(Screen.History(Fixtures.STATION, of, key), h.app.stack.last()) }
         rule.runOnIdle { assertEquals(null, h.app.sheet) }
@@ -235,7 +235,7 @@ class AgentSheetTest {
         // Its cost large in a tile, and again among what it used.
         rule.onAllNodesWithText("$4.20")[0].assertIsDisplayed()
         rule.onNodeWithText("61%").assertIsDisplayed()
-        rule.onNodeWithText("8 轮 · 共干了 1 小时 12 分").assertIsDisplayed()
+        rule.onNodeWithText("8 轮 · 共工作 1 小时 12 分").assertIsDisplayed()
         rule.onNodeWithText("142 次").assertIsDisplayed()
         picture(h, "history-details")
     }

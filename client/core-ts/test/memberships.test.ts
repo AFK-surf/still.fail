@@ -209,6 +209,6 @@ test("a_new_chat_on_a_joined_station_none_of_whose_profiles_is_open_here_says_wh
   const n = v(values, 1);
   assert.equal(n.station.id, "st");
   assert.equal(n.blocked, "shared");
-  assert.equal(n.problem, "studio 来自 甲，它的 Profile 还没开放给这个 workspace：请 甲 的管理员在 Profile 页打开「也给 W 用」");
+  assert.equal(n.problem, "studio 属于 甲，其 Profile 尚未对此 workspace 开放：请 甲 的管理员在 Profile 页开启「同时用于 W」");
   core.close();
 });

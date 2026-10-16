@@ -317,7 +317,7 @@
     "level": "ok",
     "percent": 38,
     "short": "磁盘",
-    "value": "剩 612 GB / 994 GB"
+    "value": "剩余 612 GB / 994 GB"
    }
   ],
   "os": "macOS 26.6.2",
@@ -328,7 +328,7 @@
    { "label": "主机名", "value": "studio" },
    { "label": "芯片", "value": "Apple M4 Max · 16 核 · arm64" },
    { "label": "已运行", "value": "14 天 0 小时" },
-   { "label": "still.fail", "value": "进程占 38 MB" }
+   { "label": "still.fail", "value": "进程占用 38 MB" }
   ]
  },
  "station": {
@@ -379,7 +379,7 @@
      "level": "ok",
      "percent": 38,
      "short": "磁盘",
-     "value": "剩 612 GB / 994 GB"
+     "value": "剩余 612 GB / 994 GB"
     }
    ],
    "os": "macOS 26.6.2",
@@ -390,7 +390,7 @@
     { "label": "主机名", "value": "studio" },
     { "label": "芯片", "value": "Apple M4 Max · 16 核 · arm64" },
     { "label": "已运行", "value": "14 天 0 小时" },
-    { "label": "still.fail", "value": "进程占 38 MB" }
+    { "label": "still.fail", "value": "进程占用 38 MB" }
    ]
   },
   "id": "local",
@@ -800,7 +800,7 @@
    }
   ],
   "station": "local",
-  "summary": "Apple M4 Max · 1 个 agent 在跑"
+  "summary": "Apple M4 Max · 1 个 agent 正在运行"
  },
  "memory": {
   "global": {

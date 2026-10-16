@@ -547,7 +547,7 @@ test("configuration tokens are added by their refresh token, with whose they are
       s.params.refresh_token === "xoxe-1-good" ? { ok: true, token: "xoxe.xoxp-1-access", refresh_token: "xoxe-1-next", exp: 2_000_000_000, team_id: "T5" } : { ok: false, error: "invalid_refresh_token" },
     );
     t.fake.answer("team.info", { ok: true, team: { name: "Five", domain: "five", icon: { image_68: "https://img/five" } } });
-    assert.deepEqual(await t.ask("POST", "/slack/config-tokens", { refreshToken: "xoxe-1-bad" }), [400, { error: "Slack 没接受这个 token：tooling.tokens.rotate: invalid_refresh_token" }]);
+    assert.deepEqual(await t.ask("POST", "/slack/config-tokens", { refreshToken: "xoxe-1-bad" }), [400, { error: "Slack 拒绝了此 token：tooling.tokens.rotate: invalid_refresh_token" }]);
     const [status, added] = await t.ask("POST", "/slack/config-tokens", { refreshToken: " xoxe-1-good " });
     assert.equal(status, 200, JSON.stringify(added));
     assert.equal(added.teamId, "T5");

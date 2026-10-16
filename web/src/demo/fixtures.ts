@@ -234,7 +234,7 @@ export function chatsView(chats: DemoChat[]): ChatsView {
     me: { id: "local" }, stations: [{ id: "local", station: STATION, name: "Studio", state: "online" }], loading: false,
     days: [{ daysAgo: 0, at: Date.now(), label: "今天", items: today }, ...(earlier.length ? [{ daysAgo: 1, at: ago(24 * 60), label: "昨天", items: earlier }] : [])],
     // As the core puts them (client/core-ts/src/looks.ts): the workspace's one station, at work while a chat runs.
-    glyph: { online: 1, dim: 0, failing: 0, working, summary: working ? "这台机器 · 在干活" : "本机", label: working ? "1 台 station，1 台在线，1 台在干活" : "1 台 station，1 台在线" },
+    glyph: { online: 1, dim: 0, failing: 0, working, summary: working ? "这台机器 · 运行中" : "本机", label: working ? "1 台 station，1 台在线，1 台在干活" : "1 台 station，1 台在线" },
     note: { reading: false, failing: [], empty: items.length === 0 },
   };
 }
