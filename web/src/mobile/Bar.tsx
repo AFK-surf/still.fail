@@ -412,7 +412,8 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
               <g mask={`url(#${shadowMask})`}><rect className={css.mBarShadowShape} x={0} y={clipTop} width={w} height={PANEL - clipTop} rx={R} /></g>
             </svg>
           )}
-          <div className={css.mBarGlass} data-bar="glass" style={{ top: clipTop, clipPath: shape ? `path("${shape}")` : undefined }} />
+          {/* Rounded as its outline is, so its lit rim (an inset shadow) runs round the ends too; the outline cuts the notch. */}
+          <div className={css.mBarGlass} data-bar="glass" style={{ top: clipTop, borderRadius: R, clipPath: shape ? `path("${shape}")` : undefined }} />
           {w > 0 && others.length > 0 && (
             <div className={css.mBarRows} data-bar="rows" style={{ top: 0, height: rowTop, opacity: swap ? 0 : rowsLook(o).alpha, transform: `translateY(${rowsLook(o).dy}px)`, pointerEvents: open && o > 0.6 ? "auto" : "none" }}>
               {others.map((i, n) => {
