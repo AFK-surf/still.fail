@@ -49,19 +49,15 @@ class SealingHost extends FakeHost {
     super();
     this.appKeys = true;
   }
-  secureGet(key: string, opts: { user: boolean }): Effect.Effect<Uint8Array | null, HostError> {
-    return Effect.suspend(() => {
+  override secureGet = (key: string, opts: { user: boolean }): Effect.Effect<Uint8Array | null, HostError> =>
+    Effect.suspend(() => {
       const kept = this.sealed.get(key);
       if (kept && kept.user !== opts.user) return Effect.fail(new HostError("kept with the other `user`"));
       return Effect.succeed(kept?.value ?? null);
     });
-  }
-  secureSet(key: string, value: Uint8Array, opts: { user: boolean }): Effect.Effect<void, HostError> {
-    return Effect.suspend(() => (this.failSet ? Effect.fail(new HostError("the keystore said no")) : Effect.sync(() => void this.sealed.set(key, { value, user: opts.user }))));
-  }
-  secureDelete(key: string): Effect.Effect<void, HostError> {
-    return Effect.sync(() => void this.sealed.delete(key));
-  }
+  override secureSet = (key: string, value: Uint8Array, opts: { user: boolean }): Effect.Effect<void, HostError> =>
+    Effect.suspend(() => (this.failSet ? Effect.fail(new HostError("the keystore said no")) : Effect.sync(() => void this.sealed.set(key, { value, user: opts.user }))));
+  override secureDelete = (key: string): Effect.Effect<void, HostError> => Effect.sync(() => void this.sealed.delete(key));
 }
 
 test("a host that seals keeps the signing key sealed, read without asking; one in a plain file moves in", async () => {
