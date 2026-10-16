@@ -6,7 +6,8 @@
 //   neither are submodules or nested repositories. A symbolic link goes as a link when what it names stays inside the
 //   directory, and is left out (said in `skipped`) when it leads out.
 // - Compared by content: a file's id is its Git blob id (sha1 of "blob <size>\0" and its bytes), free from the index
-//   for a clean tracked file, hashed for the rest. The target keeps a manifest of what it wrote into the mirror (path →
+//   for a clean tracked file the mirror has as it is, hashed for the rest (also a clean one that would be sent: with a
+//   filter or eol conversion its bytes are not what the index names). The target keeps a manifest of what it wrote into the mirror (path →
 //   id, mode and the stat it left), and answers with what is there now (a file a command changed is hashed again).
 // - Sent: only contents the mirror has nowhere, as pieces packed into zstd-compressed requests (`sync.put`), each
 //   within the transport's 1 MiB message; then the plan (`sync.commit`), in pages as well.
@@ -86,7 +87,8 @@ const modeOf = (mode: number) => (mode & 0o111 ? EXEC : FILE);
 
 // ── the source: what the directory has ──
 
-export type Local = { path: string; hash: string; mode: string; size: number };
+/// `indexed`: its id is the Git index's (a clean tracked file), not yet the hash of its bytes.
+export type Local = { path: string; hash: string; mode: string; size: number; indexed?: boolean };
 export type Listing = { files: Local[]; git: boolean; prefix: string; skipped: { path: string; why: string }[] };
 
 async function git(dir: string, args: string[]): Promise<string> {
@@ -181,7 +183,7 @@ export async function listLocal(dir: string): Promise<Listing> {
       } catch {
         continue;
       }
-      files.push({ path, hash: id!, mode: mode!, size });
+      files.push({ path, hash: id!, mode: mode!, size, indexed: true });
       more();
     }
     for (const path of entries(await git(dir, ["ls-files", "-z", "-o", "--exclude-standard"]))) {
@@ -261,12 +263,28 @@ export async function syncDir(ask: Ask, dir: string, now: () => number = Date.no
     for (const [path, hash, mode] of page.entries as [string, string, string][]) there.set(path, [hash, mode]);
     after = typeof page.next === "number" ? page.next : null;
   }
+  const same = (f: Local) => {
+    const t = there.get(f.path);
+    return t !== undefined && t[0] === f.hash && t[1] === f.mode;
+  };
+  // What would go with the index's id is hashed first: with a Git filter or eol conversion (a .bat checked out with
+  // CRLF, LFS) the bytes on disk are not what the index names, and what the mirror has may be them already.
+  const gone = new Set<string>();
+  await pool(listing.files.filter((f) => f.indexed && !same(f)), async (f) => {
+    const got = await onDisk(dir, f.path);
+    if (got === null || typeof got === "string") {
+      gone.add(f.path);
+      if (typeof got === "string") listing.skipped.push({ path: f.path, why: got });
+      return;
+    }
+    Object.assign(f, got, { indexed: false });
+  });
+  if (gone.size > 0) listing.files = listing.files.filter((f) => !gone.has(f.path));
   const have = new Set([...there.values()].map(([hash]) => hash));
   const set: [string, string, string][] = [];
   const need = new Map<string, Local>();
   for (const f of listing.files) {
-    const t = there.get(f.path);
-    if (t && t[0] === f.hash && t[1] === f.mode) continue;
+    if (same(f)) continue;
     set.push([f.path, f.hash, f.mode]);
     if (!have.has(f.hash) && !need.has(f.hash)) need.set(f.hash, f);
   }

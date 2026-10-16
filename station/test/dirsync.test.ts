@@ -153,6 +153,9 @@ describe("dirsync", { concurrency: true }, () => {
     // Not compressible, more than a request holds: in several.
     const big = randomBytes(3 * 1024 * 1024 + 17);
     writeFileSync(join(repo, "big.bin"), big);
+    // Checked out with CRLF, LF in the index: its bytes are not what the index names.
+    writeFileSync(join(repo, ".gitattributes"), "*.bat text eol=crlf\n");
+    writeFileSync(join(repo, "w.bat"), "@echo off\r\necho hi\r\n");
     symlinkSync("src/a.txt", join(repo, "inside"));
     symlinkSync("/etc/hosts", join(repo, "outside"));
     git(repo, "init", "-q");
@@ -171,14 +174,15 @@ describe("dirsync", { concurrency: true }, () => {
     assert.equal(p.b.store.getJob(first.started.job.id)!.exitCode, 0);
     const s1 = first.sync;
     assert.equal(s1.git, true);
-    assert.equal(s1.files, 7, "tracked and untracked, not ignored, not the link leading out");
+    assert.equal(s1.files, 9, "tracked and untracked, not ignored, not the link leading out");
     assert.deepEqual(s1.skipped, [{ path: "outside", why: "symbolic link leading out of the directory" }]);
-    assert.equal(s1.sent.files, 7);
-    assert.equal(s1.written, 7);
+    assert.equal(s1.sent.files, 9);
+    assert.equal(s1.written, 9);
     assert.ok(s1.sent.requests >= 7, `the big file in pieces, each request within the transport's message: ${s1.sent.requests}`);
     const m = p.mirror("app");
     assert.equal(readFileSync(join(m, "src", "a.txt"), "utf8"), "alpha\n");
     assert.equal(readFileSync(join(m, "notes.txt"), "utf8"), "untracked\n");
+    assert.equal(readFileSync(join(m, "w.bat"), "utf8"), "@echo off\r\necho hi\r\n", "the bytes on disk");
     assert.ok(readFileSync(join(m, "big.bin")).equals(big));
     assert.ok(statSync(join(m, "run.sh")).mode & 0o100, "the exec bit");
     assert.equal(statSync(join(m, "src", "a.txt")).mode & 0o111, 0);
@@ -186,13 +190,13 @@ describe("dirsync", { concurrency: true }, () => {
     for (const gone of ["outside", "dist", join("node_modules", "dep"), ".git"]) assert.ok(!existsSync(join(m, gone)), gone);
     assert.equal(readFileSync(join(m, "made.txt"), "utf8"), "alpha\n");
 
-    const kept = Object.fromEntries(["big.bin", "run.sh", "notes.txt", join("node_modules", "keep.js"), "made.txt"].map((f) => [f, stamp(join(m, f))]));
+    const kept = Object.fromEntries(["big.bin", "run.sh", "w.bat", "notes.txt", join("node_modules", "keep.js"), "made.txt"].map((f) => [f, stamp(join(m, f))]));
     writeFileSync(join(repo, "src", "a.txt"), "alpha, again\n");
     rmSync(join(repo, "src", "b.txt"));
     writeFileSync(join(repo, "src", "c.txt"), "gamma\n");
     const second = await p.run("k2", repo, "cat src/a.txt src/c.txt > made2.txt");
     const s2 = second.sync;
-    assert.deepEqual([s2.files, s2.sent.files, s2.sent.bytes, s2.written, s2.removed, s2.sent.requests], [7, 2, 19, 2, 1, 1]);
+    assert.deepEqual([s2.files, s2.sent.files, s2.sent.bytes, s2.written, s2.removed, s2.sent.requests], [9, 2, 19, 2, 1, 1]);
     assert.equal(readFileSync(join(m, "src", "a.txt"), "utf8"), "alpha, again\n");
     assert.ok(!existsSync(join(m, "src", "b.txt")));
     assert.equal(readFileSync(join(m, "made2.txt"), "utf8"), "alpha, again\ngamma\n");
