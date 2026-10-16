@@ -75,6 +75,8 @@ globalStyle(`${desk} ${name}`, { flex: "1" });
 // The desktop app has no title bar: the toolbar, over the page's top row (styles/shell.css.ts main), drags the window, all
 // but what is pressed in it; on Windows what is at its right end stays clear of the window's buttons (styles/sidebar.css.ts pageBar).
 globalStyle(`[data-desktop] ${desk} ${head}`, { WebkitAppRegion: "drag" });
+// Over the whole window: in the macOS app its way back clear of the window's buttons at the left of its row.
+globalStyle(`:root[data-desktop="inset"]:not([data-fullscreen]) ${desk} ${head}`, { paddingLeft: "84px" });
 globalStyle(`:is([data-desktop="overlay"], [data-desktop="custom"]) ${desk} ${head}`, { paddingRight: "calc(var(--window-buttons, 0px) + 12px)" });
 globalStyle(`[data-desktop] ${desk} ${head} :is(a, button, input, select, [role="button"], [tabindex])`, { WebkitAppRegion: "no-drag" });
 // Narrow or full screen, its floating bar, awake, takes the pointer over that row (FilePreview.css.ts).

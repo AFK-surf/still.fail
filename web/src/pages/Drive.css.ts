@@ -139,8 +139,16 @@ globalStyle(`${pickRow} > span:last-child:not(:nth-child(2))`, { fontSize: vars.
 /** Why a folder to pick is not lent, under its name: the name keeps its room however narrow the column. */
 export const pickNote = style({ color: vars.muted, fontSize: vars.textCaption, fontWeight: "400", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 
-/** A file opened: the reader or the player fills the pane. */
-export const opened = style({ position: "relative", flex: "1", minHeight: "0", overflow: "hidden" });
+/**
+ * A file opened: the reader or the player over the whole window, at the top, as a picture's or a PDF's preview is
+ * (FilePreview.css.ts, 61): nothing of the app beside it (the folded sidebar's ground was another colour by its bar). In
+ * the macOS app its bar's left end is the window's buttons' row: clear of them (`--m-top` for the bar floating in a
+ * narrow window, the desktop's docked bar below).
+ */
+export const opened = style({
+  position: "fixed", inset: "0", zIndex: "61", overflow: "hidden", background: vars.canvas,
+  selectors: { ':root[data-desktop="inset"]:not([data-fullscreen]) &': { vars: { "--m-top": "30px" } } },
+});
 export const dark = style({ background: "#000" });
 export const openedNote = style({ padding: "40px" });
 
