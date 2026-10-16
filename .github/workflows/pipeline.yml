@@ -93,7 +93,7 @@ jobs:
           if printf '%s\n' "$changed" | sh apps/android/carries.sh; then android=true; fi
           # The desktop app carries the core, the web app and a station: any of them changed is a new app.
           desktop=false
-          if has '^(apps/desktop/|client/|web/|station/(src|native)/|station/(package\.json|pnpm-lock\.yaml)$|vendor/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native|installers|release-sign)\.ts$|cloud/src/(install|install-windows|i18n)\.ts$)'; then desktop=true; fi
+          if has '^(apps/desktop/|client/|web/|station/(src|native)/|station/(package\.json|pnpm-lock\.yaml)$|vendor/|bin/|scripts/(release|station-bundle)\.sh$|\.github/release-desktop\.py$|scripts/(posthog-key|native|installers|release-sign)\.ts$|cloud/src/(install|install-windows|i18n)\.ts$)'; then desktop=true; fi
           # A branch's Windows app and its smoke run (windows-build, windows-smoke): only for what is Windows' own in it,
           # the app's code and its iroh addon (a change to the web app it carries is the Mac app's check too).
           windows=false
@@ -460,7 +460,9 @@ jobs:
           MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
           # The Windows installer's signature (its .sig): none is an error.
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
-        run: python3 .github/release-desktop.py --out "$RUNNER_TEMP/release"
+          # The Mac archive is put while the Windows app builds (--put-mac-early); the rest by the step after.
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: python3 .github/release-desktop.py --out "$RUNNER_TEMP/release" --put-mac-early
       - name: Put its files (named by its version, nothing points at them until put writes the feed)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

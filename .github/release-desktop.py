@@ -19,6 +19,7 @@ import time
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--stable', action='store_true', help='Publish the stable channel; defaults to beta')
 parser.add_argument('--out', help='Put the signed release in this directory (desktop/…) instead of the bucket: CI puts it once the check passed (scripts/release-put.sh)')
+parser.add_argument('--put-mac-early', action='store_true', help='With --out: put the Mac archive (named by its version, nothing points at it yet) in the bucket while the Windows app builds, and leave it out of --out')
 args = parser.parse_args()
 suffix = '' if args.stable else '-beta'
 root = Path(__file__).resolve().parents[1]
@@ -63,7 +64,10 @@ with tempfile.TemporaryDirectory(prefix='stillfail-signing-', dir=os.environ.get
             raise SystemExit('Existing still.fail signing identity is missing. Provision MACOS_SIGNING_CERTIFICATE_B64 and MACOS_SIGNING_CERTIFICATE_PASSWORD in production; no unsigned replacement was published.')
         if not args.out and not os.environ.get('CLOUDFLARE_API_TOKEN'):
             raise SystemExit('CLOUDFLARE_API_TOKEN is required')
-        for folder in (root, *(() if args.out else (root / 'cloud',)), root / 'apps/desktop'):
+        early = args.out and args.put_mac_early
+        if early and not os.environ.get('CLOUDFLARE_API_TOKEN'):
+            raise SystemExit('--put-mac-early needs CLOUDFLARE_API_TOKEN')
+        for folder in (root, *(() if args.out and not early else (root / 'cloud',)), root / 'apps/desktop'):
             run(['pnpm', 'install', '--frozen-lockfile', '--prefer-offline'], cwd=folder)
         env = dict(os.environ)
         env.pop('UNSIGNED', None)
@@ -75,11 +79,19 @@ with tempfile.TemporaryDirectory(prefix='stillfail-signing-', dir=os.environ.get
         env['RELEASE_DIR'] = str(Path(directory) / 'releases')
         run(['sh', 'scripts/release.sh', *([] if args.stable else ['--beta']), 'desktop'], cwd=root, env=env)
         run(['codesign', '--verify', '--deep', '--strict', str(root / 'apps/desktop/out/mac-arm64' / ('still.fail.app' if args.stable else 'youdid.wtf.app'))])
-        # After the Mac's check: build.sh starts by clearing out/.
-        run(['sh', 'scripts/release.sh', *([] if args.stable else ['--beta']), 'desktop-win'], cwd=root, env=env)
         version = subprocess.check_output(['git', 'rev-list', '--count', 'HEAD'], cwd=root, text=True).strip()
         archive = f'stillfail{suffix}-0.1.{version}-arm64-mac.zip'
         installer = f'stillfail{suffix}-0.1.{version}-x64-win.exe'
+        # mini1's line is the slow part of putting them (~5 MB/s, 2026-10-16: a 141 MB archive and a 127 MB installer
+        # took 63 s after both were built): the archive goes up while the Windows app builds (~35 s).
+        putting = None
+        if early:
+            (Path(directory) / 'early/desktop').mkdir(parents=True)
+            for name in (archive, archive + '.blockmap'):
+                shutil.copy2(Path(env['RELEASE_DIR']) / 'desktop' / name, Path(directory) / 'early/desktop' / name)
+            putting = subprocess.Popen(['sh', 'scripts/release-put.sh', '--files', str(Path(directory) / 'early')], cwd=root, env=env)
+        # After the Mac's check: build.sh starts by clearing out/.
+        run(['sh', 'scripts/release.sh', *([] if args.stable else ['--beta']), 'desktop-win'], cwd=root, env=env)
         for name, mime in (
             (archive, 'application/zip'), (archive + '.blockmap', 'application/octet-stream'), (f'stillfail{suffix}-mac.yml', 'text/yaml; charset=utf-8'),
             (installer, 'application/vnd.microsoft.portable-executable'), (installer + '.blockmap', 'application/octet-stream'),
@@ -91,6 +103,7 @@ with tempfile.TemporaryDirectory(prefix='stillfail-signing-', dir=os.environ.get
             if name.endswith('.sig') and not path.is_file() and not os.environ.get('CI'): continue
             if not path.is_file(): raise SystemExit('Expected desktop artifact missing: ' + name)
             if args.out:
+                if putting and name in (archive, archive + '.blockmap'): continue
                 (Path(args.out) / 'desktop').mkdir(parents=True, exist_ok=True)
                 shutil.copy2(path, Path(args.out) / 'desktop' / name)
                 continue
@@ -103,6 +116,8 @@ with tempfile.TemporaryDirectory(prefix='stillfail-signing-', dir=os.environ.get
                     raise SystemExit('Desktop release step failed: uploading ' + name)
                 print(f'uploading {name} failed (try {attempt + 1}), trying again', flush=True)
                 time.sleep(15)
+        if putting and putting.wait():
+            raise SystemExit('Desktop release step failed: putting the Mac archive')
     finally:
         if imported:
             subprocess.run(['security', 'list-keychains', '-d', 'user', '-s', *previous], stdout=subprocess.DEVNULL)
