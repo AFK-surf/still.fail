@@ -1411,6 +1411,17 @@ export class Store {
     return this.#all("SELECT * FROM jobs WHERE ?1 IS NULL OR session_key = ?1 ORDER BY started_at DESC", session).map(toJob);
   }
 
+  /// How many jobs are running now: other stations' tasks here (`remote_…`, jobs/remote.ts), web services (a port) and
+  /// the other jobs, for what other stations are told of this one's load (jobs/load.ts).
+  runningJobs(): { remote: number; jobs: number; services: number } {
+    const r = this.#one(
+      "SELECT COALESCE(SUM(substr(id, 1, 7) = 'remote_'), 0) AS remote, COALESCE(SUM(substr(id, 1, 7) <> 'remote_' AND port IS NOT NULL), 0) AS services, COUNT(*) AS n FROM jobs WHERE state = 'running'",
+    );
+    const remote = Number(r?.remote ?? 0);
+    const services = Number(r?.services ?? 0);
+    return { remote, services, jobs: Number(r?.n ?? 0) - remote - services };
+  }
+
   /// What a job said (`stillfail-job notify`), kept for the pages: a job's latest words are how people see what it is up to.
   addJobNotice(id: string, text: string): void {
     this.#with((changes) => {

@@ -144,8 +144,8 @@ test("station_list, station_task and session_send reach the stations of the sess
   const onB = `https://ember.test/o/${W2}/B/ember%3Ac-0123456789`;
   assert.match(await rig.refused(one, "session_send", { to: onB, text: "hi" }), /not another station in this workspace/);
   assert.match(await rig.call(two, "session_send", { to: onB, text: "hi" }), /^Sent to ember:c-0123456789 on station B/);
-  // Each asked in its session's workspace.
-  assert.deepEqual(asked.map(([to, ws, r]) => [to, ws, r.method]), [["B", W2, "describe"], ["B", W2, "task.list"], ["B", W2, "session.message"]]);
+  // Each asked in its session's workspace (station_list asks each listed station how busy it is).
+  assert.deepEqual(asked.map(([to, ws, r]) => [to, ws, r.method]), [["A", W1, "describe"], ["B", W2, "describe"], ["B", W2, "describe"], ["B", W2, "task.list"], ["B", W2, "session.message"]]);
 }));
 
 test("what another station asks reaches the chats of the workspace it asked in; a chat it opens is of that workspace", () => withTwo(async (t) => {

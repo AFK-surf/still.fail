@@ -22,6 +22,7 @@ import { Clock, Duration, Effect, Exit, FiberSet, Schedule, Scope } from "effect
 import { log } from "../ops/log.ts";
 import { type Json, type Store } from "../store/store.ts";
 import { type Jobs, jobJson, tail } from "./jobs.ts";
+import { detailed, summary } from "./load.ts";
 import { LINK, type Synced, actual, apply, listed, page, patchOf, planPart, putBlobs, readManifest, syncDir, writeManifest } from "./dirsync.ts";
 
 /// The answer of a peer that refused a request (its `{"error": …}`): final, unlike a request that did not get through.
@@ -69,6 +70,10 @@ export type RemoteOptions = {
 /// from another station) waits for it this long: the mesh is up within a second, or ~15 s when it waits for a relay
 /// (mesh/mesh.ts), before it is attached.
 export const MESH_WAIT_MS = 30_000;
+/// station_list asks every station of the workspace at once and lists one that has not answered within this as offline.
+export const LIST_WAIT_MS = 2000;
+/// A station asked how busy it is (`describe`'s `load`) says it does not know when measuring takes longer than this.
+export const LOAD_WAIT_MS = 1000;
 
 const text = (v: Json, key: string): string => (v !== null && typeof v === "object" && typeof v[key] === "string" ? v[key] : "");
 const field = (v: Json, key: string): Json => (v !== null && typeof v === "object" && !Array.isArray(v) && key in v ? v[key] : null);
@@ -165,6 +170,8 @@ export class Remote {
   private inbox: Inbox | null = null;
   private shares: Inbox | null = null;
   private xshare: { inside: Inbox; outside: Inbox } | null = null;
+  /// How busy this station is, told to the others in `describe` (load.ts); none: `describe` says nothing of it.
+  private load: (() => Promise<Json>) | null = null;
   /// Target-side requests, the sweep and withdrawals, one at a time.
   private serial: Promise<unknown> = Promise.resolve();
   /// The records followed now (outgoing tasks, closing sessions).
@@ -473,6 +480,61 @@ export class Remote {
     this.xshare = handlers;
   }
 
+  /// How this station's load is measured (load.ts `measure`), for `describe`.
+  setLoad(load: () => Promise<Json>): void {
+    this.load = load;
+  }
+
+  /// `what`, or null when it has not settled within `ms` on the clock (it goes on); its rejection as `error`.
+  private async bounded<T>(what: Promise<T>, ms: number): Promise<{ ok: T } | { error: Error } | null> {
+    let out: { ok: T } | { error: Error } | null = null;
+    const settled = what.then(
+      (ok) => void (out = { ok }),
+      (error) => void (out = { error: error instanceof Error ? error : new Error(String(error)) }),
+    );
+    await this.run(Effect.race(Effect.promise(() => settled), Effect.sleep(Duration.millis(ms)))).catch(() => undefined);
+    return out;
+  }
+
+  /// `describe`'s answer: what this station takes, and how busy it is (`load`, LOAD_WAIT_MS at most).
+  private async describe(): Promise<Json> {
+    const answer: Json = { protocol: 1, os: OS, arch: ARCH, tasks: true, sessions: true, messages: true, reads: true, files: true, chats: true, sync: 1, fileChunkBytes: CHUNK, maxFileBytes: MAX_FILE };
+    if (this.load !== null) {
+      const load = await this.bounded(this.load(), LOAD_WAIT_MS);
+      answer.load = load === null ? { unavailable: `not measured within ${LOAD_WAIT_MS / 1000} s` } : "ok" in load ? load.ok : { unavailable: load.error.message };
+    }
+    return answer;
+  }
+
+  /// station_list: the stations of `workspace`, each asked how busy it is at once (this one answers itself); one that
+  /// has not answered within LIST_WAIT_MS is listed as offline, one that refused says why.
+  private async listStations(workspace: string): Promise<Json> {
+    const roster = await this.ask("", { method: "peers", workspace });
+    const own = this.ownId();
+    const stations = Array.isArray(roster?.stations) ? roster.stations : [];
+    const listed = await Promise.all(
+      stations.map(async (entry: Json) => {
+        const id = text(entry, "id");
+        if (id === "") return entry;
+        if (id === own) return { ...entry, here: true, load: summary((await this.describe()).load ?? null) };
+        const got = await this.bounded(this.ask(id, { method: "describe", workspace }), LIST_WAIT_MS);
+        if (got === null) return { ...entry, offline: `did not answer within ${LIST_WAIT_MS / 1000} s` };
+        if ("error" in got) return got.error instanceof Refused ? { ...entry, refused: got.error.message } : { ...entry, offline: got.error.message };
+        return { ...entry, load: summary(field(got.ok, "load")) };
+      }),
+    );
+    return { ...roster, stations: listed };
+  }
+
+  /// This station's id (mesh/cloud.json), "" when it has none.
+  private ownId(): string {
+    try {
+      return text(readJson(join(this.data, "mesh", "cloud.json")), "station");
+    } catch {
+      return "";
+    }
+  }
+
   /// Whether stations of other workspaces are heard at all.
   hearsOutside(): boolean {
     return this.xshare !== null;
@@ -500,9 +562,7 @@ export class Remote {
   /// Called only after the transport authenticates the source station and checks current workspace membership.
   async handle(workspace: string, peer: string, request: Json): Promise<Json> {
     const method = text(request, "method");
-    if (method === "describe") {
-      return { protocol: 1, os: OS, arch: ARCH, tasks: true, sessions: true, messages: true, reads: true, files: true, chats: true, sync: 1, fileChunkBytes: CHUNK, maxFileBytes: MAX_FILE };
-    }
+    if (method === "describe") return this.describe();
     if (method.startsWith("xshare.")) {
       const xshare = this.xshare;
       if (!xshare) throw new Error("station is starting");
@@ -1037,7 +1097,11 @@ export class Remote {
     const row = this.store.getSession(session);
     if (!row) throw new Error("unknown session");
     const station = text(args, "station");
-    if (tool === "station_list") return this.ask(station, { method: station === "" ? "peers" : "describe", workspace: this.workspace(row.ws ?? null) });
+    if (tool === "station_list") {
+      const workspace = this.workspace(row.ws ?? null);
+      if (station === "") return this.listStations(workspace);
+      return detailed(station === this.ownId() ? await this.describe() : await this.ask(station, { method: "describe", workspace }));
+    }
     const key = text(args, "key");
     const listing = tool === "station_task" && field(args, "action") === "list";
     if (station === "" || (key === "" && !listing)) throw new Error("station and key are required (list needs only station)");

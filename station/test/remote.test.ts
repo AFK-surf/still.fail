@@ -13,6 +13,7 @@ import { TestClock } from "effect/testing";
 import { signalGroup } from "../src/jobs/group.ts";
 import { Jobs } from "../src/jobs/jobs.ts";
 import { IDLE_MS, type PeerCall, Refused, Remote, answerPeer, filePath, readJson, writeJson } from "../src/jobs/remote.ts";
+import { type Load, OLDER } from "../src/jobs/load.ts";
 import { type Json, Store } from "../src/store/store.ts";
 import { remoteTools } from "../src/tools/remote.ts";
 
@@ -329,7 +330,8 @@ describe("remote", { concurrency: true }, () => {
 
   test("a session runs a task on another station: inputs up, its notices and end told here, its artifact down", async () => {
     const { a, b, home, clock, use } = pair();
-    assert.deepEqual((await use("station_list", {})).stations, [{ id: "A" }, { id: "B" }]);
+    // Neither measures its load here: both say they cannot tell.
+    assert.deepEqual((await use("station_list", {})).stations, [{ id: "A", here: true, load: OLDER }, { id: "B", load: OLDER }]);
     const described = await use("station_list", { station: "B" });
     assert.equal(described.tasks, true);
     assert.equal(described.fileChunkBytes, 256 * 1024);
@@ -381,6 +383,90 @@ describe("remote", { concurrency: true }, () => {
     assert.ok(existsSync(a.remote.usedPath("s1")));
     await Effect.runPromise(clock.adjust("60 seconds"));
     await until("the record goes", () => !existsSync(a.remote.usedPath("s1")));
+  });
+
+  /// A station's load as one that measures it says it.
+  const loadOf = (busy: number, turns: number): Load => ({
+    os: "macOS 15.6", arch: "arm64", cpus: 12, cpuModel: "Apple M2 Max", cpuBusy: { share: busy, seconds: 60 }, loadAvg: [1.5, 2, 2.5],
+    memory: { totalBytes: 64 * 1024 ** 3, availableBytes: 40 * 1024 ** 3 }, disk: { path: "/data", totalBytes: 1000 * 1024 ** 3, freeBytes: 200 * 1024 ** 3 },
+    gpus: [{ name: "Apple M2 Max", cores: 30 }], running: { remoteTasks: 1, jobs: 2, services: 0, turns }, relay: { home: "https://r.example", ping: { relay: "https://r.example", ms: 12 } },
+    checkedAt: 0,
+  });
+
+  test("station_list asks every station at once: a slow or offline one never holds up the list, an older one's load is unknown", async () => {
+    const clock = testClock();
+    const a = station({ clock });
+    mkdirSync(join(a.dir, "mesh"), { recursive: true });
+    writeFileSync(join(a.dir, "mesh", "cloud.json"), JSON.stringify({ workspace: "ws", station: "A" }));
+    a.store.insertSession({ key: "s1", connect: "ds", runtime: "claude", profile: "cc", workspace: a.dir, token: "t1", createdBy: "ann", createdAt: Date.now(), lastActiveAt: Date.now() });
+    a.remote.setLoad(async () => loadOf(0.05, 1));
+    // B measures its load; D is from before (its describe says none); C never answers; E cannot be reached; F refuses.
+    const b = station();
+    b.remote.setLoad(async () => loadOf(0.9, 0));
+    const d = station();
+    let settled = 0;
+    const transport: PeerCall = async (target, workspace, request) => {
+      if (target === "" && request.method === "peers") return { workspace: "ws", stations: ["A", "B", "C", "D", "E", "F"].map((id) => ({ id, name: id.toLowerCase() })), current: true };
+      if (target === "C") return new Promise(() => {});
+      try {
+        if (target === "E") throw new Error("peer unavailable or does not support station RPC: no route");
+        if (target === "F") throw new Refused("station is starting");
+        const answer = await answerPeer(target === "B" ? b.remote : d.remote, workspace ?? "ws", "A", request);
+        if ("error" in answer) throw new Refused(answer.error);
+        return answer.result;
+      } finally {
+        settled++;
+      }
+    };
+    a.remote.attach(transport);
+    const tools = remoteTools(a.remote);
+    const use = async (name: string, args: Json) => JSON.parse(await tools.find((t) => t.name === name)!.run("s1", args));
+    let listed: Json = null;
+    void use("station_list", {}).then((l) => (listed = l));
+    // All but C have answered (and what they said is taken: a turn of the event loop): C alone is waited for, two
+    // seconds of the clock and no more.
+    await until("B, D, E and F answered", () => settled === 4);
+    await turn();
+    assert.equal(listed, null);
+    await rounds("the list is out", clock, "500 millis", () => listed !== null);
+    const busy = (share: string, turns: string) =>
+      `arm64 macOS 15.6, 12 cores (Apple M2 Max), GPU 30 cores; CPU ${share} busy over the last 60 s, load 1.5 / 2 / 2.5 (1 / 5 / 15 min); memory 40 GiB of 64 GiB free, disk 200 GiB of 1000 GiB free; running 1 remote task, 2 jobs, 0 services, ${turns}; relay ping 12 ms`;
+    assert.deepEqual(listed, {
+      workspace: "ws",
+      current: true,
+      stations: [
+        { id: "A", name: "a", here: true, load: busy("5%", "1 agent turn") },
+        { id: "B", name: "b", load: busy("90%", "0 agent turns") },
+        { id: "C", name: "c", offline: "did not answer within 2 s" },
+        { id: "D", name: "d", load: OLDER },
+        { id: "E", name: "e", offline: "peer unavailable or does not support station RPC: no route" },
+        { id: "F", name: "f", refused: "station is starting" },
+      ],
+    });
+    // One in detail: all it said, its load in full and in a line; an older one's load unknown; this one itself.
+    const one = await use("station_list", { station: "B" });
+    assert.equal(one.tasks, true);
+    assert.deepEqual(one.load, loadOf(0.9, 0));
+    assert.equal(one.summary, busy("90%", "0 agent turns"));
+    const older = await use("station_list", { station: "D" });
+    assert.equal(older.load, OLDER);
+    assert.equal(older.sync, 1);
+    assert.deepEqual((await use("station_list", { station: "A" })).load, loadOf(0.05, 1));
+  });
+
+  test("a station that cannot measure its load within a second says so, and answers describe all the same", async () => {
+    const clock = testClock();
+    const s = station({ clock });
+    s.remote.setLoad(() => new Promise(() => {}));
+    let answer: Json = null;
+    void answerPeer(s.remote, "ws", "A", { method: "describe" }).then((a) => (answer = a));
+    await rounds("it answers", clock, "250 millis", () => answer !== null);
+    assert.equal(answer.result.tasks, true);
+    assert.deepEqual(answer.result.load, { unavailable: "not measured within 1 s" });
+    s.remote.setLoad(async () => {
+      throw new Error("no readers");
+    });
+    assert.deepEqual((await answerPeer(s.remote, "ws", "A", { method: "describe" })).result.load, { unavailable: "no readers" });
   });
 
   test("a start the target refuses is final, and asked for again only by a new start", async () => {

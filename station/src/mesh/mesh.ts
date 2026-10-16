@@ -45,7 +45,9 @@ export const MeshLive = Layer.effectDiscard(
         (endpoint) => Effect.ignore(Effect.timeoutOption(Effect.promise(() => endpoint.close()), "1 second")),
       );
       log.info("mesh", "mesh listening", { station: endpoint.id(), workspace: cloud.state.state!.workspace_name, sockets: endpoint.sockets() });
-      yield* Effect.forkScoped(keepRelays(endpoint));
+      // What other stations are told of this one's relay (jobs/load.ts), while it is on the mesh.
+      yield* Effect.acquireRelease(Effect.sync(() => agents.net.attach(() => endpoint.home())), (off) => Effect.sync(off));
+      yield* Effect.forkScoped(keepRelays(endpoint, agents.net));
       // Online at the cloud only once a relay can reach the station: a device that saw "online" and connected before
       // the relay link was up had its first packets dropped (~3 s of retransmits).
       const online = yield* Effect.timeoutOption(Effect.promise(() => endpoint.online()), "15 seconds");

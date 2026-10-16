@@ -2,8 +2,12 @@
 // know no others), iroh homing on the nearest and the station kept on the rest too (keepers), so a device that reaches
 // only some of them still reaches it. Those the cloud adds or takes away are put in or taken out as it pushes them.
 // iroh's public relays come in only while none of ours answers (so the station can still be reached; the DHT says
-// where), and go once one does again (else iroh may home on a public relay, where browsers can't follow).
+// where), and go once one does again (else iroh may home on a public relay, where browsers can't follow). The relay
+// iroh homes on is asked first, and once it answers asked again on the same connection, timed: the ping other stations
+// are told of (jobs/load.ts).
 import { Effect, Schedule, Stream } from "effect";
+import type { Net } from "../jobs/load.ts";
+import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { ControlPlane } from "../services.ts";
 import type { Endpoint } from "./native.ts";
@@ -12,7 +16,7 @@ import type { Endpoint } from "./native.ts";
 const RELAY_CHECK = "30 seconds";
 
 /// Runs for good (until interrupted).
-export const keepRelays = (endpoint: Endpoint) =>
+export const keepRelays = (endpoint: Endpoint, net?: Net) =>
   Effect.gen(function* () {
     const cloud = yield* ControlPlane;
     let ours = cloud.state.relays();
@@ -37,13 +41,27 @@ export const keepRelays = (endpoint: Endpoint) =>
 
     const check = Effect.promise(async () => {
       let up = false;
+      const bare = (url: string) => url.replace(/\/+$/, "");
+      const home = endpoint.home();
+      const order = home === null ? ours : [...ours.filter((u) => bare(u) === bare(home)), ...ours.filter((u) => bare(u) !== bare(home))];
       // Two tries each: one lost request is not the relay down.
-      relays: for (const relay of ours) {
+      relays: for (const relay of order) {
         for (let i = 0; i < 2; i++) {
           try {
-            const r = await fetch(`${relay.replace(/\/+$/, "")}/ping`, { signal: AbortSignal.timeout(10_000) });
+            const r = await fetch(`${bare(relay)}/ping`, { signal: AbortSignal.timeout(10_000) });
             if (r.ok) {
               up = true;
+              if (net !== undefined) {
+                // Once more on the connection made (its body read, so it is free again): the time is the way there and
+                // back, not the handshakes.
+                try {
+                  await r.arrayBuffer();
+                  const start = wall.now();
+                  const again = await fetch(`${bare(relay)}/ping`, { signal: AbortSignal.timeout(10_000) });
+                  await again.arrayBuffer();
+                  if (again.ok) net.pinged(bare(relay), wall.now() - start);
+                } catch {}
+              }
               break relays;
             }
           } catch {}

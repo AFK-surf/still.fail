@@ -17,7 +17,9 @@ import { ConfigFile } from "../ops/config.ts";
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
 import { mcpPortFile, ownData, portsToTry, rememberedMcpPort } from "../ops/files.ts";
-import { AdbShares, ControlPlane, Events, Key, Paths, Readers, ScreenRegistry, Store } from "../services.ts";
+import { AdbShares, AdminHost, ControlPlane, Events, Key, Paths, Readers, ScreenRegistry, Store } from "../services.ts";
+import { Gpus } from "../jobs/gpu.ts";
+import { Net, measure } from "../jobs/load.ts";
 import { Notifier } from "../cloud/notify.ts";
 import type { Cloud as CloudState } from "../cloud/state.ts";
 import { adbTools } from "../tools/adb.ts";
@@ -82,6 +84,8 @@ export type AgentsParts = {
   place(): { origin: string; workspace: string; station: string; name: string } | null;
   /// Where the station stands with its control plane: the workspaces it is in (docs/multi-workspace.md).
   cloud: CloudState;
+  /// Its relay as the mesh sees it, for what other stations are told of its load (jobs/load.ts).
+  net: Net;
   /// GET /overview as `viewer` sees it.
   overview(viewer: Viewer, lang: Lang): Promise<unknown>;
 };
@@ -129,6 +133,7 @@ export const AgentsLive = (control: Control) =>
       const shares = yield* AdbShares;
       const screens = yield* ScreenRegistry;
       const browser = yield* Browser;
+      const host = yield* AdminHost;
       const run = join(data, "run");
       const config = new ConfigFile(data);
       // An edit is taken only if it checks out as config.rs `parse_config` would have it.
@@ -190,6 +195,22 @@ export const AgentsLive = (control: Control) =>
       const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text) });
       hub.setJobs(jobs);
       hub.onClose((session) => (remote.closeSession(session), computer.closeSession(session)));
+      // How busy this station is, told to the others' station_list (`describe`): the host page's measurements, the
+      // GPUs (looked at once now, so the first to ask need not wait), what runs here and the relay.
+      const gpus = new Gpus();
+      void gpus.read().catch(() => null);
+      const net = new Net();
+      remote.setLoad(() =>
+        measure({
+          host,
+          gpus,
+          running: () => {
+            const j = store.runningJobs();
+            return { remoteTasks: j.remote, jobs: j.jobs, services: j.services, turns: hub.running() };
+          },
+          relay: () => net.seen(),
+        }),
+      );
       // What other stations' sessions ask of this one's chats: those of the workspace asked in (`ws`; none: any, once
       // xshare checked what is shared).
       const local = async (peer: string, request: any, ws: string | null = null) => {
@@ -595,6 +616,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ previousGone: previous, hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, slack, overview: view, cloud, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      return Agents.of({ previousGone: previous, hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, slack, overview: view, cloud, net, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
     }),
   );

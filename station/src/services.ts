@@ -156,12 +156,15 @@ export class Events extends Context.Service<Events, EventStreams>()("stillfail/E
   );
 }
 
-/// The machine's state, shared by GET /host and the events.
+/// The machine's state, shared by GET /host, the events and what other stations are told of this one's load; its
+/// CPUs noted every few seconds for their recent average (Host.follow) while the station runs.
 export class AdminHost extends Context.Service<AdminHost, Host>()("stillfail/AdminHost") {
   static readonly layer = Layer.effect(
     AdminHost,
     Effect.gen(function* () {
-      return new Host(yield* Readers);
+      const host = new Host(yield* Readers);
+      yield* Effect.acquireRelease(Effect.sync(() => host.follow()), (stop) => Effect.sync(stop));
+      return host;
     }),
   );
 }

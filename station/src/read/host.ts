@@ -78,6 +78,8 @@ export function hostInfo(dataDir: string, last: Seen): { info: unknown; seen: Se
     cpus: n,
     cpuModel: model,
     load: Math.round((loadavg()[0]! / Math.max(n, 1)) * 100) / 100,
+    // The run queue over 1, 5 and 15 minutes as `uptime` says it (Windows has none: Node says zeros).
+    loadAvg: platform.os === "windows" ? null : loadavg().map((l) => Math.round(l * 100) / 100),
     cpuBusy: busy,
     uptimeSec: uptime,
     memory: mem,
