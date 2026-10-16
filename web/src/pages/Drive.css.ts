@@ -33,7 +33,7 @@ export const spin = style({ display: "contents" });
 globalStyle(`${spin}[data-on] svg`, { animation: `${turn} 900ms linear infinite` });
 
 /** The entries: rows on the page, a row's ground on hover; files dropped on it go into the folder. */
-export const list = style({ position: "relative", display: "grid", gap: "2px", minHeight: "200px", borderRadius: vars.rCard, cornerShape: vars.cornerShape });
+export const list = style({ position: "relative", display: "grid", gap: "2px", minHeight: "200px", borderRadius: vars.rCard, cornerShape: vars.cornerShape, outline: "none" });
 // As the settings lists: rows reaching a little past the column, their text in line with the page's.
 globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "none", marginLeft: `max(${neg(12)}, calc(50% - 392px))`, marginRight: `max(${neg(12)}, calc(50% - 392px))` });
 /** A line about the folders where there are none to show (none lent yet, or none matching). */
@@ -57,6 +57,8 @@ export const row = style({
   textAlign: "left", fontSize: vars.textUi, cursor: "pointer", borderRadius: vars.rField, cornerShape: vars.cornerShape,
   selectors: {
     "span&": { cursor: "default" },
+    // What is chosen says where the keys are (its ground): no ring around it besides, as Finder draws none.
+    "&:focus-visible": { outline: "none" },
     "&:disabled": { cursor: "default" },
     // In a chat's 文件 tab: narrow, the size alone.
     "&[data-compact]": { gridTemplateColumns: "18px minmax(0, 1fr) auto 28px", columnGap: "10px", minHeight: "36px", padding: "6px 10px" },
