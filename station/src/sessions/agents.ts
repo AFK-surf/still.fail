@@ -356,9 +356,19 @@ export const AgentsLive = (control: Control) =>
       // In a workspace, or out of it, as cloud.json says, from now on; and in which of them (docs/multi-workspace.md).
       let inWorkspace = bound();
       let joinedNow = new Set(cloud.memberships().filter((m) => !m.home).map((m) => m.workspace));
+      let homeNow = cloud.home();
       const follow = async () => {
         const now = bound();
         const joined = new Set(cloud.memberships().filter((m) => !m.home).map((m) => m.workspace));
+        // A new home workspace. One it had joined took over from a home it was taken out of: the old home's chats
+        // (those that say no workspace) are said to be that one's, so they stay out of the new home's sight. Moved
+        // (enrolled again elsewhere): its chats of the old home go along, as they always did.
+        const home = cloud.home();
+        if (home !== null && homeNow !== null && home !== homeNow) {
+          if (joinedNow.has(home)) store.setSessionsWs(null, homeNow);
+          else store.setSessionsWs(homeNow, null);
+        }
+        if (home !== null) homeNow = home;
         const left = [...joinedNow].filter((w) => !joined.has(w) && cloud.memberships()[0]?.workspace !== w);
         const back = [...joined].filter((w) => !joinedNow.has(w));
         joinedNow = joined;

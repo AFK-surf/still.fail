@@ -206,7 +206,7 @@ try {
 } catch (e) {
   console.error("e2e stopped:", e);
 } finally {
-  if (cloud) cloud.kill();
+  (cloud as ChildProcess | null)?.kill();
   stopStation();
 }
 process.exit(ok ? 0 : 1);

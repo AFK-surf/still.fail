@@ -212,6 +212,17 @@ export class Store {
     return this.#all("SELECT * FROM sessions ORDER BY last_active_at DESC").map(toSession);
   }
 
+  /// Says the sessions of workspace `from` (null: those that say none, the home one's) are `to`'s (null: the home
+  /// one's): when the station's home workspace changes (docs/multi-workspace.md).
+  setSessionsWs(from: string | null, to: string | null): void {
+    this.#with((changes) => {
+      const keys = (from === null ? this.#all("SELECT key FROM sessions WHERE ws IS NULL") : this.#all("SELECT key FROM sessions WHERE ws = ?", from)).map((r) => r.key as string);
+      if (from === null) this.#run("UPDATE sessions SET ws = ? WHERE ws IS NULL", to);
+      else this.#run("UPDATE sessions SET ws = ? WHERE ws = ?", to, from);
+      for (const key of keys) changes.push({ type: "session", key });
+    });
+  }
+
   insertSession(s: NewSession): void {
     this.#with((changes) => {
       this.#run(
