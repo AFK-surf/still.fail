@@ -3,14 +3,12 @@
 // highlighted, Markdown rendered, CSV as a table, HTML in a sandbox. Anything
 // else says it cannot be shown and offers the download.
 import { Dialog as RDialog } from "radix-ui";
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createContext, type ComponentType, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { BIG_FILE, useApi, type Api, type Attachment, type FileProgress } from "./api.ts";
 import { useTopic, useTopicSelect } from "./core/react.ts";
-import { useNarrow } from "./mobile/app.tsx";
+import { useNarrow } from "./mobile/narrow.ts";
 import { useBarOnScroll, ViewerBar, ViewerDownload } from "./viewer/ViewerBar.tsx";
 import type { ChatView, DriveEntry, ImageNear } from "./core/shapes.ts";
-import { Reader } from "./drive/Reader.tsx";
-import { Player } from "./drive/Player.tsx";
 import { Check, ChevronLeft, ChevronRight, Close, Copy, Download, File as FileMark, Minus, Plus } from "./icons.tsx";
 import { Prose } from "./Prose.tsx";
 import { FrameHost, isFragment, vizDocument } from "./Viz.tsx";
@@ -298,6 +296,18 @@ export interface Shown { sessionKey: string; file: Attachment }
 export type GalleryOf = { chat: { thread: number } | { session: string } } | { list: () => Shown[] };
 export const Gallery = createContext<GalleryOf | null>(null);
 
+/**
+ * The reader and the player a text and a video open in (drive/Reader.tsx, drive/Player.tsx), as the app has them: told
+ * here by the app as it starts (main.tsx), not imported, so a page with no core (a published chat's, share/) keeps
+ * its own plain viewers and none of what they need.
+ */
+type Whole = {
+  Reader: ComponentType<{ blob: Blob; onSave?: (() => void) | undefined; name: string; size: number; mtime: number; markdown: boolean; backLabel: string; onBack: () => void }>;
+  Player: ComponentType<{ blob: Blob; onSave?: (() => void) | undefined; entry: DriveEntry; backLabel: string; onBack: () => void }>;
+};
+let whole: Whole | null = null;
+export const setWholeViewers = (viewers: Whole) => { whole = viewers; };
+
 /** Where closing a preview goes back to, by name (a drive's folder: mobile/Drive.tsx DrivePreview); a chat's file's is
  * its chat's title, else 关闭. */
 export const PreviewBack = createContext<string | null>(null);
@@ -558,19 +568,20 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
   // A text and a video open in the reader and the player, as a station's file does (drive/Reader.tsx, drive/Player.tsx):
   // one viewer of each kind wherever a file is opened, each with the same bar; here they read what this has fetched.
   const saveShown = loaded.state === "ready" ? () => save(loaded) : undefined;
-  const whole = loaded.state !== "ready" ? null
-    : kind === "markdown" || kind === "text"
+  const Reader = whole?.Reader, Player = whole?.Player;
+  const viewer = loaded.state !== "ready" ? null
+    : (kind === "markdown" || kind === "text") && Reader
       ? <Reader key={file.path} blob={loaded.blob} onSave={saveShown} name={file.name} size={file.size} mtime={0} markdown={kind === "markdown"} backLabel={backLabel} onBack={onClose} />
-      : kind === "video" || kind === "audio"
+      : (kind === "video" || kind === "audio") && Player
         ? <Player key={file.path} blob={loaded.blob} onSave={saveShown} backLabel={backLabel} onBack={onClose}
           entry={{ name: file.name, size: file.size, mtime: 0, dir: false, type: loaded.blob.type, kind, sizeText: fileSize(file.size), timeText: "" } as DriveEntry} />
         : null;
-  if (whole) {
+  if (viewer) {
     return (
       <RDialog.Content ref={content} className={css2.fp} data-kind={kind ?? undefined} aria-describedby={undefined}
         onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.focus(); }}>
         <RDialog.Title className={css2.fpHiddenTitle}>{file.name}</RDialog.Title>
-        {whole}
+        {viewer}
       </RDialog.Content>
     );
   }

@@ -26,6 +26,7 @@ import { useInWorkspace } from "../notify.ts";
 import { BottomBar, PLACE_PATHS, placeOfPath, type BarPlace } from "./Bar.tsx";
 import { t } from "../i18n.ts";
 import { usePrefs } from "../prefs.ts";
+import { MobileContext } from "./narrow.ts";
 
 /** The workspace in view and the signed-in account that reaches it. */
 export interface Entry { id: string; name: string; account: Account }
@@ -61,7 +62,7 @@ export interface MobileApp {
   reader: (spec: ReaderSpec | null) => void;
 }
 
-const Context = createContext<MobileApp | null>(null);
+const Context = MobileContext;
 
 /**
  * The browser drew the last back or forward itself (Safari's own swipe from the screen's edge, its picture of the page
@@ -73,10 +74,7 @@ if (typeof window !== "undefined") {
   window.addEventListener("popstate", (event) => { drawnByBrowser = (event as PopStateEvent & { hasUAVisualTransition?: boolean }).hasUAVisualTransition === true; });
 }
 
-/** Whether this is drawn in the narrow app (a phone's way of doing things: ../annotate/ImageMarks.tsx). */
-export function useNarrow(): boolean {
-  return useContext(Context) !== null;
-}
+export { useNarrow } from "./narrow.ts";
 
 /** The page in view's path (`/w/<id>…`, as the address has it), for the rows that mark theirs (useOpenPage). */
 let shown = "";

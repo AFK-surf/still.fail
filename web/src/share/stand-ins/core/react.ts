@@ -8,3 +8,8 @@ const NONE: TopicState<never> = { value: undefined, error: null, loading: false 
 export function useTopic<T = unknown>(_topic: unknown): TopicState<T> {
   return NONE;
 }
+
+/** A topic's part (a chat's title, for a preview's way back): none here either. */
+export function useTopicSelect<T, S>(_topic: unknown, select: (state: TopicState<T>) => S): S {
+  return select(NONE);
+}

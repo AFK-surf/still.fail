@@ -2,6 +2,7 @@
 // the one picked beside it at the width and in the theme picked, and what takes it there. `?story=<id>&theme=light|dark`
 // is one story alone, as the tests (test/browser/stories.mjs) open it; with `&play=1` (the gallery's screen) it takes its
 // own steps, with `&device=<id>` it is on that device (devices.ts).
+import "../src/viewer/whole.ts";
 import "../src/styles/index.ts";
 import "@fontsource-variable/inter";
 import { StrictMode, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";

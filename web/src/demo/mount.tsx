@@ -2,6 +2,7 @@
 // worker, no station. story.ts plays a few chats in it; the visitor can click around and send messages too.
 import { GoKeeper } from "../go.ts";
 import "./demo.css.ts";
+import "../viewer/whole.ts";
 import { startScrollbars } from "../scrollbars.ts";
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";

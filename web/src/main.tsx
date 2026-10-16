@@ -1,5 +1,6 @@
 import "./renamed.ts";
 import "./styles/index.ts";
+import "./viewer/whole.ts";
 import { followAppearance } from "./theme.ts";
 import { startScrollbars } from "./scrollbars.ts";
 import { followWindowColors } from "./titleBar.ts";
