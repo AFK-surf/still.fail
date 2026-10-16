@@ -22,7 +22,7 @@ const STATUS: Record<string, number> = {
   workspace_not_found: 404, member_not_found: 404, user_not_found: 404, station_not_found: 404, invitation_not_found: 404, enrollment_not_found: 404,
   forbidden: 403, invitation_for_other_email: 403,
   already_member: 409, invalid_name: 400, invalid_emoji: 400, invalid_icon: 400, invalid_role: 400, invalid_email: 400, invalid_relay: 400, invalid_relays: 400,
-  last_owner: 409,
+  last_owner: 409, locked_workspace: 409,
   too_many_workspaces: 429, too_many_invitations: 429, too_many_members: 429, too_many_stations: 429,
   invite_code_required: 403, invite_code_invalid: 404, invite_code_used: 409, invite_code_expired: 410,
   invalid_note: 400, invalid_expiry: 400,
@@ -79,14 +79,17 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if ((path === "/.well-known/stillfail-grant-keys" || path === "/.well-known/ember-grant-keys") && method === "GET") return reply(grantKeys(env), 200, { "cache-control": "public, max-age=300" });
 
   // ── stations, authenticated by their own key ────────────────────────────
-  if (path === "/v1/stations/enroll" && method === "POST") {
+  // Enrolling moves the station to the token's workspace, out of any other; joining (docs/multi-workspace.md) adds that
+  // workspace to those it is in. The same body and proof (the token says where, the signature that the key is held);
+  // a route of its own, so that a cloud from before it refuses rather than moves the station. Both answer with `home`.
+  if ((path === "/v1/stations/enroll" || path === "/v1/stations/join") && method === "POST") {
     const input = await readJson(request).catch(() => null);
     if (!input || typeof input.token !== "string" || !validKeyHex(input.station) || typeof input.signature !== "string") return reply({ error: "invalid_request" }, 400);
     const messages = signedMessages("station-enroll-v1", publicOrigins(env), `${input.token}:${input.station}`);
     if (!(await verifyAnySignature(input.station, input.signature, messages))) return reply({ error: "invalid_signature" }, 401);
     const version = typeof input.version === "string" ? input.version.slice(0, 40) : null;
     return directory(async () => ({
-      ...(await env.DIRECTORY.getByName("primary").enroll(input.token as string, input.station as string, version)),
+      ...(await env.DIRECTORY.getByName("primary").enroll(input.token as string, input.station as string, version, path === "/v1/stations/join")),
       station: input.station,
       ...relays(env),
       grant_keys: grantKeys(env),

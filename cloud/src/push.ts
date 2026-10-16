@@ -1,7 +1,8 @@
 // Push notifications (docs/notifications.md): devices register where they can be pushed to (a browser's Web Push
 // subscription, the Android app's FCM token) with the signed-in account and session; a station sends the notices of
 // its chats, signed with its key, naming who they are for by email; still.fail cloud makes each one's text and pushes it
-// to the devices of those people who are members of the station's workspace, each device once. A device its push
+// to the devices of those people who are members of the station's workspace (the one the notices say, for a station in
+// several), each device once. A device its push
 // service says is gone is dropped (with every account); any other failure is logged and forgotten (the person hears of
 // it the next time a client runs).
 import { clock, readJson, readText, reply } from "./auth";
@@ -103,7 +104,7 @@ function notice(value: unknown): Notice | null {
   return { to, kind: n.kind, session: n.session, title: (n.title as string | undefined) ?? "", by: (n.by as string | null | undefined) || undefined, text: n.text, at, seq };
 }
 
-/** POST /v1/stations/notify: a station's notices, pushed to the members they name → `{ sent }`. */
+/** POST /v1/stations/notify `{ notices, workspace? }`: a station's notices, pushed to the members they name → `{ sent }`. */
 export async function stationNotify(request: Request, env: Env): Promise<Response> {
   if (request.headers.get("content-type")?.split(";")[0] !== "application/json") return reply({ error: "invalid_request" }, 400);
   let body: string;
@@ -115,16 +116,23 @@ export async function stationNotify(request: Request, env: Env): Promise<Respons
   const station = await stationSender(request, env, body, "station-notify-v1");
   if (!station) return reply({ error: "invalid_signature" }, 401);
   let notices: Notice[];
+  let workspace: string | null = null;
   try {
-    const value = JSON.parse(body) as { notices?: unknown };
+    const value = JSON.parse(body) as { notices?: unknown; workspace?: unknown };
     if (!Array.isArray(value.notices)) throw new Error("shape");
     notices = value.notices.slice(0, MAX_NOTICES).map(notice).filter((n): n is Notice => n !== null);
+    // The workspace whose chats they are (a station in several says; its home if it says none).
+    if (value.workspace !== undefined && value.workspace !== null) {
+      if (typeof value.workspace !== "string" || !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(value.workspace)) throw new Error("shape");
+      workspace = value.workspace;
+    }
   } catch {
     return reply({ error: "invalid_request" }, 400);
   }
   const dir = env.DIRECTORY.getByName("primary");
-  const targets = await dir.pushTargets(station, notices.flatMap((n) => n.to));
-  if (!targets) return reply({ error: "invalid_signature" }, 401);
+  const targets = await dir.pushTargets(station, notices.flatMap((n) => n.to), workspace);
+  // Enrolled (stationSender says so), but not in the workspace it named.
+  if (!targets) return workspace ? reply({ error: "not_in_workspace" }, 403) : reply({ error: "invalid_signature" }, 401);
   const keys = vapid(env);
   const fcm = serviceAccount(env.FCM_SERVICE_ACCOUNT);
   const pushes: Promise<{ device: PushRegistration; outcome: Outcome }>[] = [];

@@ -42,6 +42,28 @@ export class Directory extends ProductionDirectory {
     this.migrateFreePlan();
   }
   /**
+   * The stations as they were kept before a station could be in several workspaces: one table, a row each (with
+   * `marks`, the emoji and icon it gained later; without, as a table older than them), each station in the one
+   * workspace it is in now. The split runs again, twice (the second time finds nothing to do). What `stations` holds
+   * after it.
+   */
+  unsplitStations(marks = true): string[] {
+    const sql = this.ctx.storage.sql;
+    const rows = sql.exec("SELECT m.workspace, m.station AS id, m.name, m.emoji, m.icon, m.enrolled_at, m.enrolled_by, s.last_seen, s.version FROM station_members m JOIN stations s ON s.id = m.station ORDER BY m.enrolled_at, m.rowid").toArray();
+    this.ctx.storage.transactionSync(() => {
+      sql.exec("DROP TABLE stations");
+      sql.exec("DELETE FROM station_members");
+      sql.exec(`CREATE TABLE stations (id TEXT PRIMARY KEY, workspace TEXT NOT NULL, name TEXT NOT NULL, enrolled_at INTEGER NOT NULL, enrolled_by TEXT NOT NULL, last_seen INTEGER, version TEXT${marks ? ", emoji TEXT, icon TEXT" : ""})`);
+      for (const r of rows) {
+        sql.exec(`INSERT INTO stations (id, workspace, name, enrolled_at, enrolled_by, last_seen, version${marks ? ", emoji, icon" : ""}) VALUES (?, ?, ?, ?, ?, ?, ?${marks ? ", ?, ?" : ""})`,
+          r.id, r.workspace, r.name, r.enrolled_at, r.enrolled_by, r.last_seen, r.version, ...(marks ? [r.emoji, r.icon] : []));
+      }
+    });
+    this.migrateStationMembers();
+    this.migrateStationMembers();
+    return sql.exec("PRAGMA table_info(stations)").toArray().map((r) => r.name as string);
+  }
+  /**
    * `users` made-up accounts over the last four months, about one in three with a workspace of up to five people and
    * up to three stations (none ever connects), some invitations and codes: what the admin's console looks like once
    * many people use still.fail (dev.ts, SEED). Seeded by `seed`, so each run makes the same.
@@ -82,9 +104,10 @@ export class Directory extends ProductionDirectory {
         }
         for (let k = Math.floor(random() * 4); k > 0; k--) {
           const seen = random() < 0.12 ? null : now - Math.floor(random() * random() * random() * 40 * day);
-          sql.exec("INSERT INTO stations (id, workspace, name, enrolled_at, enrolled_by, last_seen, version) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            `${"0".repeat(56)}${String(i * 4 + k).padStart(8, "0")}`, id, `${pick(["mac-mini", "studio", "dev-box", "nas", "mbp"])}${k > 1 ? `-${k}` : ""}`, created, owner.sub, seen,
-            pick(["0.1.1212", "0.1.1212", "0.1.1212", "0.1.1190", "0.1.1104"]));
+          const station = `${"0".repeat(56)}${String(i * 4 + k).padStart(8, "0")}`;
+          sql.exec("INSERT INTO stations (id, last_seen, version) VALUES (?, ?, ?)", station, seen, pick(["0.1.1212", "0.1.1212", "0.1.1212", "0.1.1190", "0.1.1104"]));
+          sql.exec("INSERT INTO station_members (workspace, station, name, enrolled_at, enrolled_by) VALUES (?, ?, ?, ?, ?)",
+            id, station, `${pick(["mac-mini", "studio", "dev-box", "nas", "mbp"])}${k > 1 ? `-${k}` : ""}`, created, owner.sub);
         }
         if (random() < 0.15) {
           sql.exec("INSERT INTO invitations (id, workspace, token_hash, role, email, created_by, expires_at) VALUES (?, ?, ?, 'member', ?, ?, ?)",

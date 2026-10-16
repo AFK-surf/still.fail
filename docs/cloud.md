@@ -25,7 +25,7 @@ still.fail 以 p2p 为主：设备直接连 station，看 station 在不在线�
 | 账号 | 一个 Google 身份 | Google `sub` |
 | 客户端 | 一个浏览器或 App 安装，持有一把 iroh 设备密钥；可以同时登录多个账号 | 设备公钥 |
 | workspace | 一组人和一组 station；账号在其中的角色是 owner / admin / member | ULID |
-| station | 一台 still.fail 节点，属于一个 workspace | station 的 iroh 公钥 |
+| station | 一台 still.fail 节点，属于一个或几个 workspace（第一个加入的是它的**主 workspace**） | station 的 iroh 公钥 |
 
 - 一个账号可以创建多个 workspace（成为 owner），也可以接受邀请加入别人的。
 - owner / admin 可以邀请成员、登记 station、移除成员和 station；owner 还可以改角色、删除 workspace。workspace 至少保留一个 owner。
@@ -44,6 +44,14 @@ Google OAuth（`openid email profile`），access token 5 分钟，refresh token
 1. admin 在 workspace 里点「添加 station」，得到一条一次性、1 小时有效的登记命令。
 2. 在要当 station 的机器上运行它。station 用自己的 iroh 密钥签名证明持有这把密钥，控制面把这个公钥记入 workspace。
 3. station 用控制面在 state 帧里给的签名公钥（Ed25519）校验成员凭证，不需要在线访问控制面。这把公钥、名单、station 属于哪个 workspace 都以 cloud 说的为准；workspace 开了安全模式（锁）后改以锁里签过的为准，见 [workspace-lock.md](workspace-lock.md)。
+
+一台 station 可以在几个 workspace 里（设计见 [multi-workspace.md](multi-workspace.md)）。cloud 把机器和 membership 分开存：`stations (id, last_seen, version)` 和 `station_members (workspace, station, name, emoji, icon, enrolled_at, enrolled_by)`，名字和图标按 workspace 各起各的；`enrolled_at` 最早的那条是主 workspace。旧的一张 `stations` 表在 Directory 打开时拆成这两张（`migrateStationMembers`，拆过的不再动）。
+
+- `POST /v1/stations/enroll`：和以前一样**搬家**，删掉它在别的 workspace 的 membership，只留这一条。
+- `POST /v1/stations/join`：同样的请求体和签名，**加入**：加一条 membership（套餐上限按这个 workspace 算；已经在里面就只改名字）。station 的主 workspace 开着锁，或这个 workspace 开着锁而 station 已在别处，回 `409 locked_workspace`。单独一个路由，旧 cloud 就会拒绝而不是把 station 搬走。
+- 两者的回应都带 `workspace`、`workspace_name`、`name` 和 `home`（主 workspace）。
+- presence socket 的 `state` 帧：顶层字段（`workspace`、`workspace_name`、`name`、`peers`、`revocations`、`lock`）说的是主 workspace，和以前一样；`workspaces: [{workspace, workspace_name, name, peers, revocations}]` 是其余每个 membership，总是带着（只有一个就是空数组）；`relay_urls` 是 still.fail 的 relay 加上所有 membership 的 workspace 自带 relay（去重）。`revoke` 帧带 `workspace`，发给这个 workspace 里的每台 station。`lock.get` / `lock.put` 只针对主 workspace。
+- 移除 station、删除 workspace 只删那一条 membership：一条都不剩就像以前那样以 4004 断开，否则重发 `state`（主 workspace 没了，加入最早的那个接任）。workspace 的 station 列表里，不是这台 station 主 workspace 的那条带 `joined: true`。
 
 ## 连接 station 与成员凭证
 
@@ -104,7 +112,7 @@ station 在哪、怎么连，设备自己找，不经过 still.fail cloud：
 
 ## 推送通知
 
-设备（浏览器的 Web Push 订阅、安卓的 FCM token）登记在登录的账号和会话下（`POST/DELETE /v1/push`，会话退出时一起删掉）；station 把自己 chat 的通知签名后发到 `POST /v1/stations/notify`，still.fail cloud 只推给通知里点名、并且是这台 station 所在 workspace 成员的人。接口、签名和推送内容见 [notifications.md](notifications.md)，代码在 `cloud/src/push.ts`、`webpush.ts`、`fcm.ts`。
+设备（浏览器的 Web Push 订阅、安卓的 FCM token）登记在登录的账号和会话下（`POST/DELETE /v1/push`，会话退出时一起删掉）；station 把自己 chat 的通知签名后发到 `POST /v1/stations/notify`（在几个 workspace 里的 station 用 `workspace` 说是哪个的，缺省为主 workspace，不在那个 workspace 回 403），still.fail cloud 只推给通知里点名、并且是那个 workspace 成员的人。bug 报告（`/v1/feedback`）同样可以带 `workspace`。接口、签名和推送内容见 [notifications.md](notifications.md)，代码在 `cloud/src/push.ts`、`webpush.ts`、`fcm.ts`。
 
 API Worker 的密钥（都可以不设：没有 VAPID 就没有 Web Push，`/v1/push/key` 回 404；没有服务账号就不推安卓）：
 

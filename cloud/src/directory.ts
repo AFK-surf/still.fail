@@ -92,7 +92,9 @@ export class Directory extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS members (workspace TEXT NOT NULL, sub TEXT NOT NULL, role TEXT NOT NULL, added_at INTEGER NOT NULL, PRIMARY KEY (workspace, sub));
       CREATE INDEX IF NOT EXISTS members_by_user ON members (sub);
       CREATE TABLE IF NOT EXISTS invitations (id TEXT PRIMARY KEY, workspace TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, role TEXT NOT NULL, email TEXT, created_by TEXT NOT NULL, expires_at INTEGER NOT NULL);
-      CREATE TABLE IF NOT EXISTS stations (id TEXT PRIMARY KEY, workspace TEXT NOT NULL, name TEXT NOT NULL, enrolled_at INTEGER NOT NULL, enrolled_by TEXT NOT NULL, last_seen INTEGER, version TEXT);
+      CREATE TABLE IF NOT EXISTS stations (id TEXT PRIMARY KEY, last_seen INTEGER, version TEXT);
+      CREATE TABLE IF NOT EXISTS station_members (workspace TEXT NOT NULL, station TEXT NOT NULL, name TEXT NOT NULL, emoji TEXT, icon TEXT, enrolled_at INTEGER NOT NULL, enrolled_by TEXT NOT NULL, PRIMARY KEY (workspace, station));
+      CREATE INDEX IF NOT EXISTS station_members_by_station ON station_members (station, enrolled_at);
       CREATE TABLE IF NOT EXISTS enrollments (token_hash TEXT PRIMARY KEY, workspace TEXT NOT NULL, name TEXT NOT NULL, created_by TEXT NOT NULL, expires_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS revocations (workspace TEXT NOT NULL, kind TEXT NOT NULL, id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (workspace, kind, id));
       CREATE TABLE IF NOT EXISTS added (workspace TEXT NOT NULL, email TEXT NOT NULL, role TEXT NOT NULL, added_by TEXT NOT NULL, added_at INTEGER NOT NULL, PRIMARY KEY (workspace, email));
@@ -130,16 +132,33 @@ export class Directory extends DurableObject<Env> {
     if (!this.#rows("PRAGMA table_info(workspaces)").some((r) => r.name === "relays")) this.#run("ALTER TABLE workspaces ADD COLUMN relays TEXT");
     // Nor did push keep a device's language, before there were languages.
     if (!this.#rows("PRAGMA table_info(push)").some((r) => r.name === "lang")) this.#run("ALTER TABLE push ADD COLUMN lang TEXT");
-    // Nor had stations an emoji (one, picked in the settings; null for none), before they could have.
-    if (!this.#rows("PRAGMA table_info(stations)").some((r) => r.name === "emoji")) this.#run("ALTER TABLE stations ADD COLUMN emoji TEXT");
-    // Nor an icon (one of still.fail's, or a picture put up; shown before the emoji where it is known), before they could.
-    if (!this.#rows("PRAGMA table_info(stations)").some((r) => r.name === "icon")) this.#run("ALTER TABLE stations ADD COLUMN icon TEXT");
     // Nor had workspaces a mark of their own (an emoji, an icon, as a station's), before they could; their first letter till then.
     const marked = new Set(this.#rows("PRAGMA table_info(workspaces)").map((r) => r.name as string));
     for (const column of ["emoji TEXT", "icon TEXT"]) {
       if (!marked.has(column.split(" ")[0]!)) this.#run(`ALTER TABLE workspaces ADD COLUMN ${column}`);
     }
     this.migrateFreePlan();
+    this.migrateStationMembers();
+  }
+
+  /**
+   * A station was in one workspace, its row in `stations` saying which and what it is called there (with an emoji and
+   * an icon, which it gained later: absent from a table older than them). It may be in several now: `stations` keeps
+   * the machine, `station_members` each workspace it is in, named there (docs/multi-workspace.md). An old table is
+   * split here, each row into one of each; one already split has no `workspace` and is left alone.
+   */
+  protected migrateStationMembers(): void {
+    const columns = new Set(this.#rows("PRAGMA table_info(stations)").map((r) => r.name as string));
+    if (!columns.has("workspace")) return;
+    const kept = (column: string) => (columns.has(column) ? column : "NULL");
+    this.ctx.storage.transactionSync(() => {
+      this.#run(`INSERT OR IGNORE INTO station_members (workspace, station, name, emoji, icon, enrolled_at, enrolled_by)
+        SELECT workspace, id, name, ${kept("emoji")}, ${kept("icon")}, enrolled_at, enrolled_by FROM stations ORDER BY enrolled_at, rowid`);
+      this.#run("CREATE TABLE stations_split (id TEXT PRIMARY KEY, last_seen INTEGER, version TEXT)");
+      this.#run("INSERT INTO stations_split (id, last_seen, version) SELECT id, last_seen, version FROM stations");
+      this.#run("DROP TABLE stations");
+      this.#run("ALTER TABLE stations_split RENAME TO stations");
+    });
   }
 
   /**
@@ -196,6 +215,16 @@ export class Directory extends DurableObject<Env> {
     return this.#rows("SELECT sub FROM members WHERE workspace = ?", workspace).map((r) => r.sub as string);
   }
 
+  /** The stations in a workspace. */
+  #stationsIn(workspace: string): string[] {
+    return this.#rows("SELECT station FROM station_members WHERE workspace = ?", workspace).map((r) => r.station as string);
+  }
+
+  /** The workspaces a station is in, its home first: the one it joined first (the earliest row of the earliest second). */
+  #memberships(station: string): string[] {
+    return this.#rows("SELECT workspace FROM station_members WHERE station = ? ORDER BY enrolled_at, rowid", station).map((r) => r.workspace as string);
+  }
+
   /** Accounts signed in with this email (invitations are addressed by email). */
   #byEmail(email: string | null): string[] {
     return email ? this.#rows("SELECT sub FROM users WHERE lower(email) = lower(?)", email).map((r) => r.sub as string) : [];
@@ -211,7 +240,7 @@ export class Directory extends DurableObject<Env> {
    * too when what their lists show changed (a name, a role, a count).
    */
   #changed(workspace: string, list: boolean, also: Iterable<string> = []): void {
-    for (const row of this.#rows("SELECT id FROM stations WHERE workspace = ?", workspace)) this.#sendState(row.id as string);
+    for (const station of this.#stationsIn(workspace)) this.#sendState(station);
     const subs = [...this.#members(workspace), ...also];
     this.#tell(subs, ...(list ? [LIST] : []), { type: "workspace", id: workspace });
   }
@@ -316,7 +345,7 @@ export class Directory extends DurableObject<Env> {
     const user = row ? { sub: row.sub as string, email: row.email as string, name: row.name as string, picture: row.picture as string, ...(row.beta ? { beta: true as const } : {}) } : undefined;
     const workspaces = this.#rows(`
       SELECT w.id, w.name, m.role, w.created_at,
-        (SELECT COUNT(*) FROM stations s WHERE s.workspace = w.id) AS stations,
+        (SELECT COUNT(*) FROM station_members s WHERE s.workspace = w.id) AS stations,
         (SELECT COUNT(*) FROM members x WHERE x.workspace = w.id) AS members, w.relays, w.emoji, w.icon
       FROM members m JOIN workspaces w ON w.id = m.workspace WHERE m.sub = ? ORDER BY w.created_at`, sub)
       .map(({ relays, emoji, icon, ...w }) => ({ ...w, relays: parseRelays(relays), ...marks(emoji, icon) })) as unknown as WorkspaceSummary[];
@@ -399,7 +428,7 @@ export class Directory extends DurableObject<Env> {
     const members = this.#rows(`
       SELECT m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name, COALESCE(u.picture, '') AS picture, m.role, m.added_at
       FROM members m LEFT JOIN users u ON u.sub = m.sub WHERE m.workspace = ? ORDER BY m.added_at`, id) as unknown as MemberView[];
-    const stations = this.#rows("SELECT id, name, emoji, icon, enrolled_at, enrolled_by, last_seen, version FROM stations WHERE workspace = ? ORDER BY enrolled_at", id) as unknown as StationView[];
+    const stations = this.#stationViews(id).map(({ workspace: _, ...station }) => station);
     const invitations = MANAGERS.includes(role)
       ? this.#rows("SELECT id, role, email, created_by, expires_at FROM invitations WHERE workspace = ? AND expires_at > ? ORDER BY expires_at", id, nowSeconds()) as unknown as InvitationView[]
       : [];
@@ -407,6 +436,17 @@ export class Directory extends DurableObject<Env> {
       ? this.#rows("SELECT email, role, added_by, added_at FROM added WHERE workspace = ? ORDER BY added_at", id) as unknown as AddedView[]
       : [];
     return { id, name: w.name as string, ...marks(w.emoji, w.icon), role, created_at: w.created_at as number, members, stations, invitations, added, relays: parseRelays(w.relays), lock: this.#lockHead(id), lock_requests: this.#lockRequestCount(id, sub, role) };
+  }
+
+  /**
+   * The stations of a workspace (of every workspace, grouped by the caller, without one), as its views list them: named
+   * there, `joined` where it is not the station's home (a station in one workspace says nothing of it).
+   */
+  #stationViews(workspace: string | null): (StationView & { workspace: string })[] {
+    return this.#rows(`SELECT m.workspace, m.station AS id, m.name, m.emoji, m.icon, m.enrolled_at, m.enrolled_by, s.last_seen, s.version,
+        EXISTS (SELECT 1 FROM station_members o WHERE o.station = m.station AND (o.enrolled_at < m.enrolled_at OR (o.enrolled_at = m.enrolled_at AND o.rowid < m.rowid))) AS joined
+      FROM station_members m LEFT JOIN stations s ON s.id = m.station WHERE ? IS NULL OR m.workspace = ? ORDER BY m.enrolled_at, m.rowid`, workspace, workspace)
+      .map(({ joined, ...row }) => ({ ...row, ...(joined ? { joined: true } : {}) })) as unknown as (StationView & { workspace: string })[];
   }
 
   // ── the workspace lock (docs/workspace-lock.md, lock.ts): kept and carried, not trusted ─────────────────────────
@@ -421,6 +461,12 @@ export class Directory extends DurableObject<Env> {
   /** How many devices wait to be confirmed, of those the caller sees (all for owners and admins, their own for others). */
   #lockRequestCount(workspace: string, sub: string, role: Role): number {
     return this.#one("SELECT COUNT(*) AS n FROM lock_requests WHERE workspace = ? AND (? OR sub = ?)", workspace, MANAGERS.includes(role) ? 1 : 0, sub)!.n as number;
+  }
+
+  /** Whether a workspace is locked: it has a chain, not turned off. */
+  #locked(workspace: string): boolean {
+    const last = this.#one("SELECT entry FROM lock_entries WHERE workspace = ? ORDER BY seq DESC LIMIT 1", workspace);
+    return last !== undefined && (JSON.parse(last.entry as string) as LockEntry).kind !== "disable";
   }
 
   #lockAfter(workspace: string, after: number): unknown[] {
@@ -588,13 +634,14 @@ export class Directory extends DurableObject<Env> {
   deleteWorkspace(sub: string, id: string): void {
     this.#role(sub, id, ["owner"]);
     const told = [...this.#members(id), ...this.#invitees(id)];
-    const stations = this.#rows("SELECT id FROM stations WHERE workspace = ?", id).map((r) => r.id as string);
+    const stations = this.#stationsIn(id).map((station) => ({ station, home: this.#memberships(station)[0] }));
     this.ctx.storage.transactionSync(() => {
-      for (const table of ["members", "invitations", "added", "stations", "enrollments", "lock_entries", "devices", "lock_requests"]) this.#run(`DELETE FROM ${table} WHERE workspace = ?`, id);
+      for (const table of ["members", "invitations", "added", "station_members", "enrollments", "lock_entries", "devices", "lock_requests"]) this.#run(`DELETE FROM ${table} WHERE workspace = ?`, id);
       this.#run("DELETE FROM workspaces WHERE id = ?", id);
     });
     this.#tell(told, LIST, { type: "workspace", id });
-    for (const station of stations) this.#disconnect(station, CLOSE.removed, "station_removed");
+    // Its stations leave it; those in no other workspace are let go as before.
+    for (const { station, home } of stations) this.#left(station, home!);
   }
 
   // ── people ──────────────────────────────────────────────────────────────
@@ -738,33 +785,46 @@ export class Directory extends DurableObject<Env> {
   }
 
   #stationsFull(workspace: string): boolean {
-    const stations = this.#one("SELECT COUNT(*) AS n FROM stations WHERE workspace = ?", workspace)!.n as number;
+    const stations = this.#one("SELECT COUNT(*) AS n FROM station_members WHERE workspace = ?", workspace)!.n as number;
     return stations >= PLANS[this.#plan(workspace)].stations;
   }
 
   /**
-   * A station redeems an enrollment token. The caller has checked that the
-   * station holds the key for `station`. Re-enrolling moves the station.
+   * A station redeems an enrollment token. The caller has checked that the station holds the key for `station`.
+   * Re-enrolling moves the station: it leaves every other workspace it is in. Joining (`join`, POST /v1/stations/join)
+   * it stays in them and joins this one too (docs/multi-workspace.md), unless that would take it across a lock: its
+   * home's (the lock it pins), or this workspace's while it is in another. `home` is the workspace it joined first,
+   * whose say goes for the machine.
    */
-  async enroll(token: string, station: string, version: string | null): Promise<{ workspace: string; workspace_name: string; name: string }> {
+  async enroll(token: string, station: string, version: string | null, join = false): Promise<{ workspace: string; workspace_name: string; name: string; home: string }> {
     const hash = await digest(token);
     const row = this.#one("SELECT workspace, name, created_by FROM enrollments WHERE token_hash = ? AND expires_at > ?", hash, nowSeconds());
     if (!row) fail(404, "enrollment_not_found");
-    const moved = this.#one("SELECT workspace FROM stations WHERE id = ?", station)?.workspace as string | undefined;
+    const workspace = row!.workspace as string;
+    const was = this.#memberships(station);
+    const member = was.includes(workspace);
+    if (join && !member && was.length > 0 && (this.#locked(workspace) || this.#locked(was[0]!))) fail(409, "locked_workspace");
     // Several tokens may be out at once: the last free place goes to the first redeemed.
-    if (moved !== row!.workspace && this.#stationsFull(row!.workspace as string)) fail(429, "too_many_stations");
+    if (!member && this.#stationsFull(workspace)) fail(429, "too_many_stations");
+    const left = join ? [] : was.filter((w) => w !== workspace);
     this.ctx.storage.transactionSync(() => {
       this.#run("DELETE FROM enrollments WHERE token_hash = ?", hash);
-      this.#run(`INSERT INTO stations (id, workspace, name, enrolled_at, enrolled_by, last_seen, version) VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT (id) DO UPDATE SET workspace = excluded.workspace, name = excluded.name, enrolled_at = excluded.enrolled_at, enrolled_by = excluded.enrolled_by, last_seen = excluded.last_seen, version = excluded.version`,
-        station, row!.workspace, row!.name, nowSeconds(), row!.created_by, nowSeconds(), version);
+      this.#run("INSERT INTO stations (id, last_seen, version) VALUES (?, ?, ?) ON CONFLICT (id) DO UPDATE SET last_seen = excluded.last_seen, version = excluded.version", station, nowSeconds(), version);
+      for (const other of left) this.#run("DELETE FROM station_members WHERE workspace = ? AND station = ?", other, station);
+      if (join && member) this.#run("UPDATE station_members SET name = ? WHERE workspace = ? AND station = ?", row!.name, workspace, station);
+      else {
+        // Enrolled again where it is (moving), it keeps its emoji and icon there.
+        this.#run(`INSERT INTO station_members (workspace, station, name, enrolled_at, enrolled_by) VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT (workspace, station) DO UPDATE SET name = excluded.name, enrolled_at = excluded.enrolled_at, enrolled_by = excluded.enrolled_by`,
+          workspace, station, row!.name, nowSeconds(), row!.created_by);
+      }
     });
-    const w = this.#one("SELECT name FROM workspaces WHERE id = ?", row!.workspace)!;
-    this.#changed(row!.workspace as string, true);
-    if (moved && moved !== row!.workspace) this.#changed(moved, true);
+    const w = this.#one("SELECT name FROM workspaces WHERE id = ?", workspace)!;
+    this.#changed(workspace, true);
+    for (const other of left) this.#changed(other, true);
     // Already connected (re-enrolled while running): it learns where it is now.
     this.#sendState(station);
-    return { workspace: row!.workspace as string, workspace_name: w.name as string, name: row!.name as string };
+    return { workspace, workspace_name: w.name as string, name: row!.name as string, home: this.#memberships(station)[0]! };
   }
 
   /** A new name, a new emoji, a new icon (null or "" takes either away), or several; what is not given stays. */
@@ -774,26 +834,43 @@ export class Directory extends DurableObject<Env> {
     const emoji = input.emoji === undefined ? undefined : input.emoji === null || input.emoji === "" ? null : cleanEmoji(input.emoji) ?? fail(400, "invalid_emoji");
     const icon = input.icon === undefined ? undefined : input.icon === null || input.icon === "" ? null : cleanIcon(input.icon) ?? fail(400, "invalid_icon");
     if (name === undefined && emoji === undefined && icon === undefined) fail(400, "invalid_name");
-    if (name !== undefined) this.#run("UPDATE stations SET name = ? WHERE id = ? AND workspace = ?", name, station, workspace);
-    if (emoji !== undefined) this.#run("UPDATE stations SET emoji = ? WHERE id = ? AND workspace = ?", emoji, station, workspace);
-    if (icon !== undefined) this.#run("UPDATE stations SET icon = ? WHERE id = ? AND workspace = ?", icon, station, workspace);
+    if (name !== undefined) this.#run("UPDATE station_members SET name = ? WHERE station = ? AND workspace = ?", name, station, workspace);
+    if (emoji !== undefined) this.#run("UPDATE station_members SET emoji = ? WHERE station = ? AND workspace = ?", emoji, station, workspace);
+    if (icon !== undefined) this.#run("UPDATE station_members SET icon = ? WHERE station = ? AND workspace = ?", icon, station, workspace);
     this.#changed(workspace, false);
     if (name !== undefined) this.#sendState(station);
     return this.workspace(sub, workspace);
   }
 
+  /** Takes a station out of this workspace only; it stays in the others it is in. */
   removeStation(sub: string, workspace: string, station: string): void {
     this.#role(sub, workspace, MANAGERS);
-    if (!this.#one("SELECT 1 AS x FROM stations WHERE id = ? AND workspace = ?", station, workspace)) return;
-    this.#run("DELETE FROM stations WHERE id = ?", station);
+    const home = this.#memberships(station)[0];
+    if (!this.#one("SELECT 1 AS x FROM station_members WHERE station = ? AND workspace = ?", station, workspace)) return;
+    this.#run("DELETE FROM station_members WHERE station = ? AND workspace = ?", station, workspace);
     this.#changed(workspace, true);
-    this.#disconnect(station, CLOSE.removed, "station_removed");
+    this.#left(station, home!);
   }
 
-  /** What a grant to reach `station` should say about the caller, if it may. */
+  /**
+   * A station has left a workspace (its row gone already; `home` its home before): in none now, it is let go (4004, as
+   * when a station was in one); else it hears where it is now, and, its home gone, the workspace taking over (whose
+   * views now name it home) is changed too.
+   */
+  #left(station: string, home: string): void {
+    const now = this.#memberships(station);
+    if (now.length === 0) {
+      this.#run("DELETE FROM stations WHERE id = ?", station);
+      this.#disconnect(station, CLOSE.removed, "station_removed");
+      return;
+    }
+    if (now[0] !== home) this.#changed(now[0]!, true);
+    else this.#sendState(station);
+  }
+
   /** Whether a station is enrolled (in some workspace). */
   isStation(station: string): boolean {
-    return this.#one("SELECT 1 AS found FROM stations WHERE id = ?", station) !== undefined;
+    return this.#one("SELECT 1 AS found FROM station_members WHERE station = ?", station) !== undefined;
   }
 
   /** A mstill.fail's role, which its credential names (grants.ts). */
@@ -804,16 +881,17 @@ export class Directory extends DurableObject<Env> {
   // ── revocations ─────────────────────────────────────────────────────────
   // A mstill.fail's credential lasts 30 days and stations check it offline, so what takes one back is told to them: every
   // credential of an account (`sub`) or of a sign-in session (`sid`) issued up to `at` is refused from then on. Each
-  // station hears it at once if connected, and all of its workspace's (of the last 31 days) when it connects.
+  // station hears it at once if connected, and all of its workspaces' (of the last 31 days) when it connects.
 
   /** Takes back an account's credentials in a workspace, or one session's. */
   #revoke(workspace: string, kind: "sub" | "sid", id: string): void {
     const at = nowSeconds();
     this.#run("INSERT INTO revocations (workspace, kind, id, at) VALUES (?, ?, ?, ?) ON CONFLICT (workspace, kind, id) DO UPDATE SET at = excluded.at", workspace, kind, id, at);
     this.#run("DELETE FROM revocations WHERE at < ?", at - REVOCATION_DAYS * 86400);
-    const frame = JSON.stringify({ type: "revoke", kind, id, at });
-    for (const row of this.#rows("SELECT id FROM stations WHERE workspace = ?", workspace)) {
-      for (const ws of this.#presence(row.id as string)) {
+    // Which workspace's: a station in several takes it back there alone (one from before them reads no such field).
+    const frame = JSON.stringify({ type: "revoke", kind, id, at, workspace });
+    for (const station of this.#stationsIn(workspace)) {
+      for (const ws of this.#presence(station)) {
         try {
           ws.send(frame);
         } catch {
@@ -867,13 +945,13 @@ export class Directory extends DurableObject<Env> {
   }
 
   /**
-   * Where a station's notices go: its workspace, and for each email (lowercased) the registrations of the workspace's
-   * members signed in with it. Null for a station not enrolled.
+   * Where a station's notices go: the workspace they are of (`wanted`, else the station's home), and for each email
+   * (lowercased) the registrations of the workspace's members signed in with it. Null for a station not in it.
    */
-  pushTargets(station: string, emails: string[]): { workspace: string; devices: Record<string, PushRegistration[]> } | null {
-    const row = this.#one("SELECT workspace FROM stations WHERE id = ?", station);
-    if (!row) return null;
-    const workspace = row.workspace as string;
+  pushTargets(station: string, emails: string[], wanted: string | null = null): { workspace: string; devices: Record<string, PushRegistration[]> } | null {
+    const memberships = this.#memberships(station);
+    const workspace = wanted ?? memberships[0];
+    if (!workspace || !memberships.includes(workspace)) return null;
     const devices: Record<string, PushRegistration[]> = {};
     for (const email of new Set(emails.map((e) => e.toLowerCase()))) {
       devices[email] = this.#rows(
@@ -1007,7 +1085,7 @@ export class Directory extends DurableObject<Env> {
     };
     const members = group<AdminWorkspace["members"][number]>(this.#rows(`SELECT m.workspace, m.sub, COALESCE(u.email, '') AS email, COALESCE(u.name, '') AS name,
       COALESCE(u.picture, '') AS picture, m.role, m.added_at, u.last_seen FROM members m LEFT JOIN users u ON u.sub = m.sub ORDER BY m.added_at`));
-    const stations = group<StationView>(this.#rows("SELECT workspace, id, name, emoji, icon, enrolled_at, enrolled_by, last_seen, version FROM stations ORDER BY enrolled_at"));
+    const stations = group<StationView>(this.#stationViews(null) as unknown as Row[]);
     const invitations = group<AdminWorkspace["invitations"][number]>(this.#rows(`SELECT i.workspace, i.id, i.role, i.email, i.created_by, i.expires_at,
       COALESCE(NULLIF(u.name, ''), u.email, '') AS inviter FROM invitations i LEFT JOIN users u ON u.sub = i.created_by WHERE i.expires_at > ? ORDER BY i.expires_at`, now));
     // As #plan has it, in the same read.
@@ -1072,7 +1150,10 @@ export class Directory extends DurableObject<Env> {
     const now = nowSeconds();
     const today = this.#one("SELECT COUNT(*) AS n FROM feedback WHERE sender = ? AND created_at > ?", input.sender, now - 24 * 60 * 60);
     if ((today?.n as number) >= FEEDBACK_PER_DAY) return null;
-    const workspace = input.station ? ((this.#one("SELECT workspace FROM stations WHERE id = ?", input.station)?.workspace as string | undefined) ?? null) : null;
+    // A station's report is of the workspace it names (one it is in), else of its home.
+    const memberships = input.station ? this.#memberships(input.station) : [];
+    if (input.workspace && !memberships.includes(input.workspace)) fail(403, "not_in_workspace");
+    const workspace = input.station ? (input.workspace ?? memberships[0] ?? null) : null;
     const number = ((this.#one("SELECT MAX(number) AS n FROM feedback")?.n as number | null) ?? 0) + 1;
     const id = ulid();
     this.#run(
@@ -1086,7 +1167,7 @@ export class Directory extends DurableObject<Env> {
   /** The reports, newest first, with the station, workspace and account they came from. */
   adminFeedback(): AdminFeedback[] {
     const rows = this.#rows(`SELECT f.*, s.name AS station_name, w.name AS workspace_name, u.email AS account_email, u.name AS account_name
-      FROM feedback f LEFT JOIN stations s ON s.id = f.station LEFT JOIN workspaces w ON w.id = f.workspace LEFT JOIN users u ON u.sub = f.account
+      FROM feedback f LEFT JOIN station_members s ON s.station = f.station AND s.workspace = f.workspace LEFT JOIN workspaces w ON w.id = f.workspace LEFT JOIN users u ON u.sub = f.account
       ORDER BY f.number DESC LIMIT ${FEEDBACK_LISTED}`);
     return rows.map((r) => {
       let context: Record<string, unknown> | null = null;
@@ -1186,8 +1267,7 @@ export class Directory extends DurableObject<Env> {
       return new Response(null, { status: 101, webSocket: pair[0], headers: { "sec-websocket-protocol": header(request, "protocol") ?? EVENTS_PROTOCOLS[1] } });
     }
     const station = header(request, "station")!;
-    const row = this.#one("SELECT workspace FROM stations WHERE id = ?", station);
-    if (!row) return Response.json({ error: "station_removed" }, { status: 404 });
+    if (!this.isStation(station)) return Response.json({ error: "station_removed" }, { status: 404 });
     // One socket per station: a reconnect replaces the one it gave up on.
     for (const old of this.#presence(station)) this.#drop(old, CLOSE.replaced, "replaced");
     this.#run("UPDATE stations SET last_seen = ?, version = COALESCE(?, version) WHERE id = ?", nowSeconds(), header(request, "version"), station);
@@ -1217,21 +1297,32 @@ export class Directory extends DurableObject<Env> {
     for (const ws of this.#presence(station)) this.#drop(ws, code, reason);
   }
 
-  /** Where a station is and what it is called, and the cloud's own addresses as it has them now (a station enrolled
-   * under an old host follows them: its links then use the new one); sent on connect and when that changes. */
+  /**
+   * Where a station is and what it is called, and the cloud's own addresses as it has them now (a station enrolled
+   * under an old host follows them: its links then use the new one); sent on connect and when that changes. What it
+   * says at the top is of the station's home, as it was when a station was in one workspace (all a station from before
+   * several knows); `workspaces`, each other one it is in, with its own peers and revocations. Its lock is the home's.
+   */
   #sendState(station: string): void {
     const sockets = this.#presence(station);
     if (!sockets.length) return;
-    const found = this.#one("SELECT s.workspace, w.name AS workspace_name, s.name, w.relays FROM stations s JOIN workspaces w ON w.id = s.workspace WHERE s.id = ?", station);
-    if (!found) return;
-    const { relays: own, ...row } = found;
-    const revocations = this.#rows("SELECT kind, id, at FROM revocations WHERE workspace = ? AND at >= ?", row.workspace as string, nowSeconds() - REVOCATION_DAYS * 86400);
-    const peers = this.#rows("SELECT id, name, version FROM stations WHERE workspace = ? ORDER BY enrolled_at", row.workspace as string);
-    // The workspace's own relays after still.fail's: a station from before them keeps one more relay as it keeps the rest.
+    const found = this.#rows(`SELECT m.workspace, w.name AS workspace_name, m.name, w.relays FROM station_members m JOIN workspaces w ON w.id = m.workspace
+      WHERE m.station = ? ORDER BY m.enrolled_at, m.rowid`, station);
+    if (!found.length) return;
+    const since = nowSeconds() - REVOCATION_DAYS * 86400;
+    const [home, ...joined] = found.map(({ relays: _, ...row }) => ({
+      ...(row as { workspace: string; workspace_name: string; name: string }),
+      peers: this.#rows("SELECT m.station AS id, m.name, s.version FROM station_members m LEFT JOIN stations s ON s.id = m.station WHERE m.workspace = ? ORDER BY m.enrolled_at, m.rowid", row.workspace),
+      revocations: this.#rows("SELECT kind, id, at FROM revocations WHERE workspace = ? AND at >= ?", row.workspace, since),
+    }));
+    const { peers, revocations, ...row } = home!;
+    // Every workspace's own relays after still.fail's (one endpoint, homed on any of them): a station from before them
+    // keeps one more relay as it keeps the rest.
     const told = relays(this.env);
-    const relay_urls = [...told.relay_urls, ...parseRelays(own).filter((u) => !told.relay_urls.map(sameUrl).includes(sameUrl(u)))];
-    const lock = this.#lockHead(row.workspace as string);
-    const frame = JSON.stringify({ type: "state", peers, ...row, origin: this.env.PUBLIC_ORIGIN, ...told, relay_urls, grant_keys: grantKeys(this.env), revocations, lock });
+    const relay_urls = [...told.relay_urls];
+    for (const url of found.flatMap((w) => parseRelays(w.relays))) if (!relay_urls.map(sameUrl).includes(sameUrl(url))) relay_urls.push(url);
+    const lock = this.#lockHead(row.workspace);
+    const frame = JSON.stringify({ type: "state", peers, ...row, origin: this.env.PUBLIC_ORIGIN, ...told, relay_urls, grant_keys: grantKeys(this.env), revocations, lock, workspaces: joined });
     for (const ws of sockets) ws.send(frame);
   }
 
@@ -1240,8 +1331,8 @@ export class Directory extends DurableObject<Env> {
     this.#run("UPDATE stations SET last_seen = ? WHERE id = ?", nowSeconds(), station);
   }
 
-  /** "ping" is answered by the runtime; a station speaks otherwise only of the workspace lock: it asks for entries it
-   * lacks (`lock.get {after}`, answered `{type: "lock", entries}`) or brings ones the cloud lacks (`lock.put`). */
+  /** "ping" is answered by the runtime; a station speaks otherwise only of the workspace lock, its home's: it asks for
+   * entries it lacks (`lock.get {after}`, answered `{type: "lock", entries}`) or brings ones the cloud lacks (`lock.put`). */
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const attachment = ws.deserializeAttachment() as Attachment;
     if (typeof message !== "string" || !("station" in attachment)) return;
@@ -1251,7 +1342,7 @@ export class Directory extends DurableObject<Env> {
     } catch {
       return;
     }
-    const workspace = this.#one("SELECT workspace FROM stations WHERE id = ?", attachment.station)?.workspace as string | undefined;
+    const workspace = this.#memberships(attachment.station)[0];
     if (!workspace) return;
     if (body.type === "lock.get") {
       ws.send(JSON.stringify({ type: "lock", entries: this.#lockAfter(workspace, Number.isSafeInteger(body.after) ? (body.after as number) : -1) }));
