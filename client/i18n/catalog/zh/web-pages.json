@@ -1281,5 +1281,22 @@
   "web-pages.security.joined": "{name} 已受保护",
   "web-pages.security.joinTitle": "把 {name} 加入安全模式？",
   "web-pages.security.joinBody": "它会钉住这个 workspace 的锁，之后只认签过的设备和 station。确认这是你自己的机器再加入",
-  "web-pages.settings.nav.permissions": "权限"
+  "web-pages.settings.nav.permissions": "权限",
+  "web-pages.screen.title": "屏幕",
+  "web-pages.screen.section": "屏幕",
+  "web-pages.screen.mode": "只看还是控制",
+  "web-pages.screen.look": "只看",
+  "web-pages.screen.control": "控制",
+  "web-pages.screen.readOnly": "只读成员只能看",
+  "web-pages.screen.switchWhat": "切换只看和控制",
+  "web-pages.screen.keys": "发给屏幕的按键",
+  "web-pages.screen.keyboard": "键盘",
+  "web-pages.screen.connecting": "正在连接",
+  "web-pages.screen.reconnecting": "正在重新连接",
+  "web-pages.screen.again": "重新打开",
+  "web-pages.screen.over.ended": "已结束",
+  "web-pages.screen.over.outdated": "station 需要更新",
+  "web-pages.screen.over.gone": "屏幕不在了",
+  "web-pages.screen.over.denied": "看不了这个屏幕",
+  "web-pages.screen.over.failed": "没连上"
 }

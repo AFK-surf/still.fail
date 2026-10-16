@@ -19,6 +19,7 @@ import { FilesScreen } from "./Files.tsx";
 import { BarSettingsScreen } from "./BarSettings.tsx";
 import { UsageScreen, UsagePricesScreen } from "./Usage.tsx";
 import { PreviewScreen } from "./Preview.tsx";
+import { ScreenScreen } from "./Screen.tsx";
 import { Loading } from "./parts.tsx";
 import { StationScreen, StationsScreen } from "./Stations.tsx";
 import { NewProfileScreen, ProfileAccountScreen, ProfileScreen, ProfilesScreen } from "./Profiles.tsx";
@@ -82,6 +83,8 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="s/:station/files" element={<InStation stations={stations}><DriveScreen /></InStation>} />
       <Route path="s/:station/files/read" element={<InStation stations={stations}><DriveReadScreen /></InStation>} />
       <Route path="s/:station/files/play" element={<InStation stations={stations}><DrivePlayScreen /></InStation>} />
+      {/* One of its screens, seen and driven by a finger (docs/remote-screens.md). */}
+      <Route path="s/:station/screen/:id" element={<InStation stations={stations}><ScreenScreen /></InStation>} />
       <Route path="s/:station/connects/new" element={<InStation stations={stations}><NewConnectScreen /></InStation>} />
       <Route path="s/:station/connects/:id" element={<InStation stations={stations}><ConnectScreen /></InStation>} />
       <Route path="s/:station/connects/:id/run" element={<InStation stations={stations}><ConnectRunScreen /></InStation>} />

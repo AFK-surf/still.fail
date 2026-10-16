@@ -302,6 +302,12 @@ function ChatScreen({ session: chatSession }: { session: string }) {
         navigate(`${page}${url.search}`);
         return;
       }
+      // One of a station's screens (an agent asking a person to take over: docs/remote-screens.md): its viewer, here.
+      if (page && /^\/w\/[^/]+\/s\/[^/]+\/screen\/[^/]+\/?$/.test(page)) {
+        event.preventDefault();
+        navigate(page.replace(/\/$/, ""));
+        return;
+      }
       const item = /^\/o\/([^/]+)\/([^/]+)\/([^/]+)\/?$/.exec(url.pathname);
       if (!item) return;
       const session = decodeURIComponent(item[3]!);

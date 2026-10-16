@@ -1,0 +1,25 @@
+// A station's screen on a page of its own (`/w/<workspace>/s/<station>/screen/<id>`: its page in the station's list, a
+// link an agent posted in a chat), over the whole window as a file opened is. Back goes where it was opened from, or
+// to the station's page when it was opened straight.
+import { useParams } from "react-router";
+import { useGo } from "../go.ts";
+import { scopeOf, useStation } from "../station.tsx";
+import { stationPage } from "../cloud/StationPage.tsx";
+import { t } from "../i18n.ts";
+import { ScreenViewer } from "./ScreenViewer.tsx";
+import * as css from "./ScreenViewer.css.ts";
+
+export function ScreenPage() {
+  const { id = "" } = useParams();
+  const station = useStation();
+  const go = useGo();
+  const back = () => {
+    if (((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0) go(-1);
+    else go(stationPage(scopeOf(station.address), station.id));
+  };
+  return (
+    <div className={css.page}>
+      <ScreenViewer key={`${station.address} ${id}`} station={station.address} screen={id} backLabel={t("common.back")} onBack={back} />
+    </div>
+  );
+}

@@ -27,6 +27,7 @@ import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
 import { Button, Card, Field, Illustration, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, PlaceHead, SectionHeader, Seg, Spinner } from "./parts.tsx";
 import { usePlaceActions } from "./placeActions.tsx";
+import { ScreensCard } from "./Screen.tsx";
 import * as css from "./Stations.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -274,6 +275,8 @@ export function StationScreen() {
             {s.overview?.drive && <GoRow title={t("web-pages.drive.title")} value={s.overview.drive.roots.length ? t("web-pages.drive.rootsCount", { n: s.overview.drive.roots.length }) : t("web-pages.drive.notShared")}
               onClick={() => app.push(app.at(`/s/${s.id}/files`))} />}
           </ListCard>
+          {/* Its screens, to see and drive (docs/remote-screens.md). */}
+          <ScreensCard station={s.station} />
           {manager && !s.joined && <Workspaces s={s} />}
           {s.online && s.overview && <Versions station={s.station} updates={s.overview.updates} manager={manager && !s.joined} beta={s.betaOffered ?? false} />}
           <div style={{ height: 30 }} />
