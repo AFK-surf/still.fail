@@ -43,12 +43,17 @@ function clock(seconds: number): string {
 const AHEAD_S = 30;
 const AHEAD_BYTES = 4 * 1024 * 1024;
 
-function useSource(at: At, entry: DriveEntry, media: React.RefObject<HTMLVideoElement | null>): Source {
+function useSource(at: At | undefined, blob: Blob | undefined, entry: DriveEntry, media: React.RefObject<HTMLVideoElement | null>): Source {
   const [source, setSource] = useState<Source>({ state: "opening", got: null });
   useEffect(() => {
     let live = true;
     let close: (() => void) | null = null;
     let url: string | null = null;
+    // Here already (a chat's file a preview has fetched): played from here.
+    if (blob || !at) {
+      if (blob) { url = URL.createObjectURL(blob); setSource({ state: "ready", url, streamed: false }); }
+      return () => { if (url) URL.revokeObjectURL(url); };
+    }
     setSource({ state: "opening", got: null });
     const type = entry.type || (entry.kind === "audio" ? "audio/mpeg" : "video/mp4");
     void streaming().then(async (on) => {
@@ -77,18 +82,18 @@ function useSource(at: At, entry: DriveEntry, media: React.RefObject<HTMLVideoEl
       }, (e: unknown) => { if (live) setSource({ state: "error", message: e instanceof Error ? e.message : String(e) }); });
     });
     return () => { live = false; close?.(); if (url) URL.revokeObjectURL(url); };
-  }, [at.station, at.root, at.path, entry.size, entry.mtime]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [blob, at?.station, at?.root, at?.path, entry.size, entry.mtime]); // eslint-disable-line react-hooks/exhaustive-deps
   return source;
 }
 
 /** The subtitle beside it, as a WebVTT file's URL (none: null). */
-function useSubtitle(at: At, entry: DriveEntry, siblings: readonly DriveEntry[]): { url: string; name: string } | null {
+function useSubtitle(at: At | undefined, entry: DriveEntry, siblings: readonly DriveEntry[]): { url: string; name: string } | null {
   const name = useMemo(() => sideSubtitle(entry.name, siblings.filter((e) => !e.dir).map((e) => e.name)), [entry.name, siblings]);
   const side = name ? siblings.find((e) => e.name === name) : undefined;
   const [shown, setShown] = useState<{ url: string; name: string } | null>(null);
   useEffect(() => {
     setShown(null);
-    if (!side || side.size > 8 * 1024 * 1024) return;
+    if (!at || !side || side.size > 8 * 1024 * 1024) return;
     let live = true;
     let url: string | null = null;
     const path = joinPath(parentOf(at.path), side.name);
@@ -99,19 +104,25 @@ function useSubtitle(at: At, entry: DriveEntry, siblings: readonly DriveEntry[])
       setShown({ url, name: side.name });
     }, () => undefined);
     return () => { live = false; if (url) URL.revokeObjectURL(url); };
-  }, [at.station, at.root, at.path, side?.name, side?.size, side?.mtime]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [at?.station, at?.root, at?.path, side?.name, side?.size, side?.mtime]); // eslint-disable-line react-hooks/exhaustive-deps
   return shown;
 }
 
-export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
-  at: At; entry: DriveEntry; siblings: readonly DriveEntry[]; backLabel: string; onBack: () => void; onGo: (name: string) => void;
+/**
+ * A video or a sound played: one of a station's drive (`at`, streamed, the folder's others its playlist and its
+ * subtitles, where it was left kept on this device), or a chat's file a preview has here already (`blob`, `onSave`
+ * downloading it).
+ */
+export function Player({ at, blob, onSave, entry, siblings = [], backLabel, onBack, onGo = () => {} }: {
+  at?: At | undefined; blob?: Blob | undefined; onSave?: (() => void) | undefined;
+  entry: DriveEntry; siblings?: readonly DriveEntry[]; backLabel: string; onBack: () => void; onGo?: (name: string) => void;
 }) {
   const narrow = useNarrow();
   const audio = entry.kind === "audio";
   const media = useRef<HTMLVideoElement>(null);
-  const source = useSource(at, entry, media);
+  const source = useSource(at, blob, entry, media);
   const subtitle = useSubtitle(at, entry, siblings);
-  const place = usePlace(at);
+  const place = usePlace(at ?? null);
   const root = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
@@ -155,7 +166,7 @@ export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
   const keepPlace = useCallback(() => {
     const v = media.current;
     if (!v || !resumed.current || !Number.isFinite(v.duration) || v.duration <= 0) return;
-    placeAt(at, v.currentTime * 1000, v.duration * 1000);
+    if (at) placeAt(at, v.currentTime * 1000, v.duration * 1000);
   }, [at]);
   useEffect(() => () => keepPlace(), [keepPlace]);
   useEffect(() => {
@@ -255,7 +266,7 @@ export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
     body = (
       <div className={css.note}>
         <span>{failed ?? (source.state === "error" ? source.message : "")}</span>
-        {source.state === "error" && source.save && <button type="button" className={css.noteButton} onClick={() => void download(at, entry)}><Download size={16} />{t("web-pages.drive.download")}</button>}
+        {source.state === "error" && source.save && <button type="button" className={css.noteButton} onClick={() => { if (at) void download(at, entry); }}><Download size={16} />{t("web-pages.drive.download")}</button>}
       </div>
     );
   } else if (source.state === "opening") {
@@ -301,11 +312,11 @@ export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
       </div>
       {captions && cue && <div className={css.cue} data-awake={awake || undefined}><span>{cue.replace(/<[^>]+>/g, "")}</span></div>}
       {desk && !full ? (
-        <ViewerBar back={{ label: backLabel, onClick: onBack }} name={entry.name} title={at.path}
+        <ViewerBar back={{ label: backLabel, onClick: onBack }} name={entry.name} title={at?.path}
           meta={[list.length > 1 && index >= 0 ? `${index + 1} / ${list.length}` : null, sizeOf(entry.size)].filter(Boolean).join(" · ")}
           tools={<>
             {list.length > 1 && <ViewerTool label={t("web-pages.drive.player.list")} on={listing} onClick={() => setListing((l) => !l)}><List size={18} /></ViewerTool>}
-            <ViewerDownload name={entry.name} onSave={() => void download(at, entry)} />
+            <ViewerDownload name={entry.name} onSave={onSave ?? (() => { if (at) void download(at, entry); })} />
           </>} />
       ) : (
         <header className={css.head} data-awake={awake || undefined} {...keep}>

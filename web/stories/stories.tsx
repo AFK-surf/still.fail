@@ -10,6 +10,7 @@ import { Tile } from "../src/pages/Notifications.tsx";
 import { PermissionRow } from "../src/pages/Permissions.tsx";
 import { Player } from "../src/drive/Player.tsx";
 import { DrivePreview } from "../src/mobile/Drive.tsx";
+import { FilePreview } from "../src/FilePreview.tsx";
 import { useToast } from "../src/toast.tsx";
 import { ComposerExtras } from "../src/Chat.tsx";
 import type { Draft, Pending } from "../src/draft.ts";
@@ -22,7 +23,9 @@ import {
 import { Archive, Bell, Close, Copy, Download, Edit, Folder, Plus, Refresh, Search, Trash } from "../src/icons.tsx";
 import * as controlsCss from "../src/styles/controls.css.ts";
 import { vars } from "../src/styles/tokens.css.ts";
-import { AT, apk, clips, folder, note, novel, picture } from "./data.ts";
+import { AT, apk, clips, folder, note, NOTE, novel, picture } from "./data.ts";
+import CLIP_URL from "./assets/story-clip.mp4?url";
+import PICTURE_URL from "./assets/story-picture.png?url";
 
 /**
  * What takes a story to its state, as the tests do it (Playwright's selectors); shown beside it in the gallery. `hold`:
@@ -101,6 +104,18 @@ function ComposerCards() {
     </div>
   );
 }
+
+/** A chat's file opened (its preview), from what is here already: it opens in the viewer of its kind. */
+function AttachmentDemo({ name, url, type }: { name: string; url: string; type: string }) {
+  const [local, setLocal] = useState<{ blob: Blob; url: string } | null>(null);
+  useEffect(() => {
+    let live = true;
+    void fetch(url).then((r) => r.blob()).then((b) => { if (live) { const blob = new Blob([b], { type }); setLocal({ blob, url: URL.createObjectURL(blob) }); } });
+    return () => { live = false; };
+  }, [url, type]);
+  return local ? <FilePreview open onClose={noop} sessionKey="" file={{ name, path: `draft:${name}`, size: local.blob.size }} local={local} /> : null;
+}
+const NOTE_URL = URL.createObjectURL(new Blob([NOTE], { type: "text/markdown" }));
 
 function ToastDemo({ text }: { text: string }) {
   const toast = useToast();
@@ -284,6 +299,9 @@ export const stories: Story[] = [
   { id: "player", group: "文件", title: "播放器", render: () => stage(<Player at={at(clips[0]!.name)} entry={clips[0]!} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />), steps: [{ move: [640, 400] }] },
   { id: "player-list", group: "文件", title: "播放器 · 选集", render: () => stage(<Player at={at(clips[0]!.name)} entry={clips[0]!} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />), steps: [{ click: '[aria-label="选集"]' }, { move: [500, 400] }] },
   { id: "player-phone", group: "文件", title: "播放器 · 手机", phone: true, render: () => stage(<Player at={at(clips[0]!.name)} entry={clips[0]!} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />) },
+  { id: "attachment-md", group: "文件", title: "附件 · Markdown", render: () => stage(<AttachmentDemo name="orders-慢查询.md" url={NOTE_URL} type="text/markdown" />) },
+  { id: "attachment-video", group: "文件", title: "附件 · 视频", render: () => stage(<AttachmentDemo name="发版录屏 1014.mp4" url={CLIP_URL} type="video/mp4" />), steps: [{ move: [640, 400] }] },
+  { id: "attachment-picture", group: "文件", title: "附件 · 图片", render: () => stage(<AttachmentDemo name="login-375.png" url={PICTURE_URL} type="image/png" />), steps: [{ move: [640, 400] }] },
   { id: "preview-picture", group: "文件", title: "图片预览", render: () => stage(<DrivePreview at={at(picture.name)} entries={folder} entry={picture} onClose={noop} />), steps: [{ move: [640, 400] }] },
   { id: "preview-unshown", group: "文件", title: "预览 · 不能预览的文件", render: () => stage(<DrivePreview at={at(apk.name)} entries={[...folder, apk]} entry={apk} onClose={noop} />), steps: [{ move: [640, 400] }] },
   { id: "preview-unshown-phone", group: "文件", title: "预览 · 不能预览的文件 · 手机", phone: true, render: () => stage(<DrivePreview at={at(apk.name)} entries={[...folder, apk]} entry={apk} onClose={noop} />) },

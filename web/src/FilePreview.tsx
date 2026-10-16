@@ -8,7 +8,9 @@ import { BIG_FILE, useApi, type Api, type Attachment, type FileProgress } from "
 import { useTopic, useTopicSelect } from "./core/react.ts";
 import { useNarrow } from "./mobile/app.tsx";
 import { ViewerBar, ViewerDownload } from "./viewer/ViewerBar.tsx";
-import type { ChatView, ImageNear } from "./core/shapes.ts";
+import type { ChatView, DriveEntry, ImageNear } from "./core/shapes.ts";
+import { Reader } from "./drive/Reader.tsx";
+import { Player } from "./drive/Player.tsx";
 import { Check, ChevronLeft, ChevronRight, Close, Copy, Download, File as FileMark, Minus, Plus } from "./icons.tsx";
 import { Prose } from "./Prose.tsx";
 import { FrameHost, isFragment, vizDocument } from "./Viz.tsx";
@@ -551,6 +553,31 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
         ? <button type="button" className={controlsCss.btn} onClick={() => source.save?.(file, blob)}><Download size={16} />{t("web-main.preview.download")}</button>
         : <a className={controlsCss.btn} href={url} download={file.name}><Download size={16} />{t("web-main.preview.download")}</a>}</div>;
     }
+  }
+  // A text and a video open in the reader and the player, as a station's file does (drive/Reader.tsx, drive/Player.tsx):
+  // one viewer of each kind wherever a file is opened, each with the same bar; here they read what this has fetched.
+  const save = loaded.state === "ready" ? () => {
+    if (source?.save) { source.save(file, loaded.blob); return; }
+    const a = document.createElement("a");
+    a.href = loaded.url;
+    a.download = file.name;
+    a.click();
+  } : undefined;
+  const whole = loaded.state !== "ready" ? null
+    : kind === "markdown" || kind === "text"
+      ? <Reader key={file.path} blob={loaded.blob} onSave={save} name={file.name} size={file.size} mtime={0} markdown={kind === "markdown"} backLabel={backLabel} onBack={onClose} />
+      : kind === "video" || kind === "audio"
+        ? <Player key={file.path} blob={loaded.blob} onSave={save} backLabel={backLabel} onBack={onClose}
+          entry={{ name: file.name, size: file.size, mtime: 0, dir: false, type: loaded.blob.type, kind, sizeText: fileSize(file.size), timeText: "" } as DriveEntry} />
+        : null;
+  if (whole) {
+    return (
+      <RDialog.Content ref={content} className={css2.fp} data-kind={kind ?? undefined} aria-describedby={undefined}
+        onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.focus(); }}>
+        <RDialog.Title className={css2.fpHiddenTitle}>{file.name}</RDialog.Title>
+        {whole}
+      </RDialog.Content>
+    );
   }
   return (
     <RDialog.Content ref={content} className={css2.fp} data-kind={kind ?? undefined} data-docked={docked || undefined} aria-describedby={undefined} data-awake={awake || coming !== undefined || marking || undefined}

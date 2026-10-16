@@ -9,11 +9,11 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Prose } from "../Prose.tsx";
 import * as conversationCss from "../styles/conversation.css.ts";
-import { Check, ChevronLeft, ChevronRight, Close, List, Moon, Search, Sun, Text as TextIcon } from "../icons.tsx";
+import { Check, ChevronLeft, ChevronRight, Close, List, Search, Text as TextIcon } from "../icons.tsx";
 import { useNarrow, useApp, SheetGrab, SheetHead, type MobileApp } from "../mobile/app.tsx";
 import { Seg } from "../mobile/parts.tsx";
 import { Segmented, Tip } from "../ui.tsx";
-import { useAppearance, useDark, type Appearance } from "../theme.ts";
+import { useDark } from "../theme.ts";
 import { REST_MS, TAP_REST_MS } from "../FilePreview.tsx";
 import { placeStrokes, strokeLayer } from "../strokes.ts";
 import { download, placeAt, readWhole, sizeOf, usePlace, type At, type Got } from "./model.ts";
@@ -34,12 +34,14 @@ type Loaded = { state: "loading"; got: Got | null } | { state: "error"; message:
 // The books read lately, while they are the same (their size and time): opened again, at once.
 const books = new Map<string, Promise<{ book: Book; cut: boolean }>>();
 
-function loadBook(at: At, size: number, mtime: number, markdown: boolean, onProgress: (got: Got) => void): Promise<{ book: Book; cut: boolean }> {
-  const key = `${at.station}\n${at.root}\n${at.path}\n${size}\n${mtime}`;
-  let kept = books.get(key);
+/** A file read whole as text: one of a station's drive (`at`), read a part at a time, or one here already (`blob`, a
+ * chat's file a preview has fetched). */
+function loadBook(from: At | Blob, size: number, mtime: number, markdown: boolean, onProgress: (got: Got) => void): Promise<{ book: Book; cut: boolean }> {
+  const key = from instanceof Blob ? null : `${from.station}\n${from.root}\n${from.path}\n${size}\n${mtime}`;
+  let kept = key === null ? undefined : books.get(key);
   if (!kept) {
     kept = (async () => {
-      const blob = await readWhole(at, size, { max: MOST, onProgress });
+      const blob = from instanceof Blob ? from.slice(0, MOST) : await readWhole(from, size, { max: MOST, onProgress });
       const bytes = await blob.arrayBuffer();
       const cut = size > MOST;
       // Decoded, joined and searched for its chapters off the page's thread.
@@ -54,6 +56,7 @@ function loadBook(at: At, size: number, mtime: number, markdown: boolean, onProg
         worker.terminate();
       }
     })();
+    if (key === null) return kept;
     kept.catch(() => books.delete(key));
     books.set(key, kept);
     if (books.size > 3) books.delete(books.keys().next().value!);
@@ -61,17 +64,17 @@ function loadBook(at: At, size: number, mtime: number, markdown: boolean, onProg
   return kept;
 }
 
-function useBook(at: At, size: number, mtime: number, markdown: boolean): Loaded {
+function useBook(from: At | Blob, size: number, mtime: number, markdown: boolean): Loaded {
   const [loaded, setLoaded] = useState<Loaded>({ state: "loading", got: null });
   useEffect(() => {
     let live = true;
     setLoaded({ state: "loading", got: null });
-    loadBook(at, size, mtime, markdown, (got) => { if (live) setLoaded({ state: "loading", got }); }).then(
+    loadBook(from, size, mtime, markdown, (got) => { if (live) setLoaded({ state: "loading", got }); }).then(
       ({ book, cut }) => { if (live) setLoaded({ state: "ready", book, cut }); },
       (e: unknown) => { if (live) setLoaded({ state: "error", message: e instanceof Error ? e.message : String(e) }); },
     );
     return () => { live = false; };
-  }, [at.station, at.root, at.path, size, mtime, markdown]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [from instanceof Blob ? from : `${from.station}\n${from.root}\n${from.path}`, size, mtime, markdown]); // eslint-disable-line react-hooks/exhaustive-deps
   return loaded;
 }
 
@@ -150,16 +153,22 @@ interface Acts {
   close: () => void;
 }
 
-export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: { at: At; name: string; size: number; mtime: number; markdown: boolean; backLabel: string; onBack: () => void }) {
+/**
+ * A text read: one of a station's drive (`at`, where it was left kept on this device), or a chat's file a preview has
+ * here already (`blob`, `onSave` downloading it).
+ */
+export function Reader({ at, blob, onSave, name, size, mtime, markdown, backLabel, onBack }: {
+  at?: At | undefined; blob?: Blob | undefined; onSave?: (() => void) | undefined;
+  name: string; size: number; mtime: number; markdown: boolean; backLabel: string; onBack: () => void;
+}) {
   const narrow = useNarrow();
   const app = useAppSafe();
   const style = useReaderStyle();
   const dark = useDark();
   const paper = paperOf(style.paper, dark);
-  const night = useNight();
-  const loaded = useBook(at, size, mtime, markdown);
+  const loaded = useBook(blob ?? at!, size, mtime, markdown);
   const book = loaded.state === "ready" ? loaded.book : null;
-  const place = usePlace(at);
+  const place = usePlace(at ?? null);
   const scroller = useRef<HTMLDivElement>(null);
   const column = useRef<HTMLDivElement>(null);
   // Where the top of the screen is in the text (its offset), and so how far through it is.
@@ -236,7 +245,7 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
 
   // Where it is, kept as it is read, and as the reader goes.
   const keep = useRef(0);
-  const save = useCallback(() => { if (book && opened.current) placeAt(at, offsetNow(), book.text.length); }, [at, book, offsetNow]);
+  const save = useCallback(() => { if (at && book && opened.current) placeAt(at, offsetNow(), book.text.length); }, [at, book, offsetNow]);
   useEffect(() => () => { clearTimeout(keep.current); save(); }, [save]);
   useEffect(() => {
     const away = () => save();
@@ -438,14 +447,13 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
       {/* With the bars away, how far through it is: a hairline along the bottom. */}
       <div className={css.hairline} aria-hidden="true"><span style={{ transform: `scaleX(${share})` }} /></div>
       {!narrow ? (
-        <ViewerBar back={{ label: backLabel, onClick: onBack }} name={name} title={at.path}
+        <ViewerBar back={{ label: backLabel, onClick: onBack }} name={name} title={at?.path}
           meta={[book ? [chapter, `${Math.round(share * 100)}%`].filter(Boolean).join(" · ") : null, sizeOf(size)].filter(Boolean).join(" · ")}
           tools={<>
             <ViewerTool label={t("web-pages.drive.reader.contents")} on={panel === "contents"} onClick={() => open("contents")}><List size={18} /></ViewerTool>
             <ViewerTool label={t("web-pages.drive.reader.find")} on={panel === "find"} onClick={() => open("find")}><Search size={18} /></ViewerTool>
             <ViewerTool label={t("web-pages.drive.reader.layout")} on={panel === "layout"} onClick={() => open("layout")}><TextIcon size={18} /></ViewerTool>
-            <ViewerTool label={t(paper === "night" ? "web-pages.drive.reader.day" : "web-pages.drive.reader.night")} onClick={night}>{paper === "night" ? <Sun size={18} /> : <Moon size={18} />}</ViewerTool>
-            <ViewerDownload name={name} onSave={() => void download(at, { name, size, type: "" })} />
+            <ViewerDownload name={name} onSave={onSave ?? (() => { if (at) void download(at, { name, size, type: "" }); })} />
           </>} />
       ) : <header className={css.top} data-shown={shown || undefined} inert={!shown}
         onPointerEnter={(e) => { if (e.pointerType === "mouse") { onBars.current = true; clearTimeout(resting.current); } }}
@@ -481,8 +489,6 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
         <div className={css.tools}>
           <Tool icon={<List size={20} />} label={t("web-pages.drive.reader.contents")} on={panel === "contents"} onClick={() => open("contents")} />
           <Tool icon={<TextIcon size={20} />} label={t("web-pages.drive.reader.layout")} on={panel === "layout"} onClick={() => open("layout")} />
-          {/* It names where it goes: at night the day (the light paper last picked), by day the night. */}
-          <Tool icon={paper === "night" ? <Sun size={20} /> : <Moon size={20} />} label={t(paper === "night" ? "web-pages.drive.reader.day" : "web-pages.drive.reader.night")} on={false} onClick={night} />
         </div>
       </footer>}
       {!narrow && panel && (
@@ -630,8 +636,8 @@ function LayoutSheet() {
   );
 }
 
-/** The papers: the light ones, then night — which is the app's dark, as the app's dark is the reader's night. */
-const PAPERS: Exclude<Paper, "follow">[] = ["white", "green", "grey", "night"];
+/** The papers to pick: the light ones. Night is the app's dark (its theme, 外观), never picked here. */
+const PAPERS: Exclude<Paper, "follow">[] = ["white", "green", "grey"];
 type Light = "white" | "green" | "grey";
 const isLight = (p: Paper): p is Light => p === "white" || p === "green" || p === "grey";
 
@@ -640,22 +646,9 @@ function paperOf(chosen: Paper, dark: boolean): Exclude<Paper, "follow"> {
   return dark ? "night" : isLight(chosen) ? chosen : "white";
 }
 
-/** Night and day are the whole app's (外观): the reader's 夜间 turns the app dark, 日间 light. */
-function useNight(): () => void {
-  const dark = useDark();
-  const [, setAppearance] = useAppearance();
-  return () => setAppearance(dark ? "light" : "dark");
-}
-
-/** A paper picked: night turns the app dark; a light one is the day's paper, the app turned light if it was dark. */
+/** A paper picked: the day's (light) paper. The app's theme (外观) is never changed from here. */
 function usePickPaper(): (paper: Exclude<Paper, "follow">) => void {
-  const dark = useDark();
-  const [, setAppearance] = useAppearance();
-  return (paper) => {
-    if (paper === "night") { if (!dark) setAppearance("dark"); return; }
-    setReaderStyle({ paper });
-    if (dark) setAppearance("light" satisfies Appearance);
-  };
+  return (paper) => setReaderStyle({ paper });
 }
 
 /** The paper under the text, its size, its lines' height, the room either side, its face, and whether paragraphs are

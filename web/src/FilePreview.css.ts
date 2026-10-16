@@ -56,6 +56,8 @@ export const fpHead = style({
   },
 });
 globalStyle(`${fp}[data-kind="image"] ${fpHead}`, glass);
+/** A dialog's name for the reader and the player, which show it on their own bars. */
+export const fpHiddenTitle = style({ position: "absolute", width: "1px", height: "1px", overflow: "hidden", clipPath: "inset(50%)", whiteSpace: "nowrap" });
 // With the bar along its top (viewer/ViewerBar.tsx), the file under it.
 globalStyle(`${fp}[data-docked]`, { paddingTop: `${VIEWER_BAR}px` });
 globalStyle(`${fp}[data-awake] ${fpHead}, ${fpHead}:hover, ${fpHead}:has(:focus-visible)`, {

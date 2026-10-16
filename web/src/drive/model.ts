@@ -24,8 +24,9 @@ export function useFolder(station: string, root: string | null, path: string): T
 }
 
 /** Where a file was left on this device: undefined while not known yet, null before it was opened. */
-export function usePlace(at: At): DrivePlace | null | undefined {
-  const state = useTopic<DrivePlace | null>({ topic: "drivePlace", station: at.station, root: at.root, path: at.path });
+export function usePlace(at: At | null): DrivePlace | null | undefined {
+  const state = useTopic<DrivePlace | null>(at ? { topic: "drivePlace", station: at.station, root: at.root, path: at.path } : null);
+  if (!at) return null;
   return state.loading ? undefined : state.value ?? null;
 }
 
