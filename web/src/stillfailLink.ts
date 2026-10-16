@@ -1,7 +1,8 @@
 // still.fail's own links (/o/<workspace>/<station>/<session>, as agents post them; a chat's page,
 // /w/<workspace>/s/<station>/chats/<id>, as a reference written on the web is), read back into what they name: a session
 // of a workspace's station, maybe one of its web services (`?service=<job>`). The desktop's chat reads them the same way
-// (pages/ChatPage.tsx); the narrow pages (mobile/Chat.tsx) open them in the app instead of loading the page again.
+// (pages/ChatPage.tsx); the narrow pages (mobile/Chat.tsx) open them in the app instead of loading the page again. A
+// screen's page (/w/<workspace>/s/<station>/screen/<id>, an agent asking a person to take over) opens its viewer.
 import type { MouseEvent as ReactMouseEvent } from "react";
 
 /** `own`: on this app's cloud, under any of its names (ownOrigin), so opened here rather than on another site. */
@@ -45,4 +46,27 @@ export function stillfailLinkClicked(event: MouseEvent | ReactMouseEvent): Still
   if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return null;
   const anchor = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
   return anchor ? stillfailLink(anchor.href) : null;
+}
+
+/**
+ * A page of one of a station's screens (`/w/<workspace>/s/<station>/screen/<id>`, as the agents' `screen` tool links
+ * it: docs/remote-screens.md), read back: `path` the app's own address of it.
+ */
+export interface ScreenLink { workspace: string; station: string; screen: string; path: string; own: boolean }
+
+export function screenLink(href: string): ScreenLink | null {
+  let url: URL;
+  try { url = new URL(href, location.href); } catch { return null; }
+  const page = /^\/w\/([^/]+)\/s\/([^/]+)\/screen\/([^/]+)\/?$/.exec(url.pathname);
+  if (!page) return null;
+  let screen: string;
+  try { screen = decodeURIComponent(page[3]!); } catch { return null; }
+  return { workspace: page[1]!, station: page[2]!, screen, path: `/w/${page[1]}/s/${page[2]}/screen/${page[3]}`, own: ownOrigin(url) };
+}
+
+/** The screen's page a click (a plain one) lands on, or null. */
+export function screenLinkClicked(event: MouseEvent | ReactMouseEvent): ScreenLink | null {
+  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return null;
+  const anchor = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+  return anchor ? screenLink(anchor.href) : null;
 }

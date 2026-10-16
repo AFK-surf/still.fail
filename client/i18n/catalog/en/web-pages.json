@@ -1353,5 +1353,22 @@
   "web-pages.security.joined": "{name} is protected",
   "web-pages.security.joinTitle": "Add {name} to security mode?",
   "web-pages.security.joinBody": "It pins this workspace's lock and from then on accepts only signed devices and stations. Add it only if it is your own machine",
-  "web-pages.settings.nav.permissions": "Permissions"
+  "web-pages.settings.nav.permissions": "Permissions",
+  "web-pages.screen.title": "Screen",
+  "web-pages.screen.section": "Screens",
+  "web-pages.screen.mode": "Watch or control",
+  "web-pages.screen.look": "Watch",
+  "web-pages.screen.control": "Control",
+  "web-pages.screen.readOnly": "Read-only members can only watch",
+  "web-pages.screen.switchWhat": "switch between watching and controlling",
+  "web-pages.screen.keys": "Keys sent to the screen",
+  "web-pages.screen.keyboard": "Keyboard",
+  "web-pages.screen.connecting": "Connecting",
+  "web-pages.screen.reconnecting": "Reconnecting",
+  "web-pages.screen.again": "Open again",
+  "web-pages.screen.over.ended": "Ended",
+  "web-pages.screen.over.outdated": "The station needs an update",
+  "web-pages.screen.over.gone": "The screen is gone",
+  "web-pages.screen.over.denied": "This screen can't be seen",
+  "web-pages.screen.over.failed": "Couldn't connect"
 }

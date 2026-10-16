@@ -18,6 +18,7 @@ import { AccountPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
 import { DriveHome, DrivePage, useAddFolder, DrivePlayPage, DriveReadPage } from "../pages/Drive.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
+import { ScreenPage } from "../screen/ScreenPage.tsx";
 import { ChatList, StationTrouble, useGlassBands } from "../Sidebar.tsx";
 import { Rail, SidebarEdge, placeOf, useRailItems, type RailItem } from "../Rail.tsx";
 import { SystemBubbles } from "../SystemBubbles.tsx";
@@ -254,6 +255,8 @@ function StationPages({ stations }: { stations: Station[] | undefined }) {
         <Route path="files" element={<DrivePage />} />
         <Route path="files/read" element={<DriveReadPage />} />
         <Route path="files/play" element={<DrivePlayPage />} />
+        {/* One of its screens, seen and driven (docs/remote-screens.md): its row on the station's page, an agent's link. */}
+        <Route path="screen/:id" element={<ScreenPage />} />
         {/* A station's 共享调试 is the Android app's (its agent links here: the Rust station's adb.rs). */}
         <Route path="adb" element={<Empty><p>{t("web-pages.workspace.adbOnPhone")}</p></Empty>} />
         {/* One Profile page for the workspace: a station's own list is it. */}

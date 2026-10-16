@@ -39,7 +39,7 @@ import { OutsideList, outsideOf, shareOutside, type Outside } from "../OutsideSh
 import { useAction } from "../action.ts";
 import { PeopleStack } from "../components.tsx";
 import { JobDot, metaOf, NO_JOBS, useClearEnded, useJobLog, useStopJob } from "../Jobs.tsx";
-import { stillfailLinkClicked } from "../stillfailLink.ts";
+import { screenLinkClicked, stillfailLinkClicked } from "../stillfailLink.ts";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
 import type { ChatJobsView, ChatPublish, ChatPublished, ChatShare, Job } from "../core/shapes.ts";
 import { PublishMessages, tickedOf, usePublishPreview, useTicking } from "../Publish.tsx";
@@ -306,6 +306,13 @@ function Messages({ view, lives, list, draft, here, stationName }: {
     if (history && view.agents.some((a) => a.session.key === history.key)) {
       event.preventDefault();
       openHistory(app, here.station, here.key, history.key, history.entry);
+      return;
+    }
+    // One of a station's screens (an agent asking a person to take over): its viewer, over this chat.
+    const screen = screenLinkClicked(event);
+    if (screen?.own) {
+      event.preventDefault();
+      app.push(screen.path);
       return;
     }
     const link = stillfailLinkClicked(event);
