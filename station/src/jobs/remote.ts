@@ -11,10 +11,10 @@
 // here polls local state.
 import { createHash, randomBytes } from "node:crypto";
 import {
-  closeSync, constants, existsSync, fstatSync, fsyncSync, ftruncateSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync,
-  readSync, readdirSync, renameSync, rmSync, statSync, writeSync,
+  appendFileSync, closeSync, constants, existsSync, fstatSync, fsyncSync, ftruncateSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync,
+  readSync, readdirSync, readlinkSync, renameSync, rmSync, statSync, writeFileSync, writeSync,
 } from "node:fs";
-import { basename, dirname, isAbsolute, join } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { relativeParts } from "../ops/paths.ts";
 import { platform } from "../platform/index.ts";
 import { isDeepStrictEqual } from "node:util";
@@ -22,9 +22,12 @@ import { Clock, Duration, Effect, Exit, FiberSet, Schedule, Scope } from "effect
 import { log } from "../ops/log.ts";
 import { type Json, type Store } from "../store/store.ts";
 import { type Jobs, jobJson, tail } from "./jobs.ts";
+import { LINK, type Synced, actual, apply, listed, page, patchOf, planPart, putBlobs, readManifest, syncDir, writeManifest } from "./dirsync.ts";
 
 /// The answer of a peer that refused a request (its `{"error": …}`): final, unlike a request that did not get through.
 export class Refused extends Error {}
+/// A request that did not get through (asked again later).
+class Unreached extends Error {}
 
 /// A request to another station of the workspace over the station transport: its result, a Refused when that station
 /// answered with an error, any other error when it could not be asked (or the answer did not come). `workspace` is the
@@ -39,6 +42,8 @@ export type RemoteNotify = (session: string, text: string) => void | Promise<voi
 
 export const CHUNK = 256 * 1024;
 const MAX_FILE = 1024 * 1024 * 1024;
+/// The changed files a patch is made of, at most (the rest is named, not in it).
+const PATCH_MAX = 64 * 1024 * 1024;
 /// A source session's directory unused this long is removed by the target, in case its source never says so.
 export const IDLE_MS = 14 * 24 * 3600 * 1000;
 /// A source keeps asking an unreachable target to remove a closed session's directory this long.
@@ -175,7 +180,7 @@ export class Remote {
     this.meshWaitMs = options.meshWaitMs ?? MESH_WAIT_MS;
     this.attached = new Promise((resolve) => (this.markAttached = resolve));
     this.root = join(options.data, "remote");
-    for (const name of ["incoming", "outgoing", "sessions", "used"]) mkdirSync(join(this.root, name), { recursive: true });
+    for (const name of ["incoming", "outgoing", "sessions", "used", "prepared"]) mkdirSync(join(this.root, name), { recursive: true });
     this.scope = Effect.runSync(Scope.make());
     const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope);
     this.run = Effect.runSync(options.clock ? runtime.pipe(Effect.provideService(Clock.Clock, options.clock)) : runtime);
@@ -232,6 +237,28 @@ export class Remote {
     } catch {}
     if (!fresh) writeJson(record, { workspace, station: peer, session, seen: now });
     return join(room, "work");
+  }
+
+  /// The directory in a session's that mirrors the source's `dir` (its last name; with a part of its hash when another
+  /// directory of the source's has that name there already).
+  private mirrorName(workspace: string, peer: string, session: string, dir: string): string {
+    const last = dir.split(/[\\/]/).filter((p) => p !== "").at(-1) ?? "";
+    let name = last.replace(/[^\p{L}\p{N}._ -]/gu, "_").slice(0, 100);
+    if (name === "" || name === "." || name === "..") name = "dir";
+    const claimed = new Map<string, string>();
+    for (const task of this.tasksOf(workspace, peer, session)) {
+      try {
+        const meta = readJson(join(task, "task.json"));
+        if (typeof meta.mirror === "string") claimed.set(meta.mirror, text(field(meta, "spec"), "dir"));
+      } catch {}
+    }
+    const mirrors = join(this.room(workspace, peer, session), "mirrors");
+    for (const file of this.list(mirrors)) {
+      const m = readManifest(join(mirrors, file));
+      if (m !== null) claimed.set(m.name, m.dir);
+    }
+    const owner = claimed.get(name);
+    return owner === undefined || owner === dir ? name : `${name}-${hash(dir).slice(0, 8)}`;
   }
 
   /// Task directories (incoming/<id>) of a source session.
@@ -366,6 +393,12 @@ export class Remote {
         }
       } catch {}
     }
+    for (const name of this.list(join(this.root, "prepared"))) {
+      const file = join(this.root, "prepared", name);
+      try {
+        if (text(readJson(file), "session") === session) rmSync(file, { force: true });
+      } catch {}
+    }
     this.closer(path);
   }
 
@@ -468,7 +501,7 @@ export class Remote {
   async handle(workspace: string, peer: string, request: Json): Promise<Json> {
     const method = text(request, "method");
     if (method === "describe") {
-      return { protocol: 1, os: OS, arch: ARCH, tasks: true, sessions: true, messages: true, reads: true, files: true, chats: true, fileChunkBytes: CHUNK, maxFileBytes: MAX_FILE };
+      return { protocol: 1, os: OS, arch: ARCH, tasks: true, sessions: true, messages: true, reads: true, files: true, chats: true, sync: 1, fileChunkBytes: CHUNK, maxFileBytes: MAX_FILE };
     }
     if (method.startsWith("xshare.")) {
       const xshare = this.xshare;
@@ -526,16 +559,22 @@ export class Remote {
     if (method === "task.prepare") {
       const spec = field(request, "spec");
       if (text(spec, "command").trim() === "") throw new Error("command is required");
+      const from = field(spec, "dir");
+      if (from !== null && (typeof from !== "string" || from === "" || bytes(from) > 4096)) throw new Error("dir must be a path");
+      let meta: Json;
       if (existsSync(record)) {
-        if (!isDeepStrictEqual(field(readJson(record), "spec"), spec)) {
+        meta = readJson(record);
+        if (!isDeepStrictEqual(field(meta, "spec"), spec)) {
           throw new Error("task key already used with different inputs; choose a new key for new work");
         }
       } else {
         mkdirSync(dir, { recursive: true });
-        writeJson(record, { spec, workspace, station: peer, session, key, layout: "session" });
+        meta = { spec, workspace, station: peer, session, key, layout: "session" };
+        if (typeof from === "string") meta.mirror = this.mirrorName(workspace, peer, session, from);
+        writeJson(record, meta);
       }
       this.seen(workspace, peer, session);
-      return { key, prepared: true };
+      return typeof meta.mirror === "string" ? { key, prepared: true, dir: meta.mirror } : { key, prepared: true };
     }
     let meta: Json;
     try {
@@ -547,19 +586,138 @@ export class Remote {
     // Tasks prepared before shared session directories keep their own.
     const work =
       field(meta, "layout") === "session"
-        ? method === "task.start" || method === "file.put"
+        ? method === "task.start" || method === "file.put" || method === "sync.begin"
           ? this.seen(workspace, peer, session)
           : join(this.room(workspace, peer, session), "work")
         : join(dir, "work");
+    // A task with a directory runs in its mirror, a directory of the session's (docs/station-peers.md "Directories").
+    const mirror = typeof meta.mirror === "string" ? meta.mirror : null;
+    const room = this.room(workspace, peer, session);
+    const manifestPath = mirror === null ? "" : join(room, "mirrors", `${mirror}.json`);
+    const syncing = mirror === null ? "" : join(room, "sync", mirror);
+    if (method.startsWith("sync.") && mirror === null) throw new Error("this task has no directory to sync");
+    /// Another task of the session running in the same mirror (one at a time there).
+    const busy = () =>
+      this.tasksOf(workspace, peer, session).find((t) => t !== dir && this.running(t) && field(readJson(join(t, "task.json")), "mirror") === mirror);
+    const refuseBusy = () => {
+      const other = busy();
+      if (other) throw new Error(`task ${text(readJson(join(other, "task.json")), "key")} is running in ${mirror} on this station; wait for it or stop it`);
+    };
+    /// The sync under way: its state, when `id` is its.
+    const ongoing = (): Json => {
+      let state: Json = null;
+      try {
+        state = readJson(join(syncing, "state.json"));
+      } catch {}
+      if (state === null || text(state, "id") !== text(request, "id") || text(state, "key") !== key) throw new Error("this sync is over or another one began; start again");
+      return state;
+    };
     switch (method) {
       case "task.start": {
         const uploads = field(meta, "uploads");
         if (uploads !== null && typeof uploads === "object" && !Array.isArray(uploads) && Object.values(uploads).some((v) => v !== true)) {
           throw new Error("input upload is incomplete; finish it before starting");
         }
+        let cwd = work;
+        if (mirror !== null && !job) {
+          if (meta.synced !== true) throw new Error("this task's directory has not been synced; start it from a station that syncs directories");
+          refuseBusy();
+        }
+        if (mirror !== null) cwd = filePath(work, mirror, false);
         const spec = field(meta, "spec");
-        const started = this.jobs.startId(owner, text(spec, "name"), text(spec, "command"), work, null, false, jobId);
+        const started = this.jobs.startId(owner, text(spec, "name"), text(spec, "command"), cwd, null, false, jobId);
         return { key, job: jobJson(started) };
+      }
+      case "sync.begin": {
+        if (job) return { key, started: true };
+        refuseBusy();
+        rmSync(syncing, { recursive: true, force: true });
+        mkdirSync(syncing, { recursive: true });
+        mkdirSync(join(room, "mirrors"), { recursive: true });
+        const manifest = readManifest(manifestPath);
+        const files = manifest === null ? {} : await actual(join(work, mirror!), manifest.files);
+        const id = randomBytes(12).toString("hex");
+        writeJson(join(syncing, "actual.json"), files);
+        writeJson(join(syncing, "state.json"), { id, key, version: manifest?.version ?? 0 });
+        return { key, id, dir: mirror, version: manifest?.version ?? 0 };
+      }
+      case "sync.manifest": {
+        ongoing();
+        const after = asU64(field(request, "after")) ?? 0;
+        return page(listed(readJson(join(syncing, "actual.json"))), after);
+      }
+      case "sync.put": {
+        ongoing();
+        return { pieces: await putBlobs(join(syncing, "blobs"), field(request, "blobs"), fromBase64(text(request, "data"))) };
+      }
+      case "sync.commit": {
+        const state = ongoing();
+        const part = planPart(request);
+        appendFileSync(join(syncing, "plan.jsonl"), `${JSON.stringify(part)}\n`);
+        if (field(request, "final") !== true) return { key, planned: true };
+        refuseBusy();
+        const manifest = readManifest(manifestPath);
+        const version = manifest?.version ?? 0;
+        if (version !== field(state, "version")) throw new Error("the mirror changed while this sync went on; start again");
+        const plan = { set: [] as [string, string, string][], remove: [] as string[] };
+        for (const line of readFileSync(join(syncing, "plan.jsonl"), "utf8").split("\n")) {
+          if (line === "") continue;
+          const p = JSON.parse(line);
+          plan.set.push(...p.set);
+          plan.remove.push(...p.remove);
+        }
+        const files = readJson(join(syncing, "actual.json"));
+        let done: { written: number; removed: number };
+        try {
+          done = apply(work, mirror!, join(syncing, "scratch"), join(syncing, "blobs"), files, plan);
+        } finally {
+          writeManifest(manifestPath, { dir: text(field(meta, "spec"), "dir"), name: mirror!, version: version + 1, files });
+        }
+        meta.synced = true;
+        writeJson(record, meta);
+        rmSync(syncing, { recursive: true, force: true });
+        return { key, ...done, version: version + 1 };
+      }
+      case "sync.changes": {
+        if (!job || job.state === "running") throw new Error("the task has not finished");
+        const manifest = readManifest(manifestPath);
+        const base = filePath(work, mirror!, false);
+        const now = manifest === null ? {} : await actual(base, manifest.files);
+        const changes: Json[] = [];
+        let more = false;
+        for (const [path, was] of Object.entries(manifest?.files ?? {}).sort(([a], [b]) => (a < b ? -1 : 1))) {
+          const is = now[path];
+          if (is && is[0] === was[0] && is[1] === was[1]) continue;
+          if (changes.length === 1000) {
+            more = true;
+            break;
+          }
+          const change: Json = { path, old: was[0], mode: was[1], hash: is?.[0] ?? null, newMode: is?.[1] ?? null };
+          if (is?.[1] === LINK) change.link = readlinkSync(join(base, ...path.split("/")));
+          changes.push(change);
+        }
+        return { key, base: mirror, changes, more };
+      }
+      case "task.files": {
+        if (job?.state === "running") throw new Error("wait for the task to finish before downloading artifacts");
+        const paths = field(request, "paths");
+        if (!Array.isArray(paths) || paths.length > 100 || !paths.every((p) => typeof p === "string")) throw new Error("paths are required (at most 100)");
+        const cwd = mirror === null ? work : filePath(work, mirror, false);
+        const files: [string, number | null][] = [];
+        const visit = (rel: string) => {
+          if (files.length >= 1000) throw new Error("more than 1000 files to bring back");
+          let st;
+          try {
+            st = lstatSync(filePath(cwd, rel, false));
+          } catch {
+            files.push([rel, null]);
+            return;
+          }
+          if (st.isFile()) files.push([rel, st.size]);
+          else if (st.isDirectory()) for (const name of readdirSync(join(cwd, ...rel.split("/"))).sort()) visit(`${rel.replace(/\/+$/, "")}/${name}`);
+        };
+        for (const p of paths) visit(p);
+        return { key, base: mirror ?? "", files };
       }
       case "task.get":
       case "task.log": {
@@ -687,6 +845,19 @@ export class Remote {
       const state = text(field(result, "job"), "state");
       const notices = field(result, "notices");
       const finished = state !== "" && state !== "running";
+      // What the task was to bring back, and what it changed of its directory, comes before its end is told (once).
+      if (finished && entry.brought === undefined && (Array.isArray(entry.back) || typeof entry.dir === "string")) {
+        try {
+          entry.brought = await this.bringBack(entry);
+        } catch (error) {
+          if (error instanceof Unreached) return false;
+          entry.brought = { error: (error as Error).message };
+        }
+        try {
+          writeJson(path, entry);
+        } catch {}
+      }
+      if (finished && entry.brought !== undefined && result !== null && typeof result === "object") result.back = entry.brought;
       if (finished || (Array.isArray(notices) && notices.length > 0 && !isDeepStrictEqual(field(entry, "notices"), notices))) {
         const message = `Remote task ${text(entry, "key")} on ${text(entry, "station")}: ${JSON.stringify(result)}`;
         let told = true;
@@ -714,6 +885,153 @@ export class Remote {
     ).catch(() => undefined);
   }
 
+  /// A file of a task's station (`request`'s path) to `path` here, in chunks; its size. An existing file is replaced
+  /// only when `replace`.
+  private async download(ask: (request: Json) => Promise<Json>, request: Json, path: string, replace: boolean): Promise<number> {
+    if (!replace && existsSync(path)) throw new Error("local output already exists; choose another path");
+    const temp = withExtension(path, `${randomBytes(8).toString("hex")}.part`);
+    const fd = openSync(temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o666);
+    try {
+      let size: number;
+      try {
+        let offset = 0;
+        for (;;) {
+          const answer = await ask({ ...request, method: "file.get", offset });
+          const data = fromBase64(text(answer, "data"));
+          if (data.length > CHUNK || offset + data.length > MAX_FILE) throw new Error("invalid file response");
+          for (let at = 0; at < data.length; ) at += writeSync(fd, data, at, data.length - at);
+          offset += data.length;
+          if (field(answer, "eof") === true) {
+            fsyncSync(fd);
+            size = offset;
+            break;
+          }
+          if (data.length === 0) throw new Error("file transfer made no progress");
+        }
+      } finally {
+        closeSync(fd);
+      }
+      if (replace) renameSync(temp, path);
+      else linkSync(temp, path);
+      return size;
+    } finally {
+      rmSync(temp, { force: true });
+    }
+  }
+
+  /// A file of a task's station in memory; null when it is bigger than `limit`.
+  private async fetchFile(ask: (request: Json) => Promise<Json>, path: string, limit: number): Promise<Buffer | null> {
+    const parts: Buffer[] = [];
+    for (let offset = 0; ; ) {
+      const answer = await ask({ method: "file.get", path, offset });
+      if ((asU64(field(answer, "size")) ?? 0) > limit) return null;
+      const data = fromBase64(text(answer, "data"));
+      parts.push(data);
+      offset += data.length;
+      if (field(answer, "eof") === true) return Buffer.concat(parts);
+      if (data.length === 0) throw new Error("file transfer made no progress");
+    }
+  }
+
+  /// After a task ends: what it was to bring back (`back`, into station-back/<key> of its session's workspace), and,
+  /// for a task with a directory, the synced files its command changed there, as a patch for the agent to apply or
+  /// not (nothing here is overwritten). An Unreached when its station could not be asked (asked again next round).
+  private async bringBack(entry: Json): Promise<Json> {
+    const station = text(entry, "station");
+    const key = text(entry, "key");
+    const base = { workspace: field(entry, "workspace"), session: field(entry, "session"), key };
+    const ask = (request: Json) =>
+      this.ask(station, { ...base, ...request }).catch((error) => {
+        throw error instanceof Refused ? error : new Unreached((error as Error).message);
+      });
+    const row = this.store.getSession(text(entry, "session"));
+    if (!row) return { error: "the session is gone" };
+    const dest = join(row.workspace, "station-back", key.replace(/[^\w.-]/g, "_").replace(/^\./, "_"));
+    const out: Json = {};
+    const back: string[] = Array.isArray(entry.back) ? entry.back : [];
+    if (back.length > 0) {
+      let files: [string, number | null][];
+      let prefix = "";
+      try {
+        const found = await ask({ method: "task.files", paths: back });
+        files = found.files;
+        prefix = text(found, "base") === "" ? "" : `${text(found, "base")}/`;
+      } catch (error) {
+        // A station from before has no task.files: the paths are files.
+        if (!(error instanceof Refused && /unsupported peer method/.test(error.message))) throw error;
+        files = back.map((p) => [p, 0]);
+      }
+      mkdirSync(dest, { recursive: true });
+      const got: string[] = [];
+      const missing: string[] = [];
+      for (const [p, size] of files) {
+        if (size === null) {
+          missing.push(`${p}: not there`);
+          continue;
+        }
+        try {
+          await this.download(ask, { path: prefix + p }, filePath(dest, p, true), true);
+          got.push(p);
+        } catch (error) {
+          if (error instanceof Unreached) throw error;
+          missing.push(`${p}: ${(error as Error).message}`);
+        }
+      }
+      out.files = { dir: dest, count: got.length, files: got.slice(0, 50), missing };
+    }
+    if (typeof entry.dir === "string") {
+      let found: Json;
+      try {
+        found = await ask({ method: "sync.changes" });
+      } catch (error) {
+        if (error instanceof Unreached) throw error;
+        out.changed = { error: (error as Error).message };
+        return out;
+      }
+      const changes: Json[] = Array.isArray(found?.changes) ? found.changes : [];
+      if (changes.length > 0) {
+        const items = [];
+        const missing: string[] = [];
+        let total = 0;
+        for (const c of changes) {
+          let after: Buffer | null = null;
+          if (c.newMode === LINK) after = Buffer.from(String(c.link ?? ""));
+          else if (c.hash !== null) {
+            try {
+              after = await this.fetchFile(ask, `${text(found, "base")}/${c.path}`, PATCH_MAX - total);
+            } catch (error) {
+              if (error instanceof Unreached) throw error;
+            }
+            if (after === null) {
+              missing.push(c.path);
+              continue;
+            }
+            total += after.length;
+          }
+          items.push({ path: String(c.path), old: String(c.old), mode: String(c.mode), after, afterMode: c.newMode ?? null });
+        }
+        const made = await patchOf(entry.dir, text(entry, "prefix"), join(this.root, `patch-${randomBytes(6).toString("hex")}`), items);
+        const changed: Json = {
+          count: changes.length,
+          more: found.more === true,
+          files: changes.slice(0, 50).map((c) => c.path),
+          note: "the command changed these synced files on that station; nothing here was changed",
+        };
+        if (made !== null && made.patch !== "") {
+          mkdirSync(dest, { recursive: true });
+          const file = join(dest, "changes.patch");
+          writeFileSync(file, made.patch);
+          changed.patch = file;
+          changed.apply = `review it, then git apply it in ${entry.dir} if wanted`;
+        }
+        const left = [...missing, ...(made?.missing ?? [])];
+        if (left.length > 0) changed.notInPatch = left.slice(0, 50);
+        out.changed = changed;
+      }
+    }
+    return out;
+  }
+
   /// What the station_* tools do, as `session`: among the stations of its workspace.
   async tool(tool: string, session: string, args: Json): Promise<Json> {
     const row = this.store.getSession(session);
@@ -732,18 +1050,66 @@ export class Remote {
       request.method = `task.${action}`;
       request.lines = field(args, "lines");
       request.spec = { name: field(args, "name"), command: field(args, "command"), requestedBy: row.createdBy };
+      // A task's directory and what it brings back, as this station has them (remote/prepared).
+      const prepared = join(this.root, "prepared", `${hash([workspace, session, station, key])}.json`);
+      if (action === "prepare") {
+        const dir = field(args, "dir");
+        const back = field(args, "back");
+        if (dir !== null) {
+          if (typeof dir !== "string" || !isAbsolute(dir)) throw new Error("dir must be an absolute path on this machine");
+          let isDir = false;
+          try {
+            isDir = statSync(dir).isDirectory();
+          } catch {}
+          if (!isDir) throw new Error(`${dir} is not a directory`);
+          // A station from before would take the task and run it without the files.
+          const described = await this.ask(station, { method: "describe", workspace });
+          if (field(described, "sync") === null) {
+            throw new Error(`${station} is from before directory sync and would run the task without the files; update that station first, or upload inputs with station_file`);
+          }
+          request.spec.dir = resolve(dir);
+        }
+        if (back !== null) {
+          const relative = (p: unknown) => typeof p === "string" && p !== "" && !isAbsolute(p) && p.split(/[\\/]/).every((part) => part !== "..");
+          if (!Array.isArray(back) || back.length > 100 || !back.every(relative)) throw new Error("back must be paths relative to the task's directory (at most 100)");
+          request.spec.back = back;
+        }
+        const answer = await this.ask(station, request);
+        if (dir !== null || back !== null) writeJson(prepared, { workspace, session, station, key, dir: request.spec.dir ?? null, back: request.spec.back ?? null });
+        return answer;
+      }
+      let synced: Synced | null = null;
       if (action === "start") {
+        let local: Json = null;
+        try {
+          local = readJson(prepared);
+        } catch {}
+        if (typeof local?.dir === "string") {
+          try {
+            synced = await syncDir((method, more) => this.ask(station, { workspace, session, key, method, ...more }), local.dir, () => this.store.now());
+          } catch (error) {
+            const message = (error as Error).message;
+            if (error instanceof Refused && /unsupported peer method/.test(message)) {
+              throw new Error(`${station} cannot sync directories (it is from before); nothing was started. Update that station first`);
+            }
+            throw new Error(`${local.dir} was not synced to ${station}, so nothing was started: ${message}`);
+          }
+        }
         // Persist before sending: an uncertain start is still followed after a process restart.
         const path = this.outgoing(workspace, session, station, key);
         let refused = false;
         try {
           refused = readJson(path).refused === true;
         } catch {}
-        if (!existsSync(path) || refused) writeJson(path, { workspace, session, station, key, delivered: false });
+        if (!existsSync(path) || refused) {
+          const more = local === null ? {} : { dir: local.dir ?? null, back: local.back ?? null, prefix: synced?.prefix ?? "" };
+          writeJson(path, { workspace, session, station, key, delivered: false, ...more });
+        }
         this.watch(path);
       }
       try {
-        return await this.ask(station, request);
+        const answer = await this.ask(station, request);
+        return synced === null ? answer : { ...answer, sync: synced };
       } catch (error) {
         if (action === "start" && error instanceof Refused) {
           const path = this.outgoing(workspace, session, station, key);
@@ -795,36 +1161,8 @@ export class Remote {
       }
     }
     if (direction === "download") {
-      if (existsSync(path)) throw new Error("local output already exists; choose another path");
-      const temp = withExtension(path, `${randomBytes(8).toString("hex")}.part`);
-      const fd = openSync(temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o666);
-      try {
-        let size: number;
-        try {
-          let offset = 0;
-          for (;;) {
-            request.method = "file.get";
-            request.offset = offset;
-            const answer = await this.ask(station, { ...request });
-            const data = fromBase64(text(answer, "data"));
-            if (data.length > CHUNK || offset + data.length > MAX_FILE) throw new Error("invalid file response");
-            for (let at = 0; at < data.length; ) at += writeSync(fd, data, at, data.length - at);
-            offset += data.length;
-            if (field(answer, "eof") === true) {
-              fsyncSync(fd);
-              size = offset;
-              break;
-            }
-            if (data.length === 0) throw new Error("file transfer made no progress");
-          }
-        } finally {
-          closeSync(fd);
-        }
-        linkSync(temp, path);
-        return { downloaded: path, bytes: size };
-      } finally {
-        rmSync(temp, { force: true });
-      }
+      const size = await this.download((r) => this.ask(station, r), request, path, false);
+      return { downloaded: path, bytes: size };
     }
     throw new Error("direction must be upload or download");
   }

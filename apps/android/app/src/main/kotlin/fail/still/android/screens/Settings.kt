@@ -510,13 +510,14 @@ fun managerOf(current: WorkspaceEntry): Boolean? {
  * waits for it to join. To one who manages another workspace too, a choice first (as the narrow web's AddStationSheet):
  * a new machine that way, or a station of one of those added here as it is (docs/multi-workspace.md).
  */
-fun openAddStation(app: AppState, current: WorkspaceEntry, known: List<String>) {
+fun openAddStation(app: AppState, current: WorkspaceEntry, known: List<String>, existingFirst: Boolean = false) {
     app.sheet = SheetSpec(0.72f, draggable = true) {
         val joinable by rememberTopic<JoinableView>(app.core, Topics.joinable(current.workspace.id))
-        var existing by remember { mutableStateOf(false) }
+        var existing by remember { mutableStateOf(existingFirst) }
         // A new machine's command made: that is the way now, the choice gone.
         var made by remember { mutableStateOf(false) }
-        val offered = joinable.value?.offered == true
+        // A station of another workspace to add: offered only while there is one.
+        val offered = joinable.value?.let { it.offered && it.items.isNotEmpty() } == true
         SheetGrab()
         SheetHead(t("android-settings.station.add"))
         // Unpadded itself: the picking rows of an existing station go edge to edge (their words in line with the rest).
@@ -655,7 +656,15 @@ fun FirstStation(current: WorkspaceEntry) {
                 }
                 !view.manager -> Text(t("android-settings.station.wait"), fontSize = 13.sp, lineHeight = 19.5.sp, color = C.ink,
                     modifier = Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.warn.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 10.dp))
-                else -> AddStationSteps(current, emptyList(), label = t("android-settings.station.firstName"), placeholder = t("android-settings.station.firstPlaceholder")) {}
+                else -> {
+                    AddStationSteps(current, emptyList(), label = t("android-settings.station.firstName"), placeholder = t("android-settings.station.firstPlaceholder")) {}
+                    // A station the viewer manages in another workspace, added here as it is instead (docs/multi-workspace.md).
+                    val joinable by rememberTopic<JoinableView>(app.core, Topics.joinable(current.workspace.id))
+                    if (joinable.value?.let { it.offered && it.items.isNotEmpty() } == true) {
+                        Text(t("web-pages.settings.stations.firstExisting"), fontSize = 14.sp, color = C.accent,
+                            modifier = Modifier.clickable { openAddStation(app, current, emptyList(), existingFirst = true) })
+                    }
+                }
             }
         }
     }

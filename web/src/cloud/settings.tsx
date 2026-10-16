@@ -638,7 +638,7 @@ export function AddStationDialog({ view, account, stations, onClose, thisMac = f
         <Button variant="ghost" onClick={onClose}>{enroll.result ? t("common.close") : t("common.cancel")}</Button>
         {!enroll.result && <Button variant="primary" disabled={!name.trim()} busy={enroll.busy} onClick={() => enroll.run()}>{t("web-pages.settings.stations.generate")}</Button>}
       </>}>
-      {joinable?.offered && !enroll.result && <AddKinds kind={kind} onKind={setKind} />}
+      {joinable?.offered && joinable.items.length > 0 && !enroll.result && <AddKinds kind={kind} onKind={setKind} />}
       {!enroll.result ? (
         <Field label={t("web-pages.settings.stations.nameLabel")} htmlFor="station-name">
           <input id="station-name" className={controlsCss.input} value={name} autoFocus placeholder={t("web-pages.settings.stations.namePlaceholder")} onChange={(e) => setName(e.target.value)} maxLength={80}
@@ -782,6 +782,24 @@ export function FirstStation({ entry }: { entry: WorkspaceEntry }) {
       {enroll.error && <p className={controlsCss.fieldError} role="alert">{enroll.error.message}</p>}
       <JoinThisMac account={entry.account} workspace={entry.id} className={css.firstThisMac} />
     </div>
+  );
+}
+
+/**
+ * A station the viewer manages in another workspace, added to a workspace with none as it is (docs/multi-workspace.md):
+ * a link among the first station's page's others, there only while there is such a station to add.
+ */
+export function JoinExistingLink({ entry, className }: { entry: WorkspaceEntry; className?: string }) {
+  const { view, manager } = useWorkspace(entry);
+  const joinable = useJoinable(entry.id).value;
+  const [open, setOpen] = useState(false);
+  if (!view || !manager || !joinable?.offered || joinable.items.length === 0) return null;
+  return (
+    <>
+      <span aria-hidden="true"> · </span>
+      <button type="button" className={className} onClick={() => setOpen(true)}>{t("web-pages.settings.stations.firstExisting")}</button>
+      {open && <JoinStationDialog view={view} joinable={joinable} onKind={(kind) => { if (kind === "new") setOpen(false); }} onClose={() => setOpen(false)} />}
+    </>
   );
 }
 

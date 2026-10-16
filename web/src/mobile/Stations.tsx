@@ -25,7 +25,7 @@ import { emojiMark, firstEmoji, glyphMark, kindOf, NO_MARK, pictureMark, picture
 import * as markCss from "../StationMark.css.ts";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
-import { Button, Card, Field, Illustration, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, PlaceHead, SectionHeader, Seg, Spinner } from "./parts.tsx";
+import { Button, Card, Field, Illustration, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, PlaceHead, SectionHeader, Seg, Spinner } from "./parts.tsx";
 import { usePlaceActions } from "./placeActions.tsx";
 import * as css from "./Stations.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -154,7 +154,8 @@ function StationBody({ s }: { s: StationView }) {
  * Adding a station: a name, then the command to run on that machine (which installs ember and joins it); the sheet
  * waits for it to join.
  */
-export function AddStationSheet({ known }: { known: string[] }) {
+/// `existing`: a station of another workspace first (the first station's page asks for it).
+export function AddStationSheet({ known, existing: first = false }: { known: string[]; existing?: boolean }) {
   const app = useApp();
   const me = app.entry.account;
   const stations = useStations(app.entry.id).value ?? [];
@@ -165,17 +166,17 @@ export function AddStationSheet({ known }: { known: string[] }) {
   const joined = made && stations.find((s) => !known.includes(s.id));
   // A station the viewer manages in another workspace, offered beside a new machine (docs/multi-workspace.md).
   const joinable = useJoinable(app.entry.id).value;
-  const [existing, setExisting] = useState(false);
+  const [existing, setExisting] = useState(first);
   return (
     <>
       <SheetGrab />
       <SheetHead title={t("web-mobile.stations.add")} />
       <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
-        {joinable?.offered && !made && (
+        {joinable?.offered && joinable.items.length > 0 && !made && (
           <Seg options={[t("web-pages.settings.stations.kindNew"), t("web-pages.settings.stations.kindExisting")]} selected={existing ? 1 : 0}
             onSelect={(i) => setExisting(i === 1)} fill height={34} radius={17} />
         )}
-        {joinable?.offered && existing && !made ? <JoinStation joinable={joinable} /> : !made ? (
+        {joinable?.offered && joinable.items.length > 0 && existing && !made ? <JoinStation joinable={joinable} /> : !made ? (
           <>
             <p className={partsCss.mMuted}>{t("web-mobile.stations.addNote", { name: NAME })}</p>
             <b className={sheetsCss.mFormLabel}>{t("web-mobile.workspaces.name")}</b>
@@ -327,6 +328,7 @@ export function FirstStation() {
   const [made, setMade] = useState<{ install: string } | null>(null);
   const busy = useDoing("workspace.enroll", { account: app.entry.account.sub, workspace: app.entry.id });
   const [error, setError] = useState<string | null>(null);
+  const joinable = useJoinable(app.entry.id).value;
   const shown = useRef(0);
   useEffect(() => { if (made) shown.current = performance.now(); }, [made]);
   // Joined: the page is gone (the workspace has a station), so this is said as it goes.
@@ -349,6 +351,9 @@ export function FirstStation() {
                 setError(null);
                 cloud.enroll(app.entry.account.sub, app.entry.id, name.trim()).then(setMade, (e: Error) => setError(e.message));
               }} />
+              {/* A station the viewer manages in another workspace, added here as it is instead (docs/multi-workspace.md). */}
+              {joinable?.offered && joinable.items.length > 0 && <LinkButton label={t("web-pages.settings.stations.firstExisting")}
+                onClick={() => app.sheet({ height: 0.72, draggable: true, content: () => <AddStationSheet known={[]} existing /> })} />}
             </>
           )}
       </div>

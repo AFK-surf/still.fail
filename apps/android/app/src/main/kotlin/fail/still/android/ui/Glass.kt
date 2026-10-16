@@ -88,8 +88,7 @@ fun Modifier.floating(state: HazeState, shape: Shape, tint: Color = Raised): Mod
             blurRadius = GlassBlur
             noiseFactor = 0f
         }
-        // What is under it is not reached through it: a touch anywhere on the capsule, its gaps too, stays on it.
-        .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } }
+        .keepsTouches()
 }
 
 /**
@@ -102,6 +101,12 @@ fun Modifier.floatingStill(shape: Shape, tint: Color = Raised): Modifier {
     val ground = tint.copy(alpha = 0.72f).compositeOver(C.bg)
     return shadow(1.dp, shape, ambientColor = Color.Black.copy(alpha = 0.3f), spotColor = Color.Black.copy(alpha = 0.3f))
         .clip(shape).background(ground)
-        .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } }
+        .keepsTouches()
 }
 
+/**
+ * What is under a capsule is not reached through it: a touch anywhere on it, its gaps too, lands on it (the first thing
+ * hit takes a touch, not the page under it). Only that: it consumes nothing, as what is in it (a list's scroll, a row's
+ * tap) gives the drag or tap up when something round it has consumed it (2026-10-17: the `@` menu did not scroll).
+ */
+private fun Modifier.keepsTouches() = pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } }

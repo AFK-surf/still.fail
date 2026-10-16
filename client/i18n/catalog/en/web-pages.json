@@ -751,6 +751,7 @@
   },
   "web-pages.settings.stations.existingLabel": "Pick a station",
   "web-pages.settings.stations.existingLead": "Add a station you manage in another workspace here too.",
+  "web-pages.settings.stations.firstExisting": "Add one from another workspace",
   "web-pages.settings.stations.existingNone": "None of the stations in the other workspaces you manage can be added",
   "web-pages.settings.stations.generate": "Get command",
   "web-pages.settings.stations.joinAction": "Add it",

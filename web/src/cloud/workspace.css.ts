@@ -79,6 +79,8 @@ export const onboardingMain = style({
 });
 export const onboardingTitle = style({ margin: "20px 0 8px", fontSize: vars.textHeading, fontWeight: "600" });
 export const onboardingFoot = style({ marginTop: "20px", fontSize: vars.textUi });
+/** A link of the foot that opens something rather than going to a page: a button that looks as the others. */
+export const onboardingLinkButton = style({ padding: "0", border: "0", background: "none", font: "inherit", cursor: "pointer" });
 globalStyle(`${threadItem} ${muted}, ${menuWorkspace} ${muted}`, { fontSize: vars.textMeta });
 globalStyle(`${menuCheck} svg, ${menuRareItem} svg`, { color: "inherit" });
 globalStyle(`${menuCheck} svg`, { color: vars.accent });

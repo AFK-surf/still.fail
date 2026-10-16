@@ -694,6 +694,7 @@
   "web-pages.settings.stations.count": "{n} 台",
   "web-pages.settings.stations.existingLabel": "选一台 station",
   "web-pages.settings.stations.existingLead": "把你在别的 workspace 管理的 station 也加到这里。",
+  "web-pages.settings.stations.firstExisting": "加别的 workspace 的 station",
   "web-pages.settings.stations.existingNone": "你管理的其他 workspace 里没有能加进来的 station",
   "web-pages.settings.stations.generate": "生成命令",
   "web-pages.settings.stations.joinAction": "加进来",
