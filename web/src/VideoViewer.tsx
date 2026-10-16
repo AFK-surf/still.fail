@@ -5,12 +5,12 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { CanvasSink, Input, WrappedCanvas } from "mediabunny";
 import { REST_MS, TAP_REST_MS, useZoom } from "./FilePreview.tsx";
-import { Camera, ChevronLeft, ChevronRight, Landscape, Pause, Play } from "./icons.tsx";
+import { Camera, ChevronLeft, ChevronRight, Landscape, Pause, Play } from "@stillfail/ui/icons.tsx";
 import * as css from "./VideoViewer.css.ts";
 import * as fpCss from "./FilePreview.css.ts";
-import * as pagesCss from "./styles/pages.css.ts";
 import { Tip } from "./ui.tsx";
 import { t } from "./i18n.ts";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
 type Canvas = HTMLCanvasElement | OffscreenCanvas;
 
@@ -349,11 +349,11 @@ export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name
         <Timeline start={decoded?.starts[0] ?? 0} end={decoded ? decoded.starts.at(-1)! + decoded.lastDuration : duration} now={now} onSeek={seek} />
         <div className={css.vvRow}>
           <span className={css.vvGroup}>
-            <Tip label={t("web-main.video.prevKey")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.video.prev")} onClick={() => go((i) => i - 1)}><ChevronLeft size={18} /></button></Tip>
-            <Tip label={playing ? t("web-main.video.pauseKey") : t("web-main.video.playKey")}><button type="button" className={pagesCss.iconBtn} aria-label={playing ? t("web-main.video.pause") : t("web-main.video.play")} onClick={toggle}>
+            <Tip label={t("web-main.video.prevKey")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-main.video.prev")} onClick={() => go((i) => i - 1)}><ChevronLeft size={18} /></button></Tip>
+            <Tip label={playing ? t("web-main.video.pauseKey") : t("web-main.video.playKey")}><button type="button" className={pageCss.iconBtn} aria-label={playing ? t("web-main.video.pause") : t("web-main.video.play")} onClick={toggle}>
               {playing ? <Pause size={18} /> : <Play size={18} />}
             </button></Tip>
-            <Tip label={t("web-main.video.nextKey")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.video.next")} onClick={() => go((i) => i + 1)}><ChevronRight size={18} /></button></Tip>
+            <Tip label={t("web-main.video.nextKey")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-main.video.next")} onClick={() => go((i) => i + 1)}><ChevronRight size={18} /></button></Tip>
           </span>
           <span className={css.vvInfo}>
             {facts.map((f) => <span key={f.key} className={css.vvFact} data-fact={f.key}>{f.text}</span>)}
@@ -362,8 +362,8 @@ export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name
             {zoomTools}
             <Tip label={t("web-main.video.rate")}><button type="button" className={css.vvRate}
               onClick={() => setRate((r) => RATES[(RATES.indexOf(r) + RATES.length - 1) % RATES.length]!)}>{rate}×</button></Tip>
-            <Tip label={t("web-main.video.saveTip")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.video.save")} disabled={!still} onClick={save}><Camera size={18} /></button></Tip>
-            {canTurn() && <button type="button" className={`${pagesCss.iconBtn} ${css.vvTurn}`} aria-label={turned ? t("web-main.video.unturn") : t("web-main.video.turn")} aria-pressed={turned}
+            <Tip label={t("web-main.video.saveTip")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-main.video.save")} disabled={!still} onClick={save}><Camera size={18} /></button></Tip>
+            {canTurn() && <button type="button" className={`${pageCss.iconBtn} ${css.vvTurn}`} aria-label={turned ? t("web-main.video.unturn") : t("web-main.video.turn")} aria-pressed={turned}
               onClick={() => void turn().catch((e: unknown) => console.warn("full screen:", e))}><Landscape size={18} /></button>}
           </span>
         </div>

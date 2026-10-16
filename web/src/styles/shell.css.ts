@@ -1,6 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./tokens.css.ts";
-import { panel } from "./glass.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { panel } from "@stillfail/ui/styles/glass.ts";
 
 export const shell = style({
   position: "relative", display: "grid", gridTemplateColumns: "240px minmax(0, 1fr)", height: ["100vh", "100dvh"],

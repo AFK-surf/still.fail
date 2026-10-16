@@ -1,7 +1,7 @@
 // What picking a station's mark sends (the settings' stations, wide and phone): its icon and its emoji, set together. A
 // glyph keeps its emoji beside it, so older clients (which know only emoji) show the nearest; an emoji or a picture
 // takes the other away. "" takes either away.
-import { STATION_ICONS } from "./icons.tsx";
+import { STATION_ICONS } from "@stillfail/ui/icons.tsx";
 import { isPicture, stationGlyph, type MarkColor } from "./StationMark.tsx";
 
 export type Mark = { emoji: string; icon: string };

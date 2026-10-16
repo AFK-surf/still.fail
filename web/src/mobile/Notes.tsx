@@ -2,7 +2,7 @@
 // frosted box like the chat's composer; written, as a card in a row at the foot. The Android app's are its
 // screens/Notes.kt NoteBox and Card.
 import { useEffect, useLayoutEffect, useRef, type CSSProperties } from "react";
-import { Check, Trash } from "../icons.tsx";
+import { Check, Trash } from "@stillfail/ui/icons.tsx";
 import * as css from "./Notes.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import { t } from "../i18n.ts";

@@ -9,7 +9,7 @@ import { useTopic, useTopicSelect } from "./core/react.ts";
 import { useNarrow } from "./mobile/narrow.ts";
 import { useBarOnScroll, ViewerBar, ViewerDownload } from "./viewer/ViewerBar.tsx";
 import type { ChatView, DriveEntry, ImageNear } from "./core/shapes.ts";
-import { Check, ChevronLeft, ChevronRight, Close, Copy, Download, File as FileMark, Minus, Plus } from "./icons.tsx";
+import { Check, ChevronLeft, ChevronRight, Close, Copy, Download, File as FileMark, Minus, Plus } from "@stillfail/ui/icons.tsx";
 import { Prose } from "./Prose.tsx";
 import { FrameHost, isFragment, vizDocument } from "./Viz.tsx";
 import { fileLink } from "./Prose.css.ts";
@@ -17,19 +17,19 @@ import { useStation } from "./station.tsx";
 import { Segmented, Tip } from "./ui.tsx";
 import { VideoViewer } from "./VideoViewer.tsx";
 import { useImageMarks } from "./annotate/ImageMarks.tsx";
-import { useBackClose } from "./backClose.ts";
+import { useBackClose } from "@stillfail/ui/backClose.ts";
 import { thumbId, viewerFlight } from "./viewerFlight.ts";
 import { asPng, standIn } from "./wholeImages.ts";
-import { failure, useToast } from "./toast.tsx";
-import { animate, reducedMotion, type AnimationPlaybackControls } from "./motion.ts";
+import { failure, useToast } from "@stillfail/ui/toast.tsx";
+import { animate, reducedMotion, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import * as css2 from "./FilePreview.css.ts";
-import * as waitingCss from "./styles/waiting.css.ts";
-import * as controlsCss from "./styles/controls.css.ts";
-import * as pagesCss from "./styles/pages.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import { t } from "./i18n.ts";
-import { fileSize } from "./fileSize.ts";
+import { fileSize } from "@stillfail/ui/fileSize.ts";
+import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
 export { fileSize };
 
@@ -538,7 +538,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
       <div>{[fileSize(file.size), ext && ext.length <= 12 ? ext : ""].filter(Boolean).join(" · ")}</div>
       <div>{t("web-main.preview.unsupported")}</div>
       {askedNow && loaded.state === "loading"
-        ? (loaded.got ? <Progress got={loaded.got} size={file.size} /> : <span className={waitingCss.spinner} aria-hidden="true" />)
+        ? (loaded.got ? <Progress got={loaded.got} size={file.size} /> : <span className={spinnerCss.spinner} aria-hidden="true" />)
         : <>
           {loaded.state === "error" && <div className={css2.fpFactsFailed}>{t("web-main.preview.loadFailed", { error: loaded.message })}</div>}
           <button type="button" className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} onClick={ask}><Download size={16} />{t("web-main.preview.download")}</button>
@@ -548,7 +548,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
     body = <ImageViewer key={file.path} url={loaded.state === "ready" ? loaded.url : thumb!} file={file} setControls={setControls} swipe={swipe}
       waiting={loaded.state === "loading"} onMarking={setMarking} onClose={onClose} />;
   } else if (loaded.state === "loading" || (kind === null && loaded.state === "ready") || (known.kind === null && !local && front === null)) {
-    body = <div className={css2.fpNote}>{loaded.state === "loading" && loaded.got ? <Progress got={loaded.got} size={file.size} /> : <><span className={waitingCss.spinner} aria-hidden="true" />{t("web-main.preview.loading")}</>}</div>;
+    body = <div className={css2.fpNote}>{loaded.state === "loading" && loaded.got ? <Progress got={loaded.got} size={file.size} /> : <><span className={spinnerCss.spinner} aria-hidden="true" />{t("web-main.preview.loading")}</>}</div>;
   }
   else if (loaded.state === "error") body = <div className={css2.fpNote}>{t("web-main.preview.loadFailed", { error: loaded.message })}</div>;
   else {
@@ -624,16 +624,16 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
         {controls}
         {kind === "image" && !marking && (loaded.state === "ready"
           ? <CopyImage key={file.path} image={loaded.blob} />
-          : <span className={pagesCss.iconBtn} aria-hidden="true" style={{ visibility: "hidden" }}><Copy size={18} /></span>)}
+          : <span className={pageCss.iconBtn} aria-hidden="true" style={{ visibility: "hidden" }}><Copy size={18} /></span>)}
         {marking ? null : toldOf && loaded.state !== "ready"
-          ? <Tip label={t("web-main.preview.download")}><button type="button" className={pagesCss.iconBtn} onClick={ask} disabled={askedNow !== null && loaded.state === "loading"} aria-label={t("web-main.preview.download")}><Download size={18} /></button></Tip>
+          ? <Tip label={t("web-main.preview.download")}><button type="button" className={pageCss.iconBtn} onClick={ask} disabled={askedNow !== null && loaded.state === "loading"} aria-label={t("web-main.preview.download")}><Download size={18} /></button></Tip>
           : loaded.state === "ready"
           ? <Tip label={t("web-main.preview.download")}>{source?.save
-            ? <button type="button" className={pagesCss.iconBtn} onClick={() => source.save?.(file, loaded.blob)} aria-label={t("web-main.preview.download")}><Download size={18} /></button>
-            : <a className={pagesCss.iconBtn} href={loaded.url} download={file.name} aria-label={t("web-main.preview.download")}><Download size={18} /></a>}</Tip>
+            ? <button type="button" className={pageCss.iconBtn} onClick={() => source.save?.(file, loaded.blob)} aria-label={t("web-main.preview.download")}><Download size={18} /></button>
+            : <a className={pageCss.iconBtn} href={loaded.url} download={file.name} aria-label={t("web-main.preview.download")}><Download size={18} /></a>}</Tip>
           // Its place kept until it comes.
-          : <span className={pagesCss.iconBtn} aria-hidden="true" style={{ visibility: "hidden" }}><Download size={18} /></span>}
-        <Tip label={t("web-main.preview.closeKey")}><RDialog.Close className={pagesCss.iconBtn} aria-label={t("common.close")}><Close size={18} /></RDialog.Close></Tip>
+          : <span className={pageCss.iconBtn} aria-hidden="true" style={{ visibility: "hidden" }}><Download size={18} /></span>}
+        <Tip label={t("web-main.preview.closeKey")}><RDialog.Close className={pageCss.iconBtn} aria-label={t("common.close")}><Close size={18} /></RDialog.Close></Tip>
       </header>}
       <div className={css2.fpBody}>
         <div ref={slide} className={css2.fpSlide}>
@@ -661,7 +661,7 @@ function CopyImage({ image }: { image: Blob }) {
     void navigator.clipboard.write([new ClipboardItem({ "image/png": asPng(image) })])
       .then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); }, (e: unknown) => toast(t("web-main.copyFailed", { error: failure(e) })));
   };
-  return <Tip label={label}><button type="button" className={pagesCss.iconBtn} aria-label={label} onClick={copy}>{copied ? <Check size={18} /> : <Copy size={18} />}</button></Tip>;
+  return <Tip label={label}><button type="button" className={pageCss.iconBtn} aria-label={label} onClick={copy}>{copied ? <Check size={18} /> : <Copy size={18} />}</button></Tip>;
 }
 
 /** Text, when its first bytes decode as UTF-8 with no NULs. */
@@ -963,9 +963,9 @@ export function useZoom(natural: { w: number; h: number } | null, setControls: (
   useEffect(() => {
     setControls(
       <span className={css2.fpZoom}>
-        <Tip label={t("web-main.preview.zoomOutKey")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.preview.zoomOut")} disabled={scale <= minScale + 1e-6} onClick={() => zoomTo(scale / 1.25)}><Minus size={18} /></button></Tip>
+        <Tip label={t("web-main.preview.zoomOutKey")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-main.preview.zoomOut")} disabled={scale <= minScale + 1e-6} onClick={() => zoomTo(scale / 1.25)}><Minus size={18} /></button></Tip>
         <Tip label={t("web-main.preview.fitKey")}><button type="button" className={`${css2.fpToolText} ${css2.fpPercent}`} onClick={reset}>{Math.round(scale * 100)}%</button></Tip>
-        <Tip label={t("web-main.preview.zoomInKey")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.preview.zoomIn")} disabled={scale >= MAX_SCALE - 1e-6} onClick={() => zoomTo(scale * 1.25)}><Plus size={18} /></button></Tip>
+        <Tip label={t("web-main.preview.zoomInKey")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-main.preview.zoomIn")} disabled={scale >= MAX_SCALE - 1e-6} onClick={() => zoomTo(scale * 1.25)}><Plus size={18} /></button></Tip>
         <Tip label={t("web-main.preview.actualKey")}><button type="button" className={css2.fpToolText} onClick={() => zoomTo(1)}>1:1</button></Tip>
       </span>,
     );
@@ -1017,7 +1017,7 @@ function PdfViewer({ blob }: { blob: Blob }) {
   return (
     <div ref={page} className={`${css2.fpPage} ${css2.fpPdf}`}>
       {error ? <div className={css2.fpPlain}>{t("web-main.preview.pdfFailed", { error })}</div>
-        : !doc || width <= 0 ? <div className={css2.fpPlain}><span className={waitingCss.spinner} aria-hidden="true" /></div>
+        : !doc || width <= 0 ? <div className={css2.fpPlain}><span className={spinnerCss.spinner} aria-hidden="true" /></div>
         : Array.from({ length: doc.numPages }, (_, i) => <PdfPage key={i} doc={doc} number={i + 1} width={width} />)}
     </div>
   );
@@ -1104,7 +1104,7 @@ function TextViewer({ blob, kind, language, name, setControls, onMove }: {
     );
     return () => setControls(null);
   }, [rendered, source, setControls]);
-  if (text === null) return <div className={css2.fpNote}><span className={waitingCss.spinner} aria-hidden="true" />{t("web-main.preview.loading")}</div>;
+  if (text === null) return <div className={css2.fpNote}><span className={spinnerCss.spinner} aria-hidden="true" />{t("web-main.preview.loading")}</div>;
   let content: ReactNode;
   if (kind === "html" && !source) {
     // Its scripts run, but in an origin of its own: nothing of still.fail's is reachable from it.

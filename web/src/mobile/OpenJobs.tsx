@@ -6,7 +6,7 @@ import { useState } from "react";
 import type { Job } from "../core/shapes.ts";
 import { chatPath, SHOWN, useLongJobs } from "../OpenJobs.tsx";
 import { JobDot } from "../Jobs.tsx";
-import { Stop } from "../icons.tsx";
+import { Stop } from "@stillfail/ui/icons.tsx";
 import { doingMatches, failed, useDoingList } from "../doing.ts";
 import { useApp } from "./app.tsx";
 import { FailedMark, failedIn, Spinner } from "./parts.tsx";

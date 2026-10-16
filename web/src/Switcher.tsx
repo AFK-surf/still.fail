@@ -12,7 +12,7 @@ import { jumpTo } from "./jumpTo.ts";
 import { Mark, useAppUpdate } from "./brand.tsx";
 import { commands, useCommands, type Command } from "./commands.ts";
 import { webUpdates } from "./core/webUpdates.ts";
-import { Archive, Command as CommandIcon, Compose, Download, File, PanelOpen, Refresh, Settings, Stop, Thread, Web, type IconProps } from "./icons.tsx";
+import { Archive, Command as CommandIcon, Compose, Download, File, PanelOpen, Refresh, Settings, Stop, Thread, Web, type IconProps } from "@stillfail/ui/icons.tsx";
 import { ACTIONS, availableActions, labelOf, runAction, shortcutOf, useShortcut, type Action } from "./keymap.ts";
 import { ShortcutsDialog } from "./Shortcuts.tsx";
 import { stationBase } from "./station.tsx";

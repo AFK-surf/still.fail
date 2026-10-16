@@ -1,5 +1,5 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const controls = style({
   position: "fixed", top: 6, right: 12, height: 32, display: "flex", alignItems: "center", gap: 2,

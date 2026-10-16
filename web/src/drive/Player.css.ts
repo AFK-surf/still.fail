@@ -1,9 +1,9 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { VIEWER_BAR } from "../viewer/ViewerBar.css.ts";
 import { glass } from "../FilePreview.css.ts";
 import { vvBar } from "../VideoViewer.css.ts";
-import { spinner as turning } from "../styles/waiting.css.ts";
+import { spinner as turning } from "@stillfail/ui/styles/spinner.css.ts";
 
 /** The player fills its page (the phone's, or the desktop's main pane), in the theme's colours as the chat's video viewer. */
 export const player = style({ position: "absolute", inset: "0", userSelect: "none", WebkitUserSelect: "none" });

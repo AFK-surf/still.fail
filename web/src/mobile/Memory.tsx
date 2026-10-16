@@ -8,7 +8,7 @@ import { Prose } from "../Prose.tsx";
 import { useStation } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { useStations } from "../api.ts";
-import { ChevronDown, ChevronRight } from "../icons.tsx";
+import { ChevronDown, ChevronRight } from "@stillfail/ui/icons.tsx";
 import { Card, LargeTitle, ListCard, ListRow, Loading, NavBar, SectionHeader, TopBack } from "./parts.tsx";
 import { GoRow } from "./Settings.tsx";
 import * as settingsCss from "./styles/settings.css.ts";

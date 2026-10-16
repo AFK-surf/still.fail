@@ -1,5 +1,5 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "../../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const mNavButton = style({
   display: "grid", placeItems: "center", width: "34px", height: "34px", flex: "none", padding: "0", border: "0",

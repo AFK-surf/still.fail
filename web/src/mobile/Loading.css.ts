@@ -1,5 +1,5 @@
 import { keyframes, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 // The placeholders breathe while waited on (Android screens/Loading.kt the same: 1 → 0.5 and back, 1.4s).
 const breathe = keyframes({ "0%, 100%": { opacity: 1 }, "50%": { opacity: 0.5 } });

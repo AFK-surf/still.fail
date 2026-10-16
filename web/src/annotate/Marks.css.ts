@@ -1,8 +1,8 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
-import { popKeyframes } from "../styles/keyframes.css.ts";
-import { iconBtn } from "../styles/pages.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { popKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { previewBar } from "../Preview.css.ts";
+import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
 
 /** Frosted, as the composer is. */
 const glass = {

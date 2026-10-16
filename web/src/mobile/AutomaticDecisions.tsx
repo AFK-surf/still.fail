@@ -4,7 +4,7 @@ import { useParams } from "react-router";
 import { useAutomaticDecisionForm, usePolicyDraft, usePolicyForm } from "../AutomaticDecisions.tsx";
 import { useStations } from "../api.ts";
 import type { ArchiveOptionView, ArchivePolicyView, AutomaticDecisionView } from "../core/shapes.ts";
-import { ChevronRight, Refresh } from "../icons.tsx";
+import { ChevronRight, Refresh } from "@stillfail/ui/icons.tsx";
 import { stationBase } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { Button, FailedMark, Field, LargeTitle, LinkButton, ListCard, ListRow, NavButton, SectionHeader, Seg, Spinner, TopBack } from "./parts.tsx";

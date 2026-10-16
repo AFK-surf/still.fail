@@ -1,6 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { fadeInKeyframes } from "./styles/keyframes.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { fadeInKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { previewBar, previewFrame } from "./Preview.css.ts";
 import * as stageCss from "./PreviewStage.css.ts";
 

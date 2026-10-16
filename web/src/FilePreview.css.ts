@@ -1,13 +1,13 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { fadeInKeyframes } from "./styles/keyframes.css.ts";
-import { iconBtn } from "./styles/pages.css.ts";
-import { spinner } from "./styles/waiting.css.ts";
-import { segmented, segmentedOption } from "./ui.css.ts";
-import { btn } from "./styles/controls.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { fadeInKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { btn } from "@stillfail/ui/styles/controls.css.ts";
 import { enrollWait } from "./cloud/settings.css.ts";
 import { avatarTile, tokenGuide } from "./pages/SlackApp.css.ts";
 import { codeBar, codeBlock, codeShiki } from "./Prose.css.ts";
+import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
+import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
+import { segmented, segmentedOption } from "@stillfail/ui/parts.css.ts";
 
 /** Frosted glass over a picture, in the theme's colours (a viewer is light in a light app, dark in a dark one). */
 export const glass = {

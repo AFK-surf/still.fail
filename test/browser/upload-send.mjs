@@ -15,7 +15,7 @@ import './src/styles/index.ts';
 import { setCore } from './src/core/react.ts';
 import { useDraft } from './src/draft.ts';
 import { ComposerView } from './src/Chat.tsx';
-import { ToastProvider } from './src/toast.tsx';
+import { ToastProvider } from '@stillfail/ui/toast.tsx';
 import { StationContext } from './src/station.tsx';
 import { setPageRoot } from './src/brand.tsx';
 let value:any = {text:'',files:[],quotes:[],rev:0,version:0,ready:false,uploading:false,starting:false};

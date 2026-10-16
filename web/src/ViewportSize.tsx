@@ -4,7 +4,7 @@
 // choices in a sheet from the bottom.
 import { Dialog, Popover } from "radix-ui";
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { Check, Devices, Landscape, Minus, Plus } from "./icons.tsx";
+import { Check, Devices, Landscape, Minus, Plus } from "@stillfail/ui/icons.tsx";
 import { Tip } from "./ui.tsx";
 import { LIMIT, PRESETS, presetOf, setViewport, type Viewport } from "./viewport.ts";
 import * as css from "./ViewportSize.css.ts";

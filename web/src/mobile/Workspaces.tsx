@@ -13,7 +13,7 @@ import * as sheetsCss from "./styles/sheets.css.ts";
 import * as css from "./Workspaces.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 
-import { LogIn, Plus } from "../icons.tsx";
+import { LogIn, Plus } from "@stillfail/ui/icons.tsx";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 export function openWorkspaces(app: MobileApp) {

@@ -8,7 +8,7 @@ import { stationApi, useAction, useOverview, useProfiles, useStationCall, useSta
 import type { MachineLogin, ProfileFlowView, WorkspaceProfile } from "../core/shapes.ts";
 import { hosts, profileGroups } from "../cloud/settings.tsx";
 import { ACCESS, KEYED } from "../format.ts";
-import { Check, ChevronRight, More } from "../icons.tsx";
+import { Check, ChevronRight, More } from "@stillfail/ui/icons.tsx";
 import type { Choice } from "../pages/Accounts.tsx";
 import { useProfileFlow } from "../profileFlow.ts";
 import { QuotaBars } from "../components.tsx";
@@ -16,7 +16,7 @@ import { StationContext, stationBase, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp, type SheetSpec } from "./app.tsx";
 import { Presence } from "./Connects.tsx";
 import { Button, failedIn, FailedMark, Field, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, PlaceHead, PlaceNote, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, tNodes } from "./parts.tsx";
-import { useAct } from "../toast.tsx";
+import { useAct } from "@stillfail/ui/toast.tsx";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import * as pagesCss from "./styles/pages.css.ts";

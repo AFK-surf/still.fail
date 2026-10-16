@@ -1,5 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 // The admin console. Only names are bold and only what is off is coloured; rows stand apart by spacing, with no rules.
 

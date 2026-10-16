@@ -1,7 +1,7 @@
 // A new chat, after Zork's: say what to do, having picked where it runs
 // (station), on what (runtime and model) and how hard it thinks. The first
 // message (or file) makes the chat and its agent's session on that station.
-import { Key, Plus } from "./icons.tsx";
+import { Key, Plus } from "@stillfail/ui/icons.tsx";
 import { StationMark } from "./StationMark.tsx";
 import { Link, useNavigate } from "react-router";
 import { useMemo, useRef, useState } from "react";
@@ -9,7 +9,7 @@ import type { RuntimeKind, StationView } from "./api.ts";
 import type { NewChatView } from "./core/shapes.ts";
 import { useReady } from "./core/react.ts";
 import { useNewChat, usePick } from "./pick.ts";
-import { useAct } from "./toast.tsx";
+import { useAct } from "@stillfail/ui/toast.tsx";
 import { ComposerSlot, useCarryDraft } from "./dock.tsx";
 import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
 import { Button, Chooser, ChooserItem as Item, FirstOne } from "./ui.tsx";
@@ -22,14 +22,13 @@ import { keepTabs } from "./chatTabs.ts";
 import * as css from "./NewChat.css.ts";
 import { FrequentCombos } from "./FrequentCombos.tsx";
 import type { PickPatch } from "./pick.ts";
-import * as controlsCss from "./styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
-import * as chatCss from "./styles/chat.css.ts";
 import { MachineSessions } from "./MachineSessions.tsx";
 import { composerText } from "./Chat.css.ts";
 import { notSent, sendingFirst } from "./madeChat.ts";
 import { OVER_DOCK } from "./Chat.tsx";
-import { LOCAL_MS } from "./motion.ts";
+import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { t } from "./i18n.ts";
 
 /** What a station is shown by (StationMark): its icon and emoji, none for a station not listed. */
@@ -96,7 +95,7 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
       )}
       {!runtime || !model ? (
         // Nothing to choose from: the chooser leads to where models are enabled.
-        <Link className={chatCss.chooser} to={profilesPage(station)}>{t("web-main.newChat.noModels")}</Link>
+        <Link className={controlsCss.chooser} to={profilesPage(station)}>{t("web-main.newChat.noModels")}</Link>
       ) : (
         <ModelTriple side="top" pick={pick} onConfirm={() => act(pick.save(), t("web-main.newChat.changeModelWhat"))} />
       )}

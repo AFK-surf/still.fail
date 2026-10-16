@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
-import { segmentedThumb } from "../ui.css.ts";
-import { inner as innerCorner } from "../styles/align.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { inner as innerCorner } from "@stillfail/ui/styles/align.ts";
+import { segmentedThumb } from "@stillfail/ui/parts.css.ts";
 
 // The station's mark before its name: a square the size of a line, dashed while it has none; a picture fills it.
 export const slot = style({

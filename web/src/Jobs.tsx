@@ -7,13 +7,13 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ChatJobsView, Job, JobLogView } from "./core/shapes.ts";
 import { stationApi, useStationCall } from "./api.ts";
 import { useTopic } from "./core/react.ts";
-import { ArrowRight, ChevronDown, ChevronRight, PanelOpen, Stop } from "./icons.tsx";
+import { ArrowRight, ChevronDown, ChevronRight, PanelOpen, Stop } from "@stillfail/ui/icons.tsx";
 import { Empty, Segmented, Tip } from "./ui.tsx";
-import { useAct } from "./toast.tsx";
+import { useAct } from "@stillfail/ui/toast.tsx";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import * as css from "./Jobs.css.ts";
-import * as pagesCss from "./styles/pages.css.ts";
 import { t } from "./i18n.ts";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
 // What a job's dot says, its word, the line under its name and every time in words are the core's (client/core-ts/src/
 // jobs.ts): `tone` (up, live, restart, fail, off), `meta`, `detail`, a notice's `ago` and `clock`; a chat's all
@@ -229,7 +229,7 @@ export function JobsTab({ station, view, picked, onPick, chat }:
             <span className={css.jobDetailState}>{job.detail}</span>
             <span className={css.jobDetailGrow} />
             <Segmented<"notices" | "output"> label={t("web-main.jobs.show")} value={tab} onChange={setTab} options={[{ value: "notices", label: t("web-main.jobs.notices") }, { value: "output", label: t("web-main.jobs.output") }]} />
-            {job.state === "running" && <Tip label={t("web-main.jobs.stop")}><JobStop station={station} job={job} stop={stop} className={`${pagesCss.iconBtn} ${css.jobDetailStop}`} label={t("web-main.jobs.stop")} size={16} /></Tip>}
+            {job.state === "running" && <Tip label={t("web-main.jobs.stop")}><JobStop station={station} job={job} stop={stop} className={`${pageCss.iconBtn} ${css.jobDetailStop}`} label={t("web-main.jobs.stop")} size={16} /></Tip>}
           </div>
           {job.command && <Tip label={job.command} cut><div className={css.jobDetailCommand}>{job.command}</div></Tip>}
           {tab === "notices"

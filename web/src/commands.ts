@@ -1,7 +1,7 @@
 // What ⌘K's list offers besides chats and the keys' actions (Switcher.tsx): a page says what can be done from it now
 // (its settings, updating its station) with useCommands, as it says what its keys do with useShortcut.
 import { useEffect, useRef, type ComponentType } from "react";
-import type { IconProps } from "./icons.tsx";
+import type { IconProps } from "@stillfail/ui/icons.tsx";
 
 export interface Command {
   /** Its own among the list's ("settings/appearance"); also matched by what is typed. */

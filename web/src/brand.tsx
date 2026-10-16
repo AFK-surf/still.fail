@@ -9,7 +9,7 @@ import * as sidebarCss from "./styles/sidebar.css.ts";
 import * as railCss from "./Rail.css.ts";
 import * as listCss from "./Sidebar.css.ts";
 import * as bubblesCss from "./SystemBubbles.css.ts";
-import { moveState } from "./motion.ts";
+import { moveState } from "@stillfail/ui/motion.ts";
 import { Tip } from "./ui.tsx";
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";

@@ -5,7 +5,7 @@ import "./share.css.ts";
 import "@fontsource-variable/inter";
 import { createRoot } from "react-dom/client";
 import { I18nRoot } from "../i18n.ts";
-import { ToastProvider } from "../toast.tsx";
+import { ToastProvider } from "@stillfail/ui/toast.tsx";
 import { Share } from "./Share.tsx";
 
 createRoot(document.getElementById("app")!).render(<I18nRoot><ToastProvider><Share /></ToastProvider></I18nRoot>);

@@ -1,5 +1,5 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { m } from "./styles/root.css.ts";
 
 /** How many folders and files, over the list: a small grey line. */

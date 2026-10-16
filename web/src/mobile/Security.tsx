@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { useCall, useTopic } from "../core/react.ts";
 import { useDoing } from "../doing.ts";
 import { stamp } from "../api.ts";
-import { ShieldCheck } from "../icons.tsx";
+import { ShieldCheck } from "@stillfail/ui/icons.tsx";
 import { t } from "../i18n.ts";
 import { deviceName, useLock, type LockDraft, type LockRequest, type LockView } from "../cloud/Security.tsx";
 import { ROLE_LABEL } from "../cloud/settings.tsx";

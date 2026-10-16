@@ -1,5 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { navSessionWrap } from "../Sidebar.css.ts";
 
 // An archived chat's row in the sidebar (Archive.tsx ArchiveRow), a chat's row (Sidebar.css.ts) but for what can be done

@@ -1,8 +1,8 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { composerWrap } from "./styles/cloud.css.ts";
-import { vars } from "./styles/tokens.css.ts";
-import { spinner } from "./styles/waiting.css.ts";
-import { glass } from "./styles/glass.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { glass } from "@stillfail/ui/styles/glass.ts";
+import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 
 // A decision's options (Decisions.tsx): under the message that asks it in a chat, and at the foot of the decisions
 // page. One card, a row each, numbered in a circle; the recommended one last, told by its number in the accent

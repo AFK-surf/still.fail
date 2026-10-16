@@ -1,9 +1,9 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { panel as ground } from "./styles/glass.ts";
-import { fadeInKeyframes, mRiseInKeyframes } from "./styles/keyframes.css.ts";
-import { TEXT_IN, inner } from "./styles/align.ts";
-import { popover as popover0 } from "./styles/controls.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { panel as ground } from "@stillfail/ui/styles/glass.ts";
+import { fadeInKeyframes, mRiseInKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { TEXT_IN, inner } from "@stillfail/ui/styles/align.ts";
+import { popover as popover0 } from "@stillfail/ui/styles/controls.css.ts";
 
 /** The bar's button: its icon alone, or with the size the page is laid out at (and how much it is drawn at). */
 export const button = style({

@@ -1,6 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
-import { bleedX, bleedY, outsetTop } from "../styles/align.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { bleedX, bleedY, outsetTop } from "@stillfail/ui/styles/align.ts";
 
 export const kindTag = style({ display: "inline-flex", alignItems: "center", gap: "5px", color: vars.text });
 export const listRowTime = style({ flex: "none", minWidth: "5.5em", textAlign: "right", fontSize: vars.textMeta });

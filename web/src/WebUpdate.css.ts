@@ -1,5 +1,5 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const notice = style({
   position: "fixed", zIndex: 150, bottom: "calc(var(--safe-bottom) + 12px)", left: "calc(var(--safe-left) + 12px)",

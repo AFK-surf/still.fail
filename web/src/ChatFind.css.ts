@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { fadeKeyframes, searchStrokeKeyframes } from "./styles/keyframes.css.ts";
-import { glass } from "./styles/glass.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { fadeKeyframes, searchStrokeKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { glass } from "@stillfail/ui/styles/glass.ts";
 
 /** The chat's find bar (ChatFind.tsx): in the page's bar, in place of its buttons while it is open, so it covers
  *  nothing of the chat. Where a page has no such place, over the top right of the list. */

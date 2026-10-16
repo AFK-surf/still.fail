@@ -2,15 +2,15 @@
 // where a dialog's do (ui.css.ts: 24 in); a row's ground reaches to 12 from its edge, a pill, and the switcher's corner
 // is from it (12 + its half height, align.ts pillInner), not a dialog's 42: a 38 high row cannot round 30 to follow that.
 import { style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { panel } from "./styles/glass.ts";
-import { DIALOG_PAD } from "./ui.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { panel } from "@stillfail/ui/styles/glass.ts";
 
 const EDGE = 12;
 const ROW = 38;
-import { fadeKeyframes, popKeyframes } from "./styles/keyframes.css.ts";
-import { centredX } from "./styles/align.ts";
-import { inner, outset, pillInner, surface } from "./styles/align.ts";
+import { fadeKeyframes, popKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { centredX } from "@stillfail/ui/styles/align.ts";
+import { inner, outset, pillInner, surface } from "@stillfail/ui/styles/align.ts";
+import { DIALOG_PAD } from "@stillfail/ui/parts.css.ts";
 
 const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
 

@@ -1,7 +1,7 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { mScroll } from "./styles/pages.css.ts";
-import { mFromLeftKeyframes, mFromRightKeyframes, mRiseInKeyframes, mRiseOutKeyframes, mToLeftKeyframes, mToRightKeyframes } from "../styles/keyframes.css.ts";
+import { mFromLeftKeyframes, mFromRightKeyframes, mRiseInKeyframes, mRiseOutKeyframes, mToLeftKeyframes, mToRightKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 
 // Another place on the bottom bar: its page comes in from 30 toward the way the ball goes (a place further right, from
 // the right), as it shows; from another bar, it only shows.

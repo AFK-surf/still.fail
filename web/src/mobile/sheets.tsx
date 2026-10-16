@@ -2,7 +2,7 @@ import { useAction } from "../action.ts";
 // Sheets that ask something of the viewer, as the Android app's do: whether to go on with what cannot be undone, a
 // name, a command to copy.
 import { useState, type ReactNode } from "react";
-import { Check, Copy } from "../icons.tsx";
+import { Check, Copy } from "@stillfail/ui/icons.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { Button, Field } from "./parts.tsx";
 import * as sheetsCss from "./styles/sheets.css.ts";

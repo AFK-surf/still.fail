@@ -3,7 +3,7 @@ import { useConnectFlow } from "../connect-flow.ts";
 // A connect: where people reach ember (a Slack app today), the model it is
 // bound to, and how its conversations become sessions.
 import { profilesPage, scopeOf, useStation, useLink } from "../station.tsx";
-import { CheckCircle, External, Key, Plus, Power, Refresh, Trash, User } from "../icons.tsx";
+import { CheckCircle, External, Key, Plus, Power, Refresh, Trash, User } from "@stillfail/ui/icons.tsx";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useConnects, useOverview, useStations, type ConnectInput, type ConnectItem, type ConnectMode, type Connect, type ModelOption, type Overview, type MadeSlackApp } from "../api.ts";
@@ -15,20 +15,20 @@ import { OwnerLabel } from "../components.tsx";
 import { PeopleContext } from "../station.tsx";
 import { useContext } from "react";
 import { CreateAppSteps, emptyTokens, TokenFields, useSlackTokens } from "../slack.tsx";
-import { useAct, useToast } from "../toast.tsx";
+import { useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
-import * as waitingCss from "../styles/waiting.css.ts";
 import { Button, Choices, Confirm, ConnectAvatar, Dialog, Empty, Field, ICON, Loading, Menu, BackLink, Pill, StatusText, Section, Select, SlackLogo, StatusDot, SwitchRow, Time } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./Connect.css.ts";
 import * as cloudCss from "../styles/cloud.css.ts";
-import * as controlsCss from "../styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as additionsCss from "../styles/additions.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
+import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 export function ConnectPage() {
   const { id } = useParams();
   const station = useStation();
@@ -95,7 +95,7 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
           <h1 className={pagesCss.identityName}>{connect.name}</h1>
           <p className={pagesCss.identitySub}>
             <span className={css.connectStatus} role="status">
-              {doing ? <><span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" />{doing}</>
+              {doing ? <><span className={`${spinnerCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" />{doing}</>
                 : failing ? <><DoingShown state={{ running: false, error: failing.error }} size={14} />{failing.text}</>
                 : <><StatusDot state={connect.presence} />{connect.statusText}</>}
             </span>

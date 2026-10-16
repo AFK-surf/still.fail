@@ -1,7 +1,7 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { busyRing } from "./styles/busyRing.ts";
-import { spinKeyframes } from "./styles/keyframes.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { busyRing } from "@stillfail/ui/styles/busyRing.ts";
+import { spinKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 
 /** None left: the day, then where the next may come from and what was answered, in a column. */
 export const idle = style({

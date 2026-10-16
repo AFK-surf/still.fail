@@ -7,12 +7,12 @@ import { Popover } from "radix-ui";
 import { NavLink } from "react-router";
 import type { Job, LongJobsView } from "./core/shapes.ts";
 import { useCall, useTopic } from "./core/react.ts";
-import { failure, useToast } from "./toast.tsx";
+import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { stationBase } from "./station.tsx";
 import { JobDot, JobStop } from "./Jobs.tsx";
 import { Tip } from "./ui.tsx";
 import * as css from "./OpenJobs.css.ts";
-import * as controlsCss from "./styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { t } from "./i18n.ts";
 
 /** Rows shown before the rest folds under「还有 N 个」. */

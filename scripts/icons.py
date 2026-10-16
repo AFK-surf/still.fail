@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""still.fail's own icons (design/icons, drawn for still.fail by astra) for both clients: web/src/icons.tsx (React components)
+"""still.fail's own icons (design/icons, drawn for still.fail by astra) for both clients: web/ui/src/icons.tsx (React components)
 and the Android app's ui/Icons.kt (ImageVectors). With them the icons a station can have (design/station-icons, in the order
 of its manifest.json, each with the emoji kept beside it for older clients). The SVGs are the one source; `python3 scripts/icons.py --check`
 fails when the generated files are not what they make."""
@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "design/icons"
 STATION = ROOT / "design/station-icons"
-WEB = ROOT / "web/src/icons.tsx"
+WEB = ROOT / "web/ui/src/icons.tsx"
 ANDROID = ROOT / "apps/android/app/src/main/kotlin/fail/still/android/ui/Icons.kt"
 NS = "{http://www.w3.org/2000/svg}"
 

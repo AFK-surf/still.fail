@@ -1,5 +1,5 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "./tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const runtimeTags = style({});
 export const runtimeTag = style({
@@ -7,5 +7,4 @@ export const runtimeTag = style({
   borderRadius: `calc(5px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: vars.hover, color: vars.muted, fontSize: vars.textCaption, fontWeight: "500",
 });
-export const spinner = style({});
 export const runtimeMark = style({ width: "32px", height: "32px", background: vars.paper });

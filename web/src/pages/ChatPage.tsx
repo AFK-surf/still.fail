@@ -5,7 +5,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, QuotaChip, MeterChips, PeopleStack } from "../components.tsx";
-import { Archive, Boxes, Close, File, Folder, Info, PanelClose, PanelOpen, Users, Web } from "../icons.tsx";
+import { Archive, Boxes, Close, File, Folder, Info, PanelClose, PanelOpen, Users, Web } from "@stillfail/ui/icons.tsx";
 import { DriveTab } from "./DriveTab.tsx";
 import { carriesDrive, draggedNow, droppedFrom, droppedFromFinder, droppedOf, endDrag, nameByType, setDropOver } from "../drive/drag.ts";
 import { takeOff } from "../drive/flight.ts";
@@ -34,12 +34,12 @@ import { ChatPanel, FileTile, goToNeighbour } from "../Chat.tsx";
 import { OpenFile } from "../Viz.tsx";
 import { fileService, fileSourceOf } from "../Preview.tsx";
 import { useShortcut } from "../keymap.ts";
-import { animate, EASE_OUT, LOCAL_MS, reducedMotion, type AnimationPlaybackControls } from "../motion.ts";
+import { animate, EASE_OUT, LOCAL_MS, reducedMotion, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
 import { ComposerSlot } from "../dock.tsx";
 import { chatOpening, track } from "../telemetry.ts";
 import { useReady, useTopicSelect } from "../core/react.ts";
 import { chatPage, useChatPageActions } from "../chatPage.ts";
-import { useAct, useToast } from "../toast.tsx";
+import { useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
 import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, Empty, ICON, IconButton, keptWidth, Loading, MobileBack, ModelLogo, PanelRow, ResizeHandle, SlackLogo, SwitchRow, Time, Tip } from "../ui.tsx";
@@ -51,13 +51,14 @@ import * as sidebarCss from "../styles/sidebar.css.ts";
 import * as conversationCss from "../styles/conversation.css.ts";
 import * as css from "./ChatPage.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
-import * as controlsCss from "../styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { tx } from "../cloud/words.tsx";
 import { PublishDialog, PublishedLinks, RevokeConfirm } from "../Publish.tsx";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 /**
  * An item's page, one for every item: its chat's messages (none before its agent has a chat), the composer, and its
  * agents' execution histories beside them. The address is the item's: its chat's thread, or its agent's session key
@@ -425,7 +426,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
           {chat.thread && <ChatInfo station={station.address} session={chatSession} />}
           {slackUrl && (
             <Tip label={t("web-pages.chat.openInSlack")}>
-              <a className={pagesCss.iconBtn} href={slackUrl} target="_blank" rel="noopener" aria-label={t("web-pages.chat.openInSlack")}><SlackLogo /></a>
+              <a className={pageCss.iconBtn} href={slackUrl} target="_blank" rel="noopener" aria-label={t("web-pages.chat.openInSlack")}><SlackLogo /></a>
             </Tip>
           )}
           {!panel && agents[0] && <IconButton label={t("web-pages.chat.openPanel")} icon={PanelOpen} shortcut="chat.history" onMouseDown={keepFocus} onClick={() => openTab(agents[0]!.session.key)} />}
@@ -719,7 +720,7 @@ function JobsPanel({ station, session, chat }: { station: string; session: strin
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Tip label={t("web-pages.chat.services")} shortcut="chat.jobs">
         <Popover.Trigger asChild>
-          <button type="button" className={`${pagesCss.iconBtn} ${css.jobsTrigger}`} aria-label={t("web-pages.chat.services")} data-alarm={alarm} data-none={view.jobs.length === 0 || undefined}><Web {...ICON} /></button>
+          <button type="button" className={`${pageCss.iconBtn} ${css.jobsTrigger}`} aria-label={t("web-pages.chat.services")} data-alarm={alarm} data-none={view.jobs.length === 0 || undefined}><Web {...ICON} /></button>
         </Popover.Trigger>
       </Tip>
       <Popover.Portal>
@@ -748,7 +749,7 @@ function ChatInfo({ station, session }: { station: string; session: string }) {
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Tip label={t("web-pages.chat.info")}>
         <Popover.Trigger asChild>
-          <button type="button" className={pagesCss.iconBtn} aria-label={t("web-pages.chat.info")}><Info {...ICON} /></button>
+          <button type="button" className={pageCss.iconBtn} aria-label={t("web-pages.chat.info")}><Info {...ICON} /></button>
         </Popover.Trigger>
       </Tip>
       <Popover.Portal>

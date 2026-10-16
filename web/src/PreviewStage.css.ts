@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { fadeInKeyframes } from "./styles/keyframes.css.ts";
-import { centredX, centredY } from "./styles/align.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { fadeInKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { centredX, centredY } from "@stillfail/ui/styles/align.ts";
 
 /** Frosted, as the composer is. */
 const glass = {

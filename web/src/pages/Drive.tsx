@@ -15,11 +15,11 @@ import { useStations } from "../api.ts";
 import { useWorkspace } from "../cloud/api.ts";
 import { useGo } from "../go.ts";
 import { useDoing } from "../doing.ts";
-import { useAct } from "../toast.tsx";
+import { useAct } from "@stillfail/ui/toast.tsx";
 import type { DriveEntry, DriveRoot, StationView } from "../core/shapes.ts";
 import { useTopicSelect } from "../core/react.ts";
 import { Button, Confirm, Dialog, ICON, IconButton, Menu, Tip, type MenuItem } from "../ui.tsx";
-import { ChevronLeft, ChevronRight, Close, Copy, Disk, Server, Download, Edit, Folder, FolderPlus, Pin, Plus, Refresh, Retry, Trash, Upload } from "../icons.tsx";
+import { ChevronLeft, ChevronRight, Close, Copy, Disk, Server, Download, Edit, Folder, FolderPlus, Pin, Plus, Refresh, Retry, Trash, Upload } from "@stillfail/ui/icons.tsx";
 import { KindIcon } from "../drive/KindIcon.tsx";
 import { Reader } from "../drive/Reader.tsx";
 import { Player } from "../drive/Player.tsx";
@@ -27,14 +27,14 @@ import { cancel, download, joinPath, nameOf, openerOf, parentOf, refresh, retry,
 import { absoluteOf, childOf, drive, drivePath, filtered, folderName, nameProblem, rootTrouble, trailOf, useDrive, type DriveState, type PickFolder } from "../drive/useDrive.ts";
 import { draggedOf, endDrag, startDrag } from "../drive/drag.ts";
 import { ColumnsView, TreeView, useDriveView, ViewSwitch, type RowOf } from "./DriveViews.tsx";
-import { useToast } from "../toast.tsx";
+import { useToast } from "@stillfail/ui/toast.tsx";
 import { DrivePreview, FilterField, useFolders } from "../mobile/Drive.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
-import * as controlsCss from "../styles/controls.css.ts";
-import * as waitingCss from "../styles/waiting.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as css from "./Drive.css.ts";
 import { t } from "../i18n.ts";
+import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 
 export function DrivePage() {
   const station = useStation();
@@ -340,7 +340,7 @@ export function DriveRow({ at, entry, items, onOpen, compact = false, depth, exp
         <span className={css.size}>{entry.dir ? (next ? <ChevronRight size={12} strokeWidth={2} className={shellCss.muted} /> : "") : column ? "" : entry.sizeText}</span>
         {!compact && <span className={css.time}>{entry.timeText}</span>}
       </button>
-      <span className={css.more}>{busy ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" /> : <Menu items={items} />}</span>
+      <span className={css.more}>{busy ? <span className={`${spinnerCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" /> : <Menu items={items} />}</span>
     </div>
   );
   return (

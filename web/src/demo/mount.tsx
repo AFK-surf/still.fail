@@ -11,7 +11,7 @@ import "@fontsource-variable/inter";
 import { setPageRoot } from "../brand.tsx";
 import { withoutDownloads } from "../downloads.ts";
 import { Tooltip } from "radix-ui";
-import { ToastProvider } from "../toast.tsx";
+import { ToastProvider } from "@stillfail/ui/toast.tsx";
 import { MobileWorkspace } from "../mobile/index.tsx";
 import { WorkspaceShell, type WorkspaceEntry } from "../cloud/workspace.tsx";
 import { CoreClient, type Topic } from "../core/client.ts";

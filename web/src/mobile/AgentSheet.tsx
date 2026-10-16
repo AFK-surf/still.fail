@@ -7,7 +7,7 @@
 import { stationApi, useAgentCard, useChat, useStationCall, useStationLook, type ChatAgent } from "../api.ts";
 import type { AgentCardView } from "../core/shapes.ts";
 import { Elapsed, Waited } from "../Chat.tsx";
-import { ChevronRight, Stop } from "../icons.tsx";
+import { ChevronRight, Stop } from "@stillfail/ui/icons.tsx";
 import { stationBase } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { useDoing } from "../doing.ts";

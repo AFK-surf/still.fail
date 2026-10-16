@@ -1,5 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const mNote = style({ padding: "0 24px 10px", fontSize: vars.textMeta, color: "var(--m-muted)", lineHeight: "1.5" });
 /** A bar's head: its name, 当前 on the one in view, what can be done to it at its end. */

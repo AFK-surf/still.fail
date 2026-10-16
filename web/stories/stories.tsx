@@ -11,7 +11,7 @@ import { PermissionRow } from "../src/pages/Permissions.tsx";
 import { Player } from "../src/drive/Player.tsx";
 import { DrivePreview } from "../src/mobile/Drive.tsx";
 import { FilePreview } from "../src/FilePreview.tsx";
-import { useToast } from "../src/toast.tsx";
+import { useToast } from "@stillfail/ui/toast.tsx";
 import { ComposerExtras } from "../src/Chat.tsx";
 import type { Draft, Pending } from "../src/draft.ts";
 import * as composerCss from "../src/styles/composer.css.ts";
@@ -20,9 +20,9 @@ import {
   PanelHead, PanelIconButton, PanelRow, PanelText, Pill, RuntimeTags, Section, Segmented, Select, SkeletonRows, StatusDot, StatusText,
   Switch, SwitchRow, Tip,
 } from "../src/ui.tsx";
-import { Archive, Bell, Close, Copy, Download, Edit, Folder, Plus, Refresh, Search, Trash } from "../src/icons.tsx";
-import * as controlsCss from "../src/styles/controls.css.ts";
-import { vars } from "../src/styles/tokens.css.ts";
+import { Archive, Bell, Close, Copy, Download, Edit, Folder, Plus, Refresh, Search, Trash } from "@stillfail/ui/icons.tsx";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { AT, apk, clips, folder, note, NOTE, novel, picture } from "./data.ts";
 import CLIP_URL from "./assets/story-clip.mp4?url";
 import PICTURE_URL from "./assets/story-picture.png?url";

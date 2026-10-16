@@ -1,7 +1,7 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { page as settingsPage, pageHead, pageNarrow } from "../styles/pages.css.ts";
-import { neg, outset } from "../styles/align.ts";
+import { neg, outset } from "@stillfail/ui/styles/align.ts";
 
 /** Not a settings page: its head up by the window's top, its name level with the sidebar's first row, the files close under it. */
 export const page = style({ position: "relative", selectors: { [`${settingsPage}&`]: { paddingTop: "12px" } } });

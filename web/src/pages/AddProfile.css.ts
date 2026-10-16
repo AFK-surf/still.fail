@@ -1,6 +1,6 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
-import { outset } from "../styles/align.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { outset } from "@stillfail/ui/styles/align.ts";
 
 /** A group of providers under its small heading (Cue's order: labs, china, gateways, cloud, inference, local). */
 export const group = style({ marginBottom: "28px" });

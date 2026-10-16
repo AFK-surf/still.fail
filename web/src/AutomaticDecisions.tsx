@@ -4,17 +4,17 @@ import { Link } from "react-router";
 import { useStations } from "./api.ts";
 import { useCall, useTopic } from "./core/react.ts";
 import type { ArchiveOptionView, ArchivePolicyDraft, ArchivePolicyView, AutomaticDecisionDraft, AutomaticDecisionView } from "./core/shapes.ts";
-import { useAct, useToast } from "./toast.tsx";
+import { useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing, useDoingFailed } from "./doing.ts";
 import { Button, Dialog, Field, Segmented, StatusDot, Switch } from "./ui.tsx";
 import { ModelTriple } from "./ModelTriple.tsx";
 import type { Picking } from "./pick.ts";
-import { ChevronRight, Plus, Trash } from "./icons.tsx";
-import * as waitingCss from "./styles/waiting.css.ts";
-import * as controlsCss from "./styles/controls.css.ts";
+import { ChevronRight, Plus, Trash } from "@stillfail/ui/icons.tsx";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { stationBase } from "./station.tsx";
 import * as pages from "./styles/pages.css.ts";
 import * as css from "./AutomaticDecisions.css.ts";
+import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 
 /** Start with the decision point; each point opens the stations that configure it. */
 export function AutomaticDecisions({ workspace }: { workspace: string }) {
@@ -96,7 +96,7 @@ function ArchivePolicy({ station, policy }: { station: string; policy: ArchivePo
   const add = (archive: boolean) => { void form.add(archive).then((key) => { if (key) setEditing({ kind: "option", key }); }); };
   return <div className={css.policy}>
     {(form.saving || form.saveFailed) && <div className={css.policyHead}>
-      {form.saving && <span className={`${waitingCss.spinner}`} aria-hidden="true" />}
+      {form.saving && <span className={`${spinnerCss.spinner}`} aria-hidden="true" />}
       {form.saveFailed && <span className={css.error} role="alert">{form.saveFailed}</span>}
     </div>}
     <button type="button" className={css.policyWords} disabled={busy} onClick={() => open({ kind: "text" })}>{policy.text}</button>

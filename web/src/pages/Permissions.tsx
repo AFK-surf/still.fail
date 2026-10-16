@@ -5,7 +5,7 @@ import { useEffect, type ComponentType } from "react";
 import type { NotifyView } from "../core/shapes.ts";
 import { useTopic } from "../core/react.ts";
 import { checkPermission, CAN_NOTIFY, requestPermission } from "../notify.ts";
-import { Bell, Check, type IconProps } from "../icons.tsx";
+import { Bell, Check, type IconProps } from "@stillfail/ui/icons.tsx";
 import { Button, MobileBack } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./Permissions.css.ts";

@@ -1,9 +1,9 @@
 // The notifications page (Notifications.tsx): the preview screen, the ways of telling as tiles, the kinds as rows that
 // open to their ways.
 import { style } from "@vanilla-extract/css";
-import { centredY, surfaceCorner } from "../styles/align.ts";
+import { centredY, surfaceCorner } from "@stillfail/ui/styles/align.ts";
 import { cardLook } from "../styles/pages.css.ts";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const muted = style({ color: vars.muted });
 

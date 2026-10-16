@@ -10,22 +10,21 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { placeFiles } from "../../../client/core-ts/src/placed.ts";
 import type { Attachment } from "../core/shapes.ts";
-import { Avatar } from "../Avatar.tsx";
+import { Avatar } from "@stillfail/ui/Avatar.tsx";
 import { FilePreview, FileSource, Gallery, type FileSourceOf, type GalleryOf } from "../FilePreview.tsx";
-import { fileSize } from "../fileSize.ts";
-import { Read } from "../icons.tsx";
+import { fileSize } from "@stillfail/ui/fileSize.ts";
+import { Read } from "@stillfail/ui/icons.tsx";
 import { imageBox } from "../imageBox.ts";
 import { Prose, withBareLinks } from "../Prose.tsx";
 import { thumbhashUrl } from "../thumbhash.ts";
 import { FrameHost, VizHtml } from "../Viz.tsx";
 import { useStation } from "../station.tsx";
 import { thumbId } from "../viewerFlight.ts";
-import { failure } from "../toast.tsx";
+import { failure } from "@stillfail/ui/toast.tsx";
 import { lang, t } from "../i18n.ts";
 import * as chatCss from "../styles/chat.css.ts";
-import * as controlsCss from "../styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as conversationCss from "../styles/conversation.css.ts";
-import * as waitingCss from "../styles/waiting.css.ts";
 import * as vizCss from "../Viz.css.ts";
 import * as msgCss from "../Chat.css.ts";
 import * as css from "./share.css.ts";
@@ -40,6 +39,7 @@ import idle from "../../public/idle.svg";
 import idleDark from "../../public/idle-dark.svg";
 import offline from "../../public/offline.svg";
 import offlineDark from "../../public/offline-dark.svg";
+import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 
 /** The marks of models' makers (public/models), as the chat draws an agent by its maker's; one the page does not know: none. */
 const MARKS = import.meta.glob<string>("../../public/models/*.svg", { query: "?url", import: "default", eager: true });
@@ -165,7 +165,7 @@ export function Share() {
   useEffect(() => {
     document.title = state.at === "shown" && state.snapshot.title ? `${state.snapshot.title} · still.fail` : t("web-share.title");
   }, [state]);
-  if (state.at === "connecting") return <StateLine picture="idle" line={<><span className={waitingCss.spinner} aria-hidden="true" />{t("web-share.connecting")}</>} />;
+  if (state.at === "connecting") return <StateLine picture="idle" line={<><span className={spinnerCss.spinner} aria-hidden="true" />{t("web-share.connecting")}</>} />;
   if (state.at === "failed") {
     const again = state.why === "cloud" || state.why === "offline" || state.why === "busy";
     const line = state.why === "broken" ? t("web-share.broken", { error: state.error ?? "" }) : t(`web-share.${state.why}`);

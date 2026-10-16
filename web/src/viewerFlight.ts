@@ -4,7 +4,7 @@
 // thumbnail (its box, its corners, the picture cropped to it as the chat shows it), 1 the picture where the viewer puts
 // it (zoomed and panned, or not); the viewer's ground and its bars come in with it. With no thumbnail on the screen, the
 // viewer fades, as it always has.
-import { LOCAL_MS, reducedMotion } from "./motion.ts";
+import { LOCAL_MS, reducedMotion } from "@stillfail/ui/motion.ts";
 
 /** How long it takes to open out of the thumbnail, and to close back into it; both slowing into place. */
 const OPEN = 320;

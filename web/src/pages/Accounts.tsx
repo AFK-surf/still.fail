@@ -1,6 +1,6 @@
 import type { MachineLogin } from "../core/shapes.ts";
 import { profilesPage, stationBase, useStation, useLink } from "../station.tsx";
-import { Chart, ChevronRight, Edit, External, LogIn, Plus, Refresh, Trash } from "../icons.tsx";
+import { Chart, ChevronRight, Edit, External, LogIn, Plus, Refresh, Trash } from "@stillfail/ui/icons.tsx";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useOverview, useProfiles, type AccessKind, type LoginJob, type Overview, type ProfileInput, type Profile, type RuntimeKind } from "../api.ts";
@@ -10,8 +10,8 @@ import { useProfilesSidebar } from "../ProfilesNav.tsx";
 import { hosts } from "../cloud/settings.tsx";
 import type { WorkspaceProfile } from "../core/shapes.ts";
 import { useDoing, useDoingFailed } from "../doing.ts";
-import { useAct } from "../toast.tsx";
-import { useToast } from "../toast.tsx";
+import { useAct } from "@stillfail/ui/toast.tsx";
+import { useToast } from "@stillfail/ui/toast.tsx";
 import { QuotaBars } from "../components.tsx";
 import * as modelCss from "../ModelTriple.css.ts";
 import { MachineLoginCard } from "../ProfileCard.tsx";
@@ -19,7 +19,7 @@ import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Em
 import * as pagesCss from "../styles/pages.css.ts";
 import * as baseCss from "../styles/base.css.ts";
 import * as css from "./Accounts.css.ts";
-import * as controlsCss from "../styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as waitingCss from "../styles/waiting.css.ts";
 import * as additionsCss from "../styles/additions.css.ts";
@@ -29,6 +29,8 @@ import * as chatCss from "../styles/chat.css.ts";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { tx } from "../cloud/words.tsx";
+import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 /** The plans a machine's own login can be signed in again with (the add page: a vendor's subscription). */
 export type Choice = "claude-sub" | "chatgpt-sub";
 
@@ -134,7 +136,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
               onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) rename(); if (e.key === "Escape") { setName(profile.name); setEditingName(false); } }} />
           ) : (
             <h1 className={pagesCss.identityName}>{renamingTo ?? profile.name}
-              {renamingTo && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label={t("web-pages.settings.stations.renaming")} />}<RuntimeTags runtimes={profile.runtimes} decision={profile.uses?.includes("decision")} />{!profile.machine && !copy && <IconButton label={t("web-pages.settings.stations.rename")} icon={Edit} onClick={() => setEditingName(true)} />}</h1>
+              {renamingTo && <span className={`${spinnerCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label={t("web-pages.settings.stations.renaming")} />}<RuntimeTags runtimes={profile.runtimes} decision={profile.uses?.includes("decision")} />{!profile.machine && !copy && <IconButton label={t("web-pages.settings.stations.rename")} icon={Edit} onClick={() => setEditingName(true)} />}</h1>
           )}
           {facts && <p className={pagesCss.identitySub}>{facts}</p>}
           <p className={`${pagesCss.identitySub} ${css.profileState}`}>
@@ -150,7 +152,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
       </header>
       {save.error && <p className={controlsCss.fieldError} role="alert">{save.error.message}</p>}
       {/* A subscription that needs signing in, or is signing in: that comes first. */}
-      {!copy && signIn && !profile.machine && (latest?.state === "login" || signingIn) && <section className={pagesCss.section}><SignIn profile={profile} needed /></section>}
+      {!copy && signIn && !profile.machine && (latest?.state === "login" || signingIn) && <section className={pageCss.section}><SignIn profile={profile} needed /></section>}
 
       <QuotaSection profile={profile} />
 
@@ -688,7 +690,7 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
                         <input type="checkbox" disabled={busy} checked={enabled.has(m)} onChange={() => toggle(m)} />
                         <ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={14} />
                         <span>{name(m)}</span>
-                        {profile.modelsSaving?.includes(m) && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label={t("web-pages.profiles.saving")} />}
+                        {profile.modelsSaving?.includes(m) && <span className={`${spinnerCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label={t("web-pages.profiles.saving")} />}
                         {found && !found.includes(m) && <span className={`${shellCss.muted} ${css.modelPoolGone}`}>{t("web-pages.profiles.gone")}</span>}
                       </label></Tip>
                     </li>

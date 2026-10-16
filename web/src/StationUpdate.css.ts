@@ -1,8 +1,8 @@
 import { keyframes, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { IN, PANEL_PAD, PANEL_PILL, TEXT_IN, pillInner } from "./styles/align.ts";
-import { panelCard, popover as popover0 } from "./styles/controls.css.ts";
-import { panelButton, panelIcon } from "./ui.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { IN, PANEL_PAD, PANEL_PILL, TEXT_IN, pillInner } from "@stillfail/ui/styles/align.ts";
+import { panelCard, popover as popover0 } from "@stillfail/ui/styles/controls.css.ts";
+import { panelButton, panelIcon } from "@stillfail/ui/parts.css.ts";
 
 const sweep = keyframes({ from: { transform: "translateX(-100%)" }, to: { transform: "translateX(250%)" } });
 

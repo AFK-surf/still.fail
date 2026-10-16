@@ -1,6 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { mRiseKeyframes } from "../../styles/keyframes.css.ts";
-import { vars } from "../../styles/tokens.css.ts";
+import { mRiseKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 /** The narrow screen's colours in the dark (root.css.ts m, mDark). */
 const darkVars = {

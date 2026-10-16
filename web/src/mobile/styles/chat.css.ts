@@ -1,5 +1,5 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "../../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const mChat = style({ position: "absolute", inset: "0", background: "var(--m-bg)" });
 /** The chat's messages, drawn as the wide screen draws them (../../Chat.tsx), a little closer together. */

@@ -2,7 +2,7 @@
 // that goes back to the chat. Found by its job; people know it by its name. The core keeps the job as it changes (a
 // restart is said over the page, and it loads again once the service is back).
 import { useReady } from "../core/react.ts";
-import { LOCAL_MS } from "../motion.ts";
+import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { useParams } from "react-router";
 import { useJob } from "../api.ts";
 import { fileSourceOf, StationPreview } from "../Preview.tsx";

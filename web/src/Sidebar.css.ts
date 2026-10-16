@@ -1,12 +1,13 @@
 // The sidebar: the brand on top, the chat list (or a settings list) under it, a foot at the bottom. Also the station's,
 // the cloud's and the admin console's settings lists, which are drawn with the same rows.
 import { fallbackVar, globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { accountTrigger } from "./cloud/workspace.css.ts";
-import { iconBtn } from "./styles/pages.css.ts";
 import { dock, shell } from "./styles/shell.css.ts";
-import { kindIcon, kindMark, resizeHandle } from "./ui.css.ts";
-import { outsetEnd, outsetStart, oversize } from "./styles/align.ts";
+import { kindIcon, kindMark } from "./ui.css.ts";
+import { outsetEnd, outsetStart, oversize } from "@stillfail/ui/styles/align.ts";
+import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
+import { resizeHandle } from "@stillfail/ui/parts.css.ts";
 
 const wide = "(min-width: 701px)";
 const narrow = "(max-width: 700px)";

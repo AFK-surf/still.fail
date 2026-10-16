@@ -12,7 +12,7 @@ import type { ComposerFile, ComposerRef, ComposerView } from "./core/shapes.ts";
 import { track } from "./telemetry.ts";
 import { useStation } from "./station.tsx";
 import { keepSentImage, uploadImageKey } from "./sentImages.ts";
-import { useToast } from "./toast.tsx";
+import { useToast } from "@stillfail/ui/toast.tsx";
 import { setPrefs, usePrefs } from "./prefs.ts";
 import { t } from "./i18n.ts";
 

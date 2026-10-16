@@ -1,12 +1,12 @@
 import { useLayoutEffect, useRef } from "react";
 import type { ChatItem } from "./api.ts";
 import type { WorkspaceMark } from "./core/shapes.ts";
-import { reducedMotion } from "./motion.ts";
+import { reducedMotion } from "@stillfail/ui/motion.ts";
 import { StatusText, Tip } from "./ui.tsx";
 import { jumpTo } from "./jumpTo.ts";
 import * as css from "./ChatMark.css.ts";
 import { t } from "./i18n.ts";
-import { Bell, Check, Wait, Watch } from "./icons.tsx";
+import { Bell, Check, Wait, Watch } from "@stillfail/ui/icons.tsx";
 
 export type ChatTone = "busy" | "done" | "alert" | "wait" | "other";
 

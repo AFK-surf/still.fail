@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./tokens.css.ts";
-import { glass } from "./glass.ts";
-import { pillInner } from "./align.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { glass } from "@stillfail/ui/styles/glass.ts";
+import { pillInner } from "@stillfail/ui/styles/align.ts";
 
 const COMPOSER_PAD = 12;
 /** The attach and send buttons' size (toast.css.ts sendBtn, attachBtn). */

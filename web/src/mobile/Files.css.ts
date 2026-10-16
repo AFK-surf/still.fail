@@ -1,5 +1,5 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 /** A folder's mark, in the accent (dimmed with its station offline, as its row's words are). */
 export const mFolder = style({

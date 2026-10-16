@@ -2,21 +2,21 @@
 // the one picked beside it at the width and in the theme picked, and what takes it there. `?story=<id>&theme=light|dark`
 // is one story alone, as the tests (test/browser/stories.mjs) open it; with `&play=1` (the gallery's screen) it takes its
 // own steps, with `&device=<id>` it is on that device (devices.ts).
-import "../src/viewer/whole.ts";
 import "../src/styles/index.ts";
+import "../src/viewer/whole.ts";
 import "@fontsource-variable/inter";
 import { StrictMode, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router";
 import { Tooltip } from "radix-ui";
-import { ToastProvider } from "../src/toast.tsx";
+import { ToastProvider } from "@stillfail/ui/toast.tsx";
 import { extendDemo, mountDemo } from "../src/demo/mount.tsx";
 import { Button, Segmented, Select } from "../src/ui.tsx";
-import { ArrowUpRight } from "../src/icons.tsx";
+import { ArrowUpRight } from "@stillfail/ui/icons.tsx";
 import * as shellCss from "../src/styles/shell.css.ts";
 import * as nav from "../src/Sidebar.css.ts";
 import * as pagesCss from "../src/styles/pages.css.ts";
-import { vars } from "../src/styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { CHANGELOG, PEEK, SENT, readFile } from "./data.ts";
 import { DEVICES, device, wear, type Device } from "./devices.ts";
 import { play } from "./play.ts";

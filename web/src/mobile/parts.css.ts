@@ -1,5 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { m } from "./styles/root.css.ts";
 import { mForm } from "./styles/sheets.css.ts";
 import { mMessages } from "./styles/chat.css.ts";
@@ -8,7 +8,7 @@ import { mReaderBar, mSheetHead } from "./app.css.ts";
 import { mAttach, mChatBar, mChatBarTitle, mInfoAgent, mInfoStatus, mJobHead } from "./Chat.css.ts";
 import { mSteps } from "./styles/settings.css.ts";
 import { mHomeBar, mHomeWorkspace } from "./Home.css.ts";
-import { outsetTop } from "../styles/align.ts";
+import { outsetTop } from "@stillfail/ui/styles/align.ts";
 
 export const mMaker = style({
   display: "block", flex: "none",

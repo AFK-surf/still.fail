@@ -2,14 +2,8 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./tokens.css.ts";
 import { panel } from "./glass.ts";
 import { popKeyframes } from "./keyframes.css.ts";
-import { inputRow } from "./additions.css.ts";
-import { command, field, skeletonRow } from "../ui.css.ts";
-import { newChatStatus } from "../NewChat.css.ts";
-import { signIn } from "../pages/Accounts.css.ts";
-import { stepActions } from "../pages/Connect.css.ts";
-import { spinner } from "./waiting.css.ts";
-import { card } from "./pages.css.ts";
-import { bleedX } from "./align.ts";
+import { command, field, skeletonRow } from "../parts.css.ts";
+import { spinner } from "./spinner.css.ts";
 import { PANEL_PAD, TEXT_IN, inner, surface } from "./align.ts";
 
 export const btn = style({
@@ -46,16 +40,6 @@ export const btnDangerSolid = style({
     "&:hover:not(:disabled)": { background: `color-mix(in srgb, ${vars.red} 85%, black)` },
   },
 });
-/**
- * In a settings card (its grey ground and no line round it), a button that is not solid is its words and icon alone, its
- * words where the card's other words end (its padding taken back by its margin); hovered, a pill of its colour behind them.
- */
-globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnDangerSolid})`, {
-  borderColor: "transparent", background: "transparent", paddingBlock: "0", ...bleedX(12),
-});
-globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnDangerSolid}):hover:not(:disabled)`, {
-  background: "color-mix(in oklab, currentColor 10%, transparent)",
-});
 export const textToggle = style({
   display: "inline-flex", alignItems: "center", gap: "2px", border: "0", background: "none", padding: "2px 4px",
   color: vars.muted, fontSize: vars.textMeta, lineHeight: "18px", cursor: "pointer",
@@ -75,7 +59,6 @@ export const input = style({
     "&:focus": { outline: "none", borderColor: vars.fieldHover },
     [`${field}[data-invalid] &`]: { borderColor: vars.red },
     "&::placeholder": { color: vars.subtle },
-    [`${inputRow} &`]: { flex: "1" },
   },
 });
 /** A one-line field is a pill, as the buttons beside it are; a textarea keeps --r-field (its lines in a pill would not sit right). */
@@ -116,12 +99,7 @@ export const menuItem = style({
 // as a dark groove on it.
 export const menuSep = style({ height: "1px", margin: "6px 4px", background: `color-mix(in srgb, ${vars.text} 12%, transparent)` });
 export const menuLabel = style({ padding: `6px ${TEXT_IN}px 4px`, fontSize: vars.textMeta, color: vars.muted });
-export const steps = style({
-  margin: "0", paddingLeft: "20px", display: "grid", gap: "8px", fontSize: vars.textUi,
-  selectors: {
-    [`${signIn} &`]: { gap: "14px" },
-  },
-});
+export const steps = style({ margin: "0", paddingLeft: "20px", display: "grid", gap: "8px", fontSize: vars.textUi });
 export const verifyOk = style({
   display: "inline-flex", alignItems: "center", gap: "6px", color: vars.green, fontSize: vars.textUi,
 });
@@ -131,14 +109,29 @@ globalStyle(`${menuItem}[data-danger] svg`, { color: vars.red });
 globalStyle(`${steps} li::marker`, { color: vars.muted });
 globalStyle(`${steps} li:first-child`, { display: "list-item" });
 globalStyle(`${steps} li:first-child ${btn}`, { marginTop: "6px", display: "flex", width: "max-content" });
-globalStyle(`${steps} li > ${btn}, ${steps} li > ${inputRow}, ${steps} li > ${command}`, { marginTop: "8px" });
+globalStyle(`${steps} li > ${btn}, ${steps} li > ${command}`, { marginTop: "8px" });
 globalStyle(`${steps} li > ${btn}`, { display: "flex", width: "max-content" });
-globalStyle(`${steps} ${stepActions}`, { display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "8px" });
 globalStyle(`${steps} li`, { minWidth: "0" });
 globalStyle(`${steps} ${command}`, { width: "100%", minWidth: "0" });
 /** Here rather than with its class: it comes after .steps li > .btn, and wins over it. */
 globalStyle(`${skeletonRow} span:first-child`, { width: "80%" });
 /** Here rather than with its class: it comes after .steps li > .btn, and wins over it. */
 globalStyle(`${skeletonRow} span:last-child`, { width: "45%", height: "8px" });
-/** Here rather than with its class: it comes after .field-error, and wins over it. */
-globalStyle(newChatStatus, { minHeight: "1.5em", margin: "0", fontSize: vars.textMeta, color: vars.muted });
+
+/** A choice that opens a menu of what it can be (Chooser): quiet words until pointed at or open. */
+export const chooser = style({
+  display: "inline-flex", alignItems: "center", gap: "5px", height: "28px", padding: "0 8px", border: "0",
+  borderRadius: `calc(8px * ${vars.cornerScale})`, background: "none", color: vars.muted, font: "inherit",
+  fontSize: vars.textMeta, cursor: "pointer", whiteSpace: "nowrap", cornerShape: vars.cornerShape,
+  selectors: {
+    "&:hover": { background: vars.hover, color: vars.text },
+    "&[data-state=\"open\"]": { background: vars.hover, color: vars.text },
+    "a&": { textDecoration: "none", color: vars.accentText },
+  },
+});
+export const chooserMenu = style({});
+export const chooserItem = style({ display: "flex", alignItems: "center", gap: "6px" });
+export const chooserCheck = style({});
+export const chooserChevron = style({});
+globalStyle(chooserCheck, { width: "14px", display: "inline-grid", placeItems: "center", flex: "none" });
+globalStyle(chooserMenu, { maxHeight: "360px", overflowY: "auto", minWidth: "220px" });

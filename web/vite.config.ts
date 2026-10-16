@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { uiAlias } from "./ui/alias.ts";
 import { defineConfig } from "vite";
 
 const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
@@ -80,6 +81,7 @@ export default defineConfig(({ mode }) => {
     optimizeDeps: { exclude: ["@sqlite.org/sqlite-wasm"] },
     resolve: {
       alias: [
+        uiAlias,
         { find: "@stillfail/core-ts/web", replacement: here("../client/core-ts/src/hosts/web.ts") },
         // Markdown's character references (client/core-ts/src/markdown.ts, in the core's worker) by their table: the
         // browser's build of it reads them through `document`, which a worker has not.

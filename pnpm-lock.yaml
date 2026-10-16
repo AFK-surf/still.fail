@@ -14,6 +14,9 @@ importers:
       '@sqlite.org/sqlite-wasm':
         specifier: 3.53.4-build2
         version: 3.53.4-build2
+      '@stillfail/ui':
+        specifier: link:./web/ui
+        version: link:web/ui
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.6

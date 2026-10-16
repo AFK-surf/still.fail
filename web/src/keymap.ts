@@ -11,6 +11,11 @@ export type Action =
   | "composer.focus" | "composer.file" | "chat.stop" | "chat.history" | "chat.jobs" | "chat.latest" | "chat.find" | "chat.archive"
   | "panel.close" | "shortcuts";
 
+// The actions a tip of @stillfail/ui names the keys of (its Tip's `shortcut`): these (ui.tsx says their keys).
+declare module "@stillfail/ui/shortcuts.ts" {
+  interface Shortcuts extends Record<Action, true> {}
+}
+
 /**
  * A binding: modifiers, then a key, joined by "+" ("Mod+Shift+H"). Mod is ⌘ on a Mac and Ctrl elsewhere. The key is
  * where it is on the keyboard (a letter, a digit, Up/Down/Left/Right, Space, Escape, or one of \ [ ] . , / ;), so ⌥

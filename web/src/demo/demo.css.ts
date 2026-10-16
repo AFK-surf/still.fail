@@ -3,7 +3,7 @@
 import { globalStyle } from "@vanilla-extract/css";
 import { m } from "../mobile/styles/root.css.ts";
 import { shell } from "../styles/shell.css.ts";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 globalStyle("html, body", { height: "auto", overflow: "visible", overscrollBehavior: "auto" });
 globalStyle("#demo", {

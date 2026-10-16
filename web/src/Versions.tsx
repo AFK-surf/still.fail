@@ -9,7 +9,7 @@ import { ProgressChip } from "./components.tsx";
 import { Button, Switch, Tip } from "./ui.tsx";
 import { ProviderLogo } from "./ui.tsx";
 import { Mark } from "./brand.tsx";
-import { Server } from "./icons.tsx";
+import { Server } from "@stillfail/ui/icons.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./Versions.css.ts";
 import { t } from "./i18n.ts";

@@ -5,7 +5,7 @@
 // on the spot. On a touch screen a toolbar floats over the page: its sizes, turning, and a mode in which a finger moves
 // the page and two zoom it (else they are the page's own).
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { Landscape, Move } from "./icons.tsx";
+import { Landscape, Move } from "@stillfail/ui/icons.tsx";
 import { LIMIT, PRESETS, presetOf, setViewport, type Viewport } from "./viewport.ts";
 import { dims, useTouch, ViewportSheet, type Zoom } from "./ViewportSize.tsx";
 import * as css from "./PreviewStage.css.ts";

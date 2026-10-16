@@ -4,7 +4,7 @@
 import { useMemo } from "react";
 import { useCall, useTopic } from "./core/react.ts";
 import { useDoing, useDoingFailed } from "./doing.ts";
-import { failure, useToast } from "./toast.tsx";
+import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import type { NewChatView, PickView, RuntimeKind } from "./core/shapes.ts";
 import { t } from "./i18n.ts";
 

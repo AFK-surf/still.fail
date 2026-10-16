@@ -4,13 +4,13 @@
 import { StationMark } from "../StationMark.tsx";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motionValue } from "motion";
-import { animate, MOVE, reducedMotion, type AnimationPlaybackControls } from "../motion.ts";
+import { animate, MOVE, reducedMotion, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
 import { stationApi, useChats, useChatSearch, useStationCall, useStations, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
 import type { FoundMessage } from "../core/shapes.ts";
 import { jumpTo } from "../jumpTo.ts";
 import { Marked } from "../Marked.tsx";
 import { useWorkspaces } from "../cloud/api.ts";
-import { Archive, Copy, ChevronDown, ChevronRight, Edit, Ling, Pin, Refresh, Search, Settings, Unplug } from "../icons.tsx";
+import { Archive, Copy, ChevronDown, ChevronRight, Edit, Ling, Pin, Refresh, Search, Settings, Unplug } from "@stillfail/ui/icons.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { useCopyChatLink } from "../ChatRef.tsx";
 import { setSidebarMode, stationBase, useChatFilter, type ChatFilter } from "../station.tsx";

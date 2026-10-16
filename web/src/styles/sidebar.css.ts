@@ -1,5 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 /** 44px above where its line was (it has none now): a 32px button in it sits on whole pixels, level with the desktop window's buttons. */
 export const pageBar = style({

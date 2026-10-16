@@ -1,16 +1,16 @@
 import { useDoing } from "../doing.ts";
-import { useAct } from "../toast.tsx";
+import { useAct } from "@stillfail/ui/toast.tsx";
 // The workspace's stations on a narrow screen, as the Android app has them (apps/android/…/screens/Stations.kt): each
 // with the buddy's face for its state and its load as rings; one station's page is the machine (its load, network,
 // versions), with how many connects and profiles run on it (settings' lists have them, ./Settings.tsx).
 import { useReady } from "../core/react.ts";
-import { LOCAL_MS } from "../motion.ts";
+import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import { useStations, type StationView } from "../api.ts";
 import type { Host, StationNet } from "../core/shapes.ts";
 import { illustrationUrl } from "../brand.tsx";
-import { ChevronRight, Close, ImageUpload, More } from "../icons.tsx";
+import { ChevronRight, Close, ImageUpload, More } from "@stillfail/ui/icons.tsx";
 import { cloud, useWorkspace } from "../cloud/api.ts";
 import { track } from "../telemetry.ts";
 import { useDark } from "../theme.ts";

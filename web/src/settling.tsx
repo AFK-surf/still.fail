@@ -8,7 +8,7 @@
 // row is going as it starts (rowHeights.ts), and its pane goes there along with it, by the same law (motion.ts GLIDE_*)
 // from the same frame: what is above and what is below move one way each, never there and back.
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { ENTER, ENTER_FROM, GLIDE_EASE, GLIDE_MS, glideValue, LEAVE, LEAVE_TO, reducedMotion } from "./motion.ts";
+import { ENTER, ENTER_FROM, GLIDE_EASE, GLIDE_MS, glideValue, LEAVE, LEAVE_TO, reducedMotion } from "@stillfail/ui/motion.ts";
 import * as css from "./Chat.css.ts";
 import { closing as rowClosing } from "./rowHeights.ts";
 

@@ -1,6 +1,6 @@
 // The profiles' sidebar (ProfilesNav.tsx): what is on a row's second line (the rows themselves, SidebarList.tsx).
 import { style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const quota = style({ flex: "none", display: "flex", gap: 4 });
 export const credits = style({ flex: "none", fontSize: vars.textMeta, color: vars.muted, fontVariantNumeric: "tabular-nums" });

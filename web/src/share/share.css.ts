@@ -1,7 +1,7 @@
 // The share page (Share.tsx): a published chat as the chat draws it, its messages in one column down the page, which
 // scrolls as a document does (the app's never does: its panes do). Its messages' own styles are the chat's.
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { msgAvatar } from "../styles/chat.css.ts";
 import { msgRow } from "../Chat.css.ts";
 

@@ -1,7 +1,7 @@
 // The shortcuts at a glance (⌘/) and their settings page (Shortcuts.tsx). Keys are written as text, quiet, not drawn as
 // key caps.
 import { style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const sheet = style({ display: "grid", gap: "18px" });
 export const group = style({ display: "grid", gap: "2px" });

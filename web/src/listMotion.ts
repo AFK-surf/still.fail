@@ -4,8 +4,8 @@
 // chat with a new message) passes over them on a ground of its own.
 import { useLayoutEffect, useRef, useState, type PointerEvent, type RefObject } from "react";
 import { animate, motionValue, type AnimationPlaybackControls, type MotionValue } from "motion";
-import { LEAVE, LEAVE_TO, MOVE, reducedMotion } from "./motion.ts";
-import { vars } from "./styles/tokens.css.ts";
+import { LEAVE, LEAVE_TO, MOVE, reducedMotion } from "@stillfail/ui/motion.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 interface Placed { el: HTMLElement; top: number; left: number; width: number; y: MotionValue<number>; run?: AnimationPlaybackControls | undefined }
 

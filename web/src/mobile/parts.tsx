@@ -3,7 +3,7 @@
 // or an sp a pixel here.
 import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Badge as BadgeKind, Maker, Quota, RuntimeKind } from "../api.ts";
-import { Check, ChevronLeft, Filter, Plug, Plus, Settings, type IconProps } from "../icons.tsx";
+import { Check, ChevronLeft, Filter, Plug, Plus, Settings, type IconProps } from "@stillfail/ui/icons.tsx";
 import { Mark as BrandMark, illustrationUrl } from "../brand.tsx";
 import { SlackLogo } from "../ui.tsx";
 import { QuotaBars } from "../components.tsx";
@@ -11,13 +11,13 @@ import { doingMatches, failed as itFailed, useDoing, useDoingFailed } from "../d
 import type { DoingItem } from "../core/shapes.ts";
 import { useApp, useRootPage, type MenuItem } from "./app.tsx";
 import * as css from "./parts.css.ts";
-import { vars } from "../styles/tokens.css.ts";
-import * as waitingCss from "../styles/waiting.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import { t } from "../i18n.ts";
+import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -167,7 +167,7 @@ export function Seg({ options, selected, onSelect, height = 30, fill = false, ra
 
 /** The wide screen's spinner (../styles/waiting.css.ts), at a size; `color`, its turning part's (on a dark ground). */
 export function Spinner({ size, color }: { size: number; color?: string }) {
-  return <span className={`${waitingCss.spinner} ${css.mSpinner}`} style={{ width: size, height: size, borderWidth: size < 14 ? 1.5 : 2, ...(color ? { borderTopColor: color } : {}) }} aria-hidden="true" />;
+  return <span className={`${spinnerCss.spinner} ${css.mSpinner}`} style={{ width: size, height: size, borderWidth: size < 14 ? 1.5 : 2, ...(color ? { borderTopColor: color } : {}) }} aria-hidden="true" />;
 }
 
 // ── navigation ─────────────────────────────────────────────────────────

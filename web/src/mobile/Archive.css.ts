@@ -1,5 +1,5 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 /** What the archive is: no hover to explain it on a phone, so said at the top. */
 export const mArchiveNote = style({

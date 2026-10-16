@@ -1,16 +1,15 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { spinner } from "./styles/waiting.css.ts";
-import { fadeInKeyframes } from "./styles/keyframes.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { fadeInKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { msg, pageBarTitle } from "./styles/conversation.css.ts";
 import { sessionPage } from "./styles/session.css.ts";
 import { mineFilterBtn, mineFilterWide } from "./components.css.ts";
-import { textToggle } from "./styles/controls.css.ts";
-import { chooserMenu } from "./styles/chat.css.ts";
+import { textToggle } from "@stillfail/ui/styles/controls.css.ts";
 import { accountMenu } from "./cloud/workspace.css.ts";
 import { detailRow, details, sideContent } from "./pages/ChatPage.css.ts";
 import { msgRoute } from "./Chat.css.ts";
-import { bleedStart, bleedX, columns } from "./styles/align.ts";
+import { bleedStart, bleedX, columns } from "@stillfail/ui/styles/align.ts";
+import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 
 export const history = style({
   minWidth: "0", minHeight: "0", display: "flex", flexDirection: "column", borderLeft: `1px solid ${vars.line}`,
@@ -234,4 +233,3 @@ globalStyle(`${historyDetails} ${details}`, { gridTemplateColumns: "repeat(auto-
 /** Here rather than with its class: it comes after .history-details .detail-row, and wins over it. */
 globalStyle(`${msg}[data-held] > *`, { minHeight: "0", overflow: "hidden", visibility: "hidden" });
 /** Here rather than with its class: it comes after .history-body > *, and wins over it. */
-globalStyle(chooserMenu, { maxHeight: "360px", overflowY: "auto", minWidth: "220px" });

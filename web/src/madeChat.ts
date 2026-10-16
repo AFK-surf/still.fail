@@ -9,7 +9,7 @@
 // while the chat mounts. The message flies as a copy because its row can be replaced by the station receipt.
 import { pageChanging, transitionLive } from "./ui.tsx";
 import { cubicBezier } from "motion";
-import { reducedMotion } from "./motion.ts";
+import { reducedMotion } from "@stillfail/ui/motion.ts";
 import * as msgCss from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 

@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { useChatSend, type ChatFound, type ChatMessage } from "./api.ts";
-import { ChevronDown, ChevronUp, Close } from "./icons.tsx";
+import { ChevronDown, ChevronUp, Close } from "@stillfail/ui/icons.tsx";
 import { t } from "./i18n.ts";
 import { useShortcut } from "./keymap.ts";
 import { placeStrokes, strokeLayer } from "./strokes.ts";

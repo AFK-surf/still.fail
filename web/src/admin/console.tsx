@@ -4,12 +4,12 @@
 // the page is (a list's words, filter and sort, the item open) is in its URL, so a link shows the same.
 import { useTopic } from "../core/react.ts";
 import type { CoreError, Topic } from "../core/client.ts";
-import { Boxes, ChevronRight, Close, Copy, LogOut, Monitor, Plus, Said, Search, Ticket, Users } from "../icons.tsx";
+import { Boxes, ChevronRight, Close, Copy, LogOut, Monitor, Plus, Said, Search, Ticket, Users } from "@stillfail/ui/icons.tsx";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { Lockup } from "../brand.tsx";
 import { stamp, type Stamp } from "../api.ts";
-import { failure, useToast } from "../toast.tsx";
+import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, Loading, MobileBack, Pill, ResizeHandle, Select, StatusDot, Switch, SwitchRow, Time, ICON, type Presence, type Tone } from "../ui.tsx";
 import { useAccounts, useSignOut, type Account } from "../cloud/accounts.ts";
 import { admin, useAction, type FeedbackStatus } from "../cloud/api.ts";
@@ -19,7 +19,7 @@ import * as nav from "../Sidebar.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./console.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
-import * as controlsCss from "../styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as conversationCss from "../styles/conversation.css.ts";
 import { t } from "../i18n.ts";
 

@@ -17,8 +17,8 @@ import { useCall, useTopic } from "./core/react.ts";
 import { CoreError, useApi, useStationViews } from "./api.ts";
 import { StationContext, stationBase, useStation, type Station } from "./station.tsx";
 import { doingMatches, failed, useDoingList } from "./doing.ts";
-import { useAct } from "./toast.tsx";
-import { reducedMotion } from "./motion.ts";
+import { useAct } from "@stillfail/ui/toast.tsx";
+import { reducedMotion } from "@stillfail/ui/motion.ts";
 import { useSettling } from "./settling.tsx";
 import { ComposerView, StaticMessage } from "./Chat.tsx";
 import { DecisionsIdle } from "./DecisionsIdle.tsx";
@@ -26,9 +26,9 @@ import { useDraft, type Draft } from "./draft.ts";
 import { MobileComposer, type HostComposer } from "./mobile/ChatHost.tsx";
 import * as css from "./Decisions.css.ts";
 import * as chatCss from "./Chat.css.ts";
-import * as waitingCss from "./styles/waiting.css.ts";
 import { t } from "./i18n.ts";
-import { Option1, Option2, Option3, Option4, Option5, Option6 } from "./icons.tsx";
+import { Option1, Option2, Option3, Option4, Option5, Option6 } from "@stillfail/ui/icons.tsx";
+import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 
 /** How far (of its width) the decision is swiped before letting go takes it, and how fast a fling has to be (px/ms). */
 const TAKES = 0.35;
@@ -64,7 +64,7 @@ export function DecisionOptions({ station, thread, seq, options, onPick, classNa
             <span className={css.choiceNumber} aria-hidden="true">{Digit ? <Digit size={20} /> : i + 1}</span>
             <span className={css.choiceLabel}>{o.label}</span>
             {o.detail && <span className={css.choiceDetail}>{o.detail}</span>}
-            {busy && <span className={`${waitingCss.spinner} ${css.choiceSpinner}`} aria-hidden="true" />}
+            {busy && <span className={`${spinnerCss.spinner} ${css.choiceSpinner}`} aria-hidden="true" />}
           </button>
         );
       })}

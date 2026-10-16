@@ -1,5 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 /** Its icon in a line of text, before the station's name: on the text's middle, a space's width from the name. */
 export const inline = style({ display: "inline-block", verticalAlign: "-0.125em", marginRight: "0.3em" });

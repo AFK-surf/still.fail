@@ -1,7 +1,7 @@
 // An execution history's steps and thoughts in brief (the core holds what a station pushed of them: what names them, docs/
 // client-core.md): what is behind one is read whole as it shows, opened, on either page (History.tsx, mobile/History.tsx).
 import { createContext, useContext, useEffect, useState } from "react";
-import { failure } from "./toast.tsx";
+import { failure } from "@stillfail/ui/toast.tsx";
 
 /** Reads whole the transcript entries of a step or thought in brief (`history.detail`): its history's (api.ts). */
 export const ReadWhole = createContext<(entries: number[]) => Promise<unknown>>(() => Promise.resolve());

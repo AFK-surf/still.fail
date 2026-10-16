@@ -8,7 +8,7 @@ import { useStations, useConnects } from "../api.ts";
 import { useWorkspace } from "../cloud/api.ts";
 import { ROLE_LABEL } from "../cloud/settings.tsx";
 import { useLock } from "../cloud/Security.tsx";
-import { ChevronRight } from "../icons.tsx";
+import { ChevronRight } from "@stillfail/ui/icons.tsx";
 import { useAppearance, type Appearance } from "../theme.ts";
 import { CAN_NOTIFY, setNotify, useNotifyState } from "../notify.ts";
 import { useApp } from "./app.tsx";

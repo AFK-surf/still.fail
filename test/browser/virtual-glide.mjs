@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 import react from '@vitejs/plugin-react';
 import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
+import { uiAlias } from '../../web/ui/alias.ts';
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const fixture = new URL('../../web/virtual-glide-check.tsx', import.meta.url);
 const html = new URL('../../web/virtual-glide-check.html', import.meta.url);
@@ -28,7 +29,7 @@ function List() {
 createRoot(document.getElementById('root')!).render(<List />);
 `, { flag: 'wx' });
   writeFileSync(html, '<div id="root"></div><script type="module" src="/virtual-glide-check.tsx"></script>', { flag: 'wx' });
-  server = await createServer({ configFile: false, root: fileURLToPath(new URL('../../web', import.meta.url)), plugins: [react(), vanillaExtractPlugin()], server: { host: '127.0.0.1', port: 0 } });
+  server = await createServer({ configFile: false, root: fileURLToPath(new URL('../../web', import.meta.url)), plugins: [react(), vanillaExtractPlugin()], resolve: { alias: [uiAlias] }, server: { host: '127.0.0.1', port: 0 } });
   await server.listen();
   browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {}) });
   const page = await browser.newPage();

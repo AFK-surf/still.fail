@@ -1,11 +1,10 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { buddyHopKeyframes, fadeKeyframes } from "./styles/keyframes.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { buddyHopKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { list, pageNarrow } from "./styles/pages.css.ts";
-import { dialogError, dialogLead, dialogTitle, tooltip } from "./ui.css.ts";
 import { newChat } from "./NewChat.css.ts";
 import { pageBar } from "./styles/sidebar.css.ts";
-import { neg, outset } from "./styles/align.ts";
+import { neg, outset } from "@stillfail/ui/styles/align.ts";
 
 export const brandLockup = style({ display: "block" });
 export const illus = style({
@@ -81,8 +80,6 @@ export const brandPhone = style({
     },
   },
 });
-/** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
-globalStyle(dialogLead, { textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere" });
 /** Here rather than with its class: it comes after .illus, and wins over it. */
 globalStyle(`${pageNarrow} > *`, { maxWidth: "760px", marginLeft: "auto", marginRight: "auto" });
 /** Lists stand on spacing, not frames or rules: their rows' text lines up with the page's, a row's ground shows on hover. */
@@ -92,22 +89,6 @@ globalStyle(list, { listStyle: "none", marginBlock: "0", ...outset(12), padding:
 /** A list right in a narrow page (not in a section): in the page's column like everything else there, its rows' grounds
  * out past it by their padding. Its own margin above would take the column's centring away (it comes later). */
 globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "none", marginLeft: `max(${neg(12)}, calc(50% - 392px))`, marginRight: `max(${neg(12)}, calc(50% - 392px))` });
-/** Why a dialog's action did not work, just above its buttons. */
-/** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
-globalStyle(dialogError, { margin: "12px 0 0", fontSize: vars.textUi, color: vars.red });
-/** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
-globalStyle(tooltip, {
-  zIndex: "70", padding: "5px 10px", borderRadius: `calc(8px * ${vars.cornerScale})`, background: vars.primary,
-  color: vars.onPrimary, fontSize: vars.textMeta, lineHeight: "1.4", boxShadow: `0 4px 12px ${vars.shadow}`,
-  animation: `${fadeKeyframes} 120ms ${vars.easeOut}`, cornerShape: vars.cornerShape, width: "max-content",
-  maxWidth: "min(300px, calc(100vw - 16px))", textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere",
-});
-/** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
-globalStyle(dialogTitle, {
-  display: "flex", alignItems: "baseline", gap: "10px", margin: "0", fontSize: vars.textHeading, fontWeight: "600",
-});
-/** Here rather than with its class: it comes after .page-narrow > *, and wins over it. */
-globalStyle(dialogLead, { margin: "6px 24px 0", fontSize: vars.textUi, color: vars.muted });
 globalStyle(`${sidebarBuddy}[data-pose="hop"] img`, { animation: `${buddyHopKeyframes} 380ms ${vars.easeOut}` });
 globalStyle(`${sidebarBuddy}[data-pose="hop"] img`, {
   "@media": {

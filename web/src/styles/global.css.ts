@@ -1,6 +1,6 @@
 import { globalStyle } from "@vanilla-extract/css";
-import { vars } from "./tokens.css.ts";
-import { searchStrokeKeyframes, splashFloatKeyframes } from "./keyframes.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { searchStrokeKeyframes, splashFloatKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 
 /**
  * Corners, after Codex: plain rounding by default; where the browser draws superellipses, rounded rectangles get a

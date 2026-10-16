@@ -1,11 +1,11 @@
 // Pieces shared by still.fail cloud's pages and the admin's console: people's
 // avatars, the sign-in page and where a sign-in comes back to.
 import { useEffect, useState, type ReactNode } from "react";
-import { Key, Refresh } from "../icons.tsx";
+import { Key, Refresh } from "@stillfail/ui/icons.tsx";
 import { Button } from "../ui.tsx";
 import { completeSignIn, passwordSignIn, useSignIn } from "./accounts.ts";
 import { useDoing } from "../doing.ts";
-import * as controlsCss from "../styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { Illustration } from "../brand.tsx";
 import * as cloudCss from "../styles/cloud.css.ts";
 import * as shellCss from "../styles/shell.css.ts";

@@ -1,6 +1,6 @@
 // The new-chat action and the lists' menu above the sidebar's lists (the chats', 奏).
 import { t } from "./i18n.ts";
-import { Compose } from "./icons.tsx";
+import { Compose } from "@stillfail/ui/icons.tsx";
 import { ICON } from "./ui.tsx";
 import { MineFilter } from "./components.tsx";
 import { useComposerMove } from "./dock.tsx";

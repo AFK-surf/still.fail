@@ -4,7 +4,7 @@
 import { useCallback } from "react";
 import { core, useTopic } from "../core/react.ts";
 import { doingMatches, failed, useDoing, useDoingList } from "../doing.ts";
-import { failure, useToast } from "../toast.tsx";
+import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { t } from "../i18n.ts";
 import { signedOut, telemetrySettled, track, trackNow } from "../telemetry.ts";
 

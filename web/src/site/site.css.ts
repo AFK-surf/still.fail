@@ -2,7 +2,7 @@
 // light when chosen (the switch in its bar: ThemeSwitch.tsx; the demo's app follows the same data-theme). What moves is
 // CSS (no script runs for it), still for those who ask for less motion.
 import { createVar, globalStyle, keyframes, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 const NARROW = "screen and (max-width: 860px)";
 const STILL = "(prefers-reduced-motion: reduce)";

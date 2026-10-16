@@ -1,5 +1,5 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const navNote = style({ marginLeft: "auto", fontSize: vars.textMeta, color: vars.muted });
 export const connectFacts = style({ display: "flex", alignItems: "center", gap: "10px", flex: "none" });

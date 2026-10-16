@@ -6,8 +6,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useReady } from "../core/react.ts";
 import { stationBase } from "../station.tsx";
-import { LOCAL_MS } from "../motion.ts";
-import { Retry, Search, Trash } from "../icons.tsx";
+import { LOCAL_MS } from "@stillfail/ui/motion.ts";
+import { Retry, Search, Trash } from "@stillfail/ui/icons.tsx";
 import type { ArchiveItem } from "../core/shapes.ts";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { ABOUT, ARCHIVE_PAGE, DELETE_TEXT, itemKey, useArchive } from "../pages/Archive.tsx";

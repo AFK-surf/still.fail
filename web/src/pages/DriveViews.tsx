@@ -6,7 +6,7 @@ import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type R
 import type { DriveEntry } from "../core/shapes.ts";
 import { joinPath, useFolder, type At } from "../drive/model.ts";
 import { setPrefs, usePrefs } from "../prefs.ts";
-import { ViewColumns, ViewTree, List } from "../icons.tsx";
+import { ViewColumns, ViewTree, List } from "@stillfail/ui/icons.tsx";
 import { ICON, Tip, type MenuItem } from "../ui.tsx";
 import { DriveRow } from "./Drive.tsx";
 import * as shellCss from "../styles/shell.css.ts";

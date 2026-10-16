@@ -8,18 +8,18 @@ import { AgentAvatar, FileLook, MessageName, OthersMessage, PersonWords } from "
 import { Prose } from "./Prose.tsx";
 import { Dialog as RDialog } from "radix-ui";
 import { Avatar, Button, Confirm, Dialog, Time, Tip } from "./ui.tsx";
-import { Close, Copy, ShieldCheck } from "./icons.tsx";
-import { useBackClose } from "./backClose.ts";
+import { Close, Copy, ShieldCheck } from "@stillfail/ui/icons.tsx";
+import { useBackClose } from "@stillfail/ui/backClose.ts";
 import * as fpCss from "./FilePreview.css.ts";
-import * as pagesCss from "./styles/pages.css.ts";
-import * as waitingCss from "./styles/waiting.css.ts";
 import { useDoing } from "./doing.ts";
-import { failure, useAct, useToast } from "./toast.tsx";
+import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
 import * as css from "./Publish.css.ts";
 import * as chatCss from "./Chat.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import { t } from "./i18n.ts";
+import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
 /** A preview as asked (`chat.publishPreview`): being read, read, or why not. */
 export type Previewed = { reading: true } | { ok: PublishPreview } | { error: string };
@@ -138,7 +138,7 @@ export function PublishDialog({ station, thread, onClose }: { station: string; t
     );
   }
   let body: ReactNode;
-  if ("reading" in preview) body = <div className={fpCss.fpNote}><span className={waitingCss.spinner} aria-hidden="true" />{t("web-pages.chat.publish.reading")}</div>;
+  if ("reading" in preview) body = <div className={fpCss.fpNote}><span className={spinnerCss.spinner} aria-hidden="true" />{t("web-pages.chat.publish.reading")}</div>;
   else if ("error" in preview) body = <div className={fpCss.fpNote}><span className={css.problem} role="alert">{preview.error}</span></div>;
   else if (p!.messages.length === 0) body = <div className={fpCss.fpNote}>{t("web-pages.chat.publish.empty")}</div>;
   else {
@@ -161,7 +161,7 @@ export function PublishDialog({ station, thread, onClose }: { station: string; t
               {p?.hiddenText && <span className={`${fpCss.fpMeta} ${css.headNote}`}><ShieldCheck size={14} />{p.hiddenText}</span>}
             </div>
             <Button variant="primary" busy={publishing} disabled={!p || p.messages.length === 0} onClick={go}>{t("web-pages.chat.publish.go")}</Button>
-            <Tip label={t("web-main.preview.closeKey")}><RDialog.Close className={pagesCss.iconBtn} aria-label={t("common.close")}><Close size={18} /></RDialog.Close></Tip>
+            <Tip label={t("web-main.preview.closeKey")}><RDialog.Close className={pageCss.iconBtn} aria-label={t("common.close")}><Close size={18} /></RDialog.Close></Tip>
           </header>
           <div className={fpCss.fpBody}>{body}</div>
         </RDialog.Content>

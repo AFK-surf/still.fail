@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Minus, Square, Copy, Close } from "./icons.tsx";
+import { Minus, Square, Copy, Close } from "@stillfail/ui/icons.tsx";
 import { t } from "./i18n.ts";
-import { iconBtn } from "./styles/pages.css.ts";
 import * as css from "./WindowControls.css.ts";
+import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
 
 type State = { maximized: boolean; fullscreen: boolean; hover: boolean; pressed: boolean };
 const initial: State = { maximized: false, fullscreen: false, hover: false, pressed: false };

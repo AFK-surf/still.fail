@@ -2,13 +2,13 @@
 // (client/core-ts/src/history.ts): messages in and out, state marks and the agent's words stand alone; the tool calls and
 // thinking between them fold into one group. Here it is only drawn.
 import { PathSession } from "./Peeks.tsx";
-import { failure, useToast } from "./toast.tsx";
+import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
-import { Agent, ChevronDown, ChevronRight, Command, Copy, Wait, Received as ReceivedIcon, Send } from "./icons.tsx";
+import { Agent, ChevronDown, ChevronRight, Command, Copy, Wait, Received as ReceivedIcon, Send } from "@stillfail/ui/icons.tsx";
 import { DropdownMenu } from "radix-ui";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
-import { animate, EASE_OUT, reducedMotion, type AnimationPlaybackControls } from "./motion.ts";
+import { animate, EASE_OUT, reducedMotion, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
 import { useApi, useHistory, useHistoryDetail, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryStep, type HistoryTask, type HistoryView, type Place } from "./api.ts";
 import { ICON, IconButton, Pill, SlackLogo, Tip } from "./ui.tsx";
 import { useCopyChatLink } from "./ChatRef.tsx";
@@ -24,7 +24,7 @@ import { KeepRow, useKeepRow, useRowKept, useVirtualList, useVirtualModel } from
 import type { Item, Virtual } from "./virtual/model.ts";
 import { Mark } from "./brand.tsx";
 import * as css from "./History.css.ts";
-import * as controlsCss from "./styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import * as additionsCss from "./styles/additions.css.ts";

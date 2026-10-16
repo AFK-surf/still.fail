@@ -4,7 +4,7 @@
 import { useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { usePrefs } from "../prefs.ts";
 import { railLabel } from "../Rail.tsx";
-import { Archive, Chart, Chats, Folder, Im, Minus, Plus, Quota, Zou, type IconProps } from "../icons.tsx";
+import { Archive, Chart, Chats, Folder, Im, Minus, Plus, Quota, Zou, type IconProps } from "@stillfail/ui/icons.tsx";
 import { StationGlyph } from "../StationGlyph.tsx";
 import type { ComponentType } from "react";
 import { useApp, SheetGrab, SheetHead } from "./app.tsx";

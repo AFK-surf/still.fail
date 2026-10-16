@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useCall, useTopic } from "./core/react.ts";
 import type { ConnectFlowView } from "./core/shapes.ts";
 import { useDoing, useDoingFailed } from "./doing.ts";
-import { useToast, failure } from "./toast.tsx";
+import { useToast, failure } from "@stillfail/ui/toast.tsx";
 import { usePick } from "./pick.ts";
 
 const actions = ["config", "make", "verify", "create"].map((a) => `connect.flow.${a}`);

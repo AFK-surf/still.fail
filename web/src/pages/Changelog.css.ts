@@ -1,5 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 // A tab a part, this app's first, under the title.
 export const tabsRow = style({ display: "flex", marginBottom: "8px" });

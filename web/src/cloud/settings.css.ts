@@ -1,11 +1,12 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { muted } from "../styles/shell.css.ts";
-import { DIALOG_INNER, command, dialogBody, runtimeLogo } from "../ui.css.ts";
+import { runtimeLogo } from "../ui.css.ts";
 import { machineLogins } from "../pages/Accounts.css.ts";
-import { btn } from "../styles/controls.css.ts";
+import { btn } from "@stillfail/ui/styles/controls.css.ts";
 import { cardLook } from "../styles/pages.css.ts";
-import { bleedStart } from "../styles/align.ts";
+import { bleedStart } from "@stillfail/ui/styles/align.ts";
+import { DIALOG_INNER, command, dialogBody } from "@stillfail/ui/parts.css.ts";
 
 export const groupHead = style({});
 /** A group within the members' list (those added, the invitations): its name and how many, in line with the rows' words. */

@@ -11,7 +11,7 @@
 // A visualization an agent posted (an HTML file placed in its message, Viz.tsx) opens the same way, in the same
 // frame (marking and all): only the frame's requests are answered here, with the file drawn in still.fail's stylesheet,
 // instead of by a port on the station.
-import { ArrowLeft, ArrowRight, External, Refresh, Web } from "./icons.tsx";
+import { ArrowLeft, ArrowRight, External, Refresh, Web } from "@stillfail/ui/icons.tsx";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useHref } from "react-router";
 import { useLink } from "./station.tsx";
@@ -19,7 +19,6 @@ import { useCall } from "./core/react.ts";
 import { useJob } from "./api.ts";
 import { bridge, type Answer, type Asked } from "./previewBridge.ts";
 import * as css from "./Preview.css.ts";
-import * as pagesCss from "./styles/pages.css.ts";
 import { useMarks } from "./annotate/Marks.tsx";
 import { Tip } from "./ui.tsx";
 import { previewKey, useViewport } from "./viewport.ts";
@@ -28,6 +27,7 @@ import { PreviewLoad } from "./PreviewLoad.tsx";
 import { PreviewStage, useStage } from "./PreviewStage.tsx";
 import { useVizFile, useVizMessages, vizDocument } from "./Viz.tsx";
 import { t } from "./i18n.ts";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
 declare const __PREVIEW_ORIGIN__: string;
 const ORIGIN = __PREVIEW_ORIGIN__;
@@ -143,9 +143,9 @@ function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canF
   const icon = { size: 14, strokeWidth: 1.75 };
   return (
     <form className={css.previewBar} onSubmit={(e) => { e.preventDefault(); go(typed.startsWith("/") ? typed : `/${typed}`); (document.activeElement as HTMLElement | null)?.blur(); }}>
-      {back && <Tip label={t("web-main.keymap.nav.back")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.keymap.nav.back")} disabled={!canBack} onClick={back}><ArrowLeft {...icon} /></button></Tip>}
-      {forward && <Tip label={t("web-main.keymap.nav.forward")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.keymap.nav.forward")} disabled={!canForward} onClick={forward}><ArrowRight {...icon} /></button></Tip>}
-      <Tip label={t("web-main.preview.reload")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.preview.reload")} onClick={reload}><Refresh {...icon} /></button></Tip>
+      {back && <Tip label={t("web-main.keymap.nav.back")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-main.keymap.nav.back")} disabled={!canBack} onClick={back}><ArrowLeft {...icon} /></button></Tip>}
+      {forward && <Tip label={t("web-main.keymap.nav.forward")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-main.keymap.nav.forward")} disabled={!canForward} onClick={forward}><ArrowRight {...icon} /></button></Tip>}
+      <Tip label={t("web-main.preview.reload")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-main.preview.reload")} onClick={reload}><Refresh {...icon} /></button></Tip>
       {loading}
       {instead ?? (
         <label className={css.previewAddress}>
@@ -156,7 +156,7 @@ function PreviewBar({ name, at, go, reload, back, forward, canBack = false, canF
       )}
       {size}
       {extra}
-      {external && <Tip label={t("web-main.preview.openWindow")}><a className={pagesCss.iconBtn} href={external} target="_blank" rel="noopener" aria-label={t("web-main.preview.openWindow")}><External {...icon} /></a></Tip>}
+      {external && <Tip label={t("web-main.preview.openWindow")}><a className={pageCss.iconBtn} href={external} target="_blank" rel="noopener" aria-label={t("web-main.preview.openWindow")}><External {...icon} /></a></Tip>}
     </form>
   );
 }

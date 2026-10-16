@@ -1,6 +1,6 @@
 // A tool call drawn by what it is (ToolStep.tsx).
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { codeBar, codeLang } from "./Prose.css.ts";
 
 const box = {

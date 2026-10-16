@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { iconBtn } from "./styles/pages.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { fp, fpHead, fpZoom, glass } from "./FilePreview.css.ts";
+import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
 
 /** The picture, its controls floating over it. */
 export const vv = style({ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: vars.canvas, color: vars.text });

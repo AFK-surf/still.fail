@@ -1,5 +1,5 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 export const stationHead = style({ display: "flex", alignItems: "center", marginRight: 20 });
 export const stationName = style({ flex: "1", minWidth: 0 });
 // The archive policy: its words, its options (a count each, the chats under it), and the form to change them.

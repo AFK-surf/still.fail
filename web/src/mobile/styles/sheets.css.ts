@@ -1,5 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const mSheetScroll = style({
   flex: "1", minHeight: "0", overflowY: "auto", overscrollBehavior: "contain", paddingBottom: "24px",

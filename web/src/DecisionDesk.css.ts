@@ -1,5 +1,5 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const emptyList = style({ padding: "20px 10px", fontSize: vars.textMeta, lineHeight: "20px", color: vars.subtle });
 

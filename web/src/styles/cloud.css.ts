@@ -1,5 +1,5 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "./tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { inline } from "./additions.css.ts";
 import { chat } from "./session.css.ts";
 

@@ -1,5 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 /** The tab: its trail and buttons over the folder's list, which scrolls. */
 export const tab = style({ flex: "1", minHeight: "0", display: "flex", flexDirection: "column" });

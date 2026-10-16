@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { gate } from "../styles/shell.css.ts";
-import { btn, fieldError } from "../styles/controls.css.ts";
+import { btn, fieldError } from "@stillfail/ui/styles/controls.css.ts";
 
 export const invitePage = style({});
 export const inviteAccount = style({ width: "280px", marginTop: "8px" });

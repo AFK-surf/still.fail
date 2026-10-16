@@ -1,13 +1,13 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { spinner } from "./styles/waiting.css.ts";
-import { emitOutKeyframes, enterUpKeyframes, jobBreatheKeyframes, jobLiveKeyframes, msgFlashKeyframes, msgWaitingInKeyframes } from "./styles/keyframes.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { emitOutKeyframes, enterUpKeyframes, jobBreatheKeyframes, jobLiveKeyframes, msgFlashKeyframes, msgWaitingInKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { msg } from "./styles/conversation.css.ts";
-import { segmented, segmentedOption } from "./ui.css.ts";
 import { detailsList, jobsPanel } from "./pages/ChatPage.css.ts";
 import { activityLine, agentActivity, composerThumb, msgFlash, msgWaitingLate } from "./Chat.css.ts";
 import { tokenGuide } from "./pages/SlackApp.css.ts";
-import { TEXT_IN, outsetStart } from "./styles/align.ts";
+import { TEXT_IN, outsetStart } from "@stillfail/ui/styles/align.ts";
+import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
+import { segmented, segmentedOption } from "@stillfail/ui/parts.css.ts";
 
 export const jobDot = style({
   position: "relative", flex: "none", width: "8px", height: "8px", borderRadius: "50%", background: vars.lineStrong,

@@ -1,7 +1,7 @@
 // The sidebar foot's services and jobs left up a long while (OpenJobs.tsx): quiet rows over the settings, their dots the only colour.
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { centredY } from "./styles/align.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { centredY } from "@stillfail/ui/styles/align.ts";
 
 const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
 

@@ -1,5 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { mGrow } from "./parts.css.ts";
 import { mForm } from "./sheets.css.ts";
 import { mCard } from "./lists.css.ts";

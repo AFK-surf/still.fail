@@ -43,13 +43,16 @@ esac
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 touches() { printf '%s\n' "$changed" | grep -qE "$1"; }
-# The lines this run's change adds to the files given (none for `all`, which checks what is, not what changed).
+# The lines this run's change adds to the files given (none for `all`, which checks what is, not what changed). A line
+# it only moves (taken out of one of them, put in another as it was: a part moved into web/ui) is not added.
 added() {
   case "$mode" in
     commit) git diff --cached -U0 -- "$@" ;;
     push|full) git diff -U0 "$range" -- "$@" ;;
     *) ;;
-  esac | grep -E '^\+[^+]' || true
+  esac > "$tmp/diff"
+  grep -E '^-[^-]' "$tmp/diff" | cut -c2- > "$tmp/taken" || true
+  grep -E '^\+[^+]' "$tmp/diff" | cut -c2- | grep -vxF -f "$tmp/taken" | sed 's/^/+/' || true
 }
 # Whether this run does a part (STILLFAIL_CHECK_PART): any when it says none.
 part() { [ -z "${STILLFAIL_CHECK_PART:-}" ] || case " $STILLFAIL_CHECK_PART " in *" $1 "*) true ;; *) false ;; esac; }
@@ -198,39 +201,45 @@ if part ts; then
     step "operation bindings" after core node client/core-ts/scripts/operations.ts --check
   fi
 
-  if touches '^design/(station-)?icons/|^scripts/icons\.py$|^web/src/icons\.tsx$|/ui/Icons\.kt$'; then
+  if touches '^design/(station-)?icons/|^scripts/icons\.py$|^web/ui/src/icons\.tsx$|/ui/Icons\.kt$'; then
     step icons python3 scripts/icons.py --check
   fi
   # The UIs never make a request of a station or still.fail cloud themselves: they name what they want done
   # (client/core-ts/src/ops.ts), and the core, which knows what it changes, brings every topic that shows it up to date.
-  if touches '^(web/src|apps/desktop/src|apps/android)/'; then
-    step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src apps/desktop/src apps/android'
+  if touches '^(web/src|web/ui|apps/desktop/src|apps/android)/'; then
+    step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src web/ui apps/desktop/src apps/android'
+  fi
+  # The design system (web/ui, @stillfail/ui) stands on its own: nothing of the app's (web/src: its core, station,
+  # cloud, preferences), so the share page and anything else can draw with it. The app gives it what it needs (words,
+  # language, shortcut keys) through its setters.
+  if touches '^web/ui/'; then
+    step "the design system on its own" sh -c '! git grep -nE "(from|import) +\"(\.\./)+(src|client|station|cloud)/|@stillfail/core-ts" -- web/ui'
   fi
   # Colours mixed in sRGB: Chromium leaves an OKLCH mix of near greys with its hue unset but a little chroma, and draws
   # it at hue 0, so the grey grounds (code, tables, tool steps) turned pink.
-  if touches '^(web/src|apps/desktop/src)/'; then
-    step "colours mixed in sRGB" sh -c '! git grep -n "in oklch" -- web/src apps/desktop/src'
+  if touches '^(web/src|web/ui|apps/desktop/src)/'; then
+    step "colours mixed in sRGB" sh -c '! git grep -n "in oklch" -- web/src web/ui apps/desktop/src'
   fi
-  # Type sizes are the tokens' (styles/tokens.css.ts: text-micro … text-display), never a style's own (an em, relative to its text, may be).
-  if touches '^web/src/'; then
-    step "type sizes from tokens" sh -c '! git grep -nE "fontSize: *(\"[0-9.]+(px|rem)|[0-9])|font: *\"[^\"]*[0-9.]+px" -- "web/src/*.css.ts"'
+  # Type sizes are the tokens' (web/ui/src/styles/tokens.css.ts: text-micro … text-display), never a style's own (an em, relative to its text, may be).
+  if touches '^web/(src|ui)/'; then
+    step "type sizes from tokens" sh -c '! git grep -nE "fontSize: *(\"[0-9.]+(px|rem)|[0-9])|font: *\"[^\"]*[0-9.]+px" -- "web/src/*.css.ts" "web/ui/*.css.ts"'
     # Three weights: 400, 500 to stand out, 600 for titles (the official site's hero aside).
-    step "three type weights" sh -c '! git grep -nE "fontWeight: *\"?(100|200|300|[5-6][1-9]0|[5-6][0-9][1-9]|7[0-9]{2}|8[0-9]{2}|9[0-9]{2}|bold|bolder|lighter)\b" -- "web/src/*.css.ts" ":!web/src/site/"'
+    step "three type weights" sh -c '! git grep -nE "fontWeight: *\"?(100|200|300|[5-6][1-9]0|[5-6][0-9][1-9]|7[0-9]{2}|8[0-9]{2}|9[0-9]{2}|bold|bolder|lighter)\b" -- "web/src/*.css.ts" "web/ui/*.css.ts" ":!web/src/site/"'
     # The safe area is read through --safe-top … (styles/global.css.ts), never env() itself: the stories put the page on
     # each phone's by setting those.
-    step "safe area through its vars" sh -c '! git grep -n "env(safe-area-inset" -- "web/src/*.ts" "web/src/*.tsx" ":!web/src/styles/global.css.ts"'
+    step "safe area through its vars" sh -c '! git grep -n "env(safe-area-inset" -- "web/src/*.ts" "web/src/*.tsx" "web/ui/*.ts" "web/ui/*.tsx" ":!web/src/styles/global.css.ts"'
     # No corner of its own in what a change adds: a corner is a token (vars.r*) or follows what it sits in (align.ts
     # surface/inner, docs/ui-panels.md); circles, capsules and marks of 4 or less may say theirs, as may a line that says
     # why with "own corner:".
-    added 'web/src/*.css.ts' | grep -E '[bB]order[A-Za-z]*Radius: *([`"][^`"]*([5-9]|[1-9][0-9]+)(\.[0-9]+)?px|([5-9]|[1-9][0-9]+)\b)' \
+    added 'web/src/*.css.ts' 'web/ui/*.css.ts' | grep -E '[bB]order[A-Za-z]*Radius: *([`"][^`"]*([5-9]|[1-9][0-9]+)(\.[0-9]+)?px|([5-9]|[1-9][0-9]+)\b)' \
       | grep -vE 'Radius: *("999px"|999\b)|own corner:' > "$tmp/corners" || true
     step "no corner of its own (in what this adds)" sh -c "! grep . '$tmp/corners'"
     # No margin taken back by hand: a ground reaching past its words, a corner, a column, a centring is one of
     # styles/align.ts's (bleedX, surface, columns, centred…), so its numbers are said once (a var's own negative may be).
-    step "no hand-written negative margins" sh -c '! git grep -nE "margin[A-Za-z]*: *(-[0-9]|[\"\`][^\"\`]*[ (]-[0-9]|[\"\`]-[0-9])" -- "web/src/*.css.ts" | grep -v "calc(-1 \* var("'
+    step "no hand-written negative margins" sh -c '! git grep -nE "margin[A-Za-z]*: *(-[0-9]|[\"\`][^\"\`]*[ (]-[0-9]|[\"\`]-[0-9])" -- "web/src/*.css.ts" "web/ui/*.css.ts" | grep -v "calc(-1 \* var("'
     # A small panel stands on controls.css.ts popover (docs/ui-panels.md): surface() only for it and the three that are not
     # popovers (a notice, ⌘K, the composer's list of chats).
-    step "small panels on one ground" sh -c '! git grep -n "\.\.\.surface(" -- "web/src/*.css.ts" ":!web/src/styles/controls.css.ts" ":!web/src/SystemBubbles.css.ts" ":!web/src/Switcher.css.ts" ":!web/src/ChatRef.css.ts"'
+    step "small panels on one ground" sh -c '! git grep -n "\.\.\.surface(" -- "web/src/*.css.ts" "web/ui/*.css.ts" ":!web/ui/src/styles/controls.css.ts" ":!web/src/SystemBubbles.css.ts" ":!web/src/Switcher.css.ts" ":!web/src/ChatRef.css.ts"'
   fi
   # Core tests also run for Rust-only client changes. A fresh CI checkout needs both
   # their JS dependencies and the real wasm package even when no TS file changed.

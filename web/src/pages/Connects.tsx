@@ -1,7 +1,7 @@
 // Connects, as a settings page: every station's connects in the workspace.
 // Each shows who added it, and the list can be narrowed to the viewer's own.
 import { Illustration } from "../brand.tsx";
-import { Key, Plug, Plus } from "../icons.tsx";
+import { Key, Plug, Plus } from "@stillfail/ui/icons.tsx";
 import { DropdownMenu } from "radix-ui";
 import { useState } from "react";
 import { Link } from "react-router";
@@ -11,7 +11,7 @@ import { profilesPage, StationContext, stationBase, useOnlyMine, type Station } 
 import { About, Button, Confirm, ConnectAvatar, FirstOne, Menu, MobileBack, SlackLogo, StatusDot } from "../ui.tsx";
 import { NewConnectDialog } from "./Connect.tsx";
 import { DoingMark } from "../DoingMark.tsx";
-import * as controlsCss from "../styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./Connects.css.ts";
@@ -19,6 +19,7 @@ import * as cloudCss from "../styles/cloud.css.ts";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 /** The connects of a workspace, from the core's `connects` view; `settings` is where the scope's settings live. */
 export function ConnectList({ scope, settings }: { scope: string; settings: string }) {
   const [onlyMine] = useOnlyMine();
@@ -72,7 +73,7 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
         </FirstOne>
       ) : <MineFilter label={t("web-pages.settings.nav.connects")} />}
       {waiting.length > 0 && (
-        <section className={pagesCss.section} aria-label={t("web-pages.connects.waiting")}>
+        <section className={pageCss.section} aria-label={t("web-pages.connects.waiting")}>
           <h2 className={css.sectionTitleQuiet}>{t("web-pages.connects.waiting")}</h2>
           <ul className={pagesCss.list}>
             {waiting.map(({ app, station, stationName }) => (

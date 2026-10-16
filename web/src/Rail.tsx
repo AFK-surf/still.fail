@@ -16,7 +16,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ComponentType, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { DropdownMenu, Popover } from "radix-ui";
 import { NavLink, useLocation, useNavigate } from "react-router";
-import { Archive, Bell, Chart, Chats, Download, Folder, Im, Minus, Plus, Quota, Retry, Settings, Sliders, User, Watch, type IconProps } from "./icons.tsx";
+import { Archive, Bell, Chart, Chats, Download, Folder, Im, Minus, Plus, Quota, Retry, Settings, Sliders, User, Watch, type IconProps } from "@stillfail/ui/icons.tsx";
 import { ICON, PanelGroup, PanelHead, PanelNote, PanelRow, setKeptWidth, Tip, usePointerTip } from "./ui.tsx";
 import { lastChatOf, useLastChat, useWorkspaceMarks } from "./lastChat.ts";
 import { useSidebarMode, type SidebarMode } from "./station.tsx";
@@ -24,18 +24,18 @@ import { AttentionEntry } from "./Attention.tsx";
 import { useWorkspaces } from "./cloud/api.ts";
 import * as chatMarkCss from "./ChatMark.css.ts";
 import { setPrefs, usePrefs } from "./prefs.ts";
-import * as controlsCss from "./styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { RailStations } from "./Sidebar.tsx";
 import { isPicture } from "./StationMark.tsx";
 import { marked, WorkspaceMark } from "./WorkspaceMark.tsx";
 import { openedAt } from "./DecisionDesk.tsx";
 import { moveSidebar, onSidebarChosen, showSidebar, useSidebarToggle } from "./brand.tsx";
 import * as shellCss from "./styles/shell.css.ts";
-import { reducedMotion } from "./motion.ts";
+import { reducedMotion } from "@stillfail/ui/motion.ts";
 import * as css from "./Rail.css.ts";
-import * as uiCss from "./ui.css.ts";
 import { androidQr, download, downloadsOffered } from "./downloads.ts";
 import { t } from "./i18n.ts";
+import * as partsCss from "@stillfail/ui/parts.css.ts";
 
 /** Every place the rail can show, in the order the settings list them when none was chosen. */
 export const RAIL_ITEMS = ["chats", "mine", "watching", "archive", "decisions", "attention", "files", "stations", "profiles", "connects", "usage"] as const;
@@ -521,9 +521,9 @@ function RailDownload() {
   const label = t("web-main.download.title");
   const [open, setOpen] = useState(false);
   const app = (href: string, name: string, note: string) => (
-    <a className={`${uiCss.panelRow} ${css.downloadRow}`} href={href}>
-      <span className={uiCss.panelRowLabel}><span className={css.downloadName}>{name}</span><span className={css.downloadNote}>{note}</span></span>
-      <span className={uiCss.panelRowEnd}><Download size={16} /></span>
+    <a className={`${partsCss.panelRow} ${css.downloadRow}`} href={href}>
+      <span className={partsCss.panelRowLabel}><span className={css.downloadName}>{name}</span><span className={css.downloadNote}>{note}</span></span>
+      <span className={partsCss.panelRowEnd}><Download size={16} /></span>
     </a>
   );
   return (
@@ -538,9 +538,9 @@ function RailDownload() {
           <PanelHead title={label} />
           {app(download("mac"), "Mac", t("web-main.download.mac"))}
           {app(download("win"), "Windows", t("web-main.download.windows"))}
-          <div className={`${uiCss.panelRow} ${css.downloadScan}`}>
+          <div className={`${partsCss.panelRow} ${css.downloadScan}`}>
             <img className={css.downloadQr} src={androidQr()} alt="" width={72} height={72} />
-            <span className={uiCss.panelRowLabel}><span className={css.downloadName}>Android</span><br /><span className={css.downloadNote}>{t("web-main.download.android")}</span></span>
+            <span className={partsCss.panelRowLabel}><span className={css.downloadName}>Android</span><br /><span className={css.downloadNote}>{t("web-main.download.android")}</span></span>
           </div>
         </Popover.Content>
       </Popover.Portal>

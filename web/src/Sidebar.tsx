@@ -1,4 +1,4 @@
-import { Archive, Copy, Edit, Pin, Unplug } from "./icons.tsx";
+import { Archive, Copy, Edit, Pin, Unplug } from "@stillfail/ui/icons.tsx";
 import { StationMark } from "./StationMark.tsx";
 import { useCopyChatLink } from "./ChatRef.tsx";
 import { stationBase, useSidebarMode, type ChatFilter } from "./station.tsx";
@@ -11,7 +11,7 @@ import { prime, useTopic, useTopicSelect } from "./core/react.ts";
 import type { Topic } from "./core/client.ts";
 import { RowAside } from "./RowPicture.tsx";
 import { Retry, Waiting, WaitingItems } from "./Status.tsx";
-import { failure, useToast } from "./toast.tsx";
+import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { Confirm, ConnectKindIcon, ICON, SkeletonRows, Time, Tip } from "./ui.tsx";
 import { chatClicked } from "./telemetry.ts";
 import { useComposerMove } from "./dock.tsx";
@@ -23,7 +23,7 @@ import { ContextMenu } from "radix-ui";
 import { TitleInput, useRename, useRenaming } from "./Rename.tsx";
 import { useDoing } from "./doing.ts";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
-import * as controlsCss from "./styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { StationGlyph, glyphCounts } from "./StationGlyph.tsx";
 import { useHeldOrder, useListMotion, usePointerOver } from "./listMotion.ts";
 import { useWorkspaceMarks } from "./lastChat.ts";
@@ -32,8 +32,8 @@ import * as decisionsCss from "./Decisions.css.ts";
 import { DecisionRows, openedAt, openedRecently } from "./DecisionDesk.tsx";
 import { ArchiveRows } from "./pages/Archive.tsx";
 import * as chatCss from "./styles/chat.css.ts";
-import * as pagesCss from "./styles/pages.css.ts";
 import { t } from "./i18n.ts";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
 /**
  * The chats of a workspace, newest first and
@@ -442,7 +442,7 @@ function usePin(item: ChatItem) {
 function ArchiveButton({ item, archive }: { item: ChatItem; archive: () => void }) {
   return (
     <Tip label={t("web-main.chat.archive")}>
-      <button type="button" className={`${pagesCss.iconBtn} ${nav.rowArchive}`} aria-label={t("web-main.chat.archiveNamed", { title: item.title })} onMouseDown={(e) => e.preventDefault()} onClick={archive}>
+      <button type="button" className={`${pageCss.iconBtn} ${nav.rowArchive}`} aria-label={t("web-main.chat.archiveNamed", { title: item.title })} onMouseDown={(e) => e.preventDefault()} onClick={archive}>
         <Archive size={16} />
       </button>
     </Tip>

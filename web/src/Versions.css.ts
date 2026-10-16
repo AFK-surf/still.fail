@@ -1,5 +1,5 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 /** A station's software in a line: grey, but for a newer version out, an update going on, or one that failed. */
 export const versions = style({

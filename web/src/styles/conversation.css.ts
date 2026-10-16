@@ -1,5 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const pageBarTitle = style({
   gridColumn: "2", display: "flex", alignItems: "center", gap: "8px", minWidth: "0", lineHeight: "22px",

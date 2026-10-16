@@ -4,9 +4,9 @@
 import type { ReactNode } from "react";
 import { doingMatches, failed, useDoingList } from "./doing.ts";
 import { Tip } from "./ui.tsx";
-import * as css from "./DoingMark.css.ts";
-import * as waitingCss from "./styles/waiting.css.ts";
 import { t } from "./i18n.ts";
+import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
+import * as partsCss from "@stillfail/ui/parts.css.ts";
 
 type Words = Record<string, string | number | boolean | null | undefined>;
 
@@ -40,12 +40,12 @@ interface MarkProps {
 /** The spinner, or the failure mark, for a state the caller already has (several calls, or one its menu reads). */
 export function DoingShown({ state, className, size = 12, idle = null, label, side, bare }: MarkProps & { state: DoingState }) {
   if (state.running) {
-    const cls = className ? `${waitingCss.spinner} ${className}` : waitingCss.spinner;
+    const cls = className ? `${spinnerCss.spinner} ${className}` : spinnerCss.spinner;
     const spinner = label || state.note ? <span className={cls} role="status" aria-label={state.note ?? label} /> : <span className={cls} aria-hidden="true" />;
     return state.note && !bare ? <Tip label={state.note} {...(side ? { side } : {})}>{spinner}</Tip> : spinner;
   }
   if (state.error !== undefined) {
-    const mark = <span className={css.failedMark} style={{ width: size, height: size, fontSize: size - 4 }} role="img" aria-label={t("web-main.doing.failedWhy", { error: state.error })}>!</span>;
+    const mark = <span className={partsCss.failedMark} style={{ width: size, height: size, fontSize: size - 4 }} role="img" aria-label={t("web-main.doing.failedWhy", { error: state.error })}>!</span>;
     return bare ? mark : <Tip label={state.error} {...(side ? { side } : {})}>{mark}</Tip>;
   }
   return <>{idle}</>;

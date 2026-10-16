@@ -11,7 +11,7 @@ import type { AccountWorkspaces } from "./cloud/api.ts";
 import { useTopicSelect } from "./core/react.ts";
 import { ModelLogo, Time } from "./ui.tsx";
 import { chatOfLink, copyChatLink, REF_LINK, REF_MARK, shareLink, splitBy, stationOfLink } from "./chatRefs.ts";
-import { failure } from "./toast.tsx";
+import { failure } from "@stillfail/ui/toast.tsx";
 import * as css from "./ChatRef.css.ts";
 import * as hover from "./Hover.css.ts";
 import { CardSkeleton, Hover } from "./Peeks.tsx";

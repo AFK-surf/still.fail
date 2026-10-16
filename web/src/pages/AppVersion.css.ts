@@ -1,5 +1,5 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 // The desktop app's version: one row, the version and what the last check found on the left, its button on the right.
 export const row = style({ display: "flex", alignItems: "center", gap: "16px" });

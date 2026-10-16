@@ -8,7 +8,7 @@ import { CHANGEABLE } from "../keymap.ts";
 import { CAN_NOTIFY } from "../notify.ts";
 import { HAS_VERSION } from "../pages/AppVersion.tsx";
 import { HAS_LOCAL_STATION } from "../pages/LocalStation.tsx";
-import { ArrowLeft, Bell, Brain, Key, Chart, Check, ChevronRight, Edit, Folder, Im, Info, LogOut, Monitor, Plus, Quota, Refresh, Server, Settings, ShieldCheck, Sliders, Sparks, Command, Trash, User, UserPlus, Users, type IconProps } from "../icons.tsx";
+import { ArrowLeft, Bell, Brain, Key, Chart, Check, ChevronRight, Edit, Folder, Im, Info, LogOut, Monitor, Plus, Quota, Refresh, Server, Settings, ShieldCheck, Sliders, Sparks, Command, Trash, User, UserPlus, Users, type IconProps } from "@stillfail/ui/icons.tsx";
 import { SecurityNotice } from "./Security.tsx";
 import { useCommands } from "../commands.ts";
 import { Fragment, useCallback, useEffect, useRef, useState, type ComponentType } from "react";
@@ -32,7 +32,7 @@ import { MachineLoginOffers, PROFILE_LEAD, type Choice } from "../pages/Accounts
 import { addProfilePath } from "../pages/AddProfile.tsx";
 import { profilePath, useProfilesSidebar } from "../ProfilesNav.tsx";
 import { useCall, useTopic } from "../core/react.ts";
-import { failure, useAct, useToast } from "../toast.tsx";
+import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { About, BackLink, Button, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Segmented, Select, StatusDot, Time } from "../ui.tsx";
 import { useSignOut, type Account } from "./accounts.ts";
 import { useLastChat } from "../lastChat.ts";
@@ -49,16 +49,17 @@ import { useRailItems, type RailItem } from "../Rail.tsx";
 import * as railCss from "../Rail.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
-import * as controlsCss from "../styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as additionsCss from "../styles/additions.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./settings.css.ts";
 import * as accountsCss from "../pages/Accounts.css.ts";
-import * as waitingCss from "../styles/waiting.css.ts";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { tx } from "./words.tsx";
+import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 // Getters: read in the language at the time.
 export const ROLE_LABEL: Record<Role, string> = {
   get owner() { return t("web-pages.roles.owner"); },
@@ -483,7 +484,7 @@ export function ProfileAccountSettings({ entry }: { entry: WorkspaceEntry }) {
   const kind = p.machine ? t("web-main.profile.machine") : p.providerName ?? ACCESS[p.access.kind].label;
   return (
     <Page title={p.name} lead={[p.email, kind].filter(Boolean).join(" · ")} back={back} backLabel="Profile">
-      <section className={pagesCss.section}>
+      <section className={pageCss.section}>
         <div className={css.accountState}>
           {p.checkTone !== "green" && <Pill tone={p.checkTone}>{p.checkText}</Pill>}
           <span className={shellCss.muted}>{p.check ? p.check.detail : t("web-pages.profiles.neverChecked")}</span>
@@ -694,7 +695,7 @@ function EnrollSteps({ enrollment }: { enrollment: { install: string; installWin
         <CopyCommand text={windows ? enrollment.installWindows! : enrollment.install} />
       </div>
       <div className={css.enrollWait} role="status">
-        <span className={waitingCss.spinner} aria-hidden="true" />
+        <span className={spinnerCss.spinner} aria-hidden="true" />
         <span><strong>{t("web-pages.settings.enroll.waiting")}</strong><span className={shellCss.muted}>{t("web-pages.settings.enroll.waitingNote")}</span></span>
       </div>
     </div>

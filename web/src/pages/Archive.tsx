@@ -11,21 +11,21 @@ import { Navigate, NavLink } from "react-router";
 import { stationApi, stationCall, useArchiveView } from "../api.ts";
 import { prime, useCall } from "../core/react.ts";
 import type { ArchiveItem, ArchiveView } from "../core/shapes.ts";
-import { failure, useToast } from "../toast.tsx";
+import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
 import { Confirm, Empty, SkeletonRows, Tip } from "../ui.tsx";
-import { Retry, Search, Trash } from "../icons.tsx";
+import { Retry, Search, Trash } from "@stillfail/ui/icons.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { NavSection } from "../SidebarList.tsx";
 import { useListMotion } from "../listMotion.ts";
 import { useGo, useHere } from "../go.ts";
 import { stationBase } from "../station.tsx";
 import * as nav from "../Sidebar.css.ts";
-import * as pagesCss from "../styles/pages.css.ts";
-import * as controlsCss from "../styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as css from "./Archive.css.ts";
 import { t } from "../i18n.ts";
 import { Words } from "../cloud/words.tsx";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
 /**
  * The archive of a scope's stations online, as both screens show it (the phone's in ../mobile/Archive.tsx), as the
@@ -170,14 +170,14 @@ function ArchiveRow({ item, restore, ask }: { item: ArchiveItem; restore: (item:
       </NavLink>
       <div className={css.actions}>
         <Tip label={restoring.error ?? t("web-pages.archive.restore")}>
-          <button type="button" className={`${pagesCss.iconBtn} ${css.action}`} aria-label={t("web-pages.archive.restoreNamed", { title: item.title })}
+          <button type="button" className={`${pageCss.iconBtn} ${css.action}`} aria-label={t("web-pages.archive.restoreNamed", { title: item.title })}
             disabled={busy} aria-busy={restoring.running || undefined} onMouseDown={(e) => e.preventDefault()} onClick={() => void restore(item)}>
             <DoingShown state={restoring} className={controlsCss.iconSpinner} size={14} idle={<Retry size={14} />} bare />
           </button>
         </Tip>
         {item.deletable && (
           <Tip label={deleting.error ?? t("common.delete")}>
-            <button type="button" className={`${pagesCss.iconBtn} ${css.action} ${css.remove}`} aria-label={t("web-pages.archive.deleteNamed", { title: item.title })}
+            <button type="button" className={`${pageCss.iconBtn} ${css.action} ${css.remove}`} aria-label={t("web-pages.archive.deleteNamed", { title: item.title })}
               disabled={busy} aria-busy={deleting.running || undefined} onMouseDown={(e) => e.preventDefault()} onClick={() => ask(item)}>
               <DoingShown state={deleting} className={controlsCss.iconSpinner} size={14} idle={<Trash size={14} />} bare />
             </button>

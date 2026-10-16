@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { busyRing } from "./styles/busyRing.ts";
-import { leadBeatKeyframes, leadBreatheKeyframes, leadLitKeyframes, spinKeyframes } from "./styles/keyframes.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { busyRing } from "@stillfail/ui/styles/busyRing.ts";
+import { leadBeatKeyframes, leadBreatheKeyframes, leadLitKeyframes, spinKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 
 /**
  * A chat's state on its row's picture (ChatMark.tsx), at the corner, over the picture: a gap of the row's ground

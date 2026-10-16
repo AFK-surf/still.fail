@@ -1,5 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 /** Words on a card, a paragraph each. */
 export const mBody = style({ padding: "14px 16px", display: "grid", gap: "12px", fontSize: vars.textBody, lineHeight: vars.leadingBody, color: "var(--m-ink)" });

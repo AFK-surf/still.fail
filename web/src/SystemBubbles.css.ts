@@ -1,10 +1,10 @@
 // The app's own bubbles (SystemBubbles.tsx): at the page's bottom left, beside the rail (none on a narrow screen: the
 // window's edge), the newest lowest, each rising in.
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { panel } from "./styles/glass.ts";
-import { PANEL_PAD, TEXT_IN, surface } from "./styles/align.ts";
-import { panelButton, panelIcon } from "./ui.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { panel } from "@stillfail/ui/styles/glass.ts";
+import { PANEL_PAD, TEXT_IN, surface } from "@stillfail/ui/styles/align.ts";
+import { panelButton, panelIcon } from "@stillfail/ui/parts.css.ts";
 
 export const stack = style({
   position: "fixed", zIndex: 150, left: "calc(var(--safe-left) + 12px)", bottom: "calc(var(--safe-bottom) + 12px)",

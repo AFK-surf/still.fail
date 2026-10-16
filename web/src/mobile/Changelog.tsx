@@ -4,7 +4,7 @@
 // opened or it is put away. The wide screen's are ../pages/Changelog.tsx.
 import { useEffect, useState } from "react";
 import { useChangelog, useChangelogSeen } from "../changelog.ts";
-import { Close, Sparks } from "../icons.tsx";
+import { Close, Sparks } from "@stillfail/ui/icons.tsx";
 import { useApp } from "./app.tsx";
 import { LargeTitle, ListCard, SectionHeader, Seg, Spinner, TopBack } from "./parts.tsx";
 import * as pagesCss from "./styles/pages.css.ts";

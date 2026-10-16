@@ -1,7 +1,7 @@
 // The one way a model is chosen, wherever it is: the model, the runtime (where it can still change, and the model runs
 // on more than one), how hard it thinks, and who runs it (the station's pick, or one profile kept to). One panel, from
 // one control that shows them together. Picks there are a draft until 确定; a panel closed otherwise changes nothing.
-import { Check, ChevronDown, ChevronRight, Search } from "./icons.tsx";
+import { Check, ChevronDown, ChevronRight, Search } from "@stillfail/ui/icons.tsx";
 import { Popover } from "radix-ui";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ModelOption } from "./api.ts";
@@ -11,8 +11,7 @@ import { RUNTIME_LABEL } from "./format.ts";
 import { ModelLogo, ProviderLogo, RuntimeLogo, Tip } from "./ui.tsx";
 import * as css from "./ModelTriple.css.ts";
 import * as css2 from "./ModelTriple.css.ts";
-import * as chatCss from "./styles/chat.css.ts";
-import * as controlsCss from "./styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import { DoingShown } from "./DoingMark.tsx";
 import { t } from "./i18n.ts";
@@ -109,7 +108,7 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
           )}
           {/* What was picked on its way: a ring in place of the chevron, not opened again meanwhile; failed, a red mark there a few seconds. */}
           <DoingShown state={{ running: !!pick.saving, error: pick.saveFailed }} className={css2.tripleSpinner} label={t("web-main.saving")} side="top"
-            idle={<ChevronDown size={12} className={chatCss.chooserChevron} />} />
+            idle={<ChevronDown size={12} className={controlsCss.chooserChevron} />} />
         </Popover.Trigger>
       </span>
       <Popover.Portal>

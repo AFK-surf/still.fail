@@ -11,12 +11,11 @@
 // a bigger one says it cannot be played here and offers the download.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { DriveEntry } from "../core/shapes.ts";
-import { Back15, Captions, Check, ChevronLeft, Close, Download, Expand, FileAudio, Forward15, List, Pause, Play, Shrink, SkipBack, SkipForward, Volume, VolumeX } from "../icons.tsx";
+import { Back15, Captions, Check, ChevronLeft, Close, Download, Expand, FileAudio, Forward15, List, Pause, Play, Shrink, SkipBack, SkipForward, Volume, VolumeX } from "@stillfail/ui/icons.tsx";
 import { useNarrow } from "../mobile/app.tsx";
 import { Tip } from "../ui.tsx";
 import { REST_MS, TAP_REST_MS } from "../FilePreview.tsx";
 import * as vvCss from "../VideoViewer.css.ts";
-import * as pagesCss from "../styles/pages.css.ts";
 import { compareNatural, download, joinPath, parentOf, placeAt, readKept, readWhole, sideSubtitle, sizeOf, usePlace, type At, type Got } from "./model.ts";
 import { streaming, streamUrl } from "./stream.ts";
 import { ViewerBar, ViewerDownload, ViewerTool } from "../viewer/ViewerBar.tsx";
@@ -24,6 +23,7 @@ import { decodeText } from "./text.ts";
 import { toVtt } from "./subtitles.ts";
 import * as css from "./Player.css.ts";
 import { t } from "../i18n.ts";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
 /** Without a stream, the most read whole to be played. */
 const WHOLE_MAX = 200 * 1024 * 1024;
@@ -320,7 +320,7 @@ export function Player({ at, blob, onSave, entry, siblings = [], backLabel, onBa
           </>} />
       ) : (
         <header className={css.head} data-awake={awake || undefined} {...keep}>
-          <Tip label={backLabel}><button type="button" className={`${pagesCss.iconBtn} ${css.bright}`} aria-label={backLabel} onClick={onBack}><ChevronLeft size={20} /></button></Tip>
+          <Tip label={backLabel}><button type="button" className={`${pageCss.iconBtn} ${css.bright}`} aria-label={backLabel} onClick={onBack}><ChevronLeft size={20} /></button></Tip>
           <span className={css.name}><b>{entry.name}</b>{list.length > 1 && index >= 0 && <small>{index + 1} / {list.length}</small>}</span>
         </header>
       )}
@@ -328,7 +328,7 @@ export function Player({ at, blob, onSave, entry, siblings = [], backLabel, onBa
         <aside className={css.list}>
           <div className={css.listHead}>
             <b>{t("web-pages.drive.player.list")}</b><small>{index + 1} / {list.length}</small>
-            <Tip label={t("common.close")}><button type="button" className={pagesCss.iconBtn} aria-label={t("common.close")} onClick={() => setListing(false)}><Close size={16} /></button></Tip>
+            <Tip label={t("common.close")}><button type="button" className={pageCss.iconBtn} aria-label={t("common.close")} onClick={() => setListing(false)}><Close size={16} /></button></Tip>
           </div>
           <div className={css.listRows}>
             {list.map((e, i) => (
@@ -345,20 +345,20 @@ export function Player({ at, blob, onSave, entry, siblings = [], backLabel, onBa
         <Timeline duration={duration} now={time} buffered={buffered} onSeek={seek} />
         <div className={vvCss.vvRow}>
           <span className={vvCss.vvGroup}>
-            {list.length > 1 && <Tip label={t("web-pages.drive.player.prev")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-pages.drive.player.prev")} disabled={!prev} onClick={() => prev && onGo(prev.name)}><SkipBack size={18} /></button></Tip>}
-            <Tip label={t("web-pages.drive.player.back15")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-pages.drive.player.back15")} onClick={() => by(-STEP)}><Back15 size={20} /></button></Tip>
-            <Tip label={playing ? t("web-main.video.pauseKey") : t("web-main.video.playKey")}><button type="button" className={`${pagesCss.iconBtn} ${css.bright}`} aria-label={playing ? t("web-main.video.pause") : t("web-main.video.play")} onClick={toggle}>
+            {list.length > 1 && <Tip label={t("web-pages.drive.player.prev")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-pages.drive.player.prev")} disabled={!prev} onClick={() => prev && onGo(prev.name)}><SkipBack size={18} /></button></Tip>}
+            <Tip label={t("web-pages.drive.player.back15")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-pages.drive.player.back15")} onClick={() => by(-STEP)}><Back15 size={20} /></button></Tip>
+            <Tip label={playing ? t("web-main.video.pauseKey") : t("web-main.video.playKey")}><button type="button" className={`${pageCss.iconBtn} ${css.bright}`} aria-label={playing ? t("web-main.video.pause") : t("web-main.video.play")} onClick={toggle}>
               {playing ? <Pause size={20} /> : <Play size={20} />}
             </button></Tip>
-            <Tip label={t("web-pages.drive.player.forward15")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-pages.drive.player.forward15")} onClick={() => by(STEP)}><Forward15 size={20} /></button></Tip>
-            {list.length > 1 && <Tip label={t("web-pages.drive.player.next")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-pages.drive.player.next")} disabled={!next} onClick={() => next && onGo(next.name)}><SkipForward size={18} /></button></Tip>}
+            <Tip label={t("web-pages.drive.player.forward15")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-pages.drive.player.forward15")} onClick={() => by(STEP)}><Forward15 size={20} /></button></Tip>
+            {list.length > 1 && <Tip label={t("web-pages.drive.player.next")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-pages.drive.player.next")} disabled={!next} onClick={() => next && onGo(next.name)}><SkipForward size={18} /></button></Tip>}
           </span>
           <span className={`${vvCss.vvInfo} ${css.timeRow}`}><span className={vvCss.vvFact}><b className={vvCss.vvNow}>{clock(time)}</b><span className={vvCss.vvDim}> / {clock(duration)}</span></span></span>
           <span className={vvCss.vvGroup}>
             {desk && <VolumeControl volume={volume} muted={muted} onVolume={(v) => { setVolume(v); setMuted(v === 0); }} onMute={() => setMuted((m) => !m)} />}
             <Tip label={t("web-pages.drive.player.rate")}><button type="button" className={vvCss.vvRate} onClick={() => setRate((r) => RATES[(RATES.indexOf(r) + 1) % RATES.length]!)}>{rate}×</button></Tip>
-            {subtitle && <Tip label={captions ? t("web-pages.drive.player.captionsOff") : t("web-pages.drive.player.captionsOn")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-pages.drive.player.captions")} aria-pressed={captions} onClick={() => setCaptions((c) => !c)}><Captions size={18} /></button></Tip>}
-            {!audio && <Tip label={full ? t("web-pages.drive.player.unfull") : t("web-pages.drive.player.full")}><button type="button" className={pagesCss.iconBtn} aria-label={full ? t("web-pages.drive.player.unfull") : t("web-pages.drive.player.full")} onClick={() => void turn()}>{full ? <Shrink size={18} /> : <Expand size={18} />}</button></Tip>}
+            {subtitle && <Tip label={captions ? t("web-pages.drive.player.captionsOff") : t("web-pages.drive.player.captionsOn")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-pages.drive.player.captions")} aria-pressed={captions} onClick={() => setCaptions((c) => !c)}><Captions size={18} /></button></Tip>}
+            {!audio && <Tip label={full ? t("web-pages.drive.player.unfull") : t("web-pages.drive.player.full")}><button type="button" className={pageCss.iconBtn} aria-label={full ? t("web-pages.drive.player.unfull") : t("web-pages.drive.player.full")} onClick={() => void turn()}>{full ? <Shrink size={18} /> : <Expand size={18} />}</button></Tip>}
           </span>
         </div>
       </div>
@@ -382,7 +382,7 @@ function VolumeControl({ volume, muted, onVolume, onMute }: { volume: number; mu
   return (
     <span className={css.volume}>
       <Tip label={silent ? t("web-pages.drive.player.unmute") : t("web-pages.drive.player.mute")}>
-        <button type="button" className={pagesCss.iconBtn} aria-label={silent ? t("web-pages.drive.player.unmute") : t("web-pages.drive.player.mute")} onClick={onMute}>
+        <button type="button" className={pageCss.iconBtn} aria-label={silent ? t("web-pages.drive.player.unmute") : t("web-pages.drive.player.mute")} onClick={onMute}>
           {silent ? <VolumeX size={18} /> : <Volume size={18} />}
         </button>
       </Tip>

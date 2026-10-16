@@ -1,8 +1,8 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { popKeyframes } from "./styles/keyframes.css.ts";
-import { glass } from "./styles/glass.ts";
-import { PANEL_PAD, TEXT_IN, inner, surface } from "./styles/align.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { popKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { glass } from "@stillfail/ui/styles/glass.ts";
+import { PANEL_PAD, TEXT_IN, inner, surface } from "@stillfail/ui/styles/align.ts";
 
 /** Where the menu hangs from: the composer's top edge. */
 export const refAnchor = style({ position: "relative", height: "0" });

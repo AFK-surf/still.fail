@@ -1,14 +1,14 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
-import { glass } from "../styles/glass.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { glass } from "@stillfail/ui/styles/glass.ts";
 import { muted } from "../styles/shell.css.ts";
 import { sessionPage } from "../styles/session.css.ts";
 import { pageBarTitle } from "../styles/conversation.css.ts";
-import { panelRow, resizeHandle } from "../ui.css.ts";
 import { sessionMain } from "../styles/jobs.css.ts";
 import { windowsEmoji } from "../StationMark.css.ts";
 import { pageBar } from "../styles/sidebar.css.ts";
-import { TEXT_IN, outset, outsetTop } from "../styles/align.ts";
+import { TEXT_IN, outset, outsetTop } from "@stillfail/ui/styles/align.ts";
+import { panelRow, resizeHandle } from "@stillfail/ui/parts.css.ts";
 
 export const agentMarkBtn = style({
   display: "inline-grid", padding: "0", border: "0", background: "none", cursor: "pointer",

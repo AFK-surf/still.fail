@@ -3,20 +3,20 @@
 // `lockDraft` topics, `lock.*` calls, client/core-ts/src/views/lock.ts): this only draws.
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { Close, Devices, Key, Monitor, Server, ShieldCheck, Web } from "../icons.tsx";
+import { Close, Devices, Key, Monitor, Server, ShieldCheck, Web } from "@stillfail/ui/icons.tsx";
 import { useCall, useTopic } from "../core/react.ts";
 import { stamp } from "../api.ts";
 import { useDoing } from "../doing.ts";
-import { useAct } from "../toast.tsx";
+import { useAct } from "@stillfail/ui/toast.tsx";
 import { Button, Dialog, IconButton, Loading, MobileBack, Section, Time } from "../ui.tsx";
 import { t } from "../i18n.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
-import * as waitingCss from "../styles/waiting.css.ts";
 import * as css from "./Security.css.ts";
 
 export type { LockDevice, LockRequest, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
 import type { LockDevice, LockRequest, LockStation, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
+import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 
 // A function, not a table made as the module loads: words are the page's language when shown (and the site's
 // prerender loads this module before any language is set).
@@ -284,7 +284,7 @@ export function SecurityWaiting({ entry, lock }: { entry: WorkspaceEntry; lock: 
       <h1 className={css.waitingTitle}>{t("web-pages.security.waitingTitle")}</h1>
       <p className={css.waitingLead}>{t("web-pages.security.waitingLead", { name: entry.name })}</p>
       <div className={css.bigCode}>{lock.me?.code}</div>
-      <div className={css.waitingNote}><span className={waitingCss.spinner} aria-hidden="true" />{t("web-pages.security.waitingNote")}</div>
+      <div className={css.waitingNote}><span className={spinnerCss.spinner} aria-hidden="true" />{t("web-pages.security.waitingNote")}</div>
     </div>
   );
 }

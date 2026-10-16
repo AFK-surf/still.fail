@@ -18,7 +18,7 @@ import { createContext, createElement, useContext, useEffect, useLayoutEffect, u
 import { flushSync } from "react-dom";
 import { sizesOf, Virtual, type Align, type Item, type Layout, type Row } from "./model.ts";
 import * as css from "./list.css.ts";
-import { GLIDE_TAU, glideClock, glided } from "../motion.ts";
+import { GLIDE_TAU, glideClock, glided } from "@stillfail/ui/motion.ts";
 
 export type VirtualList = {
   model: Virtual;

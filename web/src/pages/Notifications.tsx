@@ -9,9 +9,9 @@ import { core, useTopic } from "../core/react.ts";
 import { CAN_NOTIFY, requestPermission, setNotify, useNotifyState, type NotifyState } from "../notify.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
 import { setPrefs } from "../prefs.ts";
-import { ChevronRight } from "../icons.tsx";
+import { ChevronRight } from "@stillfail/ui/icons.tsx";
 import { MobileBack, Section, Segmented, Switch, SwitchRow } from "../ui.tsx";
-import { failure, useToast } from "../toast.tsx";
+import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./Notifications.css.ts";
 

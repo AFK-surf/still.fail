@@ -1,0 +1,9 @@
+{
+  "name": "@stillfail/ui",
+  "private": true,
+  "type": "module",
+  "description": "still.fail's design system for the web (docs/ui-package.md): tokens, alignment, icons, motion, words and the shared parts, with no core, station or cloud behind them (its dependencies are the web's own: the root package.json)",
+  "exports": {
+    "./*": "./src/*"
+  }
+}

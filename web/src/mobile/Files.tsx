@@ -4,7 +4,7 @@
 import { useStations } from "../api.ts";
 import { stationBase } from "../station.tsx";
 import { drivePath } from "../drive/useDrive.ts";
-import { ChevronRight, Folder } from "../icons.tsx";
+import { ChevronRight, Folder } from "@stillfail/ui/icons.tsx";
 import { useApp, useRootPage } from "./app.tsx";
 import { NavItem, NavPhone } from "../SidebarList.tsx";
 import * as railCss from "../Rail.css.ts";

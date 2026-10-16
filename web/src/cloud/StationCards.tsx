@@ -12,12 +12,12 @@ import { same, type Mark } from "../stationPick.ts";
 import { StationMark } from "../StationMark.tsx";
 import { stationBase } from "../station.tsx";
 import { Link } from "react-router";
-import { ChevronRight } from "../icons.tsx";
+import { ChevronRight } from "@stillfail/ui/icons.tsx";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { tx } from "./words.tsx";
-import * as controlsCss from "../styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 
 /** `manager`: may update a station and its runtimes (a workspace owner or admin); `onMark`: may give it an icon or emoji. */
 /** `page`: where its own page is, opened by its name. */

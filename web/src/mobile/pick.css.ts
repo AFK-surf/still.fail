@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
-import { popover } from "../styles/controls.css.ts";
-import { IN, PANEL_PAD, TEXT_IN, inner, innerShape, pillInner } from "../styles/align.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { popover } from "@stillfail/ui/styles/controls.css.ts";
+import { IN, PANEL_PAD, TEXT_IN, inner, innerShape, pillInner } from "@stillfail/ui/styles/align.ts";
 import { mChat } from "./styles/chat.css.ts";
 
 /** The passage picked in a message of the chat's list (pick.tsx): on the accent's ground, its words as they are. */

@@ -1,6 +1,6 @@
 // Markdown's own parts.
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { markdown } from "./styles/conversation.css.ts";
 
 /** A message's file placed in its text: on a line of its own, a little apart from the text around it. */

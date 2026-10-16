@@ -1,6 +1,6 @@
 // An agent in brief, over its avatar (AgentCard.tsx), in the hover cards' language (Hover.css.ts).
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const agentCard = style({ display: "flex", flexDirection: "column", gap: "8px", minWidth: "0", width: "288px", maxWidth: "100%" });
 export const head = style({ display: "flex", alignItems: "center", gap: "10px", minWidth: "0" });

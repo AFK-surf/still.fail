@@ -1,5 +1,5 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "../../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const mCard = style({
   display: "block", boxSizing: "border-box", width: "calc(100% - 24px)", margin: "0 12px 10px", padding: "14px 16px",

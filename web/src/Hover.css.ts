@@ -3,9 +3,9 @@
 // grows out of the edge facing its link with a light blur, and leaves faster than it came; moving straight to the next
 // link, the card moves with no fade at all.
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { panelCard, popover } from "./styles/controls.css.ts";
-import { IN, PANEL_PAD, PANEL_PILL, TEXT_IN, pillInner } from "./styles/align.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { panelCard, popover } from "@stillfail/ui/styles/controls.css.ts";
+import { IN, PANEL_PAD, PANEL_PILL, TEXT_IN, pillInner } from "@stillfail/ui/styles/align.ts";
 
 const enter = keyframes({ from: { opacity: "0", transform: "scale(.96)", filter: "blur(2px)" } });
 const exit = keyframes({ to: { opacity: "0", transform: "scale(.97)" } });

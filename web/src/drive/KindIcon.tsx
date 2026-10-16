@@ -1,6 +1,6 @@
 // An entry's mark by what opens it (the core's `kind`), still.fail's own line icons (design/icons): no tinted tile.
 import type { DriveKind } from "../core/shapes.ts";
-import { File, FileAudio, FileCode, FilePdf, FileText, FileVideo, Folder, Photo } from "../icons.tsx";
+import { File, FileAudio, FileCode, FilePdf, FileText, FileVideo, Folder, Photo } from "@stillfail/ui/icons.tsx";
 
 const ICONS = {
   folder: Folder, video: FileVideo, audio: FileAudio, image: Photo, markdown: FileText, text: FileText, subtitle: FileText,

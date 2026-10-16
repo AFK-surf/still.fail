@@ -2,8 +2,8 @@ import { useRef, useState, useEffect } from "react";
 import { Popover } from "radix-ui";
 import { useTopic } from "./core/react.ts";
 import * as css from "./Preview.css.ts";
-import * as pages from "./styles/pages.css.ts";
 import { t } from "./i18n.ts";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
 export interface ResourceLoad {
   percent: number; total: number; finished: number; failed: number;
@@ -27,7 +27,7 @@ export function LoadRing({ value }: { value: ResourceLoad }) {
     : t("web-main.load.label", { percent: value.percent, done: value.finished, total: value.total });
   return <Popover.Root open={open} onOpenChange={setOpen}>
     <Popover.Trigger asChild>
-      <button type="button" className={`${pages.iconBtn} ${css.loadRing}`} data-failed={value.failed > 0 || undefined} aria-label={label}
+      <button type="button" className={`${pageCss.iconBtn} ${css.loadRing}`} data-failed={value.failed > 0 || undefined} aria-label={label}
         onPointerEnter={(e) => { if (e.pointerType === "mouse") { hold(); setOpen(true); } }} onPointerLeave={(e) => { if (e.pointerType === "mouse") leave(); }}>
         <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
           <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.18" />

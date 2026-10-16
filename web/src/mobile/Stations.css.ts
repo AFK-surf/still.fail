@@ -1,5 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { mGrow } from "./styles/parts.css.ts";
 import { connectionRetry } from "../Connection.css.ts";
 

@@ -15,7 +15,7 @@ import "@fontsource-variable/inter";
 import { Illustration } from "../brand.tsx";
 import { useAccounts, useSignIn, useSignOut } from "../cloud/accounts.ts";
 import { Callback, SignInPage } from "../cloud/gate.tsx";
-import { ToastProvider } from "../toast.tsx";
+import { ToastProvider } from "@stillfail/ui/toast.tsx";
 import { Button, Loading } from "../ui.tsx";
 import { Console, useAdminAccount } from "./console.tsx";
 import * as shellCss from "../styles/shell.css.ts";

@@ -9,7 +9,7 @@ import { stationApi, useConnects, useOverview, useStationCall, useStations, type
 import { useWorkspace } from "../cloud/api.ts";
 import { MODE, RUNTIME_LABEL } from "../format.ts";
 import { illustrationUrl } from "../brand.tsx";
-import { ChevronRight, More } from "../icons.tsx";
+import { ChevronRight, More } from "@stillfail/ui/icons.tsx";
 import { usePick } from "../pick.ts";
 import { consequences } from "../pages/Connect.tsx";
 import { edgeColour, MAKERS, NEW_APP, renderAvatar, toIcon, useBuddies, type Avatar } from "../pages/SlackApp.tsx";
@@ -29,7 +29,7 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
 import * as historyCss from "./styles/history.css.ts";
 import * as css from "./Connects.css.ts";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import * as newChatCss from "./styles/new-chat.css.ts";
 
 import { NAME } from "../channel.ts";

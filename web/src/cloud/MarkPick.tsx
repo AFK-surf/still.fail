@@ -3,12 +3,12 @@
 // one), or to have none. Those who may not change it see only the one it has. What is sent is ../stationPick.ts's.
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Popover } from "radix-ui";
-import { Close, ImageUpload, Plus, STATION_ICONS } from "../icons.tsx";
+import { Close, ImageUpload, Plus, STATION_ICONS } from "@stillfail/ui/icons.tsx";
 import { Glyph, glyphColor, isPicture, MARK_COLORS, markColor, StationMark, stationGlyph, type MarkColor } from "../StationMark.tsx";
 import { EMOJI, emojiMark, firstEmoji, glyphMark, kindOf, NO_MARK, pastedPicture, pictureMark, pictureOf, type Kind, type Mark } from "../stationPick.ts";
 import { Segmented } from "../ui.tsx";
 import { t } from "../i18n.ts";
-import * as controlsCss from "../styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as css from "./MarkPick.css.ts";
 
 const bare = (emoji: string) => emoji.replace(/️/g, "");

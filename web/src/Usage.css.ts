@@ -1,5 +1,5 @@
 import { globalStyle, style, styleVariants } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { cardGround } from "./styles/pages.css.ts";
 
 // The people a day's bar is split by, in the order the usage view ranks them (client/core-ts/src/views/usage.ts SERIES),

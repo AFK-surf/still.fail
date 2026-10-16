@@ -3,8 +3,8 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { navFoot, stationRow, stationTrouble } from "./Sidebar.css.ts";
 import { floatingThumb } from "./scrollbars.css.ts";
 import { dock } from "./styles/shell.css.ts";
-import { vars } from "./styles/tokens.css.ts";
-import { outsetBottom, TEXT_IN } from "./styles/align.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { outsetBottom, TEXT_IN } from "@stillfail/ui/styles/align.ts";
 
 const wide = "(min-width: 701px)";
 const narrow = "(max-width: 700px)";

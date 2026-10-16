@@ -1,5 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { pageBar } from "./sidebar.css.ts";
 import { pageBarTitle } from "./conversation.css.ts";
 

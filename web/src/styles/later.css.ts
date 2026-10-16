@@ -1,37 +1,21 @@
-import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { fadeKeyframes, spinKeyframes, toastInKeyframes } from "./styles/keyframes.css.ts";
-import { chatList } from "./styles/session.css.ts";
-import { composerWrap } from "./styles/cloud.css.ts";
-import { runtimeTags, spinner } from "./styles/waiting.css.ts";
-import { about, firstOne, resizeHandle } from "./ui.css.ts";
-import { peopleStack, quotaNote } from "./components.css.ts";
-import { sidebarBuddy } from "./brand.css.ts";
-import { modelChips } from "./pages/Accounts.css.ts";
-import { slackTeamIcon } from "./pages/Connect.css.ts";
-import { appearanceSetting, chooserCheck, modelPoolList, msgAvatar } from "./styles/chat.css.ts";
-import { groupHead } from "./cloud/settings.css.ts";
-import { details, detailsList, jobsPanel } from "./pages/ChatPage.css.ts";
-import { COMPOSER_BUTTON } from "./styles/composer.css.ts";
-import { FILE_CARD_PAD, MESSAGE_FILE_CORNER, activityLine, attachBtn, fileCard, fileCardOpen, msgFiles, msgImage, msgUnsentNote, quoteCards, sendBtn } from "./Chat.css.ts";
-import { hPlace } from "./History.css.ts";
-import { bleedX, bleedY, overlap } from "./styles/align.ts";
+// Rules that must come late in the cascade (styles/index.ts), each after what it wins over, as it says.
+import { globalStyle } from "@vanilla-extract/css";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { chatList } from "./session.css.ts";
+import { composerWrap } from "./cloud.css.ts";
+import { runtimeTags } from "./waiting.css.ts";
+import { peopleStack, quotaNote } from "../components.css.ts";
+import { sidebarBuddy } from "../brand.css.ts";
+import { modelChips } from "../pages/Accounts.css.ts";
+import { slackTeamIcon } from "../pages/Connect.css.ts";
+import { appearanceSetting, modelPoolList, msgAvatar } from "./chat.css.ts";
+import { groupHead } from "../cloud/settings.css.ts";
+import { details, detailsList, jobsPanel } from "../pages/ChatPage.css.ts";
+import { COMPOSER_BUTTON } from "./composer.css.ts";
+import { FILE_CARD_PAD, MESSAGE_FILE_CORNER, activityLine, attachBtn, fileCard, fileCardOpen, msgFiles, msgImage, msgUnsentNote, quoteCards, sendBtn } from "../Chat.css.ts";
+import { hPlace } from "../History.css.ts";
+import { bleedX, bleedY, overlap } from "@stillfail/ui/styles/align.ts";
 
-export const toastViewport = style({
-  // The window's width, its toast in the middle (centred by moving it half its own width, a long one was held to half
-  // the window and ran off both sides).
-  position: "fixed", left: "16px", right: "16px", bottom: "24px", zIndex: "80", margin: "0", display: "flex",
-  flexDirection: "column", alignItems: "center", padding: "0", listStyle: "none", outline: "none", pointerEvents: "none",
-});
-export const toast = style({
-  padding: "9px 18px", borderRadius: "20px", background: vars.primary, color: vars.onPrimary, fontSize: vars.textUi,
-  // A long message (an error with its URL) wraps inside the window instead of running off both sides.
-  maxWidth: "560px", overflowWrap: "anywhere", textWrap: "pretty", pointerEvents: "auto", boxShadow: `0 8px 24px ${vars.shadow}`,
-  animation: `${toastInKeyframes} 200ms ${vars.easeOut}`,
-  selectors: {
-    "&[data-state=\"closed\"]": { animation: `${fadeKeyframes} 150ms ${vars.easeOut} reverse forwards` },
-  },
-});
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(groupHead, {
   display: "flex", alignItems: "baseline", gap: "8px", margin: "0 4px 6px", fontSize: vars.textUi,
@@ -56,19 +40,6 @@ globalStyle(modelChips, {
 /** The runtimes a profile runs, after its name. */
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(runtimeTags, { display: "inline-flex", gap: "4px", marginLeft: "8px", verticalAlign: "1px" });
-/** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
-globalStyle(spinner, {
-  width: "16px", height: "16px", flex: "none", borderRadius: "50%", border: `2px solid ${vars.lineStrong}`,
-  borderTopColor: vars.accent, animation: `${spinKeyframes} 0.8s linear infinite`,
-});
-/** Here rather than with its class: it comes after .spinner, and wins over it. */
-globalStyle(spinner, {
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animationDuration: "2.4s",
-    },
-  },
-});
 /** Here rather than with its class: it comes after .toast-viewport, and wins over it. */
 globalStyle(`${composerWrap} > *`, { maxWidth: "760px", marginLeft: "auto", marginRight: "auto" });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
@@ -96,10 +67,6 @@ globalStyle(attachBtn, {
 });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(msgFiles, { display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: "6px" });
-/** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
-globalStyle(resizeHandle, {
-  position: "absolute", top: "0", bottom: "0", width: "7px", zIndex: "5", cursor: "col-resize", touchAction: "none",
-});
 /** Where a message came from or went: platform mark and name, a link when there is somewhere to go. */
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(hPlace, {
@@ -152,8 +119,6 @@ globalStyle(activityLine, {
   color: vars.muted, cursor: "pointer",
 });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
-globalStyle(chooserCheck, { width: "14px", display: "inline-grid", placeItems: "center", flex: "none" });
-/** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(modelPoolList, {
   listStyle: "none", margin: "0", padding: "0", display: "grid",
   gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: "2px 12px",
@@ -177,17 +142,4 @@ globalStyle(slackTeamIcon, {
 globalStyle(sidebarBuddy, {
   position: "fixed", zIndex: "40", top: "14px", left: "calc(var(--sidebar-w, 240px) - 28px)", width: "28px",
   height: "28px", padding: "0", border: "0", background: "none", cursor: "pointer", WebkitAppRegion: "no-drag",
-});
-/** A list's first one to make (ui.tsx's FirstOne): a scene, a title, a line, what to do. */
-/** Here rather than with its class: it comes after .people-stack > *, and wins over it. */
-globalStyle(firstOne, {
-  display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: "8px", margin: "24px auto",
-  padding: "8px 0 24px", maxWidth: "480px",
-});
-/** A quiet mark that says what a thing is on hover (ui.tsx's About), in place of a paragraph. */
-/** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
-globalStyle(about, {
-  display: "inline-flex", alignItems: "center", justifyContent: "center", width: "20px", height: "20px",
-  marginLeft: "6px", padding: "0", border: "0", borderRadius: "999px", background: "none", color: vars.subtle,
-  verticalAlign: "middle", cursor: "help", transition: `color ${vars.dur} ${vars.easeOut}`,
 });

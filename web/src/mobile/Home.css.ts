@@ -1,6 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
-import { spinKeyframes } from "../styles/keyframes.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { spinKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 
 export const mDot = style({
   width: "7px", height: "7px", borderRadius: "50%", background: "var(--m-accent)", flex: "none",

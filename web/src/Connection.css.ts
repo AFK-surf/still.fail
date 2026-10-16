@@ -1,6 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { spinner } from "./styles/waiting.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 
 /** 重试 as a small grey pill (Connection.tsx). */
 export const connectionRetry = style({

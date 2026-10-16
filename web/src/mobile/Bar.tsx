@@ -16,13 +16,13 @@
 //   bar is where the bar is, what is not chosen goes out at the glass's edges. Nothing fades.
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { ComponentType } from "react";
-import { Archive, Chart, Chats, Folder, Im, Ling, Plus, Quota, Zou, type IconProps } from "../icons.tsx";
+import { Archive, Chart, Chats, Folder, Im, Ling, Plus, Quota, Zou, type IconProps } from "@stillfail/ui/icons.tsx";
 import { railLabel } from "../Rail.tsx";
 import { setPrefs, usePrefs } from "../prefs.ts";
 import { useChats, useStatus } from "../api.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
 import { StationGlyph, glyphCounts } from "../StationGlyph.tsx";
-import { reducedMotion } from "../motion.ts";
+import { reducedMotion } from "@stillfail/ui/motion.ts";
 import * as css from "./Bar.css.ts";
 import { usePlaceActions } from "./placeActions.tsx";
 import type { PlaceAction } from "./parts.tsx";

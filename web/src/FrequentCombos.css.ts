@@ -1,5 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const frequent = style({ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", padding: "12px 0" });
 export const label = style({ fontSize: vars.textMeta, color: vars.muted });

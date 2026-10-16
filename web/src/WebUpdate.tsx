@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { webUpdates } from "./core/webUpdates.ts";
-import { Refresh } from "./icons.tsx";
+import { Refresh } from "@stillfail/ui/icons.tsx";
 import * as css from "./WebUpdate.css.ts";
 import { t } from "./i18n.ts";
 

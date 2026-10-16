@@ -1,8 +1,8 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
-import { btn } from "../styles/controls.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { btn } from "@stillfail/ui/styles/controls.css.ts";
 import { cardLook } from "../styles/pages.css.ts";
-import { TEXT_IN, inner, innerShape } from "../styles/align.ts";
+import { TEXT_IN, inner, innerShape } from "@stillfail/ui/styles/align.ts";
 
 export const name = style({
   padding: "0", border: "0", background: "none", font: "inherit", cursor: "pointer",

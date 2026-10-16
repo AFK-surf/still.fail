@@ -9,7 +9,7 @@ const html = new URL('../../web/activity-fold-check.html', import.meta.url);
 let browser;
 try {
   writeFileSync(fixture, `
-import { moveState, EASE_OUT } from './motion.ts';
+import { moveState, EASE_OUT } from '@stillfail/ui/motion.ts';
 import * as css from './Chat.css.ts';
 import './styles/index.ts';
 const root = document.getElementById('root')!;

@@ -1,6 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { btn, input } from "../styles/controls.css.ts";
-import { vars } from "../styles/tokens.css.ts";
+import { btn, input } from "@stillfail/ui/styles/controls.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const signInPage = style({});
 globalStyle(`${signInPage} p`, { maxWidth: "30em" });

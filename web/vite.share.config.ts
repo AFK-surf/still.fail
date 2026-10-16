@@ -3,6 +3,7 @@ import { vanillaExtractPlugin } from "@vanilla-extract/vite-plugin";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
 import { shareHosts } from "../cloud/share-hosts.ts";
+import { uiAlias } from "./ui/alias.ts";
 
 const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
@@ -35,6 +36,7 @@ export default defineConfig({
     // The cloud the page asks for the relays (/v1/relays).
     __SHARE_CLOUD__: JSON.stringify(shareHosts().cloud),
   },
+  resolve: { alias: [uiAlias] },
   server: {
     fs: { allow: [here("..")] },
   },

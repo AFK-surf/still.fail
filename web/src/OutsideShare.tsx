@@ -5,7 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { core } from "./core/react.ts";
 import { scopeOf } from "./station.tsx";
 import { Button, Dialog } from "./ui.tsx";
-import { failure } from "./toast.tsx";
+import { failure } from "@stillfail/ui/toast.tsx";
 import * as css from "./ChatRef.css.ts";
 import { t } from "./i18n.ts";
 

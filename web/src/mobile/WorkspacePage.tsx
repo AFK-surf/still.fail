@@ -9,7 +9,7 @@ import { cloud, errorText, useWorkspace, type LoginSession, type MemberView, typ
 import { useTopic } from "../core/react.ts";
 import { ROLE_HINT, ROLE_LABEL } from "../cloud/settings.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
-import { Check, UserPlus } from "../icons.tsx";
+import { Check, UserPlus } from "@stillfail/ui/icons.tsx";
 import { Avatar, Button, failedIn, Field, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavButton, PickRow, SectionHeader, TopBack } from "./parts.tsx";
 import { doingMatches, failed, useDoingList } from "../doing.ts";
 import { ask, confirm } from "./sheets.tsx";

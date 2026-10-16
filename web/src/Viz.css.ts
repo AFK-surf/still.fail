@@ -1,5 +1,5 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 /** An inline visualization: the frame on the message's own ground, a small link to the file below it. */
 export const viz = style({ width: "100%", minWidth: 0, margin: "0 0 4px", selectors: { "&:last-child": { marginBottom: 0 } } });

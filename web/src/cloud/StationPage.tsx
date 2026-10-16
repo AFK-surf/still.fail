@@ -9,7 +9,7 @@ import { useGo } from "../go.ts";
 import { MeterChip, MeterDials } from "../components.tsx";
 import { RetryPill } from "../Connection.tsx";
 import { drivePath } from "../drive/useDrive.ts";
-import { ChevronRight, Folder, Plus } from "../icons.tsx";
+import { ChevronRight, Folder, Plus } from "@stillfail/ui/icons.tsx";
 import { useRailItems } from "../Rail.tsx";
 import { stationBase } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";

@@ -1,8 +1,8 @@
 // RowPicture.tsx: who stands beside a chat row's title. The row sets `--mark-around`, its ground: the
 // gaps between overlapping pictures are cut in it.
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { overlap } from "./styles/align.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { overlap } from "@stillfail/ui/styles/align.ts";
 
 /** A person, round; who started the chat ringed in ink, a gap of the row's ground between. */
 export const face = style({

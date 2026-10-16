@@ -9,7 +9,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Prose } from "../Prose.tsx";
 import * as conversationCss from "../styles/conversation.css.ts";
-import { Check, ChevronLeft, ChevronRight, Close, List, Search, Text as TextIcon } from "../icons.tsx";
+import { Check, ChevronLeft, ChevronRight, Close, List, Search, Text as TextIcon } from "@stillfail/ui/icons.tsx";
 import { useNarrow, useApp, SheetGrab, SheetHead, type MobileApp } from "../mobile/app.tsx";
 import { Seg } from "../mobile/parts.tsx";
 import { Segmented, Tip } from "../ui.tsx";

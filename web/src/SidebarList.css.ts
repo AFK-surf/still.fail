@@ -1,7 +1,7 @@
 // The sidebar's lists' own parts (SidebarList.tsx): a row of a station, a folder, a profile, laid out as a chat's.
 import { globalStyle, style } from "@vanilla-extract/css";
 import { navRow } from "./Sidebar.css.ts";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
 

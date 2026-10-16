@@ -1,6 +1,6 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { bleedX } from "./styles/align.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { bleedX } from "@stillfail/ui/styles/align.ts";
 
 // Layout only: controls, popovers, switches and record text use the shared components.
 export const content = style({});

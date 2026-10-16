@@ -2,7 +2,7 @@
 // Shiki (VS Code's grammars) with their language named and a copy button.
 // Grammars load on demand, one chunk per language, with Shiki's JavaScript
 // regex engine so no wasm is fetched.
-import { Check, Copy } from "./icons.tsx";
+import { Check, Copy } from "@stillfail/ui/icons.tsx";
 import { Fragment, isValidElement, memo, useEffect, useMemo, useRef, useState, type ComponentProps, type CSSProperties, type ReactNode } from "react";
 import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -17,7 +17,7 @@ import { bareLinks } from "./bareLinks.ts";
 import { nameOf, placeFiles } from "../../client/core-ts/src/placed.ts";
 import { FileRef, LinkHover, pathIn } from "./Peeks.tsx";
 import { Tip } from "./ui.tsx";
-import { failure, useToast } from "./toast.tsx";
+import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { Mermaid } from "./Viz.tsx";
 import { t } from "./i18n.ts";
 

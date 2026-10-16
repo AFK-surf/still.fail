@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 import { useAction } from "../action.ts";
 import type { LocalStationAction, LocalStationState } from "../core/client.ts";
-import { FileText, Folder, Play, Refresh, Stop } from "../icons.tsx";
+import { FileText, Folder, Play, Refresh, Stop } from "@stillfail/ui/icons.tsx";
 import { About, Menu, MobileBack, StatusDot } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as cardsCss from "../cloud/StationCards.css.ts";

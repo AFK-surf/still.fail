@@ -1,5 +1,5 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "../../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const mPill = style({
   marginLeft: "6px", padding: "1px 6px", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,

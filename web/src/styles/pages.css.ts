@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
 
 export const page = style({
   flex: "1", minHeight: "0", overflowY: "auto", padding: "40px 40px 80px",
@@ -21,23 +22,13 @@ export const identityText = style({ flex: "1", minWidth: "0" });
 export const identityName = style({
   display: "flex", alignItems: "center", gap: "4px", margin: "0", fontSize: vars.textHeading, lineHeight: "34px", fontWeight: "600",
 });
-export const iconBtn = style({
-  display: "inline-grid", placeItems: "center", width: "32px", height: "32px", padding: "0", border: "0",
-  borderRadius: `calc(12px * ${vars.cornerScale})`, background: "transparent", color: vars.muted, cursor: "pointer",
-  flex: "none", transition: `background ${vars.dur} ${vars.easeOut}, color ${vars.dur} ${vars.easeOut}`,
-  cornerShape: vars.cornerShape,
-  selectors: {
-    [`${identityName} &`]: { opacity: ".55" },
-    [`${identityName}:hover &`]: { opacity: "1" },
-    "&:hover": { background: vars.hover, color: vars.text },
-    "&[aria-pressed=\"true\"]": { background: vars.selected, color: vars.text },
-  },
-});
+// Its name's buttons (an edit's pencil) stand back until the name is pointed at.
+globalStyle(`${identityName} ${iconBtn}`, { opacity: ".55" });
+globalStyle(`${identityName}:hover ${iconBtn}`, { opacity: "1" });
 export const identitySub = style({
   display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px 14px", margin: "6px 0 0", color: vars.muted,
   fontSize: vars.textUi, lineHeight: "20px",
 });
-export const section = style({ marginBottom: "28px" });
 /**
  * A grey ground, no line round it, and the app's kind of corner (a little over --r-card: it is large): nothing in it draws a curve near one (its buttons are words:
  * controls.css.ts), so nothing has to follow it.

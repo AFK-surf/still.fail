@@ -1,6 +1,6 @@
 // An agent in brief on the phone (AgentSheet.tsx): its sheet over the chat, and the same parts on its history's details.
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const mAgent = style({ display: "flex", flexDirection: "column", padding: "0 18px 24px" });
 export const mAgentHead = style({ display: "flex", alignItems: "center", gap: "12px", minWidth: "0", paddingTop: "4px" });

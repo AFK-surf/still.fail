@@ -5,15 +5,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router";
 import { useAction, useApi, useOverview, useStations } from "../api.ts";
-import { Plus } from "../icons.tsx";
+import { Plus } from "@stillfail/ui/icons.tsx";
 import { StationContext, stationBase } from "../station.tsx";
 import { useProfileFlow } from "../profileFlow.ts";
-import { useToast } from "../toast.tsx";
+import { useToast } from "@stillfail/ui/toast.tsx";
 import { BackLink, Button, Field, Loading, ProviderLogo, Segmented, Select } from "../ui.tsx";
 import type { ApiProvider, ProfileFlowView } from "../core/shapes.ts";
 import { MachineLoginOffers, LoginSteps } from "./Accounts.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
-import * as controlsCss from "../styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./AddProfile.css.ts";
 import { t } from "../i18n.ts";

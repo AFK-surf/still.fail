@@ -1,14 +1,14 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { glass } from "./styles/glass.ts";
-import { enterUpKeyframes, jobBreatheKeyframes, popKeyframes } from "./styles/keyframes.css.ts";
-import { iconBtn } from "./styles/pages.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { glass } from "@stillfail/ui/styles/glass.ts";
+import { enterUpKeyframes, jobBreatheKeyframes, popKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { msg } from "./styles/conversation.css.ts";
 import { enrollWait } from "./cloud/settings.css.ts";
 import { sidePanel } from "./pages/ChatPage.css.ts";
 import { composerQuote, msgUnsent } from "./Chat.css.ts";
 import { hPhaseText } from "./History.css.ts";
-import { panelCard, popover } from "./styles/controls.css.ts";
+import { panelCard, popover } from "@stillfail/ui/styles/controls.css.ts";
+import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
 
 /** A web service on the station's machine, in the side panel: where it is, then the page. */
 export const preview = style({ flex: "1", minHeight: "0", display: "flex", flexDirection: "column" });

@@ -8,7 +8,7 @@
 // screens/MessagePick.kt.
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { Quote } from "../api.ts";
-import { Copy, Quote as QuoteIcon } from "../icons.tsx";
+import { Copy, Quote as QuoteIcon } from "@stillfail/ui/icons.tsx";
 import * as conversationCss from "../styles/conversation.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
 import { hearPageShown, useApp } from "./app.tsx";

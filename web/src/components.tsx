@@ -5,11 +5,10 @@ import type { Level, PersonShown, Quota } from "./api.ts";
 import type { Meter } from "./core/shapes.ts";
 import { useOnlyMine, useSidebarMode, type SidebarMode } from "./station.tsx";
 import { Segmented, Tip } from "./ui.tsx";
-import { Check, Filter } from "./icons.tsx";
+import { Check, Filter } from "@stillfail/ui/icons.tsx";
 import { useLocation, useNavigate } from "react-router";
 import { DropdownMenu } from "radix-ui";
-import * as controlsCss from "./styles/controls.css.ts";
-import * as chatCss from "./styles/chat.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as css from "./components.css.ts";
 import * as cloudCss from "./styles/cloud.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
@@ -38,13 +37,13 @@ export function MineFilter({ compact, archive, watching, decisions }: { label?: 
   // Gone to another page, the focus is not brought back to the button (it would be ringed there, over the page left).
   const leaving = useRef(false);
   const item = (value: SidebarMode, text: string) => (
-    <DropdownMenu.Item className={`${controlsCss.menuItem} ${chatCss.chooserItem}`} onSelect={() => {
+    <DropdownMenu.Item className={`${controlsCss.menuItem} ${controlsCss.chooserItem}`} onSelect={() => {
       setFilter(value);
       const to = value === "decisions" ? decisions?.to : value === "archive" ? archive
         : path === decisions?.to || path === archive ? decisions?.chats : undefined;
       if (to && to !== path) { leaving.current = true; navigate(to); }
     }}>
-      <span className={chatCss.chooserCheck}>{filter === value && <Check size={14} />}</span>{text}
+      <span className={controlsCss.chooserCheck}>{filter === value && <Check size={14} />}</span>{text}
     </DropdownMenu.Item>
   );
   return (
@@ -53,7 +52,7 @@ export function MineFilter({ compact, archive, watching, decisions }: { label?: 
         <Filter size={16} strokeWidth={1.8} />{!compact && <span>{named}</span>}
       </DropdownMenu.Trigger></Tip>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${chatCss.chooserMenu}`} align="end" sideOffset={6} collisionPadding={8}
+        <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${controlsCss.chooserMenu}`} align="end" sideOffset={6} collisionPadding={8}
           onCloseAutoFocus={(e) => { if (leaving.current) { leaving.current = false; e.preventDefault(); } }}>
           {item("all", t(`web-main.filter.${of}.all`))}
           {item("mine", mine)}

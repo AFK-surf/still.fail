@@ -1,18 +1,18 @@
 // Models by name, by series: the model control's list, and a profile's list of models to enable.
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { mono, muted } from "./styles/shell.css.ts";
 import { card } from "./styles/pages.css.ts";
 import { quotaChips } from "./components.css.ts";
 import { newChat } from "./NewChat.css.ts";
 import { runCardRow } from "./pages/Connect.css.ts";
-import { input } from "./styles/controls.css.ts";
-import { chooserChevron, modelPoolItem } from "./styles/chat.css.ts";
+import { input, chooserChevron } from "@stillfail/ui/styles/controls.css.ts";
+import { modelPoolItem } from "./styles/chat.css.ts";
 import { onboardingRow } from "./cloud/settings.css.ts";
 import { sessionHead } from "./pages/ChatPage.css.ts";
 import { composerChoices } from "./Chat.css.ts";
-import { spinner } from "./styles/waiting.css.ts";
-import { PANEL_PAD, TEXT_IN, columns, outsetStart, outsetTop } from "./styles/align.ts";
+import { PANEL_PAD, TEXT_IN, columns, outsetStart, outsetTop } from "@stillfail/ui/styles/align.ts";
+import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 
 /** A series of models in the control's list: its models one under another, each as wide as the list. */
 export const series = style({ display: "flex", flexDirection: "column", gap: 1 });

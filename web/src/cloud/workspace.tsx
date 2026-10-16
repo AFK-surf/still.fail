@@ -3,7 +3,7 @@
 // together (docs/client-core.md); a page opened from the sidebar talks to the
 // station the item belongs to (StationContext).
 import { StationSettings, StationsFirst, StationsNav, useStationsSide } from "./StationPage.tsx";
-import { Check, ChevronsUpDown, Plus, Settings, UserPlus } from "../icons.tsx";
+import { Check, ChevronsUpDown, Plus, Settings, UserPlus } from "@stillfail/ui/icons.tsx";
 import { NewChat } from "../NewChat.tsx";
 import { lastChatOf, useLastChat, useRememberChat, useWorkspaceMarks } from "../lastChat.ts";
 import { DropdownMenu } from "radix-ui";
@@ -13,7 +13,7 @@ import { useChats, useStationViews, useStations } from "../api.ts";
 import { useGo } from "../go.ts";
 import type { Topic } from "../core/client.ts";
 import { useReady, useTopics } from "../core/react.ts";
-import { LOCAL_MS } from "../motion.ts";
+import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { AccountPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
 import { DriveHome, DrivePage, useAddFolder, DrivePlayPage, DriveReadPage } from "../pages/Drive.tsx";
@@ -23,7 +23,7 @@ import { Rail, SidebarEdge, placeOf, useRailItems, type RailItem } from "../Rail
 import { SystemBubbles } from "../SystemBubbles.tsx";
 import * as railCss from "../Rail.css.ts";
 import { drivePath } from "../drive/useDrive.ts";
-import { Folder, Server } from "../icons.tsx";
+import { Folder, Server } from "@stillfail/ui/icons.tsx";
 import { AttentionEntry } from "../Attention.tsx";
 import { DecisionDeskProvider, DecisionPage } from "../DecisionDesk.tsx";
 import { MarkCounts } from "../ChatMark.tsx";
@@ -45,7 +45,7 @@ import { NavAction, NavList, NavItem, NavTop } from "../SidebarList.tsx";
 import { SecurityOpen, SecurityPrompt, SecuritySettings, SecurityWaiting, useLock } from "./Security.tsx";
 import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemoryDocSettings, MemorySettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, useSidebarMode, useStationList, type Station } from "../station.tsx";
-import { useToast } from "../toast.tsx";
+import { useToast } from "@stillfail/ui/toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, Select, Tip } from "../ui.tsx";
 import { toMadeChat } from "../Chat.tsx";
 import { ComposerDock } from "../dock.tsx";
@@ -59,15 +59,15 @@ import * as nav from "../Sidebar.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./workspace.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
-import * as pagesCss from "../styles/pages.css.ts";
-import * as controlsCss from "../styles/controls.css.ts";
-import * as waitingCss from "../styles/waiting.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as chatMarkCss from "../ChatMark.css.ts";
 
 import { WebUpdate } from "../WebUpdate.tsx";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { tx } from "./words.tsx";
+import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 /** The workspace in view and the signed-in account that reaches it. */
 export interface WorkspaceEntry { id: string; name: string; account: Account }
 
@@ -341,7 +341,7 @@ function WorkspaceSidebarFooter({ entry }: { entry: WorkspaceEntry }) {
         </div>
         <div className={`${nav.navFootRow} ${railCss.narrowOnly}`}>
           <WorkspaceSwitcher current={entry} />
-          <Tip label={t("web-pages.settings.title")} side="top"><NavLink className={pagesCss.iconBtn} to={`/w/${entry.id}/settings`} aria-label={t("web-pages.settings.title")}><Settings {...ICON} /></NavLink></Tip>
+          <Tip label={t("web-pages.settings.title")} side="top"><NavLink className={pageCss.iconBtn} to={`/w/${entry.id}/settings`} aria-label={t("web-pages.settings.title")}><Settings {...ICON} /></NavLink></Tip>
         </div>
       </div>
   );
@@ -468,7 +468,7 @@ function WorkspaceSwitcher({ current, adder }: { current: WorkspaceEntry; adder?
         <DropdownMenu.Trigger asChild>
           {adder ? (
             <button type="button" className={railCss.workspaceAdd} aria-label={t("web-main.rail.addWorkspace")} title={t("web-main.rail.addWorkspace")}>
-              {respond.busy || signIn.busy ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" /> : <Plus size={16} />}
+              {respond.busy || signIn.busy ? <span className={`${spinnerCss.spinner} ${controlsCss.iconSpinner}`} role="status" /> : <Plus size={16} />}
               {pending.length > 0 && <span className={railCss.mark}><span className={css.inviteDot} role="img" aria-label={t("web-pages.workspace.invitationsCount", { n: pending.length })} /></span>}
             </button>
           ) : (
@@ -480,7 +480,7 @@ function WorkspaceSwitcher({ current, adder }: { current: WorkspaceEntry; adder?
               ? <span className={chatMarkCss.chatMarkInline} data-tone={othersTone} role="img" aria-label={marks?.othersLabel ?? ""} title={marks?.othersLabel ?? undefined} />
               : pending.length > 0 && <span className={css.inviteDot} role="img" aria-label={t("web-pages.workspace.invitationsCount", { n: pending.length })} />}
             {respond.busy || signIn.busy
-              ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner} ${css.accountSpinner}`} role="status" aria-label={signIn.busy ? t("web-pages.workspace.openingSignIn") : t("web-pages.workspace.answering")} />
+              ? <span className={`${spinnerCss.spinner} ${controlsCss.iconSpinner} ${css.accountSpinner}`} role="status" aria-label={signIn.busy ? t("web-pages.workspace.openingSignIn") : t("web-pages.workspace.answering")} />
               : <ChevronsUpDown {...ICON} size={14} />}
           </button>
           )}
@@ -515,12 +515,12 @@ function WorkspaceSwitcher({ current, adder }: { current: WorkspaceEntry; adder?
                       <DropdownMenu.Item className={`${controlsCss.btn} ${controlsCss.btnPrimary} ${css.menuInviteBtn}`} disabled={respond.busy}
                         aria-busy={(respond.busy && respond.arg?.invite.id === invite.id && respond.arg.accept) || undefined}
                         onSelect={(e) => { e.preventDefault(); respond.run({ invite, accept: true }); }}>
-                        {respond.busy && respond.arg?.invite.id === invite.id && respond.arg.accept && <span className={waitingCss.spinner} aria-hidden="true" />}{t("web-pages.cloud.join")}
+                        {respond.busy && respond.arg?.invite.id === invite.id && respond.arg.accept && <span className={spinnerCss.spinner} aria-hidden="true" />}{t("web-pages.cloud.join")}
                       </DropdownMenu.Item>
                       <DropdownMenu.Item className={`${controlsCss.btn} ${controlsCss.btnGhost} ${css.menuInviteBtn}`} disabled={respond.busy}
                         aria-busy={(respond.busy && respond.arg?.invite.id === invite.id && !respond.arg.accept) || undefined}
                         onSelect={(e) => { e.preventDefault(); respond.run({ invite, accept: false }); }}>
-                        {respond.busy && respond.arg?.invite.id === invite.id && !respond.arg.accept && <span className={waitingCss.spinner} aria-hidden="true" />}{t("web-pages.workspace.ignore")}
+                        {respond.busy && respond.arg?.invite.id === invite.id && !respond.arg.accept && <span className={spinnerCss.spinner} aria-hidden="true" />}{t("web-pages.workspace.ignore")}
                       </DropdownMenu.Item>
                     </span>
                     {respond.error && respond.arg?.invite.id === invite.id && <p className={`${controlsCss.fieldError} ${css.menuInviteError}`} role="alert">{respond.arg.accept ? t("web-pages.cloud.joinFailed", { error: errorText(respond.error) }) : t("web-pages.workspace.ignoreFailed", { error: errorText(respond.error) })}</p>}

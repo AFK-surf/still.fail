@@ -2,14 +2,14 @@ import { Popover } from "radix-ui";
 import type { StationUpdateNotice } from "./core/shapes.ts";
 import { core } from "./core/react.ts";
 import { stationApi, useStationCall } from "./api.ts";
-import { useAct } from "./toast.tsx";
+import { useAct } from "@stillfail/ui/toast.tsx";
 import { useDoing } from "./doing.ts";
 import { DoingMark } from "./DoingMark.tsx";
-import { Close, Download } from "./icons.tsx";
+import { Close, Download } from "@stillfail/ui/icons.tsx";
 import { useCommands } from "./commands.ts";
 import { t } from "./i18n.ts";
 import * as css from "./StationUpdate.css.ts";
-import * as controlsCss from "./styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 
 export function StationUpdate({ station, notice }: { station: string; notice?: StationUpdateNotice | null | undefined }) {
   const api = stationApi(useStationCall(station));

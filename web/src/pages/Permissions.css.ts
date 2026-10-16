@@ -1,6 +1,6 @@
 // The permissions page (Permissions.tsx): a settings card each, its state at the end of its first row.
 import { style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const lead = style({ margin: "6px 0 0", color: vars.muted, fontSize: vars.textUi });
 export const muted = style({ color: vars.muted });

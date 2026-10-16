@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { ACTIONS, CHANGEABLE, bindingOf, boundTo, changed, groupLabel, keyLabel, keysOf, labelOf, setKeys, useKeymap, workspaceKeyLabel, type Action } from "./keymap.ts";
-import { useToast } from "./toast.tsx";
+import { useToast } from "@stillfail/ui/toast.tsx";
 import { Dialog, MobileBack, Section } from "./ui.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
-import * as controlsCss from "./styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as css from "./Shortcuts.css.ts";
 import { t } from "./i18n.ts";
 

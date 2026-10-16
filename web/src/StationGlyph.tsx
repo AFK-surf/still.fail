@@ -6,7 +6,7 @@
 // eye while one station works and both while more do; with the phone itself offline it sleeps and the whole fades.
 import { useId } from "react";
 import type { ChatsView } from "./api.ts";
-import { restingLoop } from "./motion.ts";
+import { restingLoop } from "@stillfail/ui/motion.ts";
 import * as css from "./StationGlyph.css.ts";
 
 /** `connecting` is of `dim`: those whose link is on its way. */

@@ -10,18 +10,18 @@
 // bottom left, level with the composer (which starts beside it), opens the latest chats over the page: another chat
 // from there takes the place of the one open.
 import { transitionTo } from "../ui.tsx";
-import { said, ToastTo } from "../toast.tsx";
-import { afterBack, useBackClose } from "../backClose.ts";
+import { said, ToastTo } from "@stillfail/ui/toast.tsx";
+import { afterBack, useBackClose } from "@stillfail/ui/backClose.ts";
 import { backPage } from "../backPage.ts";
 import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useLocation, useNavigate, useNavigationType, type Location } from "react-router";
 import type { Account } from "../cloud/accounts.ts";
 import { NavBack } from "./parts.tsx";
-import { Chats } from "../icons.tsx";
+import { Chats } from "@stillfail/ui/icons.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as rootCss from "./styles/root.css.ts";
 import * as css from "./app.css.ts";
-import { follower, type Follower } from "../motion.ts";
+import { follower, type Follower } from "@stillfail/ui/motion.ts";
 import { useInWorkspace } from "../notify.ts";
 import { BottomBar, PLACE_PATHS, placeOfPath, type BarPlace } from "./Bar.tsx";
 import { t } from "../i18n.ts";

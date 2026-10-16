@@ -1,5 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const mGrow = style({ flex: "1", minWidth: "0" });
 export const mMuted = style({ color: "var(--m-muted)" });

@@ -1,7 +1,7 @@
 // The new chat page's way to go on with a session the machine kept (MachineSessions.tsx).
 import { style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { outset } from "./styles/align.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { outset } from "@stillfail/ui/styles/align.ts";
 
 const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
 

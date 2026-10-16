@@ -40,7 +40,7 @@ import { CoreClient } from './src/core/client.ts';
 import { useDraft } from './src/draft.ts';
 import { ComposerView, ChatRows, useMessageList } from './src/Chat.tsx';
 import * as css from './src/Chat.css.ts';
-import { ToastProvider } from './src/toast.tsx';
+import { ToastProvider } from '@stillfail/ui/toast.tsx';
 import { StationContext } from './src/station.tsx';
 import { setPageRoot } from './src/brand.tsx';
 const client = new CoreClient(onMessage => {

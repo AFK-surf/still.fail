@@ -1,8 +1,8 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { jobDot } from "../Jobs.css.ts";
 import { mChat, mMessages } from "./styles/chat.css.ts";
-import { outsetTop } from "../styles/align.ts";
+import { outsetTop } from "@stillfail/ui/styles/align.ts";
 
 export const mCenter = style({
   flex: "1", display: "grid", placeItems: "center", padding: "32px", textAlign: "center", fontSize: vars.textUi,

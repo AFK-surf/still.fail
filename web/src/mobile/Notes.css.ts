@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
-import { popKeyframes } from "../styles/keyframes.css.ts";
-import { bleedX, bleedY, surfaceCorner } from "../styles/align.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { popKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { bleedX, bleedY, surfaceCorner } from "@stillfail/ui/styles/align.ts";
 
 /**
  * A note's number, as a web page's marks show theirs (../annotate/Marks.css.ts): a pin, its point at the bottom right

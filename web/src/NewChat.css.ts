@@ -1,8 +1,8 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { composerWrap } from "./styles/cloud.css.ts";
 import { composerBox } from "./styles/composer.css.ts";
-import { glass } from "./styles/glass.ts";
+import { glass } from "@stillfail/ui/styles/glass.ts";
 
 export const newChatSub = style({
   textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere", margin: "0 0 8px", color: vars.muted,

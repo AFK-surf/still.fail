@@ -6,18 +6,18 @@ import { useStation } from "./station.tsx";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useApi, type MachineSaid, type MachineSession, type RuntimeKind, type Stamp } from "./api.ts";
 import type { ModelOption } from "./core/shapes.ts";
-import { ArrowLeft, Monitor } from "./icons.tsx";
+import { ArrowLeft, Monitor } from "@stillfail/ui/icons.tsx";
 import { Button, Dialog, RuntimeLogo, Time, Tip } from "./ui.tsx";
 import { AgentAvatar, AgentWords, MessageName, MineBubble, MineMessage, OthersMessage } from "./Chat.tsx";
 import { modelName, optionOf } from "./ModelTriple.tsx";
 import * as conversationCss from "./styles/conversation.css.ts";
 import { RUNTIME_LABEL } from "./format.ts";
 import * as css from "./MachineSessions.css.ts";
-import * as uiCss from "./ui.css.ts";
-import * as waitingCss from "./styles/waiting.css.ts";
 
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
+import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
+import * as partsCss from "@stillfail/ui/parts.css.ts";
 // Times in words, still worked out here (they were the job lists' until those moved into the core).
 
 /** A time span in words, as long ago: 12 秒前, 4 分钟前, 3 小时前, 2 天前. */
@@ -92,7 +92,7 @@ export function MachineSessions({ name, models, onContinued }: { name: string; m
             <Button variant="ghost" icon={ArrowLeft} disabled={busy} onClick={() => { setLooking(null); setError(null); }}>{t("common.back")}</Button>
             <Button variant="primary" busy={busy} onClick={() => void go(looking)}>{looking.session ? t("web-main.machine.openChat") : t("web-main.machine.continue")}</Button>
           </>}>
-          {error && <p className={uiCss.dialogError} role="alert">{error}</p>}
+          {error && <p className={partsCss.dialogError} role="alert">{error}</p>}
           <Preview runtime={looking.runtime} id={looking.id} models={models} />
         </Dialog>
       ) : (
@@ -135,8 +135,8 @@ function Preview({ runtime, id, models }: { runtime: RuntimeKind; id: string; mo
     return () => { live = false; };
   }, [api, runtime, id]);
   useLayoutEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [shown]);
-  if (error) return <p className={uiCss.dialogError} role="alert">{error}</p>;
-  if (!shown) return <div className={css.previewWait}><span className={waitingCss.spinner} aria-hidden="true" />{t("web-main.reading")}</div>;
+  if (error) return <p className={partsCss.dialogError} role="alert">{error}</p>;
+  if (!shown) return <div className={css.previewWait}><span className={spinnerCss.spinner} aria-hidden="true" />{t("web-main.reading")}</div>;
   const left = shown.total - shown.said.length;
   const model = shown.session.model;
   const option = optionOf(models, model);

@@ -8,7 +8,7 @@ import type { MachineLogin } from "./core/shapes.ts";
 import type { Profile } from "./api.ts";
 import { QuotaBars } from "./components.tsx";
 import { ACCESS } from "./format.ts";
-import { ChevronRight } from "./icons.tsx";
+import { ChevronRight } from "@stillfail/ui/icons.tsx";
 import { ICON, Pill, ProviderLogo, RuntimeTags, Tip } from "./ui.tsx";
 import * as css from "./ProfileCard.css.ts";
 import * as waitingCss from "./styles/waiting.css.ts";

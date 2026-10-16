@@ -3,7 +3,7 @@
 // and its mark is moved back to where the dropped one was shown (in the same frame that one goes), then let go to its
 // own place, which does not move meanwhile. The frost over the chat fades first; the marks go once it is half gone.
 import { useLayoutEffect, type RefObject } from "react";
-import { reducedMotion } from "../motion.ts";
+import { reducedMotion } from "@stillfail/ui/motion.ts";
 
 /** Where a dropped file was shown over the chat: its box untilted, and its tilt. */
 type From = { box: DOMRect; tilt: number };

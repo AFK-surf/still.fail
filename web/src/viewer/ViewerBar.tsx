@@ -4,11 +4,11 @@
 // middle, its tools on the right as icons, download last. Its ground is the file's (`--viewer-ground`, the paper
 // under a text), its ink and line with it. On a phone each keeps its own floating bars.
 import { useCallback, useRef, useState, type ReactNode, type UIEvent, type PointerEvent } from "react";
-import { ChevronLeft, Download } from "../icons.tsx";
+import { ChevronLeft, Download } from "@stillfail/ui/icons.tsx";
 import { Tip } from "../ui.tsx";
-import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./ViewerBar.css.ts";
 import { t } from "../i18n.ts";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
 export function ViewerBar({ back, name, meta, tools, title, hidden = false }: {
   /** Where its way back goes, by name, and going there (or closing it). */
@@ -39,7 +39,7 @@ export function ViewerBar({ back, name, meta, tools, title, hidden = false }: {
 export function ViewerTool({ label, on = false, onClick, children }: { label: string; on?: boolean; onClick: () => void; children: ReactNode }) {
   return (
     <Tip label={label}>
-      <button type="button" className={`${pagesCss.iconBtn} ${css.tool}`} aria-label={label} aria-pressed={on || undefined} data-on={on || undefined} onClick={onClick}>{children}</button>
+      <button type="button" className={`${pageCss.iconBtn} ${css.tool}`} aria-label={label} aria-pressed={on || undefined} data-on={on || undefined} onClick={onClick}>{children}</button>
     </Tip>
   );
 }
@@ -48,7 +48,7 @@ export function ViewerTool({ label, on = false, onClick, children }: { label: st
 export function ViewerDownload({ href, name, onSave }: { href?: string | undefined; name: string; onSave?: (() => void) | undefined }) {
   const label = t("web-main.preview.download");
   if (onSave || !href) return <ViewerTool label={label} onClick={() => onSave?.()}><Download size={18} /></ViewerTool>;
-  return <Tip label={label}><a className={`${pagesCss.iconBtn} ${css.tool}`} href={href} download={name} aria-label={label}><Download size={18} /></a></Tip>;
+  return <Tip label={label}><a className={`${pageCss.iconBtn} ${css.tool}`} href={href} download={name} aria-label={label}><Download size={18} /></a></Tip>;
 }
 
 /**

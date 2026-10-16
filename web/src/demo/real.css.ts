@@ -1,6 +1,6 @@
 // The note that a step needs a real still.fail instance (real.tsx): over the demo, frosted as still.fail's floating things are.
 import { keyframes, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 const fade = keyframes({ from: { opacity: 0 } });
 const rise = keyframes({ from: { opacity: 0, transform: "translateY(12px) scale(.97)" } });

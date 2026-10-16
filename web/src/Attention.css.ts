@@ -1,8 +1,8 @@
 // What wants the viewer, in the sidebar's foot (Attention.tsx): its row, as light as the rows by it, and the list it
 // opens, as wide as the sidebar.
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { columns, outsetEnd } from "./styles/align.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { columns, outsetEnd } from "@stillfail/ui/styles/align.ts";
 
 export const entry = style({ width: "100%", border: "0", background: "none", textAlign: "left", fontFamily: "inherit", cursor: "pointer", selectors: { '&[data-state="open"]': { background: vars.hover } } });
 export const name = style({ flex: "1", color: vars.text });

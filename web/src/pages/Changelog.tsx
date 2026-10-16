@@ -5,12 +5,12 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { useChangelog, useChangelogSeen } from "../changelog.ts";
 import type { ChangelogItem } from "../core/shapes.ts";
-import { Close, Sparks } from "../icons.tsx";
+import { Close, Sparks } from "@stillfail/ui/icons.tsx";
 import { Loading, MobileBack, Segmented, Tip } from "../ui.tsx";
 import { t } from "../i18n.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
-import * as controlsCss from "../styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as css from "./Changelog.css.ts";
 
 export function ChangelogPage({ back }: { back: string }) {

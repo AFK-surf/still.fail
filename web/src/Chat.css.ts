@@ -1,15 +1,15 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { enterUpKeyframes, fadeKeyframes, nowInKeyframes, nowOutKeyframes, popInKeyframes, spinKeyframes } from "./styles/keyframes.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { enterUpKeyframes, fadeKeyframes, nowInKeyframes, nowOutKeyframes, popInKeyframes, spinKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { markdown, msg, msgHead, msgTime } from "./styles/conversation.css.ts";
 import { chat, chatList } from "./styles/session.css.ts";
-import { spinner } from "./styles/waiting.css.ts";
 import { COMPOSER_INNER, composerBox } from "./styles/composer.css.ts";
 import { tokenStart } from "./pages/Connect.css.ts";
 import { msgAvatar, msgMine, msgWaiting } from "./styles/chat.css.ts";
 import { onboardingCard } from "./cloud/settings.css.ts";
-import { glass } from "./styles/glass.ts";
-import { columns, outsetStart } from "./styles/align.ts";
+import { glass } from "@stillfail/ui/styles/glass.ts";
+import { columns, outsetStart } from "@stillfail/ui/styles/align.ts";
+import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 
 export const msgName = style({ fontWeight: "600" });
 /** A chat's list of messages, on either screen (the wide screen's pane, the phone's page): what quotes jump within. */

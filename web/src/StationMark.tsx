@@ -2,7 +2,7 @@
 // first: one of still.fail's (glyph:<name>, design/station-icons; glyph:<name>:<colour> in one of MARK_COLORS, else the
 // colour of the words it sits in) or a picture put up (a data URL); else its emoji. A glyph this build does not know shows
 // the emoji (it is kept beside every glyph, for older clients too).
-import { Server, STATION_ICONS } from "./icons.tsx";
+import { Server, STATION_ICONS } from "@stillfail/ui/icons.tsx";
 import * as css from "./StationMark.css.ts";
 
 const BY_NAME = new Map(STATION_ICONS.map((s) => [s.name, s]));

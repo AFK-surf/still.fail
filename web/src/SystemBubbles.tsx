@@ -7,9 +7,9 @@ import { Link } from "react-router";
 import { webUpdates } from "./core/webUpdates.ts";
 import { useAppUpdate } from "./brand.tsx";
 import { useChangelog, useChangelogSeen } from "./changelog.ts";
-import { Close, Download, Refresh, Sparks } from "./icons.tsx";
+import { Close, Download, Refresh, Sparks } from "@stillfail/ui/icons.tsx";
 import { NAME } from "./channel.ts";
-import { reducedMotion } from "./motion.ts";
+import { reducedMotion } from "@stillfail/ui/motion.ts";
 import * as css from "./SystemBubbles.css.ts";
 import { t } from "./i18n.ts";
 
