@@ -153,7 +153,7 @@ function LoginBody({ station, login, logins, terminal }: {
         : step === "loopback" ? <Loopback station={station} login={login} canRelay={logins?.canRelay ?? false} />
         : step === "device" ? <Device login={login} />
         : step === "open" || !known ? <OpenPage login={login} /> : null}
-      {login.active && canLogin && <Terminal station={station} login={login} first={terminal || login.waiting || step === "terminal" || !known} />}
+      {login.active && canLogin && <Terminal station={station} login={login} first={terminal || login.waiting || step === "terminal" || (step !== undefined && !known)} />}
     </div>
   );
 }

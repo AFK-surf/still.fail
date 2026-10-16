@@ -438,8 +438,10 @@ export const unix: Platform = {
       const tty = (await run("ps", ["-o", "tty=", "-p", String(pid)])).stdout.trim();
       if (tty === "" || tty.startsWith("?") || tty === "??") return null;
       const { stdout } = await run("stty", [MACOS ? "-f" : "-F", `/dev/${tty}`, "-a"]);
-      if (/(^|\s)-echo(\s|$)/.test(stdout)) return false;
-      return /(^|\s)echo(\s|$)/.test(stdout) ? true : null;
+      // A password is read a line at a time without echo; a program reading keys one by one (a menu, a Y/n) turns off
+      // both line mode and echo, and draws what it shows itself: that is no secret.
+      if (/(^|\s)-echo(\s|$)/.test(stdout) && !/(^|\s)-icanon(\s|$)/.test(stdout)) return false;
+      return /(^|\s)-?echo(\s|$)/.test(stdout) ? true : null;
     } catch {
       return null;
     }

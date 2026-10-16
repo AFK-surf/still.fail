@@ -159,7 +159,8 @@ export type Platform = {
   /// The addresses those processes listen on at TCP `port` (127.0.0.1, ::1, * for all); null when this machine cannot
   /// tell.
   listening(pids: number[], port: number): Promise<string[] | null>;
-  /// Whether the terminal process `pid` runs in echoes what is typed (off while a password is read); null when not told.
+  /// Whether the terminal process `pid` runs in echoes what is typed: false only while a line is read without echo (a
+  /// password), not while keys are read one by one (a menu); null when not told.
   echoes(pid: number): Promise<boolean | null>;
 
   // What only some machines have.
