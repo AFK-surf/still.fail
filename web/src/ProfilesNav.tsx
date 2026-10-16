@@ -8,7 +8,7 @@ import { useSyncExternalStore, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { useAction, useApi, useProfiles, useStations, type StationView } from "./api.ts";
 import type { MachineLogin, Quota, WorkspaceProfile } from "./core/shapes.ts";
-import { FillChip } from "./components.tsx";
+import { QuotaChip } from "./components.tsx";
 import { Plus } from "./icons.tsx";
 import { addProfilePath } from "./pages/AddProfile.tsx";
 import { hosts, profileGroups } from "./cloud/settings.tsx";
@@ -112,7 +112,7 @@ function Windows({ quota }: { quota: Quota | null | undefined }) {
     <span className={css.quota}>
       {quota.windows.map((w) => (
         <Tip key={w.label} label={<>{left(w)}{w.refills && <><br />{w.refills}</>}</>}>
-          <FillChip fill={w.left} level={w.level} mark={w.mark} label={left(w)} small bare />
+          <QuotaChip window={w} small bare />
         </Tip>
       ))}
     </span>

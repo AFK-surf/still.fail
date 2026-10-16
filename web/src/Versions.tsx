@@ -5,7 +5,7 @@ import type { SoftwareVersion } from "./core/shapes.ts";
 import { stationApi, useAction, useStationCall } from "./api.ts";
 import { useDoing } from "./doing.ts";
 import { DoingMark } from "./DoingMark.tsx";
-import { FillChip } from "./components.tsx";
+import { ProgressChip } from "./components.tsx";
 import { Button, Switch, Tip } from "./ui.tsx";
 import { ProviderLogo } from "./ui.tsx";
 import { Mark } from "./brand.tsx";
@@ -141,9 +141,9 @@ function Item({ v, manager, busy, onUpdate }: { v: SoftwareVersion; manager: boo
   );
 }
 
-/** How much of what a runtime's install downloads is in: the allowance's rounded box, its edge going round as it comes. */
+/** How much of what a runtime's install downloads is in: the allowance's rounded box, filling as it comes. */
 export function DownloadChip({ percent }: { percent: number }) {
-  return <FillChip fill={percent} level="progress" label={t("web-main.versions.downloaded", { percent })} bare />;
+  return <ProgressChip percent={percent} label={t("web-main.versions.downloaded", { percent })} bare />;
 }
 
 /** What a piece of software is drawn with: still.fail's mark for the station, its maker's for a runtime. */
