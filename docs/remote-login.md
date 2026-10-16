@@ -1,6 +1,6 @@
 # 远程登录（设计稿）
 
-> chat EMBER/1792171443.604000（2026-10-17 用户定：不在 station 之间借用、复制登录；每台 station 自己登录、自己持有和续期凭据，人在客户端远程完成；登录是机器级的；通用，跑工具自己的登录命令；浏览器那一步在客户端设备上、用这个人自己的浏览器完成；station 的浏览器和远程屏幕只是兜底；能操作这台 station 的人就能在上面登录，不分是哪个 workspace 的；两种都支持的工具默认用设备码）。
+> chat EMBER/1792171443.604000（2026-10-17 用户定：不在 station 之间借用、复制登录；每台 station 自己登录、自己持有和续期凭据，人在客户端远程完成；登录是机器级的；通用，跑工具自己的登录命令；浏览器那一步在客户端设备上、用这个人自己的浏览器完成；station 的浏览器和远程屏幕只是兜底；能操作这台 station 的人就能在上面登录，不分是哪个 workspace 的；两种都支持的工具默认用设备码）。同一 chat 后来又定：不按服务一个一个支持，只有一种通用的登录方式；登录区不列没登录的服务。
 
 状态：第一步已实现（PR #496：station `station/src/logins/`、core `client/core-ts/src/station/machine-logins.ts`、web `web/src/MachineLogins.tsx`）；下面写「实现」的地方是代码里实际的做法，和最初的设计不同处随文说明。
 
@@ -14,7 +14,7 @@ agent 在 station 上跑 `gh`、`gcloud`、`npm publish`、`docker push` 时常�
 
 - **不借用、不复制**：不把一台机器的登录拷到另一台。各家的 refresh token 多是一次性的，拷过去的两份会有一份过一阵被挤掉（`station/src/agents/machine-logins.ts` 开头写的就是这个原因）。要在三台 station 上用 gh，就在三台上各登录一次。
 - **机器级**：登录落在 station 的系统用户下（和 agent 跑命令用的是同一个 HOME、同一个钥匙串），这台 station 上所有 chat 的 agent、所有任务都用它，不分 chat、不分 workspace。界面上每个登录入口都写明这一点。
-- **通用**：不维护「支持哪些 CLI」的固定名单。任何命令都能当登录命令跑（`gh auth login`、`gcloud auth login`、`az login`、`aws sso login`、`npm login`、`docker login`、`gh auth refresh -s workflow`……）。常见服务有内置的描述（怎么查状态、怎么登录），只是为了显示「已登录 / 没登录」和一键登录；agent 可以给新工具加描述。
+- **只有一种通用的登录方式**（用户定：不按服务一个一个支持，只有一种通用的登录方式；登录区不列没登录的服务）：不维护「支持哪些 CLI」的名单，没有服务描述，不查各服务登没登录。登录就是跑工具自己的登录命令（`gh auth login`、`gcloud auth login`、`az login --use-device-code`、`aws sso login`、`npm login`、`docker login`、`gh auth refresh -s workflow`……），要人做什么全从命令自己的行为看出来（见下面「怎么做到」「网址和端口的解析」）。station 页只列通过 still.fail 在这台上做过的登录。
 - **浏览器那一步在客户端设备上**：用这个人自己的浏览器、密码管理器（1Password）、passkey。station 上什么都不用装。
 - **station 的浏览器 + 远程屏幕只是兜底**：只用于回调地址不是本机回环、又没有设备码的登录，以及网页版接不住回调时。
 
@@ -39,11 +39,11 @@ agent 在 station 上跑 `gh`、`gcloud`、`npm publish`、`docker push` 时常�
 | 情况 | 怎么认出来 | 客户端做什么 |
 |---|---|---|
 | 回环回调 | 网址里的 `redirect_uri`（或同类参数）是 `http://localhost:<端口>`、`http://127.0.0.1:<端口>`、`http://[::1]:<端口>` | 本机临时监听同一个端口，用默认浏览器打开网址，回调经 mesh 转给 station 上的命令 |
-| 设备码 | 输出里有验证网址和一串码（`ABCD-1234` 之类，或描述里给的格式） | 卡片上显示网址和码：复制码、打开网址 |
+| 设备码 | 输出里有验证网址和一串码（`ABCD-1234` 之类，见「网址和端口的解析」） | 卡片上显示网址和码：复制码、打开网址 |
 | 只要打开网址 | 有网址，但没有回环回调，也没有码（如 `npm login` 的网页登录：命令自己去轮询 npm） | 用默认浏览器打开网址，等命令自己结束 |
 | 要输入 | PTY 停在提示上（用户名、密码、2FA、选项、贴码） | 面板里的小终端；贴码类的给一个输入框 |
 
-浏览器那一步做完以后，命令自己写凭据、自己退出。退出码 0 再跑一次描述里的状态命令，读出登录的是哪个账号。
+浏览器那一步做完以后，命令自己写凭据、自己退出。退出码 0 就算完成（不再跑状态命令、不读账号）。
 
 ## 实验：各 CLI 怎么开浏览器
 
@@ -77,7 +77,7 @@ agent 在 station 上跑 `gh`、`gcloud`、`npm publish`、`docker push` 时常�
 - **不能探回调路径**：一条 state 不对的请求就让 gcloud、aws、Claude Code、wrangler 直接失败退出，firebase 改成贴码。所以 station 核对端口只看 `lsof`，从不往回调路径发请求；客户端对不上的请求一律不转。没有一个命令检查 `Host` 头。
 - **回调可能是 POST**：az 用 `form_post`，浏览器把 code 和 state 用表单 POST 到 `http://localhost:<端口>/`。客户端要接这一种 POST，并在表单正文里找 state。
 - **常用的大多是设备码**：gh 只有设备码，Docker、Vercel 默认设备码，npm 只要打开网址。第一步就算只有设备码和打开网址，gh、Docker、Vercel、npm 都能在网页版和手机上做完；真正要回环转发的是 gcloud、aws（也有设备码）、az（也有设备码）、wrangler（也有设备码）、firebase、Claude Code、codex（也有设备码）。
-- **要按回车才开浏览器**：gh、npm、Docker。描述里写 `enter: true`，station 替人按；按了以后它们会调 `open`，正好被替身截到。
+- **要按回车才开浏览器**：gh、npm、Docker。光标停在「Press Enter/ENTER … open … browser」这类只要回车去开网页的提示上时，station 替人按（这里没有要选的东西，按了以后它们会调 `open`，正好被替身截到）；别的提示，问 Y/n 的也一样（gh 的「Authenticate Git with your GitHub credentials? (Y/n)」），都留给人在面板的终端里答。
 - **要真 TTY**：Docker 没 TTY 直接拒绝。gh 在 TTY 里会问终端背景色（OSC 11）和光标位置，没人回答就卡住，所以 PTY 那头的终端模拟器要回答这些查询。
 - **固定端口**：gcloud 8085、codex 1455、wrangler 8976、firebase 9005。gcloud、codex、firebase 被占会顺延（station 以实际网址里的端口为准），wrangler 被占直接失败。
 - **超时**：回环的在 30 秒内都没说超时；codex 设备码 15 分钟，wrangler 设备码 5 分钟。
@@ -124,9 +124,9 @@ station: PTY 输出 "First copy your one-time code: ABCD-1234 … https://github
 station: 命令轮询到结果，写凭据，退出 0 → done
 ```
 
-有的命令显示设备码后还要按一次回车才去开浏览器（gh 的 `Press Enter to open github.com in your browser...`）。station 不等人按：描述里写了 `enter: true` 的，看到提示就替它按；没写的，提示会出现在终端里，人在客户端按。实现：输出停了 500 ms 才看光标所在行（和人一样等它把话说完），每一处提示只答一次。
+有的命令显示设备码后还要按一次回车才去开浏览器（gh 的 `Press Enter to open github.com in your browser...`）。station 不等人按：只要回车去开网页的提示，它替人按；问问题的（Y/n、选项、用户名密码）留给人在终端里答。实现：输出停了 500 ms 才看光标所在行（和人一样等它把话说完），每一处提示只按一次；命令再说话就不算在等了。
 
-能选的时候，描述优先用设备码（gh 只有设备码，Docker、Vercel 默认就是；`az login --use-device-code`、`aws sso login --use-device-code`、`wrangler login --device`、`codex login --device-auth` 也有）：设备码在网页版、手机、别人的电脑上都一样能完成，不依赖客户端能不能监听端口。只有设备码不可用、或者服务商把设备码关了（有的公司的 Entra ID 策略禁设备码）时才走回环。
+能选的时候优先用设备码（人或 agent 给命令时带上设备码选项）（gh 只有设备码，Docker、Vercel 默认就是；`az login --use-device-code`、`aws sso login --use-device-code`、`wrangler login --device`、`codex login --device-auth` 也有）：设备码在网页版、手机、别人的电脑上都一样能完成，不依赖客户端能不能监听端口。只有设备码不可用、或者服务商把设备码关了（有的公司的 Entra ID 策略禁设备码）时才走回环。
 
 ### 要输入（PTY）
 
@@ -156,7 +156,8 @@ station: 命令轮询到结果，写凭据，退出 0 → done
 
 - `station/src/logins/`（新）：
   - `run.ts`：起 PTY、设 `BROWSER` 和 `open`/`xdg-open` 替身、读输出、解析网址/端口/设备码、超时、取消。
-  - `services.ts`：服务描述（内置 + agent 加的），跑状态命令，记谁登录的。
+  - `index.ts`：进行中和刚结束的登录（在内存里），以及在这台上做过的登录的记录（`<data>/logins/history.json`：命令、谁、什么时候、怎么结束的，不记网址、码和输出）。
+  - `parse.ts`：从网址和输出里认出回环、设备码、只要回车的提示（通用规则，不按工具）。
   - `relay.ts`：把回调转给登录命令的端口，核对端口归属。
 - 路由 `station/src/api/routes/logins.ts`，工具 `station/src/tools/login.ts`。
 - 现有 Profile 登录（`accounts/login.ts`）先不动；以后可以改成用同一套跑（`codex login` 不加 `--device-auth` 就是回环 1455 端口）。
@@ -171,56 +172,19 @@ station: 命令轮询到结果，写凭据，退出 0 → done
 
 - 网址先看 `BROWSER`/替身拿到的，再看输出里的 `https://…`；两样都有时以打开的为准（Claude Code 打印的网址回调到它自己的 https 贴码页，打开的才是回环）。
 - 回环：取网址查询参数里的 `redirect_uri`（也看 `redirect_url`、`redirect`、`callback`，以及这些参数里再套一层的网址），host 是 `localhost`、`127.0.0.1`、`[::1]` 的，取端口和路径；再看 `state`、`response_mode=form_post`。端口为 0 或没写的不算回环。
-- 设备码：描述里有 `code` 正则就用它；否则用通用规则（`ABCD-1234` 这类，和现有 `deviceCode()` 一样，再加上「code」字样同一行的 6–10 位大写字母数字）。
+- 设备码：通用规则，不按工具：网址里的 `user_code=`（RFC 8628 的 verification_uri_complete，Vercel 这样给）；`ABCD-1234` 这类（四位大写字母数字、横线、四到六位：gh、Docker、AWS、Cloudflare）；「code」字样同一行里紧跟在 code 后面、或带数字的 6–10 位大写字母数字（az）。验证网址取路径里有 device、activate、verify 的那个。
 - 认不出来的网址也照样给客户端「打开」，由人判断。
 
-### 服务描述
+### 不按工具的知识
 
-内置的写在 `station/src/logins/builtin.ts`，agent 加的存在 `<data>/logins/services/<id>.json`，同一个 `id` 以 agent 加的为准。格式：
+一个服务一个服务的描述（原来的 `builtin.ts`：状态命令、登录参数、设备码正则、替人回答的提示）全部去掉了。还留着的工具相关的东西只有解析时认不出来就不行的那几条通用规则，都写在 `parse.ts`，不对应哪一个工具：
+- 设备码的三种样子（见上），验证网址看路径里的 device/activate/verify；
+- 回调参数的名字（`redirect_uri`、`redirect_url`、`redirect`、`callback`、`return_to`）和 `response_mode=form_post`；
+- 「只要回车去开网页」的提示：`press enter|return … open|browser`，且不是 Y/n。
 
-```json
-{
-  "id": "gh",
-  "name": "GitHub",
-  "bin": "gh",
-  "status": {
-    "command": ["gh", "auth", "status", "--hostname", "github.com"],
-    "in": {"exit": 0},
-    "account": "account (\\S+)"
-  },
-  "login": {
-    "command": ["gh", "auth", "login", "--hostname", "github.com", "--web", "--git-protocol", "https"],
-    "flow": "device",
-    "enter": true,
-    "code": "[A-Z0-9]{4}-[A-Z0-9]{4}"
-  },
-  "logout": ["gh", "auth", "logout", "--hostname", "github.com"],
-  "signedOut": ["not logged into any GitHub hosts", "gh auth login"],
-  "env": {}
-}
-```
+登录成没成，只看命令的退出码（0 是完成）；不再跑状态命令、不读账号。
 
-| 字段 | 意思 |
-|---|---|
-| `id`、`name` | 键和显示名 |
-| `bin` | 在 station 的 PATH 里找得到才算「装了」；没装的在列表里显示「没装」，不能登录 |
-| `status.command` | 查状态的命令，10 秒超时，不给 TTY |
-| `status.in` | 怎样算已登录：`{"exit": 0}`，或 `{"match": "正则"}`（对输出），两个都写要都满足 |
-| `status.account` | 从输出里取账号的正则（第一个分组） |
-| `login.command` | 登录命令；选能少问问题的参数（`--web`、`--hostname`） |
-| `login.flow` | `device`、`loopback`、`open`、`terminal`：只是提示，用来在开始前告诉人大概要做什么；实际按运行时看到的走 |
-| `login.enter` | 看到「按回车打开浏览器」的提示时替人按回车 |
-| `login.code` | 设备码的正则（有分组取第一个分组） |
-| `login.answers` | `[{match, text}]`：光标所在行匹配 `match` 时替人输入 `text` 再回车；`text` 为空就是只按回车，取工具自己的默认（实现时加的：gh 的「Authenticate Git with your GitHub credentials? (Y/n)」、az 登录后选订阅都靠它，不然网页版和手机上也要先打开终端答一次） |
-| `logout` | 退出命令（可选） |
-| `signedOut` | 命令失败时输出里出现这些字样，说明是没登录（给 agent 用：看到这些就该调 `login`） |
-| `env` | 额外的环境变量（如 `{"AWS_PROFILE": "dev"}`） |
-
-内置第一批：gh、gcloud（`gcloud auth login` 和 `gcloud auth application-default login` 两条）、npm、docker、aws（sso）、az、vercel、wrangler、firebase、fly、huggingface。具体命令和参数照上面的实验表定。
-
-状态什么时候查：station 起来后第一次有人读列表时、每次远程登录结束后、agent 调 `login status` 时；列表被读而上次检查超过 5 分钟时再查一次。不按定时器轮询。结果和变化用事件推。
-
-谁登录的：`<data>/logins/state.json` 记 `{service: {by: {email, name}, chat?, at, account}}`。通过 still.fail 之外登录的（有人 ssh 上去敲的），只显示账号，不显示人。
+做过的登录：`<data>/logins/history.json` 记最近 50 次 `{id, name, command, state, by, workspace?, chat?, startedAt, endedAt, timedOut?}`。通过 still.fail 之外登录的（有人 ssh 上去敲的）不出现。
 
 ### 接口（member link，`stillfail/admin/1`）
 
@@ -228,28 +192,25 @@ station: 命令轮询到结果，写凭据，退出 0 → done
 
 | 方法和路径 | 作用 |
 |---|---|
-| `GET /machine-logins` | `{services: [Service], logins: [Login]}`：服务和状态，进行中和最近结束的登录 |
-| `POST /machine-logins` | `{service}` 或 `{command: [..]}`，可带 `stations` 由客户端各自发；要幂等 key。同一服务已有进行中的登录就回那一个 |
+| `GET /machine-logins` | `{logins: [Login]}`：进行中的，然后结束了的（内存里的，再接历史记录里的） |
+| `POST /machine-logins` | `{command}`（一行，或词的数组）；要幂等 key。同一条命令已有进行中的登录就回那一个 |
 | `GET /machine-logins/<id>` | 一次登录 |
 | `DELETE /machine-logins/<id>` | 取消（结束命令） |
 | `POST /machine-logins/<id>/callback` | `{method, path, headers, body?}`（body 是 base64）→ 命令的回应 `{status, headers, body}`（body 是 base64，整份；回调页很小，不做流式） |
 | `POST /machine-logins/<id>/paste` | `{text}`：贴回来的 `http://localhost…` 地址当回调；别的文字写进 PTY 加回车 |
 | `POST /machine-logins/<id>/input` | `{text}` 或 `{key: "Enter" \| "Backspace" \| "Up" \| "Down" \| "Left" \| "Right" \| "Tab" \| "Ctrl-C"}`：写进终端 |
 | `GET /events?login=<id>` | 这次登录的终端（事件 `login-screen`），见上面「要输入」 |
-| `POST /machine-services` | agent 或管理员加、改服务描述（agent 走工具，不走这里也行） |
 
 ```
-Service = {id, name, installed, state: "in" | "out" | "unknown", account?, by?, at?, checkedAt?, flow, builtin, login?}
-Login   = {id, service?, name, command, state, step?, url?, domain?, callback?: {host, port, path, state, post},
-           code?, codeUrl?, waiting, by, workspace?, chat?, startedAt, expiresAt, endedAt?, error?, timedOut?,
-           account?, before?: {account?, by?, at?}}
+Login   = {id, name, command, state, step?, url?, domain?, callback?: {host, port, path, state, post},
+           code?, codeUrl?, waiting, by, workspace?, chat?, startedAt, expiresAt, endedAt?, error?, timedOut?}
 state   = starting | browser | code | input | verifying | done | failed | cancelled
 step    = loopback | device | open | terminal          // 现在要人做的那一步
 ```
 
 `callback.state` 给客户端核对浏览器回来的那一条；只读成员拿到的 `Login` 没有 `url`、`callback`、`code`、`codeUrl`、`error`，只看得到状态（`Logins.limited`）。
 
-事件：station 的事件流加 `machine-logins`（和别的事件一样用连字符），带变了的 `{login}` 或 `{service}`；只读成员收到去掉网址和码的那份。流开时 core 先 `GET /machine-logins` 读一遍，之后靠事件。
+事件：station 的事件流加 `machine-logins`（和别的事件一样用连字符），带变了的 `{login}`；只读成员收到去掉网址和码的那份。流开时 core 先 `GET /machine-logins` 读一遍，之后靠事件。
 
 能力和兼容：
 
@@ -265,46 +226,42 @@ agent 要在另一台 station 上登录（它在 A 上，命令要在 B 上跑�
 ## agent 的 `login` 工具
 
 ```
-login {action: "status", service?}                       // 一个或全部服务的状态
-login {action: "start", service | command, station?}     // 起登录，回 {id, state, step, link}
-login {action: "get", id}                                 // 现在怎样了
-login {action: "cancel", id}
-login {action: "describe", service: {...}}               // 加/改一个服务描述（上面的格式）
+login {command, station?}      // 跑工具自己的登录命令，回 {id, state, step, link}
+login {id}                     // 现在怎样了
+login {id, cancel: true}       // 结束它
 ```
 
 - 工具回的东西里**没有**登录网址、设备码：agent 用不着，也就不会把它们贴进 Slack 或 chat。
-- 用法（写进 instructions 和工具说明）：命令失败、输出说没登录（描述里的 `signedOut` 字样，或者明显是认证错误）时，调 `login start`；然后 `chat_post` 带 `card: {"type": "login", "login": "<id>"}`，正文一句话说要谁在哪台登录什么、为什么，加登录链接，`kind: "need_human"` 结束这一轮。
-- 登录结束（成功、失败、超时、取消）时，station 给发卡片的会话一条通知（和远程 chat 结束时的 station notice 一样），卡片自动算答了（从奏里撤掉）。agent 被叫醒后继续原来的事。
-- 同一服务已有进行中的登录，`start` 回那一个，不起第二个。
-- 没有描述的工具，agent 可以直接给 `command`，也可以先 `describe` 再 `start`（下次页面上就有这一行）。
-- 改了工具和规则，按惯例在 `station/src/agents/migrations.ts` 的 `NOTES` 末尾加一条。
+- 用法（写进 instructions 和工具说明）：命令失败、输出说没登录（not logged in、401、token 过期）时，用工具自己的登录命令调 `login`（有设备码选项的优先用它）；然后 `chat_post` 带 `card: {"type": "login", "login": "<id>"}`，正文一句话说要谁在哪台登录什么、为什么，加登录链接，`kind: "need_human"` 结束这一轮。
+- 登录结束（完成、失败、超时、取消）时，station 给发起它和发过它卡片的会话各一条通知（和远程 chat 结束时的 station notice 一样），卡片自动算答了（从奏里撤掉）。agent 被叫醒后继续原来的事。
+- 同一条命令已有进行中的登录，回那一个，不起第二个。
+- 改了工具和规则，按惯例在 `station/src/agents/migrations.ts` 的 `NOTES` 末尾加一条（38）。
 
 ### `login` 卡片
 
 - 新卡片类型 `{"type": "login", "login": "<id>", "station"?: "<id>", "assignee"?}`（`station/src/sessions/args.ts` 的 `cardArg` 加一种；`station` 是登录在别的 station 上时）。登录结束时 station 把带这个 id 的卡片记进 `closed_cards`（像 agent 自己撤回，不算谁答了，也不叫醒谁：叫醒它的是那条 station 通知）。
 - 卡片里只有登录的 id。网址、设备码由客户端打开卡片时经 mesh 向 station 要，所以消息、推送、奏都不会带它们走 still.fail cloud 或 Slack。
-- 推送通知只说「需要在 studio 上登录 GitHub」。
+- 推送通知只说「需要在 studio 上登录 gh」这类话（agent 写的正文）。
 - Slack 里的 chat 没有卡片：agent 只贴登录链接，链接在客户端里打开。
 
 ## 界面（web、桌面、安卓，文字）
 
 ### station 页的「登录」区
 
-- 标题「登录」，下面一行小字：「登录在这台 station 上，所有 chat 的 agent 都会用。」
-- 每个服务一行：名字（`GitHub`）、状态（「已登录 octocat · 张三 10-17」/「没登录」/「没装」/「查不出来」）、按钮「登录」（已登录的是「重新登录」，放在 ⋯ 里，旁边有「退出登录」）。
-- 列表最后「运行登录命令…」：输入一条命令（`vercel login`），按同样的面板走。
-- 只读成员只看得到状态，没有按钮。
+- 标题「登录」，下面一行小字：「运行工具自己的登录命令，在你自己的浏览器里完成；登录在这台 station 上，所有 chat 的 agent 都会用。」
+- 主操作是一个输入框加「运行」：输入工具自己的登录命令（`gh auth login`），按下面的面板走。
+- 下面只列通过 still.fail 在这台上做过的登录：进行中的在前，然后结束了的，新的在前；每行是命令、谁、什么时候、现状或结果（验证码 ABCD-1234 / 命令在等你输入 / 登录完成 / 登录失败 / 已取消 / 超时了）。点一行打开它的面板（结束了的可以「重试」）。一条都没有时只有输入框和那行小字，不列任何服务。
+- 只读成员只看得到列表，没有输入框和按钮。
 
 ### 登录面板（桌面对话框，手机网页和安卓底部面板）
 
-- 标题「在 studio 上登录 GitHub」。
-- 开始前（已经登录的）：「现在登录的是 octocat（张三 10-12 登录）。重新登录后，这台 station 上所有 chat 都会改用新账号。」[重新登录]
+- 标题「在 studio 上登录 gh」（命令的程序名），下面一行等宽小字是整条命令。
 - 回环：「要在浏览器里登录 accounts.google.com。」[打开浏览器]。点了以后「等浏览器回来…」。网址的域名总是显示出来，人能看清要去哪里登录。
 - 设备码：「打开 github.com/login/device，输入」+ 大字的码 [复制] [打开]；「输完后这里会自己更新。」
 - 只要打开网址：「在浏览器里完成登录。」[打开浏览器]
 - 网页版或端口被占：「这个页面接不住登录回调。登录完浏览器会跳到一个 localhost 开头、打不开的地址，把地址栏里的整个地址粘贴到这里。」输入框 [提交]；下面小字「或者 在 station 的浏览器里登录」。第一步网页版先只说一句「要在 still.fail 桌面 app 里打开这个登录」并显示域名；`paste` 接口已经有，面板上的贴地址放在之后。
 - 终端：一个可展开的「终端」，展开后是等宽字体的屏幕和一个输入框（密码时是密码框），一排按键：回车、↑、↓、Tab、Ctrl-C。
-- 结束：「已登录 octocat」；失败时显示命令最后几行和 [重试]；超时「超时了，没等到浏览器回来」[重试]。
+- 结束：「登录完成」（命令退出码 0）；失败时显示命令最后几行和 [重试]；超时「超时了，没等到浏览器回来」[重试]。
 - 多台：面板上方一排 station 名字，每个带状态（等你、进行中、完成、失败），当前那台高亮；「也在其他 station 上登录」可再勾。
 - 底部固定一行：「这个登录在 studio 上，所有 chat 的 agent 都会用这个账号。」
 
@@ -326,7 +283,7 @@ login {action: "describe", service: {...}}               // 加/改一个服务�
 - **workspace 锁**：这些接口都在 member link 上，开了锁的 station 只放锁里的设备，角色取锁和凭证里较低的。cloud 起不了登录、也转不了回调。
 - **不经 cloud**：登录网址、设备码、回调（里面有授权码）、终端内容只走 iroh（member link 和 station 之间的 transport，端到端加密，relay 只看到密文）。消息、卡片、推送、奏只带登录 id。station 日志只记服务名、谁、结果，不记网址的查询串和终端内容。
 - **转发的范围**：客户端只听回环、只在这次登录点了「打开」之后、只接路径和 state 对得上的第一条；station 只转给这次登录的端口，并核对端口确实是这个命令在听；每次登录只转一次。
-- **打开什么网址**：客户端只打开 `https://` 的网址，打开前在面板上显示域名；服务描述里写了预期域名的，对不上就提醒。一个被人操纵的 agent 可以起一个「登录」把人引到钓鱼页，显示域名、要人点一下才打开，是能做到的最多的。
+- **打开什么网址**：客户端只打开 `https://` 的网址，打开前在面板上显示域名。一个被人操纵的 agent 可以起一个「登录」把人引到钓鱼页，显示域名、要人点一下才打开，是能做到的最多的。
 - **终端里的密码**：不进 core 的数据库、不进 station 日志，回显关着时客户端不显示。
 
 ## 失败的情况
@@ -334,7 +291,7 @@ login {action: "describe", service: {...}}               // 加/改一个服务�
 | 情况 | 怎么办 |
 |---|---|
 | 客户端端口被占 | 监听失败就不打开浏览器，面板说「本机 8085 端口被占用」，改成贴地址或 station 浏览器。不能换端口：`redirect_uri` 的端口要和命令换 token 时用的一致 |
-| station 上端口被占 | gcloud、codex、firebase 自己顺延到下一个端口（以截到的网址为准）；wrangler 直接失败，描述里给它加 `--callback-port`，或者改用 `--device` |
+| station 上端口被占 | gcloud、codex、firebase 自己顺延到下一个端口（以截到的网址为准）；wrangler 直接失败，命令里加 `--callback-port`，或者改用 `--device` |
 | 客户端中途断线、关了 | station 上的命令照等，直到它自己或 station 的 15 分钟超时。人可以在别的设备上打开同一个登录接着做（状态是推的）。回环的浏览器跳回来时原来那台的监听没了，就贴地址 |
 | 客户端就是这台 station | 不监听，直接打开网址 |
 | 命令超时或退出 | 记为失败，显示最后几行，[重试] 重新起 |
@@ -349,9 +306,9 @@ login {action: "describe", service: {...}}               // 加/改一个服务�
 
 **第一步**
 
-- station：`logins/` 模块（`script` 包的 PTY、`BROWSER` 和替身截网址、回环端口和设备码解析、回调转发和端口核对、超时取消）、接口和事件、内置描述（先 gh、gcloud、npm，其余照实验表写上）。
+- station：`logins/` 模块（`script` 包的 PTY、`BROWSER` 和替身截网址、回环端口和设备码解析、回调转发和端口核对、超时取消）、接口和事件。实现：没有内置描述，任何登录命令走同一条路（用户后来定的）。
 - core：`machineLogins` topic、`machineLogin.start/cancel/paste/open/term/input` 调用；node host（桌面）加只听回环的监听，打开网址走现有的 `openExternal`。实现：topic 是 `machineLogins`（一台的全部）、`machineLogin`（一次）、`machineLoginScreen`（终端，代替 `term` 调用）；调用是 `machineLogin.start/cancel/input/paste`（station 操作）和 `machineLogin.open`（core 自己的：回环的先在本机听，再回要打开的网址；`here` 是这台 station 就在本机时不听）；监听是 `Host.listen`（只有 node host 有，`canRelay`），打开网址由页面 `window.open`，桌面 app 里会交给系统浏览器（`openExternal`）。全部只在内存里，不进 core 的数据库。
-- 桌面和网页：station 页「登录」区（只放内置的几行）、登录面板（回环转发只桌面有，网页先只有设备码、打开网址、终端）。
+- 桌面和网页：station 页「登录」区（输入登录命令，下面是做过的登录）、登录面板（回环转发只桌面有，网页先只有设备码、打开网址、终端）。
 - agent：`login` 工具、`login` 卡片、登录结束的通知、instructions 和 migrations NOTE。
 - 验证：studio 上 dev cloud + 临时 station，临时 HOME，用 gh（设备码）、gcloud（回环 8085）、npm（只打开网址）各走通一次；回环转发（GET 和 form_post 的 POST、只听 `[::1]` 和只听 127.0.0.1 的两种）、端口被占、state 不对、命令已退出时的拒绝写确定性测试（假的登录命令 + 本机 HTTP 服务）。
 
@@ -360,7 +317,6 @@ login {action: "describe", service: {...}}               // 加/改一个服务�
 - 安卓：回环转发（shell 加监听、Custom Tab、必要时前台服务）。
 - 网页的贴地址兜底、station 浏览器兜底（要 remote-screens 先合）。
 - 几台 station 一起登录。
-- station 页完整的列表：全部内置描述、「谁登录的」、退出登录、agent 加的描述。
 - `login {station}` 跨 station。
 - Windows 的 ConPTY。
 - Profile 的订阅登录改用同一套。
