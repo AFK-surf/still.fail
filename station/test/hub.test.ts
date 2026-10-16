@@ -21,7 +21,7 @@ test("a new session first says where it can be followed, multi-session connects 
   await r.accept(m);
   await settle();
   assert.equal(r.chat.posts.length, 1);
-  assert.equal(r.chat.posts[0]![1], `<https://ember.test/o/ws/st/cl%3AC1%3A${m.threadTs}|在 still.fail 里查看这个会话>`);
+  assert.equal(r.chat.posts[0]![1], `<https://ember.test/o/ws/st/cl%3AC1%3A${m.threadTs}|在 still.fail 中查看此会话>`);
   assert.deepEqual(r.chat.posts[0]![0], { channel: "C1", threadTs: m.threadTs });
   // Its next message is the same session: nothing more.
   await r.accept({ ...say("<@UBOT> and the tests"), threadTs: m.threadTs });
@@ -87,7 +87,7 @@ test("files shared in Slack are fetched into the session's uploads and given to 
   await settle();
   assert.deepEqual(r.chat.downloads, ["F1", "F2"], "a message sent again is not fetched again");
   const [said] = r.said(r.thread("C1", m.threadTs).id);
-  assert.equal(said!.text, "<@UBOT> 看看\n\n[文件 log.txt 没拿到：missing_scope]");
+  assert.equal(said!.text, "<@UBOT> 看看\n\n[无法获取文件 log.txt：missing_scope]");
   assert.equal(said!.attachments.length, 1);
   const [shot] = said!.attachments;
   assert.equal(shot!.name, "shot.png");
@@ -162,7 +162,7 @@ test("a turn ending without a state is nudged, then reported after max nudges", 
   r.claude.last().complete();
   await settle();
   assert.equal(r.claude.last().prompts.length, 2);
-  assert.ok(r.chat.lastText().includes("没有给出结果"));
+  assert.ok(r.chat.lastText().includes("未产出结果"));
   await r.close();
 });
 
@@ -634,7 +634,7 @@ test("an agent that loses the station's tools is started again rather than nudge
   second.complete();
   await settle();
   assert.equal(r.claude.count(), 2);
-  assert.ok(matches(r.chat.lastText(), ["没有在聊天里回复", "兜底", "> Here is the answer: 42."]), r.chat.lastText());
+  assert.ok(matches(r.chat.lastText(), ["未在对话中回复", "代为转发", "> Here is the answer: 42."]), r.chat.lastText());
   // A new message: a new process, the tools' again.
   await r.accept(reply(m, "9999.9", "still there?"));
   await settle();
@@ -653,7 +653,7 @@ test("a turn given up on after its nudges shows the agent's last words, unless i
   await settle();
   s.complete();
   await settle();
-  assert.ok(matches(r.chat.lastText(), ["兜底", "> The build passes."]), r.chat.lastText());
+  assert.ok(matches(r.chat.lastText(), ["代为转发", "> The build passes."]), r.chat.lastText());
   // It posted this time: what it said was seen, the notice is the plain one.
   await r.accept(reply(m, "9999.10", "and now?"));
   await settle();
@@ -663,7 +663,7 @@ test("a turn given up on after its nudges shows the agent's last words, unless i
   await settle();
   s.complete();
   await settle();
-  assert.ok(r.chat.lastText().includes("没有给出结果"), r.chat.lastText());
+  assert.ok(r.chat.lastText().includes("未产出结果"), r.chat.lastText());
   await r.close();
 });
 
@@ -955,7 +955,7 @@ test("a person's message in a chat with several agents reaches each of them once
   const one = newSession(r.hub, chat("claude"));
   const two = newSession(r.hub, chat("codex"));
   addToThread(r.hub, one[1].id, two[0]);
-  const quote = { author: "Claude", role: "agent", ts: "1.000001", text: "上一条", comment: "当前" };
+  const quote = { author: "Claude", role: "agent", ts: "1.000001", text: "上一条", comment: "这里" };
   sayIn(r.hub, one[1].id, "a@example.com", "你们俩分一下工", [], [quote]);
   await settle();
   for (const driver of [r.claude, r.codex]) {
@@ -966,7 +966,7 @@ test("a person's message in a chat with several agents reaches each of them once
   assert.equal(r.store.pendingMessages(one[0]).length + r.store.pendingMessages(two[0]).length, 0);
   const said = r.said(one[1].id);
   assert.equal(said[0]!.text, "你们俩分一下工", "the words are stored as typed; the quote is a column");
-  assert.equal(said[0]!.quotes[0]!.comment, "当前");
+  assert.equal(said[0]!.quotes[0]!.comment, "这里");
   await r.close();
 });
 
@@ -1241,7 +1241,7 @@ test("a session changes profile, model and effort by hand, and is taken on by an
   await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
   r.claude.last().complete();
   await settle();
-  assert.ok((await refused(configure(r.hub, key, { profile: "cx" }))).includes("不能跑 Claude Code"));
+  assert.ok((await refused(configure(r.hub, key, { profile: "cx" }))).includes("无法运行 Claude Code"));
   r.edit(withProfile("cc3", "third", []));
   assert.ok((await refused(configure(r.hub, key, { profile: "cc3" }))).includes("「third」未启用 opus"), "only one with its model enabled");
   // Its model and effort change too, to what a profile of its runtime runs.
@@ -1343,7 +1343,7 @@ test("a connect or a new chat can keep its sessions to one profile; otherwise th
   const pinned = (model: string) => ({ ...chat(), model, profile: "cc2" });
   const [key] = newSession(r.hub, pinned("opus"));
   assert.deepEqual([r.session(key).profile, r.session(key).profilePinned], ["cc2", true]);
-  assert.throws(() => newSession(r.hub, pinned("sonnet")), /没有启用 sonnet/);
+  assert.throws(() => newSession(r.hub, pinned("sonnet")), /未启用 sonnet/);
   const [auto] = newSession(r.hub, chat());
   assert.ok(!r.session(auto).profilePinned);
   await r.close();
@@ -1458,7 +1458,7 @@ test("a turn that runs out of allowance goes on on another account, or once the 
   second.end(spent("usage limit reached"));
   await settle();
   assert.equal(r.claude.count(), 2, "no account left to go on with");
-  assert.ok(matches(r.chat.lastText(), ["触发额度或限流", "usage limit reached"]));
+  assert.ok(matches(r.chat.lastText(), ["已达到额度或速率限制", "usage limit reached"]));
   // Changed by hand (here: kept to the first again): it goes on by itself.
   await configure(r.hub, key, { profile: on });
   await settle();
@@ -1676,7 +1676,7 @@ test("a session the machine kept goes on in a chat, run in its own directory, wi
   // Only a note of where it came from, linking to what was said before: nothing of it is copied into the chat.
   assert.equal(said.length, 1);
   assert.equal(said[0]!.authorKind, "ember");
-  assert.ok(said[0]!.text.startsWith("接着本机 Claude Code 在"), said[0]!.text);
+  assert.ok(said[0]!.text.startsWith("继续本机 Claude Code 在"), said[0]!.text);
   const last = readTimeline("claude", found.path).length - 1;
   assert.ok(said[0]!.text.endsWith(`[查看之前的对话](?history=${key}&entry=${last})`), said[0]!.text);
   await settle();
@@ -1726,7 +1726,7 @@ test("a directory the station may not read is told as that, not left to the agen
   // As macOS privacy protection answers a station nobody gave access to: it may stat the directory, not list it.
   chmodSync(project, 0o000);
   try {
-    assert.throws(() => continueMachineSession(r.hub, roots, found, "local"), /没有权限读取目录/);
+    assert.throws(() => continueMachineSession(r.hub, roots, found, "local"), /无权读取目录/);
     assert.equal(r.store.listSessions().length, 0);
     // One continued while it could be read, and read no more later: its turn says why, and no agent is started.
     chmodSync(project, 0o755);
@@ -1751,7 +1751,7 @@ test("a session whose directory is gone is not continued", async () => {
   const root = join(r.dir, "machine");
   const roots = machine(root, join(root, "gone"));
   const found = find(roots, "codex", "22222222-aaaa-bbbb-cccc-000000000001")!;
-  assert.throws(() => continueMachineSession(r.hub, roots, found, "local"), /已经不在了/);
+  assert.throws(() => continueMachineSession(r.hub, roots, found, "local"), /已不存在/);
   assert.equal(r.store.listSessions().length, 0);
   await r.close();
 });

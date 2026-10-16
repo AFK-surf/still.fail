@@ -38,7 +38,7 @@ test("markdown_links_as_written_and_bare_addresses_where_a_reader_sees_them_end"
   // Within a link's words an address is words.
   assert.deepEqual(parse("[https://a.dev](https://b.dev)"), [["p", [["a", ["https://a.dev"], { href: "https://b.dev" }]]]]);
   assert.deepEqual(parse("看 [这里][1]，图 ![图][2]，[没有][3]\n\n[1]: https://a.dev\n[2]: shot.png \"截图\""), [
-    ["p", ["看 ", ["a", ["当前"], { href: "https://a.dev" }], "，图 ", ["img", { src: "shot.png", alt: "图", title: "截图" }], "，[没有][3]"]],
+    ["p", ["看 ", ["a", ["这里"], { href: "https://a.dev" }], "，图 ", ["img", { src: "shot.png", alt: "图", title: "截图" }], "，[没有][3]"]],
   ]);
 });
 

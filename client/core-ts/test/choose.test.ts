@@ -85,7 +85,7 @@ test("a_machines_session_is_a_line_its_home_as_tilde", () => {
 test("a_quota_in_a_line_names_only_the_window_running_low", () => {
   const q = (windows: J) => quotaLine({ state: "ok", windows });
   assert.deepEqual(q([{ label: "每周", usedPercent: 10 }, { label: "5 小时", usedPercent: 40 }]), { text: "5 小时 60% · 每周 90%" });
-  assert.deepEqual(q([{ label: "每周", usedPercent: 95 }, { label: "5 小时", usedPercent: 75 }]), { text: "每周只剩 5%", level: "red" });
+  assert.deepEqual(q([{ label: "每周", usedPercent: 95 }, { label: "5 小时", usedPercent: 75 }]), { text: "每周剩余 5%", level: "red" });
   assert.deepEqual(quotaLine({ state: "unavailable", windows: [], detail: "读不到" }), { text: "读不到" });
   assert.equal(quotaLine(null), null);
 });

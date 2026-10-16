@@ -251,7 +251,7 @@ test("a new connect from tokens is named as its bot is in Slack; bad tokens are 
   try {
     const [bad, said] = await s.ask("POST", "/connects", { bind: { runtime: "claude" }, slack: { appToken: "xoxb-1", botToken: "xapp-1" } });
     assert.equal(bad, 400);
-    assert.equal(said.error, "Bot Token 应该以 xoxb- 开头；App-Level Token 应该以 xapp- 开头");
+    assert.equal(said.error, "Bot Token 应以 xoxb- 开头；App-Level Token 应以 xapp- 开头");
     assert.deepEqual(await s.ask("POST", "/connects", { slack: { appToken: "xapp-1", install: "nope" } }), [400, { error: "app 尚未安装：请先在 Slack 中安装" }]);
     bot(s.fake, { name: "ember" });
     // Its name is taken: the next is ember-2. An app id given is kept with it.
@@ -344,7 +344,7 @@ test("invalid edits are refused and leave the config unchanged", async () => {
     assert.equal(bad[0], 400);
     assert.match(bad[1].error, /unknown runtime/);
     assert.deepEqual(await t.ask("PUT", "/connects/y", {}), [400, { error: "runtime is required" }]);
-    assert.deepEqual(await t.ask("PUT", "/connects/ds", { bind: { profile: "cx" } }), [400, { error: "「cx」不能跑 claude" }]);
+    assert.deepEqual(await t.ask("PUT", "/connects/ds", { bind: { profile: "cx" } }), [400, { error: "「cx」无法运行 claude" }]);
     assert.deepEqual(await t.ask("PUT", "/connects/ds", { bind: { profile: "cc", model: "opus" } }), [400, { error: "「cc」没有启用 opus" }]);
     assert.equal((await t.ask("PUT", "/connects/ds", { bind: { effort: "ultra" } }))[0], 400);
     assert.deepEqual(await t.ask("PUT", "/connects/ds", "{" as unknown as Json).then(([s]) => s), 200, "a body that is a string is no object: {}");
@@ -397,7 +397,7 @@ test("a connect's Slack app is edited through its manifest; new permissions need
     assert.deepEqual(await t.ask("PUT", "/connects/ds/slack-app", { backgroundColor: "red" }), [400, { error: "背景色格式应为 #RRGGBB" }]);
     assert.deepEqual(await t.ask("PUT", "/connects/ds/slack-app", { name: "  " }), [400, { error: "名称不能为空" }]);
     t.fake.answer("apps.manifest.validate", { ok: false, error: "invalid_manifest", errors: [{ pointer: "/x", message: "bad" }] });
-    assert.deepEqual(await t.ask("PUT", "/connects/ds/slack-app", { description: "x" }), [400, { error: "Slack 没接受这次修改：manifest 不合法：/x bad" }]);
+    assert.deepEqual(await t.ask("PUT", "/connects/ds/slack-app", { description: "x" }), [400, { error: "Slack 拒绝了此次修改：manifest 无效：/x bad" }]);
     // Token edits keep the app id the station learned.
     await t.ask("PUT", "/connects/ds", { slack: { botToken: "xoxb-new-token-123" } });
     assert.equal(t.saved().connects[0].slack.appId, "A0DS");

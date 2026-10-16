@@ -153,7 +153,7 @@ describe("updates", { concurrency: true }, () => {
     const [a, p] = downloading("0.159.3", 60_000_000, 133_847_481);
     assert.deepEqual([say(a, "zh"), p], ["正在下载 0.159.3（134 MB）", 44]);
     const [b, q] = downloading("0.159.3", 60_000_000, null);
-    assert.deepEqual([say(b, "zh"), q], ["正在下载 0.159.3：已下 60 MB", null]);
+    assert.deepEqual([say(b, "zh"), q], ["正在下载 0.159.3：已下载 60 MB", null]);
   });
 
   test("versions compare number by number", () => {
@@ -452,7 +452,7 @@ describe("updates", { concurrency: true }, () => {
       await updates.check();
       assert.deepEqual([station(updates).latest, station(updates).newer, updates.toUpdateTo()], [undefined, false, null], name);
       // Asked anyway (a page from before it read): refused, and not left updating.
-      await assert.rejects(updates.update("station", "zh"), (e: Error) => e.message.startsWith("这个版本的签名验不过"), name);
+      await assert.rejects(updates.update("station", "zh"), (e: Error) => e.message.startsWith("此版本签名校验失败"), name);
       assert.equal(station(updates).state, "idle", name);
       assert.ok(!existsSync(join(dir, "installer-ran")), name);
       assert.ok(!asked.some((a) => a.startsWith("/install")), name);
@@ -467,7 +467,7 @@ describe("updates", { concurrency: true }, () => {
     t.after(() => updates.close());
     await updates.check();
     assert.deepEqual([station(updates).latest, station(updates).newer, station(updates).downgrade], ["0.1.1290", false, false]);
-    await assert.rejects(updates.update("station", "zh"), (e: Error) => e.message === "0.1.1290 比现在的 0.1.1300 旧，不更新");
+    await assert.rejects(updates.update("station", "zh"), (e: Error) => e.message === "0.1.1290 早于当前的 0.1.1300，不予更新");
     assert.ok(!existsSync(join(dir, "installer-ran")));
     // Installed from the beta and put on the stable channel by a person: going back is theirs to ask.
     const beta = temp();
@@ -528,7 +528,7 @@ describe("updates", { concurrency: true }, () => {
     let line = station(updates);
     assert.deepEqual([line.note, line.updatable, line.channel, line.auto], ["并非通过安装脚本安装，无法在此更新", false, undefined, undefined]);
     await assert.rejects(updates.update("station", "en"), /Station: /);
-    await assert.rejects(updates.setAuto(true, "zh"), (e: Error) => e.message === "Station：不是用安装脚本装的，没法在这里更新");
+    await assert.rejects(updates.setAuto(true, "zh"), (e: Error) => e.message === "Station：并非通过安装脚本安装，无法在此更新");
     const unjoined = installed(temp(), "1300", null, { origin: () => null });
     t.after(() => unjoined.close());
     await unjoined.check();
@@ -574,7 +574,7 @@ describe("updates", { concurrency: true }, () => {
       await updates.check();
       await updates.update("codex", "zh");
       await until("failed", () => updates.get("zh")[2]!.state === "failed");
-      assert.equal(updates.get("zh")[2]!.message, `${exe(join(bin, "npm"))} 跑完了，但 station 的 PATH 上还是找不到 codex：可能装到了别处`);
+      assert.equal(updates.get("zh")[2]!.message, `${exe(join(bin, "npm"))} 已完成，但 station 的 PATH 中仍找不到 codex：可能安装到了其他位置`);
     });
   });
 
@@ -659,9 +659,9 @@ INSTALLER
     assert.deepEqual(pinNpmVersion(how as any, "@openai/codex", "0.159.3").args, ["install", "-g", "@openai/codex@0.159.3", "--prefix", node, "--prefer-online"]);
     const say_ = (h: unknown) => (h as Unable).say("zh");
     assert.ok(say_(howToUpdate("codex", found("/project/node_modules/@openai/codex/bin/codex.js"), env)).includes("全局安装目录"));
-    assert.ok(say_(howToUpdate("codex", found("/usr/local/bin/codex"), env)).includes("自己更新"));
+    assert.ok(say_(howToUpdate("codex", found("/usr/local/bin/codex"), env)).includes("手动更新"));
     // Codex's standalone installer is a shell script: on Windows not run.
-    if (WINDOWS) assert.ok(say_(howToUpdate("codex", found("C:/Users/a/.codex/packages/standalone/releases/0.1.0-x86_64-pc-windows-msvc/bin/codex.exe"), env)).includes("自己更新"));
+    if (WINDOWS) assert.ok(say_(howToUpdate("codex", found("C:/Users/a/.codex/packages/standalone/releases/0.1.0-x86_64-pc-windows-msvc/bin/codex.exe"), env)).includes("手动更新"));
     assert.deepEqual(howToInstall("codex", env), { program: npm, args: ["install", "-g", "@openai/codex@latest"] });
     const bare: Env = { PATH: "/nowhere" };
     assert.ok(say_(howToInstall("codex", bare)).includes("Node"));

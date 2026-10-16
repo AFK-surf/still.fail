@@ -34,7 +34,7 @@ test("an app keeps a signing key and signs entries with it; a web page has none"
   const app = new FakeHost();
   app.appKeys = true;
   const signer = await Effect.runPromise(Signer.make(app));
-  assert.equal((await Effect.runPromise(Signer.load(app)))?.id, signer.id, "Not suggested");
+  assert.equal((await Effect.runPromise(Signer.load(app)))?.id, signer.id, "kept");
   const e = signer.sign(next("ws1", null, 1000, "genesis", { owner: "a" }));
   assert.ok(verify(null, Buffer.from(signedBytes(entryHash(e))), publicOf(signer.id.slice(8)), Buffer.from(e.sig.sig, "hex")));
 });

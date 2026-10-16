@@ -673,8 +673,8 @@ test("a_sessions_model_control_says_what_changes_and_saves_it_on_the_station", a
   apply(host, values);
   p = v(values, 1);
   assert.equal(p.draft.profile ?? null, null);
-  assert.ok(String(p.dropped).includes("改成了自动分配"), JSON.stringify(p));
-  assert.ok(String(p.force).startsWith("指定的账号「p2」没有启用"), JSON.stringify(p));
+  assert.ok(String(p.dropped).includes("已改为自动分配"), JSON.stringify(p));
+  assert.ok(String(p.force).startsWith("所选账号「p2」未启用"), JSON.stringify(p));
   assert.equal(p.whoLevel, "amber");
   assert.equal(p.becomes[1], "high");
   assert.equal(p.changed, true);
@@ -907,7 +907,7 @@ test("a_chats_jobs_are_shown_as_the_core_puts_them_and_a_jobs_output_says_when_i
   const jobs = v(values, 1);
   assert.deepEqual(jobs.jobs.map((j: J) => j.id), ["s", "w", "done"]);
   assert.deepEqual([jobs.alarm, jobs.servicesNote, jobs.jobsNote], ["restart", "1 个在重启", "1 个运行中"]);
-  assert.deepEqual([jobs.ended, jobs.clear, jobs.clearText], [1, ["k1"], "清掉 1 个已结束的"]);
+  assert.deepEqual([jobs.ended, jobs.clear, jobs.clearText], [1, ["k1"], "清除 1 个已结束的"]);
   const w = jobs.jobs[1];
   assert.deepEqual([w.tone, w.meta[0].text, w.meta[1].text, w.detail], ["live", "CI 还在跑", " · 2 分钟前", "在盯着 · 1 分钟 · 1 条通知"]);
   assert.deepEqual([jobs.jobs[0].meta[0].text, jobs.jobs[2].tone], ["正在重启", "off"]);

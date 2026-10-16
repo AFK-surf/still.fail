@@ -83,7 +83,7 @@ test("a chat's people hear of its turns and of each other, once, gathered", asyn
   assert.equal(posted.length, 1, "gathered into one post");
   assert.deepEqual(all.sort(), [
     ["done", "ada@x.com,bob@x.com", "好了", 2],
-    ["failed", "ada@x.com,bob@x.com", "启动失败", 3],
+    ["failed", "ada@x.com,bob@x.com", "没能启动", 3],
     ["message", "ada@x.com", "看一下", 1],
   ]);
   // The home workspace's: posted as before, without naming it.

@@ -147,7 +147,7 @@ test("apps are reached with the person's token that owns them, rotating one abou
     const refused = await apps.updateManifest("me", "A2", {}).catch((e) => e);
     assert.ok(refused instanceof SlackApiError);
     assert.equal(refused.code, "invalid_manifest");
-    assert.equal(slackError(refused, "zh"), "manifest 不合法：/display_information/name too long");
+    assert.equal(slackError(refused, "zh"), "manifest 无效：/display_information/name too long");
     assert.equal(refused.message, 'apps.manifest.validate: invalid_manifest [{"pointer":"/display_information/name","message":"too long"}]');
 
     fake.seen = [];

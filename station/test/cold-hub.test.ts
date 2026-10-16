@@ -86,7 +86,7 @@ test("archiving a session cleans what can be made again from its directory", asy
   const workspace = r.session(key).workspace;
   mkdirSync(join(workspace, "app/node_modules/x"), { recursive: true });
   writeFileSync(join(workspace, "app/node_modules/x/index.js"), Buffer.alloc(50_000, 1));
-  writeFileSync(join(workspace, "notes.md"), "Not suggested");
+  writeFileSync(join(workspace, "notes.md"), "kept");
   assert.equal(await cold.cleanRebuildable(key), 0, "not while in the lists");
   await archive(r.hub, key, true);
   await settle();
@@ -100,9 +100,9 @@ test("archiving a session cleans what can be made again from its directory", asy
   // Cleaned once archived (in the background, on the file system: looked at every 10 ms, no deadline).
   while (existsSync(join(workspace, "app/node_modules"))) await new Promise((res) => setTimeout(res, 10));
   await finishArchive(r, key);
-  assert.deepEqual(await workspaceFile(dirname(workspace), "notes.md"), Buffer.from("Not suggested"));
+  assert.deepEqual(await workspaceFile(dirname(workspace), "notes.md"), Buffer.from("kept"));
   await archive(r.hub, key, false);
-  assert.equal(readFileSync(join(workspace, "notes.md"), "utf8"), "Not suggested");
+  assert.equal(readFileSync(join(workspace, "notes.md"), "utf8"), "kept");
   await r.close();
 });
 

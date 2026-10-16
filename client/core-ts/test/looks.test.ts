@@ -15,7 +15,7 @@ test("the_glyph_counts_stations_by_their_links_and_says_who_works", () => {
   let g = glyph(stations, days);
   assert.deepEqual([g.online, g.dim, g.failing, g.working], [2, 1, 1, 1]);
   assert.equal(g.summary, "4 台 station · 1 台运行中");
-  assert.equal(g.label, "4 台 station，2 台在线，1 台在干活，1 台离线，1 台出错");
+  assert.equal(g.label, "4 台 station，2 台在线，1 台运行中，1 台离线，1 台出错");
   assert.equal(glyph([station("w/a", "Studio", "online")], days).summary, "Studio · 运行中");
   assert.equal(glyph([], []).label, "0 台 station，0 台在线");
   g = glyph([station("w/a", "A", "connecting"), station("w/b", "B", "offline")], []);

@@ -148,7 +148,7 @@ describe("signed releases", () => {
     try {
       // No installer in the release (one from before they were bundled): refused.
       assert.equal(await updateCommand(["update", "--beta", "--app", app, "--data", data], data, trusted), 1);
-      assert.match(said.pop()!, /没有安装脚本/);
+      assert.match(said.pop()!, /不含安装脚本/);
       assert.equal(JSON.parse(readFileSync(join(data, "config.json"), "utf8")).updateChannel, "beta");
       writeFileSync(join(app, "bin", `install.zh.${process.platform === "win32" ? "ps1" : "sh"}`), "");
       assert.equal(await updateCommand(["update", "--app", app, "--data", data], data, trusted), 0);

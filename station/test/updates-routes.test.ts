@@ -94,7 +94,7 @@ test("an update asked for is refused with what is wrong", async (t) => {
   const ask = rig(updates);
   await ask("POST", "/updates/check");
   assert.deepEqual(await ask("POST", "/updates", { id: "nope" }), [400, { error: "不存在 nope" }]);
-  assert.deepEqual(await ask("POST", "/updates", {}), [400, { error: "没有  这一项" }]);
+  assert.deepEqual(await ask("POST", "/updates", {}), [400, { error: "不存在 " }]);
   // Codex is not there and there is neither npm nor Homebrew to install it with.
   assert.deepEqual(await ask("POST", "/updates", { id: "codex" }), [400, { error: "Codex：这台机器上没有 npm 也没有 Homebrew：先装 Node（带 npm），再回来安装 Codex" }]);
 });
@@ -159,7 +159,7 @@ test("the running station takes the ask: kept in its config and read on that cha
   assert.equal(updates.channel(), "beta");
   writeFileSync(join(runDir, CHANNEL_ASK), "nightly");
   updates.answerChannelAsk();
-  assert.equal(readFileSync(join(runDir, CHANNEL_ANSWER), "utf8"), "error 不认识的渠道 nightly\n");
+  assert.equal(readFileSync(join(runDir, CHANNEL_ANSWER), "utf8"), "error 无法识别的渠道 nightly\n");
 });
 
 test("the channel command says the channel, set first when named", async () => {

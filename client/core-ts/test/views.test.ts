@@ -1416,7 +1416,7 @@ test("what_a_chats_agent_sent_to_slack_shows_after_the_message_it_followed_witho
     [0, call("mcp__stillfail__chat_post", { to: "C0OPS/1727.0001", text: "*部署* 好了 <https://x.y|看这里>" }, "1970-01-01T00:00:02Z", "c1")],
     [1, { at: "1970-01-01T00:00:02Z", kind: "tool_result", text: "posted", ok: true, callId: "c1" }],
     // Its own chat's words are its messages already; what goes to a still.fail chat is not Slack's.
-    [2, call("mcp__stillfail__chat_post", { to: "EMBER/1.0", text: "当前" }, "1970-01-01T00:00:02.5Z", "c2")],
+    [2, call("mcp__stillfail__chat_post", { to: "EMBER/1.0", text: "这里" }, "1970-01-01T00:00:02.5Z", "c2")],
     [3, call("mcp__stillfail__slack_api", { method: "chat.postMessage", params: { channel: "C0DEV", text: "新话题" } }, "1970-01-01T00:00:04Z", "c3")],
     // What someone said in Slack, given to it.
     [4, { at: "1970-01-01T00:00:05Z", kind: "user", text: '<message via="slack" thread="C0OPS/1727.0001" from="Mia (U9)" ts="2.5">*收到*，<@U9> 看一下</message>' }],
@@ -1464,7 +1464,7 @@ test("a_chats_page_is_told_by_each_message_whose_its_files_are_and_where_archivi
   // Kept frozen, as the core keeps what it has read: what the page is told goes on copies (written on these, it threw
   // and took the core down).
   const frozen = <T,>(v: T): T => { if (v && typeof v === "object") { for (const x of Object.values(v)) frozen(x); Object.freeze(v); } return v; };
-  t.set(pageOf("ws/a", 7), frozen({ first: 1, last: 3, entries: [{ ...entry(1, "查看"), attachments: [file("a.png")] }, { ...entry(2, "在看"), authorKind: "agent", author: "k" }, done], thread: null }));
+  t.set(pageOf("ws/a", 7), frozen({ first: 1, last: 3, entries: [{ ...entry(1, "看看"), attachments: [file("a.png")] }, { ...entry(2, "在看"), authorKind: "agent", author: "k" }, done], thread: null }));
   const settled = { ...row("k", now), thread: 7 };
   settled.agents[0].lastTurn = { kind: "message", declared: "final", ending: "all_done", outcome: "completed", startedAt: 1, endedAt: 1 };
   t.set(rows("ws/a"), [settled]);

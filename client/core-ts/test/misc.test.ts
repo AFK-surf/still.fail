@@ -194,7 +194,7 @@ test("marks_say_how_many_and_how_urgent", () => {
   assert.equal(counts(0, 0, 3).tone(), "done");
   assert.equal(counts(0, 0, 0).tone(), null);
   assert.equal(counts(2, 0, 3).label(), "2 个出错 · 3 个有新消息");
-  assert.equal(counts(0, 1, 1).label(), "1 个在等你 · 1 个有新消息");
+  assert.equal(counts(0, 1, 1).label(), "1 个待你处理 · 1 个有新消息");
   assert.equal(counts(0, 0, 1).label(), "1 个有新消息");
 });
 

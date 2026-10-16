@@ -65,7 +65,7 @@ function fill(ws: string) {
   write(join(ws, "readonly.txt"), "ro");
   chmodSync(join(ws, "readonly.txt"), 0o444);
   write(join(ws, "uploads/截图 1.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 1, 2, 3]));
-  write(join(ws, `${"long-".repeat(30)}/${"名称".repeat(30)}.md`), "deep and long");
+  write(join(ws, `${"long-".repeat(30)}/${"名字".repeat(30)}.md`), "deep and long");
   write(join(ws, "empty"), "");
   mkdirSync(join(ws, "an/empty/dir"), { recursive: true });
   chmodSync(join(ws, "an"), 0o750);

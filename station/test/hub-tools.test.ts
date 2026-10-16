@@ -477,7 +477,7 @@ test("files posted to Slack go into the thread; apps without files:write link to
   assert.deepEqual([last.text, last.attachments.length], ["图表\n\n[weather.html](weather.html)", 2], "still.fail keeps both, the figure placed");
   r.chat.noFiles = true;
   await r.call(key, "chat_post", { to, text: "再看", files: ["shot.png"] });
-  assert.equal(r.chat.lastText(), `再看\n\n<${link}?file=shot.png|在 still.fail 里查看附件>`, "no files:write: linked as before");
+  assert.equal(r.chat.lastText(), `再看\n\n<${link}?file=shot.png|在 still.fail 中查看附件>`, "no files:write: linked as before");
   assert.deepEqual(r.chat.files.at(-1), []);
   await r.close();
 });

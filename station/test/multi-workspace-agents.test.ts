@@ -167,8 +167,8 @@ test("a session runs on the profiles allowed in its workspace; picking, pinning 
   assert.equal(rig.session(two).profile, "cc");
   assert.equal(rig.hub.accounts.runOn(two).id, "cc");
   // Pinned or changed to one not for W2: refused.
-  assert.throws(() => newSession(rig.hub, { runtime: "claude", createdBy: "b@x", ws: W2, profile: "cc2" }, "en"), /not for this workspace/);
-  assert.throws(() => rig.hub.accounts.change(two, { profile: "cc2" }, "en"), /not for this workspace/);
+  assert.throws(() => newSession(rig.hub, { runtime: "claude", createdBy: "b@x", ws: W2, profile: "cc2" }, "en"), /isn't available to this workspace/);
+  assert.throws(() => rig.hub.accounts.change(two, { profile: "cc2" }, "en"), /isn't available to this workspace/);
   // The home workspace's sessions run on any.
   const [ofOne] = newSession(rig.hub, { runtime: "claude", createdBy: "a@x", ws: W1, profile: "cc2" }, "en");
   assert.equal(rig.session(ofOne).profile, "cc2");

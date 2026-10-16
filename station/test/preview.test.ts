@@ -79,7 +79,7 @@ test("a web service on the machine is reached as it answers, framing allowed", a
   await stop(s);
   const gone = await proxyPreview("GET", [], null, port, "/", "zh");
   assert.equal(gone.status, 502);
-  assert.ok((await text(gone.body)).includes(`localhost:${port} 没有回应`));
+  assert.ok((await text(gone.body)).includes(`localhost:${port} 无响应`));
   assert.equal(previewTarget("/preview/99999/"), null, "not a port");
   assert.deepEqual(previewTarget("/preview/8080"), [8080, "/"]);
   assert.equal((await proxyPreview("GE T", [], null, port, "/", "en")).status, 400);
@@ -192,5 +192,5 @@ test("a client gone closes the service's socket, and a refusal says why", async 
   const none = await openSocket([], http.port, "/", "zh").then(() => null, (e: SocketRefused) => e);
   assert.ok(none instanceof SocketRefused);
   assert.equal(none.status, 502);
-  assert.ok(none.message.includes(`localhost:${http.port} 没有回应`), none.message);
+  assert.ok(none.message.includes(`localhost:${http.port} 无响应`), none.message);
 });

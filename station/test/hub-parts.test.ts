@@ -87,7 +87,7 @@ test("explicit files are reused, and missing or colliding files are refused", ()
 test("files an app cannot upload stay in still.fail, and the post links there", () => {
   const file = (name: string) => ({ name, path: `/w/uploads/${name}`, size: 1 });
   const [posted, kept] = slackWithFiles("这周的天气", [file("weather.html"), file("shot.png")], "https://e/o/w/s/k");
-  assert.equal(posted, "这周的天气\n\n<https://e/o/w/s/k?file=weather.html|在 still.fail 里查看图表和附件>", "the link opens the figure");
+  assert.equal(posted, "这周的天气\n\n<https://e/o/w/s/k?file=weather.html|在 still.fail 中查看图表和附件>", "the link opens the figure");
   assert.equal(kept, "这周的天气\n\n[weather.html](weather.html)", "the HTML placed so still.fail draws it");
   assert.deepEqual(slackWithFiles("看图：[天气](weather.html)", [file("weather.html")], "L"), ["看图：[天气](weather.html)\n\n<L?file=weather.html|在 still.fail 里查看图表>", "看图：[天气](weather.html)"]);
   assert.deepEqual(slackWithFiles("", [file("a b.pdf")], "L"), ["<L?file=a%20b.pdf|在 still.fail 里查看附件>", ""]);

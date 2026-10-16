@@ -216,7 +216,7 @@ test("how_a_turn_ended_says_itself_in_words", () => {
   assert.equal(words({ declared: "block", ending: "need_help", need: "要 Stripe 的测试 key", outcome: "completed" }), "需要你处理：要 Stripe 的测试 key");
   assert.equal(words({ declared: "block", outcome: "completed" }), "需要你处理");
   assert.equal(words({ declared: "block", ending: "need_decision", outcome: "completed" }), "需要你处理");
-  assert.equal(words({ outcome: "failed", detail: "rate_limit: You've hit your limit" }), "出错：额度用完");
+  assert.equal(words({ outcome: "failed", detail: "rate_limit: You've hit your limit" }), "出错：额度已用完");
   assert.equal(words({ outcome: "failed", detail: "auth: 401" }), "出错：登录失效");
   assert.equal(words({ outcome: "aborted" }), "出错：被停止");
   assert.equal(words({ outcome: "completed" }), "出错：意外停止");
@@ -420,7 +420,7 @@ test("what_the_clients_show_is_put_in_here", () => {
   const cpu = h.meters[0];
   assert.deepEqual([cpu.label, cpu.percent, cpu.level, cpu.value, cpu.note], ["CPU", 93, "red", "93%", "负载 4.0 · Apple M2 Max"]);
   assert.deepEqual([h.meters[2].level, h.meters[2].value, h.emberText], ["red", "剩余 50.0 GB / 1000 GB", "still.fail 100 MB"]);
-  assert.match(h.usage, /^内存 .+ · 磁盘 剩 50\.0 GB \/ 1000 GB$/);
+  assert.match(h.usage, /^内存 .+ · 磁盘 剩余 50\.0 GB \/ 1000 GB$/);
   assert.equal(h.identity, "Apple M2 Max · 32 GB · macOS 26");
   assert.deepEqual(h.details.map((d: J) => `${d.label} ${d.value}`), ["主机名 studio", "芯片 Apple M2 Max · 8 核 · arm64", "已运行 1 天 1 小时", "still.fail 进程占用 100 MB"]);
   assert.deepEqual([cpu.left, cpu.remaining, cpu.big, cpu.unit, cpu.title, cpu.total], [7, "空闲 7%", "7", "%", "CPU 空闲", "负载 4.0"]);

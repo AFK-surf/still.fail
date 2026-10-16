@@ -136,7 +136,7 @@ test("a_workspaces_status_is_its_own_waits_its_accounts_socket_and_the_relay", (
   for (const s of [w1, w2, device]) s.skip(2_500);
   const texts = (v: unknown) => (v as { items: { text: string }[] }).items.map((i) => i.text);
   assert.deepEqual(texts(value([[w2, "all"], [device, { for: ["a2"] }]])), ["无法连接 still.fail cloud，2 秒后重试", "正在连接 relay"]);
-  assert.deepEqual(texts(value([[w1, "all"], [device, { for: ["a1"] }]])), ["连不上 still.fail cloud，7 秒后重试", "正在连接 relay", "读取对话"]);
+  assert.deepEqual(texts(value([[w1, "all"], [device, { for: ["a1"] }]])), ["无法连接 still.fail cloud，7 秒后重试", "正在连接 relay", "读取对话"]);
   assert.deepEqual(texts(value([[w2, "all"], [device, { for: [] }]])), ["正在连接 relay"]);
   assert.deepEqual(texts(value([[w1, "all"], [w2, "all"], [device, "all"]])), ["无法连接 still.fail cloud，2 秒后重试", "正在连接 relay", "读取对话", "still.fail cloud 读取 workspace"]);
 });

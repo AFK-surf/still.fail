@@ -193,7 +193,7 @@ test("archiving writes a thread out to a zstd file and back", () => {
   store.joinThread(shared.id, "b", "ds");
   store.joinThread(own.id, "a", "ember");
   const at = (m: NewMessage, at: number): NewMessage => ({ ...m, at });
-  store.insertMessage(at(newMessage(own.id, "2.2", "person", "local", "查看"), 1));
+  store.insertMessage(at(newMessage(own.id, "2.2", "person", "local", "看看"), 1));
   store.insertMessage(at(newMessage(own.id, "2.3", "agent", "a", "好"), 2));
   store.insertMessage(at(newMessage(shared.id, "1.1", "person", "U1", "hi"), 3));
   const before = store.listThreads("local", null, own.id)[0];
@@ -249,9 +249,9 @@ test("an archived thread whose file is lost reads as empty, and is counted on fr
   const kept = store.openThread("ember", "EMBER", "2.1", null, null);
   store.joinThread(lost.id, "a", "ember");
   store.joinThread(kept.id, "b", "ember");
-  say(store, lost.id, "1.2", "person", "local", "查看");
+  say(store, lost.id, "1.2", "person", "local", "看看");
   say(store, lost.id, "1.3", "agent", "a", "好");
-  say(store, lost.id, "1.4", "agent", "a", "已完成");
+  say(store, lost.id, "1.4", "agent", "a", "做完了");
   say(store, kept.id, "2.2", "person", "local", "还有这个");
   store.setRead("local", lost.id, 3);
   store.setArchived("a", true, MANUAL);
@@ -554,7 +554,7 @@ test("an existing client view gains model identity even after a partial upgrade"
     // The broken upgrade added the column while leaving this old view in place.
     if (alreadyAdded) db.exec("ALTER TABLE entries ADD COLUMN agent_identity TEXT");
     db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
-    db.exec(`INSERT INTO entries (thread, n, kind, ts, author_kind, author, text, client, at) VALUES (1, 1, 'message', '1.1', 'person', 'local', 'Not suggested', 'android old', 100)`);
+    db.exec(`INSERT INTO entries (thread, n, kind, ts, author_kind, author, text, client, at) VALUES (1, 1, 'message', '1.1', 'person', 'local', 'kept', 'android old', 100)`);
     db.exec(`INSERT INTO entries (thread, n, kind, target, author_kind, author, text, at) VALUES (1, 2, 'edit', 1, 'person', 'local', 'edited', 200)`);
     db.close();
     // Both the first upgrade and subsequent opens must keep existing data readable.

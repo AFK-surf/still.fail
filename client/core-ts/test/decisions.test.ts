@@ -171,7 +171,7 @@ test("cards_in_a_chat_say_whether_they_wait_and_who_answered_how", () => {
   pick.quotes = [{ author: "Claude", text: "选哪个？", ts: "9.000002", role: "agent" }];
   messages = [askedMsg(2), pick];
   messages = d.inMessages(messages, null);
-  assert.deepEqual(messages[0].decision, { resolved: true, answeredBy: "林晓", chosen: "B", text: "林晓 选了「B」" });
+  assert.deepEqual(messages[0].decision, { resolved: true, answeredBy: "林晓", chosen: "B", text: "林晓 选择了「B」" });
   shape("MessageDecision", messages[0].decision);
   const mine = said(3, "person", "都不要");
   mine.mine = true;

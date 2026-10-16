@@ -27,7 +27,7 @@ test("a subscription sign-in relays the link, the code and the result", async ()
     assert.equal(heard[0], "sub");
     await logins.submitCode("sub", "wrong", "zh");
     assert.ok((await wait("sub", "failed")).error!.includes("invalid code"));
-    await assert.rejects(logins.submitCode("sub", "x", "zh"), /没有在等授权码/);
+    await assert.rejects(logins.submitCode("sub", "x", "zh"), /未在等待授权码/);
     await logins.start(sub, "zh");
     await wait("sub", "needs_code");
     await assert.rejects(logins.submitCode("sub", "  ", "zh"), /空/);
