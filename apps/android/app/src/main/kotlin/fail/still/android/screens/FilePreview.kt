@@ -121,6 +121,7 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
+import fail.still.android.AppState
 import fail.still.android.LocalApp
 import fail.still.android.data.Attachment
 import fail.still.android.data.ChatOf
@@ -138,6 +139,9 @@ import fail.still.android.ui.zoomable
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.smoothOutline
 import fail.still.core.CoreException
+import fail.still.android.BuildConfig
+import fail.still.android.installApk
+import fail.still.android.mayInstall
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.max
@@ -414,11 +418,28 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
     val after = if (chat != null) told.value?.after?.let { f -> f.owner?.let { Shown(it, f) } } else folder.getOrNull(at + 1).takeIf { at >= 0 }
     val fullId = FileData.id(station, key, file, thumb = false)
     fun keptLoad() = FileData.kept(fullId)?.let { FileLoad.Ready(it) } ?: FileLoad.Loading(null)
+    // What a file of no known kind is: text, when its first bytes read as UTF-8 with no NULs. Only they are fetched.
+    var sniffed by remember(fullId) { mutableStateOf(if (known.kind == null) FileData.kept(fullId)?.let { looksLikeText(it) } else null) }
+    LaunchedEffect(fullId) {
+        if (known.kind != null || sniffed != null) return@LaunchedEffect
+        // A station from before parts cannot say: told of, as anything else not shown.
+        sniffed = try { looksLikeText(FileData.head(app, station, key, file, SNIFF_BYTES)) } catch (_: CoreException) { false }
+    }
+    val kind = known.kind ?: sniffed?.let { if (it) PreviewKind.Text else null }
+    val sure = known.kind != null || sniffed != null
+    // Shown here: a kind it has a viewer for, read from the disk (players, PDFs) or small enough to read into memory.
+    // Anything else is told of (its name, size and kind) and fetched only when asked for: saved, or an APK installed.
+    val toldOf = sure && when (kind) { PreviewKind.Video, PreviewKind.Audio, PreviewKind.Pdf -> false; null -> true; else -> file.size > BIG_FILE }
+    var asked by remember(fullId) { mutableStateOf(false) }
+    var then by remember(fullId) { mutableStateOf<Then?>(null) }
+    // Asked again after it failed: fetched again.
+    var tries by remember(fullId) { mutableIntStateOf(0) }
+    val want = sure && (!toldOf || asked)
     // By the file it is of: stepped to another, what came of the one before is not taken for it (not even for a frame).
-    val got by produceState<Pair<String, FileLoad>>(fullId to keptLoad(), fullId) {
-        if (value.first == fullId && value.second is FileLoad.Ready) return@produceState
+    val got by produceState<Pair<String, FileLoad>>(fullId to keptLoad(), fullId, want, tries) {
+        if (value.first == fullId && (value.second is FileLoad.Ready || value.second is FileLoad.OnDisk)) return@produceState
         value = fullId to keptLoad()
-        if (value.second is FileLoad.Ready) return@produceState
+        if (value.second is FileLoad.Ready || !want) return@produceState
         value = fullId to try {
             if (file.size > BIG_FILE) FileLoad.OnDisk(FileData.toDisk(app, context, station, key, file).await())
             else FileLoad.Ready(FileData.fetch(app, station, key, file, thumb = false).await())
@@ -433,8 +454,18 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
     }
     val bytes = (loaded as? FileLoad.Ready)?.bytes
     val disk = (loaded as? FileLoad.OnDisk)?.file
-    // What a file of no known kind is: text, when its first bytes read as UTF-8 with no NULs.
-    val kind = known.kind ?: bytes?.let { if (looksLikeText(it)) PreviewKind.Text else null }
+    // Asked for and come: saved, or installed (on the app's scope: closing the viewer does not stop it).
+    LaunchedEffect(then, bytes, disk) {
+        val what = then ?: return@LaunchedEffect
+        if (bytes == null && disk == null) return@LaunchedEffect
+        then = null
+        app.scope.launch { if (what == Then.Install) install(app, context, fullId, file.name, bytes, disk) else save(app, context, file.name, bytes, disk) }
+    }
+    fun ask(what: Then) {
+        if (what == Then.Install && !mayInstall(context)) { app.toast = t("android-chat.file.allowInstall", "app" to BuildConfig.APP_NAME); return }
+        if (bytes != null || disk != null) app.scope.launch { if (what == Then.Install) install(app, context, fullId, file.name, bytes, disk) else save(app, context, file.name, bytes, disk) }
+        else { if (loaded is FileLoad.Failed) tries++; asked = true; then = what }
+    }
     val dark = kind == PreviewKind.Image || kind == PreviewKind.Video
 
     // The bars float over the file, and fade when left alone (not while an image comes, nor while marking).
@@ -536,22 +567,27 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
                         swipe = if (marks.on) null else swipe, slide = { strip.value })
                 }
                 known.kind == PreviewKind.Video && still != null && (bytes == null && disk == null || shownLoaded !is FileLoad.Ready && shownLoaded !is FileLoad.OnDisk) -> Poster(still, videoZoom, Modifier.viewerFlying(flight))
-                shownLoaded is FileLoad.Loading -> Note { if (progress != null) Progress(progress, file.size, dark = false) else Waiting() }
+                toldOf -> Note {
+                    Facts(file, kind, cantShow = if (kind == null) t("android-chat.file.cantPreview") else t("android-chat.file.tooBigToShow"))
+                    when {
+                        // On its way, asked for: how far it has come.
+                        asked && shownLoaded is FileLoad.Loading -> if (progress != null) Progress(progress, file.size, dark = false) else Waiting()
+                        else -> Column(Modifier.width(220.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (shownLoaded is FileLoad.Failed) Text(t("android-chat.file.loadFailed", "error" to shownLoaded.message), Modifier.fillMaxWidth(), fontSize = 14.sp, color = C.red, textAlign = TextAlign.Center)
+                            val apk = file.name.lowercase().endsWith(".apk")
+                            if (apk) NoteButton(null, t("android-chat.file.install"), strong = true) { ask(Then.Install) }
+                            NoteButton(Icons.Download, t("android-chat.file.download"), strong = !apk) { ask(Then.Save) }
+                        }
+                    }
+                }
+                !sure || shownLoaded is FileLoad.Loading -> Note { if (progress != null) Progress(progress, file.size, dark = false) else Waiting() }
                 shownLoaded is FileLoad.Failed -> Note { Text(t("android-chat.file.loadFailed", "error" to shownLoaded.message), fontSize = 15.sp, color = C.muted, textAlign = TextAlign.Center) }
                 disk != null -> when (kind) {
                     PreviewKind.Video -> VideoViewer(disk, file.name, awake, { wake(TAP_REST_MS) }, ::toggle, darkGlass(haze, Smooth(16.dp)), videoZoom, Modifier.viewerFlying(flight), still, chrome = { flight.chrome },
                         startAtUs = FileViewers.frames[FileViewers.id(station, key, file.path)]?.atUs ?: 0L, frameOut = { flight.frame = it })
                     PreviewKind.Audio -> Note { AudioViewer(disk, file.name) }
                     PreviewKind.Pdf -> PdfViewer(disk, ::toggle)
-                    // Too big to be read in here: it can be saved.
-                    else -> Note {
-                        Text(t("android-chat.file.tooBigToShow"), fontSize = 15.sp, color = C.muted, textAlign = TextAlign.Center)
-                        Row(
-                            Modifier.clip(Smooth(12.dp)).background(C.chip).clickable { scope.launch { app.toast = if (download(context, file.name, disk)) t("android-chat.file.saved") else t("android-chat.file.saveFailed") } }
-                                .padding(horizontal = 14.dp, vertical = 9.dp),
-                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) { IconIn(Icons.Download, 16.dp, C.ink); Text(t("android-chat.file.download"), fontSize = 15.sp, color = C.ink) }
-                    }
+                    else -> {}
                 }
                 bytes == null -> {}
                 kind == PreviewKind.Video -> OnDisk(fullId, file.name, bytes, waiting = { if (still != null) Poster(still, videoZoom, Modifier.viewerFlying(flight)) else Note { Waiting() } }) {
@@ -561,14 +597,6 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
                 kind == PreviewKind.Audio -> OnDisk(fullId, file.name, bytes) { Note { AudioViewer(it, file.name) } }
                 kind == PreviewKind.Pdf -> OnDisk(fullId, file.name, bytes) { PdfViewer(it, ::toggle) }
                 kind != null -> TextViewer(bytes, kind, known.language, file.name, source, ::toggle)
-                else -> Note {
-                    Text(t("android-chat.file.cantPreview"), fontSize = 15.sp, color = C.muted)
-                    Row(
-                        Modifier.clip(Smooth(12.dp)).background(C.chip).clickable { scope.launch { app.toast = if (download(context, file.name, bytes)) t("android-chat.file.saved") else t("android-chat.file.saveFailed") } }
-                            .padding(horizontal = 14.dp, vertical = 9.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) { IconIn(Icons.Download, 16.dp, C.ink); Text(t("android-chat.file.download"), fontSize = 15.sp, color = C.ink) }
-                }
             }
         }
         // A page's taps are its own (they do not reach here to bring the bar back): over one, the bar stays.
@@ -622,11 +650,10 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
                     kind == PreviewKind.Markdown || kind == PreviewKind.Csv || kind == PreviewKind.Html ->
                         Seg(listOf(t("android-chat.file.tab.preview"), t("android-chat.file.tab.source")), if (source) 1 else 0, { source = it == 1 }, Modifier.width(120.dp), height = 30.dp, fill = true, radius = 15.dp, inset = 2.dp)
                 }
-                if (!marks.on && !coming) Box(Modifier.alpha(if (bytes != null || disk != null) 1f else 0f)) {
-                    PictureButton(Icons.Download, t("android-chat.file.download"), enabled = bytes != null || disk != null, tint = tint) {
-                        if (bytes != null) scope.launch { app.toast = if (download(context, file.name, bytes)) t("android-chat.file.saved") else t("android-chat.file.saveFailed") }
-                        else if (disk != null) scope.launch { app.toast = if (download(context, file.name, disk)) t("android-chat.file.saved") else t("android-chat.file.saveFailed") }
-                    }
+                // A file told of (not shown) can be asked for from here as well as from its page.
+                val saving = bytes != null || disk != null || toldOf && !asked
+                if (!marks.on && !coming) Box(Modifier.alpha(if (saving) 1f else 0f)) {
+                    PictureButton(Icons.Download, t("android-chat.file.download"), enabled = saving, tint = tint) { ask(Then.Save) }
                 }
                 PictureButton(Icons.Close, t("common.close"), tint = tint, onClick = onClose)
             }
@@ -687,6 +714,50 @@ private fun Note(content: @Composable () -> Unit) {
 @Composable
 private fun Waiting() {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Spinner(16.dp); Text(t("android-chat.file.loading"), fontSize = 15.sp, color = C.muted) }
+}
+
+/** How many of a file's first bytes tell whether it is text. */
+private const val SNIFF_BYTES = 8192
+
+/** What a file told of (not shown here) is fetched for, once asked. */
+private enum class Then { Save, Install }
+
+/** A file not shown here, told of: its kind's mark, its name, its size and extension, and why it is not shown. */
+@Composable
+private fun Facts(file: Attachment, kind: PreviewKind?, cantShow: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        IconIn(if (kind == null) Icons.File else Icons.FileText, 44.dp, C.muted)
+        Text(file.name, Modifier.padding(top = 6.dp), fontSize = 17.sp, lineHeight = 23.sp, fontWeight = FontWeight.SemiBold, color = C.ink, textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        val ext = file.name.substringAfterLast('.', "").takeIf { it.isNotEmpty() && it.length <= 8 && it != file.name }?.uppercase()
+        Text(listOfNotNull(fileSize(file.size), ext).joinToString(" · "), fontSize = 13.sp, color = C.muted)
+        Text(cantShow, Modifier.padding(top = 4.dp), fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
+    }
+}
+
+/** A button on a note's page: the accent's when `strong`, the chip colour's otherwise. */
+@Composable
+private fun NoteButton(icon: androidx.compose.ui.graphics.vector.ImageVector?, label: String, strong: Boolean, onClick: () -> Unit) {
+    val ink = if (strong) Color.White else C.ink
+    Row(
+        Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(if (strong) C.accent else C.chip).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+    ) { icon?.let { IconIn(it, 16.dp, ink) }; Text(label, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = ink) }
+}
+
+/** A file put in the phone's Downloads, from memory or from the disk; said in a toast. */
+private suspend fun save(app: AppState, context: android.content.Context, name: String, bytes: ByteArray?, disk: File?) {
+    val ok = if (disk != null) download(context, name, disk) else bytes != null && download(context, name, bytes)
+    app.toast = if (ok) t("android-chat.file.saved") else t("android-chat.file.saveFailed")
+}
+
+/** An APK handed to the system's installer, which asks the person to confirm; a failure is said in a toast. */
+private suspend fun install(app: AppState, context: android.content.Context, id: String, name: String, bytes: ByteArray?, disk: File?) {
+    try {
+        val apk = disk ?: FileData.onDisk(context, id, name, bytes ?: return)
+        withContext(Dispatchers.IO) { installApk(context, apk) }
+    } catch (e: Exception) {
+        app.toast = t("android-chat.file.installFailed", "error" to (e.message ?: e.javaClass.simpleName))
+    }
 }
 
 /** How much of a file has come, out of its size (the station's, else the one sent with it). */

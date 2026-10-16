@@ -312,5 +312,8 @@
   "android-chat.info.startedAt": "{name} {ago}开的",
   "android-chat.info.latestAt": "最新 {ago}",
   "android-chat.info.title": "对话信息",
-  "android-chat.pick.quote": "引用"
+  "android-chat.pick.quote": "引用",
+  "android-chat.file.install": "安装",
+  "android-chat.file.installFailed": "没能安装：{error}",
+  "android-chat.file.allowInstall": "允许 {app} 安装应用后，再点一次安装"
 }

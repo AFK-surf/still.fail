@@ -330,5 +330,8 @@
   "android-chat.info.startedAt": "{name} started it {ago}",
   "android-chat.info.latestAt": "latest {ago}",
   "android-chat.info.title": "Chat info",
-  "android-chat.pick.quote": "Quote"
+  "android-chat.pick.quote": "Quote",
+  "android-chat.file.install": "Install",
+  "android-chat.file.installFailed": "Couldn't install: {error}",
+  "android-chat.file.allowInstall": "Allow {app} to install apps, then tap Install again"
 }

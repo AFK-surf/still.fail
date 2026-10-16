@@ -272,6 +272,14 @@ class StationApi(private val core: StillFailCore, val station: String) {
         }
     }
 
+    /** The first `length` bytes of a file sent to the session (`station.file.part`); throws `unsupported` from a station from before parts. */
+    suspend fun fileHead(key: String, name: String, length: Int): ByteArray {
+        val got = core.call("station.file.part", buildJsonObject {
+            put("station", station); put("key", key); put("name", name); put("offset", 0); put("length", length)
+        }).jsonObject
+        return Base64.decode(got["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT)
+    }
+
     /** A video's poster as the station makes it (a small JPEG of its first frame); null when it has none. */
     suspend fun poster(key: String, name: String): ByteArray? {
         val got = core.call("station.poster", buildJsonObject { put("station", station); put("key", key); put("name", name) })

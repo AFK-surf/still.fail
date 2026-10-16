@@ -71,19 +71,14 @@ class Updates(context: Context, private val origin: String, private val core: St
      */
     suspend fun install(): String? {
         if (checking || progress != null) return null
-        if (!context.packageManager.canRequestPackageInstalls()) {
-            context.startActivity(
-                Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
-            return t("android-misc.updates.allowInstall", "app" to BuildConfig.APP_NAME)
-        }
+        if (!mayInstall(context)) return t("android-misc.updates.allowInstall", "app" to BuildConfig.APP_NAME)
         return try {
             progress = t("android-misc.updates.checking")
             val release = ask(true) ?: return t("android-misc.updates.latest")
             progress = t("android-misc.updates.downloading")
             val apk = download(release)
             progress = t("android-misc.updates.installing")
-            withContext(Dispatchers.IO) { commit(apk) }
+            withContext(Dispatchers.IO) { installApk(context, apk, self = true) }
             null
         } catch (e: Exception) {
             t("android-misc.updates.failed", "error" to (e.message ?: e.javaClass.simpleName))
@@ -181,25 +176,40 @@ class Updates(context: Context, private val origin: String, private val core: St
             connection.disconnect()
         }
     }
+}
 
-    private fun commit(apk: File) {
-        val installer = context.packageManager.packageInstaller
-        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
+/** Whether this app may install apps (安装未知应用); when not, the system's page for it opens instead. */
+fun mayInstall(context: Context): Boolean {
+    if (context.packageManager.canRequestPackageInstalls()) return true
+    context.startActivity(
+        Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+    )
+    return false
+}
+
+/**
+ * Hands an APK to the system's installer; what it says comes to [InstallResult], which opens its page for the person
+ * to confirm. `self`: this app's own newer build, installed over it without asking where the system allows that.
+ */
+fun installApk(context: Context, apk: File, self: Boolean = false) {
+    val installer = context.packageManager.packageInstaller
+    val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
+        if (self) {
             setAppPackageName(context.packageName)
-            setSize(apk.length())
             if (Build.VERSION.SDK_INT >= 31) setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
         }
-        val id = installer.createSession(params)
-        installer.openSession(id).use { session ->
-            session.openWrite("stillfail.apk", 0, apk.length()).use { out ->
-                apk.inputStream().use { it.copyTo(out) }
-                session.fsync(out)
-            }
-            val intent = Intent(context, InstallResult::class.java)
-            // The installer puts its status in the intent: it has to be mutable.
-            val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
-            session.commit(PendingIntent.getBroadcast(context, id, intent, flags).intentSender)
+        setSize(apk.length())
+    }
+    val id = installer.createSession(params)
+    installer.openSession(id).use { session ->
+        session.openWrite("stillfail.apk", 0, apk.length()).use { out ->
+            apk.inputStream().use { it.copyTo(out) }
+            session.fsync(out)
         }
+        val intent = Intent(context, InstallResult::class.java).putExtra(InstallResult.SELF, self)
+        // The installer puts its status in the intent: it has to be mutable.
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
+        session.commit(PendingIntent.getBroadcast(context, id, intent, flags).intentSender)
     }
 }
 
@@ -208,6 +218,8 @@ class Updates(context: Context, private val origin: String, private val core: St
 private const val RETRIES = 6
 
 class InstallResult : BroadcastReceiver() {
+    companion object { const val SELF = "self" }
+
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
@@ -221,7 +233,8 @@ class InstallResult : BroadcastReceiver() {
             else -> {
                 Notifier.words(context)
                 val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: t("android-misc.updates.installFailed")
-                Toast.makeText(context, t("android-misc.updates.failed", "error" to message), Toast.LENGTH_LONG).show()
+                val words = if (intent.getBooleanExtra(SELF, true)) "android-misc.updates.failed" else "android-chat.file.installFailed"
+                Toast.makeText(context, t(words, "error" to message), Toast.LENGTH_LONG).show()
             }
         }
     }

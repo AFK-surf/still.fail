@@ -188,6 +188,14 @@ internal object FileData {
         return got
     }
 
+    /** The first `length` bytes of the file (all of it when kept already): enough to tell what it is without fetching the whole. */
+    suspend fun head(app: AppState, station: String, key: String, file: Attachment, length: Int): ByteArray {
+        kept.get(id(station, key, file, thumb = false))?.let { return it }
+        val root = DriveKey.rootOf(key)
+        return if (root != null) app.api(station).driveRead(root, file.path, 0, length).bytes
+        else app.api(station).fileHead(key, file.path.substringAfterLast('/'), length)
+    }
+
     /** A picture decoded from `bytes`, its longer side at most `longest` pixels; kept by `id`. */
     suspend fun picture(id: String, bytes: ByteArray, longest: Int): ImageBitmap? {
         val tag = "$id@$longest"
