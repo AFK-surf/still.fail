@@ -7,6 +7,7 @@ package fail.still.android.motion
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -15,6 +16,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import fail.still.android.Screen
 import fail.still.android.data.ChatItem
 import fail.still.android.data.ChatOf
@@ -105,6 +108,22 @@ class ChatShareTest {
         assertEquals("c-9", ref["id"]!!.jsonPrimitive.content)
         assertEquals(Fixtures.WS, ref["into"]!!.jsonPrimitive.content)
         rule.onNodeWithText("参考一下 @[首页改版的配色方案] ").assertExists()
+    }
+
+    /** More chats than the menu's height: a drag on it scrolls it to the last (a phone's, 2026-10-17: it did not). */
+    @Test
+    fun theMenuScrolls() {
+        val h = Harness(rule)
+        h.fake.put(topic, Fixtures.chat(talk))
+        h.fake.put(Topics.chatSearch(Fixtures.WS, "", Fixtures.STATION, null, 8, elsewhere = true), ChatSearchView(items = (1..8).map { item("c-l$it", "第 $it 个对话", it) }))
+        h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
+        h.type("@")
+        h.keyboard()
+        rule.onNodeWithText("第 8 个对话").assertIsNotDisplayed()
+        rule.onNodeWithText("第 4 个对话").performTouchInput { swipeUp() }
+        h.settle()
+        picture(h, "ref-menu-scrolled")
+        rule.onNodeWithText("第 8 个对话").assertIsDisplayed()
     }
 
     @Test fun sharedThenSentLight() = sharedThenSent(false)
