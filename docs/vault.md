@@ -1,6 +1,6 @@
 # 密钥库（设计稿）
 
-> 状态：设计稿，没有实现。chat EMBER/1792192607.305000（2026-10-17：「能做一个基于 still.fail 基础设施的 1password 吗」）。
+> 状态：第 0–2 期在做（分支 vault）；个人库为默认、先不接 1Password/Bitwarden、agent 写入要批准（2026-10-17 用户定）。chat EMBER/1792192607.305000（2026-10-17：「能做一个基于 still.fail 基础设施的 1password 吗」）。
 
 ## 要解决的事
 
@@ -45,18 +45,17 @@
   └─ 包着 → 每个库钥匙（一份）
 ```
 
-- **设备箱钥匙**：锁的 `device` 条目里加一个可选字段 `box_key: "x25519:<hex>"`，由这台设备自己的 `sign_key` 签进锁里。旧客户端不写这个字段，也就不能加入库。网页版设备没有 `sign_key`，所以也没有 `box_key`。
+- **设备箱钥匙**：不改锁。每台 app 设备给自己的箱钥匙出一张「箱钥匙证书」，用锁里自己的 `sign_key` 签名，跟着库一起存（格式见「实现约定」）。验证的人拿锁里这台设备的 `sign_key` 验，所以 station 和 cloud 塞不进自己的箱钥匙。网页版设备没有 `sign_key`，也就没有箱钥匙。
 - **存放**：安卓放 Android Keystore（有 StrongBox 就用），要求生物识别或屏幕锁解锁；macOS 放钥匙串，用 Touch ID 解锁；Windows/Linux 用 Electron `safeStorage`。现在锁的签名钥匙（`lock-signer`）是 app 数据目录里的普通文件，`workspace-lock.md` 的「还没做」里已经记着要挪进钥匙串，这件事和箱钥匙一起做。
 - **不用主密码**：1Password 用「主密码 + Secret Key」，因为它的新设备要能自己登录、不依赖旧设备。still.fail 加新设备本来就要旧设备核对短码（`lock.confirm`），确认的同时把库钥匙包给新设备的箱钥匙就行，不用多记一个密码。所有设备都丢了，就用恢复码。
 - **passkey**：passkey 有 PRF 扩展时，可以多包一份库钥匙给 PRF 派生出的钥匙，用来在新设备上恢复。先不做，等锁的 passkey 签名做完再加。
-- **算法**：箱子用 libsodium 的 sealed box（X25519 + XSalsa20-Poly1305），条目用 XChaCha20-Poly1305，附加数据里写 `ws/vault/item/version`，防止把一条密文挪去冒充另一条。core 已经有 `@noble/curves`，再加 `@noble/ciphers`，不引入原生库。
+- **算法**：只用 Node 自带 `node:crypto` 也有的几样（station 不加依赖，core 用 `@noble/*`）：X25519、HKDF-SHA256、ChaCha20-Poly1305（96 位随机 nonce）、Ed25519/P-256 验签。附加数据里写清 `ws/vault/item/version/epoch`，一条密文挪不到别处冒充。
 
 ## 库和条目
 
-- **库（vault）**：`{id, name, members[], keys: {<box_key>: <sealed 库钥匙>}, recovery: <sealed>, epoch}`。`members` 是能用这个库的成员（锁里的 `sub`）；`keys` 给这些成员的每台 app 设备各包一份。每次加人、删人、删设备，`epoch` 加一。
-- **库元数据也要签**：`members` 和 `keys` 的每次变化，都由一台有权限的设备用锁里的 `sign_key` 签名。station 不认没签名的变化，客户端也不信，否则 station 被攻破后就能把自己塞进 `members`。规则和锁一样：owner/admin 管成员；成员只能给自己的设备加 `keys`。
-- **条目（item）**：`{id, vault, version, epoch, ciphertext}`。密文里是 `{kind, name, fields, domains, notes, agent}`。`kind` 先只有 `token`、`ssh_key`、`login`。名字也在密文里，station 不知道里面存的是什么。
-- **给 agent 用的设置**也在密文里（`agent`）：能不能给 agent 用、允许的方式（代理 / ssh-agent / 环境变量）、允许的域名、一次批准能用多久。这样 station 改不了。
+- **库（vault）**：`{id, owner, name, members[], keys[], recovery, epoch}`。`members` 是能用这个库的成员（锁里的 `sub`）；`keys` 给这些成员的每台 app 设备各包一份。每次加人、删人、删设备，`epoch` 加一。
+- **库元数据也要签**：每一版都由库 owner 的一台锁里设备签名，station 不认没签名的，客户端也不信，否则 station 被攻破后就能把自己塞进 `members`。owner 定了不变，所以验证不用翻历史。这一期只有 owner 管成员；成员自己加新设备，由 owner 的任一台设备在确认锁的同时补签。
+- **条目（item）**：`{id, vault, version, epoch, ct, listing?}`。密文里是 `{kind, name, fields, domains, notes}`。`kind` 先只有 `token`、`ssh_key`、`login`。名字在密文里，station 不知道存的是什么；只有打开「给 agent 用」的条目带一个明文的 `listing`（名字、允许的方式和域名），agent 要靠它知道有什么能申请。`listing` 由写入的设备签名，station 改不了。
 - **移除**：删人或删设备之后，生成新的库钥匙，`epoch` 加一。之后新写的条目都用新钥匙加密；旧条目下次被打开时由那台设备顺手重新加密（被删的人以前看过的值，本来就该去各服务那边换掉，界面上会提示）。
 
 ## 存储和同步
@@ -94,8 +93,8 @@ sequenceDiagram
 
 | 方式 | 怎么做 | agent 看得到原值吗 | 适合 |
 |---|---|---|---|
-| 代理（默认） | keeper 在本机起一个 HTTPS 代理。agent 的环境里有 `HTTPS_PROXY`，还有一个只给这个会话的 CA（`NODE_EXTRA_CA_CERTS`、`SSL_CERT_FILE`、`REQUESTS_CA_BUNDLE`）。请求里写占位符 `stillfail-secret:<授权号>`，发往条目允许的域名时，代理把占位符换成原值；发往别的域名就拒绝 | 看不到 | API key、Bearer token、GitHub token（`gh` 走 HTTPS） |
-| ssh-agent | keeper 在会话目录里开一个 `SSH_AUTH_SOCK`，每次签名检查授权 | 看不到，私钥不离开 keeper | git over ssh、登其他机器 |
+| 代理（默认） | `stillfail-secret run <授权号> --env GH_TOKEN -- gh pr list`：只给这一个命令设 `HTTPS_PROXY`（keeper 的本机代理，带这次授权的代理口令）和信任 keeper CA 的变量（`NODE_EXTRA_CA_CERTS`、`SSL_CERT_FILE`、`REQUESTS_CA_BUNDLE`、`GIT_SSL_CAINFO`、`CURL_CA_BUNDLE`），`GH_TOKEN` 的值是占位符 `stillfail-secret:<授权号>`。请求发往条目允许的域名时，代理把请求头里的占位符换成原值；占位符发往别的域名就拒绝。不在 agent 的全局环境里设代理：keeper 出问题不能连累 agent 自己的 API 请求 | 看不到 | API key、Bearer token、GitHub token（`gh` 走 HTTPS） |
+| ssh-agent | `stillfail-secret run <授权号> -- git push`：给这个命令一个 keeper 的 `SSH_AUTH_SOCK`，只列出这次授权的那把钥匙，每次签名检查授权 | 看不到，私钥不离开 keeper | git over ssh、登其他机器 |
 | 环境变量 | `stillfail-secret run <授权号> -- <命令>`：keeper 用这个值作为环境变量启动这一个进程，stdout/stderr 经过 keeper 输出，原值和它的 base64、URL 编码写法逐字换成 `[已隐藏]` | 子进程看得到；agent 只能从输出里拿到，而输出已经遮掉了 | 只认环境变量、不走 HTTP 的工具（数据库客户端之类） |
 
 - 环境变量方式的输出遮挡是按**确切的值**遮，比 `redact.ts` 按长相猜靠谱得多。但它防不住命令自己把值发出去，所以界面上把这一档标成「agent 能拿到」，条目默认不开这一档。
@@ -103,7 +102,7 @@ sequenceDiagram
 
 ### 记录
 
-每次申请、批准、拒绝、使用（时间、chat、方式、目标域名或命令，不含值）都写进 station 的 `vault_audit`，并作为一条系统消息显示在那个 chat 里。在库的页面能按条目查。记录由 keeper 签名，按库同步给成员的设备，station 删不掉别人手上已经有的记录。
+每次申请、批准、拒绝、使用（时间、chat、方式、目标域名或命令，不含值）都写进 station 的 `vault_audit`，并作为一条系统消息显示在那个 chat 里。在库的页面能按条目查。记录按库同步给成员的设备（第一期只存在 station 上，同步下来放到界面那一步做）。
 
 ## 人用的密码库（第二期以后）
 
@@ -141,11 +140,105 @@ sequenceDiagram
 - 我们和它们不一样的地方：**在手机上批准**（它们都在桌面、CLI 或者 Slack/Jira 的审批流里批准），**密钥只封给发起申请的这一次使用**，代理和环境变量两种方式都有，批准、过期、记录在同一个流程里，在 chat 里就能看到。
 - 没查实的：1Password 有没有在手机上批准 agent 请求的功能（没找到）；Bitwarden Agent Access 的批准界面具体长什么样。
 
+## 实现约定
+
+各部分并行开发，以这一节为准；改这里要同时改三处实现。
+
+### 编码
+
+- 二进制一律 base64url（不带 `=`），公钥 `x25519:<hex>`，签名钥匙沿用锁的 `ed25519:<hex>`、`p256:<b64url>`。
+- 要签名、要做附加数据的 JSON 都用锁的 `canonical`（键排序、无空白、只有整数）。
+- 签名：`sig = {key, alg, sig}`，和锁的 `Sig` 一样（这一期不收 passkey 签名），签的字节是 `"<标签>\0" + sha256(canonical(去掉 sig 的对象))`。标签：箱钥匙证书 `stillfail-vault-box/1`，库 `stillfail-vault/1`，条目 `stillfail-vault-item/1`，授权 `stillfail-vault-grant/1`，拒绝 `stillfail-vault-deny/1`。
+
+### 封装（seal）
+
+`seal(收件人 x25519 公钥, 明文, 上下文)`：生成临时 X25519 钥匙对，`shared = X25519(临时私钥, 收件人公钥)`，`key = HKDF-SHA256(ikm=shared, salt=临时公钥‖收件人公钥, info="stillfail-vault-seal/1", 32)`，ChaCha20-Poly1305，nonce 12 个 0（每个 key 只用一次），附加数据 = 上下文字符串。结果 `临时公钥(32)‖密文‖tag(16)` 的 base64url。
+
+### 箱钥匙证书
+
+```
+BoxCert = {v: 1, ws, device: <锁里设备的基础公钥 hex>, box: "x25519:<hex>", at, sig}   // sig.key 必须是锁里这台设备的 sign_key
+```
+
+### 库
+
+```
+Vault = {v: 1, ws, id: "v_<ULID>", seq, owner: <sub>, name, members: [<sub>],
+         epoch, keys: [{cert: BoxCert, wrapped: seal(cert.box, 库钥匙(32), "stillfail-vault-key/1\0<ws>\0<id>\0<epoch>")}],
+         recovery?: seal(恢复公钥, 库钥匙, 同上上下文), at, sig}
+```
+
+- `sig.key` 是锁里 `owner` 的某台 app 设备的 `sign_key`。`owner` 不能变；`seq` 每版加一，station 只收 `seq` 恰好大一的（第一次是 0）。
+- `keys` 里每张证书都要验：签名对、设备在锁里、设备属于 `members` 里的人。
+- 恢复码：24 个词（BIP-39 英文词表）= 32 字节熵，`恢复私钥 = HKDF-SHA256(熵, info="stillfail-vault-recovery/1")` 当 X25519 私钥用。
+- 换 `epoch`（删人、删设备）时重新生成库钥匙，`keys` 全部重包。
+
+### 条目
+
+```
+Item = {v: 1, ws, vault, id: "i_<ULID>", version, epoch, deleted?: true,
+        ct: <base64url(nonce(12)‖ChaCha20-Poly1305(库钥匙, 明文 JSON, 附加数据))>,
+        listing?: {name, kind, modes: ["proxy"|"ssh"|"env"], hosts: [<域名>], env?: <建议的变量名>},
+        at, sig}
+附加数据 = "stillfail-vault-item/1\0<ws>\0<vault>\0<id>\0<version>\0<epoch>"
+明文 = {kind: "token"|"ssh_key"|"login", name, fields: {…}, domains: [], notes}
+       token: {value}; ssh_key: {private_key(OpenSSH PEM), public_key}; login: {username, password, totp?}
+```
+
+- `sig` 是写入设备的 `sign_key`（锁里的、属于库 `members`）。station 只收 `version` 恰好大一的；删除是写一版 `deleted: true` 的空密文。
+- 没有 `listing` 的条目 agent 看不到。`hosts` 支持 `*.example.com`。
+
+### 申请和授权
+
+```
+Request（station 生成，存 vault_requests）= {id: "r_<ULID>", ws, vault, item, session, chat, mode, reason,
+         command?, hosts?, box: "x25519:<hex>"(keeper 这次的临时公钥), at, status: "pending"|"granted"|"denied"|"expired"}
+Grant（批准的设备生成）= {v: 1, ws, request, vault, item, mode, hosts, scope: "once"|"hour"|"chat",
+         exp(unix 秒), secret: seal(request.box, 明文 JSON, "stillfail-vault-grant/1\0<ws>\0<request>"), at, sig}
+Deny = {v: 1, ws, request, at, sig}
+```
+
+- 批准的人必须是库的成员，`sig.key` 是他锁里设备的 `sign_key`。`scope`：`once` 只能用一次（一次 `stillfail-secret run`）、`hour` 一小时内、`chat` 这个 chat 里直到 `exp`（最长 24 小时）。
+- 授权号就是 `request` 的 id。只有发起申请的那个 session 能用（凭 `STILLFAIL_MCP_TOKEN`）。
+
+### station 的接口
+
+core → station（走现有的 admin/工作区路由，按锁认出设备和成员）：
+
+| 调用 | 做什么 |
+|---|---|
+| `GET vault/vaults`、`GET vault/items?vault=` | 列出这个人能看到的库和条目（全量密文；core 按 id 增量存） |
+| `PUT vault/vaults`、`PUT vault/items` | 写一版（验签、验 seq/version） |
+| `GET vault/requests` | 这个人能批准的、还在等的申请 |
+| `POST vault/grants`、`POST vault/denials` | 批准、拒绝 |
+
+agent → station（MCP 工具，在 `stillfail` 服务器里）：
+
+| 工具 | 做什么 |
+|---|---|
+| `secret_list` | 有 `listing` 的条目：id、名字、方式、域名，加上这个 session 手上还能用的授权 |
+| `secret_use {item, mode, reason, command?, hosts?}` | 建申请，往这个 chat 发一张申请卡片（库 owner 是 assignee），推送。等最多 2 分钟：批准了回授权号和用法，没批准回「等批准」，之后批准或拒绝时往 session 里发一条消息 |
+
+`stillfail-secret run <授权号> [--env NAME] -- <命令…>`：keeper 的命令行，连 keeper 的 unix socket，凭 `STILLFAIL_MCP_TOKEN` 证明是哪个 session。
+
+### keeper
+
+- station 起的子进程（`station/src/vault/keeper.ts`），station 退出它也退出；和 station 之间走一个只有 station 知道口令的 unix socket。station 把 Grant 原样交给 keeper，keeper 自己验签、用这次申请的临时私钥（只在 keeper 内存里）解封。
+- 代理：`127.0.0.1` 上的 HTTP 代理，`CONNECT` 到授权允许的域名时做中间人（keeper 的 CA，私钥存 station 数据目录 `vault/ca.key`，0600），只在请求头里换占位符；其他 `CONNECT` 原样转发。代理口令（`Proxy-Authorization`）对应授权，没有口令的请求只转发不替换。
+- ssh-agent：每次 `run` 开一个临时 socket，只认这次授权的钥匙，命令结束就关。
+- 环境变量方式：keeper 自己起子进程，stdout/stderr 经 keeper 输出，原值、base64、base64url、URL 编码的写法都换成 `[已隐藏]`（跨块边界也要遮）。
+
+### 设备上的钥匙
+
+- Host 加 `secureGet/secureSet/secureDelete(key, {user: boolean})`：安卓用 Keystore 包一层（`user: true` 时要求生物识别或屏幕锁，`setUserAuthenticationRequired`），macOS 钥匙串，Windows/Linux 用 Electron `safeStorage`。网页 host 没有这三个方法。
+- 存的东西：`vault-box`（X25519 私钥，`user: true`）、`lock-signer`（从现在的普通文件挪进来，`user: false`，老文件读到后迁移并删除）。
+- 批准一次申请、打开一个条目都要过一次 `user: true` 的读；解开的库钥匙在内存里缓存 5 分钟。
+
 ## 分期
 
 | 期 | 内容 | 前提 |
 |---|---|---|
-| 0 | 锁的签名钥匙和箱钥匙放进系统钥匙串；锁的 `device` 条目加 `box_key`；恢复码 | 锁已上线 |
+| 0 | 锁的签名钥匙和箱钥匙放进系统钥匙串；箱钥匙证书；恢复码 | 锁已上线 |
 | 1 | 库和条目的存储、同步、签名的成员变化；app 里能建库、加 token 和 SSH 钥匙 | 0 |
 | 2 | keeper、`secret_list`/`secret_use`、申请卡片、代理、ssh-agent、记录 | 1 |
 | 3 | 环境变量方式；把 station 自己的 Slack token、API key profile 挪进库里（老的继续能用） | 2 |
@@ -154,7 +247,7 @@ sequenceDiagram
 
 ## 兼容
 
-- 锁的 `device` 条目多一个可选字段，旧 station 不读这个字段，验签不受影响（签名覆盖整条记录，字段多少不影响验证）。旧客户端不写 `box_key`，就不能加入库，库页面提示升级。
+- 锁不改。旧客户端没有箱钥匙证书，就不能加入库，库页面提示升级。
 - 旧 station 不认识 `vault.*` 调用，回 404，库页面把它列成「这台 station 不能放库」。
 - 新表都是 `IF NOT EXISTS`；core 的新 topic 和视图同包发布。
 
