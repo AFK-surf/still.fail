@@ -214,6 +214,7 @@
   "web-main.combos.label": "Frequent picks",
   "web-main.combos.short": "Frequent",
   "web-main.composer.attach": "Attach file",
+  "web-main.composer.dropHere": "Drop to add to the message",
   "web-main.composer.label": "Message",
   "web-main.composer.placeholder": "Message",
   "web-main.composer.pressToType": "Press {key} to type",

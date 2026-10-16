@@ -5,9 +5,10 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, QuotaChip, MeterChips, PeopleStack } from "../components.tsx";
-import { Archive, Boxes, Close, File, Folder, Info, PanelClose, PanelOpen, Upload, Users, Web } from "../icons.tsx";
+import { Archive, Boxes, Close, File, Folder, Info, PanelClose, PanelOpen, Users, Web } from "../icons.tsx";
 import { DriveTab } from "./DriveTab.tsx";
-import { carriesDrive, droppedFrom, droppedFromFinder, droppedOf } from "../drive/drag.ts";
+import dropArt from "../drive/drop.svg?raw";
+import { carriesDrive, droppedFrom, droppedFromFinder, droppedOf, setDropOver } from "../drive/drag.ts";
 import { offerToDraft } from "../draft.ts";
 import { useThisMachine } from "../thisMachine.ts";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
@@ -389,15 +390,8 @@ function ChatScreen({ session: chatSession }: { session: string }) {
       {chat.watch && <Confirm open={askArchive} title={t("web-pages.chat.archiveConfirm", { title: chat.title })} description={chat.watch.ask} action={t("web-pages.chat.archive")}
         onConfirm={() => { setAskArchive(false); void archive(); }} onClose={() => setAskArchive(false)} />}
       <div className={`${jobsCss.sessionMain} ${css.dropZone}`} {...drop.handlers}>
-      {drop.over && (
-        <div className={css.dropHint} aria-hidden="true">
-          <div className={css.dropCard}>
-            <Upload size={16} strokeWidth={1.75} />
-            <span className={css.dropTitle}>{t("web-pages.chat.dropTitle")}</span>
-            <span className={css.dropNote}>{t(drop.over === "path" ? "web-pages.chat.dropPath" : "web-pages.chat.dropFile", { station: station.name })}</span>
-          </div>
-        </div>
-      )}
+      {/* Files over the chat: it frosts over, and says where they go. */}
+      {drop.over && <div className={css.dropHint} aria-hidden="true"><span className={css.dropArt} dangerouslySetInnerHTML={{ __html: dropArt }} /><span>{t("web-main.composer.dropHere")}</span></div>}
       <header className={sidebarCss.pageBar}>
         <MobileBack to={link("/chats")} label={t("web-pages.decisions.back")} />
         {/* The chat's title, then who is in it: its people, then its agents (each opens its history). */}
@@ -617,19 +611,18 @@ function useChatAgent(station: string, session: string, key: string): ChatAgent 
 }
 
 /**
- * The chat as a place to drop files on, all of it: while they are over it, what letting go does is said over it (a
- * station's files, or Finder's on a machine that is a station, are named by their path; others go up as files); let go,
- * they go into its message. The composer's own drop (Chat.tsx) comes first where it is.
+ * The chat as a place to drop files on, all of it: while they are over it, its composer (where they go) says what
+ * letting go does (a station's files, or Finder's on a machine that is a station, are named by their path; others go up
+ * as files); let go, they go into its message. The composer's own drop (Chat.tsx) comes first where it is.
  */
 function useChatDrop(chat: string, station: string) {
   const here = useThisMachine(station);
   const [over, setOver] = useState<"path" | "file" | null>(null);
   const depth = useRef(0);
-  // The composer, where what is dropped goes, marked meanwhile (its dock is not in the chat's part of the page).
+  // The composer, where what is dropped goes, says so meanwhile (Chat.tsx; its dock is not in the chat's part of the page).
   useEffect(() => {
-    if (!over) return;
-    document.documentElement.dataset.dropping = "";
-    return () => { delete document.documentElement.dataset.dropping; };
+    setDropOver(over);
+    return () => setDropOver(null);
   }, [over]);
   const kind = (dt: DataTransfer): "path" | "file" | null =>
     carriesDrive(dt) ? "path" : dt.types.includes("Files") ? (here && window.stillfailDesktop?.pathOf ? "path" : "file") : null;

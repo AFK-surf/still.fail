@@ -241,11 +241,17 @@ export const fileCardMeta = style({
   },
 });
 export const fileCardText = style({ flex: "1", minWidth: "0", display: "grid" });
-/** What a file dragged in is, on its card's hover: its name, where it is, how it goes. */
-export const refInfo = style({ display: "grid", gap: "2px", minWidth: "0", maxWidth: "300px" });
-export const refInfoName = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+/** What a file dragged in is, on its card's hover: its name and where it is beside how it goes; under them, how the
+ * chat takes what is dragged in. Words only where they say something; the controls small. */
+export const refInfo = style({ display: "grid", gap: "10px", minWidth: "0", width: "300px", maxWidth: "100%" });
+export const refInfoHead = style({ display: "flex", alignItems: "center", gap: "12px", minWidth: "0" });
+export const refInfoText = style({ flex: "1", minWidth: "0", display: "grid", gap: "2px" });
+export const refInfoName = style({ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+// The folder's end is what tells: cut from its start.
 export const refInfoPath = style({ color: vars.muted, fontSize: vars.textMeta, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", direction: "rtl", textAlign: "left" });
-export const refInfoMode = style({ marginTop: "8px", justifySelf: "start" });
+export const refInfoMode = style({ flex: "none", vars: { "--pad": "2px", "--gap": "0px" } });
+globalStyle(`${refInfoMode} > button`, { height: "24px", padding: "0 10px", fontSize: vars.textMeta });
+export const refInfoChat = style({ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", color: vars.muted, fontSize: vars.textMeta, cursor: "pointer" });
 export const fileCardName = style({
   fontSize: vars.textUi, lineHeight: "20px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });

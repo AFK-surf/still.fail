@@ -1,7 +1,7 @@
 // A chat's 文件 tab (ChatPage.tsx's side panel): the files of the workspace's stations, beside the chat, to put into what
 // is being written. It starts at the chat's station's home for a member who browses every folder, else at its pinned
 // folders; the way up is a trail of folders over the list, the first of them the places (each station's home and the
-// folders pinned on it). A file or folder is added to the message from its … or dragged into the composer, named by its
+// folders pinned on it). A file or folder is added to the message from its … or dragged onto the chat, named by its
 // path on its station until switched to a file there; its path is copied from its … (or a right click), or dragged
 // anywhere that takes text. A folder is entered, or pinned. Images, PDFs and code open in the chat's preview over the
 // page; what reads or plays opens on the files' page.
@@ -163,7 +163,6 @@ function FolderList({ station, root, path, chat, onGo, onPlaces, onOpen }: {
           <span className={driveCss.spin} data-on={refreshing || undefined}><IconButton label={t("web-pages.drive.refresh")} icon={Refresh} onClick={reload} /></span>
         </span>
       </div>
-      <p className={css.hint}>{t("web-pages.drive.dragHint")}</p>
       <div className={`${driveCss.list} ${css.list}`}>
         {folder.error ? (
           <div className={driveCss.problem}><p className={controlsCss.fieldError}>{folder.error.message}</p><Button variant="ghost" icon={Retry} onClick={reload}>{t("web-pages.drive.retry")}</Button></div>

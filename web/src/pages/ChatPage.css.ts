@@ -1,7 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { glass } from "../styles/glass.ts";
-import { composerBox } from "../styles/composer.css.ts";
 import { muted } from "../styles/shell.css.ts";
 import { sessionPage } from "../styles/session.css.ts";
 import { pageBarTitle } from "../styles/conversation.css.ts";
@@ -252,15 +251,13 @@ globalStyle(`${sideBar} ${sideTabList}`, { flex: "1", minWidth: "0", height: "au
 /** Ending its warm process, in its details' line: a link's look, as the profile's beside it. */
 export const evict = style({ padding: "0", border: "0", background: "none", color: "inherit", font: "inherit", cursor: "pointer" });
 
-/** The chat takes files dropped anywhere on it (ChatPage.tsx useChatDrop): while they are over it, the composer (where
- * they go) ringed, and what letting go does in a pill over it. */
+/** The chat takes files dropped anywhere on it (ChatPage.tsx useChatDrop): while they are over it, it frosts over (as the
+ * composer's glass) and says in its middle where they go; nothing ringed, nothing in a box. */
 export const dropZone = style({ position: "relative" });
-export const dropHint = style({ position: "absolute", inset: "0", zIndex: 30, display: "grid", placeItems: "end center", paddingBottom: "112px", pointerEvents: "none" });
-export const dropCard = style({
-  ...glass, display: "flex", alignItems: "center", gap: "8px", padding: "8px 16px", borderRadius: "999px",
-  boxShadow: "0 2px 12px rgb(0 0 0 / .08)", whiteSpace: "nowrap",
+export const dropHint = style({
+  ...glass, position: "absolute", inset: "0", zIndex: 40, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+  gap: "16px", pointerEvents: "none", color: vars.text, fontSize: vars.textUi, fontWeight: 500,
 });
-globalStyle(`${dropCard} svg`, { color: vars.accent, flex: "none" });
-export const dropTitle = style({ color: vars.text, fontSize: vars.textUi, fontWeight: 600 });
-export const dropNote = style({ color: vars.muted, fontSize: vars.textMeta });
-globalStyle(`:root[data-dropping] ${composerBox}`, { boxShadow: `0 0 0 2px color-mix(in srgb, ${vars.accent} 70%, transparent)` });
+/** The buddy catching the file (drive/drop.svg, in the text's colour and the accent). */
+export const dropArt = style({ display: "block", width: "200px", height: "144px" });
+globalStyle(`${dropArt} svg`, { display: "block", width: "100%", height: "100%" });

@@ -2,6 +2,7 @@
 // a type of its own, for a composer to take it, named by its path on its station (switched to a file, it is sent:
 // copied by the chat's station when it is the one that has it, else read from the other and sent up); and its path as
 // plain text, for anywhere else (a text field, a terminal).
+import { useSyncExternalStore } from "react";
 import type { DriveEntry } from "../core/shapes.ts";
 import type { Dropped } from "../draft.ts";
 import { absoluteOf } from "./useDrive.ts";
@@ -67,4 +68,17 @@ export function droppedFromFinder(dt: DataTransfer, here: { station: string; nam
     out.push({ name: file.name, size: dir ? 0 : file.size, ref: { station: here.station, stationName: here.name, path, dir }, ...(dir ? {} : { blob: file, ...(drive ? { drive } : {}) }) });
   }
   return out.length ? out : null;
+}
+
+/** What is being dragged over a chat's page now (ChatPage.tsx), for its composer to show where it goes: a station's files
+ * or Finder's on a machine that is a station (`path`), other files (`file`), or nothing. */
+let over: "path" | "file" | null = null;
+const listeners = new Set<() => void>();
+export function setDropOver(next: "path" | "file" | null): void {
+  if (over === next) return;
+  over = next;
+  for (const l of listeners) l();
+}
+export function useDropOver(): "path" | "file" | null {
+  return useSyncExternalStore((l) => { listeners.add(l); return () => { listeners.delete(l); }; }, () => over, () => null);
 }

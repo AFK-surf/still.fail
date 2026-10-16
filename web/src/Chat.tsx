@@ -13,7 +13,7 @@ import { Mark } from "./brand.tsx";
 import { scopeOf, stationBase, usePerson, useStation } from "./station.tsx";
 import { chatOfLink } from "./chatRefs.ts";
 import { Hover, PathSession } from "./Peeks.tsx";
-import { Avatar, ICON, ModelLogo, PanelRow, PanelText, Pill, Segmented, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
+import { Avatar, ICON, ModelLogo, Pill, Segmented, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { chatPage } from "./chatPage.ts";
 import { Prose, withBareLinks } from "./Prose.tsx";
@@ -29,7 +29,7 @@ import { animate, arrive, EASE_OUT, follower, glider, moveState, type AnimationP
 import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
 import { DraftKey, offerToDraft, pathWords, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
-import { carriesDrive, droppedFrom, droppedFromFinder, droppedOf } from "./drive/drag.ts";
+import { carriesDrive, droppedFrom, droppedFromFinder, droppedOf, useDropOver } from "./drive/drag.ts";
 import { useThisMachine } from "./thisMachine.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
@@ -1507,6 +1507,8 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
   const station = useStation().address;
   // The station of the machine the desktop app is on, when it is one of this workspace's: what Finder drops are on.
   const here = useThisMachine(station);
+  // Files dragged over its chat's page (ChatPage.tsx useChatDrop).
+  const pageOver = useDropOver();
   const outside = useOutsideShare();
   const send = async () => {
     if (submitDraft) { submitDraft(draft); return; }
@@ -1568,7 +1570,8 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
         }}
         onSubmit={(e) => { e.preventDefault(); submit(); }} onClick={() => input.current?.focus()}
         // Locked (its station offline), no file is taken in.
-        onDragOver={(e) => { if ((e.dataTransfer.types.includes("Files") || carriesDrive(e.dataTransfer)) && !locked) { e.preventDefault(); setDragging(true); } }}
+        // Over a chat's page the page shows where they go (ChatPage.tsx useChatDrop); the composer is not marked then.
+        onDragOver={(e) => { if ((e.dataTransfer.types.includes("Files") || carriesDrive(e.dataTransfer)) && !locked) { e.preventDefault(); if (pageOver === null) setDragging(true); } }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => {
           // A station's files (the chat's 文件 tab): named by their path there, until switched to files.
@@ -1912,21 +1915,26 @@ function RefCard({ file: f, draft, onRemove }: { file: Pending; draft: Draft; on
   // A folder goes as a zip only from the chat's own station (zipped there).
   const zips = ref.dir && ref.station === station.address;
   const meta = asFile ? f.error ?? (pending ? going : fileSize(f.done?.size ?? f.size)) : t(ref.dir ? "web-main.file.folderOn" : "web-main.file.pathOn", { station: ref.stationName });
-  // Hovered: its name, where it is, and how it goes (a path, the file, a folder as a zip), switched there.
+  // Hovered: its name, where it is (its station, its folder), how it goes (a path, the file, a folder as a zip), and how
+  // this chat takes what is dragged in; each switched there.
+  const where = ref.path.slice(0, Math.max(ref.path.lastIndexOf("/"), ref.path.lastIndexOf("\\"))) || ref.path;
   const info = (
-    <>
-      <PanelText className={css.refInfo}>
-        <b className={css.refInfoName}>{f.name}</b>
-        <span className={css.refInfoPath} title={ref.path}>{ref.stationName} · {ref.path}</span>
+    <div className={css.refInfo}>
+      <div className={css.refInfoHead}>
+        <span className={css.refInfoText}>
+          <span className={css.refInfoName}>{f.name}</span>
+          <span className={css.refInfoPath} title={ref.path}><bdi>{ref.stationName} · {where}</bdi></span>
+        </span>
         {(!ref.dir || zips) && (
           <Segmented className={css.refInfoMode} label={t("web-main.file.sendAs")} value={ref.mode} onChange={(mode) => draft.setMode(f.id, mode)}
             options={[{ value: "path", label: t("web-main.file.modePath") }, { value: "file", label: t(ref.dir ? "web-main.file.modeZip" : "web-main.file.modeFile") }]} />
         )}
-      </PanelText>
-      <div className={controlsCss.panelEdge}>
-        <PanelRow label={t("web-main.file.chatAsFiles")} end={draft.asFiles ? <Check size={16} /> : undefined} onClick={() => draft.setAsFiles(!draft.asFiles)} />
       </div>
-    </>
+      <label className={css.refInfoChat}>
+        <span>{t("web-main.file.chatAsFiles")}</span>
+        <Switch small checked={draft.asFiles} onChange={draft.setAsFiles} label={t("web-main.file.chatAsFiles")} />
+      </label>
+    </div>
   );
   return (
     <Hover tile content={info}>
