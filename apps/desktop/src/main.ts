@@ -24,7 +24,7 @@ import { Dock, dockHelper, dockKinds, type DockKinds, type DockSettings } from "
 import { moveUserData } from "./moves.mts";
 import { attachWindowControls, loadSnapTarget } from "./window-controls.ts";
 import { exportOriginStorage, importOriginStorage, type OriginSnapshot } from "./origin-storage";
-import { WebUpdates } from "./web-update.mts";
+import { type WebBuild, WebUpdates } from "./web-update.mts";
 import zhWords from "../../../client/i18n/catalog/zh/desktop.json" with { type: "json" };
 import enWords from "../../../client/i18n/catalog/en/desktop.json" with { type: "json" };
 
@@ -1077,34 +1077,122 @@ function setMenu(): void {
 /** How often the beta app asks for a newer web app (its feed is a few hundred bytes; the web app changes a commit). */
 const WEB_UPDATE_EVERY = 30 * 60 * 1000;
 
-/**
- * Someone has clicked or typed in a window since the app started: a newer web app found at start is then offered (刷新)
- * rather than taken under their hands (open).
- */
-let touched = false;
+/** At start, how long the feed may take to answer before the app opens on what it has (a download then goes on behind). */
+const WEB_ASK_MS = 5_000;
+/** At start, how long the feed may take to answer before the window saying so shows (a quick "nothing newer" shows none). */
+const WEB_SAY_MS = 500;
 
 /**
- * Asks for a newer web app: one downloaded is offered to the pages (刷新). At start (`take`) it is taken at once and the
- * pages reload on it, unless someone is using them already: an app just opened, or just updated (the newest app is
- * often older than the newest web app, docs/desktop-web-updates.md), is not left on an older web app.
+ * At start, before the window opens: an app that has not asked for a newer web app for a while (closed since, or just
+ * updated: the newest app is often older than the newest web app) asks first, in a small window saying so, and opens
+ * on the build it gets. Skipped, the feed slow to answer, or failing, it opens on what it has; a download under way goes
+ * on and is offered (刷新) once done.
  */
-async function lookForWeb(take = false): Promise<boolean> {
+async function webAtStart(): Promise<void> {
+  const updates = webUpdates;
+  if (!updates || !updates.stale(WEB_UPDATE_EVERY)) return;
+  const shown = startUpdateWindow();
+  const got = await new Promise<WebBuild | null>((resolve) => {
+    let downloading = false;
+    const asking = setTimeout(() => { if (!downloading) resolve(null); }, WEB_ASK_MS);
+    const saying = setTimeout(() => shown.show(), WEB_SAY_MS);
+    updates.progress = (p) => {
+      downloading = true;
+      shown.show();
+      shown.say(t("desktop.startUpdate.downloading", { version: `0.1.${p.build}`, got: mb(p.received), size: mb(p.size) }), p.received / p.size);
+    };
+    shown.skipped(() => resolve(null));
+    updates.check().then(resolve, (error: Error) => {
+      console.warn("looking for a newer web app at start failed", error.message);
+      resolve(null);
+    }).finally(() => {
+      clearTimeout(asking);
+      clearTimeout(saying);
+    });
+  });
+  updates.progress = null;
+  if (got) await updates.take().catch((error: Error) => console.warn("taking the web app downloaded failed", error.message));
+  shown.close();
+}
+
+const mb = (bytes: number) => (bytes / 1e6).toFixed(1);
+
+/** The small window webAtStart shows: what it does, a bar of the download, and 跳过. */
+function startUpdateWindow(): { show: () => void; say: (detail: string, done: number) => void; skipped: (then: () => void) => void; close: () => void } {
+  const dark = nativeTheme.shouldUseDarkColors;
+  const [canvas, ink] = dark ? ["#1f2023", "#e9e9ea"] : ["#ffffff", "#3b3e43"];
+  const window = new BrowserWindow({
+    width: 380, height: 128, show: false, frame: false, resizable: false, maximizable: false, fullscreenable: false,
+    backgroundColor: canvas, title: NAME, webPreferences: { sandbox: true, contextIsolation: true },
+  });
+  const page = `<!doctype html><meta charset="utf-8"><style>
+    html, body { margin: 0; height: 100%; background: ${canvas}; color: ${ink}; font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; user-select: none; cursor: default; }
+    body { box-sizing: border-box; padding: 20px; display: flex; flex-direction: column; gap: 10px; -webkit-app-region: drag; }
+    b { font-size: 14px; font-weight: 600; }
+    #detail { opacity: 0.6; font-variant-numeric: tabular-nums; flex: 1; }
+    .bar { height: 4px; border-radius: 2px; background: color-mix(in srgb, ${ink} 14%, transparent); overflow: hidden; }
+    .bar i { display: block; height: 100%; width: 0; background: ${ink}; transition: width 0.15s; }
+    .row { display: flex; align-items: center; gap: 12px; }
+    .row .bar { flex: 1; }
+    button { -webkit-app-region: no-drag; font: inherit; color: inherit; background: none; border: 0; padding: 2px 4px; opacity: 0.7; cursor: pointer; }
+    button:hover { opacity: 1; }
+  </style><b>${t("desktop.startUpdate.title", { app: NAME })}</b><div id="detail"></div>
+  <div class="row"><div class="bar"><i id="bar"></i></div><button id="skip">${t("desktop.startUpdate.skip")}</button></div>
+  <script>
+    window.say = (detail, done) => { document.getElementById("detail").textContent = detail; document.getElementById("bar").style.width = (done * 100).toFixed(1) + "%"; };
+    document.getElementById("skip").onclick = () => { location.hash = "skip"; };
+  </script>`;
+  let state = { detail: t("desktop.startUpdate.checking"), done: 0 };
+  let loaded = false;
+  const push = () => { if (loaded && !window.isDestroyed()) void window.webContents.executeJavaScript(`say(${JSON.stringify(state.detail)}, ${state.done})`); };
+  window.webContents.on("did-finish-load", () => {
+    loaded = true;
+    push();
+  });
+  let showing = false;
+  let drawn = false;
+  window.once("ready-to-show", () => {
+    drawn = true;
+    if (showing) window.show();
+  });
+  let skip = () => {};
+  window.webContents.on("did-navigate-in-page", (_event, url) => { if (url.endsWith("#skip")) skip(); });
+  // Closed (⌘W) is skipped too.
+  window.on("closed", () => skip());
+  void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(page)}`);
+  return {
+    show: () => {
+      if (showing) return;
+      showing = true;
+      if (drawn && !window.isDestroyed()) window.show();
+    },
+    say: (detail, done) => {
+      // A bar's step a thousandth at least: not a script run for each chunk read.
+      if (detail === state.detail && Math.abs(done - state.done) < 0.001 && done < 1) return;
+      state = { detail, done };
+      push();
+    },
+    skipped: (then) => { skip = then; },
+    close: () => {
+      skip = () => {};
+      if (!window.isDestroyed()) window.destroy();
+    },
+  };
+}
+
+/** Asks for a newer web app: one downloaded is offered to the pages (刷新). */
+async function lookForWeb(): Promise<boolean> {
   if (!webUpdates) return false;
   // One downloaded before and not taken yet is still the one to offer (the feed says nothing newer than it).
   const ready = (await webUpdates.check()) ?? webUpdates.ready;
-  if (!ready || webUpdate?.phase === "installing") return !!ready;
-  const found: UpdateState = { phase: "available", version: `0.1.${ready.build}`, kind: "web" };
-  if (take && !touched) {
-    webUpdate = found;
-    await takeWebUpdate();
-  } else sayWebUpdate(found);
-  return true;
+  if (ready && webUpdate?.phase !== "installing") sayWebUpdate({ phase: "available", version: `0.1.${ready.build}`, kind: "web" });
+  return !!ready;
 }
 
 function keepWebUpdated(): void {
   if (!webUpdates) return;
-  const check = (take = false) => void lookForWeb(take).catch((error: Error) => console.warn("looking for a newer web app failed", error.message));
-  check(true);
+  const check = () => void lookForWeb().catch((error: Error) => console.warn("looking for a newer web app failed", error.message));
+  check();
   setInterval(check, WEB_UPDATE_EVERY);
   // The menu's 检查更新… and the version page ask for the app first, then for a web app alone.
   const appCheck = checkNow;
@@ -1348,9 +1436,6 @@ function open(path = "/", titled = false): BrowserWindow {
     event.preventDefault();
     external(url);
   });
-  window.webContents.on("input-event", (_event, input) => {
-    if (input.type === "mouseDown" || input.type === "keyDown" || input.type === "rawKeyDown") touched = true;
-  });
   // A right-click gets a menu, as in a browser (showContextMenu).
   window.webContents.on("context-menu", (_event, params) => showContextMenu(window, params));
   // A newer web app that does not come up is put away (backFromWeb): the build the page started on, when its page was
@@ -1548,11 +1633,14 @@ if (!app.requestSingleInstanceLock()) {
       });
       void webUpdates.settle().catch((error: Error) => console.warn("settling the web apps downloaded failed", error.message));
     }
+    // Asked while the rest gets ready; the window waits for it.
+    const asked = webAtStart();
     protocol.handle("app", serve);
     await migrateOrigin();
     protocol.handle("stillfail-preview", preview);
     protocol.handle("stillfail-drive", drive);
     setMenu();
+    await asked;
     started = true;
     open();
     station.start();

@@ -86,5 +86,9 @@
   "desktop.update.update": "更新",
   "desktop.window.controls": "窗口控制",
   "desktop.window.maximize": "最大化",
-  "desktop.window.restore": "还原"
+  "desktop.window.restore": "还原",
+  "desktop.startUpdate.title": "正在更新 {app}",
+  "desktop.startUpdate.checking": "正在检查新版本…",
+  "desktop.startUpdate.downloading": "正在下载 {version}：{got} / {size} MB",
+  "desktop.startUpdate.skip": "跳过"
 }

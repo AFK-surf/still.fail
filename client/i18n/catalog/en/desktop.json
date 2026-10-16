@@ -86,5 +86,9 @@
   "desktop.update.update": "Update",
   "desktop.window.controls": "Window controls",
   "desktop.window.maximize": "Maximize",
-  "desktop.window.restore": "Restore"
+  "desktop.window.restore": "Restore",
+  "desktop.startUpdate.title": "Updating {app}",
+  "desktop.startUpdate.checking": "Checking for a new version…",
+  "desktop.startUpdate.downloading": "Downloading {version}: {got} / {size} MB",
+  "desktop.startUpdate.skip": "Skip"
 }

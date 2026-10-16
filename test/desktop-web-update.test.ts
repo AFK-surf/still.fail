@@ -56,12 +56,12 @@ function host(served: { feed?: object; files: Record<string, Uint8Array> }) {
   return { fetch, asked };
 }
 
-function app(dir: string, build: number, fetch: (url: string) => Promise<Response>) {
+function app(dir: string, build: number, fetch: (url: string) => Promise<Response>, now?: () => number) {
   const carried = join(dir, "Resources", "web");
   mkdirSync(join(carried, "assets"), { recursive: true });
   writeFileSync(join(carried, "index.html"), "carried");
   writeFileSync(join(carried, "assets", "old.js"), "carried's");
-  return new WebUpdates({ dir: join(dir, "userData", "web"), carried, app: build, feed: "https://app.still.fail/releases/desktop/web/stillfail-beta-web.json", fetch, trusted });
+  return new WebUpdates({ dir: join(dir, "userData", "web"), carried, app: build, feed: "https://app.still.fail/releases/desktop/web/stillfail-beta-web.json", fetch, trusted, ...(now ? { now } : {}) });
 }
 
 describe("the desktop app's web app without a new app", () => {
@@ -153,9 +153,49 @@ describe("the desktop app's web app without a new app", () => {
     assert.equal(again.current().build, 3020);
     await again.settle();
     assert.equal(existsSync(join(dir, "userData", "web", "0.1.3010")), false);
-    assert.deepEqual(JSON.parse(readFileSync(join(dir, "userData", "web", "state.json"), "utf8")), { served: 3020 });
+    assert.equal(JSON.parse(readFileSync(join(dir, "userData", "web", "state.json"), "utf8")).served, 3020);
     // An app updated since, carrying a newer web app than the one downloaded, serves its own.
     assert.equal(app(dir, 3030, fetch).current().build, 3030);
+  });
+
+  test("an app not asked for a while, or never by this build of it, is stale; a download tells its progress", async () => {
+    const dir = temp();
+    const served: { feed?: object; files: Record<string, Uint8Array> } = { files: {} };
+    const { fetch } = host(served);
+    let now = 1_000_000;
+    const HOUR = 60 * 60 * 1000;
+    const web = app(dir, 3000, fetch, () => now);
+    assert.equal(web.stale(HOUR), true);
+    // A feed that fails says nothing of what is newest.
+    const failing = app(dir, 3000, async () => new Response("", { status: 502 }), () => now);
+    await assert.rejects(failing.check(), /502/);
+    assert.equal(failing.stale(HOUR), true);
+    // Nothing published: asked all the same.
+    await web.check();
+    assert.equal(web.stale(HOUR), false);
+    const r = release(3010, 3000);
+    served.feed = r.feed;
+    served.files[r.file] = r.bytes;
+    const told: number[] = [];
+    web.progress = (p) => {
+      assert.deepEqual([p.build, p.size], [3010, r.bytes.length]);
+      told.push(p.received);
+    };
+    now += 2 * HOUR;
+    assert.equal(web.stale(HOUR), true);
+    assert.equal((await web.check())?.build, 3010);
+    assert.equal(told[0], 0);
+    assert.equal(told.at(-1), r.bytes.length);
+    assert.equal(web.stale(HOUR), false);
+    // The next start of this app knows when it asked; the app updated since does not (it is offered other builds).
+    now += HOUR / 2;
+    assert.equal(app(dir, 3000, fetch, () => now).stale(HOUR), false);
+    assert.equal(app(dir, 3005, fetch, () => now).stale(HOUR), true);
+    // More bytes than signed: not read on.
+    const long = release(3020, 3000);
+    served.feed = long.feed;
+    served.files[long.file] = Buffer.concat([long.bytes, Buffer.from("more")]);
+    await assert.rejects(web.check(), /longer than the one signed/);
   });
 
   test("a build for a newer app, or not the bytes signed, is not taken; one that did not come up is put away", async () => {

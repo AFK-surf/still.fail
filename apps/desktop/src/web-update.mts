@@ -2,7 +2,8 @@
 // for a newer build of the web app it carries; one signed by a release key, for an app as old as this one or older
 // (`needs`), and newer than the web app it runs is downloaded, checked against what was signed, and opened into
 // userData/web/0.1.<build>. The pages then offer 刷新 (no restart): taking it makes that the web app served, and reloads
-// them; the next start takes it by itself. What the app carries stays, the last way back.
+// them; the next start takes it by itself. At start, an app that has not asked for a while (`stale`) asks before its
+// window opens, the download's progress shown (main.ts webAtStart). What the app carries stays, the last way back.
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
@@ -15,7 +16,7 @@ export interface WebBuild { build: number; needs: number; dir: string }
 
 /** What a downloaded build says of itself, beside its files (what its feed said, once verified). */
 const ABOUT = ".stillfail-web.json";
-/** The build served, in userData/web (state.json; none: the one the app carries). */
+/** The build served, in userData/web (state.json; none: the one the app carries), and when this app last heard what is newest. */
 const STATE = "state.json";
 /** How many builds taken before the one served stay while the app runs, for a page opened on one to find its files. */
 const KEEP = 2;
@@ -30,7 +31,11 @@ export interface WebUpdatesOptions {
   feed: string;
   fetch: (url: string) => Promise<Response>;
   trusted?: Map<string, string>;
+  now?: () => number;
 }
+
+/** A build being downloaded: bytes got of its size. */
+export interface WebProgress { build: number; received: number; size: number }
 
 export class WebUpdates {
   /** Downloaded and opened, newer than what is served: what 刷新 takes. */
@@ -39,6 +44,11 @@ export class WebUpdates {
   /** Taken before the one served since the app started: pages opened on them may still ask for their files. */
   private before: WebBuild[] = [];
   private checking: Promise<WebBuild | null> | null = null;
+  /** When the feed last answered this app (a build of the app before it does not count: it was offered other builds). */
+  private checked: number | null = null;
+  /** Told as a build downloads. */
+  progress: ((progress: WebProgress) => void) | null = null;
+  private writing: Promise<void> = Promise.resolve();
 
   private readonly options: WebUpdatesOptions;
 
@@ -50,6 +60,15 @@ export class WebUpdates {
     // one): no page is open yet, so it is taken now rather than offered.
     const newest = this.list().at(-1);
     if (newest && newest.build > carried.build) this.served = newest;
+    try {
+      const state = JSON.parse(readFileSync(join(options.dir, STATE), "utf8")) as { checked?: { app: number; at: number } };
+      if (state.checked?.app === options.app && Number.isFinite(state.checked.at)) this.checked = state.checked.at;
+    } catch {}
+  }
+
+  /** Not asked for `within` ms (or never by this app): what is served may well be old. */
+  stale(within: number): boolean {
+    return this.checked === null || Math.abs(this.now() - this.checked) >= within;
   }
 
   /** At start: says what is served (state.json), and removes the builds that are not. */
@@ -106,7 +125,18 @@ export class WebUpdates {
     return true;
   }
 
+  private now(): number {
+    return (this.options.now ?? Date.now)();
+  }
+
   private async fetchNewer(): Promise<WebBuild | null> {
+    const found = await this.askFeed();
+    this.checked = this.now();
+    await this.writeState();
+    return found;
+  }
+
+  private async askFeed(): Promise<WebBuild | null> {
     const { feed, fetch, app } = this.options;
     const response = await fetch(feed);
     // No feed yet (none published for this channel): nothing newer.
@@ -127,7 +157,7 @@ export class WebUpdates {
     const url = new URL(release.file, feed).href;
     const got = await fetch(url);
     if (!got.ok) throw new Error(`${url}: ${got.status}`);
-    const bytes = new Uint8Array(await got.arrayBuffer());
+    const bytes = await this.read(got, release.build, release.size);
     if (bytes.length !== release.size || createHash("sha256").update(bytes).digest("hex") !== release.sha256) throw new Unverified(`${release.file} is not the one signed`);
     const files = readArchive(bytes);
     if (!files.some((f) => f.path === "index.html")) throw new Unverified(`${release.file} has no index.html`);
@@ -145,6 +175,26 @@ export class WebUpdates {
     await rename(part, dir);
     this.ready = { build: release.build, needs: release.needs, dir };
     return this.ready;
+  }
+
+  /** A download's bytes, its progress told as they come; no more than `size` of them. */
+  private async read(response: Response, build: number, size: number): Promise<Uint8Array> {
+    const tell = (received: number) => this.progress?.({ build, received, size });
+    tell(0);
+    if (!response.body) {
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      tell(bytes.length);
+      return bytes;
+    }
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+    for await (const chunk of response.body as AsyncIterable<Uint8Array>) {
+      received += chunk.length;
+      if (received > size) throw new Unverified(`build ${build} is longer than the one signed`);
+      chunks.push(chunk);
+      tell(received);
+    }
+    return Buffer.concat(chunks);
   }
 
   private dirOf(build: number): string {
@@ -177,11 +227,17 @@ export class WebUpdates {
       .sort((a, b) => a.build - b.build);
   }
 
-  private async writeState(): Promise<void> {
-    await mkdir(this.options.dir, { recursive: true });
-    const state = { served: this.served.dir === this.options.carried ? null : this.served.build };
-    await writeFile(join(this.options.dir, `${STATE}.part`), `${JSON.stringify(state)}\n`);
-    await rename(join(this.options.dir, `${STATE}.part`), join(this.options.dir, STATE));
+  /** One write at a time (a check answering as the app starts settling): each writes what is true when it runs. */
+  private writeState(): Promise<void> {
+    const write = this.writing.then(async () => {
+      await mkdir(this.options.dir, { recursive: true });
+      const checked = this.checked === null ? {} : { checked: { app: this.options.app, at: this.checked } };
+      const state = { served: this.served.dir === this.options.carried ? null : this.served.build, ...checked };
+      await writeFile(join(this.options.dir, `${STATE}.part`), `${JSON.stringify(state)}\n`);
+      await rename(join(this.options.dir, `${STATE}.part`), join(this.options.dir, STATE));
+    });
+    this.writing = write.catch(() => {});
+    return write;
   }
 
   /** What is neither served, nor kept for the pages before, nor ready goes. */
