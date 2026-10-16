@@ -1,6 +1,6 @@
 # 远程登录（设计稿）
 
-> chat EMBER/1792171443.604000（2026-10-17 用户定：不在 station 之间借用、复制登录；每台 station 自己登录、自己持有和续期凭据，人在客户端远程完成；登录是机器级的；通用，跑工具自己的登录命令；浏览器那一步在客户端设备上、用这个人自己的浏览器完成；station 的浏览器和远程屏幕只是兜底）。
+> chat EMBER/1792171443.604000（2026-10-17 用户定：不在 station 之间借用、复制登录；每台 station 自己登录、自己持有和续期凭据，人在客户端远程完成；登录是机器级的；通用，跑工具自己的登录命令；浏览器那一步在客户端设备上、用这个人自己的浏览器完成；station 的浏览器和远程屏幕只是兜底；能操作这台 station 的人就能在上面登录，不分是哪个 workspace 的）。
 
 状态：设计稿，还没有实现。
 
@@ -324,7 +324,7 @@ login {action: "describe", service: {...}}               // 加/改一个服务�
 
 ## 安全
 
-- **谁能起登录、转回调、往终端里打字**：能在这台 station 上让东西跑起来的人，也就是 station 主 workspace 里非只读的成员（能开 chat、让 agent 跑命令的人）。登录命令本身就是任意命令，所以不另设更低的门槛，也不需要更高：这些人的 agent 本来就能跑 `gh auth login`。只读成员（`viewer`）只能看状态。加入的 workspace 的成员（multi-workspace.md）第一步不能起，见「待定」。
+- **谁能起登录、转回调、往终端里打字**：能操作这台 station 的人，即能在上面让东西跑起来的人（能开 chat、让 agent 跑命令），主 workspace 和加入的 workspace（multi-workspace.md）一样（用户定）。登录命令本身就是任意命令，所以不另设更低的门槛，也不需要更高：这些人的 agent 本来就能跑 `gh auth login`。只读成员（`viewer`）只能看状态。登录是机器级的，谁登的账号，这台 station 上所有 workspace 的 agent 都会用；登录列表里记下是谁、从哪个 workspace 登的。
 - **agent 起登录**：等同于 agent 跑命令，不另要权限；完成它的人要满足上一条。
 - **workspace 锁**：这些接口都在 member link 上，开了锁的 station 只放锁里的设备，角色取锁和凭证里较低的。cloud 起不了登录、也转不了回调。
 - **不经 cloud**：登录网址、设备码、回调（里面有授权码）、终端内容只走 iroh（member link 和 station 之间的 transport，端到端加密，relay 只看到密文）。消息、卡片、推送、奏只带登录 id。station 日志只记服务名、谁、结果，不记网址的查询串和终端内容。
@@ -370,5 +370,4 @@ login {action: "describe", service: {...}}               // 加/改一个服务�
 
 ## 待定
 
-- **加入的 workspace 的成员能不能起登录**：按「能在这台 station 上让东西跑起来」算，他们也能（软隔离，他们的 agent 本来就能跑 `gh auth login`）；按 multi-workspace.md「station 级的东西归主 workspace 管」算，不能，而登录是机器级的，他们登的账号主 workspace 的 agent 也会用。这份设计第一步先只给主 workspace 的非只读成员。
 - **两种都有时先用设备码还是回环**：az、aws、wrangler、codex 两种都支持。设备码在网页版、手机上都能做、不依赖客户端监听，但要多输一次码，有的公司策略禁设备码；回环是一路点下去。这份设计默认先用设备码，回环留给只有回环的（gcloud、firebase、Claude Code）和设备码被禁时；描述里可以按服务改。
