@@ -336,7 +336,7 @@ function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: 
   return (
     <MineMessage data-vk={`o:${o.id}`} data-author={t("web-main.chat.you")} data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
       <MineWords message={upImages(o)} />
-      {o.uploads?.filter((f) => !isImage(f.name)).map((f) => <FileCard key={f.id} file={f} pending={o.state !== "failed"} error={o.state === "failed" ? o.error ?? null : null} />)}
+      {o.uploads?.filter((f) => !isImage(f.name)).map((f) => <FileCard key={f.id} file={f} pending={o.state !== "failed"} sent={f.sent} error={o.state === "failed" ? o.error ?? null : null} />)}
       {o.state === "failed"
         // Not sent: said briefly, why in its tip; sending it again or dropping it right beside.
         ? <div className={css.msgUnsent}>
@@ -1476,7 +1476,7 @@ export function FileTile({ name, dir = false, progress, error = false, land = fa
   );
 }
 
-function FileCard({ file, onRemove, pending, sent, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; pending?: boolean; sent?: number | undefined; error?: string | null }) {
+export function FileCard({ file, onRemove, pending, sent, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; pending?: boolean; sent?: number | undefined; error?: string | null }) {
   // A file of more than one part says how far it has gone.
   const going = pending && sent !== undefined && file.size > 4 * 1024 * 1024
     ? t("web-main.file.uploadingPart", { percent: Math.floor((sent / file.size) * 100), size: fileSize(file.size) })

@@ -392,7 +392,7 @@ export class Composers {
         if (s) {
           if (this.#uploads.get(f.id) === upload) this.#sizes.set(f.id, s);
           change(s);
-          inner.views.local.uploadSized(f.id, s);
+          inner.views.local.uploadChanged(f.id, s);
         }
         return s;
       }, () => null)
@@ -408,7 +408,10 @@ export class Composers {
         if (told.file !== undefined) saved = told.file;
         else if (told.have === have) return yield* Effect.fail(new CoreError("upload", t("core-misc.composer.upload_failed")));
         else have = told.have;
-        change({ sent: told.file !== undefined ? f.size : have });
+        const sent = told.file !== undefined ? f.size : have;
+        change({ sent });
+        // A message sent before it is up says how far it has gone, as the composer did.
+        inner.views.local.uploadChanged(f.id, { sent });
       }
       const size = yield* Effect.promise(() => sizing);
       if (size) saved = { ...saved, ...size };

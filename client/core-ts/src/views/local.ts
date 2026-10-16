@@ -483,18 +483,19 @@ export class Local {
     this.onChange({ kind: "outbox", station, thread });
   }
 
-  /// An image's size, read only after the message it goes with was sent (a big one takes a while to read): that
-  /// message's upload takes it wherever it waits, so its row holds the image's own shape before it is up, not a fixed
-  /// box that changes once it is.
-  uploadSized(upload: string, size: { width: number; height: number }): void {
-    const sized = (list: J[]): J[] | null => {
-      if (!list.some((m) => arr(get(m, "uploads")).some((u) => get(u, "id") === upload && get(u, "width") === undefined))) return null;
+  /// What an upload has come to after the message it goes with was sent: an image's size (a big one takes a while to
+  /// read), so its row holds the image's own shape before it is up, not a fixed box that changes once it is; how much of
+  /// it the station has, so its card says how far it has gone. That message's upload takes it wherever it waits.
+  uploadChanged(upload: string, patch: { width?: number; height?: number; sent?: number }): void {
+    const changes = (u: J) => get(u, "id") === upload && Object.entries(patch).some(([k, v]) => get(u, k) !== v);
+    const changed = (list: J[]): J[] | null => {
+      if (!list.some((m) => arr(get(m, "uploads")).some(changes))) return null;
       return list.map((m) => arr(get(m, "uploads")).some((u) => get(u, "id") === upload)
-        ? { ...m, uploads: arr(get(m, "uploads")).map((u) => get(u, "id") === upload ? { ...u, ...size } : u) }
+        ? { ...m, uploads: arr(get(m, "uploads")).map((u) => get(u, "id") === upload ? { ...u, ...patch } : u) }
         : m);
     };
     for (const [k, list] of this.#outbox) {
-      const next = sized(list);
+      const next = changed(list);
       if (!next) continue;
       const at = k.indexOf(SEP);
       const [station, thread] = [k.slice(0, at), Number(k.slice(at + 1))];
@@ -502,14 +503,14 @@ export class Local {
       this.onChange({ kind: "outbox", station, thread });
     }
     for (const [key, chat] of this.#pending) {
-      const next = sized(chat.queue);
+      const next = changed(chat.queue);
       if (!next) continue;
       chat.queue = next;
       this.#savePending(key);
       this.onChange({ kind: "pending", key });
     }
     for (const [k, first] of this.#firsts) {
-      const next = sized(first.queue);
+      const next = changed(first.queue);
       if (!next) continue;
       first.queue = next;
       this.#saveFirst(k);

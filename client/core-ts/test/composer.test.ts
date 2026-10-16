@@ -416,8 +416,26 @@ test("an_image_sent_before_the_page_heard_its_size_goes_with_its_size_all_the_sa
   t.send(502);
   await t.settle();
   assert.equal(t.local.outbox("ws/st", 7)[1].uploads[0].width, undefined);
-  t.local.uploadSized("slow", { width: 640, height: 480 });
+  t.local.uploadChanged("slow", { width: 640, height: 480 });
   assert.deepEqual([t.local.outbox("ws/st", 7)[1].uploads[0].width, t.local.outbox("ws/st", 7)[1].uploads[0].height], [640, 480]);
+  t.core.close();
+});
+
+test("a_message_sent_before_its_file_is_up_says_how_far_the_file_has_gone", async () => {
+  const t = await setup();
+  const last = Deferred.makeUnsafe<J, CoreError>();
+  (t.core.inner.stations.requests as J).uploadPart = (_addr: unknown, q: J, bytes: Uint8Array) =>
+    q.offset === 0 ? Effect.succeed({ have: bytes.length }) : Deferred.await(last);
+  (t.core.inner.stations as J).post = () => Effect.succeed(1);
+  await t.watch(1, "ws/st:k");
+  const size = 4 * 1024 * 1024 + 3;
+  const file = { id: "big", name: "big.bin", size, blob: new Blob([new Uint8Array(size)]) };
+  await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [file] });
+  call(t.core, t.ui, 501, "chat.send", { station: "ws/st", thread: 7, text: "", uploads: [{ id: file.id, name: file.name, size }] });
+  await t.settle();
+  assert.equal(t.core.inner.views.local.outbox("ws/st", 7)[0].uploads[0].sent, 4 * 1024 * 1024);
+  Deferred.doneUnsafe(last, Effect.succeed({ have: size, file: { name: file.name, size, path: "/u/big.bin" } }));
+  await t.settle();
   t.core.close();
 });
 

@@ -13,7 +13,7 @@ import { driveFile } from "../src/drive/viewerFile.ts";
 import { DrivePreview } from "../src/mobile/Drive.tsx";
 import { FilePreview } from "../src/FilePreview.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
-import { ComposerExtras } from "../src/Chat.tsx";
+import { ComposerExtras, FileCard, MineBubble, MineMessage } from "../src/Chat.tsx";
 import type { Draft, Pending } from "../src/draft.ts";
 import * as composerCss from "../src/styles/composer.css.ts";
 import {
@@ -150,6 +150,18 @@ function ComposerCards() {
   );
 }
 
+/** A message sent while its file still goes up: the file says how far it has gone, as it did in the composer. */
+function OutboxUpload() {
+  return (
+    <div style={{ padding: 40, maxWidth: 820 }}>
+      <MineMessage data-role="person">
+        <MineBubble text="帮我看看是否正常" />
+        <FileCard file={{ name: "Trace-20261017T025130.json.gz", size: 38_400_000 }} pending sent={16_777_216} />
+      </MineMessage>
+    </div>
+  );
+}
+
 /** A chat's file opened (its preview), from what is here already: it opens in the viewer of its kind. */
 function AttachmentDemo({ name, url, type }: { name: string; url: string; type: string }) {
   const [local, setLocal] = useState<{ blob: Blob; url: string } | null>(null);
@@ -243,6 +255,7 @@ export const stories: Story[] = [
   },
 
   { id: "composer-cards", group: "对话", title: "输入框里的附件", render: () => stage(<ComposerCards />) },
+  { id: "outbox-upload", group: "对话", title: "发出后还在上传的附件", render: () => stage(<OutboxUpload />) },
 
   // ── dialogs and toasts ──
   { id: "dialog", group: "弹窗", title: "弹窗", render: () => stage(<Dialog open title="添加 station" description="在要接入的机器上运行这条命令。" onClose={noop} footer={<><Button variant="ghost">取消</Button><Button variant="primary">完成</Button></>}><CopyCommand text="curl -fsSL https://still.fail/install.sh | sh" /></Dialog>) },
