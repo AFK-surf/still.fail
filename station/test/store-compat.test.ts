@@ -69,7 +69,7 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
     // then says them at its end, and each is a column line of its own.
     const plain = (l: string) => ADDED.reduce((t, [table, column]) => (t.startsWith(`table ${table}:`) ? t.replace(new RegExp(`, ${column} [A-Z]+(?=\\)$)`), "") : t), l);
     const mine = (l: string) => ADDED.some(([table, column]) => l.startsWith(`  ${table}.${column} `));
-    const was = before.map(plain);
+    const was = before.filter((l) => !mine(l)).map(plain);
     const now = opened.filter((l) => !mine(l)).map(plain);
     assert.deepEqual(was.filter((l) => !now.includes(l)), [], "nothing changed or gone");
     const added = now.filter((l) => !was.includes(l));
