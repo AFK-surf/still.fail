@@ -64,6 +64,8 @@ import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.DisposableEffect
 
 /**
  * A file or folder of a station's in a draft: which station has it (`station`, its name `stationName`), where (`path`,
@@ -97,6 +99,8 @@ fun openStationFiles(app: AppState, draft: Draft, station: String) {
     app.sheet = SheetSpec(0.86f, draggable = true) {
         var place by remember { mutableStateOf<Place?>(null) }
         val ticked = remember { mutableStateMapOf<String, Ticked>() }
+        // How far each folder was scrolled, for one gone back to.
+        val scrolls = remember { mutableMapOf<String, Pair<Int, Int>>() }
         fun toggle(x: Ticked) { if (ticked.remove(x.key) == null) ticked[x.key] = x }
         SheetGrab()
         SheetHead(t("web-pages.chat.files"))
@@ -104,7 +108,7 @@ fun openStationFiles(app: AppState, draft: Draft, station: String) {
         Box(Modifier.weight(1f)) {
             val p = place
             if (p == null) Places(station.substringBefore('/')) { place = it }
-            else FolderRows(app, p, { ticked.containsKey(it.key) }, ::toggle) { name -> place = Place(p.station, p.stationName, p.root, p.rootName, joinIn(p.path, name)) }
+            else FolderRows(app, p, scrolls, { ticked.containsKey(it.key) }, ::toggle) { name -> place = Place(p.station, p.stationName, p.root, p.rootName, joinIn(p.path, name)) }
         }
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             Button(t("common.cancel"), primary = false) { app.sheet = null }
@@ -170,11 +174,15 @@ private fun Places(scope: String, onGo: (Place) -> Unit) {
 
 /** A folder: itself to tick as a whole, then what is in it (a folder entered, a file ticked). */
 @Composable
-private fun FolderRows(app: AppState, p: Place, ticked: (Ticked) -> Boolean, onToggle: (Ticked) -> Unit, onEnter: (String) -> Unit) {
+private fun FolderRows(app: AppState, p: Place, scrolls: MutableMap<String, Pair<Int, Int>>, ticked: (Ticked) -> Boolean, onToggle: (Ticked) -> Unit, onEnter: (String) -> Unit) {
     val folder by rememberTopic<DriveFolder>(app.core, Topics.drive(p.station, p.root, p.path))
+    // Each folder its own scroll: one entered starts at its top, one gone back to is where it was left.
+    val key = "${p.station}\n${p.root}\n${p.path}"
+    val state = remember(key) { val (i, o) = scrolls[key] ?: (0 to 0); LazyListState(i, o) }
+    DisposableEffect(key) { onDispose { scrolls[key] = state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset } }
     val whole = Ticked(p.station, p.stationName, p.root, p.path, if (p.path.isEmpty()) p.rootName else p.path.substringAfterLast('/'), 0, true)
     val of = { e: DriveEntry -> Ticked(p.station, p.stationName, p.root, joinIn(p.path, e.name), e.name, e.size, e.dir) }
-    LazyColumn(contentPadding = PaddingValues(bottom = 8.dp)) {
+    LazyColumn(state = state, contentPadding = PaddingValues(bottom = 8.dp)) {
         item(key = "whole") {
             PickRow(t("web-mobile.files.wholeFolder"), sub = whole.path, checked = ticked(whole), leading = { IconIn(Icons.Folder, 20.dp, C.ink) }) { onToggle(whole) }
             Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).heightIn(min = 1.dp, max = 1.dp).background(C.line))
@@ -183,8 +191,8 @@ private fun FolderRows(app: AppState, p: Place, ticked: (Ticked) -> Boolean, onT
         when {
             folder.error != null && shown == null -> item { Text(folder.error!!.message ?: "", fontSize = 13.sp, color = C.red, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) }
             shown == null -> item { Note(t("android-misc.drive.reading")) }
-            shown.entries.isEmpty() -> item { Note(t("web-pages.drive.emptyFolder")) }
-            else -> items(shown.entries, key = { it.name }) { e ->
+            fail.still.android.drive.arranged(shown.entries, app.driveSort, app.driveHidden).isEmpty() -> item { Note(t("web-pages.drive.emptyFolder")) }
+            else -> items(fail.still.android.drive.arranged(shown.entries, app.driveSort, app.driveHidden), key = { it.name }) { e ->
                 val icon: @Composable () -> Unit = { IconIn(kindIcon(e.kind), 20.dp, C.ink) }
                 if (e.dir) PickRow(e.name, sub = e.timeText, leading = icon) { onEnter(e.name) }
                 else PickRow(e.name, sub = listOf(e.sizeText.ifEmpty { fileSize(e.size) }, e.timeText).filter { it.isNotEmpty() }.joinToString(" · "), checked = ticked(of(e)), leading = icon) { onToggle(of(e)) }

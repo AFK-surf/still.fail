@@ -471,5 +471,14 @@
   "android-misc.screen.outdatedRow": "此 station 版本过旧，更新后才能查看屏幕",
   "android-misc.screen.drives": "{who} 正在控制",
   "android-misc.screen.someoneDrives": "他人正在控制",
-  "android-misc.screen.takeOver": "接管"
+  "android-misc.screen.takeOver": "接管",
+  "android-misc.drive.chosen": {
+    "one": "已选 {n} 项",
+    "other": "已选 {n} 项"
+  },
+  "android-misc.drive.chooseAll": "全选",
+  "android-misc.drive.chooseNone": "全不选",
+  "android-misc.drive.stale": "现在读不到，显示的是上次的内容：{error}",
+  "android-misc.drive.view": "显示方式",
+  "android-misc.drive.chosenActions": "对所选项的操作"
 }

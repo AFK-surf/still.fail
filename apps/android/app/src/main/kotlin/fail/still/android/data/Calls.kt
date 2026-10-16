@@ -483,7 +483,10 @@ class StationApi(private val core: StillFailCore, val station: String) {
     suspend fun driveFolders(path: String?): DriveFolders = decode(DriveFolders.serializer(), ops.driveFolders { if (path != null) this.path = path })
     suspend fun driveMkdir(root: String, path: String) { ops.driveMkdir(root, path) }
     suspend fun driveRename(root: String, from: String, to: String) { ops.driveRename(root, from, to) }
-    suspend fun driveRemove(root: String, path: String) { ops.driveRemove(root, path) }
+    /** To the machine's trash where the station has one (`permanent`: for good; `no_trash` where none takes it). */
+    suspend fun driveRemove(root: String, path: String, permanent: Boolean = false) { ops.driveRemove(root, path) { if (permanent) this.permanent = true } }
+    /** A folder zipped on the station to download: where the zip is (a root of its own and its path there), its name and size. */
+    suspend fun driveZip(root: String, path: String): DriveZip = decode(DriveZip.serializer(), ops.driveZip(root, path))
     /** A folder read again, answering once it is (its page's refresh). */
     suspend fun driveRefresh(root: String, path: String) { core.call("drive.refresh", buildJsonObject { put("station", station); put("root", root); put("path", path) }) }
     /** Where a file was left on this device (a text's offset, a video's time in ms), of how much when known. */
@@ -735,3 +738,7 @@ data class OutsideRef(val station: String, val id: String, val title: String, va
 
 @kotlinx.serialization.Serializable
 private class OutsideRefs(val chats: List<OutsideRef> = emptyList())
+
+/** A folder zipped on the station (`drive.zip`): read as any file of the drive is, by its root and path. */
+@kotlinx.serialization.Serializable
+data class DriveZip(val root: String, val path: String, val name: String, val size: Long)

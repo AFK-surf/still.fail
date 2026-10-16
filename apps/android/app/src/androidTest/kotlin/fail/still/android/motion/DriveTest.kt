@@ -83,6 +83,8 @@ class DriveTest {
             entry("main.py", "code", 3_000, "2.9 KB"),
             entry("数据.csv", "csv", 9_000, "8.8 KB"),
             entry("安装包.zip", "other", 50_000_000, "47.7 MB", "2023/8/1"),
+            // Hidden: not shown unless asked for.
+            entry(".DS_Store", "other", 6_000, "5.9 KB"),
         ),
     )
 
@@ -191,9 +193,35 @@ class DriveTest {
         rule.onNodeWithContentDescription("添加").performClick(); h.settle()
         h.record("drive-plus-$tone").end()
         rule.runOnUiThread { h.app.sheet = null }; h.settle()
+        // Held: chosen, as the phone's own file managers do; what can be done to it from the bar's ⋯.
         rule.onNodeWithText("三体.txt").performTouchInput { longClick() }; h.settle()
+        rule.onNodeWithText("已选 1 项").assertIsDisplayed()
+        h.record("drive-chosen-$tone").end()
+        rule.onNodeWithContentDescription("对所选项的操作").performClick(); h.settle()
         h.record("drive-sheet-$tone").end()
         assertTrue(rule.onAllNodesWithText("重命名").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithText("复制路径").fetchSemanticsNodes().isNotEmpty())
+    }
+
+    @Test fun choosingSeveral() {
+        val h = launch(listOf(Screen.Stations, Screen.Station(st), Screen.Drive(st, books, "")), false)
+        // Hidden files are left out unless asked for.
+        assertTrue(rule.onAllNodesWithText(".DS_Store").fetchSemanticsNodes().isEmpty())
+        rule.onNodeWithText("三体.txt").performTouchInput { longClick() }; h.settle()
+        rule.onNodeWithText("笔记.md").performClick(); h.settle()
+        rule.onNodeWithText("已选 2 项").assertIsDisplayed()
+        rule.onNodeWithContentDescription("对所选项的操作").performClick(); h.settle()
+        h.record("drive-chosen-several-light").end()
+        assertTrue(rule.onAllNodesWithText("下载 2 个文件").fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithText("删除 2 项").fetchSemanticsNodes().isNotEmpty())
+        rule.runOnUiThread { h.app.sheet = null }; h.settle()
+        // Back lets go of what is chosen; the view's sheet shows hidden files on asking.
+        rule.onNodeWithText("取消").performClick(); h.settle()
+        rule.onNodeWithContentDescription("显示方式").performClick(); h.settle()
+        rule.onNodeWithText("显示隐藏文件").performClick(); h.settle()
+        rule.runOnUiThread { h.app.sheet = null }; h.settle()
+        assertTrue(rule.onAllNodesWithText(".DS_Store").fetchSemanticsNodes().isNotEmpty())
+        rule.runOnUiThread { h.app.setDriveView("hidden", null) }; h.settle()
     }
 
     @Test fun emptyLight() = empty(false)
