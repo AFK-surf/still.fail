@@ -5,6 +5,9 @@
 # the agents' door, and the turn ends all_done. The launcher's pid stays the same throughout.
 # e2e.sh <work>   (the bundle built: pnpm run build; the native parts prebuilt: scripts/native.ts)
 set -eu
+# Exercise the same fixed mesh port through the overlapping update processes, not just a stop/start.
+mesh_port=$(node -e 'const s=require("node:dgram").createSocket("udp4"); s.bind(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')
+export STILLFAIL_MESH_BIND_ADDR="0.0.0.0:$mesh_port"
 work=$1
 here=$(cd "$(dirname "$0")/.." && pwd)
 native() { node "$here/../scripts/native.ts" file "$1"; } # prebuilt, or built here (scripts/native.ts)
@@ -34,10 +37,11 @@ echo '{}' > "$work/data/homes/cc/.credentials.json"
 launcher=$!
 trap 'kill $launcher 2>/dev/null; sleep 3; pkill -f "$work/data" 2>/dev/null || true' EXIT
 node_pid() { pgrep -f "station/main.js run .*$work/data" | head -1; }
-udp_port() { lsof -nP -iUDP -a -p "$1" | awk 'NR>1 && $9 ~ /^\*:/ {sub("\\*:","",$9); print $9}' | grep -v 5353 | head -1; }
+udp_port() { lsof -nP -i4UDP -a -p "$1" | awk 'NR>1 && $9 ~ /^\*:/ {sub("\\*:","",$9); print $9}' | grep -v 5353 | head -1; }
 sleep 5
 first=$(node_pid)
 port=$(udp_port "$first")
+[ "$port" = "$mesh_port" ]
 ask() { "$load" send "$work/data" "$id" "127.0.0.1:$port" "$@" 2>/dev/null; }
 made=$(ask POST /admin/api/sessions '{"runtime":"claude"}')
 key=$(echo "$made" | python3 -c 'import json,sys; print(json.load(sys.stdin)["key"])')
@@ -60,6 +64,7 @@ for i in $(seq 1 150); do
 done
 # Then a crash in the middle of a turn: the launcher starts Node again, which takes the turn up from its runner.
 port=$(udp_port "$second")
+[ "$port" = "$mesh_port" ]
 ask POST "/admin/api/threads/$thread/messages" '{"text":"slow:60 post:said after a crash"}'
 sleep 2
 kill -9 "$second"
@@ -74,6 +79,10 @@ for i in $(seq 1 200); do
   [ "$ended" -ge 2 ] && break
   sleep 0.2
 done
+[ "$ended" -ge 2 ]
+port=$(udp_port "$third")
+[ "$port" = "$mesh_port" ]
+ask GET /admin/api/sessions > /dev/null
 echo "turns: $(sqlite3 "$work/data/stillfail.db" "select outcome || '/' || coalesce(declared,'-') from turns where session_key='$key'" | tr '\n' ' ')"
 echo "chat:"
 sqlite3 "$work/data/stillfail.db" "select '  ' || author_kind || ': ' || text from entries where thread=$thread order by n"
