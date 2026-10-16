@@ -1385,6 +1385,7 @@ export const SHAPES: Record<string, Shape> = {
     ["stationId", "String"],
     ["session", "String"],
     ["thread", opt("i64"), { client: opt("I54") }],
+    ["seq", opt("i64"), { client: opt("I54"), doc: "The message it is about (its card for `wait`), which a notification opens the chat at." }],
     ["title", "String"],
     ["body", "String"],
     ["tag", "String"],

@@ -72,12 +72,13 @@ test("a chat's people hear of its turns and of each other, once, gathered", asyn
     await Effect.runPromise(clock.adjust("1 second"));
     for (let j = 0; j < 5; j++) await settle();
   }
-  const all = posted.flat().map((n) => [n.kind, n.to.join(","), n.text]);
+  // Each about its message (what a notification opens the chat at).
+  const all = posted.flat().map((n) => [n.kind, n.to.join(","), n.text, n.seq]);
   assert.equal(posted.length, 1, "gathered into one post");
   assert.deepEqual(all.sort(), [
-    ["done", "ada@x.com,bob@x.com", "好了"],
-    ["failed", "ada@x.com,bob@x.com", "没能启动"],
-    ["message", "ada@x.com", "看一下"],
+    ["done", "ada@x.com,bob@x.com", "好了", 2],
+    ["failed", "ada@x.com,bob@x.com", "没能启动", 3],
+    ["message", "ada@x.com", "看一下", 1],
   ]);
   notifier.close();
 });

@@ -103,12 +103,13 @@ export class Notices {
       seenHere.set(change.id, next);
       if (first) continue;
       const found = noticed(row, old, me, slackUsers, members);
-      if (found !== null) added.push(this.#add(its, station, row, found[0], found[1]));
+      if (found !== null) added.push(this.#add(its, station, row, found[0], found[1], found[0] === "wait" ? next.decision : next.seq));
     }
     return added;
   }
 
-  #add(into: Workspace, station: string, row: J, kind: string, body: string): J {
+  /// `seq`: the message it is about (the card for `wait`, else the chat's last), which a notification opens the chat at.
+  #add(into: Workspace, station: string, row: J, kind: string, body: string, seq: number | null): J {
     const at = station.indexOf("/");
     const [workspace, id] = at >= 0 ? [station.slice(0, at), station.slice(at + 1)] : ["", station];
     const session = typeof get(row, "id") === "string" ? row.id : "";
@@ -121,6 +122,7 @@ export class Notices {
       stationId: id,
       session,
       thread: get(row, "thread") ?? null,
+      seq: seq !== null && seq > 0 ? seq : null,
       title: title(row),
       body,
       tag: `${workspace}/${id}/${session}`,

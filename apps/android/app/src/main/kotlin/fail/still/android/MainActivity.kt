@@ -195,10 +195,10 @@ class MainActivity : ComponentActivity() {
         val uri = intent?.data ?: return
         val app = app ?: return
         // What the link opens is the core’s (`link.parse`), including a dev cloud’s http origin.
-        // Notifications keep the chat URL to identify the workspace, but land on its decisions page.
+        // A notification's opens its chat at the message it is about.
         if (uri.scheme == "https" || uri.scheme == "http") {
             setIntent(Intent())
-            app.openLink(uri.toString(), outside = true, notification = intent.getBooleanExtra(Notifier.OPEN_DECISIONS, false))
+            app.openLink(uri.toString(), outside = true, at = intent.getLongExtra(Notifier.AT, 0L).takeIf { it > 0 })
             return
         }
         if (uri.scheme !in AUTH_SCHEMES || uri.host != "auth") return

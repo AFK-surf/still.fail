@@ -1,5 +1,5 @@
 // Notifications (docs/notifications.md → Clients): one channel (消息), one notification per chat (its tag), opening the
-// workspace’s decisions page. Local notices are those the core's `notify` says to show while the app is in front
+// chat at the message it is about. Local notices are those the core's `notify` says to show while the app is in front
 // (MainActivity; client/core-ts/src/attend.ts decides), pushes come from FCM while it is not (Push.kt). 我 → 通知 turns
 // both off (kept in the core).
 package fail.still.android
@@ -41,8 +41,8 @@ object Notifier {
     private const val CHANNEL = "messages"
     /** Every notification has this id; the chat is its tag, so a newer one for a chat replaces the older. */
     private const val ID = 1
-    /** Distinguishes a notification tap from an ordinary chat link. */
-    const val OPEN_DECISIONS = "fail.still.android.OPEN_DECISIONS"
+    /** The message a notification is about (its seq in the chat), which its tap opens the chat at. */
+    const val AT = "fail.still.android.AT"
     /** Where the app kept 我 → 通知 before the core did (AppState.moveNotify). */
     const val FLAG = "notify"
 
@@ -71,13 +71,13 @@ object Notifier {
 
     private fun manager(context: Context) = context.getSystemService(NotificationManager::class.java)
 
-    /** Keep the chat URL for its workspace; a notification tap opens that workspace’s decisions. */
-    fun show(context: Context, tag: String, title: String, body: String, url: String) {
+    /** A tap opens the chat (`url`) at the message it is about (`seq`; at its usual place without one: an older station or cloud). */
+    fun show(context: Context, tag: String, title: String, body: String, url: String, seq: Long?) {
         val manager = manager(context)
         words(context)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, t("android-misc.notify.channel"), NotificationManager.IMPORTANCE_HIGH))
         val open = Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.CLOUD_ORIGIN.trimEnd('/') + url)).setClass(context, MainActivity::class.java)
-            .putExtra(OPEN_DECISIONS, true)
+            .apply { if (seq != null) putExtra(AT, seq) }
         val tap = PendingIntent.getActivity(context, tag.hashCode(), open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val notification = Notification.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
@@ -92,7 +92,7 @@ object Notifier {
         manager.notify(tag, ID, notification)
     }
 
-    fun show(context: Context, notice: Notice) = show(context, notice.tag, notice.title, notice.body, notice.url)
+    fun show(context: Context, notice: Notice) = show(context, notice.tag, notice.title, notice.body, notice.url, notice.seq)
 
     /** A chat opened: its notification is read. */
     fun cancel(context: Context, tag: String) = manager(context).cancel(tag, ID)

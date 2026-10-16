@@ -50,6 +50,7 @@ that workspace's (the last 20), with none every workspace's. Its value:
   "kind": "done",                  // done | block | failed | message
   "station": "ws/st", "workspace": "ws", "stationId": "st",
   "session": "<row id>", "thread": 7,
+  "seq": 12,                       // the message it is about: the card for `wait`, else the chat's last
   "title": "部署挂了", "body": "Claude: 修好了",
   "tag": "ws/st/<row id>",
   "url": "/o/ws/st/<row id, URI-encoded>",
@@ -108,6 +109,7 @@ with `notice.claim`, so it is shown once however many pages are open; one not ta
   { "notices": [{
     "to": ["a@b.c"],               // people's emails; only members of the station's workspace get it
     "kind": "done", "session": "<key>", "thread": 7,
+    "seq": 12,                     // the message it is about (its number in the chat); optional
     "title": "部署挂了", "by": "Claude", "text": "修好了", "at": 1790000000000
   }] }
   ```
@@ -122,7 +124,8 @@ high priority, every value a string):
 ```jsonc
 { "type": "notice", "kind": "done", "title": "…", "body": "…",
   "tag": "ws/st/<session>", "url": "/o/ws/st/<session>",
-  "workspace": "ws", "station": "st", "session": "<key>", "at": "1790000000000" }
+  "workspace": "ws", "station": "st", "session": "<key>", "at": "1790000000000",
+  "seq": "12" }                    // when the station gave one
 ```
 
 Secrets: `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` (P-256, base64url raw
@@ -153,6 +156,7 @@ cloud sends nothing. An older cloud answers 404, and nothing more comes of it.
 - Android: `POST_NOTIFICATIONS` is asked for; one channel (消息); local notices
   while the app is in front (not for the open chat; the core's `notify`), FCM
   pushes while it is not (`notice.pushed`). The token is registered with
-  `push.register`. Tapping either kind opens the notification’s workspace on
-  the decisions page (奏), with Back returning to its chat list. Ordinary chat
-  links still open their chat. 我 → 通知 turns them off, kept by the core.
+  `push.register`. Tapping either kind opens its chat at the message it is
+  about (`seq`: the card for `wait`, else the message noticed), with Back
+  returning to its chat list; without a `seq` (an older station or cloud) the
+  chat opens where it would. 我 → 通知 turns them off, kept by the core.

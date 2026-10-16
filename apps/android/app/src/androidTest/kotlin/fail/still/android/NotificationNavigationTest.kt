@@ -10,9 +10,10 @@ import kotlinx.serialization.json.JsonNull
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** Navigation on a core-parsed notification URL, without connecting to a live station. */
+/** Navigation on a core-parsed notification URL (its chat, at its message), without connecting to a live station. */
 class NotificationNavigationTest {
-    private fun check(notification: Boolean, alreadyOpen: Boolean) {
+    /** `at`: a notification's message (null: an ordinary link, or a notification from an older station). */
+    private fun check(at: Long?, alreadyOpen: Boolean) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val fake = FakeCore()
@@ -28,11 +29,10 @@ class NotificationNavigationTest {
             app = AppState(fake.core, prefs, "http://127.0.0.1:9", Updates(context, "http://127.0.0.1:9", fake.core))
             app.pickWorkspace("previous")
             if (alreadyOpen) app.push(Screen.Chat("previous/station", ChatOf.Session("previous-chat")))
-            app.openLink("http://127.0.0.1:9/o/destination/station/chat", outside = true, notification = notification)
+            app.openLink("http://127.0.0.1:9/o/destination/station/chat", outside = true, at = at)
         }
         try {
-            val expected = if (notification) listOf(Screen.Home, Screen.Decisions)
-                else listOf(Screen.Home, Screen.Chat("destination/station", ChatOf.Session("chat")))
+            val expected = listOf(Screen.Home, Screen.Chat("destination/station", ChatOf.Session("chat"), at = at))
             var arrived = false
             repeat(100) {
                 if (!arrived) {
@@ -51,7 +51,7 @@ class NotificationNavigationTest {
         }
     }
 
-    @Test fun notificationFromHome() = check(notification = true, alreadyOpen = false)
-    @Test fun notificationReplacesAnotherChatAndWorkspace() = check(notification = true, alreadyOpen = true)
-    @Test fun ordinaryLinkStillOpensChat() = check(notification = false, alreadyOpen = true)
+    @Test fun notificationOpensItsMessageFromHome() = check(at = 12, alreadyOpen = false)
+    @Test fun notificationReplacesAnotherChatAndWorkspace() = check(at = 12, alreadyOpen = true)
+    @Test fun ordinaryLinkOpensChat() = check(at = null, alreadyOpen = true)
 }

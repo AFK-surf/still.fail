@@ -11,7 +11,8 @@ import { wall } from "../ops/fibers.ts";
 /// How long a notice's text is kept, in characters (still.fail cloud cuts it shorter).
 const TEXT = 400;
 
-export type Notice = { to: string[]; kind: string; session: string; thread: number; title: string; by: string; text: string; at: number };
+/// `seq`: the message it is about (its `n` in the chat), which a notification opens the chat at.
+export type Notice = { to: string[]; kind: string; session: string; thread: number; seq: number | null; title: string; by: string; text: string; at: number };
 
 /// What a turn's end is worth telling its chat, and in what words: blocked, or done having said something there (the
 /// chat's last message is the agent's, from this turn). Any other end says nothing; a failed one, the station's ⚠️ does.
@@ -43,12 +44,12 @@ function emailsOf(s: Store, creator: string | null, said: string[], sessions: st
     .filter((e) => e !== not && !seen.has(e) && (seen.add(e), true));
 }
 
-function notice(s: Store, thread: number, session: string, kind: string, by: string, text: string, except: string | null): Notice | null {
+function notice(s: Store, thread: number, seq: number | null, session: string, kind: string, by: string, text: string, except: string | null): Notice | null {
   const summary = store.listThreads(s, "", null, thread).pop();
   if (summary === undefined) return null;
   const to = emailsOf(s, summary.thread.createdBy, summary.people, summary.sessions.map((m) => m.session), except);
   if (to.length === 0) return null;
-  return { to, kind, session, thread, title: chatTitle(summary, null), by, text: [...text].slice(0, TEXT).join(""), at: wall.now() };
+  return { to, kind, session, thread, seq, title: chatTitle(summary, null), by, text: [...text].slice(0, TEXT).join(""), at: wall.now() };
 }
 
 /// A session changed: its last turn, if it ended since `since` and is not `ended` (the end already told), told to its
@@ -63,10 +64,11 @@ export function turnNotices(s: Store, key: string, since: number, ended: number 
   const out: Notice[] = [];
   for (const thread of store.sessionThreads(s, key)) {
     if (thread.surface !== STILLFAIL_SURFACE || thread.hiddenAt !== null) continue;
-    const told = turnNotice(turn, store.lastMessage(s, thread.id), key, translate(lang, "station.notice.file"));
+    const last = store.lastMessage(s, thread.id);
+    const told = turnNotice(turn, last, key, translate(lang, "station.notice.file"));
     if (told === null) continue;
     const by = authorNames(api, thread.id)("agent", key) ?? "";
-    const n = notice(s, thread.id, key, told[0], by, told[1], null);
+    const n = notice(s, thread.id, last?.n ?? null, key, told[0], by, told[1], null);
     if (n !== null) out.push(n);
   }
   return { ended: at, notices: out };
@@ -78,7 +80,10 @@ export function saidNotices(s: Store, id: number, entries: EntryRow[], since: nu
   useNames(s);
   const fresh = entries.filter((e) => e.kind === "message" && e.at >= since);
   const person = fresh.filter((e) => e.authorKind === "person").at(-1);
-  const wrong = fresh.filter((e) => e.authorKind === "ember").flatMap((e) => (e.text === null ? [] : (wentWrong(e.text) ?? []))).at(-1);
+  const wrong = fresh.filter((e) => e.authorKind === "ember").flatMap((e) => {
+    const what = e.text === null ? null : wentWrong(e.text);
+    return what === null ? [] : [{ n: e.n, what }];
+  }).at(-1);
   if (person === undefined && wrong === undefined) return [];
   const thread = store.getThread(s, id);
   if (thread === null || thread.surface !== STILLFAIL_SURFACE || thread.hiddenAt !== null) return [];
@@ -88,11 +93,11 @@ export function saidNotices(s: Store, id: number, entries: EntryRow[], since: nu
   if (person !== undefined) {
     const by = authorNames(apiOf(s), id)("person", person.author) ?? person.author;
     const text = person.text !== null && person.text.trim() !== "" ? person.text : translate(lang, "station.notice.file");
-    const n = notice(s, id, session, "message", by, text, person.author);
+    const n = notice(s, id, person.n, session, "message", by, text, person.author);
     if (n !== null) out.push(n);
   }
   if (wrong !== undefined) {
-    const n = notice(s, id, session, "failed", "", wrong, null);
+    const n = notice(s, id, wrong.n, session, "failed", "", wrong.what, null);
     if (n !== null) out.push(n);
   }
   return out;

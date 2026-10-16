@@ -3293,6 +3293,8 @@ data class Notice (
 	val stationId: String,
 	val session: String,
 	val thread: Long? = null,
+	/// The message it is about (its card for `wait`), which a notification opens the chat at.
+	val seq: Long? = null,
 	val title: String,
 	val body: String,
 	val tag: String,

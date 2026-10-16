@@ -3282,6 +3282,8 @@ export interface Notice {
 	stationId: string;
 	session: string;
 	thread?: number;
+	/** The message it is about (its card for `wait`), which a notification opens the chat at. */
+	seq?: number;
 	title: string;
 	body: string;
 	tag: string;

@@ -86,6 +86,8 @@ interface Notice {
   by?: string;
   text: string;
   at: number;
+  /** The message it is about (its number in the chat), which a notification opens the chat at; older stations give none. */
+  seq?: number;
 }
 
 /** A notice as a station sends it, or null for one that is not (it is skipped). Kinds it does not know read as `done`. */
@@ -97,7 +99,8 @@ function notice(value: unknown): Notice | null {
   if (typeof n.session !== "string" || !n.session || n.session.length > 512) return null;
   if (typeof n.text !== "string" || (n.title !== undefined && typeof n.title !== "string") || (n.by !== undefined && n.by !== null && typeof n.by !== "string")) return null;
   const at = typeof n.at === "number" && Number.isFinite(n.at) ? Math.floor(n.at) : clock.now();
-  return { to, kind: n.kind, session: n.session, title: (n.title as string | undefined) ?? "", by: (n.by as string | null | undefined) || undefined, text: n.text, at };
+  const seq = typeof n.seq === "number" && Number.isSafeInteger(n.seq) && n.seq >= 0 ? n.seq : undefined;
+  return { to, kind: n.kind, session: n.session, title: (n.title as string | undefined) ?? "", by: (n.by as string | null | undefined) || undefined, text: n.text, at, seq };
 }
 
 /** POST /v1/stations/notify: a station's notices, pushed to the members they name → `{ sent }`. */
@@ -139,6 +142,7 @@ export async function stationNotify(request: Request, env: Env): Promise<Respons
       station,
       session: n.session,
       at: String(n.at),
+      ...(n.seq === undefined ? {} : { seq: String(n.seq) }),
     });
     // A device signed in with several of the people named gets it once.
     const devices = new Map<string, PushRegistration>();

@@ -112,6 +112,7 @@ test("a_chat_of_mine_is_noticed_as_it_changes_and_not_for_how_it_was_at_first", 
   assert.equal(n.tag, "ws/st/ds:C1:1.2");
   assert.equal(n.url, "/o/ws/st/ds%3AC1%3A1.2");
   assert.equal(n.title, "部署挂了");
+  assert.equal(n.seq, 5, "about the message it opens the chat at");
   notices.look(stations);
   assert.equal(kinds(notices).length, 1);
   rows.set("ws/st", [row(null, 6, false, ["person", "me@x.y"])]);
@@ -129,6 +130,7 @@ test("a_chat_of_mine_is_noticed_as_it_changes_and_not_for_how_it_was_at_first", 
   notices.look(stations);
   assert.deepEqual(kinds(notices), ["done", "block", "message", "failed"]);
   assert.equal(notices.value(null).items[3].body, "出错了 · 无法启动 agent：没有 claude");
+  assert.deepEqual(notices.value(null).items.map((i: J) => i.seq), [5, 7, 8, 9]);
 });
 
 test("chats_not_mine_and_slack_threads_are_not_noticed", () => {
@@ -187,6 +189,7 @@ test("a_decision_newly_waiting_for_me_is_noticed_once", () => {
   notices.look(stations);
   assert.deepEqual(kinds(notices), ["wait", "wait", "wait"]);
   assert.equal(notices.value(null).items[2].body, "等你决定 · 域名填哪个？");
+  assert.deepEqual(notices.value(null).items.map((i: J) => i.seq), [5, 7, 8], "about its card");
 });
 
 test("needing_help_is_told_by_what_it_needs", () => {

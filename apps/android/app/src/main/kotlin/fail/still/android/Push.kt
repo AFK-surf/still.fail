@@ -101,7 +101,7 @@ class PushService : FirebaseMessagingService() {
         if (data["type"] != "notice" || !shown(data["workspace"], data["kind"])) return
         val tag = data["tag"] ?: return
         val url = data["url"] ?: return
-        Notifier.show(this, tag, data["title"].orEmpty(), data["body"].orEmpty(), url)
+        Notifier.show(this, tag, data["title"].orEmpty(), data["body"].orEmpty(), url, data["seq"]?.toLongOrNull())
     }
 
     /**

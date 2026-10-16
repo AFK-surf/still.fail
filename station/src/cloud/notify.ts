@@ -64,7 +64,7 @@ export class Notifier {
   }
 
   /// People's messages and the station's ⚠️ in its own chats.
-  private said(thread: number, entries: { kind: string; authorKind: string; text: string | null; at: number }[]) {
+  private said(thread: number, entries: { n: number; kind: string; authorKind: string; text: string | null; at: number }[]) {
     const worth = entries.some((e) => e.kind === "message" && e.at >= this.since && (e.authorKind === "person" || (e.authorKind === "ember" && (e.text ?? "").startsWith("⚠️"))));
     if (worth) this.ask("saidNotices", { thread, entries, since: this.since, lang: stationLang() });
   }

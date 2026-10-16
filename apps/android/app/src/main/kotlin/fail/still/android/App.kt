@@ -456,13 +456,13 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
     fun home() { sheet = null; forward = false; stack = listOf(Screen.Home) }
     /**
      * An item's link from outside: its workspace, and its page over the list (back goes to the list); a service's link
-     * (`?service=<job>`) has the service over its chat.
+     * (`?service=<job>`) has the service over its chat. `at`: the message it opens at (a notification's).
      */
-    fun openItem(workspace: String, station: String, session: String, service: String? = null) {
+    fun openItem(workspace: String, station: String, session: String, service: String? = null, at: Long? = null) {
         pickWorkspace(workspace)
         sheet = null; menu = null; forward = true
         val address = "$workspace/$station"
-        stack = listOf(Screen.Home, Screen.Chat(address, ChatOf.Session(session))) + listOfNotNull(service?.let { Screen.Preview(address, it) })
+        stack = listOf(Screen.Home, Screen.Chat(address, ChatOf.Session(session), at = at)) + listOfNotNull(service?.let { Screen.Preview(address, it) })
     }
 
     /** An agent's execution history, over the chat it is in (at `entry`, else its newest): not twice over itself. */
@@ -479,23 +479,19 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
      * (`link.parse`: an invitation, a chat's page, an item and its web service); a web service of one of this chat's
      * agents (`?service=<job>`) over the chat, another session as its chat (and its service over that). Any other link
      * goes to `orElse` (the system opens it). `outside`: a link from outside the app (a notification, the browser),
-     * whose item opens over the list.
+     * whose item opens over the list; `at`: the message a notification is about, its chat opened there.
      */
-    fun openLink(url: String, outside: Boolean = false, notification: Boolean = false, orElse: () -> Unit = {}) {
+    fun openLink(url: String, outside: Boolean = false, at: Long? = null, orElse: () -> Unit = {}) {
         scope.launch {
             val target = try {
                 core.call("link.parse", buildJsonObject { put("url", url) }).takeIf { it !is JsonNull }
                     ?.let { StillFailJson.decodeFromJsonElement(LinkTarget.serializer(), it) }
             } catch (_: CoreException) { null }
-            if (notification && target?.opens == "item" && !target.workspace.isNullOrEmpty()) {
-                pickWorkspace(target.workspace)
-                sheet = null; menu = null; forward = true
-                stack = listOf(Screen.Home, Screen.Decisions)
-            } else if (target == null || !open(target, outside)) orElse()
+            if (target == null || !open(target, outside, at)) orElse()
         }
     }
 
-    private fun open(t: LinkTarget, outside: Boolean): Boolean {
+    private fun open(t: LinkTarget, outside: Boolean, at: Long? = null): Boolean {
         val ws = t.workspace.orEmpty()
         val station = t.station.orEmpty()
         // One of its agents' execution history the link names, over the chat once it is open (`?history=`, `entry`).
@@ -524,7 +520,7 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
                 val top = stack.last()
                 val here = top is Screen.Chat && top.station == address && ((top.of as? ChatOf.Session)?.key == session || chatAgents[top.id]?.contains(session) == true)
                 when {
-                    outside -> openItem(ws, station, session, service)
+                    outside -> openItem(ws, station, session, service, at)
                     here -> if (service != null) push(Screen.Preview(address, service))
                     ws != workspace -> openItem(ws, station, session, service)
                     else -> {

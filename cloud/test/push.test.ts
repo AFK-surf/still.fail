@@ -372,7 +372,7 @@ test("Android devices get a high-priority FCM data message; an unregistered toke
     const { id, station, aliceTokens, bobTokens } = await workspace(h);
     assert.equal((await register(h, aliceTokens, "POST", { kind: "fcm", token: "alice-token" })).status, 204);
     assert.equal((await register(h, bobTokens, "POST", { kind: "fcm", token: "gone-token" })).status, 204);
-    assert.deepEqual(await (await notify(h, station, [notice(["alice@example.test", "bob@example.test"], { kind: "failed", text: "token runs out" })])).json(), { sent: 1 });
+    assert.deepEqual(await (await notify(h, station, [notice(["alice@example.test", "bob@example.test"], { kind: "failed", text: "token runs out", seq: 12 })])).json(), { sent: 1 });
 
     const token = got.filter((r) => r.url === account.token_uri);
     assert.equal(token.length, 1, "one access token for all the pushes");
@@ -390,6 +390,7 @@ test("Android devices get a high-priority FCM data message; an unregistered toke
     assert.deepEqual(toAlice.message.android, { priority: "HIGH" }, "no collapse key: the app replaces a chat's notification by its tag");
     assert.equal(toAlice.message.data.body, "出错了 · token runs out");
     assert.equal(toAlice.message.data.tag, tag);
+    assert.equal(toAlice.message.data.seq, "12", "the message it is about (none from an older station: above)");
     assert.ok(Object.values(toAlice.message.data).every((v) => typeof v === "string"), "every value a string");
 
     // The unregistered token is gone; the access token is kept.
