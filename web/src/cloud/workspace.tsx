@@ -23,7 +23,7 @@ import { Rail, SidebarEdge, placeOf, useRailItems, type RailItem } from "../Rail
 import { SystemBubbles } from "../SystemBubbles.tsx";
 import * as railCss from "../Rail.css.ts";
 import { drivePath } from "../drive/useDrive.ts";
-import { Folder } from "../icons.tsx";
+import { Folder, Server } from "../icons.tsx";
 import { AttentionEntry } from "../Attention.tsx";
 import { DecisionDeskProvider, DecisionPage } from "../DecisionDesk.tsx";
 import { MarkCounts } from "../ChatMark.tsx";
@@ -387,12 +387,22 @@ function FilesNav({ scope, top }: { scope: string; top?: ReactNode }) {
   const where = useLocation();
   const root = new URLSearchParams(where.search).get("root");
   const folders = stations.flatMap((s) => (s.overview?.drive?.roots ?? []).map((r) => ({ s, r })));
+  // Each station whose every folder the viewer browses: its home first (the way to all the rest).
+  const homes = stations.flatMap((s) => (s.overview?.drive?.anywhere && s.overview.drive.home ? [{ s, home: s.overview.drive.home }] : []));
   const add = useAddFolder(scope);
   return (
     <>
       <NavTop top={top} action={add.can && <NavAction icon={<Plus {...ICON} />} label={t("web-pages.drive.addRoot")} onClick={add.start} />} />
       <NavList>
-        {folders.length === 0 && <p className={nav.navEmpty}>{t("web-main.rail.filesNone")}</p>}
+        {folders.length === 0 && homes.length === 0 && <p className={nav.navEmpty}>{t("web-main.rail.filesNone")}</p>}
+        {homes.map(({ s, home }) => {
+          const base = stationBase(s.station);
+          const here = where.pathname.startsWith(`${base}/files`) && (root === home || (!root && (s.overview?.drive?.roots ?? []).length !== 1));
+          return (
+            <NavItem key={`${s.station} home`} to={drivePath(base, home)} current={here} tip={home} mark={<Server {...ICON} />} title={t("web-pages.drive.home")}
+              end={<><span className={railCss.dot} data-online={s.online || undefined} />{s.name}</>} />
+          );
+        })}
         {folders.map(({ s, r }) => {
           const base = stationBase(s.station);
           const roots = s.overview?.drive?.roots ?? [];

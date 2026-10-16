@@ -1,8 +1,10 @@
 // A station's drive on a wide screen (docs/drive.md), at `/w/<ws>/s/<station>/files` (opened from the rail's 文件 and
-// its sidebar of the stations' folders, the station's card in settings, the card over its name in a chat, or ⌘K), as
-// wide as the page: the folders it lends, a folder's entries in a list (its mark,
-// name, size, time), the path above as a trail back. With a mouse: a click opens, the row's … (on hover) or a right
-// click gives what can be done to it, files dropped on the list go up into the folder shown, ⌘/Ctrl+U puts files up.
+// its sidebar of the stations' homes and pinned folders, the station's card in settings, the card over its name in a
+// chat, or ⌘K), as wide as the page: a folder's entries in a list (its mark, name, size, time), the path above as a
+// trail back (up to the top of the disk, for a member who browses every folder), the folder pinned to the sidebar or
+// not. With a mouse: a click opens, the row's … (on hover) or a right click gives what can be done to it (its path
+// copied among them), a row dragged out carries the file (into a chat's composer) and its path, files dropped on the
+// list go up into the folder shown, ⌘/Ctrl+U puts files up.
 // The reader and the player are pages of their own (`files/read`, `files/play`); images, PDFs and code open in the
 // chat's preview over the page. The phone's pages are ../mobile/Drive.tsx, with the same parts under them.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -14,14 +16,17 @@ import { useWorkspace } from "../cloud/api.ts";
 import { useGo } from "../go.ts";
 import { useDoing } from "../doing.ts";
 import { useAct } from "../toast.tsx";
-import type { DriveEntry, DriveRoot } from "../core/shapes.ts";
+import type { DriveEntry, DriveRoot, StationView } from "../core/shapes.ts";
+import { useTopicSelect } from "../core/react.ts";
 import { Button, Confirm, Dialog, ICON, IconButton, Menu, Tip, type MenuItem } from "../ui.tsx";
-import { ChevronLeft, ChevronRight, Close, Disk, Server, Download, Edit, Folder, FolderPlus, Plus, Refresh, Retry, Trash, Upload } from "../icons.tsx";
+import { ChevronLeft, ChevronRight, Close, Copy, Disk, Server, Download, Edit, Folder, FolderPlus, Pin, Plus, Refresh, Retry, Trash, Upload } from "../icons.tsx";
 import { KindIcon } from "../drive/KindIcon.tsx";
 import { Reader } from "../drive/Reader.tsx";
 import { Player } from "../drive/Player.tsx";
 import { cancel, download, joinPath, nameOf, openerOf, parentOf, refresh, retry, rootLabel, settle, sizeOf, upload, useFolder, useUploads, type At, type Upload as Up } from "../drive/model.ts";
-import { childOf, drive, drivePath, filtered, nameProblem, rootTrouble, useDrive, type DriveState, type PickFolder } from "../drive/useDrive.ts";
+import { absoluteOf, childOf, drive, drivePath, filtered, folderName, nameProblem, rootTrouble, trailOf, useDrive, type DriveState, type PickFolder } from "../drive/useDrive.ts";
+import { draggedOf, startDrag } from "../drive/drag.ts";
+import { useToast } from "../toast.tsx";
 import { DrivePreview, FilterField, useFolders } from "../mobile/Drive.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
@@ -37,7 +42,8 @@ export function DrivePage() {
   const asked = q.get("root");
   const path = q.get("path") ?? "";
   const only = d.roots.length === 1 && d.roots[0]!.state === "ok" ? d.roots[0]!.path : null;
-  const root = asked ?? only;
+  // Where nothing is asked: the one folder pinned, else the home for a member who browses every folder.
+  const root = asked ?? only ?? (d.anywhere ? d.home : null);
   return (
     <div className={`${pagesCss.page} ${css.page}`}>
       {d.loading || !d.offered || root === null ? <Roots d={d} /> : <FolderView d={d} root={root} path={path} />}
@@ -45,11 +51,13 @@ export function DrivePage() {
   );
 }
 
-/** 文件 in the rail (`/w/<ws>/files`): the first folder any station lends (the sidebar lists them all); none, says so. */
+/** 文件 in the rail (`/w/<ws>/files`): the first folder pinned on any station (the sidebar lists them all), else the
+ * first station's home; none, says so. */
 export function DriveHome({ scope }: { scope: string }) {
   const stations = useStations(scope).value;
   const add = useAddFolder(scope);
-  const first = (stations ?? []).flatMap((s) => (s.overview?.drive?.roots ?? []).map((r) => drivePath(stationBase(s.station), r.path)))[0];
+  const first = (stations ?? []).flatMap((s) => (s.overview?.drive?.roots ?? []).map((r) => drivePath(stationBase(s.station), r.path)))[0]
+    ?? (stations ?? []).flatMap((s) => (s.overview?.drive?.anywhere && s.overview.drive.home ? [drivePath(stationBase(s.station), s.overview.drive.home)] : []))[0];
   if (first) return <Navigate to={first} replace />;
   return (
     <div className={`${pagesCss.page} ${css.page}`}>
@@ -62,12 +70,14 @@ export function DriveHome({ scope }: { scope: string }) {
 }
 
 /**
- * 添加文件夹 where no one station is in view (the files' sidebar, their empty page), for the workspace's owners and admins:
- * the folders of the one station with a drive to pick from, or of the one chosen first when there are several.
+ * Pin 文件夹 where no one station is in view (the files' sidebar, their empty page), for those who may pin (any member
+ * who may write; on a station from before, the workspace's owners and admins): the folders of the one station with a
+ * drive to pick from, or of the one chosen first when there are several.
  */
 export function useAddFolder(scope: string) {
-  const stations = (useStations(scope).value ?? []).filter((s) => s.overview?.drive);
   const role = useWorkspace(scope).value?.role;
+  const manager = role === "owner" || role === "admin";
+  const stations = (useStations(scope).value ?? []).filter((s) => s.overview?.drive && (manager || s.overview.drive.anywhere));
   const [choosing, setChoosing] = useState(false);
   const [picking, setPicking] = useState<string | null>(null);
   const roots = stations.find((s) => s.station === picking)?.overview?.drive?.roots ?? [];
@@ -88,7 +98,7 @@ export function useAddFolder(scope: string) {
     {picking && <PickerDialog station={picking} roots={roots} onClose={() => setPicking(null)} />}
   </>;
   return {
-    can: (role === "owner" || role === "admin") && stations.length > 0,
+    can: stations.length > 0,
     start: () => { if (stations.length === 1) setPicking(stations[0]!.station); else setChoosing(true); },
     dialogs,
   };
@@ -117,13 +127,13 @@ function Roots({ d }: { d: DriveState }) {
           <span className={css.crumbs}><span>{station.name}</span></span>
           <h1>{t("web-pages.drive.title")}</h1>
         </div>
-        {d.manage && d.offered && d.roots.length > 0 && <div className={css.actions}><Menu items={[{ label: t("web-pages.drive.manage"), icon: Folder, onSelect: manage.open }]} /></div>}
+        {(d.manage || d.anywhere) && d.offered && d.roots.length > 0 && <div className={css.actions}><Menu items={[{ label: t("web-pages.drive.manage"), icon: Folder, onSelect: manage.open }]} /></div>}
       </header>
       {d.loading ? <p className={shellCss.muted}>{d.error ?? t("web-pages.drive.reading")}</p>
         : !d.offered ? <Empty text={t("web-pages.drive.oldStation")} />
         : d.roots.length === 0 ? (
-          <Empty text={d.manage ? t("web-pages.drive.noneManage") : t("web-pages.drive.noneMember")}
-            action={d.manage ? <Button variant="primary" icon={Folder} onClick={manage.pick}>{t("web-pages.drive.pick")}</Button> : undefined} />
+          <Empty text={d.manage || d.anywhere ? t("web-pages.drive.noneManage") : t("web-pages.drive.noneMember")}
+            action={d.manage || d.anywhere ? <Button variant="primary" icon={Folder} onClick={manage.pick}>{t("web-pages.drive.pick")}</Button> : undefined} />
         ) : (
           <div className={css.list}>
             <p className={css.count}>{t("web-pages.drive.rootsCount", { n: d.roots.length })}</p>
@@ -164,7 +174,12 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
   const [removing, setRemoving] = useState<DriveEntry | null>(null);
   const [preview, setPreview] = useState<DriveEntry | null>(null);
   const [dragging, setDragging] = useState(false);
-  const name = path ? nameOf(path) : rootLabel(d.roots, root);
+  const here = absoluteOf(root, path);
+  const name = path ? nameOf(path) : d.anywhere && !d.roots.some((r) => r.path === root) ? (here === d.home ? t("web-pages.drive.home") : folderName(here)) : rootLabel(d.roots, root);
+  const pinned = d.roots.some((r) => r.path === here);
+  const toast = useToast();
+  const copyPath = (abs: string) => void navigator.clipboard.writeText(abs).then(() => toast(t("web-pages.drive.pathCopied")), (e: unknown) => toast(t("web-main.copyFailed", { error: e instanceof Error ? e.message : String(e) })));
+  const pin = (abs: string, on: boolean) => act(drive.pin(station.address, d.roots, abs, on), t("web-pages.drive.rootsWhat"), t(on ? "web-pages.drive.shared" : "web-pages.drive.unpinned", { name: folderName(abs) }));
   const reload = () => {
     if (refreshing) return;
     setRefreshing(true);
@@ -184,6 +199,12 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
   const items = (e: DriveEntry): MenuItem[] => [
     { label: t("web-pages.drive.open"), onSelect: () => open(e) },
     ...(e.dir ? [] : [{ label: t("web-pages.drive.download"), icon: Download, onSelect: () => save(e) }]),
+    { label: t("web-pages.drive.copyPath"), icon: Copy, onSelect: () => copyPath(absoluteOf(root, joinPath(path, e.name))) },
+    ...(e.dir && d.anywhere ? [(() => {
+      const abs = absoluteOf(root, joinPath(path, e.name));
+      const on = d.roots.some((r) => r.path === abs);
+      return { label: t(on ? "web-pages.drive.unpin" : "web-pages.drive.pin"), icon: Pin, onSelect: () => pin(abs, !on) };
+    })()] : []),
     ...(d.write ? [
       { label: t("web-pages.drive.rename"), icon: Edit, onSelect: () => setNaming({ entry: e }) },
       { label: t("web-pages.drive.delete"), icon: Trash, danger: true, onSelect: () => setRemoving(e) },
@@ -197,12 +218,26 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
     return () => removeEventListener("keydown", onKey);
   }, [d.write]);
   const trail = path.split("/").filter(Boolean);
+  // For a member who browses every folder: the whole way from the home (or the disk's top), each step a folder to go to
+  // (those within the root by their path under it, so a pinned folder stays the one marked in the sidebar).
+  const way = d.anywhere ? trailOf(here, d.home, t("web-pages.drive.home")) : null;
+  const goTo = (abs: string) => {
+    const under = abs === root ? "" : abs.startsWith(root.endsWith("/") ? root : `${root}/`) ? abs.slice(root.length).replace(/^\/+/, "") : null;
+    go(under !== null ? drivePath(station.base, root, under) : drivePath(station.base, abs));
+  };
   return (
     <>
       <header className={pagesCss.pageHead}>
         <div className={css.headText}>
+          {way && way.length > 1 && (
+            <span className={css.crumbs}>
+              {way.slice(0, -1).map((c, i) => (
+                <span key={c.path} className={css.crumb}>{i > 0 && <ChevronRight size={12} />}<button type="button" onClick={() => goTo(c.path)}>{c.name}</button></span>
+              ))}
+            </span>
+          )}
           {/* Inside a folder lent: the way back up to it (the folder lent itself, and whose it is, are the sidebar's). */}
-          {trail.length > 0 && (
+          {!way && trail.length > 0 && (
             <span className={css.crumbs}>
               <button type="button" onClick={() => go(drivePath(station.base, root))}>{rootLabel(d.roots, root)}</button>
               {trail.slice(0, -1).map((p, i) => (
@@ -220,7 +255,11 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
           {d.write && <IconButton label={t("web-pages.drive.upload")} icon={Upload} onClick={() => files.current?.click()} />}
           {d.write && <IconButton label={t("web-pages.drive.mkdir")} icon={FolderPlus} onClick={() => setNaming({ entry: null })} />}
           <span className={css.spin} data-on={refreshing || undefined}><IconButton label={t("web-pages.drive.refresh")} icon={Refresh} onClick={reload} /></span>
-          {d.manage && <Menu items={[{ label: t("web-pages.drive.manage"), icon: Folder, onSelect: manage.open }]} />}
+          {d.anywhere && <span className={css.pin} data-on={pinned || undefined}><IconButton label={t(pinned ? "web-pages.drive.unpin" : "web-pages.drive.pin")} icon={Pin} onClick={() => pin(here, !pinned)} /></span>}
+          <Menu items={[
+            { label: t("web-pages.drive.copyPath"), icon: Copy, onSelect: () => copyPath(here) },
+            ...(d.manage || d.anywhere ? [{ label: t("web-pages.drive.manage"), icon: Folder, onSelect: manage.open }] : []),
+          ]} />
         </div>
       </header>
       <div className={css.list} data-dragging={dragging || undefined}
@@ -250,18 +289,32 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
   );
 }
 
+/** A station's name, as the workspace's stations list has it (its address while not known). */
+export function useStationName(station: string): string {
+  return useTopicSelect<StationView[], string>({ topic: "stations", scope: station.split("/")[0] ?? "" }, (s) => s.value?.find((x) => x.station === station)?.name ?? station);
+}
+
 function EntryRow({ at, entry, items, onOpen }: { at: At; entry: DriveEntry; items: MenuItem[]; onOpen: () => void }) {
+  return <DriveRow at={at} entry={entry} items={items} onOpen={onOpen} />;
+}
+
+/**
+ * A row of a folder's list, as the files' page and a chat's 文件 tab draw it: its mark, name, size and time (`compact`:
+ * the size alone), the … on hover and the same on a right click; dragged out, it carries the file and its path.
+ */
+export function DriveRow({ at, entry, items, onOpen, compact = false }: { at: At; entry: DriveEntry; items: MenuItem[]; onOpen: () => void; compact?: boolean }) {
+  const stationName = useStationName(at.station);
   const full = joinPath(at.path, entry.name);
   const removing = useDoing("drive.remove", { station: at.station, root: at.root, path: full });
   const renaming = useDoing("drive.rename", { station: at.station, root: at.root, from: full });
   const busy = removing || renaming;
   const row = (
-    <div className={css.entry} data-busy={busy || undefined}>
-      <button type="button" className={css.row} onClick={onOpen} disabled={busy}>
-        <KindIcon kind={entry.kind} size={20} className={css.icon} />
+    <div className={css.entry} data-busy={busy || undefined} draggable={!busy} onDragStart={(e) => startDrag(e, [draggedOf(at, entry, stationName)])}>
+      <button type="button" className={css.row} data-compact={compact || undefined} onClick={onOpen} disabled={busy} title={compact ? entry.name : undefined}>
+        <KindIcon kind={entry.kind} size={compact ? 18 : 20} className={css.icon} />
         <span className={css.name}>{entry.name}</span>
         <span className={css.size}>{entry.dir ? "" : entry.sizeText}</span>
-        <span className={css.time}>{entry.timeText}</span>
+        {!compact && <span className={css.time}>{entry.timeText}</span>}
       </button>
       <span className={css.more}>{busy ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" /> : <Menu items={items} />}</span>
     </div>

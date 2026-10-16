@@ -25,6 +25,9 @@ globalStyle(`${crumbs} button:hover`, { color: vars.text, textDecorationColor: "
 export const headMeta = style({ margin: "0", color: vars.muted, fontSize: vars.textMeta });
 export const actions = style({ flex: "none", display: "flex", alignItems: "center", gap: "6px" });
 const turn = keyframes({ to: { transform: "rotate(360deg)" } });
+/** Pin: in the accent while the folder shown is pinned. */
+export const pin = style({ display: "contents" });
+globalStyle(`${pin}[data-on] button`, { color: vars.accent });
 /** Refresh turns while the folder is read again. */
 export const spin = style({ display: "contents" });
 globalStyle(`${spin}[data-on] svg`, { animation: `${turn} 900ms linear infinite` });
@@ -50,6 +53,8 @@ export const row = style({
   selectors: {
     "span&": { cursor: "default" },
     "&:disabled": { cursor: "default" },
+    // In a chat's 文件 tab: narrow, the size alone.
+    "&[data-compact]": { gridTemplateColumns: "18px minmax(0, 1fr) auto 28px", columnGap: "10px", minHeight: "36px", padding: "6px 10px" },
     // A folder lent, or one of the station's to pick: no columns of sizes and times.
     [`${list} > &, [role=dialog] &`]: { gridTemplateColumns: "20px minmax(0, 1fr) 16px", minHeight: "44px" },
     [`${list} > &:hover, [role=dialog] &:hover`]: { background: vars.list },
@@ -63,15 +68,21 @@ export const trouble = style({ color: vars.muted, fontSize: vars.textMeta });
 globalStyle(`${trouble} b`, { color: vars.red, fontWeight: "500" });
 export const size = style({ color: vars.muted, fontSize: vars.textMeta, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" });
 export const time = style({ color: vars.muted, fontSize: vars.textMeta, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" });
+/** How far in from a row's end its buttons sit: their corner is the row's less this (concentric). */
+const MORE_IN = 6;
 /** The row's …, at its end: shown on hover (always where nothing hovers). */
 export const more = style({
-  position: "absolute", right: "6px", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: "2px",
+  position: "absolute", right: `${MORE_IN}px`, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: "2px",
   opacity: "0", transition: `opacity ${vars.dur} ${vars.easeOut}`,
   selectors: {
     [`${entry}:hover &, ${entry}:focus-within &, &:has([data-state=open]), &[data-shown], ${entry}[data-busy] &`]: { opacity: "1" },
   },
   "@media": { "(hover: none)": { opacity: "1" } },
 });
+
+// Its buttons concentric with the row's corner; a compact row's are smaller, as far in from its top as from its end.
+globalStyle(`${more} button`, { borderRadius: `calc(${vars.rField} - ${MORE_IN}px)`, cornerShape: vars.cornerShape });
+globalStyle(`${entry}:has([data-compact]) ${more} button`, { width: "24px", height: "24px" });
 
 /** Going up: how far it has got, its size, in the size and time columns. */
 export const progressCell = style({ gridColumn: "3 / 5", display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", gap: "10px" });

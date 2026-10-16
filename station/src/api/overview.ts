@@ -2,10 +2,11 @@
 // profiles, the agents' processes, counts, the disk, logins, updates — as the viewer sees it. Answered on the main
 // thread from what is in memory and the config; told again on /events when it changes (`overview`).
 import { statfsSync } from "node:fs";
+import { homedir } from "node:os";
 import type { Accounts } from "../accounts/index.ts";
 import { mask } from "../accounts/index.ts";
 import type { Cloud } from "../cloud/state.ts";
-import type { Viewer } from "../mesh/credential.ts";
+import { type Viewer, readOnly } from "../mesh/credential.ts";
 import { platform } from "../platform/index.ts";
 import type { Lang } from "../ops/i18n.ts";
 import type { Hub } from "../sessions/hub.ts";
@@ -115,7 +116,8 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     sharing: d.accounts !== undefined,
     updates: d.updates?.get(lang) ?? [],
     slackApps: d.slack?.apps(viewer) ?? [],
-    // The folders its members browse (drive/drive.ts), each with whether it can be browsed now.
-    drive: { roots: rootsOf(raw).map(rootView) },
+    // The folders pinned in its drive (drive/drive.ts), each with whether it can be browsed now; a member who may write
+    // browses every folder from the home (`anywhere`).
+    drive: { roots: rootsOf(raw).map(rootView), ...(readOnly(viewer) ? {} : { anywhere: true, home: homedir() }) },
   };
 }

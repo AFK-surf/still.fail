@@ -8,7 +8,7 @@ import { type PastedInfo } from "./pastedText.ts";
 import { createContext, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
 import { CoreError, useChatSend, type Attachment, type ChatTo, type Quote } from "./api.ts";
 import { core, useTopicSelect } from "./core/react.ts";
-import type { ComposerFile, ComposerView } from "./core/shapes.ts";
+import type { ComposerFile, ComposerRef, ComposerView } from "./core/shapes.ts";
 import { track } from "./telemetry.ts";
 import { useStation } from "./station.tsx";
 import { keepSentImage, uploadImageKey } from "./sentImages.ts";
@@ -19,7 +19,16 @@ export const MAX_FILE = 1024 * 1024 * 1024;
 
 /** A file on its way to the station: uploading (`sent`: how much of it the station has), uploaded, or failed.
  * `preview`: an image's local picture, until it leaves the draft. */
-export interface Pending { id: string; name: string; size: number; sent?: number; width?: number; height?: number; done: Attachment | null; error: string | null; preview?: string; image?: Blob; pasted?: PastedInfo; pastedFile?: File }
+export interface Pending { id: string; name: string; size: number; sent?: number; width?: number; height?: number; done: Attachment | null; error: string | null; preview?: string; image?: Blob; pasted?: PastedInfo; pastedFile?: File; ref?: ComposerRef }
+
+/** A file or folder dragged in from where it is: which station has it and where (`ref`), and how to send it should it be
+ * switched to a file: where it is in that station's drive, or the file itself (one from Finder). */
+export interface Dropped { name: string; size: number; ref: Omit<ComposerRef, "mode">; drive?: { station: string; root: string; path: string }; blob?: File }
+
+/** Where a file named by its path is, as the message says it (the core's words for it, composer.ts `pathWords`). */
+export const pathWords = (ref: ComposerRef) => t(ref.dir ? "common.folderOn" : "common.pathOn", { station: ref.stationName, path: ref.path });
+/** Whether a file of the draft goes as words (named by its path), not as a file. */
+const named = (f: { ref?: ComposerRef | undefined }) => f.ref?.mode === "path";
 
 /** A passage quoted in the message being written, with what is said about it. */
 export interface DraftQuote extends Quote { id: string }
@@ -29,6 +38,10 @@ export interface Draft {
   files: Pending[];
   /** Files picked, pasted or dropped: each goes to the station at once (and waits there in no chat, until a message takes it). */
   add(files: FileList | File[], pasted?: PastedInfo): void;
+  /** Files and folders dragged in from where they are: named by their path until switched to files (`setMode`). */
+  addDropped(items: Dropped[]): void;
+  /** A file dragged in, named by its path or sent as a file. */
+  setMode(id: string, mode: "path" | "file"): void;
   remove(id: string): void;
   quotes: DraftQuote[];
   /** Quotes added (a preview's marks), as they are. */
@@ -63,6 +76,8 @@ export interface Draft {
  */
 export interface Offer {
   files: File[]; quotes: DraftQuote[]; text?: string;
+  /** Files and folders of a station's, named by their path (a chat's 文件 tab). */
+  dropped?: Dropped[];
   /** A passage selected in the chat, quoted with its comment line taking the focus. */
   quote?: Omit<Quote, "comment">;
 }
@@ -220,6 +235,16 @@ export function useDraft({ key: given, station, carry }: {
       if (answer === undefined) setShown((x) => ({ ...x, files: x.files.map((f) => (ids.has(f.id) && !f.done && !f.error ? { ...f, error: t("web-main.draft.uploadFailed") } : f)) }));
     });
   };
+  const addDropped = (items: Dropped[]) => {
+    const files = items.map((f) => ({ id: `f${Date.now()}-${nextId++}`, name: f.name, size: f.size, ref: { ...f.ref, mode: "path" as const }, ...(f.drive ? { drive: f.drive } : {}), ...(f.blob ? { blob: f.blob } : {}) }));
+    void act("add", { station: station ?? contextStation, files }, (s) => ({
+      ...s,
+      files: [...s.files, ...files.map((f): ComposerFile => ({ id: f.id, name: f.name, size: f.size, ref: f.ref }))],
+    }));
+  };
+  const setMode = (id: string, mode: "path" | "file") => {
+    void act("mode", { id, mode }, (s) => ({ ...s, files: s.files.map((f) => (f.id === id && f.ref && !(mode === "file" && f.ref.dir) ? { ...f, ref: { ...f.ref, mode } } : f)) }));
+  };
   const remove = (id: string) => {
     const l = local.get(id);
     if (l?.preview) URL.revokeObjectURL(l.preview);
@@ -243,7 +268,7 @@ export function useDraft({ key: given, station, carry }: {
 
   const files: Pending[] = shown.files.map((f) => ({ ...f, done: (f.done ?? null) as Attachment | null, error: f.error ?? null, ...(f.sent != null ? { sent: f.sent } : {}), ...(f.pasted ? { pasted: f.pasted as PastedInfo } : {}), ...local.get(f.id) }));
   const quotes = shown.quotes;
-  const uploading = files.some((f) => !f.done && !f.error);
+  const uploading = files.some((f) => !f.done && !f.error && !named(f));
   const ready = (Boolean(text.trim()) || files.some((f) => !f.error) || quotes.length > 0) && !shown.starting && !files.some((f) => f.pasted && f.error);
 
   const back = useRef<{ text: string; shown: Shown } | null>(null);
@@ -269,7 +294,10 @@ export function useDraft({ key: given, station, carry }: {
       if (f.done) keepSentImage(station ?? contextStation, f.done.path, f.image);
       else keepSentImage(station ?? contextStation, uploadImageKey(f.id), f.image, 10 * 60_000);
     }
-    const { text: value, files: sentFiles, quotes: sentQuotes } = take();
+    const { text: written, files: all, quotes: sentQuotes } = take();
+    // Those named by their path go as words after what is written; the rest as files.
+    const value = [written, ...all.filter(named).map((f) => pathWords(f.ref!))].filter((w) => w !== "").join("\n");
+    const sentFiles = all.filter((f) => !named(f));
     const attachments = sentFiles.flatMap((f) => (f.done ? [f.done] : []));
     const sent = sentQuotes.map(({ author, text: q, comment: c, ts, role, file }) => ({ author, text: q, comment: c.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}), ...(file ? { file } : {}) }));
     if (first) onSending?.(value);
@@ -314,7 +342,7 @@ export function useDraft({ key: given, station, carry }: {
   };
 
   return {
-    text, setText, files, add, remove, quotes, addQuotes, comment, unquote, quote, focusQuote: shown.focus, quoteFocused,
+    text, setText, files, add, addDropped, setMode, remove, quotes, addQuotes, comment, unquote, quote, focusQuote: shown.focus, quoteFocused,
     uploading, ready, starting: shown.starting, error: shown.error, setError, take, restore: () => restore(), send,
   };
 }

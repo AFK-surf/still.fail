@@ -25,6 +25,7 @@
   "common.provider.keyOptional": "API key (optional)",
   "common.provider.uses": "Works for: {uses}",
   "common.provider.usesHint": "Claude Code needs the provider's Anthropic endpoint and Codex its Responses endpoint; one with only chat completions serves automatic decisions",
+  "common.pathOn": "File on {station}: {path}",
   "common.decision": "Auto decisions",
   "common.decisionLong": "Usable for automatic decisions",
   "common.recommended": "Recommended",
@@ -32,5 +33,6 @@
   "common.link.copy": "Copy link",
   "common.link.copied": "Link copied",
   "common.link.copyFailed": "Couldn't copy the link: {error}",
-  "common.reload": "Reload"
+  "common.reload": "Reload",
+  "common.folderOn": "Folder on {station}: {path}"
 }

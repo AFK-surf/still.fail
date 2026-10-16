@@ -1,30 +1,37 @@
-// The station's drive (src/drive/drive.ts) as members ask it. GET /drive says its roots, and what the viewer may do;
-// PUT /drive/roots names them (the workspace's owners and admins, kept in config.json `drive.roots`), GET
-// /drive/folders lets them pick one. The rest is a path under a root (`root`, `path` relative to it, `/` between
-// components): GET /drive/list, /drive/stat and /drive/read (a part of a file: `offset`, `length`); PUT /drive/upload
-// (a part of a file written: `id`, `offset`, `total`, `replace`; its bytes the body), POST /drive/mkdir, /drive/rename
-// and /drive/remove (a JSON body). Read-only members only read (the admin API refuses their writes). A refusal is
-// `{error, code}` with the code's status (CODES).
+// The station's drive (src/drive/drive.ts) as members ask it. GET /drive says its pinned folders, and what the viewer
+// may do; PUT /drive/roots pins them (any member but a read-only one, kept in config.json `drive.roots`), GET
+// /drive/folders lists the folders of a place. The rest is a path under a root (`root`, `path` relative to it, `/`
+// between components; `root` any absolute path for a member who may write, one pinned for a read-only one): GET
+// /drive/list, /drive/stat and /drive/read (a part of a file: `offset`, `length`); PUT /drive/upload (a part of a file
+// written: `id`, `offset`, `total`, `replace`; its bytes the body), POST /drive/mkdir, /drive/rename, /drive/remove
+// and /drive/stage (a file copied among the uploads, for a message to send; a JSON body). Read-only members only read
+// (the admin API refuses their writes). A refusal is `{error, code}` with the code's status (CODES).
 import { homedir } from "node:os";
 import { type Answer, type Request, json, param } from "../request.ts";
 import type { Route } from "../admin.ts";
 import type { ConfigFile } from "../../ops/config.ts";
 import { type Lang, tr } from "../../ops/i18n.ts";
 import { readOnly } from "../../mesh/credential.ts";
-import { CODES, Drive, DriveError, MAX_READ, MOST_ROOTS, rootsOf } from "../../drive/drive.ts";
+import { CODES, Drive, DriveError, MAX_READ, MOST_ROOTS, TOO_BIG, rootsOf } from "../../drive/drive.ts";
 
-export type DriveRouteDeps = { drive: Drive; config: ConfigFile; home?: string; changed?: () => void };
+export type DriveRouteDeps = {
+  drive: Drive; config: ConfigFile; home?: string; changed?: () => void;
+  /// Where a file sent in a chat waits for its message (the uploads), with a name of its own: none, no /drive/stage.
+  stage?: (name: string) => { safe: string; path: string };
+};
 
 const manages = (r: { viewer: { role: string } }) => r.viewer.role === "owner" || r.viewer.role === "admin";
+/// Whether the asker reaches every folder of the machine: a member who may write, whose agents could reach them anyway.
+const anywhere = (r: { viewer: Request["viewer"] }) => !readOnly(r.viewer);
 
 /// A refusal in the asker's words (`station.drive.<code>`, after the path it is about, if any).
 const refused = (e: unknown, lang: Lang): Answer => {
   const d = e instanceof DriveError ? e : new DriveError("io", (e as Error).message);
-  const words = tr(lang, d.code === "permission" && d.message === MANAGE ? "station.drive.manage" : `station.drive.${d.code}`);
+  const words = tr(lang, d.code === "permission" && d.message === MANAGE ? "station.drive.manage" : d.code === "too_large" && d.message === TOO_BIG ? "station.drive.tooBigToSend" : `station.drive.${d.code}`);
   return json(CODES[d.code], JSON.stringify({ error: d.about ? `${d.about}: ${words}` : words, code: d.code, ...(d.have !== undefined ? { have: d.have } : {}) }));
 };
 
-const MANAGE = "only the workspace's owners and admins name the drive's folders";
+const MANAGE = "a read-only member does not pin folders";
 
 /// A number from the query: its fallback when not there, -1 when not one.
 const num = (r: Request, name: string, fallback: number) => {
@@ -45,10 +52,16 @@ const text = (v: unknown, name: string): string => {
   return v;
 };
 
-/// What GET /drive and the overview say: the roots, and what the viewer may do with them.
-export const driveView = (drive: Drive, r: { viewer: Request["viewer"] }) => ({ roots: drive.roots(), manage: manages(r), write: !readOnly(r.viewer) });
+/// What GET /drive and the overview say: the folders pinned, what the viewer may do, and, for one who reaches every
+/// folder (`anywhere`), the home to start from.
+export const driveView = (drive: Drive, r: { viewer: Request["viewer"] }, home = homedir()) => ({
+  roots: drive.roots(), manage: manages(r), write: !readOnly(r.viewer), ...(anywhere(r) ? { anywhere: true, home } : {}),
+});
 
-export function routes({ drive, config, home = homedir(), changed }: DriveRouteDeps): Route[] {
+/// The most a file sent in a chat from the drive is (as an upload in parts).
+const MOST_STAGED = 1024 * 1024 * 1024;
+
+export function routes({ drive, config, home = homedir(), changed, stage }: DriveRouteDeps): Route[] {
   const at = (r: Request) => ({ root: param(r, "root") ?? "", path: param(r, "path") ?? "" });
   const answer = (f: (r: Request) => Promise<unknown>) => async (r: Request): Promise<Answer> => {
     try {
@@ -58,12 +71,12 @@ export function routes({ drive, config, home = homedir(), changed }: DriveRouteD
     }
   };
   return [
-    { method: "GET", pattern: /^\/drive$/, handle: answer(async (r) => driveView(drive, r)) },
+    { method: "GET", pattern: /^\/drive$/, handle: answer(async (r) => driveView(drive, r, home)) },
     {
       method: "PUT",
       pattern: /^\/drive\/roots$/,
       handle: answer(async (r) => {
-        if (!manages(r)) throw new DriveError("permission", MANAGE);
+        if (!anywhere(r)) throw new DriveError("permission", MANAGE);
         const asked = body(r).roots;
         if (!Array.isArray(asked) || asked.length > MOST_ROOTS || asked.some((p) => typeof p !== "string")) throw new DriveError("invalid_request", `roots: at most ${MOST_ROOTS} paths`);
         const before = rootsOf(config.raw());
@@ -77,25 +90,25 @@ export function routes({ drive, config, home = homedir(), changed }: DriveRouteD
           raw.drive = { ...(raw.drive !== null && typeof raw.drive === "object" ? raw.drive : {}), roots };
         });
         changed?.();
-        return driveView(drive, r);
+        return driveView(drive, r, home);
       }),
     },
     {
       method: "GET",
       pattern: /^\/drive\/folders$/,
       handle: answer(async (r) => {
-        if (!manages(r)) throw new DriveError("permission", MANAGE);
+        if (!anywhere(r)) throw new DriveError("permission", MANAGE);
         return drive.folders(param(r, "path") ?? "", home, r.lang);
       }),
     },
-    { method: "GET", pattern: /^\/drive\/list$/, handle: answer(async (r) => drive.list(at(r).root, at(r).path)) },
-    { method: "GET", pattern: /^\/drive\/stat$/, handle: answer(async (r) => drive.stat(at(r).root, at(r).path)) },
+    { method: "GET", pattern: /^\/drive\/list$/, handle: answer(async (r) => drive.list(at(r).root, at(r).path, anywhere(r))) },
+    { method: "GET", pattern: /^\/drive\/stat$/, handle: answer(async (r) => drive.stat(at(r).root, at(r).path, anywhere(r))) },
     {
       method: "GET",
       pattern: /^\/drive\/read$/,
       handle: async (r) => {
         try {
-          const read = await drive.read(at(r).root, at(r).path, num(r, "offset", 0), num(r, "length", MAX_READ));
+          const read = await drive.read(at(r).root, at(r).path, num(r, "offset", 0), num(r, "length", MAX_READ), anywhere(r));
           return {
             status: 200,
             headers: { "content-type": read.type, "cache-control": "no-store", "stillfail-total": String(read.total), "stillfail-mtime": String(read.mtime) },
@@ -110,7 +123,7 @@ export function routes({ drive, config, home = homedir(), changed }: DriveRouteD
       method: "PUT",
       pattern: /^\/drive\/upload$/,
       handle: answer(async (r) =>
-        drive.upload(at(r).root, at(r).path, param(r, "id") ?? "", num(r, "offset", 0), num(r, "total", -1), r.body, param(r, "replace") === "1"),
+        drive.upload(at(r).root, at(r).path, param(r, "id") ?? "", num(r, "offset", 0), num(r, "total", -1), r.body, param(r, "replace") === "1", anywhere(r)),
       ),
     },
     {
@@ -118,7 +131,7 @@ export function routes({ drive, config, home = homedir(), changed }: DriveRouteD
       pattern: /^\/drive\/mkdir$/,
       handle: answer(async (r) => {
         const b = body(r);
-        return drive.mkdir(text(b.root, "root"), text(b.path, "path"));
+        return drive.mkdir(text(b.root, "root"), text(b.path, "path"), anywhere(r));
       }),
     },
     {
@@ -126,7 +139,7 @@ export function routes({ drive, config, home = homedir(), changed }: DriveRouteD
       pattern: /^\/drive\/rename$/,
       handle: answer(async (r) => {
         const b = body(r);
-        return drive.rename(text(b.root, "root"), text(b.from, "from"), text(b.to, "to"));
+        return drive.rename(text(b.root, "root"), text(b.from, "from"), text(b.to, "to"), anywhere(r));
       }),
     },
     {
@@ -134,9 +147,21 @@ export function routes({ drive, config, home = homedir(), changed }: DriveRouteD
       pattern: /^\/drive\/remove$/,
       handle: answer(async (r) => {
         const b = body(r);
-        await drive.remove(text(b.root, "root"), text(b.path, "path"));
+        await drive.remove(text(b.root, "root"), text(b.path, "path"), anywhere(r));
         return {};
       }),
     },
+    ...(stage
+      ? [{
+          method: "POST",
+          pattern: /^\/drive\/stage$/,
+          handle: answer(async (r) => {
+            // Sending is writing (a read-only member sends nothing; the admin API refuses it first).
+            if (readOnly(r.viewer)) throw new DriveError("permission", "a read-only member sends nothing");
+            const b = body(r);
+            return drive.stage(text(b.root, "root"), text(b.path, "path"), stage, MOST_STAGED, anywhere(r));
+          }),
+        } as Route]
+      : []),
   ];
 }

@@ -55,14 +55,17 @@ function withMeters<T extends { meters: { short: string; percent: number }[] }>(
 /** How this device reaches the station: straight, quick. */
 const NET = { path: "直连", via: "direct" as const, rtt: { text: "12 ms", level: "ok" as const }, rttHistory: [11, 12, 14, 12, 11, 12], down: "1.2 KB/s", up: "0.4 KB/s", total: "今天共 ↓ 48 MB · ↑ 3.1 MB" };
 
-/** The folders the station lends (docs/drive.md), its downloads with what the chats made in them. */
-const DRIVE = { roots: [
+/** The station's files (docs/drive.md): every folder from its home, its downloads with what the chats made in them, and
+ * the folders pinned. */
+const DRIVE = { anywhere: true, home: "/Users/lin", roots: [
   { path: "/Users/lin/Downloads", name: "下载", state: "ok" as const },
   { path: "/Users/lin/code/acme", name: "acme", state: "ok" as const },
   { path: "/Users/lin/Desktop", name: "桌面", state: "ok" as const },
 ] };
 type Made = [name: string, kind: DriveKind, size: number, minutes: number];
 const FOLDERS: Record<string, Made[]> = {
+  "/Users/lin": [["code", "folder", 0, 30], ["Desktop", "folder", 0, 300], ["Documents", "folder", 0, 2_000], ["Downloads", "folder", 0, 40], ["Movies", "folder", 0, 9_000], ["Pictures", "folder", 0, 9_000]],
+  "/Users/lin/code": [["acme", "folder", 0, 30], ["notes", "folder", 0, 4_000]],
   "/Users/lin/Downloads": [
     ["设计稿", "folder", 0, 40], ["login-375.png", "image", 319_488, 52], ["发版录屏 1014.mp4", "video", 50_541_773, 175],
     ["orders-慢查询.md", "markdown", 9_216, 240], ["export-1013.csv", "csv", 225_280, 1_500], ["合同-2026Q4.pdf", "pdf", 1_468_006, 1_380],
@@ -73,10 +76,10 @@ const FOLDERS: Record<string, Made[]> = {
 };
 const TYPES: Partial<Record<DriveKind, string>> = { image: "image/png", video: "video/mp4", markdown: "text/markdown", csv: "text/csv", pdf: "application/pdf", code: "application/json" };
 
-/** A folder lent, as the core shows it (client/core-ts/src/drive.ts): its folders first. */
+/** A folder, as the core shows it (client/core-ts/src/drive.ts): its folders first. */
 export function driveFolder(root: string, path: string): DriveFolder {
   const at = Date.now();
-  const entries = path ? [] : (FOLDERS[root] ?? []).map(([name, kind, size, minutes]): DriveEntry => {
+  const entries = (FOLDERS[path ? `${root.replace(/\/$/, "")}/${path}` : root] ?? []).map(([name, kind, size, minutes]): DriveEntry => {
     const mtime = at - minutes * 60_000;
     const d = new Date(mtime);
     const today = new Date(at).toDateString() === d.toDateString();

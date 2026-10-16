@@ -100,7 +100,7 @@ export function sweepStaged(dir: string, now = wall.now()) {
 }
 
 /// Where an upload named `name` is kept in `dir`: its name made safe, and a path of its own.
-function uploadPath(dir: string, name: string): { safe: string; path: string } {
+export function uploadPath(dir: string, name: string): { safe: string; path: string } {
   const base = name.replace(/\\/g, "/").split("/").at(-1) ?? "";
   const safe = chars([...base].map((c) => (c.codePointAt(0)! < 0x20 ? "_" : c)).join("").replace(/^\.+/, ""), 120) || "file";
   mkdirSync(dir, { recursive: true });

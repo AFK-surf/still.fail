@@ -4,7 +4,7 @@ import { enterUpKeyframes, fadeKeyframes, nowInKeyframes, nowOutKeyframes, popIn
 import { markdown, msg, msgHead, msgTime } from "./styles/conversation.css.ts";
 import { chat, chatList } from "./styles/session.css.ts";
 import { spinner } from "./styles/waiting.css.ts";
-import { composerBox } from "./styles/composer.css.ts";
+import { COMPOSER_INNER, composerBox } from "./styles/composer.css.ts";
 import { tokenStart } from "./pages/Connect.css.ts";
 import { msgAvatar, msgMine, msgWaiting } from "./styles/chat.css.ts";
 import { onboardingCard } from "./cloud/settings.css.ts";
@@ -241,6 +241,12 @@ export const fileCardMeta = style({
   },
 });
 export const fileCardText = style({ flex: "1", minWidth: "0", display: "grid" });
+/** A file dragged in: named by its path or sent as a file, switched here. */
+export const fileCardMode = style({
+  flex: "none", padding: "0", border: "0", background: "none", color: vars.muted, fontSize: vars.textCaption, cursor: "pointer",
+  textDecoration: "underline", textDecorationColor: "transparent", textUnderlineOffset: "3px",
+  selectors: { "&:hover": { color: vars.text, textDecorationColor: "currentColor" } },
+});
 export const fileCardName = style({
   fontSize: vars.textUi, lineHeight: "20px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
@@ -427,7 +433,7 @@ export const quoteCard = style({
   borderRadius: `calc(12px * ${vars.cornerScale})`, background: `color-mix(in srgb, ${vars.text} 4%, ${vars.canvas})`,
   selectors: {
     // Inside the composer, cards follow its curve: inner radius = the frame's radius less its padding.
-    [`${composerQuote} &`]: { maxWidth: "none", borderRadius: `calc(32px * ${vars.cornerScale} - 12px)` },
+    [`${composerQuote} &`]: { maxWidth: "none", borderRadius: COMPOSER_INNER },
   },
 });
 export const quoteCardSource = style({
@@ -678,7 +684,7 @@ export const pasteSnippetRemove = style({ margin: "10px" });
  * Cards are as tall as an image's thumbnail beside them.
  */
 globalStyle(`${composerFiles} :is(${composerThumb}, ${fileCard}, ${pasteSnippet})`, {
-  borderRadius: `calc(32px * ${vars.cornerScale} - 12px)`, cornerShape: vars.cornerShape,
+  borderRadius: COMPOSER_INNER, cornerShape: vars.cornerShape,
 });
 globalStyle(`${composerFiles} :is(${fileCard}, ${pasteSnippet})`, { boxSizing: "border-box", height: "64px", alignItems: "center" });
 globalStyle(`${composerFiles} ${fileCard}`, { padding: "0 14px" });

@@ -5,7 +5,8 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, QuotaChip, MeterChips, PeopleStack } from "../components.tsx";
-import { Archive, Boxes, Close, File, Info, PanelClose, PanelOpen, Users, Web } from "../icons.tsx";
+import { Archive, Boxes, Close, File, Folder, Info, PanelClose, PanelOpen, Users, Web } from "../icons.tsx";
+import { DriveTab } from "./DriveTab.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
@@ -149,7 +150,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   useEffect(() => {
     for (const job of jobs) if (job.open === false) closePreview(previewKey(station.address, job.id));
   }, [jobs, station.address]);
-  const known = agents.length ? tabs.filter((key) => key === JOBS || fileOf(key) !== null || (serviceOf(key) !== null && jobs.some((j) => j.id === serviceOf(key))) || agents.some((a) => a.session.key === key)) : tabs;
+  const known = agents.length ? tabs.filter((key) => key === JOBS || key === FILES || fileOf(key) !== null || (serviceOf(key) !== null && jobs.some((j) => j.id === serviceOf(key))) || agents.some((a) => a.session.key === key)) : tabs;
   const isAgent = (key: string) => agents.some((a) => a.session.key === key);
   const open = known;
   // The job picked in the 任务 tab.
@@ -334,6 +335,9 @@ function ChatScreen({ session: chatSession }: { session: string }) {
     if (shown && isAgent(shown)) saveTabs([]); else openTab(open.find(isAgent) ?? agents[0]!.session.key);
   } : null);
   useShortcut("chat.jobs", () => (shown === JOBS ? closeTab(JOBS) : openJobs()));
+  // The stations' files beside the chat (DriveTab.tsx), where they have them: pressed again while in front, closed.
+  const drive = useStationDrive(station.address);
+  const toggleFiles = () => (open.includes(FILES) && shown === FILES ? closeTab(FILES) : openTab(FILES));
   useShortcut("panel.close", open.length ? () => saveTabs([]) : null);
   const thread = chatView.value?.thread?.id ?? null;
   const keeper = agents[0]?.session.key ?? ("session" in of ? of.session : null);
@@ -398,6 +402,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
           {/* Nothing left in it (the core's `archivable`): archived with one press. */}
           {chat.archivable && keeper && <IconButton label={t("web-pages.chat.archive")} icon={Archive} shortcut="chat.archive" onClick={archiveAsked} />}
           <JobsPanel station={station.address} session={chatSession} chat={chatKey} />
+          {drive && <IconButton label={t("web-pages.chat.files")} icon={Folder} onMouseDown={keepFocus} onClick={toggleFiles} />}
           {chat.thread && <ChatInfo station={station.address} session={chatSession} />}
           {slackUrl && (
             <Tip label={t("web-pages.chat.openInSlack")}>
@@ -427,6 +432,16 @@ function ChatScreen({ session: chatSession }: { session: string }) {
                           <span className={css.sideTabAgent}><Boxes size={14} strokeWidth={1.75} /><span className={css.sideTabText} data-text={t("web-pages.chat.jobs")}>{t("web-pages.chat.jobs")}</span></span>
                         </Tabs.Trigger>
                         <button type="button" className={css.sideTabClose} aria-label={t("web-pages.chat.closeJobs")} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
+                      </span>
+                    );
+                  }
+                  if (key === FILES) {
+                    return (
+                      <span key={key} className={css.sideTabWrap}>
+                        <Tabs.Trigger className={css.sideTab} value={key} id={tabId(key)} aria-controls={paneId(key)}>
+                          <span className={css.sideTabAgent}><Folder size={14} strokeWidth={1.75} /><span className={css.sideTabText} data-text={t("web-pages.chat.files")}>{t("web-pages.chat.files")}</span></span>
+                        </Tabs.Trigger>
+                        <button type="button" className={css.sideTabClose} aria-label={t("web-pages.chat.closeFiles")} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                       </span>
                     );
                   }
@@ -474,6 +489,14 @@ function ChatScreen({ session: chatSession }: { session: string }) {
                 return (
                   <SidePane key={key} of={key} shown={side.shown}>
                     <JobsTab station={station.address} view={jobsView} picked={jobPicked} onPick={pickJob} chat={chatKey} />
+                  </SidePane>
+                );
+              }
+              if (key === FILES) {
+                // Kept while another tab shows: the folder it is in stays.
+                return (
+                  <SidePane key={key} of={key} shown={side.shown} kept>
+                    <DriveTab chat={chatKey} />
                   </SidePane>
                 );
               }
@@ -581,6 +604,14 @@ function useChatAgent(station: string, session: string, key: string): ChatAgent 
 
 /** The 任务 tab's key: every service and job of the chat's agents. */
 const JOBS = "jobs";
+/** The 文件 tab's key: the files of the chat's station (DriveTab.tsx). */
+const FILES = "files";
+
+/** Whether any station of the chat's workspace has files to show (one from before the drive has none): only that, so
+ * the page is not drawn again for the rest of their overviews. */
+function useStationDrive(station: string): boolean {
+  return useTopicSelect<StationView[], boolean>({ topic: "stations", scope: scopeOf(station) }, (s) => !!s.value?.some((x) => x.overview?.drive));
+}
 /** A side tab's and its pane's ids, each naming the other (a tab's key can hold a space; an id cannot). */
 function tabId(key: string): string { return `side-tab-${encodeURIComponent(key)}`; }
 function paneId(key: string): string { return `side-pane-${encodeURIComponent(key)}`; }

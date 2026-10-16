@@ -555,6 +555,9 @@ export interface StillFailDesktop {
   };
   /** Shows a file of this machine in Finder (a directory opened): false when it is not there; an app from before it has none. */
   reveal?(path: string): Promise<boolean>;
+  /** Where a file dropped or picked is on this machine (Electron's webUtils.getPathForFile): "" for one that is not on its
+   * disk; an app from before this has none. */
+  pathOf?(file: File): string;
   /**
    * The window's frame: `inset` (macOS) and `overlay` (Windows) have no title bar, the page's top row is it with the
    * window's buttons at its left or right; `system` has the system's. None from apps before it, all inset; apps before

@@ -1,11 +1,13 @@
-// A station's drive (zdrive, brought in): the directories its workspace's owners and admins name in config.json
-// (`drive.roots`), which members browse and change over their link: list a folder, read a part of a file, write one in
-// parts, make a folder, rename, remove. Every path is asked relative to one of the roots and stays in it: `..` is
-// refused rather than worked out, and the path as the file system has it (its links followed) must still be under the
-// root, so a link pointing out is refused too. The station's own data (its key, its config, the profiles' homes, the
-// machine's runtime logins) is never reachable, even under a root, as for the device tools: a listing leaves it out.
+// A station's drive (zdrive, brought in): its machine's files, which members browse and change over their link: list a
+// folder, read a part of a file, write one in parts, make a folder, rename, remove. A member who may write (and so may
+// have an agent do anything on the machine) reaches every folder (`anywhere`): any absolute path is a root to ask from.
+// The folders pinned in config.json (`drive.roots`) are the list everyone sees first, and all a read-only member
+// reaches. Every path is asked relative to a root and stays in it: `..` is refused rather than worked out, and, for a
+// read-only member, the path as the file system has it (its links followed) must still be under the pinned root, so a
+// link pointing out is refused too. The station's own data (its key, its config, the profiles' homes, the machine's
+// runtime logins) is never reachable, as for the device tools: a listing leaves it out.
 import { constants, statSync } from "node:fs";
-import { lstat, mkdir, open, readdir, realpath, rename, rm, stat, unlink } from "node:fs/promises";
+import { copyFile, lstat, mkdir, open, readdir, realpath, rename, rm, stat, unlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { platform } from "../platform/index.ts";
 import { unreadableDir } from "../ops/files.ts";
@@ -48,6 +50,8 @@ export type Entry = { name: string; dir: boolean; size: number; mtime: number; t
 /// the station may not list it, which on macOS is a folder privacy protection keeps from a station launchd runs).
 export type RootView = { path: string; name: string; state: "ok" | "missing" | "not_a_directory" | "unreadable" };
 
+/// Why a file is not sent in a chat (its words are the route's).
+export const TOO_BIG = "too big to send";
 /// At most this many roots.
 export const MOST_ROOTS = 32;
 /// A listing stops at this many entries (`truncated`).
@@ -193,10 +197,11 @@ export class Drive {
     return (protect ?? (await this.protectedNow())).some((p) => within(asked, p) || within(found, p));
   }
 
-  /// `path` under `root` as a request may use it, or why not.
-  async place(root: string, path: string): Promise<Place> {
+  /// `path` under `root` as a request may use it, or why not. `anywhere`: the asker reaches every folder, `root` any
+  /// absolute path (else one of those pinned).
+  async place(root: string, path: string, anywhere = false): Promise<Place> {
     const roots = rootsOf(this.deps.config());
-    const named = roots.find((r) => key(r) === key(platform.paths.clean(root)));
+    const named = roots.find((r) => key(r) === key(platform.paths.clean(root))) ?? (anywhere && platform.paths.rooted(root) ? platform.paths.clean(root) : undefined);
     if (named === undefined) throw new DriveError("not_a_root", "that folder is not one of this station's drive");
     const parts = path.split("/").filter((p) => p !== "" && p !== ".");
     if (parts.some((p) => p === ".." || p.includes("\0") || (platform.paths.sep === "\\" && (p.includes("\\") || p.includes(":"))))) {
@@ -205,15 +210,15 @@ export class Drive {
     const top = await real(named);
     const asked = parts.length === 0 ? top : join(top, ...parts);
     const found = await real(asked);
-    if (!within(found, top)) throw new DriveError("path_escape", "that path leads out of its root");
+    if (!anywhere && !within(found, top)) throw new DriveError("path_escape", "that path leads out of its root");
     if (await this.isProtected(asked, found)) throw new DriveError("protected", "the station's own data is not part of its drive");
     const entry = parts.length === 0 ? top : join(await real(dirname(asked)), basename(asked));
     return { root: named, asked, found, entry, parts };
   }
 
   /// A folder's entries, folders first, each part by name; what is protected or leads out of the root left out.
-  async list(root: string, path: string): Promise<{ path: string; entries: Entry[]; truncated: boolean }> {
-    const at = await this.place(root, path);
+  async list(root: string, path: string, anywhere = false): Promise<{ path: string; entries: Entry[]; truncated: boolean }> {
+    const at = await this.place(root, path, anywhere);
     const top = await real(at.root);
     try {
       const dirents = await readdir(at.found, { withFileTypes: true });
@@ -226,7 +231,7 @@ export class Drive {
           shown.slice(i, i + AT_ONCE).map(async (d): Promise<Entry | null> => {
             const asked = join(at.found, d.name);
             const found = d.isSymbolicLink() ? await real(asked) : asked;
-            if (!within(found, top) || (await this.isProtected(asked, found, protect))) return null;
+            if ((!anywhere && !within(found, top)) || (await this.isProtected(asked, found, protect))) return null;
             try {
               const s = await stat(found);
               const dir = s.isDirectory();
@@ -246,8 +251,8 @@ export class Drive {
     }
   }
 
-  async stat(root: string, path: string): Promise<Entry> {
-    const at = await this.place(root, path);
+  async stat(root: string, path: string, anywhere = false): Promise<Entry> {
+    const at = await this.place(root, path, anywhere);
     try {
       const s = await stat(at.found);
       const dir = s.isDirectory();
@@ -259,9 +264,9 @@ export class Drive {
   }
 
   /// `length` bytes of a file from `offset` (fewer at its end, none past it), with its whole size and time.
-  async read(root: string, path: string, offset: number, length: number): Promise<{ bytes: Buffer; total: number; mtime: number; type: string }> {
+  async read(root: string, path: string, offset: number, length: number, anywhere = false): Promise<{ bytes: Buffer; total: number; mtime: number; type: string }> {
     if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(length) || length < 0 || length > MAX_READ) throw new DriveError("invalid_request", "invalid offset or length");
-    const at = await this.place(root, path);
+    const at = await this.place(root, path, anywhere);
     let handle;
     try {
       handle = await open(at.found, constants.O_RDONLY);
@@ -287,10 +292,10 @@ export class Drive {
   /// is put together beside where it goes and put there whole once its last part is in (synced, then renamed), so
   /// nobody sees half of it. A part asked again is written again (the same bytes); one that leaves a gap is refused
   /// with how much the station has (`upload_lost`), to go on from there. An existing file is replaced only when asked.
-  async upload(root: string, path: string, id: string, offset: number, total: number, body: Buffer, replace: boolean): Promise<{ have: number; entry: Entry | null }> {
+  async upload(root: string, path: string, id: string, offset: number, total: number, body: Buffer, replace: boolean, anywhere = false): Promise<{ have: number; entry: Entry | null }> {
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) throw new DriveError("invalid_request", "an upload's id is 1 to 64 letters, digits, - or _");
     if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(total) || total < 0 || offset + body.length > total) throw new DriveError("invalid_request", "invalid offset or total");
-    const at = await this.place(root, path);
+    const at = await this.place(root, path, anywhere);
     const name = at.parts.at(-1);
     if (name === undefined) throw new DriveError("invalid_request", "a file needs a name");
     const folder = dirname(at.found);
@@ -327,7 +332,7 @@ export class Drive {
       handle = undefined;
       await taken();
       await rename(part, at.found);
-      return { have: total, entry: await this.stat(root, at.parts.join("/")) };
+      return { have: total, entry: await this.stat(root, at.parts.join("/"), anywhere) };
     } catch (e) {
       if (last) await unlink(part).catch(() => {});
       throw failed(e);
@@ -346,8 +351,8 @@ export class Drive {
     }
   }
 
-  async mkdir(root: string, path: string): Promise<Entry> {
-    const at = await this.place(root, path);
+  async mkdir(root: string, path: string, anywhere = false): Promise<Entry> {
+    const at = await this.place(root, path, anywhere);
     if (at.parts.length === 0) throw new DriveError("exists", "the root is there");
     try {
       if (await stat(at.found).then(() => true, () => false)) throw new DriveError("exists", "there is already one by that name");
@@ -355,13 +360,13 @@ export class Drive {
     } catch (e) {
       throw failed(e);
     }
-    return this.stat(root, at.parts.join("/"));
+    return this.stat(root, at.parts.join("/"), anywhere);
   }
 
   /// Renamed or moved within its root; what is there already is not replaced (a change of case alone is a rename).
-  async rename(root: string, from: string, to: string): Promise<Entry> {
-    const a = await this.place(root, from);
-    const b = await this.place(root, to);
+  async rename(root: string, from: string, to: string, anywhere = false): Promise<Entry> {
+    const a = await this.place(root, from, anywhere);
+    const b = await this.place(root, to, anywhere);
     if (a.parts.length === 0 || b.parts.length === 0) throw new DriveError("invalid_request", "the root itself is not renamed");
     if (within(b.entry, a.entry) && key(b.entry) !== key(a.entry)) throw new DriveError("invalid_request", "a folder cannot go into itself");
     try {
@@ -373,12 +378,29 @@ export class Drive {
     } catch (e) {
       throw failed(e);
     }
-    return this.stat(root, b.parts.join("/"));
+    return this.stat(root, b.parts.join("/"), anywhere);
+  }
+
+  /// A file copied to `into` (where a chat's uploads wait for the message that sends them), for a member to send it in a
+  /// chat as if it had been uploaded: a clone where the disk can make one (APFS, btrfs), so even a big one costs nothing.
+  async stage(root: string, path: string, into: (name: string) => { safe: string; path: string }, most: number, anywhere = false): Promise<{ name: string; path: string; size: number }> {
+    const at = await this.place(root, path, anywhere);
+    const name = at.parts.at(-1) ?? rootName(at.root);
+    try {
+      const s = await stat(at.found);
+      if (s.isDirectory()) throw new DriveError("is_a_directory", "that is a folder");
+      if (s.size > most) throw new DriveError("too_large", TOO_BIG);
+      const to = into(name);
+      await copyFile(at.found, to.path, constants.COPYFILE_EXCL | constants.COPYFILE_FICLONE);
+      return { name: to.safe, path: to.path, size: s.size };
+    } catch (e) {
+      throw failed(e);
+    }
   }
 
   /// Removed, a folder with all it holds. The root itself is not.
-  async remove(root: string, path: string): Promise<void> {
-    const at = await this.place(root, path);
+  async remove(root: string, path: string, anywhere = false): Promise<void> {
+    const at = await this.place(root, path, anywhere);
     if (at.parts.length === 0) throw new DriveError("invalid_request", "the root itself is not removed");
     try {
       // A link is removed as a link, not what it points at.

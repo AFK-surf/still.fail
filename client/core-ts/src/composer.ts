@@ -27,11 +27,18 @@ type J = any;
 export type ComposerQuote = { id: string; author: string; text: string; comment: string; ts?: string; role?: string; file?: string };
 
 /// A file in what is written: going up (`sent` of `size`), up (`done`, as the station keeps it) or failed (`error`).
-/// `pasted`: long words pasted, kept as a file (what the page says of them).
-export type ComposerFile = { id: string; name: string; size: number; sent?: number; width?: number; height?: number; done: J | null; error: string | null; pasted?: J };
+/// `pasted`: long words pasted, kept as a file (what the page says of them). `ref`: one dragged in from where it is.
+export type ComposerFile = { id: string; name: string; size: number; sent?: number; width?: number; height?: number; done: J | null; error: string | null; pasted?: J; ref?: ComposerRef };
 
-/// A file handed to the core to send up: the page's id for it, the file itself.
-export type FileIn = { id: string; name: string; size: number; blob: Blob | FileSource; pasted?: J };
+/// A file or folder dragged in from where it is (a station's files, or Finder on a machine that is a station): named by
+/// its path (`mode: "path"`: the message says which station has it and where, nothing goes up), or sent (`file`: it goes
+/// up to the chat's station as a picked one would). A folder is only named.
+export type ComposerRef = { station: string; stationName: string; path: string; dir: boolean; mode: "path" | "file" };
+
+/// A file handed to the core to send up: the page's id for it, and the file itself (`blob`), or where it is in a
+/// station's drive (`drive`: the chat's station copies it among its uploads; another station's is read from there and
+/// sent up as a picked one would be). A folder named by its path has neither.
+export type FileIn = { id: string; name: string; size: number; blob?: Blob | FileSource; pasted?: J; drive?: { station?: string; root: string; path: string }; ref?: ComposerRef };
 
 type State = {
   /// Cached only for the account database it was read from.
@@ -71,6 +78,8 @@ export class Composers {
   #edits = 0;
   #keptId = 0;
   #uploads = new Map<string, { station: string; file: FileIn | null; done: Deferred.Deferred<J, CoreError>; error: boolean }>();
+  /// Files named by their path, kept to send up should they be switched to files (`mode`), by id.
+  #held = new Map<string, { station: string; file: FileIn }>();
   /// Images' sizes as read here, by upload id, until the upload is let go: a message the page sent before it heard of
   /// one is given it all the same (`sizeOf`).
   #sizes = new Map<string, { width: number; height: number }>();
@@ -82,7 +91,7 @@ export class Composers {
   /// The topic's value: what is written in `key`, read from the chat's draft the first time.
   value(key: string): unknown {
     const s = this.#state(key);
-    const uploading = s.files.some((f) => !f.done && !f.error);
+    const uploading = s.files.some((f) => !f.done && !f.error && f.ref?.mode !== "path");
     const ready = (s.text.trim() !== "" || s.files.some((f) => !f.error) || s.quotes.length > 0) && !s.starting && !s.files.some((f) => f.pasted && f.error);
     return {
       text: s.text, rev: s.rev, quotes: s.quotes, ...(s.focus !== null ? { focus: s.focus } : {}),
@@ -302,10 +311,34 @@ export class Composers {
   add(key: string, station: string, files: FileIn[]): number {
     const s = this.#state(key);
     for (const f of files) {
+      const ref = f.ref ? { ...f.ref, mode: f.ref.dir ? "path" as const : f.ref.mode } : undefined;
+      if (ref?.mode === "path") {
+        // Named by its path: nothing goes up unless it is switched to a file.
+        s.files = [...s.files, { id: f.id, name: f.name, size: f.size, done: null, error: null, ref }];
+        this.#held.set(f.id, { station, file: f });
+        continue;
+      }
       const tooBig = f.size > MAX_FILE;
-      s.files = [...s.files, { id: f.id, name: f.name, size: f.size, done: null, error: tooBig ? t("core-misc.composer.too_big") : null, ...(f.pasted ? { pasted: f.pasted } : {}) }];
+      s.files = [...s.files, { id: f.id, name: f.name, size: f.size, done: null, error: tooBig ? t("core-misc.composer.too_big") : null, ...(f.pasted ? { pasted: f.pasted } : {}), ...(ref ? { ref } : {}) }];
       if (!tooBig) this.#upload(key, station, f);
       else if (f.blob instanceof FileSource) f.blob.close();
+    }
+    return this.#changed(key, s);
+  }
+
+  /// A file dragged in, named by its path or sent: switched to a file, it goes up (once: back to a path and to a file
+  /// again, what went up is taken).
+  mode(key: string, id: string, mode: "path" | "file"): number {
+    const s = this.#state(key);
+    const f = s.files.find((x) => x.id === id);
+    if (!f?.ref || f.ref.mode === mode || (mode === "file" && f.ref.dir)) return s.version;
+    const ref = { ...f.ref, mode };
+    s.files = s.files.map((x) => (x.id === id ? { ...x, ref } : x));
+    if (mode === "file" && !this.#uploads.has(id)) {
+      const held = this.#held.get(id);
+      if (!held) s.files = s.files.map((x) => (x.id === id ? { ...x, error: t("core-misc.composer.upload_missing", { name: x.name }) } : x));
+      else if (f.size > MAX_FILE) s.files = s.files.map((x) => (x.id === id ? { ...x, error: t("core-misc.composer.too_big") } : x));
+      else this.#upload(key, held.station, held.file);
     }
     return this.#changed(key, s);
   }
@@ -335,7 +368,21 @@ export class Composers {
     };
     // An image's size, read while it goes up: every page holds its place from the first (the outbox's row too, before it
     // is up, even when it was sent before its size was read), and it travels with the file.
-    const blob = f.blob;
+    // Another station's file: read from there a part at a time, as a picked one is read from the page.
+    const elsewhere = f.drive?.station !== undefined && f.drive.station !== station ? f.drive : null;
+    const blob = f.blob ?? (elsewhere ? remoteSource(inner, elsewhere as { station: string; root: string; path: string }, f.size) : undefined);
+    if (f.drive && !elsewhere) {
+      const drive = f.drive;
+      inner.runner.fork(
+        Effect.flatMap(Effect.try({ try: () => StationAddr.parse(station), catch: asCoreError }), (addr) => inner.stations.requests.driveStage(addr, drive.root, drive.path, null)).pipe(
+          Effect.match({
+            onSuccess: (done) => { upload.file = null; change({ sent: f.size, done }); Deferred.doneUnsafe(upload.done, Effect.succeed(done)); },
+            onFailure: (e) => { upload.error = true; change({ error: e.message || t("core-misc.composer.upload_failed") }); Deferred.doneUnsafe(upload.done, Effect.fail(e)); },
+          }),
+        ),
+      );
+      return;
+    }
     // Its header first (a few bytes, at once); decoded only when that does not say.
     const decoded = (b: Blob) => typeof createImageBitmap === "function"
       ? createImageBitmap(b).then((m) => { const s = { width: m.width, height: m.height }; m.close(); return s; })
@@ -355,7 +402,8 @@ export class Composers {
       let have = 0;
       let saved: J;
       while (saved === undefined) {
-        const bytes = new Uint8Array(yield* Effect.tryPromise({ try: () => f.blob.slice(have, have + PART).arrayBuffer(), catch: asCoreError }));
+        if (!blob) return yield* Effect.fail(new CoreError("upload", t("core-misc.composer.upload_missing", { name: f.name })));
+        const bytes = new Uint8Array(yield* Effect.tryPromise({ try: () => blob.slice(have, have + PART).arrayBuffer(), catch: asCoreError }));
         const told = yield* inner.stations.requests.uploadPart(addr, { id, name: f.name, size: f.size, offset: have }, bytes, null);
         if (told.file !== undefined) saved = told.file;
         else if (told.have === have) return yield* Effect.fail(new CoreError("upload", t("core-misc.composer.upload_failed")));
@@ -405,6 +453,9 @@ export class Composers {
   release(files: { id: string }[]): void {
     for (const f of files) {
       this.#sizes.delete(f.id);
+      const held = this.#held.get(f.id)?.file.blob;
+      if (held instanceof FileSource && this.#uploads.get(f.id)?.file?.blob !== held) held.close();
+      this.#held.delete(f.id);
       const source = this.#uploads.get(f.id)?.file?.blob;
       if (source instanceof FileSource) source.close();
       this.#uploads.delete(f.id);
@@ -422,11 +473,14 @@ export class Composers {
     s.error = null;
     s.focus = null;
     const version = this.#changed(key, s);
+    // Those named by their path go as words, after what is written: where each is.
+    const named = taken.files.filter((f) => f.ref?.mode === "path");
+    const sent = taken.files.filter((f) => f.ref?.mode !== "path");
     return {
-      text: taken.text.trim(),
-      attachments: taken.files.flatMap((f) => (f.done ? [f.done] : [])),
+      text: [taken.text.trim(), ...named.map((f) => pathWords(f.ref!))].filter((w) => w !== "").join("\n"),
+      attachments: sent.flatMap((f) => (f.done ? [f.done] : [])),
       quotes: taken.quotes.map(({ author, text, comment, ts, role, file }) => ({ author, text, comment: comment.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}), ...(file ? { file } : {}) })),
-      files: taken.files.map((f) => f.id),
+      files: sent.map((f) => f.id),
       version,
     };
   }
@@ -476,6 +530,18 @@ export class Composers {
   }
 }
 
+/// Where a file named by its path is, as the message says it: its station's name and its path there.
+export const pathWords = (ref: ComposerRef) => t(ref.dir ? "common.folderOn" : "common.pathOn", { station: ref.stationName, path: ref.path });
+
+/// Another station's file read from its drive a part at a time (`drive.read`), to be sent up to the chat's station.
+function remoteSource(inner: Inner, at: { station: string; root: string; path: string }, size: number): FileSource {
+  const addr = StationAddr.parse(at.station);
+  return new FileSource(size, "", (start, end) => Effect.runPromise(inner.stations.requests.driveRead(addr, at.root, at.path, start, end - start, null)).then((got) => {
+    const bytes = got.bytes;
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  }), () => {});
+}
+
 // ── the calls ──
 
 const str = (p: unknown, k: string): string => {
@@ -518,14 +584,31 @@ export function parseComposer(name: string, params: unknown): Call | null {
     case "add": {
       const files = Array.isArray(p.files) ? p.files : [];
       const list = files.map((f: J) => {
-        if (!isObject(f) || typeof (f as J).id !== "string" || !((f as J).blob instanceof Blob || (f as J).blob instanceof FileSource)) throw CoreError.invalid(t("core-misc.params.missing", { field: "files" }));
         const x = f as J;
-        return { id: x.id, name: typeof x.name === "string" ? x.name : x.blob.name ?? "", size: typeof x.size === "number" ? x.size : x.blob.size, blob: x.blob, ...(isObject(x.pasted) ? { pasted: x.pasted } : {}) } as FileIn;
+        if (!isObject(f) || typeof x.id !== "string") throw CoreError.invalid(t("core-misc.params.missing", { field: "files" }));
+        // Dragged in from where it is: named by its path, or sent.
+        const r = x.ref;
+        const ref = isObject(r) && typeof r.station === "string" && typeof r.path === "string"
+          ? { ref: { station: r.station, stationName: typeof r.stationName === "string" ? r.stationName : r.station, path: r.path, dir: r.dir === true, mode: r.mode === "file" ? "file" as const : "path" as const } }
+          : {};
+        // A file of a station's drive: where it is (its station, when not the chat's).
+        if (isObject(x.drive) && typeof x.drive.root === "string" && typeof x.drive.path === "string") {
+          const drive = { ...(typeof x.drive.station === "string" ? { station: x.drive.station } : {}), root: x.drive.root, path: x.drive.path };
+          // The file itself too, when the page has it (one from Finder): sent up from there to another station.
+          const blob = x.blob instanceof Blob || x.blob instanceof FileSource ? { blob: x.blob } : {};
+          return { id: x.id, name: typeof x.name === "string" ? x.name : x.drive.path.split("/").at(-1) ?? "", size: typeof x.size === "number" ? x.size : 0, drive, ...blob, ...ref } as FileIn;
+        }
+        // A folder named by its path: nothing to send.
+        if (ref.ref?.dir) return { id: x.id, name: typeof x.name === "string" ? x.name : "", size: 0, ...ref } as FileIn;
+        if (!(x.blob instanceof Blob || x.blob instanceof FileSource)) throw CoreError.invalid(t("core-misc.params.missing", { field: "files" }));
+        return { id: x.id, name: typeof x.name === "string" ? x.name : x.blob.name ?? "", size: typeof x.size === "number" ? x.size : x.blob.size, blob: x.blob, ...(isObject(x.pasted) ? { pasted: x.pasted } : {}), ...ref } as FileIn;
       });
       return { kind: "composer", key, act: { add: list, station: str(p, "station") } };
     }
     case "remove":
       return { kind: "composer", key, act: { remove: str(p, "id") } };
+    case "mode":
+      return { kind: "composer", key, act: { mode: str(p, "mode") === "file" ? "file" : "path", file: str(p, "id") } };
     case "take":
       return { kind: "composer", key, act: { take: true } };
     case "restore":
@@ -542,7 +625,7 @@ export function parseComposer(name: string, params: unknown): Call | null {
 export type ComposerAct =
   | { text: string } | { append: string } | { quote: ComposerQuote; focus: boolean } | { comment: string; words: string }
   | { unquote: string } | { focused: true } | { error: string | null } | { starting: boolean } | { add: FileIn[]; station: string }
-  | { remove: string } | { take: true } | { restore: true; error: string | null; unlessWritten: boolean } | { carry: string } | { move: string };
+  | { remove: string } | { mode: "path" | "file"; file: string } | { take: true } | { restore: true; error: string | null; unlessWritten: boolean } | { carry: string } | { move: string };
 
 export function install(): void {
   handlers.composer = (inner, call) => {
@@ -560,6 +643,7 @@ export function install(): void {
       if ("starting" in a) return { version: all.starting(c.key, a.starting) };
       if ("add" in a) return { version: all.add(c.key, a.station, a.add) };
       if ("remove" in a) return { version: all.remove(c.key, a.remove) };
+      if ("mode" in a) return { version: all.mode(c.key, a.file, a.mode) };
       if ("take" in a) return all.take(c.key);
       if ("restore" in a) return { version: all.restore(c.key, a.error, a.unlessWritten) };
       if ("carry" in a) return { version: all.carry(c.key, a.carry) };

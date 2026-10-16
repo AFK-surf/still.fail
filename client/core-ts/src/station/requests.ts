@@ -344,6 +344,18 @@ export class Requests {
     });
   }
 
+  /// POST /drive/stage {root, path}: a file of the station's drive copied among the uploads, waiting there as one sent
+  /// up would (the same answer: `{name, path, size}`), for a message to send.
+  driveStage(station: StationAddr, root: string, path: string, ctx: SpanContext | null): Effect.Effect<unknown, CoreError> {
+    const body = new TextEncoder().encode(JSON.stringify({ root, path }));
+    return Effect.flatMap(this.exchange(station, "POST", "/drive/stage", [["content-type", "application/json"]], body, false, ctx), (r) => {
+      const parsed = parseJson(r.body);
+      const data = parsed === undefined ? {} : parsed;
+      if (r.status === 404 && isNoRoute(r.body)) return Effect.fail(new CoreError("unsupported", t("station.core.driveOldStation"), 404));
+      return r.status >= 200 && r.status < 300 ? Effect.succeed(data as unknown) : Effect.fail(httpError(r.status, data));
+    });
+  }
+
   /// GET /sessions/:key/poster?name=: a video's poster (a JPEG), or null when the station has none (it cannot make one,
   /// or is from before posters).
   poster(station: StationAddr, key: string, name: string, ctx: SpanContext | null): Effect.Effect<Uint8Array | null, CoreError> {

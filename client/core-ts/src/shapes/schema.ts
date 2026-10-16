@@ -653,11 +653,13 @@ export const SHAPES: Record<string, Shape> = {
     ["updates", vec("SoftwareVersion"), { default: true, doc: "The station's and its runtimes' versions, and whether newer ones are out (none from a station older than them)." }],
     ["processesText", "String", { doc: "Its agents' processes, in a line." }],
     ["footprint", opt("FootprintBrief"), { doc: "How much of the disk it takes (none from a station older than the footprint page, which then is not offered)." }],
-    ["drive", opt("DriveRoots"), { doc: "The folders it lends its members (none from a station older than the drive, which then is not offered)." }],
+    ["drive", opt("DriveRoots"), { doc: "Its files: the folders pinned, and whether the viewer browses every folder (none from a station older\nthan the drive, which then is not offered)." }],
   ], { doc: "A station's overview, with what the clients show of its connects and profiles." }),
   DriveRoots: struct([
-    ["roots", vec("DriveRoot")],
-  ], { doc: "A station's drive (docs/drive.md): the folders its workspace's owners and admins named." }),
+    ["roots", vec("DriveRoot"), { doc: "The folders pinned: the list everyone sees first, and all a read-only member reaches." }],
+    ["anywhere", opt("bool"), { doc: "The viewer browses every folder of the machine (a member who may write); absent from a station from\nbefore, which lends only the folders pinned." }],
+    ["home", opt("String"), { doc: "Where browsing starts, with `anywhere`: the home of the station's machine." }],
+  ], { doc: "A station's drive (docs/drive.md): the folders pinned, and how far the viewer reaches." }),
   DriveRoot: struct([
     ["path", "String", { doc: "Where it is on the station; what the drive's calls name it by." }],
     ["name", "String"],
@@ -967,7 +969,16 @@ export const SHAPES: Record<string, Shape> = {
     ["done", opt("Attachment"), { doc: "Up: as the station keeps it (in no chat until a message takes it)." }],
     ["error", opt("String")],
     ["pasted", opt("PastedInfo")],
+    ["ref", opt("ComposerRef"), { doc: "Dragged in from where it is (a station's files, or Finder on a machine that is a station)." }],
   ], { doc: "A file in what is being written: going up, up, or failed." }),
+  ComposerRef: struct([
+    ["station", "String", { doc: "The station it is on (its address)." }],
+    ["stationName", "String"],
+    ["path", "String", { doc: "Its absolute path there." }],
+    ["dir", "bool", { doc: "A folder: only ever named by its path." }],
+    ["mode", "ComposerRefMode"],
+  ], { doc: "A file or folder dragged in from where it is: named by its path (the message says which station has it and where),\nor sent as a file to the chat's station (`composer.mode`)." }),
+  ComposerRefMode: words(["path","file"], { doc: "Whether a file dragged in is named by its path or sent." }),
   ComposerView: struct([
     ["text", "String", { doc: "The words as written: what the page typed (`composer.text`), or the core's own (read back, taken, put back,\ncarried on), which come with a new `rev` for the page to show." }],
     ["rev", "i64", { client: "I54" }],

@@ -1,6 +1,7 @@
 // The admin API (the Rust station's admin/mod.rs `route`): a table of routes, each a method, a path pattern and what answers
 // it, gathered from src/api/routes (one module a part of the API). Reads go to the readers (off the main thread); what
 // is not here answers 404 as an unknown route does.
+import { join } from "node:path";
 import type { Readers } from "../read/pool.ts";
 import { HttpError } from "../read/views.ts";
 import { type Answer, type Request, error, json, queryPairs } from "./request.ts";
@@ -14,7 +15,7 @@ import { routes as accounts } from "./routes/accounts.ts";
 import { routes as xshare } from "./routes/xshare.ts";
 import { routes as publish } from "./routes/publish.ts";
 import { routes as slack } from "./routes/slack.ts";
-import { routes as hub } from "./routes/hub.ts";
+import { routes as hub, uploadPath } from "./routes/hub.ts";
 import { routes as deviceTools } from "./routes/tools.ts";
 import { routes as links } from "./routes/links.ts";
 import { routes as drive } from "./routes/drive.ts";
@@ -123,6 +124,8 @@ export class Admin {
               protect: () => ownPaths(deps.agents!.config.data, deps.agents!.config.path, deps.agents!.hub.config().profiles.map((p) => p.home)),
             }),
             changed: () => deps.events?.overviewChanged(),
+            // Beside the files uploaded for a message (routes/hub.ts), swept as they are.
+            stage: (name) => uploadPath(join(deps.agents!.hub.config().dataDir, "uploads"), name),
           })
         : []),
       ...(deps.agents?.xshare ? xshare({ xshare: deps.agents.xshare, store: deps.store }) : []),

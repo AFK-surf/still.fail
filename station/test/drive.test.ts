@@ -144,16 +144,17 @@ async function ask(table: ReturnType<typeof routes>, r: Request) {
   return { status: a.status, headers: a.headers, body: b, json: a.headers["content-type"] === "application/json" ? JSON.parse(b.toString()) : null };
 }
 
-test("routes: roots named by owners and admins, kept in config.json; reads with their size", async () => {
+test("routes: folders pinned by any member who may write, kept in config.json; reads with their size", async () => {
   const { base, root, data } = place();
   const configDir = mkdtempSync(join(tmpdir(), "drive-config-"));
   const config = new ConfigFile(configDir);
   let told = 0;
   const drive = new Drive({ config: () => config.raw(), protect: () => [data] });
   const table = routes({ drive, config, home: base, changed: () => told++ });
-  assert.deepEqual((await ask(table, request("GET", "/drive"))).json, { roots: [], manage: false, write: true });
-  assert.equal((await ask(table, request("PUT", "/drive/roots", {}, { roots: [root] }))).status, 403);
-  assert.equal((await ask(table, request("GET", "/drive/folders", {}, null))).status, 403);
+  assert.deepEqual((await ask(table, request("GET", "/drive"))).json, { roots: [], manage: false, write: true, anywhere: true, home: base });
+  assert.deepEqual((await ask(table, request("GET", "/drive", {}, null, "viewer"))).json, { roots: [], manage: false, write: false });
+  assert.equal((await ask(table, request("PUT", "/drive/roots", {}, { roots: [root] }, "viewer"))).status, 403);
+  assert.equal((await ask(table, request("GET", "/drive/folders", {}, null, "viewer"))).status, 403);
   mkdirSync(join(base, ".hidden"));
   mkdirSync(join(base, "Movies"));
   const picked = await ask(table, request("GET", "/drive/folders", {}, null, "owner"));
@@ -206,4 +207,47 @@ test("routes: roots named by owners and admins, kept in config.json; reads with 
   assert.deepEqual(kept.json.roots.map((r: any) => r.state), ["missing", "ok"]);
   assert.doesNotThrow(() => checkConfig({ drive: { roots: [root] } }, base));
   assert.throws(() => checkConfig({ drive: { roots: [1] } }, base), /drive.roots/);
+});
+
+test("anywhere: a member who may write reaches every folder, a read-only one only those pinned; the station's data never", async () => {
+  const { base, root, data } = place();
+  const config = new ConfigFile(mkdtempSync(join(tmpdir(), "drive-config-")));
+  const drive = new Drive({ config: () => config.raw(), protect: () => [data] });
+  const table = routes({ drive, config, home: base });
+  symlinkSync(join(base, "outside.txt"), join(root, "out-link"));
+  // Not pinned: any absolute folder is a root for a member, none for a viewer.
+  const listed = await ask(table, request("GET", "/drive/list", { root: base, path: "" }));
+  assert.deepEqual(listed.json.entries.map((e: any) => e.name), ["root", "outside.txt"]);
+  assert.equal((await ask(table, request("GET", "/drive/list", { root: base, path: "" }, null, "viewer"))).json.code, "not_a_root");
+  assert.equal((await ask(table, request("GET", "/drive/list", { root: "relative", path: "" }))).json.code, "not_a_root");
+  // A link out of a folder is followed for a member (listed and read), not for a viewer of a pinned one.
+  assert.equal((await ask(table, request("GET", "/drive/read", { root, path: "out-link" }))).body.toString(), "out");
+  config.update((raw) => (raw.drive = { roots: [root] }));
+  assert.equal((await ask(table, request("GET", "/drive/read", { root, path: "out-link" }, null, "viewer"))).json.code, "path_escape");
+  assert.equal((await ask(table, request("GET", "/drive/read", { root, path: "notes.md" }, null, "viewer"))).body.toString(), "# hello\n");
+  // `..` is refused all the same, and the station's data from anywhere.
+  assert.equal((await ask(table, request("GET", "/drive/read", { root, path: "../outside.txt" }))).json.code, "path_escape");
+  assert.equal((await ask(table, request("GET", "/drive/read", { root: data, path: "key" }))).json.code, "protected");
+  assert.equal((await ask(table, request("GET", "/drive/list", { root: base, path: "root/.stillfail" }))).json.code, "protected");
+  assert.equal((await ask(table, request("GET", "/drive/list", { root: base, path: "root" }))).json.entries.some((e: any) => e.name === ".stillfail"), false);
+  // Pinned by a member.
+  assert.equal((await ask(table, request("PUT", "/drive/roots", {}, { roots: [root, base] }))).status, 200);
+  assert.deepEqual(config.raw().drive.roots, [root, base]);
+});
+
+test("stage: a file copied among the uploads for a message to send; not a folder, not by a viewer", async () => {
+  const { base, root, data } = place();
+  const config = new ConfigFile(mkdtempSync(join(tmpdir(), "drive-config-")));
+  const drive = new Drive({ config: () => config.raw(), protect: () => [data] });
+  const uploads = mkdtempSync(join(tmpdir(), "drive-uploads-"));
+  let n = 0;
+  const table = routes({ drive, config, home: base, stage: (name) => ({ safe: name, path: join(uploads, `${n++}-${name}`) }) });
+  const staged = await ask(table, request("POST", "/drive/stage", {}, { root, path: "Season 1/E2.mp4" }));
+  assert.deepEqual(staged.json, { name: "E2.mp4", path: join(uploads, "0-E2.mp4"), size: 3 });
+  assert.equal(readFileSync(join(uploads, "0-E2.mp4"), "utf8"), "two");
+  assert.equal(readFileSync(join(root, "Season 1", "E2.mp4"), "utf8"), "two");
+  assert.equal((await ask(table, request("POST", "/drive/stage", {}, { root, path: "Season 1" }))).json.code, "is_a_directory");
+  assert.equal((await ask(table, request("POST", "/drive/stage", {}, { root, path: ".stillfail/key" }))).json.code, "protected");
+  assert.equal((await ask(table, request("POST", "/drive/stage", {}, { root, path: "notes.md" }, "viewer"))).status, 403);
+  assert.equal((await ask(table, request("POST", "/drive/stage", {}, { root: base, path: "outside.txt" }))).json.name, "outside.txt");
 });

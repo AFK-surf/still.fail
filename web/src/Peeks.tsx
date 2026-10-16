@@ -14,6 +14,7 @@ import { useStation } from "./station.tsx";
 import { failure, useToast } from "./toast.tsx";
 import * as css from "./Hover.css.ts";
 import { pathIn } from "./paths.ts";
+import { useThisMachineAddress } from "./thisMachine.ts";
 
 export { pathIn };
 
@@ -369,22 +370,10 @@ function chipPath(path: string): string {
   return `${parts.slice(0, 2).join("/")}/…/${parts.slice(-2).join("/")}${slash}`;
 }
 
-// The station of the machine the desktop app is on ("<workspace>/<station>"), asked of it once; null in a browser, or an
-// app that cannot show files.
-let thisMachine: Promise<string | null> | null = null;
-
 /** Whether `address` is the station of the machine the page is on (the desktop app's): its files can be shown in Finder. */
 function useOnThisMachine(address: string): boolean {
-  const [here, setHere] = useState<string | null>(null);
-  useEffect(() => {
-    const desktop = window.stillfailDesktop;
-    if (!desktop?.reveal || !desktop.station) return;
-    thisMachine ??= desktop.station.state().then((s) => (s?.workspace && s.station ? `${s.workspace}/${s.station}` : null), () => null);
-    let live = true;
-    void thisMachine.then((a) => { if (live) setHere(a); });
-    return () => { live = false; };
-  }, []);
-  return here !== null && here === address;
+  const here = useThisMachineAddress();
+  return !!window.stillfailDesktop?.reveal && here !== null && here === address;
 }
 
 /** What shows the machine's files: Finder on a Mac, Explorer on Windows. */

@@ -1,7 +1,7 @@
 // The page's way to the core's utility process (web/src/core/client.ts,
 // desktopOpener). A MessagePort cannot cross the context bridge, so it comes
 // to the page as a window message, tagged with the id the page asked with.
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 const desktop = {
   openCore: (id: number) => ipcRenderer.send("core:open", id),
@@ -24,6 +24,8 @@ const desktop = {
   },
   /** A file or directory of this machine (its station's) shown in Finder: a directory opened, a file selected in its own (main.ts). */
   reveal: (path: string): Promise<boolean> => ipcRenderer.invoke("file:reveal", path),
+  /** Where a file dropped from Finder is on this machine: named by its path in a chat (web/src/Chat.tsx). */
+  pathOf: (file: File): string => { try { return webUtils.getPathForFile(file); } catch { return ""; } },
   /** The cloud's origin: its links (https://…/o/…) are the app's own. */
   cloudOrigin: ipcRenderer.sendSync("app:cloud-origin") as string,
   /**

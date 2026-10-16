@@ -1,22 +1,26 @@
 # A station's drive
 
-A station lends its members folders of its machine: they browse them, read and
-play what is in them, and upload, rename and remove. It is zdrive
-(`zzj3720/zdrive`) brought into still.fail: zdrive's ops and path sandbox, over
-the members' link the station already has (no pairing, no allowlist of its own,
-no transport of its own).
+A station shows its members the files of its machine: they browse them, read
+and play what is in them, upload, rename and remove, and put them into a chat's
+message. It is zdrive (`zzj3720/zdrive`) brought into still.fail: zdrive's ops
+and path sandbox, over the members' link the station already has (no pairing,
+no allowlist of its own, no transport of its own).
 
 ## Who may do what
 
-- **Which folders**: the workspace's owners and admins name them, in the
-  station's settings (`drive.roots` in config.json). None by default: a station
-  lends nothing until someone names a folder.
-- **Members** browse and change what is under them; **read-only members**
-  (viewers) only browse and read (the admin API refuses their writes).
-- Every path is relative to a root and stays in it: `..` is refused, a link that
-  leads out is refused (and not listed), and the station's own data (its data
-  directory, config, the profiles' homes, the machine's runtime logins) is never
-  reachable even under a root, as for the device tools.
+- **Members who may write** reach every folder of the machine (`anywhere`):
+  whoever can have an agent run there could have it read any file anyway, so
+  the drive does not pretend otherwise. They start at the machine's home; any
+  absolute path is a root to ask from.
+- **Pinned folders** (`drive.roots` in config.json) are the list everyone sees
+  first (the files' sidebar, a chat's 文件 tab); any member who may write pins
+  and unpins them. **Read-only members** (viewers) reach only these, and only
+  browse and read (the admin API refuses their writes).
+- Every path is relative to a root and stays in it: `..` is refused; for a
+  viewer, a link that leads out of the pinned folder is refused (and not
+  listed). The station's own data (its data directory, config, the profiles'
+  homes, the machine's runtime logins) is never reachable, as for the device
+  tools.
 - On macOS a station launchd runs may not read Documents, Desktop, Downloads or
   removable volumes: such a root is listed with `state: unreadable`.
 
@@ -24,9 +28,9 @@ no transport of its own).
 
 | Request | Answer |
 |---|---|
-| `GET /drive` | `{roots: [{path, name, state}], manage, write}` (also in the overview as `drive.roots`) |
-| `PUT /drive/roots {roots}` | owners and admins; each new one must be there, a folder, none of the station's data |
-| `GET /drive/folders?path=` | owners and admins: the folders in `path` (the home when empty), to pick a root |
+| `GET /drive` | `{roots: [{path, name, state}], manage, write, anywhere?, home?}` (also in the overview as `drive`) |
+| `PUT /drive/roots {roots}` | the folders pinned, by any member who may write; each new one must be there, a folder, none of the station's data |
+| `GET /drive/folders?path=` | members who may write: the folders in `path` (the home when empty), to pick one to pin |
 | `GET /drive/list?root=&path=` | `{path, entries: [{name, dir, size, mtime, type}], truncated}`, folders first, names by number |
 | `GET /drive/stat?root=&path=` | one entry |
 | `GET /drive/read?root=&path=&offset=&length=` | the bytes (at most 8 MB), `stillfail-total`, `stillfail-mtime`, `content-type` |
@@ -34,6 +38,7 @@ no transport of its own).
 | `POST /drive/mkdir {root, path}` | the new folder's entry |
 | `POST /drive/rename {root, from, to}` | within the root, nothing replaced |
 | `POST /drive/remove {root, path}` | a folder with what it holds; a link as a link |
+| `POST /drive/stage {root, path}` | a file copied among the uploads (a clone where the disk can), answered as an upload is (`{name, path, size}`), for a message to send; at most 1 GB |
 
 A refusal is `{error, code}` (`error` in the asker's language) with the code's
 status: `invalid_request` 400, `not_a_root`/`not_found` 404,
@@ -67,11 +72,24 @@ part that leaves a gap is refused `upload_lost` with `have`, where to go on from
   `drive.refresh {station, root, path}`; `drive.place {station, root, path, at,
   of?}`.
 - A station from before the drive has no `drive` in its overview: the clients
-  offer nothing for it.
+  offer nothing for it. One from before `anywhere` lends only its pinned folders.
+- Into a chat's message (composer.ts): a file or folder dragged into the
+  composer (from a list of a drive, or from Finder in the desktop app on a
+  machine that is a station of the workspace) is named by its path
+  (`ComposerFile.ref`, `mode: path`): the message says which station has it and
+  where (`common.pathOn`), nothing goes up. `composer.mode {id, mode: file}`
+  sends it as a file instead: the chat's own station copies it (`drive.stage`),
+  another station's is read from there (`drive.read`) and sent up as a picked
+  file is, one from Finder goes up from the page. A folder is only named.
 
 ## Clients
 
 On a wide screen the rail's 文件 (web/src/Rail.tsx) goes to `/w/<ws>/files`,
-which opens the first station lending folders; the sidebar beside the drive's
-pages lists every station's folders under its name. The phone reaches a drive
-from its station's page.
+which opens the first folder pinned (else the first station's home); the
+sidebar beside the drive's pages lists each station's home and the folders
+pinned, the station's name at the end of each. A folder's page has the way up
+to the home (or the disk's top), a pin, and each row's path to copy; a row
+dragged out carries the file and its path. A chat's 文件 tab
+(web/src/pages/DriveTab.tsx) browses every station's files beside the chat, to
+drag into the composer or add to the message. The phone reaches a drive from
+its station's page.

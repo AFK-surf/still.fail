@@ -5,7 +5,7 @@ import { makePastedFile, pastedInfo, PASTE_THRESHOLD } from "./pastedText.ts";
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { sentFileKey, sentImage, sentImageKey, uploadImageKey } from "./sentImages.ts";
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
-import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Web } from "./icons.tsx";
+import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Close, Command, Edit, Folder, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Web } from "./icons.tsx";
 import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { Link, useHref, useSearchParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
@@ -28,7 +28,9 @@ import type { Align, Item } from "./virtual/model.ts";
 import { animate, arrive, EASE_OUT, follower, glider, moveState, type AnimationPlaybackControls, type Follower } from "./motion.ts";
 import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
-import { DraftKey, offerToDraft, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
+import { DraftKey, offerToDraft, pathWords, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
+import { carriesDrive, droppedFrom, droppedOf } from "./drive/drag.ts";
+import { useThisMachine } from "./thisMachine.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
@@ -1503,6 +1505,8 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
     void api.warm(sessionKey).catch(() => {});
   };
   const station = useStation().address;
+  // The station of the machine the desktop app is on, when it is one of this workspace's: what Finder drops are on.
+  const here = useThisMachine(station);
   const outside = useOutsideShare();
   const send = async () => {
     if (submitDraft) { submitDraft(draft); return; }
@@ -1564,9 +1568,19 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
         }}
         onSubmit={(e) => { e.preventDefault(); submit(); }} onClick={() => input.current?.focus()}
         // Locked (its station offline), no file is taken in.
-        onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !locked) { e.preventDefault(); setDragging(true); } }}
+        onDragOver={(e) => { if ((e.dataTransfer.types.includes("Files") || carriesDrive(e.dataTransfer)) && !locked) { e.preventDefault(); setDragging(true); } }}
         onDragLeave={() => setDragging(false)}
-        onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); setDragging(false); if (!locked) add(e.dataTransfer.files); } }}>
+        onDrop={(e) => {
+          // A station's files (the chat's 文件 tab): named by their path there, until switched to files.
+          if (carriesDrive(e.dataTransfer)) { e.preventDefault(); setDragging(false); if (!locked) draft.addDropped(droppedOf(e.dataTransfer).map(droppedFrom)); return; }
+          if (e.dataTransfer.files.length) {
+            e.preventDefault(); setDragging(false);
+            if (locked) return;
+            // From Finder on a machine that is a station: named by their path there, as a station's files are.
+            const named = droppedHere(e.dataTransfer, here);
+            if (named) draft.addDropped(named); else add(e.dataTransfer.files);
+          }
+        }}>
         <ComposerExtras draft={draft} focusQuote={focusQuote} onFocused={onFocused} onDone={() => input.current?.focus()} />
         {field}
         <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ""; }} />
@@ -1575,6 +1589,29 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
       {draft.error && <p className={`${controlsCss.fieldError} ${css.chatError}`} role="alert">{draft.error}</p>}
     </div>
   );
+}
+
+/**
+ * Files dropped from Finder (or Explorer) in the desktop app on a machine that is one of the workspace's stations: named
+ * by their path there, each kept to send as a file if switched. Elsewhere (a browser, an app from before, a machine that
+ * is no station of the workspace) none is: they go up as files.
+ */
+function droppedHere(dt: DataTransfer, here: { station: string; name: string } | null): Parameters<Draft["addDropped"]>[0] | null {
+  const pathOf = window.stillfailDesktop?.pathOf;
+  if (!here || !pathOf) return null;
+  const items = [...dt.items].filter((i) => i.kind === "file");
+  const out: Parameters<Draft["addDropped"]>[0] = [];
+  for (const item of items) {
+    const file = item.getAsFile();
+    const path = file ? pathOf(file) : "";
+    if (!file || !path) return null;
+    const dir = item.webkitGetAsEntry?.()?.isDirectory === true;
+    // Sent to the station it is on, it is copied there from where it is; to another, it goes up from here.
+    const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+    const drive = cut > 0 ? { station: here.station, root: path.slice(0, cut), path: path.slice(cut + 1) } : undefined;
+    out.push({ name: file.name, size: dir ? 0 : file.size, ref: { station: here.station, stationName: here.name, path, dir }, ...(dir ? {} : { blob: file, ...(drive ? { drive } : {}) }) });
+  }
+  return out.length ? out : null;
 }
 
 /**
@@ -1718,9 +1755,10 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
     el.setSelectionRange(at, at);
   }, [text]);
   // A preview's marks beside the chat: their screenshot and a quote each, to say more about before sending.
-  useDraftInbox(locked ? undefined : draftKey, ({ files: offered, quotes: added, text: words, quote }) => {
+  useDraftInbox(locked ? undefined : draftKey, ({ files: offered, quotes: added, text: words, quote, dropped }) => {
     if (words) setText(text.trim() ? `${text.trimEnd()}\n${words}` : words);
     if (offered.length) add(offered);
+    if (dropped?.length) draft.addDropped(dropped);
     if (added.length) draft.addQuotes(added);
     // A passage selected in the chat: its comment line takes the focus.
     if (quote) draft.quote(quote);
@@ -1868,7 +1906,7 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft
       )}
       {rest.length > 0 && (
         <div className={css.composerFiles}>
-          {rest.map((f) => <PendingFile key={f.id} file={f} onRemove={() => draft.remove(f.id)}
+          {rest.map((f) => f.ref ? <RefCard key={f.id} file={f} onMode={(mode) => draft.setMode(f.id, mode)} onRemove={() => draft.remove(f.id)} /> : <PendingFile key={f.id} file={f} onRemove={() => draft.remove(f.id)}
             onRetry={f.pastedFile && f.error ? () => { draft.remove(f.id); draft.add([f.pastedFile!], f.pasted); } : undefined}
             onRestore={f.pasted?.text === undefined || draft.starting ? undefined : () => {
               draft.setText(draft.text ? `${draft.text}\n${f.pasted!.text}` : f.pasted!.text!);
@@ -1878,6 +1916,30 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * A file or folder dragged in from where it is: named by its path (which station has it, and where), or, switched, sent
+ * as a file (going up as any file does). A folder is only named.
+ */
+function RefCard({ file: f, onMode, onRemove }: { file: Pending; onMode: (mode: "path" | "file") => void; onRemove: () => void }) {
+  const ref = f.ref!;
+  const asFile = ref.mode === "file";
+  const pending = asFile && !f.done && !f.error;
+  const going = f.sent !== undefined && f.size > 0
+    ? t("web-main.file.uploadingPart", { percent: Math.floor((f.sent / f.size) * 100), size: fileSize(f.size) })
+    : t("web-main.file.uploading");
+  return (
+    <Tip label={pathWords(ref)}><span className={css.fileCard} data-error={asFile && f.error ? true : undefined}>
+      {pending ? <span className={waitingCss.spinner} aria-hidden="true" /> : ref.dir ? <Folder size={16} aria-hidden="true" /> : <Read size={16} aria-hidden="true" />}
+      <span className={css.fileCardText}>
+        <span className={css.fileCardName}>{f.name}</span>
+        <span className={css.fileCardMeta}>{asFile ? f.error ?? (pending ? going : fileSize(f.size)) : t("web-main.file.pathOn", { station: ref.stationName })}</span>
+      </span>
+      {!ref.dir && <button type="button" className={css.fileCardMode} onClick={(e) => { e.stopPropagation(); onMode(asFile ? "path" : "file"); }}>{t(asFile ? "web-main.file.asPath" : "web-main.file.asFile")}</button>}
+      <button type="button" className={css.fileCardRemove} aria-label={t("web-main.file.remove", { name: f.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>
+    </span></Tip>
   );
 }
 

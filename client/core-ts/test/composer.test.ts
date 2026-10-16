@@ -529,3 +529,65 @@ test("a_message_waits_for_every_upload_and_keeps_already_uploaded_attachments", 
   assert.deepEqual(t.posted[0].attachments, [ready, t.saved, saved]);
   t.core.close();
 });
+
+test("a_station_file_is_copied_among_its_uploads_not_sent_up_and_goes_with_the_message", async () => {
+  const t = await setup();
+  const asked: J[] = [];
+  let parts = 0;
+  (t.core.inner.stations.requests as J).uploadPart = () => { parts++; return Effect.fail(new CoreError("upload", "not this way")); };
+  (t.core.inner.stations.requests as J).driveStage = (_addr: unknown, root: string, path: string) => {
+    asked.push([root, path]);
+    return path === "gone.txt" ? Effect.fail(new CoreError("http_404", "没有这个文件或文件夹", 404)) : Effect.succeed({ name: "cut.mp4", path: "/data/uploads/2026-cut.mp4", size: 3 });
+  };
+  await t.watch(1, "ws/st:k");
+  await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [{ id: "d1", name: "cut.mp4", size: 3, drive: { root: "/Users/me", path: "Movies/cut.mp4" } }] });
+  assert.deepEqual(asked, [["/Users/me", "Movies/cut.mp4"]]);
+  assert.equal(parts, 0);
+  assert.deepEqual([v(t.values, 1).files[0].done.path, v(t.values, 1).uploading, v(t.values, 1).ready], ["/data/uploads/2026-cut.mp4", false, true]);
+  // What is sent takes it as an upload's.
+  assert.equal((await Effect.runPromise(t.core.inner.composers.uploaded("ws/st", [{ id: "d1", name: "cut.mp4" }])))[0].path, "/data/uploads/2026-cut.mp4");
+  // One the station cannot copy says why, in its place.
+  await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [{ id: "d2", name: "gone.txt", size: 1, drive: { root: "/Users/me", path: "gone.txt" } }] });
+  assert.equal(v(t.values, 1).files[1].error, "没有这个文件或文件夹");
+  t.core.close();
+});
+
+test("a_file_dragged_in_is_named_by_its_path_until_switched_to_a_file_which_then_goes_up_from_where_it_is", async () => {
+  const t = await setup();
+  const staged: J[] = [];
+  const read: J[] = [];
+  const parts: J[] = [];
+  const requests = t.core.inner.stations.requests as J;
+  requests.driveStage = (_addr: unknown, root: string, path: string) => { staged.push([root, path]); return Effect.succeed({ name: "a.mp4", path: "/data/uploads/a.mp4", size: 3 }); };
+  requests.driveRead = (addr: J, root: string, path: string, offset: number, length: number) => {
+    read.push([String(addr), root, path, offset, length]);
+    return Effect.succeed({ type: "", total: 3, mtime: null, bytes: new Uint8Array([7, 8, 9]).subarray(offset, offset + length) });
+  };
+  requests.uploadPart = (_addr: unknown, q: J, bytes: Uint8Array) => { parts.push([...bytes]); return Effect.succeed({ have: q.size, file: { name: q.name, path: "/data/uploads/b.mp4", size: q.size } }); };
+  await t.watch(1, "ws/st:k");
+  const ref = (station: string, path: string, dir = false) => ({ station, stationName: station === "ws/st" ? "Studio" : "Mini", path, dir, mode: "path" });
+  await t.ask("text", { key: "ws/st:k", text: "看看这个" });
+  await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [
+    { id: "a", name: "a.mp4", size: 3, ref: ref("ws/st", "/Users/me/a.mp4"), drive: { station: "ws/st", root: "/Users/me", path: "a.mp4" } },
+    { id: "b", name: "b.mp4", size: 3, ref: ref("ws/mini", "/Users/me/b.mp4"), drive: { station: "ws/mini", root: "/Users/me", path: "b.mp4" } },
+    { id: "c", name: "src", size: 0, ref: ref("ws/st", "/Users/me/src", true) },
+  ] });
+  // Named by their paths: nothing goes up, and it can be sent.
+  assert.deepEqual([staged, read, parts], [[], [], []]);
+  assert.deepEqual(v(t.values, 1).files.map((f: J) => [f.id, f.ref.mode, f.done ?? null]), [["a", "path", null], ["b", "path", null], ["c", "path", null]]);
+  assert.deepEqual([v(t.values, 1).uploading, v(t.values, 1).ready], [false, true]);
+  // Switched to files: the chat's station copies its own; another's is read from there and sent up. A folder stays a path.
+  await t.ask("mode", { key: "ws/st:k", id: "a", mode: "file" });
+  await t.ask("mode", { key: "ws/st:k", id: "b", mode: "file" });
+  await t.ask("mode", { key: "ws/st:k", id: "c", mode: "file" });
+  assert.deepEqual(staged, [["/Users/me", "a.mp4"]]);
+  assert.deepEqual(read.map((r) => r.slice(0, 4)), [["ws/mini", "/Users/me", "b.mp4", 0]]);
+  assert.deepEqual(parts, [[7, 8, 9]]);
+  assert.deepEqual(v(t.values, 1).files.map((f: J) => [f.id, f.ref.mode, f.done?.path ?? null]), [["a", "file", "/data/uploads/a.mp4"], ["b", "file", "/data/uploads/b.mp4"], ["c", "path", null]]);
+  // Back to a path: taken as words after what is written; the files as attachments.
+  await t.ask("mode", { key: "ws/st:k", id: "b", mode: "path" });
+  const taken = t.core.inner.composers.take("ws/st:k");
+  assert.equal(taken.text, "看看这个\nMini 上的文件：/Users/me/b.mp4\nStudio 上的文件夹：/Users/me/src");
+  assert.deepEqual([taken.attachments.map((f: J) => f.path), taken.files], [["/data/uploads/a.mp4"], ["a"]]);
+  t.core.close();
+});

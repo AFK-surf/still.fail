@@ -1665,6 +1665,23 @@ data class PastedInfo (
 	val text: String? = null
 )
 
+/// Whether a file dragged in is named by its path or sent.
+typealias ComposerRefMode = String
+
+/// A file or folder dragged in from where it is: named by its path (the message says which station has it and where),
+/// or sent as a file to the chat's station (`composer.mode`).
+@Serializable
+data class ComposerRef (
+	/// The station it is on (its address).
+	val station: String,
+	val stationName: String,
+	/// Its absolute path there.
+	val path: String,
+	/// A folder: only ever named by its path.
+	val dir: Boolean,
+	val mode: ComposerRefMode
+)
+
 /// A file in what is being written: going up, up, or failed.
 @Serializable
 data class ComposerFile (
@@ -1681,7 +1698,9 @@ data class ComposerFile (
 	/// Up: as the station keeps it (in no chat until a message takes it).
 	val done: Attachment? = null,
 	val error: String? = null,
-	val pasted: PastedInfo? = null
+	val pasted: PastedInfo? = null,
+	/// Dragged in from where it is (a station's files, or Finder on a machine that is a station).
+	val ref: ComposerRef? = null
 )
 
 /// A message sent from here that the chat does not show yet (sending | failed); `seq` once the station has it.
@@ -2254,10 +2273,16 @@ data class DriveRoot (
 	val state: DriveRootState
 )
 
-/// A station's drive (docs/drive.md): the folders its workspace's owners and admins named.
+/// A station's drive (docs/drive.md): the folders pinned, and how far the viewer reaches.
 @Serializable
 data class DriveRoots (
-	val roots: List<DriveRoot>
+	/// The folders pinned: the list everyone sees first, and all a read-only member reaches.
+	val roots: List<DriveRoot>,
+	/// The viewer browses every folder of the machine (a member who may write); absent from a station from
+	/// before, which lends only the folders pinned.
+	val anywhere: Boolean? = null,
+	/// Where browsing starts, with `anywhere`: the home of the station's machine.
+	val home: String? = null
 )
 
 @Serializable
@@ -3148,7 +3173,8 @@ data class Overview (
 	val processesText: String,
 	/// How much of the disk it takes (none from a station older than the footprint page, which then is not offered).
 	val footprint: FootprintBrief? = null,
-	/// The folders it lends its members (none from a station older than the drive, which then is not offered).
+	/// Its files: the folders pinned, and whether the viewer browses every folder (none from a station older
+	/// than the drive, which then is not offered).
 	val drive: DriveRoots? = null
 )
 

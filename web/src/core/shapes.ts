@@ -1675,6 +1675,24 @@ export interface PastedInfo {
 	text?: string;
 }
 
+/** Whether a file dragged in is named by its path or sent. */
+export type ComposerRefMode = "path" | "file";
+
+/**
+ * A file or folder dragged in from where it is: named by its path (the message says which station has it and where),
+ * or sent as a file to the chat's station (`composer.mode`).
+ */
+export interface ComposerRef {
+	/** The station it is on (its address). */
+	station: string;
+	stationName: string;
+	/** Its absolute path there. */
+	path: string;
+	/** A folder: only ever named by its path. */
+	dir: boolean;
+	mode: ComposerRefMode;
+}
+
 /** A file in what is being written: going up, up, or failed. */
 export interface ComposerFile {
 	/** The page's id for it (`composer.add`). */
@@ -1693,6 +1711,8 @@ export interface ComposerFile {
 	done?: Attachment;
 	error?: string;
 	pasted?: PastedInfo;
+	/** Dragged in from where it is (a station's files, or Finder on a machine that is a station). */
+	ref?: ComposerRef;
 }
 
 /** A message sent from here that the chat does not show yet (sending | failed); `seq` once the station has it. */
@@ -2280,9 +2300,17 @@ export interface DriveRoot {
 	state: DriveRootState;
 }
 
-/** A station's drive (docs/drive.md): the folders its workspace's owners and admins named. */
+/** A station's drive (docs/drive.md): the folders pinned, and how far the viewer reaches. */
 export interface DriveRoots {
+	/** The folders pinned: the list everyone sees first, and all a read-only member reaches. */
 	roots: DriveRoot[];
+	/**
+	 * The viewer browses every folder of the machine (a member who may write); absent from a station from
+	 * before, which lends only the folders pinned.
+	 */
+	anywhere?: boolean;
+	/** Where browsing starts, with `anywhere`: the home of the station's machine. */
+	home?: string;
 }
 
 export interface FlowChoice {
@@ -3120,7 +3148,10 @@ export interface Overview {
 	processesText: string;
 	/** How much of the disk it takes (none from a station older than the footprint page, which then is not offered). */
 	footprint?: FootprintBrief;
-	/** The folders it lends its members (none from a station older than the drive, which then is not offered). */
+	/**
+	 * Its files: the folders pinned, and whether the viewer browses every folder (none from a station older
+	 * than the drive, which then is not offered).
+	 */
 	drive?: DriveRoots;
 }
 

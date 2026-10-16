@@ -1,6 +1,7 @@
-// What both the phone's and the desktop's drive pages know of a station's drive: its roots (the overview's: none from a
-// station from before the drive, which then is not offered), who may name them (the workspace's owners and admins) and
-// who may change what is in them (anyone but a read-only member). The changes are the core's operations by name.
+// What both the phone's and the desktop's drive pages know of a station's drive: its pinned folders (the overview's: none
+// from a station from before the drive, which then is not offered), whether the viewer browses every folder of the
+// machine from its home (`anywhere`: a member who may write), and who may change what is in them (anyone but a
+// read-only member). The changes are the core's operations by name.
 import { useMemo } from "react";
 import { core, useTopicSelect } from "../core/react.ts";
 import { useWorkspace } from "../cloud/api.ts";
@@ -16,6 +17,10 @@ export interface DriveState {
   roots: DriveRoot[];
   /** May name the folders it lends (the workspace's owners and admins). */
   manage: boolean;
+  /** Browses every folder of the machine, and pins them (a member who may write, of a station that lets them). */
+  anywhere: boolean;
+  /** Where browsing starts, with `anywhere`: the home of the station's machine. */
+  home: string | null;
   /** May change what is in them (not a read-only member). */
   write: boolean;
   error: string | null;
@@ -35,6 +40,8 @@ export function useDrive(station: string): DriveState {
     offered: !!picked.drive,
     roots: picked.drive?.roots ?? [],
     manage: role === "owner" || role === "admin",
+    anywhere: picked.drive?.anywhere === true,
+    home: picked.drive?.home ?? null,
     write: picked.viewer !== "viewer",
     error: picked.error,
   }), [picked, role]);
@@ -76,6 +83,9 @@ export const filtered = (entries: readonly PickFolder[], filter: string) => {
 
 export const drive = {
   setRoots: (station: string, roots: string[]) => call("drive.setRoots", { station, roots }),
+  /** `folder` (an absolute path on the station) pinned, or not, among `roots`. */
+  pin: (station: string, roots: readonly DriveRoot[], folder: string, pinned: boolean) =>
+    call("drive.setRoots", { station, roots: pinned ? [...roots.map((r) => r.path).filter((p) => p !== folder), folder] : roots.map((r) => r.path).filter((p) => p !== folder) }),
   folders: (station: string, path: string | null) => call("drive.folders", { station, ...(path ? { path } : {}) }).then(foldersOf),
   mkdir: (at: At, name: string) => call("drive.mkdir", { station: at.station, root: at.root, path: joinPath(at.path, name) }),
   rename: (at: At, entry: DriveEntry, to: string) => call("drive.rename", { station: at.station, root: at.root, from: joinPath(at.path, entry.name), to: joinPath(at.path, to) }),
@@ -103,4 +113,34 @@ export function drivePath(base: string, root: string | null, path = "", what: ""
 export function childOf(folder: string, name: string): string {
   const sep = folder.includes("\\") && !folder.includes("/") ? "\\" : "/";
   return folder.endsWith(sep) ? `${folder}${name}` : `${folder}${sep}${name}`;
+}
+
+/** Where a path under a root is on the station: its absolute path (the root's separator between). */
+export function absoluteOf(root: string, path: string): string {
+  return path.split("/").filter(Boolean).reduce((at, name) => childOf(at, name), root);
+}
+
+/** A folder's own name from its absolute path (the path itself for a top: `/`, `C:\`). */
+export const folderName = (path: string) => path.split(/[/\\]/).filter(Boolean).at(-1) ?? path;
+
+/**
+ * The way to an absolute folder, each step a folder to go to: from the home (named) when it is under it, else from the
+ * top of the disk.
+ */
+export function trailOf(abs: string, home: string | null, homeName: string): { name: string; path: string }[] {
+  const sep = abs.includes("\\") && !abs.includes("/") ? "\\" : "/";
+  const trim = (p: string) => (p.length > 1 && p.endsWith(sep) ? p.slice(0, -1) : p);
+  const at = trim(abs);
+  const h = home === null ? null : trim(home);
+  if (h !== null && (at === h || at.startsWith(h + sep))) {
+    const out = [{ name: homeName, path: h }];
+    for (const part of at.slice(h.length).split(sep).filter(Boolean)) out.push({ name: part, path: childOf(out.at(-1)!.path, part) });
+    return out;
+  }
+  const parts = at.split(sep).filter(Boolean);
+  // A Windows path starts with its drive (`C:`), a POSIX one with `/`.
+  const top = sep === "/" ? "/" : `${parts.shift() ?? ""}\\`;
+  const out = [{ name: top, path: top }];
+  for (const part of parts) out.push({ name: part, path: childOf(out.at(-1)!.path, part) });
+  return out;
 }
