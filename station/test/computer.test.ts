@@ -124,7 +124,7 @@ test("a screenshot: the view's newest frame, its size and its scale to the scree
   const r = await computer.act("s1", { screen: "browser:T1" });
   assert.deepEqual(source.opened, [{ maxWidth: 1280, maxHeight: 1280, codecs: ["jpeg"] }]);
   assert.deepEqual(r.content[1], { type: "image", data: Buffer.from(picture(1)).toString("base64"), mimeType: "image/jpeg" });
-  assert.match(text(r), /browser:T1 "Docs": screenshot 640×360 px of a 1280×720 screen \(scale 2: 1 screenshot px = 2 screen px\)/);
+  assert.match(text(r), /browser:T1 "Docs": screenshot 640×360 px \(scale 2: 1 screenshot px = 2 screen px\)\. Give x\/y in this screenshot's pixels\./);
   // A newer frame came (the screen changed): the next screenshot is it.
   source.views[0]!.show(2);
   await flush();
@@ -192,24 +192,24 @@ test("each action's input: clicks, double and right clicks, drags, scrolls, keys
 test("after an action its screenshot waits for the screen to answer (500 ms, or `wait`); a view's first picture is waited for", async () => {
   const { computer, source, timers } = setup();
   await computer.act("s1", { screen: "browser:T1" });
-  let done: any = null;
-  void computer.act("s1", { screen: "browser:T1", action: "click", x: 10, y: 10 }).then((r) => (done = r));
+  const got: { done?: any } = {};
+  void computer.act("s1", { screen: "browser:T1", action: "click", x: 10, y: 10 }).then((r) => (got.done = r));
   await flush();
   assert.equal(source.views[0]!.inputs.length, 3, "sent at once");
-  assert.equal(done, null, "the screenshot waits");
+  assert.equal(Boolean(got.done), false, "the screenshot waits");
   source.views[0]!.show(7);
   timers.advance(SETTLE_MS - 1);
   await flush();
-  assert.equal(done, null);
+  assert.equal(Boolean(got.done), false);
   timers.advance(1);
   await flush();
-  assert.match(text(done), /^Clicked at \(10, 10\)\./);
-  assert.equal(done.content[1].data, Buffer.from(picture(7)).toString("base64"));
+  assert.match(text(got.done), /^Clicked at \(10, 10\)\./);
+  assert.equal(got.done.content[1].data, Buffer.from(picture(7)).toString("base64"));
   // A screen showing nothing yet: its first picture, when it comes; none in FIRST_MS is said so.
   const blank = new FakeSource("browser:T2");
   blank.first = null;
   const { computer: c2 } = setup(blank);
-  let first: any = null;
+  let first = null as any;
   void c2.act("s1", { screen: "browser:T2" }).then((r) => (first = r));
   await flush();
   blank.views[0]!.show(3);

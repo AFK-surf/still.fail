@@ -439,8 +439,10 @@ export class Computer {
   #described(source: ScreenSource, size: Size, view: AgentView): string {
     const real = source.size();
     const scale = real.width > 0 && size.width > 0 ? real.width / size.width : 1;
+    // By the widths: a source's listed height may be its window's (a tab's, before its first frame says otherwise).
+    const scaled = Number(scale.toFixed(3));
     const lines = [
-      `${source.id} ${JSON.stringify(source.title())}: screenshot ${size.width}×${size.height} px${real.width > 0 ? ` of a ${real.width}×${real.height} screen (scale ${Number(scale.toFixed(3))}: 1 screenshot px = ${Number(scale.toFixed(3))} screen px)` : ""}. Give x/y in this screenshot's pixels.`,
+      `${source.id} ${JSON.stringify(source.title())}: screenshot ${size.width}×${size.height} px (scale ${scaled}: 1 screenshot px = ${scaled} screen px). Give x/y in this screenshot's pixels.`,
     ];
     const people = this.#p.hub.people(source.id).viewers.filter((n) => n !== view.name);
     if (people.length > 0) lines.push(`Also on this screen: ${people.join(", ")}.`);
