@@ -23,9 +23,8 @@ import * as rootCss from "./styles/root.css.ts";
 import * as css from "./app.css.ts";
 import { follower, type Follower } from "@stillfail/ui/motion.ts";
 import { useInWorkspace } from "../notify.ts";
-import { BottomBar, PLACE_PATHS, placeOfPath, type BarPlace } from "./Bar.tsx";
+import { BottomBar, PLACE_PATHS, placeOfPath, useBars, type BarPlace } from "./Bar.tsx";
 import { t } from "../i18n.ts";
-import { usePrefs } from "../prefs.ts";
 import { MobileContext } from "./narrow.ts";
 
 /** The workspace in view and the signed-in account that reaches it. */
@@ -155,7 +154,7 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
   // A place's page coming in (switched to on the bar): which, from how far across; gone once it is in.
   const [placeIn, setPlaceIn] = useState<{ key: string; from: number; n: number } | null>(null);
   useEffect(() => { if (!placeIn) return; const timer = setTimeout(() => setPlaceIn(null), 260); return () => clearTimeout(timer); }, [placeIn]);
-  const bars = usePrefs((p) => p.bars);
+  const bars = useBars();
   const barsNow = useRef(bars);
   barsNow.current = bars;
   const drawnFirst = useRef(new Map<string, number>());

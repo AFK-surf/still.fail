@@ -3461,6 +3461,11 @@ export interface PrefsView {
 	rails?: Record<string, string[]>;
 	/** A phone's bottom bars (always whole: the core fills in what is not kept). */
 	bars?: BarPrefs;
+	/**
+	 * A phone's bottom bars as each workspace has them, by workspace (each whole, as `bars`); one not there goes
+	 * by `bars` (one set for all, as devices kept it before).
+	 */
+	barsBy?: Record<string, BarPrefs>;
 }
 
 /** Providers of one group, as the picker lists them. */

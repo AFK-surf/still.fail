@@ -8,8 +8,8 @@ import { fromLocale, follows, setCurrent, t, tr, type Lang } from "./i18n.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "driveViews", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars"];
-const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "resume", "lockNotice", "rails"];
+const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "driveViews", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy"];
+const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "resume", "lockNotice", "rails", "barsBy"];
 const TABS_KEPT = 200;
 const DEFERRED_KEPT = 200;
 const PREFS = { topic: "prefs" };
@@ -70,9 +70,11 @@ export function barsOf(v: unknown): { sets: string[][]; current: number } {
   return { sets, current: Math.min(sets.length - 1, Math.max(0, n)) };
 }
 
-/// The prefs as they go out: the reader's settings whole, and the bottom bars.
+/// The prefs as they go out: the reader's settings whole, and the bottom bars (each workspace's too).
 export function shown(v: unknown): unknown {
-  return isObject(v) ? { ...v, reader: readerOf(v.reader), bars: barsOf(v.bars) } : v;
+  if (!isObject(v)) return v;
+  const by = isObject(v.barsBy) ? Object.fromEntries(Object.entries(v.barsBy).map(([ws, b]) => [ws, barsOf(b)])) : {};
+  return { ...v, reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by };
 }
 
 /// What is kept, as kept (no defaults filled in).
@@ -110,6 +112,8 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
           delete map[key];
           continue;
         }
+        // A workspace's bottom bars, kept as they read (as `bars`).
+        if (field === "barsBy") entry = barsOf(entry);
         if (field === "chatTabs" && isObject(entry)) {
           const last = Object.values(map).reduce<number>((m, v) => (isObject(v) && typeof v.at === "number" ? Math.max(m, v.at) : m), 0);
           entry = { ...entry, at: Math.max(now, last + 1) };

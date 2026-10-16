@@ -290,17 +290,22 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
     val workspace: String? get() = kept.workspace
     fun pickWorkspace(id: String) { if (id != kept.workspace) setPrefs(kept.copy(workspace = id), buildJsonObject { put("workspace", id) }) }
 
-    /** The bottom bars (Places.kt, ui/Bar.kt), whole: the core's, or the default ones before it says. */
-    val bars: fail.still.android.data.BarPrefs get() = kept.bars?.let { barsOf(it.sets, it.current.toInt()) } ?: DEFAULT_BARS
-    /** The bars changed (`sets`, `current` the one in view): shown at once, kept whole (`prefs.set {bars}`). */
+    /**
+     * The bottom bars (Places.kt, ui/Bar.kt) of the workspace in view, whole: its own (`barsBy`), else the ones all had
+     * before each had its own, else the default ones before the core says.
+     */
+    val bars: fail.still.android.data.BarPrefs get() =
+        (kept.workspace?.let { kept.barsBy?.get(it) } ?: kept.bars)?.let { barsOf(it.sets, it.current.toInt()) } ?: DEFAULT_BARS
+    /** The bars changed (`sets`, `current` the one in view): shown at once, kept whole, the workspace in view's (`prefs.set {barsBy}`). */
     fun setBars(sets: List<List<String>>, current: Int) {
         val whole = barsOf(sets, current)
-        setPrefs(kept.copy(bars = whole), buildJsonObject {
-            putJsonObject("bars") {
-                put("sets", kotlinx.serialization.json.JsonArray(whole.sets.map { set -> kotlinx.serialization.json.JsonArray(set.map { kotlinx.serialization.json.JsonPrimitive(it) }) }))
-                put("current", whole.current)
-            }
-        })
+        val json = buildJsonObject {
+            put("sets", kotlinx.serialization.json.JsonArray(whole.sets.map { set -> kotlinx.serialization.json.JsonArray(set.map { kotlinx.serialization.json.JsonPrimitive(it) }) }))
+            put("current", whole.current)
+        }
+        val ws = kept.workspace
+        if (ws == null) setPrefs(kept.copy(bars = whole), buildJsonObject { put("bars", json) })
+        else setPrefs(kept.copy(barsBy = (kept.barsBy ?: emptyMap()) + (ws to whole)), buildJsonObject { putJsonObject("barsBy") { put(ws, json) } })
     }
 
     /** 外观: "system" (the default), "light" or "dark". */

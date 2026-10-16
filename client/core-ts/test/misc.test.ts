@@ -9,7 +9,7 @@ import { Doing } from "../src/doing.ts";
 import { conformTy } from "../src/conform.ts";
 import { merge } from "../src/entries.ts";
 import { badgeOf, Counts, lastChat, rowTone } from "../src/views/marks.ts";
-import { barsOf } from "../src/prefs.ts";
+import { barsOf, shown } from "../src/prefs.ts";
 import { FakeHost } from "../src/testing.ts";
 import "./helpers.ts";
 
@@ -169,6 +169,13 @@ test("a_phones_bottom_bars_read_whole_from_what_is_kept", () => {
   assert.deepEqual(barsOf({ sets: [["x"], ["decisions"]], current: 1 }), { sets: [["decisions"]], current: 0 }, "a bar with nothing known goes");
   assert.deepEqual(barsOf({ sets: [["chats"], ["files"]], current: 1 }), { sets: [["chats"], ["files"]], current: 1 });
 });
+test("each_workspaces_bottom_bars_go_out_whole", () => {
+  const out = shown({ barsBy: { a: { sets: [["files", "nope"]], current: 4 }, b: "junk" } }) as { barsBy: Record<string, unknown> };
+  assert.deepEqual(out.barsBy.a, { sets: [["files"]], current: 0 }, "a workspace's bars read as `bars` do");
+  assert.deepEqual(out.barsBy.b, barsOf(undefined), "one unreadable: the default");
+  assert.deepEqual((shown({}) as { barsBy: unknown }).barsBy, {}, "none kept: no workspace's");
+});
+
 
 test("the_chat_last_open_is_the_cores_else_the_path_a_page_kept", () => {
   const kept = { openChat: { ws: { station: "ws/a", key: "k1" } }, lastChat: { ws: "/w/ws/s/b/chats/k2" } };

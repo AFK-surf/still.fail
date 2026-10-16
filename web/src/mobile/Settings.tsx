@@ -19,7 +19,7 @@ import { standalone } from "../standalone.ts";
 import { download, downloadsOffered, onAndroid } from "../downloads.ts";
 import { Presence } from "./Connects.tsx";
 import { railLabel } from "../Rail.tsx";
-import type { BarPlace } from "./Bar.tsx";
+import { useBars, type BarPlace } from "./Bar.tsx";
 import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, Seg, Spinner, TopBack } from "./parts.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -64,7 +64,7 @@ export function SettingsScreen() {
   const profiles = stations?.flatMap((s) => s.overview?.profiles ?? []) ?? [];
   const short = profiles.filter((p) => p.trouble != null).length;
   const language = usePrefs((p) => p.language) ?? null;
-  const bars = usePrefs((p) => p.bars);
+  const bars = useBars();
   const lock = useLock(app.entry.id);
   const at = (path: string) => () => app.push(app.at(path));
   const under = app.under();
@@ -162,7 +162,7 @@ export function AppearanceScreen() {
 export function LanguageScreen() {
   const app = useApp();
   const language = usePrefs((p) => p.language) ?? null;
-  const bars = usePrefs((p) => p.bars);
+  const bars = useBars();
   const options = languages();
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>

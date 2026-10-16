@@ -18,7 +18,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Poin
 import type { ComponentType } from "react";
 import { Archive, Chart, Chats, Folder, Im, Ling, Plus, Quota, Zou, type IconProps } from "@stillfail/ui/icons.tsx";
 import { railLabel } from "../Rail.tsx";
-import { setPrefs, usePrefs } from "../prefs.ts";
+import { prefs, setPrefs, usePrefs } from "../prefs.ts";
 import { useChats, useStatus } from "../api.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
 import { StationGlyph, glyphCounts } from "../StationGlyph.tsx";
@@ -121,7 +121,7 @@ export interface BottomBarProps {
 }
 
 export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) {
-  const bars = usePrefs((p) => p.bars);
+  const bars = useBars();
   const sets = bars.sets as BarPlace[][];
   const cur = Math.min(bars.current, sets.length - 1);
   const items = sets[cur] ?? [];
@@ -266,7 +266,7 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
     if (key && key !== place) go(key);
     panel(false, () => {
       setSwap((was) => was && { ...was, done: true });
-      setPrefs({ bars: { sets: bars.sets, current: i } });
+      setBars(bars.sets as BarPlace[][], i);
     }, [200, 28]);
   };
   // Landed and drawn as the chosen bar: the stack gone (it is where the bar's places are), the ball going on. Away (a page
@@ -473,7 +473,14 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
   );
 }
 
-/** Says a bar's new places (or a new bar, or one fewer) to the core, whole. */
+/** The bottom bars of the workspace in view (its own; the ones all had before it had its own). */
+export function useBars(): { sets: string[][]; current: number } {
+  return usePrefs((p) => (p.workspace ? p.barsBy[p.workspace] : undefined) ?? p.bars);
+}
+
+/** Says a bar's new places (or a new bar, or one fewer) to the core, whole: the workspace in view's. */
 export function setBars(sets: BarPlace[][], current: number): void {
-  setPrefs({ bars: { sets, current: Math.max(0, Math.min(current, sets.length - 1)) } });
+  const whole = { sets, current: Math.max(0, Math.min(current, sets.length - 1)) };
+  const ws = prefs().workspace;
+  setPrefs(ws ? { barsBy: { [ws]: whole } } : { bars: whole });
 }

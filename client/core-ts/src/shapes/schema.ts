@@ -1192,6 +1192,7 @@ export const SHAPES: Record<string, Shape> = {
     ["rail", opt(vec("String")), { default: true, doc: "What the wide screen's rail shows, in its order (web/src/Rail.tsx RAIL_ITEMS: chats, mine, watching, archive,\ndecisions, attention, files, stations, profiles, connects, usage); none: its default ones." }],
     ["rails", map(vec("String")), { default: true, doc: "The rail as each workspace has it, by workspace (as `rail`); one not there goes by `rail` (one rail for all,\nas devices kept it before)." }],
     ["bars", "BarPrefs", { default: true, doc: "A phone's bottom bars (always whole: the core fills in what is not kept)." }],
+    ["barsBy", map("BarPrefs"), { default: true, doc: "A phone's bottom bars as each workspace has them, by workspace (each whole, as `bars`); one not there goes\nby `bars` (one set for all, as devices kept it before)." }],
   ], { doc: "What this device keeps of how its person likes it (the `prefs` topic, `prefs.set`), and what it is." }),
   BadgeKinds: struct([
     ["on", "bool", { default: true, doc: "The badge shown at all." }],

@@ -2,13 +2,12 @@
 // out, the empty slot adds one (a sheet of the places), a place held and moved sideways takes another slot; a bar is
 // made the one in view, deleted (with more than one), or a new one made. Said to the core whole each time (`bars`).
 import { useRef, type PointerEvent as ReactPointerEvent } from "react";
-import { usePrefs } from "../prefs.ts";
 import { railLabel } from "../Rail.tsx";
 import { Archive, Chart, Chats, Folder, Im, Minus, Plus, Quota, Zou, type IconProps } from "@stillfail/ui/icons.tsx";
 import { StationGlyph } from "../StationGlyph.tsx";
 import type { ComponentType } from "react";
 import { useApp, SheetGrab, SheetHead } from "./app.tsx";
-import { BAR_PLACES, setBars, type BarPlace } from "./Bar.tsx";
+import { BAR_PLACES, setBars, useBars, type BarPlace } from "./Bar.tsx";
 import { LargeTitle, ListCard, ListRow, PickRow, TopBack } from "./parts.tsx";
 import * as listsCss from "./styles/lists.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -28,7 +27,7 @@ function PlaceIcon({ place, size = 28 }: { place: BarPlace; size?: number }) {
 
 export function BarSettingsScreen() {
   const app = useApp();
-  const bars = usePrefs((p) => p.bars);
+  const bars = useBars();
   const sets = bars.sets as BarPlace[][];
   const save = (next: BarPlace[][], current = bars.current) => setBars(next, current);
   // Without bar i: the one in view stays the one it was (one place on if it was after i; the one before, or the
@@ -128,7 +127,7 @@ function Slots({ set, last, onMove, onRemove, onAdd }: { set: BarPlace[]; last: 
 /** The places to add to bar `bar` (a new one, past the last): those there already, or a full bar, can't. */
 function PickSheet({ bar }: { bar: number }) {
   const app = useApp();
-  const bars = usePrefs((p) => p.bars);
+  const bars = useBars();
   const sets = bars.sets as BarPlace[][];
   const set = sets[bar] ?? [];
   const full = set.length >= SIZE;

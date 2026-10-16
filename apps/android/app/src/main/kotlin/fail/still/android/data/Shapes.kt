@@ -3452,7 +3452,10 @@ data class PrefsView (
 	/// as devices kept it before).
 	val rails: Map<String, List<String>>? = null,
 	/// A phone's bottom bars (always whole: the core fills in what is not kept).
-	val bars: BarPrefs? = null
+	val bars: BarPrefs? = null,
+	/// A phone's bottom bars as each workspace has them, by workspace (each whole, as `bars`); one not there goes
+	/// by `bars` (one set for all, as devices kept it before).
+	val barsBy: Map<String, BarPrefs>? = null
 )
 
 /// Providers of one group, as the picker lists them.
