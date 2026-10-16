@@ -285,7 +285,7 @@ each("a_view_brings_its_frames_with_their_bytes_and_takes_acks_key_frames_and_in
     { ack: 34_333 },
   ]);
   // Who else is on it, the viewer left out; the pointer as the station draws it.
-  v!.send(stateFrame({ controlledBy: ["a@x.com", "Bob"], cursor: { x: 0.1, y: 0.2, shape: "text" } }));
+  v!.send(stateFrame({ viewers: ["a@x.com", "Bob"], controlledBy: ["a@x.com"], cursor: { x: 0.1, y: 0.2, shape: "text" } }));
   await host.settle();
   said(host, log);
   const now = lastState(log, 1);
@@ -371,14 +371,15 @@ test("a_view_refused_says_why_and_is_not_tried_again", async () => {
   const cases: [number | [number, string], string, string][] = [
     [[404, "no screen browser:T9"], "gone", "这个屏幕已经不在了"],
     [[404, "no route POST /screens/x/view"], "outdated", "这台 station 需要更新才能远程看屏幕"],
-    [[403, "没有屏幕录制权限"], "denied", "没有屏幕录制权限"],
-    [[409, "这台机器没有显示器"], "denied", "这台机器没有显示器"],
+    [[503, "在「屏幕录制」里打开 stillfail-station"], "denied", "在「屏幕录制」里打开 stillfail-station"],
+    [[403, "只读成员不能看"], "denied", "只读成员不能看"],
+    [[415, "没有共同的格式"], "failed", "没有共同的格式"],
   ];
   for (const [answer, phase, message] of cases) {
     const { host, core, ui, views, opts } = await viewing(1);
     opts.answer = () => answer;
     const log: J[] = [];
-    call(core, ui, 1, "screen.view", { station: "ws/st", screen: "browser:T9", view: "v" });
+    call(core, ui, 1, "screen.view", { station: "ws/st", screen: "desktop", view: "v" });
     await host.settle();
     await host.time.pass(60_000);
     said(host, log);
@@ -408,6 +409,43 @@ test("a_view_the_station_cannot_open_now_is_tried_again_then_given_up", async ()
   said(host, log);
   assert.equal(opens, 8);
   assert.deepEqual(states(log, 1).map((s: J) => s.phase).filter((p: string, i: number, a: string[]) => p !== a[i - 1]), ["connecting", "reconnecting", "failed"]);
+  core.close();
+});
+
+test("a_screen_the_station_does_not_list_is_not_opened", async () => {
+  const { host, core, ui, views } = await viewing(1);
+  const log: J[] = [];
+  call(core, ui, 1, "screen.view", { station: "ws/st", screen: "browser:T9", view: "v" });
+  await host.settle();
+  said(host, log);
+  assert.equal(views.length, 0);
+  assert.equal(lastState(log, 1).phase, "gone");
+  core.close();
+});
+
+each("the_station_says_what_a_view_takes_and_lacks_and_when_it_stops", async (seed) => {
+  const { host, core, ui, views } = await viewing(seed);
+  const log: J[] = [];
+  call(core, ui, 1, "screen.view", { station: "ws/st", screen: "desktop", view: "v" });
+  await host.settle();
+  // Seen, not driven: macOS's Accessibility grant is missing (the station's first state says so).
+  views[0]!.send(join([stateFrame({ title: "桌面", control: false, access: { capture: true, control: false, message: "在「辅助功能」里打开 stillfail-station", app: "stillfail-station" } }), configFrame({ codec: "jpeg", width: 10, height: 10 }), videoFrame(true, 1, bytesOf(10, seed))]));
+  await host.settle();
+  said(host, log);
+  const s = lastState(log, 1);
+  assert.deepEqual([s.control, s.access], [false, { capture: true, control: false, message: "在「辅助功能」里打开 stillfail-station", app: "stillfail-station" }]);
+  call(core, ui, 2, "screen.input", { view: "v", input: { t: "text", text: "x" } });
+  await host.settle();
+  assert.deepEqual(views[0]!.got, []);
+  // The station stops (an update): the view is opened again once it is back.
+  views[0]!.send(stateFrame({ ended: "stopping" }));
+  await host.settle();
+  await host.time.pass(1_000);
+  assert.equal(views.length, 2);
+  views[1]!.send(stateFrame({ ended: "gone" }));
+  await host.settle();
+  said(host, log);
+  assert.deepEqual([lastState(log, 1).phase, lastState(log, 1).message], ["ended", "这个屏幕已经不在了"]);
   core.close();
 });
 

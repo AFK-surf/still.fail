@@ -47,6 +47,18 @@ be JPEG (CDP screencast) or H.264. Clients decode both.
   Anyone else may drive. Every active view shows in `controlledBy` / `viewers`, so people and the agent see who is on it.
 - Ending: either side finishes the stream.
 
+### Clients
+
+The core (client/core-ts/src/screens.ts; docs/client-core.md, the `screens` topic and the `screen.*` calls) holds each
+station's list (read as its stream opens, then its `screens` events; in memory only) and opens views. A view's frames
+go to the page as they come, their bytes beside the JSON rather than in it (the web's worker transfers them, the
+desktop's utility process posts them on the page's port, Android's engine hands them to Kotlin with `emitBytes`); the
+page decodes (WebCodecs or `createImageBitmap` on the web, MediaCodec or a bitmap on Android) and acknowledges each
+frame it drew. What the page draws of the view (its phase, 只看/控制, who else is on it) the core says whole as it
+changes; it opens the view again when the link drops or 只看/控制 changes. A station from before screens answers
+`GET /screens` 404: its list is empty and says it needs an update, and a link to one of its screens says so without
+opening a stream (such a station would take the stream for a request and wait for a body).
+
 ### Asking a person to take over
 
 The agents' `screen` tool lists the station's screens and gives a link to one: `<cloud>/w/<workspace>/s/<station>/screen/<id>`.
