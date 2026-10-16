@@ -53,8 +53,16 @@ can mark places and comment. Use stillfail-show for evidence to accompany the li
 
 ## Another station
 
-Use `station_list` to discover workspace stations, then `station_list {station}` for capabilities. Any station of the
-workspace accepts tasks from here; one not updated yet may still refuse them.
+Use `station_list` to see the workspace's stations and how busy each is right now (cores, arch/OS, GPU, CPU busy over
+the last minute, load average, free memory and disk where tasks run, what it is running); `station_list {station}`
+gives one in detail with its task capabilities. Any station of the workspace accepts tasks from here; one not updated
+yet may still refuse them, and an older one's load shows as unknown.
+
+Choosing where to run: the right OS and architecture first; then enough free memory and disk for the job (a large
+build needs several GiB of each); then the least busy (low CPU busy and load per core, few running tasks). Heavy
+builds and test suites go to a big machine, not a small VM. Offline stations are skipped. There are no locks: do
+not wait for, ask for or announce a "lock" on a machine, and do not queue behind other agents' claims. Look at the
+load, and if a machine is busy pick another or run anyway when nothing better is free.
 
 Prepare `station_task` with a stable `key`, upload inputs with `station_file`, then start the same key. Commands
 run as the target OS user, not a sandbox. All tasks of this session share one directory on the target (the working

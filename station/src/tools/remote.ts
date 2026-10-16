@@ -8,7 +8,7 @@ export const STATION_TOOLS: { name: string; description: string; inputSchema: un
   {
     name: "station_list",
     description:
-      "List stations in this workspace. With station, ask its OS, architecture and whether it accepts tasks from here. Old stations may not support peer calls.",
+      "List stations in this workspace with how busy each is and what it has, to pick where station_task runs: cores, arch/OS, GPU, CPU busy over about the last minute, load average, free memory, free disk where tasks run, running remote tasks/jobs/services/agent turns, relay ping. All are asked at once; one not answering within 2 s is listed offline, an older station's load is unknown. With station, the same for that one in detail, with whether it accepts tasks and file limits. Choose by the numbers: prefer an idle station with enough free memory and disk and the right OS/architecture; keep heavy builds and tests off small VMs. There are no locks between agents: never wait for, ask for or announce one; look at the load and go.",
     inputSchema: { type: "object", properties: { station: { type: "string" } }, additionalProperties: false },
   },
   {

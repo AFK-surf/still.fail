@@ -41,6 +41,7 @@ export const NOTES: [number, string][] = [
   [34, "New tool screen: the screens of this station a person can see and drive from their still.fail app (this machine's display, the station's browser tabs), who is on each now, and the link to post with need_human when a person must act there (log in, a captcha)."],
   [35, "New tool browser: the station's own Chrome with a persistent profile (sign-ins stay, shared by the station's sessions); it gives the DevTools endpoint for chrome-devtools-mcp or Playwright. Use it for web work behind a login, and give a person its tab with the screen tool to sign in or solve a captcha (skill stillfail-browser)."],
   [36, "New tool computer: screenshot and operate one of the station's screens yourself (click, drag, scroll, type, keys, in the screenshot's pixels), the desktop or a browser tab. Prefer the browser's DevTools for web pages; refused while a person drives the screen; when stuck, post the screen's link (screen tool) with need_human."],
+  [37, "station_list now shows each station's load and capacity (cores, arch/OS, GPU, CPU busy, load average, free memory and disk, running tasks/jobs/turns): pick the station for station_task by it. There are no machine locks between agents; do not wait for or announce one."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

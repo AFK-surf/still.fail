@@ -14,7 +14,7 @@ Deploy cloud first, then the stations that participate. Old stations ignore the 
 
 ## Agent tools
 
-- `station_list {}` returns the workspace's registered stations and whether the roster is current. A listed station is not necessarily online. `station_list {station}` connects to one and returns its protocol, OS, architecture, whether it accepts tasks and file limits.
+- `station_list {}` returns the workspace's registered stations, whether the roster is current, and for each how busy it is now (`load`, one line; see "Load"). `station_list {station}` connects to one and returns its protocol, OS, architecture, whether it accepts tasks, file limits and its `load` in full, with that line as `summary`.
 - `station_task {station, action:"prepare", key, name, command}` records the task specification and creates its directory. Pick a stable key for one execution. Preparing that key with a different specification is refused.
 - `station_task {…, action:"prepare", dir, back}` (both optional): `dir` is an absolute path of a directory on the source machine; every start syncs it into a mirror on the target first and runs the command there (see "Directories"). `back` lists paths relative to where the command runs, downloaded when it ends into `station-back/<key>/` of the source session's workspace.
 - `station_file {station, key, direction:"upload", local, path}` uploads a local session file into a relative path in that task directory. Finish uploading before starting.
@@ -23,6 +23,12 @@ Deploy cloud first, then the stations that participate. Old stations ignore the 
 - `station_file {station, key, direction:"download", path, local}` downloads an artifact after the task finishes. It creates a new file inside the source session workspace and does not overwrite existing files. The agent can attach it to its original conversation with `chat_post`.
 
 Files use 256 KiB chunks, up to 1 GiB per file. Binary files work. Paths cannot escape the task directory and transfers refuse symbolic links. Inputs cannot be written through the transfer API after execution starts. An interrupted upload can be repeated; an incomplete upload blocks start. Downloads publish the final filename only once the transfer succeeds. For a working directory (a checkout with local changes), give `dir` instead of uploading it.
+
+## Load
+
+Agents pick the station for a task by how busy it is; there are no locks between them. `describe` answers `load` (`station/src/jobs/load.ts`): `os`, `arch`, `cpus`, `cpuModel`; `cpuBusy` (`share` 0–1 over `seconds`, about the last minute, from CPU ticks the station notes every 15 s; `seconds` null when it has only the moment before); `loadAvg` (1/5/15 min, null on Windows); `memory` (`totalBytes`, `availableBytes`); `disk` (the volume of the data directory, where tasks run); `gpus` (Apple Silicon: the chip and its GPU cores from `ioreg`; NVIDIA through `nvidia-smi`, its memory and how busy; null when none is known); `running` (`remoteTasks` from other stations, `jobs`, `services`, agent `turns`); `relay` (`home`, and `ping`: a ping to the home relay, timed on a warm connection every 30 s by `mesh/relays.ts`); `checkedAt`. The machine figures are GET /host's (`api/host.ts`, the same ten-second cache the station page uses). Measuring waits at most 1 s; past that, or on an error, `load` is `{unavailable}`.
+
+`station_list {}` asks every listed station at once (this one answers itself, `here: true`); one that has not answered within 2 s is listed with `offline`, one that refused with `refused`, and the list never waits longer. A station from before this answers `describe` without `load`: its load is "unknown (older station)".
 
 ## Directories
 
