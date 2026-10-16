@@ -65,6 +65,7 @@ import fail.still.android.LocalApp
 import fail.still.android.R
 import fail.still.android.data.Cloud
 import fail.still.android.data.Enrollment
+import fail.still.android.data.JoinableView
 import fail.still.android.data.LoginSession
 import fail.still.android.data.errorText
 import fail.still.android.data.Member
@@ -504,25 +505,94 @@ fun managerOf(current: WorkspaceEntry): Boolean? {
     return topic.value?.manager ?: if (topic.error != null) false else null
 }
 
-/** Adding a station: a name, then the command to run on that machine (which installs still.fail and joins it); the sheet waits for it to join. */
+/**
+ * Adding a station: a name, then the command to run on that machine (which installs still.fail and joins it); the sheet
+ * waits for it to join. To one who manages another workspace too, a choice first (as the narrow web's AddStationSheet):
+ * a new machine that way, or a station of one of those added here as it is (docs/multi-workspace.md).
+ */
 fun openAddStation(app: AppState, current: WorkspaceEntry, known: List<String>) {
     app.sheet = SheetSpec(0.72f, draggable = true) {
+        val joinable by rememberTopic<JoinableView>(app.core, Topics.joinable(current.workspace.id))
+        var existing by remember { mutableStateOf(false) }
+        // A new machine's command made: that is the way now, the choice gone.
+        var made by remember { mutableStateOf(false) }
+        val offered = joinable.value?.offered == true
         SheetGrab()
         SheetHead(t("android-settings.station.add"))
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(t("android-settings.station.addNote", "app" to BuildConfig.APP_NAME), fontSize = 14.sp, color = C.muted)
-            AddStationSteps(current, known, onCancel = { app.sheet = null }) { app.sheet = null }
+        // Unpadded itself: the picking rows of an existing station go edge to edge (their words in line with the rest).
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (offered && !made) {
+                val kind = t("web-pages.settings.stations.kind")
+                Seg(listOf(t("web-pages.settings.stations.kindNew"), t("web-pages.settings.stations.kindExisting")), if (existing) 1 else 0, { existing = it == 1 },
+                    Modifier.padding(horizontal = 20.dp).fillMaxWidth().semantics { contentDescription = kind }, height = 34.dp, fill = true, radius = 17.dp)
+            }
+            val view = joinable.value
+            if (view != null && offered && existing && !made) JoinStation(current, view, onClose = { app.sheet = null })
+            else Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(t("android-settings.station.addNote", "app" to BuildConfig.APP_NAME), fontSize = 14.sp, color = C.muted)
+                AddStationSteps(current, known, onCancel = { app.sheet = null }, onMade = { made = true }) { app.sheet = null }
+            }
+        }
+    }
+}
+
+/**
+ * A station of another workspace the viewer manages, picked from `view` (the first at first) and added to this one as
+ * it is (`station.join`): what that shares of the machine said under the list, why it was refused in red. Once it has
+ * joined the sheet says so, with Done.
+ */
+@Composable
+private fun JoinStation(current: WorkspaceEntry, view: JoinableView, onClose: () -> Unit) {
+    val app = LocalApp.current
+    val scope = rememberCoroutineScope()
+    val ws = current.workspace.id
+    var picked by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var done by remember { mutableStateOf<String?>(null) }
+    val chosen = view.items.firstOrNull { it.station == picked } ?: view.items.firstOrNull()
+    val busy = chosen != null && app.isDoing("station.join", "workspace" to ws, "station" to chosen.station)
+    // The words 20 in from the sheet's edges; the picking rows edge to edge, their own room making it 20 for theirs.
+    val side = Modifier.padding(horizontal = 20.dp)
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        done?.let { name ->
+            Text(t("web-pages.settings.stations.joinedHere", "name" to name), side, fontSize = 14.sp, color = C.ink)
+            Row(side.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(t("common.done"), primary = true) { onClose() } }
+            return@Column
+        }
+        Text(t("web-pages.settings.stations.existingLead"), side, fontSize = 14.sp, color = C.muted)
+        if (view.items.isEmpty()) Text(t(if (view.loading) "android-settings.reading" else "web-pages.settings.stations.existingNone"), side, fontSize = 14.sp, color = C.muted)
+        else Column {
+            view.items.forEach { s ->
+                // Its mark before its name, as a station's own sheet has it: every name starts in one line.
+                PickRow(s.name, s.line, checked = s.station == chosen?.station, enabled = !busy,
+                    mark = if (hasStationMark(s.emoji, s.icon)) ({ StationMark(s.emoji, s.icon, 15.dp, C.ink) }) else null) {
+                    picked = s.station; error = null
+                }
+            }
+        }
+        Text(t("web-pages.settings.stations.softIsolation"), side, fontSize = 12.sp, color = C.muted)
+        error?.let { Text(it, side, fontSize = 13.sp, color = C.red) }
+        Row(side.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+            Button(t("common.cancel"), primary = false) { onClose() }
+            Button(t("web-pages.settings.stations.joinAction"), primary = true, busy = busy, enabled = chosen != null) {
+                val s = chosen ?: return@Button
+                error = null
+                scope.launch {
+                    try { done = app.api(s.station).joinWorkspace(ws) ?: s.name } catch (e: CoreException) { error = errorText(e) }
+                }
+            }
         }
     }
 }
 
 /**
  * A station's name, then the one command that installs still.fail on that machine and joins it (one with still.fail already
- * too), copied from here, and the wait for it; `onJoined` once it has. `onCancel`: a way out beside the first step.
+ * too), copied from here, and the wait for it; `onMade` once the command is there, `onJoined` once it has joined.
+ * `onCancel`: a way out beside the first step.
  * `label`: what the name's line is called.
  */
 @Composable
-private fun AddStationSteps(current: WorkspaceEntry, known: List<String>, label: String = t("android-settings.station.name"), placeholder: String = t("android-settings.station.namePlaceholder"), onCancel: (() -> Unit)? = null, onJoined: () -> Unit) {
+private fun AddStationSteps(current: WorkspaceEntry, known: List<String>, label: String = t("android-settings.station.name"), placeholder: String = t("android-settings.station.namePlaceholder"), onCancel: (() -> Unit)? = null, onMade: () -> Unit = {}, onJoined: () -> Unit) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
@@ -542,7 +612,7 @@ private fun AddStationSteps(current: WorkspaceEntry, known: List<String>, label:
                     if (onCancel != null) Button(t("common.cancel"), primary = false) { onCancel() }
                     Button(t("android-settings.station.make"), primary = true, busy = busy, enabled = name.isNotBlank()) {
                         error = null
-                        scope.launch { try { made = Cloud(app.core, current.account.sub).enroll(current.workspace.id, name.trim()) } catch (e: CoreException) { error = errorText(e) } }
+                        scope.launch { try { made = Cloud(app.core, current.account.sub).enroll(current.workspace.id, name.trim()); onMade() } catch (e: CoreException) { error = errorText(e) } }
                     }
                 }
             }

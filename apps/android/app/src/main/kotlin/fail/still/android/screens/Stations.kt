@@ -64,6 +64,7 @@ import fail.still.android.LocalApp
 import fail.still.android.R
 import fail.still.android.Screen
 import fail.still.android.data.StationView
+import fail.still.android.data.MembershipsView
 import fail.still.android.data.StationNet
 import fail.still.android.data.NetFigure
 import fail.still.android.data.Topics
@@ -84,6 +85,7 @@ import androidx.compose.foundation.layout.offset
 import fail.still.android.ui.Icons
 import fail.still.android.ui.Illustration
 import fail.still.android.ui.ListCard
+import fail.still.android.ui.ListRow
 import fail.still.android.ui.Loading
 import fail.still.android.ui.NavBack
 import fail.still.android.ui.NavBar
@@ -108,6 +110,10 @@ internal fun Buddy(s: StationView, size: Int = 40) {
     }
     Image(painterResource(face), null, Modifier.size(size.dp))
 }
+
+/** Where a station this workspace joined is at home (docs/multi-workspace.md), as grey words before what is said of it; null for one at home here. */
+internal fun joinedMark(s: StationView): String? =
+    if (s.joined != true) null else s.home?.let { t("web-pages.stations.joinedFrom", "name" to it) } ?: t("web-pages.stations.joinedElsewhere")
 
 /** Back, at the top of a large-title page (settings' own); `trailing`, an action at its other end (a ＋). */
 @Composable
@@ -151,7 +157,8 @@ fun StationsScreen(current: WorkspaceEntry) {
                                 if (hasStationMark(s.emoji, s.icon)) StationMark(s.emoji, s.icon, 16.dp, C.ink)
                                 Text(s.name, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
-                            Text(s.summary, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            // A station this workspace joined: where it is at home first (the line is cut short at its end).
+                            Text(listOfNotNull(joinedMark(s), s.summary.takeIf { it.isNotEmpty() }).joinToString(" · "), fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         if (s.reconnecting == true) Reconnecting()
                         IconIn(Icons.ChevronRight, 14.dp, C.subtle)
@@ -277,7 +284,7 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
         val manager = isManager(current)
         NavBar("Station", app::pop, s?.name ?: stationName(address), sub = s?.let { st ->
             // As tall either way: the title does not move as the station comes and goes.
-            { Box(Modifier.height(16.dp), contentAlignment = Alignment.CenterStart) { if (st.reconnecting == true) Reconnecting() else Text(st.host?.identity ?: st.line.orEmpty(), fontSize = 11.sp, color = C.muted, maxLines = 1) } }
+            { Box(Modifier.height(16.dp), contentAlignment = Alignment.CenterStart) { if (st.reconnecting == true) Reconnecting() else Text(listOfNotNull(joinedMark(st), (st.host?.identity ?: st.line)?.takeIf { it.isNotEmpty() }).joinToString(" · "), fontSize = 11.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis) } }
         }, trailing = if (s != null && manager) ({ NavButton(Icons.More, { openStationMenu(app, current, s) }) }) else null)
         if (s == null) return Loading(stations.error?.message ?: t("android-settings.reading"))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
@@ -303,13 +310,35 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                 // The folders it lends its members (docs/drive.md); none offered by a station from before the drive.
                 overview?.drive?.let { drive -> GoRow(t("android-misc.drive.title"), fail.still.android.drive.driveValue(drive.roots)) { app.push(Screen.Drive(address, null, "")) } }
             }
-            if (s.online && overview != null) Versions(address, overview.updates, manager, beta = s.betaOffered == true)
+            if (manager && s.joined != true) StationWorkspaces(address)
+            // Its updates are its home workspace's managers' (docs/multi-workspace.md).
+            if (s.online && overview != null) Versions(address, overview.updates, manager && s.joined != true, beta = s.betaOffered == true)
             Spacer(Modifier.height(30.dp))
         }
     }
 }
 
-
+/**
+ * The workspaces a station is in, a row each (its name, and what it has of the machine: 主 workspace, or the folders
+ * opened to it), on its page in its home workspace for that one's owners and admins; only once it is in more than one
+ * (as the narrow web's).
+ */
+@Composable
+private fun StationWorkspaces(address: String) {
+    val app = LocalApp.current
+    val topic by rememberTopic<MembershipsView>(app.core, Topics.memberships(address))
+    val view = topic.value ?: return
+    if (!view.manages || view.workspaces.size < 2) return
+    SectionHeader("Workspace", start = 24.dp)
+    ListCard {
+        view.workspaces.forEach { w ->
+            ListRow {
+                Text(w.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(w.line, fontSize = 14.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 220.dp))
+            }
+        }
+    }
+}
 
 /**
  * This device's connection to a station: how it goes (and packets lost, when some were) over its round trip on the

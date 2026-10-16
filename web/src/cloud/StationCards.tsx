@@ -210,7 +210,7 @@ function StationCard({ s, menu, page, manager, onMark, markBusy }: { s: StationV
       {foot && <div className={css.cardFoot}>{foot}</div>}
       {wrong.length > 0 && <div className={css.warn}>{wrong.map((p) => <span key={p.key} data-level={p.level}>{p.text}</span>)}</div>}
       {s.online && s.net && <Net net={s.net} />}
-      {s.online && <div className={css.cardVersions}><UpdateSummary station={s.station} updates={s.overview?.updates} manager={manager} /></div>}
+      {s.online && <div className={css.cardVersions}><UpdateSummary station={s.station} updates={s.overview?.updates} manager={manager && !s.joined} /></div>}
     </div>
   );
 }

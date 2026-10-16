@@ -243,6 +243,10 @@ object Topics {
     const val ARCHIVE_PAGE = 60
     fun connects(scope: String, mine: Boolean) = buildJsonObject { put("topic", "connects"); put("scope", scope); put("mine", mine) }
     fun workspace(id: String) = buildJsonObject { put("topic", "workspace"); put("workspace", id) }
+    /** The stations of the viewer's other workspaces that could be added to this one as they are (docs/multi-workspace.md). */
+    fun joinable(workspace: String) = buildJsonObject { put("topic", "joinable"); put("workspace", workspace) }
+    /** The workspaces a station is in, for its home workspace's owners and admins. */
+    fun memberships(station: String) = buildJsonObject { put("topic", "memberships"); put("station", station) }
     fun loginSessions(account: String) = buildJsonObject { put("topic", "loginSessions"); put("account", account) }
     fun overview(station: String) = buildJsonObject { put("topic", "overview"); put("station", station) }
     fun host(station: String) = buildJsonObject { put("topic", "host"); put("station", station) }

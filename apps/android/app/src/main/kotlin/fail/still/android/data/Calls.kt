@@ -399,6 +399,13 @@ class StationApi(private val core: StillFailCore, val station: String) {
     suspend fun shareInto(id: String, workspace: String, prefer: String?) {
         op("chat.xshareAdd") { put("id", id); put("workspace", workspace); prefer?.let { put("prefer", it) } }
     }
+    /**
+     * This station (by its address in its home workspace) added to `workspace` as it is (docs/multi-workspace.md):
+     * answers what it is called there, null when the station does not say. A refusal comes in words.
+     */
+    suspend fun joinWorkspace(workspace: String): String? =
+        ((op("station.join") { put("workspace", workspace) } as? JsonObject)?.get("joined") as? JsonObject)?.get("name")
+            ?.let { it as? JsonPrimitive }?.takeIf { it.isString }?.content
     /** Deletes a session for good: its chat, its history and its workspace directory. */
     suspend fun deleteSession(key: String) { ops.sessionDelete(key = key) }
 

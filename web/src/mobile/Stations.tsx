@@ -274,7 +274,7 @@ export function StationScreen() {
               onClick={() => app.push(app.at(`/s/${s.id}/files`))} />}
           </ListCard>
           {manager && !s.joined && <Workspaces s={s} />}
-          {s.online && s.overview && <Versions station={s.station} updates={s.overview.updates} manager={manager} beta={s.betaOffered ?? false} />}
+          {s.online && s.overview && <Versions station={s.station} updates={s.overview.updates} manager={manager && !s.joined} beta={s.betaOffered ?? false} />}
           <div style={{ height: 30 }} />
         </div>
       )}
