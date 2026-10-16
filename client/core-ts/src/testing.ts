@@ -347,7 +347,11 @@ export class FakeHost implements Host {
   }
 
   emit(client: ClientId, message: CoreMessage): void {
-    this.emitted.push([client, JSON.parse(JSON.stringify(message)) as CoreMessage]);
+    // Bytes beside the JSON (a screen view's frame) are kept as they came (a copy).
+    if ("bytes" in message && message.bytes !== undefined) {
+      const { bytes, ...rest } = message;
+      this.emitted.push([client, { ...(JSON.parse(JSON.stringify(rest)) as object), bytes: bytes.slice() } as CoreMessage]);
+    } else this.emitted.push([client, JSON.parse(JSON.stringify(message)) as CoreMessage]);
   }
 }
 

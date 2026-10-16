@@ -121,7 +121,7 @@ export function times(value: unknown, c: Clock): unknown {
   return changed ? map : value;
 }
 
-const NO_TICK = new Set(["live", "thread", "history", "host", "net", "status", "notices", "notify", "connection", "draft", "composer", "prefs", "doing", "adbShare", "slackTokens", "joinable", "memberships"]);
+const NO_TICK = new Set(["live", "thread", "history", "host", "net", "status", "notices", "notify", "connection", "draft", "composer", "prefs", "doing", "adbShare", "slackTokens", "joinable", "memberships", "screens"]);
 
 /// Whether a topic shows times in words, sent again each minute while shown.
 export function ticks(topic: Topic): boolean {
@@ -173,6 +173,7 @@ const SHAPED: Record<string, Ty> = {
   lockDraft: "LockDraftView",
   joinable: "JoinableView",
   memberships: "MembershipsView",
+  screens: "ScreensView",
 };
 
 /// A topic's value through the shape the clients are generated from: what it does not declare is dropped, and a value

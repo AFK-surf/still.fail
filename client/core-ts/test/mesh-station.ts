@@ -2,6 +2,7 @@
 // On localhost over the native addon (station/native/mesh), or on a simulated network (sim-iroh.ts: its `world`).
 import { loadAddon } from "../src/hosts/node-iroh.ts";
 import { ALPN, FORMER_ALPN } from "../src/mesh.ts";
+import { configFrame, readClientFrames, stateFrame, videoFrame } from "../src/screen-frames.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -23,6 +24,11 @@ export class Station {
   idempotent = false;
   /// Each request it carried out (read whole, on a way not dead): its head.
   served: J[] = [];
+  /// Screen views (docs/remote-screens.md) as it served them: the head, what the client sent, the most frames it ever
+  /// had sent and not acknowledged. A view sends `screenFrames` (a config first), each once fewer than 2 are
+  /// unacknowledged, then ends.
+  views: { head: J; got: J[]; mostUnacked: number }[] = [];
+  screenFrames: { key: boolean; ts: number; data: Uint8Array }[] = [];
   world: World = REAL;
 
   static async start(alpns: Uint8Array[] = [ALPN, FORMER_ALPN], world: World = REAL): Promise<Station> {
@@ -124,6 +130,7 @@ export class Station {
       void (async () => {
         const c = { bytes: Buffer.alloc(0) };
         const head = await Station.readLine(stream, c);
+        if (head !== null && JSON.parse(head).screen !== undefined) return this.#view(stream, JSON.parse(head), c.bytes);
         let body = c.bytes;
         for (;;) {
           const chunk = await stream.read();
@@ -154,6 +161,40 @@ export class Station {
         await stream.finish().catch(() => {});
       })().catch(() => {});
     }
+  }
+
+  /// A screen view: answered 200, then frames as the client acknowledges them (pull-driven, as the station's views are).
+  async #view(stream: J, head: J, carry: Buffer): Promise<void> {
+    const view = { head, got: [] as J[], mostUnacked: 0 };
+    this.views.push(view);
+    const frames = [...this.screenFrames];
+    const unacked = new Set<number>();
+    const waiting: { wake: (() => void) | null } = { wake: null };
+    void (async () => {
+      let buf: Uint8Array = new Uint8Array(carry);
+      for (;;) {
+        const chunk = await stream.read().catch(() => null);
+        if (chunk === null) return;
+        const [got, rest] = readClientFrames(new Uint8Array(Buffer.concat([buf, chunk])));
+        buf = rest;
+        for (const f of got) {
+          view.got.push(f);
+          if ("ack" in f) for (const ts of [...unacked]) if (ts <= f.ack) unacked.delete(ts);
+        }
+        waiting.wake?.();
+      }
+    })().catch(() => {});
+    await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers: { "content-type": "application/x-stillfail-screen" } })}\n`));
+    await stream.write(Buffer.from(configFrame({ codec: "jpeg", width: 640, height: 480 })));
+    for (const frame of frames) {
+      while (unacked.size >= 2) await new Promise<void>((r) => (waiting.wake = r));
+      unacked.add(frame.ts);
+      view.mostUnacked = Math.max(view.mostUnacked, unacked.size);
+      await stream.write(Buffer.from(videoFrame(frame.key, frame.ts, frame.data)));
+    }
+    while (unacked.size > 0) await new Promise<void>((r) => (waiting.wake = r));
+    await stream.write(Buffer.from(stateFrame({ ended: "done" })));
+    await stream.finish().catch(() => {});
   }
 
   async close() {

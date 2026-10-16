@@ -18,6 +18,7 @@ import { ALPN, clearlyBetter, cost, DEVICE_KEY, EXPLORE_MS, FORMER_ALPN, HEDGE_F
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
+import { FrameReader, ackFrame } from "../src/screen-frames.ts";
 import { Status } from "../src/status.ts";
 import { FakeHost } from "../src/testing.ts";
 import { Tracer } from "../src/trace.ts";
@@ -180,6 +181,51 @@ sim("streams_a_reply_as_it_comes", async (s) => {
   assert.ok(!first.includes("one"), first);
   const rest = text(await s.run(readAll(reply.body)));
   assert.ok((first + rest).endsWith("|one|two|three"), first + rest);
+  await close(s, station, mesh);
+});
+
+/// A screen view over the mesh (docs/remote-screens.md): its head line carries `screen`, its frames come whole however
+/// the network cuts them, and the station sends only as the client acknowledges (never more than 2 ahead).
+sim("a_screen_view_brings_frames_as_they_are_acknowledged", async (s) => {
+  const { mesh, station } = await setup(s);
+  const big = (n: number, b: number) => new Uint8Array(n).map((_, i) => (i * 31 + b) & 255);
+  station.screenFrames = [
+    { key: true, ts: 0, data: big(300_000, 1) },
+    { key: false, ts: 33_333, data: big(4_000, 2) },
+    { key: false, ts: 66_666, data: big(9, 3) },
+    { key: true, ts: 100_000, data: big(120_000, 4) },
+    { key: false, ts: 133_333, data: big(70_000, 5) },
+  ];
+  const wire = wireOf(s, mesh);
+  const addr = StationAddr.parse(`w/${station.id()}`);
+  const ask = { maxWidth: 1280, maxHeight: 720, codecs: ["jpeg"], control: false };
+  const seen = await s.run(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const view = yield* wire.screen!(addr, { method: "POST", path: "/admin/api/screens/desktop/view", headers: [] }, ask);
+        assert.equal(view.reply.status, 200);
+        const reader = new FrameReader();
+        const frames: J[] = [];
+        for (;;) {
+          const chunk = yield* view.reply.body.take;
+          if (chunk === null) return frames;
+          reader.push(chunk);
+          for (let f = reader.next(); f !== null; f = reader.next()) {
+            frames.push(f);
+            if ("video" in f) yield* view.send.write(ackFrame(f.video.ts));
+          }
+        }
+      }),
+    ),
+  );
+  assert.deepEqual(station.views.map((v) => v.head), [{ method: "POST", path: "/admin/api/screens/desktop/view", headers: {}, screen: ask }]);
+  assert.deepEqual(seen[0], { config: { codec: "jpeg", width: 640, height: 480, description: null } });
+  const videos = seen.filter((f: J) => "video" in f).map((f: J) => f.video);
+  assert.deepEqual(videos.map((v: J) => [v.key, v.ts, v.data.length]), station.screenFrames.map((f) => [f.key, f.ts, f.data.length]));
+  for (const [i, v] of videos.entries()) assert.deepEqual(v.data, station.screenFrames[i]!.data);
+  assert.deepEqual(seen.at(-1), { state: { ended: "done" } });
+  assert.deepEqual(station.views[0]!.got, station.screenFrames.map((f) => ({ ack: f.ts })));
+  assert.ok(station.views[0]!.mostUnacked <= 2);
   await close(s, station, mesh);
 });
 

@@ -27,7 +27,9 @@ import { service } from "../trace.ts";
 import { t } from "../i18n.ts";
 export { CoreFiles } from "./file-port.ts";
 
-export type Listener = (client: ClientId, json: string) => void;
+/// What the core says to one UI, as JSON; `bytes` beside it for a message that carries some (a screen view's frame,
+/// protocol.ts), left out of the JSON.
+export type Listener = (client: ClientId, json: string, bytes?: Uint8Array) => void;
 
 function fetchError(e: unknown): HostError {
   // undici says "fetch failed" and keeps the cause: say what failed.
@@ -285,7 +287,10 @@ export class NodeHost implements Host {
     webcrypto.getRandomValues(buf);
   }
   emit(client: ClientId, message: CoreMessage): void {
-    this.#listener(client, JSON.stringify(message));
+    if ("bytes" in message && message.bytes !== undefined) {
+      const { bytes, ...rest } = message;
+      this.#listener(client, JSON.stringify(rest), bytes);
+    } else this.#listener(client, JSON.stringify(message));
   }
 
   close(): void {

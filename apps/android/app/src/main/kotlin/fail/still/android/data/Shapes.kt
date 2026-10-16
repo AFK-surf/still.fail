@@ -2794,8 +2794,8 @@ data class KeptTabs (
 
 /// What one of still.fail's links opens in the app (`link.parse`): `invite` (`token`), a chat's page (`chat`), or an
 /// item (`item`: its `session`, and `service` its web service), each maybe with `history`, one of its agents' execution
-/// history (at `entry`); `history` alone (`?history=…`): that history in the chat the link is in. The call answers null
-/// for any other link.
+/// history (at `entry`); `history` alone (`?history=…`): that history in the chat the link is in; `screen`, one of a
+/// station's screens (docs/remote-screens.md). The call answers null for any other link.
 @Serializable
 data class LinkTarget (
 	val opens: String,
@@ -2806,7 +2806,9 @@ data class LinkTarget (
 	val session: String? = null,
 	val service: String? = null,
 	val history: String? = null,
-	val entry: Long? = null
+	val entry: Long? = null,
+	/// For `screen`: the screen's id on the station (`/w/<workspace>/s/<station>/screen/<id>`).
+	val screen: String? = null
 )
 
 @Serializable
@@ -3715,6 +3717,75 @@ data class PublishPreview (
 	val hidden: UInt,
 	/// That in words (隐藏了 3 处); absent when none.
 	val hiddenText: String? = null
+)
+
+/// Where a screen's pointer is, as its station says.
+@Serializable
+data class ScreenCursor (
+	/// 0..1 of the frame's width.
+	val x: Double,
+	/// 0..1 of the frame's height.
+	val y: Double,
+	/// A CSS cursor name (`default`, `pointer`, `text`…).
+	val shape: String? = null
+)
+
+/// A screen of a station a person can see and drive (docs/remote-screens.md).
+@Serializable
+data class ScreenItem (
+	/// The station's: `desktop`, `browser:<targetId>`.
+	val id: String,
+	/// `desktop` (the station machine's display) or `browser` (a tab of the station's browser).
+	val kind: String,
+	val title: String,
+	val width: UInt,
+	val height: UInt,
+	/// Who is on it now, by name.
+	val viewers: List<String>? = null,
+	/// What the core says of it under its title: what it is, its size, who is on it (core).
+	val line: String,
+	/// Its page in the app: `/w/<workspace>/s/<station>/screen/<id>` (the id encoded), as the agents' links name it.
+	val link: String
+)
+
+/// A screen view as its page draws it (`screen.view`'s `{state}` values): each one whole, the latest is how it is.
+@Serializable
+data class ScreenViewState (
+	/// `connecting`, `live`, `reconnecting`, `ended` (the station ended it, or the screen went), `outdated` (the
+	/// station is from before screens), `gone` (no such screen), `denied` (it cannot be seen now: no permission to
+	/// capture, no display) or `failed`.
+	val phase: String,
+	/// Why, in the viewer's words, for a phase that is not `connecting` or `live`.
+	val message: String? = null,
+	val title: String,
+	val kind: String? = null,
+	/// Driving it now: input goes to the station (else only seen).
+	val control: Boolean,
+	/// May drive it (not a read-only member).
+	val may: Boolean,
+	/// The other people on it now, by name.
+	val others: List<String>,
+	/// What the viewer's bar says: 只看 or 控制, and who else is on it (core).
+	val line: String,
+	/// `h264` or `jpeg`, once the first config came.
+	val codec: String? = null,
+	val width: UInt? = null,
+	val height: UInt? = null,
+	val cursor: ScreenCursor? = null
+)
+
+/// A station's screens (the `screens` topic; docs/remote-screens.md, client/core-ts/src/screens.ts).
+@Serializable
+data class ScreensView (
+	val screens: List<ScreenItem>,
+	/// The station is from before screens: it has none to show until it is updated.
+	val outdated: Boolean,
+	/// The viewer may drive them (a read-only member only sees).
+	val control: Boolean,
+	/// The station said which it has (false while it has not been reached since the core started).
+	val known: Boolean,
+	/// Why there are none to show, when there is a reason (the station needs an update, is offline).
+	val note: String? = null
 )
 
 /// A session with its threads and turns (`session` topic).

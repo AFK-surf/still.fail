@@ -234,6 +234,10 @@ export class NodeShell implements Native {
     this.emitted.push([client, json]);
     for (const wake of this.#hearing.splice(0)) wake();
   }
+  /// With bytes beside the JSON: what the test reads is the JSON, the bytes as `bytes` (base64 for a look at them).
+  emitBytes(client: number, json: string, bytes: Uint8Array): void {
+    this.emit(client, JSON.stringify({ ...JSON.parse(json), bytes: Buffer.from(bytes).toString("base64") }));
+  }
   /// Once the core emits again.
   heard(): Promise<void> {
     return new Promise((resolve) => this.#hearing.push(resolve));

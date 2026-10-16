@@ -14,7 +14,7 @@ import type { WorkerFault } from "./client.ts";
 
 // Typed by hand: the web tsconfig has the DOM lib, not the worker's.
 interface Port {
-  postMessage(message: unknown): void;
+  postMessage(message: unknown, transfer?: Transferable[]): void;
   onmessage: ((event: MessageEvent) => void) | null;
 }
 
@@ -56,7 +56,11 @@ const clients = new Map<number, (message: unknown) => void>();
 
 function toPage(message: unknown): void {
   try {
-    scope.postMessage(message);
+    // A screen view's frame (protocol.ts `bytes`): its buffer moves to the page rather than being copied; the core
+    // made it for this message alone (client/core-ts/src/screens.ts).
+    const bytes = (message as { bytes?: unknown } | null)?.bytes;
+    if (bytes instanceof Uint8Array && bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength && bytes.buffer instanceof ArrayBuffer) scope.postMessage(message, [bytes.buffer]);
+    else scope.postMessage(message);
   } catch {
     // The page is gone; this worker goes with it.
   }

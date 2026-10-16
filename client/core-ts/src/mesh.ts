@@ -21,7 +21,7 @@ import type { Runner } from "./runtime.ts";
 import { RECHECKING } from "./station/words.ts";
 import { StationAddr, stationId } from "./station/addr.ts";
 import { IDEMPOTENCY_KEY, IDEMPOTENT, READS } from "./station/requests.ts";
-import type { LinkNet, RequestHead, SocketOut, StationWire, WireReply, WireSocket } from "./station/wire.ts";
+import type { LinkNet, RequestHead, ScreenAsk, SocketOut, StationWire, WireReply, WireSocket } from "./station/wire.ts";
 import { RELAY } from "./status.ts";
 import { Kind, type Tracer } from "./trace.ts";
 import { fromUtf8, hex, parseJson, sha256, toJsonBytes, utf8 } from "./util.ts";
@@ -396,7 +396,16 @@ export class Link {
 
   /// A preview page's WebSocket on its own stream: the stream stays open both ways.
   socket(head: RequestHead): Effect.Effect<[Reply, SocketOut], CoreError> {
-    const wire = { method: head.method, path: head.path, headers: Object.fromEntries(head.headers), socket: true };
+    return this.#duplex({ method: head.method, path: head.path, headers: Object.fromEntries(head.headers), socket: true });
+  }
+
+  /// A view of one of the station's screens (docs/remote-screens.md): its head line carries `screen`, and the stream
+  /// stays open both ways for the frames.
+  screen(head: RequestHead, screen: J): Effect.Effect<[Reply, SocketOut], CoreError> {
+    return this.#duplex({ method: head.method, path: head.path, headers: Object.fromEntries(head.headers), screen });
+  }
+
+  #duplex(wire: J): Effect.Effect<[Reply, SocketOut], CoreError> {
     return Effect.map(this.#open(wire, false, null), ([stream, lines, reply]) => {
       const out: SocketOut = {
         write: (bytes) => Effect.mapError(stream.write(bytes), (e) => meshError(t("core-logic.mesh.unsent", { error: e.message }))),
@@ -1623,6 +1632,18 @@ export class MeshWire implements StationWire {
       const mesh = yield* waiting(status, RELAY, t("station.core.connecting"), env.mesh());
       const link = yield* waiting(status, { station: station.toString() }, t("station.core.connecting"), mesh.link(station.toString(), env.credentials(station.workspace), env.relays(station.workspace)));
       const [reply, send] = yield* link.socket(head);
+      yield* Effect.addFinalizer(() => Effect.sync(() => reply.cancel()));
+      return { reply: { status: reply.status, headers: reply.headers, body: reply.body, via: link.path() }, send };
+    });
+  }
+
+  screen(station: StationAddr, head: RequestHead, screen: ScreenAsk): Effect.Effect<WireSocket, CoreError, import("effect").Scope.Scope> {
+    const env = this.#env;
+    return Effect.gen(function* () {
+      const status = env.status(station.workspace);
+      const mesh = yield* waiting(status, RELAY, t("station.core.connecting"), env.mesh());
+      const link = yield* waiting(status, { station: station.toString() }, t("station.core.connecting"), mesh.link(station.toString(), env.credentials(station.workspace), env.relays(station.workspace)));
+      const [reply, send] = yield* link.screen(head, screen);
       yield* Effect.addFinalizer(() => Effect.sync(() => reply.cancel()));
       return { reply: { status: reply.status, headers: reply.headers, body: reply.body, via: link.path() }, send };
     });

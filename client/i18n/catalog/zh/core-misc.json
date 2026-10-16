@@ -184,5 +184,13 @@
   "core-misc.composer.upload_missing": "{name} 的上传源已丢失，请在新消息中重新添加附件。",
   "core-misc.composer.upload_failed": "上传失败",
   "core-misc.lock.stationOld": "{name} 的版本太旧，先升级再加入",
-  "core-misc.lock.stationOffline": "{name} 现在连不上，上线后再加入"
+  "core-misc.lock.stationOffline": "{name} 现在连不上，上线后再加入",
+  "core-misc.screen.opening": "打开屏幕",
+  "core-misc.screen.noWire": "这里看不了 station 的屏幕",
+  "core-misc.screen.timeout": "屏幕没有打开：station 没有回应",
+  "core-misc.screen.noCodec": "没有这台设备能解码的格式",
+  "core-misc.screen.badInput": "不认识的输入",
+  "core-misc.screen.closed": "这个屏幕已经关了",
+  "core-misc.screen.open": "这个名字的屏幕已经开着",
+  "core-misc.screen.garbled": "屏幕的数据读不懂：{error}"
 }

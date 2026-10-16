@@ -92,7 +92,10 @@ shared.
 ## Protocol (UI ↔ core)
 
 Messages are JSON-shaped data (structured clone on the web, JSON strings
-natively). Binary values in the JSON protocol (file bytes) are base64 strings.
+natively). Binary values in the JSON protocol (file bytes) are base64 strings, but for a screen view's frames
+(`screen.view`): a value of a call may carry bytes beside its JSON, `{ "id": 7, "value": { … }, "bytes": <bytes> }`.
+The web's worker transfers them to the page (no copy); the desktop's utility process posts `{ json, bytes }` on the
+page's port; Android's engine hands them to Kotlin as a byte array beside the JSON (`__native.emitBytes`).
 
 The composer's `composer.add` hands selected files to the core, which owns
 their upload and reports progress through the `composer` topic. On the web,
@@ -194,6 +197,7 @@ notices are only of the workspace the viewer is in (attend.ts).
 | `adbShare` | — | this phone's adb as lent to a station's agents (`AdbShareView`, adb.ts; docs/adb-share.md): whether it is and to which, how the offer goes (`phase`), how the station's adb holds the phone (`adb`, `serial`, `message`), until when, the tunnels open now. Kept in memory only |
 | `joinable` | `workspace` | the stations 添加 station offers to add to the workspace as they are (`JoinableView`, views/memberships.ts; docs/multi-workspace.md): those of the viewer's other workspaces whose home workspace (the cloud does not list them there as `joined`) the viewer is an owner or admin of, not in this one already, each with its address in its home workspace and a line (`甲 · 在线`); `offered` while the viewer manages another workspace at all, `loading` while one of them is not read. From what is held of the workspaces only |
 | `memberships` | `station` | the workspaces the station is in (`MembershipsView`): its `GET /workspaces`, its home one first. Only for the owners and admins of its home workspace (`manages`: the page is in that one, and the viewer manages it); read while a page shows it, kept by its address; again after `station.join`. A station from before several workspaces says so (`error`) |
+| `screens` | `station` | the station's screens a person can see and drive (`ScreensView`; docs/remote-screens.md, screens.ts): its `GET /screens` as its stream opens, then its `screens` events; kept in memory only. Each screen with `line` (what it is, its size, who is on it) and `link` (its page in the app). `control`: the viewer may drive (not a read-only member); `outdated`: a station from before screens (404), which has none until it is updated; `known`: it said which it has since the core started; `note`: why there are none |
 
 ```jsonc
 // live
@@ -478,6 +482,11 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `station.preview` | `station`, `port`, `method`, `path`, `headers?`, `body?`, `stream?` | a request to a web service on the station's machine (`/preview/<port>`): `{ status, headers, body }`; with `stream`, values `{ head: { status, headers } }` then `{ chunk }` for each piece of the body as it comes, and the answer (null) at its end. Only waited on (`status`) until its head; cancelled, the station stops asking the service |
 | `preview.socket` | `station`, `port`, `path`, `headers?`, `socket` (a name the UI gives it) | a WebSocket of that service, over the mesh only: values `{ open: { protocol } }`, then `{ text }` or `{ binary }` for each message; the answer is its close, `{ code, reason }`. Cancelling the call drops it |
 | `preview.socket.send` | `socket`, one of `text`, `binary`, `close: [code, reason]` | — ; what the page sends on the socket it named so |
+| `screen.view` | `station`, `screen` (its id), `view` (a name the UI gives it), `codecs?` (`["h264","jpeg"]`: those the UI decodes), `maxWidth?`, `maxHeight?` (1920×1080), `control?` (true) | a view of one of the station's screens (docs/remote-screens.md), over the mesh only: values `{ state }` (`ScreenViewState`, whole each time it changes: the phase, 只看/控制, who else is on it, the frame's size, the pointer), `{ config: { codec, width, height } }` with the avcC (H.264) as `bytes` (none for JPEG), then `{ frame: { key, ts } }` with the frame as `bytes` (H.264 in AVCC, or a JPEG); the answer (null) once it ended (the last state says why). The core opens it again when the link drops (`reconnecting`). Cancelling the call ends it |
+| `screen.ack` | `view`, `ts` | — ; the UI decoded the frame of that timestamp (the station sends at most 2 ahead of it) |
+| `screen.keyframe` | `view` | — ; the UI's decoder lost its state: the next frame is a key frame |
+| `screen.input` | `view`, `input` (`{t:"pointer", kind, x, y, buttons}`, `{t:"wheel", x, y, dx, dy}`, `{t:"key", kind, key, code, mods}`, `{t:"text", text}`: coordinates 0..1 of the frame) | — ; dropped while the view only looks |
+| `screen.control` | `view`, `control` | — ; 只看 (false) or 控制 (true): the view goes on, opened again with it |
 | `migrate` | `accounts`, `device` | — (web only: what localStorage held before the core existed) |
 | `push.key` / `push.register` / `push.unregister` | see docs/notifications.md | this device's push registration, with every signed-in account |
 | `newChat.pick` | `scope`, `station?` (its id), `model?`, `runtime?`, `effort?`, `profile?` (null: the default depth, the station's pick) | — ; what a new chat in the scope starts on, kept on the device (choose.rs): the `newChat` view follows. A model keeps its runtime where it runs there; a runtime changed takes its default depth |
