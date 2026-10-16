@@ -495,5 +495,8 @@
   "android-misc.screen.failed": "Couldn't open this screen",
   "android-misc.screen.retry": "Try again",
   "android-misc.screen.exit": "Exit",
-  "android-misc.screen.outdatedRow": "This station is too old to show its screens; update it first"
+  "android-misc.screen.outdatedRow": "This station is too old to show its screens; update it first",
+  "android-misc.screen.drives": "{who} is in control",
+  "android-misc.screen.someoneDrives": "Someone else is in control",
+  "android-misc.screen.takeOver": "Take over"
 }

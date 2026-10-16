@@ -97,12 +97,15 @@ class ScreenViewerTest {
 
         fun say(value: JsonElement, bytes: ByteArray? = null) { h.fake.say(VIEW, value, bytes); h.deliver() }
 
-        fun state(phase: String, control: Boolean = true, may: Boolean = true, others: List<String> = listOf("李雷"), message: String? = null, access: ScreenAccess? = null) =
+        fun state(
+            phase: String, control: Boolean = true, may: Boolean = true, others: List<String> = listOf("李雷"), message: String? = null,
+            access: ScreenAccess? = null, controllers: List<String>? = null, takeOver: Boolean? = null, line: String? = null,
+        ) =
             say(buildJsonObject {
                 put("state", StillFailJson.encodeToJsonElement(ScreenViewState(
                     phase = phase, message = message, title = "still.fail — Chrome", kind = "browser", control = control, may = may, others = others,
-                    line = (if (control) "控制" else "只看") + (if (others.isEmpty()) "" else " · ${others.joinToString("、")}也在看"),
-                    codec = "jpeg", width = W.toUInt(), height = H.toUInt(), access = access,
+                    line = line ?: ((if (control) "控制" else "只看") + (if (others.isEmpty()) "" else " · ${others.joinToString("、")}也在看")),
+                    codec = "jpeg", width = W.toUInt(), height = H.toUInt(), access = access, controllers = controllers, takeOver = takeOver,
                 )))
             })
 
@@ -166,6 +169,8 @@ class ScreenViewerTest {
         assertEquals(s.view, asked["view"]!!.jsonPrimitive.contentOrNull)
         assertEquals(listOf("jpeg"), asked["codecs"]!!.jsonArray.map { it.jsonPrimitive.contentOrNull })
         assertEquals(1920, asked["maxWidth"]!!.jsonPrimitive.int)
+        // Not said: the core decides (only looking while someone else drives it).
+        assertEquals(null, asked["control"])
         v.shot("screen-connecting")
         rule.onNodeWithText("正在连接…").assertIsDisplayed()
 
@@ -285,6 +290,54 @@ class ScreenViewerTest {
             else i++
         }
         return starts.mapIndexed { k, (_, from) -> b.copyOfRange(from, if (k + 1 < starts.size) starts[k + 1].first else b.size) }
+    }
+
+    /**
+     * An agent drives it as it opens: the core opened it only looking (no `control` asked), who drives it is said with
+     * 接管; 接管 asks for control (`screen.control` true), and the line then says the agent waits. Upright and sideways.
+     */
+    @Test fun anAgentDrivingIsTakenOver() {
+        val v = Viewer()
+        val s = v.open()
+        assertEquals(null, v.told(VIEW).single()["control"])
+        val agent = "Agent「修登录」"
+        v.state("live", control = false, others = listOf(agent, "Bob"), controllers = listOf(agent), takeOver = true, line = "只看 · $agent 在控制 · Bob 也在看")
+        v.config()
+        v.frame(1000)
+        rule.waitUntil(5_000) { v.acked(1000) }
+        v.shot("screen-agent-driving")
+        rule.onNodeWithText("$agent 在控制").assertIsDisplayed()
+        // Only looking: a tap is not sent.
+        rule.onNodeWithTag(STAGE).performTouchInput { click(v.at(0.5f, 0.5f)) }
+        v.h.settle()
+        assertEquals(emptyList<JsonObject>(), v.inputs())
+
+        rule.runOnUiThread { rule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
+        rule.waitUntil(10_000) { rule.onNodeWithTag(STAGE).fetchSemanticsNode().size.let { it.width > it.height } }
+        v.frame(1033)
+        rule.waitUntil(5_000) { v.acked(1033) }
+        v.shot("screen-agent-driving-landscape")
+        rule.onNodeWithText("接管").performTouchInput { click() }
+        v.h.settle()
+        val asked = v.told("screen.control").single()
+        assertEquals(s.view, asked["view"]!!.jsonPrimitive.contentOrNull)
+        assertEquals(true, asked["control"]!!.jsonPrimitive.contentOrNull?.toBoolean())
+        // The core opens it again driving; the agent waits.
+        v.state("live", control = true, others = listOf(agent, "Bob"), controllers = emptyList(), takeOver = false, line = "控制 · $agent 暂停中 · Bob 也在看")
+        v.frame(1066)
+        rule.waitUntil(5_000) { v.acked(1066) }
+        v.shot("screen-agent-paused-landscape")
+        assertEquals(0, rule.onAllNodesWithTextCount("接管"))
+        rule.runOnUiThread { rule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
+        rule.waitUntil(10_000) { rule.onNodeWithTag(STAGE).fetchSemanticsNode().size.let { it.width < it.height } }
+        v.frame(1100)
+        rule.waitUntil(5_000) { v.acked(1100) }
+        v.shot("screen-agent-paused")
+        rule.onNodeWithText("控制 · $agent 暂停中 · Bob 也在看").assertIsDisplayed()
+        // Driving now: a tap is a click.
+        rule.onNodeWithTag(STAGE).performTouchInput { click(v.at(0.5f, 0.5f)) }
+        rule.waitUntil(5_000) { v.inputs().size >= 2 }
+        rule.runOnUiThread { rule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
     }
 
     @Test fun liveInTheDark() {

@@ -162,9 +162,14 @@ fun ScreenViewer(session: ScreenSession, title: String?, onExit: () -> Unit) {
         val sideways = maxWidth > maxHeight
         if (sideways) Row(Modifier.fillMaxSize()) {
             Rail(session, typing, ::keyboard, onExit)
-            Stage(session, zoom, Modifier.weight(1f).fillMaxHeight(), onExit)
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                Stage(session, zoom, Modifier.fillMaxSize(), onExit)
+                // Sideways the frame takes the height: who drives it floats over its top, while it does.
+                if (session.canTakeOver) TakeOver(session, Modifier.align(Alignment.TopCenter).padding(top = 12.dp))
+            }
         } else Column(Modifier.fillMaxSize()) {
             Bar(session, title, typing, ::keyboard, onExit)
+            if (session.canTakeOver) TakeOver(session, Modifier.align(Alignment.CenterHorizontally).padding(horizontal = 12.dp, vertical = 4.dp))
             Stage(session, zoom, Modifier.weight(1f).fillMaxWidth(), onExit)
         }
     }
@@ -182,7 +187,7 @@ private fun choosable(session: ScreenSession) = session.state?.may == true && op
  */
 private fun undriven(session: ScreenSession): String? {
     val state = session.state ?: return null
-    if (session.phase != "live" || !session.wantsControl || state.control || !state.may) return null
+    if (session.phase != "live" || !session.controlling || state.control || !state.may || state.takeOver == true) return null
     return state.access?.message?.takeIf { it.isNotEmpty() }
 }
 
@@ -197,13 +202,14 @@ private fun Bar(session: ScreenSession, title: String?, typing: Boolean, keyboar
         RoundButton(Icons.Close, t("android-misc.screen.close"), onClick = onExit)
         Column(Modifier.weight(1f)) {
             Text(state?.title?.takeIf { it.isNotEmpty() } ?: title ?: t("android-misc.screen.title"), fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            state?.line?.takeIf { it.isNotEmpty() && open(session) }?.let { Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            // While another drives it, who does is said below (with 接管), not twice.
+            state?.line?.takeIf { it.isNotEmpty() && open(session) && !session.canTakeOver }?.let { Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
         if (choosable(session)) Seg(
-            listOf(t("android-misc.screen.look"), t("android-misc.screen.drive")), if (session.wantsControl) 1 else 0,
+            listOf(t("android-misc.screen.look"), t("android-misc.screen.drive")), if (session.controlling) 1 else 0,
             { session.control(it == 1) }, height = 32.dp, radius = 16.dp,
         )
-        if (session.driving) RoundButton(Icons.Text, t("android-misc.screen.keyboard"), pressed = typing, onClick = keyboard)
+        if (session.driving) RoundButton(Icons.Keyboard, t("android-misc.screen.keyboard"), pressed = typing, onClick = keyboard)
     }
 }
 
@@ -228,17 +234,42 @@ private fun Rail(session: ScreenSession, typing: Boolean, keyboard: () -> Unit, 
                 )
             }
             if (choosable(session)) RoundButton(
-                if (session.wantsControl) Icons.Cursor else Icons.Eye,
-                if (session.wantsControl) t("android-misc.screen.drive") else t("android-misc.screen.look"),
-                pressed = session.wantsControl,
-            ) { session.control(!session.wantsControl) }
-            if (session.driving) RoundButton(Icons.Text, t("android-misc.screen.keyboard"), pressed = typing, onClick = keyboard)
+                if (session.controlling) Icons.Cursor else Icons.Eye,
+                if (session.controlling) t("android-misc.screen.drive") else t("android-misc.screen.look"),
+                pressed = session.controlling,
+            ) { session.control(!session.controlling) }
+            if (session.driving) RoundButton(Icons.Keyboard, t("android-misc.screen.keyboard"), pressed = typing, onClick = keyboard)
         }
         if (saying && state != null) Text(
             state.line, fontSize = 13.sp, lineHeight = 18.sp, color = C.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.align(Alignment.BottomStart).offset(x = 64.dp, y = (-8).dp).widthIn(max = 280.dp)
                 .floatingStill(RoundedCornerShape(18.dp)).padding(horizontal = 14.dp, vertical = 8.dp),
         )
+    }
+}
+
+/**
+ * Someone else drives it (an agent at work) and this view only looks: who, and 接管 in one tap (`screen.control` true:
+ * their input waits while this person drives; the line then says so).
+ */
+@Composable
+private fun TakeOver(session: ScreenSession, modifier: Modifier) {
+    val who = session.state?.controllers.orEmpty()
+    // A capsule round a 32 high button 6 in from its edge: its corner 6 + 16.
+    Row(
+        modifier.widthIn(max = 480.dp).floatingStill(RoundedCornerShape(22.dp)).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(C.warn))
+        Text(
+            if (who.isEmpty()) t("android-misc.screen.someoneDrives") else t("android-misc.screen.drives", "who" to who.joinToString("、")),
+            fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        Box(
+            Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).background(C.accent).clickable { session.control(true) }.padding(horizontal = 14.dp),
+            contentAlignment = Alignment.Center,
+        ) { Text(t("android-misc.screen.takeOver"), fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1) }
     }
 }
 

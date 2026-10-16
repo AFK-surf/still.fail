@@ -468,5 +468,8 @@
   "android-misc.screen.failed": "没能打开这个屏幕",
   "android-misc.screen.retry": "再试一次",
   "android-misc.screen.exit": "退出",
-  "android-misc.screen.outdatedRow": "这台 station 版本太旧，更新后才能看它的屏幕"
+  "android-misc.screen.outdatedRow": "这台 station 版本太旧，更新后才能看它的屏幕",
+  "android-misc.screen.drives": "{who} 在控制",
+  "android-misc.screen.someoneDrives": "有人在控制",
+  "android-misc.screen.takeOver": "接管"
 }

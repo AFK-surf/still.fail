@@ -63,8 +63,17 @@ class ScreenSession(
     var picture by mutableStateOf<Picture?>(null); private set
     /** Something was shown since it opened: a frame kept on screen through a reconnect or an end. */
     var shownAny by mutableStateOf(false); private set
-    /** 控制 (true) or 只看, as the person chose. */
-    var wantsControl by mutableStateOf(true); private set
+    /**
+     * 控制 (true) or 只看 as the person chose; null until they do: the core opens it in 只看 while someone else (an
+     * agent at work) drives it, else in 控制, so opening a screen never takes it from whoever is on it.
+     */
+    var wantsControl by mutableStateOf<Boolean?>(null); private set
+
+    /** 控制 or 只看 as the view is meant to be now: as chosen, else as the core opened it (只看 while another drives). */
+    val controlling: Boolean get() = wantsControl ?: (state?.takeOver != true)
+
+    /** Someone else (an agent) drives it and this view only looks, but may take it over (接管). */
+    val canTakeOver: Boolean get() = phase == "live" && state?.takeOver == true
 
     private val main = Handler(Looper.getMainLooper())
     private var job: Job? = null
@@ -104,7 +113,8 @@ class ScreenSession(
             put("codecs", JsonArray(listOfNotNull(if (h264) "h264" else null, "jpeg").map(::JsonPrimitive)))
             put("maxWidth", limit.width)
             put("maxHeight", limit.height)
-            put("control", wantsControl)
+            // Not said until the person chooses: the core decides (only looking while another drives).
+            wantsControl?.let { put("control", it) }
         }
         job = scope.launch {
             try {
