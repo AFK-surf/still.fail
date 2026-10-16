@@ -350,3 +350,49 @@ test("the admin gives an account the right to create workspaces, or takes it bac
     await h.close();
   }
 });
+
+test("the admin gives an email the test channel and the standard plan before anyone signs in with it; the first to does", async () => {
+  const h = await harness();
+  try {
+    const aliceAdmin = h.as(await h.login("alice"), "admin");
+    const list = async () => (await (await aliceAdmin("GET", "/v1/admin/users")).json()) as any;
+
+    // Dave has never signed in: his email is given both, in any case and with spaces; it is listed as pending, not as a user.
+    const given = await aliceAdmin("POST", "/v1/admin/pending", { email: "  Dave@Example.test ", beta: true, may_create: true });
+    assert.equal(given.status, 200);
+    assert.deepEqual(await given.json(), { email: "dave@example.test", sub: null });
+    // One not given stays as it was.
+    await aliceAdmin("POST", "/v1/admin/pending", { email: "dave@example.test", beta: false });
+    await aliceAdmin("POST", "/v1/admin/pending", { email: "dave@example.test", beta: true });
+    assert.deepEqual((await list()).pending.map((p: any) => [p.email, p.beta, p.may_create]), [["dave@example.test", true, true]]);
+    assert.equal((await list()).users.some((u: any) => u.email === "dave@example.test"), false);
+
+    // He signs in: his account has both, and the email is no longer pending.
+    const dave = h.as(await h.login("dave"));
+    assert.equal(((await (await dave("GET", "/v1/me")).json()) as any).user.beta, true);
+    const user = (await list()).users.find((u: any) => u.email === "dave@example.test");
+    assert.deepEqual([user.beta, user.may_create, user.admission], [true, true, "granted"]);
+    assert.deepEqual((await list()).pending, []);
+    assert.equal((await dave("POST", "/v1/workspaces", { name: "Dave's" })).status, 200);
+    assert.equal((await dave("POST", "/v1/workspaces", { name: "Second" })).status, 200);
+
+    // An email someone has signed in with: theirs at once, and its account said.
+    const bobTokens = await h.login("bob");
+    assert.deepEqual(await (await aliceAdmin("POST", "/v1/admin/pending", { email: "bob@example.test", beta: true })).json(), { email: "bob@example.test", sub: bobTokens.subject });
+    assert.equal(((await (await h.as(bobTokens)("GET", "/v1/me")).json()) as any).user.beta, true);
+    assert.deepEqual((await list()).pending, []);
+
+    // Taken back before anyone signs in: the account that does has none of it.
+    await aliceAdmin("POST", "/v1/admin/pending", { email: "erin@example.test", beta: true });
+    assert.equal((await aliceAdmin("POST", "/v1/admin/pending/remove", { email: "Erin@example.test" })).status, 200);
+    assert.deepEqual((await list()).pending, []);
+    assert.equal("beta" in ((await (await h.as(await h.login("erin"))("GET", "/v1/me")).json()) as any).user, false);
+
+    assert.equal((await aliceAdmin("POST", "/v1/admin/pending", { email: "nope", beta: true })).status, 400);
+    assert.equal((await aliceAdmin("POST", "/v1/admin/pending", { email: "x@example.test", beta: "yes" })).status, 400);
+    // Only the admin, only on the console's host.
+    assert.equal((await dave("POST", "/v1/admin/pending", { email: "x@example.test", beta: true })).status, 404);
+  } finally {
+    await h.close();
+  }
+});

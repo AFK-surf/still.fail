@@ -695,6 +695,20 @@ class CloudOperations(private val call: suspend (String, JsonObject) -> JsonElem
         values["user"] = JsonPrimitive(user)
         return call("admin.block", JsonObject(values))
     }
+    class AdminSetPendingFields : OperationFields() {
+        var beta: Boolean? by field<Boolean>("beta") { JsonPrimitive(it) }
+        var may_create: Boolean? by field<Boolean>("may_create") { JsonPrimitive(it) }
+    }
+    suspend fun adminSetPending(email: String, fill: AdminSetPendingFields.() -> Unit = {}): JsonElement {
+        val values = AdminSetPendingFields().apply(fill).fields
+        values["email"] = JsonPrimitive(email)
+        return call("admin.setPending", JsonObject(values))
+    }
+    suspend fun adminRemovePending(email: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["email"] = JsonPrimitive(email)
+        return call("admin.removePending", JsonObject(values))
+    }
     suspend fun adminDeleteWorkspace(workspace: String): JsonElement {
         val values = mutableMapOf<String, JsonElement>()
         values["workspace"] = JsonPrimitive(workspace)

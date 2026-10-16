@@ -85,6 +85,12 @@ export const admin = {
   setMayCreate: (sub: string, user: string, on: boolean) => operations(sub).adminSetMayCreate<{ sub: string; may_create: boolean }>({ user, on }),
   /** Blocks the account `user` (signed out everywhere, kept out), or lets it back. */
   block: (sub: string, user: string, on: boolean) => operations(sub).adminBlock<{ blocked: boolean }>({ user, on }),
+  /** Gives an email the test channel or the standard plan (one left out stays as it was): an account signed in with it at
+   *  once (its `sub`), otherwise (`sub` null) the first that signs in with it. */
+  setPending: (sub: string, email: string, rights: { beta?: boolean; may_create?: boolean }) =>
+    operations(sub).adminSetPending<{ email: string; sub: string | null }>({ email, ...rights }),
+  /** Takes back what an email nobody signed in with yet was given. */
+  removePending: (sub: string, email: string) => operations(sub).adminRemovePending<{ ok: true }>({ email }),
   deleteWorkspace: (sub: string, workspace: string) => operations(sub).adminDeleteWorkspace<{ ok: true }>({ workspace }),
   /** Where a bug report stands. */
   feedbackStatus: (sub: string, id: string, status: FeedbackStatus) => operations(sub).adminFeedbackStatus<{ ok: true }>({ id, status }),

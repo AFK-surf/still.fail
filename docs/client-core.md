@@ -507,7 +507,7 @@ thread, else its session), `chats.archived`,
 `workspace.enroll`, `workspace.renameStation`, `workspace.removeStation`,
 `invitation.preview`, `invitation.accept`, `invitation.decline`,
 `loginSession.revoke`, `admin.me`, `admin.createCode`, `admin.revokeCode`,
-`admin.feedbackStatus`.
+`admin.setPending`, `admin.removePending`, `admin.feedbackStatus`.
 
 An operation answers only after the live topics it touches are current, so
 the UI never invalidates caches itself and a page that navigates right after a

@@ -55,6 +55,13 @@ export interface AdminUser extends UserView {
   /** Blocked by the admin from the console. Missing from a cloud from before. */
   blocked?: boolean;
 }
+/** Rights the admin gave an email nobody has signed in with yet: the account it signs in with first has them. */
+export interface AdminPending {
+  email: string;
+  beta: boolean;
+  may_create: boolean;
+  added_at: number;
+}
 export interface AdminWorkspace {
   id: string;
   name: string;

@@ -21,7 +21,7 @@ import { langOf, type Lang } from "./i18n.ts";
 import { MAX_RELAYS, parseRelays, relays, relayUrls, sameUrl } from "./relays";
 import type { Part } from "./changelog";
 import type { FeedbackInput } from "./feedback";
-import type { AccountEvent, AddedView, Admission, AdminFeedback, AdminUser, AdminWorkspace, DeviceView, FeedbackStatus, InvitationView, InviteCodeView, LockHead, LockRequestView, MeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
+import type { AccountEvent, AddedView, Admission, AdminFeedback, AdminPending, AdminUser, AdminWorkspace, DeviceView, FeedbackStatus, InvitationView, InviteCodeView, LockHead, LockRequestView, MeView, MemberView, PendingInvitation, Role, StationView, UserView, WorkspaceSummary, WorkspaceView } from "./types";
 import { asEntry, entryHash, shortCode, type LockEntry } from "./lock";
 export type { Role };
 
@@ -97,6 +97,7 @@ export class Directory extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS revocations (workspace TEXT NOT NULL, kind TEXT NOT NULL, id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (workspace, kind, id));
       CREATE TABLE IF NOT EXISTS added (workspace TEXT NOT NULL, email TEXT NOT NULL, role TEXT NOT NULL, added_by TEXT NOT NULL, added_at INTEGER NOT NULL, PRIMARY KEY (workspace, email));
       CREATE INDEX IF NOT EXISTS added_by_email ON added (email);
+      CREATE TABLE IF NOT EXISTS pending (email TEXT PRIMARY KEY, beta INTEGER, may_create INTEGER, added_by TEXT NOT NULL, added_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS invite_codes (code TEXT PRIMARY KEY, note TEXT NOT NULL DEFAULT '', created_by TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, revoked_at INTEGER, used_by TEXT, used_at INTEGER, workspace TEXT);
       CREATE TABLE IF NOT EXISTS push (id TEXT PRIMARY KEY, sub TEXT NOT NULL, sid TEXT NOT NULL, kind TEXT NOT NULL, endpoint TEXT, p256dh TEXT, auth TEXT, token TEXT, created INTEGER NOT NULL);
       CREATE UNIQUE INDEX IF NOT EXISTS push_by_endpoint ON push (sub, endpoint);
@@ -221,6 +222,7 @@ export class Directory extends DurableObject<Env> {
       identity.sub, identity.email, identity.name, identity.picture, nowSeconds(), nowSeconds(),
     );
     this.#joinAdded(identity.sub, identity.email);
+    this.#takePending(identity.sub, identity.email);
     if (!old || (old.email === identity.email && old.name === identity.name && old.picture === identity.picture)) return;
     // Members lists show them; invitations they sent show their name; a new email has other invitations.
     for (const row of this.#rows("SELECT workspace FROM members WHERE sub = ?", identity.sub)) this.#changed(row.workspace as string, false);
@@ -240,6 +242,17 @@ export class Directory extends DurableObject<Env> {
       this.#run("UPDATE users SET admitted = 'invitation' WHERE sub = ? AND admitted IS NULL", sub);
     });
     for (const row of rows) this.#changed(row.workspace as string, true);
+  }
+
+  /** An account signing in with an email the admin gave rights to before it had one: they are its from now on. */
+  #takePending(sub: string, email: string): void {
+    const row = this.#one("SELECT beta, may_create FROM pending WHERE email = ?", email.toLowerCase());
+    if (!row) return;
+    this.ctx.storage.transactionSync(() => {
+      if (row.beta) this.#run("UPDATE users SET beta = 1 WHERE sub = ?", sub);
+      if (row.may_create) this.#run("UPDATE users SET admitted = 'granted' WHERE sub = ? AND (admitted IS NULL OR admitted IN ('invitation', 'free'))", sub);
+      this.#run("DELETE FROM pending WHERE email = ?", email.toLowerCase());
+    });
   }
 
   /**
@@ -912,6 +925,42 @@ export class Directory extends DurableObject<Env> {
       this.#run("UPDATE users SET admitted = ? WHERE sub = ?", creator ? "free" : member ? "invitation" : null, sub);
     }
     return { sub, may_create: isAdmin(this.env, row!.email as string) || this.#standard(sub) };
+  }
+
+  /** The emails the admin gave rights to that nobody has signed in with yet, the latest first. */
+  adminPending(): AdminPending[] {
+    return this.#rows("SELECT email, beta, may_create, added_at FROM pending ORDER BY added_at DESC").map((row) => ({
+      email: row.email as string, beta: Boolean(row.beta), may_create: Boolean(row.may_create), added_at: row.added_at as number,
+    }));
+  }
+
+  /**
+   * The admin gives rights to an email, which needs no one to have signed in with it: the test channel, the standard plan
+   * (`beta`, `may_create`; one not given, or null, stays as it was). An account already signed in with it has them at once (`sub`,
+   * the first such); otherwise the account that first signs in with it does (#takePending; `sub` null).
+   */
+  setPending(by: string, email: unknown, beta: boolean | null | undefined, mayCreate: boolean | null | undefined): { email: string; sub: string | null } {
+    const address = typeof email === "string" ? email.trim().toLowerCase() : "";
+    if (!/^[^\s@]{1,64}@[^\s@]{1,190}$/.test(address)) fail(400, "invalid_email");
+    const accounts = this.#byEmail(address);
+    if (accounts.length > 0) {
+      for (const sub of accounts) {
+        if (typeof beta === "boolean") this.setBeta(sub, beta);
+        if (typeof mayCreate === "boolean") this.setMayCreate(sub, mayCreate);
+      }
+      return { email: address, sub: accounts[0]! };
+    }
+    const on = (v: boolean | null | undefined) => (typeof v === "boolean" ? (v ? 1 : 0) : null);
+    this.#run(`INSERT INTO pending (email, beta, may_create, added_by, added_at) VALUES (?, COALESCE(?, 0), COALESCE(?, 0), ?, ?)
+      ON CONFLICT (email) DO UPDATE SET beta = COALESCE(?, beta), may_create = COALESCE(?, may_create)`,
+      address, on(beta), on(mayCreate), by, nowSeconds(), on(beta), on(mayCreate));
+    return { email: address, sub: null };
+  }
+
+  /** Takes back the rights given to an email nobody has signed in with yet. */
+  removePending(email: unknown): { ok: true } {
+    this.#run("DELETE FROM pending WHERE email = ?", typeof email === "string" ? email.trim().toLowerCase() : "");
+    return { ok: true };
   }
 
   /** Notes that the admin blocked the account or let it back (the account's own object is what keeps it out). */

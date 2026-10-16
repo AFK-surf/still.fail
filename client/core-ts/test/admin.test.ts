@@ -56,6 +56,29 @@ test("users_are_found_filtered_and_sorted", () => {
   assert.deepEqual([ids(page), page.more, page.found], [["c"], true, 2]);
 });
 
+test("emails_given_rights_before_a_sign_in_are_listed_with_the_users_and_have_a_page", () => {
+  const v = { ...users(), pending: [{ email: "dan@z.io", beta: true, may_create: true, added_at: NOW - DAY }, { email: "eve@z.io", beta: false, may_create: false, added_at: NOW - 3 * DAY }] };
+  const all = list("users", v, "", null, null, null, NOW);
+  assert.equal(all.total, 5);
+  // Never seen, they sort among those never seen, by when they were added.
+  assert.deepEqual(ids(all), ["a", "b", "email:dan@z.io", "email:eve@z.io", "c"]);
+  const dan = all.rows[2];
+  assert.deepEqual([dan.title, dan.line, dan.marks.map((m: J) => m.label), dan.last_seen], ["dan@z.io", "首次登录后开通：测试版、标准版", ["未登录", "测试版"], null]);
+  assert.equal(all.rows[3].line, "首次登录后开通：还没开通任何资格");
+  // Nothing an account did is said of them; what they were given is.
+  assert.deepEqual([count(all, "stuck"), count(all, "dormant"), count(all, "new"), count(all, "active")], [1, 2, 1, 1]);
+  assert.deepEqual([count(all, "pending"), count(all, "beta"), count(all, "creators")], [2, 2, 2]);
+  assert.deepEqual(ids(list("users", v, "dan", null, null, null, NOW)), ["email:dan@z.io"]);
+  // Nor are they users in the overview.
+  assert.equal(overview(v, workspaces(), { codes: [] }, undefined, NOW, 0).stats[0].value, 3);
+
+  const page = user("email:dan@z.io", v, workspaces(), undefined, NOW);
+  assert.deepEqual([page.pending, page.email, page.admission, page.beta, page.mayCreate, page.mayCreateFixed, page.blocked, page.workspaces], [true, "dan@z.io", "未登录", true, true, false, null, []]);
+  assert.throws(() => user("email:nobody@z.io", v, workspaces(), undefined, NOW));
+  // From a cloud from before it, there are none.
+  assert.equal(list("users", users(), "", null, null, null, NOW).total, 3);
+});
+
 test("workspaces_say_what_is_off", () => {
   const all = list("workspaces", workspaces(), "", null, null, null, NOW);
   assert.deepEqual(ids(all), ["w1", "w2"]);

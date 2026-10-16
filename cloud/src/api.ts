@@ -273,7 +273,15 @@ export async function adminApi(request: Request, env: Env, path: string): Promis
   }
   const dir = env.DIRECTORY.getByName("primary");
   if (path === "/v1/admin/me" && method === "GET") return reply({ email: claims.email });
-  if (path === "/v1/admin/users" && method === "GET") return directory(async () => ({ users: await dir.adminUsers() }));
+  // With the emails given rights before anyone signed in with them (`pending`; a console from before reads no such list).
+  if (path === "/v1/admin/users" && method === "GET") return directory(async () => ({ users: await dir.adminUsers(), pending: await dir.adminPending() }));
+  // Gives an email the test channel or the standard plan, signed in with or not: { email, beta?: boolean, may_create?: boolean }.
+  if (path === "/v1/admin/pending" && method === "POST") {
+    const right = (v: unknown) => v === undefined || v === null || typeof v === "boolean";
+    if (!right(input.beta) || !right(input.may_create)) return reply({ error: "invalid_request" }, 400);
+    return directory(() => dir.setPending(claims.sub, input.email, input.beta as boolean | null | undefined, input.may_create as boolean | null | undefined));
+  }
+  if (path === "/v1/admin/pending/remove" && method === "POST") return directory(() => dir.removePending(input.email));
   // Lets an account into the test channel (BETA_ORIGIN) or out of it: { on: boolean }.
   const beta = /^\/v1\/admin\/users\/([A-Za-z0-9_-]{1,128})\/beta$/.exec(path);
   if (beta && method === "POST") {

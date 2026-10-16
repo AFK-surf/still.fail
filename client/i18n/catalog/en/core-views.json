@@ -53,6 +53,10 @@
   "core-views.admin.no_station": "No station",
   "core-views.admin.not_in": "Not in yet",
   "core-views.admin.overview.this_week": "This week",
+  "core-views.admin.pending": "Not signed in",
+  "core-views.admin.pending.line": "On first sign-in: {rights}",
+  "core-views.admin.pending.nothing": "Nothing given yet",
+  "core-views.admin.pending.standard": "Standard plan",
   "core-views.admin.people": {
     "one": "1 person",
     "other": "{n} people"

@@ -155,6 +155,8 @@ export const PARAMS: Record<string, string> = {
   "admin.setBeta": "user:string on?:boolean",
   "admin.setMayCreate": "user:string on?:boolean",
   "admin.block": "user:string on?:boolean",
+  "admin.setPending": "email:string beta?:boolean may_create?:boolean",
+  "admin.removePending": "email:string",
   "admin.deleteWorkspace": "workspace:string",
   "admin.feedbackStatus": "id:string status?:string",
 };
@@ -487,6 +489,10 @@ function cloudOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/v1/admin/users/${p.at("user")}/may-create`, { on: p.bool("on") });
     case "admin.block":
       return op("POST", () => `/v1/admin/users/${p.at("user")}/block`, { on: p.bool("on") });
+    case "admin.setPending":
+      return op("POST", () => "/v1/admin/pending", p.pick(["email", "beta", "may_create"]));
+    case "admin.removePending":
+      return op("POST", () => "/v1/admin/pending/remove", p.pick(["email"]));
     case "admin.deleteWorkspace":
       return op("POST", () => `/v1/admin/workspaces/${p.at("workspace")}/delete`, null);
     case "admin.feedbackStatus":

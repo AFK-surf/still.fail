@@ -10,7 +10,7 @@ import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, usePa
 import { Lockup } from "../brand.tsx";
 import { stamp, type Stamp } from "../api.ts";
 import { failure, useToast } from "../toast.tsx";
-import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, Loading, MobileBack, Pill, ResizeHandle, Select, StatusDot, Switch, Time, ICON, type Presence, type Tone } from "../ui.tsx";
+import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, Loading, MobileBack, Pill, ResizeHandle, Select, StatusDot, Switch, SwitchRow, Time, ICON, type Presence, type Tone } from "../ui.tsx";
 import { useAccounts, useSignOut, type Account } from "../cloud/accounts.ts";
 import { admin, useAction, type FeedbackStatus } from "../cloud/api.ts";
 import { Prose } from "../Prose.tsx";
@@ -57,6 +57,8 @@ type Row = Timed & {
 };
 type ListView = { total: number; found: number; filter: string; filters: { id: string; label: string; count: number }[]; sort: string; sorts: { id: string; label: string }[]; rows: Row[]; more: boolean };
 type UserPage = Timed & {
+  /** An email given rights before anyone signed in with it (id `email:<address>`). */
+  pending?: boolean;
   id: string; title: string; person: PersonLike; email: string; admin: boolean; admission: string; code: string | null;
   mayCreate: boolean | null; mayCreateHint: string; mayCreateFixed: boolean; beta: boolean | null; blocked: boolean | null;
   workspaces: { id: string; name: string; line: string }[];
@@ -208,6 +210,7 @@ function ListPage({ account, list }: { account: Account; list: List }) {
   const { value: view, error } = useKept<ListView>({ topic: "adminList", account: account.sub, list, query, ...(filter ? { filter } : {}), ...(sort ? { sort } : {}), limit });
   const set = (key: string, value: string | null) => setParams((p) => { const next = new URLSearchParams(p); if (value) next.set(key, value); else next.delete(key); return next; }, { replace: true });
   const [making, setMaking] = useState(false);
+  const [granting, setGranting] = useState(false);
   const search = params.toString() ? `?${params}` : "";
   const detail = id && list !== "invite-codes";
   return (
@@ -217,6 +220,7 @@ function ListPage({ account, list }: { account: Account; list: List }) {
         <header className={pagesCss.pageHead}>
           <div><h1>{TITLE[list]}{view && <span className={css.total}>{view.total}</span>}</h1></div>
           {list === "invite-codes" && <Button icon={Plus} variant="primary" onClick={() => setMaking(true)}>{t("web-pages.admin.code.make")}</Button>}
+          {list === "users" && <Button icon={Plus} onClick={() => setGranting(true)}>{t("web-pages.admin.pending.add")}</Button>}
         </header>
         <div className={css.toolbar}>
           <label className={css.search}>
@@ -257,6 +261,7 @@ function ListPage({ account, list }: { account: Account; list: List }) {
           ? <FeedbackDetail key={id} account={account} id={id} close={`${PATH.feedback}${search}`} />
           : <WorkspaceDetail key={id} account={account} id={id} close={`${PATH.workspaces}${search}`} />)}
       {making && <NewCodeDialog account={account} onClose={() => setMaking(false)} />}
+      {granting && <PendingDialog account={account} search={search} onClose={() => setGranting(false)} />}
     </div>
   );
 }
@@ -329,19 +334,33 @@ function Detail({ close, head, children }: { close: string; head: React.ReactNod
   );
 }
 
+// An email given rights before anyone signed in with it is listed as `email:<address>` (views/admin.ts).
+const PENDING = "email:";
+
 function UserDetail({ account, id, close, search }: { account: Account; id: string; close: string; search: string }) {
   const toast = useToast();
+  const navigate = useNavigate();
   const { value: u, error } = useKept<UserPage>({ topic: "adminItem", account: account.sub, list: "users", id });
-  const mayCreate = useAction((on: boolean) => admin.setMayCreate(account.sub, id, on), (_, on) => toast(on ? t("web-pages.admin.user.mayCreateOn") : t("web-pages.admin.user.mayCreateOff")));
-  const beta = useAction((on: boolean) => admin.setBeta(account.sub, id, on), (_, on) => toast(on ? t("web-pages.admin.user.betaOn") : t("web-pages.admin.user.betaOff")));
+  const email = id.startsWith(PENDING) ? id.slice(PENDING.length) : null;
+  const mayCreate = useAction<boolean, unknown>((on) => email !== null ? admin.setPending(account.sub, email, { may_create: on }) : admin.setMayCreate(account.sub, id, on),
+    (_, on) => toast(on ? t("web-pages.admin.user.mayCreateOn") : t("web-pages.admin.user.mayCreateOff")));
+  const beta = useAction<boolean, unknown>((on) => email !== null ? admin.setPending(account.sub, email, { beta: on }) : admin.setBeta(account.sub, id, on),
+    (_, on) => toast(on ? t("web-pages.admin.user.betaOn") : t("web-pages.admin.user.betaOff")));
+  const remove = useAction(() => admin.removePending(account.sub, email ?? ""), () => { toast(t("web-pages.admin.pending.removed")); navigate(close); });
   const [blocking, setBlocking] = useState(false);
   const block = useAction((on: boolean) => admin.block(account.sub, id, on), (_, on) => toast(on ? t("web-pages.admin.user.blocked") : t("web-pages.admin.user.unblocked")));
   if (!u) return <aside className={css.detail}>{error ? <Failed error={error} /> : <Loading label={t("web-pages.settings.reading")} fill={false} />}</aside>;
   return (
     <Detail close={close} head={<>
       <Avatar account={u.person} size={40} />
-      <span className={css.detailTitle}><b>{u.title}</b><span>{u.email}</span></span>
+      <span className={css.detailTitle}><b>{u.title}</b><span>{u.pending ? u.admission : u.email}</span></span>
     </>}>
+      {u.pending ? (
+        <dl className={css.kv}>
+          <dt>{t("web-pages.admin.user.admission")}</dt><dd>{u.admission}<span className={shellCss.muted}> · {t("web-pages.admin.pending.lead")}</span></dd>
+          <dt>{t("web-pages.admin.pending.addedAt")}</dt><dd><Time stamp={stamp(u, "created_at")} /></dd>
+        </dl>
+      ) : <>
       <dl className={css.kv}>
         <dt>{t("web-pages.admin.user.admission")}</dt><dd>{u.admission}{u.code && <span className={shellCss.muted}> · <span className={shellCss.mono}>{u.code}</span></span>}</dd>
         <dt>{t("web-pages.admin.user.firstSignIn")}</dt><dd><Time stamp={stamp(u, "created_at")} /></dd>
@@ -355,6 +374,7 @@ function UserDetail({ account, id, close, search }: { account: Account; id: stri
           <span className={css.grow}>{w.name}</span><span className={css.lineAside}>{w.line}</span><ChevronRight {...ICON} />
         </Link>
       ))}
+      </>}
       {!u.admin && <>
         <div className={css.group}>{t("web-pages.admin.user.rights")}</div>
         {u.mayCreate !== null && (
@@ -374,6 +394,11 @@ function UserDetail({ account, id, close, search }: { account: Account; id: stri
             {u.blocked
               ? <Button busy={block.busy} onClick={() => block.run(false)}>{t("web-pages.admin.user.unblock")}</Button>
               : <Button variant="danger" busy={block.busy} onClick={() => setBlocking(true)}>{t("web-pages.admin.user.block")}</Button>}
+          </div>
+        )}
+        {u.pending && (
+          <div className={css.actions}>
+            <Button busy={remove.busy} onClick={() => remove.run()}>{t("web-pages.admin.pending.remove")}</Button>
           </div>
         )}
         {block.error && <p className={controlsCss.fieldError} role="alert">{block.error.message}</p>}
@@ -518,3 +543,33 @@ function NewCodeDialog({ account, onClose }: { account: Account; onClose(): void
   );
 }
 
+/** Gives an email rights before anyone signed in with it; opens its page (an account's, if one has signed in with it). */
+function PendingDialog({ account, search, onClose }: { account: Account; search: string; onClose(): void }) {
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [beta, setBeta] = useState(true);
+  const [mayCreate, setMayCreate] = useState(false);
+  // Only what is switched on: an account already signed in with the email keeps what it has besides.
+  const add = useAction(() => admin.setPending(account.sub, email, { ...(beta ? { beta } : {}), ...(mayCreate ? { may_create: mayCreate } : {}) }), (made) => {
+    toast(made.sub !== null ? t("web-pages.admin.pending.known") : t("web-pages.admin.pending.added"));
+    navigate(`${PATH.users}/${encodeURIComponent(made.sub ?? `${PENDING}${made.email}`)}${search}`);
+    onClose();
+  });
+  const ready = email.trim() !== "" && (beta || mayCreate) && !add.busy;
+  return (
+    <Dialog open onClose={onClose} title={t("web-pages.admin.pending.add")} description={t("web-pages.admin.pending.addLead")}
+      footer={<>
+        <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
+        <Button variant="primary" busy={add.busy} disabled={!ready} onClick={() => add.run()}>{t("web-pages.admin.pending.addShort")}</Button>
+      </>}>
+      <Field label={t("web-pages.admin.pending.email")} htmlFor="pending-email">
+        <input id="pending-email" className={controlsCss.input} type="email" value={email} autoFocus maxLength={255} placeholder="name@example.com" onChange={(e) => setEmail(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && ready) add.run(); }} />
+      </Field>
+      <SwitchRow title={t("web-pages.admin.user.beta")} description={t("web-pages.admin.user.betaHint")} checked={beta} onChange={setBeta} />
+      <SwitchRow title={t("web-pages.admin.user.mayCreate")} description={t("web-pages.admin.pending.mayCreateHint")} checked={mayCreate} onChange={setMayCreate} />
+      {add.error && <p className={controlsCss.fieldError} role="alert">{add.error.message}</p>}
+    </Dialog>
+  );
+}
