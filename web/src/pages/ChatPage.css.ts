@@ -256,10 +256,12 @@ export const evict = style({ padding: "0", border: "0", background: "none", colo
 export const dropZone = style({ position: "relative" });
 const frostOut = keyframes({ to: { opacity: 0 } });
 export const dropHint = style({
-  ...glass, position: "absolute", inset: "0", zIndex: 40, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+  // Under the composer (dock.css.ts, 3), from the first: where they go stays clear, and a dropped file's mark comes
+  // into it over the frost.
+  ...glass, position: "absolute", inset: "0", zIndex: 2, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
   gap: "16px", pointerEvents: "none", color: vars.text, fontSize: vars.textUi, fontWeight: 500,
-  // Let go: it fades, under the composer, where the dropped files' marks are on their cards (drive/flight.ts).
-  selectors: { "&[data-leaving]": { zIndex: 2, animation: `${frostOut} 260ms ease-out forwards` } },
+  // Let go: it fades (drive/flight.ts FROST_OUT_MS).
+  selectors: { "&[data-leaving]": { animation: `${frostOut} 260ms ease-out forwards` } },
 });
 /** What is dragged, each by its mark (Chat.tsx FileTile) twice the size of a card's, a few fanned out as a stack. */
 export const dropMarks = style({ position: "relative", width: "180px", height: "84px" });

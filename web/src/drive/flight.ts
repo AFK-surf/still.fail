@@ -3,7 +3,7 @@
 // and its mark is moved back to where the dropped one was shown (in the same frame that one goes), then let go to its
 // own place, which does not move meanwhile. The frost over the chat fades first; the marks go once it is half gone.
 import { useLayoutEffect, type RefObject } from "react";
-import { EASE_OUT_CSS, reducedMotion } from "../motion.ts";
+import { reducedMotion } from "../motion.ts";
 
 /** Where a dropped file was shown over the chat: its box untilted, and its tilt. */
 type From = { box: DOMRect; tilt: number };
@@ -12,10 +12,15 @@ let waiting: From[] = [];
 let at = 0;
 /** A drop's cards are drawn in the commit after it: what no card took by then is let go. */
 const WITHIN_MS = 1000;
-const FLIGHT_MS = 420;
+const FLIGHT_MS = 380;
+/** Off and on its way, then setting down: not the page's ease-out, whose long tail leaves it hanging by its card. */
+const FLY = "cubic-bezier(0.4, 0, 0.2, 1)";
 /** The frost over the chat fades (ChatPage.css.ts, `frostOut`): the marks set off once it is half gone. */
 export const FROST_OUT_MS = 260;
 const SET_OFF_MS = FROST_OUT_MS / 2;
+/** The composer's ground grows round a card in this long (morph.ts, 260ms): the card's ground and words come in then. */
+const CARD_AT_MS = 200;
+const CARD_IN_MS = 160;
 
 /** The files shown over the chat are let go: where each one's mark is now. */
 export function takeOff(marks: Element[]): void {
@@ -38,9 +43,17 @@ export function useLanding(mark: RefObject<Element | null>): void {
     const from = waiting.shift()!;
     const to = el.getBoundingClientRect();
     if (!to.width || !to.height) return;
-    // The card is in its place from the first: no rising in of its own.
+    // The card is in its place from the first, with no rising in of its own; but for its mark, it shows only once the
+    // composer's ground, growing to take it (morph.ts grow), is round it: its ground and its words then come in.
     const card = el.closest<HTMLElement>("[data-card]");
+    const shows: Animation[] = [];
     if (card) card.style.animation = "none";
+    // (A picture is its own card: it comes whole.)
+    if (card && card !== el) {
+      const timing = { duration: CARD_IN_MS, delay: CARD_AT_MS, easing: "ease-out", fill: "backwards" } as const;
+      shows.push(card.animate([{ backgroundColor: "transparent", boxShadow: "none", borderColor: "transparent" }, {}], timing));
+      for (const part of card.children) if (!part.contains(el) && part !== el) shows.push(part.animate([{ opacity: 0 }, { opacity: 1 }], timing));
+    }
     // The composer's list of files scrolls (when there are many): it lets the mark in meanwhile.
     const box = el.closest<HTMLElement>("form");
     const clipped: HTMLElement[] = [];
@@ -58,13 +71,13 @@ export function useLanding(mark: RefObject<Element | null>): void {
     const run = el.animate([
       { transform: `translate(${dx}px, ${dy}px) rotate(${from.tilt}deg) scale(${from.box.width / to.width}, ${from.box.height / to.height})` },
       { transform: "none" },
-    ], { duration: FLIGHT_MS, delay: SET_OFF_MS, easing: EASE_OUT_CSS, fill: "backwards" });
+    ], { duration: FLIGHT_MS, delay: SET_OFF_MS, easing: FLY, fill: "backwards" });
     const done = () => {
       for (const n of clipped) n.style.overflow = "";
       el.style.position = "";
       el.style.zIndex = "";
     };
     run.onfinish = done;
-    return () => { run.cancel(); done(); };
+    return () => { run.cancel(); for (const a of shows) a.cancel(); done(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 }
