@@ -3,6 +3,7 @@
 // what its agents did.
 import { parseThreadAddress, threadAddress } from "../agents/instructions.ts";
 import { iso, type TimelineEntry } from "../read/transcript.ts";
+import { LAPSED } from "../store/rows.ts";
 import { type Attachment, STILLFAIL_SURFACE, type SessionRow, type SessionThread, type ThreadRow } from "../store/store.ts";
 import { type Args, jsNumber, jsString } from "./args.ts";
 import { threadHistory } from "./conversations.ts";
@@ -94,15 +95,20 @@ export function linkedWorkspace(reference: string): string | null {
 /// The key a thread goes by where it is shared (xshare/index.ts): its own session's, else its first agent's.
 const chatKeyOf = (hub: Hub, t: ThreadRow) => t.home ?? hub.store.threadSessions(t.id)[0]?.session ?? "";
 
+/// The chats session `key` is in, by the keys they are shared by.
+const chatsOf = (hub: Hub, key: string) => new Set([key, ...hub.store.sessionThreads(key).map((t) => chatKeyOf(hub, t.thread))]);
+
 /// Whether workspace `ws` may reach session `key`'s chat (docs/multi-workspace.md): one of that workspace's, or one
-/// another workspace of this station shares with it (to write in: shared to write). `ws` null: any.
+/// another workspace of this station shares with it (to write in: shared to write), whose share goes on from now. `ws`
+/// null: any.
 export function reachable(hub: Hub, key: string, ws: string | null, write = false): boolean {
   if (ws === null || hub.inWorkspace(key, ws)) return true;
-  const chats = new Set([key, ...hub.store.sessionThreads(key).map((t) => chatKeyOf(hub, t.thread))]);
-  return [...chats].some((c) => {
+  const shared = [...chatsOf(hub, key)].filter((c) => {
     const share = hub.store.chatShare(c);
     return share !== null && share.to.some((t) => t.workspace === ws) && (!write || share.write);
   });
+  for (const c of shared) hub.store.usedChatShare(c, [ws]);
+  return shared.length > 0;
 }
 
 /// Whether a thread is a chat of workspace `ws` (null: any): its own session's, else its agents'; one without any is
@@ -261,7 +267,10 @@ export function named(hub: Hub, given: string, ws: string | null = null, write =
     const [key, entry] = linked;
     const there = linkedWorkspace(reference);
     const known = hub.store.getSession(key) !== null;
-    if (known && !reachable(hub, key, ws, false) && there !== null && there !== ws) throw new Error(`${reference} is a chat of another workspace: that chat is not shared with your workspace`);
+    if (known && !reachable(hub, key, ws, false) && there !== null && there !== ws) {
+      if (ws !== null && [...chatsOf(hub, key)].some((c) => hub.store.chatShareLapsed(c, [ws]))) throw new Error(`${reference} is a chat of another workspace: ${LAPSED}`);
+      throw new Error(`${reference} is a chat of another workspace: that chat is not shared with your workspace`);
+    }
     if (!known || !reachable(hub, key, ws, false)) throw new Error(`${reference} names session ${key}, which is not on this station (it may be another station's, or deleted)`);
     if (!reachable(hub, key, ws, write)) throw new Error(`${reference} is shared with your workspace to read only: nothing can be sent to it`);
     return { type: "session", key, entry };

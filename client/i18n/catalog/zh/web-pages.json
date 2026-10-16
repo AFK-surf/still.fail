@@ -218,7 +218,7 @@
   "web-pages.chat.info.started": "发起",
   "web-pages.chat.info.unknown": "未记录",
   "web-pages.chat.xshare": "分享给其他 workspace",
-  "web-pages.chat.xshare.lead": "勾选的 workspace 里的 agent 能读这个对话",
+  "web-pages.chat.xshare.lead": "勾选的 workspace 里的 agent 能读这个对话；连续 6 小时没用就失效，要再分享一次",
   "web-pages.chat.xshare.write": "可以发消息",
   "web-pages.chat.xshare.writeNote": "关掉时只能看",
   "web-pages.chat.xshare.verb": "分享对话",

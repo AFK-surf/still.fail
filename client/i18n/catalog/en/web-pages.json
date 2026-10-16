@@ -233,7 +233,7 @@
   "web-pages.chat.info.started": "Started",
   "web-pages.chat.info.unknown": "Unknown",
   "web-pages.chat.xshare": "Share with other workspaces",
-  "web-pages.chat.xshare.lead": "Agents in the ticked workspaces can read this chat",
+  "web-pages.chat.xshare.lead": "Agents in the ticked workspaces can read this chat; unused for 6 hours, it has to be shared again",
   "web-pages.chat.xshare.write": "Can send messages",
   "web-pages.chat.xshare.writeNote": "Off, they can only read",
   "web-pages.chat.xshare.verb": "share the chat",

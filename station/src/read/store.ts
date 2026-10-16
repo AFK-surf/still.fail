@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
-import { type InWorkspace, sees } from "../store/rows.ts";
+import { type InWorkspace, liveShare, sees, toChatShare } from "../store/rows.ts";
 
 export type Json = any;
 
@@ -555,8 +555,8 @@ export function archiveVerdict(s: Store, thread: number): Json | null {
 
 // ── chats shared with other workspaces (chat_shares) ──
 
-/// What each chat shared with other workspaces is shared with, by the session key its link names (none on a
-/// database from before the table).
+/// What each chat shared with other workspaces is shared with now (its shares not lapsed, store/rows.ts), by the
+/// session key its link names (none on a database from before the table).
 export function chatShares(s: Store): Map<string, { to: { workspace: string; name: string }[]; write: boolean; by: string; at: number }> {
   let rows: Json[];
   try {
@@ -564,14 +564,11 @@ export function chatShares(s: Store): Map<string, { to: { workspace: string; nam
   } catch {
     return new Map();
   }
+  const now = nowMs();
   return new Map(
-    rows.map((r) => {
-      let to: Json = [];
-      try {
-        to = JSON.parse(r.shared);
-      } catch {}
-      const list = Array.isArray(to) ? to.filter((t: Json) => typeof t?.workspace === "string").map((t: Json) => ({ workspace: t.workspace, name: String(t.name ?? t.workspace) })) : [];
-      return [r.session, { to: list, write: r.write === 1, by: r.by, at: r.at }];
+    rows.flatMap((r) => {
+      const share = liveShare(toChatShare(r), now);
+      return share === null ? [] : [[r.session, { ...share, to: share.to.map(({ workspace, name }) => ({ workspace, name })) }] as const];
     }),
   );
 }

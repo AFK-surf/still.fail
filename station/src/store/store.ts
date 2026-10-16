@@ -22,9 +22,9 @@ import {
   type Attachment, type AutoTitle, type CardAnswer, type ChatShare, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
   type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type Published, type ProcessRow, type ProfileStatus,
   type Quote, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
-  type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
+  type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
-  toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary,
+  liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary,
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
 import * as usage from "./usage.ts";
@@ -38,6 +38,8 @@ export type { UsageCall, UsageFile, UsageFor, UsageGroup, UsageTurn } from "./us
 const ARCHIVE_CACHE = 32;
 /// How many of a job's notices are kept.
 const JOB_NOTICES = 50;
+/// A chat shared with another workspace being used there is noted at most this often (chat_shares `used`).
+const USED_NOTE_MS = 60_000;
 
 type Changes = StoreChange[];
 type Arg = SQLInputValue;
@@ -280,25 +282,74 @@ export class Store {
 
   // ── chats shared with other workspaces (chat_shares; xshare/) ──
 
-  /// What a chat (by the session key its link names) is shared with, if anything.
+  /// What a chat (by the session key its link names) is shared with now, if anything: the workspaces whose share did
+  /// not lapse (XSHARE_IDLE_MS unused).
   chatShare(session: string): ChatShare | null {
     const r = this.#one("SELECT * FROM chat_shares WHERE session = ?", session);
-    return r ? toChatShare(r) : null;
+    return r ? liveShare(toChatShare(r), this.now()) : null;
   }
 
-  /// Every chat shared with another workspace, by its session key.
+  /// Every chat shared with another workspace now, by its session key.
   chatShares(): Map<string, ChatShare> {
-    return new Map(this.#all("SELECT * FROM chat_shares").map((r) => [r.session, toChatShare(r)]));
+    const now = this.now();
+    return new Map(this.#all("SELECT * FROM chat_shares").flatMap((r) => {
+      const share = liveShare(toChatShare(r), now);
+      return share === null ? [] : [[r.session, share] as const];
+    }));
   }
 
-  /// Shares a chat with other workspaces (`to`), or (none) no longer; its chat's views change.
+  /// Whether a chat's share with one of `workspaces` (null: any) lapsed (unused too long), so is not on.
+  chatShareLapsed(session: string, workspaces: string[] | null): boolean {
+    const r = this.#one("SELECT * FROM chat_shares WHERE session = ?", session);
+    const now = this.now();
+    return r !== undefined && toChatShare(r).to.some((t) => (workspaces === null || workspaces.includes(t.workspace)) && !shareLive(t, now));
+  }
+
+  /// The workspaces some chat's share with lapsed: their stations are still answered why they read it no more.
+  lapsedShareWorkspaces(): Set<string> {
+    const now = this.now();
+    return new Set(this.#all("SELECT * FROM chat_shares").flatMap((r) => toChatShare(r).to.filter((t) => !shareLive(t, now)).map((t) => t.workspace)));
+  }
+
+  /// The agents of `workspaces` read a chat or wrote to it: its share with them goes on from now (one lapsed stays
+  /// so). Noted at most once a minute, no change to anything shown.
+  usedChatShare(session: string, workspaces: string[]): void {
+    const r = this.#one("SELECT * FROM chat_shares WHERE session = ?", session);
+    if (!r) return;
+    const now = this.now();
+    const share = toChatShare(r);
+    if (!share.to.some((t) => workspaces.includes(t.workspace) && shareLive(t, now) && now - t.used >= USED_NOTE_MS)) return;
+    const to = share.to.map((t) => (workspaces.includes(t.workspace) && shareLive(t, now) ? { ...t, used: now } : t));
+    this.#run("UPDATE chat_shares SET shared = ? WHERE session = ?", JSON.stringify(to), session);
+  }
+
+  /// The chats whose share with a workspace lapsed after `since` and by now: their views change (they are shared with
+  /// it no longer). Answers when the next one lapses, null when none will.
+  lapseChatShares(since: number): number | null {
+    const now = this.now();
+    let next: number | null = null;
+    this.#with((changes) => {
+      for (const r of this.#all("SELECT * FROM chat_shares")) {
+        const ends = toChatShare(r).to.map((t) => t.used + XSHARE_IDLE_MS);
+        if (ends.some((end) => end > since && end <= now)) {
+          for (const t of this.sessionThreads(r.session)) changes.push({ type: "thread", id: t.thread.id, entries: [] });
+          changes.push({ type: "session", key: r.session });
+        }
+        for (const end of ends) if (end > now && (next === null || end < next)) next = end;
+      }
+    });
+    return next;
+  }
+
+  /// Shares a chat with other workspaces (`to`), or (none) no longer, each from now; its chat's views change.
   setChatShare(session: string, to: { workspace: string; name: string }[], write: boolean, by: string): void {
     this.#with((changes) => {
       if (to.length === 0) this.#run("DELETE FROM chat_shares WHERE session = ?", session);
       else {
+        const now = this.now();
         this.#run(
           "INSERT INTO chat_shares (session, shared, write, by, at) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT (session) DO UPDATE SET shared = ?2, write = ?3, by = ?4, at = ?5",
-          session, JSON.stringify(to), write ? 1 : 0, by, this.now(),
+          session, JSON.stringify(to.map((t) => ({ workspace: t.workspace, name: t.name, used: now }))), write ? 1 : 0, by, now,
         );
       }
       for (const t of this.sessionThreads(session)) changes.push({ type: "thread", id: t.thread.id, entries: [] });

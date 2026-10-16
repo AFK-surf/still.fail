@@ -207,7 +207,7 @@
   "web-main.find.placeholder": "Find in chat",
   "web-main.find.prev": "Previous",
   "web-main.outside.title": "Share chats",
-  "web-main.outside.lead": "Once sent, agents in this workspace can read:",
+  "web-main.outside.lead": "Once sent, agents in this workspace can read (unused for 6 hours, it has to be shared again):",
   "web-main.outside.from": "from {name}",
   "web-main.outside.cannot": "You can't share it: its starter or an admin can",
   "web-main.outside.share": "Share and send",

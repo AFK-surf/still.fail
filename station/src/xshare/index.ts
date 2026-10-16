@@ -13,6 +13,9 @@
 //   one, `xshare.trusts`).
 // - A session that wrote to a session of another workspace may be answered by it (`replies`): that station may send it
 //   messages.
+// - Each of these lapses once unused for XSHARE_IDLE_MS (6 hours): a chat's share with a workspace whose agents neither
+//   read it nor wrote to it (store/store.ts `used`; a person shares it again), and an answer to a session that neither
+//   wrote nor was answered (`answered`).
 // - A station in several workspaces (docs/multi-workspace.md): a chat shared from here is its own workspace's (what its
 //   link names); one shared with this station is the workspace's that took it (`as`: the workspace a member of which
 //   said to take chats from its host, which its sessions alone see), the home one for what was kept before. Requests
@@ -27,6 +30,7 @@ import { Refused } from "../jobs/remote.ts";
 import { Fibers } from "../ops/fibers.ts";
 import { writePrivate } from "../ops/files.ts";
 import { log } from "../ops/log.ts";
+import { LAPSED, XSHARE_IDLE_MS } from "../store/rows.ts";
 import type { ChatShare, Store } from "../store/store.ts";
 
 type Json = any;
@@ -61,6 +65,9 @@ type State = {
   hosts: Record<string, Host>;
   /// Sessions here that wrote to another workspace's, and the stations they wrote to (those may answer).
   replies: Record<string, string[]>;
+  /// When each of those last wrote there or was answered from there, by session and station (none kept from before:
+  /// when this station started).
+  answered: Record<string, Record<string, number>>;
   /// The stations of this station's workspace each host was told last, as their hash, by `<as>/<host>`.
   roster: Record<string, string>;
 };
@@ -118,10 +125,14 @@ export class ChatShares {
   /// How often each host said something changed (xshare.changed), so a list asked for before is not taken over it.
   private heard = new Map<string, number>();
   private state: State | null = null;
+  /// Shares that lapsed by this time were told of (their views changed); the next to lapse is waited for.
+  private lapsed = 0;
+  private lapsing: (() => void) | null = null;
 
   constructor(deps: XshareDeps) {
     this.deps = deps;
     this.time = new Fibers("xshare", deps.clock);
+    this.lapsed = this.time.now();
   }
 
   private get root() {
@@ -131,11 +142,16 @@ export class ChatShares {
   /// The one copy of state.json in memory, read at the first use and written through.
   private readState(): State {
     if (this.state) return this.state;
-    const empty: State = { guests: {}, hosted: {}, borrowed: {}, hosts: {}, replies: {}, roster: {} };
+    const empty: State = { guests: {}, hosted: {}, borrowed: {}, hosts: {}, replies: {}, answered: {}, roster: {} };
     try {
       const s = JSON.parse(readFileSync(join(this.root, "state.json"), "utf8"));
       for (const k of Object.keys(empty) as (keyof State)[]) if (isObject(s[k])) (empty as any)[k] = s[k];
     } catch {}
+    const now = this.time.now();
+    for (const [session, stations] of Object.entries(empty.replies)) {
+      const at = (empty.answered[session] ??= {});
+      for (const station of Array.isArray(stations) ? stations : []) at[station] ??= now;
+    }
     this.state = empty;
     return empty;
   }
@@ -236,16 +252,32 @@ export class ChatShares {
   private noteSent(session: string, station: string) {
     const state = this.readState();
     const had = state.replies[session] ?? [];
-    if (had.includes(station)) return;
-    state.replies[session] = [...had, station];
+    if (!had.includes(station)) state.replies[session] = [...had, station];
+    (state.answered[session] ??= {})[station] = this.time.now();
     const keys = Object.keys(state.replies);
-    for (const k of keys.slice(0, Math.max(0, keys.length - MAX_REPLIES))) delete state.replies[k];
+    for (const k of keys.slice(0, Math.max(0, keys.length - MAX_REPLIES))) {
+      delete state.replies[k];
+      delete state.answered[k];
+    }
     this.writeState();
+  }
+
+  /// Whether `station` may answer session `session` here: it wrote to it, and it or that station spoke within
+  /// XSHARE_IDLE_MS (which it does now, from when it goes on).
+  private answers(session: string, station: string): boolean {
+    const state = this.readState();
+    if (!(state.replies[session] ?? []).includes(station)) return false;
+    const now = this.time.now();
+    if (now - (state.answered[session]?.[station] ?? 0) >= XSHARE_IDLE_MS) return false;
+    (state.answered[session] ??= {})[station] = now;
+    this.writeState();
+    return true;
   }
 
   // ── running ──
 
   start() {
+    this.lapseLater();
     this.stops.push(this.deps.cloud.listen(() => void this.reconcile()));
     this.stops.push(
       this.deps.store.subscribe((change) => {
@@ -253,7 +285,7 @@ export class ChatShares {
         if (change.type === "thread") {
           const home = this.deps.store.getThread(change.id)?.home ?? null;
           if (home !== null && this.deps.store.chatShare(home) !== null) void this.reconcile();
-        } else if (change.type === "sessionRemoved" && this.deps.store.chatShare(change.key) !== null) {
+        } else if (change.type === "sessionRemoved" && (this.deps.store.chatShare(change.key) !== null || this.deps.store.chatShareLapsed(change.key, null))) {
           this.deps.store.setChatShare(change.key, [], false, "");
           void this.reconcile();
         }
@@ -264,7 +296,23 @@ export class ChatShares {
 
   async close() {
     for (const stop of this.stops.splice(0)) stop();
+    this.lapsing?.();
     await this.time.close();
+  }
+
+  /// Once the next share lapses (unused too long), its chat's views change and its workspace's stations are told it is
+  /// no longer shared with them.
+  private lapseLater() {
+    this.lapsing?.();
+    this.lapsing = null;
+    const next = this.deps.store.lapseChatShares(this.lapsed);
+    this.lapsed = this.time.now();
+    if (next === null) return;
+    this.lapsing = this.time.after(next - this.lapsed, () => {
+      this.lapsing = null;
+      this.lapseLater();
+      void this.reconcile();
+    });
   }
 
   /// Brings what is told and asked in line: one at a time, again if asked meanwhile.
@@ -338,8 +386,9 @@ export class ChatShares {
       }
       if (Object.keys(hosted.told).length === 0) delete state.hosted[chat];
     }
-    // Workspaces nothing is shared with any more, once told so: forgotten.
+    // Workspaces nothing is shared with any more, once told so: forgotten (those a share with lapsed are answered why).
     const used = new Set([...shares.values()].flatMap((s) => s.to.map((t) => t.workspace)));
+    for (const workspace of this.deps.store.lapsedShareWorkspaces()) used.add(workspace);
     for (const [workspace, g] of Object.entries(state.guests)) {
       if (used.has(workspace)) continue;
       if (Object.values(state.hosted).some((h) => Object.keys(h.told).some((st) => st in g.stations))) continue;
@@ -479,7 +528,7 @@ export class ChatShares {
     const here = workspace ?? this.home();
     if (method === "xshare.changed") return this.changed(peer, request, here);
     const to = typeof request?.to === "string" ? request.to : "";
-    if ((method === "session.message" || method === "session.put") && (this.readState().replies[to] ?? []).includes(peer)) return this.deps.inbox(peer, request);
+    if ((method === "session.message" || method === "session.put") && this.answers(to, peer)) return this.deps.inbox(peer, request);
     const guests = this.guestsOf(peer, request?.as);
     if (guests.length === 0) throw new Error("this station shares no chat with your workspace");
     switch (method) {
@@ -501,12 +550,21 @@ export class ChatShares {
     throw new Error(`${method} is not open to other workspaces: only reading and writing in the chats shared with them`);
   }
 
-  /// Whether a request reads (or writes in) a chat shared with one of `workspaces`; throws why not.
+  /// Whether a request reads (or writes in) a chat shared with one of `workspaces`; throws why not. Its share goes on
+  /// from now.
   private check(workspaces: string[], request: Json, write: boolean) {
+    const store = this.deps.store;
     const chats = this.deps.touches(request);
-    const shares = chats.map((c) => this.deps.store.chatShare(c)).filter((s): s is ChatShare => s !== null && s.to.some((t) => workspaces.includes(t.workspace)));
-    if (shares.length === 0) throw new Error("that chat is not shared with your workspace");
-    if (write && !shares.some((s) => s.write)) throw new Error("that chat is shared with your workspace to read only: nothing can be sent to it");
+    const shared = chats.flatMap((c) => {
+      const s = store.chatShare(c);
+      return s !== null && s.to.some((t) => workspaces.includes(t.workspace)) ? [{ chat: c, share: s }] : [];
+    });
+    if (shared.length === 0) {
+      if (chats.some((c) => store.chatShareLapsed(c, workspaces))) throw new Error(LAPSED);
+      throw new Error("that chat is not shared with your workspace");
+    }
+    if (write && !shared.some((s) => s.share.write)) throw new Error("that chat is shared with your workspace to read only: nothing can be sent to it");
+    for (const { chat } of shared) store.usedChatShare(chat, workspaces);
   }
 
   /// xshare.list: the chats of workspace `here` (null: the home one) shared with the asking station's workspaces; it
@@ -591,6 +649,7 @@ export class ChatShares {
     }
     this.writeState();
     this.deps.store.setChatShare(chat, to.map((t) => ({ workspace: t.workspace, name: text(t.name, 80) || t.workspace })), write, by);
+    this.lapseLater();
     void this.reconcile();
     return this.deps.store.chatShare(chat);
   }

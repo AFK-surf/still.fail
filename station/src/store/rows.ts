@@ -295,16 +295,37 @@ export function toPublished(r: Json): Published {
   return { id: r.id, thread: r.thread, key: r.key, title: r.title, by: r.created_by, byName: r.by_name, at: r.created_at, upto: r.upto, size: r.size };
 }
 
-/// A chat shared with other workspaces (chat_shares, docs/chat-share.md).
-export type ChatShare = { to: { workspace: string; name: string }[]; write: boolean; by: string; at: number };
+/// How long a chat stays shared with a workspace whose agents neither read it nor write to it (docs/chat-share.md):
+/// after that a person must share it again.
+export const XSHARE_IDLE_MS = 6 * 60 * 60_000;
 
+/// Why a chat once shared with an agent's workspace is not now.
+export const LAPSED = "that chat's share with your workspace lapsed, unused for 6 hours: a person of its workspace must share it again (by @-mentioning it in a message to you, or in its chat info)";
+
+/// A chat shared with other workspaces (chat_shares, docs/chat-share.md): each workspace with when its agents last read
+/// it or wrote to it, or it was shared with them (`used`).
+export type ChatShare = { to: { workspace: string; name: string; used: number }[]; write: boolean; by: string; at: number };
+
+/// A chat_shares row as stored: every workspace it names, those whose share lapsed too (one kept from before `used`
+/// was used when it was shared).
 export function toChatShare(r: Json): ChatShare {
   let to: Json = [];
   try {
     to = JSON.parse(r.shared);
   } catch {}
-  const list = Array.isArray(to) ? to.filter((t: Json) => typeof t?.workspace === "string").map((t: Json) => ({ workspace: t.workspace as string, name: String(t.name ?? t.workspace) })) : [];
+  const list = Array.isArray(to)
+    ? to.filter((t: Json) => typeof t?.workspace === "string").map((t: Json) => ({ workspace: t.workspace as string, name: String(t.name ?? t.workspace), used: typeof t.used === "number" ? t.used : r.at }))
+    : [];
   return { to: list, write: r.write === 1, by: r.by, at: r.at };
+}
+
+/// Whether a workspace's share is still on at `now`: used within XSHARE_IDLE_MS.
+export const shareLive = (t: { used: number }, now: number) => now - t.used < XSHARE_IDLE_MS;
+
+/// A share as it is at `now`: the workspaces it is still on for; null when none.
+export function liveShare(share: ChatShare, now: number): ChatShare | null {
+  const to = share.to.filter((t) => shareLive(t, now));
+  return to.length === 0 ? null : { ...share, to };
 }
 
 export function toThread(r: Json): ThreadRow {

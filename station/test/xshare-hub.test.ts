@@ -12,12 +12,14 @@ import { FILE, fileForPeer, PUT, putForPeer } from "../src/sessions/peer-files.t
 import { ChatShares } from "../src/xshare/index.ts";
 import { Cloud } from "../src/cloud/state.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
-import { Rig, say, settle } from "./hub-fakes.ts";
+import type { Clock } from "effect";
+import { XSHARE_IDLE_MS } from "../src/store/rows.ts";
+import { Rig, say, settle, testClock } from "./hub-fakes.ts";
 
 type Side = { rig: Rig; xshare: ChatShares };
 
-function side(workspace: string, station: string, name: string, other: () => Side): Side {
-  const rig = new Rig({ link: true, place: { workspace, station } });
+function side(workspace: string, station: string, name: string, other: () => Side, clock?: Clock.Clock): Side {
+  const rig = new Rig({ link: true, place: { workspace, station }, clock });
   const hub = rig.hub;
   const inbox = async (peer: string, request: any) => {
     switch (request?.method) {
@@ -57,6 +59,7 @@ function side(workspace: string, station: string, name: string, other: () => Sid
     title: (chat) => sender(hub, chat)[0],
     touches: (request) => chatsTouched(hub, request),
     inbox,
+    clock,
   });
   hub.onPeer((to, request) => ask(to, me.xshare.address(to, request)));
   hub.onOutsideChats(() => me.xshare.borrowed());
@@ -120,6 +123,64 @@ test("an agent of another workspace finds, reads and (when allowed) writes to a 
   await Promise.all([far.xshare.reconcile(), near.xshare.reconcile()]);
   assert.ok(!(await near.rig.call(keyN, "chat_list", {})).includes("Shared with this workspace"));
   assert.match(await near.rig.refused(keyN, "chat_read", { chat: linkA }), /not shared|shares no chat/);
+  await Promise.all([far.xshare.close(), near.xshare.close()]);
+  await far.rig.close();
+  await near.rig.close();
+});
+
+test("a share lapses once its agents have not read or written for six hours, until a person shares it again", async () => {
+  const time = testClock();
+  const HOUR = 60 * 60_000;
+  let near: Side;
+  const far: Side = side("W1", "far", "Team", () => near, time.clock);
+  near = side("W2", "near", "Home", () => far, time.clock);
+  far.xshare.start();
+  near.xshare.start();
+  const a = say("<@UBOT> the release plan");
+  await far.rig.accept(a);
+  const n = say("<@UBOT> what is the plan over there?");
+  await near.rig.accept(n);
+  await settle();
+  const keyA = sessionKey("cl", "C1", a.threadTs);
+  const keyN = sessionKey("cl", "C1", n.threadTs);
+  const linkA = far.rig.hub.link(keyA)!;
+  const linkN = near.rig.hub.link(keyN)!;
+  const both = async () => {
+    await settle();
+    await Promise.all([far.xshare.reconcile(), near.xshare.reconcile()]);
+    await Promise.all([far.xshare.reconcile(), near.xshare.reconcile()]);
+  };
+  const to = [{ workspace: "W2", name: "Home", stations: [{ id: "near", name: "laptop" }] }];
+  await far.xshare.share(keyA, to, true, "a@example.com");
+  await near.xshare.trust("W1", "Team", "far", "studio");
+  await both();
+
+  // Each use goes on from then: read at 5 hours, written to at 10, answered at 15, read at 20, all inside six hours.
+  await time.adjust(5 * HOUR);
+  assert.ok((await near.rig.call(keyN, "chat_read", { chat: linkA })).includes("the release plan"));
+  await time.adjust(5 * HOUR);
+  await near.rig.call(keyN, "session_send", { to: linkA, text: "send me the plan" });
+  await time.adjust(5 * HOUR);
+  await far.rig.call(keyA, "session_send", { to: linkN, text: "here it is" });
+  await time.adjust(5 * HOUR);
+  await near.rig.call(keyN, "session_history", { chat: linkA });
+  assert.ok((await near.rig.call(keyN, "chat_list", {})).includes(linkA));
+
+  // Six hours without: the chat is no longer shared with W2 (its row says so, its list no longer has it), its agents
+  // are told why, and its agent no longer answers the session that wrote.
+  await time.adjust(XSHARE_IDLE_MS);
+  await both();
+  assert.equal(far.rig.store.chatShare(keyA), null);
+  assert.ok(!(await near.rig.call(keyN, "chat_list", {})).includes(linkA));
+  assert.match(await near.rig.refused(keyN, "chat_read", { chat: linkA }), /lapsed, unused for 6 hours/);
+  assert.match(await near.rig.refused(keyN, "session_send", { to: linkA, text: "still there?" }), /lapsed/);
+  assert.match(await far.rig.refused(keyA, "session_send", { to: linkN, text: "one more thing" }), /./);
+
+  // Shared again by a person: on for another six hours.
+  await far.xshare.share(keyA, to, true, "a@example.com");
+  await both();
+  assert.ok((await near.rig.call(keyN, "chat_read", { chat: linkA })).includes("the release plan"));
+  assert.ok((await near.rig.call(keyN, "chat_list", {})).includes(linkA));
   await Promise.all([far.xshare.close(), near.xshare.close()]);
   await far.rig.close();
   await near.rig.close();

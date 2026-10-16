@@ -14,6 +14,16 @@
 - chat 的「对话信息」里也有「分享给其他 workspace」：看现在分享给了谁、改成「可以发消息」、取消分享。可以勾选自己所在的其他 workspace，「可以发消息」默认关（只能看）。能改的人：chat 的发起人，或 B 的 owner/admin。
 - 分享的单位是一个 chat：它的消息、附件，和它的 agent 的执行历史。
 
+## 期限（2026-10-17 用户定）
+
+「跨 workspace 沟通和查看加上时间限制，每次使用刷新时间，连续六个小时没有使用就要重新授权」：
+
+- 一个 chat 分享给一个 workspace 算一条授权，各自计时。A 的 agent 每次读（`session.read` / `session.file`，即 chat_read、session_history、拉附件）或写（`session.put` / `session.message`，即 session_send）都从这一刻重新计时；只列出来（`chat_list`、`xshare.list`）不算。同一台 station 上别的 workspace 来读写（`reachable`）也一样。
+- 连续 6 小时（`XSHARE_IDLE_MS`，store/rows.ts）没用，这条授权失效：X 把它当成不再分享给 A（界面上的分享对象里没有 A，A 的 station 被告知 `gone`，chat_list 不再列出），A 的 agent 再读写时被拒，错误里说明是过期了、要有人重新分享。
+- 重新授权就是再分享一次：在 A 的 chat 里 @ 它发送时照常弹「分享对话」确认，或者在「对话信息」里再勾上。任何一次改分享（`PUT …/xshare`）都让列出的每个 workspace 从头计时。
+- B 的 agent 回复 A 的 session（`replies`）同样有期限：A 的 session 往 X 发过消息、或 X 回过它之后 6 小时内可以回，每次往来重新计时（A 的 `state.json` `answered`）。
+- 计时记在 X 上：`chat_shares.shared` 的每一项多一个 `used`（毫秒）。失效的项留在行里，用来说明为什么被拒，下次分享时被整份替换。旧行没有 `used` 的按 `at`（上次改分享的时间）算，所以上线时已经超过 6 小时没改过的分享会直接失效。读取一律按时间过滤，另有一个定时器在最早一项到期时让视图更新、通知 A。
+
 ## 谁记什么
 
 **X（host）**，stillfail.db 的 `chat_shares` 表（按 chat 的 session key）：分享给哪些 workspace、能不能发消息、谁、什么时候改的；`<data>/xshare/state.json`：

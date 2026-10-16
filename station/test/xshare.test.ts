@@ -9,6 +9,7 @@ import { test } from "node:test";
 import { Refused } from "../src/jobs/remote.ts";
 import { ChatShares } from "../src/xshare/index.ts";
 import { Cloud } from "../src/cloud/state.ts";
+import { liveShare, toChatShare, XSHARE_IDLE_MS } from "../src/store/rows.ts";
 
 const X = "x".repeat(64);
 const X2 = "2".repeat(64);
@@ -62,6 +63,17 @@ class Shares {
   setChatShare(k: string, to: any[], write: boolean, by: string) {
     if (to.length === 0) this.rows.delete(k);
     else this.rows.set(k, { to, write, by, at: 1 });
+  }
+  // Shares lapse in the real store (xshare-hub.test.ts): here none does.
+  chatShareLapsed() {
+    return false;
+  }
+  lapsedShareWorkspaces() {
+    return new Set<string>();
+  }
+  usedChatShare() {}
+  lapseChatShares() {
+    return null;
   }
   subscribe() {
     return () => {};
@@ -271,4 +283,12 @@ test("the pages share a chat (its starter or a manager) and say which station to
   assert.equal(xshare.workspaceOf(P), W2);
   await xshare.close();
   store.close();
+});
+
+test("a share kept from before its uses were noted counts from when it was last changed", () => {
+  const row = { shared: JSON.stringify([{ workspace: W2, name: "Two" }]), write: 0, by: "a@example.com", at: 1000 };
+  assert.equal(liveShare(toChatShare(row), 1000 + XSHARE_IDLE_MS - 1)?.to.length, 1);
+  assert.equal(liveShare(toChatShare(row), 1000 + XSHARE_IDLE_MS), null);
+  const used = { ...row, shared: JSON.stringify([{ workspace: W2, name: "Two", used: 5000 }]) };
+  assert.equal(liveShare(toChatShare(used), 1000 + XSHARE_IDLE_MS)?.to[0]?.used, 5000);
 });

@@ -186,7 +186,7 @@
   "web-main.find.placeholder": "在对话中查找",
   "web-main.find.prev": "上一个",
   "web-main.outside.title": "分享对话",
-  "web-main.outside.lead": "发送后，这个 workspace 里的 agent 就能读到：",
+  "web-main.outside.lead": "发送后，这个 workspace 里的 agent 就能读到（连续 6 小时没用就失效）：",
   "web-main.outside.from": "来自 {name}",
   "web-main.outside.cannot": "你没有权限分享，需要它的发起人或管理员",
   "web-main.outside.share": "分享并发送",
