@@ -313,4 +313,5 @@ export const unix: Platform = {
   hasKeychain: MACOS,
   hasQuickLook: MACOS,
   hasFolderPermissions: MACOS,
+  hasDesktopScreen: MACOS,
 };

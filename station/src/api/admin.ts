@@ -2,6 +2,7 @@
 // it, gathered from src/api/routes (one module a part of the API). Reads go to the readers (off the main thread); what
 // is not here answers 404 as an unknown route does.
 import { join } from "node:path";
+import type { ScreenHub } from "../screens/hub.ts";
 import type { Readers } from "../read/pool.ts";
 import { HttpError } from "../read/views.ts";
 import { type Answer, type Request, error, json, queryPairs } from "./request.ts";
@@ -69,7 +70,7 @@ export type Tools = {
 };
 
 /// What the admin API answers with besides the readers: the write side, once there.
-export type AdminDeps = { events?: Events; store?: Store; host?: Host; agents?: AgentsParts; clock?: Clock.Clock };
+export type AdminDeps = { events?: Events; store?: Store; host?: Host; agents?: AgentsParts; clock?: Clock.Clock; screens?: ScreenHub };
 
 /// The header a write's key comes in, and how long an answer is kept (once.rs).
 const ONCE_KEY = "idempotency-key";
@@ -141,6 +142,10 @@ export class Admin {
             overview: (r) => deps.agents!.overview(r.viewer, r.lang),
             ...(deps.store ? { policies: { store: deps.store, review: () => void reviewUndecided(deps.agents!.hub).catch(() => {}) } } : {}),
           })
+        : []),
+      // The screens members see and drive (docs/remote-screens.md); a view of one is a stream of its own (mesh/screens.ts).
+      ...(deps.screens
+        ? [{ method: "GET", pattern: /^\/screens$/, handle: async (r: Request) => (await deps.screens!.refresh(), json(200, JSON.stringify(deps.screens!.listed(r.lang)))) }]
         : []),
       // The station as its settings pages show it.
       ...(deps.agents?.overview ? [{ method: "GET", pattern: /^\/overview$/, handle: async (r: Request) => json(200, JSON.stringify(await deps.agents!.overview(r.viewer, r.lang))) }] : []),

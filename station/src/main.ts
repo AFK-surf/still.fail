@@ -26,7 +26,7 @@ import { ConfigFile } from "./ops/config.ts";
 import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { version } from "./ops/version.ts";
-import { AdbShares, AdminApi, AdminHost, ControlPlane, Events, Key, MeshNative, Paths, Readers, Store, Up } from "./services.ts";
+import { AdbShares, AdminApi, AdminHost, ControlPlane, Events, Key, MeshNative, Paths, Readers, ScreenRegistry, Store, Up } from "./services.ts";
 import { PROVIDERS, type Provider } from "./cloud/provider.ts";
 import { wall } from "./ops/fibers.ts";
 import { platform } from "./platform/index.ts";
@@ -118,7 +118,7 @@ function run() {
   });
   hearErrors((line, error) => reports.report(line, error));
   const paths = Layer.succeed(Paths)({ data, app });
-  const base = Layer.mergeAll(Key.layer, Readers.layer, Store.layer, MeshNative.layer, Up.layer).pipe(Layer.provideMerge(paths));
+  const base = Layer.mergeAll(Key.layer, Readers.layer, Store.layer, MeshNative.layer, Up.layer, ScreenRegistry.layer).pipe(Layer.provideMerge(paths));
   const parts = ControlPlane.layer.pipe(Layer.provideMerge(base));
   const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive).pipe(
     Layer.provideMerge(AdminApi.layer),

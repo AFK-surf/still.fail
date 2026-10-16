@@ -122,6 +122,12 @@ export class Events {
     Object.assign(this.deps, more);
   }
 
+  /// The station's screens changed (docs/remote-screens.md): `screens` as GET /screens answers it, in each stream's
+  /// language (`listed`), the latest alone kept for one coming back.
+  screens(listed: (lang: Lang) => unknown) {
+    for (const lang of new Set(this.clients.map((c) => c.lang))) this.emit("screens", listed(lang), (c) => c.lang === lang, `screens\0${lang}`);
+  }
+
   /// Something the overview shows changed (config, accounts, connects, cloud, updates).
   overviewChanged() {
     this.dirty.overview = true;
