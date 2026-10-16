@@ -31,22 +31,21 @@ export const agentStationAgent = style({
     "&:focus-visible": { outline: `2px solid var(--focus, ${vars.accent})`, outlineOffset: "2px" },
   },
 });
-/** The station's part: its icon, or its name (kept short) where it has none; then how it is reached (直连, 北京中继, 离线). */
+/** The station's part: its icon, or its name (kept short) where it has none. */
 export const agentStationPart = style({
-  display: "inline-flex", alignItems: "center", gap: "4px", height: "var(--mark)", maxWidth: "200px",
+  display: "inline-flex", alignItems: "center", height: "var(--mark)", maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis",
   cursor: "default", outline: "none",
   selectors: {
+    "&[data-name]": { display: "block", lineHeight: "var(--mark)" },
     // Segoe's wider emoji gets the same square as its provider. Keep the existing layout for other platforms/marks.
-    [`&&:not([data-name]):not([data-link]):has(${windowsEmoji})`]: { width: "var(--mark)", paddingInline: "0", justifyContent: "center", flex: "none" },
+    [`&&:not([data-name]):has(${windowsEmoji})`]: { width: "var(--mark)", paddingInline: "0", justifyContent: "center", flex: "none" },
     "&:hover, &[data-state=open], &:focus-visible": { color: vars.text, background: vars.hover },
   },
 });
-/** Its name, where it has no icon: cut short before how it is reached is. */
-export const agentStationName = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis" });
-/** The machine it runs on, beside the title: a quiet tag, its name cut short (agentStationName), how it is reached not. */
+/** The machine it runs on, beside the title: a quiet tag. */
 export const chatStation = style({
   display: "inline-flex", alignItems: "center", gap: "4px",
-  flex: "none", maxWidth: "220px", whiteSpace: "nowrap",
+  flex: "none", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
   padding: "1px 7px", border: `1px solid ${vars.line}`, borderRadius: "999px",
   color: vars.muted, fontSize: vars.textMeta, lineHeight: vars.leadingMeta, cursor: "default",
   selectors: {

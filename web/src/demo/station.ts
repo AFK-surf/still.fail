@@ -53,7 +53,7 @@ function withMeters<T extends { meters: { short: string; percent: number }[] }>(
 }
 
 /** How this device reaches the station: straight, quick. */
-const NET = { path: "直连", rtt: { text: "12 ms", level: "ok" as const }, rttHistory: [11, 12, 14, 12, 11, 12], down: "1.2 KB/s", up: "0.4 KB/s", total: "今天共 ↓ 48 MB · ↑ 3.1 MB" };
+const NET = { path: "直连", via: "direct" as const, rtt: { text: "12 ms", level: "ok" as const }, rttHistory: [11, 12, 14, 12, 11, 12], down: "1.2 KB/s", up: "0.4 KB/s", total: "今天共 ↓ 48 MB · ↑ 3.1 MB" };
 
 /** The folders the station lends (docs/drive.md), its downloads with what the chats made in them. */
 const DRIVE = { roots: [

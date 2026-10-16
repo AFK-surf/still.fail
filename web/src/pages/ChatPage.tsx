@@ -18,7 +18,8 @@ import type { ChatJobsView, ChatPublish, ChatShare, Host, StationView } from "..
 import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useStationCall, useStationLook, useAgentCard, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { StationMark } from "../StationMark.tsx";
-import { StationLinkText, useStationLink } from "../StationLink.tsx";
+import { StationCornerDot, StationDot, useStationLink } from "../StationLink.tsx";
+import * as linkCss from "../StationLink.css.ts";
 import { StationPeek } from "../cloud/StationCards.tsx";
 import { Hover } from "../Peeks.tsx";
 import { AgentCard, UsageTiles } from "../AgentCard.tsx";
@@ -529,16 +530,18 @@ function AgentTile({ agent, chat, marked, station }: { agent: ChatAgent; chat: s
   const { session } = agent;
   const onHistory = () => chatPage.history(chat, session.key);
   const where = useChatStation();
+  const link = useStationLink(useStation().address);
   const label = t("web-pages.chat.historyOf", { agent: session.agentText });
   // With the station it runs on, one tile: the maker opens the history and has
-  // the agent's card, the station's part its own.
+  // the agent's card, the station's part its own; the agent's badge on the maker's corner, how the station is reached on the tile's.
   if (station && where) {
     return (
-      <span className={css.agentStation} data-on={marked || undefined}>
+      <span className={`${css.agentStation} ${linkCss.corner}`} data-on={marked || undefined}>
         <AgentMark maker={session.maker} runtime={session.runtime} badge={agent.badge} badgeText={session.badgeText} size={20}
           wrap={(logo) => <Hover tile content={<AgentCard agent={agent} />}><button type="button" className={css.agentStationAgent} onClick={onHistory} aria-label={label}>{logo}</button></Hover>}>
           <StationPart where={where} />
         </AgentMark>
+        <StationCornerDot link={link} />
       </span>
     );
   }
@@ -903,33 +906,29 @@ function StationCard({ address, settings }: { address: string; settings: string 
   return view ? <StationPeek s={view} settings={settings} panel /> : null;
 }
 
-/** The station's part of its agent's tile: its icon (or its name where it has none), then how it is reached. */
+/** The station's part of its agent's tile: its icon, or its name where it has none (how it is reached is on the tile's corner). */
 function StationPart({ where }: { where: NonNullable<ReturnType<typeof useChatStation>> }) {
   const { look, name, address } = where;
   const mark = look && (look.emoji || look.icon);
   const link = useStationLink(address);
   return (
     <StationHover where={where}>
-      <span className={css.agentStationPart} data-name={mark ? undefined : true} data-link={link ? true : undefined} tabIndex={look ? 0 : undefined} aria-label={mark ? (link ? `${name} · ${link.text}` : name) : undefined}>
-        {mark ? <StationMark emoji={look.emoji} icon={look.icon} size={12} /> : <span className={css.agentStationName}>{name}</span>}
-        {link && <>{!mark && " · "}<StationLinkText link={link} /></>}
+      <span className={css.agentStationPart} data-name={mark ? undefined : true} tabIndex={look ? 0 : undefined} aria-label={link ? `${name} · ${link.text}` : mark ? name : undefined}>
+        {mark ? <StationMark emoji={look.emoji} icon={look.icon} size={12} /> : name}
       </span>
     </StationHover>
   );
 }
 
-/** The machine the chat runs on, beside its title, while it has no agent to share a tile with: its name, then how it is reached. */
+/** The machine the chat runs on, beside its title, while it has no agent to share a tile with; how it is reached, a dot before it. */
 function ChatStation() {
   const where = useChatStation();
+  const link = useStationLink(useStation().address);
   if (!where) return null;
   const { look, name } = where;
-  const link = useStationLink(where.address);
   return (
     <StationHover where={where}>
-      <span className={css.chatStation} tabIndex={look ? 0 : undefined}>
-        {(look?.emoji || look?.icon) && <StationMark emoji={look.emoji} icon={look.icon} size={12} />}<span className={css.agentStationName}>{name}</span>
-        {link && <StationLinkText link={link} />}
-      </span>
+      <span className={css.chatStation} tabIndex={look ? 0 : undefined}>{link && <StationDot link={link} />}{(look?.emoji || look?.icon) && <StationMark emoji={look.emoji} icon={look.icon} size={12} />}{name}</span>
     </StationHover>
   );
 }

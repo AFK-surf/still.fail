@@ -16,6 +16,7 @@ export const SHAPES: Record<string, Shape> = {
   Tone: words(["accent","green","blue","red","amber","neutral"], { doc: "A colour of meaning." }),
   Presence: words(["online","busy","error","offline"], { doc: "A link's dot." }),
   Level: words(["ok","amber","red"], { doc: "How full something is." }),
+  NetVia: words(["direct","relay","choosing"], { doc: "How a connection to a station goes: straight there, through a relay, or still being chosen." }),
   Status: words(["running","queued","final","block","decision","failed","aborted","unexpected","idle"], { doc: "Where an agent stands." }),
   Badge: words(["run","block","failed"], { doc: "An agent's mark: at work, blocked, failed." }),
   Stamp: struct([
@@ -1932,6 +1933,7 @@ export const SHAPES: Record<string, Shape> = {
   ]),
   StationNet: struct([
     ["path", "String", { doc: "直连, 北京中继 (the relay's name, or 中继 host), or 正在选路." }],
+    ["via", opt("NetVia"), { doc: "The same as a word to tell apart (a chat's bar marks it with a dot). Missing from a core from before." }],
     ["rtt", opt("NetFigure")],
     ["rttHistory", vec("f64"), { doc: "Round trips over the last minute, oldest first, in milliseconds." }],
     ["down", "String", { doc: "Bytes a second now, each way: 1.4 MB/s." }],

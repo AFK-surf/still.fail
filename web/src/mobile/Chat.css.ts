@@ -53,20 +53,22 @@ export const mChatBack = style({
 export const mChatBarTitle = style({
   flex: "1", minWidth: "0", display: "flex", alignItems: "center", gap: "8px", paddingRight: "8px",
 });
-/** The station it runs on, after the title: a quiet tag, its name cut short (mBarJoinedName), how it is reached not. */
+/** The station it runs on, after the title: a quiet tag, cut short. */
 export const mBarStation = style({
-  flex: "none", display: "inline-flex", alignItems: "center", gap: "4px", maxWidth: "160px", padding: "1px 8px",
+  flex: "none", display: "inline-flex", alignItems: "center", gap: "4px", maxWidth: "104px", padding: "1px 8px",
   border: `1px solid ${vars.line}`, borderRadius: "999px", background: "none", color: vars.muted,
   fontSize: vars.textMeta, lineHeight: vars.leadingMeta, cursor: "pointer",
 });
+globalStyle(`${mBarStation} > span:last-child`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 /** Its card in a sheet: the card's own lines, as wide as the sheet's rows. */
 export const mStationSheet = style({ padding: "4px 20px 24px" });
 export const mBarAgent = style({ flex: "none", display: "grid", padding: "0", border: "0", background: "none", cursor: "pointer" });
 /** The first agent's tile with the station it runs on (../ui.tsx AgentMark), one control: the maker's square, then the station's part. */
 export const mBarJoinedAgent = style({ display: "grid", placeItems: "center", width: "var(--mark)", height: "var(--mark)" });
-export const mBarJoinedStation = style({ display: "inline-flex", alignItems: "center", gap: "4px", height: "var(--mark)", maxWidth: "150px" });
-/** Its name, where it has no icon: cut short before how it is reached is. */
-export const mBarJoinedName = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const mBarJoinedStation = style({
+  display: "inline-flex", alignItems: "center", height: "var(--mark)", maxWidth: "96px", overflow: "hidden", textOverflow: "ellipsis",
+  selectors: { "&[data-name]": { display: "block", lineHeight: "var(--mark)" } },
+});
 /**
  * A message's words are picked by the page where a finger holds them (pick.tsx): the system's own menu never comes, and
  * for a finger the browser's own selection is off (on a phone it fights the list's scrolling and brings its own menus).

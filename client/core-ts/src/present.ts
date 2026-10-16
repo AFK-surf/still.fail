@@ -840,6 +840,7 @@ export function net(raw: J, relayName: (host: string) => string | null): J {
       : null;
   return {
     path,
+    via: r.path === "direct" ? "direct" : r.path === "relay" ? "relay" : "choosing",
     rtt,
     rttHistory: history,
     down: rate("rxBps"),

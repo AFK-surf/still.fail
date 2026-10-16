@@ -3124,6 +3124,9 @@ export interface Overview {
 	drive?: DriveRoots;
 }
 
+/** How a connection to a station goes: straight there, through a relay, or still being chosen. */
+export type NetVia = "direct" | "relay" | "choosing";
+
 /**
  * This device's connection to a station, in words (its card's network line): how it goes, its round trip now and
  * over the last minute, and what goes over it.
@@ -3131,6 +3134,8 @@ export interface Overview {
 export interface StationNet {
 	/** 直连, 北京中继 (the relay's name, or 中继 host), or 正在选路. */
 	path: string;
+	/** The same as a word to tell apart (a chat's bar marks it with a dot). Missing from a core from before. */
+	via?: NetVia;
 	rtt?: NetFigure;
 	/** Round trips over the last minute, oldest first, in milliseconds. */
 	rttHistory: number[];
