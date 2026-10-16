@@ -11,7 +11,7 @@
 ## 已定的规则
 
 - **主 workspace**：station 第一个加入的 workspace（`cloud.json` 顶层那个）。之后加入的叫**加入的 workspace**。主 workspace 被移走时，加入最早的那个接任。
-- **station 级的东西只归主 workspace 的 owner/admin 管**：账号（profiles、订阅登录、API key）、更新和通道、`tools.access`、加入和退出 workspace、自动决策、station 分享（share）、给加入的 workspace 开放哪些文件夹、继续本机的 Claude Code/Codex 会话。其他 workspace 的 admin 不能改，可以看到自己能用到的部分。
+- **station 级的东西只归主 workspace 的 owner/admin 管**：账号（profiles、订阅登录、API key）、更新和通道、`tools.access`、加入和退出 workspace、自动决策、station 分享（share）、继续本机的 Claude Code/Codex 会话。其他 workspace 的 admin 不能改，可以看到自己能用到的部分。
 - **按 workspace 分开的**：chat（会话、thread、奏、归档和归档策略）、Slack connect、agent 的记忆和 skills（`agent/`）、文件根目录（`drive.roots`）、chat 分享（xshare）、station 之间的调用（session_send、chat_list、station_list、任务）都只在同一个 workspace 的 station 之间。
 - **账号可以共用**：每个 profile 默认只给主 workspace 用；主 workspace 的管理员可以给它勾上加入的 workspace（`profiles[].workspaces`）。加入的 workspace 一个能用的 profile 都没有时，那里的 chat 开不了轮次，界面说明原因。
 - **软隔离**：所有 agent 用同一个系统用户跑，A 的 agent 想读 B 的会话目录，物理上拦不住。这里隔离的是数据、列表和 agent 的工具，不是沙盒。界面上加入 workspace 时写明这一点。
@@ -92,7 +92,7 @@
 - 所有列会话、thread、奏、归档、通知、执行历史的路由和事件流都按 `viewer.workspace` 过滤；按 key 读写单个会话时，会话不在 viewer 的 workspace 就当它不存在（404）。
 - `archive_policy` 加 `ws` 列，一个 workspace 一份策略。
 - Slack connect：config 的 connect 多一个可选的 `workspace`（缺省主 workspace）。在哪个 workspace 里加的就归哪个，列表只给那个 workspace 的人看。
-- 文件：主 workspace 仍是 `drive.roots`；加入的 workspace 是 `drive.workspaces[<ws>]`，由 station 的管理员（主 workspace 的 owner/admin）替它选，决定这台机器给那个 workspace 看哪些文件夹。加入的 workspace 的成员只能看这些文件夹，不能像主 workspace 的成员那样浏览整台机器，也不能自己加文件夹。
+- 文件：各 workspace pin 自己的文件夹列表：主 workspace 仍是 `drive.roots`，加入的 workspace 是 `drive.workspaces[<ws>]`。能写的成员不论哪个 workspace 都能浏览整台机器（能用 agent 就能让它读，拦文件浏览没有意义，2026-10-17 用户定），只读成员只看自己 workspace pin 的。
 - agent 的记忆和 skills：主 workspace 仍是 `<data>/agent/`，加入的 workspace 用 `<data>/agent/workspaces/<ws>/`（`MEMORY.md`、`skills/`）。会话按自己的 `ws` 拿对应的那份。
 - profile：`profiles[].workspaces?: string[]`，缺省只给主 workspace。选 profile、自动挑 profile 时只看会话所在 workspace 能用的。
 - agent 的工具：`chat_list`、`chat_read`、`session_send`、`station_list`、`chat_create`、`station_task` 等都只看会话所在 workspace 的 chat 和 station；chat 链接里的 workspace 不是会话自己的，就按 xshare 的规则走（没被分享就拒绝）。

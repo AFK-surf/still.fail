@@ -188,7 +188,7 @@ export class Drive {
     return rootsOf(this.deps.config()).map(rootView);
   }
 
-  /// The drive as a workspace the station joined has it: its own pinned folders only.
+  /// The drive as a workspace the station joined has it: its own pinned folders.
   scoped(workspace: string): Drive {
     return new Drive({ ...this.deps, config: () => {
       const raw = this.deps.config() ?? {};

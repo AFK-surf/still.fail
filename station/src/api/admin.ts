@@ -128,7 +128,6 @@ export class Admin {
               protect: () => ownPaths(deps.agents!.config.data, deps.agents!.config.path, deps.agents!.hub.config().profiles.map((p) => p.home)),
             }),
             changed: () => deps.events?.overviewChanged(),
-            workspaces: () => deps.agents!.cloud?.memberships().map((m) => m.workspace) ?? [],
             // Beside the files uploaded for a message (routes/hub.ts), swept as they are.
             stage: (name) => uploadPath(join(deps.agents!.hub.config().dataDir, "uploads"), name),
           })

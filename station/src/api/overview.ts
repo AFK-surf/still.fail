@@ -126,7 +126,7 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     // The folders pinned in its drive (drive/drive.ts), each with whether it can be browsed now; a member who may write
     // browses every folder from the home (`anywhere`).
     // Those of a joined workspace browse only its pinned folders, never the whole machine.
-    drive: { roots: rootsOf(raw, viewer.home === false ? viewer.workspace : null).map(rootView), ...(readOnly(viewer) || viewer.home === false ? {} : { anywhere: true, home: homedir() }) },
+    drive: { roots: rootsOf(raw, viewer.home === false ? viewer.workspace : null).map(rootView), ...(readOnly(viewer) ? {} : { anywhere: true, home: homedir() }) },
   };
 }
 

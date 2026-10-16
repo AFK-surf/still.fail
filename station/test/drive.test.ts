@@ -283,29 +283,24 @@ test("stage a folder as a zip: every file under it, links not followed, the stat
   assert.equal((await ask(table, request("POST", "/drive/stage", {}, { root, path: "Season 1" }))).json.code, "is_a_directory");
 });
 
-test("a workspace the station joined sees only the folders pinned for it, pinned by the station's managers", async () => {
+test("a workspace the station joined keeps its own pinned folders, and reaches the machine as the home one does", async () => {
   const { base, root, data } = place();
   const config = new ConfigFile(mkdtempSync(join(tmpdir(), "drive-config-")));
   const drive = new Drive({ config: () => config.raw(), protect: () => [data] });
-  const table = routes({ drive, config, home: base, workspaces: () => ["w", "w2"] });
-  const theirs = (r: Request, role = "owner") => ({ ...r, viewer: { ...r.viewer, role, workspace: "w2", home: false } });
+  const table = routes({ drive, config, home: base });
+  const theirs = (r: Request, role = "member") => ({ ...r, viewer: { ...r.viewer, role, workspace: "w2", home: false } });
   const season = join(root, "Season 1");
-  // Theirs: none pinned, no whole machine, nothing to pin themselves.
-  assert.deepEqual((await ask(table, theirs(request("GET", "/drive")))).json, { roots: [], manage: false, write: true });
-  assert.equal((await ask(table, theirs(request("GET", "/drive/list", { root: base, path: "" })))).json.code, "not_a_root");
-  assert.equal((await ask(table, theirs(request("GET", "/drive/folders")))).status, 403);
-  assert.equal((await ask(table, theirs(request("PUT", "/drive/roots", {}, { roots: [season] })))).status, 403);
-  // The home workspace's owner pins one folder for them, and keeps its own.
-  assert.equal((await ask(table, request("PUT", "/drive/roots", {}, { roots: [root] }, "owner"))).status, 200);
-  assert.equal((await ask(table, request("PUT", "/drive/roots", {}, { roots: [season], workspace: "w2" }, "member"))).status, 403);
-  const pinned = await ask(table, request("PUT", "/drive/roots", {}, { roots: [season], workspace: "w2" }, "owner"));
-  assert.equal(pinned.status, 200);
-  assert.deepEqual(pinned.json.joined.w2.map((r: any) => r.path), [season]);
+  // Theirs: none pinned yet, the whole machine for a member who may write, as for the home workspace's.
+  assert.deepEqual((await ask(table, theirs(request("GET", "/drive")))).json, { roots: [], manage: false, write: true, anywhere: true, home: base });
+  assert.equal((await ask(table, theirs(request("GET", "/drive/list", { root, path: "" })))).status, 200);
+  // Each workspace pins its own list.
+  assert.equal((await ask(table, request("PUT", "/drive/roots", {}, { roots: [root] }))).status, 200);
+  assert.equal((await ask(table, theirs(request("PUT", "/drive/roots", {}, { roots: [season] })))).status, 200);
   assert.deepEqual(config.raw().drive, { roots: [root], workspaces: { w2: [season] } });
   assert.doesNotThrow(() => checkConfig(config.raw(), base));
-  // Now theirs is that folder, and only it.
   assert.deepEqual((await ask(table, theirs(request("GET", "/drive")))).json.roots.map((r: any) => r.path), [season]);
-  assert.deepEqual((await ask(table, theirs(request("GET", "/drive/list", { root: season, path: "" })))).json.entries.map((e: any) => e.name), ["e1.mp4", "E2.mp4", "E10.mp4"]);
-  assert.equal((await ask(table, theirs(request("GET", "/drive/list", { root, path: "" })))).json.code, "not_a_root");
-  assert.equal((await ask(table, theirs(request("GET", "/drive/read", { root: season, path: "../notes.md" })))).json.code, "path_escape");
+  assert.deepEqual((await ask(table, request("GET", "/drive"))).json.roots.map((r: any) => r.path), [root]);
+  // A read-only member of theirs: only what theirs pinned.
+  assert.equal((await ask(table, theirs(request("GET", "/drive/list", { root, path: "" }), "viewer"))).json.code, "not_a_root");
+  assert.deepEqual((await ask(table, theirs(request("GET", "/drive/list", { root: season, path: "" }), "viewer"))).json.entries.map((e: any) => e.name), ["e1.mp4", "E2.mp4", "E10.mp4"]);
 });

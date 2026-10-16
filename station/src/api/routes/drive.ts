@@ -11,22 +11,19 @@ import { type Answer, type Request, json, param } from "../request.ts";
 import type { Route } from "../admin.ts";
 import type { ConfigFile } from "../../ops/config.ts";
 import { type Lang, tr } from "../../ops/i18n.ts";
-import { managesStation, readOnly } from "../../mesh/credential.ts";
+import { readOnly } from "../../mesh/credential.ts";
 import { CODES, Drive, DriveError, MAX_READ, MOST_ROOTS, TOO_BIG, rootsOf } from "../../drive/drive.ts";
 
 export type DriveRouteDeps = {
   drive: Drive; config: ConfigFile; home?: string; changed?: () => void;
-  /// The workspaces the station is in, its home one first (docs/multi-workspace.md): whose pinned folders may be set.
-  workspaces?: () => string[];
   /// Where a file sent in a chat waits for its message (the uploads), with a name of its own: none, no /drive/stage.
   stage?: (name: string) => { safe: string; path: string };
 };
 
 const manages = (r: { viewer: { role: string } }) => r.viewer.role === "owner" || r.viewer.role === "admin";
-/// Whether the asker reaches every folder of the machine: a member of its home workspace who may write, whose agents
-/// could reach them anyway. One of a workspace the station joined reaches only the folders pinned for it.
-const anywhere = (r: { viewer: Request["viewer"] }) => !readOnly(r.viewer) && r.viewer.home !== false;
-/// The drive as the asker's workspace has it.
+/// Whether the asker reaches every folder of the machine: a member who may write, whose agents could reach them anyway.
+const anywhere = (r: { viewer: Request["viewer"] }) => !readOnly(r.viewer);
+/// The drive as the asker's workspace has it: the folders that workspace pinned (docs/multi-workspace.md).
 const driveOf = (drive: Drive, r: { viewer: Request["viewer"] }) => (r.viewer.home === false ? drive.scoped(r.viewer.workspace) : drive);
 
 /// A refusal in the asker's words (`station.drive.<code>`, after the path it is about, if any).
@@ -59,19 +56,17 @@ const text = (v: unknown, name: string): string => {
 
 /// What GET /drive and the overview say: the folders pinned, what the viewer may do, and, for one who reaches every
 /// folder (`anywhere`), the home to start from.
-export const driveView = (drive: Drive, r: { viewer: Request["viewer"] }, home = homedir(), workspaces: string[] = []) => ({
-  roots: driveOf(drive, r).roots(), manage: manages(r) && r.viewer.home !== false, write: !readOnly(r.viewer), ...(anywhere(r) ? { anywhere: true, home } : {}),
-  // For the station's managers: the folders pinned for each workspace it joined.
-  ...(managesStation(r.viewer) && workspaces.length > 1 ? { joined: Object.fromEntries(workspaces.slice(1).map((ws) => [ws, drive.scoped(ws).roots()])) } : {}),
+export const driveView = (drive: Drive, r: { viewer: Request["viewer"] }, home = homedir()) => ({
+  roots: driveOf(drive, r).roots(), manage: manages(r), write: !readOnly(r.viewer), ...(anywhere(r) ? { anywhere: true, home } : {}),
 });
 
 /// The most a file sent in a chat from the drive is (as an upload in parts).
 const MOST_STAGED = 1024 * 1024 * 1024;
 
-export function routes({ drive: whole, config, home = homedir(), changed, stage, workspaces = () => [] }: DriveRouteDeps): Route[] {
+export function routes({ drive: whole, config, home = homedir(), changed, stage }: DriveRouteDeps): Route[] {
   const at = (r: Request) => ({ root: param(r, "root") ?? "", path: param(r, "path") ?? "" });
   // Every route below goes through the asker's workspace's drive.
-  const view = (r: Request) => driveView(whole, r, home, workspaces());
+  const view = (r: Request) => driveView(whole, r, home);
   const answer = (f: (r: Request) => Promise<unknown>) => async (r: Request): Promise<Answer> => {
     try {
       return json(200, JSON.stringify(await f(r)));
@@ -86,12 +81,10 @@ export function routes({ drive: whole, config, home = homedir(), changed, stage,
       pattern: /^\/drive\/roots$/,
       handle: answer(async (r) => {
         if (!anywhere(r)) throw new DriveError("permission", MANAGE);
-        const b = body(r);
-        const asked = b.roots;
+        const asked = body(r).roots;
         if (!Array.isArray(asked) || asked.length > MOST_ROOTS || asked.some((p) => typeof p !== "string")) throw new DriveError("invalid_request", `roots: at most ${MOST_ROOTS} paths`);
-        // A joined workspace's folders: pinned by the station's managers (what of the machine that workspace sees).
-        const ws = typeof b.workspace === "string" && b.workspace !== workspaces()[0] ? b.workspace : null;
-        if (ws !== null && (!managesStation(r.viewer) || !workspaces().includes(ws))) throw new DriveError("permission", MANAGE);
+        // The asker's workspace's own list: one the station joined keeps its own (`drive.workspaces`).
+        const ws = r.viewer.home === false ? r.viewer.workspace : null;
         const drive = whole;
         const before = rootsOf(config.raw(), ws);
         const roots: string[] = [];

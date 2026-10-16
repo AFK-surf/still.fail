@@ -268,7 +268,7 @@ test("the overview says the viewer's workspace, its connects and its chats' coun
     assert.deepEqual([b.mesh.workspace, b.mesh.workspaceId, b.mesh.name], ["Bee", "B", "studio in B"]);
     assert.deepEqual(b.connects.map((c: any) => c.id), ["c-b"]);
     assert.equal(b.counts.sessions, 1);
-    assert.equal(b.drive.anywhere, undefined, "a joined workspace's members browse only its pinned folders");
+    assert.equal(b.drive.anywhere, true, "a joined workspace's members who may write browse the machine as the home one's do");
     const w = await of(home);
     assert.deepEqual([w.mesh.workspace, w.mesh.workspaceId, w.mesh.name], ["Home", "W", "studio"]);
     assert.deepEqual(w.connects.map((c: any) => c.id), ["c-home", "c-w"]);
