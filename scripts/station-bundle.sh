@@ -11,6 +11,8 @@
 #                                                          ember-station beside it: what the installer, bin/stillfail,
 #                                                          the desktop app and services written by older releases run)
 #   stillfail/station/{main.js, read/worker.js, skills/, mesh.node, stillfail-runner, package.json}
+#                                                         (and on darwin-arm64 stillfail-screen: the desktop as a screen,
+#                                                          docs/remote-screens.md)
 #   stillfail/NODE_VERSION                                (the version of the Node it runs on: .node-version's)
 #   stillfail/dist/admin/posthog.json                     (only the PostHog key the station reports errors with, when
 #                                                          $STILLFAIL_POSTHOG names one: scripts/posthog-key.ts; the
@@ -36,6 +38,7 @@ x=; [ "$platform" = win32-x64 ] && x=.exe
 launcher="$(native launcher)"
 mesh="$(native mesh)"
 runner="$(native runner)"
+screen=; [ "$platform" = darwin-arm64 ] && screen="$(native screen)"
 (cd "$root/station" && pnpm run build >&2)
 app="$out/stillfail"
 rm -rf "$app"
@@ -53,15 +56,17 @@ cp "$launcher" "$app/mesh/target/release/stillfail-station$x"
 # it in the launcher's artifact).
 [ "$platform" = win32-x64 ] && cp "$(dirname "$launcher")/stillfail-station-w.exe" "$app/mesh/target/release/"
 cp "$mesh" "$runner" "$app/station/"
+[ -z "$screen" ] || cp "$screen" "$app/station/"
 # macOS asks "find devices on local networks?" (the mesh's mDNS) for the launcher: Node and everything it starts are
 # its. Ad hoc, the grant was its hash's: each new launcher asked again, and every Node it started while unanswered put
 # up one more. The station release job signs the native parts ($STILLFAIL_SIGN_STATION: .github/sign-station.sh), so
 # a grant stays. Not signed is a warning, not a release missed: they are put again as they were (ad hoc), which works.
 if [ "$platform" = darwin-arm64 ] && [ -n "${STILLFAIL_SIGN_STATION:-}" ]; then
   sh "$root/.github/sign-station.sh" "$app/mesh/target/release/stillfail-station" fail.still.station \
-    "$app/station/$(basename "$runner")" fail.still.runner "$app/station/$(basename "$mesh")" fail.still.mesh >&2 ||
+    "$app/station/$(basename "$runner")" fail.still.runner "$app/station/$(basename "$mesh")" fail.still.mesh \
+    "$app/station/stillfail-screen" fail.still.screen >&2 ||
     { echo "::warning::the station's native parts were not signed (.github/sign-station.sh): ad hoc" >&2
-      cp "$launcher" "$app/mesh/target/release/stillfail-station"; cp "$mesh" "$runner" "$app/station/"; }
+      cp "$launcher" "$app/mesh/target/release/stillfail-station"; cp "$mesh" "$runner" "$screen" "$app/station/"; }
 fi
 [ "$platform" = win32-x64 ] || ln -s stillfail-station "$app/mesh/target/release/ember-station"
 cp "$root/station/dist/main.js" "$app/station/"

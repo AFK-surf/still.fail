@@ -121,3 +121,9 @@ station 的逻辑在 macOS、Linux、Windows 上是同一份。各平台不同�
 - 流：`read()`、`write()`、`finish()`、`reset()`、`stopped()`。
 - 所有异步操作不阻塞 Node 主线程（napi async，tokio 多线程运行时）。
 - 缩略图（`src/thumbs.rs`，就是当时 Rust station 的 `thumbs.rs`，`image`/`thumbhash` 及其编解码 crate 钉在它当时的版本上（station/native/mesh/Cargo.lock），产出与 Rust 版逐字节相同）：`thumbnail(image, dir)` → `{path, type}` 或 null；`thumbhash(image, dir?)` → `{hash, width, height}` 或 null，给了 `dir` 且图大于 24 KiB 时用同一次解码在后台线程做缩略图。哪些文件、何时做由 TS（`src/sessions/thumbs.ts`）决定。
+
+## 4. 屏幕助手（`station/native/screen`，可执行文件 `stillfail-screen`，只有 macOS）
+
+本机屏幕作为远程控制的画面源（[remote-screens.md](remote-screens.md)）。Swift 写（ScreenCaptureKit、VideoToolbox、CGEvent 都是系统框架，Swift 里最直接），和 dock 一样由 `scripts/native.ts` 用这台 Mac 的 Xcode 预编译（part `screen`，darwin-arm64），发布时放在 `station/` 里 `mesh.node` 旁边，签名标识 `fail.still.screen`。station（`src/screens/desktop.ts`）每个画面起一个进程：`status` 问权限和主屏，`request` 让 macOS 弹授权框，`view` 在 stdin/stdout 上收发分帧的消息（协议写在 `main.swift` 开头），stdin 关了就退出，所以画面结束、station 退出都会带走它。
+
+权限归「负责的进程」：launchd 下是启动器 `stillfail-station`（发布版签了固定标识，授权跨版本保留），桌面 app 里是 app 自己。助手用 `responsibility_get_pid_responsible_for_pid` 找到它，缺权限时 station 告诉人要在系统设置里打开哪个程序（名字和路径）。
