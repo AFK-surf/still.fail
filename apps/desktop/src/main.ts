@@ -878,9 +878,12 @@ async function checkFromMenu(): Promise<void> {
   } else if (!found.latest) {
     await show({ message: t("desktop.update.latest"), detail: `${NAME} ${found.current}` });
   } else {
+    // A newer web app alone (keepWebUpdated's check found it): the windows reload on it, the app does not restart.
+    const web = !update && webUpdate?.version === found.latest;
     const { response } = await show({
-      message: t("desktop.update.available", { version: found.latest }), detail: t("desktop.update.availableDetail", { current: found.current, app: NAME }),
-      buttons: [t("desktop.update.update"), t("desktop.update.later")], defaultId: 0, cancelId: 1,
+      message: t("desktop.update.available", { version: found.latest }),
+      detail: t(web ? "desktop.update.availableWebDetail" : "desktop.update.availableDetail", { current: found.current, app: NAME }),
+      buttons: [t(web ? "desktop.update.reload" : "desktop.update.update"), t("desktop.update.later")], defaultId: 0, cancelId: 1,
     });
     if (response === 0) startUpdate();
   }
