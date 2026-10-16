@@ -1,6 +1,6 @@
 // What a person does over a screen they drive, said to the station as the core's `screen.input` takes it
 // (docs/remote-screens.md): the pointer and the wheel at 0..1 of the picture (its letterbox left out), keys, and text
-// (an IME's, a paste's, a phone's keyboard's). A mouse clicks and drags as itself; a finger taps (a click), drags (the
+// (an IME's, a paste's, a phone's keyboard's; a paste the host takes goes on the screen's clipboard instead). A mouse clicks and drags as itself; a finger taps (a click), drags (the
 // button held) and scrolls with two. Keys are heard by a hidden textarea that holds the focus while driving, so an
 // IME composes in it and a phone's keyboard comes up for it. Moves and the wheel go once a frame, the latest.
 
@@ -22,6 +22,8 @@ export interface InputHost {
   send: (input: ScreenInput) => void;
   /** A mouse is over the picture while driving (or has left it): its own pointer shows the station's shape then. */
   hovering?: (on: boolean) => void;
+  /** A paste, taken by the host (onto the screen's clipboard, pasted there): true when it took it, else it is typed. */
+  paste?: (data: DataTransfer) => boolean;
 }
 
 /** A finger moved this far is a drag, not a tap. */
@@ -220,6 +222,8 @@ export function hearInput(host: InputHost): () => void {
   });
   on(keys, "paste", (e) => {
     e.preventDefault();
+    if (!host.driving()) return;
+    if (e.clipboardData && host.paste?.(e.clipboardData)) return;
     const text = e.clipboardData?.getData("text/plain");
     if (text && host.driving()) host.send({ t: "text", text });
   });

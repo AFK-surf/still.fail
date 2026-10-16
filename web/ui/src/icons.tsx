@@ -333,6 +333,10 @@ export function PanelOpen(props: IconProps) {
   return <Svg {...props}><path d="M8 4H16Q20.5 4 20.5 8.5V15.5Q20.5 20 16 20H8Q3.5 20 3.5 15.5V8.5Q3.5 4 8 4Z M14.5 4.5V19.5 M7 12H12 M9.5 9L6.5 12L9.5 15" /></Svg>;
 }
 
+export function Paste(props: IconProps) {
+  return <Svg {...props}><path d="M8.5 5H7Q4.5 5 4.5 7.5V18Q4.5 20.5 7 20.5H17Q19.5 20.5 19.5 18V7.5Q19.5 5 17 5H15.5 M10 3H14Q15.5 3 15.5 4.5V5.5Q15.5 7 14 7H10Q8.5 7 8.5 5.5V4.5Q8.5 3 10 3Z" /></Svg>;
+}
+
 export function Pause(props: IconProps) {
   return <Svg {...props}><path d="M7 5V19 M17 5V19" /></Svg>;
 }
@@ -603,6 +607,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "other": Other,
   "panel-close": PanelClose,
   "panel-open": PanelOpen,
+  "paste": Paste,
   "pause": Pause,
   "photo": Photo,
   "pin": Pin,

@@ -24,7 +24,13 @@ export const SCREENS_LACKING: ScreensView = { ...SCREENS, screens: SCREENS.scree
 export const OUTDATED: ScreensView = { screens: [], outdated: true, control: true, known: true, note: "此 station 需要更新才能远程查看屏幕" };
 
 /** How a story's view goes: live (driving, or a read-only member's), or the phase it ends up in. */
-export type ViewStory = "connecting" | "live" | "readOnly" | "undrivable" | "agent" | "reconnecting" | "ended" | "outdated" | "gone" | "denied" | "failed";
+export type ViewStory = "connecting" | "live" | "readOnly" | "undrivable" | "agent" | "reconnecting" | "ended" | "outdated" | "gone" | "denied" | "failed"
+  /** Driving it with its clipboard and files (docs/remote-screens.md "Clipboard and files"): a copy made on it this browser
+   *  would not write itself (offered), a file dragged over it, files dropped and on their way, and there. */
+  | "copied" | "dragging" | "sending" | "sent";
+const TRANSFER: ViewStory[] = ["copied", "dragging", "sending", "sent"];
+/** Where the demo station puts a file dropped on its screen. */
+const DROP = { folder: "/Users/zhangsan/Downloads", reveal: true };
 
 const MESSAGES: Partial<Record<ViewStory, string>> = {
   reconnecting: "连接已断开，正在重连",
@@ -231,6 +237,7 @@ async function play(story: ViewStory, h264: boolean, params: Record<string, unkn
   };
   // An agent drives it as it opens: the core opens it to look (no `control` asked), 接管 at hand.
   const agent = story === "agent";
+  if (TRANSFER.includes(story)) Object.assign(state, { clipboard: ["text", "png"], drop: DROP });
   if (agent) Object.assign(state, { control: false, others: [AGENT, "张三"], controllers: [AGENT], takeOver: true });
   const say = () => { state.line = lineOf(state, agent); emit({ state: { ...state, others: [...state.others], controllers: [...(state.controllers ?? [])] } }); };
   const name = String(params.view);
@@ -263,6 +270,22 @@ async function play(story: ViewStory, h264: boolean, params: Record<string, unkn
     }
     await wait(250, signal);
   }
+  const viewer = () => document.querySelector("[data-phase]");
+  if (story === "copied") {
+    // A browser that will not write the clipboard by itself (not focused, no permission): the copy is offered.
+    const refuse = () => Promise.reject(new DOMException("not allowed", "NotAllowedError"));
+    Object.assign(navigator.clipboard, { writeText: refuse, write: refuse });
+    emit({ clipboard: { type: "text", text: "https://github.com/login/device  验证码 8F3K-27QD" } });
+  } else if (story === "dragging") {
+    const dt = new DataTransfer();
+    dt.items.add(new File(["x"], "季度报告.pdf"));
+    viewer()?.dispatchEvent(new DragEvent("dragover", { dataTransfer: dt, bubbles: true, cancelable: true }));
+  } else if (story === "sending" || story === "sent") {
+    const dt = new DataTransfer();
+    dt.items.add(new File(["会议纪要\n"], "会议纪要.txt", { type: "text/plain" }));
+    dt.items.add(new File([new Uint8Array(12 * 1024 * 1024)], "季度报告 2026 Q3 最终版.pdf", { type: "application/pdf" }));
+    viewer()?.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true }));
+  }
   if (story === "reconnecting") {
     Object.assign(state, { phase: "reconnecting", message: MESSAGES.reconnecting });
     say();
@@ -292,6 +315,13 @@ export function screensDemo(story: ViewStory = "live", list: ScreensView = SCREE
         return null;
       }
       if (name === "screen.input") { heard.push(p.input); return null; }
+      if (name === "screen.clipboard") { heard.push({ clipboard: p }); return null; }
+      if (name === "drive.upload.part") {
+        // Sent: each whole at once. On its way: the small one there, the large one a third of the way and no further.
+        const total = Number(p.total);
+        if (story === "sending" && total > 1024 * 1024) return Number(p.offset) === 0 ? { have: Math.round(total / 3), entry: null } : new Promise(() => {});
+        return { have: total, entry: { name: String(p.path), dir: false, size: total, mtime: 0, type: "" } };
+      }
       if (name === "screen.ack") { seen.acks.push(Number(p.ts)); return null; }
       return name === "screen.keyframe" ? null : undefined;
     },

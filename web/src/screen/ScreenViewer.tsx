@@ -7,18 +7,22 @@
 // With a mouse it is a file opened's page: the bar along the top (the way back, the screen's name, what the core says
 // of the view, 只看/控制), gone after a moment at rest while driving and back as the pointer comes to the top. On a
 // phone: frosted bars above and below the picture (the way back and the name; 只看/控制 and the keyboard), always there.
+//
+// While driving it, its clipboard goes both ways and files go to its machine (Transfer.tsx): a copy made on it comes
+// onto this device's clipboard, a paste here is pasted there, a file dropped on it (or picked) is put where it says.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { core } from "../core/react.ts";
 import type { ScreenViewState } from "../core/shapes.ts";
-import { ChevronLeft, Keyboard } from "@stillfail/ui/icons.tsx";
-import { useAct } from "@stillfail/ui/toast.tsx";
-import { ViewerBar, VIEWER_BAR_REACH } from "@stillfail/ui/viewer/ViewerBar.tsx";
+import { ChevronLeft, Keyboard, Paste, Upload } from "@stillfail/ui/icons.tsx";
+import { useAct, useToast } from "@stillfail/ui/toast.tsx";
+import { ViewerBar, ViewerTool, VIEWER_BAR_REACH } from "@stillfail/ui/viewer/ViewerBar.tsx";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
 import { REST_MS } from "@stillfail/ui/viewer/rest.ts";
 import { Button, PanelButton, Segmented, Tip } from "../ui.tsx";
 import { t } from "../i18n.ts";
 import { ScreenFrames, decodable, viewSize, type FrameConfig, type FrameHead } from "./frames.ts";
 import { hearInput, type ScreenInput } from "./input.ts";
+import { CopiedNote, DropVeil, SendsPanel, clipOf, pasted, putClip, useSends, type Clip } from "./Transfer.tsx";
 import * as css from "./ScreenViewer.css.ts";
 
 /** What the view's bar shows: its state but the pointer (which moves often, and is drawn without React). */
@@ -64,6 +68,15 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
   /** 只看/控制 as asked, until the core says it is so. */
   const [want, setWant] = useState<boolean | null>(null);
   const [typing, setTyping] = useState(false);
+  /** A copy made on the screen this browser would not put on the clipboard by itself: offered until taken or put away. */
+  const [copied, setCopied] = useState<Clip | null>(null);
+  /** A file dragged over the screen while it can take one. */
+  const [dragging, setDragging] = useState(false);
+  const [sendsOpen, setSendsOpen] = useState(false);
+  const files = useRef<HTMLInputElement>(null);
+  const toast = useToast();
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
 
   const phase = failure ? "failed" : shown?.phase ?? "connecting";
   const live = phase === "live";
@@ -72,6 +85,11 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
   const driving = live && shown?.control === true;
   const drivingRef = useRef(driving);
   drivingRef.current = driving;
+  /** What a person driving it has of its clipboard, and where a file dropped on it goes (none while only looking). */
+  const clipTypes = driving ? shown?.clipboard ?? [] : [];
+  const clipTypesRef = useRef(clipTypes);
+  clipTypesRef.current = clipTypes;
+  const drop = driving ? shown?.drop : undefined;
 
   /** The picture fitted in the stage, whole, in the middle (letterboxed). */
   const place = useCallback(() => {
@@ -122,6 +140,10 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
         setDrawn(true);
       },
     });
+    // A copy made on the screen: on this device's clipboard at once where the browser lets it, else offered.
+    const copiedThere = (clip: Clip) => {
+      putClip(clip).then(() => { if (open) { setCopied(null); toastRef.current(t("web-pages.screen.copied")); } }, () => { if (open) setCopied(clip); });
+    };
     const took = (state: ScreenViewState) => {
       latest.current = state;
       drawPointer();
@@ -132,10 +154,11 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
       if (!open) return;
       core().call("screen.view", { station, screen, view: name, codecs, ...viewSize() }, (value, bytes) => {
         if (!open) return;
-        const v = value as { state?: ScreenViewState; config?: FrameConfig; frame?: FrameHead };
+        const v = value as { state?: ScreenViewState; config?: FrameConfig; frame?: FrameHead; clipboard?: { type?: string; text?: string } };
         if (v.frame) frames.frame(v.frame, bytes);
         else if (v.config) frames.config(v.config, bytes);
         else if (v.state) took(v.state);
+        else if (v.clipboard) { const clip = clipOf(v.clipboard, bytes); if (clip) copiedThere(clip); }
       }, abort.signal).then(() => {
         // Answered: over. The last state said why; one that did not leave it there is ended.
         if (open) setShown((was) => (was && !OVER.has(was.phase) ? { ...was, phase: "ended" } : was));
@@ -160,6 +183,15 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
       driving: () => drivingRef.current,
       send: (input: ScreenInput) => { if (drivingRef.current) tell("screen.input", { view: view.current, input }); },
       hovering: (on) => { hovering.current = on; drawPointer(); },
+      // A paste onto the screen's clipboard, pasted there, where it carries what is pasted; else it is typed.
+      paste: (data) => {
+        const types = clipTypesRef.current;
+        if (!types.length) return false;
+        const png = types.includes("png") && [...data.files].some((f) => f.type === "image/png");
+        if (!png && !(types.includes("text") && data.getData("text/plain"))) return false;
+        void pasted(data, types).then((clip) => { if (clip) setClipboard(clip); });
+        return true;
+      },
     });
   }, [drawPointer]);
   // Only looking (or no longer live): the keys let go, the keyboard down.
@@ -170,6 +202,30 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
 
   // 只看 / 控制: as asked at once, the core's word once it has said so (or back, if it could not).
   const act = useAct();
+  const actRef = useRef(act);
+  actRef.current = act;
+  /** The screen's clipboard set and pasted there (a paste here, a phone's paste, a file's path). */
+  const setClipboard = (clip: { text: string } | { png: string }) => {
+    actRef.current(core().call("screen.clipboard", { view: view.current, ...clip, paste: true }), t("web-pages.screen.pasteWhat"));
+  };
+  // A phone's paste: what this device's clipboard holds, read within the tap.
+  const pasteHere = () => {
+    if (!navigator.clipboard?.readText) return;
+    navigator.clipboard.readText().then((text) => {
+      if (text) setClipboard({ text });
+      else toast(t("web-pages.screen.clipboardEmpty"));
+    }, () => toast(t("web-pages.screen.clipboardUnread")));
+  };
+  const sends = useSends(station, drop);
+  const sendFiles = (list: File[]) => {
+    if (!drop || list.length === 0) return;
+    setSendsOpen(true);
+    sends.send(list);
+  };
+  const reveal = (path: string) => tell("screen.input", { view: view.current, input: { t: "reveal", path } });
+  // Not driving any more: nothing dragged over it is taken.
+  useEffect(() => { if (!drop) setDragging(false); }, [drop]);
+  const sendsShown = drop !== undefined && sendsOpen && (sends.going.length > 0 || sends.sent.length > 0);
   const control = want ?? shown?.control ?? false;
   // What the station lacks to be driven (macOS Accessibility): 控制 is not to be had, and the bar says what to turn on.
   const access = shown?.access;
@@ -223,6 +279,9 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
   /** What happened, as the core says it (and what the station lacks, where it says). */
   const headline = OVER.has(phase) ? t(`web-pages.screen.over.${phase}`) : "";
   const why = [failure ?? shown?.message, access?.message].filter((w, i, all): w is string => !!w && w !== headline && all.indexOf(w) === i);
+  const sendTool = drop && !over ? (
+    <ViewerTool label={t("web-pages.screen.sendFile")} onClick={() => files.current?.click()}><Upload size={18} /></ViewerTool>
+  ) : null;
   const modes = (
     <Tip label={cannot}>
       <span className={css.mode}>
@@ -233,7 +292,10 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
   );
 
   return (
-    <div className={css.viewer} data-phone={phone || undefined} data-phase={phase} onPointerMove={onPointerMove} onPointerDown={onPointerMove}>
+    <div className={css.viewer} data-phone={phone || undefined} data-phase={phase} onPointerMove={onPointerMove} onPointerDown={onPointerMove}
+      onDragOver={(e) => { if (drop && e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDragging(true); } }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
+      onDrop={(e) => { if (!drop || !e.dataTransfer.files.length) return; e.preventDefault(); setDragging(false); sendFiles([...e.dataTransfer.files]); }}>
       <div ref={stage} className={css.stage} data-driving={driving || undefined}>
         <div ref={picture} className={css.picture} data-shown={drawn || undefined} data-faded={over || undefined}>
           <canvas ref={canvas} className={css.canvas} />
@@ -243,6 +305,14 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
           autoCapitalize="off" autoCorrect="off" autoComplete="off" spellCheck={false}
           onFocus={() => setTyping(true)} onBlur={() => setTyping(false)} />
       </div>
+      {dragging && drop && <DropVeil title={title} drop={drop} />}
+      {copied && driving && <CopiedNote clip={copied} onDone={(put) => { setCopied(null); if (put) toast(t("web-pages.screen.copied")); }} />}
+      {sendsShown && drop && (
+        <SendsPanel drop={drop} going={sends.going} sent={sends.sent}
+          onPastePath={(path) => setClipboard({ text: path })} onReveal={reveal}
+          onClose={() => { sends.clear(); if (!sends.going.some((u) => u.state === "sending")) setSendsOpen(false); }} />
+      )}
+      <input ref={files} type="file" multiple hidden onChange={(e) => { const list = [...(e.target.files ?? [])]; e.target.value = ""; sendFiles(list); }} />
       {waiting && (
         <div className={css.waiting} role="status">
           <span className={css.spinnerBox} aria-hidden="true"><span className={css.spinner} /></span>
@@ -277,13 +347,23 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
                   <Keyboard size={18} />
                 </button>
               </Tip>
+              {clipTypes.includes("text") && (
+                <Tip label={t("web-pages.screen.paste")}>
+                  <button type="button" className={css.keyboard} aria-label={t("web-pages.screen.paste")} onClick={pasteHere}><Paste size={18} /></button>
+                </Tip>
+              )}
+              {drop && (
+                <Tip label={t("web-pages.screen.sendFile")}>
+                  <button type="button" className={css.keyboard} aria-label={t("web-pages.screen.sendFile")} onClick={() => files.current?.click()}><Upload size={18} /></button>
+                </Tip>
+              )}
             </div>
           )}
         </>
       ) : (
         <ViewerBar back={{ label: backLabel, onClick: onBack }} name={title} meta={line}
           hidden={live && !awake && !touched.current && !takeOver && controllers.length === 0}
-          tools={over ? undefined : takeOver ? <span className={css.takeOverTools}>{others}{takeOverButton}</span> : modes} />
+          tools={over ? undefined : takeOver ? <span className={css.takeOverTools}>{others}{takeOverButton}</span> : <>{sendTool}{modes}</>} />
       )}
     </div>
   );

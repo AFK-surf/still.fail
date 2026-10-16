@@ -170,6 +170,16 @@ const UPLOAD_PART = 4 * 1024 * 1024;
 let uploads: readonly Upload[] = [];
 const heard = new Set<() => void>();
 const stopped = new Set<string>();
+/** How an upload goes on that asked for it: beside a file of its name at once, and who hears where it went. */
+export interface UploadWay {
+  /** A name taken there: under a free name beside it, not asked (a file dropped into a screen). */
+  keepBoth?: boolean;
+  /** Once the folder has it, by the name it has there. */
+  done?: (name: string) => void;
+}
+const ways = new Map<string, UploadWay>();
+/** The names an upload found taken, so the next free one is another. */
+const tried = new Map<string, Set<string>>();
 function put(next: readonly Upload[]): void {
   uploads = next;
   for (const h of heard) h();
@@ -183,12 +193,16 @@ export function useUploads(station: string, root: string | null, folder: string)
 }
 
 /** Starts putting files into a folder: each its own row while it goes, gone from them once the folder has it. */
-export function upload(station: string, root: string, folder: string, files: Iterable<File>): void {
+export function upload(station: string, root: string, folder: string, files: Iterable<File>, way?: UploadWay): string[] {
+  const keys: string[] = [];
   for (const file of files) {
     const key = crypto.randomUUID();
+    if (way) ways.set(key, way);
     put([...uploads, { key, station, root, folder, name: file.name, size: file.size, sent: 0, state: "sending", file }]);
+    keys.push(key);
     void send(key, false);
   }
+  return keys;
 }
 
 /** The one whose name was taken: over what is there (`replace`), or beside it under a free name. */
@@ -213,6 +227,8 @@ export function retry(key: string): void {
 /** Given up: its row goes (what the station had of it is cleared there in a day). */
 export function cancel(key: string): void {
   stopped.add(key);
+  ways.delete(key);
+  tried.delete(key);
   change(key, () => null);
 }
 
@@ -232,6 +248,10 @@ async function send(key: string, replace: boolean): Promise<void> {
       if (told.entry) {
         // The folder has it now (the core read it again before answering): its row goes.
         change(key, () => null);
+        const way = ways.get(key);
+        ways.delete(key);
+        tried.delete(key);
+        way?.done?.(name);
         return;
       }
       // The station goes on from what it has (less, after it lost a part); nothing more is a part it could not take.
@@ -245,7 +265,17 @@ async function send(key: string, replace: boolean): Promise<void> {
     if (e instanceof CoreError && e.status === 409 && have === 0 && !replace) {
       const held = topicNow<DriveFolder>({ topic: "drive", station, root, path: folder });
       const name = uploads.find((x) => x.key === key)?.name ?? first.name;
-      // A folder by that name cannot be replaced: kept beside it at once.
+      // A folder by that name cannot be replaced, and one asked to keep both is: beside it at once, under a name not
+      // tried yet.
+      if (ways.get(key)?.keepBoth) {
+        const names = tried.get(key) ?? new Set<string>();
+        tried.set(key, names);
+        names.add(name);
+        const free = freeName(first.name, new Set([...names, ...namesIn(station, root, folder)]));
+        change(key, (x) => ({ ...x, name: free, state: "sending", sent: 0 }));
+        void send(key, false);
+        return;
+      }
       if (held?.entries.some((x) => x.name === name && x.dir)) return settle(key, false);
       change(key, (x) => ({ ...x, state: "taken" }));
       return;
