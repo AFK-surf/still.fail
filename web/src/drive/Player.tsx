@@ -312,7 +312,7 @@ export function Player({ at, blob, onSave, entry, siblings = [], backLabel, onBa
       </div>
       {captions && cue && <div className={css.cue} data-awake={awake || undefined}><span>{cue.replace(/<[^>]+>/g, "")}</span></div>}
       {desk && !full ? (
-        <ViewerBar back={{ label: backLabel, onClick: onBack }} name={entry.name} title={at?.path}
+        <ViewerBar back={{ label: backLabel, onClick: onBack }} name={entry.name} title={at?.path} hidden={!awake && !listing}
           meta={[list.length > 1 && index >= 0 ? `${index + 1} / ${list.length}` : null, sizeOf(entry.size)].filter(Boolean).join(" · ")}
           tools={<>
             {list.length > 1 && <ViewerTool label={t("web-pages.drive.player.list")} on={listing} onClick={() => setListing((l) => !l)}><List size={18} /></ViewerTool>}

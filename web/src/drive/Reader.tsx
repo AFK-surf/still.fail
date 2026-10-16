@@ -17,7 +17,7 @@ import { useDark } from "../theme.ts";
 import { REST_MS, TAP_REST_MS } from "../FilePreview.tsx";
 import { placeStrokes, strokeLayer } from "../strokes.ts";
 import { download, placeAt, readWhole, sizeOf, usePlace, type At, type Got } from "./model.ts";
-import { ViewerBar, ViewerDownload, ViewerTool } from "../viewer/ViewerBar.tsx";
+import { useBarOnScroll, ViewerBar, ViewerDownload, ViewerTool } from "../viewer/ViewerBar.tsx";
 import { isHeading, search, type Book, type Chapter } from "./text.ts";
 import { LINES, MARGINS, SIZES, setReaderStyle, useReaderStyle, type Paper } from "./readerStyle.ts";
 import * as css from "./Reader.css.ts";
@@ -169,6 +169,8 @@ export function Reader({ at, blob, onSave, name, size, mtime, markdown, backLabe
   const loaded = useBook(blob ?? at!, size, mtime, markdown);
   const book = loaded.state === "ready" ? loaded.book : null;
   const place = usePlace(at ?? null);
+  // On a wide screen its bar goes as the text is read down, and comes back up with it (or the pointer at the top).
+  const barOnScroll = useBarOnScroll();
   const scroller = useRef<HTMLDivElement>(null);
   const column = useRef<HTMLDivElement>(null);
   // Where the top of the screen is in the text (its offset), and so how far through it is.
@@ -439,15 +441,15 @@ export function Reader({ at, blob, onSave, name, size, mtime, markdown, backLabe
 
   return (
     <div className={css.reader} data-paper={paper} data-indent={style.indent || undefined} data-narrow={narrow || undefined} data-bars={shown || undefined} style={vars}
-      onPointerMove={(e) => { if (e.pointerType === "mouse" && !narrow) wake(); }}>
-      <div ref={scroller} className={css.scroller} tabIndex={-1} onScroll={onScroll} data-panel={(!narrow && panel) || undefined}
+      onPointerMove={(e) => { if (e.pointerType === "mouse" && !narrow) wake(); barOnScroll.onPointerMove(e); }}>
+      <div ref={scroller} className={css.scroller} tabIndex={-1} onScroll={(e) => { onScroll(); barOnScroll.onScroll(e); }} data-panel={(!narrow && panel) || undefined}
         onPointerDown={(e) => { tapAt.current = { x: e.clientX, y: e.clientY }; }} onPointerUp={onPointerUp}>
         <div ref={column} className={css.column}>{body}</div>
       </div>
       {/* With the bars away, how far through it is: a hairline along the bottom. */}
       <div className={css.hairline} aria-hidden="true"><span style={{ transform: `scaleX(${share})` }} /></div>
       {!narrow ? (
-        <ViewerBar back={{ label: backLabel, onClick: onBack }} name={name} title={at?.path}
+        <ViewerBar back={{ label: backLabel, onClick: onBack }} name={name} title={at?.path} hidden={barOnScroll.hidden && !panel}
           meta={[book ? [chapter, `${Math.round(share * 100)}%`].filter(Boolean).join(" · ") : null, sizeOf(size)].filter(Boolean).join(" · ")}
           tools={<>
             <ViewerTool label={t("web-pages.drive.reader.contents")} on={panel === "contents"} onClick={() => open("contents")}><List size={18} /></ViewerTool>

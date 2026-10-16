@@ -281,7 +281,8 @@ const PANEL = 320;
 // shown, takes the pointer over the window's top row (FilePreview.css.ts).
 globalStyle(`[data-desktop] ${reader}[data-narrow] ${top}[data-shown]`, { WebkitAppRegion: "no-drag" });
 /** The text under it, and clear of the panel docked at the right. */
-globalStyle(`${desk} ${scroller}`, { top: `${BAR}px`, paddingTop: "40px", outline: "none" });
+// The text from the window's top, starting below the bar and read on under it (it goes as the text is read down).
+globalStyle(`${desk} ${scroller}`, { top: "0", paddingTop: `${BAR + 40}px`, outline: "none" });
 globalStyle(`${desk} ${scroller}[data-panel]`, { paddingRight: `${PANEL}px` });
 /** How far through it is: the hairline along the bottom, always. */
 globalStyle(`${desk} ${hairline}`, { opacity: "1" });

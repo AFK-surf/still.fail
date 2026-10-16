@@ -70,7 +70,8 @@ const desk = `${player}:not([data-narrow]):not(:fullscreen)`;
 // Narrow or full screen, its floating bar, awake, takes the pointer over that row (FilePreview.css.ts).
 globalStyle(`[data-desktop] ${head}[data-awake]`, { WebkitAppRegion: "no-drag" });
 /** The picture under it, clear of the list docked at the right; the controls and a subtitle over the picture's middle. */
-globalStyle(`${desk} ${stage}`, { top: `${BAR}px` });
+// The picture the whole window: the bar over it, gone with the controls as it plays on.
+globalStyle(`${desk} ${stage}`, { top: "0" });
 globalStyle(`${desk}[data-list] ${stage}`, { right: `${LIST}px` });
 globalStyle(`${desk}[data-list] ${vvBar}, ${desk}[data-list] ${cue}`, { left: `calc((100% - ${LIST}px) / 2)`, width: `min(100% - ${LIST + 32}px, 1080px)` });
 

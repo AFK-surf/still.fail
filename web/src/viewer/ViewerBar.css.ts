@@ -1,8 +1,9 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 
-/** How tall the bar is: what is under it starts there. */
-export const VIEWER_BAR = 52;
+/** How tall the bar is: as a page's bar (styles/sidebar.css.ts), a 32px button in it level with the desktop window's
+ * buttons. What is under it starts below it, and goes under it as it is scrolled or as the bar goes. */
+export const VIEWER_BAR = 45;
 
 /**
  * Across the top of the file opened, over the whole window: the way back, the name in the middle, the tools. Its
@@ -12,9 +13,15 @@ export const VIEWER_BAR = 52;
 export const bar = style({
   position: "absolute", zIndex: "3", top: "0", left: "0", right: "0", height: `${VIEWER_BAR}px`, boxSizing: "border-box",
   display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr)", alignItems: "center", gap: "16px",
-  padding: "0 12px", background: `var(--viewer-ground, ${vars.canvas})`, color: `var(--viewer-ink, ${vars.text})`,
-  boxShadow: `inset 0 -1px 0 var(--viewer-line, ${vars.line})`,
+  padding: "0 12px 1px", color: `var(--viewer-ink, ${vars.text})`,
+  // Over the file, frosted with its ground: what scrolls under it shows through, softened.
+  background: `color-mix(in srgb, var(--viewer-ground, ${vars.canvas}) 82%, transparent)`, WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+  backdropFilter: "blur(20px) saturate(1.4)", boxShadow: `inset 0 -1px 0 color-mix(in srgb, var(--viewer-line, ${vars.line}) 70%, transparent)`,
+  transition: `transform 240ms ${vars.easeOut}, opacity 240ms ${vars.easeOut}`,
+  "@media": { "(prefers-reduced-motion: reduce)": { transition: "opacity 160ms linear" } },
   selectors: {
+    // Gone up out of the way: the file under it whole.
+    "&[data-hidden]": { transform: "translateY(-100%)", opacity: "0", pointerEvents: "none" },
     "[data-desktop] &": { WebkitAppRegion: "drag" },
     ':root[data-desktop="inset"]:not([data-fullscreen]) &': { paddingLeft: "84px" },
     ':is([data-desktop="overlay"], [data-desktop="custom"]) &': { paddingRight: "calc(var(--window-buttons, 0px) + 12px)" },

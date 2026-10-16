@@ -7,7 +7,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { BIG_FILE, useApi, type Api, type Attachment, type FileProgress } from "./api.ts";
 import { useTopic, useTopicSelect } from "./core/react.ts";
 import { useNarrow } from "./mobile/app.tsx";
-import { ViewerBar, ViewerDownload } from "./viewer/ViewerBar.tsx";
+import { useBarOnScroll, ViewerBar, ViewerDownload } from "./viewer/ViewerBar.tsx";
 import type { ChatView, DriveEntry, ImageNear } from "./core/shapes.ts";
 import { Reader } from "./drive/Reader.tsx";
 import { Player } from "./drive/Player.tsx";
@@ -507,6 +507,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
   const backTo = useContext(PreviewBack);
   const chatTitle = useTopicSelect<ChatView, string | null>(docked && !backTo && sessionKey && !sessionKey.startsWith("drive:") ? { topic: "chat", station: station.address, session: sessionKey } : null, (s) => s.value?.title ?? null);
   const backLabel = backTo ?? chatTitle ?? t("common.close");
+  const barOnScroll = useBarOnScroll();
   // The bar floats over the file, and fades when the pointer leaves it or rests a while (not over it, not while it comes).
   const [awake, setAwake] = useState(true);
   const resting = useRef(0);
@@ -582,7 +583,8 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
   return (
     <RDialog.Content ref={content} className={css2.fp} data-kind={kind ?? undefined} data-docked={docked || undefined} aria-describedby={undefined} data-awake={awake || coming !== undefined || marking || undefined}
       // A mouse wakes the bars by moving; a finger has no hover, and a tap on the file shows or hides them.
-      onPointerMove={(e) => { if (e.pointerType === "mouse") wake(); }}
+      onPointerMove={(e) => { if (e.pointerType === "mouse") wake(); barOnScroll.onPointerMove(e); }}
+      onScrollCapture={barOnScroll.onScroll}
       onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; clearTimeout(resting.current); if (!onBar.current) setAwake(false); }}
       onPointerDown={(e) => { tapAt.current = { x: e.clientX, y: e.clientY }; }}
       onPointerUp={(e) => {
@@ -594,6 +596,8 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
       onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.focus(); }}>
       {docked ? (
         <ViewerBar back={{ label: backLabel, onClick: onClose }} title={file.path}
+          // A picture: gone with the rest as the pointer rests (back as it moves); what is read down: as it is read down.
+          hidden={kind === "image" ? !(awake || coming !== undefined || marking) : barOnScroll.hidden}
           name={<RDialog.Title asChild><span>{file.name}</span></RDialog.Title>}
           meta={`${count > 1 && at >= 0 ? `${at + 1} / ${count} · ` : ""}${fileSize(file.size)}${kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}`}
           tools={<>
