@@ -445,6 +445,7 @@ jobs:
         with: { name: "release-android-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
 
   # The desktop app (fail.still.desktop.beta), on desktop/stillfail-beta-mac.yml: built and signed on the organization Mac.
+  # Its Windows app is desktop-win's, beside it: one after the other they took ~140 s, then their 268 MB went up.
   desktop:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop == 'true' }}
@@ -461,11 +462,7 @@ jobs:
           KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
           MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
           MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
-          # The Windows installer's signature (its .sig): none is an error.
-          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
-          # The Mac archive is put while the Windows app builds (--put-mac-early); the rest by the step after.
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: python3 .github/release-desktop.py --out "$RUNNER_TEMP/release" --put-mac-early
+        run: python3 .github/release-desktop.py --only mac --out "$RUNNER_TEMP/release"
       - name: Put its files (named by its version, nothing points at them until put writes the feed)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -473,7 +470,34 @@ jobs:
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
       - uses: actions/upload-artifact@v4
-        with: { name: "release-desktop-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
+        with: { name: "release-desktop-mac-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
+
+  # The Windows desktop app (beta), on desktop/stillfail-beta.yml: built on the organization Mac too (build.sh --win),
+  # in a runner of its own beside desktop's Mac app. Not code-signed; its installer's .sig is (docs/release-signing.md).
+  desktop-win:
+    needs: [plan, natives]
+    if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop == 'true' }}
+    runs-on: [self-hosted, mini1]
+    environment: production
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: ./.github/actions/setup-mac
+      - name: Build the beta Windows desktop app and sign its installer's .sig
+        env:
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          # The installer's signature (its .sig): none is an error.
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: python3 .github/release-desktop.py --only win --out "$RUNNER_TEMP/release"
+      - name: Put its files (named by its version, nothing points at them until put writes the feed)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
+      - uses: actions/upload-artifact@v4
+        with: { name: "release-desktop-win-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
 
   # The web app the beta desktop app takes without a new app (docs/desktop-web-updates.md): when the web app changed and
   # its shell did not (a change to the shell is a new app, desktop above, carrying it). The same build as the app
@@ -514,8 +538,8 @@ jobs:
   # What was built put in the bucket, once the check passed and the API and the web are out; nothing when a build
   # failed. Then the changelog that says so (scripts/changelog-put.sh): in this job, not one more after it.
   put:
-    needs: [plan, check, check-linux, check-browser, check-android, api, static, station, android, desktop, desktop-web]
-    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result) && (needs.station.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-web.result == 'success')
+    needs: [plan, check, check-linux, check-browser, check-android, api, static, station, android, desktop, desktop-win, desktop-web]
+    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result) && (needs.station.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-web.result == 'success')
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 20
@@ -568,8 +592,8 @@ jobs:
 
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
   done:
-    needs: [plan, natives, check, check-linux, check-browser, check-android, api, static, station, android, desktop, desktop-web, put]
-    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result)
+    needs: [plan, natives, check, check-linux, check-browser, check-android, api, static, station, android, desktop, desktop-win, desktop-web, put]
+    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result)
     runs-on: [self-hosted, mini1]
     permissions:
       contents: write # only this job updates the tag deployed/beta
@@ -588,7 +612,7 @@ jobs:
   # How long this run took against its budget (scripts/ci-time.ts): in the run's summary, and a warning when over. A
   # station's watch reads the same of every run and has an agent find why one went over.
   timing:
-    needs: [plan, natives, check, check-linux, check-browser, check-android, bundle, mac-build, api, static, station, station-update, android, desktop, desktop-web, put, changelog, done]
+    needs: [plan, natives, check, check-linux, check-browser, check-android, bundle, mac-build, api, static, station, station-update, android, desktop, desktop-win, desktop-web, put, changelog, done]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -620,6 +644,7 @@ jobs:
           planned '${{ needs.plan.outputs.station }}' '${{ needs.station.result }}' station
           planned '${{ needs.plan.outputs.android }}' '${{ needs.android.result }}' android
           planned '${{ needs.plan.outputs.desktop }}' '${{ needs.desktop.result }}' desktop
+          planned '${{ needs.plan.outputs.desktop }}' '${{ needs.desktop-win.result }}' desktop-win
           [ '${{ needs.plan.outputs.desktop }}' = true ] || planned '${{ needs.plan.outputs.desktop_web }}' '${{ needs.desktop-web.result }}' desktop-web
           if [ -n "$missed" ]; then echo "::error::changed, planned, and not released:$missed"; exit 1; fi
           echo "every planned part went out"

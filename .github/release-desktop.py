@@ -20,7 +20,10 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--stable', action='store_true', help='Publish the stable channel; defaults to beta')
 parser.add_argument('--out', help='Put the signed release in this directory (desktop/…) instead of the bucket: CI puts it once the check passed (scripts/release-put.sh)')
 parser.add_argument('--put-mac-early', action='store_true', help='With --out: put the Mac archive (named by its version, nothing points at it yet) in the bucket while the Windows app builds, and leave it out of --out')
+parser.add_argument('--only', choices=('mac', 'win'), help="Build one of the two apps: CI builds them side by side, in jobs of their own (the Windows one needs no Apple certificate)")
 args = parser.parse_args()
+mac = args.only != 'win'
+win = args.only != 'mac'
 suffix = '' if args.stable else '-beta'
 root = Path(__file__).resolve().parents[1]
 identity = json.loads((root / 'apps/desktop/package.json').read_text())['build']['mac']['identity']
@@ -33,14 +36,16 @@ def run(args, **kwargs):
 
 # The user's keychain search list is the one mini1's jobs share: the station release job's .github/sign-station.sh
 # sets it too, under this lock, held until this one's keychain is gone (the process's end).
-lock = open(Path.home() / '.stillfail-mac-signing.lock', 'a')
-fcntl.flock(lock, fcntl.LOCK_EX)
-previous = shlex.split(subprocess.check_output(['security', 'list-keychains', '-d', 'user'], text=True))
+# The Windows app alone signs nothing with Apple's keychain: it neither waits for the lock nor touches the list.
+if mac:
+    lock = open(Path.home() / '.stillfail-mac-signing.lock', 'a')
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    previous = shlex.split(subprocess.check_output(['security', 'list-keychains', '-d', 'user'], text=True))
 with tempfile.TemporaryDirectory(prefix='stillfail-signing-', dir=os.environ.get('RUNNER_TEMP')) as directory:
     keychain = str(Path(directory) / 'signing.keychain-db')
     imported = False
     try:
-        certificate = os.environ.get('MACOS_SIGNING_CERTIFICATE_B64')
+        certificate = os.environ.get('MACOS_SIGNING_CERTIFICATE_B64') if mac else None
         if certificate:
             password = os.environ.get('MACOS_SIGNING_CERTIFICATE_PASSWORD')
             if not password:
@@ -57,14 +62,13 @@ with tempfile.TemporaryDirectory(prefix='stillfail-signing-', dir=os.environ.get
             run(['security', 'set-key-partition-list', '-S', 'apple-tool:,apple:', '-k', keypass, keychain], stdout=subprocess.DEVNULL)
             run(['security', 'list-keychains', '-d', 'user', '-s', keychain, *previous])
             path.unlink()
-        elif os.environ.get('KEYCHAIN_PASSWORD_AFK'):
+        elif mac and os.environ.get('KEYCHAIN_PASSWORD_AFK'):
             run(['security', 'unlock-keychain', '-p', os.environ['KEYCHAIN_PASSWORD_AFK'], str(Path.home() / 'Library/Keychains/login.keychain-db')])
-        identities = subprocess.check_output(['security', 'find-identity', '-v', '-p', 'codesigning'], text=True)
-        if identity not in identities:
+        if mac and identity not in subprocess.check_output(['security', 'find-identity', '-v', '-p', 'codesigning'], text=True):
             raise SystemExit('Existing still.fail signing identity is missing. Provision MACOS_SIGNING_CERTIFICATE_B64 and MACOS_SIGNING_CERTIFICATE_PASSWORD in production; no unsigned replacement was published.')
         if not args.out and not os.environ.get('CLOUDFLARE_API_TOKEN'):
             raise SystemExit('CLOUDFLARE_API_TOKEN is required')
-        early = args.out and args.put_mac_early
+        early = args.out and args.put_mac_early and mac and win
         if early and not os.environ.get('CLOUDFLARE_API_TOKEN'):
             raise SystemExit('--put-mac-early needs CLOUDFLARE_API_TOKEN')
         for folder in (root, *(() if args.out and not early else (root / 'cloud',)), root / 'apps/desktop'):
@@ -77,8 +81,9 @@ with tempfile.TemporaryDirectory(prefix='stillfail-signing-', dir=os.environ.get
             posthog.chmod(0o600)
             env['STILLFAIL_POSTHOG'] = str(posthog)
         env['RELEASE_DIR'] = str(Path(directory) / 'releases')
-        run(['sh', 'scripts/release.sh', *([] if args.stable else ['--beta']), 'desktop'], cwd=root, env=env)
-        run(['codesign', '--verify', '--deep', '--strict', str(root / 'apps/desktop/out/mac-arm64' / ('still.fail.app' if args.stable else 'youdid.wtf.app'))])
+        if mac:
+            run(['sh', 'scripts/release.sh', *([] if args.stable else ['--beta']), 'desktop'], cwd=root, env=env)
+            run(['codesign', '--verify', '--deep', '--strict', str(root / 'apps/desktop/out/mac-arm64' / ('still.fail.app' if args.stable else 'youdid.wtf.app'))])
         version = subprocess.check_output(['git', 'rev-list', '--count', 'HEAD'], cwd=root, text=True).strip()
         archive = f'stillfail{suffix}-0.1.{version}-arm64-mac.zip'
         installer = f'stillfail{suffix}-0.1.{version}-x64-win.exe'
@@ -91,13 +96,15 @@ with tempfile.TemporaryDirectory(prefix='stillfail-signing-', dir=os.environ.get
                 shutil.copy2(Path(env['RELEASE_DIR']) / 'desktop' / name, Path(directory) / 'early/desktop' / name)
             putting = subprocess.Popen(['sh', 'scripts/release-put.sh', '--files', str(Path(directory) / 'early')], cwd=root, env=env)
         # After the Mac's check: build.sh starts by clearing out/.
-        run(['sh', 'scripts/release.sh', *([] if args.stable else ['--beta']), 'desktop-win'], cwd=root, env=env)
-        for name, mime in (
-            (archive, 'application/zip'), (archive + '.blockmap', 'application/octet-stream'), (f'stillfail{suffix}-mac.yml', 'text/yaml; charset=utf-8'),
-            (installer, 'application/vnd.microsoft.portable-executable'), (installer + '.blockmap', 'application/octet-stream'),
-            # Its signature (scripts/release-sign.ts), which the app checks before installing it: before the feed.
-            (installer + '.sig', 'application/json'), (f'stillfail{suffix}.yml', 'text/yaml; charset=utf-8'),
-        ):
+        if win:
+            run(['sh', 'scripts/release.sh', *([] if args.stable else ['--beta']), 'desktop-win'], cwd=root, env=env)
+        files = (
+            *(((archive, 'application/zip'), (archive + '.blockmap', 'application/octet-stream'), (f'stillfail{suffix}-mac.yml', 'text/yaml; charset=utf-8')) if mac else ()),
+            *(((installer, 'application/vnd.microsoft.portable-executable'), (installer + '.blockmap', 'application/octet-stream'),
+               # Its signature (scripts/release-sign.ts), which the app checks before installing it: before the feed.
+               (installer + '.sig', 'application/json'), (f'stillfail{suffix}.yml', 'text/yaml; charset=utf-8')) if win else ()),
+        )
+        for name, mime in files:
             path = Path(env['RELEASE_DIR']) / 'desktop' / name
             # Unsigned only outside CI, without RELEASE_SIGNING_KEY (release-sign.ts refuses that in CI).
             if name.endswith('.sig') and not path.is_file() and not os.environ.get('CI'): continue
