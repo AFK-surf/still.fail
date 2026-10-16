@@ -229,6 +229,21 @@ const PARTS: Record<string, Part> = {
       copyFileSync(join(scratch, "arm64-apple-macosx/release/StillfailDock"), join(out, "StillfailDock"));
     },
   },
+  // The station's desktop as a screen (station/native/screen, docs/remote-screens.md): a Swift helper the station starts
+  // per view (ScreenCaptureKit, VideoToolbox, CGEvent), built with the Xcode the Mac has.
+  screen: {
+    files: () => ["stillfail-screen"],
+    targets: ["darwin-arm64"],
+    env: "STILLFAIL_SCREEN",
+    inputs: ["station/native/screen"],
+    recipe: () => ({ swift: DOCK_BUILD }),
+    build(_t, out) {
+      const dir = join(ROOT, "station/native/screen");
+      const scratch = process.env.CARGO_TARGET_DIR ? join(process.env.CARGO_TARGET_DIR, "native", "screen") : join(dir, ".build");
+      run("swift", [...DOCK_BUILD, "--scratch-path", scratch], { cwd: dir });
+      copyFileSync(join(scratch, "arm64-apple-macosx/release/stillfail-screen"), join(out, "stillfail-screen"));
+    },
+  },
   // iroh's relay in dev mode, for the core's mesh tests (client/core-ts/test/mesh.test.ts): n0's own build, the
   // version still.fail's relays run (cloud/Dockerfile).
   "iroh-relay": {
