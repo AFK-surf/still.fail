@@ -188,6 +188,8 @@
   "core-views.flow.uses_none": "Added like this it can't be used anywhere",
   "core-views.flow.verify_add": "Verify and add",
   "core-views.flow.wait": "Wait for the current step to finish",
+  "core-views.joinable.offline": "offline",
+  "core-views.joinable.online": "online",
   "core-views.list_separator": ", ",
   "core-views.local_author": "Local",
   "core-views.marks.alert": {
@@ -197,6 +199,9 @@
   "core-views.marks.others": "Other workspaces: {label}",
   "core-views.marks.unread": "{n} unread",
   "core-views.marks.wait": "{n} waiting for you",
+  "core-views.memberships.folders": "Folders: {names}",
+  "core-views.memberships.home": "Home workspace",
+  "core-views.memberships.noFolders": "No folders shared",
   "core-views.named_error": "{name}: {error}",
   "core-views.new_chat": "New chat",
   "core-views.no_messages": "(No messages yet)",

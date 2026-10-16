@@ -2736,6 +2736,34 @@ data class JobLogView (
 	val said: String? = null
 )
 
+/// A station that could be added to a workspace.
+@Serializable
+data class JoinableStation (
+	/// Its address in its home workspace: what `station.join` names.
+	val station: String,
+	val id: String,
+	val name: String,
+	val emoji: String? = null,
+	val icon: String? = null,
+	/// Its home workspace.
+	val workspace: String,
+	val workspaceName: String,
+	val online: Boolean,
+	/// Its home workspace and whether it is up, in a line: Acme · 在线.
+	val line: String
+)
+
+/// The stations that could be added to a workspace as they are (the `joinable` topic; views/memberships.ts): those
+/// whose home workspace the viewer is an owner or admin of, not in this one already.
+@Serializable
+data class JoinableView (
+	/// The viewer is an owner or admin of another workspace: picking a station of one of those is offered.
+	val offered: Boolean,
+	/// This workspace or one of those has not been read yet: more may come.
+	val loading: Boolean,
+	val items: List<JoinableStation>
+)
+
 /// A chat's history tabs as last left: which are open, which is in front.
 @Serializable
 data class KeptTabs (
@@ -3029,6 +3057,40 @@ data class MarkItem (
 	val at: Long
 )
 
+/// A workspace a station is in.
+@Serializable
+data class StationMembership (
+	val workspace: String,
+	/// The workspace's name.
+	val name: String,
+	/// What the station is called there.
+	val stationName: String,
+	/// Its home workspace, whose owners and admins manage the machine.
+	val home: Boolean,
+	/// The workspace the page is in.
+	val here: Boolean,
+	/// What it has of the machine, in a line: 主 workspace, or the folders pinned for it.
+	val line: String,
+	/// A joined workspace's folders, as the station's managers pinned them for it (none for the home one:
+	/// its own are the overview's drive).
+	val roots: List<DriveRoot>
+)
+
+/// The workspaces a station is in (the `memberships` topic; views/memberships.ts), for its home workspace's owners and admins.
+@Serializable
+data class MembershipsView (
+	/// The viewer is an owner or admin of its home workspace (the one the page is in): only they see this.
+	val manages: Boolean,
+	/// Not read yet.
+	val loading: Boolean,
+	/// Why it could not be read (a station from before several workspaces is in its home one alone).
+	val error: String? = null,
+	/// It may join another workspace (not while a workspace lock holds it to one).
+	val canJoin: Boolean,
+	/// The workspaces it is in, its home one first.
+	val workspaces: List<StationMembership>
+)
+
 /// A part of the global memory, under one of its headings (the text before the first, if any, as 开头).
 @Serializable
 data class MemorySection (
@@ -3255,7 +3317,12 @@ data class StationView (
 	/// or before one is open.
 	val net: StationNet? = null,
 	/// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
-	val time: Map<String, Stamp>? = null
+	val time: Map<String, Stamp>? = null,
+	/// Its home is another workspace (docs/multi-workspace.md): this one it joined, and only the owners and
+	/// admins of that one manage the machine.
+	val joined: Boolean? = null,
+	/// With `joined`: its home workspace's name, when the viewer is in that one too.
+	val home: String? = null
 )
 
 /// A new chat's page (the `newChat` topic): the stations it can start on, the one it starts on, and what it runs

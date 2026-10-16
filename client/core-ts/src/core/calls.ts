@@ -33,6 +33,7 @@ export type Call =
   | { kind: "chatArchive"; op: ops.Request; thread: number | null; session: string; archived: boolean }
   | { kind: "chatChange"; op: ops.Request; thread: number | null; session: string; title: string | null; pinned: boolean | null; keep: boolean }
   | { kind: "chatXshare"; station: string; workspace: string | null; session: string; thread: number | null; to: string[]; write: boolean }
+  | { kind: "stationJoin"; workspace: string; station: string; name: string | null }
   | { kind: "chatSend"; station: string; thread: number; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number; width?: number; height?: number }[]; quotes: unknown; client: string | null }
   | { kind: "chatCreate"; station: string; ask: Record<string, unknown> }
   | { kind: "chatSendTo"; station: string; session: string; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number; width?: number; height?: number }[]; quotes: unknown; client: string | null }
@@ -147,6 +148,7 @@ export function counts(call: Call, name: string): boolean {
     case "chatChange":
     case "chatXshare":
     case "chatXshareAdd":
+    case "stationJoin":
     case "chatPublish":
     case "chatUnpublish":
     case "chatRetry":
@@ -504,6 +506,14 @@ export function parseCall(name: string, params: unknown): Call {
         ["write", "bool", "default"],
       ]);
       return { kind: "chatXshare", station: p.station as string, workspace: p.workspace as string | null, session: p.session as string, thread: p.thread as number | null, to: [...new Set(p.to as string[])], write: p.write as boolean };
+    }
+    case "station.join": {
+      const p = read(params, [
+        ["workspace", S, "req"],
+        ["station", S, "req"],
+        ["name", S, "opt"],
+      ]);
+      return { kind: "stationJoin", workspace: p.workspace as string, station: p.station as string, name: p.name as string | null };
     }
     case "chat.ref": {
       const p = read(params, [

@@ -2720,6 +2720,34 @@ export interface JobLogView {
 	said?: string;
 }
 
+/** A station that could be added to a workspace. */
+export interface JoinableStation {
+	/** Its address in its home workspace: what `station.join` names. */
+	station: string;
+	id: string;
+	name: string;
+	emoji?: string;
+	icon?: string;
+	/** Its home workspace. */
+	workspace: string;
+	workspaceName: string;
+	online: boolean;
+	/** Its home workspace and whether it is up, in a line: Acme · 在线. */
+	line: string;
+}
+
+/**
+ * The stations that could be added to a workspace as they are (the `joinable` topic; views/memberships.ts): those
+ * whose home workspace the viewer is an owner or admin of, not in this one already.
+ */
+export interface JoinableView {
+	/** The viewer is an owner or admin of another workspace: picking a station of one of those is offered. */
+	offered: boolean;
+	/** This workspace or one of those has not been read yet: more may come. */
+	loading: boolean;
+	items: JoinableStation[];
+}
+
 /** A chat's history tabs as last left: which are open, which is in front. */
 export interface KeptTabs {
 	tabs: string[];
@@ -3000,6 +3028,40 @@ export interface MarkItem {
 	at: number;
 }
 
+/** A workspace a station is in. */
+export interface StationMembership {
+	workspace: string;
+	/** The workspace's name. */
+	name: string;
+	/** What the station is called there. */
+	stationName: string;
+	/** Its home workspace, whose owners and admins manage the machine. */
+	home: boolean;
+	/** The workspace the page is in. */
+	here: boolean;
+	/** What it has of the machine, in a line: 主 workspace, or the folders pinned for it. */
+	line: string;
+	/**
+	 * A joined workspace's folders, as the station's managers pinned them for it (none for the home one:
+	 * its own are the overview's drive).
+	 */
+	roots: DriveRoot[];
+}
+
+/** The workspaces a station is in (the `memberships` topic; views/memberships.ts), for its home workspace's owners and admins. */
+export interface MembershipsView {
+	/** The viewer is an owner or admin of its home workspace (the one the page is in): only they see this. */
+	manages: boolean;
+	/** Not read yet. */
+	loading: boolean;
+	/** Why it could not be read (a station from before several workspaces is in its home one alone). */
+	error?: string;
+	/** It may join another workspace (not while a workspace lock holds it to one). */
+	canJoin: boolean;
+	/** The workspaces it is in, its home one first. */
+	workspaces: StationMembership[];
+}
+
 /** A part of the global memory, under one of its headings (the text before the first, if any, as 开头). */
 export interface MemorySection {
 	title: string;
@@ -3240,6 +3302,13 @@ export interface StationView {
 	net?: StationNet;
 	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
 	time?: Record<string, Stamp>;
+	/**
+	 * Its home is another workspace (docs/multi-workspace.md): this one it joined, and only the owners and
+	 * admins of that one manage the machine.
+	 */
+	joined?: boolean;
+	/** With `joined`: its home workspace's name, when the viewer is in that one too. */
+	home?: string;
 }
 
 /**

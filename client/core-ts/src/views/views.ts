@@ -34,6 +34,7 @@ import { admin, sources as adminSources } from "./admin.ts";
 import { attention, choices, find, models, runnableOn, runtimes } from "./models.ts";
 import * as brief from "./brief.ts";
 import * as xshare from "./xshare.ts";
+import * as memberships from "./memberships.ts";
 import * as publish from "./publish.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -68,7 +69,8 @@ export const chatDerive: Derive = {
 };
 
 /// A station of a scope, as the workspace lists it.
-export type StationInfo = { address: string; id: string; name: string; emoji: string | null; icon: string | null; online: boolean; lastSeen: J; version: J };
+/// `joined`: the station's home is another workspace (docs/multi-workspace.md), this one it joined.
+export type StationInfo = { address: string; id: string; name: string; emoji: string | null; icon: string | null; online: boolean; lastSeen: J; version: J; joined: boolean };
 
 /// Whether a station is taken for down: its link found it so, or — not found out yet this time — it was, last.
 export function down(link: J): boolean {
@@ -294,6 +296,8 @@ export type ViewsEnv = {
   xshareAsked?: (station: string, session: string) => xshare.Asked | undefined;
   /// A chat's snapshot being revoked here (`chat.unpublish`) and not answered yet.
   revoking?: (station: string, id: string) => boolean;
+  /// The name of the home workspace of a station a workspace joined, when the viewer is in it (memberships.ts).
+  homeName?: (workspace: string, id: string) => string | null;
 };
 
 /// The views' environment in a core.
@@ -315,6 +319,7 @@ export function envOf(core: Inner): ViewsEnv {
     places: () => xshare.places(core),
     xshareAsked: (station, session) => xshare.asked(core, station, session),
     revoking: (station, id) => publish.revoking(core, station, id),
+    homeName: (workspace, id) => memberships.homeName(core, workspace, id),
     relayName: (host) => {
       for (const account of core.accounts.list()) {
         const names = get(core.data.record("me", account.sub), "relay_names");
@@ -613,7 +618,7 @@ export class Views implements Owner {
       const id = str(get(s, "id"));
       if (id === null) return [];
       const address = `${scope}/${id}`;
-      return [{ address, id, name: str(get(s, "name")) ?? id, emoji: str(get(s, "emoji")) || null, icon: str(get(s, "icon")) || null, online: !down(this.link(address)), lastSeen: get(s, "last_seen") ?? null, version: get(s, "version") ?? null }];
+      return [{ address, id, name: str(get(s, "name")) ?? id, emoji: str(get(s, "emoji")) || null, icon: str(get(s, "icon")) || null, online: !down(this.link(address)), lastSeen: get(s, "last_seen") ?? null, version: get(s, "version") ?? null, joined: get(s, "joined") === true }];
     });
   }
 
@@ -1115,6 +1120,7 @@ export class Views implements Owner {
         host,
         net: net === undefined ? null : present.net(net, (h) => this.relayName(h)),
         betaOffered: betaOffered(overview, () => this.#betaOf(scope)),
+        ...(s.joined ? { joined: true, home: this.#core.homeName?.(scope, s.id) ?? null } : {}),
       };
     });
     return { ok: items };

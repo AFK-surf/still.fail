@@ -46,6 +46,7 @@ import { Asks } from "./asks.ts";
 import { Adb } from "./adb.ts";
 import { envOf, Views } from "./views/views.ts";
 import * as xshare from "./views/xshare.ts";
+import * as memberships from "./views/memberships.ts";
 import * as publish from "./views/publish.ts";
 import * as lockCalls from "./views/lock.ts";
 import { isObject } from "./util.ts";
@@ -197,6 +198,7 @@ export class Core {
       inner.viewCalls = new ViewCalls(inner, inner.views);
       inner.viewCalls.install();
       xshare.install(inner);
+      memberships.install(inner);
       publish.install(inner);
       lockCalls.install(inner);
       inner.attention = new Attention(inner, yield* Attend.load(inner.host));

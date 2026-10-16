@@ -192,6 +192,8 @@ notices are only of the workspace the viewer is in (attend.ts).
 | `notices` | `workspace?` | what a person hears about while the client runs: chats of theirs that want them (docs/notifications.md); a workspace's, or every one's (each `Notice` names its `workspace` and `station` address) |
 | `notify` | `workspace?` | notifications on this device: on or off, asked, whether to hold pushes, the notices to show now (docs/notifications.md), only the workspace's for a page in one |
 | `adbShare` | — | this phone's adb as lent to a station's agents (`AdbShareView`, adb.ts; docs/adb-share.md): whether it is and to which, how the offer goes (`phase`), how the station's adb holds the phone (`adb`, `serial`, `message`), until when, the tunnels open now. Kept in memory only |
+| `joinable` | `workspace` | the stations 添加 station offers to add to the workspace as they are (`JoinableView`, views/memberships.ts; docs/multi-workspace.md): those of the viewer's other workspaces whose home workspace (the cloud does not list them there as `joined`) the viewer is an owner or admin of, not in this one already, each with its address in its home workspace and a line (`甲 · 在线`); `offered` while the viewer manages another workspace at all, `loading` while one of them is not read. From what is held of the workspaces only |
+| `memberships` | `station` | the workspaces the station is in (`MembershipsView`): its `GET /workspaces`, each joined one with the folders pinned for it (`GET /drive`'s `joined`), its home one first. Only for the owners and admins of its home workspace (`manages`: the page is in that one, and the viewer manages it); read while a page shows it, kept by its address; again after `station.join`, and the folders as `drive.setRoots` with `workspace` answers. A station from before several workspaces says so (`error`) |
 
 ```jsonc
 // live
@@ -344,7 +346,7 @@ the views.
 | View | Params | Value |
 | --- | --- | --- |
 | `chats` | `scope`, `mine` | the sidebar: `{ me, stations, loading, days }`; every station's rows side by side |
-| `stations` | `scope` | every station of the scope, each with its link, overview, host and usable models |
+| `stations` | `scope` | every station of the scope, each with its link, overview, host and usable models; one the workspace joined (its home is another: docs/multi-workspace.md) says so, `joined`, with its home's name, `home`, when the viewer is in that one too |
 | `connects` | `scope`, `mine` | every connect of every online station: `{ me, items: [{ station, stationName, connect }], loading }`; with `mine`, those whose `createdBy.id` is me |
 | `chat` | `station`, and `thread` (id) or `session` (key) | an item's page: `{ me, thread, title, people, agents, messages, more, outbox, link }` |
 | `archive` | `scope` | the archive: `{ days, errors, loading, note }`, every online station's archived chats newest first by the day they were archived |
@@ -486,6 +488,7 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `adb.stop` | — | — ; lent no longer |
 | `adb.pair` | `code` | `{ message }`: the station's adb pairs with the phone through its pairing port |
 | `adb.grant` | — | `{ message }`: the station's adb grants the app `WRITE_SECURE_SETTINGS`, to turn Wireless debugging on itself |
+| `station.join` | `workspace`, `station` (its address in its home workspace), `name?` (its name there, by default) | `{ joined }`: the station added to `workspace` as it is (docs/multi-workspace.md): an enrollment made there as the account that reaches it, then the station's `POST /workspaces/join {token}` over its home workspace's link; the accounts read again, so it is listed there, and its `memberships`. A refusal is said in words: a station from before (404), a cloud from before (the station says it cannot yet), a workspace lock, the plan's limit |
 
 A UI never makes a request of a station or still.fail cloud itself (no method, no
 path): it names what it wants done, and the core knows the request that does it
@@ -505,7 +508,8 @@ thread, else its session), `chats.archived`,
 `profile.useMachineLogin`, `profile.put`, `profile.delete`, `profile.quota`,
 `profile.check`, `profile.login`, `profile.cancelLogin`, `profile.loginCode`,
 `login.new`, `login.code`, `login.drop`, `job.get`, `job.log`, `job.stop`,
-`memory.get`, `software.update`, `software.check`, `software.channel`. still.fail cloud's take
+`memory.get`, `software.update`, `software.check`, `software.channel`, `drive.setRoots` (with `workspace`, the folders
+of a workspace the station joined: offered only where `memberships` lists one). still.fail cloud's take
 `account`: `workspace.create`, `workspace.rename`, `workspace.setRelays`, `workspace.delete`,
 `workspace.invite`, `workspace.addMembers`, `workspace.removeAdded`,
 `workspace.revokeInvitation`, `workspace.setRole`, `workspace.removeMember`,
@@ -559,7 +563,7 @@ The core's modules (`client/core-ts/src`):
 - `entries.ts` — a thread's entries merged into messages (edits applied): the one place that does it.
 - `workspace.ts` — the workspaces, each with what is its own. `notices.ts`, `attend.ts` (`client.focus`, `notify`), `status.ts`, `pill.ts`, `doing.ts`, `adb.ts`.
 - `activity.ts`, `history.ts`, `present.ts`, `format.ts`, `decisions.ts`, `jobs.ts`, `looks.ts`, `changelog.ts` — what the clients show, decided once for every client.
-- `views/` — the view topics (chats, chat, stations, decisions, usage, admin…), and `views/local.ts`, the local overlays (outbox, pending chats, renames and pins under way).
+- `views/` — the view topics (chats, chat, stations, decisions, usage, admin…; `views/memberships.ts`, a station in several workspaces), and `views/local.ts`, the local overlays (outbox, pending chats, renames and pins under way).
 - `choose.ts`, `forms.ts` — the new-chat and model pickers, the forms (automatic decisions, Slack tokens, the connect wizard, adding a profile).
 - `trace.ts` — traces of user actions (docs/telemetry.md). `testing.ts` — a host for tests.
 
