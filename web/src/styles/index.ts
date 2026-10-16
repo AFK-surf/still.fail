@@ -34,6 +34,7 @@ import "../pages/ChatPage.css.ts";
 import "../Chat.css.ts";
 import "../Publish.css.ts";
 import "../Decisions.css.ts";
+import "../MachineLogins.css.ts";
 import "../DecisionDesk.css.ts";
 import "../DecisionsIdle.css.ts";
 import "../Connection.css.ts";

@@ -7,7 +7,8 @@
 // screen lists them all and shows the one picked (DecisionDesk.tsx), with those two as buttons.
 //
 // A text card (`card.type` text) has a field to write in and a send button where the options would be
-// (decision.reply); a card of a type this page does not know, only a way to its chat, to answer there.
+// (decision.reply); a login card (`login`), the login an agent started (MachineLogins.tsx LoginCard); a card of a type
+// this page does not know, only a way to its chat, to answer there.
 //
 // Everything said goes through the core's calls (decision.answer / reply / defer / dismiss); what is under way shows
 // on its button (doing.ts), what failed in a toast (useAct).
@@ -15,7 +16,7 @@ import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMou
 import type { ChatMessage, DecisionItem, DecisionOption, DecisionsView, MessageCard } from "./core/shapes.ts";
 import { useCall, useTopic } from "./core/react.ts";
 import { CoreError, useApi, useStationViews } from "./api.ts";
-import { StationContext, stationBase, useStation, type Station } from "./station.tsx";
+import { scopeOf, StationContext, stationBase, useStation, type Station } from "./station.tsx";
 import { doingMatches, failed, useDoingList } from "./doing.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { reducedMotion } from "@stillfail/ui/motion.ts";
@@ -23,6 +24,7 @@ import { useSettling } from "./settling.tsx";
 import { ComposerView, StaticMessage } from "./Chat.tsx";
 import { DecisionsIdle } from "./DecisionsIdle.tsx";
 import { VaultCard } from "./VaultApproval.tsx";
+import { LoginCard } from "./MachineLogins.tsx";
 import { useDraft, type Draft } from "./draft.ts";
 import { MobileComposer, type HostComposer } from "./mobile/ChatHost.tsx";
 import * as css from "./Decisions.css.ts";
@@ -151,9 +153,15 @@ export function MessageDecision({ message: m, thread }: { message: ChatMessage; 
         {m.card?.vault ? <VaultCard address={station} id={m.card.vault} />
           : thread !== null && cardType(m.card, m.options) === "options" && !!m.options?.length &&
           <DecisionOptions station={station} thread={thread} seq={m.seq} options={m.options} />}
+        {m.card?.type === "login" && m.card.login && <LoginCard station={loginStation(station, m.card)} id={m.card.login} />}
       </> : d?.text ? <p className={css.settledLine}>{d.text}</p> : null}
     </div>
   );
+}
+
+/** Where a login card's login is: the chat's station, or another of its workspace (the card's `station`, its key). */
+export function loginStation(chatStation: string, card: MessageCard): string {
+  return card.station ? `${scopeOf(chatStation)}/${card.station}` : chatStation;
 }
 
 export const keyOf = (d: DecisionItem) => `${d.station}/${d.thread}/${d.seq}`;
@@ -372,6 +380,7 @@ export function DecisionPicks({ d, onAnswered, onOpen }: { d: DecisionItem; onAn
   const type = cardType(d.card, d.options);
   if (type === "options") return <DecisionOptions station={d.station} thread={d.thread} seq={d.seq} options={d.card?.options ?? d.options} onPick={onAnswered} />;
   if (type === "text") return null;
+  if (type === "login" && d.card?.login) return <LoginCard station={loginStation(d.station, d.card)} id={d.card.login} />;
   return <button type="button" className={css.elsewhere} onClick={onOpen}>{t("web-main.decisions.elsewhere")}</button>;
 }
 

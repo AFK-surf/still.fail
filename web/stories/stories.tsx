@@ -25,7 +25,9 @@ import {
 import { Archive, Bell, Close, Copy, Download, Edit, Folder, Plus, Refresh, Search, Trash } from "@stillfail/ui/icons.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { AT, apk, clips, folder, HISTORY, JOIN_REFUSED, JOINABLE, MEMBERSHIPS, note, NOTE, novel, picture } from "./data.ts";
+import { AT, apk, clips, folder, HISTORY, JOIN_REFUSED, JOINABLE, LOGINS, loginsView, MEMBERSHIPS, note, NOTE, novel, picture, SCREENS, VIEWER_LOGIN } from "./data.ts";
+import { LoginCard, LoginPanel, LoginsSection } from "../src/MachineLogins.tsx";
+import * as pagesCss from "../src/styles/pages.css.ts";
 import type { DemoExtension } from "../src/demo/mount.tsx";
 import type { ShareInView } from "../src/core/shapes.ts";
 import type { Shared } from "../src/shareIn.ts";
@@ -152,6 +154,32 @@ const sharing = (state: "kept" | "new" | "none" | "loading" | "search"): Pick<St
     },
   },
 });
+/**
+ * The demo's station's logins (data.ts LOGINS, docs/remote-login.md): `canLogin` false as a read-only member sees them,
+ * `canRelay` false as a web page has them (no callback taken), `old` a station from before them; `card`, the chat's
+ * first agent message carrying that login's card.
+ */
+const logins = ({ canLogin = true, canRelay = true, old = false, card }: { canLogin?: boolean; canRelay?: boolean; old?: boolean; card?: string } = {}): DemoExtension => ({
+  topic: (t) => t.topic === "machineLogins" ? (old ? { ...loginsView(), supported: false, services: [], logins: [] } : loginsView(canLogin, canRelay))
+    : t.topic === "machineLogin" ? (canLogin ? LOGINS[t.id] ?? null : t.id === "device" ? VIEWER_LOGIN : LOGINS[t.id] ?? null)
+    : t.topic === "machineLoginScreen" ? SCREENS[t.id] ?? null
+    : undefined,
+  call: (name) => (name === "machineLogin.start" ? { id: "device" } : name.startsWith("machineLogin.") ? null : undefined),
+  then: (t, value) => {
+    if (!card || t.topic !== "chat" || !value) return undefined;
+    const chat = value as { messages: { authorKind: string; card?: unknown }[] };
+    const first = chat.messages.findIndex((m) => m.authorKind === "agent");
+    return { ...chat, messages: chat.messages.map((m, i) => (i === first ? { ...m, card: { type: "login", login: card } } : m)) };
+  },
+});
+/** A login's panel over the page, on the demo's station. */
+const loginPanel = (id: string) => () => stage(<LoginPanel station="demo/local" id={id} onClose={noop} />);
+/** A chat's login cards, one for each login, as an agent's message has them. */
+const loginCards = (ids: string[]) => () => stage(
+  <div style={{ display: "grid", alignContent: "start", gap: 4, padding: 40, maxWidth: 720 }}>{ids.map((id) => <LoginCard key={id} station="demo/local" id={id} />)}</div>,
+);
+/** The station page's 登录, as the page lays it out. */
+const loginsSection = () => stage(<div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><LoginsSection station="demo/local" /></div>);
 const ANTHROPIC = { id: "anthropic", name: "Anthropic" };
 const OPENAI = { id: "openai", name: "OpenAI" };
 const noop = () => undefined;
@@ -378,6 +406,31 @@ export const stories: Story[] = [
   { id: "app-share-none", group: "应用", title: "分享进来 · 没有 chat 也没有 station", app: true, ...sharing("none") },
   { id: "app-share-loading", group: "应用", title: "分享进来 · 加载中", app: true, ...sharing("loading") },
   { id: "app-share-search", group: "应用", title: "分享进来 · 搜索 chat", app: true, ...sharing("search"), steps: [{ text: "搜索" }, { key: "N" }, { key: "A" }, { key: "S" }] },
+
+  // ── a station's logins (docs/remote-login.md) ──
+  { id: "logins-section", group: "登录", title: "station 页 · 登录", render: loginsSection, demo: logins() },
+  { id: "logins-section-command", group: "登录", title: "station 页 · 运行登录命令", render: loginsSection, demo: logins(), steps: [{ text: "运行登录命令…" }] },
+  { id: "logins-section-readonly", group: "登录", title: "station 页 · 只读成员", render: loginsSection, demo: logins({ canLogin: false }) },
+  { id: "logins-section-old", group: "登录", title: "station 页 · 旧 station", render: loginsSection, demo: logins({ old: true }) },
+  { id: "app-station-logins", group: "登录", title: "station 页 · 在页面里", app: true, demo: logins(), steps: [{ click: '[aria-label^="Station"]' }] },
+  { id: "login-loopback", group: "登录", title: "面板 · 回环（桌面）", render: loginPanel("loopback"), demo: logins() },
+  { id: "login-loopback-web", group: "登录", title: "面板 · 回环（网页）", render: loginPanel("loopback"), demo: logins({ canRelay: false }) },
+  { id: "login-loopback-listening", group: "登录", title: "面板 · 回环 · 等浏览器回来", render: loginPanel("listening"), demo: logins() },
+  { id: "login-device", group: "登录", title: "面板 · 设备码", render: loginPanel("device"), demo: logins() },
+  { id: "login-device-again", group: "登录", title: "面板 · 重新登录", render: loginPanel("again"), demo: logins() },
+  { id: "login-open", group: "登录", title: "面板 · 打开网址", render: loginPanel("open"), demo: logins() },
+  { id: "login-terminal", group: "登录", title: "面板 · 终端在等输入", render: loginPanel("terminal"), demo: logins() },
+  { id: "login-password", group: "登录", title: "面板 · 终端要密码", render: loginPanel("password"), demo: logins() },
+  { id: "login-done", group: "登录", title: "面板 · 已登录", render: loginPanel("done"), demo: logins() },
+  { id: "login-failed", group: "登录", title: "面板 · 失败", render: loginPanel("failed"), demo: logins() },
+  { id: "login-timeout", group: "登录", title: "面板 · 超时", render: loginPanel("timeout"), demo: logins() },
+  { id: "login-readonly", group: "登录", title: "面板 · 只读成员", render: loginPanel("device"), demo: logins({ canLogin: false }) },
+  { id: "login-cards", group: "登录", title: "对话里的卡片", render: loginCards(["loopback", "device", "open", "terminal", "done", "failed"]), demo: logins() },
+  { id: "login-cards-web", group: "登录", title: "对话里的卡片 · 网页", render: loginCards(["loopback", "device"]), demo: logins({ canRelay: false }) },
+  { id: "app-chat-login-card", group: "登录", title: "对话 · 登录卡片", app: true, demo: logins({ card: "device" }) },
+  { id: "app-chat-login-panel", group: "登录", title: "对话 · 点卡片打开面板", app: true, demo: logins({ card: "device" }), steps: [{ click: "[data-login-card]" }] },
+  { id: "phone-chat-login-card", group: "登录", title: "手机 · 对话里的卡片", app: true, phone: true, demo: logins({ card: "terminal" }) },
+  { id: "phone-login-sheet", group: "登录", title: "手机 · 登录面板", app: true, phone: true, demo: logins({ card: "terminal" }), steps: [{ click: "[data-login-card]" }] },
 
   // ── settings ──
   { id: "settings-appearance", group: "设置", title: "外观", app: true, steps: [{ click: '[aria-label="设置"]' }] },

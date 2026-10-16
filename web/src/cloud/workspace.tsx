@@ -2,7 +2,7 @@
 // place. The core reaches each station and puts the workspace's views
 // together (docs/client-core.md); a page opened from the sidebar talks to the
 // station the item belongs to (StationContext).
-import { StationSettings, StationsFirst, StationsNav, useStationsSide } from "./StationPage.tsx";
+import { stationLoginPage, StationSettings, StationsFirst, StationsNav, useStationsSide } from "./StationPage.tsx";
 import { ShareInPanel } from "../ShareIn.tsx";
 import { Check, ChevronsUpDown, Plus, Settings, UserPlus } from "@stillfail/ui/icons.tsx";
 import { NewChat } from "../NewChat.tsx";
@@ -47,7 +47,7 @@ import { NavAction, NavList, NavItem, NavTop } from "../SidebarList.tsx";
 import { SecurityOpen, SecurityPrompt, SecuritySettings, SecurityWaiting, useLock } from "./Security.tsx";
 import { VaultSettings } from "./Vault.tsx";
 import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, JoinExistingLink, MemoryDocSettings, MemorySettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
-import { PeopleContext, profilesPage, StationContext, stationBase, useSidebarMode, useStationList, type Station } from "../station.tsx";
+import { PeopleContext, profilesPage, scopeOf, StationContext, stationBase, useSidebarMode, useStationList, type Station } from "../station.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, Select, Tip } from "../ui.tsx";
 import { toMadeChat } from "../Chat.tsx";
@@ -261,6 +261,8 @@ function StationPages({ stations }: { stations: Station[] | undefined }) {
         <Route path="screen/:id" element={<ScreenPage />} />
         {/* A station's 共享调试 is the Android app's (its agent links here: the Rust station's adb.rs). */}
         <Route path="adb" element={<Empty><p>{t("web-pages.workspace.adbOnPhone")}</p></Empty>} />
+        {/* A login's link, as its agent posts it (docs/remote-login.md): the station's page with its panel open. */}
+        <Route path="login/:login" element={<LoginLink station={station} />} />
         {/* One Profile page for the workspace: a station's own list is it. */}
         <Route path="settings/accounts" element={<Navigate to={profilesPage(station)} replace />} />
         <Route path="settings/accounts/:id" element={<AccountPage />} />
@@ -282,6 +284,12 @@ function Bare({ entry, children }: { entry: WorkspaceEntry; children: ReactNode 
       {children}
     </div>
   );
+}
+
+/** `login/<id>` of a station: its page, the login's panel open over it. */
+function LoginLink({ station }: { station: Station }) {
+  const { login = "" } = useParams();
+  return <Navigate to={stationLoginPage(scopeOf(station.address), station.id, login)} replace />;
 }
 
 /**

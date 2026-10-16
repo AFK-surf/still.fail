@@ -3,7 +3,7 @@
 // profiles, connects, folders lent), its software and the machine itself. Elsewhere (no rail, or Station not in it) the
 // settings' list of cards stays, each name opening this page.
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
-import { Link, Navigate, NavLink, useParams } from "react-router";
+import { Link, Navigate, NavLink, useParams, useSearchParams } from "react-router";
 import { stamp, useMemberships, useStations, type StationView } from "../api.ts";
 import { useGo } from "../go.ts";
 import { MeterChip, MeterDials } from "../components.tsx";
@@ -21,6 +21,7 @@ import { HostDetails, joinedText, Net, problems, state, useLong } from "./Statio
 import { MarkPick } from "./MarkPick.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
 import { ScreensSection } from "../screen/ScreenList.tsx";
+import { LoginPanel, LoginsSection } from "../MachineLogins.tsx";
 import { NavAction, NavList, NavItem, NavLine, NavTop, navFill } from "../SidebarList.tsx";
 import { AddStationDialog, useStationEdits, useWorkspace } from "./settings.tsx";
 import type { WorkspaceEntry } from "./workspace.tsx";
@@ -41,6 +42,8 @@ export function useStationsSide(): boolean {
 }
 
 export const stationPage = (workspace: string, id: string) => `/w/${workspace}/settings/stations/${encodeURIComponent(id)}`;
+/** A station's page with a login's panel open over it (the link agents post: docs/remote-login.md). */
+export const stationLoginPage = (workspace: string, id: string, login: string) => `${stationPage(workspace, id)}?login=${encodeURIComponent(login)}`;
 
 /** The sidebar's list: adding one in the band over it (a manager), then each station, how it is at its row's end. */
 export function StationsNav({ entry, top }: { entry: WorkspaceEntry; top?: ReactNode }) {
@@ -110,6 +113,9 @@ export function StationSettings({ entry }: { entry: WorkspaceEntry }) {
   const edits = useStationEdits(view, entry.account, listed ?? []);
   const found = listed?.find((s) => s.id === id);
   const back = `/w/${entry.id}/settings/stations`;
+  // A login's link (`/w/<ws>/s/<station>/login/<id>`, workspace.tsx) comes here with it: its panel open over the page.
+  const [search, setSearch] = useSearchParams();
+  const login = search.get("login");
   if (!listed) return <Loading label={t("web-pages.settings.workspace.loading")} />;
   // Removed (or a link from before): the list, or the first of them.
   if (!found) return <Navigate to={back} replace />;
@@ -120,6 +126,7 @@ export function StationSettings({ entry }: { entry: WorkspaceEntry }) {
       <Head s={s} manager={manager} edits={edits} />
       {edits.dialogs}
       <Body s={s} manager={manager} />
+      {login && <LoginPanel key={login} station={s.station} id={login} onClose={() => setSearch({}, { replace: true })} />}
     </div>
   );
 }
@@ -207,6 +214,8 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
           </ul>
         </Section>
       )}
+      {/* The command-line tools its agents use, logged in here for every chat (docs/remote-login.md). */}
+      <LoginsSection station={s.station} />
       {o && o.connects.length > 0 && (
         <Section title={<>{t("web-pages.settings.nav.connects")}<span className={settingsCss.titleCount}>{o.connects.length}</span></>}>
           <ul className={pagesCss.list}>

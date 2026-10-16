@@ -35,6 +35,11 @@ export type Topic =
   | { topic: "jobs"; station: string }
   // A job's last `lines` lines of output and when it last grew, current as it grows.
   | { topic: "jobLog"; station: string; job: string; lines: number }
+  // A station's logins to its command-line tools (docs/remote-login.md): the services it knows and its logins, one
+  // login as it stands, and that login's terminal (only while it is looked at).
+  | { topic: "machineLogins"; station: string }
+  | { topic: "machineLogin"; station: string; id: string }
+  | { topic: "machineLoginScreen"; station: string; id: string }
   | { topic: "loginSessions"; account: string }
   // `feedback`: bug reports about still.fail (a cloud from before has none: an error).
   | { topic: "admin"; account: string; list: "users" | "workspaces" | "invite-codes" | "feedback" }

@@ -79,6 +79,8 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="s/:station/chats/:chat/run/:agent" element={<InStation stations={stations}><RunSettingsScreen /></InStation>} />
       <Route path="s/:station/chats/:chat/services/:service" element={<InStation stations={stations}><PreviewScreen /></InStation>} />
       <Route path="s/:station/overview" element={<InStation stations={stations}><StationScreen /></InStation>} />
+      {/* A login's link, as its agent posts it (docs/remote-login.md): the station's page, the login's sheet over it. */}
+      <Route path="s/:station/login/:login" element={<InStation stations={stations}><StationScreen /></InStation>} />
       <Route path="s/:station/memory" element={<InStation stations={stations}><MemoryScreen /></InStation>} />
       <Route path="s/:station/memory/global" element={<InStation stations={stations}><MemoryDocScreen /></InStation>} />
       <Route path="s/:station/memory/skill/:name" element={<InStation stations={stations}><MemoryDocScreen /></InStation>} />

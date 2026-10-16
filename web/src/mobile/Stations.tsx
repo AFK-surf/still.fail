@@ -3,10 +3,13 @@ import { useAct } from "@stillfail/ui/toast.tsx";
 // The workspace's stations on a narrow screen, as the Android app has them (apps/android/…/screens/Stations.kt): each
 // with the buddy's face for its state and its load as rings; one station's page is the machine (its load, network,
 // versions), with how many connects and profiles run on it (settings' lists have them, ./Settings.tsx).
-import { useReady } from "../core/react.ts";
+import { useCall, useReady } from "../core/react.ts";
 import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
+import { openLoginSheet, useMachineLogins, useStartLogin } from "../MachineLogins.tsx";
+import type { MachineService } from "../core/shapes.ts";
+import * as loginsCss from "../MachineLogins.css.ts";
 import { useJoinable, useMemberships, useStations, type StationView } from "../api.ts";
 import type { Host, JoinableView, StationNet } from "../core/shapes.ts";
 import { illustrationUrl } from "../brand.tsx";
@@ -264,6 +267,10 @@ export function StationScreen() {
   const stations = useStations(app.entry.id);
   const s = stations.value?.find((x) => x.id === id);
   const manager = useManager();
+  // A login's link (`s/<station>/login/<id>`, docs/remote-login.md): its sheet over the page, once.
+  const { login } = useParams();
+  const address = s?.station;
+  useEffect(() => { if (login && address) openLoginSheet(app, { station: address, id: login }); }, [login, address]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className={pagesCss.mScreen}>
       <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s?.reconnecting ? <Reconnecting /> : s ? <span className={barsCss.mNavbarNote}>{[joinedText(s), s.host?.identity || (s.online ? t("web-mobile.stations.online") : t("web-mobile.stations.offline"))].filter(Boolean).join(" · ")}</span> : undefined}
@@ -287,12 +294,58 @@ export function StationScreen() {
           </ListCard>
           {/* Its screens, to see and drive (docs/remote-screens.md). */}
           <ScreensCard station={s.station} />
+          <Logins station={s.station} />
           {manager && !s.joined && <Workspaces s={s} />}
           {s.online && s.overview && <Versions station={s.station} updates={s.overview.updates} manager={manager && !s.joined} beta={s.betaOffered ?? false} />}
           <div style={{ height: 30 }} />
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The command-line tools its agents use, logged in on it for every chat (as the wide screen's station page,
+ * ../MachineLogins.tsx LoginsSection): each service, how it stands and logging in; a command of one's own to run.
+ */
+function Logins({ station }: { station: string }) {
+  const app = useApp();
+  const view = useMachineLogins(station);
+  const call = useCall();
+  if (!view) return null;
+  return (
+    <>
+      <SectionHeader title={t("web-main.logins.title")} start={24} />
+      <ListCard>
+        {!view.supported ? <ListRow><span className={partsCss.mMuted}>{t("web-main.logins.update")}</span></ListRow> : <>
+          {view.services.map((x) => <LoginRow key={x.id} station={station} s={x} canLogin={view.canLogin} />)}
+          {view.canLogin && <PickRow label={t("web-main.logins.command")} onClick={() => ask(app, {
+            title: t("web-main.logins.command"), value: "", placeholder: t("web-main.logins.commandPlaceholder"), action: t("web-main.logins.run"),
+            // Its sheet says why the station would not; else it gives way to the login's (once it has closed).
+            run: (command) => call("machineLogin.start", { station, command }).then((answer) => {
+              const { id } = answer as { id: string };
+              setTimeout(() => openLoginSheet(app, { station, id }), 0);
+            }),
+          })} />}
+        </>}
+      </ListCard>
+      {view.supported && <p className={loginsCss.phoneLead}>{t("web-main.logins.lead")}</p>}
+    </>
+  );
+}
+
+/** A service: its name over how it stands, logging in (again) at its end where it is installed. */
+function LoginRow({ station, s, canLogin }: { station: string; s: MachineService; canLogin: boolean }) {
+  const app = useApp();
+  const start = useStartLogin(station);
+  const busy = useDoing("machineLogin.start", { station, service: s.id });
+  const go = () => s.login ? openLoginSheet(app, { station, id: s.login })
+    : start({ service: s.id }, t("web-main.logins.startWhat", { name: s.name }), (id) => openLoginSheet(app, { station, id }));
+  return (
+    <ListRow>
+      <span className={loginsCss.phoneRowText}><span className={listsCss.mRowTitle}>{s.name}</span><span className={loginsCss.phoneState}>{s.stateText}</span></span>
+      {canLogin && s.installed && <LinkButton busy={busy} label={s.login ? t("web-main.logins.continue") : s.state === "in" ? t("web-main.logins.relogin") : t("web-main.logins.login")} onClick={go} />}
+    </ListRow>
   );
 }
 
