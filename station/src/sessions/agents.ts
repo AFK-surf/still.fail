@@ -334,17 +334,20 @@ export const AgentsLive = (control: Control) =>
             if (service) events.machineLogins({ service }, { service }, readOnly, `service\0${service.id}`);
           }
         }),
+        // Told: the agent that started it, and each that posted its card (one may post a card for a login under way).
         logins.onEnded((login, starter) => {
+          let carded: string[] = [];
           try {
-            store.closeLoginCards(login.id);
+            carded = store.closeLoginCards(login.id);
           } catch (error) {
             log.warn("logins", "a login's cards were not closed", { login: login.id, error: (error as Error).message });
           }
-          if (!starter.chat) return;
-          try {
-            hub.notify(starter.chat, endedNotice(login, loginLink(starter.chat, login.id)));
-          } catch (error) {
-            log.warn("logins", "the agent that started a login was not told it ended", { login: login.id, error: (error as Error).message });
+          for (const session of new Set([...(starter.chat ? [starter.chat] : []), ...carded])) {
+            try {
+              hub.notify(session, endedNotice(login, loginLink(session, login.id)));
+            } catch (error) {
+              log.warn("logins", "an agent was not told a login ended", { login: login.id, session, error: (error as Error).message });
+            }
           }
         }),
       ];

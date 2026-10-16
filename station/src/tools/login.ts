@@ -115,5 +115,5 @@ export function endedNotice(login: Login, link: string | null): string {
     login.state === "done" ? `is done${login.account ? `: logged in as ${login.account}` : ""}. Carry on with what needed it`
     : login.state === "cancelled" ? "was cancelled. Ask whether it is still wanted before starting another"
     : `failed${login.error ? `: ${login.error.split("\n").slice(-3).join(" / ").replace(/https?:\/\/\S+/g, "<link>")}` : ""}. Start it again if it is still needed`;
-  return `The login you started on this station, ${which}, ${how}.${login.state === "done" ? "" : link ? ` (Its link was ${link}.)` : ""} Its card was closed.`;
+  return `The login on this station you started or posted a card for, ${which}, ${how}.${login.state === "done" ? "" : link ? ` (Its link was ${link}.)` : ""} Its card was closed.`;
 }

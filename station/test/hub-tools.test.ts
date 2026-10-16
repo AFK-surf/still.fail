@@ -418,11 +418,11 @@ test("a login card names its login, and closes for everyone as the login ends", 
   assert.ok((await refused({ to, text: "x", card: { type: "login", login: "a b" } })).includes("a login card names the login"));
   assert.ok((await refused({ to, text: "x", card: { type: "login", login: "abc", station: "studio" } })).includes("card.station"));
   // Another login's end leaves it; its own closes it (nobody answered: withdrawn, as by its agent).
-  assert.equal(r.store.closeLoginCards("abc12"), 0);
+  assert.deepEqual(r.store.closeLoginCards("abc12"), []);
   assert.ok(r.store.pendingCard(thread.id) !== null);
-  assert.equal(r.store.closeLoginCards("abc123"), 1);
+  assert.deepEqual(r.store.closeLoginCards("abc123"), [key], "its agent: told the login ended");
   assert.equal(r.store.pendingCard(thread.id), null);
-  assert.equal(r.store.closeLoginCards("abc123"), 0, "once");
+  assert.deepEqual(r.store.closeLoginCards("abc123"), [], "once");
   await r.close();
 });
 
