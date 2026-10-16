@@ -122,8 +122,10 @@ station 的逻辑在 macOS、Linux、Windows 上是同一份。各平台不同�
 - 所有异步操作不阻塞 Node 主线程（napi async，tokio 多线程运行时）。
 - 缩略图（`src/thumbs.rs`，就是当时 Rust station 的 `thumbs.rs`，`image`/`thumbhash` 及其编解码 crate 钉在它当时的版本上（station/native/mesh/Cargo.lock），产出与 Rust 版逐字节相同）：`thumbnail(image, dir)` → `{path, type}` 或 null；`thumbhash(image, dir?)` → `{hash, width, height}` 或 null，给了 `dir` 且图大于 24 KiB 时用同一次解码在后台线程做缩略图。哪些文件、何时做由 TS（`src/sessions/thumbs.ts`）决定。
 
-## 4. 屏幕助手（`station/native/screen`，可执行文件 `stillfail-screen`，只有 macOS）
+## 4. still.fail Helper（`station/native/helper`，`still.fail Helper.app`，只有 macOS）
 
-本机屏幕作为远程控制的画面源（[remote-screens.md](remote-screens.md)）。Swift 写（ScreenCaptureKit、VideoToolbox、CGEvent 都是系统框架，Swift 里最直接），和 dock 一样由 `scripts/native.ts` 用这台 Mac 的 Xcode 预编译（part `screen`，darwin-arm64），发布时放在 `station/` 里 `mesh.node` 旁边，签名标识 `fail.still.screen`。station（`src/screens/desktop.ts`）每个画面起一个进程：`status` 问权限和主屏，`request` 让 macOS 弹授权框，`view` 在 stdin/stdout 上收发分帧的消息（协议写在 `main.swift` 开头），stdin 关了就退出，所以画面结束、station 退出都会带走它。
+station 在 macOS 上要系统授权的事都放在这个 app 里，眼下是本机屏幕（[remote-screens.md](remote-screens.md)），以后保护目录、摄像头这类也加在这里，共用一个授权身份（bundle id `fail.still.helper`）。为什么是单独的 app：屏幕录制、辅助功能这类授权要进程重启才生效，授权给 station 的启动器就得重启 station；给 helper，只重启 helper。
 
-权限归「负责的进程」：launchd 下是启动器 `stillfail-station`（发布版签了固定标识，授权跨版本保留），桌面 app 里是 app 自己。助手用 `responsibility_get_pid_responsible_for_pid` 找到它，缺权限时 station 告诉人要在系统设置里打开哪个程序（名字和路径）。
+- Swift 写（ScreenCaptureKit、VideoToolbox、CGEvent、SwiftUI 授权窗口），授权窗口照搬 Cue 的 Computer Use，用 `vendor/PermissionFlow`（改动见 vendor/README.md）。`scripts/native.ts` 的 part `helper`（darwin-arm64）用这台 Mac 的 Xcode 编，装进 `still.fail Helper.app`（`Info.plist` 在包目录里，LSUIElement）并 ad hoc 签名；发布时 `station-bundle.sh` 放在 `station/` 里 `mesh.node` 旁边，用 `fail.still.helper` 重签。TCC 按 bundle id 加签名要求记授权，同一证书签的新版本沿用授权。
+- station（`src/helper/app.ts`）先把它拷到 `<data>/helper/`（不在别的 app 里面：桌面 app 里 station 在 still.fail.app 内部；代码变了才重拷，并让旧的退出），再用 `open -n -g --env …` 交给 LaunchServices 启动，这样它自己就是 TCC 的“负责进程”。之后在 `<data>/helper/helper.sock` 上一个连接一个请求：先一行 `{token, op, …}`（token 在 `<data>/helper/token`，0600，station 交接后的新进程照样连得上），op 有 `hello`、`status`、`permissions.show`、`screen.view`（之后这个连接收发画面消息）、`restart`、`quit`，协议写在 `main.swift` 开头。没人连 30 分钟它自己退出，station 停止时让它退出，要用时再起。
+- 授权后：窗口关闭时如果期间有新授权，它用同一个 socket 和 token 重新启动自己；打开画面时发现“授权了但本进程还没生效”也会先重启，station 等它回来再开一次。

@@ -1,31 +1,21 @@
-// This machine's display as a screen source (`desktop`, docs/remote-screens.md): on macOS, a helper process per view
-// (native/screen, `stillfail-screen`) captures the main display with ScreenCaptureKit, encodes H.264 with
-// VideoToolbox and posts input with CGEvent; elsewhere it says it is not supported, and opens nothing.
+// This machine's display as a screen source (`desktop`, docs/remote-screens.md): on macOS, still.fail Helper
+// (helper/app.ts) captures the main display with ScreenCaptureKit, encodes H.264 with VideoToolbox (or a JPEG a
+// picture, for a view that takes no H.264) and posts input with CGEvent, a view a connection to it; elsewhere the desktop says it is not supported, and opens nothing.
 //
-// macOS asks whether a process may capture the screen (Screen Recording) and post input (Accessibility) of the process
-// responsible for it: under launchd, the station's launcher (`stillfail-station`, mesh/target/release in the release);
-// in the desktop app, the app. The helper says which (`status`), and what is missing is told with its name and path.
-// The grants are asked of macOS as they are needed (when a view is opened or listed), never followed: a person turns
-// one on in System Settings, and the next look sees it.
-import { type ChildProcess, execFile, spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+// macOS grants Screen Recording and Accessibility to the helper app. Opening the desktop while one is missing puts the
+// helper's window up on this Mac (once an attempt, the system's own prompt not asked: it would fight the window): a
+// row per grant, Allow opens System Settings with the app to drag into its list. The helper starts itself again once a
+// grant is taken, so the grant is in effect; the station's process is never restarted for it. What is missing, and
+// whether the window is up, is told with the screens (`access`).
+import type net from "node:net";
 import { hostname } from "node:os";
-import { fileURLToPath } from "node:url";
+import type { HelperApp } from "../helper/app.ts";
 import { wall } from "../ops/fibers.ts";
+import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { ScreenRefused } from "./hub.ts";
 import { MacInput } from "./mac-input.ts";
-import type { Frame, FrameConfig, ScreenAccess, ScreenInput, ScreenSource, ScreenView, ViewOptions } from "./source.ts";
-
-/// Where the helper is: STILLFAIL_SCREEN, beside the station's code in a release, or where `swift build` put it.
-export function screenHelper(env: NodeJS.ProcessEnv = process.env): string | null {
-  const candidates = [
-    env.STILLFAIL_SCREEN,
-    fileURLToPath(new URL("./stillfail-screen", import.meta.url)),
-    fileURLToPath(new URL("../../native/screen/.build/arm64-apple-macosx/release/stillfail-screen", import.meta.url)),
-  ];
-  return candidates.find((p) => p && existsSync(p)) ?? null;
-}
+import type { Codec, Frame, FrameConfig, ScreenAccess, ScreenInput, ScreenSource, ScreenView, ViewOptions } from "./source.ts";
 
 /// What the helper's `status` says.
 export type HelperStatus = {
@@ -33,26 +23,55 @@ export type HelperStatus = {
   control: boolean;
   responsible?: { pid: number; path: string; name: string };
   display?: { id: number; width: number; height: number };
+  /// What its running process may do (a grant is had once it starts again).
+  live?: { capture: boolean; control: boolean };
+  /// Whether its window asking for the grants is up.
+  asking?: boolean;
 };
 
 /// A look at the grants is this fresh at most (a list asked for twice at once looks once).
 const FRESH_MS = 2_000;
-/// The helper answers `status` at once; past this it is taken as not there.
-const STATUS_MS = 10_000;
 
 export type DesktopOptions = {
   /// Whether this machine's display can be seen at all (platform.hasDesktopScreen).
   supported: boolean;
-  /// The helper's path (`screenHelper`), null when it is not there.
-  helper: string | null;
+  /// still.fail Helper, null when the release has none.
+  helper: HelperApp | null;
   /// Told when its size or access changed.
   changed: () => void;
   /// Its title (default: the machine's name).
   title?: () => string;
-  /// The side test's measurement of the encoder and the link where Screen Recording is not granted: made-up pictures,
-  /// no capture (the helper's --synthetic). Never set by the station.
+  /// The language of the helper's window (default: the station's).
+  lang?: () => Lang;
+  /// The side test's measurement of the encoder and the link without Screen Recording: made-up pictures, no capture.
+  /// Never set by the station.
   synthetic?: "moving" | "still";
 };
+
+/// The helper's window's words, in `lang` (Permissions.swift; PermissionFlow's panel under `panel`).
+export function windowWords(lang: Lang): Record<string, unknown> {
+  const w = (key: string, args: Record<string, unknown> = {}) => tr(lang, `station.helper.window.${key}`, args);
+  return {
+    title: w("title"),
+    subtitle: w("subtitle"),
+    capture: w("capture"),
+    captureWhy: w("captureWhy"),
+    control: w("control"),
+    controlWhy: w("controlWhy"),
+    allow: w("allow"),
+    done: w("done"),
+    panel: {
+      // String(format:) positions: the app, then the grant.
+      "permission_flow.panel.title": w("drag", { app: "%1$@", grant: "%2$@" }),
+      "permission_flow.panel.step": w("step", { n: "%d" }),
+      "permission_flow.drag.label": w("dragLabel"),
+      "permission_flow.pane.screen_recording": w("capture"),
+      "permission_flow.pane.accessibility": w("control"),
+      "permission_flow.pane.permission": w("grant"),
+      "permission_flow.app.this_app": "still.fail Helper",
+    },
+  };
+}
 
 export class Desktop implements ScreenSource {
   readonly id = "desktop";
@@ -61,8 +80,6 @@ export class Desktop implements ScreenSource {
   #status: HelperStatus | null = null;
   #checked = -Infinity;
   #checking: Promise<void> | null = null;
-  /// macOS's prompts are asked for once a run, as a view is first refused.
-  #asked = false;
   readonly #views = new Set<HelperView>();
 
   constructor(options: DesktopOptions) {
@@ -81,86 +98,92 @@ export class Desktop implements ScreenSource {
     if (!this.#o.supported) return { capture: false, control: false, unsupported: "platform" };
     if (this.#o.helper === null) return { capture: false, control: false, unsupported: "helper" };
     const s = this.#status;
-    const who = s?.responsible?.path ? { app: s.responsible.name, path: s.responsible.path } : {};
-    return { capture: s?.capture ?? false, control: s?.control ?? false, ...who };
+    // Not looked at yet: nothing said.
+    if (s === null) return { capture: true, control: true };
+    const who = s.responsible?.path ? { app: s.responsible.name, path: s.responsible.path } : {};
+    return { capture: s.capture, control: s.control, ...who, ...(s.asking ? { asking: true } : {}) };
   }
 
-  /// The grants and the display as macOS has them now (at most FRESH_MS old, unless `force`).
+  /// The grants and the display as macOS has them now (at most FRESH_MS old, unless `force`); the helper started for it.
   refresh(force = false): Promise<void> {
     const helper = this.#o.helper;
     if (!this.#o.supported || helper === null) return Promise.resolve();
     if (!force && wall.now() - this.#checked < FRESH_MS) return Promise.resolve();
-    this.#checking ??= this.#ask(helper, "status").then(
-      (status) => {
-        this.#checked = wall.now();
-        const before = JSON.stringify(this.#status);
-        this.#status = status;
-        if (JSON.stringify(status) !== before) this.#o.changed();
-      },
-      (error) => log.warn("screens", "the desktop's helper did not answer", { error: (error as Error).message }),
-    ).finally(() => (this.#checking = null));
+    this.#checking ??= helper
+      .request({ op: "status" })
+      .then(
+        (status: HelperStatus) => {
+          this.#checked = wall.now();
+          const before = JSON.stringify(this.#status);
+          this.#status = status;
+          if (JSON.stringify(status) !== before) this.#o.changed();
+        },
+        (error) => log.warn("screens", "still.fail Helper did not answer", { error: (error as Error).message }),
+      )
+      .finally(() => (this.#checking = null));
     return this.#checking;
-  }
-
-  #ask(helper: string, what: "status" | "request"): Promise<HelperStatus> {
-    return new Promise((resolve, reject) => {
-      execFile(helper, [what], { timeout: STATUS_MS, encoding: "utf8" }, (error, stdout) => {
-        if (error) return reject(error);
-        try {
-          resolve(JSON.parse(stdout.trim().split("\n").at(-1) ?? ""));
-        } catch (e) {
-          reject(e as Error);
-        }
-      });
-    });
   }
 
   async open(options: ViewOptions): Promise<ScreenView> {
     const helper = this.#o.helper;
     if (!this.#o.supported) throw new ScreenRefused(501, "station.screen.unsupported", {}, this.access());
     if (helper === null) throw new ScreenRefused(501, "station.screen.noHelper", {}, this.access());
-    if (!options.codecs.includes("h264")) throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264" });
+    // H.264 where it is taken (the hardware's, small); else a JPEG a picture (an agent's view, a client without H.264).
+    const codec: Codec | undefined = options.codecs.includes("h264") ? "h264" : options.codecs.includes("jpeg") ? "jpeg" : undefined;
+    if (codec === undefined) throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264, JPEG" });
     await this.refresh(true);
-    if (!this.#status?.capture && this.#o.synthetic === undefined) {
-      this.#prompt(helper);
-      const access = this.access();
-      throw new ScreenRefused(503, "station.screen.captureOff", { app: access.app || "stillfail-station", path: access.path || "" }, access);
-    }
-    if (!this.#status?.control && this.#o.synthetic === undefined) this.#prompt(helper);
-    const extra = this.#o.synthetic === undefined ? [] : ["--synthetic", this.#o.synthetic];
-    const view = new HelperView(helper, options, this.#status?.display?.id, extra, () => this.#views.delete(view));
-    this.#views.add(view);
-    try {
-      await view.ready;
-    } catch (error) {
-      view.close();
-      if ((error as HelperError).code === "capture") {
-        await this.refresh(true);
-        const access = this.access();
-        throw new ScreenRefused(503, "station.screen.captureOff", { app: access.app || "stillfail-station", path: access.path || "" }, access);
+    const synthetic = this.#o.synthetic !== undefined;
+    if (!synthetic && this.#status === null) throw new ScreenRefused(503, "station.screen.failed", { said: "still.fail Helper did not answer" });
+    if (!synthetic && this.#status !== null && (!this.#status.capture || !this.#status.control)) await this.#ask(helper);
+    if (!synthetic && this.#status?.capture !== true) throw this.#refused();
+    // Granted since the helper started: it starts itself again to have it, and is asked once more.
+    for (let attempt = 0; ; attempt++) {
+      const view = new HelperView(codec, await helper.connect({ op: "screen.view", codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight, ...(this.#status?.display ? { display: this.#status.display.id } : {}), ...(synthetic ? { synthetic: this.#o.synthetic } : {}) }), () => this.#views.delete(view));
+      this.#views.add(view);
+      try {
+        await view.ready;
+        return view;
+      } catch (error) {
+        view.close();
+        const code = (error as HelperError).code;
+        if (code === "restart" && attempt === 0) {
+          await helper.back();
+          continue;
+        }
+        if (code === "capture" || code === "restart") {
+          await this.refresh(true);
+          throw this.#refused();
+        }
+        throw new ScreenRefused(503, "station.screen.failed", { said: (error as Error).message });
       }
-      throw new ScreenRefused(503, "station.screen.failed", { said: (error as Error).message });
     }
-    return view;
   }
 
-  /// macOS's prompts for what is missing (on this machine's screen; they also list the process in System Settings, to
-  /// be turned on there).
-  #prompt(helper: string) {
-    if (this.#asked) return;
-    this.#asked = true;
-    this.#ask(helper, "request").catch((error) => log.warn("screens", "macOS was not asked for the grants", { error: (error as Error).message }));
+  #refused(): ScreenRefused {
+    const access = this.access();
+    return new ScreenRefused(503, "station.screen.captureOff", { app: access.app || "still.fail Helper" }, access);
   }
 
-  /// The station stopping: every view ends.
-  close() {
+  /// The helper's window asking for what is missing, on this Mac, in its language; what it says then.
+  async #ask(helper: HelperApp) {
+    try {
+      await helper.request({ op: "permissions.show", words: windowWords(this.#o.lang?.() ?? stationLang()) });
+      await this.refresh(true);
+    } catch (error) {
+      log.warn("screens", "still.fail Helper's window did not show", { error: (error as Error).message });
+    }
+  }
+
+  /// The station stopping: every view ends, and the helper (resolved once it is gone).
+  close(): Promise<void> {
     for (const view of [...this.#views]) view.close();
+    return this.#o.helper?.quit().catch(() => {}) ?? Promise.resolve();
   }
 }
 
 type HelperError = Error & { code?: string };
 
-/// The helper's messages: a kind byte, the payload's length (4 bytes), the payload (native/screen's main.swift).
+/// The helper's messages: a kind byte, the payload's length (4 bytes), the payload (native/helper's ScreenView.swift).
 export function helperMessage(kind: number, payload: Buffer = Buffer.alloc(0)): Buffer {
   const head = Buffer.alloc(5);
   head[0] = kind;
@@ -168,10 +191,10 @@ export function helperMessage(kind: number, payload: Buffer = Buffer.alloc(0)): 
   return Buffer.concat([head, payload]);
 }
 
-/// One view: a helper process, asked for each frame.
+/// One view: a connection to the helper, asked for each frame.
 class HelperView implements ScreenView {
   readonly ready: Promise<{ width: number; height: number }>;
-  readonly #proc: ChildProcess;
+  readonly #socket: net.Socket;
   readonly #input = new MacInput();
   #carry: Buffer = Buffer.alloc(0);
   #waiting: ((frame: Frame | null) => void)[] = [];
@@ -180,22 +203,17 @@ class HelperView implements ScreenView {
   #settle!: { resolve: (v: { width: number; height: number }) => void; reject: (e: Error) => void };
   readonly #gone: () => void;
 
-  constructor(helper: string, options: ViewOptions, display: number | undefined, extra: string[], gone: () => void) {
+  readonly #codec: Codec;
+
+  constructor(codec: Codec, socket: net.Socket, gone: () => void) {
+    this.#codec = codec;
+    this.#socket = socket;
     this.#gone = gone;
     this.ready = new Promise((resolve, reject) => (this.#settle = { resolve, reject }));
-    const args = ["view", "--max-width", String(options.maxWidth), "--max-height", String(options.maxHeight)];
-    if (display !== undefined) args.push("--display", String(display));
-    args.push(...extra);
-    this.#proc = spawn(helper, args, { stdio: ["pipe", "pipe", "pipe"] });
-    this.#proc.stdin!.on("error", () => this.close());
-    this.#proc.stdout!.on("data", (chunk: Buffer) => this.#heard(chunk));
-    this.#proc.stderr!.on("data", (chunk: Buffer) => log.info("screens", "the desktop's helper said", { text: chunk.toString().trim().slice(0, 500) }));
-    this.#proc.on("error", (error) => {
-      this.#settle.reject(error);
-      this.close();
-    });
-    this.#proc.on("exit", () => {
-      this.#settle.reject(new Error("the desktop's helper ended"));
+    socket.on("data", (chunk: Buffer) => this.#heard(chunk));
+    socket.on("error", () => this.close());
+    socket.on("close", () => {
+      this.#settle.reject(new Error("still.fail Helper ended the view"));
       this.close();
     });
   }
@@ -224,7 +242,7 @@ class HelperView implements ScreenView {
         return;
       }
       case 2:
-        this.#config = { codec: "h264", width: payload.readUInt32BE(0), height: payload.readUInt32BE(4), description: new Uint8Array(payload.subarray(8)) };
+        this.#config = { codec: this.#codec, width: payload.readUInt32BE(0), height: payload.readUInt32BE(4), ...(this.#codec === "h264" ? { description: new Uint8Array(payload.subarray(8)) } : {}) };
         return;
       case 3: {
         const frame: Frame = { key: (payload[0]! & 1) === 1, ts: Number(payload.readBigUInt64BE(1)), data: new Uint8Array(payload.subarray(9)) };
@@ -236,14 +254,14 @@ class HelperView implements ScreenView {
         return;
       }
       case 4:
-        log.info("screens", "the desktop's helper", { said: payload.toString() });
+        log.info("screens", "still.fail Helper", { said: payload.toString() });
         return;
     }
   }
 
   #send(kind: number, payload?: Buffer) {
     if (this.#ended) return;
-    this.#proc.stdin!.write(helperMessage(kind, payload));
+    this.#socket.write(helperMessage(kind, payload));
   }
 
   next(): Promise<Frame | null> {
@@ -265,8 +283,7 @@ class HelperView implements ScreenView {
   close() {
     if (this.#ended) return;
     this.#ended = true;
-    this.#proc.stdin!.end();
-    this.#proc.kill();
+    this.#socket.destroy();
     for (const resolve of this.#waiting.splice(0)) resolve(null);
     this.#gone();
   }
