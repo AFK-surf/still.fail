@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { partsOf, readMessage } from "../scripts/changelog.ts";
+import { partsOf, readMessage, saysNothing } from "../scripts/changelog.ts";
 
 test("a commit's lines and fixes come from each paragraph of trailers, not only git's last one", () => {
   // As 4ae91923 and 36 others were written: the trailers git reads are only Co-Authored-By.
@@ -19,10 +19,11 @@ test("a subject, or prose that only mentions a trailer, says nothing", () => {
   assert.deepEqual(readMessage(prose), { text: [], fixes: [] });
 });
 
-test("a Changelog trailer saying there is nothing to tell is no line", () => {
+test("a Changelog trailer saying there is nothing to tell is refused", () => {
   for (const nothing of ["none", "None.", "n/a", "无", "-"]) {
-    assert.deepEqual(readMessage(`Subject\n\nSession: ember:c-5\nChangelog: ${nothing}\nFixes: FB-7\n`), { text: [], fixes: [7] });
+    assert.deepEqual(saysNothing(`Subject\n\nSession: ember:c-5\nChangelog: ${nothing}\nFixes: FB-7\n`), [nothing]);
   }
+  assert.deepEqual(saysNothing("Subject\n\nChangelog: 修复：none 不再出现在更新提示里\n"), []);
 });
 
 test("the words for other parts do not make a commit reach Android", () => {

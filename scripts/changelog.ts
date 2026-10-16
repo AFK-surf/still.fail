@@ -88,7 +88,8 @@ export function readNotCarried(root: string): RegExp | null {
 }
 
 const TRAILER = /^([A-Za-z][A-Za-z0-9-]*):\s*(.*)$/;
-// `Changelog: none` and the like: the commit says there is nothing to tell (67e764d3 and 3 others showed "none" as news).
+// `Changelog: none` and the like, refused by the commit-msg hook and CI (`--refuse`): a commit with nothing to tell writes
+// no Changelog line (67e764d3 and 3 others put "none" in the update bubble).
 const NOTHING = /^(none|n\/?a|nothing|无|没有|-+)[.。]?$/i;
 
 /**
@@ -105,11 +106,16 @@ export function readMessage(message: string): { text: string[]; fixes: number[] 
     if (!lines.length || !lines.every((l, i) => TRAILER.test(l) || (i > 0 && /^\s/.test(l)))) continue;
     for (const line of lines.join("\n").replace(/\n\s+/g, " ").split("\n")) {
       const [, key, value] = TRAILER.exec(line)!;
-      if (/^changelog$/i.test(key!) && value!.trim() && !NOTHING.test(value!.trim())) text.push(value!.trim());
+      if (/^changelog$/i.test(key!) && value!.trim()) text.push(value!.trim());
       if (/^fixes$/i.test(key!)) for (const fb of value!.matchAll(/FB-?(\d+)/gi)) fixes.push(Number(fb[1]));
     }
   }
   return { text, fixes };
+}
+
+/** The message's Changelog lines that only say there is nothing to tell. */
+export function saysNothing(message: string): string[] {
+  return readMessage(message).text.filter((t) => NOTHING.test(t));
 }
 
 type Notes = Record<string, { text?: string[]; fixes?: number[] }>;
@@ -195,6 +201,15 @@ export function draft(root: string, rev = "HEAD"): string {
 if (import.meta.main) {
   const root = join(import.meta.dirname, "..");
   const [flag, rev] = process.argv[2]?.startsWith("--") ? [process.argv[2], process.argv[3]] : [undefined, process.argv[2]];
+  if (flag === "--refuse") {
+    // A commit message's file (the commit-msg hook), or a range's commits (CI): no `Changelog: none`.
+    const arg = rev!;
+    const messages = existsSync(arg) ? [["this commit", readFileSync(arg, "utf8")]]
+      : execFileSync("git", ["log", "--format=%h%x1f%B%x1e", arg], { cwd: root, encoding: "utf8" }).split("\x1e").map((r) => r.trim()).filter(Boolean).map((r) => r.split("\x1f"));
+    const bad = messages.filter(([, m]) => saysNothing(m!).length);
+    for (const [commit, m] of bad) console.error(`${commit}: "Changelog: ${saysNothing(m!)[0]}": a commit with nothing to tell people writes no Changelog line (docs/changelog.md)`);
+    process.exit(bad.length ? 1 : 0);
+  }
   if (flag === "--stable") console.log(JSON.stringify(stable(root, changelog(root, rev ?? "HEAD"))));
   else if (flag === "--draft") process.stdout.write(draft(root, rev ?? "HEAD"));
   else console.log(JSON.stringify(changelog(root, rev ?? "HEAD")));

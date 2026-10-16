@@ -173,7 +173,7 @@ jobs:
           range='${{ needs.plan.outputs.range }}'
           if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
           # Its guards beside it: the stable release's selection, and (a branch) nothing merged into main taken back by
-          # a squash onto a main that moved (scripts/undone.sh).
+          # a squash onto a main that moved (scripts/undone.sh), and no `Changelog: none` (scripts/changelog.ts).
           python3 -m unittest discover -s .github -p 'test_stable_plan.py' > "$RUNNER_TEMP/stable.log" 2>&1 &
           stable=$!
           undone=""
@@ -184,6 +184,9 @@ jobs:
           status=0
           if [ "$range" = all ]; then sh scripts/check.sh all || status=1; else sh scripts/check.sh full "$range" || status=1; fi
           if wait $stable; then echo "· stable release selection guards … ok"; else echo "· stable release selection guards … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/stable.log"; status=1; fi
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            if node scripts/changelog.ts --refuse "$(git merge-base HEAD origin/main)..HEAD"; then echo "· no Changelog: none … ok"; else echo "· no Changelog: none … FAILED"; status=1; fi
+          fi
           if [ -n "$undone" ]; then
             if wait $undone; then echo "· undoes nothing on main … ok"; else echo "· undoes nothing on main … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/undone.log"; status=1; fi
           fi
