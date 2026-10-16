@@ -131,7 +131,7 @@ station: 命令轮询到结果，写凭据，退出 0 → done
 ### 要输入（PTY）
 
 - station 给登录命令一个固定大小的 PTY（宽 200 列、高 40 行：宽一点是为了长网址不被折行，解析不出错），在 station 上用一个无界面的终端模拟器（`@xterm/headless`）维护屏幕。它要回答程序发来的终端查询（光标位置 `ESC[6n`、背景色 OSC 11）：gh 会问，没人答就一直卡住。网址和设备码从去掉控制序列的原始输出里读（长网址在屏幕上会折行，输出里是一整串）。
-- 客户端打开面板时订阅这个终端：station 先推整屏，再推改了的行和光标位置；客户端按自己的宽度显示（行太长就折行），不做终端模拟，三端一样。实现：走 station 已有的事件流（`GET /events?login=<id>`，事件 `login-screen` `{id, rows, cursor, echo, live, full?}`，先整屏再只发改了的行），core 的 `machineLoginScreen` topic 被看着时才把它加进流的参数；输入是 `POST /machine-logins/<id>/input`。原来写的「`/term` 双向流、和 screens 的 view 同一种分帧」没有用：remote-screens 不在 main 上，事件流 + 一个写接口已经够，三端都不用新的流类型。
+- 客户端打开面板时订阅这个终端：station 先推整屏，再推改了的行和光标位置；客户端按自己的宽度显示（行太长就折行），不做终端模拟，三端一样。实现：走 station 已有的事件流（`GET /events?login=<id>`，事件 `login-screen` `{id, rows, cursor, echo, live, full?}`，先整屏再只发改了的行），core 的 `machineLoginScreen` topic 被看着时才把它加进流的参数；输入是 `POST /machine-logins/<id>/input`。原来写的「`/term` 双向流、和 screens 的 view 同一种分帧」没有用：screens 的 view 流是给画面的（二进制帧、按帧率推），一块 200×40 的文字屏用已有的事件流（只发改了的行，断线续传照旧）加一个写接口就够，三端都不用新的流类型。
 - 输入：文字（输入法、粘贴结果）、回车、退格、方向键、Tab、Ctrl-C。终端关了回显（输密码）时客户端的输入框换成密码框。实现：命令停在提示上时，station 对命令所在的终端跑 `stty -a`（`ps -o tty=` 找到它的 tty）看有没有 `-echo`；读不到时看提示里有没有 password、token、密码 这类字样。
 - 卡片和面板不默认展开终端；命令停在提示上且没有网址、设备码时自动展开，并说「命令在等你输入」。
 - 屏幕内容只在内存里：core 不写进数据库，station 不写日志。登录结束 10 分钟后丢掉。
