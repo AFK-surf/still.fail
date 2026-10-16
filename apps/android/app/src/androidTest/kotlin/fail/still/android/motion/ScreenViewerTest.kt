@@ -340,6 +340,18 @@ class ScreenViewerTest {
         rule.runOnUiThread { rule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
     }
 
+    /** 接管 in the dark: the main solid button, as the web's primary (light on the dark theme). */
+    @Test fun anAgentDrivingInTheDark() {
+        val v = Viewer(dark = true)
+        v.open()
+        val agent = "Agent「修登录」"
+        v.state("live", control = false, others = listOf(agent), controllers = listOf(agent), takeOver = true, line = "只看 · $agent 在控制")
+        v.config()
+        v.frame(1000)
+        rule.waitUntil(5_000) { v.acked(1000) }
+        v.shot("screen-agent-driving-dark")
+    }
+
     @Test fun liveInTheDark() {
         val v = Viewer(dark = true)
         v.open()

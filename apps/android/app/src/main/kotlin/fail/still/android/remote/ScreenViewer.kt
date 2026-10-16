@@ -266,10 +266,11 @@ private fun TakeOver(session: ScreenSession, modifier: Modifier) {
             fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
+        // The main solid button, as the web's primary (dark in the light theme, light in the dark one), not the accent.
         Box(
-            Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).background(C.accent).clickable { session.control(true) }.padding(horizontal = 14.dp),
+            Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).background(C.ink).clickable { session.control(true) }.padding(horizontal = 14.dp),
             contentAlignment = Alignment.Center,
-        ) { Text(t("android-misc.screen.takeOver"), fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1) }
+        ) { Text(t("android-misc.screen.takeOver"), fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold, color = C.bg, maxLines = 1) }
     }
 }
 
