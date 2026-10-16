@@ -65,7 +65,9 @@ export function lockClaim(secret: Uint8Array, ws: string, endpoint: string): Loc
 }
 
 /// This app's signing key (`lock-signer`): an Ed25519 seed kept by the app, apart from the device key. Only an app keeps
-/// one (`Host.appKeys`): a web page's code is still.fail cloud's, so what it keeps signs nothing.
+/// one (`Host.appKeys`): a web page's code is still.fail cloud's, so what it keeps signs nothing. A host that seals
+/// values (`Host.secureSet`) keeps it so, read without asking the person (`user: false`); one kept as a plain file by
+/// an app from before goes in there the first time it is read, and the file goes. A host without keeps the file.
 export class Signer {
   static readonly KEY = "lock-signer";
   readonly #seed: Uint8Array;
@@ -80,10 +82,30 @@ export class Signer {
   /// The kept one; null when there is none (or this is no app).
   static load(host: Host): Effect.Effect<Signer | null, CoreError> {
     if (!host.appKeys) return Effect.succeed(null);
-    return Effect.map(Effect.mapError(host.storageGet(Signer.KEY), asCoreError), (seed) => (seed !== null && seed.length === 32 ? new Signer(seed) : null));
+    const seedOf = (v: Uint8Array | null) => (v !== null && v.length === 32 ? v : null);
+    const plain = Effect.map(Effect.mapError(host.storageGet(Signer.KEY), asCoreError), seedOf);
+    const { secureGet, secureSet } = host;
+    if (!secureGet || !secureSet) return Effect.map(plain, (seed) => (seed ? new Signer(seed) : null));
+    const sealed = Effect.map(Effect.mapError(secureGet.call(host, Signer.KEY, { user: false }), asCoreError), seedOf);
+    return Effect.gen(function* () {
+      const kept = yield* sealed;
+      if (kept) {
+        // A move cut short after sealing leaves the file: it goes now.
+        yield* Effect.mapError(host.storageDelete(Signer.KEY), asCoreError);
+        return new Signer(kept);
+      }
+      const old = yield* plain;
+      if (!old) return null;
+      // Sealed, and read back the same, before the file goes: a failure on the way leaves the file as it was.
+      yield* Effect.mapError(secureSet.call(host, Signer.KEY, old, { user: false }), asCoreError);
+      const back = yield* sealed;
+      if (!back || hex(back) !== hex(old)) return yield* Effect.fail(new CoreError("host", "the lock's signing key did not read back as it was sealed"));
+      yield* Effect.mapError(host.storageDelete(Signer.KEY), asCoreError);
+      return new Signer(old);
+    });
   }
 
-  /// The kept one, made the first time.
+  /// The kept one, made the first time (sealed where the host seals).
   static make(host: Host): Effect.Effect<Signer, CoreError> {
     return Effect.gen(function* () {
       if (!host.appKeys) return yield* Effect.fail(new CoreError("lock_no_signer", "a web page signs nothing for the lock: use the desktop or Android app, or a passkey"));
@@ -91,7 +113,8 @@ export class Signer {
       if (had) return had;
       const seed = new Uint8Array(32);
       host.randomBytes(seed);
-      yield* Effect.mapError(host.storageSet(Signer.KEY, seed), asCoreError);
+      const kept = host.secureSet ? host.secureSet(Signer.KEY, seed, { user: false }) : host.storageSet(Signer.KEY, seed);
+      yield* Effect.mapError(kept, asCoreError);
       return new Signer(seed);
     });
   }

@@ -154,6 +154,9 @@ export class WakingHost implements Host {
   readonly memoryDb?: Host["memoryDb"];
   readonly deleteDb?: Host["deleteDb"];
   readonly legacyRead?: Host["legacyRead"];
+  readonly secureGet?: Host["secureGet"];
+  readonly secureSet?: Host["secureSet"];
+  readonly secureDelete?: Host["secureDelete"];
 
   constructor(inner: Host, wakes: Wakes) {
     this.inner = inner;
@@ -165,6 +168,10 @@ export class WakingHost implements Host {
     if (inner.memoryDb) this.memoryDb = () => inner.memoryDb!();
     if (inner.deleteDb) this.deleteDb = (name) => inner.deleteDb!(name);
     if (inner.legacyRead) this.legacyRead = (range) => inner.legacyRead!(range);
+    // So is what the system keeps sealed; a read may wait on the person, never on a UI coming back.
+    if (inner.secureGet) this.secureGet = (key, opts) => inner.secureGet!(key, opts);
+    if (inner.secureSet) this.secureSet = (key, value, opts) => inner.secureSet!(key, value, opts);
+    if (inner.secureDelete) this.secureDelete = (key) => inner.secureDelete!(key);
   }
 
   cloudOrigin(): string {

@@ -4,7 +4,7 @@
 // the page is served from app://ember, the core runs in Node (client/core-ts,
 // the full iroh endpoint) with its data in userData, and a sign-in finished in
 // the system browser comes back through stillfail://auth/callback.
-import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, MessageChannelMain, nativeTheme, net, Notification, powerMonitor, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess, type WebContents } from "electron";
+import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, MessageChannelMain, nativeTheme, net, Notification, powerMonitor, protocol, safeStorage, shell, systemPreferences, utilityProcess, type MessagePortMain, type UtilityProcess, type WebContents } from "electron";
 import { autoUpdater, type NsisUpdater, type UpdateInfo } from "electron-updater";
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -25,6 +25,7 @@ import { moveUserData } from "./moves.mts";
 import { attachWindowControls, loadSnapTarget } from "./window-controls.ts";
 import { exportOriginStorage, importOriginStorage, type OriginSnapshot } from "./origin-storage";
 import { type WebBuild, WebUpdates } from "./web-update.mts";
+import { SealedFiles } from "./secure.ts";
 import zhWords from "../../../client/i18n/catalog/zh/desktop.json" with { type: "json" };
 import enWords from "../../../client/i18n/catalog/en/desktop.json" with { type: "json" };
 
@@ -168,10 +169,51 @@ const meshAddon = () => {
   return existsSync(alone) ? alone : join(resources, app.isPackaged ? "station" : "station/stillfail", "station", "mesh.node");
 };
 
+/**
+ * What the core keeps sealed (secure.ts): safeStorage, where it seals for real (not Linux's plain-text fallback); null
+ * where it does not, and the core keeps its keys as files as before. A value kept with `user` asks for Touch ID first,
+ * on a Mac that has it; `user_cancelled` when the person said no.
+ */
+let sealed: SealedFiles | null | undefined;
+function sealedFiles(): SealedFiles | null {
+  if (sealed !== undefined) return sealed;
+  if (!app.isReady()) return null;
+  const real = safeStorage.isEncryptionAvailable() && (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text");
+  const ask = process.platform === "darwin"
+    ? async (reason: string) => {
+        if (!systemPreferences.canPromptTouchID()) return;
+        await systemPreferences.promptTouchID(reason).catch(() => { throw new Error("user_cancelled"); });
+      }
+    : null;
+  sealed = real ? new SealedFiles(join(app.getPath("userData"), "sealed"), safeStorage, ask) : null;
+  return sealed;
+}
+
+/** The core's ask of what is sealed (core.ts `sealer`), answered on its process. */
+type SealedAsk = { id: number; op: "get" | "set" | "delete"; key: string; user?: boolean; reason?: string; value?: string };
+async function answerSealed(files: SealedFiles, ask: SealedAsk): Promise<{ value?: string | null }> {
+  if (ask.op === "get") {
+    const value = await files.get(ask.key, ask.user === true, ask.reason ?? "");
+    return { value: value === null ? null : Buffer.from(value).toString("base64") };
+  }
+  if (ask.op === "set") await files.set(ask.key, Buffer.from(ask.value ?? "", "base64"), ask.user === true);
+  else await files.delete(ask.key);
+  return {};
+}
+
 /** The core's process, started when a page first asks for it and again after it exited. */
 function coreProcess(): UtilityProcess {
   if (core) return core;
-  const child = utilityProcess.fork(join(__dirname, "core.js"), [join(app.getPath("userData"), "core"), CLOUD_ORIGIN, meshAddon(), BETA ? "beta" : ""], { serviceName: `${NAME} core` });
+  const files = sealedFiles();
+  const child = utilityProcess.fork(join(__dirname, "core.js"), [join(app.getPath("userData"), "core"), CLOUD_ORIGIN, meshAddon(), BETA ? "beta" : "", files ? "sealed" : ""], { serviceName: `${NAME} core` });
+  child.on("message", (message: { sealed?: SealedAsk }) => {
+    const ask = message?.sealed;
+    if (!ask || !files) return;
+    answerSealed(files, ask).then(
+      (answer) => child.postMessage({ sealed: { id: ask.id, ...answer } }),
+      (error: unknown) => child.postMessage({ sealed: { id: ask.id, error: error instanceof Error ? error.message : String(error) } }),
+    );
+  });
   child.on("exit", (code) => {
     if (core === child) core = null;
     dropOwnLink(t("desktop.core.exited"));

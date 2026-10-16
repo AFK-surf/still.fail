@@ -98,6 +98,16 @@ export interface Host {
   storageSet(key: string, value: Uint8Array): Effect.Effect<void, HostError>;
   storageDelete(key: string): Effect.Effect<void, HostError>;
 
+  /// Values the system keeps sealed (docs/vault.md, "设备上的钥匙"): an app's only (Android's Keystore; the desktop's
+  /// Electron safeStorage, its key in the macOS keychain or Windows' DPAPI); a web page has none. `user: true`: reading
+  /// it takes the person (biometrics or the device's credential; Touch ID on a Mac that has it), `reason` said in the
+  /// prompt; `user: false`: sealed at rest, read without asking. A value is read as it was kept: asked with the other
+  /// `user`, it fails. The host's errors say `user_cancelled` (the person said no), `no_device_lock` (no screen lock,
+  /// so nothing can need the person) or `not_in_front` (no screen to ask on) as their message.
+  secureGet?(key: string, opts: { user: boolean; reason?: string }): Effect.Effect<Uint8Array | null, HostError>;
+  secureSet?(key: string, value: Uint8Array, opts: { user: boolean }): Effect.Effect<void, HostError>;
+  secureDelete?(key: string): Effect.Effect<void, HostError>;
+
   /// An account's SQLite database by name (`account-<sub>`), made empty if it is not there: one file per signed-in
   /// account (docs/core-db.md). Fails when it cannot be opened, or another process holds it (`SqlError` "busy").
   /// A host without one keeps nothing on the device.

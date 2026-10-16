@@ -42,6 +42,17 @@ function fetchError(e: unknown): HostError {
   return new HostError(message);
 }
 
+/// What seals values for the core where Node cannot itself (the desktop app: Electron's safeStorage and Touch ID are the
+/// main process's, apps/desktop/src/secure.ts, asked from the utility process the core runs in). Its failures' messages
+/// are the host's (host.ts `secureGet`).
+export interface Sealer {
+  get(key: string, user: boolean, reason: string): Promise<Uint8Array | null>;
+  set(key: string, value: Uint8Array, user: boolean): Promise<void>;
+  delete(key: string): Promise<void>;
+}
+
+const sealError = (e: unknown) => new HostError(e instanceof Error ? e.message : String(e));
+
 export class NodeHost implements Host {
   readonly #origin: string;
   readonly #beta: boolean;
@@ -50,13 +61,22 @@ export class NodeHost implements Host {
   readonly #open = new Map<string, NodeSql>();
   readonly #listener: Listener;
   readonly #started = performance.now();
+  readonly secureGet?: Host["secureGet"];
+  readonly secureSet?: Host["secureSet"];
+  readonly secureDelete?: Host["secureDelete"];
 
-  constructor(dataDir: string, cloudOrigin: string, beta: boolean, listener: Listener) {
+  /// `sealer`: what seals values, where the app has one; without, the host has no `secure*` (tests, the side runs).
+  constructor(dataDir: string, cloudOrigin: string, beta: boolean, listener: Listener, sealer?: Sealer) {
     mkdirSync(dataDir, { recursive: true });
     this.#dir = dataDir;
     this.#origin = cloudOrigin.replace(/\/+$/, "");
     this.#beta = beta;
     this.#listener = listener;
+    if (sealer) {
+      this.secureGet = (key, opts) => Effect.tryPromise({ try: () => sealer.get(key, opts.user, opts.reason ?? ""), catch: sealError });
+      this.secureSet = (key, value, opts) => Effect.tryPromise({ try: () => sealer.set(key, value, opts.user), catch: sealError });
+      this.secureDelete = (key) => Effect.tryPromise({ try: () => sealer.delete(key), catch: sealError });
+    }
   }
 
   cloudOrigin(): string {
@@ -306,11 +326,12 @@ export class NodeHost implements Host {
 /// starts another (apps/desktop/src/core.ts).
 /// `hostWire`: its stations answer at the cloud's origin over plain HTTP, not on the mesh (the side-by-side run,
 /// harness/run.ts). `account`: who the accounts are with, when not still.fail cloud (an app embedding the core gives
-/// `commaAccountProvider({origin, bearer})`; docs/core-ts.md, "Account providers and embedding").
-export function start(dataDir: string, cloudOrigin: string, listener: Listener, channel?: string, options: { hostWire?: boolean; account?: AccountProviderFactory } = {}) {
+/// `commaAccountProvider({origin, bearer})`; docs/core-ts.md, "Account providers and embedding"). `sealer`: what seals
+/// values for it (the desktop app's main process: apps/desktop/src/core.ts).
+export function start(dataDir: string, cloudOrigin: string, listener: Listener, channel?: string, options: { hostWire?: boolean; account?: AccountProviderFactory; sealer?: Sealer } = {}) {
   service.name = "stillfail-native";
   service.os = process.platform === "darwin" ? "macos" : process.platform;
-  const host = new NodeHost(dataDir, cloudOrigin, channel === "beta", listener);
+  const host = new NodeHost(dataDir, cloudOrigin, channel === "beta", listener, options.sealer);
   const clients = new Set<number>();
   let dead = false;
   let running: Core | null = null;

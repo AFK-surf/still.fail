@@ -14,13 +14,41 @@ interface NodeCore {
   receiveRaw(client: number, message: unknown): void;
   disconnect(client: number): void;
 }
+/** client/core-ts hosts/node.ts `Sealer`: what seals values for the core. */
+interface Sealer {
+  get(key: string, user: boolean, reason: string): Promise<Uint8Array | null>;
+  set(key: string, value: Uint8Array, user: boolean): Promise<void>;
+  delete(key: string): Promise<void>;
+}
 /** `channel`: "beta" for the beta app's core (main.ts BETA). */
 /** `bytes`: beside the JSON of a message that carries some (a screen view's frame). */
-type Start = (dataDir: string, cloudOrigin: string, listener: (client: number, json: string, bytes?: Uint8Array) => void, channel?: string) => NodeCore;
+/** `sealer`: what the main process seals for it (main.ts `sealedFiles`), where it does. */
+type Start = (dataDir: string, cloudOrigin: string, listener: (client: number, json: string, bytes?: Uint8Array) => void, channel?: string, options?: { sealer?: Sealer }) => NodeCore;
 
-const [dataDir, cloudOrigin, mesh, channel] = process.argv.slice(2) as [string, string, string, string | undefined];
+const [dataDir, cloudOrigin, mesh, channel, sealing] = process.argv.slice(2) as [string, string, string, string | undefined, string | undefined];
 process.env.STILLFAIL_MESH_NATIVE ??= mesh;
 const { start, CoreFiles } = require(join(__dirname, "core-ts.js")) as { start: Start; CoreFiles: new (send: (message: unknown) => void) => FilePort };
+
+/** Asks of what is sealed, waiting for the main process's answer by id; the bytes go as base64. */
+const sealedWaiting = new Map<number, { resolve: (value: string | null | undefined) => void; reject: (error: Error) => void }>();
+let sealedNext = 1;
+function askSealed(ask: { op: "get" | "set" | "delete"; key: string; user?: boolean; reason?: string; value?: string }): Promise<string | null | undefined> {
+  return new Promise((resolve, reject) => {
+    const id = sealedNext++;
+    sealedWaiting.set(id, { resolve, reject });
+    process.parentPort.postMessage({ sealed: { id, ...ask } });
+  });
+}
+const sealer: Sealer | undefined = sealing === "sealed"
+  ? {
+      get: async (key, user, reason) => {
+        const value = await askSealed({ op: "get", key, user, reason });
+        return typeof value === "string" ? new Uint8Array(Buffer.from(value, "base64")) : null;
+      },
+      set: async (key, value, user) => void (await askSealed({ op: "set", key, user, value: Buffer.from(value).toString("base64") })),
+      delete: async (key) => void (await askSealed({ op: "delete", key })),
+    }
+  : undefined;
 
 /** One core and its clients. A panic ends a core; the pages then open new ports, which go to the next one. */
 interface Generation {
@@ -40,7 +68,7 @@ function begin(): Generation {
     // A message with bytes (a screen view's frame) goes as its JSON and the bytes beside it, not as base64 in the JSON
     // (web/src/core/client.ts desktopOpener reads both).
     generation.clients.get(client)?.postMessage(bytes === undefined ? json : { json, bytes });
-  }, channel || undefined);
+  }, channel || undefined, sealer ? { sealer } : {});
   return generation;
 }
 
@@ -73,7 +101,16 @@ function serve(port: MessagePortMain): void {
   port.start();
 }
 
-process.parentPort.on("message", ({ ports }) => {
+process.parentPort.on("message", ({ data, ports }) => {
+  // The main process's answer to an ask of what is sealed.
+  const answer = (data as { sealed?: { id: number; value?: string | null; error?: string } } | null)?.sealed;
+  if (answer) {
+    const waiting = sealedWaiting.get(answer.id);
+    sealedWaiting.delete(answer.id);
+    if (answer.error !== undefined) waiting?.reject(new Error(answer.error));
+    else waiting?.resolve(answer.value);
+    return;
+  }
   const port = ports[0];
   if (port) serve(port);
 });

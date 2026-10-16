@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { createPrivateKey, createPublicKey, verify } from "node:crypto";
 import { test } from "node:test";
 import { Effect } from "effect";
+import { HostError } from "../src/error.ts";
 import { Signer, endpointBytes, entryHash, lockClaim, next, shortCode, signedBytes } from "../src/lock.ts";
 import { FakeHost } from "../src/testing.ts";
 
@@ -37,4 +38,66 @@ test("an app keeps a signing key and signs entries with it; a web page has none"
   assert.equal((await Effect.runPromise(Signer.load(app)))?.id, signer.id, "kept");
   const e = signer.sign(next("ws1", null, 1000, "genesis", { owner: "a" }));
   assert.ok(verify(null, Buffer.from(signedBytes(entryHash(e))), publicOf(signer.id.slice(8)), Buffer.from(e.sig.sig, "hex")));
+});
+
+/// An app's host that seals values (Android's Keystore, the desktop's safeStorage), in memory: what it was asked to keep
+/// and how, and a failure to give where a test wants one.
+class SealingHost extends FakeHost {
+  readonly sealed = new Map<string, { value: Uint8Array; user: boolean }>();
+  failSet = false;
+  constructor() {
+    super();
+    this.appKeys = true;
+  }
+  secureGet(key: string, opts: { user: boolean }): Effect.Effect<Uint8Array | null, HostError> {
+    return Effect.suspend(() => {
+      const kept = this.sealed.get(key);
+      if (kept && kept.user !== opts.user) return Effect.fail(new HostError("kept with the other `user`"));
+      return Effect.succeed(kept?.value ?? null);
+    });
+  }
+  secureSet(key: string, value: Uint8Array, opts: { user: boolean }): Effect.Effect<void, HostError> {
+    return Effect.suspend(() => (this.failSet ? Effect.fail(new HostError("the keystore said no")) : Effect.sync(() => void this.sealed.set(key, { value, user: opts.user }))));
+  }
+  secureDelete(key: string): Effect.Effect<void, HostError> {
+    return Effect.sync(() => void this.sealed.delete(key));
+  }
+}
+
+test("a host that seals keeps the signing key sealed, read without asking; one in a plain file moves in", async () => {
+  // Made new: sealed, no file.
+  const fresh = new SealingHost();
+  const made = await Effect.runPromise(Signer.make(fresh));
+  assert.deepEqual([...fresh.sealed.keys()], ["lock-signer"]);
+  assert.equal(fresh.sealed.get("lock-signer")?.user, false);
+  assert.equal(fresh.stored("lock-signer"), undefined);
+  assert.equal((await Effect.runPromise(Signer.load(fresh)))?.id, made.id);
+
+  // An app from before kept it as a file: the same key, now sealed, and the file gone.
+  const before = new FakeHost();
+  before.appKeys = true;
+  const old = await Effect.runPromise(Signer.make(before));
+  const moved = new SealingHost();
+  moved.store("lock-signer", before.stored("lock-signer")!);
+  assert.equal((await Effect.runPromise(Signer.load(moved)))?.id, old.id);
+  assert.equal(moved.stored("lock-signer"), undefined, "the file is gone");
+  assert.equal(moved.sealed.get("lock-signer")?.user, false);
+  assert.equal((await Effect.runPromise(Signer.make(moved))).id, old.id, "and it is the one used from then on");
+
+  // Sealing fails: the file stays, and nothing is signed with a key of another.
+  const stuck = new SealingHost();
+  stuck.store("lock-signer", before.stored("lock-signer")!);
+  stuck.failSet = true;
+  await assert.rejects(Effect.runPromise(Signer.load(stuck)), /keystore said no/);
+  await assert.rejects(Effect.runPromise(Signer.make(stuck)), /keystore said no/);
+  assert.ok(stuck.stored("lock-signer"), "the file is kept");
+  stuck.failSet = false;
+  assert.equal((await Effect.runPromise(Signer.load(stuck)))?.id, old.id, "and moves in once sealing works");
+
+  // Both there (a move cut short after sealing): the sealed one is the key, and the file goes.
+  const both = new SealingHost();
+  both.sealed.set("lock-signer", { value: before.stored("lock-signer")!, user: false });
+  both.store("lock-signer", before.stored("lock-signer")!);
+  assert.equal((await Effect.runPromise(Signer.load(both)))?.id, old.id);
+  assert.equal(both.stored("lock-signer"), undefined);
 });
