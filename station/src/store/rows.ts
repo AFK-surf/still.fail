@@ -21,6 +21,14 @@ export function slackSurface(connect: string, teamId: string | null): string {
 
 export type SessionScope = "thread" | "all";
 
+/// Who looks, as far as the station's workspaces go (docs/multi-workspace.md): their workspace, and whether it is the
+/// station's home one (absent: it is, as on a station in one workspace).
+export type InWorkspace = { workspace: string; home?: boolean };
+
+/// Whether a session whose chat is in `ws` (null: the station's home workspace) is one `viewer` may see and use: a
+/// member of one workspace sees nothing of another's chats.
+export const sees = (viewer: InWorkspace, ws: string | null): boolean => ws === viewer.workspace || (ws === null && viewer.home !== false);
+
 export type SessionRow = {
   key: string; connect: string; scope: SessionScope; title: string | null; createdBy: string | null; runtime: string;
   profile: string; profilePinned: boolean; model: string | null; effort: string | null; fast: boolean | null;
@@ -142,12 +150,12 @@ export type TurnFor = { profile: string | null; person: string | null; thread: n
 export type StoreChange =
   /// Anything about that session changed.
   | { type: "session"; key: string }
-  /// It was deleted.
-  | { type: "sessionRemoved"; key: string }
+  /// It was deleted; `ws` the workspace its chat was in (null: the home one).
+  | { type: "sessionRemoved"; key: string; ws?: string | null }
   /// Entries were appended there (contiguous, in order), or its sessions changed (none).
   | { type: "thread"; id: number; entries: EntryRow[] }
-  /// It went, with every entry it had.
-  | { type: "threadRemoved"; id: number }
+  /// It went, with every entry it had; `ws` as its session's.
+  | { type: "threadRemoved"; id: number; ws?: string | null }
   /// A viewer's read position moved.
   | { type: "read"; viewer: string; thread: number; n: number }
   /// The Slack users a viewer said are them changed.

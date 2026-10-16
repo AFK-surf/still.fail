@@ -24,7 +24,7 @@ import type { Viewer } from "../mesh/credential.ts";
 import type { Lang } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Readers } from "../read/pool.ts";
-import type { StoreChange } from "../store/rows.ts";
+import { type StoreChange, sees } from "../store/rows.ts";
 import type { Answer } from "./request.ts";
 import type { Clock } from "effect";
 import { Fibers } from "../ops/fibers.ts";
@@ -62,7 +62,16 @@ export type EventsDeps = {
   processState?(key: string): string;
   /// Someone follows again, after nobody did (allowances are read again then).
   followed?(): void;
+  /// Whether `viewer` sees a session, a thread or a job: those of their workspace's chats (docs/multi-workspace.md).
+  /// None: every one.
+  seen?(viewer: Viewer, of: { session: string } | { thread: number } | { job: string }): boolean;
 };
+
+/// A viewer's streams in one language: what their sidebar and overview are told by. A person in two of the station's
+/// workspaces is two viewers (docs/multi-workspace.md).
+const viewerKey = (viewer: Viewer, lang: Lang) => `${viewer.email}\0${viewer.workspace}\0${lang}`;
+/// Whether a stream is that viewer's in that language.
+const theirs = (c: { viewer: Viewer; lang: Lang }, viewer: Viewer, lang: Lang) => c.viewer.email === viewer.email && c.viewer.workspace === viewer.workspace && c.lang === lang;
 
 type Client = {
   id: number;
@@ -87,7 +96,7 @@ export class Events {
   /// Who followed last: whose names a thread's entries are read with while nobody does.
   private last: { viewer: Viewer; lang: Lang } | null = null;
   /// What each viewer's streams were last told of their sidebar (row id → JSON) and their overview (JSON), by viewer and
-  /// language (`${email}\0${lang}`): what changes is told against it.
+  /// language (`viewerKey`): what changes is told against it.
   private rowsTold = new Map<string, Map<string, string>>();
   private overviewTold = new Map<string, string>();
   private deps: EventsDeps;
@@ -161,7 +170,7 @@ export class Events {
     };
     push("retry: 3000\n\n");
     // Coming back where all that was told since is kept (their sidebar told on this run too).
-    const k = `${viewer.email}\0${lang}`;
+    const k = viewerKey(viewer, lang);
     const resumes = since !== null && this.rowsTold.has(k) && this.log.has(since);
     if (since !== null && !resumes) {
       // Why, for the log: a station whose streams are never resumed has every client read it again each time.
@@ -322,6 +331,11 @@ export class Events {
     for (const c of this.clients) if (to(c)) c.raw(text);
   }
 
+  /// Whether a stream's viewer sees that session, thread or job (`seen`).
+  private sees(c: Client, of: { session: string } | { thread: number } | { job: string }): boolean {
+    return this.deps.seen?.(c.viewer, of) ?? true;
+  }
+
   private storeChanged(change: StoreChange) {
     switch (change.type) {
       case "session":
@@ -332,7 +346,7 @@ export class Events {
         this.dirty.sessions.delete(change.key);
         this.states.delete(change.key);
         this.overviewChanged();
-        this.emit("session-removed", { key: change.key }, undefined, `session\0${change.key}`);
+        this.emit("session-removed", { key: change.key }, (c) => sees(c.viewer, change.ws ?? null), `session\0${change.key}`);
         this.rowsChanged(null);
         break;
       case "thread": {
@@ -344,12 +358,12 @@ export class Events {
           // Entries as the pages show them (with their authors' names), read off the main thread.
           void this.deps.readers
             .read("entries", { viewer: who.viewer, thread: change.id, params: [["from", String(first)], ["to", String(last)]] }, who.lang)
-            .then((text) => this.emit("thread", { id: change.id, entries: JSON.parse(text).entries }), (e) => log.warn("events", "thread event not sent", { error: (e as Error).message }));
+            .then((text) => this.emit("thread", { id: change.id, entries: JSON.parse(text).entries }, (c) => this.sees(c, { thread: change.id })), (e) => log.warn("events", "thread event not sent", { error: (e as Error).message }));
           // And to each viewer, the thread as GET /threads/:id has it for them (their read position, their unread count):
           // a client puts it in place rather than read it again after every message (a phone did some two a minute).
-          for (const { viewer, lang } of this.viewers(who)) {
+          for (const { viewer, lang } of this.viewers(who).filter((v) => this.deps.seen?.(v.viewer, { thread: change.id }) ?? true)) {
             void this.deps.readers.read("thread", { viewer, id: change.id, lang }, lang).then(
-              (text) => this.emit("thread-view", JSON.parse(text), (c) => c.viewer.email === viewer.email && c.lang === lang, `thread-view\0${change.id}\0${viewer.email}\0${lang}`),
+              (text) => this.emit("thread-view", JSON.parse(text), (c) => theirs(c, viewer, lang), `thread-view\0${change.id}\0${viewerKey(viewer, lang)}`),
               () => {},
             );
           }
@@ -358,11 +372,11 @@ export class Events {
         break;
       }
       case "threadRemoved":
-        this.emit("thread-removed", { id: change.id });
+        this.emit("thread-removed", { id: change.id }, (c) => sees(c.viewer, change.ws ?? null));
         this.rowsChanged(null);
         break;
       case "read":
-        this.emit("read", { viewer: change.viewer, thread: change.thread, n: change.n }, (c) => c.viewer.email === change.viewer);
+        this.emit("read", { viewer: change.viewer, thread: change.thread, n: change.n }, (c) => c.viewer.email === change.viewer && this.sees(c, { thread: change.thread }));
         this.rowsChanged(change.viewer);
         break;
       case "identities":
@@ -376,10 +390,10 @@ export class Events {
         break;
       case "job":
         // A job as GET /jobs/:id answers it, so a client holding it puts it in place without reading anything again.
-        void this.deps.readers.read("job", { id: change.id }, "zh").then((text) => this.emit("job", JSON.parse(text), undefined, `job\0${change.id}`), () => {});
+        void this.deps.readers.read("job", { id: change.id }, "zh").then((text) => this.emit("job", JSON.parse(text), (c) => this.sees(c, { job: change.id }), `job\0${change.id}`), () => {});
         break;
       case "jobRemoved":
-        this.emit("job-removed", { id: change.id, session: change.session }, undefined, `job\0${change.id}`);
+        this.emit("job-removed", { id: change.id, session: change.session }, (c) => this.sees(c, { session: change.session }), `job\0${change.id}`);
         break;
       case "usage":
         // Model calls were recorded: a page showing usage reads it again (it is too big to send to everyone).
@@ -408,7 +422,7 @@ export class Events {
   /// Each viewer and language streams are followed in (who followed last, while none is), once.
   private viewers(who: { viewer: Viewer; lang: Lang }): { viewer: Viewer; lang: Lang }[] {
     const seen = new Set<string>();
-    return (this.clients.length > 0 ? this.clients : [who]).filter((c) => !seen.has(`${c.viewer.email}\0${c.lang}`) && seen.add(`${c.viewer.email}\0${c.lang}`));
+    return (this.clients.length > 0 ? this.clients : [who]).filter((c) => !seen.has(viewerKey(c.viewer, c.lang)) && seen.add(viewerKey(c.viewer, c.lang)));
   }
 
   /// Changes gathered into one round: after what happens now, once.
@@ -439,7 +453,7 @@ export class Events {
     for (const key of dirty.sessions) {
       if (!this.deps.sessionExists(key)) continue;
       try {
-        this.emit("session", JSON.parse(await this.deps.readers.read("summary", { key }, "zh")), undefined, `session\0${key}`);
+        this.emit("session", JSON.parse(await this.deps.readers.read("summary", { key }, "zh")), (c) => this.sees(c, { session: key }), `session\0${key}`);
       } catch (error) {
         log.warn("events", "session event not sent", { session: key, error: (error as Error).message });
       }
@@ -447,17 +461,17 @@ export class Events {
     // The overview to each viewer, in each language their streams were asked in.
     if (overview && this.deps.overview) {
       const seen = new Set<string>();
-      const viewers = this.clients.filter((c) => !seen.has(`${c.viewer.email}\0${c.lang}`) && seen.add(`${c.viewer.email}\0${c.lang}`));
+      const viewers = this.clients.filter((c) => !seen.has(viewerKey(c.viewer, c.lang)) && seen.add(viewerKey(c.viewer, c.lang)));
       await Promise.all(
         viewers.map(async ({ viewer, lang }) => {
           try {
             const value = await this.deps.overview!(viewer, lang);
             // Told only as it changed for them: a stream that comes back has every viewer's made again.
-            const k = `${viewer.email}\0${lang}`;
+            const k = viewerKey(viewer, lang);
             const text = JSON.stringify(value);
             if (this.overviewTold.get(k) === text) return;
             this.overviewTold.set(k, text);
-            this.emit("overview", value, (c) => c.viewer.email === viewer.email && c.lang === lang, `overview\0${k}`);
+            this.emit("overview", value, (c) => theirs(c, viewer, lang), `overview\0${k}`);
           } catch (error) {
             log.warn("events", "overview not told", { error: (error as Error).message });
           }
@@ -466,7 +480,7 @@ export class Events {
     }
     if (!dirty.rowsAll && dirty.rows.size === 0) return;
     const seen = new Set<string>();
-    const viewers = this.clients.filter((c) => (dirty.rowsAll || dirty.rows.has(c.viewer.email)) && !seen.has(`${c.viewer.email}\0${c.lang}`) && seen.add(`${c.viewer.email}\0${c.lang}`));
+    const viewers = this.clients.filter((c) => (dirty.rowsAll || dirty.rows.has(c.viewer.email)) && !seen.has(viewerKey(c.viewer, c.lang)) && seen.add(viewerKey(c.viewer, c.lang)));
     await Promise.all(
       viewers.map(async ({ viewer, lang }) => {
         let rows: any[];
@@ -479,10 +493,10 @@ export class Events {
         // Their streams opened while it could not be read (nothing it changes by is told against), and what their
         // clients read of the station then failed as it did: now that it reads, those streams are ended. Each comes
         // back to one that is not resumed, and reads the station again.
-        if (!this.rowsTold.has(`${viewer.email}\0${lang}`)) {
-          const theirs = this.clients.filter((c) => c.viewer.email === viewer.email && c.lang === lang);
-          log.info("events", "the sidebar reads again: its streams are ended, to read the station again", { streams: theirs.length });
-          for (const c of theirs) c.end();
+        if (!this.rowsTold.has(viewerKey(viewer, lang))) {
+          const streams = this.clients.filter((c) => theirs(c, viewer, lang));
+          log.info("events", "the sidebar reads again: its streams are ended, to read the station again", { streams: streams.length });
+          for (const c of streams) c.end();
           return;
         }
         this.tellRows(viewer, lang, rows);
@@ -493,12 +507,12 @@ export class Events {
   /// A viewer's sidebar as it is now (`rows`, in `lang`): the rows that changed since their streams were told it last
   /// are told to them (`chat`, `chat-removed`), and it is what is told against from now.
   private tellRows(viewer: Viewer, lang: Lang, rows: any[]) {
-    const k = `${viewer.email}\0${lang}`;
+    const k = viewerKey(viewer, lang);
     const now = new Map(rows.map((r) => [String(r.id ?? ""), JSON.stringify(r)]));
     const before = this.rowsTold.get(k);
     this.rowsTold.set(k, now);
     if (!before) return;
-    const to = (c: Client) => c.viewer.email === viewer.email && c.lang === lang;
+    const to = (c: Client) => theirs(c, viewer, lang);
     for (const row of rows) {
       const id = String(row.id ?? "");
       if (before.get(id) !== now.get(id)) this.emit("chat", row, to, `chat\0${k}\0${id}`);

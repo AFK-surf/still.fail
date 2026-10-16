@@ -15,6 +15,7 @@ import { basename, dirname, join, isAbsolute } from "node:path";
 import { clean, cleanPosix, fileName, samePath, segments, within } from "../ops/paths.ts";
 import type { Viewer } from "../mesh/credential.ts";
 import type { Lang } from "../ops/i18n.ts";
+import { type InWorkspace, sees } from "../store/rows.ts";
 import { watching } from "./store.ts";
 import * as store from "./store.ts";
 import type { AuthorKind, Json, SessionRow, Store, ThreadRow, ThreadSummary } from "./store.ts";
@@ -167,19 +168,23 @@ export function summary(s: Store, key: string): Json {
   return summaryWith(s, key, { stats: store.sessionStats(s, key), bindings: store.listBindings(s), participants: store.participants(s, key), watches: watching(s) });
 }
 
-/// GET /sessions (views.rs `sessions`): the sessions shown in lists, or only the archived ones; those of one connect.
-export function sessions(s: Store, connect: string | null, archived: boolean, lang: Lang): Json[] {
+/// GET /sessions (views.rs `sessions`): the sessions shown in lists, or only the archived ones; those of one connect;
+/// those of the viewer's workspace (all of them for a read made for no one).
+export function sessions(s: Store, connect: string | null, archived: boolean, lang: Lang, viewer: InWorkspace | null = null): Json[] {
   setLang(lang);
   const l: Lists = { stats: store.sessionStats(s, null), bindings: store.listBindings(s), participants: store.participants(s, null), watches: watching(s) };
   return store
     .listSessions(s)
-    .filter((x) => (connect === null || x.connect === connect) && (x.archivedAt !== null) === archived)
+    .filter((x) => (connect === null || x.connect === connect) && (x.archivedAt !== null) === archived && (viewer === null || sees(viewer, x.ws)))
     .map((x) => summaryWith(s, x.key, l));
 }
 
 /// GET /sessions/:key (views.rs `session`): the session, its threads, turns and jobs (newest first).
 export function session(s: Store, key: string, viewer: Viewer, lang: Lang): Json {
   setLang(lang);
+  // One of another workspace is none (docs/multi-workspace.md).
+  const row = store.getSession(s, key);
+  if (row !== null && !sees(viewer, row.ws)) throw new HttpError(404, `unknown session ${key}`);
   const turns = store.listTurns(s, key);
   const jobs = store.listJobs(s, key).map((j) => shown(s, j));
   return { session: summary(s, key), threads: threadViews(s, viewer, key), turns, jobs };
@@ -223,10 +228,15 @@ function threadView(s: Store, t: ThreadSummary, shares: ReturnType<typeof store.
   return v;
 }
 
+/// The threads of the viewer's workspace (of one session).
 function threadViews(s: Store, viewer: Viewer, session: string | null): Json[] {
   const shares = store.chatShares(s);
   const published = store.publishedByThread(s);
-  return store.listThreads(s, viewer.email, session, null).map((t) => threadView(s, t, shares, published));
+  const seen = store.seenBy(s, viewer);
+  return store
+    .listThreads(s, viewer.email, session, null)
+    .filter((t) => t.sessions.some((m) => seen(m.session)))
+    .map((t) => threadView(s, t, shares, published));
 }
 
 /// GET /threads?session= (views.rs `threads`): the threads (of one session).
@@ -239,7 +249,7 @@ export function threads(s: Store, viewer: Viewer, session: string | null, lang: 
 export function thread(s: Store, viewer: Viewer, id: string, lang: Lang): Json {
   setLang(lang);
   const n = parseI64(id);
-  if (n === null || store.getThread(s, n) === null) throw new HttpError(404, `unknown thread ${id}`);
+  if (n === null || store.getThread(s, n) === null || !store.seesThread(s, viewer, n)) throw new HttpError(404, `unknown thread ${id}`);
   const found = store.listThreads(s, viewer.email, null, n)[0];
   if (found === undefined) throw new HttpError(404, `unknown thread ${n}`);
   return threadView(s, found);

@@ -6,7 +6,7 @@ import { session, sessionFile, sessionPlace, sessions, summary, thread, threads,
 export const sessionOps: Record<string, ReadOp> = {
   /// One session as lists and events have it (views.rs `summary`).
   summary: (s, a) => summary(s, a.key),
-  sessions: (s, a) => sessions(s, a.connect ?? null, a.archived, a.lang),
+  sessions: (s, a) => sessions(s, a.connect ?? null, a.archived, a.lang, a.viewer ?? null),
   session: (s, a) => session(s, a.key, a.viewer, a.lang),
   timeline: (s, a) => timeline(s, a.key, a.before, a.limit, a.lang, a.from, a.to, a.brief),
   sessionFile: (s, a) => sessionFile(s, a.key, a.name, a.thumb, a.lang),

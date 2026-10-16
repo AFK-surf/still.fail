@@ -461,6 +461,8 @@ export class Store {
   /// with their entries (or archive files) and reads.
   deleteSession(key: string): void {
     this.#with((changes) => {
+      // Which workspace's it was, for those its going is told to.
+      const ws: string | null = this.#one("SELECT ws FROM sessions WHERE key = ?", key)?.ws ?? null;
       const kept: number[] = [];
       const removed: number[] = [];
       const unpublished: string[] = [];
@@ -500,9 +502,9 @@ export class Store {
         rmSync(this.#threadFile(thread), { force: true });
       }
       for (const id of unpublished) this.#removeSnapshot(id);
-      changes.push({ type: "sessionRemoved", key });
+      changes.push({ type: "sessionRemoved", key, ws });
       // Clients drop what they keep of the threads that went with it.
-      for (const id of removed) changes.push({ type: "threadRemoved", id });
+      for (const id of removed) changes.push({ type: "threadRemoved", id, ws });
       for (const id of kept) changes.push({ type: "thread", id, entries: [] });
     });
   }
@@ -734,19 +736,20 @@ export class Store {
     }));
   }
 
-  /// The archive policy as last saved, and who saved it; null until anyone has (the default then).
-  archivePolicy(): { policy: Json; change: Json } | null {
-    const r = this.#one("SELECT id, at, policy, author, summary FROM archive_policy ORDER BY id DESC LIMIT 1");
+  /// A workspace's archive policy as last saved, and who saved it (`ws` null, or absent: the station's home workspace's);
+  /// null until anyone has (the default then).
+  archivePolicy(ws: string | null = null): { policy: Json; change: Json } | null {
+    const r = this.#one("SELECT id, at, policy, author, summary FROM archive_policy WHERE ws IS ? ORDER BY id DESC LIMIT 1", ws);
     if (!r) return null;
     const policy = parsed(r.policy);
     if (!policy) return null;
     return { policy, change: { id: r.id, at: r.at, by: parsed(r.author) ?? null, summary: r.summary } };
   }
 
-  /// A new archive policy, by whom, and what it changed.
-  setArchivePolicy(policy: Json, author: Json, summary: string): void {
+  /// A new archive policy of a workspace (null, or absent: the home one's), by whom, and what it changed.
+  setArchivePolicy(policy: Json, author: Json, summary: string, ws: string | null = null): void {
     this.#with((changes) => {
-      this.#run("INSERT INTO archive_policy(at, policy, author, summary) VALUES (?, ?, ?, ?)", this.now(), JSON.stringify(policy), JSON.stringify(author), summary);
+      this.#run("INSERT INTO archive_policy(at, policy, author, summary, ws) VALUES (?, ?, ?, ?, ?)", this.now(), JSON.stringify(policy), JSON.stringify(author), summary, ws);
       changes.push({ type: "decisionChecks" });
     });
   }

@@ -16,11 +16,18 @@ type Json = any;
 const ARCHIVE_REVIEW_MESSAGES = 400;
 const ARCHIVE_REVIEW_BYTES = 80_000;
 
-/// The archive policy in force.
-export const policyOf = (hub: Hub): ArchivePolicy => currentPolicy(hub.store);
+/// Whose archive policy a session's chat is under (docs/multi-workspace.md): its workspace's, null for the station's home
+/// one (whose policy is kept as null).
+export function policyWs(hub: Hub, key: string): string | null {
+  const ws = hub.wsOf(key);
+  return ws === null || ws === hub.workspaces()[0] ? null : ws;
+}
 
-/// Which policy a check was made under: its number as saved (0 for the default).
-export const policyStamp = (hub: Hub): number => hub.store.archivePolicy()?.change.id ?? 0;
+/// The archive policy in force for a session's chat.
+export const policyOf = (hub: Hub, key: string): ArchivePolicy => currentPolicy(hub.store, policyWs(hub, key));
+
+/// Which policy a check of a session's chat was made under: its number as saved (0 for the default).
+export const policyStamp = (hub: Hub, key: string): number => hub.store.archivePolicy(policyWs(hub, key))?.change.id ?? 0;
 
 /// Starts the review in the background (a fiber of the hub's).
 export function suggestArchive(hub: Hub, key: string) {
@@ -51,8 +58,8 @@ export async function review(hub: Hub, key: string): Promise<void> {
       hub.store.recordDecision(key, detail);
     } catch {}
   };
-  const policy = policyOf(hub);
-  const policyAt = policyStamp(hub);
+  const policy = policyOf(hub, key);
+  const policyAt = policyStamp(hub, key);
   // What the chats look like to their pages: the option picked, or why none was, for each thread as it stands.
   const verdict = (versions: [number, number][], v: Json) => {
     for (const [id, version] of versions) {
@@ -118,7 +125,7 @@ export async function review(hub: Hub, key: string): Promise<void> {
   const picked = "ok" in reviewed ? policy.options.find((o) => o.id === reviewed.ok.selected) : undefined;
   // Said while the chat stood still: anything said since makes it a question for another review.
   const now = hub.config().automaticDecisions.completion;
-  const unchanged = versions.every(([id, version]) => hub.store.lastEntry(id) === version) && now.enabled === rule.enabled && now.model === rule.model && policyStamp(hub) === policyAt;
+  const unchanged = versions.every(([id, version]) => hub.store.lastEntry(id) === version) && now.enabled === rule.enabled && now.model === rule.model && policyStamp(hub, key) === policyAt;
   record({
     purpose: "archive",
     version: 3,
@@ -153,13 +160,13 @@ export async function review(hub: Hub, key: string): Promise<void> {
 export function undecided(hub: Hub): string[] {
   const { store } = hub;
   const stats = store.sessionStats(null);
-  const policy = policyStamp(hub);
   const keys: string[] = [];
   for (const s of store.listSessions()) {
     if (s.archivedAt !== null || s.running) continue;
     const stat = stats.get(s.key);
     const last = stat?.lastTurn ?? null;
     if (!last || last.endedAt === null || last.ending !== "all_done" || (stat?.pending ?? 0) > 0) continue;
+    const policy = policyStamp(hub, s.key);
     const threads = store.sessionThreads(s.key).map((t) => t.thread.id);
     const decided = store.lastDecision(s.key);
     // Under another policy than now, it is asked again, the recommended ones too.

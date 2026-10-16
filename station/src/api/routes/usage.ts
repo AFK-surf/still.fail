@@ -44,7 +44,7 @@ export const routes = ({ read, host, agents }: Tools): Route[] => {
         const from = number(r, "from") ?? 0n;
         const tz = number(r, "tz") ?? 0n;
         const clamped = tz < -1440n ? -1440n : tz > 1440n ? 1440n : tz;
-        return read(r, "usage", { lang: r.lang, from: String(from), to: String(to), tz: String(clamped), reading: agents?.usage.readingAll() ?? true });
+        return read(r, "usage", { lang: r.lang, from: String(from), to: String(to), tz: String(clamped), reading: agents?.usage.readingAll() ?? true, viewer: r.viewer });
       },
     },
     // Sessions this machine's own Claude Code and Codex kept (in a terminal), to go on with one in a chat: the

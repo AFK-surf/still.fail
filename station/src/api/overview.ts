@@ -13,6 +13,9 @@ import type { Hub } from "../sessions/hub.ts";
 import type { Store } from "../store/store.ts";
 import type { Updates } from "../updates/updates.ts";
 import { rootView, rootsOf } from "../drive/drive.ts";
+import { sees } from "../store/rows.ts";
+import { titleOf } from "../read/views.ts";
+import { policyView } from "../sessions/archive-policy.ts";
 
 
 /// What the Slack side adds (src/slack): a connect's connection, the viewer's Slack workspaces and apps.
@@ -32,17 +35,19 @@ export type OverviewDeps = {
   slack?: SlackView;
 };
 
-/// This station's link to still.fail cloud, as the pages show it (server.rs MeshFile::status).
-export function meshStatus(cloud: Cloud): Record<string, unknown> {
+/// This station's link to still.fail cloud, as the pages show it (server.rs MeshFile::status): in the viewer's workspace
+/// (docs/multi-workspace.md), its home one for no one in particular.
+export function meshStatus(cloud: Cloud, viewer?: Viewer): Record<string, unknown> {
   const s = cloud.state;
   if (s === null) return { state: "off", origin: null, station: null, workspace: null, workspaceId: null, name: null };
+  const m = viewer === undefined ? null : cloud.membership(viewer.workspace);
   const v: Record<string, unknown> = {
     state: s.removed_at !== undefined ? "removed" : "running",
     origin: s.origin ?? null,
     station: s.station ?? null,
-    workspace: s.workspace_name ?? null,
-    workspaceId: s.workspace ?? null,
-    name: s.name ?? null,
+    workspace: m?.workspace_name ?? s.workspace_name ?? null,
+    workspaceId: m?.workspace ?? s.workspace ?? null,
+    name: m?.name ?? s.name ?? null,
   };
   if (s.removed_at !== undefined) v.removedAt = s.removed_at;
   return v;
@@ -65,11 +70,13 @@ function diskRoom(path: string): unknown {
 
 export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Promise<unknown> {
   const raw = d.config() ?? {};
-  const sessions = d.store.listSessions();
-  // The agents' runtime processes; background jobs' groups are recorded too (to be reaped), but they are jobs.
-  const processes = d.store.listProcesses().filter((p) => p.runtime !== "job");
+  // What is of the viewer's workspace (docs/multi-workspace.md): its chats, and the connects added in it.
+  const sessions = d.store.listSessions().filter((s) => sees(viewer, s.ws));
+  // The agents' runtime processes; background jobs' groups are recorded too (to be reaped), but they are jobs. The
+  // machine's: for its home workspace's members.
+  const processes = viewer.home === false ? [] : d.store.listProcesses().filter((p) => p.runtime !== "job");
   const memory = await processMemory(processes.map((p) => p.pgid));
-  const connects = (Array.isArray(raw.connects) ? raw.connects : []).map((c: any) => {
+  const connects = (Array.isArray(raw.connects) ? raw.connects : []).filter((c: any) => sees(viewer, typeof c?.workspace === "string" && c.workspace !== "" ? c.workspace : null)).map((c: any) => {
     const mode = c.mode ?? "multi-session";
     const slack = c.slack ?? {};
     const runtime = c.bind?.runtime;
@@ -94,9 +101,9 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
   });
   const states = sessions.map((s) => d.hub.processState(s.key));
   return {
-    automaticDecisions: d.accounts?.automaticDecisionsView(viewer) ?? null,
+    automaticDecisions: d.accounts ? decisionsView(d, viewer) : null,
     viewer: { via: "mesh", ...viewer },
-    mesh: meshStatus(d.cloud),
+    mesh: meshStatus(d.cloud, viewer),
     connects,
     profiles: d.accounts?.profilesView() ?? [],
     footprint: null,
@@ -118,6 +125,29 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     slackApps: d.slack?.apps(viewer) ?? [],
     // The folders pinned in its drive (drive/drive.ts), each with whether it can be browsed now; a member who may write
     // browses every folder from the home (`anywhere`).
-    drive: { roots: rootsOf(raw).map(rootView), ...(readOnly(viewer) ? {} : { anywhere: true, home: homedir() }) },
+    // Those of a joined workspace browse only its pinned folders, never the whole machine.
+    drive: { roots: rootsOf(raw).map(rootView), ...(readOnly(viewer) || viewer.home === false ? {} : { anywhere: true, home: homedir() }) },
   };
+}
+
+/// The automatic decisions as the viewer sees them: the checks of their workspace's chats only, and the archive policy of
+/// their workspace (docs/multi-workspace.md: one each), which its owners and admins edit (`canEditPolicy`). The rest
+/// (the rule, its model) is the station's, its home workspace managers'.
+function decisionsView(d: OverviewDeps, viewer: Viewer): unknown {
+  const view = d.accounts!.automaticDecisionsView(viewer);
+  const mine = (session: unknown) => typeof session === "string" && sees(viewer, d.store.getSession(session)?.ws ?? null);
+  const manages = viewer.role === "owner" || viewer.role === "admin";
+  if (Array.isArray(view?.recent)) view.recent = view.recent.filter((row: any) => mine(row?.session));
+  if (view?.policy !== undefined || (manages && viewer.home === false)) {
+    view.policy = policyView(d.store, viewer.home === false ? viewer.workspace : null, mine, (session) => chatTitleOf(d.store, session));
+    view.canEditPolicy = manages;
+  }
+  return view;
+}
+
+/// What a session's chat is called in the chat list; its key only where it has no chat.
+function chatTitleOf(store: Store, session: string): string {
+  const summary = store.listThreads("", session, null)[0];
+  if (summary) return titleOf(summary.thread, summary.firstText, null);
+  return store.getSession(session)?.title ?? session;
 }

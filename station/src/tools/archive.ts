@@ -3,7 +3,7 @@
 // checked again under it.
 import { currentPolicy, MAX_OPTIONS, savePolicy } from "../sessions/archive-policy.ts";
 import type { Hub } from "../sessions/hub.ts";
-import { reviewUndecided } from "../sessions/review.ts";
+import { policyWs, reviewUndecided } from "../sessions/review.ts";
 import type { Tool } from "./mcp.ts";
 
 export const ARCHIVE_POLICY = {
@@ -42,10 +42,12 @@ export function archiveTools(hub: Hub): Tool[] {
     {
       ...ARCHIVE_POLICY,
       run: async (key, args) => {
-        const now = currentPolicy(hub.store);
+        // The policy of the workspace the session's chat is in.
+        const ws = policyWs(hub, key);
+        const now = currentPolicy(hub.store, ws);
         if (args.policy === undefined && args.options === undefined) return JSON.stringify(now, null, 2);
         const next = { policy: args.policy ?? now.policy, options: args.options ?? now.options };
-        const changed = savePolicy(hub.store, next, { kind: "agent", session: key });
+        const changed = savePolicy(hub.store, next, { kind: "agent", session: key }, ws);
         if (changed === null) return "Nothing changed: the policy is already so.";
         void reviewUndecided(hub).catch(() => {});
         return `Saved (${changed}). The done chats are checked again under it; this chat is when your turn ends all_done. Tell the person what you changed.`;

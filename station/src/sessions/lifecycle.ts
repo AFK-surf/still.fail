@@ -53,6 +53,9 @@ export function bindSingle(hub: Hub, connectId: string, target: string | null, t
   const row = hub.store.getSession(target);
   if (!row) throw new Error(`unknown session ${target}`);
   if (row.runtime !== connect.bind.runtime) throw new Error(`session ${target} runs ${row.runtime}, the connect runs ${connect.bind.runtime}`);
+  // A connect's sessions are its workspace's chats (docs/multi-workspace.md): none of another workspace.
+  const home = hub.workspaces()[0] ?? null;
+  if (home !== null && hub.wsOf(row) !== (connect.workspace ?? home)) throw new Error(`session ${target} is in another workspace than the connect`);
   hub.store.setBinding(connect.id, target);
   log.info("hub", "single-session connect rebound", { connect: connect.id, session: target });
   return target;
@@ -81,7 +84,12 @@ function stillfailChat(hub: Hub, thread: number): ThreadRow {
 /// Brings another session into a chat on the station's pages; it hears what is said from then on.
 export function addToThread(hub: Hub, thread: number, session: string) {
   stillfailChat(hub, thread);
-  if (hub.store.getSession(session) === null) throw new Error(`unknown session ${session}`);
+  const row = hub.store.getSession(session);
+  if (row === null) throw new Error(`unknown session ${session}`);
+  // A chat is one workspace's (docs/multi-workspace.md): no session of another joins it. Outside any workspace, all are
+  // the same one's.
+  const there = hub.store.threadSessions(thread)[0];
+  if (hub.workspaces().length > 0 && there !== undefined && hub.wsOf(there.session) !== hub.wsOf(row)) throw new Error(`session ${session} is in another workspace than the chat`);
   hub.store.joinThread(thread, session, INTERNAL_CONNECT);
 }
 

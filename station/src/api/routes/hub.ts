@@ -32,6 +32,7 @@ import { withLock, workspaceFile } from "../../sessions/archive.ts";
 import { roomOf } from "../../sessions/footprint.ts";
 import { dir as thumbsDir, keep } from "../../sessions/thumbs.ts";
 import { wall } from "../../ops/fibers.ts";
+import { sessionSeen } from "../seen.ts";
 
 const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
 const ok = (value: unknown, status = 200) => json(status, JSON.stringify(value));
@@ -194,8 +195,9 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
       return error(500, (e as Error).message);
     }
   };
-  const session = (s: Store, key: string) => {
-    if (s.getSession(key) === null) throw new Refused(404, `unknown session ${key}`);
+  /// A session there, and in the asker's workspace (one of another is none for them: api/seen.ts).
+  const session = (s: Store, key: string, r: Request) => {
+    if (s.getSession(key) === null || !sessionSeen(s, r.viewer, key)) throw new Refused(404, `unknown session ${key}`);
   };
   const thread = (s: Store, id: string) => {
     const n = /^[+-]?\d+$/.test(id) ? Number(id) : NaN;
@@ -352,7 +354,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
         write((s, a) => {
           const i = input(r);
           const key = text(i.session);
-          session(s, key);
+          session(s, key, r);
           const t = typeof i.title === "string" ? i.title.trim() : "";
           const chat = openChat(a.hub, key, r.viewer.email, t === "" ? null : chars(t, 80));
           return threadView(r, chat.id);
@@ -391,7 +393,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
       handle: (r, [k]) =>
         write(async (s, a) => {
           const key = segment(k!);
-          session(s, key);
+          session(s, key, r);
           await deleteSession(a.hub, key);
           log.info("admin", "session deleted from the admin page", { session: key, by: r.viewer.email });
           return ok({ ok: true });
@@ -403,7 +405,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
       handle: (r, [k]) =>
         write((s, a) => {
           const key = segment(k!);
-          session(s, key);
+          session(s, key, r);
           const removed = a.jobs.clearEnded(key);
           log.info("admin", "ended jobs cleared from the admin page", { session: key, by: r.viewer.email, count: removed.length });
           return ok({ removed });
@@ -417,7 +419,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
         handle: (r, [k]) =>
           write(async (s, a) => {
             const key = segment(k!);
-            session(s, key);
+            session(s, key, r);
             await archive(a.hub, key, method === "POST");
             return read(r, "summary", { key, lang: r.lang });
           }),
@@ -437,7 +439,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
               await a.hub.evict(key);
               return ok({ ok: true });
             case "warm":
-              session(s, key);
+              session(s, key, r);
               a.hub.warm(key).catch((e) => log.warn("admin", "warming failed", { session: key, error: (e as Error).message }));
               return ok({ ok: true }, 202);
             // How the session runs from its next turn on: its profile, model, effort (configure).
@@ -513,7 +515,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
         write(async (s, a) => {
           const t = thread(s, segment(rawId!));
           const key = text(input(r).session);
-          session(s, key);
+          session(s, key, r);
           await as(400, () => addToThread(a.hub, t.id, key));
           return threadView(r, t.id);
         }),

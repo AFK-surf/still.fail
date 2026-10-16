@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
+import { type InWorkspace, sees } from "../store/rows.ts";
 
 export type Json = any;
 
@@ -34,6 +35,8 @@ export type SessionRow = {
   profile: string; profilePinned: boolean; model: string | null; effort: string | null; fast: boolean | null;
   runtimeSessionId: string | null; workspace: string; cwd: string | null; running: boolean; createdAt: number;
   lastActiveAt: number; archivedAt: number | null; archivedBy: string | null; shownAt: number | null;
+  /// Which of the station's workspaces its chat is in (store/rows.ts): null is the home one. Not for the pages.
+  ws: string | null;
 };
 
 export type ThreadRow = {
@@ -167,6 +170,7 @@ function toSession(r: Json): SessionRow {
     fast: r.fast === null || r.fast === undefined ? null : r.fast !== 0, runtimeSessionId: r.runtime_session_id,
     workspace: r.workspace, cwd: r.cwd ?? null, running: r.running === 1, createdAt: r.created_at,
     lastActiveAt: r.last_active_at, archivedAt: r.archived_at, archivedBy: r.archived_by, shownAt: r.shown_at,
+    ws: r.ws ?? null,
   };
 }
 
@@ -306,6 +310,26 @@ const all = (s: Store, sql: string, ...args: Json[]): Json[] => s.db.prepare(sql
 export function getSession(s: Store, key: string): SessionRow | null {
   const r = one(s, "SELECT * FROM sessions WHERE key = ?", key);
   return r ? toSession(r) : null;
+}
+
+/// Which sessions `viewer` sees (docs/multi-workspace.md): those whose chat is in their workspace (one not there: the
+/// home one's). A read made for no one (null) sees every one.
+export function seenBy(s: Store, viewer: InWorkspace | null | undefined): (key: string) => boolean {
+  if (!viewer) return () => true;
+  // `*`: a database from before has no `ws` (every chat its home workspace's).
+  const ws = new Map<string, string | null>(all(s, "SELECT * FROM sessions").map((r) => [r.key, r.ws ?? null]));
+  return (key) => sees(viewer, ws.get(key) ?? null);
+}
+
+/// Whether `viewer` sees a thread: one of its sessions is in their workspace (a thread with none: the home one's).
+export function seesThread(s: Store, viewer: InWorkspace | null | undefined, thread: number): boolean {
+  if (!viewer) return true;
+  const members = threadSessions(s, thread);
+  if (members.length === 0) return sees(viewer, null);
+  return members.some((m) => {
+    const row = getSession(s, m.session);
+    return row !== null && sees(viewer, row.ws);
+  });
 }
 
 /// Every session, most recently active first.

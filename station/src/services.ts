@@ -7,6 +7,7 @@ import { Admin } from "./api/admin.ts";
 import { Shares } from "./mesh/adb.ts";
 import { Events as EventStreams } from "./api/events.ts";
 import { Host } from "./api/host.ts";
+import { jobSeen, sessionSeen, threadSeen } from "./api/seen.ts";
 import { outputAt, tail } from "./read/jobs.ts";
 import { Store as StationStore } from "./store/store.ts";
 import { type StationKey, loadKey } from "./cloud/key.ts";
@@ -111,6 +112,7 @@ export class Events extends Context.Service<Events, EventStreams>()("stillfail/E
         tail,
         outputAt,
         sessionExists: (key) => store.getSession(key) !== null,
+        seen: (viewer, of) => ("session" in of ? sessionSeen(store, viewer, of.session) : "thread" in of ? threadSeen(store, viewer, of.thread) : jobSeen(store, viewer, of.job)),
       });
     }),
   );

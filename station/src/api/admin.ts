@@ -30,6 +30,8 @@ import { previewTarget, proxyPreview } from "../jobs/preview.ts";
 import type { Clock } from "effect";
 import { liveClock } from "../ops/fibers.ts";
 import { readOnly } from "../mesh/credential.ts";
+import { elsewhere } from "./seen.ts";
+import { reviewUndecided } from "../sessions/review.ts";
 
 /// What a read-only member (a viewer, contract §4) may still ask besides reads: marks of their own (read, kept,
 /// dismissed), which change nothing anyone else sees.
@@ -133,7 +135,14 @@ export class Admin {
         : []),
       ...(deps.agents?.xshare ? xshare({ xshare: deps.agents.xshare, store: deps.store }) : []),
       ...publish(tools),
-      ...(deps.agents?.accounts ? accounts({ accounts: deps.agents.accounts, sharing: deps.agents.sharing, overview: (r) => deps.agents!.overview(r.viewer, r.lang) }) : []),
+      ...(deps.agents?.accounts
+        ? accounts({
+            accounts: deps.agents.accounts,
+            sharing: deps.agents.sharing,
+            overview: (r) => deps.agents!.overview(r.viewer, r.lang),
+            ...(deps.store ? { policies: { store: deps.store, review: () => void reviewUndecided(deps.agents!.hub).catch(() => {}) } } : {}),
+          })
+        : []),
       // The station as its settings pages show it.
       ...(deps.agents?.overview ? [{ method: "GET", pattern: /^\/overview$/, handle: async (r: Request) => json(200, JSON.stringify(await deps.agents!.overview(r.viewer, r.lang))) }] : []),
     ];
@@ -193,6 +202,9 @@ export class Admin {
     // A viewer reads: no message sent, nothing changed (previews included).
     if (readOnly(r.viewer) && !readOnlyMay(r)) return error(403, "read-only members cannot change this station");
     if (r.method === "POST" && /^\/*batch$/.test(r.path)) return this.batch(r);
+    // A session, chat or job of another workspace than the viewer's is none for them (api/seen.ts).
+    const hidden = this.deps.store ? elsewhere(this.deps.store, r.path, r.viewer) : null;
+    if (hidden !== null) return error(404, hidden);
     // A web service on this machine, through its preview's path: any method, its answer as it comes.
     const preview = previewTarget(r.path);
     if (preview !== null) {

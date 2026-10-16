@@ -88,10 +88,12 @@ export function rustLines(text: string): string[] {
 }
 
 /// GET /jobs (views.rs `open_jobs`): the jobs still up (running, or a service being started again), newest first, each
-/// with the chat it is in as the viewer's list has it (`chat`: its id, title and whether it is archived).
+/// with the chat it is in as the viewer's list has it (`chat`: its id, title and whether it is archived). Those of the
+/// viewer's workspace's chats.
 export function openJobs(s: Store, viewer: Viewer, lang: Lang): Json[] {
   setLang(lang);
-  const open = store.listJobs(s, null).filter((j) => j.state === "running" || (j.port !== null && j.state === "exited"));
+  const seen = store.seenBy(s, viewer);
+  const open = store.listJobs(s, null).filter((j) => (j.state === "running" || (j.port !== null && j.state === "exited")) && seen(j.sessionKey));
   if (open.length === 0) return [];
   // Each job's chat: the session's own over one it only takes part in, a listed one over an archived one (the last of
   // each, as the sidebar lists them). The archive's rows are read only for a session whose own chat is not listed: they

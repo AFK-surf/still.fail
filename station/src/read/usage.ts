@@ -8,7 +8,8 @@ import { knownChannel, slackCreator } from "./slack-known.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
-import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, usageGroups, usageSince, usageThreads } from "./store.ts";
+import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, seenBy, usageGroups, usageSince, usageThreads } from "./store.ts";
+import type { InWorkspace } from "../store/rows.ts";
 import { titleOf } from "./views.ts";
 
 // ── prices (usage.rs) ──
@@ -196,9 +197,12 @@ const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.
 
 /// admin/views.rs `usage`: what the agents spent from `from` until `to` (ms), by day in the asker's time zone
 /// (`utcOffsetMin`), with the threads, people and profiles the rows name. `from`/`to` are i64s, written as such.
-/// `reading`: whether the counter is still reading everything for the first time (UsageCounter.readingAll).
-export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true): Json {
-  const rows = summary(s, from, to, utcOffsetMin);
+/// `reading`: whether the counter is still reading everything for the first time (UsageCounter.readingAll). `viewer`:
+/// only the calls of their workspace's chats (docs/multi-workspace.md; those of sessions gone, the home one's); all of
+/// them for a read made for no one.
+export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true, viewer: InWorkspace | null = null): Json {
+  const seen = seenBy(s, viewer);
+  const rows = summary(s, from, to, utcOffsetMin).filter((r) => seen(r.session));
   const wanted = [...new Set(rows.map((r) => r.thread).filter((t): t is number => t !== null))];
   const threads: Record<string, Json> = {};
   for (const [t, first] of usageThreads(s, wanted)) {

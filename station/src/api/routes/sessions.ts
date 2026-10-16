@@ -213,7 +213,7 @@ async function openFile(read: Tools["read"], r: Request, key: string): Promise<A
   }
 }
 
-const sessionsOf = (r: Request) => ({ connect: param(r, "connect") ?? null, archived: param(r, "archived") === "1", lang: r.lang });
+const sessionsOf = (r: Request) => ({ connect: param(r, "connect") ?? null, archived: param(r, "archived") === "1", lang: r.lang, viewer: r.viewer });
 const threadsOf = (r: Request) => ({ viewer: r.viewer, session: param(r, "session") ?? null, lang: r.lang });
 
 export const routes = ({ read, agents }: Tools): Route[] => [
