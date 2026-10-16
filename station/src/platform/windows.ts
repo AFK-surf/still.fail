@@ -449,4 +449,5 @@ export const windows: Platform = {
   hasKeychain: false,
   hasQuickLook: false,
   hasFolderPermissions: false,
+  hasDesktopScreen: false,
 };

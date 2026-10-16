@@ -14,6 +14,8 @@ import { type Admitted, readOnly, revoked, verifyMemberOf } from "./credential.t
 import { type Entry, LockRefusal, admit, asEntry, genesis, lowerRole } from "../cloud/lock.ts";
 import type { Connection, Stream } from "./native.ts";
 import { answerAdb, type Shares } from "./adb.ts";
+import { answerScreen } from "./screens.ts";
+import type { ScreenHub } from "../screens/hub.ts";
 import { compressed } from "./compress.ts";
 import { Traces, parseParent, route } from "./traces.ts";
 import { FrameReader, SocketRefused, openSocket, previewTarget, pumpSocket } from "../jobs/preview.ts";
@@ -140,6 +142,8 @@ export type Members = {
   up(): boolean;
   /// Phones lent to the agents.
   shares: Shares;
+  /// The screens members see and drive (docs/remote-screens.md); none: no view is answered.
+  screens?: ScreenHub;
   /// The mesh's spans, when traces are on.
   traces?: Traces;
   /// Which member credentials the control plane signs (still.fail cloud's when not said).
@@ -247,7 +251,7 @@ async function request(m: Members, raw: Stream, viewer: Admitted["viewer"], conn
   const method: string = typeof head.method === "string" ? head.method.toUpperCase() : "GET";
   const path: string = typeof head.path === "string" ? head.path : "";
   // A span of the caller's trace when it records one: from the stream's acceptance to its answer's last byte (an
-  // event stream's, a socket's or a phone's offer: to its head). The admin API's goes under ours.
+  // event stream's, a socket's, a screen's view or a phone's offer: to its head). The admin API's goes under ours.
   const traced = tracing(m.traces, head, method, path, conn.via(), accepted, raw, firstReader.carry.length);
   const stream = traced.stream;
   const reader = firstReader;
@@ -300,7 +304,7 @@ function tracing(traces: Traces | undefined, head: any, method: string, path: st
           const said = JSON.parse(line.toString());
           outcome.status = Number(said.status) || 0;
           const type = String(said.headers?.["content-type"] ?? "");
-          if (outcome.status === 101 || type.startsWith("text/event-stream") || type.startsWith("application/x-ndjson")) end(true, null);
+          if (outcome.status === 101 || type.startsWith("text/event-stream") || type.startsWith("application/x-ndjson") || type.startsWith("application/x-stillfail-screen")) end(true, null);
         } catch {}
         outcome.sent += bytes.length - line.length - 1;
       } else outcome.sent += bytes.length;
@@ -326,6 +330,11 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     // Lending a phone is a change a read-only member does not make.
     if (readOnly(viewer)) return answer(403, { error: "read-only members cannot lend or use phones" });
     return answerAdb(m.shares, conn, viewer, head, stream, reader);
+  }
+  // A view of a screen (mesh/screens.ts): frames both ways for as long as it lasts. A read-only member views only.
+  if (head.screen !== null && typeof head.screen === "object" && !Array.isArray(head.screen)) {
+    if (m.screens === undefined) return answer(404, { error: "no screens on this station" });
+    return answerScreen(m.screens, stream, reader.carry, head, viewer, m.up);
   }
   // A preview page's WebSocket (`"socket": true`): no body to wait for, the stream carries its messages both ways.
   if (head.socket === true) {

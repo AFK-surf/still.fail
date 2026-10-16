@@ -149,6 +149,8 @@ export type Platform = {
   hasQuickLook: boolean;
   /// Privacy permissions a folder can be denied by (macOS's).
   hasFolderPermissions: boolean;
+  /// The machine's display seen and driven from a client (docs/remote-screens.md; macOS's ScreenCaptureKit).
+  hasDesktopScreen: boolean;
 };
 
 export const platform: Platform = process.platform === "win32" ? windows : unix;

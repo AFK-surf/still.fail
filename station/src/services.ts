@@ -18,6 +18,9 @@ import { type Mesh, loadMesh } from "./mesh/native.ts";
 import { Readers as ReaderPool } from "./read/pool.ts";
 import { Agents } from "./sessions/agents.ts";
 import { log } from "./ops/log.ts";
+import { platform } from "./platform/index.ts";
+import { ScreenHub } from "./screens/hub.ts";
+import { Desktop, screenHelper } from "./screens/desktop.ts";
 
 /// Where the station keeps its data, and the release it runs from.
 export class Paths extends Context.Service<Paths, { readonly data: string; readonly app: string }>()("stillfail/Paths") {}
@@ -96,6 +99,29 @@ export class Store extends Context.Service<Store, StationStore>()("stillfail/Sto
   );
 }
 
+/// The screens members see and drive (docs/remote-screens.md): the registry the station's parts add their sources to
+/// (`add`), with this machine's display among them from the start; views of them end as the station stops.
+export class ScreenRegistry extends Context.Service<ScreenRegistry, ScreenHub>()("stillfail/Screens") {
+  static readonly layer = Layer.effect(
+    ScreenRegistry,
+    Effect.gen(function* () {
+      const hub = yield* Effect.acquireRelease(Effect.sync(() => new ScreenHub()), (hub) => Effect.sync(() => hub.close()));
+      const desktop = new Desktop({ supported: platform.hasDesktopScreen, helper: screenHelper(), changed: () => hub.changed() });
+      yield* Effect.acquireRelease(
+        Effect.sync(() => {
+          const remove = hub.add(desktop);
+          const unrefresh = hub.refresher(() => desktop.refresh());
+          // Its size and grants as they are at start.
+          void desktop.refresh();
+          return () => (unrefresh(), remove(), desktop.close());
+        }),
+        (stop) => Effect.sync(stop),
+      );
+      return hub;
+    }),
+  );
+}
+
 /// The event streams (GET /events): the store's changes, pushed.
 export class Events extends Context.Service<Events, EventStreams>()("stillfail/Events") {
   static readonly layer = Layer.effect(
@@ -104,7 +130,8 @@ export class Events extends Context.Service<Events, EventStreams>()("stillfail/E
       const store = yield* Store;
       const readers = yield* Readers;
       const admin = yield* AdminHost;
-      return new EventStreams({
+      const screens = yield* ScreenRegistry;
+      const events = new EventStreams({
         readers,
         subscribe: (listener) => store.subscribe(listener),
         host: () => admin.sample(),
@@ -114,6 +141,12 @@ export class Events extends Context.Service<Events, EventStreams>()("stillfail/E
         sessionExists: (key) => store.getSession(key) !== null,
         seen: (viewer, of) => ("session" in of ? sessionSeen(store, viewer, of.session) : "thread" in of ? threadSeen(store, viewer, of.thread) : jobSeen(store, viewer, of.job)),
       });
+      // The screens as they change, and who is on them (`screens`).
+      yield* Effect.acquireRelease(
+        Effect.sync(() => screens.onChange(() => events.screens((lang) => screens.listed(lang)))),
+        (off) => Effect.sync(off),
+      );
+      return events;
     }),
   );
 }
@@ -133,7 +166,7 @@ export class AdminApi extends Context.Service<AdminApi, Admin>()("stillfail/Admi
   static readonly layer = Layer.effect(
     AdminApi,
     Effect.gen(function* () {
-      return new Admin(yield* Readers, { store: yield* Store, events: yield* Events, host: yield* AdminHost, agents: yield* Agents });
+      return new Admin(yield* Readers, { store: yield* Store, events: yield* Events, host: yield* AdminHost, agents: yield* Agents, screens: yield* ScreenRegistry });
     }),
   );
 }
