@@ -192,5 +192,19 @@
   "core-misc.screen.badInput": "Unrecognized input",
   "core-misc.screen.closed": "This screen view is closed",
   "core-misc.screen.open": "A screen view of this name is already open",
-  "core-misc.screen.garbled": "Couldn't read the screen's data: {error}"
+  "core-misc.screen.garbled": "Couldn't read the screen's data: {error}",
+  "core-misc.vault.unavailable": "The vault is in the desktop and Android apps: a web page keeps no keys",
+  "core-misc.vault.needsLock": "The vault needs the workspace's security mode on",
+  "core-misc.vault.notSigner": "This device is not confirmed in the workspace's security mode yet",
+  "core-misc.vault.notSetUp": "Set up the vault on this device first",
+  "core-misc.vault.noStation": "No station of this workspace holds vaults: they need the security mode and an update",
+  "core-misc.vault.noKey": "This device has no key to this vault yet: add it from another of your devices, or use your recovery words",
+  "core-misc.vault.notOwner": "Only the vault's owner gives its key to more devices",
+  "core-misc.vault.unknown": "No such vault, or not one of yours",
+  "core-misc.vault.unknownItem": "No such item",
+  "core-misc.vault.untrusted": "This item is not signed by a member of its vault",
+  "core-misc.vault.noRequest": "That request is not waiting any more",
+  "core-misc.vault.reason.open": "Open “{name}”",
+  "core-misc.vault.reason.unlock": "Unlock the vault “{name}”",
+  "core-misc.vault.reason.approve": "Let an agent use “{name}”"
 }

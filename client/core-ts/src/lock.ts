@@ -124,6 +124,11 @@ export class Signer {
     const hash = entryHash(e);
     return { ...e, sig: { key: this.id, alg: "Ed25519", sig: hex(ed25519.sign(signedBytes(hash), this.#seed)) } };
   }
+
+  /// Other bytes it vouches for (the vault's records, vault/crypto.ts `sign`): the signature in hex.
+  signBytes(bytes: Uint8Array): string {
+    return hex(ed25519.sign(bytes, this.#seed));
+  }
 }
 
 /// The entry that follows `head` (the genesis when there is none), unsigned.

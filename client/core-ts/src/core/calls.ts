@@ -95,7 +95,9 @@ export type Call =
   /// A station's screen seen and driven (screens.ts): `screen.view` and what goes on it.
   | { kind: "screen"; call: ScreenCall }
   /// The workspace lock (views/lock.ts): `lock.<name>` on a workspace, with what it takes.
-  | { kind: "lock"; name: string; workspace: string; params: Record<string, unknown> };
+  | { kind: "lock"; name: string; workspace: string; params: Record<string, unknown> }
+  /// The vault (views/vault.ts): `vault.<name>` on a workspace, with what it takes.
+  | { kind: "vault"; name: string; workspace: string; params: Record<string, unknown> };
 
 /// Whether a UI can cancel it (`{id, cancel}`), and one gone does: the calls that hold something open for a page.
 export function cancellable(call: Call): boolean {
@@ -182,12 +184,17 @@ export function counts(call: Call, name: string): boolean {
       return call.call.kind === "pair" || call.call.kind === "grant";
     case "lock":
       return call.name !== "state" && call.name !== "toggle" && call.name !== "dismiss" && call.name !== "shown";
+    case "vault":
+      return call.name !== "state" && call.name !== "lock" && call.name !== "open";
     default:
       return false;
   }
 }
 
 const S = "string" as const;
+
+/// The vault's calls (views/vault.ts).
+export const VAULT_CALLS = ["state", "lock", "setup", "create", "addDevice", "putItem", "deleteItem", "open", "recover", "approve", "deny"];
 
 /// The workspace lock's calls (views/lock.ts).
 export const LOCK_CALLS = ["state", "open", "toggle", "dismiss", "shown", "request", "confirm", "deny", "addStation", "joinStation", "renew", "removeDevice", "disable"];
@@ -249,6 +256,10 @@ export function parseCall(name: string, params: unknown): Call {
     return files as { id: string; name: string; size: number; width?: number; height?: number }[];
   };
   const uploadFields = () => { const files = uploads(); return files.length ? { uploads: files } : {}; };
+  if (name.startsWith("vault.") && VAULT_CALLS.includes(name.slice(6))) {
+    const p = read(params, [["workspace", S, "req"]]);
+    return { kind: "vault", name: name.slice(6), workspace: p.workspace as string, params: isObject(params) ? (params as Record<string, unknown>) : {} };
+  }
   if (name.startsWith("lock.") && LOCK_CALLS.includes(name.slice(5))) {
     const p = read(params, [["workspace", S, "req"]]);
     return { kind: "lock", name: name.slice(5), workspace: p.workspace as string, params: isObject(params) ? (params as Record<string, unknown>) : {} };

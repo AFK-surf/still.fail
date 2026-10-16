@@ -37,6 +37,8 @@ const SPECS: Record<string, Spec> = {
   sessions: items("key"),
   jobs: items("id"),
   history: { fields: { items: items("key") } },
+  vaults: { fields: { vaults: items("id"), requests: items("id") } },
+  vaultItems: { fields: { items: items("id") } },
 };
 
 export function specOf(topic: Topic): Spec | null {

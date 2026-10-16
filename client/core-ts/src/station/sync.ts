@@ -97,6 +97,9 @@ export class StationsSync {
   onChange: (address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens", key?: string) => void = () => {};
   /// Told of entries that came as they were said (an event): they come in with a motion.
   onTold: (address: string, id: number, entries: unknown[]) => void = () => {};
+  /// What other parts read of a station whenever it is read again (its stream opened afresh), each a task of its own
+  /// (the vault's: views/vault.ts); and hear of its events they know.
+  readonly also: { read(address: string): Effect.Effect<void, CoreError>; event(address: string, name: string, data: unknown): void }[] = [];
 
   constructor(core: Inner, wire: StationWire) {
     this.#core = core;
@@ -189,6 +192,7 @@ export class StationsSync {
       this.#enqueue(address, "screens", Priority.background, this.#screens(address, ctx)),
       ...this.#usageChanged(address, ctx),
       ...this.#slackConnects(address).map((id) => this.#enqueue(address, `slackApp/${id}`, Priority.background, read({ topic: "slackApp", station: address, connect: id }, `/connects/${encode(id)}/slack-app`))),
+      ...this.also.map((part, i) => this.#enqueue(address, `also/${i}`, Priority.background, part.read(address))),
     ];
     this.#core.runner.fork(Effect.ensuring(Effect.ignore(Effect.all(done.map((d) => Deferred.await(d)), { mode: "result" })), Effect.sync(() => span.end())));
   }
@@ -715,6 +719,8 @@ export class StationsSync {
       case "screens":
         this.#heldScreens(address, { screens: Array.isArray(get(data, "screens")) ? (get(data, "screens") as unknown[]) : [], outdated: false });
         return;
+      default:
+        for (const part of this.also) part.event(address, name, data);
     }
   }
 

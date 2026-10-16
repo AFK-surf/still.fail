@@ -4019,6 +4019,100 @@ export interface UsageView {
 	prices?: UsagePriceTable[];
 }
 
+/** An item of a vault. */
+export interface VaultItemRow {
+	id: string;
+	version: number;
+	at: number;
+	/** Its name: what it holds once the vault is unlocked, else its listing's (none: unlisted, locked). */
+	name?: string;
+	/** `token`, `ssh_key` or `login`, where known. */
+	kind?: string;
+	/** Agents see it (it has a listing). */
+	listed: boolean;
+	modes: string[];
+	hosts: string[];
+}
+
+/** A vault's items (the `vaultItems` topic). */
+export interface VaultItemsView {
+	vault: string;
+	name: string;
+	open: boolean;
+	items: VaultItemRow[];
+}
+
+/** A member of a vault: their name as the workspace has it (or their email). */
+export interface VaultMember {
+	sub: string;
+	name: string;
+}
+
+/** A station of the workspace that holds no vault. */
+export interface VaultRefusal {
+	station: string;
+	name: string;
+	/** Why it holds no vault: `vault_needs_lock` (it has not pinned the lock), `http_404` (too old). */
+	code: string;
+}
+
+/** An agent's request to use an item, waiting on the viewer (`vault.approve`, `vault.deny`). */
+export interface VaultRequest {
+	id: string;
+	vault: string;
+	vaultName: string;
+	item: string;
+	itemName?: string;
+	session: string;
+	chat: string;
+	/** `proxy`, `ssh` or `env`. */
+	mode: string;
+	reason: string;
+	command?: string;
+	hosts: string[];
+	at: number;
+}
+
+/** A vault the viewer is a member of. */
+export interface VaultRow {
+	id: string;
+	name: string;
+	owner: string;
+	ownerName: string;
+	/** The viewer owns it: they add devices and people to it. */
+	mine: boolean;
+	members: VaultMember[];
+	/** The station that holds it. */
+	station: string;
+	stationName: string;
+	items: number;
+	/** How many devices hold its key. */
+	devices: number;
+	/** Unlocked on this device now (its key kept a few minutes): item names shown, opened without asking. */
+	open: boolean;
+	/** This device holds its key. */
+	keyed: boolean;
+	/** Members' devices set up since that hold no key yet (`vault.addDevice`, by its owner). */
+	missing: number;
+	/** Its key is also sealed to its owner's recovery words. */
+	recoverable: boolean;
+}
+
+/** The workspace's vaults as the viewer sees them (the `vaults` topic; client/core-ts/src/views/vault.ts, docs/vault.md). */
+export interface VaultsView {
+	/** An app keeping keys in the system's secure storage (a web page is not). */
+	available: boolean;
+	/** The workspace's lock is on and checks out: the vault needs it. */
+	locked: boolean;
+	/** This device signs in the lock. */
+	canSign: boolean;
+	/** This device's box key is published (`vault.setup`). */
+	setUp: boolean;
+	vaults: VaultRow[];
+	requests: VaultRequest[];
+	refused: VaultRefusal[];
+}
+
 /**
  * A workspace's mark: of the chats its person takes part in, how many want them (blocked or failed) and how many
  * have something unread; of all its chats, how many have a decision waiting (`wait`); its `tone` (alert | wait | done, as a

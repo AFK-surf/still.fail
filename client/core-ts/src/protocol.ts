@@ -102,6 +102,8 @@ export const TOPICS: Record<string, Spec> = {
   memberships: { station: S },
   screens: { station: S },
   lockDraft: { workspace: S },
+  vaults: { workspace: S },
+  vaultItems: { workspace: S, vault: S },
 };
 
 const LIMITS: Record<string, number> = { u64: 2 ** 64, u32: 2 ** 32 - 1, u16: 65535 };

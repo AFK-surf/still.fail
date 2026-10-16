@@ -4014,6 +4014,107 @@ data class UsageView (
 	val prices: List<UsagePriceTable>? = null
 )
 
+/// An item of a vault.
+@Serializable
+data class VaultItemRow (
+	val id: String,
+	val version: UInt,
+	val at: Long,
+	/// Its name: what it holds once the vault is unlocked, else its listing's (none: unlisted, locked).
+	val name: String? = null,
+	/// `token`, `ssh_key` or `login`, where known.
+	val kind: String? = null,
+	/// Agents see it (it has a listing).
+	val listed: Boolean,
+	val modes: List<String>,
+	val hosts: List<String>
+)
+
+/// A vault's items (the `vaultItems` topic).
+@Serializable
+data class VaultItemsView (
+	val vault: String,
+	val name: String,
+	val open: Boolean,
+	val items: List<VaultItemRow>
+)
+
+/// A member of a vault: their name as the workspace has it (or their email).
+@Serializable
+data class VaultMember (
+	val sub: String,
+	val name: String
+)
+
+/// A station of the workspace that holds no vault.
+@Serializable
+data class VaultRefusal (
+	val station: String,
+	val name: String,
+	/// Why it holds no vault: `vault_needs_lock` (it has not pinned the lock), `http_404` (too old).
+	val code: String
+)
+
+/// An agent's request to use an item, waiting on the viewer (`vault.approve`, `vault.deny`).
+@Serializable
+data class VaultRequest (
+	val id: String,
+	val vault: String,
+	val vaultName: String,
+	val item: String,
+	val itemName: String? = null,
+	val session: String,
+	val chat: String,
+	/// `proxy`, `ssh` or `env`.
+	val mode: String,
+	val reason: String,
+	val command: String? = null,
+	val hosts: List<String>,
+	val at: Long
+)
+
+/// A vault the viewer is a member of.
+@Serializable
+data class VaultRow (
+	val id: String,
+	val name: String,
+	val owner: String,
+	val ownerName: String,
+	/// The viewer owns it: they add devices and people to it.
+	val mine: Boolean,
+	val members: List<VaultMember>,
+	/// The station that holds it.
+	val station: String,
+	val stationName: String,
+	val items: UInt,
+	/// How many devices hold its key.
+	val devices: UInt,
+	/// Unlocked on this device now (its key kept a few minutes): item names shown, opened without asking.
+	val open: Boolean,
+	/// This device holds its key.
+	val keyed: Boolean,
+	/// Members' devices set up since that hold no key yet (`vault.addDevice`, by its owner).
+	val missing: UInt,
+	/// Its key is also sealed to its owner's recovery words.
+	val recoverable: Boolean
+)
+
+/// The workspace's vaults as the viewer sees them (the `vaults` topic; client/core-ts/src/views/vault.ts, docs/vault.md).
+@Serializable
+data class VaultsView (
+	/// An app keeping keys in the system's secure storage (a web page is not).
+	val available: Boolean,
+	/// The workspace's lock is on and checks out: the vault needs it.
+	val locked: Boolean,
+	/// This device signs in the lock.
+	val canSign: Boolean,
+	/// This device's box key is published (`vault.setup`).
+	val setUp: Boolean,
+	val vaults: List<VaultRow>,
+	val requests: List<VaultRequest>,
+	val refused: List<VaultRefusal>
+)
+
 /// A workspace's mark: of the chats its person takes part in, how many want them (blocked or failed) and how many
 /// have something unread; of all its chats, how many have a decision waiting (`wait`); its `tone` (alert | wait | done, as a
 /// chat's mark) and in words, none when it is 0 and 0; the chat last

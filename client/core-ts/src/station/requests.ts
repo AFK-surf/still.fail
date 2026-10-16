@@ -34,9 +34,11 @@ export const UPLOAD_WHOLE_MAX = 50 * 1024 * 1024;
 export const SOCKET_OPEN_MS = 30_000;
 
 /// A station's non-2xx answer as an error.
+/// A station's refusal: its `code` where it says one (the vault's, `vault_needs_lock`…), else `http_<status>`.
 export function httpError(status: number, data: unknown): CoreError {
   const e = get(data, "error");
-  return new CoreError(`http_${status}`, typeof e === "string" ? e : t("station.core.requestFailed", { status }), status);
+  const code = get(data, "code");
+  return new CoreError(typeof code === "string" && /^[a-z][a-z0-9_]*$/.test(code) ? code : `http_${status}`, typeof e === "string" ? e : t("station.core.requestFailed", { status }), status);
 }
 
 export function failed(span: Span, error: CoreError): void {

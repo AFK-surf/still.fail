@@ -575,6 +575,13 @@ export class Data {
     }
     // A workspace's lock as the cloud keeps it (views/lock.ts): in the workspace's, by its id.
     if (table === "lock") return [this.#ofWorkspace(key) ?? null, [key, "lock"]];
+    // A workspace's vaults as its stations hold them (views/vault.ts): the vaults, box certificates and requests by the
+    // workspace's id; each vault's items by `<workspace>/<vault>`.
+    if (table === "vault") return [this.#ofWorkspace(key) ?? null, [key, "vault"]];
+    if (table === "vaultItems") {
+      const ws = ofAddress(key);
+      return [this.#ofWorkspace(ws) ?? null, [ws, `vaultItems:${key.slice(ws.length + 1)}`]];
+    }
     if (table === "place" || table === "link" || table === "heard" || table === "memberships") {
       // A station's own, kept by its address (`<workspace>/<station>…`), in its workspace's: where a chat was left
       // (`place`, `<address>/<thread>`), how its link was last time (`link`), the last event its stream told (`heard`,
