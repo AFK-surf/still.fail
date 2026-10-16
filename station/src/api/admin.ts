@@ -25,6 +25,9 @@ import { routes as vault } from "./routes/vault.ts";
 import { routes as vaultRequests } from "./routes/vault-requests.ts";
 import { vaultStore } from "../vault/store.ts";
 import { Drive } from "../drive/drive.ts";
+import { HelperFiles } from "../helper/files.ts";
+import type { HelperApp } from "../helper/app.ts";
+import { platform } from "../platform/index.ts";
 import { ownPaths } from "../ops/own.ts";
 import type { AgentsParts } from "../sessions/agents.ts";
 import type { Store } from "../store/store.ts";
@@ -73,7 +76,11 @@ export type Tools = {
 };
 
 /// What the admin API answers with besides the readers: the write side, once there.
-export type AdminDeps = { events?: Events; store?: Store; host?: Host; agents?: AgentsParts; clock?: Clock.Clock; screens?: ScreenHub };
+export type AdminDeps = {
+  events?: Events; store?: Store; host?: Host; agents?: AgentsParts; clock?: Clock.Clock; screens?: ScreenHub;
+  /// still.fail Helper (macOS): the drive's protected folders go through it.
+  helper?: HelperApp | null;
+};
 
 /// The header a write's key comes in, and how long an answer is kept (once.rs).
 const ONCE_KEY = "idempotency-key";
@@ -141,6 +148,8 @@ export class Admin {
             drive: new Drive({
               config: () => deps.agents!.config.raw(),
               protect: () => ownPaths(deps.agents!.config.data, deps.agents!.config.path, deps.agents!.hub.config().profiles.map((p) => p.home)),
+              // The folders macOS keeps from the station, through still.fail Helper; their roots told again as its grants change.
+              files: deps.helper && platform.hasFolderPermissions ? new HelperFiles({ helper: deps.helper, changed: () => deps.events?.overviewChanged() }) : null,
             }),
             changed: () => deps.events?.overviewChanged(),
             // Beside the files uploaded for a message (routes/hub.ts), swept as they are.

@@ -17,6 +17,8 @@
 //                  bytes (or the end, to write nothing), then {size}
 //   files.mkdir    {path, recursive}, files.rename {from, to}, files.remove {path} (a folder with all it holds, a link
 //                  as a link), files.unlink {path}                → {}
+//   files.trash    {path}                                      → {to}: in the trash as Finder puts it there (the home's,
+//                  a disk's own; null where none takes it)
 // A refusal is {error, code}: an errno's name (ENOENT, EACCES, …), `outside`/`protected` (the roots, what is
 // protected), `grant` with {grant, state} (macOS has not let this app open that folder: state `unknown`, never asked,
 // or `denied`), `restart` (granted since this process started: it starts again, and the station asks once more).
@@ -333,6 +335,18 @@ enum Files {
       let at = try scope.place(request["path"], entry: true)
       if unlink(at.found) != 0 { throw FileRefusal.errno() }
       channel.line([:])
+    case "files.trash":
+      let at = try scope.place(request["path"], entry: true)
+      var out: NSURL?
+      do {
+        try FileManager.default.trashItem(at: URL(fileURLWithPath: at.found), resultingItemURL: &out)
+        channel.line(["to": out?.path ?? NSNull()])
+      } catch let error as NSError {
+        // A disk with no trash: said so, for the person to say whether it goes for good.
+        if error.domain == NSCocoaErrorDomain && error.code == NSFeatureUnsupportedError { channel.line(["to": NSNull()]); return }
+        if let posix = error.userInfo[NSUnderlyingErrorKey] as? NSError, posix.domain == NSPOSIXErrorDomain { throw FileRefusal.errno(Int32(posix.code)) }
+        throw FileRefusal(code: "EIO", message: error.localizedDescription)
+      }
     default:
       throw FileRefusal(code: "EINVAL", message: "unknown op \(op)")
     }

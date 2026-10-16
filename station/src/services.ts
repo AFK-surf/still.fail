@@ -102,19 +102,30 @@ export class Store extends Context.Service<Store, StationStore>()("stillfail/Sto
   );
 }
 
+/// still.fail Helper (macOS; docs/station-ts-native.md §4), installed and talked to under <data>/helper: this Mac's
+/// screen (the desktop's) and the drive's protected folders (helper/files.ts); null where there is none.
+export class Helper extends Context.Service<Helper, HelperApp | null>()("stillfail/Helper") {
+  static readonly layer = Layer.effect(
+    Helper,
+    Effect.gen(function* () {
+      const { data } = yield* Paths;
+      const app = platform.hasDesktopScreen ? helperApp() : null;
+      return app === null ? null : new HelperApp({ app, dir: join(data, "helper") });
+    }),
+  );
+}
+
 /// The screens members see and drive (docs/remote-screens.md): the registry the station's parts add their sources to
 /// (`add`), with this machine's display among them from the start; views of them end as the station stops.
 export class ScreenRegistry extends Context.Service<ScreenRegistry, ScreenHub>()("stillfail/Screens") {
   static readonly layer = Layer.effect(
     ScreenRegistry,
     Effect.gen(function* () {
-      const { data } = yield* Paths;
       const hub = yield* Effect.acquireRelease(Effect.sync(() => new ScreenHub({ drop: () => dropFolder(homedir()) })), (hub) => Effect.sync(() => hub.close()));
-      // still.fail Helper (macOS), installed and talked to under <data>/helper.
-      const app = platform.hasDesktopScreen ? helperApp() : null;
-      // Back after it ended by itself: the desktop asks again for a grant still missing.
-      const helper = app === null ? null : new HelperApp({ app, dir: join(data, "helper"), onBack: () => void desktop.helperBack() });
+      const helper = yield* Helper;
       const desktop: Desktop = new Desktop({ supported: platform.hasDesktopScreen, helper, changed: () => hub.changed() });
+      // Back after it ended by itself: the desktop asks again for a grant still missing.
+      helper?.onBack(() => void desktop.helperBack());
       yield* Effect.acquireRelease(
         Effect.sync(() => {
           const remove = hub.add(desktop);
@@ -176,7 +187,7 @@ export class AdminApi extends Context.Service<AdminApi, Admin>()("stillfail/Admi
   static readonly layer = Layer.effect(
     AdminApi,
     Effect.gen(function* () {
-      return new Admin(yield* Readers, { store: yield* Store, events: yield* Events, host: yield* AdminHost, agents: yield* Agents, screens: yield* ScreenRegistry });
+      return new Admin(yield* Readers, { store: yield* Store, events: yield* Events, host: yield* AdminHost, agents: yield* Agents, screens: yield* ScreenRegistry, helper: yield* Helper });
     }),
   );
 }

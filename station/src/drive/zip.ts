@@ -1,10 +1,12 @@
 // A folder put into a zip, for a member to send it in a chat as one file (drive.ts `stage`): every file under it,
 // deflated, named by its path in the folder (under the folder's own name), with its time. Links are not followed, and
 // what `skip` names (the station's own data, uploads not finished) is left out. No zip64: at most `most` bytes read in
-// all, which the caller keeps well under 4 GB.
+// all, which the caller keeps well under 4 GB. The folder is read as `fs` reaches it (fs.ts: through still.fail Helper
+// for one macOS keeps from the station); the zip is the station's own file.
 import { crc32, deflateRawSync } from "node:zlib";
-import { lstat, open, readdir, readFile } from "node:fs/promises";
+import { open } from "node:fs/promises";
 import { basename, join } from "node:path";
+import { type Fs, direct } from "./fs.ts";
 
 export class TooBig extends Error {}
 
@@ -20,7 +22,7 @@ function dos(ms: number): { time: number; date: number } {
 }
 
 /// Writes `dir` as a zip at `to` (made new; it must not be there). Answers the zip's size.
-export async function zipFolder(dir: string, to: string, most: number, skip: (path: string, name: string) => Promise<boolean>): Promise<number> {
+export async function zipFolder(dir: string, to: string, most: number, skip: (path: string, name: string) => Promise<boolean>, fs: Fs = direct): Promise<number> {
   const out = await open(to, "wx");
   let at = 0;
   let read = 0;
@@ -55,26 +57,26 @@ export async function zipFolder(dir: string, to: string, most: number, skip: (pa
     entries.push(e);
   };
   const walk = async (path: string, name: string) => {
-    const names = (await readdir(path)).sort();
+    const names = (await fs.names(path)).sort();
     for (const child of names) {
       const full = join(path, child);
       if (await skip(full, child)) continue;
-      const s = await lstat(full).catch(() => null);
-      if (s === null || s.isSymbolicLink()) continue;
+      const s = await fs.lstat(full).catch(() => null);
+      if (s === null || s.link) continue;
       const inZip = `${name}/${child}`;
-      if (s.isDirectory()) {
+      if (s.dir) {
         await add(`${inZip}/`, null, s.mtimeMs);
         await walk(full, inZip);
-      } else if (s.isFile()) {
+      } else if (s.file) {
         read += s.size;
         if (read > most) throw new TooBig();
-        await add(inZip, await readFile(full), s.mtimeMs);
+        await add(inZip, await fs.readAll(full), s.mtimeMs);
       }
     }
   };
   try {
     const top = basename(dir) || "folder";
-    const s = await lstat(dir);
+    const s = await fs.lstat(dir);
     await add(`${top}/`, null, s.mtimeMs);
     await walk(dir, top);
     const start = at;

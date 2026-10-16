@@ -97,6 +97,9 @@ grant, Allow opens the System Settings pane with a panel holding the app to drag
 `access` say what is missing and that the window is up (`asking`), or that opening the screen puts it up. The system's
 own prompt is not used (it would fight the window).
 
+The same app opens the drive's folders macOS protects (`files.*`, docs/drive.md): its window then shows only the rows
+asked for (`permissions.show {grants}`), a folder's row asking macOS's own prompt (the only way a folder is granted).
+
 ### Clipboard and files
 
 While a person drives a screen, its clipboard goes both ways. The desktop: the helper sets NSPasteboard (text, or PNG

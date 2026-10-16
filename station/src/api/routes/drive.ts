@@ -7,6 +7,7 @@
 // and /drive/stage (a file copied among the uploads, or a folder zipped there, for a message to send; a JSON body). Read-only members only read
 // (the admin API refuses their writes). A refusal is `{error, code}` with the code's status (CODES).
 import { homedir } from "node:os";
+import { basename } from "node:path";
 import { type Answer, type Request, json, param } from "../request.ts";
 import type { Route } from "../admin.ts";
 import type { ConfigFile } from "../../ops/config.ts";
@@ -28,14 +29,21 @@ const anywhere = (r: { viewer: Request["viewer"] }) => !readOnly(r.viewer);
 /// The drive as the asker's workspace has it: the folders that workspace pinned (docs/multi-workspace.md).
 const driveOf = (drive: Drive, r: { viewer: Request["viewer"] }) => (r.viewer.home === false ? drive.scoped(r.viewer.workspace) : drive);
 
-/// A refusal in the asker's words (`station.drive.<code>`, after the path it is about, if any).
+/// A refusal in the asker's words (`station.drive.<code>`, after the path it is about, if any). One for a folder macOS
+/// keeps from the station that still.fail Helper may not open yet says so, and that its window is up on that Mac.
 const refused = (e: unknown, lang: Lang): Answer => {
   const d = e instanceof DriveError ? e : new DriveError("io", (e as Error).message);
-  const words = tr(lang, d.code === "permission" && d.message === MANAGE ? "station.drive.manage" : d.code === "too_large" && d.message === TOO_BIG ? "station.drive.tooBigToSend" : `station.drive.${d.code}`);
+  const words = d.need
+    ? tr(lang, d.need.asking ? "station.drive.helperAsking" : "station.drive.helperNeeded", { folder: folderWords(d.need.grant, d.need.top, lang) })
+    : tr(lang, d.code === "permission" && d.message === MANAGE ? "station.drive.manage" : d.code === "too_large" && d.message === TOO_BIG ? "station.drive.tooBigToSend" : `station.drive.${d.code}`);
   return json(CODES[d.code], JSON.stringify({ error: d.about ? `${d.about}: ${words}` : words, code: d.code, ...(d.have !== undefined ? { have: d.have } : {}) }));
 };
 
 const MANAGE = "a read-only member does not pin folders";
+
+/// A protected folder as people call it: the home's by their names in the asker's words, a disk by its own.
+const folderWords = (grant: string, top: string, lang: Lang) =>
+  grant === "documents" || grant === "desktop" || grant === "downloads" ? tr(lang, `station.drive.place.${grant[0]!.toUpperCase()}${grant.slice(1)}`) : basename(top) || top;
 
 /// A number from the query: its fallback when not there, -1 when not one.
 const num = (r: Request, name: string, fallback: number) => {

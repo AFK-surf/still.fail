@@ -28,8 +28,11 @@ export type HelperStatus = {
   display?: { id: number; width: number; height: number };
   /// What its running process may do (a grant is had once it starts again).
   live?: { capture: boolean; control: boolean };
-  /// Whether its window asking for the grants is up.
+  /// Whether its window asking for the grants is up, and what it asks for.
   asking?: boolean;
+  asked?: string[];
+  /// The drive's folder grants (helper/files.ts).
+  files?: Record<string, string>;
 };
 
 /// A look at the grants is this fresh at most (a list asked for twice at once looks once).
@@ -189,7 +192,7 @@ export class Desktop implements ScreenSource {
   async #ask(helper: HelperApp) {
     this.#wanted = true;
     try {
-      await helper.request({ op: "permissions.show", words: windowWords(this.#o.lang?.() ?? stationLang()) });
+      await helper.request({ op: "permissions.show", words: windowWords(this.#o.lang?.() ?? stationLang()), grants: ["capture", "control"] });
       await this.refresh(true);
     } catch (error) {
       log.warn("screens", "still.fail Helper's window did not show", { error: (error as Error).message });

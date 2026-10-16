@@ -21,14 +21,54 @@ no allowlist of its own, no transport of its own).
   listed). The station's own data (its data directory, config, the profiles'
   homes, the machine's runtime logins) is never reachable, as for the device
   tools.
-- On macOS a station launchd runs may not read Documents, Desktop, Downloads or
-  removable volumes: such a root is listed with `state: unreadable`.
+- On macOS a station launchd runs may not open Documents, Desktop, Downloads or
+  disks (removable, network): the drive reaches them through still.fail Helper,
+  which holds the grants (below).
+
+## Folders macOS protects (drive/fs.ts, helper/files.ts)
+
+macOS's privacy protection keeps the home's Documents, Desktop and Downloads,
+and the disks mounted in /Volumes (not the system's own), from a process nobody
+gave access to; a station launchd runs is such a process, and macOS never asks
+about it. The drive takes them through still.fail Helper (the station's macOS
+app, docs/remote-screens.md, native/helper's Files.swift), which macOS asks
+about and which holds the grants, so they open without the station restarting:
+
+- Per path, on macOS with the helper: one at or under such a folder that the
+  station may not open itself (it may, when the desktop app runs it and has the
+  grant) goes through the helper; everything else, and every other system, is
+  read directly, as before. The station checks the path first as it does any
+  (its root, `..`, links out for a viewer, its own data); the helper is told
+  the root it may reach and what it may not, and refuses anything else.
+- The helper's `files.*` requests (main.swift, Files.swift) list, stat, read a
+  range, write, make a folder, rename, remove, put in the trash (macOS's own,
+  as Finder does: the home's, a disk's); a file's bytes go over the
+  helper's socket as they are read or written (a read of 8 MB at most, an
+  upload's part, a file copied for a chat), never a whole file in memory there.
+- The grants are Files and Folders, one per folder (Documents, Desktop,
+  Downloads, Removable Volumes, Network Volumes): macOS grants them only through
+  its own prompt, when the app opens the folder, and they take effect at once
+  (no restart). Full Disk Access (System Settings, dragged in) covers them all
+  as well. The helper looks before it touches anything (`TCCAccessPreflight`:
+  granted, denied, never asked) and never opens a folder it has no grant for: a
+  prompt nobody answers would hold the call.
+- Without the grant, a request for such a folder is refused (`permission`, its
+  words saying so) and the helper's window comes up on that Mac with a row for
+  that folder (once an attempt; not again while it is up); its Allow has the
+  helper open the folder, and macOS asks. One refused before opens System
+  Settings › Files and Folders instead, where the helper has a switch for it.
+  The window tells the station when a grant changes, and the roots are told
+  again (`unreadable` becomes `ok`). A pinned root in such a folder is
+  `unreadable` until the helper has the grant.
+- Agents are not affected: their commands still run under the station's
+  launcher, which macOS keeps out of these folders as before (an agent whose
+  chat starts there is told so, `station.session.cwdDeniedMac`).
 
 ## Station (station/src/drive/drive.ts, api/routes/drive.ts)
 
 | Request | Answer |
 |---|---|
-| `GET /drive` | `{roots: [{path, name, state}], manage, write, anywhere?, home?, trash?, watch, zip?}` (also in the overview as `drive`) |
+| `GET /drive` | `{roots: [{path, name, state}], manage, write, anywhere?, home?, trash?, watch, zip?}` (also in the overview as `drive`; `state` `unreadable` for a folder macOS protects until still.fail Helper has its grant) |
 | `PUT /drive/roots {roots}` | the folders pinned, by any member who may write; each new one must be there, a folder, none of the station's data |
 | `GET /drive/folders?path=` | members who may write: the folders in `path` (the home when empty), to pick one to pin |
 | `GET /drive/list?root=&path=` | `{path, entries: [{name, dir, size, mtime, type}], truncated}`, folders first, names by number; past 50000 entries the first 50000 in that order |

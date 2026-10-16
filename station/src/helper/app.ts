@@ -13,7 +13,9 @@
 // The station watches the app it started (a connection held open, `watch`): when the app ends without being asked
 // (macOS's Quit & Reopen when it did not reopen it, a crash), the station waits a moment for it to come back by itself
 // (its own restart, macOS's reopen), then starts it again; `onBack` is told either way (the desktop puts its window up
-// again when a grant is still missing).
+// again when a grant is still missing). The app tells on that connection what changes meanwhile (a grant: `listen`).
+//
+// A refusal is an Error with the answer's fields (`code`, and what the op adds).
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -80,14 +82,15 @@ export class HelperApp {
   #watch: net.Socket | null = null;
   #quitting = false;
   #revivals: number[] = [];
-  readonly #onBack: (() => void) | undefined;
+  readonly #backs = new Set<() => void>();
+  readonly #listeners = new Set<(event: Record<string, unknown>) => void>();
 
   constructor(options: { app: string; dir: string; launch?: Launch; onBack?: () => void }) {
     this.app = options.app;
     this.dir = options.dir;
     this.socket = join(options.dir, "helper.sock");
     this.#launch = options.launch ?? openApp;
-    this.#onBack = options.onBack;
+    if (options.onBack) this.#backs.add(options.onBack);
     try {
       this.#token = readFileSync(join(options.dir, "token"), "utf8").trim() || null;
     } catch {
@@ -109,6 +112,35 @@ export class HelperApp {
     return socket;
   }
 
+  /// Told when the app came back after it ended by itself; the returned function stops it.
+  onBack(listener: () => void): () => void {
+    this.#backs.add(listener);
+    return () => void this.#backs.delete(listener);
+  }
+
+  /// Told what the app says changed (`{event: "grants"}`: a grant, as its window saw it).
+  listen(listener: (event: Record<string, unknown>) => void): () => void {
+    this.#listeners.add(listener);
+    return () => void this.#listeners.delete(listener);
+  }
+
+  /// The running app's process, null when none answers.
+  async pid(): Promise<number | null> {
+    if (this.#token === null || !existsSync(this.socket)) return null;
+    return this.#ask({ op: "hello" }).then((a) => (typeof a?.pid === "number" ? a.pid : null), () => null);
+  }
+
+  /// Until the app answering is not process `pid` (it started itself again, for a grant), at most `ms`.
+  async restarted(pid: number, ms = START_MS): Promise<void> {
+    const until = wall.now() + ms;
+    for (;;) {
+      const now = await this.pid();
+      if (now !== null && now !== pid) return;
+      if (wall.now() > until) throw new Error("still.fail Helper did not start again");
+      await wall.sleep(100);
+    }
+  }
+
   /// The app up and answering: started (or started again) when not.
   ensure(): Promise<void> {
     this.#quitting = false;
@@ -124,8 +156,25 @@ export class HelperApp {
     const socket = await this.#dial();
     this.#watch = socket;
     socket.on("error", () => {});
-    // Read (its answer, then nothing): a socket not read never hears that the other end went.
-    socket.on("data", () => {});
+    // Read (its answer, then what it tells): a socket not read never hears that the other end went.
+    let carry = "";
+    let answered = false;
+    socket.setEncoding("utf8");
+    socket.on("data", (chunk: string) => {
+      carry += chunk;
+      for (let at = carry.indexOf("\n"); at >= 0; at = carry.indexOf("\n")) {
+        const line = carry.slice(0, at);
+        carry = carry.slice(at + 1);
+        if (!answered) {
+          answered = true;
+          continue;
+        }
+        try {
+          const event = JSON.parse(line);
+          for (const listener of this.#listeners) listener(event);
+        } catch {}
+      }
+    });
     socket.on("close", () => {
       if (this.#watch === socket) this.#watch = null;
       if (!this.#quitting) void this.#revive();
@@ -147,7 +196,7 @@ export class HelperApp {
         await this.ensure();
       });
       await this.#watching();
-      this.#onBack?.();
+      for (const back of this.#backs) back();
     } catch (error) {
       log.warn("helper", "still.fail Helper not started again", { error: (error as Error).message });
     }
@@ -207,13 +256,15 @@ export class HelperApp {
       let got = "";
       socket.setEncoding("utf8");
       socket.on("data", (chunk: string) => {
+        // A long answer (a listing) comes in many parts: only the new part is looked through.
+        const from = got.length;
         got += chunk;
-        const at = got.indexOf("\n");
+        const at = got.indexOf("\n", from);
         if (at < 0) return;
         socket.destroy();
         try {
           const answer = JSON.parse(got.slice(0, at));
-          if (typeof answer?.error === "string") reject(new Error(answer.error));
+          if (typeof answer?.error === "string") reject(Object.assign(new Error(answer.error), answer));
           else resolve(answer);
         } catch (e) {
           reject(e as Error);
