@@ -47,18 +47,21 @@ export function videoPayload(f: Frame): Buffer {
 export class FrameIn {
   #carry: Buffer;
   readonly #stream: Stream;
-  constructor(stream: Stream, carry: Buffer = Buffer.alloc(0)) {
+  readonly #limit: number;
+  /// `limit`: the largest frame taken (the station takes a client's input frames; a client reads video frames).
+  constructor(stream: Stream, carry: Buffer = Buffer.alloc(0), limit = MAX_IN) {
     this.#stream = stream;
     this.#carry = carry;
+    this.#limit = limit;
   }
 
   /// The next frame, or null where the stream finished between frames; throws where it ended inside one, or one is
-  /// larger than MAX_IN.
+  /// larger than its limit.
   async next(): Promise<{ kind: number; payload: Buffer } | null> {
     for (;;) {
       if (this.#carry.length >= 5) {
         const length = this.#carry.readUInt32BE(1);
-        if (length > MAX_IN) throw new Error("screen frame too large");
+        if (length > this.#limit) throw new Error("screen frame too large");
         if (this.#carry.length >= 5 + length) {
           const kind = this.#carry[0]!;
           const payload = this.#carry.subarray(5, 5 + length);

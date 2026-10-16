@@ -153,7 +153,7 @@ async function view(conn: Connection, label: string, move = false): Promise<{ st
   const heard = new Reader(stream);
   const answer = await heard.line();
   if (answer.status !== 200) return { status: answer.status, error: JSON.parse((await heard.rest()).toString()).error };
-  const frames = new FrameIn(stream, heard.carry);
+  const frames = new FrameIn(stream, heard.carry, 64 << 20);
   const kept: Buffer[] = [];
   let count = 0, keys = 0, bytes = 0, width = 0, height = 0, finished = false, n = 0;
   const started = performance.now();

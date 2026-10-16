@@ -78,7 +78,7 @@ async function view(link: Awaited<ReturnType<typeof linked>>, label: string, mov
   const heard = new Reader(stream);
   const answer = await heard.line();
   assert.equal(answer.status, 200, `${JSON.stringify(answer)} ${answer.status === 200 ? "" : (await heard.rest()).toString()}`);
-  const frames = new FrameIn(stream, heard.carry);
+  const frames = new FrameIn(stream, heard.carry, 64 << 20);
   const kept: Buffer[] = [];
   let count = 0, keys = 0, bytes = 0, width = 0, height = 0;
   const started = performance.now();
