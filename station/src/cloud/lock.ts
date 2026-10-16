@@ -83,7 +83,7 @@ export const signedBytes = (hash: string) => Buffer.concat([Buffer.from("stillfa
 export const endpointBytes = (ws: string, endpoint: string) => Buffer.from(`stillfail-lock-endpoint/1\0${ws}\0${endpoint}`);
 
 /// A signing key's public half by its id: `ed25519:<hex>` or `p256:<base64url of the uncompressed point>`.
-function publicKey(id: string) {
+export function publicKey(id: string) {
   if (id.startsWith("ed25519:") && isId(id.slice(8))) {
     return { alg: "Ed25519" as const, key: createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x: Buffer.from(id.slice(8), "hex").toString("base64url") }, format: "jwk" }) };
   }
