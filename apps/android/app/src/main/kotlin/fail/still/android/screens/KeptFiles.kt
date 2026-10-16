@@ -1,7 +1,8 @@
 // What this phone keeps, by chat: each chat's messages as the core keeps them (`cache.usage`) and the files opened in it
 // (the players, PDFs, a big file fetched a part at a time: in the app's cache, each under its own name in a directory
 // of its own, cache/files/<id>-<size>/<name>, with the station and session it came from beside it); then what belongs
-// to no chat: web pages' cache, update packages, other temporary files, and the core's own data. Nothing is deleted by
+// to no chat: files opened from stations' drives (DriveCache, which lets the least lately opened go by itself past its
+// bounds), web pages' cache, update packages, other temporary files, and the core's own data. Nothing else is deleted by
 // itself: a file, a chat's all, or everything, when the person says.
 package fail.still.android.screens
 
@@ -46,6 +47,7 @@ import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.SectionHeader
 import fail.still.android.data.t
+import fail.still.android.drive.DriveCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -69,8 +71,8 @@ class KeptChat(val station: String, val thread: Long, val title: String, val mes
 }
 
 /** What is kept here: by chat, files of no chat known, and what belongs to no chat. */
-class Kept(val chats: List<KeptChat>, val loose: List<KeptFile>, val web: Long, val updates: Long, val temporary: Long, val data: Long) {
-    val total get() = chats.sumOf { it.size } + loose.sumOf { it.size } + web + updates + temporary + data
+class Kept(val chats: List<KeptChat>, val loose: List<KeptFile>, val drive: Long, val web: Long, val updates: Long, val temporary: Long, val data: Long) {
+    val total get() = chats.sumOf { it.size } + loose.sumOf { it.size } + drive + web + updates + temporary + data
 }
 
 object KeptFiles {
@@ -116,7 +118,7 @@ object KeptFiles {
     private fun webCache(context: Context) = File(context.cacheDir, "WebView")
     private fun updates(context: Context) = File(context.cacheDir, "updates")
     /** Temporary files of the app's own (a marked image made, say): the cache but for what is counted apart. */
-    private fun temporary(context: Context) = context.cacheDir.listFiles()?.filter { it.name !in setOf("files", "WebView", "updates") }.orEmpty()
+    private fun temporary(context: Context) = context.cacheDir.listFiles()?.filter { it.name !in setOf("files", "WebView", "updates", DriveCache.dir(context).name, DriveCache.playedDir(context).name) }.orEmpty()
 
     /** Everything kept, read now: the core says what it keeps of each chat. */
     suspend fun read(app: AppState, context: Context): Kept {
@@ -135,7 +137,7 @@ object KeptFiles {
             }
             val loose = files.filter { it !in used }
             val data = (sizeOf(File(context.filesDir, "stillfail-core")) - chats.sumOf { it.messages }).coerceAtLeast(0L)
-            Kept(chats.sortedByDescending { it.size }, loose, sizeOf(webCache(context)), sizeOf(updates(context)), temporary(context).sumOf { sizeOf(it) }, data)
+            Kept(chats.sortedByDescending { it.size }, loose, DriveCache.size(context), sizeOf(webCache(context)), sizeOf(updates(context)), temporary(context).sumOf { sizeOf(it) }, data)
         }
     }
 
@@ -145,15 +147,16 @@ object KeptFiles {
         withContext(Dispatchers.IO) { chat.files.forEach { delete(context, it) } }
     }
 
+    suspend fun clearDrive(context: Context) = withContext(Dispatchers.IO) { DriveCache.clear(context) }
     suspend fun clearWeb(context: Context) = withContext(Dispatchers.IO) { webCache(context).deleteRecursively(); Unit }
     suspend fun clearUpdates(context: Context) = withContext(Dispatchers.IO) { updates(context).deleteRecursively(); Unit }
     suspend fun clearTemporary(context: Context) = withContext(Dispatchers.IO) { temporary(context).forEach { it.deleteRecursively() } }
 
-    /** Everything that can go: every chat's, files of no chat, web pages', update packages, temporary files. */
+    /** Everything that can go: every chat's, files of no chat, files opened from drives, web pages', update packages, temporary files. */
     suspend fun clearAll(app: AppState, context: Context, kept: Kept) {
         kept.chats.forEach { clearChat(app, context, it) }
         withContext(Dispatchers.IO) { kept.loose.forEach { delete(context, it) } }
-        clearWeb(context); clearUpdates(context); clearTemporary(context)
+        clearDrive(context); clearWeb(context); clearUpdates(context); clearTemporary(context)
     }
 }
 
@@ -221,6 +224,7 @@ fun KeptFilesScreen() {
             SectionHeader(t("android-settings.files.other"), start = 24.dp)
             ListCard {
                 if (kept.loose.isNotEmpty()) SizeRow(t("android-settings.files.loose"), t("android-settings.files.count", "n" to kept.loose.size), kept.loose.sumOf { it.size }, { app.push(Screen.KeptChat(null, null)) })
+                SizeRow(t("android-settings.files.drive"), t("android-settings.files.drive.sub"), kept.drive, if (kept.drive > 0) ({ ask(t("android-settings.files.drive"), t("android-settings.files.drive.text")) { KeptFiles.clearDrive(context) } }) else null, chevron = false)
                 SizeRow(t("android-settings.files.web"), null, kept.web, if (kept.web > 0) ({ ask(t("android-settings.files.web"), t("android-settings.files.web.text")) { KeptFiles.clearWeb(context) } }) else null, chevron = false)
                 SizeRow(t("android-settings.files.updates"), null, kept.updates, if (kept.updates > 0) ({ ask(t("android-settings.files.updates"), t("android-settings.files.updates.text")) { KeptFiles.clearUpdates(context) } }) else null, chevron = false)
                 SizeRow(t("android-settings.files.temporary"), null, kept.temporary, if (kept.temporary > 0) ({ ask(t("android-settings.files.temporary"), t("android-settings.files.temporary.text")) { KeptFiles.clearTemporary(context) } }) else null, chevron = false)

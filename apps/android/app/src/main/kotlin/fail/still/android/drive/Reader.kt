@@ -172,8 +172,10 @@ fun ReaderScreen(station: String, root: String, path: String) {
     PaperBars(p.dark)
     val opening by produceState<Opening>(Opening.Coming(0, null), station, root, path) {
         value = try {
-            val bytes = app.api(station).driveBytes(root, path, MAX_NOVEL_BYTES.toLong()) { got, of -> value = Opening.Coming(got, of) }
-            val size = (value as? Opening.Coming)?.of ?: bytes.size.toLong()
+            // Kept on the phone by when it changed, as its folder says (DriveCache); one not in it is read each time.
+            val entry = folderOf(app, station, root, parentOf(path)).firstOrNull { !it.dir && it.name == name }
+            val (bytes, size) = if (entry != null) DriveCache.bytes(app.api(station), root, path, entry.mtime, entry.size, MAX_NOVEL_BYTES.toLong()) { got, of -> value = Opening.Coming(got, of) }
+            else app.api(station).driveBytes(root, path, MAX_NOVEL_BYTES.toLong()) { got, of -> value = Opening.Coming(got, of) }.let { it to ((value as? Opening.Coming)?.of ?: it.size.toLong()) }
             val novel = withContext(Dispatchers.Default) { buildNovel(name, bytes, size, size > bytes.size) }
             // Where it was left on this device (held here: no wait for a station).
             val held = withTimeoutOrNull(1000) { app.core.topic(Topics.drivePlace(station, root, path)).first { !it.loading } }?.value

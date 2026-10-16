@@ -94,3 +94,9 @@ dragged out carries the file and its path. A chat's 文件 tab
 (web/src/pages/DriveTab.tsx) browses every station's files beside the chat, to
 drag into the composer or add to the message. The phone reaches a drive from
 its station's page.
+
+The Android app keeps a file it has read on the phone (apps/android/…/drive/DriveCache.kt), so it opens again without
+asking the station: by station, root and path, and by the `mtime` and `size` its folder says (a file changed is fetched
+anew, the old one deleted; a read that finds it changed meanwhile starts again). Texts, pictures, PDFs and the rest are
+kept whole (the reader's first 16 MB of a longer text), the least lately opened going past 512 MB; videos and songs by
+the ranges played, in media3's cache, past 1.5 GB. Settings → storage shows both as one row, to clear.

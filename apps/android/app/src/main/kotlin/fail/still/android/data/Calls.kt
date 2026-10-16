@@ -34,8 +34,9 @@ private const val FILE_PART = 4 * 1024 * 1024
 /** The most of a file of the drive one `drive.read` asks for (the station gives at most 8 MB). */
 const val DRIVE_PART = 4 * 1024 * 1024
 
-/** A part of a file of the drive (`drive.read`): its type, the whole file's size, the bytes. */
-class DriveRead(val type: String, val total: Long, val bytes: ByteArray)
+/** A part of a file of the drive (`drive.read`): its type, the whole file's size and when it last changed (null when the
+ * station does not say), the bytes. */
+class DriveRead(val type: String, val total: Long, val bytes: ByteArray, val mtime: Long? = null)
 
 /**
  * The folders in one on the station (`drive.folders`), to pick one to lend: where, its parent (none at the top), the home,
@@ -479,7 +480,8 @@ class StationApi(private val core: StillFailCore, val station: String) {
         val got = (if (heard == null) core.call("drive.read", params) else core.call("drive.read", params) { p -> partLoaded(p)?.let(heard) }).jsonObject
         val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { Base64.decode(got["bytes"]!!.jsonPrimitive.content, Base64.DEFAULT) }
         val total = got["total"]?.jsonPrimitive?.content?.toDoubleOrNull()?.toLong() ?: (offset + bytes.size)
-        return DriveRead((got["type"] as? JsonPrimitive)?.content ?: "", total, bytes)
+        val mtime = (got["mtime"] as? JsonPrimitive)?.content?.toDoubleOrNull()?.toLong()
+        return DriveRead((got["type"] as? JsonPrimitive)?.content ?: "", total, bytes, mtime)
     }
 
     /**

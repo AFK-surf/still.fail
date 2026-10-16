@@ -3,6 +3,7 @@
 // preview (FilePreview.kt).
 package fail.still.android.screens
 
+import fail.still.android.drive.DriveCache
 import fail.still.android.data.t
 import android.content.ContentValues
 import android.content.Context
@@ -156,6 +157,8 @@ internal object FileData {
     // decoded pictures up to an eighth of the heap.
     private val kept = object : LruCache<String, ByteArray>(32 * 1024 * 1024) { override fun sizeOf(key: String, value: ByteArray) = value.size }
     private val coming = HashMap<String, Deferred<ByteArray>>()
+    /** Files of a drive kept whole on the phone (DriveCache), by id: what [onDisk] hands out rather than write them again. */
+    private val onPhone = java.util.concurrent.ConcurrentHashMap<String, File>()
     private val pictures = object : LruCache<String, ImageBitmap>((Runtime.getRuntime().maxMemory() / 8).coerceIn(8L * 1024 * 1024, Int.MAX_VALUE.toLong()).toInt()) { override fun sizeOf(key: String, value: ImageBitmap) = value.width * value.height * 4 }
     /** Bytes so far and the whole size (null when the station does not say), of whole files on their way. */
     val progress = mutableStateMapOf<String, Pair<Long, Long?>>()
@@ -176,8 +179,14 @@ internal object FileData {
         val got = scope.async {
             try {
                 val root = DriveKey.rootOf(key)
-                // A file of a station's drive (the viewer opened from its page): read from its root, a part at a time.
-                if (root != null) app.api(station).driveBytes(root, file.path, size = file.size.takeIf { it > 0 } ?: Long.MAX_VALUE) { loaded, total -> on?.invoke(loaded, total) }.also { kept.put(id, it) }
+                val mtime = DriveKey.mtimeOf(key)
+                // A file of a station's drive (the viewer opened from its page): kept on the phone once read (DriveCache),
+                // else read from its root, a part at a time.
+                if (root != null && mtime != null && file.size > 0) {
+                    val held = DriveCache.fetch(app.api(station), root, file.path, mtime, file.size) { loaded, total -> on?.invoke(loaded, total) }
+                    onPhone[id] = held.file
+                    withContext(Dispatchers.IO) { held.file.readBytes() }.also { kept.put(id, it) }
+                } else if (root != null) app.api(station).driveBytes(root, file.path, size = file.size.takeIf { it > 0 } ?: Long.MAX_VALUE) { loaded, total -> on?.invoke(loaded, total) }.also { kept.put(id, it) }
                 else app.api(station).file(key, file.path.substringAfterLast('/'), thumb, on).second.also { kept.put(id, it) }
             } finally {
                 coming.remove(id)
@@ -192,6 +201,8 @@ internal object FileData {
     suspend fun head(app: AppState, station: String, key: String, file: Attachment, length: Int): ByteArray {
         kept.get(id(station, key, file, thumb = false))?.let { return it }
         val root = DriveKey.rootOf(key)
+        val mtime = DriveKey.mtimeOf(key)
+        if (root != null && mtime != null) DriveCache.head(station, root, file.path, mtime, file.size, length)?.let { return it }
         return if (root != null) app.api(station).driveRead(root, file.path, 0, length).bytes
         else app.api(station).fileHead(key, file.path.substringAfterLast('/'), length)
     }
@@ -224,12 +235,17 @@ internal object FileData {
         comingToDisk[id]?.let { return it }
         val got = scope.async {
             try {
+                val root = DriveKey.rootOf(key)
+                val mtime = DriveKey.mtimeOf(key)
+                // A file of a station's drive: kept with the drive's others (DriveCache), by when it changed.
+                if (root != null && mtime != null) return@async DriveCache.fetch(app.api(station), root, file.path, mtime, file.size) { loaded, total ->
+                    scope.launch { if (id in comingToDisk) progress[id] = loaded to total }
+                }.file.also { onPhone[id] = it }
                 val done = withContext(Dispatchers.IO) { KeptFiles.place(context, id, file.name, file.size) }
                 if (done.exists() && done.length() == file.size) return@async done.also { it.setLastModified(System.currentTimeMillis()) }
                 val part = File(done.parentFile, done.name + ".part")
                 val name = file.path.substringAfterLast('/')
                 try {
-                    val root = DriveKey.rootOf(key)
                     if (root != null) app.api(station).driveToDisk(root, file.path, part, file.size) { loaded, total -> scope.launch { if (id in comingToDisk) progress[id] = loaded to total } }
                     else app.api(station).fileToDisk(key, name, part, file.size) { loaded, total -> scope.launch { if (id in comingToDisk) progress[id] = loaded to total } }
                 } catch (e: CoreException) {
@@ -250,6 +266,7 @@ internal object FileData {
     /** The file on the phone's disk, for what reads a file rather than bytes (the players, PdfRenderer); kept until the
      * person deletes it (settings → files kept, KeptFiles.kt). */
     suspend fun onDisk(context: Context, id: String, name: String, bytes: ByteArray): File = withContext(Dispatchers.IO) {
+        onPhone[id]?.takeIf { it.length() == bytes.size.toLong() }?.let { return@withContext it }
         val file = KeptFiles.place(context, id, name, bytes.size.toLong())
         if (!file.exists() || file.length() != bytes.size.toLong()) {
             val part = File(file.parentFile, file.name + ".part")
@@ -286,6 +303,8 @@ fun decode(bytes: ByteArray, longest: Int): ImageBitmap? {
 internal object DriveKey {
     private const val TAG = "drive\u0001"
     fun of(root: String, mtime: Long) = "$TAG$mtime\u0001$root"
+    /** When the file a key names last changed; null for a session's key. */
+    fun mtimeOf(key: String): Long? = if (key.startsWith(TAG)) key.removePrefix(TAG).substringBefore('\u0001').toLongOrNull() else null
     /** The root a key names; null for a session's key. */
     fun rootOf(key: String): String? = if (key.startsWith(TAG)) key.removePrefix(TAG).substringAfter('\u0001') else null
 }

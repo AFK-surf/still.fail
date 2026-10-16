@@ -140,6 +140,9 @@ dependencies {
     implementation(libs.firebase.messaging)
     // A station's drive played as it streams (drive/Player.kt): ranged reads through the core, never the whole file first.
     implementation(libs.androidx.media3.exoplayer)
+    // What was played kept on the phone (drive/DriveCache.kt): media3's cache and the index it keeps.
+    implementation(libs.androidx.media3.datasource)
+    implementation(libs.androidx.media3.database)
     // The motion tests: frame by frame on the test clock (src/androidTest).
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

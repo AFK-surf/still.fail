@@ -305,22 +305,15 @@ object DriveFetches {
     fun id(station: String, root: String, path: String) = "$station\n$root\n$path"
 }
 
-/** A file of the drive in the app's cache (for another app to open, or to save), fetched a part at a time with its progress shown on its row. */
+/** A file of the drive kept on the phone (DriveCache; for another app to open, or to save), fetched a part at a time with its progress shown on its row. */
 private suspend fun fetched(app: AppState, context: Context, station: String, root: String, entry: DriveEntry, path: String): File {
     val id = DriveFetches.id(station, root, path)
-    val dir = File(context.cacheDir, "drive/${Integer.toHexString(id.hashCode())}-${entry.mtime}").apply { mkdirs() }
-    val file = File(dir, entry.name.replace('/', '_'))
-    if (file.exists() && file.length() == entry.size) return file
-    val part = File(dir, file.name + ".part")
-    part.delete()
     DriveFetches.progress[id] = 0
     try {
-        app.api(station).driveToDisk(root, path, part, entry.size) { at, total -> DriveFetches.progress[id] = if (total > 0) at * 100 / total else 0 }
-        withContext(Dispatchers.IO) { part.renameTo(file) }
+        return DriveCache.fetch(app.api(station), root, path, entry.mtime, entry.size) { at, total -> DriveFetches.progress[id] = if (total > 0) at * 100 / total else 0 }.file
     } finally {
         DriveFetches.progress.remove(id)
     }
-    return file
 }
 
 /** How another app is handed a file: to open it (VIEW) or to share it (SEND). */

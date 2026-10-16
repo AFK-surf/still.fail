@@ -128,6 +128,9 @@
     "one": "1 day ago",
     "other": "{n} days ago"
   },
+  "android-settings.files.drive": "Files browsed",
+  "android-settings.files.drive.sub": "Up to 2 GB; the least recently opened go first",
+  "android-settings.files.drive.text": "Deletes the texts, pictures, videos and other files opened from stations' files; they download again when opened.",
   "android-settings.files.files": "Files opened",
   "android-settings.files.filesTotal": "{n} · {size}",
   "android-settings.files.hours": {

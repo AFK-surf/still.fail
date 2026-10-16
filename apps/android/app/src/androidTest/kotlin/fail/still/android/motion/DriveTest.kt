@@ -1,7 +1,7 @@
 // A station's drive (drive/*.kt) on the fake core: its row on the station's page, the roots, a folder of every kind,
 // what a held row offers, nothing lent (for an owner and for a member), the folder picker, the reader (its bars, its
 // contents, search, a paper) and the player (a small video and its subtitle served through `drive.read`). Each is
-// pictured light and dark (settled.png under motion/drive-*).
+// pictured light and dark (settled.png under motion/drive-*). A file opened again is read from the phone (DriveCache).
 package fail.still.android.motion
 
 import android.util.Base64
@@ -33,6 +33,7 @@ import fail.still.android.data.Overview
 import fail.still.android.data.Topics
 import fail.still.android.data.Viewer
 import fail.still.android.data.WorkspaceView
+import fail.still.android.drive.DriveCache
 import fail.still.android.drive.DriveUpload
 import fail.still.android.drive.DriveUploads
 import kotlinx.serialization.json.JsonNull
@@ -40,6 +41,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -84,7 +86,7 @@ class DriveTest {
         ),
     )
 
-    private fun launch(stack: List<Screen>, dark: Boolean, role: String = "owner", roots: List<DriveRoot> = this.roots): Harness {
+    private fun launch(stack: List<Screen>, dark: Boolean, role: String = "owner", roots: List<DriveRoot> = this.roots, folder: DriveFolder = this.folder): Harness {
         val h = Harness(rule)
         h.fake.put(Topics.workspace(Fixtures.WS), WorkspaceView(id = Fixtures.WS, name = "Dev", role = role))
         h.fake.put(Topics.stations(Fixtures.WS), listOf(station(roots)))
@@ -273,5 +275,33 @@ class DriveTest {
         // The player plays on its own clock (real time).
         repeat(10) { Thread.sleep(200); h.settle(200) }
         h.record("drive-player-$tone").end()
+    }
+
+    /** Opened a second time, the reader's text and the player's video and subtitle come from the phone: the station is asked nothing. */
+    @Test fun openedAgainFromThePhone() {
+        DriveCache.clear(InstrumentationRegistry.getInstrumentation().targetContext)
+        // The folder as the station has it now: each file's size and time as `drive.read` says them.
+        val kinds = mapOf("三体.txt" to "text", "E01.mp4" to "video", "E01.srt" to "subtitle")
+        val exact = DriveFolder(path = "", folders = 0, files = kinds.size, countText = "${kinds.size} 个文件", entries = kinds.map { (name, kind) -> entry(name, kind, files[name]!!.size.toLong()) })
+        val h = launch(listOf(Screen.Stations, Screen.Station(st), Screen.Drive(st, books, "")), false, folder = exact)
+        val reads = java.util.concurrent.atomic.AtomicInteger()
+        h.fake.answer = { name, p -> if (name == "drive.read") reads.incrementAndGet(); answer(name, p) }
+        fun asked(screen: Screen, opened: () -> Unit): Int {
+            val before = reads.get()
+            rule.runOnUiThread { h.app.push(screen) }
+            opened()
+            rule.runOnUiThread { h.app.pop() }; h.settle()
+            return reads.get() - before
+        }
+        val read = {
+            h.settle(3000)
+            assertTrue(rule.onAllNodesWithText("汪淼", substring = true).fetchSemanticsNodes().isNotEmpty())
+        }
+        // The player plays on its own clock (real time).
+        val play = { repeat(10) { Thread.sleep(200); h.settle(200) } }
+        assertTrue(asked(Screen.DriveRead(st, books, "三体.txt"), read) > 0)
+        assertEquals(0, asked(Screen.DriveRead(st, books, "三体.txt"), read))
+        assertTrue(asked(Screen.DrivePlay(st, books, "E01.mp4"), play) > 0)
+        assertEquals(0, asked(Screen.DrivePlay(st, books, "E01.mp4"), play))
     }
 }

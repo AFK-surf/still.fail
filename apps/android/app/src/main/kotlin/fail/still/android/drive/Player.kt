@@ -1,5 +1,6 @@
 // A video or a song of a drive, played as it streams through the core (DriveSource; media3's ExoPlayer): nothing is
-// fetched whole first, a seek far ahead is one more ranged read. Dark, as the chat's viewer of pictures is; its controls
+// fetched whole first, a seek far ahead is one more ranged read; what was played is kept (DriveCache's played) and
+// plays again from the phone. Dark, as the chat's viewer of pictures is; its controls
 // float over the picture, frosted, and fade when left alone (a tap brings them back): where it is and how much is
 // buffered, play, the next in the folder, the speed, the subtitle beside it (E01.srt for E01.mp4), fit or fill, and
 // sideways (landscape, the system bars away). A double tap on the left or right third jumps 15 s, in the middle it
@@ -94,6 +95,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.MediaItem
+import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -133,9 +135,11 @@ import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.C as Palette
 import fail.still.core.CoreException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.doubleOrNull
@@ -156,7 +160,7 @@ private const val NUDGE_MS = 15_000L
 private const val REST_MS = 2500L
 
 /** The folder a file is in as last read (held on the device): its entries, for the playlist and the subtitle. */
-private suspend fun folderOf(app: AppState, station: String, root: String, dir: String): List<DriveEntry> {
+internal suspend fun folderOf(app: AppState, station: String, root: String, dir: String): List<DriveEntry> {
     val got = withTimeoutOrNull(5000) { app.core.topic(Topics.drive(station, root, dir)).first { it.value != null || it.error != null } }
     return got?.value?.let { runCatching { decode(DriveFolder.serializer(), it).entries }.getOrNull() }.orEmpty()
 }
@@ -221,7 +225,13 @@ fun PlayerScreen(station: String, root: String, path: String) {
         val sizes = held.filter { !it.dir }.associate { join(dir, it.name) to it.size }
         val sub = pickSubtitle(name, held.filter { !it.dir }.map { it.name })
         subtitle = sub
-        val factory = DriveSource.Factory(api, root, sizes, stats)
+        // Kept by when each changed, as the folder says: one not in it is played without being kept.
+        val known = held.filter { !it.dir }.associateBy { join(dir, it.name) }
+        val played = withContext(Dispatchers.IO) { DriveCache.played() }
+        val upstream = DriveSource.Factory(api, root, sizes, stats)
+        val factory = if (path !in known) upstream else CacheDataSource.Factory().setCache(played).setUpstreamDataSourceFactory(upstream)
+            .setCacheKeyFactory { spec -> DriveUri.pathOf(spec.uri).let { p -> known[p]?.let { DriveCache.playedKey(station, root, p, it.mtime, it.size) } ?: "$station\n$root\n$p" } }
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
         val sources = mutableListOf<MediaSource>(ProgressiveMediaSource.Factory(factory).createMediaSource(MediaItem.fromUri(DriveUri.of(path))))
         if (sub != null) subtitleMime(sub)?.let { mime ->
             val config = MediaItem.SubtitleConfiguration.Builder(DriveUri.of(join(dir, sub))).setMimeType(mime).setLabel(sub).setSelectionFlags(Media.SELECTION_FLAG_DEFAULT).build()
