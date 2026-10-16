@@ -126,7 +126,7 @@ export class Notices {
       title: title(row),
       body,
       tag: `${workspace}/${id}/${session}`,
-      url: `/o/${workspace}/${id}/${encode(session)}`,
+      url: `/o/${workspace}/${id}/${encode(session)}${seq !== null && seq > 0 ? `?message=${seq}` : ""}`,
       at: Math.trunc(this.#env.now()),
     };
     const items = this.#heard(into).items;

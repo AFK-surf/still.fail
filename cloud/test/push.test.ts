@@ -391,6 +391,7 @@ test("Android devices get a high-priority FCM data message; an unregistered toke
     assert.equal(toAlice.message.data.body, "出错了 · token runs out");
     assert.equal(toAlice.message.data.tag, tag);
     assert.equal(toAlice.message.data.seq, "12", "the message it is about (none from an older station: above)");
+    assert.equal(toAlice.message.data.url, `/o/${id}/${station.id}/${encodeURIComponent("ember:c-1/x y")}?message=12`, "opened at that message");
     assert.ok(Object.values(toAlice.message.data).every((v) => typeof v === "string"), "every value a string");
 
     // The unregistered token is gone; the access token is kept.

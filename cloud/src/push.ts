@@ -137,7 +137,7 @@ export async function stationNotify(request: Request, env: Env): Promise<Respons
       title: line(n.title),
       body: noticeBody(n.kind, n.text, n.by, lang),
       tag: `${base}/${n.session}`,
-      url: `/o/${base}/${encodeURIComponent(n.session)}`,
+      url: `/o/${base}/${encodeURIComponent(n.session)}${n.seq === undefined ? "" : `?message=${n.seq}`}`,
       workspace: targets.workspace,
       station,
       session: n.session,

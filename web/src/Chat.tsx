@@ -437,9 +437,18 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
     const seq = ts === null ? null : seqOf.current.get(ts);
     if (id !== null && seq !== undefined) void sending.place(id, seq, seq === null ? null : offset).catch(() => undefined);
   };
-  // A message asked to be shown (jumpTo.ts) is where it opens this time, rather than the unread line.
+  // A message asked to be shown (jumpTo.ts) is where it opens this time, rather than the unread line; so is one its
+  // link names (`?message=<seq>`, a notification's: docs/notifications.md), asked for once the link is read.
   const asked = useRef(false);
-  if (useJump(station, id) !== null) asked.current = true;
+  const [search, setSearch] = useSearchParams();
+  const named = Number(search.get("message"));
+  const linked = id !== null && Number.isSafeInteger(named) && named > 0 ? named : null;
+  if (useJump(station, id) !== null || linked !== null) asked.current = true;
+  useEffect(() => {
+    if (linked === null || id === null) return;
+    jumpTo({ station, thread: id, seq: linked });
+    setSearch((now) => { now.delete("message"); return now; }, { replace: true });
+  }, [linked, id, station, setSearch]);
   const divider = chat.unreadLine ?? null;
   // Where it opens, said once its messages are there: where it was left here (`leftAt`), else where the core says it
   // was left (`at`: that message at the top, or where its top was, `atOffset`, when it is the very entry left there);

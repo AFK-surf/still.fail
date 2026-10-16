@@ -35,8 +35,11 @@ notifications), and only for people who take part in them (the sidebar's
 | `message` | another person said something in the chat, while no agent there is at work | `<name>: <text>` |
 
 The title is the chat's title as the sidebar shows it. Texts are one line
-(whitespace collapsed), cut to 140 characters. A notification opens the chat:
-`/o/<workspace>/<station>/<session>` (the link every client already opens).
+(whitespace collapsed), cut to 140 characters. A notification opens the chat at
+the message it is about: `/o/<workspace>/<station>/<session>?message=<seq>` (the
+link every client already opens; the chat's list goes to that message and flashes
+it, as when a row's state line is pressed, and the link loses `message`). Without
+a `seq` (an older station) it is the chat's link alone.
 
 ## Client core: the `notices` topic
 
@@ -53,7 +56,7 @@ that workspace's (the last 20), with none every workspace's. Its value:
   "seq": 12,                       // the message it is about: the card for `wait`, else the chat's last
   "title": "部署挂了", "body": "Claude: 修好了",
   "tag": "ws/st/<row id>",
-  "url": "/o/ws/st/<row id, URI-encoded>",
+  "url": "/o/ws/st/<row id, URI-encoded>?message=12",
   "at": 1790000000000
 }] }                               // oldest first, the last 20
 ```
@@ -124,7 +127,7 @@ high priority, every value a string):
 
 ```jsonc
 { "type": "notice", "kind": "done", "title": "…", "body": "…",
-  "tag": "ws/st/<session>", "url": "/o/ws/st/<session>",
+  "tag": "ws/st/<session>", "url": "/o/ws/st/<session>?message=12",
   "workspace": "ws", "station": "st", "session": "<key>", "at": "1790000000000",
   "seq": "12" }                    // when the station gave one
 ```

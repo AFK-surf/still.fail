@@ -110,7 +110,7 @@ test("a_chat_of_mine_is_noticed_as_it_changes_and_not_for_how_it_was_at_first", 
   const n = notices.value(null).items[0];
   assert.equal(n.body, "Opus 5.5: 修好了 再看看");
   assert.equal(n.tag, "ws/st/ds:C1:1.2");
-  assert.equal(n.url, "/o/ws/st/ds%3AC1%3A1.2");
+  assert.equal(n.url, "/o/ws/st/ds%3AC1%3A1.2?message=5", "opening the chat at its message");
   assert.equal(n.title, "部署挂了");
   assert.equal(n.seq, 5, "about the message it opens the chat at");
   notices.look(stations);
