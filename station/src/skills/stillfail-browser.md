@@ -22,6 +22,15 @@ Rules:
 - It is closed after an hour unused and restarted if it dies while in use; call `browser` again when your
   connection drops (the address usually stays).
 
+## Its tabs as screens (the `computer` tool)
+
+The `computer` tool takes screenshots of a screen of the station and clicks, drags, scrolls, types and presses keys
+on it, in the screenshot's pixels: a tab of this browser (`browser:<targetId>`, from `screen`) or the machine's display
+(`desktop`). For web pages prefer DevTools (Playwright, chrome-devtools-mcp): they read and act on the page itself and
+are faster and surer. Use `computer` for native apps on the desktop, and for what DevTools cannot reach (a browser
+dialog, a canvas). A person watching sees you work; while one is driving the screen your input is refused, so wait or
+ask them. When you are stuck, hand over as below.
+
 ## When a person is needed
 
 A sign-in (password, 2FA, a code sent to their phone), a captcha or a consent that only a person may give: do not try

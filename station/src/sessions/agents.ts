@@ -24,6 +24,7 @@ import { adbTools } from "../tools/adb.ts";
 import { screenTools } from "../tools/screen.ts";
 import { Browser } from "../browser/service.ts";
 import { browserTools } from "../tools/browser.ts";
+import { Computer, computerTools } from "../tools/computer.ts";
 import { archiveTools } from "../tools/archive.ts";
 import { feedbackTools, tellFixed } from "../tools/feedback.ts";
 import { signedPost } from "../cloud/signed.ts";
@@ -186,7 +187,7 @@ export const AgentsLive = (control: Control) =>
       });
       const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text) });
       hub.setJobs(jobs);
-      hub.onClose((session) => remote.closeSession(session));
+      hub.onClose((session) => (remote.closeSession(session), computer.closeSession(session)));
       // What other stations' sessions ask of this one's chats: those of the workspace asked in (`ws`; none: any, once
       // xshare checked what is shared).
       const local = async (peer: string, request: any, ws: string | null = null) => {
@@ -233,6 +234,21 @@ export const AgentsLive = (control: Control) =>
       hub.onOutsideChats((ws) => xshare.borrowed(ws));
       remote.setOutside({ inside: (peer, request, ws) => xshare.inside(peer, request, ws), outside: (peer, request, ws) => xshare.outside(peer, request, ws) });
 
+      // The agents' own hands on the screens: a session's view of one shows among its people as its chat.
+      const computer = new Computer({
+        hub: screens,
+        base: () => {
+          const s = place();
+          return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
+        },
+        name: (session) => {
+          let title = session;
+          try {
+            title = sender(hub, session)[0];
+          } catch {}
+          return `agent: ${title}`;
+        },
+      });
       const tools = [
         ...chatTools(hub),
         ...archiveTools(hub),
@@ -247,6 +263,7 @@ export const AgentsLive = (control: Control) =>
           return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
         }),
         ...browserTools(browser),
+        ...computerTools(computer),
       ];
       // The station's and the runtimes' versions, read at start and every few hours; updated from the pages, or by
       // itself while nothing runs and nothing is asked of it (auto update), watched or not.

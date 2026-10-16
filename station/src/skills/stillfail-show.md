@@ -50,6 +50,8 @@ When a person has to act on this machine's display or a browser tab of the stati
 approve a prompt, judge something live), the `screen` tool gives the link that opens it in their still.fail app,
 where they see and drive it. Post the link with `chat_post kind=need_human` saying what to do there, and end the
 turn; `screen` later says whether someone is viewing or controlling it. Not for evidence: show that as above.
+The `computer` tool lets you see and operate a screen yourself (screenshots, clicks, keys); for web pages prefer the
+browser's DevTools (stillfail-browser), and when you are stuck hand the screen to a person with its link.
 
 ## Evidence
 

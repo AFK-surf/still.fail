@@ -39,6 +39,7 @@ export const NOTES: [number, string][] = [
   [32, "station_task prepare takes dir (an absolute local directory: each start syncs it, only what changed, into a mirror on the target and runs the command there; changed synced files come back as a patch) and back (paths downloaded into station-back/<key>/ after it ends)."],
   [33, "New tool screen: the screens of this station a person can see and drive from their still.fail app (this machine's display, the station's browser tabs), who is on each now, and the link to post with need_human when a person must act there (log in, a captcha)."],
   [34, "New tool browser: the station's own Chrome with a persistent profile (sign-ins stay, shared by the station's sessions); it gives the DevTools endpoint for chrome-devtools-mcp or Playwright. Use it for web work behind a login, and give a person its tab with the screen tool to sign in or solve a captcha (skill stillfail-browser)."],
+  [35, "New tool computer: screenshot and operate one of the station's screens yourself (click, drag, scroll, type, keys, in the screenshot's pixels), the desktop or a browser tab. Prefer the browser's DevTools for web pages; refused while a person drives the screen; when stuck, post the screen's link (screen tool) with need_human."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.
