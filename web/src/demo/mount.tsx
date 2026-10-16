@@ -34,6 +34,8 @@ let mounted = false;
 
 const chats = openingChats();
 const subs = new Map<number, Topic>();
+/** The calls under way, to cancel. */
+const under = new Map<number, AbortController>();
 let post: (message: unknown) => void = () => undefined;
 
 /**
@@ -45,6 +47,11 @@ export interface DemoExtension {
   /** The demo's own value for a topic, changed (or undefined: as it is). */
   then?(topic: Topic, value: unknown): unknown;
   call?(name: string, params: Record<string, unknown>): unknown;
+  /**
+   * A call that says how far it has got as it goes (a screen view's states and frames): `emit` each value, with its bytes
+   * beside it; the answer once it is over. `signal` aborts as the page cancels it. Undefined for the demo's.
+   */
+  stream?(name: string, params: Record<string, unknown>, emit: (value: unknown, bytes?: Uint8Array) => void, signal: AbortSignal): Promise<unknown> | undefined;
 }
 const extensions: DemoExtension[] = [];
 export function extendDemo(extension: DemoExtension): void { extensions.push(extension); }
@@ -82,6 +89,8 @@ function demoValueOf(topic: Topic): unknown {
     case "decisions": return station.decisions(chats);
     case "drive": return station.driveFolder(topic.root, topic.path);
     case "drivePlace": return null;
+    // A station's screens: none here (the stories add theirs).
+    case "screens": return null;
     // What the core puts together of them (client/core-ts/src/choose.ts), as a new chat and a model control start.
     case "newChat": return newChatView();
     case "pick": return pickView(topic.of);
@@ -142,7 +151,8 @@ const prefs: Record<string, unknown> = {};
 /** A message no longer asking anything of the viewer. */
 const withoutAsked = ({ asked: _, ...m }: ChatMessage): ChatMessage => m;
 
-function answer(name: string, params: Record<string, unknown>): unknown {
+function answer(name: string, params: Record<string, unknown>, emit: (value: unknown, bytes?: Uint8Array) => void = () => undefined, signal: AbortSignal = new AbortController().signal): unknown {
+  for (const e of extensions) { const v = e.stream?.(name, params, emit, signal); if (v !== undefined) return v; }
   for (const e of extensions) { const v = e.call?.(name, params); if (v !== undefined) return v; }
   if (name === "prefs.set") {
     for (const [field, value] of Object.entries(params)) {
@@ -235,19 +245,26 @@ setCore(new CoreClient((onMessage) => {
   post = (message) => queueMicrotask(() => onMessage(message));
   return {
     post(raw) {
-      const message = raw as { id: number; subscribe?: Topic; unsubscribe?: boolean; call?: string; params?: Record<string, unknown> };
+      const message = raw as { id: number; subscribe?: Topic; unsubscribe?: boolean; call?: string; params?: Record<string, unknown>; cancel?: boolean };
       if (message.subscribe) {
         subs.set(message.id, message.subscribe);
         post({ id: message.id, value: valueOf(message.subscribe) });
       } else if (message.unsubscribe) {
         subs.delete(message.id);
+      } else if (message.cancel) {
+        under.get(message.id)?.abort();
       } else if (message.call) {
+        // Under way until answered: a streamed call says how far it has got (its values, their bytes beside them).
+        const abort = new AbortController();
+        under.set(message.id, abort);
+        const emit = (value: unknown, bytes?: Uint8Array) => post({ id: message.id, value, ...(bytes ? { bytes } : {}) });
         void Promise.resolve()
-          .then(() => answer(message.call!, message.params ?? {}))
+          .then(() => answer(message.call!, message.params ?? {}, emit, abort.signal))
           .then(
             (ok) => post({ id: message.id, ok }),
-            (e: Error) => post({ id: message.id, error: { code: e instanceof station.NeedsReal ? "demo" : "internal", message: e.message } }),
-          );
+            (e: Error & { code?: string }) => post({ id: message.id, error: { code: e instanceof station.NeedsReal ? "demo" : e.code ?? "internal", message: e.message } }),
+          )
+          .finally(() => under.delete(message.id));
       }
     },
     close() {},

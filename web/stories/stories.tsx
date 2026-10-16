@@ -26,6 +26,8 @@ import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { AT, apk, clips, folder, JOIN_REFUSED, JOINABLE, MEMBERSHIPS, note, NOTE, novel, picture } from "./data.ts";
 import type { DemoExtension } from "../src/demo/mount.tsx";
+import { ScreenViewer } from "../src/screen/ScreenViewer.tsx";
+import { OUTDATED, SCREENS_LACKING, screensDemo, type ViewStory } from "./screens.ts";
 import CLIP_URL from "./assets/story-clip.mp4?url";
 import PICTURE_URL from "./assets/story-picture.png?url";
 
@@ -91,6 +93,14 @@ const memberships = (joined = false): DemoExtension => ({
     return [...value, { ...first, station: "demo/mini1", id: "mini1", name: "Mini1", emoji: undefined, icon: "glyph:dice-1", joined: true, home: "Lab" }];
   },
 });
+/** One of the demo station's screens seen, its view going as `story` says (screens.ts), alone on the window; `h264`: in
+ * H.264 where the browser encodes it. */
+const screenView = (story: ViewStory, phone = false, h264 = false): Pick<Story, "render" | "demo"> => ({
+  demo: screensDemo(story, undefined, h264),
+  render: () => stage(<ScreenViewer station="demo/local" screen="desktop" backLabel="返回" onBack={noop} phone={phone} />),
+});
+/** With a mouse, the pointer brought to the top: the bar there while the view is live. */
+const toTheBar: Step[] = [{ move: [640, 20] }];
 const ANTHROPIC = { id: "anthropic", name: "Anthropic" };
 const OPENAI = { id: "openai", name: "OpenAI" };
 const noop = () => undefined;
@@ -361,6 +371,26 @@ export const stories: Story[] = [
   { id: "preview-picture", group: "文件", title: "图片预览", render: () => stage(<DrivePreview at={at(picture.name)} entries={folder} entry={picture} onClose={noop} />), steps: [{ move: [640, 400] }] },
   { id: "preview-unshown", group: "文件", title: "预览 · 不能预览的文件", render: () => stage(<DrivePreview at={at(apk.name)} entries={[...folder, apk]} entry={apk} onClose={noop} />), steps: [{ move: [640, 400] }] },
   { id: "preview-unshown-phone", group: "文件", title: "预览 · 不能预览的文件 · 手机", phone: true, render: () => stage(<DrivePreview at={at(apk.name)} entries={[...folder, apk]} entry={apk} onClose={noop} />) },
+
+  // ── a station's screens (docs/remote-screens.md) ──
+  { id: "screen-connecting", group: "屏幕", title: "屏幕 · 连接中", ...screenView("connecting") },
+  { id: "screen-live", group: "屏幕", title: "屏幕 · 控制", ...screenView("live"), steps: toTheBar },
+  { id: "screen-live-h264", group: "屏幕", title: "屏幕 · 控制 · H.264", ...screenView("live", false, true), steps: toTheBar },
+  { id: "screen-read-only", group: "屏幕", title: "屏幕 · 只读成员只能看", ...screenView("readOnly"), steps: toTheBar },
+  { id: "screen-undrivable", group: "屏幕", title: "屏幕 · station 没有辅助功能权限", ...screenView("undrivable"), steps: toTheBar },
+  { id: "screen-reconnecting", group: "屏幕", title: "屏幕 · 重新连接", ...screenView("reconnecting") },
+  { id: "screen-ended", group: "屏幕", title: "屏幕 · 结束了", ...screenView("ended") },
+  { id: "screen-outdated", group: "屏幕", title: "屏幕 · station 要更新", ...screenView("outdated") },
+  { id: "screen-gone", group: "屏幕", title: "屏幕 · 不在了", ...screenView("gone") },
+  { id: "screen-denied", group: "屏幕", title: "屏幕 · 没有权限", ...screenView("denied") },
+  { id: "screen-failed", group: "屏幕", title: "屏幕 · 没连上", ...screenView("failed") },
+  { id: "screen-phone", group: "屏幕", title: "屏幕 · 手机", phone: true, ...screenView("live", true) },
+  { id: "app-station-screens", group: "屏幕", title: "station · 屏幕", app: true, demo: screensDemo(), steps: [{ click: '[aria-label^="Station"]' }] },
+  { id: "app-station-screens-lacking", group: "屏幕", title: "station · 屏幕 · 缺权限", app: true, demo: screensDemo("live", SCREENS_LACKING), steps: [{ click: '[aria-label^="Station"]' }] },
+  { id: "app-station-screens-outdated", group: "屏幕", title: "station · 屏幕 · 要更新", app: true, demo: screensDemo("live", OUTDATED), steps: [{ click: '[aria-label^="Station"]' }] },
+  { id: "app-screen", group: "屏幕", title: "station · 打开屏幕", app: true, demo: screensDemo(), steps: [{ click: '[aria-label^="Station"]' }, { click: 'a[href$="/screen/desktop"]' }, ...toTheBar] },
+  { id: "phone-station-screens", group: "屏幕", title: "手机 · station 的屏幕", app: true, phone: true, demo: screensDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }] },
+  { id: "phone-screen", group: "屏幕", title: "手机 · 打开屏幕", app: true, phone: true, demo: screensDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }, { text: "登录 · GitHub" }] },
 
   // ── the phone ──
   { id: "phone-chat", group: "手机", title: "对话", app: true, phone: true },

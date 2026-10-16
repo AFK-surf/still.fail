@@ -20,6 +20,7 @@ import { WorkspaceMark } from "../WorkspaceMark.tsx";
 import { HostDetails, joinedText, Net, problems, state, useLong } from "./StationCards.tsx";
 import { MarkPick } from "./MarkPick.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
+import { ScreensSection } from "../screen/ScreenList.tsx";
 import { NavAction, NavList, NavItem, NavLine, NavTop, navFill } from "../SidebarList.tsx";
 import { AddStationDialog, useStationEdits, useWorkspace } from "./settings.tsx";
 import type { WorkspaceEntry } from "./workspace.tsx";
@@ -191,6 +192,8 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
           {o.processes.length > 0 && <p className={css.note}>{o.processesText}</p>}
         </Section>
       )}
+      {/* Its screens, to see and drive (docs/remote-screens.md); a station from before them says so quietly. */}
+      <ScreensSection station={s.station} />
       {o && o.profiles.length > 0 && (
         <Section title={<>Profile<span className={settingsCss.titleCount}>{o.profiles.length}</span></>}>
           <ul className={pagesCss.list}>

@@ -125,3 +125,5 @@ import "../FrequentCombos.css.ts";
 import "../AutomaticDecisions.css.ts";
 import "../mobile/AutomaticDecisions.css.ts";
 import "../pages/Drive.css.ts";
+import "../screen/ScreenList.css.ts";
+import "../screen/ScreenViewer.css.ts";
