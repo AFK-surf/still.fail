@@ -2,7 +2,7 @@
 // (scripts/release-sign.ts desktop-web, verifyDesktopWeb), what the app downloads and serves (web-update.mts), and which
 // changes are a web release alone (scripts/desktop-web.ts plan).
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, createPublicKey, generateKeyPairSync, sign } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,10 +11,23 @@ import { gunzipSync, gzipSync } from "node:zlib";
 import { describe, test } from "node:test";
 import { readArchive, writeArchive } from "../apps/desktop/src/web-archive.mts";
 import { WebUpdates } from "../apps/desktop/src/web-update.mts";
-import { Unverified, verifyDesktopWeb } from "../station/src/updates/signed.ts";
-import { KEY, OTHER, signed, trusted } from "../station/test/release-fakes.ts";
+import { Unverified, keyId, verifyDesktopWeb } from "../station/src/updates/signed.ts";
 import { SHELL, plan } from "../scripts/desktop-web.ts";
 
+// A release key of the tests' own (station/test/release-fakes.ts's, made here: that one takes the station's packages,
+// which this check has not installed), and another the app does not take.
+const pair = () => {
+  const { privateKey } = generateKeyPairSync("ed25519");
+  const raw = Buffer.from(createPublicKey(privateKey).export({ format: "jwk" }).x as string, "base64url").toString("base64");
+  return { privateKey, raw, pem: privateKey.export({ format: "pem", type: "pkcs8" }) as string };
+};
+const KEY = pair();
+const OTHER = pair();
+const trusted = new Map([[keyId(KEY.raw), KEY.raw]]);
+const signed = (words: object, key = KEY) => {
+  const bytes = Buffer.from(JSON.stringify(words));
+  return { release: bytes.toString("base64"), signature: sign(null, bytes, key.privateKey).toString("base64"), key: keyId(key.raw) };
+};
 const temp = () => mkdtempSync(join(tmpdir(), "stillfail-web-update-"));
 const files = (build: number) => [
   { path: "index.html", bytes: Buffer.from(`<!doctype html><title>${build}</title>`) },
