@@ -405,9 +405,9 @@ class BarTest {
         f.up()
         f.r.frames(40)
         f.r.end()
-        assertEquals("let go above the panel: open", 1f, openness(closed), 0.01f)
-        assertEquals(listOf<Screen>(Screen.Home), h.app.stack)
-        assertEquals(0L, h.app.bars.current)
+        // Let go above the panel's row, open: the place the ball kept to there, the top row's (奏, under the finger).
+        assertEquals(1L, h.app.bars.current)
+        assertEquals(listOf<Screen>(Screen.Decisions), h.app.stack)
     }
 
     /** Opened, drawn back under 16 and let go there: closed, nothing chosen. */
@@ -441,7 +441,8 @@ class BarTest {
         fun open(name: String, tap: Boolean): List<Float> {
             val f = Finger(h.record(name), Offset(g.left + 28 * d, closed + 28 * d))
             f.down()
-            f.to(Offset(f.at.x, closed - 60 * d), 6)
+            // Over the line and let go at once, the panel just opening (not yet 85%, so nothing chosen): it opens on.
+            f.to(Offset(f.at.x, closed - 40 * d), 2)
             f.up()
             val path = ArrayList<Float>()
             for (i in 1..30) {
