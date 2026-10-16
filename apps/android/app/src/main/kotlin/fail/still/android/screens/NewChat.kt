@@ -82,7 +82,6 @@ import fail.still.android.data.errorText
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.StationMark
-import fail.still.android.ui.hasStationMark
 import fail.still.android.ui.Icons
 import fail.still.android.ui.Illustration
 import fail.still.android.ui.Loading
@@ -289,7 +288,7 @@ private fun pickStation(app: AppState, stations: List<StationView>, current: Str
         SheetHead(t("android-chat.new.station.pick"))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             stations.forEach { s ->
-                PickRow(s.name, s.summary, checked = s.station == current, leading = { Buddy(s, 36) }, mark = if (hasStationMark(s.emoji, s.icon)) ({ StationMark(s.emoji, s.icon, 15.dp, C.ink) }) else null) { onPick(s.id); app.sheet = null }
+                PickRow(s.name, s.summary, checked = s.station == current, leading = { StationMark(s.emoji, s.icon, 22.dp, C.ink, none = Icons.Server) }) { onPick(s.id); app.sheet = null }
             }
         }
     }
