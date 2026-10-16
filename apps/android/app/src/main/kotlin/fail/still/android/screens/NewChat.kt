@@ -198,7 +198,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
                         Column(Modifier.fillMaxWidth().padding(top = 12.dp)) { MachineLoginOffers(view.station, overview, inset = 0.dp) }
                     }
                     // The machine's own Claude Code and Codex sessions, to go on with one (web/src/MachineSessions.tsx).
-                    if (overview != null && choice.blocked != "profile") MachineSessionsOffer(view)
+                    // Not on a station this workspace joined with no profile open to it (the machine's sessions are its home's).
+                    if (overview != null && choice.blocked != "profile" && choice.blocked != "shared") MachineSessionsOffer(view)
                 }
                 // Its end clear of what stands at the foot.
                 Spacer(Modifier.height(with(androidx.compose.ui.platform.LocalDensity.current) { foot.toDp() }))

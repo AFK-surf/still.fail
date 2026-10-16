@@ -62,6 +62,21 @@ const joining = (kind: "list" | "none" | "error"): DemoExtension => ({
   topic: (t) => (t.topic === "joinable" ? (kind === "none" ? JOINABLE_NONE : JOINABLE) : undefined),
   call: (name) => (name === "station.join" ? (kind === "error" ? Promise.reject(new Error(JOIN_REFUSED)) : { joined: null }) : undefined),
 });
+/** The demo's station in Lab too, its profile open to Lab (`on`) or not: the profile's page offers the switch. */
+const profileFor = (on: boolean): DemoExtension => ({
+  topic: (t) => (t.topic === "memberships" ? MEMBERSHIPS : undefined),
+  then: (t, value) => {
+    if (t.topic !== "overview" || !value || typeof value !== "object") return undefined;
+    const o = value as { profiles: Record<string, unknown>[] };
+    return { ...o, profiles: o.profiles.map((p) => ({ ...p, workspaces: on ? ["lab"] : [] })) };
+  },
+});
+/** A new chat on a station this workspace joined that has no profile open to it (the core's `blocked: shared`). */
+const notShared: DemoExtension = {
+  then: (t, value) => (t.topic === "newChat" && value && typeof value === "object"
+    ? { ...(value as object), blocked: "shared", problem: "Studio 来自 Lab，它的 Profile 还没开放给这个 workspace：请 Lab 的管理员在 Profile 页打开「也给 Acme 用」" }
+    : undefined),
+};
 /** The demo's station in Lab too (the core's `memberships`), and, with `joined`, Lab's Mini1 in this workspace. */
 const memberships = (joined = false): DemoExtension => ({
   topic: (t) => (t.topic === "memberships" ? MEMBERSHIPS : undefined),
@@ -261,6 +276,9 @@ export const stories: Story[] = [
   { id: "app-station-add-existing-error", group: "应用", title: "添加 station · 加入失败", app: true, demo: joining("error"), steps: [{ click: '[aria-label^="Station"]' }, { text: "添加 station" }, { text: "已有的 station" }, { text: "加进来" }] },
   { id: "app-files-row-menu-joined", group: "应用", title: "文件 · 文件夹右键 · 开放给加入的 workspace", app: true, demo: memberships(), steps: [{ click: '[aria-label="文件"]' }, { text: "主目录" }, { rightClick: "button:has-text(\"Movies\")" }] },
   { id: "app-profile", group: "应用", title: "Profile", app: true, steps: [{ click: '[aria-label="Profile"]' }] },
+  { id: "app-profile-workspaces", group: "应用", title: "Profile · 也给加入的 workspace 用", app: true, demo: profileFor(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-workspaces-on", group: "应用", title: "Profile · 已开放给加入的 workspace", app: true, demo: profileFor(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-new-chat-not-shared", group: "应用", title: "新建对话 · 加入的 station 没有开放的 Profile", app: true, demo: notShared, steps: [{ text: "新建对话" }] },
   { id: "app-connects", group: "应用", title: "连接", app: true, steps: [{ click: '[aria-label="连接"]' }] },
   { id: "app-usage", group: "应用", title: "用量", app: true, steps: [{ click: '[aria-label="用量"]' }] },
 
@@ -352,6 +370,8 @@ export const stories: Story[] = [
   { id: "phone-profile", group: "手机", title: "Profile", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }] },
   { id: "phone-memory", group: "手机", title: "记忆", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }] },
   { id: "phone-memory-skill", group: "手机", title: "记忆 · 项目", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }, { text: "acme-web" }] },
+  { id: "phone-profile-workspaces", group: "手机", title: "Profile · 也给加入的 workspace 用", app: true, phone: true, demo: profileFor(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "phone-new-chat-not-shared", group: "手机", title: "新建对话 · 加入的 station 没有开放的 Profile", app: true, phone: true, demo: notShared, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="新建对话"]' }] },
   { id: "phone-station-add-existing", group: "手机", title: "添加 station · 已有的", app: true, phone: true, demo: joining("list"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }] },
   { id: "phone-station-add-existing-error", group: "手机", title: "添加 station · 加入失败", app: true, phone: true, demo: joining("error"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }, { text: "加进来" }] },
   { id: "phone-station-workspaces", group: "手机", title: "station · 在几个 workspace 里", app: true, phone: true, demo: memberships(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }] },

@@ -67,6 +67,7 @@ import fail.still.android.data.ProfilesView
 import fail.still.android.data.ShareStation
 import fail.still.android.data.Quota
 import fail.still.android.data.StationView
+import fail.still.android.data.MembershipsView
 import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
 import fail.still.android.data.rememberTopic
@@ -96,6 +97,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 
@@ -245,6 +247,41 @@ fun ProfileAccountScreen(current: WorkspaceEntry, key: String) {
                 }
             }
             Spacer(Modifier.height(30.dp))
+        }
+    }
+}
+
+/**
+ * Which of the workspaces the station joined may run their chats on it too (as the web's WorkspacesSection), a switch
+ * each: for its home workspace's owners and admins (the core's `memberships`), once the station is in more than one.
+ */
+@Composable
+private fun WorkspacesSection(address: String, p: Profile) {
+    val app = LocalApp.current
+    val api = app.api(address)
+    val topic by rememberTopic<MembershipsView>(app.core, Topics.memberships(address))
+    val view = topic.value ?: return
+    val joined = if (view.manages) view.workspaces.filter { !it.home } else emptyList()
+    if (joined.isEmpty()) return
+    val now = p.workspaces.orEmpty()
+    val busy = app.isDoing("profile.put", "station" to address, "id" to p.id)
+    SectionHeader(t("web-pages.profiles.workspaces.title"), start = 24.dp)
+    ListCard {
+        joined.forEach { w ->
+            val on = w.workspace in now
+            ListRow(onClick = if (busy) null else ({
+                val next = if (on) now - w.workspace else now + w.workspace
+                app.act(t("web-pages.profiles.workspaces.what"), t(if (on) "web-pages.profiles.workspaces.turnedOff" else "web-pages.profiles.workspaces.turnedOn", "name" to w.name)) {
+                    api.putProfile(p.id, buildJsonObject { putJsonArray("workspaces") { next.forEach { add(JsonPrimitive(it)) } } })
+                }
+            })) {
+                Column(Modifier.weight(1f)) {
+                    Text(t("web-pages.profiles.workspaces.for", "name" to w.name), fontSize = 15.sp, color = C.ink)
+                    Text(t(if (on) "web-pages.profiles.workspaces.on" else "web-pages.profiles.workspaces.off", "name" to w.name), fontSize = 13.sp, color = C.muted)
+                }
+                DoingMark(busy, app.failedOf("profile.put", "station" to address, "id" to p.id), 14.dp)
+                Switch(on)
+            }
         }
     }
 }
@@ -440,6 +477,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
             if (!copy && kind == "subscription" && p.machine != true) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN)
             if (p.trouble?.action != "quota") QuotaSection(address, p)
             if (s.overview?.sharing == true) ShareSection(current, s, p)
+            if (!copy) WorkspacesSection(address, p)
             if (!copy && p.fast != null) {
                 val busy = app.isDoing("profile.put", "station" to address, "id" to p.id)
                 SectionHeader(t("android-settings.profile.run"), start = 24.dp)
