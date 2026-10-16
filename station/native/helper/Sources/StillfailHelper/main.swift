@@ -3,8 +3,11 @@
 // process: a grant that takes effect only once the process starts again restarts this app, never the station.
 //
 //   stillfail-helper status    one JSON line: what this process may do, which process macOS asks about, the display
-//   (started by `open -n -g --env STILLFAIL_HELPER_SOCKET=… --env STILLFAIL_HELPER_TOKEN=… <app>`): the helper,
-//   listening on that Unix socket until it is told to quit or nobody has connected for IDLE.
+//   (started by `open -n -g <app>`, or by macOS itself: its Quit & Reopen after a grant): the helper, listening on
+//   helper.sock beside the app (the station's <data>/helper) for requests with the token in `token` there, until it
+//   is told to quit or nobody has connected for IDLE. STILLFAIL_HELPER_SOCKET and STILLFAIL_HELPER_TOKEN say
+//   otherwise. One helper a directory (a lock beside the app): another started there ends at once, unless it is this
+//   one starting itself again (STILLFAIL_HELPER_TAKEOVER), which waits for the lock.
 //
 // Each connection to the socket is one request: a JSON line `{token, op, …}`, the token the station gave it at start.
 //   hello               → {ok, v: 1, pid, app, capabilities: ["screen"]}
@@ -13,6 +16,7 @@
 //   permissions.show    {words}: the window that asks for the grants (Permissions.swift) → {ok}
 //   screen.view         {maxWidth, maxHeight, display?, fps?, bitrate?, synthetic?}: a view of the display; the
 //                       connection then carries ScreenView.swift's messages both ways until either side closes it
+//   watch               → {ok}, then held open for as long as this process is (the station's supervision)
 //   restart             → {ok}, then this app starts again (a grant to take effect)
 //   quit                → {ok}, then it ends
 // Capabilities to come (the drive's protected folders, the camera) are ops of their own namespace in this one app, so
@@ -28,10 +32,27 @@ if arguments.first == "status" {
 }
 
 let environment = ProcessInfo.processInfo.environment
-guard let socketPath = environment["STILLFAIL_HELPER_SOCKET"], let token = environment["STILLFAIL_HELPER_TOKEN"], !socketPath.isEmpty, !token.isEmpty else {
-  FileHandle.standardError.write(Data("usage: stillfail-helper status | (STILLFAIL_HELPER_SOCKET, STILLFAIL_HELPER_TOKEN set, started by open)\n".utf8))
+/// Where the station put this app: its socket and token beside it.
+let home = Bundle.main.bundleURL.deletingLastPathComponent().path
+let socketPath = environment["STILLFAIL_HELPER_SOCKET"] ?? (home as NSString).appendingPathComponent("helper.sock")
+let token = environment["STILLFAIL_HELPER_TOKEN"]
+  ?? ((try? String(contentsOfFile: (home as NSString).appendingPathComponent("token"), encoding: .utf8)) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+guard !token.isEmpty else {
+  FileHandle.standardError.write(Data("stillfail-helper: no token beside the app (\(home)/token): the station starts it\n".utf8))
   exit(2)
 }
+// One helper here: the lock is held for as long as this process is.
+let lockPath = (home as NSString).appendingPathComponent("helper.lock")
+let lock = open(lockPath, O_CREAT | O_RDWR, 0o600)
+var locked = lock >= 0 && flock(lock, LOCK_EX | LOCK_NB) == 0
+if !locked && environment["STILLFAIL_HELPER_TAKEOVER"] == "1" {
+  // This app starting itself again: the one before ends in a moment.
+  for _ in 0..<100 where !locked {
+    usleep(100_000)
+    locked = flock(lock, LOCK_EX | LOCK_NB) == 0
+  }
+}
+guard locked else { exit(0) }
 
 let application = NSApplication.shared
 _ = application.setActivationPolicy(.accessory)

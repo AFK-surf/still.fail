@@ -81,6 +81,8 @@ export class Desktop implements ScreenSource {
   #checked = -Infinity;
   #checking: Promise<void> | null = null;
   readonly #views = new Set<HelperView>();
+  /// Its window was put up for grants not all taken yet: up again when the helper comes back still lacking one.
+  #wanted = false;
 
   constructor(options: DesktopOptions) {
     this.#o = options;
@@ -164,8 +166,19 @@ export class Desktop implements ScreenSource {
     return new ScreenRefused(503, "station.screen.captureOff", { app: access.app || "still.fail Helper" }, access);
   }
 
+  /// The helper came back after it ended by itself (macOS's Quit & Reopen after a grant, a crash): its window again,
+  /// with what is still missing, when it was asking.
+  async helperBack() {
+    await this.refresh(true);
+    const s = this.#status;
+    if (s === null) return;
+    if (s.capture && s.control) this.#wanted = false;
+    else if (this.#wanted && this.#o.helper !== null) await this.#ask(this.#o.helper);
+  }
+
   /// The helper's window asking for what is missing, on this Mac, in its language; what it says then.
   async #ask(helper: HelperApp) {
+    this.#wanted = true;
     try {
       await helper.request({ op: "permissions.show", words: windowWords(this.#o.lang?.() ?? stationLang()) });
       await this.refresh(true);

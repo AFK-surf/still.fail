@@ -112,6 +112,10 @@ final class Daemon {
         return
       }
       ScreenView(channel: channel, options: request).run()
+    case "watch":
+      // The station's watch: open for as long as this process is (its end is how the station learns this one ended).
+      channel.line(["ok": true])
+      while channel.readLine() != nil {}
     case "restart":
       channel.line(["ok": true])
       DispatchQueue.main.async { self.restart() }
@@ -139,7 +143,7 @@ final class Daemon {
     configuration.createsNewApplicationInstance = true
     configuration.activates = false
     configuration.addsToRecentItems = false
-    configuration.environment = ["STILLFAIL_HELPER_SOCKET": socketPath, "STILLFAIL_HELPER_TOKEN": token]
+    configuration.environment = ["STILLFAIL_HELPER_SOCKET": socketPath, "STILLFAIL_HELPER_TOKEN": token, "STILLFAIL_HELPER_TAKEOVER": "1"]
     NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, error in
       if let error { FileHandle.standardError.write(Data("stillfail-helper: not started again: \(error)\n".utf8)) }
       exit(0)

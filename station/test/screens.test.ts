@@ -402,6 +402,8 @@ class FakeHelperApp {
   status: any;
   #server: net.Server | null = null;
   #where: { path: string; token: string } | null = null;
+  #conns = new Set<net.Socket>();
+  watching = 0;
   constructor(status: any) {
     this.status = status;
   }
@@ -424,8 +426,19 @@ class FakeHelperApp {
   }
   close() {
     this.#stop();
+    for (const c of this.#conns) c.destroy();
+  }
+  /// It ends by itself (macOS's Quit & Reopen, a crash): its socket gone, every connection with it.
+  crash() {
+    this.close();
+  }
+  /// macOS starts it again itself, from its place (not the station's launch).
+  async reopen() {
+    await this.#listen();
   }
   #serve(conn: net.Socket, token: string) {
+    this.#conns.add(conn);
+    conn.on("close", () => this.#conns.delete(conn));
     let carry = Buffer.alloc(0);
     let viewing: ((chunk: Buffer) => void) | null = null;
     const line = (v: unknown) => conn.end(`${JSON.stringify(v)}\n`);
@@ -448,6 +461,10 @@ class FakeHelperApp {
           this.shown.push(ask.words);
           this.asking = true;
           return line({ ok: true });
+        case "watch":
+          this.watching++;
+          conn.write(`${JSON.stringify({ ok: true })}\n`);
+          return;
         case "quit":
           this.quits++;
           line({ ok: true });
@@ -632,4 +649,42 @@ test("a view the station opens itself (an agent's) shows who has it, driving or 
   assert.ok(told >= 3);
   await person.stream.finish();
   await person.served;
+});
+
+const waitFor = async (what: () => boolean) => {
+  while (!what()) await new Promise((r) => setTimeout(r, 20));
+};
+
+test("the helper watched: ended by itself it is started again, once, its window up again for a grant still missing", { skip: WINDOWS }, async () => {
+  const { app, dir } = helperRelease();
+  const fake = new FakeHelperApp({ capture: false, control: false, display, responsible: responsible(dir) });
+  let backs = 0;
+  const helper: HelperApp = new HelperApp({ app, dir, launch: fake.launch, onBack: () => (backs++, void desktop.helperBack()) });
+  const desktop: Desktop = new Desktop({ supported: true, helper, changed: () => {}, lang: () => "en" });
+  await assert.rejects(desktop.open({ maxWidth: 1920, maxHeight: 1080, codecs: ["h264"] }));
+  assert.deepEqual([fake.launches, fake.shown.length, fake.watching], [1, 1, 1]);
+  // One grant taken, then macOS quits it to reopen it, and does not: the station starts it, and asks for the other.
+  fake.status = { ...fake.status, capture: true };
+  fake.asking = false;
+  fake.crash();
+  await waitFor(() => backs === 1 && fake.shown.length === 2);
+  assert.deepEqual([fake.launches, fake.watching], [2, 2]);
+  // macOS reopened it itself this time: the station takes it as it is, a second one not started.
+  fake.crash();
+  await fake.reopen();
+  await waitFor(() => backs === 2 && fake.shown.length === 3);
+  assert.deepEqual([fake.launches, fake.watching], [2, 3]);
+  // All granted: back once more, no window.
+  fake.status = { ...fake.status, control: true };
+  fake.crash();
+  await fake.reopen();
+  await waitFor(() => backs === 3);
+  await settle();
+  assert.equal(fake.shown.length, 3, "up again only while a grant was missing");
+  // Asked to end with the station: not started again.
+  await desktop.close();
+  await settle();
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(fake.launches, 2);
+  fake.close();
 });

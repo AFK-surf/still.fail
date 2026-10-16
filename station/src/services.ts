@@ -110,8 +110,9 @@ export class ScreenRegistry extends Context.Service<ScreenRegistry, ScreenHub>()
       const hub = yield* Effect.acquireRelease(Effect.sync(() => new ScreenHub()), (hub) => Effect.sync(() => hub.close()));
       // still.fail Helper (macOS), installed and talked to under <data>/helper.
       const app = platform.hasDesktopScreen ? helperApp() : null;
-      const helper = app === null ? null : new HelperApp({ app, dir: join(data, "helper") });
-      const desktop = new Desktop({ supported: platform.hasDesktopScreen, helper, changed: () => hub.changed() });
+      // Back after it ended by itself: the desktop asks again for a grant still missing.
+      const helper = app === null ? null : new HelperApp({ app, dir: join(data, "helper"), onBack: () => void desktop.helperBack() });
+      const desktop: Desktop = new Desktop({ supported: platform.hasDesktopScreen, helper, changed: () => hub.changed() });
       yield* Effect.acquireRelease(
         Effect.sync(() => {
           const remove = hub.add(desktop);

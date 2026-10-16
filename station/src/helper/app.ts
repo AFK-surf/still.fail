@@ -6,8 +6,14 @@
 //
 // The release's app is copied to <data>/helper first (a path of its own, outside any other app: the desktop app has
 // the station inside it), anew when its code changed. The station talks to it on a Unix socket there, each connection
-// one request: a JSON line with the token it gave the app when it started it (<data>/helper/token, 0600, so a station
-// process that takes over finds the app it started), answered with a JSON line, or with a stream (`screen.view`).
+// one request: a JSON line with the token in <data>/helper/token (0600; the app reads it there too, so the app macOS
+// starts again itself after a grant, its Quit & Reopen, finds the station), answered with a JSON line, or with a
+// stream (`screen.view`). One app a directory: a lock there ends any second one.
+//
+// The station watches the app it started (a connection held open, `watch`): when the app ends without being asked
+// (macOS's Quit & Reopen when it did not reopen it, a crash), the station waits a moment for it to come back by itself
+// (its own restart, macOS's reopen), then starts it again; `onBack` is told either way (the desktop puts its window up
+// again when a grant is still missing).
 import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -20,6 +26,11 @@ import { log } from "../ops/log.ts";
 export const HELPER_APP = "still.fail Helper.app";
 /// How long a started app has to answer, at most.
 const START_MS = 15_000;
+/// How long an app that ended is given to come back by itself before the station starts it.
+const COMING_BACK_MS = 3_000;
+/// Started again this many times within REVIVALS_MS without staying up: the station stops trying (until it is needed).
+const REVIVALS = 5;
+const REVIVALS_MS = 60_000;
 
 /// The release's helper app: STILLFAIL_HELPER, or beside the station's code in a release.
 export function helperApp(env: NodeJS.ProcessEnv = process.env): string | null {
@@ -66,12 +77,17 @@ export class HelperApp {
   readonly #launch: Launch;
   #token: string | null;
   #starting: Promise<void> | null = null;
+  #watch: net.Socket | null = null;
+  #quitting = false;
+  #revivals: number[] = [];
+  readonly #onBack: (() => void) | undefined;
 
-  constructor(options: { app: string; dir: string; launch?: Launch }) {
+  constructor(options: { app: string; dir: string; launch?: Launch; onBack?: () => void }) {
     this.app = options.app;
     this.dir = options.dir;
     this.socket = join(options.dir, "helper.sock");
     this.#launch = options.launch ?? openApp;
+    this.#onBack = options.onBack;
     try {
       this.#token = readFileSync(join(options.dir, "token"), "utf8").trim() || null;
     } catch {
@@ -95,8 +111,46 @@ export class HelperApp {
 
   /// The app up and answering: started (or started again) when not.
   ensure(): Promise<void> {
-    this.#starting ??= this.#ensure().finally(() => (this.#starting = null));
+    this.#quitting = false;
+    this.#starting ??= this.#ensure()
+      .then(() => this.#watching())
+      .finally(() => (this.#starting = null));
     return this.#starting;
+  }
+
+  /// The app watched: its end (not asked for) starts it again.
+  async #watching() {
+    if (this.#watch !== null) return;
+    const socket = await this.#dial();
+    this.#watch = socket;
+    socket.on("error", () => {});
+    // Read (its answer, then nothing): a socket not read never hears that the other end went.
+    socket.on("data", () => {});
+    socket.on("close", () => {
+      if (this.#watch === socket) this.#watch = null;
+      if (!this.#quitting) void this.#revive();
+    });
+    socket.write(`${JSON.stringify({ op: "watch", token: this.#token })}\n`);
+  }
+
+  /// The app ended by itself: back by itself in a moment, or started again.
+  async #revive() {
+    const now = wall.now();
+    this.#revivals = [...this.#revivals.filter((t) => now - t < REVIVALS_MS), now];
+    if (this.#revivals.length > REVIVALS) {
+      log.warn("helper", "still.fail Helper keeps ending; not started again until it is needed");
+      return;
+    }
+    try {
+      await this.back(COMING_BACK_MS).catch(async () => {
+        log.info("helper", "still.fail Helper ended; starting it again");
+        await this.ensure();
+      });
+      await this.#watching();
+      this.#onBack?.();
+    } catch (error) {
+      log.warn("helper", "still.fail Helper not started again", { error: (error as Error).message });
+    }
   }
 
   async #ensure() {
@@ -105,18 +159,21 @@ export class HelperApp {
     // Its code changed: the one running is the old one.
     if (up && replaced) await this.#ask({ op: "quit" }).catch(() => {});
     else if (up) return;
-    const token = randomBytes(32).toString("hex");
-    writeFileSync(join(this.dir, "token"), token, { mode: 0o600 });
-    this.#token = token;
+    // The token stays what it is: an app started by macOS itself reads it beside it.
+    if (this.#token === null) {
+      const token = randomBytes(32).toString("hex");
+      writeFileSync(join(this.dir, "token"), token, { mode: 0o600 });
+      this.#token = token;
+    }
     rmSync(this.socket, { force: true });
     log.info("helper", "starting still.fail Helper", { app: path });
-    await this.#launch(path, { STILLFAIL_HELPER_SOCKET: this.socket, STILLFAIL_HELPER_TOKEN: token });
+    await this.#launch(path, { STILLFAIL_HELPER_SOCKET: this.socket, STILLFAIL_HELPER_TOKEN: this.#token });
     await this.back();
   }
 
-  /// Until it answers again (started, or starting itself again for a grant), at most START_MS.
-  async back(): Promise<void> {
-    const until = wall.now() + START_MS;
+  /// Until it answers again (started, or starting itself again for a grant), at most `ms`.
+  async back(ms = START_MS): Promise<void> {
+    const until = wall.now() + ms;
     while (!(await this.#hello())) {
       if (wall.now() > until) throw new Error("still.fail Helper did not start");
       await wall.sleep(100);
@@ -170,6 +227,9 @@ export class HelperApp {
 
   /// The station stopping: the app ends too (started again when next needed).
   async quit() {
+    this.#quitting = true;
     if (await this.#hello()) await this.#ask({ op: "quit" }).catch(() => {});
+    this.#watch?.destroy();
+    this.#watch = null;
   }
 }

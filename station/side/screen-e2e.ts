@@ -226,21 +226,29 @@ async function main() {
   const credential = (await api(alice, "POST", `/v1/workspaces/${dev}/credential`, { device: device.id() })).credential as string;
   let conn = await member(device, station, credential);
   console.log(`screens: ${JSON.stringify(await screens(conn))}`);
-  let first = await view(conn, "display-still");
-  if (first.status !== 200) {
-    console.log(`REFUSED ${first.status}: ${first.error}`);
+  // Opening it asks for what is missing (the helper's window on this Mac); measured once all is granted.
+  const tried = await view(conn, "display-first");
+  if (tried.status !== 200) console.log(`REFUSED ${tried.status}: ${tried.error}`);
+  // What the desktop lacks (null: nothing; "unknown" when the list was not read).
+  const missing = async () => {
+    try {
+      return (await screens(conn)).find((s) => s.id === "desktop")?.access ?? null;
+    } catch {
+      return "unknown";
+    }
+  };
+  if (tried.status !== 200 || (await missing()) !== null) {
     console.log(`GRANT-WAITING: the helper's window is up on this Mac; waiting up to ${WAIT} s for the grants`);
     const deadline = Date.now() + WAIT * 1000;
     for (;;) {
       if (Date.now() > deadline) throw new Error("not granted in time");
       await sleep(3000);
       if (conn.isClosed()) conn = await member(device, station, credential);
-      const desktop = (await screens(conn).catch(() => [])).find((s) => s.id === "desktop");
-      if (desktop && desktop.access === undefined) break;
+      if ((await missing()) === null) break;
     }
     console.log("GRANTED");
-    first = await view(conn, "display-still");
   }
+  const first = await view(conn, "display-still");
   if (first.status !== 200) throw new Error(`still refused: ${first.error}`);
   const moving = await view(conn, "display-moving", true);
   if (moving.status !== 200) console.log(`REFUSED moving ${moving.status}: ${moving.error}`);
