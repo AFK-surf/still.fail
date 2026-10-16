@@ -392,7 +392,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
       {drop.over && (
         <div className={css.dropHint} aria-hidden="true">
           <div className={css.dropCard}>
-            <Upload size={28} strokeWidth={1.6} />
+            <Upload size={16} strokeWidth={1.75} />
             <span className={css.dropTitle}>{t("web-pages.chat.dropTitle")}</span>
             <span className={css.dropNote}>{t(drop.over === "path" ? "web-pages.chat.dropPath" : "web-pages.chat.dropFile", { station: station.name })}</span>
           </div>
@@ -625,6 +625,12 @@ function useChatDrop(chat: string, station: string) {
   const here = useThisMachine(station);
   const [over, setOver] = useState<"path" | "file" | null>(null);
   const depth = useRef(0);
+  // The composer, where what is dropped goes, marked meanwhile (its dock is not in the chat's part of the page).
+  useEffect(() => {
+    if (!over) return;
+    document.documentElement.dataset.dropping = "";
+    return () => { delete document.documentElement.dataset.dropping; };
+  }, [over]);
   const kind = (dt: DataTransfer): "path" | "file" | null =>
     carriesDrive(dt) ? "path" : dt.types.includes("Files") ? (here && window.stillfailDesktop?.pathOf ? "path" : "file") : null;
   const handlers = {

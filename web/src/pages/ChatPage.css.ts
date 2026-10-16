@@ -1,6 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
-import { panel } from "../styles/glass.ts";
+import { glass } from "../styles/glass.ts";
+import { composerBox } from "../styles/composer.css.ts";
 import { muted } from "../styles/shell.css.ts";
 import { sessionPage } from "../styles/session.css.ts";
 import { pageBarTitle } from "../styles/conversation.css.ts";
@@ -251,19 +252,15 @@ globalStyle(`${sideBar} ${sideTabList}`, { flex: "1", minWidth: "0", height: "au
 /** Ending its warm process, in its details' line: a link's look, as the profile's beside it. */
 export const evict = style({ padding: "0", border: "0", background: "none", color: "inherit", font: "inherit", cursor: "pointer" });
 
-/** The chat takes files dropped anywhere on it (ChatPage.tsx useChatDrop): while they are over it, a ring round it and,
- * in its middle, what letting go does, on a panel's ground (the messages do not read through it). */
+/** The chat takes files dropped anywhere on it (ChatPage.tsx useChatDrop): while they are over it, the composer (where
+ * they go) ringed, and what letting go does in a pill over it. */
 export const dropZone = style({ position: "relative" });
-export const dropHint = style({
-  position: "absolute", inset: "8px", zIndex: 30, display: "grid", placeItems: "center", pointerEvents: "none",
-  borderRadius: vars.rCard, cornerShape: vars.cornerShape,
-  background: `color-mix(in srgb, ${vars.accent} 5%, color-mix(in srgb, ${vars.canvas} 55%, transparent))`,
-  boxShadow: `inset 0 0 0 1.5px color-mix(in srgb, ${vars.accent} 55%, transparent)`,
-});
+export const dropHint = style({ position: "absolute", inset: "0", zIndex: 30, display: "grid", placeItems: "end center", paddingBottom: "112px", pointerEvents: "none" });
 export const dropCard = style({
-  ...panel, display: "grid", justifyItems: "center", gap: "4px", maxWidth: "320px", padding: "18px 24px",
-  borderRadius: vars.rCard, cornerShape: vars.cornerShape, boxShadow: "0 8px 28px rgb(0 0 0 / .10)", textAlign: "center",
+  ...glass, display: "flex", alignItems: "center", gap: "8px", padding: "8px 16px", borderRadius: "999px",
+  boxShadow: "0 2px 12px rgb(0 0 0 / .08)", whiteSpace: "nowrap",
 });
-globalStyle(`${dropCard} svg`, { color: vars.accent, marginBottom: "6px" });
+globalStyle(`${dropCard} svg`, { color: vars.accent, flex: "none" });
 export const dropTitle = style({ color: vars.text, fontSize: vars.textUi, fontWeight: 600 });
-export const dropNote = style({ color: vars.muted, fontSize: vars.textMeta, lineHeight: "1.5" });
+export const dropNote = style({ color: vars.muted, fontSize: vars.textMeta });
+globalStyle(`:root[data-dropping] ${composerBox}`, { boxShadow: `0 0 0 2px color-mix(in srgb, ${vars.accent} 70%, transparent)` });

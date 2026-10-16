@@ -241,9 +241,11 @@ export const fileCardMeta = style({
   },
 });
 export const fileCardText = style({ flex: "1", minWidth: "0", display: "grid" });
-/** What a file dragged in is, on its card's hover: its name, where it is, what sending does. */
-export const refInfo = style({ display: "grid", gap: "2px", minWidth: "0" });
-export const refInfoPath = style({ color: vars.muted, fontSize: vars.textMeta, overflowWrap: "anywhere" });
+/** What a file dragged in is, on its card's hover: its name, where it is, how it goes. */
+export const refInfo = style({ display: "grid", gap: "2px", minWidth: "0", maxWidth: "300px" });
+export const refInfoName = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const refInfoPath = style({ color: vars.muted, fontSize: vars.textMeta, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", direction: "rtl", textAlign: "left" });
+export const refInfoMode = style({ marginTop: "8px", justifySelf: "start" });
 export const fileCardName = style({
   fontSize: vars.textUi, lineHeight: "20px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });

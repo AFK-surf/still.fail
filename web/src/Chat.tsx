@@ -13,7 +13,7 @@ import { Mark } from "./brand.tsx";
 import { scopeOf, stationBase, usePerson, useStation } from "./station.tsx";
 import { chatOfLink } from "./chatRefs.ts";
 import { Hover, PathSession } from "./Peeks.tsx";
-import { Avatar, ICON, ModelLogo, PanelRow, PanelText, Pill, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
+import { Avatar, ICON, ModelLogo, PanelRow, PanelText, Pill, Segmented, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { chatPage } from "./chatPage.ts";
 import { Prose, withBareLinks } from "./Prose.tsx";
@@ -1912,18 +1912,19 @@ function RefCard({ file: f, draft, onRemove }: { file: Pending; draft: Draft; on
   // A folder goes as a zip only from the chat's own station (zipped there).
   const zips = ref.dir && ref.station === station.address;
   const meta = asFile ? f.error ?? (pending ? going : fileSize(f.done?.size ?? f.size)) : t(ref.dir ? "web-main.file.folderOn" : "web-main.file.pathOn", { station: ref.stationName });
+  // Hovered: its name, where it is, and how it goes (a path, the file, a folder as a zip), switched there.
   const info = (
     <>
       <PanelText className={css.refInfo}>
-        <b>{asFile && ref.dir ? `${f.name}.zip` : f.name}</b>
-        <span className={css.refInfoPath}>{t(ref.dir ? "web-main.file.folderOn" : "web-main.file.pathOn", { station: ref.stationName })} · {ref.path}</span>
-        <span>{asFile ? t(ref.dir ? "web-main.file.sendsZip" : "web-main.file.sendsFile", { station: station.name }) : t("web-main.file.sendsPath", { station: ref.stationName })}</span>
+        <b className={css.refInfoName}>{f.name}</b>
+        <span className={css.refInfoPath} title={ref.path}>{ref.stationName} · {ref.path}</span>
+        {(!ref.dir || zips) && (
+          <Segmented className={css.refInfoMode} label={t("web-main.file.sendAs")} value={ref.mode} onChange={(mode) => draft.setMode(f.id, mode)}
+            options={[{ value: "path", label: t("web-main.file.modePath") }, { value: "file", label: t(ref.dir ? "web-main.file.modeZip" : "web-main.file.modeFile") }]} />
+        )}
       </PanelText>
       <div className={controlsCss.panelEdge}>
-        {asFile
-          ? <PanelRow icon={<Read size={16} />} label={t("web-main.file.asPath")} onClick={() => draft.setMode(f.id, "path")} />
-          : (!ref.dir || zips) && <PanelRow icon={<Send size={16} />} label={t(ref.dir ? "web-main.file.asZip" : "web-main.file.asFile")} onClick={() => draft.setMode(f.id, "file")} />}
-        <PanelRow icon={<Folder size={16} />} label={t("web-main.file.chatAsFiles")} end={draft.asFiles ? <Check size={16} /> : undefined} onClick={() => draft.setAsFiles(!draft.asFiles)} />
+        <PanelRow label={t("web-main.file.chatAsFiles")} end={draft.asFiles ? <Check size={16} /> : undefined} onClick={() => draft.setAsFiles(!draft.asFiles)} />
       </div>
     </>
   );
