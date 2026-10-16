@@ -1,0 +1,152 @@
+{
+  "ws": "01HZZZZZZZZZZZZZZZZZZZZZZZ",
+  "signer": {
+    "seed": "0101010101010101010101010101010101010101010101010101010101010101",
+    "key": "ed25519:8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+  },
+  "device": {
+    "seed": "0909090909090909090909090909090909090909090909090909090909090909",
+    "id": "fd1724385aa0c75b64fb78cd602fa1d991fdebf76b13c58ed702eac835e9f618"
+  },
+  "box": {
+    "priv": "0202020202020202020202020202020202020202020202020202020202020202",
+    "pub": "x25519:ce8d3ad1ccb633ec7b70c17814a5c76ecd029685050d344745ba05870e587d59"
+  },
+  "vaultKey": "0404040404040404040404040404040404040404040404040404040404040404",
+  "eph": {
+    "wrap": "0303030303030303030303030303030303030303030303030303030303030303",
+    "recovery": "0606060606060606060606060606060606060606060606060606060606060606",
+    "grant": "0808080808080808080808080808080808080808080808080808080808080808"
+  },
+  "nonce": "050505050505050505050505",
+  "plain": "{\"kind\":\"token\",\"name\":\"GitHub\",\"fields\":{\"value\":\"ghp_abc\"},\"domains\":[\"github.com\"],\"notes\":\"\"}",
+  "requestBox": {
+    "priv": "0707070707070707070707070707070707070707070707070707070707070707",
+    "pub": "x25519:13be4feaeaf204c7fd3358fc9c00721881d174278128227ec674f37f7fe97b6d"
+  },
+  "recovery": [
+    {
+      "entropy": "0000000000000000000000000000000000000000000000000000000000000000",
+      "pub": "x25519:494e3054e0c07893ba1e2ee88659974004d297d7ab2e767c5dc084450c272d19"
+    },
+    {
+      "entropy": "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f",
+      "pub": "x25519:9d16e5de652230cfca7dbe0f177d9875638dc637a564781d3b58d2258f650d49"
+    },
+    {
+      "entropy": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "pub": "x25519:99af1f9ed39168d862ac0119b46dab30d0326e7e5799c2791607ed901d176c4a"
+    }
+  ],
+  "words": {
+    "0000000000000000000000000000000000000000000000000000000000000000": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art",
+    "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f": "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title",
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff": "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo vote"
+  },
+  "cert": {
+    "v": 1,
+    "ws": "01HZZZZZZZZZZZZZZZZZZZZZZZ",
+    "device": "fd1724385aa0c75b64fb78cd602fa1d991fdebf76b13c58ed702eac835e9f618",
+    "box": "x25519:ce8d3ad1ccb633ec7b70c17814a5c76ecd029685050d344745ba05870e587d59",
+    "at": 1000,
+    "sig": {
+      "key": "ed25519:8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+      "alg": "Ed25519",
+      "sig": "def5641091f2b3664d6e90d9906bfb810ce0da70141215d65d4ce4cd37677a42dd3c9bc4d926eb0c471028ee04cccbc2f73fdf63f9e5bdd23dc987d2f213680f"
+    }
+  },
+  "vault": {
+    "v": 1,
+    "ws": "01HZZZZZZZZZZZZZZZZZZZZZZZ",
+    "id": "v_01HZZZZZZZZZZZZZZZZZZZZZZZ",
+    "seq": 0,
+    "owner": "alice",
+    "name": "Personal",
+    "members": [
+      "alice"
+    ],
+    "epoch": 0,
+    "keys": [
+      {
+        "cert": {
+          "v": 1,
+          "ws": "01HZZZZZZZZZZZZZZZZZZZZZZZ",
+          "device": "fd1724385aa0c75b64fb78cd602fa1d991fdebf76b13c58ed702eac835e9f618",
+          "box": "x25519:ce8d3ad1ccb633ec7b70c17814a5c76ecd029685050d344745ba05870e587d59",
+          "at": 1000,
+          "sig": {
+            "key": "ed25519:8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+            "alg": "Ed25519",
+            "sig": "def5641091f2b3664d6e90d9906bfb810ce0da70141215d65d4ce4cd37677a42dd3c9bc4d926eb0c471028ee04cccbc2f73fdf63f9e5bdd23dc987d2f213680f"
+          }
+        },
+        "wrapped": "Xf7dO2vUf2-ijuFdlp1bsOpTd01Ii9r53xxuASSz7yJDgZdvIxpZ4xz9N5GPzKQ5SrJIl25ht6p5lKdj5_L2kxE_LfPQ7ENB9Y7VDfSuVpU"
+      }
+    ],
+    "recovery": "9bLW5g-Ud-MQwpgtqqbJE2wQihd3xZR-RI-jfWgXRVeNStRBvmSZoxo9kQWOua6y1jPMwv_4ZxzyL0iDQxI9k9Wkz-yIOgRz5J695gw8Cic",
+    "at": 1000,
+    "sig": {
+      "key": "ed25519:8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+      "alg": "Ed25519",
+      "sig": "b54ad4f1b61b49c6b5d951420e197d948f10478313851e24eec6f4c7c318fcd5944f3b2543699a126bf7937226cd14f1b47ef2bc6bff1d2be1f3b9b21baf5508"
+    }
+  },
+  "item": {
+    "v": 1,
+    "ws": "01HZZZZZZZZZZZZZZZZZZZZZZZ",
+    "vault": "v_01HZZZZZZZZZZZZZZZZZZZZZZZ",
+    "id": "i_01HZZZZZZZZZZZZZZZZZZZZZZZ",
+    "version": 0,
+    "epoch": 0,
+    "ct": "BQUFBQUFBQUFBQUF67SMusB5UZAkOOXJXLqOVDdwOwET6f10XoJGJcz3VVh6Cg0KHH67mJowrcSGWLQyuxNqolw421Fr0GTasCL7rx4dhHkg0kIrsLaDrmR1z9We0Wg3Wm5eRt1lHpc6SR5LP2Bnz6W5zHTUI7nPk1Y5UYs",
+    "listing": {
+      "name": "GitHub",
+      "kind": "token",
+      "modes": [
+        "proxy"
+      ],
+      "hosts": [
+        "api.github.com",
+        "*.github.com"
+      ],
+      "env": "GH_TOKEN"
+    },
+    "at": 1001,
+    "sig": {
+      "key": "ed25519:8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+      "alg": "Ed25519",
+      "sig": "1c71d0dc5646daed028254b3a254785d54e6caea1e14504c8aca9f409f75d84779c9f96a0a35958df757d98e3542efec184700bf1adcc0d4ede05c70bac59a04"
+    }
+  },
+  "grant": {
+    "v": 1,
+    "ws": "01HZZZZZZZZZZZZZZZZZZZZZZZ",
+    "request": "r_01HZZZZZZZZZZZZZZZZZZZZZZZ",
+    "vault": "v_01HZZZZZZZZZZZZZZZZZZZZZZZ",
+    "item": "i_01HZZZZZZZZZZZZZZZZZZZZZZZ",
+    "mode": "proxy",
+    "hosts": [
+      "api.github.com"
+    ],
+    "scope": "once",
+    "exp": 1600,
+    "secret": "MdSras7slhE3kXA3k25gcW-sVzr-lNnahKgCBEjfwRLB1R-ZKpLv3OMOUIg_N1kFkiPjwTEfVc87-HzcYOQirmM8G5UIVlHLvybTCmxo0oCc-oLgCrPQLqr3-pIbo5gA7YCWrB4CSep9fW4xR8hjgS13BXshMAwYJ6dgNMnNDKmRXdkcCAxbzFR-lmBKmy0m7w",
+    "at": 1002,
+    "sig": {
+      "key": "ed25519:8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+      "alg": "Ed25519",
+      "sig": "6bceda6bbfd02a61fe91bcf7d9c21467c8901a7e0cb60b419dce10a476282bd6c360d8571ec25149cdde7b5394dc54351bd13e0f54c60429eeb7c888940a7805"
+    }
+  },
+  "deny": {
+    "v": 1,
+    "ws": "01HZZZZZZZZZZZZZZZZZZZZZZZ",
+    "request": "r_01HZZZZZZZZZZZZZZZZZZZZZZZ",
+    "at": 1003,
+    "sig": {
+      "key": "ed25519:8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+      "alg": "Ed25519",
+      "sig": "bf7dc8af9777f6e1caa52cd8ce26d566cc18384c791143b0ce628b5d67299f1ed68e4dc256dd8547599f9e1f93efa7bf81a817ff635856a20861ed3c7730e403"
+    }
+  }
+}
