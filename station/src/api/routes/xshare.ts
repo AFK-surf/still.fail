@@ -68,7 +68,7 @@ export const routes = ({ xshare, store }: { xshare?: ChatShares; store?: Store }
       handle: (r) =>
         answer(async (x) => {
           const i = input(r);
-          await x.trust(str(i.workspace), str(i.name), str(i.station), str(i.stationName));
+          await x.trust(str(i.workspace), str(i.name), str(i.station), str(i.stationName), r.viewer.home === false ? r.viewer.workspace : undefined);
           return { ok: true };
         }),
     },

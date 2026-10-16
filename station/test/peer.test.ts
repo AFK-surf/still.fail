@@ -138,6 +138,14 @@ test("a station in two workspaces asks and hears each one's stations in that wor
     const call = peerCall(both, bothCloud, at);
     assert.deepEqual(await call("", "w2", { method: "peers" }), { workspace: "w2", stations: [{ id: joinedMate.id() }], current: true });
     assert.deepEqual(await call("", null, { method: "peers" }), { workspace: "ws", stations: [{ id: homeMate.id() }], current: true });
+    // A station of the home workspace asking in the joined one: no station of it, heard as one of another workspace
+    // (chats shared there) when the station hears those.
+    remote.hearsOutside = () => true;
+    remote.handleOutside = async (_peer: string, request: any, workspace: string) => (asked.push(["outside", workspace, request.method]), { outside: workspace });
+    await assert.rejects(fromHome(both.id(), "w2", { method: "session.read" }), /outside this workspace/);
+    const sharing = peerCall(homeMate, cloudOf(homeMate.id(), [both.id()]), at, { reaches: (_t, w) => w === "w2" });
+    assert.deepEqual(await sharing(both.id(), "w2", { method: "session.read" }), { outside: "w2" });
+    assert.deepEqual(asked.at(-1), ["outside", "w2", "session.read"]);
   } finally {
     await Promise.all([both.close(), homeMate.close(), joinedMate.close()]);
   }

@@ -91,7 +91,8 @@ export function peerCall(endpoint: Endpoint, cloud: Cloud, addr: (id: string) =>
 
 /// Another station's connection: each of its requests answered by the remote tasks, while it belongs.
 /// A station of another workspace is heard too while chats are shared across workspaces (`remote.hearsOutside`): each
-/// of its requests must name this workspace, and only what is shared with its own is answered (xshare/index.ts).
+/// of its requests must name this workspace, and only what is shared with its own is answered (xshare/index.ts). One
+/// that shares a workspace with this station but asks in another of this station's is heard as such a station there.
 export async function servePeer(conn: Connection, cloud: Cloud, remote: Remote) {
   const peer = conn.remoteId();
   let inside = true;
@@ -108,7 +109,8 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Remote) 
     try {
       const envelope = JSON.parse((await within(15_000, readAll(stream, MAX_MESSAGE), "peer request timed out")).toString("utf8"));
       if (typeof envelope?.workspace !== "string") throw new Error("workspace missing");
-      if (inside) {
+      const there = inside && cloud.membership(envelope.workspace)?.peers.some((p) => p?.id === peer) === true;
+      if (there || (inside && !remote.hearsOutside?.())) {
         member(cloud, peer, envelope.workspace);
         const method = envelope.request?.method;
         answer = { result: typeof method === "string" && method.startsWith("lock.") ? answerLock(cloud, envelope.request) : await remote.handle(envelope.workspace, peer, envelope.request ?? null) };

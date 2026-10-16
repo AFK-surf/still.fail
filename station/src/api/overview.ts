@@ -105,7 +105,7 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     viewer: { via: "mesh", ...viewer },
     mesh: meshStatus(d.cloud, viewer),
     connects,
-    profiles: d.accounts?.profilesView() ?? [],
+    profiles: d.accounts?.profilesView(viewer) ?? [],
     footprint: null,
     processes: processes.map((p) => {
       const kb = memory.get(p.pgid);
@@ -116,7 +116,7 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     // The Slack workspaces the station can make and edit apps in itself (an app configuration token each).
     slackTeams: d.slack?.teams(viewer) ?? [],
     disk: diskRoom(d.hub.config().dataDir),
-    logins: d.accounts?.loginsView() ?? [],
+    logins: d.accounts?.loginsView(viewer) ?? [],
     apiProviders: d.accounts?.apiProviders() ?? [],
     machineLogins: d.accounts?.machineLogins() ?? [],
     // It shares profiles and skills with its workspace's other stations (share/index.ts).
