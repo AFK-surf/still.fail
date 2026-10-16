@@ -12,6 +12,8 @@
 import { useContext, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { MachineLoginScreen, MachineLoginShown, MachineLoginsView } from "./core/shapes.ts";
 import { useCall, useTopic } from "./core/react.ts";
+import { Link } from "react-router";
+import { stationBase } from "./station.tsx";
 import { useDoing } from "./doing.ts";
 import { useThisMachineAddress } from "./thisMachine.ts";
 import { Button, Dialog, PanelButton, Section } from "./ui.tsx";
@@ -41,13 +43,6 @@ function useLogin(station: string, id: string): MachineLoginShown | null | undef
   return useTopic<MachineLoginShown | null>(loginTopic(station, id)).value;
 }
 
-/** Starting a login (its command, the tool's own): `then` with its id once the station has it. */
-export function useStartLogin(station: string): (params: { command: string }, what: string, then: (id: string) => void) => void {
-  const call = useCall();
-  const act = useAct();
-  return (params, what, then) => act(call("machineLogin.start", { station, ...params }).then((answer) => then((answer as { id: string }).id)), what);
-}
-
 // ── opening the panel ──
 
 export interface LoginOpen { station: string; id: string; terminal?: boolean | undefined }
@@ -68,22 +63,19 @@ export function openLoginSheet(app: MobileApp, login: LoginOpen): void {
   app.sheet({ height: 0.72, draggable: true, content: () => <LoginSheet {...login} /> });
 }
 
-/** The panel as a dialog (the wide screen, the desktop app). Retried, it goes on with the new login. */
-export function LoginPanel({ station, id: first, terminal, onClose }: LoginOpen & { onClose(): void }) {
-  const [id, setId] = useState(first);
-  useEffect(() => setId(first), [first]);
+/** The panel as a dialog (the wide screen, the desktop app). */
+export function LoginPanel({ station, id, terminal, onClose }: LoginOpen & { onClose(): void }) {
   const login = useLogin(station, id);
   const logins = useMachineLogins(station);
   return (
     <Dialog open title={login?.title ?? t("web-main.logins.title")} onClose={onClose}
-      footer={<LoginFoot station={station} login={login} canLogin={logins?.canLogin ?? false} onRetry={setId} />}>
+      footer={<LoginFoot station={station} login={login} canLogin={logins?.canLogin ?? false} />}>
       <LoginBody station={station} login={login} logins={logins} terminal={terminal} />
     </Dialog>
   );
 }
 
-function LoginSheet({ station, id: first, terminal }: LoginOpen) {
-  const [id, setId] = useState(first);
+function LoginSheet({ station, id, terminal }: LoginOpen) {
   const login = useLogin(station, id);
   const logins = useMachineLogins(station);
   return (
@@ -93,7 +85,7 @@ function LoginSheet({ station, id: first, terminal }: LoginOpen) {
       <div className={sheetsCss.mSheetScroll}>
         <div className={css.sheetBody}>
           <LoginBody station={station} login={login} logins={logins} terminal={terminal} />
-          <div className={sheetsCss.mFormActions}><LoginEnd station={station} login={login} canLogin={logins?.canLogin ?? false} onRetry={setId} /></div>
+          <div className={sheetsCss.mFormActions}><LoginEnd station={station} login={login} canLogin={logins?.canLogin ?? false} /></div>
           {login && <p className={css.sheetFoot}>{t("web-main.logins.footer", { station: login.stationName })}</p>}
         </div>
       </div>
@@ -109,27 +101,22 @@ function Act({ label, primary = false, busy = false, onClick }: { label: string;
 }
 
 /** The dialog's foot: where the login is and that every chat there uses it, then cancelling it or trying it again. */
-function LoginFoot({ station, login, canLogin, onRetry }: { station: string; login: MachineLoginShown | null | undefined; canLogin: boolean; onRetry(id: string): void }) {
+function LoginFoot({ station, login, canLogin }: { station: string; login: MachineLoginShown | null | undefined; canLogin: boolean }) {
   return (
     <>
       {login && <p className={css.foot}>{t("web-main.logins.footer", { station: login.stationName })}</p>}
-      <LoginEnd station={station} login={login} canLogin={canLogin} onRetry={onRetry} />
+      <LoginEnd station={station} login={login} canLogin={canLogin} />
     </>
   );
 }
 
-/** Cancelling a login under way, or one that ended without logging in started again as it was (its command). */
-function LoginEnd({ station, login, canLogin, onRetry }: { station: string; login: MachineLoginShown | null | undefined; canLogin: boolean; onRetry(id: string): void }) {
+/** Cancelling a login under way (starting one again is its agent's). */
+function LoginEnd({ station, login, canLogin }: { station: string; login: MachineLoginShown | null | undefined; canLogin: boolean }) {
   const call = useCall();
   const act = useAct();
-  const start = useStartLogin(station);
-  const again = { command: login?.command ?? "" };
   const cancelling = useDoing("machineLogin.cancel", { station, id: login?.id });
-  const starting = useDoing("machineLogin.start", { station, ...again });
-  if (!login || !canLogin) return null;
-  if (login.active) return <Act label={t("common.cancel")} busy={cancelling} onClick={() => act(call("machineLogin.cancel", { station, id: login.id }), t("web-main.logins.cancelWhat"))} />;
-  if (login.state === "done") return null;
-  return <Act label={t("common.retry")} primary busy={starting} onClick={() => start(again, t("web-main.logins.startWhat", { name: login.name }), onRetry)} />;
+  if (!login || !canLogin || !login.active) return null;
+  return <Act label={t("common.cancel")} busy={cancelling} onClick={() => act(call("machineLogin.cancel", { station, id: login.id }), t("web-main.logins.cancelWhat"))} />;
 }
 
 /**
@@ -143,17 +130,17 @@ function LoginBody({ station, login, logins, terminal }: {
   if (login === null) return <p className={css.quiet}>{t("web-main.logins.gone")}</p>;
   const canLogin = logins?.canLogin ?? false;
   const step = login.active ? login.step : undefined;
-  const known = step === "loopback" || step === "device" || step === "open" || step === "terminal";
   return (
     <div className={css.body}>
       <p className={css.commandLine}>{login.command}</p>
       {!login.active ? <Ended login={login} />
         // Nothing asked yet, or the viewer may only look: how it stands.
-        : !canLogin || !step ? <p className={css.waitingLine}>{login.active && canLogin && <span className={spinnerCss.spinner} aria-hidden="true" />}{login.statusText}</p>
+        // Nothing for the person yet (starting, or its agent answering the command's questions), or the viewer may only look.
+        : !canLogin || !step || step === "terminal" || login.waiting ? <p className={css.waitingLine}>{login.active && canLogin && <span className={spinnerCss.spinner} aria-hidden="true" />}{login.statusText}</p>
         : step === "loopback" ? <Loopback station={station} login={login} canRelay={logins?.canRelay ?? false} />
         : step === "device" ? <Device login={login} />
-        : step === "open" || !known ? <OpenPage login={login} /> : null}
-      {login.active && canLogin && <Terminal station={station} login={login} first={terminal || login.waiting || step === "terminal" || (step !== undefined && !known)} />}
+        : <OpenPage login={login} />}
+      {login.active && <Terminal station={station} login={login} first={terminal === true} />}
     </div>
   );
 }
@@ -179,17 +166,6 @@ function openPage(url: string | undefined): void {
   if (url) window.open(url, "_blank", "noopener");
 }
 
-/** Copying a device code, said for a moment on its button. */
-function useCopy(text: string | undefined): [boolean, () => void] {
-  const [copied, setCopied] = useState(false);
-  const toast = useToast();
-  useEffect(() => {
-    if (!copied) return;
-    const timer = setTimeout(() => setCopied(false), 1600);
-    return () => clearTimeout(timer);
-  }, [copied]);
-  return [copied, () => { if (text) void navigator.clipboard.writeText(text).then(() => setCopied(true), (e: unknown) => toast(t("web-main.copyFailed", { error: e instanceof Error ? e.message : String(e) }))); }];
-}
 
 /**
  * A loopback login's browser, on this device: the core listens for the browser's callback (not on the station's own
@@ -232,16 +208,20 @@ function Loopback({ station, login, canRelay }: { station: string; login: Machin
   );
 }
 
+/** Copying the code and opening its page, in one press: the code stays on show, for a clipboard that refused it. */
+function copyAndOpen(login: MachineLoginShown): void {
+  // Both in the press itself: the copy asked first (the page's window taking the focus could refuse it after), the page
+  // opened whatever the clipboard says (a web page's browser lets only a press open one).
+  if (login.code) void navigator.clipboard?.writeText(login.code).catch(() => {});
+  openPage(login.codeUrl ?? login.url);
+}
+
 function Device({ login }: { login: MachineLoginShown }) {
-  const [copied, copy] = useCopy(login.code);
   return (
     <div className={css.step}>
       <p className={css.line}>{t("web-main.logins.device", { domain: login.domain ?? "" })}</p>
       {login.code && <span className={css.code}>{login.code}</span>}
-      <div className={css.actions}>
-        <Act label={copied ? t("common.copied") : t("common.copy")} onClick={copy} />
-        <Act label={t("web-main.logins.open")} primary onClick={() => openPage(login.codeUrl ?? login.url)} />
-      </div>
+      <div className={css.actions}><Act label={t("web-main.logins.copyOpen")} primary onClick={() => copyAndOpen(login)} /></div>
       <p className={css.quiet}>{t("web-main.logins.deviceNote")}</p>
     </div>
   );
@@ -257,62 +237,20 @@ function OpenPage({ login }: { login: MachineLoginShown }) {
   );
 }
 
-const KEYS = [
-  { key: "Enter", label: () => t("web-main.logins.key.enter") },
-  { key: "Up", label: () => "↑", name: () => t("web-main.logins.key.up") },
-  { key: "Down", label: () => "↓", name: () => t("web-main.logins.key.down") },
-  { key: "Tab", label: () => "Tab" },
-  { key: "Ctrl-C", label: () => "Ctrl-C" },
-] as const;
-
 /**
- * The command's terminal, folded under a line that says when it waits for typing (opened by itself then): its screen
- * (read only while open), a field that sends what is typed with Enter (a password field while the command does not echo),
- * and the keys a field cannot send.
+ * What the command shows, folded (its agent answers what it asks; the person only looks, if they like): its screen,
+ * read only while open.
  */
 function Terminal({ station, login, first }: { station: string; login: MachineLoginShown; first: boolean }) {
-  const [chosen, setChosen] = useState<boolean | null>(null);
-  // Opened by itself once (the command waited), it stays open while the person types: their typing ends the wait.
-  const [opened, setOpened] = useState(first);
-  useEffect(() => { if (first) setOpened(true); }, [first]);
-  const open = chosen ?? (first || opened);
+  const [open, setOpen] = useState(first);
   const screen = useTopic<MachineLoginScreen | null>(open ? { topic: "machineLoginScreen", station, id: login.id } : null).value;
-  const call = useCall();
-  const act = useAct();
-  const [text, setText] = useState("");
-  const send = (what: { text?: string; key?: string }) => call("machineLogin.input", { station, id: login.id, ...what });
-  const enter = () => {
-    const typed = text;
-    setText("");
-    // What was typed, then Enter: one after the other, in that order.
-    act((typed ? send({ text: typed }) : Promise.resolve()).then(() => send({ key: "Enter" })), t("web-main.logins.sendWhat"));
-  };
-  const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); enter(); }
-  };
-  const phone = useContext(MobileContext) !== null;
   return (
     <div className={css.terminal}>
-      <button type="button" className={css.terminalToggle} aria-expanded={open} onClick={() => setChosen(!open)}>
+      <button type="button" className={css.terminalToggle} aria-expanded={open} onClick={() => setOpen(!open)}>
         <ChevronRight size={14} strokeWidth={1.7} className={css.chevron} data-open={open || undefined} />
         {t("web-main.logins.terminal")}
-        {login.waiting && <span className={css.terminalWaits}>{t("web-main.logins.waitingInput")}</span>}
       </button>
-      {open && (
-        <>
-          <Screen screen={screen} />
-          <div className={css.typing}>
-            <input className={`${phone ? listsCss.mField : controlsCss.input} ${css.typingField}`} type={screen && !screen.echo ? "password" : "text"}
-              value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} autoComplete="off" autoCapitalize="off" spellCheck={false}
-              placeholder={screen && !screen.echo ? t("web-main.logins.passwordHere") : t("web-main.logins.typeHere")} aria-label={t("web-main.logins.terminal")} />
-          </div>
-          <div className={css.keys} role="group" aria-label={t("web-main.logins.keys")}>
-            {KEYS.map((k) => (
-              <Button key={k.key} aria-label={"name" in k ? k.name() : undefined} onClick={() => act(send({ key: k.key }), t("web-main.logins.sendWhat"))}>{k.label()}</Button>
-            ))}
-          </div>
-        </>
-      )}
+      {open && <Screen screen={screen} />}
     </div>
   );
 }
@@ -341,64 +279,56 @@ function Screen({ screen }: { screen: MachineLoginScreen | null | undefined }) {
 // ── the station page ──
 
 /**
- * A station page's 登录 (docs/remote-login.md): one way for every tool (用户定): a login command to run, the tool's own,
- * and below it only the logins done there through still.fail: under way, then how each ended, by whom and when; nothing
- * else when there are none. A read-only member sees them only; an older station says to update it.
+ * A station page's 登录 (docs/remote-login.md): only the logins done there through still.fail. Agents start them (用户定:
+ * nobody types a command); those under way open their panel, those ended say how, which chat's agent started them and
+ * who finished them. Nothing at all when there are none (or the station is from before them).
  */
 export function LoginsSection({ station }: { station: string }) {
   const view = useMachineLogins(station);
   const panel = useLoginPanel();
-  if (!view) return null;
+  if (!view || !view.supported || view.logins.length === 0) return null;
   return (
-    <Section title={t("web-main.logins.title")} description={view.supported ? t("web-main.logins.lead") : undefined}>
-      {!view.supported ? <p className={css.note}>{t("web-main.logins.update")}</p> : (
-        <>
-          {view.canLogin && <CommandRow station={station} onOpen={panel.open} />}
-          {view.logins.length > 0 && (
-            <div className={pagesCss.list}>
-              {view.logins.map((l) => <LoginRow key={l.id} station={station} login={l} onOpen={panel.open} />)}
-            </div>
-          )}
-        </>
-      )}
+    <Section title={t("web-main.logins.title")} description={t("web-main.logins.lead")}>
+      <div className={pagesCss.list}>
+        {view.logins.map((l) => <LoginRow key={l.id} station={station} login={l} onOpen={panel.open} />)}
+      </div>
       {panel.panel}
     </Section>
   );
 }
 
-/** A login done here: its command, who and when, how it stands or ended; its panel opened when pressed. */
-function LoginRow({ station, login, onOpen }: { station: string; login: MachineLoginShown; onOpen(login: LoginOpen): void }) {
-  const said = [login.byText, login.whenText, login.statusText].filter(Boolean).join(" · ");
-  return (
-    <button type="button" className={`${pagesCss.listRow} ${css.loginRow}`} onClick={() => onOpen({ station, id: login.id })}>
-      <span className={`${pagesCss.mark} ${css.mark}`}><Key size={18} strokeWidth={1.7} /></span>
-      <span className={pagesCss.cardRowText}>
-        <strong className={css.name}>{login.command}</strong>
-        <span className={login.active ? css.stateActive : login.state === "failed" ? css.stateFailed : css.state}>{said}</span>
-      </span>
-      <ChevronRight size={16} strokeWidth={1.7} className={css.rowChevron} />
-    </button>
-  );
+/** Which chat's agent started a login: its title, a link to it (a login ended), or as words (one under way, pressed whole). */
+function StartedIn({ station, login, link }: { station: string; login: MachineLoginShown; link: boolean }) {
+  if (!login.chat) return null;
+  const title = login.chatTitle || t("web-main.logins.aChat");
+  const words = t("web-main.logins.startedIn", { chat: "\u0000" }).split("\u0000");
+  return <>{words[0]}{link ? <Link className={css.chatLink} to={`${stationBase(station)}/chats/${encodeURIComponent(login.chat)}`}>{title}</Link> : title}{words[1]}</>;
 }
 
-/** The login command to run (`gh auth login`): its panel opened once the station has started it. */
-function CommandRow({ station, onOpen }: { station: string; onOpen(login: LoginOpen): void }) {
-  const [command, setCommand] = useState("");
-  const start = useStartLogin(station);
-  const typed = command.trim();
-  const busy = useDoing("machineLogin.start", { station, command: typed });
-  const run = () => {
-    if (!typed || busy) return;
-    start({ command: typed }, t("web-main.logins.runWhat", { command: typed }), (id) => { setCommand(""); onOpen({ station, id }); });
-  };
-  return (
-    <div className={css.commandForm}>
-      <input className={`${controlsCss.input} ${css.commandField}`} value={command} disabled={busy} spellCheck={false} autoCapitalize="off"
-        placeholder={t("web-main.logins.commandPlaceholder")} aria-label={t("web-main.logins.command")} onChange={(e) => setCommand(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) run(); }} />
-      <Button variant="primary" busy={busy} disabled={!typed} onClick={run}>{t("web-main.logins.run")}</Button>
-    </div>
+/** A login done here: its command, then which chat's agent started it, who finished it, when, how it stands or ended. */
+function LoginRow({ station, login, onOpen }: { station: string; login: MachineLoginShown; onOpen(login: LoginOpen): void }) {
+  const rest = [login.doneByText ? t("web-main.logins.doneBy", { name: login.doneByText }) : null, login.whenText, login.statusText].filter(Boolean).join(" · ");
+  const said = (link: boolean) => (
+    <span className={login.active ? css.stateActive : login.state === "failed" ? css.stateFailed : css.state}>
+      {login.chat && <><StartedIn station={station} login={login} link={link} />{" · "}</>}{rest}
+    </span>
   );
+  const text = (link: boolean) => (
+    <span className={pagesCss.cardRowText}>
+      <strong className={css.name}>{login.command}</strong>
+      {said(link)}
+    </span>
+  );
+  const mark = <span className={`${pagesCss.mark} ${css.mark}`}><Key size={18} strokeWidth={1.7} /></span>;
+  // Under way: pressed, its panel opens. Ended: what it says is all there is (its chat a link).
+  if (login.active) {
+    return (
+      <button type="button" className={`${pagesCss.listRow} ${css.loginRow}`} onClick={() => onOpen({ station, id: login.id })}>
+        {mark}{text(false)}<ChevronRight size={16} strokeWidth={1.7} className={css.rowChevron} />
+      </button>
+    );
+  }
+  return <div className={`${pagesCss.listRow} ${css.pastRow}`}>{mark}{text(true)}</div>;
 }
 
 // ── a chat's card ──
@@ -420,31 +350,25 @@ export function LoginCard({ station, id }: { station: string; id: string }) {
         onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); open(); } }}>
         <span className={css.cardTitle}>{login.title}</span>
         <span className={css.cardStatus}>{login.statusText}</span>
-        {login.active && logins?.canLogin && <CardActions station={station} login={login} canRelay={logins.canRelay} onTerminal={() => open(true)} />}
+        {login.active && logins?.canLogin && <CardActions station={station} login={login} canRelay={logins.canRelay} />}
       </div>
       {panel.panel}
     </>
   );
 }
 
-function CardActions({ station, login, canRelay, onTerminal }: { station: string; login: MachineLoginShown; canRelay: boolean; onTerminal(): void }) {
+function CardActions({ station, login, canRelay }: { station: string; login: MachineLoginShown; canRelay: boolean }) {
   const relay = useRelay(station, login);
-  const [copied, copy] = useCopy(login.code);
-  const step = login.step;
-  const known = step === "loopback" || step === "device" || step === "open" || step === "terminal";
+  const step = login.waiting ? undefined : login.step;
   const buttons: ReactNode[] = [];
-  const button = (key: string, label: string, onClick: () => void, filled = false, busy = false) => buttons.push(
-    <PanelButton key={key} {...(filled ? { tone: "filled" as const } : {})} disabled={busy} aria-busy={busy || undefined} onClick={(e) => { e.stopPropagation(); onClick(); }}>
+  const button = (key: string, label: string, onClick: () => void, busy = false) => buttons.push(
+    <PanelButton key={key} tone="filled" disabled={busy} aria-busy={busy || undefined} onClick={(e) => { e.stopPropagation(); onClick(); }}>
       <span className={css.cardButtonText}>{label}</span>
     </PanelButton>,
   );
   // A loopback login on a page that cannot take its callback: the card opens the panel, which says so.
-  if (step === "loopback" && canRelay) button("open", t("web-main.logins.openBrowser"), relay.open, true, relay.busy);
-  if (step === "device" && login.code) {
-    button("copy", copied ? t("common.copied") : t("web-main.logins.copyCode"), copy, true);
-    button("open", t("web-main.logins.open"), () => openPage(login.codeUrl ?? login.url));
-  }
-  if ((step === "open" || (step && !known)) && login.url) button("open", t("web-main.logins.openBrowser"), () => openPage(login.url), true);
-  if (step === "terminal" || login.waiting || (step && !known)) button("terminal", t("web-main.logins.openTerminal"), onTerminal, buttons.length === 0);
+  if (step === "loopback" && canRelay) button("open", t("web-main.logins.openBrowser"), relay.open, relay.busy);
+  if (step === "device" && login.code) button("open", t("web-main.logins.copyOpen"), () => copyAndOpen(login));
+  if (step === "open" && login.url) button("open", t("web-main.logins.openBrowser"), () => openPage(login.url));
   return buttons.length ? <span className={css.cardActions}>{buttons}</span> : null;
 }

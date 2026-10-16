@@ -459,7 +459,7 @@
   "core-logic.machineLogin.cancelled": "已取消",
   "core-logic.machineLogin.timedOut": "超时了，没等到浏览器回来",
   "core-logic.machineLogin.failed": "登录失败",
-  "core-logic.machineLogin.waiting": "命令在等你输入",
+  "core-logic.machineLogin.waiting": "等 agent 回答命令的问题",
   "core-logic.machineLogin.verifying": "正在确认登录",
   "core-logic.machineLogin.code": "验证码 {code}",
   "core-logic.machineLogin.comingBack": "等浏览器回来",

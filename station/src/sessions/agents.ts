@@ -37,7 +37,7 @@ import { jobTools } from "../tools/jobs.ts";
 import { forwardTools } from "../tools/forward.ts";
 import { Forwards } from "../mesh/peer-forward.ts";
 import { nameOf, peerNamed } from "../mesh/peer-http.ts";
-import { endedNotice, loginTools } from "../tools/login.ts";
+import { endedNotice, loginTools, promptNotice } from "../tools/login.ts";
 import { Logins } from "../logins/index.ts";
 import { readOnly } from "../mesh/credential.ts";
 import { McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
@@ -323,10 +323,24 @@ export const AgentsLive = (control: Control) =>
         const ws = (session ? store.getSession(session)?.ws : null) ?? s.workspace;
         return `${s.origin}/w/${ws}/s/${s.station}/login/${encode(id)}`;
       };
+      /// The logins whose agent was told they ask something (once a time they do).
+      const asking = new Set<string>();
       const unlistenLogins = [
         logins.changes((change) => {
           const login = logins.get(change.login);
-          if (login) events.machineLogins({ login }, { login: Logins.limited(login) }, readOnly, `login\0${login.id}`);
+          if (!login) return;
+          events.machineLogins({ login }, { login: Logins.limited(login) }, readOnly, `login\0${login.id}`);
+          // Asking something again after its person's browser step (az picking a subscription, say): its agent answers.
+          const asks = login.waiting && login.endedAt === undefined && logins.hadBrowserStep(login.id);
+          if (asks && !asking.has(login.id) && login.chat) {
+            try {
+              hub.notify(login.chat, promptNotice(logins, login, loginLink(login.chat, login.id)));
+            } catch (error) {
+              log.warn("logins", "an agent was not told its login asks something", { login: login.id, error: (error as Error).message });
+            }
+          }
+          if (asks) asking.add(login.id);
+          else asking.delete(login.id);
         }),
         // Told: the agent that started it, and each that posted its card (one may post a card for a login under way).
         logins.onEnded((login, starter) => {
@@ -367,7 +381,11 @@ export const AgentsLive = (control: Control) =>
           starter: (session) => {
             const row = store.getSession(session);
             const email = row?.createdBy ?? "";
-            return { by: { email, name: readers.names.get(email) ?? "" }, workspace: row?.ws ?? place()?.workspace ?? null, chat: session };
+            let chatTitle: string | null = null;
+            try {
+              chatTitle = sender(hub, session)[0];
+            } catch {}
+            return { by: { email, name: readers.names.get(email) ?? "" }, workspace: row?.ws ?? place()?.workspace ?? null, chat: session, chatTitle };
           },
           link: (session, id) => loginLink(session, id),
         }),

@@ -81,10 +81,7 @@ export interface OperationParams {
   "drive.zip": { root: string; path: string };
   "drive.stage": { root: string; path: string; zip?: boolean | null | undefined };
   "software.auto": { on?: boolean | null | undefined };
-  "machineLogin.start": { command: string };
   "machineLogin.cancel": { id: string };
-  "machineLogin.input": { id: string; text?: string | null | undefined; key?: string | null | undefined };
-  "machineLogin.paste": { id: string; text: string };
   "workspace.create": { name?: string | null | undefined; invite_code?: string | null | undefined };
   "workspace.rename": { workspace: string; name?: string | null | undefined; emoji?: string | null | undefined; icon?: string | null | undefined };
   "workspace.setRelays": { workspace: string; relays?: string[] | null | undefined };
@@ -114,7 +111,7 @@ export interface OperationParams {
   "admin.feedbackStatus": { id: string; status?: string | null | undefined };
 }
 
-export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chats.archived", "drive.folders", "file.open", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineLogin.input", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "tools.access", "widget.setState", "widget.state"]);
+export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chats.archived", "drive.folders", "file.open", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "tools.access", "widget.setState", "widget.state"]);
 
 type Call = (name: string, params: Record<string, unknown>) => Promise<unknown>;
 
@@ -201,10 +198,7 @@ export function bindStationOperations(call: Call) {
     driveZip: <T = unknown>(params: OperationParams["drive.zip"]) => call("drive.zip", params) as Promise<T>,
     driveStage: <T = unknown>(params: OperationParams["drive.stage"]) => call("drive.stage", params) as Promise<T>,
     softwareAuto: <T = unknown>(params: OperationParams["software.auto"] = {}) => call("software.auto", params) as Promise<T>,
-    machineLoginStart: <T = unknown>(params: OperationParams["machineLogin.start"]) => call("machineLogin.start", params) as Promise<T>,
     machineLoginCancel: <T = unknown>(params: OperationParams["machineLogin.cancel"]) => call("machineLogin.cancel", params) as Promise<T>,
-    machineLoginInput: <T = unknown>(params: OperationParams["machineLogin.input"]) => call("machineLogin.input", params) as Promise<T>,
-    machineLoginPaste: <T = unknown>(params: OperationParams["machineLogin.paste"]) => call("machineLogin.paste", params) as Promise<T>,
   };
 }
 

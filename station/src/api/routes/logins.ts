@@ -46,17 +46,6 @@ export const routes = (logins: () => Logins | undefined): Route[] => {
         }),
     },
     {
-      method: "POST",
-      pattern: /^\/machine-logins\/*$/,
-      handle: (r) =>
-        answer(async (l) => {
-          const body = input(r);
-          const command = typeof body.command === "string" || Array.isArray(body.command) ? (body.command as string | string[]) : null;
-          if (command === null) throw new Refused(400, "command: the tool's own login command");
-          return ok(await l.start(command, { by: { email: r.viewer.email, name: r.viewer.name }, workspace: r.viewer.workspace ?? null }));
-        }),
-    },
-    {
       method: "GET",
       pattern: /^\/machine-logins\/+([^/]+)\/*$/,
       handle: (r, [login]) =>
@@ -68,7 +57,7 @@ export const routes = (logins: () => Logins | undefined): Route[] => {
     {
       method: "DELETE",
       pattern: /^\/machine-logins\/+([^/]+)\/*$/,
-      handle: (_r, [login]) => answer((l) => ok(l.cancel(id(login!)))),
+      handle: (r, [login]) => answer((l) => ok(l.cancel(id(login!), { email: r.viewer.email, name: r.viewer.name }))),
     },
     {
       // The browser's callback, from the client it came back to: `{method, path, headers, body?}` (the body base64) →
@@ -80,26 +69,7 @@ export const routes = (logins: () => Logins | undefined): Route[] => {
           const body = input(r);
           const headers = body.headers && typeof body.headers === "object" && !Array.isArray(body.headers) ? Object.fromEntries(Object.entries(body.headers as Record<string, unknown>).filter((e): e is [string, string] => typeof e[1] === "string")) : {};
           if (typeof body.method !== "string" || typeof body.path !== "string") throw new Refused(400, "method and path");
-          return ok(await l.callback(id(login!), { method: body.method, path: body.path, headers, ...(typeof body.body === "string" ? { body: body.body } : {}) }));
-        }),
-    },
-    {
-      method: "POST",
-      pattern: /^\/machine-logins\/+([^/]+)\/+paste\/*$/,
-      handle: (r, [login]) =>
-        answer(async (l) => {
-          const text = input(r).text;
-          if (typeof text !== "string" || text.trim() === "") throw new Refused(400, "text");
-          return ok(await l.paste(id(login!), text));
-        }),
-    },
-    {
-      method: "POST",
-      pattern: /^\/machine-logins\/+([^/]+)\/+input\/*$/,
-      handle: (r, [login]) =>
-        answer((l) => {
-          l.input(id(login!), input(r));
-          return ok({ ok: true });
+          return ok(await l.callback(id(login!), { method: body.method, path: body.path, headers, ...(typeof body.body === "string" ? { body: body.body } : {}) }, { email: r.viewer.email, name: r.viewer.name }));
         }),
     },
   ];

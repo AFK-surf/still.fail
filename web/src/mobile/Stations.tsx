@@ -3,7 +3,7 @@ import { useAct } from "@stillfail/ui/toast.tsx";
 // The workspace's stations on a narrow screen, as the Android app has them (apps/android/…/screens/Stations.kt): each
 // with the buddy's face for its state and its load as rings; one station's page is the machine (its load, network,
 // versions), with how many connects and profiles run on it (settings' lists have them, ./Settings.tsx).
-import { useCall, useReady } from "../core/react.ts";
+import { useReady } from "../core/react.ts";
 import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
@@ -304,33 +304,23 @@ export function StationScreen() {
 }
 
 /**
- * The command-line tools its agents use, logged in on it for every chat (as the wide screen's station page,
- * ../MachineLogins.tsx LoginsSection): a login command to run, the tool's own, and the logins done there.
+ * The logins done on it through still.fail (as the wide screen's station page, ../MachineLogins.tsx LoginsSection):
+ * agents start them; one under way opens its sheet. Nothing when there are none.
  */
 function Logins({ station }: { station: string }) {
   const app = useApp();
   const view = useMachineLogins(station);
-  const call = useCall();
-  if (!view) return null;
+  if (!view || !view.supported || view.logins.length === 0) return null;
   return (
     <>
       <SectionHeader title={t("web-main.logins.title")} start={24} />
       <ListCard>
-        {!view.supported ? <ListRow><span className={partsCss.mMuted}>{t("web-main.logins.update")}</span></ListRow> : <>
-          {view.canLogin && <PickRow label={t("web-main.logins.command")} onClick={() => ask(app, {
-            title: t("web-main.logins.command"), value: "", placeholder: t("web-main.logins.commandPlaceholder"), action: t("web-main.logins.run"),
-            // Its sheet says why the station would not; else it gives way to the login's (once it has closed).
-            run: (command) => call("machineLogin.start", { station, command }).then((answer) => {
-              const { id } = answer as { id: string };
-              setTimeout(() => openLoginSheet(app, { station, id }), 0);
-            }),
-          })} />}
-          {view.logins.map((l) => (
-            <PickRow key={l.id} label={l.command} sub={[l.byText, l.whenText, l.statusText].filter(Boolean).join(" · ")} onClick={() => openLoginSheet(app, { station, id: l.id })} />
-          ))}
-        </>}
+        {view.logins.map((l) => {
+          const said = [l.chatTitle ? t("web-main.logins.startedIn", { chat: l.chatTitle }) : null, l.doneByText ? t("web-main.logins.doneBy", { name: l.doneByText }) : null, l.whenText, l.statusText].filter(Boolean).join(" · ");
+          return <PickRow key={l.id} label={l.command} sub={said} enabled={l.active} onClick={() => openLoginSheet(app, { station, id: l.id })} />;
+        })}
       </ListCard>
-      {view.supported && <p className={loginsCss.phoneLead}>{t("web-main.logins.lead")}</p>}
+      <p className={loginsCss.phoneLead}>{t("web-main.logins.lead")}</p>
     </>
   );
 }

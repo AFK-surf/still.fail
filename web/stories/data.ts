@@ -193,7 +193,7 @@ const LOGIN_AT = Date.UTC(2026, 9, 17, 8, 0);
 /** A login on the demo's station as the core shows it, in one state or another. */
 const login = (id: string, command: string, more: Partial<MachineLoginShown>): MachineLoginShown => ({
   id, station: "demo/local", stationName: "Studio", name: command.split(" ")[0]!, title: `在 Studio 上登录 ${command.split(" ")[0]}`, command, state: "browser",
-  active: true, waiting: false, listening: false, statusText: "", byText: "林", whenText: "16:00", startedAt: LOGIN_AT, expiresAt: LOGIN_AT + 15 * 60_000, ...more,
+  active: true, waiting: false, listening: false, statusText: "", byText: "林", chat: "ember:c-demo", chatTitle: "发布 0.4 版", whenText: "16:00", startedAt: LOGIN_AT, expiresAt: LOGIN_AT + 15 * 60_000, ...more,
 });
 /** Logins in each of their states, by id. */
 export const LOGINS: Record<string, MachineLoginShown> = {
@@ -211,32 +211,22 @@ export const LOGINS: Record<string, MachineLoginShown> = {
     statusText: "等浏览器回来",
   }),
   open: login("open", "npm login", { step: "open", url: "https://www.npmjs.com/login?next=/login/cli/6f1c2b", domain: "www.npmjs.com", statusText: "在浏览器里完成登录" }),
-  question: login("question", "gh auth login", { state: "input", step: "terminal", waiting: true, statusText: "命令在等你输入" }),
-  terminal: login("terminal", "vercel login", { state: "input", step: "terminal", waiting: true, statusText: "命令在等你输入" }),
-  password: login("password", "docker login", { state: "input", step: "terminal", waiting: true, statusText: "命令在等你输入" }),
-  done: login("done", "gh auth login", { state: "done", active: false, statusText: "登录完成", whenText: "10/16 11:20", startedAt: LOGIN_AT - 86_400_000, endedAt: LOGIN_AT - 86_400_000 + 60_000 }),
+  question: login("question", "gh auth login", { state: "input", step: "terminal", waiting: true, statusText: "等 agent 回答命令的问题" }),
+  done: login("done", "gh auth login", { state: "done", active: false, statusText: "登录完成", doneByText: "林", chatTitle: "修 CI 的 token", whenText: "10/16 11:20", startedAt: LOGIN_AT - 86_400_000, endedAt: LOGIN_AT - 86_400_000 + 60_000 }),
   failed: login("failed", "gcloud auth login", {
     state: "failed", active: false, statusText: "登录失败", byText: "Ada", whenText: "10/15 09:05", endedAt: LOGIN_AT + 120_000,
     error: "Your browser has been opened to visit:\n\n    https://accounts.google.com/o/oauth2/auth?...\n\nERROR: (gcloud.auth.login) There was a problem with web authentication.\nTry running again with --no-browser.",
   }),
   timeout: login("timeout", "gcloud auth login", { state: "failed", active: false, statusText: "超时了，没等到浏览器回来", endedAt: LOGIN_AT + 15 * 60_000 }),
-  cancelled: login("cancelled", "npm login", { state: "cancelled", active: false, statusText: "已取消", whenText: "10/14 18:42", endedAt: LOGIN_AT + 60_000 }),
+  cancelled: login("cancelled", "npm login", { state: "cancelled", active: false, statusText: "已取消", doneByText: "Ada", chatTitle: "npm 发包", whenText: "10/14 18:42", endedAt: LOGIN_AT + 60_000 }),
 };
 /** A login seen by a read-only member: no page, no code, only how it stands. */
 export const VIEWER_LOGIN: MachineLoginShown = (({ url: _u, code: _c, ...rest }) => rest)(LOGINS.device!);
 
 const row = (text: string) => text.padEnd(200, " ");
-/** The terminals of those that wait on typing: a question, a menu to pick from, a password asked for. */
+/** The terminal of one whose agent answers a question (shown folded, for who wants to look). */
 export const SCREENS: Record<string, MachineLoginScreen> = {
   question: { rows: [row("? Authenticate Git with your GitHub credentials? (Y/n) "), row("")], cursorX: 55, cursorY: 0, echo: true, live: true },
-  terminal: {
-    rows: [row("Vercel CLI 39.1.0"), row("? Log in to Vercel (Use arrow keys)"), row("❯ Continue with GitHub"), row("  Continue with GitLab"), row("  Continue with Bitbucket"), row("  Continue with Email"), row("  Continue with SAML Single Sign-On"), row(""), row("")],
-    cursorX: 0, cursorY: 2, echo: true, live: true,
-  },
-  password: {
-    rows: [row("Log in with your Docker ID or email address to push and pull images from Docker Hub."), row("You can log in with your password or a Personal Access Token (PAT)."), row(""), row("Username: lin"), row("Password: "), row("")],
-    cursorX: 10, cursorY: 4, echo: false, live: true,
-  },
 };
 
 /** The demo's station's logins: `listed`, those done there (under way first). */

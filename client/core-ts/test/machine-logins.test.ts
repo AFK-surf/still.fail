@@ -14,7 +14,7 @@ import { base, started, stationReplies } from "./station-fixture.ts";
 
 const ST = "ws/st";
 
-const device = { id: "l1", name: "gh", command: ["gh", "auth", "login"], state: "code", step: "device", url: "https://github.com/login/device", domain: "github.com", code: "1A2B-C3D4", waiting: false, by: { email: "a@x.com", name: "张三" }, startedAt: Date.UTC(2026, 9, 12, 4), expiresAt: 2 };
+const device = { id: "l1", name: "gh", command: ["gh", "auth", "login"], state: "code", step: "device", url: "https://github.com/login/device", domain: "github.com", code: "1A2B-C3D4", waiting: false, by: { email: "a@x.com", name: "张三" }, chat: "ember:c-1", chatTitle: "部署", startedAt: Date.UTC(2026, 9, 12, 4), expiresAt: 2 };
 const past = { id: "l0", name: "npm", command: ["npm", "login"], state: "done", waiting: false, by: { email: "b@x.com", name: "李四" }, startedAt: Date.UTC(2026, 9, 11, 4), expiresAt: 2, endedAt: Date.UTC(2026, 9, 11, 4, 3) };
 const loopback = { id: "l2", name: "gcloud", command: ["gcloud", "auth", "login"], state: "browser", step: "loopback", url: "https://accounts.google.com/o/oauth2/auth?redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F&state=s3", domain: "accounts.google.com", callback: { host: "localhost", port: 8085, path: "/", state: "s3", post: false }, waiting: false, by: { email: "a@x.com", name: "张三" }, startedAt: 3, expiresAt: 4 };
 
@@ -46,6 +46,7 @@ test("a station's logins: read as its stream opens, in words, told as they chang
   const one = v(values, 2);
   assert.deepEqual([one.title, one.command, one.statusText, one.code, one.url, one.domain, one.active, one.byText], ["在 studio 上登录 gh", "gh auth login", "验证码 1A2B-C3D4", "1A2B-C3D4", "https://github.com/login/device", "github.com", true, "张三"]);
   assert.match(one.whenText, /^10\/12 \d{1,2}:\d{2}$/);
+  assert.deepEqual([one.chat, one.chatTitle], ["ember:c-1", "部署"]);
   const done = all.logins.find((l: any) => l.id === "l0");
   assert.deepEqual([done.statusText, done.active, done.byText, done.command], ["登录完成", false, "李四", "npm login"]);
   assert.equal(v(values, 3), null, "a login the station does not have");
@@ -96,34 +97,30 @@ test("a login's terminal: its stream asks for it while it is shown, all of it fi
   core.close();
 });
 
-test("starting, cancelling, typing: the station's answer is in place at once", async () => {
+test("cancelling: the station's answer is in place at once; nothing else a client writes but the callback", async () => {
   const { host, core } = await started(listed());
-  const asked: { method: string; path: string; body: any }[] = [];
+  const asked: { method: string; path: string }[] = [];
   stationReplies(host, (req) => {
     const path = req.url.replace("https://stillfail.test/admin/api", "");
-    if (!path.startsWith("/machine-logins/") && !(path === "/machine-logins" && req.method === "POST")) return undefined;
-    asked.push({ method: req.method, path, body: req.body && req.body.length > 0 ? JSON.parse(new TextDecoder().decode(req.body)) : null });
-    if (req.method === "POST" && path === "/machine-logins") return { ...device, id: "l3", name: "npm", command: ["npm", "login"], code: undefined, step: undefined, state: "starting" };
-    if (req.method === "DELETE") return { ...device, state: "cancelled", endedAt: 5 };
-    return { ok: true };
+    if (!path.startsWith("/machine-logins/")) return undefined;
+    asked.push({ method: req.method, path });
+    return { ...device, state: "cancelled", step: undefined, code: undefined, doneBy: { email: "a@x.com", name: "张三" }, endedAt: Date.UTC(2026, 9, 12, 5) };
   });
   const ui = core.connect();
   const values = new Map();
-  subscribe(core, ui, 1, { topic: "machineLogin", station: ST, id: "l3" });
+  subscribe(core, ui, 1, { topic: "machineLogin", station: ST, id: "l1" });
   await host.settle();
-  call(core, ui, 2, "machineLogin.start", { station: ST, command: "npm login" });
+  call(core, ui, 2, "machineLogin.cancel", { station: ST, id: "l1" });
   await host.settle();
-  assert.equal(answers(drain(host, values), 2)?.ok !== undefined, true);
   drain(host, values);
-  assert.equal(v(values, 1).statusText, "正在启动登录命令");
-  call(core, ui, 3, "machineLogin.input", { station: ST, id: "l3", key: "Enter" });
-  call(core, ui, 4, "machineLogin.cancel", { station: ST, id: "l1" });
+  assert.deepEqual(asked, [{ method: "DELETE", path: "/machine-logins/l1" }]);
+  assert.deepEqual([v(values, 1).statusText, v(values, 1).doneByText], ["已取消", "张三"]);
+  // Starting one, or typing into one, is its agent's (the login tool), not a client's.
+  call(core, ui, 3, "machineLogin.start", { station: ST, command: "gh auth login" });
+  call(core, ui, 4, "machineLogin.input", { station: ST, id: "l1", key: "Enter" });
   await host.settle();
-  assert.deepEqual(asked.map((a) => [a.method, a.path, a.body]), [
-    ["POST", "/machine-logins", { command: "npm login" }],
-    ["POST", "/machine-logins/l3/input", { key: "Enter" }],
-    ["DELETE", "/machine-logins/l1", null],
-  ]);
+  const emitted = host.takeEmitted();
+  assert.ok(answers(emitted, 3)?.error && answers(emitted, 4)?.error);
   core.close();
 });
 

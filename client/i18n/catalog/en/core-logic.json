@@ -561,7 +561,7 @@
   "core-logic.machineLogin.cancelled": "Cancelled",
   "core-logic.machineLogin.timedOut": "Timed out waiting for the browser",
   "core-logic.machineLogin.failed": "Login failed",
-  "core-logic.machineLogin.waiting": "The command is waiting for your input",
+  "core-logic.machineLogin.waiting": "Waiting for the agent to answer the command",
   "core-logic.machineLogin.verifying": "Checking the login",
   "core-logic.machineLogin.code": "Code {code}",
   "core-logic.machineLogin.comingBack": "Waiting for the browser to come back",

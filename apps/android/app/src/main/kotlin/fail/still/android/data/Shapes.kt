@@ -3141,7 +3141,7 @@ data class MachineLoginShown (
 	val codeUrl: String? = null,
 	/// Loopback: the port its callback comes to.
 	val port: UInt? = null,
-	/// The command waits on a prompt with nothing else to do: its terminal opens by itself.
+	/// The command waits on a prompt: its agent answers it (等 agent 回答命令的问题).
 	val waiting: Boolean,
 	/// This device listens for its loopback callback now (opened here, in the desktop app): 等浏览器回来.
 	val listening: Boolean,
@@ -3149,8 +3149,14 @@ data class MachineLoginShown (
 	val statusText: String,
 	/// Failed: why (the command's last lines).
 	val error: String? = null,
-	/// Who started it.
+	/// Whose chat it was started for (the chat's starter).
 	val byText: String? = null,
+	/// The session of the agent that started it (its chat opens by it).
+	val chat: String? = null,
+	/// That chat's title, when it began.
+	val chatTitle: String? = null,
+	/// Who finished it: whose browser came back through their client, or who cancelled it.
+	val doneByText: String? = null,
 	/// When it started, in words: 14:05 today, 10/16 14:05 before.
 	val whenText: String,
 	val startedAt: Long,

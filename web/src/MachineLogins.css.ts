@@ -12,15 +12,16 @@ const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", wh
 
 /** A login done there, as the page's list rows, pressed to open its panel. */
 export const loginRow = style({ width: "100%", border: "0", background: "none", color: vars.text, font: "inherit", textAlign: "left", cursor: "pointer" });
+/** A login that ended: what it says is all there is (not pressed). */
+export const pastRow = style({ selectors: { "&:hover": { background: "none" } } });
 export const mark = style({ width: "36px", height: "36px", color: vars.muted });
-export const name = style({ fontWeight: "500", color: vars.text, fontFamily: vars.fontMono, ...ellipsis });
+export const name = style({ fontWeight: "500", color: vars.text, ...ellipsis });
+/** The chat whose agent started it. */
+export const chatLink = style({ color: "inherit", textDecoration: "underline", textUnderlineOffset: "2px" });
 export const state = style({ color: vars.muted, ...ellipsis });
 export const stateActive = style({ color: vars.accentText, ...ellipsis });
 export const stateFailed = style({ color: vars.red, ...ellipsis });
 export const rowChevron = style({ flex: "none", color: vars.muted });
-/** The login command to run: a field and its button, the section's main action. */
-export const commandForm = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, marginBottom: "8px" });
-export const commandField = style({ flex: "1", minWidth: 0, fontFamily: vars.fontMono });
 export const note = style({ margin: "0", fontSize: vars.textUi, color: vars.muted });
 
 // ── the panel ──
@@ -48,7 +49,6 @@ export const terminalToggle = style({
   display: "inline-flex", alignItems: "center", gap: "6px", justifySelf: "start", padding: "0", border: "0", background: "none",
   color: vars.text, font: "inherit", fontSize: vars.textUi, fontWeight: "500", cursor: "pointer",
 });
-export const terminalWaits = style({ color: vars.accentText, fontWeight: "400" });
 export const chevron = style({ color: vars.muted, transition: `transform ${vars.dur} ${vars.easeOut}`, selectors: { "&[data-open]": { transform: "rotate(90deg)" } } });
 /** Its screen: the station's lines in monospace, wrapped to the width (they come 200 columns wide), the cursor a block. */
 export const screen = style({
@@ -60,9 +60,6 @@ export const screenRow = style({ minHeight: "1.5em" });
 export const cursor = style({ background: vars.text, color: vars.canvas });
 /** The command's last lines, as the screen is drawn. */
 export const lastLines = style([screen, { minHeight: "0" }]);
-export const typing = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 });
-export const typingField = style({ flex: "1", minWidth: 0, fontFamily: vars.fontMono });
-export const keys = style({ display: "flex", flexWrap: "wrap", gap: "6px" });
 /** The dialog's foot: where the login is and who uses it, on the buttons' left. */
 export const foot = style({ flex: "1", minWidth: 0, margin: "0", fontSize: vars.textMeta, color: vars.muted });
 /** The phone's sheet: its words in from its edges as its other sheets' are. */

@@ -15,6 +15,7 @@ import type { Callback } from "../src/logins/relay.ts";
 import { asksEnter, commandWords, deviceCodeIn, deviceUrls, loopbackOf, plainText, prompts, urlsIn } from "../src/logins/parse.ts";
 import { QUIET_MS, TIMEOUT_MS } from "../src/logins/run.ts";
 import { routes } from "../src/api/routes/logins.ts";
+import { loginTools, screenFor } from "../src/tools/login.ts";
 import { WINDOWS, platform } from "../src/platform/index.ts";
 import { approval, script, temp, upon } from "./accounts-fakes.ts";
 import { settle, testClock } from "./hub-fakes.ts";
@@ -141,6 +142,58 @@ echo "Logged in as octocat"
   }
 });
 
+test("the agent drives the command through its tool: it sees the screen without the page or code, answers the Y/n itself, and is told when the person's step is ready", { skip: skipped }, async () => {
+  const m = machine();
+  const approved = approval(m.home);
+  script(join(m.bin, "fakegh"), `#!/bin/sh
+printf '? Authenticate Git with your GitHub credentials? (Y/n) '
+read answer
+echo "answered [$answer]"
+echo "! First copy your one-time code: 1A2B-C3D4"
+printf "Press Enter to open https://github.com/login/device in your browser... "
+read go
+"$BROWSER" https://github.com/login/device
+echo "Waiting for the browser"
+read ok < '${approved.path}'
+`);
+  const [tool] = loginTools({ logins: () => m.logins, starter: () => ({ ...m.by, chat: "ember:c-1", chatTitle: "部署" }), link: (_s, id) => `https://still.fail/w/w1/s/st/login/${id}` });
+  try {
+    const starting = tool!.run("ember:c-1", { command: "fakegh auth login" });
+    const id = await upon((w) => m.logins.changes(w), () => m.logins.logins()[0]?.id, "started");
+    await m.quietAt(id, "Authenticate Git");
+    const asked = await starting;
+    assert.match(asked, /\? Authenticate Git with your GitHub credentials\? \(Y\/n\)/);
+    assert.match(asked, /It waits on the prompt above: answer it with login/);
+    assert.ok(!asked.includes("card"), "no card yet: nothing is the person's to do");
+    // Its default, as the agent takes it: Enter.
+    const answering = tool!.run("ember:c-1", { id, key: "enter" });
+    await m.quietAt(id, "Press Enter to open");
+    await upon((w) => m.logins.follow(id, w), () => m.screen(id).includes("Waiting for the browser"), "opened");
+    // Quiet again (its cursor on the line after what it said).
+    await settle(5);
+    await m.time.adjust(QUIET_MS);
+    const ready = await answering;
+    assert.ok(m.screen(id).includes("answered []"));
+    assert.match(ready, /The person's browser step is ready: chat_post with card \{"type": "login", "login": "/);
+    assert.ok(ready.includes("<code>") && ready.includes("<link>"), ready);
+    assert.ok(!ready.includes("1A2B-C3D4") && !ready.includes("github.com/login/device"), "neither the code nor the page");
+    assert.equal(m.logins.get(id)!.chatTitle, "部署");
+    await approved.approve();
+    await m.until(id, (l) => l.state === "done", "done");
+    assert.match(await tool!.run("ember:c-1", { id }), /It finished/);
+    await assert.rejects(tool!.run("ember:c-1", { id, key: "f13" }), /key: one of/);
+  } finally {
+    await m.logins.close();
+  }
+});
+
+test("the screen as the agent reads it: the page and the code hidden, the cursor's line marked, nothing past the last line", () => {
+  const login = { code: "1A2B-C3D4" } as Login;
+  const rows = ["! First copy your one-time code: 1A2B-C3D4", "Press Enter to open https://github.com/login/device in your browser... ", "", "", ""];
+  assert.equal(screenFor({ rows, cursor: { x: 70, y: 1 }, echo: true, live: true }, login), "! First copy your one-time code: <code>\nPress Enter to open <link> in your browser...▏");
+  assert.equal(screenFor(null, login), "");
+});
+
 test("a tool nobody described: its device code and page read from what it says", { skip: skipped }, async () => {
   const m = machine();
   script(join(m.bin, "acme"), `#!/bin/sh\necho "Acme CLI 3.1"\necho "To finish, open https://login.acme.example/activate and enter code: WDJB-MJHT"\necho "(the code lasts 10 minutes)"\nread forever\n`);
@@ -153,7 +206,7 @@ test("a tool nobody described: its device code and page read from what it says",
   }
 });
 
-test("a login waiting on prompts: its terminal answers the program's queries, takes typing, and says when the input is a password", { skip: skipped }, async () => {
+test("a login waiting on prompts: its terminal answers the program's queries, its agent types a name, and nothing is typed at a password prompt", { skip: skipped }, async () => {
   const m = machine();
   script(join(m.bin, "fakeprompt"), `#!/usr/bin/env node
 const { execFileSync } = require("node:child_process");
@@ -204,12 +257,13 @@ process.stdin.on("data", (d) => {
     m.logins.input(login.id, { key: "Enter" });
     await m.quietAt(login.id, "Password:");
     await upon((w) => m.logins.follow(login.id, w), () => echo === false, "no echo");
-    m.logins.input(login.id, { text: "s3cret\r" });
-    const done = await m.until(login.id, (l) => l.state === "done", "done");
-    assert.equal(done.state, "done");
-    assert.ok(m.screen(login.id).includes("welcome alice"));
-    assert.ok(!m.screen(login.id).includes("s3cret"), "the password was not echoed");
+    // A secret is nobody's to type here: refused, nothing sent.
+    assert.throws(() => m.logins.input(login.id, { text: "s3cret" }), (e: unknown) => e instanceof Refused && e.status === 409 && /secret/.test(e.message));
+    assert.throws(() => m.logins.input(login.id, { key: "Enter" }), (e: unknown) => e instanceof Refused && /secret/.test(e.message));
+    assert.ok(m.screen(login.id).trimEnd().endsWith("Password:"), "nothing reached it");
+    assert.equal(m.logins.get(login.id)!.state, "input");
     stop();
+    m.logins.cancel(login.id);
     assert.throws(() => m.logins.input(login.id, { text: "x" }), (e: unknown) => e instanceof Refused && e.status === 409);
   } finally {
     await m.logins.close();
@@ -337,45 +391,45 @@ test("the logins done here are kept: command, who, when and how each ended, with
   try {
     const ok = await m.logins.start("fakeok", m.by);
     await m.until(ok.id, (l) => l.state === "done", "done");
-    const waits = await m.logins.start("fakewait", { ...m.by, chat: "ember:c-1" });
+    const waits = await m.logins.start("fakewait", { ...m.by, chat: "ember:c-1", chatTitle: "部署" });
     await m.until(waits.id, (l) => l.step === "device", "device");
-    m.logins.cancel(waits.id);
+    m.logins.cancel(waits.id, { email: "b@x.com", name: "李四" });
     // A station started again: what it kept.
     const again = new Logins({ data: join(m.home, "data"), env: () => m.env, clock: m.time.clock, lang: () => "zh" });
     const kept = again.logins();
     assert.deepEqual(kept.map((l) => [l.command.join(" "), l.state, l.by.name]), [["fakewait", "cancelled", "张三"], ["fakeok", "done", "张三"]]);
     assert.ok(kept.every((l) => l.url === undefined && l.code === undefined && l.error === undefined && typeof l.endedAt === "number"));
     assert.equal(again.get(ok.id)!.state, "done");
-    assert.equal(kept[0]!.chat, "ember:c-1");
+    assert.deepEqual([kept[0]!.chat, kept[0]!.chatTitle, kept[0]!.doneBy?.name], ["ember:c-1", "部署", "李四"]);
     await again.close();
   } finally {
     await m.logins.close();
   }
 });
 
-test("the routes: a read-only member's list has no pages or codes; what a request lacks is refused", { skip: skipped }, async () => {
+test("the routes: a read-only member's list has no pages or codes; no route starts a login or types into one", { skip: skipped }, async () => {
   const m = machine();
   script(join(m.bin, "fakecode"), `#!/bin/sh\necho "Open https://example.com/device and enter WXYZ-1234"\nread forever\n`);
-  const [list, start, , cancel] = routes(() => m.logins);
+  const all = routes(() => m.logins);
+  assert.deepEqual(all.map((r) => r.method), ["GET", "GET", "DELETE", "POST"], "list, one, cancel, callback: starting one is an agent's");
+  const [list, , cancel] = all;
   const ask = (route: (typeof list), role: string, body: Json = {}, args: string[] = []) =>
-    route.handle({ method: route.method, path: "/machine-logins", query: [], headers: {}, body: Buffer.from(JSON.stringify(body)), viewer: { sub: "s", email: "a@x.com", name: "张三", role, workspace: "w1", device: "d" }, lang: "zh" }, args);
+    route!.handle({ method: route!.method, path: "/machine-logins", query: [], headers: {}, body: Buffer.from(JSON.stringify(body)), viewer: { sub: "s", email: "a@x.com", name: "张三", role, workspace: "w1", device: "d" }, lang: "zh" }, args);
   const read = async (answer: Promise<{ status: number; body: unknown }>) => {
     const a = await answer;
     return { status: a.status, body: JSON.parse((a.body as Buffer).toString()) };
   };
   try {
-    const started = await read(ask(start, "member", { command: "fakecode" }));
-    assert.equal((await read(ask(start, "member", { service: "gh" }))).status, 400, "a command, not a service");
-    assert.equal(started.status, 200);
-    await m.until(started.body.id, (l) => l.step === "device", "device");
+    const started = await m.logins.start("fakecode", m.by);
+    await m.until(started.id, (l) => l.step === "device", "device");
     const member = await read(ask(list, "member"));
     const viewer = await read(ask(list, "viewer"));
-    const mine = member.body.logins.find((l: Json) => l.id === started.body.id);
-    const theirs = viewer.body.logins.find((l: Json) => l.id === started.body.id);
+    const mine = member.body.logins.find((l: Json) => l.id === started.id);
+    const theirs = viewer.body.logins.find((l: Json) => l.id === started.id);
     assert.deepEqual([mine.code, mine.url], ["WXYZ-1234", "https://example.com/device"]);
     assert.deepEqual([theirs.code, theirs.url, theirs.step, theirs.domain], [undefined, undefined, "device", "example.com"]);
-    assert.equal((await read(ask(start, "member", {}))).status, 400);
-    assert.equal((await read(ask(cancel, "member", {}, [started.body.id]))).body.state, "cancelled");
+    const cancelled = (await read(ask(cancel!, "member", {}, [started.id]))).body;
+    assert.deepEqual([cancelled.state, cancelled.doneBy], ["cancelled", { email: "a@x.com", name: "张三" }], "who finished it: who cancelled it");
   } finally {
     await m.logins.close();
   }

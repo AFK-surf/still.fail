@@ -71,6 +71,10 @@ export class LoginRun {
   relayed = false;
   /// Ended for want of time.
   timedOut = false;
+  /// It has asked a person for a browser step (a page, a code) at some point.
+  hadBrowserStep = false;
+  /// Who are waiting for it to go quiet again (or end): its agent, after it started it or typed into it.
+  #quietWaiters: (() => void)[] = [];
   readonly #o: RunOptions;
   #child: ChildProcess | null = null;
   #term: InstanceType<typeof xterm.Terminal>;
@@ -161,6 +165,21 @@ export class LoginRun {
     this.#o.changed();
   }
 
+  /// Whether it waits on a line typed without echo: a secret (a password), which nobody types for it here.
+  get secret(): boolean {
+    return this.active && this.waiting && !this.echo;
+  }
+
+  /// Resolves the next time its output has gone quiet and been looked at (what it waits on is known then), or it ends.
+  nextQuiet(): Promise<void> {
+    if (!this.active) return Promise.resolve();
+    return new Promise((resolve) => this.#quietWaiters.push(resolve));
+  }
+
+  #quietNow(): void {
+    for (const wake of this.#quietWaiters.splice(0)) wake();
+  }
+
   /// Typed into its terminal: text as it is, or a key.
   input(given: { text?: string; key?: Key }): void {
     if (!this.active) return;
@@ -244,6 +263,7 @@ export class LoginRun {
       this.step = "open";
       this.state = "browser";
     }
+    if (this.step === "device" || this.step === "loopback" || this.step === "open") this.hadBrowserStep = true;
     if (JSON.stringify([this.state, this.step, this.url, this.loopback, this.code, this.codeUrl, this.waiting]) !== before) this.#o.changed();
   }
 
@@ -258,6 +278,7 @@ export class LoginRun {
     if (place !== this.#answered && asksEnter(line)) {
       this.#answered = place;
       this.#write("\r");
+      // Its page comes now: what it waits on is known once it is quiet again.
       return;
     }
     const waiting = line.trim() !== "" && prompts(line) && this.state !== "verifying";
@@ -283,6 +304,7 @@ export class LoginRun {
       this.#o.drawn();
     }
     if (changed) this.#o.changed();
+    this.#quietNow();
   }
 
   /// Its browser came back and the callback went to it: it finishes by itself now.
@@ -331,6 +353,7 @@ export class LoginRun {
     log.info("logins", "a login ended", { id: this.id, state });
     this.#o.changed();
     this.#o.drawn();
+    this.#quietNow();
   }
 
   /// Stops listening to it for good (the station closing): its command ended.

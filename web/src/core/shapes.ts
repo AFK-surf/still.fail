@@ -3125,7 +3125,7 @@ export interface MachineLoginShown {
 	codeUrl?: string;
 	/** Loopback: the port its callback comes to. */
 	port?: number;
-	/** The command waits on a prompt with nothing else to do: its terminal opens by itself. */
+	/** The command waits on a prompt: its agent answers it (等 agent 回答命令的问题). */
 	waiting: boolean;
 	/** This device listens for its loopback callback now (opened here, in the desktop app): 等浏览器回来. */
 	listening: boolean;
@@ -3133,8 +3133,14 @@ export interface MachineLoginShown {
 	statusText: string;
 	/** Failed: why (the command's last lines). */
 	error?: string;
-	/** Who started it. */
+	/** Whose chat it was started for (the chat's starter). */
 	byText?: string;
+	/** The session of the agent that started it (its chat opens by it). */
+	chat?: string;
+	/** That chat's title, when it began. */
+	chatTitle?: string;
+	/** Who finished it: whose browser came back through their client, or who cancelled it. */
+	doneByText?: string;
 	/** When it started, in words: 14:05 today, 10/16 14:05 before. */
 	whenText: string;
 	startedAt: number;

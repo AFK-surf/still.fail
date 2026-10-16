@@ -1,9 +1,12 @@
 // The station's logins to the command-line tools its agents use (docs/remote-login.md): each station logs in itself,
 // the login landing in its own user's home and keychain (machine-wide: every chat's agent uses it); a person finishes it
 // from their client, in their own browser. One way for every tool (用户定: no service supported one by one): the tool's
-// own login command is run (run.ts), and what it asks of a person is read from what it does. Here: the logins under way
-// and ended lately (their screens with them), and the record of those done through still.fail on this station (command,
-// who, when, how it ended: <data>/logins/history.json), which is all the station page lists.
+// own login command is run (run.ts), and what it asks of a person is read from what it does. Only agents start one (用户
+// 定: nobody types a command), and the agent answers its prompts (Y/n, menus) through its `login` tool; a person does only
+// the step that needs them, in their own browser. Nothing types a secret into it: a prompt read without echo is refused.
+// Here: the logins under way and ended lately (their screens with them), and the record of those done through still.fail
+// on this station (command, its chat, who finished it, when, how it ended: <data>/logins/history.json), which is all the
+// station page lists.
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Clock } from "effect";
@@ -25,9 +28,8 @@ const KEPT_MOST = 20;
 const HISTORY_MOST = 50;
 
 export type Person = { email: string; name: string };
-/// Who started a login: a person (from their client, in a workspace), or an agent (its session, in its chat's workspace;
-/// `by` its chat's starter).
-export type Starter = { by: Person; workspace: string | null; chat?: string | null };
+/// Who started a login: an agent (its session `chat`, its chat's title, in its chat's workspace; `by` its chat's starter).
+export type Starter = { by: Person; workspace: string | null; chat?: string | null; chatTitle?: string | null };
 
 export type Login = {
   id: string;
@@ -46,6 +48,10 @@ export type Login = {
   by: Person;
   workspace?: string;
   chat?: string;
+  /// Its chat's title when it began.
+  chatTitle?: string;
+  /// Who finished it: the person whose browser came back through their client, or who cancelled it.
+  doneBy?: Person;
   startedAt: number;
   expiresAt: number;
   endedAt?: number;
@@ -54,7 +60,7 @@ export type Login = {
   timedOut?: boolean;
 };
 
-type Entry = { run: LoginRun; starter: Starter; screens: Set<(screen: Screen) => void> };
+type Entry = { run: LoginRun; starter: Starter; doneBy?: Person; screens: Set<(screen: Screen) => void> };
 
 export type LoginsOptions = {
   data: string;
@@ -125,6 +131,7 @@ export class Logins {
     const kept: Login = {
       id: login.id, name: login.name, command: login.command, state: login.state, waiting: false, by: login.by,
       ...(login.workspace ? { workspace: login.workspace } : {}), ...(login.chat ? { chat: login.chat } : {}),
+      ...(login.chatTitle ? { chatTitle: login.chatTitle } : {}), ...(login.doneBy ? { doneBy: login.doneBy } : {}),
       startedAt: login.startedAt, expiresAt: login.expiresAt, ...(login.endedAt !== undefined ? { endedAt: login.endedAt } : {}),
       ...(login.timedOut ? { timedOut: true } : {}),
     };
@@ -226,16 +233,20 @@ export class Logins {
     return e;
   }
 
-  cancel(id: string): Login {
+  /// Cancelled: by a person (`by`, from their client), or by its agent.
+  cancel(id: string, by?: Person): Login {
     const e = this.#entry(id);
+    if (e.run.active && by) e.doneBy = by;
     e.run.cancel();
     return this.#shown(e);
   }
 
-  /// Typed into its terminal: `{text}`, or `{key}`.
+  /// Typed into its terminal by its agent (its `login` tool): `{text}`, or `{key}`. Never into a prompt that reads
+  /// without echo: a secret is nobody's to type here.
   input(id: string, given: { text?: unknown; key?: unknown }): void {
     const e = this.#entry(id);
     if (!e.run.active) throw new Refused(409, tr(this.#lang(), "station.machineLogin.ended"));
+    if (e.run.secret) throw new Refused(409, "this command asks for a secret (a password or token, read without echo): nothing is typed into it here. Use the tool's browser or device-code login instead (gh auth login --web, az login --use-device-code…), or tell the person this tool cannot be logged in this way");
     if (typeof given.key === "string") {
       if (!(given.key in KEYS)) throw new Refused(400, `key: one of ${Object.keys(KEYS).join(", ")}`);
       e.run.input({ key: given.key as Key });
@@ -245,23 +256,29 @@ export class Logins {
     } else throw new Refused(400, "text or key");
   }
 
-  /// What a person pasted: the address the browser came back to (http://localhost…) is taken as its callback; anything
-  /// else is typed in, with Enter.
-  async paste(id: string, text: string): Promise<{ login: Login; answered?: Answered }> {
-    const e = this.#entry(id);
-    const t = text.trim();
-    const back = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):(\d+)(\/[^\s]*)?$/.exec(t);
-    if (back !== null && e.run.loopback !== null) {
-      const answered = await relay(e.run, { method: "GET", path: back[3] ?? "/", headers: { host: `${back[1]}:${back[2]}` } });
-      return { login: this.#shown(e), answered };
-    }
-    this.input(id, { text: `${t}\r` });
-    return { login: this.#shown(e) };
+  /// Waits until the command has gone quiet (what it waits on is known), it ended, or `ms` passed.
+  async settle(id: string, ms: number): Promise<Login | null> {
+    const e = this.#entries.get(id);
+    if (e) await Promise.race([e.run.nextQuiet(), this.#fibers.sleep(ms)]);
+    return this.get(id);
   }
 
-  /// The browser's callback, from a person's client, relayed to the command.
-  async callback(id: string, callback: Callback): Promise<Answered> {
-    return relay(this.#entry(id).run, callback);
+  /// Its screen as its agent reads it.
+  screen(id: string): Screen | null {
+    return this.#entries.get(id)?.run.screen() ?? null;
+  }
+
+  /// Whether it has asked a person for a browser step at some point.
+  hadBrowserStep(id: string): boolean {
+    return this.#entries.get(id)?.run.hadBrowserStep ?? false;
+  }
+
+  /// The browser's callback, from the client of the person `by`, relayed to the command.
+  async callback(id: string, callback: Callback, by?: Person): Promise<Answered> {
+    const e = this.#entry(id);
+    const answered = await relay(e.run, callback);
+    if (by) e.doneBy = by;
+    return answered;
   }
 
   /// Its terminal: now, and each time it changes, until the returned function is called.
@@ -286,6 +303,8 @@ export class Logins {
       by: e.starter.by,
       ...(e.starter.workspace ? { workspace: e.starter.workspace } : {}),
       ...(e.starter.chat ? { chat: e.starter.chat } : {}),
+      ...(e.starter.chatTitle ? { chatTitle: e.starter.chatTitle } : {}),
+      ...(e.doneBy ? { doneBy: e.doneBy } : {}),
       startedAt: r.startedAt,
       expiresAt: r.expiresAt,
       ...(r.endedAt !== null ? { endedAt: r.endedAt } : {}),
