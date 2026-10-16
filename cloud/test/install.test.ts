@@ -314,7 +314,7 @@ test("a station updating itself installs only the release its signed words name,
     // A download that is not the signed release: not installed.
     const bad = m.run([], { ...told, STILLFAIL_RELEASE_SHA256: "0".repeat(64) }, bundled);
     assert.equal(bad.status, 1, bad.out);
-    assert.match(bad.out, /签名里说的不一样/);
+    assert.match(bad.out, /与签名不符/);
     assert.ok(!existsSync(join(data, "app")), "nothing installed");
     assert.match(bad.said, /curl .*https:\/\/releases\.test\/releases\/stillfail-station-darwin-arm64\.tar\.gz/);
 

@@ -106,7 +106,7 @@ test("the VAPID token is ES256 for the endpoint's origin, for at most 12 hours",
 test("a notification's text is one line of at most 140 characters, made by its kind", () => {
   assert.equal(noticeBody("done", "修好了\n\n  部署  完成", "Claude"), "Claude: 修好了 部署 完成");
   assert.equal(noticeBody("message", "hi", "Bob"), "Bob: hi");
-  assert.equal(noticeBody("block", "要你确认", "Claude"), "需要处理 · 要你确认");
+  assert.equal(noticeBody("block", "要你确认", "Claude"), "需要你处理 · 要你确认");
   assert.equal(noticeBody("failed", "token runs out"), "出错 · token runs out");
   assert.equal(noticeBody("done", "no one said it"), "no one said it");
   // In the language of the device it goes to.

@@ -492,8 +492,8 @@ test("an_agent_can_be_moved_to_the_profiles_of_its_runtime", () => {
   assert.deepEqual(runnableOn(ov, s, 0), [
     { id: "a", name: "A", current: true, spent: null, kind: null, runtime: null, quota: null, quotaLine: null, efforts: ["minimal", "low", "medium", "high", "xhigh"] },
     {
-      id: "b", name: "B", current: false, spent: { until: 9000, text: "额度用完 · 1 分钟内恢复", back: "1 分钟内恢复" }, kind: null, runtime: null,
-      quota: { state: "ok", windows: [{ usedPercent: 100, resetsAt: 9000 }] }, quotaLine: { text: "只剩 0%", level: "red" }, efforts: ["minimal", "low", "medium", "high", "xhigh"],
+      id: "b", name: "B", current: false, spent: { until: 9000, text: "额度已用完 · 1 分钟内恢复", back: "1 分钟内恢复" }, kind: null, runtime: null,
+      quota: { state: "ok", windows: [{ usedPercent: 100, resetsAt: 9000 }] }, quotaLine: { text: "剩余 0%", level: "red" }, efforts: ["minimal", "low", "medium", "high", "xhigh"],
     },
   ]);
   assert.ok(choices(ov, s, 0).some((c: J) => c.model === "m" && c.accounts.codex.length === 2));
