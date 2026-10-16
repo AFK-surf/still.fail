@@ -512,11 +512,20 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         values["to"] = JsonPrimitive(to)
         return call("drive.rename", JsonObject(values))
     }
-    suspend fun driveRemove(root: String, path: String): JsonElement {
-        val values = mutableMapOf<String, JsonElement>()
+    class DriveRemoveFields : OperationFields() {
+        var permanent: Boolean? by field<Boolean>("permanent") { JsonPrimitive(it) }
+    }
+    suspend fun driveRemove(root: String, path: String, fill: DriveRemoveFields.() -> Unit = {}): JsonElement {
+        val values = DriveRemoveFields().apply(fill).fields
         values["root"] = JsonPrimitive(root)
         values["path"] = JsonPrimitive(path)
         return call("drive.remove", JsonObject(values))
+    }
+    suspend fun driveZip(root: String, path: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["root"] = JsonPrimitive(root)
+        values["path"] = JsonPrimitive(path)
+        return call("drive.zip", JsonObject(values))
     }
     class DriveStageFields : OperationFields() {
         var zip: Boolean? by field<Boolean>("zip") { JsonPrimitive(it) }

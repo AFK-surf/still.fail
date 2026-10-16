@@ -146,6 +146,8 @@ export class StationTopics implements Owner {
     }
     if (topic.topic === "live" && this.#core.data.opened("transcript", station, topic.key as string, true)) this.#sync.channels.bring(transcriptOf(station, topic.key as string), Priority.shown);
     if (topic.topic === "net") this.#sampleNet(topic);
+    // A folder of the drive: kept as it is on the station's disk while shown.
+    if (topic.topic === "drive") this.#samplers.set(topicKey(topic), this.#core.runner.fork(this.#sync.driveWatch(station, topic.root as string, topic.path as string)));
     this.resume(topic);
     // A job's log: what it is now read once; from then on the station says how it grows, on its stream.
     if (topic.topic === "jobLog") this.#sync.readLog(station, topic.job as string, topic.lines as number);
@@ -160,8 +162,8 @@ export class StationTopics implements Owner {
     // What the agents spent, and the archive: read as a page shows them, not with each change while none does.
     if (topic.topic === "stationUsage") this.#sync.usageShown(station);
     if (topic.topic === "archivedRows") this.#sync.archivedShown(station);
-    // A folder of the drive: read again each time it is shown (what is held is shown meanwhile), the station saying
-    // nothing of what changes on its disk.
+    // A folder of the drive: read again each time it is shown (what is held is shown meanwhile); while shown, the station
+    // says when something in it changes (sync.ts `driveWatch`).
     if (topic.topic === "drive") this.#sync.driveShown(station, topic.root as string, topic.path as string);
   }
 

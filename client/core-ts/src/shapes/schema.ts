@@ -660,6 +660,9 @@ export const SHAPES: Record<string, Shape> = {
     ["roots", vec("DriveRoot"), { doc: "The folders pinned: the list everyone sees first, and all a read-only member reaches." }],
     ["anywhere", opt("bool"), { doc: "The viewer browses every folder of the machine (a member who may write); absent from a station from\nbefore, which lends only the folders pinned." }],
     ["home", opt("String"), { doc: "Where browsing starts, with `anywhere`: the home of the station's machine." }],
+    ["trash", opt("bool"), { doc: "What is deleted goes to the machine's trash (`drive.remove`; `permanent` for good); absent where there\nis none, or from a station from before, which deletes for good." }],
+    ["watch", opt("bool"), { doc: "The station says when something in a folder shown changes (GET /drive/watch)." }],
+    ["zip", opt("bool"), { doc: "A folder can be zipped to download (`drive.zip`)." }],
   ], { doc: "A station's drive (docs/drive.md): the folders pinned, and how far the viewer reaches." }),
   DriveRoot: struct([
     ["path", "String", { doc: "Where it is on the station; what the drive's calls name it by." }],

@@ -24,9 +24,13 @@ function place() {
   writeFileSync(join(root, "notes.md"), "# hello\n");
   writeFileSync(join(base, "outside.txt"), "out");
   const config = { drive: { roots: [root] } } as any;
-  const drive = new Drive({ config: () => config, protect: () => [data] });
+  // What is deleted goes to this place's own trash, not the machine's.
+  const drive = new Drive({ config: () => config, protect: () => [data], home: base });
   return { base, root, data, config, drive };
 }
+
+/// What every member is told the drive does here: deleting to the trash (where there is one), watching folders.
+const CAN = { ...(process.platform === "darwin" || process.platform === "linux" ? { trash: true } : {}), watch: true };
 
 const code = async (p: Promise<unknown>) => {
   try {
@@ -118,6 +122,53 @@ test("mkdir, rename, remove: within the root, nothing replaced, the root itself 
   assert.equal(existsSync(join(root, ".stillfail", "key")), true);
 });
 
+test("remove puts it in the trash, a name there taken given a number, as the machine's file browser does; for good on asking", async () => {
+  const { base, root, drive } = place();
+  if (process.platform !== "darwin" && process.platform !== "linux") return;
+  const trash = process.platform === "darwin" ? join(base, ".Trash") : join(base, ".local", "share", "Trash", "files");
+  writeFileSync(join(root, "a.txt"), "1");
+  await drive.remove(root, "a.txt");
+  writeFileSync(join(root, "a.txt"), "2");
+  await drive.remove(root, "a.txt");
+  assert.equal(existsSync(join(root, "a.txt")), false);
+  assert.equal(readFileSync(join(trash, "a.txt"), "utf8"), "1");
+  assert.equal(readFileSync(join(trash, "a 2.txt"), "utf8"), "2");
+  if (process.platform === "linux") assert.match(readFileSync(join(trash, "..", "info", "a 2.txt.trashinfo"), "utf8"), /^\[Trash Info\]\nPath=.*a\.txt\nDeletionDate=/);
+  await drive.remove(root, "Season 1", false, true);
+  assert.equal(existsSync(join(root, "Season 1")), false);
+  assert.equal(existsSync(join(trash, "Season 1")), false);
+});
+
+test("a folder zipped to download: read from its own place as any file of the drive is, by a member who may write", async () => {
+  const { root, drive } = place();
+  const zip = await drive.zip(root, "Season 1", 1 << 20, true);
+  assert.equal(zip.name, "Season 1.zip");
+  const read = await drive.read(zip.root, zip.path, 0, 4, true);
+  assert.deepEqual([...read.bytes.subarray(0, 4)], [0x50, 0x4b, 0x03, 0x04]);
+  assert.equal(await code(drive.zip(root, "notes.md", 1 << 20, true)), "not_a_directory");
+});
+
+test("a folder watched: told once something in it changes, a change between two askings not lost", async () => {
+  const { FolderWatches } = await import("../src/drive/watch.ts");
+  const { root, drive } = place();
+  const watches = new FolderWatches(1500, 5000);
+  const dir = await drive.folderToWatch(root, "Season 1");
+  // The first asking starts the watch (macOS may tell of the writes just before it); then nothing changes.
+  await watches.changed(dir, "c");
+  assert.equal(await watches.changed(dir, "c"), false);
+  const asked = watches.changed(dir, "c");
+  setTimeout(() => writeFileSync(join(root, "Season 1", "E3.mp4"), "three"), 100);
+  assert.equal(await asked, true);
+  // Between two askings: kept for the next.
+  writeFileSync(join(root, "Season 1", "E4.mp4"), "four");
+  await new Promise((r) => setTimeout(r, 600));
+  const started = Date.now();
+  assert.equal(await watches.changed(dir, "c"), true);
+  assert.ok(Date.now() - started < 500);
+  watches.close();
+  assert.equal(await code(drive.folderToWatch(root, "notes.md")), "not_a_directory");
+});
+
 test("a link removed is the link, not what it points at", async () => {
   const { root, drive } = place();
   symlinkSync(join(root, "Season 1"), join(root, "shortcut"));
@@ -151,8 +202,8 @@ test("routes: folders pinned by any member who may write, kept in config.json; r
   let told = 0;
   const drive = new Drive({ config: () => config.raw(), protect: () => [data] });
   const table = routes({ drive, config, home: base, changed: () => told++ });
-  assert.deepEqual((await ask(table, request("GET", "/drive"))).json, { roots: [], manage: false, write: true, anywhere: true, home: base });
-  assert.deepEqual((await ask(table, request("GET", "/drive", {}, null, "viewer"))).json, { roots: [], manage: false, write: false });
+  assert.deepEqual((await ask(table, request("GET", "/drive"))).json, { roots: [], manage: false, write: true, anywhere: true, home: base, ...CAN, zip: true });
+  assert.deepEqual((await ask(table, request("GET", "/drive", {}, null, "viewer"))).json, { roots: [], manage: false, write: false, ...CAN });
   assert.equal((await ask(table, request("PUT", "/drive/roots", {}, { roots: [root] }, "viewer"))).status, 403);
   assert.equal((await ask(table, request("GET", "/drive/folders", {}, null, "viewer"))).status, 403);
   mkdirSync(join(base, ".hidden"));
@@ -291,7 +342,7 @@ test("a workspace the station joined keeps its own pinned folders, and reaches t
   const theirs = (r: Request, role = "member") => ({ ...r, viewer: { ...r.viewer, role, workspace: "w2", home: false } });
   const season = join(root, "Season 1");
   // Theirs: none pinned yet, the whole machine for a member who may write, as for the home workspace's.
-  assert.deepEqual((await ask(table, theirs(request("GET", "/drive")))).json, { roots: [], manage: false, write: true, anywhere: true, home: base });
+  assert.deepEqual((await ask(table, theirs(request("GET", "/drive")))).json, { roots: [], manage: false, write: true, anywhere: true, home: base, ...CAN, zip: true });
   assert.equal((await ask(table, theirs(request("GET", "/drive/list", { root, path: "" })))).status, 200);
   // Each workspace pins its own list.
   assert.equal((await ask(table, request("PUT", "/drive/roots", {}, { roots: [root] }))).status, 200);

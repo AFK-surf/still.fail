@@ -130,7 +130,8 @@ export const PARAMS: Record<string, string> = {
   "drive.folders": "path?:string",
   "drive.mkdir": "root:string path:string",
   "drive.rename": "root:string from:string to:string",
-  "drive.remove": "root:string path:string",
+  "drive.remove": "root:string path:string permanent?:boolean",
+  "drive.zip": "root:string path:string",
   "drive.stage": "root:string path:string zip?:boolean",
   "software.auto": "on?:boolean",
   "workspace.create": "name?:string invite_code?:string",
@@ -431,7 +432,10 @@ function stationOp(name: string, params: unknown): Request | null {
     case "drive.rename":
       return op("POST", () => "/drive/rename", p.pick(["root", "from", "to"]), drive(p.str("root"), [p.str("from"), p.str("to")]));
     case "drive.remove":
-      return op("POST", () => "/drive/remove", p.pick(["root", "path"]), drive(p.str("root"), [p.str("path")]));
+      return op("POST", () => "/drive/remove", p.pick(["root", "path", "permanent"]), drive(p.str("root"), [p.str("path")]));
+    // A folder zipped on the station to download: where the zip is, read as a file of the drive (`drive.read`).
+    case "drive.zip":
+      return op("POST", () => "/drive/zip", p.pick(["root", "path"]), NONE);
     // A file of the drive (a folder: zipped there) put among the uploads, as one sent up would be, for a message to send
     // (the phone's Station 文件 switched to a file; the web's composer stages its own: composer.ts).
     case "drive.stage":

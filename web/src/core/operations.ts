@@ -77,7 +77,8 @@ export interface OperationParams {
   "drive.folders": { path?: string | null | undefined };
   "drive.mkdir": { root: string; path: string };
   "drive.rename": { root: string; from: string; to: string };
-  "drive.remove": { root: string; path: string };
+  "drive.remove": { root: string; path: string; permanent?: boolean | null | undefined };
+  "drive.zip": { root: string; path: string };
   "drive.stage": { root: string; path: string; zip?: boolean | null | undefined };
   "software.auto": { on?: boolean | null | undefined };
   "workspace.create": { name?: string | null | undefined; invite_code?: string | null | undefined };
@@ -193,6 +194,7 @@ export function bindStationOperations(call: Call) {
     driveMkdir: <T = unknown>(params: OperationParams["drive.mkdir"]) => call("drive.mkdir", params) as Promise<T>,
     driveRename: <T = unknown>(params: OperationParams["drive.rename"]) => call("drive.rename", params) as Promise<T>,
     driveRemove: <T = unknown>(params: OperationParams["drive.remove"]) => call("drive.remove", params) as Promise<T>,
+    driveZip: <T = unknown>(params: OperationParams["drive.zip"]) => call("drive.zip", params) as Promise<T>,
     driveStage: <T = unknown>(params: OperationParams["drive.stage"]) => call("drive.stage", params) as Promise<T>,
     softwareAuto: <T = unknown>(params: OperationParams["software.auto"] = {}) => call("software.auto", params) as Promise<T>,
   };

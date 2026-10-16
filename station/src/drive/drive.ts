@@ -9,9 +9,12 @@
 import { constants, statSync } from "node:fs";
 import { copyFile, lstat, mkdir, open, readdir, realpath, rename, rm, stat, unlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
 import { platform } from "../platform/index.ts";
 import { unreadableDir } from "../ops/files.ts";
 import { TooBig, zipFolder } from "./zip.ts";
+import { toTrash } from "./trash.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 
 /// Why a request was refused (zdrive's codes, and `protected` for the station's own data), each with its status.
@@ -26,6 +29,7 @@ export const CODES = {
   not_a_directory: 409,
   exists: 409,
   upload_lost: 409,
+  no_trash: 409,
   too_large: 413,
   io: 500,
 } as const;
@@ -176,6 +180,8 @@ export type DriveDeps = {
   /// What no request may reach, even under a root (asked anew each time: a profile may be added meanwhile).
   protect: () => string[];
   now?: () => number;
+  /// Whose trash what is deleted goes to (the machine's home; a test's own).
+  home?: string;
 };
 
 export class Drive {
@@ -234,7 +240,8 @@ export class Drive {
       const dirents = await readdir(at.found, { withFileTypes: true });
       const entries: Entry[] = [];
       const protect = await this.protectedNow();
-      const visible = dirents.filter((d) => !PART.test(d.name));
+      // The first by the order shown (folders first, then by name) when there are more than are listed, not the disk's.
+      const visible = dirents.filter((d) => !PART.test(d.name)).sort((a, b) => (a.isDirectory() !== b.isDirectory() ? (a.isDirectory() ? -1 : 1) : collator.compare(a.name, b.name)));
       const shown = visible.slice(0, MOST_ENTRIES);
       for (let i = 0; i < shown.length; i += AT_ONCE) {
         const batch = await Promise.all(
@@ -420,17 +427,55 @@ export class Drive {
     }
   }
 
-  /// Removed, a folder with all it holds. The root itself is not.
-  async remove(root: string, path: string, anywhere = false): Promise<void> {
+  /// Put in the machine's trash (./trash.ts), as its own file browser does: `no_trash` where none takes it, for the
+  /// asker to say whether it goes for good. `permanent`: removed, a folder with all it holds. The root itself is not.
+  async remove(root: string, path: string, anywhere = false, permanent = false): Promise<void> {
     const at = await this.place(root, path, anywhere);
     if (at.parts.length === 0) throw new DriveError("invalid_request", "the root itself is not removed");
     try {
       // A link is removed as a link, not what it points at.
       await lstat(at.entry);
+      if (!permanent) {
+        if ((await toTrash(at.entry, this.deps.home)) === null) throw new DriveError("no_trash", "no trash takes it here");
+        return;
+      }
       await rm(at.entry, { recursive: true });
     } catch (e) {
       throw failed(e);
     }
+  }
+
+  /// A folder put into a zip of its own name (links not followed, the station's own data left out), for a member to
+  /// download it: made in a folder of its own in the machine's temporary files, read from there as any file of the
+  /// drive is (`root`, `path`); those made more than an hour ago are let go as another is made.
+  async zip(root: string, path: string, most: number, anywhere = false): Promise<{ root: string; path: string; name: string; size: number }> {
+    const at = await this.place(root, path, anywhere);
+    const name = `${at.parts.at(-1) ?? rootName(at.root)}.zip`;
+    const zips = join(tmpdir(), "stillfail-zips");
+    await sweep(zips, ZIPS_KEPT_MS);
+    const dir = join(zips, randomUUID());
+    try {
+      if (!(await stat(at.found)).isDirectory()) throw new DriveError("not_a_directory", "that is a file");
+      await mkdir(dir, { recursive: true, mode: 0o700 });
+      const protect = await this.protectedNow();
+      const skip = async (p: string, n: string) => PART.test(n) || (await this.isProtected(p, await real(p), protect));
+      const size = await zipFolder(at.found, join(dir, name), most, skip);
+      return { root: dir, path: name, name, size };
+    } catch (e) {
+      await rm(dir, { recursive: true, force: true }).catch(() => {});
+      throw e instanceof TooBig ? new DriveError("too_large", TOO_BIG) : failed(e);
+    }
+  }
+
+  /// The folder at `path` as the file system has it, to watch (./watch.ts) for the asker, who may list it.
+  async folderToWatch(root: string, path: string, anywhere = false): Promise<string> {
+    const at = await this.place(root, path, anywhere);
+    try {
+      if (!(await stat(at.found)).isDirectory()) throw new DriveError("not_a_directory", "that is a file");
+    } catch (e) {
+      throw failed(e);
+    }
+    return at.found;
   }
 
   /// For the settings that name the roots: the folders in `path` (the home when none), for owners and admins to pick
@@ -497,5 +542,18 @@ export class Drive {
     if (!s.isDirectory()) throw about(new DriveError("not_a_directory", "not a folder"));
     if (await this.isProtected(clean, await real(clean))) throw about(new DriveError("protected", "the station's own data"));
     return clean;
+  }
+}
+
+/// How long a zip made for a download is kept.
+const ZIPS_KEPT_MS = 60 * 60_000;
+
+/// The folders in `dir` made more than `ms` ago, removed.
+async function sweep(dir: string, ms: number): Promise<void> {
+  const now = Date.now();
+  for (const name of await readdir(dir).catch(() => [] as string[])) {
+    const at = join(dir, name);
+    const s = await stat(at).catch(() => null);
+    if (s && now - s.mtimeMs > ms) await rm(at, { recursive: true, force: true }).catch(() => {});
   }
 }

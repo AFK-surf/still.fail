@@ -13,6 +13,7 @@ import type { ConfigFile } from "../../ops/config.ts";
 import { type Lang, tr } from "../../ops/i18n.ts";
 import { readOnly } from "../../mesh/credential.ts";
 import { CODES, Drive, DriveError, MAX_READ, MOST_ROOTS, TOO_BIG, rootsOf } from "../../drive/drive.ts";
+import { FolderWatches } from "../../drive/watch.ts";
 
 export type DriveRouteDeps = {
   drive: Drive; config: ConfigFile; home?: string; changed?: () => void;
@@ -58,12 +59,16 @@ const text = (v: unknown, name: string): string => {
 /// folder (`anywhere`), the home to start from.
 export const driveView = (drive: Drive, r: { viewer: Request["viewer"] }, home = homedir()) => ({
   roots: driveOf(drive, r).roots(), manage: manages(r), write: !readOnly(r.viewer), ...(anywhere(r) ? { anywhere: true, home } : {}),
+  // What is deleted goes to the machine's trash (macOS, Linux); folders are watched for what changes in them, and zipped
+  // to download.
+  ...(process.platform === "darwin" || process.platform === "linux" ? { trash: true } : {}), watch: true, ...(anywhere(r) ? { zip: true } : {}),
 });
 
 /// The most a file sent in a chat from the drive is (as an upload in parts).
 const MOST_STAGED = 1024 * 1024 * 1024;
 
 export function routes({ drive: whole, config, home = homedir(), changed, stage }: DriveRouteDeps): Route[] {
+  const watches = new FolderWatches();
   const at = (r: Request) => ({ root: param(r, "root") ?? "", path: param(r, "path") ?? "" });
   // Every route below goes through the asker's workspace's drive.
   const view = (r: Request) => driveView(whole, r, home);
@@ -155,8 +160,29 @@ export function routes({ drive: whole, config, home = homedir(), changed, stage 
       pattern: /^\/drive\/remove$/,
       handle: answer(async (r) => {
         const b = body(r);
-        await driveOf(whole, r).remove(text(b.root, "root"), text(b.path, "path"), anywhere(r));
+        await driveOf(whole, r).remove(text(b.root, "root"), text(b.path, "path"), anywhere(r), b.permanent === true);
         return {};
+      }),
+    },
+    {
+      // A folder zipped to download: where the zip is (a root of its own, read as any file of the drive is), for a member
+      // who reaches every folder.
+      method: "POST",
+      pattern: /^\/drive\/zip$/,
+      handle: answer(async (r) => {
+        if (!anywhere(r)) throw new DriveError("permission", "a read-only member does not download folders");
+        const b = body(r);
+        return driveOf(whole, r).zip(text(b.root, "root"), text(b.path, "path"), MOST_STAGED, true);
+      }),
+    },
+    {
+      // Answered once something in the folder changes (`{changed: true}`), else after a while (`false`), for the client to
+      // read it again (./drive/watch.ts). `id`: the client's own asking, kept between its askings.
+      method: "GET",
+      pattern: /^\/drive\/watch$/,
+      handle: answer(async (r) => {
+        const dir = await driveOf(whole, r).folderToWatch(at(r).root, at(r).path, anywhere(r));
+        return { changed: await watches.changed(dir, param(r, "id") ?? "") };
       }),
     },
     ...(stage
