@@ -63,6 +63,14 @@ output inside it rather than elsewhere on that machine (or over ssh): it is remo
 this chat is archived or deleted, or after 14 days unused, which is what keeps the target's disk free. Pin inputs and
 versions: clone or fetch the intended revision there, or upload a bundle.
 
+To build or test a local working directory there (a checkout with uncommitted changes), prepare with `dir` (its
+absolute path here) instead of uploading: each start syncs it into a mirror on the target (named in prepare's answer,
+inside the session directory) and runs the command there. Only files Git tracks or would add (all but the usual build
+and dependency directories outside Git) go, and only what changed; the target's build output and dependencies stay
+warm. `back: [paths]` downloads outputs into `station-back/<key>/` here when the task ends. Synced files the command
+changed come back as `station-back/<key>/changes.patch`: review it and `git apply` it in the directory if wanted. One task
+at a time per mirror.
+
 `station_task` lists, inspects, tails or stops your remote tasks. Completion and notices survive reconnects and
 station restarts; no local polling job is needed. End `waiting`, naming the task. Download artifacts with
 `station_file` and post them to the requesting chat. Downloads create new files, never overwrite; inputs may be
