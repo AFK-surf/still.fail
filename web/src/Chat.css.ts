@@ -636,8 +636,9 @@ export const msgVideo = style({
 });
 globalStyle(`${msgVideo} video, ${msgVideo} img`, { width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" });
 globalStyle(`${msgVideo}[data-letterbox] video, ${msgVideo}[data-letterbox] img`, { objectFit: "contain" });
-// A letterboxed image on the chat itself, not on grey (a video keeps its black).
-globalStyle(`button${msgImage}[data-letterbox]:not(${msgVideo}):not([data-failed])`, { background: "none" });
+// An image on the chat itself, not on grey, once it shows (and a letterboxed one throughout): its clear parts, a window
+// screenshot's shadow, show the chat rather than a grey edge. The grey is only its box waiting. (A video keeps its black.)
+globalStyle(`button${msgImage}:is([data-loaded], [data-letterbox]):not(${msgVideo}):not([data-failed])`, { background: "none" });
 export const msgVideoPlay = style({
   position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
   width: "40px", height: "40px", display: "grid", placeItems: "center", borderRadius: "50%",

@@ -246,7 +246,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
         borderRadius: target.radius,
       });
       picture.stand.style.setProperty("corner-shape", target.corner);
-      // Its box's ground comes in on the way (the thumbnail has none): landed, a picture with clear parts is on it.
+      // Its box's ground, if it has one, comes in on the way (the thumbnail has none): landed, it is on what the message's is.
       picture.stand.style.backgroundColor = target.ground;
       // Its corners from the thumbnail's to the message's, as its box grows.
       moves.push(picture.stand.animate([
@@ -491,8 +491,8 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
         picture.stand.dataset.flying = "";
         corners(picture.stand, target);
       }
-      // Its corners from the thumbnail's to the message's, and its box's ground coming in (the thumbnail has none):
-      // landed, it is as the message draws it, a picture with clear parts on that ground.
+      // Its corners from the thumbnail's to the message's, and its box's ground, if it has one, coming in (the thumbnail
+      // has none): landed, it is as the message draws it.
       const style = getComputedStyle(target);
       picture.ground ??= style.backgroundColor;
       const radius = parseFloat(style.borderTopLeftRadius) || 0;
