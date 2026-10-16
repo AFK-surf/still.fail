@@ -62,6 +62,11 @@ const joining = (kind: "list" | "none" | "error"): DemoExtension => ({
   topic: (t) => (t.topic === "joinable" ? (kind === "none" ? JOINABLE_NONE : JOINABLE) : undefined),
   call: (name) => (name === "station.join" ? (kind === "error" ? Promise.reject(new Error(JOIN_REFUSED)) : { joined: null }) : undefined),
 });
+/** A workspace with no station yet (its first station's page), with stations of other workspaces to add. */
+const firstJoining: DemoExtension = {
+  topic: (t) => (t.topic === "joinable" ? JOINABLE : t.topic === "stations" ? [] : undefined),
+  call: (name) => (name === "station.join" ? { joined: null } : undefined),
+};
 /** The demo's station in Lab too, its profile open to Lab (`on`) or not: the profile's page offers the switch. */
 const profileFor = (on: boolean): DemoExtension => ({
   topic: (t) => (t.topic === "memberships" ? MEMBERSHIPS : undefined),
@@ -272,6 +277,8 @@ export const stories: Story[] = [
   { id: "app-station-workspaces", group: "应用", title: "station · 在几个 workspace 里", app: true, demo: memberships(), steps: [{ click: '[aria-label^="Station"]' }] },
   { id: "app-station-joined", group: "应用", title: "station · 从别的 workspace 加入的", app: true, demo: memberships(true), steps: [{ click: '[aria-label^="Station"]' }, { text: "Mini1" }] },
   { id: "app-station-add-existing", group: "应用", title: "添加 station · 已有的", app: true, demo: joining("list"), steps: [{ click: '[aria-label^="Station"]' }, { text: "添加 station" }, { text: "已有的 station" }] },
+  { id: "app-first-station-existing", group: "应用", title: "第一台 station · 也可加已有的", app: true, demo: firstJoining },
+  { id: "app-first-station-existing-open", group: "应用", title: "第一台 station · 选已有的", app: true, demo: firstJoining, steps: [{ text: "把别的 workspace 已有的 station 加进来" }] },
   { id: "app-station-add-existing-none", group: "应用", title: "添加 station · 已有的 · 没有", app: true, demo: joining("none"), steps: [{ click: '[aria-label^="Station"]' }, { text: "添加 station" }, { text: "已有的 station" }] },
   { id: "app-station-add-existing-error", group: "应用", title: "添加 station · 加入失败", app: true, demo: joining("error"), steps: [{ click: '[aria-label^="Station"]' }, { text: "添加 station" }, { text: "已有的 station" }, { text: "加进来" }] },
   { id: "app-profile", group: "应用", title: "Profile", app: true, steps: [{ click: '[aria-label="Profile"]' }] },

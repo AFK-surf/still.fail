@@ -762,6 +762,9 @@ function EnrollSteps({ enrollment }: { enrollment: { install: string; installWin
 export function FirstStation({ entry }: { entry: WorkspaceEntry }) {
   const { view, manager } = useWorkspace(entry);
   const [name, setName] = useState("");
+  // A station the viewer manages in another workspace, added here as it is instead (docs/multi-workspace.md).
+  const joinable = useJoinable(entry.id).value;
+  const [existing, setExisting] = useState(false);
   const enroll = useAction(() => cloud.enroll(entry.account.sub, entry.id, name));
   const shown = useRef(0);
   useEffect(() => { if (enroll.result) shown.current = performance.now(); }, [enroll.result]);
@@ -781,6 +784,8 @@ export function FirstStation({ entry }: { entry: WorkspaceEntry }) {
       </Field>
       {enroll.error && <p className={controlsCss.fieldError} role="alert">{enroll.error.message}</p>}
       <JoinThisMac account={entry.account} workspace={entry.id} className={css.firstThisMac} />
+      {joinable?.offered && <Button icon={Server} className={css.firstThisMac} onClick={() => setExisting(true)}>{t("web-pages.settings.stations.firstExisting")}</Button>}
+      {existing && joinable?.offered && <JoinStationDialog view={view} joinable={joinable} onKind={(kind) => { if (kind === "new") setExisting(false); }} onClose={() => setExisting(false)} />}
     </div>
   );
 }

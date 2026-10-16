@@ -154,7 +154,8 @@ function StationBody({ s }: { s: StationView }) {
  * Adding a station: a name, then the command to run on that machine (which installs ember and joins it); the sheet
  * waits for it to join.
  */
-export function AddStationSheet({ known }: { known: string[] }) {
+/// `existing`: a station of another workspace first (the first station's page asks for it).
+export function AddStationSheet({ known, existing: first = false }: { known: string[]; existing?: boolean }) {
   const app = useApp();
   const me = app.entry.account;
   const stations = useStations(app.entry.id).value ?? [];
@@ -165,7 +166,7 @@ export function AddStationSheet({ known }: { known: string[] }) {
   const joined = made && stations.find((s) => !known.includes(s.id));
   // A station the viewer manages in another workspace, offered beside a new machine (docs/multi-workspace.md).
   const joinable = useJoinable(app.entry.id).value;
-  const [existing, setExisting] = useState(false);
+  const [existing, setExisting] = useState(first);
   return (
     <>
       <SheetGrab />
@@ -327,6 +328,7 @@ export function FirstStation() {
   const [made, setMade] = useState<{ install: string } | null>(null);
   const busy = useDoing("workspace.enroll", { account: app.entry.account.sub, workspace: app.entry.id });
   const [error, setError] = useState<string | null>(null);
+  const joinable = useJoinable(app.entry.id).value;
   const shown = useRef(0);
   useEffect(() => { if (made) shown.current = performance.now(); }, [made]);
   // Joined: the page is gone (the workspace has a station), so this is said as it goes.
@@ -349,6 +351,9 @@ export function FirstStation() {
                 setError(null);
                 cloud.enroll(app.entry.account.sub, app.entry.id, name.trim()).then(setMade, (e: Error) => setError(e.message));
               }} />
+              {/* A station the viewer manages in another workspace, added here as it is instead (docs/multi-workspace.md). */}
+              {joinable?.offered && <Button label={t("web-pages.settings.stations.firstExisting")} primary={false}
+                onClick={() => app.sheet({ height: 0.72, draggable: true, content: () => <AddStationSheet known={[]} existing /> })} />}
             </>
           )}
       </div>
