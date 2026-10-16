@@ -116,7 +116,9 @@ export type Topic =
   // A station in several workspaces (client/core-ts/src/views/memberships.ts): the stations of the viewer's other
   // workspaces that could be added to this one, and the workspaces a station is in. A core from before has neither.
   | { topic: "joinable"; workspace: string }
-  | { topic: "memberships"; station: string };
+  | { topic: "memberships"; station: string }
+  // A station's screens a person can see and drive (docs/remote-screens.md): a core from before it answers an error.
+  | { topic: "screens"; station: string };
 
 /** A chat as a page shows it (`client.focus`): by its thread, or its key before it has one; `end`: its end in view. */
 export interface ChatShown { station: string; thread: number | null; session: string | null; end?: boolean }
@@ -169,8 +171,8 @@ export type Opener = (onMessage: (data: unknown) => void, onFail: (reason: strin
 interface Pending {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
-  /** How far the call has got, for one that says so (a file asked for with `progress`). */
-  onProgress?: ((value: unknown) => void) | undefined;
+  /** How far the call has got, for one that says so (a file asked for with `progress`); `bytes` beside a value that carries some (a screen view's frame). */
+  onProgress?: ((value: unknown, bytes?: Uint8Array) => void) | undefined;
 }
 
 interface Subscription {
@@ -248,7 +250,7 @@ export class CoreClient {
   }
 
   /** `signal` stops the call while it is under way; it then fails with `cancelled`. */
-  call(name: string, params: unknown = {}, onProgress?: (value: unknown) => void, signal?: AbortSignal): Promise<unknown> {
+  call(name: string, params: unknown = {}, onProgress?: (value: unknown, bytes?: Uint8Array) => void, signal?: AbortSignal): Promise<unknown> {
     if (this.#closed) return Promise.reject(new CoreError({ code: "closed", message: t("web-main.core.closed") }));
     if (signal?.aborted) return Promise.reject(new CoreError({ code: "cancelled", message: t("web-main.core.cancelled") }));
     const id = this.#nextId++;
@@ -453,7 +455,7 @@ export class CoreClient {
   #receive(data: unknown): void {
     if (typeof data !== "object" || data === null) return;
     this.#heard++;
-    const message = data as { id?: number; ok?: unknown; value?: unknown; delta?: DeltaOp[]; error?: ErrorBody; fatal?: string; fault?: WorkerFault; retired?: boolean; rejoin?: boolean };
+    const message = data as { id?: number; ok?: unknown; value?: unknown; bytes?: Uint8Array; delta?: DeltaOp[]; error?: ErrorBody; fatal?: string; fault?: WorkerFault; retired?: boolean; rejoin?: boolean };
     // A newer build's core took over: this page is of the older build, so it loads the newer one.
     if (message.retired) {
       location.reload();
@@ -481,7 +483,7 @@ export class CoreClient {
     if (call) {
       // Values under a call's id tell how far it has got; its answer comes after them.
       if ("value" in message && !message.error) {
-        call.onProgress?.(message.value);
+        call.onProgress?.(message.value, message.bytes);
         return;
       }
       this.#calls.delete(message.id);
@@ -712,7 +714,10 @@ export function desktopOpener(desktop: StillFailDesktop): Opener {
       } else if (data?.stillfailCore === "port" && data.id === id && !port && event.ports[0]) {
         port = event.ports[0];
         port.onmessage = (message) => {
-          if (!files.receive(message.data)) onMessage(JSON.parse(message.data as string));
+          if (files.receive(message.data)) return;
+          // JSON, or JSON with bytes beside it (a screen view's frame: apps/desktop/src/core.ts).
+          const data = message.data as string | { json: string; bytes: Uint8Array };
+          onMessage(typeof data === "string" ? JSON.parse(data) : { ...JSON.parse(data.json), bytes: data.bytes });
         };
         for (const message of early.splice(0)) port.postMessage(message);
       }

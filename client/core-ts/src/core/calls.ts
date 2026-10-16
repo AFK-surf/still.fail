@@ -2,6 +2,7 @@
 import { parseAdb, type AdbCall } from "../adb-parse.ts";
 import { parseAsk, type Ask } from "../asks-parse.ts";
 import { parseAttend, type AttendCall } from "../attend-parse.ts";
+import { parseScreen, type ScreenCall } from "../screens.ts";
 import { parseComposer, type ComposerAct } from "../composer.ts";
 import { conform } from "../conform.ts";
 import { CoreError } from "../error.ts";
@@ -91,12 +92,14 @@ export type Call =
   | { kind: "changelogSeen" }
   | { kind: "ask"; ask: Ask }
   | { kind: "adb"; call: AdbCall }
+  /// A station's screen seen and driven (screens.ts): `screen.view` and what goes on it.
+  | { kind: "screen"; call: ScreenCall }
   /// The workspace lock (views/lock.ts): `lock.<name>` on a workspace, with what it takes.
   | { kind: "lock"; name: string; workspace: string; params: Record<string, unknown> };
 
 /// Whether a UI can cancel it (`{id, cancel}`), and one gone does: the calls that hold something open for a page.
 export function cancellable(call: Call): boolean {
-  return (call.kind === "stationPreview" && call.stream) || call.kind === "previewSocket";
+  return (call.kind === "stationPreview" && call.stream) || call.kind === "previewSocket" || (call.kind === "screen" && call.call.kind === "view");
 }
 
 function opStation(op: ops.Request): string | null {
@@ -117,6 +120,8 @@ export function callStation(call: Call): string | null {
     }
     case "adb":
       return call.call.kind === "share" ? call.call.offer.station : null;
+    case "screen":
+      return call.call.kind === "view" ? call.call.station : null;
     case "decisionForm":
     case "policyForm":
     case "profileFlow":
@@ -777,6 +782,8 @@ export function parseCall(name: string, params: unknown): Call {
   const p = orEmpty(params);
   const adb = parseAdb(name, p);
   if (adb) return { kind: "adb", call: adb };
+  const screen = parseScreen(name, p);
+  if (screen) return { kind: "screen", call: screen };
   const ask = parseAsk(name, p);
   if (ask) return { kind: "ask", ask };
   const op = ops.request(name, p);

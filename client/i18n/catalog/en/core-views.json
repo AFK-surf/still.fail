@@ -412,5 +412,19 @@
   "core-views.profiles.sharedWith": "Shared with {stations}",
   "core-views.profiles.sharedNone": "Shared; no other station uses it yet",
   "core-views.profiles.ownLogin": "Signed in here on its own",
-  "core-views.profiles.ownKey": "This station's own key"
+  "core-views.profiles.ownKey": "This station's own key",
+  "core-views.screen.and": ", ",
+  "core-views.screen.many": "{names} and {more} more",
+  "core-views.screen.kind.desktop": "Desktop",
+  "core-views.screen.kind.browser": "Browser tab",
+  "core-views.screen.on": "{names} on it",
+  "core-views.screen.outdated": "Update this station to see its screens",
+  "core-views.screen.gone": "This screen is gone",
+  "core-views.screen.denied": "This screen can't be seen right now",
+  "core-views.screen.ended": "Ended",
+  "core-views.screen.lost": "Lost the connection to this screen",
+  "core-views.screen.reconnecting": "Connection lost, reconnecting",
+  "core-views.screen.control": "Controlling",
+  "core-views.screen.watch": "View only",
+  "core-views.screen.alsoOn": "{names} also on it"
 }

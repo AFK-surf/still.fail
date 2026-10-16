@@ -19,7 +19,9 @@ export type ClientMessage =
 export type CoreMessage =
   | { id: RequestId; ok: unknown }
   | { id: RequestId; error: CoreError }
-  | { id: RequestId; value: unknown }
+  /// `bytes`: a call's value may carry bytes beside its JSON (a screen view's frames): the web transfers them, the
+  /// native hosts hand them over as they are (never as base64 in the JSON).
+  | { id: RequestId; value: unknown; bytes?: Uint8Array }
   | { id: RequestId; delta: AnyOp[] };
 
 /// What a UI can subscribe to: `{ topic, …params }`, its params as protocol.rs declares them (defaults filled, absent
@@ -98,6 +100,7 @@ export const TOPICS: Record<string, Spec> = {
   lock: { workspace: S },
   joinable: { workspace: S },
   memberships: { station: S },
+  screens: { station: S },
   lockDraft: { workspace: S },
 };
 
@@ -146,7 +149,7 @@ export function sameTopic(a: Topic, b: Topic): boolean {
   return topicKey(a) === topicKey(b);
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "drive"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "drive", "screens"]);
 const VIEWS = new Set(["chats", "stations", "profiles", "connects", "chat", "history", "agentCard", "chatSearch", "archive", "chatJobs", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "adminList", "adminItem", "adminOverview"]);
 
 /// The station a station topic belongs to; null for the account topics, the core's own and the views.

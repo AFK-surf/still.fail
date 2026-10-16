@@ -14,6 +14,8 @@ const shell: Native = {
   call: (id, op, json, bytes) => native.call(id, op, json, bytes === null ? undefined : (bytes.buffer as ArrayBuffer).slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)),
   callSync: (op, json) => native.callSync(op, json),
   emit: (client, json) => native.emit(client, json),
+  // The frame's own buffer when it is all of it (as the screen views make them), else its bytes copied out.
+  emitBytes: (client, json, bytes) => native.emitBytes(client, json, (bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength ? bytes.buffer : bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)) as ArrayBuffer),
   now: () => native.now(),
   monotonic: () => native.monotonic(),
   utcOffset: (at) => native.utcOffset(at),

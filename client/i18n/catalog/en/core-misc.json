@@ -184,5 +184,13 @@
   "core-misc.composer.upload_missing": "The upload source for {name} is no longer available. Attach the file again in a new message.",
   "core-misc.composer.upload_failed": "Upload failed",
   "core-misc.lock.stationOld": "{name} is too old; update it first",
-  "core-misc.lock.stationOffline": "Can't reach {name}; add it once it's online"
+  "core-misc.lock.stationOffline": "Can't reach {name}; add it once it's online",
+  "core-misc.screen.opening": "Opening a screen",
+  "core-misc.screen.noWire": "Station screens can't be viewed here",
+  "core-misc.screen.timeout": "The screen did not open: the station did not answer",
+  "core-misc.screen.noCodec": "No format this device can decode",
+  "core-misc.screen.badInput": "Input not understood",
+  "core-misc.screen.closed": "This screen view is closed",
+  "core-misc.screen.open": "A screen view of this name is already open",
+  "core-misc.screen.garbled": "The screen's data could not be read: {error}"
 }

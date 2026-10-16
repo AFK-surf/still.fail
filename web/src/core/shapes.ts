@@ -2762,8 +2762,8 @@ export interface KeptTabs {
 /**
  * What one of still.fail's links opens in the app (`link.parse`): `invite` (`token`), a chat's page (`chat`), or an
  * item (`item`: its `session`, and `service` its web service), each maybe with `history`, one of its agents' execution
- * history (at `entry`); `history` alone (`?history=…`): that history in the chat the link is in. The call answers null
- * for any other link.
+ * history (at `entry`); `history` alone (`?history=…`): that history in the chat the link is in; `screen`, one of a
+ * station's screens (docs/remote-screens.md). The call answers null for any other link.
  */
 export interface LinkTarget {
 	opens: string;
@@ -2775,6 +2775,8 @@ export interface LinkTarget {
 	service?: string;
 	history?: string;
 	entry?: number;
+	/** For `screen`: the screen's id on the station (`/w/<workspace>/s/<station>/screen/<id>`). */
+	screen?: string;
 }
 
 export interface TimelineEntry {
@@ -3706,6 +3708,73 @@ export interface PublishPreview {
 	hidden: number;
 	/** That in words (隐藏了 3 处); absent when none. */
 	hiddenText?: string;
+}
+
+/** Where a screen's pointer is, as its station says. */
+export interface ScreenCursor {
+	/** 0..1 of the frame's width. */
+	x: number;
+	/** 0..1 of the frame's height. */
+	y: number;
+	/** A CSS cursor name (`default`, `pointer`, `text`…). */
+	shape?: string;
+}
+
+/** A screen of a station a person can see and drive (docs/remote-screens.md). */
+export interface ScreenItem {
+	/** The station's: `desktop`, `browser:<targetId>`. */
+	id: string;
+	/** `desktop` (the station machine's display) or `browser` (a tab of the station's browser). */
+	kind: string;
+	title: string;
+	width: number;
+	height: number;
+	/** Who is on it now, by name. */
+	viewers?: string[];
+	/** What the core says of it under its title: what it is, its size, who is on it (core). */
+	line: string;
+	/** Its page in the app: `/w/<workspace>/s/<station>/screen/<id>` (the id encoded), as the agents' links name it. */
+	link: string;
+}
+
+/** A screen view as its page draws it (`screen.view`'s `{state}` values): each one whole, the latest is how it is. */
+export interface ScreenViewState {
+	/**
+	 * `connecting`, `live`, `reconnecting`, `ended` (the station ended it, or the screen went), `outdated` (the
+	 * station is from before screens), `gone` (no such screen), `denied` (it cannot be seen now: no permission to
+	 * capture, no display) or `failed`.
+	 */
+	phase: string;
+	/** Why, in the viewer's words, for a phase that is not `connecting` or `live`. */
+	message?: string;
+	title: string;
+	kind?: string;
+	/** Driving it now: input goes to the station (else only seen). */
+	control: boolean;
+	/** May drive it (not a read-only member). */
+	may: boolean;
+	/** The other people on it now, by name. */
+	others: string[];
+	/** What the viewer's bar says: 只看 or 控制, and who else is on it (core). */
+	line: string;
+	/** `h264` or `jpeg`, once the first config came. */
+	codec?: string;
+	width?: number;
+	height?: number;
+	cursor?: ScreenCursor;
+}
+
+/** A station's screens (the `screens` topic; docs/remote-screens.md, client/core-ts/src/screens.ts). */
+export interface ScreensView {
+	screens: ScreenItem[];
+	/** The station is from before screens: it has none to show until it is updated. */
+	outdated: boolean;
+	/** The viewer may drive them (a read-only member only sees). */
+	control: boolean;
+	/** The station said which it has (false while it has not been reached since the core started). */
+	known: boolean;
+	/** Why there are none to show, when there is a reason (the station needs an update, is offline). */
+	note?: string;
 }
 
 /** A session with its threads and turns (`session` topic). */

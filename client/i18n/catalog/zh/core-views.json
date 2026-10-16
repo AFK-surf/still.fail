@@ -340,5 +340,19 @@
   "core-views.profiles.sharedWith": "分享给 {stations}",
   "core-views.profiles.sharedNone": "已分享，还没有别的 station 在用",
   "core-views.profiles.ownLogin": "在这台单独登录",
-  "core-views.profiles.ownKey": "这台自己的 key"
+  "core-views.profiles.ownKey": "这台自己的 key",
+  "core-views.screen.and": "、",
+  "core-views.screen.many": "{names} 等 {more} 人",
+  "core-views.screen.kind.desktop": "桌面",
+  "core-views.screen.kind.browser": "浏览器标签页",
+  "core-views.screen.on": "{names} 在看",
+  "core-views.screen.outdated": "这台 station 需要更新才能远程看屏幕",
+  "core-views.screen.gone": "这个屏幕已经不在了",
+  "core-views.screen.denied": "现在看不了这个屏幕",
+  "core-views.screen.ended": "已结束",
+  "core-views.screen.lost": "连不上这个屏幕",
+  "core-views.screen.reconnecting": "连接断了，正在重连",
+  "core-views.screen.control": "控制",
+  "core-views.screen.watch": "只看",
+  "core-views.screen.alsoOn": "{names} 也在看"
 }

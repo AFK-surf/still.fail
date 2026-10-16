@@ -27,6 +27,7 @@ import { Kind, SAMPLE, Tracer } from "./trace.ts";
 import { Wakes, WakingHost } from "./wake.ts";
 import { Workspaces } from "./workspace.ts";
 import { install as installStationCalls } from "./station/calls.ts";
+import { install as installScreens } from "./screens.ts";
 import { Composers, install as installComposer } from "./composer.ts";
 import { StationsSync } from "./station/sync.ts";
 import { StationTopics } from "./station/topics.ts";
@@ -59,8 +60,8 @@ export const CREDENTIAL_OTHERS_KEPT = 8;
 /// Where this device's push registration is kept.
 export const PUSH_KEY = "push";
 
-/// How far a call has got, for a UI that asked to hear it.
-export type Progress = (value: unknown) => void;
+/// How far a call has got, for a UI that asked to hear it; `bytes` go beside the value, not in it (protocol.ts).
+export type Progress = (value: unknown, bytes?: Uint8Array) => void;
 
 export type Options = {
   /// How the core reaches stations: the mesh by default; tests' stations answer over the host's fetch.
@@ -190,6 +191,7 @@ export class Core {
       inner.stationTopics = new StationTopics(inner, inner.stations);
       inner.router.owners.push(inner.stationTopics);
       installStationCalls();
+      installScreens();
       inner.composers = new Composers(inner);
       installComposer();
       inner.views = new Views(envOf(inner));
@@ -350,7 +352,7 @@ export class Core {
     const loads = call.kind === "stationPreview" ? inner.workspaces.ofStation(call.station).part("previewLoad", () => new Loads()) : null;
     const resource = loads !== null && call.kind === "stationPreview" ? loads.start(call.station, call.port, call.method, call.path, call.headers, inner.host.nowMs()) : null;
     if (resource) inner.store.invalidate(resource[0]);
-    const progress: Progress = (value) => {
+    const progress: Progress = (value, bytes) => {
       const head = isObject(value) && isObject(value.head) ? value.head : null;
       if (loads && resource && head && typeof head.status === "number") {
         loads.head(resource, head.status);
@@ -359,7 +361,7 @@ export class Core {
         if (stream) loads.end(resource, inner.host.nowMs(), null);
         inner.store.invalidate(resource[0]);
       }
-      inner.host.emit(client, { id, value });
+      inner.host.emit(client, bytes === undefined ? { id, value } : { id, value, bytes });
     };
     const key = `${client}/${id}`;
     const stoppable = cancellable(call);

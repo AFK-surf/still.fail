@@ -11,7 +11,7 @@ import { stationWhat } from "../status.ts";
 import { Kind, route, type Span, type SpanContext } from "../trace.ts";
 import { get, hex, isObject, parseJson, toJsonBytes } from "../util.ts";
 import type { StationAddr } from "./addr.ts";
-import { concat, readAll, replyHeader, type RequestHead, type StationWire, type WireReply, type WireSocket } from "./wire.ts";
+import { concat, readAll, replyHeader, type RequestHead, type ScreenAsk, type StationWire, type WireReply, type WireSocket } from "./wire.ts";
 
 export const IDEMPOTENCY_KEY = "idempotency-key";
 /// A request that only reads though it is no GET (POST /changed/<list>, what is held in its body): asked again on
@@ -434,6 +434,42 @@ export class Requests {
         return yield* Effect.fail(httpError(socket.reply.status, data === undefined ? {} : data));
       }
       return socket;
+    });
+  }
+
+  /// A view of the station's screen `id` (docs/remote-screens.md): open once the station answers 200, its frames
+  /// both ways then (screen-frames.ts). A station that refuses says why (`httpError`: 404 no such screen, or no such
+  /// route on a station from before screens). A station from before screens that takes the stream for a request
+  /// waits for a body never finished: the open is given up after SOCKET_OPEN_MS.
+  screenView(station: StationAddr, id: string, ask: ScreenAsk, ctx: SpanContext | null): Effect.Effect<WireSocket, CoreError, Scope.Scope> {
+    return Effect.gen({ self: this }, function* () {
+      const full = `/admin/api/screens/${encode(id)}/view`;
+      const waiting = this.#status(station).begin({ station: station.toString() }, t("core-misc.screen.opening"), false);
+      const span = this.#core.tracer.span(`SCREEN ${route(full)}`, Kind.Client, ctx);
+      span.set("url.path", route(full));
+      span.set("stillfail.stream", true);
+      const head: RequestHead = { method: "POST", path: full, headers: [["traceparent", span.context.traceparent()], [LANG_HEADER, current()]] };
+      const opening = this.wire.screen ? this.wire.screen(station, head, ask) : Effect.fail(new CoreError("unsupported", t("core-misc.screen.noWire")));
+      const opened = yield* Effect.result(
+        Effect.raceFirst(
+          opening,
+          Effect.sleep(SOCKET_OPEN_MS).pipe(Effect.andThen(Effect.fail(new CoreError("timeout", t("core-misc.screen.timeout"))))),
+        ).pipe(Effect.ensuring(Effect.sync(() => waiting.end()))),
+      );
+      if (opened._tag === "Failure") {
+        failed(span, opened.failure);
+        span.end();
+        return yield* Effect.fail(opened.failure);
+      }
+      const view = opened.success;
+      answered(span, view.reply);
+      span.end();
+      if (view.reply.status !== 200) {
+        const bytes = yield* Effect.orElseSucceed(readAll(view.reply.body), () => empty);
+        const data = parseJson(bytes);
+        return yield* Effect.fail(httpError(view.reply.status, data === undefined ? {} : data));
+      }
+      return view;
     });
   }
 }

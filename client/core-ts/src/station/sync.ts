@@ -91,7 +91,7 @@ export class StationsSync {
   /// What the station topics want of a stream beyond what the sync wants (host samples, logs, sessions shown).
   wanted: (address: string) => { host: boolean; live: string[]; logs: [string, number][] } = () => ({ host: false, live: [], logs: [] });
   /// Told when what a station holds beyond the records changed (link, live views, host, logs).
-  onChange: (address: string, what: "link" | "live" | "host" | "log" | "errors", key?: string) => void = () => {};
+  onChange: (address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens", key?: string) => void = () => {};
   /// Told of entries that came as they were said (an event): they come in with a motion.
   onTold: (address: string, id: number, entries: unknown[]) => void = () => {};
 
@@ -156,6 +156,8 @@ export class StationsSync {
   /// swept as a reading of everything would.
   #goesOn(address: string, how: { away: boolean; restored: boolean }): void {
     if (how.away) this.#catchUpShown(address);
+    // Its screens are held in memory only: read again whenever the stream was not there to hear them change.
+    if (how.away || how.restored || this.screens(address) === undefined) this.#enqueue(address, "screens", Priority.background, this.#screens(address));
     if (how.restored) this.#historyStart(address);
   }
 
@@ -181,6 +183,7 @@ export class StationsSync {
       ...this.#archivedChanged(address, ctx),
       this.#enqueue(address, "jobs", p, read({ topic: "jobs", station: address }, "/jobs")),
       this.#enqueue(address, "footprint", Priority.background, read({ topic: "footprint", station: address }, "/footprint")),
+      this.#enqueue(address, "screens", Priority.background, this.#screens(address, ctx)),
       ...this.#usageChanged(address, ctx),
       ...this.#slackConnects(address).map((id) => this.#enqueue(address, `slackApp/${id}`, Priority.background, read({ topic: "slackApp", station: address, connect: id }, `/connects/${encode(id)}/slack-app`))),
     ];
@@ -192,6 +195,36 @@ export class StationsSync {
     for (const topic of this.#core.store.liveTopics()) {
       if (topic.topic === "thread" && topic.station === address && typeof topic.thread === "number") this.channels.catchUp(entriesOf(address, topic.thread), Priority.shown);
     }
+  }
+
+  /// The station's screens as it has them now (docs/remote-screens.md), in memory only: what it shows is as it is. A
+  /// station from before screens has none (404): it is held so, and said (`outdated`).
+  #screens(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link || !this.reachable(address)) return;
+      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", "/screens", null, { quiet: true, ctx }));
+      if (answer._tag === "Success") this.#heldScreens(address, { screens: Array.isArray(get(answer.success, "screens")) ? (get(answer.success, "screens") as unknown[]) : [], outdated: false });
+      else if (answer.failure.status === 404) this.#heldScreens(address, { screens: [], outdated: true });
+      else return yield* Effect.fail(answer.failure);
+    });
+  }
+
+  #heldScreens(address: string, held: { screens: unknown[]; outdated: boolean }): void {
+    const link = this.#links.get(address);
+    if (!link) return;
+    link.memory.set("screens", held);
+    this.onChange(address, "screens");
+  }
+
+  /// What is held of the station's screens; undefined while it has not said.
+  screens(address: string): { screens: unknown[]; outdated: boolean } | undefined {
+    return this.#links.get(address)?.memory.get("screens") as { screens: unknown[]; outdated: boolean } | undefined;
+  }
+
+  /// The station's screens read now, for a person waiting on them (a view of one opened before they were known).
+  readScreens(address: string): Effect.Effect<void, CoreError> {
+    return this.ask(address, "screens", this.#screens(address));
   }
 
   /// A job's log as it is now (its `lines` last lines), once: its topic opened. The station's stream says how it grows
@@ -649,6 +682,10 @@ export class StationsSync {
         return;
       case "footprint":
         core.data.set({ topic: "footprint", station: address }, data);
+        return;
+      // Its screens came or went, or who is on them changed (docs/remote-screens.md).
+      case "screens":
+        this.#heldScreens(address, { screens: Array.isArray(get(data, "screens")) ? (get(data, "screens") as unknown[]) : [], outdated: false });
         return;
     }
   }
