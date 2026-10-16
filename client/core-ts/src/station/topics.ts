@@ -17,6 +17,7 @@ import { StationAddr } from "./addr.ts";
 import { PAGE, TRANSCRIPT_PAGE, entriesOf, transcriptOf } from "./channel-kinds.ts";
 import type { StationsSync } from "./sync.ts";
 import type { LinkNet } from "./wire.ts";
+import { screensChanged, screensView } from "../screens.ts";
 
 /// A chat shows a window of its thread's entries: at most this many.
 export const WINDOW = 3 * PAGE;
@@ -33,7 +34,7 @@ export function packetsSince(was: LinkNet["packets"], now: LinkNet["packets"]): 
   return { sent: now.sent - was.sent, lost: now.lost - was.lost };
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "job", "drive"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "job", "drive", "screens"]);
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
@@ -94,9 +95,13 @@ export class StationTopics implements Owner {
   #changed(address: string, what: string, key?: string): void {
     const store = this.#core.store;
     const of = (pick: (t: Topic) => boolean) => store.invalidateAll((t) => t.station === address && pick(t));
-    if (what === "link") of((t) => t.topic === "link" || t.topic === "live");
+    if (what === "link") of((t) => t.topic === "link" || t.topic === "live" || t.topic === "screens");
     else if (what === "live") of((t) => t.topic === "live" && (key === undefined || t.key === key));
     else if (what === "host") of((t) => t.topic === "host");
+    else if (what === "screens") {
+      of((t) => t.topic === "screens");
+      screensChanged(this.#core, address);
+    }
     else if (what === "log" || what === "errors") of((t) => key === undefined || topicKey(t) === key);
   }
 
@@ -193,6 +198,8 @@ export class StationTopics implements Owner {
         const v = link?.memory.get("host");
         return v === undefined ? undefined : { ok: v };
       }
+      case "screens":
+        return { ok: screensView(this.#core, station, this.#sync.screens(station), link?.state.state === "online") };
       case "jobLog": {
         const v = link?.memory.get(topicKey(topic));
         return v === undefined ? undefined : { ok: v };

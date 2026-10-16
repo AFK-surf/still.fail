@@ -9,6 +9,8 @@ export interface HermesNative {
   call(id: number, op: string, json: string, bytes: ArrayBuffer | undefined): void;
   callSync(op: string, json: string): string;
   emit(client: number, json: string): void;
+  /// A message with bytes beside its JSON (a screen view's frame): the bytes reach Kotlin as they are.
+  emitBytes(client: number, json: string, bytes: ArrayBuffer): void;
   fatal(reason: string): void;
   now(): number;
   monotonic(): number;

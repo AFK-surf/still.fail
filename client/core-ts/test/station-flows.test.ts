@@ -1068,7 +1068,9 @@ test("a_chat_open_is_asked_what_was_said_since_though_its_stream_came_back_told_
   await read();
   assert.equal(streams.at(-1)!.path, `/events?since=${encodeURIComponent("1f2e3d4c.9")}`);
   assert.deepEqual(nums(values), [1, 2, 3, 4, 5]);
-  const asked = host.requests.slice(from).flatMap(readsOf).filter((url) => url.includes("/admin/api/") && !url.includes("/events")).map((url) => url.replace("https://stillfail.test/admin/api", ""));
+  // Its screens are the exception: held in memory only and changing as people come and go, they are asked again
+  // whenever the stream was away (a small list; screens.ts).
+  const asked = host.requests.slice(from).flatMap(readsOf).filter((url) => url.includes("/admin/api/") && !url.includes("/events") && !url.endsWith("/screens")).map((url) => url.replace("https://stillfail.test/admin/api", ""));
   assert.deepEqual(asked, ["/threads/7/entries?after=3"]);
   // A stream that takes over from one still heard (an agent started: the stream follows it) was not away: nothing asked.
   const again = host.requests.length;

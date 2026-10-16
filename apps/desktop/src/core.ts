@@ -15,7 +15,8 @@ interface NodeCore {
   disconnect(client: number): void;
 }
 /** `channel`: "beta" for the beta app's core (main.ts BETA). */
-type Start = (dataDir: string, cloudOrigin: string, listener: (client: number, json: string) => void, channel?: string) => NodeCore;
+/** `bytes`: beside the JSON of a message that carries some (a screen view's frame). */
+type Start = (dataDir: string, cloudOrigin: string, listener: (client: number, json: string, bytes?: Uint8Array) => void, channel?: string) => NodeCore;
 
 const [dataDir, cloudOrigin, mesh, channel] = process.argv.slice(2) as [string, string, string, string | undefined];
 process.env.STILLFAIL_MESH_NATIVE ??= mesh;
@@ -30,13 +31,15 @@ interface Generation {
 
 function begin(): Generation {
   const generation: Generation = { core: null as unknown as NodeCore, clients: new Map(), dead: false };
-  generation.core = start(dataDir, cloudOrigin, (client, json) => {
+  generation.core = start(dataDir, cloudOrigin, (client, json, bytes) => {
     // `{"fatal": …}` goes to each of its clients (a bug that ended the core); from the first, new pages get a new core.
     if (!generation.dead && json.startsWith('{"fatal"')) {
       generation.dead = true;
       current = begin();
     }
-    generation.clients.get(client)?.postMessage(json);
+    // A message with bytes (a screen view's frame) goes as its JSON and the bytes beside it, not as base64 in the JSON
+    // (web/src/core/client.ts desktopOpener reads both).
+    generation.clients.get(client)?.postMessage(bytes === undefined ? json : { json, bytes });
   }, channel || undefined);
   return generation;
 }

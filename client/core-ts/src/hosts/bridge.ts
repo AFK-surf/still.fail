@@ -42,6 +42,8 @@ export interface Native {
   callSync(op: string, json: string): string;
   /// What the core says to one UI.
   emit(client: number, json: string): void;
+  /// What the core says to one UI with bytes beside it (a screen view's frame, protocol.ts): the JSON without them.
+  emitBytes(client: number, json: string, bytes: Uint8Array): void;
   now(): number;
   monotonic(): number;
   utcOffset(atMs: number): number;
@@ -227,7 +229,10 @@ export class BridgeHost implements Host {
     this.#bridge.native.random(buf);
   }
   emit(client: ClientId, message: CoreMessage): void {
-    this.#bridge.native.emit(client, JSON.stringify(message));
+    if ("bytes" in message && message.bytes !== undefined) {
+      const { bytes, ...rest } = message;
+      this.#bridge.native.emitBytes(client, JSON.stringify(rest), bytes);
+    } else this.#bridge.native.emit(client, JSON.stringify(message));
   }
 }
 

@@ -81,7 +81,13 @@ export interface StationWire {
   measure?(station: StationAddr): Effect.Effect<void, CoreError>;
   /// A preview page's WebSocket. Only the mesh carries one.
   socket?(station: StationAddr, head: RequestHead): Effect.Effect<WireSocket, CoreError, Scope.Scope>;
+  /// A view of one of the station's screens (docs/remote-screens.md): the head line carries `screen`, and the stream
+  /// stays open both ways (the station's answer, then frames each way: screen-frames.ts). Only the mesh carries one.
+  screen?(station: StationAddr, head: RequestHead, screen: ScreenAsk): Effect.Effect<WireSocket, CoreError, Scope.Scope>;
 }
+
+/// What a screen view asks for, as its head line's `screen` has it (docs/remote-screens.md).
+export type ScreenAsk = { maxWidth: number; maxHeight: number; codecs: string[]; control: boolean };
 
 export function noMeasure(): Effect.Effect<void, CoreError> {
   return Effect.fail(new CoreError("unsupported", t("station.core.oneWay")));
