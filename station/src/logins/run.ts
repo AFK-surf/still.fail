@@ -1,0 +1,370 @@
+// One login (docs/remote-login.md, 怎么做到): a login command run on this machine in a pseudo-terminal (the system's
+// `script`, 200 × 40), with stand-ins for the browser (BROWSER, and `open`, `xdg-open`, `osascript` first on its PATH)
+// that hand the page it would open to the station instead. What a person has to do is read from three places: the page
+// it opens, what it prints (pages, a device code, prompts), and whether it has stopped on a prompt. Its screen is kept by
+// a terminal emulator with no display (@xterm/headless), which also answers what the program asks of its terminal (the
+// cursor's place, the background colour: gh waits for both). Nothing it shows is logged or kept on disk.
+import { type ChildProcess } from "node:child_process";
+import { type FSWatcher, readFileSync, watch } from "node:fs";
+import { basename, dirname } from "node:path";
+import { StringDecoder } from "node:string_decoder";
+import xterm from "@xterm/headless";
+import type { Fibers } from "../ops/fibers.ts";
+import { type Lang, tr } from "../ops/i18n.ts";
+import { log } from "../ops/log.ts";
+import { endCommand, startCommand } from "../ops/processes.ts";
+import { platform } from "../platform/index.ts";
+import type { Description } from "./builtin.ts";
+import { type Loopback, asksEnter, deviceCodeIn, deviceUrls, loopbackOf, plainText, prompts, secretAsked, urlsIn } from "./parse.ts";
+
+export const COLS = 200;
+export const ROWS = 40;
+/// How long a login may take before it is ended (a device code lasts 5 to 15 minutes; a browser left open, as long).
+export const TIMEOUT_MS = 15 * 60_000;
+/// Output quiet this long: the command waits (on a prompt, or for the browser).
+export const QUIET_MS = 500;
+/// How much of what it said is kept to read (pages and codes come early).
+const SAID_KEPT = 32_000;
+/// An ended command's group is killed outright this long after it was asked to stop.
+const KILL_MS = 3_000;
+
+export type LoginState = "starting" | "browser" | "code" | "input" | "verifying" | "done" | "failed" | "cancelled";
+export type Step = "loopback" | "device" | "open" | "terminal";
+export type Key = "Enter" | "Backspace" | "Up" | "Down" | "Left" | "Right" | "Tab" | "Ctrl-C";
+
+export const KEYS: Record<Key, string> = { Enter: "\r", Backspace: "\u007f", Up: "\u001b[A", Down: "\u001b[B", Right: "\u001b[C", Left: "\u001b[D", Tab: "\t", "Ctrl-C": "\u0003" };
+
+export type Screen = { rows: string[]; cursor: { x: number; y: number }; echo: boolean; live: boolean };
+
+export type RunOptions = {
+  id: string;
+  command: string[];
+  /// The command's environment (PATH as the station's): the stand-ins are put first.
+  env: Record<string, string>;
+  cwd: string;
+  /// Where the stand-ins are (one directory for all logins), and the file this login's write the pages to.
+  shims: string;
+  opened: string;
+  description: Description | null;
+  fibers: Fibers;
+  lang: Lang;
+  /// Its state, step, page or code changed.
+  changed(): void;
+  /// Its screen changed.
+  drawn(): void;
+  /// Exit 0: who is logged in now (the description's status), read before it is done.
+  verify(): Promise<string | null>;
+};
+
+export class LoginRun {
+  readonly id: string;
+  readonly command: string[];
+  readonly startedAt: number;
+  readonly expiresAt: number;
+  state: LoginState = "starting";
+  step: Step | null = null;
+  url: string | null = null;
+  loopback: Loopback | null = null;
+  code: string | null = null;
+  codeUrl: string | null = null;
+  waiting = false;
+  echo = true;
+  error: string | null = null;
+  account: string | null = null;
+  endedAt: number | null = null;
+  /// Its callback was relayed (once only).
+  relayed = false;
+  /// Ended for want of time.
+  timedOut = false;
+  readonly #o: RunOptions;
+  #child: ChildProcess | null = null;
+  #term: InstanceType<typeof xterm.Terminal>;
+  #said = "";
+  #opened: string[] = [];
+  #rows: string[] = Array.from({ length: ROWS }, () => "");
+  #cursor = { x: 0, y: 0 };
+  #exited = false;
+  #quiet: (() => void) | null = null;
+  #timeout: () => void = () => {};
+  #watcher: FSWatcher | null = null;
+  /// The prompt last answered for the person (its line and place), so it is answered once.
+  #answered = "";
+
+  constructor(o: RunOptions) {
+    this.#o = o;
+    this.id = o.id;
+    this.command = o.command;
+    this.startedAt = o.fibers.now();
+    this.expiresAt = this.startedAt + TIMEOUT_MS;
+    this.#term = new xterm.Terminal({ cols: COLS, rows: ROWS, scrollback: 200, allowProposedApi: true });
+    // What the program asks of its terminal, answered as a terminal would: the cursor's place and the like by the
+    // emulator itself, the colours here (a light terminal).
+    this.#term.onData((reply) => this.#write(reply));
+    this.#term.parser.registerOscHandler(10, (data) => (data === "?" ? (this.#write("\u001b]10;rgb:0000/0000/0000\u001b\\"), true) : false));
+    this.#term.parser.registerOscHandler(11, (data) => (data === "?" ? (this.#write("\u001b]11;rgb:ffff/ffff/ffff\u001b\\"), true) : false));
+  }
+
+  get active(): boolean {
+    return this.endedAt === null;
+  }
+
+  /// The processes it runs as: `script` (or the command itself) and all it started.
+  async pids(): Promise<number[]> {
+    const pid = this.#child?.pid;
+    if (pid === undefined || this.#exited) return [];
+    return [pid, ...(await platform.descendants(pid))];
+  }
+
+  screen(): Screen {
+    return { rows: [...this.#rows], cursor: { ...this.#cursor }, echo: this.echo, live: this.active };
+  }
+
+  /// Starts the command; one that cannot be run ends failed, saying why.
+  async start(): Promise<void> {
+    const [program, ...args] = this.command;
+    const env: Record<string, string> = { ...(platform.prependPath(this.#o.env, this.#o.shims) as Record<string, string>) };
+    const browser = `${this.#o.shims}/${platform.exe("browser")}`;
+    Object.assign(env, {
+      TERM: "xterm-256color",
+      COLUMNS: String(COLS),
+      LINES: String(ROWS),
+      BROWSER: browser,
+      GH_BROWSER: browser,
+      STILLFAIL_LOGIN_OPENED: this.#o.opened,
+      ...(this.#o.description?.env ?? {}),
+    });
+    const wrapped = platform.terminal(program!, args, COLS, ROWS) ?? [program!, args];
+    const r = platform.runnable(wrapped[0], wrapped[1], env);
+    let child: ChildProcess;
+    try {
+      child = startCommand(r.file, r.args, { cwd: this.#o.cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+    } catch (e) {
+      return this.#fail(tr(this.#o.lang, "station.machineLogin.cannotRun", { error: (e as Error).message }));
+    }
+    this.#child = child;
+    const spawned = await new Promise<Error | null>((resolve) => {
+      child.once("spawn", () => resolve(null));
+      child.once("error", (e) => resolve(e));
+    });
+    if (spawned) {
+      this.#exited = true;
+      return this.#fail(tr(this.#o.lang, "station.machineLogin.cannotRun", { error: spawned.message }));
+    }
+    child.stdin?.on("error", () => {});
+    const decoders = [new StringDecoder("utf8"), new StringDecoder("utf8")];
+    [child.stdout, child.stderr].forEach((stream, i) => stream?.on("data", (chunk: Buffer) => this.#output(decoders[i]!.write(chunk))));
+    child.once("close", (code, signal) => void this.#closed(code, signal));
+    this.#timeout = this.#o.fibers.after(TIMEOUT_MS, () => this.#fail(tr(this.#o.lang, "station.machineLogin.timedOut"), "timeout"));
+    // The pages it opens, as its stand-ins write them.
+    try {
+      const file = basename(this.#o.opened);
+      this.#watcher = watch(dirname(this.#o.opened), { persistent: false }, (_event, name) => {
+        if (name === null || name === file) this.#read();
+      });
+      this.#watcher.on("error", () => {});
+    } catch {}
+    log.info("logins", "a login started", { id: this.id, command: this.command[0] });
+    this.#o.changed();
+  }
+
+  /// Typed into its terminal: text as it is, or a key.
+  input(given: { text?: string; key?: Key }): void {
+    if (!this.active) return;
+    if (given.key !== undefined) this.#write(KEYS[given.key]);
+    else if (given.text !== undefined) this.#write(given.text);
+  }
+
+  /// Cancelled by a person (or the station going): its command ended.
+  cancel(): void {
+    if (!this.active) return;
+    this.#end("cancelled", null);
+  }
+
+  #write(text: string): void {
+    const stdin = this.#child?.stdin;
+    if (!stdin || stdin.destroyed || this.#exited) return;
+    stdin.write(text);
+  }
+
+  #output(text: string): void {
+    if (text === "" || !this.active) return;
+    const said = this.#said + plainText(text);
+    this.#said = said.length > SAID_KEPT ? said.slice(said.length - SAID_KEPT) : said;
+    this.#term.write(text, () => {
+      this.#draw();
+      this.#read();
+    });
+    // Quiet again from now: whether it waits is asked once it has said its piece.
+    this.#quiet?.();
+    this.#quiet = this.#o.fibers.after(QUIET_MS, () => void this.#settled());
+  }
+
+  /// The screen as the emulator has it now; told when it changed.
+  #draw(): void {
+    const buffer = this.#term.buffer.active;
+    const rows = Array.from({ length: ROWS }, (_, i) => buffer.getLine(buffer.baseY + i)?.translateToString(true) ?? "");
+    const cursor = { x: buffer.cursorX, y: buffer.cursorY };
+    const same = rows.every((r, i) => r === this.#rows[i]) && cursor.x === this.#cursor.x && cursor.y === this.#cursor.y;
+    this.#rows = rows;
+    this.#cursor = cursor;
+    if (!same) this.#o.drawn();
+  }
+
+  /// What it asks of a person now, from the pages it opened and what it said.
+  #read(): void {
+    if (!this.active) return;
+    try {
+      const text = readFileSync(this.#o.opened, "utf8");
+      this.#opened = urlsIn(text);
+    } catch {}
+    const before = JSON.stringify([this.state, this.step, this.url, this.loopback, this.code, this.codeUrl, this.waiting]);
+    const printed = urlsIn(this.#said);
+    // The page it opens, over what it prints: they may differ (Claude Code prints its paste-a-code page and opens its
+    // loopback one; codex prints localhost and comes back to 127.0.0.1).
+    const page = this.#opened.at(-1) ?? null;
+    const back = page !== null ? loopbackOf(page) : null;
+    const printedBack = page === null ? printed.find((u) => loopbackOf(u) !== null) ?? null : null;
+    const code = deviceCodeIn(this.#said, this.#o.description?.login.code ?? null);
+    if (this.state === "verifying") {
+      // The browser came back: nothing more to do but wait for it to finish.
+    } else if (back !== null || printedBack !== null) {
+      this.url = page !== null && back !== null ? page : printedBack;
+      this.loopback = back ?? loopbackOf(printedBack!);
+      this.step = "loopback";
+      this.state = "browser";
+      this.code = null;
+    } else if (code !== null) {
+      const urls = deviceUrls([...this.#opened, ...printed], code);
+      this.code = code;
+      this.url = urls.url;
+      this.codeUrl = urls.codeUrl;
+      this.step = "device";
+      this.state = "code";
+    } else if (page !== null || printed.some((u) => u.startsWith("https://"))) {
+      this.url = page ?? printed.filter((u) => u.startsWith("https://")).at(-1)!;
+      this.step = "open";
+      this.state = "browser";
+    }
+    if (JSON.stringify([this.state, this.step, this.url, this.loopback, this.code, this.codeUrl, this.waiting]) !== before) this.#o.changed();
+  }
+
+  /// Its output has been quiet a while: a prompt the description answers is answered, Enter pressed where it asks for
+  /// it and the description says to; else, stopped on a prompt, it waits for a person.
+  async #settled(): Promise<void> {
+    this.#quiet = null;
+    if (!this.active || this.#exited) return;
+    const line = this.#rows[this.#cursor.y] ?? "";
+    const place = `${this.#cursor.y}\0${line}`;
+    const d = this.#o.description;
+    const answer = d?.login.answers?.find((a) => {
+      try {
+        return new RegExp(a.match).test(line);
+      } catch {
+        return false;
+      }
+    });
+    if (place !== this.#answered && (answer !== undefined || (d?.login.enter === true && asksEnter(line)))) {
+      this.#answered = place;
+      this.#write(`${answer?.text ?? ""}\r`);
+      return;
+    }
+    const waiting = line.trim() !== "" && prompts(line) && this.state !== "verifying";
+    let echo = this.echo;
+    if (waiting) {
+      // Asked of the first of its processes that is on the terminal (not `script` itself, nor what feeds it).
+      let told: boolean | null = null;
+      for (const pid of (await this.pids()).slice(1)) {
+        told = await platform.echoes(pid);
+        if (told !== null) break;
+      }
+      echo = told ?? !secretAsked(line);
+      if (!this.active) return;
+    }
+    const changed = waiting !== this.waiting || (waiting && this.step === null);
+    this.waiting = waiting;
+    if (waiting && this.step === null) {
+      this.step = "terminal";
+      this.state = "input";
+    }
+    if (echo !== this.echo) {
+      this.echo = echo;
+      this.#o.drawn();
+    }
+    if (changed) this.#o.changed();
+  }
+
+  /// Its browser came back and the callback went to it: it finishes by itself now.
+  relayedNow(): void {
+    this.relayed = true;
+    if (this.active && this.state !== "verifying") {
+      this.state = "verifying";
+      this.waiting = false;
+      this.#o.changed();
+    }
+  }
+
+  async #closed(code: number | null, signal: NodeJS.Signals | null): Promise<void> {
+    this.#exited = true;
+    if (!this.active) return;
+    if (code === 0) {
+      this.state = "verifying";
+      this.waiting = false;
+      this.#o.changed();
+      let account: string | null = null;
+      try {
+        account = await this.#o.verify();
+      } catch {}
+      if (!this.active) return;
+      this.account = account;
+      return this.#end("done", null);
+    }
+    const said = lastLines(this.#said);
+    this.#end("failed", said !== "" ? said : tr(this.#o.lang, "station.machineLogin.exited", { code: code !== null ? String(code) : (signal ?? "signal") }));
+  }
+
+  #fail(error: string, why?: "timeout"): void {
+    if (!this.active) return;
+    if (why === "timeout") this.timedOut = true;
+    this.#end("failed", error);
+  }
+
+  #end(state: LoginState, error: string | null): void {
+    if (!this.active) return;
+    this.state = state;
+    this.error = error;
+    this.waiting = false;
+    this.endedAt = this.#o.fibers.now();
+    this.#timeout();
+    this.#quiet?.();
+    this.#quiet = null;
+    this.#watcher?.close();
+    this.#watcher = null;
+    const child = this.#child;
+    if (child && !this.#exited) {
+      child.stdin?.end();
+      endCommand(child, "SIGTERM");
+      this.#o.fibers.after(KILL_MS, () => {
+        if (!this.#exited) endCommand(child, "SIGKILL");
+      });
+    }
+    log.info("logins", "a login ended", { id: this.id, state });
+    this.#o.changed();
+    this.#o.drawn();
+  }
+
+  /// Stops listening to it for good (the station closing): its command ended.
+  close(): void {
+    this.cancel();
+    this.#term.dispose();
+  }
+}
+
+/// The last few lines of what a command said, for why it failed.
+export function lastLines(said: string): string {
+  const lines = said
+    .trim()
+    .split("\n")
+    .map((l) => l.trimEnd())
+    .filter((l) => l.trim() !== "");
+  return [...lines.slice(Math.max(0, lines.length - 6)).join("\n")].slice(0, 800).join("");
+}

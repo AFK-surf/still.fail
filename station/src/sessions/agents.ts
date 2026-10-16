@@ -37,6 +37,9 @@ import { jobTools } from "../tools/jobs.ts";
 import { forwardTools } from "../tools/forward.ts";
 import { Forwards } from "../mesh/peer-forward.ts";
 import { nameOf, peerNamed } from "../mesh/peer-http.ts";
+import { endedNotice, loginTools } from "../tools/login.ts";
+import { Logins } from "../logins/index.ts";
+import { readOnly } from "../mesh/credential.ts";
 import { McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
 import { remoteTools } from "../tools/remote.ts";
 import { UsageCounter } from "../usage/counter.ts";
@@ -90,6 +93,8 @@ export type AgentsParts = {
   peers: { route: PeerRoute | null };
   /// Ports of other stations forwarded here (mesh/peer-forward.ts).
   forwards: Forwards;
+  /// The station's logins to command-line tools (docs/remote-login.md).
+  logins: Logins;
   slack: SlackParts;
   /// Where the station is in its control plane while in a workspace.
   place(): { origin: string; workspace: string; station: string; name: string } | null;
@@ -309,6 +314,40 @@ export const AgentsLive = (control: Control) =>
           return `agent: ${title}`;
         },
       });
+      // The station's logins to command-line tools (docs/remote-login.md): each told on the event streams as it changes;
+      // one an agent started tells that agent as it ends, its cards closed.
+      const logins = new Logins({ data, clock: hub.clock });
+      const loginLink = (session: string | null, id: string) => {
+        const s = place();
+        if (!s || !plane.spec().pages) return null;
+        const ws = (session ? store.getSession(session)?.ws : null) ?? s.workspace;
+        return `${s.origin}/w/${ws}/s/${s.station}/login/${encode(id)}`;
+      };
+      const unlistenLogins = [
+        logins.changes((change) => {
+          if (change.login !== undefined) {
+            const login = logins.get(change.login);
+            if (login) events.machineLogins({ login }, { login: Logins.limited(login) }, readOnly, `login\0${login.id}`);
+          }
+          if (change.service !== undefined) {
+            const service = logins.service(change.service);
+            if (service) events.machineLogins({ service }, { service }, readOnly, `service\0${service.id}`);
+          }
+        }),
+        logins.onEnded((login, starter) => {
+          try {
+            store.closeLoginCards(login.id);
+          } catch (error) {
+            log.warn("logins", "a login's cards were not closed", { login: login.id, error: (error as Error).message });
+          }
+          if (!starter.chat) return;
+          try {
+            hub.notify(starter.chat, endedNotice(login, loginLink(starter.chat, login.id)));
+          } catch (error) {
+            log.warn("logins", "the agent that started a login was not told it ended", { login: login.id, error: (error as Error).message });
+          }
+        }),
+      ];
       const tools = [
         ...chatTools(hub),
         ...archiveTools(hub),
@@ -325,6 +364,16 @@ export const AgentsLive = (control: Control) =>
         ...browserTools(browser),
         ...computerTools(computer),
         ...forwardTools(forwards),
+        ...loginTools({
+          logins: () => logins,
+          // The chat's starter: whom the agent works for.
+          starter: (session) => {
+            const row = store.getSession(session);
+            const email = row?.createdBy ?? "";
+            return { by: { email, name: readers.names.get(email) ?? "" }, workspace: row?.ws ?? place()?.workspace ?? null, chat: session };
+          },
+          link: (session, id) => loginLink(session, id),
+        }),
       ];
       // The vault's secrets, asked for by agents and granted from the members' apps (docs/vault.md).
       const vaults = vaultStore(store.db);
@@ -445,6 +494,7 @@ export const AgentsLive = (control: Control) =>
         overview: view,
         processState: (key) => hub.processState(key),
         followed: () => accounts.followed(),
+        loginScreen: (id, send) => logins.follow(id, send),
       });
       // A runtime installed or updated from the pages: the machine's logins read again.
       updates.onRuntimeChanged(() => {
@@ -632,6 +682,8 @@ export const AgentsLive = (control: Control) =>
           if (handing) return;
           handing = true;
           await time.close();
+          for (const stop of unlistenLogins) stop();
+          await logins.close();
           await sharing?.close();
           await xshare.close();
           unlistenRule();
@@ -661,6 +713,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ previousGone: previous, hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, peers, forwards, slack, overview: view, cloud, net, secrets, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      return Agents.of({ previousGone: previous, hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, peers, forwards, logins, slack, overview: view, cloud, net, secrets, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
     }),
   );

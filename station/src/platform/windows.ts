@@ -464,4 +464,28 @@ export const windows: Platform = {
   hasQuickLook: false,
   hasFolderPermissions: false,
   hasDesktopScreen: false,
+
+  // No `script`: a login's command runs on pipes (most say their link and code then). No process tree is read: only
+  // the command itself is taken to listen.
+  terminal: () => null,
+  descendants: async () => [],
+  async listening(pids, port) {
+    try {
+      const { stdout } = await run("netstat", ["-ano", "-p", "TCP"], { windowsHide: true });
+      const found: string[] = [];
+      for (const line of stdout.split("\n")) {
+        const f = line.trim().split(/\s+/);
+        if (f.length < 5 || f[0] !== "TCP" || f[3] !== "LISTENING" || !pids.includes(Number(f[4]))) continue;
+        const at = f[1]!.lastIndexOf(":");
+        if (Number(f[1]!.slice(at + 1)) !== port) continue;
+        const address = f[1]!.slice(0, at).replace(/^\[|\]$/g, "");
+        const shown = address === "0.0.0.0" || address === "::" ? "*" : address;
+        if (!found.includes(shown)) found.push(shown);
+      }
+      return found;
+    } catch {
+      return null;
+    }
+  },
+  echoes: async () => null,
 };

@@ -399,5 +399,13 @@
   "station.drive.place.Videos": "Videos",
   "station.drive.place.Music": "Music",
   "station.drive.place.Pictures": "Pictures",
-  "station.drive.no_trash": "No trash here; it can only be deleted permanently"
+  "station.drive.no_trash": "No trash here; it can only be deleted permanently",
+  "station.machineLogin.cannotRun": "Can't run the login command: {error}",
+  "station.machineLogin.timedOut": "Login not finished in 15 min; ended",
+  "station.machineLogin.exited": "The login command exited ({code})",
+  "station.machineLogin.unknownService": "This station doesn't know {service}: give the login command instead",
+  "station.machineLogin.notInstalled": "{name} isn't installed on this station ({bin} not found)",
+  "station.machineLogin.badCommand": "Give a login command, e.g. vercel login",
+  "station.machineLogin.unknown": "No such login (it may have ended a while ago)",
+  "station.machineLogin.ended": "This login has ended"
 }

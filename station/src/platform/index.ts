@@ -149,6 +149,18 @@ export type Platform = {
   /// Whether a program here can show windows (a browser with its own): a Mac's or Windows' desktop; on Linux a display
   /// the environment names (DISPLAY, WAYLAND_DISPLAY).
   hasDisplay(env: Env): boolean;
+  // Logins to command-line tools (logins/run.ts, logins/relay.ts).
+  /// `program` with `args` in a pseudo-terminal of `cols` × `rows` (stdin a pipe, kept open: closing it ends the
+  /// command), as the system's `script` gives one: the program and arguments to start; none where there is no such way
+  /// (Windows: the command runs on pipes).
+  terminal(program: string, args: string[], cols: number, rows: number): [string, string[]] | null;
+  /// The processes `pid` started, and theirs (not itself).
+  descendants(pid: number): Promise<number[]>;
+  /// The addresses those processes listen on at TCP `port` (127.0.0.1, ::1, * for all); null when this machine cannot
+  /// tell.
+  listening(pids: number[], port: number): Promise<string[] | null>;
+  /// Whether the terminal process `pid` runs in echoes what is typed (off while a password is read); null when not told.
+  echoes(pid: number): Promise<boolean | null>;
 
   // What only some machines have.
   /// The macOS keychain (Claude Code keeps its login there).

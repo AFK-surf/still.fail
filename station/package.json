@@ -10,6 +10,7 @@
     "test:side": "node ../scripts/native.ts run mesh runner archive-rs -- node --test side/*.test.ts"
   },
   "dependencies": {
+    "@xterm/headless": "6.0.0",
     "effect": "4.0.0",
     "ws": "8.22.0"
   },

@@ -1149,6 +1149,23 @@ export class Store {
     });
   }
 
+  /// The login cards of a login (docs/remote-login.md: `{"type": "login", "login": <id>}`) still waiting: closed for
+  /// everyone as the login ends, as their agent would withdraw them (nobody answered, nobody is woken: the station tells
+  /// the agent itself). How many were.
+  closeLoginCards(login: string): number {
+    return this.#with((changes) => {
+      const rows = this.#all(
+        "SELECT thread, n, author FROM entries WHERE kind = 'message' AND author_kind = 'agent' AND card LIKE '%\"login\"%' AND card LIKE ? AND NOT EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = entries.thread AND c.n = entries.n)",
+        `%"login":${JSON.stringify(login)}%`,
+      );
+      for (const r of rows) {
+        this.#run("INSERT OR IGNORE INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", r.thread, r.n, r.author, this.now());
+        changes.push({ type: "thread", id: r.thread, entries: [] });
+      }
+      return rows.length;
+    });
+  }
+
   /// Close this exact pending card for everyone. This writes no message or delivery: the agent stays asleep. A stale
   /// click cannot close a newer question or overwrite a newer turn's state. `lang` is lang.rs `spoken()`: the request's.
   closeCard(viewer: string, thread: number, n: number, option: string, lang: Lang = stationLang()): boolean {

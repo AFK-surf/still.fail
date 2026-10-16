@@ -40,3 +40,17 @@ export function procStatTicks(stat: string): [busy: number, total: number] | nul
   const idle = v[3]! + (v[4] ?? 0);
   return [total - idle, total];
 }
+
+/// lsof -Fn's names of the sockets listening at `port`: `n127.0.0.1:8085`, `n[::1]:8085`, `n*:8085` → the addresses.
+export function parseLsof(text: string, port: number): string[] {
+  const found: string[] = [];
+  for (const line of text.split("\n")) {
+    if (!line.startsWith("n")) continue;
+    const name = line.slice(1).trim();
+    const at = name.lastIndexOf(":");
+    if (at < 0 || Number(name.slice(at + 1)) !== port) continue;
+    const address = name.slice(0, at).replace(/^\[|\]$/g, "");
+    if (!found.includes(address)) found.push(address);
+  }
+  return found;
+}

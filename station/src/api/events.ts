@@ -65,6 +65,9 @@ export type EventsDeps = {
   /// Whether `viewer` sees a session, a thread or a job: those of their workspace's chats (docs/multi-workspace.md).
   /// None: every one.
   seen?(viewer: Viewer, of: { session: string } | { thread: number } | { job: string }): boolean;
+  /// A login's terminal (docs/remote-login.md): `send` given its screen now and as it changes, until the returned
+  /// function is called.
+  loginScreen?(id: string, send: (screen: { rows: string[]; cursor: { x: number; y: number }; echo: boolean; live: boolean }) => void): () => void;
 };
 
 /// A viewer's streams in one language: what their sidebar and overview are told by. A person in two of the station's
@@ -118,7 +121,7 @@ export class Events {
   }
 
   /// Where `live` sessions are followed from, the overview and process states (the agents' side, once it is made).
-  follow(more: Pick<EventsDeps, "live" | "overview" | "processState" | "followed">) {
+  follow(more: Pick<EventsDeps, "live" | "overview" | "processState" | "followed" | "loginScreen">) {
     Object.assign(this.deps, more);
   }
 
@@ -132,6 +135,13 @@ export class Events {
   /// `to` takes, the latest under `of` kept for one coming back.
   tell(event: string, data: unknown, of: string, to: (viewer: Viewer) => boolean) {
     this.emit(event, data, (c) => to(c.viewer), of);
+  }
+
+  /// A login or a service changed (docs/remote-login.md): told to everyone as `machine-logins`, a read-only member
+  /// given `limited` (how it stands only).
+  machineLogins(data: { login?: unknown; service?: unknown }, limited: { login?: unknown; service?: unknown }, readOnly: (viewer: Viewer) => boolean, of: string) {
+    this.emit("machine-logins", data, (c) => !readOnly(c.viewer), `machine-logins\0${of}`);
+    this.emit("machine-logins", limited, (c) => readOnly(c.viewer), `machine-logins-limited\0${of}`);
   }
 
   /// Something the overview shows changed (config, accounts, connects, cloud, updates).
@@ -160,7 +170,8 @@ export class Events {
   /// `since`: the last id the client heard (`<run>.<n>`), from the stream it takes over from or the one it lost; what was
   /// told after it is told first, and their sidebar and overview as they are now (RESUMED says so), or `missed`.
   /// `brief`: the sessions followed have their transcript entries in brief (read/transcript.ts `brief`).
-  async open(viewer: Viewer, lang: Lang, host: boolean, live: [string, number, number | null][], logs: [string, number][], since: string | null = null, brief = false): Promise<Answer> {
+  /// `logins`: those logins' terminals, each a `login-screen` event (all its rows first, then the rows that changed).
+  async open(viewer: Viewer, lang: Lang, host: boolean, live: [string, number, number | null][], logs: [string, number][], since: string | null = null, brief = false, logins: string[] = []): Promise<Answer> {
     const queue: string[] = [];
     let wakeReader: (() => void) | null = null;
     let closed = false;
@@ -207,6 +218,19 @@ export class Events {
     }
     // Those jobs' last lines: a `job-log` event now, and again each time the log changes, until the stream goes.
     for (const [id, lines] of logs) client.stops.push(this.followLog(client, id, lines));
+    // Those logins' terminals: never of the log (a stream that takes over asks again, and is told all of it).
+    for (const id of logins) {
+      let told: string[] | null = null;
+      const stop = this.deps.loginScreen?.(id, (screen) => {
+        const rows: Record<string, string> = {};
+        screen.rows.forEach((row, i) => {
+          if (told === null || told[i] !== row) rows[i] = row;
+        });
+        client.send("login-screen", { id, rows, cursor: screen.cursor, echo: screen.echo, live: screen.live, ...(told === null ? { full: true } : {}) });
+        told = screen.rows;
+      });
+      if (stop) client.stops.push(stop);
+    }
     if (host) void this.deps.host().then((info) => client.send("host", info), () => {});
     this.clients.push(client);
     this.last = { viewer, lang };

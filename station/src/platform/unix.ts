@@ -1,14 +1,14 @@
 // macOS and Linux (and another Unix as Linux): process groups and signals, /bin/sh, `/` paths, links. What the two
 // differ in (how the machine reads: sysctl and vm_stat, or /proc; the keychain and QuickLook) is said here too.
 import { type ChildProcess, execFile, execFileSync, spawn } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, lstatSync, readFileSync, readlinkSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { cpus as cpuList, release, type as osType } from "node:os";
 import { delimiter, join } from "node:path";
 import { promisify } from "node:util";
 import { wall } from "../ops/fibers.ts";
 import type { Env, Found, Host, Platform } from "./index.ts";
 import { holder } from "./processes.ts";
-import { field, firstWord, output, parseF64, parseU64, procStatTicks, trim } from "./text.ts";
+import { field, firstWord, output, parseF64, parseLsof, parseU64, procStatTicks, trim } from "./text.ts";
 
 const MACOS = process.platform === "darwin";
 const run = promisify(execFile);
@@ -159,6 +159,89 @@ const host: Host = {
     return kb === null ? 0 : kb * 1024;
   },
 };
+
+/// Words as one argument of a POSIX shell's command line.
+const quoted = (word: string) => (/^[A-Za-z0-9_./=:@%+-]+$/.test(word) ? word : `'${word.replaceAll("'", `'\\''`)}'`);
+
+/// The processes `pid` started, and theirs: ps's parents.
+async function descendants(pid: number): Promise<number[]> {
+  let text = "";
+  try {
+    text = (await run("ps", ["-A", "-o", "pid=,ppid="])).stdout;
+  } catch {
+    return [];
+  }
+  const children = new Map<number, number[]>();
+  for (const line of text.split("\n")) {
+    const [child, parent] = line.trim().split(/\s+/).map(Number);
+    if (!Number.isInteger(child) || !Number.isInteger(parent)) continue;
+    children.set(parent!, [...(children.get(parent!) ?? []), child!]);
+  }
+  const out: number[] = [];
+  const next = [pid];
+  while (next.length > 0) {
+    for (const c of children.get(next.pop()!) ?? []) {
+      if (out.includes(c)) continue;
+      out.push(c);
+      next.push(c);
+    }
+  }
+  return out;
+}
+
+/// /proc/net/tcp's address (hex, the bytes of each 32-bit word in the machine's order) as an address: 0100007F → 127.0.0.1.
+function procAddress(hex: string): string {
+  if (/^0+$/.test(hex)) return "*";
+  const words = hex.match(/.{8}/g) ?? [];
+  const bytes = words.flatMap((w) => (w.match(/../g) ?? []).reverse().map((b) => parseInt(b, 16)));
+  if (bytes.length === 4) return bytes.join(".");
+  const v4 = bytes.slice(0, 10).every((b) => b === 0) && bytes[10] === 255 && bytes[11] === 255;
+  if (v4) return bytes.slice(12).join(".");
+  if (bytes.slice(0, 15).every((b) => b === 0) && bytes[15] === 1) return "::1";
+  return (hex.match(/.{4}/g) ?? []).join(":");
+}
+
+/// Where `pids` listen at `port` by Linux's /proc (no lsof): the listening sockets of the port, those whose inode one of
+/// them holds open.
+function procListening(pids: number[], port: number): string[] | null {
+  const sockets = new Map<string, string>();
+  for (const table of ["/proc/net/tcp", "/proc/net/tcp6"]) {
+    let text: string;
+    try {
+      text = readFileSync(table, "utf8");
+    } catch {
+      continue;
+    }
+    for (const line of text.split("\n").slice(1)) {
+      const f = line.trim().split(/\s+/);
+      if (f.length < 10 || f[3] !== "0A") continue;
+      const [address, hexPort] = f[1]!.split(":");
+      if (parseInt(hexPort ?? "", 16) === port) sockets.set(f[9]!, procAddress(address ?? ""));
+    }
+  }
+  if (!existsSync("/proc/self/fd")) return null;
+  const found: string[] = [];
+  for (const pid of pids) {
+    let fds: string[] = [];
+    try {
+      fds = readdirSync(`/proc/${pid}/fd`);
+    } catch {
+      continue;
+    }
+    for (const fd of fds) {
+      let target = "";
+      try {
+        target = readlinkSync(`/proc/${pid}/fd/${fd}`);
+      } catch {
+        continue;
+      }
+      const inode = /^socket:\[(\d+)\]$/.exec(target)?.[1];
+      const address = inode === undefined ? undefined : sockets.get(inode);
+      if (address !== undefined && !found.includes(address)) found.push(address);
+    }
+  }
+  return found;
+}
 
 /// std::env::consts::OS for the Unixes Node names otherwise.
 const OS: Record<string, string> = { darwin: "macos", linux: "linux", freebsd: "freebsd", openbsd: "openbsd" };
@@ -324,6 +407,43 @@ export const unix: Platform = {
     return [...new Set(found)].filter(executable);
   },
   hasDisplay: (env) => MACOS || Boolean(env.DISPLAY || env.WAYLAND_DISPLAY),
+  terminal(program, args, cols, rows) {
+    // The window's size first (script's own is its stdin's, a pipe's: none), then the command in its place.
+    const inner = ["/bin/sh", "-c", `stty cols ${cols} rows ${rows} 2>/dev/null; exec "$@"`, "sh", program, ...args];
+    // macOS's script refuses a socket for its stdin, and Node's pipes (and macOS's fifos) are sockets: a pipe is put
+    // between, `cat` feeding it from ours, ended as the command ends (else it would hold the end up until ours closes).
+    if (MACOS) {
+      const run = `stty cols ${cols} rows ${rows} 2>/dev/null; exec "$@"`;
+      const feed = `exec 3<&0; cat <&3 | { /usr/bin/script -q /dev/null /bin/sh -c '${run}' sh "$@" 3<&-; s=$?; /usr/bin/pkill -P $$ -x cat; exit $s; }`;
+      return ["/bin/sh", ["-c", feed, "sh", program, ...args]];
+    }
+    const script = ["/usr/bin/script", "/bin/script"].find((p) => existsSync(p));
+    return script === undefined ? null : [script, ["-qfec", inner.map(quoted).join(" "), "/dev/null"]];
+  },
+  descendants,
+  async listening(pids, port) {
+    if (pids.length === 0) return [];
+    try {
+      const { stdout } = await run("lsof", ["-nP", "-a", "-p", pids.join(","), `-iTCP:${port}`, "-sTCP:LISTEN", "-Fn"]);
+      return parseLsof(stdout, port);
+    } catch (e) {
+      const error = e as NodeJS.ErrnoException & { stdout?: string; code?: unknown };
+      // lsof says nothing found by its exit 1.
+      if (typeof error.code === "number" && error.code === 1) return parseLsof(error.stdout ?? "", port);
+      return MACOS ? null : procListening(pids, port);
+    }
+  },
+  async echoes(pid) {
+    try {
+      const tty = (await run("ps", ["-o", "tty=", "-p", String(pid)])).stdout.trim();
+      if (tty === "" || tty.startsWith("?") || tty === "??") return null;
+      const { stdout } = await run("stty", [MACOS ? "-f" : "-F", `/dev/${tty}`, "-a"]);
+      if (/(^|\s)-echo(\s|$)/.test(stdout)) return false;
+      return /(^|\s)echo(\s|$)/.test(stdout) ? true : null;
+    } catch {
+      return null;
+    }
+  },
 
   hasKeychain: MACOS,
   trash: MACOS ? "finder" : "freedesktop",

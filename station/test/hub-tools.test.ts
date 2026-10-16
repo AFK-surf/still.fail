@@ -200,8 +200,8 @@ test("a post carries a card, kept with it and checked", async () => {
   assert.deepEqual([kept().card, kept().options], [undefined, undefined]);
   const refused = (args: Json) => r.refused(key, "chat_post", args);
   const one = [{ label: "A" }];
-  assert.ok((await refused({ to, text: "x", card: { type: "poll" } })).includes('unknown card type "poll": the types known are options, text'));
-  assert.ok((await refused({ to, text: "x", card: {} })).includes("one of options, text"));
+  assert.ok((await refused({ to, text: "x", card: { type: "poll" } })).includes('unknown card type "poll": the types known are options, text, login'));
+  assert.ok((await refused({ to, text: "x", card: {} })).includes("one of options, text, login"));
   assert.ok((await refused({ to, text: "x", card: ["A"] })).includes("card must be an object"));
   assert.ok((await refused({ to, text: "x", card: { type: "options" } })).includes("an options card has options"));
   assert.ok((await refused({ to, text: "x", card: { type: "options", options: one }, options: one })).includes("not also as options"));
@@ -398,6 +398,31 @@ test("a turn ends all_done, needing a decision or help, or waiting, and the word
     ["need_help"],
     "posts keep today's words",
   );
+  await r.close();
+});
+
+test("a login card names its login, and closes for everyone as the login ends", async () => {
+  const r = new Rig();
+  const [key, thread] = newSession(r.hub, web("local"));
+  const to = `EMBER/${thread.threadTs}`;
+  const kept = () => {
+    const n = r.said(thread.id).at(-1)!.n;
+    return r.store.entriesBetween(thread.id, n, n)[0]!;
+  };
+  const said = await r.call(key, "chat_post", { to, text: "要在 studio 上登录 GitHub", kind: "need_human", need: "登录 GitHub", card: { type: "login", login: "abc123", assignee: "a@x.com" } });
+  assert.ok(said.includes("People finish the login from the card"), said);
+  assert.deepEqual(kept().card, { type: "login", login: "abc123", assignee: "a@x.com" });
+  assert.ok(r.store.pendingCard(thread.id) !== null);
+  const refused = (args: Json) => r.refused(key, "chat_post", args);
+  assert.ok((await refused({ to, text: "x", card: { type: "login" } })).includes("a login card names the login"));
+  assert.ok((await refused({ to, text: "x", card: { type: "login", login: "a b" } })).includes("a login card names the login"));
+  assert.ok((await refused({ to, text: "x", card: { type: "login", login: "abc", station: "studio" } })).includes("card.station"));
+  // Another login's end leaves it; its own closes it (nobody answered: withdrawn, as by its agent).
+  assert.equal(r.store.closeLoginCards("abc12"), 0);
+  assert.ok(r.store.pendingCard(thread.id) !== null);
+  assert.equal(r.store.closeLoginCards("abc123"), 1);
+  assert.equal(r.store.pendingCard(thread.id), null);
+  assert.equal(r.store.closeLoginCards("abc123"), 0, "once");
   await r.close();
 });
 

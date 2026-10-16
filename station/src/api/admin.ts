@@ -24,6 +24,7 @@ import { routes as workspaces } from "./routes/workspaces.ts";
 import { routes as vault } from "./routes/vault.ts";
 import { routes as vaultRequests } from "./routes/vault-requests.ts";
 import { vaultStore } from "../vault/store.ts";
+import { routes as machineLogins } from "./routes/logins.ts";
 import { Drive } from "../drive/drive.ts";
 import { HelperFiles } from "../helper/files.ts";
 import type { HelperApp } from "../helper/app.ts";
@@ -158,6 +159,7 @@ export class Admin {
         : []),
       ...(deps.agents?.xshare ? xshare({ xshare: deps.agents.xshare, store: deps.store }) : []),
       ...publish(tools),
+      ...(deps.agents ? machineLogins(() => deps.agents?.logins) : []),
       ...(deps.agents?.accounts
         ? accounts({
             accounts: deps.agents.accounts,
