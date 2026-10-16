@@ -889,7 +889,20 @@ export const SHAPES: Record<string, Shape> = {
   MemoryFile: struct([
     ["path", "String"],
     ["text", "String"],
+    ["sections", vec("MemorySection"), { default: true, doc: "Its parts by their `##` headings, as people find their way in it (the core's)." }],
+    ["size", opt("String"), { doc: "How long it is: 12 KB (the core's)." }],
   ], { keepNone: true }),
+  MemorySection: struct([
+    ["title", "String"],
+    ["text", "String", { doc: "What is under its heading." }],
+    ["note", "String", { doc: "How much is in it: 10 条, or its size when it is no list." }],
+  ], { doc: "A part of the global memory, under one of its headings (the text before the first, if any, as 开头)." }),
+  SkillDoc: struct([
+    ["name", "String", { doc: "design.md." }],
+    ["text", "String"],
+    ["label", opt("String"), { doc: "Its name as people read it: design (the core's)." }],
+    ["size", opt("String"), { doc: "34 KB (the core's)." }],
+  ], { doc: "Another file of a skill beside its SKILL.md: a topic it points to.", keepNone: true }),
   SkillFile: struct([
     ["name", "String"],
     ["description", "String"],
@@ -898,6 +911,9 @@ export const SHAPES: Record<string, Shape> = {
     ["text", "String"],
     ["body", opt("String")],
     ["about", opt("String")],
+    ["brief", opt("String"), { doc: "`about` in a line, without what is in parentheses, for its row (the core's)." }],
+    ["size", opt("String"), { doc: "Its text and files together: 51 KB (the core's)." }],
+    ["files", vec("SkillDoc"), { default: true, doc: "Its other files (absent from a station before them)." }],
     ["share", opt("SkillShare"), { doc: "Shared with the workspace's other stations, or another station's (absent: neither)." }],
   ], { doc: "A skill: `body` its text as people read it (no frontmatter), `about` when it applies (a project's without its\n项目记忆：); both absent from a core before them." }),
   SkillShare: struct([

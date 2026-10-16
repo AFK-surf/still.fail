@@ -520,5 +520,11 @@
     "one": "{n} file",
     "other": "{n} files"
   },
-  "core-logic.drive.empty": "Empty folder"
+  "core-logic.drive.empty": "Empty folder",
+  "core-logic.memory.lead": "Opening",
+  "core-logic.memory.whole": "All of it",
+  "core-logic.memory.points": {
+    "one": "1 point",
+    "other": "{n} points"
+  }
 }

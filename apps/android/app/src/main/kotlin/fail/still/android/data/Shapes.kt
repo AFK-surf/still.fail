@@ -2989,10 +2989,24 @@ data class MarkItem (
 	val at: Long
 )
 
+/// A part of the global memory, under one of its headings (the text before the first, if any, as 开头).
+@Serializable
+data class MemorySection (
+	val title: String,
+	/// What is under its heading.
+	val text: String,
+	/// How much is in it: 10 条, or its size when it is no list.
+	val note: String
+)
+
 @Serializable
 data class MemoryFile (
 	val path: String,
-	val text: String
+	val text: String,
+	/// Its parts by their `##` headings, as people find their way in it (the core's).
+	val sections: List<MemorySection>? = null,
+	/// How long it is: 12 KB (the core's).
+	val size: String? = null
 )
 
 @Serializable
@@ -3559,6 +3573,18 @@ data class SessionDetail (
 	val turns: List<TurnRecord>
 )
 
+/// Another file of a skill beside its SKILL.md: a topic it points to.
+@Serializable
+data class SkillDoc (
+	/// design.md.
+	val name: String,
+	val text: String,
+	/// Its name as people read it: design (the core's).
+	val label: String? = null,
+	/// 34 KB (the core's).
+	val size: String? = null
+)
+
 /// How a skill is shared between the workspace's stations.
 @Serializable
 data class SkillShare (
@@ -3582,6 +3608,12 @@ data class SkillFile (
 	val text: String,
 	val body: String? = null,
 	val about: String? = null,
+	/// `about` in a line, without what is in parentheses, for its row (the core's).
+	val brief: String? = null,
+	/// Its text and files together: 51 KB (the core's).
+	val size: String? = null,
+	/// Its other files (absent from a station before them).
+	val files: List<SkillDoc>? = null,
 	/// Shared with the workspace's other stations, or another station's (absent: neither).
 	val share: SkillShare? = null
 )

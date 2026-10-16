@@ -14,7 +14,7 @@ import { ConnectRunScreen, ConnectScreen, ConnectsScreen, NewConnectScreen } fro
 import { HistoryScreen, RunSettingsScreen } from "./History.tsx";
 import { Home, Recent } from "./Home.tsx";
 import { MeScreen } from "./Me.tsx";
-import { MemoriesScreen, MemoryScreen } from "./Memory.tsx";
+import { MemoriesScreen, MemoryDocScreen, MemoryScreen } from "./Memory.tsx";
 import { DrivePlayScreen, DriveReadScreen, DriveScreen } from "./Drive.tsx";
 import { FilesScreen } from "./Files.tsx";
 import { BarSettingsScreen } from "./BarSettings.tsx";
@@ -78,6 +78,8 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="s/:station/chats/:chat/services/:service" element={<InStation stations={stations}><PreviewScreen /></InStation>} />
       <Route path="s/:station/overview" element={<InStation stations={stations}><StationScreen /></InStation>} />
       <Route path="s/:station/memory" element={<InStation stations={stations}><MemoryScreen /></InStation>} />
+      <Route path="s/:station/memory/global" element={<InStation stations={stations}><MemoryDocScreen /></InStation>} />
+      <Route path="s/:station/memory/skill/:name" element={<InStation stations={stations}><MemoryDocScreen /></InStation>} />
       {/* A station's drive: its folders, each folder a page (?root=&path=), a file read or played on a page of its own. */}
       <Route path="s/:station/files" element={<InStation stations={stations}><DriveScreen /></InStation>} />
       <Route path="s/:station/files/read" element={<InStation stations={stations}><DriveReadScreen /></InStation>} />

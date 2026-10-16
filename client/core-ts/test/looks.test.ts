@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
-import { answer, face, glyph, linkShown, listNote, stationLine, stationUpdate } from "../src/looks.ts";
+import { answer, face, glyph, linkShown, listNote, memorySections, stationLine, stationUpdate } from "../src/looks.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -52,6 +52,25 @@ test("a_skill_reads_without_its_frontmatter", () => {
   answer("GET", "/memory", memory);
   assert.deepEqual([memory.skills[0].body, memory.skills[0].about], ["# A", "做 a 时"]);
   assert.deepEqual([memory.skills[1].body, memory.skills[1].about], ["no front", "别的"]);
+});
+
+test("the_memory_reads_in_parts_with_how_long_each_is", () => {
+  const memory: J = {
+    global: { path: "g", text: "# ember memory\n\n## 回复\n- 一\n- 二\n\n```\n## 不是标题\n- 也不是一条\n```\n## 机器\n本机不编译\n" },
+    skills: [{
+      name: "ember", description: "项目记忆：ember / still.fail（团队聊天里的 agent）。开发 ember 时使用。", project: true, text: "---\nname: ember\n---\n总览",
+      files: [{ name: "design.md", text: "设计" }],
+    }],
+  };
+  answer("GET", "/memory", memory);
+  assert.deepEqual(memory.global.sections.map((s: J) => [s.title, s.note]), [["回复", "2 条"], ["机器", "15 B"]]);
+  assert.match(memory.global.sections[0].text, /## 不是标题/);
+  const skill = memory.skills[0];
+  assert.equal(skill.brief, "ember / still.fail。开发 ember 时使用。");
+  assert.deepEqual([skill.files[0].label, skill.files[0].size, skill.size], ["design", "6 B", "12 B"]);
+  assert.deepEqual(memorySections("开头的话\n## 一\n- a").map((s: J) => s.title), ["开头", "一"]);
+  assert.deepEqual(memorySections("# 标题\n只有一段").map((s: J) => [s.title, s.text]), [["全文", "只有一段"]]);
+  assert.deepEqual(memorySections(""), []);
 });
 
 test("a_chat_link_is_said_only_while_down_or_coming_back", () => {

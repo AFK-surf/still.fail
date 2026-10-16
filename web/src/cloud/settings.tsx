@@ -26,7 +26,7 @@ import { StationContext, stationBase, type Station } from "../station.tsx";
 import { useGo } from "../go.ts";
 import { ProfileCard } from "../ProfileCard.tsx";
 import { StationList } from "./StationCards.tsx";
-import { MemoryView } from "../Memory.tsx";
+import { MemoryDoc, MemoryView } from "../Memory.tsx";
 import { DAYS, PriceTables, UsageBody, usageCss, useUsage, type UsageDays } from "../Usage.tsx";
 import { MachineLoginOffers, PROFILE_LEAD, type Choice } from "../pages/Accounts.tsx";
 import { addProfilePath } from "../pages/AddProfile.tsx";
@@ -306,7 +306,7 @@ export function StationsSettings({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-/** Each station's agents' memory: global and projects', where its sessions run. */
+/** Each station's agents' memory: global and projects', where its sessions run; each part opens on a page below. */
 export function MemorySettings({ entry }: { entry: WorkspaceEntry }) {
   const listed = useStations(entry.id).value;
   if (listed?.length === 0) return <Navigate to={`/w/${entry.id}/settings/stations`} replace />;
@@ -316,9 +316,22 @@ export function MemorySettings({ entry }: { entry: WorkspaceEntry }) {
       {stations.map((s) => (
         <div key={s.id} className={css.memoryStation}>
           {stations.length > 1 && <h2 className={css.memoryStationName}>{s.name}</h2>}
-          {s.online ? <MemoryView station={s.station} /> : <p className={shellCss.muted}>{t("web-pages.settings.memory.offline")}</p>}
+          {s.online ? <MemoryView station={s.station} to={(page) => `/w/${entry.id}/settings/memory/${s.id}/${page}`} /> : <p className={shellCss.muted}>{t("web-pages.settings.memory.offline")}</p>}
         </div>
       ))}
+    </Page>
+  );
+}
+
+/** A page of a station's memory (settings/memory/:station/global?at= or /skill/:name?file=), back to the list. */
+export function MemoryDocSettings({ entry }: { entry: WorkspaceEntry }) {
+  const { station: id, name } = useParams();
+  const [params, setParams] = useSearchParams();
+  const view = useStations(entry.id).value?.find((s) => s.id === id);
+  return (
+    <Page title={name ?? t("web-main.memory.global")} back={`/w/${entry.id}/settings/memory`} backLabel={t("web-pages.settings.memory.title")}>
+      {view ? <MemoryDoc station={view.station} name={name ?? null} at={Number(params.get("at") ?? 0)} file={params.get("file") ?? ""}
+        pick={(key, value) => setParams({ [key]: String(value) }, { replace: true })} /> : <Loading label={t("web-pages.settings.reading")} fill={false} />}
     </Page>
   );
 }

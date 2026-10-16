@@ -185,6 +185,8 @@ sealed interface Screen {
 
     /** The agents' memory on a station. */
     data class Memory(val station: String) : Screen { override val id = "memory/$station" }
+    /** A page of a station's memory: a skill (`skill`, with its files), or the global memory's parts from `at`. */
+    data class MemoryDoc(val station: String, val skill: String?, val at: Int = 0) : Screen { override val id = "memory/$station/${skill?.let { "skill/$it" } ?: "global"}" }
     /**
      * A station's drive (drive/DriveScreen.kt), a page per folder: `root` null is the drive itself (its one root's
      * contents, or its roots), else the folder `path` under `root`.
@@ -913,6 +915,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     Screen.Files -> fail.still.android.drive.FilesScreen(current)
                     Screen.BarSettings -> fail.still.android.screens.BarSettingsScreen()
                     is Screen.Memory -> fail.still.android.screens.MemoryScreen(current, screen.station)
+                    is Screen.MemoryDoc -> fail.still.android.screens.MemoryDocScreen(current, screen.station, screen.skill, screen.at)
                     is Screen.SlackApp -> fail.still.android.screens.SlackAppScreen(screen.station, screen.connect)
                     is Screen.Drive -> fail.still.android.drive.DriveScreen(current, screen.station, screen.root, screen.path)
                     is Screen.DriveRead -> fail.still.android.drive.ReaderScreen(screen.station, screen.root, screen.path)

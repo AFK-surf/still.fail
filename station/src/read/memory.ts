@@ -80,6 +80,24 @@ function sharing(dataDir: string, raw: Json, dir: string, name: string): Json {
   }
 }
 
+/// A skill's other files, the topics its SKILL.md points to (`design.md`…): each Markdown file beside it but the edits
+/// kept from an older copy (SKILL.conflict-*.md), by name.
+function skillFiles(dir: string): Json[] {
+  let names: string[];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return [];
+  }
+  return names
+    .filter((n) => n.endsWith(".md") && n !== "SKILL.md" && !/^SKILL\.conflict-/.test(n))
+    .sort(byBytes)
+    .flatMap((name) => {
+      const text = readText(joined(dir, name));
+      return text === null ? [] : [{ name, text }];
+    });
+}
+
 function listSkills(home: string, dataDir: string, raw: Json): Json[] {
   const dir = joined(home, "skills");
   let names: string[];
@@ -93,7 +111,7 @@ function listSkills(home: string, dataDir: string, raw: Json): Json[] {
     if (text === null) return [];
     const description = front(text, "description") ?? "";
     const builtin = BUILTIN.includes(name);
-    return [{ name, description, project: description.startsWith(PROJECT_PREFIX), builtin, text, share: builtin ? null : sharing(dataDir, raw, dir, name) }];
+    return [{ name, description, project: description.startsWith(PROJECT_PREFIX), builtin, text, files: skillFiles(joined(dir, name)), share: builtin ? null : sharing(dataDir, raw, dir, name) }];
   });
   return skills.sort((a, b) => Number(a.builtin) - Number(b.builtin) || Number(!a.project) - Number(!b.project) || byBytes(a.name, b.name));
 }

@@ -1,7 +1,8 @@
 // What the clients show of the stations and their links (looks.rs): the stations' glyph and its line, what a list
 // with no rows says instead, how a chat's link is when it is not as it should be, a station's face, a station update.
 import { t } from "./i18n.ts";
-import { arr as arrU, get as getU } from "./util.ts";
+import { bytes as size } from "./format.ts";
+import { arr as arrU, get as getU, utf8 } from "./util.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -86,9 +87,16 @@ export function stationLine(online: boolean, host: J): string {
   return m !== "" ? m : t(online ? "core-logic.looks.station.online" : "core-logic.looks.station.offline");
 }
 
-/// A station's answer as the clients show it: the agents' memory with each skill's text as people read it.
+/// A station's answer as the clients show it: the agents' memory with each skill's text as people read it, the
+/// global memory in its parts, and how long each is.
 export function answer(method: string, path: string, value: J): void {
   if (method !== "GET" || path !== "/memory") return;
+  const global = get(value, "global");
+  if (global !== null && typeof global === "object") {
+    const text = strOf(global, "text");
+    global.sections = memorySections(text);
+    global.size = size(utf8(text).length);
+  }
   for (const skill of arr(get(value, "skills"))) {
     const text = strOf(skill, "text");
     let body = text;
@@ -104,7 +112,50 @@ export function answer(method: string, path: string, value: J): void {
     const project = get(skill, "project") === true;
     skill.body = body.trim();
     skill.about = project && description.startsWith("项目记忆：") ? description.slice("项目记忆：".length) : description;
+    const brief = skill.about.replace(/（[^（）]*）/g, "").replace(/\s*\([^()]*\)/g, "").replace(/\s+/g, " ").trim();
+    skill.brief = brief !== "" ? brief : skill.about;
+    const files = arr(get(skill, "files")).filter((f) => typeof get(f, "name") === "string");
+    let bytes = utf8(skill.body).length;
+    for (const f of files) {
+      const n = utf8(strOf(f, "text")).length;
+      bytes += n;
+      f.label = f.name.endsWith(".md") ? f.name.slice(0, -3) : f.name;
+      f.size = size(n);
+    }
+    skill.files = files;
+    skill.size = size(bytes);
   }
+}
+
+/// The global memory by its `##` headings (none inside a fenced block): what is before the first, without the page's
+/// own `#` title, is 开头 (the whole of it, 全文, when there are none); each says how many points it has.
+export function memorySections(text: string): J[] {
+  const parts: { title: string; lines: string[] }[] = [];
+  let lead: string[] = [];
+  let title: string | null = null;
+  let fenced = false;
+  for (const line of text.split("\n")) {
+    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
+    if (!fenced && /^## /.test(line)) {
+      parts.push({ title: line.slice(3).trim(), lines: [] });
+      continue;
+    }
+    if (parts.length > 0) parts[parts.length - 1]!.lines.push(line);
+    else if (!fenced && title === null && /^# /.test(line) && lead.every((l) => l.trim() === "")) title = line.slice(2).trim();
+    else lead.push(line);
+  }
+  const before = lead.join("\n").trim();
+  if (before !== "") parts.unshift({ title: t(parts.length > 0 ? "core-logic.memory.lead" : "core-logic.memory.whole"), lines: lead });
+  return parts.map((p) => {
+    const body = p.lines.join("\n").trim();
+    let points = 0;
+    let inFence = false;
+    for (const line of p.lines) {
+      if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
+      else if (!inFence && /^([-*+]|\d+[.)]) /.test(line)) points += 1;
+    }
+    return { title: p.title, text: body, note: points > 0 ? t("core-logic.memory.points", { n: points }) : size(utf8(body).length) };
+  });
 }
 
 /// Kept overview progress survives a handover's disconnected interval. No update is inferred from a disconnect.

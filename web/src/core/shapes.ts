@@ -2958,9 +2958,22 @@ export interface MarkItem {
 	at: number;
 }
 
+/** A part of the global memory, under one of its headings (the text before the first, if any, as 开头). */
+export interface MemorySection {
+	title: string;
+	/** What is under its heading. */
+	text: string;
+	/** How much is in it: 10 条, or its size when it is no list. */
+	note: string;
+}
+
 export interface MemoryFile {
 	path: string;
 	text: string;
+	/** Its parts by their `##` headings, as people find their way in it (the core's). */
+	sections?: MemorySection[];
+	/** How long it is: 12 KB (the core's). */
+	size?: string;
 }
 
 export interface MeshStatus {
@@ -3552,6 +3565,17 @@ export interface SessionDetail {
 	turns: TurnRecord[];
 }
 
+/** Another file of a skill beside its SKILL.md: a topic it points to. */
+export interface SkillDoc {
+	/** design.md. */
+	name: string;
+	text: string;
+	/** Its name as people read it: design (the core's). */
+	label?: string;
+	/** 34 KB (the core's). */
+	size?: string;
+}
+
 /** How a skill is shared between the workspace's stations. */
 export interface SkillShare {
 	id: string;
@@ -3575,6 +3599,12 @@ export interface SkillFile {
 	text: string;
 	body?: string;
 	about?: string;
+	/** `about` in a line, without what is in parentheses, for its row (the core's). */
+	brief?: string;
+	/** Its text and files together: 51 KB (the core's). */
+	size?: string;
+	/** Its other files (absent from a station before them). */
+	files?: SkillDoc[];
 	/** Shared with the workspace's other stations, or another station's (absent: neither). */
 	share?: SkillShare;
 }

@@ -424,5 +424,11 @@
     "one": "{n} 个文件",
     "other": "{n} 个文件"
   },
-  "core-logic.drive.empty": "空文件夹"
+  "core-logic.drive.empty": "空文件夹",
+  "core-logic.memory.lead": "开头",
+  "core-logic.memory.whole": "全文",
+  "core-logic.memory.points": {
+    "one": "{n} 条",
+    "other": "{n} 条"
+  }
 }
