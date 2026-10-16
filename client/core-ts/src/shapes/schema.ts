@@ -1253,6 +1253,8 @@ export const SHAPES: Record<string, Shape> = {
     ["viewers", vec("String"), { default: true, doc: "Who is on it now, by name." }],
     ["controlledBy", vec("String"), { default: true, doc: "Those of them whose input is taken." }],
     ["access", opt("ScreenAccess"), { doc: "What is missing for it to be seen or driven (macOS's grants), when something is." }],
+    ["clipboard", vec("String"), { default: true, doc: "The clipboard types a view that drives it carries both ways (`text`, `png`); none from a station before them." }],
+    ["drop", opt("ScreenDrop"), { doc: "Where a file dropped into a view of it is put on the station's machine; none from a station before files." }],
     ["line", "String", { doc: "What the core says of it under its title: what it is, its size, who is on it (core)." }],
     ["link", "String", { doc: "Its page in the app: `/w/<workspace>/s/<station>/screen/<id>` (the id encoded), as the agents' links name it." }],
   ], { doc: "A screen of a station a person can see and drive (docs/remote-screens.md)." }),
@@ -1270,6 +1272,10 @@ export const SHAPES: Record<string, Shape> = {
     ["app", opt("String")],
     ["path", opt("String")],
   ], { doc: "What a screen's station lacks for it (docs/remote-screens.md `access`): macOS's Screen Recording and Accessibility\ngrants, or a machine it is not supported on." }),
+  ScreenDrop: struct([
+    ["folder", "String", { doc: "The folder on the station's machine (absolute): the drive's upload puts a file there with it as `root`." }],
+    ["reveal", "bool", { doc: "The view can show the file there in the machine's file manager (`screen.input` `{t: \"reveal\", path}`)." }],
+  ], { doc: "Where a file a person drops into a screen's view goes (docs/remote-screens.md `drop`): the machine's Downloads, else its home." }),
   ScreenCursor: struct([
     ["x", "f64", { doc: "0..1 of the frame's width." }],
     ["y", "f64", { doc: "0..1 of the frame's height." }],
@@ -1291,6 +1297,8 @@ export const SHAPES: Record<string, Shape> = {
     ["height", opt("u32")],
     ["cursor", opt("ScreenCursor")],
     ["access", opt("ScreenAccess"), { doc: "What the station lacks for it, when it says (with `denied`, or while it is seen but cannot be driven)." }],
+    ["clipboard", vec("String"), { default: true, doc: "While driving it: the clipboard types it carries both ways (`text`, `png`): a paste goes with\n`screen.clipboard`, a copy made on it comes as the call's `{clipboard}` value. None while only looking." }],
+    ["drop", opt("ScreenDrop"), { doc: "While driving it: where a file dropped into the view goes (none while only looking, or from a station before files)." }],
   ], { doc: "A screen view as its page draws it (`screen.view`'s `{state}` values): each one whole, the latest is how it is." }),
   PrefsView: struct([
     ["onlyMine", "bool", { default: true, doc: "The lists show only the chats and connects the viewer takes part in." }],

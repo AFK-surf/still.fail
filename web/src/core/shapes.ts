@@ -3799,6 +3799,14 @@ export interface ScreenCursor {
 	shape?: string;
 }
 
+/** Where a file a person drops into a screen's view goes (docs/remote-screens.md `drop`): the machine's Downloads, else its home. */
+export interface ScreenDrop {
+	/** The folder on the station's machine (absolute): the drive's upload puts a file there with it as `root`. */
+	folder: string;
+	/** The view can show the file there in the machine's file manager (`screen.input` `{t: "reveal", path}`). */
+	reveal: boolean;
+}
+
 /** A screen of a station a person can see and drive (docs/remote-screens.md). */
 export interface ScreenItem {
 	/** The station's: `desktop`, `browser:<targetId>`. */
@@ -3814,6 +3822,10 @@ export interface ScreenItem {
 	controlledBy?: string[];
 	/** What is missing for it to be seen or driven (macOS's grants), when something is. */
 	access?: ScreenAccess;
+	/** The clipboard types a view that drives it carries both ways (`text`, `png`); none from a station before them. */
+	clipboard?: string[];
+	/** Where a file dropped into a view of it is put on the station's machine; none from a station before files. */
+	drop?: ScreenDrop;
 	/** What the core says of it under its title: what it is, its size, who is on it (core). */
 	line: string;
 	/** Its page in the app: `/w/<workspace>/s/<station>/screen/<id>` (the id encoded), as the agents' links name it. */
@@ -3854,6 +3866,13 @@ export interface ScreenViewState {
 	cursor?: ScreenCursor;
 	/** What the station lacks for it, when it says (with `denied`, or while it is seen but cannot be driven). */
 	access?: ScreenAccess;
+	/**
+	 * While driving it: the clipboard types it carries both ways (`text`, `png`): a paste goes with
+	 * `screen.clipboard`, a copy made on it comes as the call's `{clipboard}` value. None while only looking.
+	 */
+	clipboard?: string[];
+	/** While driving it: where a file dropped into the view goes (none while only looking, or from a station before files). */
+	drop?: ScreenDrop;
 }
 
 /** A station's screens (the `screens` topic; docs/remote-screens.md, client/core-ts/src/screens.ts). */

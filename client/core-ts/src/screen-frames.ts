@@ -1,5 +1,6 @@
 // A screen view's frames on its stream (docs/remote-screens.md, Wire): a kind byte, the payload's length (4 bytes,
-// big-endian), the payload. The station sends `config`, `video` and `state`; the client `input`, `ack` and `keyframe`.
+// big-endian), the payload. The station sends `config`, `video` and `state`; the client `input`, `ack` and `keyframe`;
+// the screen's clipboard goes both ways (`clipboard`) while the view drives it.
 // Read as the stream's pieces come, however they are cut: each frame's bytes are copied once, into an array of its own
 // (what goes to the UI, transferred on the web).
 import { fromBase64, fromUtf8, isObject, utf8 } from "./util.ts";
@@ -7,9 +8,19 @@ import { fromBase64, fromUtf8, isObject, utf8 } from "./util.ts";
 export const CONFIG = 1;
 export const VIDEO = 2;
 export const STATE = 3;
+export const CLIPBOARD = 4;
 export const INPUT = 16;
 export const ACK = 17;
 export const KEYFRAME = 18;
+export const SET_CLIPBOARD = 19;
+
+/// A clip's type on the wire.
+export type ClipType = "text" | "png";
+const CLIP_BYTE: Record<ClipType, number> = { text: 1, png: 2 };
+const CLIP_OF_BYTE: Record<number, ClipType> = { 1: "text", 2: "png" };
+/// The most a clipboard carries each way (station/src/screens/source.ts): text's UTF-8 bytes, a picture's.
+export const CLIP_TEXT_MAX = 1024 * 1024;
+export const CLIP_PNG_MAX = 8 * 1024 * 1024;
 
 /// A frame longer than this is no frame: the stream is out of step (or not a view's).
 export const MAX_FRAME = 64 * 1024 * 1024;
@@ -24,6 +35,8 @@ export type StationFrame =
   | { config: FrameConfig }
   | { video: { key: boolean; ts: number; data: Uint8Array } }
   | { state: J }
+  /// The screen's clipboard, changed: its type and its bytes (text in UTF-8).
+  | { clipboard: { type: ClipType; data: Uint8Array } }
   /// A kind this client does not know (a later station's): passed over.
   | { other: number };
 
@@ -69,6 +82,15 @@ export class FrameReader {
       }
       case STATE:
         return { state: json(this.#take(length)) };
+      case CLIPBOARD: {
+        const type = length > 0 ? CLIP_OF_BYTE[this.#peek(0)] : undefined;
+        if (type === undefined) {
+          this.#skip(length);
+          return { other: kind };
+        }
+        this.#skip(1);
+        return { clipboard: { type, data: this.#take(length - 1) } };
+      }
       default:
         this.#skip(length);
         return { other: kind };
@@ -153,6 +175,15 @@ export function keyframeFrame(): Uint8Array {
   return frame(KEYFRAME, new Uint8Array(0));
 }
 
+/// The screen's clipboard set (and pasted, with `paste`): flags, type, the bytes.
+export function clipboardFrame(type: ClipType, data: Uint8Array, paste: boolean): Uint8Array {
+  const payload = new Uint8Array(2 + data.length);
+  payload[0] = paste ? 1 : 0;
+  payload[1] = CLIP_BYTE[type];
+  payload.set(data, 2);
+  return frame(SET_CLIPBOARD, payload);
+}
+
 // ── what a station sends, for its tests and the test station ──
 
 export function configFrame(config: { codec: string; width: number; height: number; description?: string }): Uint8Array {
@@ -173,8 +204,15 @@ export function stateFrame(state: J): Uint8Array {
   return frame(STATE, utf8(JSON.stringify(state)));
 }
 
+export function copiedFrame(type: ClipType, data: Uint8Array): Uint8Array {
+  const payload = new Uint8Array(1 + data.length);
+  payload[0] = CLIP_BYTE[type];
+  payload.set(data, 1);
+  return frame(CLIPBOARD, payload);
+}
+
 /// What the client sends, read (the test station's side).
-export type ClientFrame = { input: J } | { ack: number } | { keyframe: true } | { other: number };
+export type ClientFrame = { input: J } | { ack: number } | { keyframe: true } | { clipboard: { type: ClipType | null; paste: boolean; data: Uint8Array } } | { other: number };
 
 export function readClientFrames(buf: Uint8Array): [ClientFrame[], Uint8Array] {
   const frames: ClientFrame[] = [];
@@ -195,6 +233,9 @@ export function readClientFrames(buf: Uint8Array): [ClientFrame[], Uint8Array] {
       }
       case KEYFRAME:
         frames.push({ keyframe: true });
+        break;
+      case SET_CLIPBOARD:
+        frames.push({ clipboard: { type: CLIP_OF_BYTE[payload[1] ?? 0] ?? null, paste: ((payload[0] ?? 0) & 1) === 1, data: payload.slice(2) } });
         break;
       default:
         frames.push({ other: buf[at]! });

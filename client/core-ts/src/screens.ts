@@ -4,19 +4,21 @@
 // (protocol.ts), and the UI acknowledges each one it decoded, which is what lets the station send the next: a slow link
 // or a slow decoder lowers the frame rate rather than queueing. What the page draws of the view (its phase, 只看/控制,
 // who else is on it) is said whole as `{state}` each time it changes; the page only draws it. The link dropping opens
-// the view again; switching 只看/控制 opens it again with the other.
+// the view again; switching 只看/控制 opens it again with the other. While it drives the screen, the screen's clipboard
+// goes both ways (`screen.clipboard` sets it and pastes; a copy made on it comes as `{clipboard}`), and where a file
+// dropped into it goes (`drop`) is in its state, for the page to upload it with the drive's upload.
 import { Deferred, Effect, Queue } from "effect";
 import type { Inner, Progress } from "./core.ts";
 import { handlers } from "./core/execute.ts";
 import { CoreError, asCoreError } from "./error.ts";
 import { t } from "./i18n.ts";
 import { encode } from "./ops.ts";
-import { FrameReader, ackFrame, inputFrame, keyframeFrame } from "./screen-frames.ts";
+import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type ClipType, FrameReader, ackFrame, clipboardFrame, inputFrame, keyframeFrame } from "./screen-frames.ts";
 import { StationAddr } from "./station/addr.ts";
 import type { ScreenAsk, WireSocket } from "./station/wire.ts";
 import type { ClientId, RequestId } from "./protocol.ts";
 import type { SpanContext } from "./trace.ts";
-import { get, isObject } from "./util.ts";
+import { fromBase64, fromUtf8, get, isObject, utf8 } from "./util.ts";
 import { ofAddress } from "./workspace.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -39,7 +41,12 @@ export type ScreenCall =
   | { kind: "ack"; view: string; ts: number }
   | { kind: "keyframe"; view: string }
   | { kind: "input"; view: string; input: J }
-  | { kind: "control"; view: string; control: boolean };
+  | { kind: "control"; view: string; control: boolean }
+  /// The screen's clipboard set to text or a PNG (its bytes), then pasted where its focus is unless `paste` is false.
+  | { kind: "clipboard"; view: string; type: ClipType; data: Uint8Array; paste: boolean };
+
+/// A PNG's first bytes.
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const unit = (v: number) => Math.min(1, Math.max(0, v));
@@ -81,6 +88,23 @@ export function parseScreen(name: string, params: unknown): ScreenCall | null {
       return { kind: "keyframe", view: text(params, "view") };
     case "screen.input":
       return { kind: "input", view: text(params, "view"), input: checkInput(get(params, "input")) };
+    case "screen.clipboard": {
+      const view = text(params, "view");
+      const paste = get(params, "paste") !== false;
+      const said = get(params, "text");
+      if (typeof said === "string") {
+        if (said === "") throw CoreError.invalid(t("core-misc.params.missing", { field: "text" }));
+        const data = utf8(said);
+        if (data.length > CLIP_TEXT_MAX) throw CoreError.invalid(t("core-misc.screen.clipTooLarge"));
+        return { kind: "clipboard", view, type: "text", data, paste };
+      }
+      const png = get(params, "png");
+      const data = typeof png === "string" ? fromBase64(png) : null;
+      if (data === null || data.length === 0) throw CoreError.invalid(t("core-misc.params.missing", { field: "text" }));
+      if (data.length > CLIP_PNG_MAX) throw CoreError.invalid(t("core-misc.screen.clipTooLarge"));
+      if (!PNG_SIGNATURE.every((b, i) => data[i] === b)) throw CoreError.invalid(t("core-misc.screen.notPng"));
+      return { kind: "clipboard", view, type: "png", data, paste };
+    }
     case "screen.control": {
       const control = get(params, "control");
       if (typeof control !== "boolean") throw CoreError.invalid(t("core-misc.params.missing", { field: "control" }));
@@ -118,6 +142,10 @@ export function checkInput(input: unknown): J {
     case "text":
       if (typeof input.text !== "string" || input.text === "" || input.text.length > TEXT_MAX) throw bad();
       return { t: "text", text: input.text };
+    // A file dropped into the view, shown in the machine's file manager (a screen whose `drop` says `reveal`).
+    case "reveal":
+      if (typeof input.path !== "string" || input.path === "" || input.path.length > 4096) throw bad();
+      return { t: "reveal", path: input.path };
     default:
       throw bad();
   }
@@ -201,9 +229,21 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
     const title = typeof get(s, "title") === "string" && get(s, "title") !== "" ? (get(s, "title") as string) : kind === "browser" ? t("core-views.screen.kind.browser") : t("core-views.screen.kind.desktop");
     const item = { id, kind, title, width, height, viewers: names(get(s, "viewers")), controlledBy: names(get(s, "controlledBy")) };
     const access = accessOf(get(s, "access"));
-    return [{ ...item, ...(access ? { access } : {}), line: access?.message ?? itemLine(item), link: screenPath(station, id) }];
+    const clipboard = clipTypesOf(get(s, "clipboard"));
+    const drop = dropOf(get(s, "drop"));
+    return [{ ...item, ...(access ? { access } : {}), ...(clipboard.length ? { clipboard } : {}), ...(drop ? { drop } : {}), line: access?.message ?? itemLine(item), link: screenPath(station, id) }];
   });
   return { screens, outdated: false, control, known: true };
+}
+
+/// The clipboard types a station says a screen carries (`clipboard`): ours only.
+export function clipTypesOf(v: unknown): ClipType[] {
+  return Array.isArray(v) ? (["text", "png"] as const).filter((c) => v.includes(c)) : [];
+}
+
+/// Where a station puts a file dropped into a screen's view (`drop`); null when it takes none (one from before files).
+export function dropOf(v: unknown): { folder: string; reveal: boolean } | null {
+  return isObject(v) && typeof v.folder === "string" && v.folder !== "" ? { folder: v.folder, reveal: v.reveal === true } : null;
 }
 
 /// What a station says it lacks for a screen (its `access`), as the clients show it; null when nothing is said.
@@ -224,6 +264,8 @@ type Open = {
   keyframe(): void;
   input(input: J): void;
   control(on: boolean): void;
+  /// Fails (why, in words) while the view does not drive the screen, or the screen carries no such clipboard.
+  clipboard(type: ClipType, data: Uint8Array, paste: boolean): CoreError | null;
   /// The station's list changed: who is on it may have.
   listed(): void;
 };
@@ -283,6 +325,11 @@ export function install(): void {
       case "control":
         target.control(c.control);
         break;
+      case "clipboard": {
+        const refused = target.clipboard(c.type, c.data, c.paste);
+        if (refused) return Effect.fail(refused);
+        break;
+      }
     }
     return Effect.succeed(null);
   };
@@ -337,7 +384,13 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       }
       if (watching.length > 0) parts.push(t("core-views.screen.alsoOn", { names: listed(watching) }));
       state.line = parts.join(" · ");
-      progress({ state: { ...state, others: [...others], controllers: [...controllers] } });
+      // What a person driving it has of its clipboard and of files dropped into it (none while only looking).
+      const clipboard = state.control ? clipTypesOf(get(item, "clipboard")) : [];
+      const drop = state.control ? dropOf(get(item, "drop")) : null;
+      state.clipboard = clipboard;
+      if (drop) state.drop = drop;
+      else delete state.drop;
+      progress({ state: { ...state, others: [...others], controllers: [...controllers], clipboard: [...clipboard], ...(drop ? { drop: { ...drop } } : {}) } });
     };
     const write = (bytes: Uint8Array) => {
       if (out !== null) Queue.offerUnsafe(out, bytes);
@@ -351,6 +404,12 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       // Only while driving: what the view only looks at takes no input.
       input: (input) => {
         if (state.control) write(inputFrame(input));
+      },
+      clipboard: (type, data, paste) => {
+        if (!state.control || out === null) return new CoreError("invalid_params", t("core-misc.screen.notDriving"));
+        if (!clipTypesOf(get(listedItem(), "clipboard")).includes(type)) return new CoreError("unsupported", t("core-misc.screen.noClipboard"));
+        write(clipboardFrame(type, data, paste));
+        return null;
       },
       control: (on) => {
         const next = on && may;
@@ -438,6 +497,13 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                   tell();
                 }
                 progress({ frame: { key: frame.video.key, ts: frame.video.ts } }, frame.video.data);
+              } else if ("clipboard" in frame) {
+                // A copy made on the screen, for the page to put on this device's clipboard (only while driving it).
+                if (!state.control) continue;
+                const clip = frame.clipboard;
+                if (clip.type === "text") {
+                  if (clip.data.length > 0 && clip.data.length <= CLIP_TEXT_MAX) progress({ clipboard: { type: "text", text: fromUtf8(clip.data) } });
+                } else if (clip.data.length > 0 && clip.data.length <= CLIP_PNG_MAX) progress({ clipboard: { type: "png", size: clip.data.length } }, clip.data);
               } else if ("state" in frame) {
                 const s = frame.state;
                 if (!isObject(s)) continue;

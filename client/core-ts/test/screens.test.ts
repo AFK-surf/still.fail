@@ -8,7 +8,7 @@ import { Effect, Queue } from "effect";
 import { linkTarget } from "../src/asks.ts";
 import { parseCall } from "../src/core/calls.ts";
 import { CoreError } from "../src/error.ts";
-import { FrameReader, ackFrame, configFrame, inputFrame, keyframeFrame, readClientFrames, stateFrame, videoFrame, type ClientFrame, type StationFrame } from "../src/screen-frames.ts";
+import { CLIP_PNG_MAX, CLIP_TEXT_MAX, FrameReader, ackFrame, clipboardFrame, configFrame, copiedFrame, inputFrame, keyframeFrame, readClientFrames, stateFrame, videoFrame, type ClientFrame, type StationFrame } from "../src/screen-frames.ts";
 import { checkInput, othersOf } from "../src/screens.ts";
 import { HostWire, type RequestHead, type ScreenAsk, type StationWire } from "../src/station/wire.ts";
 import type { FakeHost } from "../src/testing.ts";
@@ -495,3 +495,115 @@ test("acks_after_a_view_went_are_let_go_and_input_to_none_is_refused", async () 
   core.close();
 });
 
+
+// ── the clipboard and files dropped ──
+
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7, 7]);
+/// A station that says its screens carry the clipboard and take files dropped.
+const CARRYING = { screens: [{ ...SCREENS.screens[0], clipboard: ["text", "png", "gif"], drop: { folder: "/Users/bob/Downloads", reveal: true } }, { ...SCREENS.screens[1], clipboard: ["text"], drop: { folder: "/Users/bob/Downloads" } }] };
+
+each("the_clipboard_frames_both_ways_are_read_and_framed_however_cut", (seed) => {
+  const text = new TextEncoder().encode("复制的 text");
+  const reader = new FrameReader();
+  const read: StationFrame[] = [];
+  for (const piece of cut(join([copiedFrame("text", text), videoFrame(true, 1, bytesOf(20, seed)), copiedFrame("png", PNG), new Uint8Array([4, 0, 0, 0, 2, 9, 9])]), random(seed))) {
+    reader.push(piece);
+    for (let f = reader.next(); f !== null; f = reader.next()) read.push(f);
+  }
+  assert.deepEqual(read[0], { clipboard: { type: "text", data: text } });
+  assert.deepEqual(read[2], { clipboard: { type: "png", data: PNG } });
+  assert.deepEqual(read[3], { other: 4 }, "a clipboard of a type this client does not know is passed over");
+  const [frames] = readClientFrames(join([clipboardFrame("text", text, true), clipboardFrame("png", PNG, false)]));
+  assert.deepEqual(frames, [{ clipboard: { type: "text", paste: true, data: text } }, { clipboard: { type: "png", paste: false, data: PNG } }]);
+});
+
+test("a_paste_is_checked_its_size_bounded_and_a_reveal_is_an_input", () => {
+  const text = parseCall("screen.clipboard", { view: "v", text: "hi" }) as J;
+  assert.deepEqual([text.call.type, text.call.paste, [...text.call.data]], ["text", true, [104, 105]], "pasted unless asked not to");
+  assert.equal((parseCall("screen.clipboard", { view: "v", text: "hi", paste: false }) as J).call.paste, false);
+  assert.equal((parseCall("screen.clipboard", { view: "v", png: base64(PNG) }) as J).call.type, "png");
+  assert.ok(parseCall("screen.clipboard", { view: "v", text: "a".repeat(CLIP_TEXT_MAX) }));
+  for (const bad of [{ view: "v" }, { view: "v", text: "" }, { view: "v", text: "a".repeat(CLIP_TEXT_MAX - 1) + "é" }, { view: "v", png: base64(new Uint8Array([1, 2, 3])) }, { view: "v", png: "!!" }]) {
+    assert.throws(() => parseCall("screen.clipboard", bad), (e: J) => e.code === "invalid_params", JSON.stringify(bad).slice(0, 80));
+  }
+  const tooBig = new Uint8Array(CLIP_PNG_MAX + 1);
+  tooBig.set(PNG);
+  assert.throws(() => parseCall("screen.clipboard", { view: "v", png: base64(tooBig) }), (e: J) => e.code === "invalid_params");
+  assert.deepEqual(checkInput({ t: "reveal", path: "/Users/bob/Downloads/a.pdf" }), { t: "reveal", path: "/Users/bob/Downloads/a.pdf" });
+  assert.throws(() => checkInput({ t: "reveal", path: "" }));
+});
+
+each("while_driving_the_clipboard_goes_both_ways_and_where_files_go_is_said", async (seed) => {
+  const { host, core, ui, views } = await viewing(seed, { ...base(), "GET /screens": CARRYING });
+  const log: J[] = [];
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 9, { topic: "screens", station: "ws/st" });
+  call(core, ui, 1, "screen.view", { station: "ws/st", screen: "desktop", view: "v", control: true });
+  await host.settle();
+  apply(host, values);
+  const listed = (values.get(9) as J).screens;
+  assert.deepEqual([listed[0].clipboard, listed[0].drop], [["text", "png"], { folder: "/Users/bob/Downloads", reveal: true }], "ours only");
+  assert.deepEqual(listed[1].drop, { folder: "/Users/bob/Downloads", reveal: false });
+  views[0]!.send(join([configFrame({ codec: "jpeg", width: 10, height: 10 }), videoFrame(true, 1, bytesOf(10, seed))]));
+  await host.settle();
+  said(host, log);
+  const live = lastState(log, 1);
+  assert.deepEqual([live.clipboard, live.drop], [["text", "png"], { folder: "/Users/bob/Downloads", reveal: true }]);
+  // A copy made on the screen: to the page, text in its JSON, a picture's bytes beside it.
+  views[0]!.send(join([copiedFrame("text", new TextEncoder().encode("从远端复制")), copiedFrame("png", PNG)]));
+  await host.settle();
+  said(host, log);
+  const copies = log.filter((m) => m.id === 1 && m.value?.clipboard);
+  assert.deepEqual(copies[0].value, { clipboard: { type: "text", text: "从远端复制" } });
+  assert.deepEqual([copies[1].value, [...copies[1].bytes]], [{ clipboard: { type: "png", size: PNG.length } }, [...PNG]]);
+  // A paste here, after the key before it; a reveal as input.
+  call(core, ui, 2, "screen.input", { view: "v", input: { t: "key", kind: "down", key: "Meta", code: "MetaLeft", mods: 4 } });
+  call(core, ui, 3, "screen.clipboard", { view: "v", text: "粘贴" });
+  call(core, ui, 4, "screen.clipboard", { view: "v", png: base64(PNG), paste: false });
+  call(core, ui, 5, "screen.input", { view: "v", input: { t: "reveal", path: "/Users/bob/Downloads/a.pdf" } });
+  await host.settle();
+  said(host, log);
+  assert.deepEqual(log.find((m) => m.id === 3), { id: 3, ok: null });
+  assert.deepEqual(views[0]!.got, [
+    { input: { t: "key", kind: "down", key: "Meta", code: "MetaLeft", mods: 4 } },
+    { clipboard: { type: "text", paste: true, data: new TextEncoder().encode("粘贴") } },
+    { clipboard: { type: "png", paste: false, data: PNG } },
+    { input: { t: "reveal", path: "/Users/bob/Downloads/a.pdf" } },
+  ]);
+  core.close();
+});
+
+each("only_looking_there_is_no_clipboard_nor_files_and_a_paste_is_refused", async (seed) => {
+  const { host, core, ui, views } = await viewing(seed, { ...base(), "GET /screens": CARRYING });
+  const log: J[] = [];
+  call(core, ui, 1, "screen.view", { station: "ws/st", screen: "desktop", view: "v", control: false });
+  await host.settle();
+  views[0]!.send(join([configFrame({ codec: "jpeg", width: 10, height: 10 }), videoFrame(true, 1, bytesOf(10, seed)), copiedFrame("text", new TextEncoder().encode("not for a looker"))]));
+  await host.settle();
+  call(core, ui, 2, "screen.clipboard", { view: "v", text: "x" });
+  await host.settle();
+  said(host, log);
+  const watch = lastState(log, 1);
+  assert.deepEqual([watch.control, watch.clipboard, watch.drop], [false, [], undefined]);
+  assert.equal(log.some((m) => m.id === 1 && m.value?.clipboard), false, "a copy is not given to a view that only looks");
+  assert.equal(log.find((m) => m.id === 2).error.code, "invalid_params");
+  assert.deepEqual(views[0]!.got, []);
+  core.close();
+});
+
+each("a_station_before_the_clipboard_offers_none_and_a_paste_to_it_is_refused", async (seed) => {
+  const { host, core, ui, views } = await viewing(seed);
+  const log: J[] = [];
+  call(core, ui, 1, "screen.view", { station: "ws/st", screen: "browser:T1", view: "v", control: true });
+  await host.settle();
+  views[0]!.send(join([configFrame({ codec: "jpeg", width: 10, height: 10 }), videoFrame(true, 1, bytesOf(10, seed))]));
+  await host.settle();
+  call(core, ui, 2, "screen.clipboard", { view: "v", text: "x" });
+  await host.settle();
+  said(host, log);
+  const live = lastState(log, 1);
+  assert.deepEqual([live.control, live.clipboard, live.drop], [true, [], undefined]);
+  assert.equal(log.find((m) => m.id === 2).error.code, "unsupported");
+  assert.deepEqual(views[0]!.got, [], "nothing sent to a station that would not know it");
+  core.close();
+});

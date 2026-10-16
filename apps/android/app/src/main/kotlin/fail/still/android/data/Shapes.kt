@@ -3780,6 +3780,15 @@ data class ScreenCursor (
 	val shape: String? = null
 )
 
+/// Where a file a person drops into a screen's view goes (docs/remote-screens.md `drop`): the machine's Downloads, else its home.
+@Serializable
+data class ScreenDrop (
+	/// The folder on the station's machine (absolute): the drive's upload puts a file there with it as `root`.
+	val folder: String,
+	/// The view can show the file there in the machine's file manager (`screen.input` `{t: "reveal", path}`).
+	val reveal: Boolean
+)
+
 /// A screen of a station a person can see and drive (docs/remote-screens.md).
 @Serializable
 data class ScreenItem (
@@ -3796,6 +3805,10 @@ data class ScreenItem (
 	val controlledBy: List<String>? = null,
 	/// What is missing for it to be seen or driven (macOS's grants), when something is.
 	val access: ScreenAccess? = null,
+	/// The clipboard types a view that drives it carries both ways (`text`, `png`); none from a station before them.
+	val clipboard: List<String>? = null,
+	/// Where a file dropped into a view of it is put on the station's machine; none from a station before files.
+	val drop: ScreenDrop? = null,
 	/// What the core says of it under its title: what it is, its size, who is on it (core).
 	val line: String,
 	/// Its page in the app: `/w/<workspace>/s/<station>/screen/<id>` (the id encoded), as the agents' links name it.
@@ -3832,7 +3845,12 @@ data class ScreenViewState (
 	val height: UInt? = null,
 	val cursor: ScreenCursor? = null,
 	/// What the station lacks for it, when it says (with `denied`, or while it is seen but cannot be driven).
-	val access: ScreenAccess? = null
+	val access: ScreenAccess? = null,
+	/// While driving it: the clipboard types it carries both ways (`text`, `png`): a paste goes with
+	/// `screen.clipboard`, a copy made on it comes as the call's `{clipboard}` value. None while only looking.
+	val clipboard: List<String>? = null,
+	/// While driving it: where a file dropped into the view goes (none while only looking, or from a station before files).
+	val drop: ScreenDrop? = null
 )
 
 /// A station's screens (the `screens` topic; docs/remote-screens.md, client/core-ts/src/screens.ts).
