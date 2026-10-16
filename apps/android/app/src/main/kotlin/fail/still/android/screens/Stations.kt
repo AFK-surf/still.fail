@@ -310,10 +310,42 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                 // The folders it lends its members (docs/drive.md); none offered by a station from before the drive.
                 overview?.drive?.let { drive -> GoRow(t("android-misc.drive.title"), fail.still.android.drive.driveValue(drive.roots)) { app.push(Screen.Drive(address, null, "")) } }
             }
+            StationScreens(address)
             if (manager && s.joined != true) StationWorkspaces(address)
             // Its updates are its home workspace's managers' (docs/multi-workspace.md).
             if (s.online && overview != null) Versions(address, overview.updates, manager && s.joined != true, beta = s.betaOffered == true)
             Spacer(Modifier.height(30.dp))
+        }
+    }
+}
+
+/**
+ * The station's screens a person can see and drive (docs/remote-screens.md: its display, its browser's tabs), a row
+ * each opening the viewer (remote/ScreenActivity.kt); a station from before them, or none to show, says why in a quiet
+ * row. Nothing while the station has not said which it has.
+ */
+@Composable
+private fun StationScreens(address: String) {
+    val app = LocalApp.current
+    val topic by rememberTopic<fail.still.android.data.ScreensView>(app.core, Topics.screens(address))
+    val view = topic.value ?: return
+    val why = view.note ?: if (view.outdated) t("android-misc.screen.outdatedRow") else null
+    if (view.screens.isEmpty() && why == null) return
+    SectionHeader(t("android-misc.screen.section"), start = 24.dp)
+    ListCard {
+        view.screens.forEach { screen ->
+            ListRow(onClick = { app.openScreen(address, screen.id, screen.title) }) {
+                IconIn(if (screen.kind == "browser") Icons.Web else Icons.Monitor, 18.dp, C.muted)
+                Column(Modifier.weight(1f)) {
+                    Text(screen.title, fontSize = 15.sp, lineHeight = 20.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    // A grant missing (its line says which): the one thing on the row in colour.
+                    Text(screen.line, fontSize = 13.sp, lineHeight = 18.sp, color = if (screen.access != null) C.warn else C.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+                IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+            }
+        }
+        if (view.screens.isEmpty() && why != null) ListRow {
+            Text(why, fontSize = 14.sp, lineHeight = 20.sp, color = C.muted, modifier = Modifier.weight(1f))
         }
     }
 }

@@ -144,6 +144,7 @@ class MainActivity : ComponentActivity() {
             // The notification settings the app kept, into the core before anything goes by them.
             made.moveNotify()
             made.inFront = Notifier.inFront
+            made.openScreen = { station, screen, title -> fail.still.android.remote.ScreenActivity.open(this@MainActivity, station, screen, title) }
             app = made
             tellPermission()
             launch { made.followNotify() }

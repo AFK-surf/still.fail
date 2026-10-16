@@ -478,5 +478,22 @@
   "android-misc.bar.moveRight": "Move right",
   "android-misc.files.none.manager": "No folders shared yet. Tap + to pick a folder on a station, and the workspace's members can browse it here",
   "android-misc.files.none.member": "The workspace's admins haven't shared any folders yet",
-  "android-misc.files.lendOn": "Pick a folder on which station"
+  "android-misc.files.lendOn": "Pick a folder on which station",
+  "android-misc.screen.section": "Screens",
+  "android-misc.screen.title": "Screen",
+  "android-misc.screen.close": "Close",
+  "android-misc.screen.look": "View",
+  "android-misc.screen.drive": "Control",
+  "android-misc.screen.keyboard": "Keyboard",
+  "android-misc.screen.connecting": "Connecting…",
+  "android-misc.screen.starting": "Opening the screen…",
+  "android-misc.screen.reconnecting": "Reconnecting…",
+  "android-misc.screen.ended": "Ended",
+  "android-misc.screen.outdated": "This station needs an update",
+  "android-misc.screen.gone": "This screen is gone",
+  "android-misc.screen.denied": "Can't view this screen now",
+  "android-misc.screen.failed": "Couldn't open this screen",
+  "android-misc.screen.retry": "Try again",
+  "android-misc.screen.exit": "Exit",
+  "android-misc.screen.outdatedRow": "This station is too old to show its screens; update it first"
 }

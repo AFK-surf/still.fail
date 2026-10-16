@@ -99,8 +99,11 @@ class StillFailCore internal constructor(
     private var nextId = 1L
     private val calls = HashMap<Long, CompletableDeferred<JsonElement>>()
     private val replyIds = ConcurrentHashMap.newKeySet<Long>()
-    /** What calls that say how they go (`{id, value}` before their answer: a streamed preview, a preview socket) hear. */
-    private val progress = HashMap<Long, (JsonElement) -> Unit>()
+    /**
+     * What calls that say how they go (`{id, value}` before their answer: a streamed preview, a preview socket, a screen
+     * view) hear: each value, with the bytes it carries beside its JSON (a screen view's frame) or null.
+     */
+    private val progress = HashMap<Long, (JsonElement, ByteArray?) -> Unit>()
     private val subs = HashMap<Long, Subscription>()
     /** Calls made while the core is being restarted, sent once it is up. */
     private val queue = ArrayList<JsonObject>()
@@ -170,14 +173,23 @@ class StillFailCore internal constructor(
      * `preview.socket`, `station.file` with `progress`): each value to `onProgress` (on the core's own thread, in
      * order), then its answer. Cancelling the coroutine cancels the call (`{id, cancel}`), which the core stops.
      */
-    suspend fun call(name: String, params: JsonObject, onProgress: (JsonElement) -> Unit): JsonElement {
+    suspend fun call(name: String, params: JsonObject, onProgress: (JsonElement) -> Unit): JsonElement =
+        stream(name, params) { value, _ -> onProgress(value) }
+
+    /**
+     * A call whose values may carry bytes beside their JSON (`screen.view`: a frame's H.264 or JPEG, docs/client-core.md
+     * "Protocol"): each value to `onValue` with its bytes (null for one without), in the order the core said them (those
+     * with bytes and those without on one lane), on the core's own thread: hand heavy work elsewhere. Then its answer.
+     * Cancelling the coroutine cancels the call, as [call] with progress does.
+     */
+    suspend fun stream(name: String, params: JsonObject, onValue: (JsonElement, ByteArray?) -> Unit): JsonElement {
         coroutineContext[CallObserver]?.started?.invoke(name, params)
         val answer = CompletableDeferred<JsonElement>()
         val id = withContext(confined) {
             val id = nextId++
             calls[id] = answer
             replyIds.add(id)
-            progress[id] = onProgress
+            progress[id] = onValue
             send(buildJsonObject { put("id", id); put("call", name); put("params", params) })
             id
         }
@@ -191,6 +203,14 @@ class StillFailCore internal constructor(
             }
             throw e
         }
+    }
+
+    /**
+     * A call nobody waits for (`screen.ack`, `screen.input`): sent in order with the rest, its answer (or error) let go.
+     * Not for what a person asked for, whose failure is to be said (call, with `doing`).
+     */
+    fun tell(name: String, params: JsonObject) {
+        scope.launch(confined) { send(buildJsonObject { put("id", nextId++); put("call", name); put("params", params) }) }
     }
 
     /**
@@ -233,7 +253,7 @@ class StillFailCore internal constructor(
     /** Starts a core and brings it up to date: every topic subscribed, queued calls sent. */
     internal fun open() {
         val next = try {
-            engines { from, json ->
+            engines { from, json, bytes ->
                 // CoreMessage writes id, then ok/value/delta/error (client/core-ts/src/protocol.ts).
                 // Inspect only that bounded prefix, never the text or base64 payload itself.
                 val id = MESSAGE_ID.find(json.take(128))?.groupValues?.get(1)?.toLongOrNull()
@@ -243,7 +263,7 @@ class StillFailCore internal constructor(
                         android.util.Log.e("StillFailCore", "unreadable message from the core", e)
                         return@launch
                     }
-                    withContext(confined) { if (from === engine) receive(message) }
+                    withContext(confined) { if (from === engine) receive(message, bytes) }
                 }
             }
         } catch (e: Exception) {
@@ -309,7 +329,7 @@ class StillFailCore internal constructor(
         }
     }
 
-    private fun receive(message: JsonObject) {
+    private fun receive(message: JsonObject, bytes: ByteArray? = null) {
         message["fatal"]?.let {
             restart(it.jsonPrimitive.contentOrNull ?: "")
             return
@@ -321,7 +341,7 @@ class StillFailCore internal constructor(
         // How a call goes, before its answer.
         val going = message["value"]
         if (going != null && error == null && message["ok"] == null) progress[id]?.let { callback ->
-            scope.launch(replies) { callback(going) }
+            scope.launch(replies) { callback(going, bytes) }
             return
         }
         progress.remove(id)

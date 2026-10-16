@@ -451,5 +451,22 @@
   "android-misc.bar.moveRight": "往右移",
   "android-misc.files.none.manager": "还没有借出的文件夹。点 + 选一台 station 上的文件夹，workspace 的成员就能在这里浏览它",
   "android-misc.files.none.member": "workspace 的管理员还没有借出文件夹",
-  "android-misc.files.lendOn": "在哪台 station 上选文件夹"
+  "android-misc.files.lendOn": "在哪台 station 上选文件夹",
+  "android-misc.screen.section": "屏幕",
+  "android-misc.screen.title": "屏幕",
+  "android-misc.screen.close": "关闭",
+  "android-misc.screen.look": "只看",
+  "android-misc.screen.drive": "控制",
+  "android-misc.screen.keyboard": "键盘",
+  "android-misc.screen.connecting": "正在连接…",
+  "android-misc.screen.starting": "正在打开画面…",
+  "android-misc.screen.reconnecting": "正在重新连接…",
+  "android-misc.screen.ended": "已结束",
+  "android-misc.screen.outdated": "这台 station 需要更新",
+  "android-misc.screen.gone": "这个屏幕已经不在了",
+  "android-misc.screen.denied": "现在看不了这个屏幕",
+  "android-misc.screen.failed": "没能打开这个屏幕",
+  "android-misc.screen.retry": "再试一次",
+  "android-misc.screen.exit": "退出",
+  "android-misc.screen.outdatedRow": "这台 station 版本太旧，更新后才能看它的屏幕"
 }

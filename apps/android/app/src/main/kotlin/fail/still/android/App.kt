@@ -555,10 +555,23 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
                 sheet = null; menu = null; forward = true
                 stack = (if (outside || ws != workspace) listOf(Screen.Home) else stack) + Screen.AdbShare(address)
             }
+            // One of a station's screens, as its agent asks a person to take over (docs/remote-screens.md): the viewer
+            // over whatever page is open (back comes back to it).
+            "screen" -> {
+                val screen = t.screen ?: return false
+                if (station.isEmpty()) return false
+                openScreen("$ws/$station", screen, null)
+            }
             else -> return false
         }
         return true
     }
+
+    /**
+     * Opens one of a station's screens in the viewer (remote/ScreenActivity.kt: an activity over the app, set by
+     * MainActivity); `title`, the row's, until the core says one.
+     */
+    var openScreen: (station: String, screen: String, title: String?) -> Unit = { _, _, _ -> }
 
     fun api(station: String) = StationApi(core, station)
     /** For what outlives the page that started it (a message sent as the page moves to its new chat). */
