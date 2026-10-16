@@ -234,17 +234,14 @@ export const fileCard = style({
     },
   },
 });
+// Digits all one width: a percentage counting up does not shake.
 export const fileCardMeta = style({
-  fontSize: vars.textCaption, lineHeight: "16px", color: vars.muted,
+  fontSize: vars.textCaption, lineHeight: "16px", color: vars.muted, fontVariantNumeric: "tabular-nums",
   selectors: {
     [`${fileCard}[data-error] &`]: { color: vars.red },
   },
 });
 export const fileCardText = style({ flex: "1", minWidth: "0", display: "grid" });
-/** A file's percentage as it goes up: "100" and the number in one cell, the number at its end, "100" unseen. */
-export const fileCardPercent = style({ display: "inline-grid", justifyItems: "end", fontVariantNumeric: "tabular-nums" });
-globalStyle(`${fileCardPercent} > *`, { gridArea: "1 / 1" });
-globalStyle(`${fileCardPercent} > [aria-hidden]`, { visibility: "hidden" });
 /**
  * A file's card in a message: its sheet (FileTile, 30 × 36, the sheet drawn 2.75 in from its sides and 1.75 from its
  * top and foot, its corners rounded 3.25) as far from the card's edges on every side, and the card rounded as the sheet

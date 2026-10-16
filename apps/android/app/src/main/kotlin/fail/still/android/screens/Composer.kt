@@ -638,14 +638,11 @@ fun AppState.upload(draft: Draft, station: String, picked: Picked, scope: Corout
     }
 }
 
-/**
- * What a file going up says: how far it has gone, once that is known. The number is as wide as "100" (figure spaces
- * before it, as wide as a digit where digits are all one width, as FileCard draws them), so what follows stands still.
- */
+/** What a file going up says: how far it has gone, once that is known. */
 internal fun uploadingText(f: Pending): String {
     val sent = f.sent
     return if (sent == null || f.size <= 0) t("android-chat.file.uploading")
-    else t("android-chat.file.uploading.part", "percent" to (sent * 100 / f.size).toString().padStart(3, '\u2007'), "size" to fileSize(f.size))
+    else t("android-chat.file.uploading.part", "percent" to (sent * 100 / f.size).toInt(), "size" to fileSize(f.size))
 }
 
 @Composable

@@ -1476,20 +1476,11 @@ export function FileTile({ name, dir = false, progress, error = false, land = fa
   );
 }
 
-/**
- * What a file going up says: how far it has gone, once that is known. The number keeps the width of "100" (its digits
- * all one width), so what follows it stands still as it counts.
- */
-function Uploading({ sent, size }: { sent: number | undefined; size: number }) {
-  if (sent === undefined || size <= 0) return t("web-main.file.uploading");
-  const percent = Math.floor((sent / size) * 100);
-  return t("web-main.file.uploadingPart", { size: fileSize(size) }).split(/(\{percent\})/).map((part, i) => part === "{percent}"
-    ? <span key={i} className={css.fileCardPercent}><span aria-hidden="true">100</span><span>{percent}</span></span>
-    : part);
-}
-
 export function FileCard({ file, onRemove, pending, sent, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; pending?: boolean; sent?: number | undefined; error?: string | null }) {
-  const going = <Uploading sent={sent} size={file.size} />;
+  // How far it has gone, once that is known.
+  const going = pending && sent !== undefined && file.size > 0
+    ? t("web-main.file.uploadingPart", { percent: Math.floor((sent / file.size) * 100), size: fileSize(file.size) })
+    : t("web-main.file.uploading");
   return (
     <Tip label={file.path ?? file.name} cut={!file.path}><span className={css.fileCard} data-card="" data-error={error ? true : undefined}>
       <FileTile name={file.name} progress={pending ? (sent ?? 0) / Math.max(1, file.size) : undefined} error={!!error} land={!!onRemove} />
@@ -1980,7 +1971,9 @@ function RefCard({ file: f, draft, onRemove, onTap }: { file: Pending; draft: Dr
   const station = useStation();
   const asFile = ref.mode === "file";
   const pending = asFile && !f.done && !f.error;
-  const going = <Uploading sent={f.sent} size={f.size} />;
+  const going = f.sent !== undefined && f.size > 0
+    ? t("web-main.file.uploadingPart", { percent: Math.floor((f.sent / f.size) * 100), size: fileSize(f.size) })
+    : t("web-main.file.uploading");
   // A folder goes as a zip only from the chat's own station (zipped there).
   const zips = ref.dir && ref.station === station.address;
   const meta = asFile ? f.error ?? (pending ? going : fileSize(f.done?.size ?? f.size)) : `${ref.stationName} · ${t("web-main.file.modePath")}`;
