@@ -205,6 +205,11 @@ export class Choose implements Owner {
     return typeof v === "string" ? v : "";
   }
 
+  /// The station the scope's new chats last started on (its id; "" for none).
+  keptStation(scope: string): string {
+    return this.#kept(scope);
+  }
+
   #keepStation(scope: string, id: string): void {
     this.#env.data.put(TABLE, `ws:${scope}:last`, id, false);
   }

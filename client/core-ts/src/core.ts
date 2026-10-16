@@ -40,6 +40,7 @@ import { Attention } from "./attention.ts";
 import { Pills } from "./pill.ts";
 import type { Choose } from "./choose.ts";
 import { installChoose } from "./choose-calls.ts";
+import { install as installShareIn } from "./share-in.ts";
 import { Changelog } from "./changelog.ts";
 import { installForms, type Forms } from "./forms-calls.ts";
 import { Loads } from "./preview-load.ts";
@@ -210,6 +211,7 @@ export class Core {
       inner.router.after = (topic, value) => inner.attention.attended(topic, value);
       inner.attention.install();
       inner.choose = installChoose(inner);
+      installShareIn(inner);
       inner.forms = installForms(inner);
       const asks = new Asks(inner.host, (app, from, to) => inner.changelog.brings(app, from, to));
       inner.adb = new Adb({

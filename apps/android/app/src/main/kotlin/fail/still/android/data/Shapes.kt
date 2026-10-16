@@ -3836,6 +3836,50 @@ data class SessionDetail (
 	val turns: List<TurnRecord>
 )
 
+@Serializable
+data class ShareInKept (
+	val station: String,
+	/// Its row's `id`.
+	val id: String,
+	/// Why it is first, for its second line: youtube.com 的链接上次发到这里.
+	val text: String
+)
+
+@Serializable
+data class ShareInPick (
+	val station: String,
+	/// The chat's row `id`; absent: a new chat on the station.
+	val id: String? = null
+)
+
+@Serializable
+data class ShareInStation (
+	/// Its address.
+	val station: String,
+	val name: String
+)
+
+/// Where something another app shares into still.fail goes (the `shareIn` topic; docs/share-in.md).
+@Serializable
+data class ShareInView (
+	/// The site of the link shared (`youtube.com`, its www./m. left out); none for text without one.
+	val site: String? = null,
+	/// The chats it can go to: the workspace's own on still.fail's page, newest first, the one `kept` first; those
+	/// the query finds when one is given. At most 30.
+	val items: List<ChatItem>,
+	/// The chat what came from the same site went to last time, in `items`. Absent when none (or it is gone).
+	val kept: ShareInKept? = null,
+	/// Where it goes: what was picked (`shareIn.pick`), else the one `kept`, else the latest chat, else a new chat on
+	/// the station new chats last started on. Absent when it can go nowhere.
+	val picked: ShareInPick? = null,
+	/// The workspace's stations up now: where a new chat can start.
+	val stations: List<ShareInStation>,
+	/// The chats are not known yet.
+	val loading: Boolean,
+	/// Why it can go nowhere (no chat, no station up), in words.
+	val note: String? = null
+)
+
 /// Another file of a skill beside its SKILL.md: a topic it points to.
 @Serializable
 data class SkillDoc (

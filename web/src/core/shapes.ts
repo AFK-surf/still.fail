@@ -3852,6 +3852,50 @@ export interface SessionDetail {
 	turns: TurnRecord[];
 }
 
+export interface ShareInKept {
+	station: string;
+	/** Its row's `id`. */
+	id: string;
+	/** Why it is first, for its second line: youtube.com 的链接上次发到这里. */
+	text: string;
+}
+
+export interface ShareInPick {
+	station: string;
+	/** The chat's row `id`; absent: a new chat on the station. */
+	id?: string;
+}
+
+export interface ShareInStation {
+	/** Its address. */
+	station: string;
+	name: string;
+}
+
+/** Where something another app shares into still.fail goes (the `shareIn` topic; docs/share-in.md). */
+export interface ShareInView {
+	/** The site of the link shared (`youtube.com`, its www./m. left out); none for text without one. */
+	site?: string;
+	/**
+	 * The chats it can go to: the workspace's own on still.fail's page, newest first, the one `kept` first; those
+	 * the query finds when one is given. At most 30.
+	 */
+	items: ChatItem[];
+	/** The chat what came from the same site went to last time, in `items`. Absent when none (or it is gone). */
+	kept?: ShareInKept;
+	/**
+	 * Where it goes: what was picked (`shareIn.pick`), else the one `kept`, else the latest chat, else a new chat on
+	 * the station new chats last started on. Absent when it can go nowhere.
+	 */
+	picked?: ShareInPick;
+	/** The workspace's stations up now: where a new chat can start. */
+	stations: ShareInStation[];
+	/** The chats are not known yet. */
+	loading: boolean;
+	/** Why it can go nowhere (no chat, no station up), in words. */
+	note?: string;
+}
+
 /** Another file of a skill beside its SKILL.md: a topic it points to. */
 export interface SkillDoc {
 	/** design.md. */

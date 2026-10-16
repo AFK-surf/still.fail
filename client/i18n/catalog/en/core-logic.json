@@ -538,5 +538,10 @@
   "core-logic.memory.points": {
     "one": "1 point",
     "other": "{n} points"
-  }
+  },
+  "core-logic.shareIn.kept": "Links from {site} went here last time",
+  "core-logic.shareIn.kept_text": "Shared text went here last time",
+  "core-logic.shareIn.none": "No chat to send to, and no station online",
+  "core-logic.shareIn.error.empty": "Nothing to send",
+  "core-logic.shareIn.new_chat": "New chat"
 }

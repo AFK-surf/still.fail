@@ -436,5 +436,10 @@
   "core-logic.memory.points": {
     "one": "{n} 条",
     "other": "{n} 条"
-  }
+  },
+  "core-logic.shareIn.kept": "{site} 的链接上次发到这里",
+  "core-logic.shareIn.kept_text": "上次分享的文字发到这里",
+  "core-logic.shareIn.none": "还没有能发到的 chat，也没有在线的 station",
+  "core-logic.shareIn.error.empty": "没有要发的内容",
+  "core-logic.shareIn.new_chat": "新 chat"
 }

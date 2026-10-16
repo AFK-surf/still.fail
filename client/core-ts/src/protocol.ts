@@ -76,6 +76,7 @@ export const TOPICS: Record<string, Spec> = {
   archivedRows: { station: S },
   archive: { scope: S },
   newChat: { scope: S },
+  shareIn: { scope: S, source: S, query: ["string", "def"] },
   pick: { station: S, of: S },
   chatJobs: { station: S, thread: ["u64", "opt"], session: ["string", "opt"] },
   imageNear: { station: S, thread: ["u64", "opt"], session: ["string", "opt"], path: S },

@@ -37,6 +37,7 @@ export type Call =
   | { kind: "stationJoin"; workspace: string; station: string; name: string | null }
   | { kind: "chatSend"; station: string; thread: number; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number; width?: number; height?: number }[]; quotes: unknown; client: string | null }
   | { kind: "chatCreate"; station: string; ask: Record<string, unknown> }
+  | { kind: "shareIn"; scope: string; source: string; target: { station: string; id?: string } | null; title: string | null; note: string | null; client: string | null }
   | { kind: "chatSendTo"; station: string; session: string; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number; width?: number; height?: number }[]; quotes: unknown; client: string | null }
   | { kind: "decisionAnswer"; station: string; thread: number; seq: number; option: string }
   | { kind: "decisionReply"; station: string; thread: number; seq: number; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number; width?: number; height?: number }[]; quotes: unknown }
@@ -476,6 +477,26 @@ export function parseCall(name: string, params: unknown): Call {
         ["seq", "u64", "req"],
       ]);
       return { kind: "chatRead", station: p.station as string, thread: p.thread as number, seq: p.seq as number };
+    }
+    case "shareIn.pick": {
+      const p = read(params, [
+        ["scope", S, "req"],
+        ["source", S, "req"],
+        ["station", S, "req"],
+        ["id", S, "opt"],
+      ]);
+      const id = typeof p.id === "string" && p.id !== "" ? p.id : null;
+      return { kind: "shareIn", scope: p.scope as string, source: p.source as string, target: { station: p.station as string, ...(id !== null ? { id } : {}) }, title: null, note: null, client: null };
+    }
+    case "shareIn.send": {
+      const p = read(params, [
+        ["scope", S, "req"],
+        ["source", S, "req"],
+        ["title", S, "opt"],
+        ["text", S, "opt"],
+        ["client", S, "opt"],
+      ]);
+      return { kind: "shareIn", scope: p.scope as string, source: p.source as string, target: null, title: p.title as string | null, note: p.text as string | null, client: p.client as string | null };
     }
     case "newChat.pick":
     case "newChat.create":

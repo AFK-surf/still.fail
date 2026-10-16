@@ -1396,6 +1396,28 @@ export const SHAPES: Record<string, Shape> = {
     ["pick", opt("PickView"), { doc: "Its model control (the `pick` topic of `new` on the station), with the page." }],
     ["frequent", opt(vec("FrequentCombo")), { doc: "Up to four combinations used on this device in this workspace, filtered to this station." }],
   ], { doc: "A new chat's page (the `newChat` topic): the stations it can start on, the one it starts on, and what it runs\nthere, as last picked on this device (`newChat.pick`); what the station no longer has gives way to the first it has." }),
+  ShareInView: struct([
+    ["site", opt("String"), { doc: "The site of the link shared (`youtube.com`, its www./m. left out); none for text without one." }],
+    ["items", vec("ChatItem"), { doc: "The chats it can go to: the workspace's own on still.fail's page, newest first, the one `kept` first; those\nthe query finds when one is given. At most 30." }],
+    ["kept", opt("ShareInKept"), { doc: "The chat what came from the same site went to last time, in `items`. Absent when none (or it is gone)." }],
+    ["picked", opt("ShareInPick"), { doc: "Where it goes: what was picked (`shareIn.pick`), else the one `kept`, else the latest chat, else a new chat on\nthe station new chats last started on. Absent when it can go nowhere." }],
+    ["stations", vec("ShareInStation"), { doc: "The workspace's stations up now: where a new chat can start." }],
+    ["loading", "bool", { doc: "The chats are not known yet." }],
+    ["note", opt("String"), { doc: "Why it can go nowhere (no chat, no station up), in words." }],
+  ], { doc: "Where something another app shares into still.fail goes (the `shareIn` topic; docs/share-in.md)." }),
+  ShareInKept: struct([
+    ["station", "String"],
+    ["id", "String", { doc: "Its row's `id`." }],
+    ["text", "String", { doc: "Why it is first, for its second line: youtube.com 的链接上次发到这里." }],
+  ]),
+  ShareInPick: struct([
+    ["station", "String"],
+    ["id", opt("String"), { doc: "The chat's row `id`; absent: a new chat on the station." }],
+  ]),
+  ShareInStation: struct([
+    ["station", "String", { doc: "Its address." }],
+    ["name", "String"],
+  ]),
   FrequentCombo: struct([
     ["model", "String"],
     ["runtime", "RuntimeKind"],
