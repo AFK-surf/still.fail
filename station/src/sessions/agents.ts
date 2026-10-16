@@ -59,6 +59,8 @@ const encode = encodeURIComponent;
 const PREVIOUS_LIMIT_MS = 40_000;
 
 export type AgentsParts = {
+  /// The agents' predecessor-exit wait, also used before binding the mesh socket.
+  previousGone: Promise<void>;
   hub: Hub;
   jobs: Jobs;
   remote: Remote;
@@ -422,8 +424,9 @@ export const AgentsLive = (control: Control) =>
       let door: AgentsDoor | null = null;
       let handing = false;
       // Taken up once the previous process is gone; then the door opens, and what was cut off resumes.
+      const previous = previousGone(run);
       const start = async () => {
-        await previousGone(run);
+        await previous;
         mkdirSync(run, { recursive: true });
         writeFileSync(join(run, "hub.json"), JSON.stringify({ pid: process.pid }) + "\n");
         if (!inWorkspace) hub.hold("unbound");
@@ -565,6 +568,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, slack, overview: view, cloud, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      return Agents.of({ previousGone: previous, hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, slack, overview: view, cloud, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
     }),
   );
