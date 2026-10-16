@@ -112,3 +112,9 @@ export const SENT = {
     { name: "发版录屏 1016.mp4", path: "/Users/lin/Downloads/发版录屏 1016.mp4", size: clipSize },
   ],
 };
+
+/** A file a message names, as its card reads it (file.peek): a few of its lines. */
+export const PEEK = {
+  kind: "text", name: "login.css.ts", path: "web/src/login.css.ts", size: 1840, mtime: MTIME,
+  lines: { start: 12, at: 14, text: ["export const form = style({", "  display: \"grid\", gap: 12,", "  padding: \"0 16px\",", "  maxWidth: 360,", "});"] },
+};

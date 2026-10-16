@@ -84,9 +84,11 @@ export function corners(mark = false) {
 /**
  * Every small panel (a surface saying its --panel-pad): its corner its inner one and its padding together; padded 6
  * (all but ⌘K, a dialog); a panel of words' blocks in by 10 and as far from its top and foot; its rows' words in by 10;
- * what sits in its corners as far from both edges and concentric.
+ * what sits in its corners (a button: as far in as the words stand) as far from both edges and concentric.
  */
 export function panels(mark = false) {
+    // A row's padding: the words in a small panel stand in by it more than what has a ground (align.ts TEXT_IN).
+    const TEXT = 10;
     const say = (el, why) => { wrong.push(why); if (mark) el.setAttribute('data-off', why); };
     const px = (v) => parseFloat(v) || 0;
     const resolve = (el, value) => {
@@ -156,7 +158,20 @@ export function panels(mark = false) {
         const dr = px(getComputedStyle(d).borderBottomRightRadius);
         if (!r.width || !r.height || !dr) continue;
         const gl = r.left - box.left - border, gr = box.right - border - r.right, gt = r.top - box.top - border, gb = box.bottom - border - r.bottom;
-        const side = gl <= near ? gl : gr <= near ? gr : null, end = gt <= near ? gt : gb <= near ? gb : null;
+        // A button by a corner (its ground shows under the pointer) counts as in it as far in as the words stand (the
+        // padding and a row's): there too it is as far from both edges and concentric, or it stands where words do
+        // with a ground the corner does not follow. What sits in a control of its own (a segmented control's options)
+        // is that control's, and a switch is a row's.
+        let reach = near;
+        if (small && d.matches('button, [role=button], a[href]') && !d.matches('[role=switch]')) {
+          let own = false;
+          for (let a = d.parentElement; a && a !== s; a = a.parentElement) {
+            const o = getComputedStyle(a), bg = o.backgroundColor;
+            if ((bg && bg !== 'transparent' && !/rgba\([^)]*,\s*0\)$/.test(bg)) || px(o.borderTopWidth) > 0) { own = true; break; }
+          }
+          if (!own) reach = pad + TEXT + 1;
+        }
+        const side = gl <= reach ? gl : gr <= reach ? gr : null, end = gt <= reach ? gt : gb <= reach ? gb : null;
         if (side === null || end === null || side < -0.5 || end < -0.5) continue;
         corners++;
         const who = `${name} › ${d.className.toString().split(' ')[0] || d.tagName}`;

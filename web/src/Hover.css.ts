@@ -5,12 +5,16 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { panelCard, popover } from "./styles/controls.css.ts";
+import { IN, PANEL_PAD, PANEL_PILL, TEXT_IN, pillInner } from "./styles/align.ts";
 
 const enter = keyframes({ from: { opacity: "0", transform: "scale(.96)", filter: "blur(2px)" } });
 const exit = keyframes({ to: { opacity: "0", transform: "scale(.97)" } });
 
 /** A small panel of words (styles/controls.css.ts popover, panelCard: docs/ui-panels.md), its own coming and going. */
 export const card = style([popover, panelCard, {
+  // Its corner from the pills a file's card has in its corner (fileFoot): align.ts pillInner.
+  vars: { [IN]: pillInner(PANEL_PAD, PANEL_PILL, vars.cornerScale) },
+  display: "flex", flexDirection: "column", gap: "8px",
   zIndex: "60", width: "320px", maxWidth: "calc(100vw - 16px)", color: vars.text, fontSize: vars.textUi, lineHeight: "1.45",
   transformOrigin: "var(--radix-hover-card-content-transform-origin)",
   selectors: {
@@ -57,13 +61,16 @@ export const filePath = style({
   fontFamily: vars.fontMono, fontSize: vars.textCaption, color: vars.muted, overflowWrap: "anywhere", userSelect: "text", WebkitUserSelect: "text",
 });
 /** What can be done with a file's path (copied, shown in Finder), at the end of its facts. */
-export const actions = style({ display: "inline-flex", gap: "2px", marginLeft: "auto" });
-export const action = style({
-  display: "inline-flex", alignItems: "center", gap: "4px", padding: "2px 6px", border: "0",
-  borderRadius: "999px", background: "transparent",
-  color: vars.muted, font: "inherit", cursor: "pointer", whiteSpace: "nowrap",
-  selectors: { "&:hover": { background: vars.hover, color: vars.text } },
+/**
+ * A file's card's foot, at the card's padding (controlsCss.panelEdge, docs/ui-panels.md): what it is (its size, its
+ * entries) in words where the words stand, no ground of their own by a corner, and its buttons (ui.tsx PanelButton) in
+ * the card's corner, as far from its side as from its foot.
+ */
+export const fileFoot = style({
+  display: "flex", alignItems: "center", gap: "8px", minWidth: "0", minHeight: PANEL_PILL, paddingLeft: TEXT_IN,
+  fontSize: vars.textMeta, color: vars.muted,
 });
+export const actions = style({ display: "inline-flex", gap: "2px", marginLeft: "auto", flex: "none" });
 export const time = style({ flex: "0 0 auto", marginLeft: "auto", whiteSpace: "nowrap" });
 /** A tinted pill: its glyph and the state's name, its colours by `data-state`. */
 export const state = style({

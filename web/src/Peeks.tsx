@@ -13,6 +13,8 @@ import { lang, t } from "./i18n.ts";
 import { useStation } from "./station.tsx";
 import { failure, useToast } from "./toast.tsx";
 import * as css from "./Hover.css.ts";
+import { panelEdge } from "./styles/controls.css.ts";
+import { PanelButton } from "./ui.tsx";
 import { pathIn } from "./paths.ts";
 import { useThisMachineAddress } from "./thisMachine.ts";
 
@@ -394,9 +396,9 @@ function PathActions({ path, local }: { path: string; local: boolean }) {
   }, (e: unknown) => toast(t("web-main.copyFailed", { error: failure(e) })));
   return (
     <span className={css.actions}>
-      <button type="button" className={css.action} onClick={copy}>{copied ? <Check size={12} /> : <Copy size={12} />}{copied ? t("common.copied") : t("web-main.preview.copyPath")}</button>
+      <PanelButton tone="quiet" onClick={copy}>{copied ? <Check size={12} /> : <Copy size={12} />}{copied ? t("common.copied") : t("web-main.preview.copyPath")}</PanelButton>
       {local && (path.startsWith("/") || path.startsWith("~/")) && (
-        <button type="button" className={css.action} onClick={() => void reveal(path, toast)}><Folder size={12} />{t("web-main.preview.reveal", { app: FILES_APP })}</button>
+        <PanelButton tone="quiet" onClick={() => void reveal(path, toast)}><Folder size={12} />{t("web-main.preview.reveal", { app: FILES_APP })}</PanelButton>
       )}
     </span>
   );
@@ -428,41 +430,45 @@ function FileCard({ session, station, path, line, local }: { session: string; st
   const read = useRead<Peek>(peekKey(station, session, path, line), () => api.filePeek<Peek>(session, path, line));
   if (read.state === "loading") return <CardSkeleton />;
   if (read.state === "error") return (
-    <div className={css.rich}>
-      <FileHead name={path.replace(/\/$/, "").split("/").at(-1) || path} dir={path.endsWith("/")} path={path} />
-      <p className={css.note}>{read.message}</p>
-      <div className={css.facts}><PathActions path={path} local={local} /></div>
-    </div>
+    <>
+      <div className={css.rich}>
+        <FileHead name={path.replace(/\/$/, "").split("/").at(-1) || path} dir={path.endsWith("/")} path={path} />
+        <p className={css.note}>{read.message}</p>
+      </div>
+      <div className={`${css.fileFoot} ${panelEdge}`}><PathActions path={path} local={local} /></div>
+    </>
   );
   const p = read.value;
   const dir = p.kind === "dir";
   return (
-    <div className={css.rich}>
-      <FileHead name={`${p.name}${p.lines?.at ? `:${p.lines.at}` : ""}`} dir={dir} path={p.path} time={ago(p.mtime)} />
-      {p.kind === "text" && p.lines && p.lines.text.length > 0 && (
-        <pre className={css.lines}>
-          {p.lines.text.map((l, i) => {
-            const n = p.lines!.start + i;
-            return <span key={n} className={css.line} data-at={n === p.lines!.at || undefined}><span className={css.lineNo}>{n}</span><span className={css.lineText}>{l || " "}</span></span>;
-          })}
-        </pre>
-      )}
-      {p.kind === "image" && p.image && <img className={css.thumb} src={`data:${p.image.type};base64,${p.image.data}`} alt="" />}
-      {dir && p.entries && p.entries.length > 0 && (
-        <ul className={css.entries}>
-          {p.entries.map((e) => {
-            const EntryIcon = e.endsWith("/") ? Folder : FileIcon;
-            return <li key={e} className={css.entry}><EntryIcon size={12} className={css.entryIcon} /><span className={css.entryName}>{e.replace(/\/$/, "")}</span></li>;
-          })}
-        </ul>
-      )}
-      <div className={css.facts}>
+    <>
+      <div className={css.rich}>
+        <FileHead name={`${p.name}${p.lines?.at ? `:${p.lines.at}` : ""}`} dir={dir} path={p.path} time={ago(p.mtime)} />
+        {p.kind === "text" && p.lines && p.lines.text.length > 0 && (
+          <pre className={css.lines}>
+            {p.lines.text.map((l, i) => {
+              const n = p.lines!.start + i;
+              return <span key={n} className={css.line} data-at={n === p.lines!.at || undefined}><span className={css.lineNo}>{n}</span><span className={css.lineText}>{l || " "}</span></span>;
+            })}
+          </pre>
+        )}
+        {p.kind === "image" && p.image && <img className={css.thumb} src={`data:${p.image.type};base64,${p.image.data}`} alt="" />}
+        {dir && p.entries && p.entries.length > 0 && (
+          <ul className={css.entries}>
+            {p.entries.map((e) => {
+              const EntryIcon = e.endsWith("/") ? Folder : FileIcon;
+              return <li key={e} className={css.entry}><EntryIcon size={12} className={css.entryIcon} /><span className={css.entryName}>{e.replace(/\/$/, "")}</span></li>;
+            })}
+          </ul>
+        )}
+      </div>
+      <div className={`${css.fileFoot} ${panelEdge}`}>
         {dir && <span>{t("web-main.preview.items", { count: p.count ?? p.entries?.length ?? 0 })}</span>}
-        {!dir && <span className={css.chip}>{fileSize(p.size)}</span>}
-        {p.kind === "binary" && <span className={css.chip}>{t("web-main.preview.binary")}</span>}
+        {!dir && <span>{fileSize(p.size)}</span>}
+        {p.kind === "binary" && <span>{t("web-main.preview.binary")}</span>}
         <PathActions path={p.path} local={local} />
       </div>
-    </div>
+    </>
   );
 }
 

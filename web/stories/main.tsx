@@ -17,7 +17,7 @@ import * as shellCss from "../src/styles/shell.css.ts";
 import * as nav from "../src/Sidebar.css.ts";
 import * as pagesCss from "../src/styles/pages.css.ts";
 import { vars } from "../src/styles/tokens.css.ts";
-import { CHANGELOG, SENT, readFile } from "./data.ts";
+import { CHANGELOG, PEEK, SENT, readFile } from "./data.ts";
 import { DEVICES, device, wear, type Device } from "./devices.ts";
 import { play } from "./play.ts";
 import { stories, type Story } from "./stories.tsx";
@@ -37,17 +37,21 @@ extendDemo({
   topic: (t) => (t.topic === "changelog" ? (story?.news ? CHANGELOG : { tabs: [] }) : undefined),
   // A chat's messages with files: the last of a person's with the picture and the files, the agent's next with a file.
   then: (t, value) => {
-    if (!story?.files || t.topic !== "chat" || !value) return undefined;
-    const chat = value as { messages: { authorKind: string; attachments: unknown[] }[] };
+    if (!(story?.files || story?.peek) || t.topic !== "chat" || !value) return undefined;
+    const chat = value as { messages: { authorKind: string; text: string; attachments: unknown[] }[] };
     const person = chat.messages.findLastIndex((m) => m.authorKind === "person");
-    const agent = chat.messages.findLastIndex((m) => m.authorKind === "agent");
+    // The first of the agent's, not its last: the demo's agent says more as the story runs, and what its last said would
+    // move to the next.
+    const agent = chat.messages.findIndex((m) => m.authorKind === "agent");
     return {
       ...chat,
-      messages: chat.messages.map((m, i) => i === person ? { ...m, attachments: [SENT.picture, ...SENT.files] }
-        : i === agent ? { ...m, attachments: [SENT.files[0]] } : m),
+      messages: chat.messages.map((m, i) => story.files && i === person ? { ...m, attachments: [SENT.picture, ...SENT.files] }
+        : i === agent ? { ...m, ...(story.files ? { attachments: [SENT.files[0]] } : {}), ...(story.peek ? { text: `${m.text}\n\n改在 \`${PEEK.path}\` 里。` } : {}) } : m),
     };
   },
+  // A file named in a message, as its card reads it: there, or (`peek: "missing"`) not.
   call: (name, p) => name === "drive.read" ? readFile(String(p.path), Number(p.offset), Number(p.length))
+    : name === "file.peek" ? (story?.peek === "missing" ? Promise.reject(new Error("No such file")) : PEEK)
     : name === "drive.place" || name === "changelog.seen" || name === "station.updateNotice" ? null : undefined,
 });
 // What the tests read: the stories and how each is reached.

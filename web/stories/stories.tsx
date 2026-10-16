@@ -47,6 +47,8 @@ export interface Story {
   news?: boolean;
   /** Its chat's messages carry files (data.ts SENT): pictures and files' cards. */
   files?: boolean;
+  /** A file its chat's agent names in a message, read for its card (data.ts PEEK), or not to be found. */
+  peek?: "file" | "missing";
 }
 
 const at = (name: string) => ({ ...AT, path: name });
@@ -275,6 +277,8 @@ export const stories: Story[] = [
   { id: "panel-rail-menu", group: "小面板", title: "侧边条右键菜单", app: true, steps: [{ rightClick: '[aria-label="文件"]' }] },
   { id: "panel-rail-adder", group: "小面板", title: "侧边条自定义", app: true, steps: [{ rightClick: '[aria-label="文件"]' }, { text: "自定义侧边条" }] },
   { id: "panel-chat-menu", group: "小面板", title: "对话右键菜单", app: true, steps: [{ rightClick: "a:has-text(\"订单导出支持 CSV\")" }] },
+  { id: "panel-file-card", group: "小面板", title: "消息里的文件卡片", app: true, peek: "file", steps: [{ move: [1, 1] }, { hover: 'button[class*="fileChip"]' }] },
+  { id: "panel-file-card-missing", group: "小面板", title: "消息里的文件卡片 · 找不到", app: true, peek: "missing", steps: [{ move: [1, 1] }, { hover: 'button[class*="fileChip"]' }] },
   { id: "panel-station-card", group: "小面板", title: "station 卡片", app: true, steps: [{ move: [1, 1] }, { hover: "header >> text=/Studio|这台机器/" }] },
   { id: "panel-switcher", group: "小面板", title: "⌘K", app: true, steps: [{ click: "textarea" }, { key: "ControlOrMeta+k" }] },
   {
