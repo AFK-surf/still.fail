@@ -100,6 +100,8 @@ export type HubOptions = {
   internal?: InternalChat | null;
   /// A session's page in still.fail (its /o/ link), when the station is in a workspace.
   link?: (key: string) => string | undefined;
+  /// The workspaces the station is in now, its home one first (docs/multi-workspace.md); none outside any.
+  workspaces?: () => string[];
   /// The runners alive on this machine now, by id (default: <data>/run/runners).
   runners?: () => string[];
   cold?: ColdStorage;
@@ -116,6 +118,7 @@ export class Hub {
   readonly internal: InternalChat | null;
   readonly drivers: Map<string, AgentDriver>;
   readonly link: (key: string) => string | undefined;
+  readonly workspaces: () => string[];
   readonly cold: ColdStorage;
   readonly accounts: Accounts;
   readonly clock: Clock.Clock;
@@ -151,6 +154,7 @@ export class Hub {
     this.internal = options.internal ?? null;
     this.drivers = new Map(options.drivers.map((d) => [d.runtime(), d]));
     this.link = options.link ?? (() => undefined);
+    this.workspaces = options.workspaces ?? (() => []);
     this.cold = options.cold ?? NOTHING_COLD;
     this.accounts = new Accounts({
       config: () => this.config(),
@@ -224,6 +228,31 @@ export class Hub {
     this.adopted.clear();
     await Promise.all([...this.actors.values()].map((a) => a.suspend()));
     await Promise.all([...this.drivers.values()].map((d) => d.shutdown()));
+  }
+
+  /// Whether a session's workspace is one the station is in now (a joined one may have taken it out): held otherwise.
+  /// Outside every workspace the "unbound" hold says so instead.
+  private inAWorkspace(key: string): boolean {
+    const all = this.workspaces();
+    if (all.length === 0) return true;
+    const ws = this.store.getSession(key)?.ws ?? null;
+    return ws === null || all.includes(ws);
+  }
+
+  /// The station left one of its workspaces but is still in others (docs/multi-workspace.md): that workspace's
+  /// sessions end their processes as `suspendAll` ends everyone's; `backIn` resumes them once it is back.
+  async leftWorkspace(ws: string) {
+    const keys = new Set(this.store.listSessions().filter((s) => s.ws === ws).map((s) => s.key));
+    for (const [key, fiber] of this.deadlines) if (keys.has(key)) (this.interrupt(fiber), this.deadlines.delete(key));
+    await Promise.all([...this.actors.values()].filter((a) => keys.has(a.key)).map((a) => a.suspend()));
+  }
+
+  /// The station is in a workspace again: its sessions' cut-off turns resume, and what waited goes on.
+  backIn(ws: string) {
+    for (const row of this.store.listSessions().filter((s) => s.ws === ws)) {
+      if (row.running && this.online(row)) void this.actor(row).recover();
+      else if (this.store.sessionsWithPending().includes(row.key) && this.online(row)) void this.actor(row).kick();
+    }
   }
 
   /// How many turns are running.
@@ -757,6 +786,19 @@ export class Hub {
     return false;
   }
 
+  /// Which workspace a session's chat is in: its own, or the station's home one for those from before (null outside
+  /// any workspace).
+  wsOf(row: SessionRow | string | null): string | null {
+    const s = typeof row === "string" ? this.store.getSession(row) : row;
+    return s?.ws ?? this.workspaces()[0] ?? null;
+  }
+
+  /// Whether a session's chat is in `workspace` (a viewer's): what a member of one workspace may see and use.
+  inWorkspace(row: SessionRow | string | null, workspace: string): boolean {
+    const s = typeof row === "string" ? this.store.getSession(row) : row;
+    return s !== null && s !== undefined && this.wsOf(s) === workspace;
+  }
+
   /// A session for a connect: the connect's own profile when it keeps to one (and it still can run it); else any of its
   /// runtime, the model's first (pool.ts).
   createSession(config: HubConfig, key: string, connect: Connect, scope: "thread" | "all", message: InboundMessage | null, title: string | null, createdBy: string | null) {
@@ -787,6 +829,7 @@ export class Hub {
       token: newToken(),
       createdAt: now,
       lastActiveAt: now,
+      ws: connect.workspace ?? null,
     });
     log.info("hub", "session created", { session: key, connect: connect.id, scope, runtime: connect.bind.runtime, profile: profile.id });
   }
@@ -842,7 +885,7 @@ export class Hub {
       archiveIsCold: (key) => this.cold.isCold(key),
       restoreArchive: (key) => this.cold.restore(key),
       cleanArchive: (key) => this.cold.pack(key),
-      held: () => this.holdsNow.size > 0,
+      held: (key) => this.holdsNow.size > 0 || !this.inAWorkspace(key),
       stopJobs: async (key) => {
         const jobs = this.jobs;
         const running = this.store.listJobs(key).filter((j) => j.state === "running" && (j.watch || j.port === null));

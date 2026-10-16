@@ -101,8 +101,9 @@ export type SessionDeps = {
   /// A turn ended as its opener (an agent that opened its chat) is told: all_done or need_human with its words, or
   /// failed or stopped.
   settled?(key: string, state: "all_done" | "need_human" | "failed" | "stopped", words: string | null): void;
-  /// Turns are held (the station is about to stop or hand over): none starts, messages stay pending.
-  held(): boolean;
+  /// Turns are held (the station is about to stop or hand over, or is out of the session's workspace): none starts,
+  /// messages stay pending.
+  held(key: string): boolean;
   /// Stopped while it waits: ends the session's jobs that would bring it back.
   stopJobs(key: string): Promise<void>;
   /// Archived: ends every job and service of the session.
@@ -347,7 +348,7 @@ export class SessionActor {
   /// Its last turn stopped at its account's allowance and it was changed since: it goes on where it stopped.
   goOn(): Promise<void> {
     return this.enqueue(async () => {
-      if (this.deps.held() || this.archived() || this.turn || this.agent?.session.busy()) return;
+      if (this.deps.held(this.key) || this.archived() || this.turn || this.agent?.session.busy()) return;
       if (this.deps.store.pendingMessages(this.key).length > 0) return this.pump();
       await this.startTurn("resume", GO_ON_AFTER_SPENT);
     });
@@ -378,7 +379,7 @@ export class SessionActor {
   /// Starts the runtime process ahead of a message, so its start-up overlaps the typing.
   warm(): Promise<void> {
     return this.enqueue(async () => {
-      if (this.agent || this.deps.held()) return;
+      if (this.agent || this.deps.held(this.key)) return;
       log.info("session", "warming session process", { session: this.key });
       await this.ensureAgent();
       this.idleSince = this.now();
@@ -517,7 +518,7 @@ export class SessionActor {
   }
 
   private async giveNotices() {
-    if (this.deps.held()) return;
+    if (this.deps.held(this.key)) return;
     if (this.archived()) {
       this.notices = [];
       return;
@@ -534,7 +535,7 @@ export class SessionActor {
   }
 
   private async pump() {
-    if (this.deps.held() || this.archived()) return; // they stay pending
+    if (this.deps.held(this.key) || this.archived()) return; // they stay pending
     const store = this.deps.store;
     const pending = store.pendingMessages(this.key);
     if (pending.length === 0) return;
@@ -867,7 +868,7 @@ export class SessionActor {
     if (turn?.declared) this.toolsRestarts = 0;
     // Reopen Claude once so it reads the current credentials (and refreshes an expiring machine token). Resume its
     // transcript with a continuation, never replay the original request: it may already have run tools.
-    if (this.runtime === "claude" && outcome.kind === "failed" && outcome.reason === "auth" && !stopRequested && !this.deps.held() && turn && !turn.authRetried && !turn.declared) {
+    if (this.runtime === "claude" && outcome.kind === "failed" && outcome.reason === "auth" && !stopRequested && !this.deps.held(this.key) && turn && !turn.authRetried && !turn.declared) {
       this.nudges = 0;
       const agent = this.agent;
       this.agent = null;
@@ -936,7 +937,7 @@ export class SessionActor {
       this.nudges = 0;
       return;
     }
-    if (this.deps.held()) return;
+    if (this.deps.held(this.key)) return;
     // Not nudged (it could not have answered): told to go on in the new process, once; lost again, given up on.
     if (lost !== null) {
       this.nudges = 0;
@@ -1025,7 +1026,7 @@ export class SessionActor {
           Effect.promise(() =>
             this.enqueue(async () => {
               // Held: the wait stays, for the next station to take up.
-              if (this.deps.held() || this.waiting !== wait) return;
+              if (this.deps.held(this.key) || this.waiting !== wait) return;
               if (this.archived()) return this.letGo();
               this.waiting = null;
               this.phase = "idle";

@@ -6,7 +6,7 @@ import { randomBytes } from "node:crypto";
 import { appendFileSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, statfsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { clean, fileName as nameOf, inside } from "../../ops/paths.ts";
-import { type Answer, type Request, error, json, param, percentDecode } from "../request.ts";
+import { type Answer, type Request, HOME_ONLY, error, json, param, percentDecode } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
 import { tr } from "../../ops/i18n.ts";
 import { log } from "../../ops/log.ts";
@@ -318,6 +318,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
                 title: typeof i.title === "string" ? chars(i.title, 120) : null,
                 createdBy: r.viewer.email,
                 clientKey: given("clientKey"),
+                ws: r.viewer.workspace || null,
               },
               r.lang,
             ),
@@ -331,6 +332,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
       pattern: /^\/machine-sessions$/,
       handle: (r) =>
         write(async (_s, a) => {
+          if (r.viewer.home === false) throw new Refused(403, HOME_ONLY);
           const i = input(r);
           const kind = runtime(r, i);
           const id = text(i.id);

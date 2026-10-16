@@ -11,6 +11,13 @@ import { type Provider, providerOf } from "./provider.ts";
 
 export type Revocation = { kind: string; id: string; at: number };
 
+/// A workspace the station is in besides its home one (docs/multi-workspace.md): what it is called there, the other
+/// stations there and what that workspace takes back.
+export type Joined = { workspace: string; workspace_name: string; name: string; peers: any[]; revocations: Revocation[] };
+
+/// One of the workspaces the station is in, its home one (cloud.json's top level) or a joined one.
+export type Membership = Joined & { home: boolean };
+
 export type CloudState = {
   /// The control plane it is enrolled in (cloud/provider.ts): absent is still.fail cloud, as files from before say.
   provider?: Provider;
@@ -31,6 +38,9 @@ export type CloudState = {
   /// When the cloud said the station was removed from its workspace (unix seconds), and how (4004 / 404).
   removed_at?: number;
   removed_code?: number;
+  /// The workspaces it joined besides its home one (the top level), as the control plane's `state` frame said last;
+  /// absent from files of before, and from stations in one workspace.
+  joined?: Joined[];
 };
 
 export const meshDir = (data: string) => join(data, "mesh");
@@ -60,6 +70,7 @@ export function readState(data: string): CloudState | null {
   if (!existsSync(statePath(data))) return null;
   const raw = JSON.parse(readFileSync(statePath(data), "utf8"));
   const state: CloudState = { ...raw, relay_urls: raw.relay_urls ?? [], peers: raw.peers ?? [], revocations: raw.revocations ?? [] };
+  if (raw.joined !== undefined) state.joined = joinedOf(raw.joined);
   if (raw.provider !== undefined) state.provider = providerOf(raw.provider);
   return state;
 }
@@ -75,8 +86,27 @@ export function writeState(data: string, s: CloudState) {
   if (s.gateway_keys !== undefined) out.gateway_keys = s.gateway_keys;
   if (s.removed_at !== undefined) out.removed_at = s.removed_at;
   if (s.removed_code !== undefined) out.removed_code = s.removed_code;
+  if (s.joined !== undefined && s.joined.length > 0) out.joined = s.joined;
   writePrivate(statePath(data), JSON.stringify(out, null, 2));
 }
+
+/// The joined workspaces a file or a `state` frame's `workspaces` names, what is malformed in them left out.
+export function joinedOf(raw: unknown): Joined[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((j: any) =>
+    typeof j?.workspace === "string" && j.workspace !== ""
+      ? [{
+          workspace: j.workspace,
+          workspace_name: typeof j.workspace_name === "string" ? j.workspace_name : j.workspace,
+          name: typeof j.name === "string" ? j.name : "",
+          peers: Array.isArray(j.peers) ? j.peers : [],
+          revocations: Array.isArray(j.revocations) ? j.revocations.filter(isRevocation) : [],
+        }]
+      : [],
+  );
+}
+
+export const isRevocation = (r: any): r is Revocation => typeof r?.kind === "string" && typeof r?.id === "string" && Number.isInteger(r?.at) && r.at >= 0;
 
 /// The state in memory, and who wants to hear of its changes.
 export class Cloud {
@@ -263,6 +293,28 @@ export class Cloud {
 
   removed(): boolean {
     return this.state?.removed_at !== undefined;
+  }
+
+  /// The workspace it was enrolled in first (cloud.json's top level), where its station-wide settings are managed;
+  /// null outside any.
+  home(): string | null {
+    const s = this.state;
+    return s && s.workspace && !this.removed() ? s.workspace : null;
+  }
+
+  /// Every workspace the station is in now, its home one first. A locked station is in its home one only: the lock
+  /// names one workspace's members and stations (docs/multi-workspace.md).
+  memberships(): Membership[] {
+    const s = this.state;
+    if (s === null || !s.workspace || this.removed()) return [];
+    const home: Membership = { workspace: s.workspace, workspace_name: s.workspace_name, name: s.name, peers: s.peers, revocations: s.revocations, home: true };
+    if (this.locked() !== null) return [home];
+    return [home, ...(s.joined ?? []).filter((j) => j.workspace !== s.workspace).map((j) => ({ ...j, home: false }))];
+  }
+
+  /// The station in `workspace`, if it is in it now.
+  membership(workspace: string): Membership | null {
+    return this.memberships().find((m) => m.workspace === workspace) ?? null;
   }
 
   /// still.fail's relays, ours first, as `relays()` in the Rust station: `relay_urls`, else `relay_url`; what is no URL

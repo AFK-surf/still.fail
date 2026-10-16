@@ -10,7 +10,7 @@ import { log } from "../ops/log.ts";
 import { wall } from "../ops/fibers.ts";
 import { nowSecs } from "../ops/files.ts";
 import type { Accepted } from "../cloud/provider.ts";
-import { type Admitted, readOnly, revoked, verifyMember } from "./credential.ts";
+import { type Admitted, readOnly, revoked, verifyMemberOf } from "./credential.ts";
 import { type Entry, LockRefusal, admit, asEntry, genesis, lowerRole } from "../cloud/lock.ts";
 import type { Connection, Stream } from "./native.ts";
 import { answerAdb, type Shares } from "./adb.ts";
@@ -164,7 +164,8 @@ export async function serve(m: Members, conn: Connection) {
   // The role the credential names: the control plane's word, which the lock may lower but not raise.
   let named = "";
   const check = (line: any) => {
-    const admitted = verifyMember(typeof line?.credential === "string" ? line.credential : "", m.cloud.grantKeys(), state().workspace, device, state().revocations, m.accepted?.());
+    // Of any workspace the station is in: the viewer's is the one its requests are answered for.
+    const admitted = verifyMemberOf(typeof line?.credential === "string" ? line.credential : "", m.cloud.grantKeys(), m.cloud.memberships(), device, m.accepted?.());
     named = admitted.viewer.role;
     if (proof) admitted.viewer.lockDevice = proof;
     return inLock(m.cloud, admitted, named, device);
@@ -181,15 +182,16 @@ export async function serve(m: Members, conn: Connection) {
   }
   // How far its lock goes, when it has one (a device that has more brings it, docs/workspace-lock.md).
   const head = lockHead(m.cloud);
-  await writeLine(first, { ok: true, station: state().name, expires_at: current.exp, ...(head ? { lock: head } : {}) });
+  await writeLine(first, { ok: true, station: m.cloud.membership(current.viewer.workspace)?.name ?? state().name, expires_at: current.exp, ...(head ? { lock: head } : {}) });
   log.info("mesh", "client connected", { email: current.viewer.email, device: device.slice(0, 12) });
 
   // The connection ends when its credential runs out or is revoked, or the station leaves its workspace: checked on
   // every change of the cloud's state, and when the credential runs out.
   // Or the lock takes the device away (or lowers its member's role: the next request goes with the role it has now).
   const gone = () => {
-    if (m.cloud.removed()) conn.close(2, "station_removed");
-    else if (revoked(current, state().revocations)) conn.close(3, "credential_revoked");
+    const of = m.cloud.membership(current.viewer.workspace);
+    if (m.cloud.removed() || of === null) conn.close(2, "station_removed");
+    else if (revoked(current, of.revocations)) conn.close(3, "credential_revoked");
     else if (current.exp <= nowSecs()) conn.close(3, "credential_expired");
     else {
       try {
@@ -227,7 +229,7 @@ export async function serve(m: Members, conn: Connection) {
   try {
     for (let stream = await conn.acceptBi(); stream; stream = await conn.acceptBi()) {
       if (gone()) return;
-      const viewer = current.viewer;
+      const viewer = { ...current.viewer, home: m.cloud.home() === current.viewer.workspace };
       request(m, stream, viewer, conn).catch((e) => log.info("mesh", "request failed", { error: (e as Error).message }));
     }
   } finally {

@@ -19,6 +19,7 @@ import { routes as hub, uploadPath } from "./routes/hub.ts";
 import { routes as deviceTools } from "./routes/tools.ts";
 import { routes as links } from "./routes/links.ts";
 import { routes as drive } from "./routes/drive.ts";
+import { routes as workspaces } from "./routes/workspaces.ts";
 import { Drive } from "../drive/drive.ts";
 import { ownPaths } from "../ops/own.ts";
 import type { AgentsParts } from "../sessions/agents.ts";
@@ -116,6 +117,7 @@ export class Admin {
           })
         : []),
       ...(deps.agents?.config ? deviceTools({ config: deps.agents.config, changed: () => deps.events?.overviewChanged() }) : []),
+      ...(deps.agents?.cloud ? workspaces({ cloud: deps.agents.cloud, data: deps.agents.config.data, changed: () => deps.events?.overviewChanged() }) : []),
       ...(deps.agents?.config
         ? drive({
             config: deps.agents.config,

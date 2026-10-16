@@ -184,7 +184,7 @@ describe("remote", { concurrency: true }, () => {
       await call(r, peer, "task.prepare", { spec: { command: FOREVER } });
       await call(r, peer, "task.start");
     }
-    await r.remote.revoke("ws", ["peer-b"], true);
+    await r.remote.revoke([{ workspace: "ws", peers: ["peer-b"] }], true);
     assert.equal((await call(r, "peer-a", "task.get")).job.state, "stopped");
     assert.equal((await call(r, "peer-b", "task.get")).job.state, "running");
     await call(r, "peer-b", "task.stop");

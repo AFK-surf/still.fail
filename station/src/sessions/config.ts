@@ -31,6 +31,8 @@ export type Connect = {
   requireMention: boolean;
   slack: { botName?: string; [key: string]: unknown };
   bind: { runtime: Runtime; profile?: string; model?: string; effort?: string };
+  /// The workspace it was added in, whose chats its sessions are (docs/multi-workspace.md); absent: the home one.
+  workspace?: string;
 };
 
 /// decision.rs `DecisionRule`: the completion review after all_done, and the model it asks.
@@ -96,6 +98,7 @@ export function hubConfig(raw: any, dataDir: string): HubConfig {
       requireMention: mode === "multi-session" ? true : c.requireMention !== false,
       slack: { ...(c.slack ?? {}), botName: nonEmpty(c.slack?.botName) },
       bind: { runtime: bind.runtime === "codex" ? "codex" : "claude", profile: nonEmpty(bind.profile), model: nonEmpty(bind.model), effort: nonEmpty(bind.effort) },
+      ...(nonEmpty(c.workspace) !== undefined ? { workspace: nonEmpty(c.workspace) } : {}),
     };
   });
   const completion = raw?.automaticDecisions?.completion ?? {};

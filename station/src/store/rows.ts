@@ -25,6 +25,9 @@ export type SessionRow = {
   key: string; connect: string; scope: SessionScope; title: string | null; createdBy: string | null; runtime: string;
   profile: string; profilePinned: boolean; model: string | null; effort: string | null; fast: boolean | null;
   runtimeSessionId: string | null; workspace: string; cwd: string | null;
+  /// Which of the station's workspaces its chat is in (docs/multi-workspace.md): null is its home workspace (sessions
+  /// from before, and those made outside any workspace's request). Not the `workspace` above, its directory.
+  ws: string | null;
   /// Not for the pages (serde skip).
   token: string;
   running: boolean; createdAt: number; lastActiveAt: number; archivedAt: number | null; archivedBy: string | null;
@@ -36,7 +39,7 @@ export type NewSession = {
   key: string; connect: string; scope?: SessionScope | null; title?: string | null; createdBy?: string | null;
   runtime: string; profile: string; profilePinned?: boolean; model?: string | null; effort?: string | null;
   fast?: boolean | null; workspace: string; cwd?: string | null; runtimeSessionId?: string | null; token: string;
-  createdAt: number; lastActiveAt: number;
+  createdAt: number; lastActiveAt: number; ws?: string | null;
 };
 
 /// A place people talk: a Slack thread, or a chat on the station's page.
@@ -259,7 +262,7 @@ export function toSession(r: Json): SessionRow {
     key: r.key, connect: r.connect, scope: r.scope === "all" ? "all" : "thread", title: r.title, createdBy: r.created_by,
     runtime: r.runtime, profile: r.profile, profilePinned: r.profile_pinned === 1, model: r.model, effort: r.effort,
     fast: r.fast === null || r.fast === undefined ? null : r.fast !== 0, runtimeSessionId: r.runtime_session_id,
-    workspace: r.workspace, cwd: r.cwd ?? null, token: r.token, running: r.running === 1, createdAt: r.created_at,
+    workspace: r.workspace, cwd: r.cwd ?? null, ws: r.ws ?? null, token: r.token, running: r.running === 1, createdAt: r.created_at,
     lastActiveAt: r.last_active_at, archivedAt: r.archived_at, archivedBy: r.archived_by, shownAt: r.shown_at,
   };
 }

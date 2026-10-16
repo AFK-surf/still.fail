@@ -19,6 +19,8 @@ export type ProviderSpec = {
   readonly enrollPath: string;
   /// The enrollment proof's prefixes, tried in order: the next only when the control plane refuses the signature.
   readonly enrollPrefixes: readonly string[];
+  /// POST, signed as enrollment: joins one more workspace, staying in those it is in (docs/multi-workspace.md).
+  readonly joinPath: string;
   /// The presence WebSocket.
   readonly connectPath: string;
   /// The connect proof's prefixes: each signs under its own tag in its own x-<prefix>-* headers.
@@ -48,6 +50,7 @@ export const STILLFAIL: ProviderSpec = {
   name: "still.fail cloud",
   enrollPath: "/v1/stations/enroll",
   enrollPrefixes: ["stillfail", "ember"],
+  joinPath: "/v1/stations/join",
   connectPath: "/v1/stations/connect",
   connectPrefixes: ["stillfail", "ember"],
   notifyPath: "/v1/stations/notify",
@@ -67,6 +70,7 @@ export const COMMA: ProviderSpec = {
   name: "Comma",
   enrollPath: "/v1/comma/stations/enroll",
   enrollPrefixes: ["comma"],
+  joinPath: "/v1/comma/stations/join",
   connectPath: "/v1/comma/stations/connect",
   connectPrefixes: ["comma"],
   notifyPath: "/v1/comma/stations/notify",

@@ -26,7 +26,7 @@ import {
   byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
   toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addWatchColumn } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
 import * as usage from "./usage.ts";
 
 export * from "./rows.ts";
@@ -90,6 +90,7 @@ export class Store {
       addClientColumn(db);
       addAutoTitleColumns(db);
       addWatchColumn(db);
+      addWorkspaceColumns(db);
       db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
     } catch (e) {
       db.close();
@@ -214,12 +215,12 @@ export class Store {
   insertSession(s: NewSession): void {
     this.#with((changes) => {
       this.#run(
-        `INSERT INTO sessions (key, connect, scope, title, created_by, runtime, profile, profile_pinned, model, effort, workspace, cwd, runtime_session_id, token, created_at, last_active_at, told_notes, fast)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sessions (key, connect, scope, title, created_by, runtime, profile, profile_pinned, model, effort, workspace, cwd, runtime_session_id, token, created_at, last_active_at, told_notes, fast, ws)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         s.key, s.connect, s.scope ?? "thread", s.title ?? null, s.createdBy ?? null, s.runtime, s.profile, flag(s.profilePinned ?? false),
         s.model ?? null, s.effort ?? null, s.workspace, s.cwd ?? null, s.runtimeSessionId ?? null, s.token, s.createdAt, s.lastActiveAt,
         // A new session begins with today's instructions: no note is news to it.
-        latestNote(), optFlag(s.fast),
+        latestNote(), optFlag(s.fast), s.ws ?? null,
       );
       changes.push({ type: "session", key: s.key });
     });

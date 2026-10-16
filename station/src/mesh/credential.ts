@@ -7,7 +7,8 @@ import { type Accepted, STILLFAIL } from "../cloud/provider.ts";
 import { wall } from "../ops/fibers.ts";
 
 /// `lockDevice`: the device's base key and its proof for this endpoint, as its hello gave them (cloud/lock.ts).
-export type Viewer = { sub: string; email: string; name: string; role: string; workspace: string; device: string; lockDevice?: { base: string; proof: string } };
+/// `home`: whether `workspace` is the station's home one (docs/multi-workspace.md), as of the request; absent is yes.
+export type Viewer = { sub: string; email: string; name: string; role: string; workspace: string; device: string; lockDevice?: { base: string; proof: string }; home?: boolean };
 export type Admitted = { viewer: Viewer; exp: number; iat: number; sid: string };
 export type Revocation = { kind: string; id: string; at: number };
 
@@ -43,10 +44,27 @@ export function verifyMember(credential: string, keys: any, workspace: string, d
   return admitted;
 }
 
+/// A credential for any of the workspaces the station is in (docs/multi-workspace.md), checked as `verifyMember` does
+/// against that workspace's revocations.
+export function verifyMemberOf(credential: string, keys: any, memberships: { workspace: string; revocations: Revocation[] }[], device: string, accepted: Accepted = STILLFAIL.credential): Admitted {
+  let ws = "";
+  try {
+    ws = JSON.parse(b64(credential.split(".")[1] ?? "").toString())?.ws ?? "";
+  } catch {
+    // Malformed: verifyMember says how.
+  }
+  const of = memberships.find((m) => m.workspace === ws) ?? memberships[0];
+  return verifyMember(credential, keys, of?.workspace ?? "", device, of?.revocations ?? [], accepted);
+}
+
 /// Roles that may read but not write: no messages sent, nothing changed (contract §4).
 export const READ_ONLY_ROLES = ["viewer"];
 
 export const readOnly = (viewer: { role: string }) => READ_ONLY_ROLES.includes(viewer.role);
+
+/// Who manages the station itself (its accounts, updates, device tools, what it shares, the workspaces it joins): an
+/// owner or admin of its home workspace (docs/multi-workspace.md).
+export const managesStation = (viewer: { role: string; home?: boolean }) => (viewer.role === "owner" || viewer.role === "admin") && viewer.home !== false;
 
 /// Taken back: its account's (`sub`) or session's (`sid`) credentials issued up to `at`.
 export function revoked(admitted: Admitted, revocations: Revocation[]): boolean {

@@ -403,3 +403,10 @@ export function addAutoTitleColumns(db: DatabaseSync): void {
 export function addWatchColumn(db: DatabaseSync): void {
   if (!has(db, "jobs", "watch")) db.exec("ALTER TABLE jobs ADD COLUMN watch INTEGER NOT NULL DEFAULT 0");
 }
+
+/// The columns a station in several workspaces came with (docs/multi-workspace.md): which workspace a session's chat
+/// is in (sessions.ws) and whose archive policy a row is (archive_policy.ws); NULL is the station's home workspace.
+export function addWorkspaceColumns(db: DatabaseSync): void {
+  if (!has(db, "sessions", "ws")) db.exec("ALTER TABLE sessions ADD COLUMN ws TEXT");
+  if (!has(db, "archive_policy", "ws")) db.exec("ALTER TABLE archive_policy ADD COLUMN ws TEXT");
+}

@@ -1,6 +1,6 @@
 // What the agents spent, the machine's own sessions, the agents' memory, the machine itself, and the retired footprint
 // (admin/mod.rs: GET /usage, /machine-sessions, /machine-sessions/:runtime/:id, /memory, /host, /footprint).
-import { type Request, type Answer, error, json, param, percentDecode } from "../request.ts";
+import { type Request, type Answer, HOME_ONLY, error, json, param, percentDecode } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
 
 const I64_MIN = -9223372036854775808n;
@@ -47,15 +47,16 @@ export const routes = ({ read, host, agents }: Tools): Route[] => {
         return read(r, "usage", { lang: r.lang, from: String(from), to: String(to), tz: String(clamped), reading: agents?.usage.readingAll() ?? true });
       },
     },
-    // Sessions this machine's own Claude Code and Codex kept (in a terminal), to go on with one in a chat.
-    { method: "GET", pattern: /^\/machine-sessions$/, handle: (r: Request) => read(r, "machineSessions", {}) },
+    // Sessions this machine's own Claude Code and Codex kept (in a terminal), to go on with one in a chat: the
+    // machine's, for its home workspace only (docs/multi-workspace.md).
+    { method: "GET", pattern: /^\/machine-sessions$/, handle: (r: Request) => (r.viewer.home === false ? error(403, HOME_ONLY) : read(r, "machineSessions", {})) },
     // One of them, to look at before going on with it: what was said, the latest `limit`. As the Rust matches its
     // segments (empty ones dropped, any after the third ignored).
     {
       method: "GET",
       pattern: /^\/+machine-sessions\/+([^/]+)\/+([^/]+)(?:\/.*)?$/,
       handle: (r: Request, [runtime, id]: string[]) =>
-        read(r, "machineSession", { lang: r.lang, runtime: segment(runtime!), id: segment(id!), limit: param(r, "limit") }),
+        r.viewer.home === false ? error(403, HOME_ONLY) : read(r, "machineSession", { lang: r.lang, runtime: segment(runtime!), id: segment(id!), limit: param(r, "limit") }),
     },
     // The agents' memory, for the pages to show: the global one, and the shared skills (projects' memories among them).
     { method: "GET", pattern: /^\/memory$/, handle: (r: Request) => read(r, "memory", {}) },

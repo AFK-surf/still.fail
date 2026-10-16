@@ -32,7 +32,8 @@ export class Refused extends Error {}
 /// method `peers` is the transport's roster: {workspace, stations, current}.
 export type PeerCall = (station: string, workspace: string | null, request: Json) => Promise<Json>;
 /// Takes a message a session of another station sent here (the hub's from_peer): from which station, the request.
-export type Inbox = (peer: string, request: Json) => Promise<Json>;
+/// `workspace`: which of this station's workspaces the request was made in, when the transport knows it.
+export type Inbox = (peer: string, request: Json, workspace?: string) => Promise<Json>;
 /// Tells a session's agent something; a throw (or rejection) is "not told" (it is told again later).
 export type RemoteNotify = (session: string, text: string) => void | Promise<void>;
 
@@ -445,10 +446,10 @@ export class Remote {
   }
 
   /// A request of a station that is not of this workspace (the transport checked it names this workspace).
-  async handleOutside(peer: string, request: Json): Promise<Json> {
+  async handleOutside(peer: string, request: Json, workspace?: string): Promise<Json> {
     const xshare = this.xshare;
     if (!xshare) throw new Error("station is starting");
-    return xshare.outside(peer, request);
+    return xshare.outside(peer, request, workspace);
   }
 
   /// A request to another station of the workspace (session_send's messages, and this module's own).
@@ -472,19 +473,19 @@ export class Remote {
     if (method.startsWith("xshare.")) {
       const xshare = this.xshare;
       if (!xshare) throw new Error("station is starting");
-      return xshare.inside(peer, request);
+      return xshare.inside(peer, request, workspace);
     }
     if (method.startsWith("share.")) {
       const shares = this.shares;
       if (!shares) throw new Error("station is starting");
-      return shares(peer, request);
+      return shares(peer, request, workspace);
     }
     // A message (and the files it takes along), a chat read (and its attachments), a chat opened or how one went, not
     // execution: workspace membership (checked by the transport) is enough, as it is for the chats' pages.
     if (["session.message", "session.read", "session.file", "session.put", "session.create", "session.notice"].includes(method)) {
       const inbox = this.inbox;
       if (!inbox) throw new Error("station is starting");
-      return inbox(peer, request);
+      return inbox(peer, request, workspace);
     }
     return this.serially(() => this.task(workspace, peer, method, request));
   }
@@ -622,8 +623,9 @@ export class Remote {
     }
   }
 
-  /// Peers removed from the workspace have their tasks stopped, without touching any local jobs.
-  revoke(workspace: string, peers: string[], membershipCurrent: boolean): Promise<void> {
+  /// Peers removed from a workspace (or the workspace left) have their tasks stopped, without touching any local jobs.
+  /// `rosters`: each workspace the station is in now, with its other stations.
+  revoke(rosters: { workspace: string; peers: string[] }[], membershipCurrent: boolean): Promise<void> {
     return this.serially(async () => {
       const incoming = join(this.root, "incoming");
       for (const name of this.list(incoming)) {
@@ -634,7 +636,7 @@ export class Remote {
           continue;
         }
         const peer = text(meta, "station");
-        if (!membershipCurrent || (text(meta, "workspace") === workspace && peers.includes(peer))) continue;
+        if (!membershipCurrent || rosters.some((r) => text(meta, "workspace") === r.workspace && r.peers.includes(peer))) continue;
         const id = `remote_${name}`;
         if (this.store.getJob(id)?.state === "running") {
           try {

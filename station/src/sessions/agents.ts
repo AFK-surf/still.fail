@@ -19,6 +19,7 @@ import { log } from "../ops/log.ts";
 import { mcpPortFile, ownData, portsToTry, rememberedMcpPort } from "../ops/files.ts";
 import { AdbShares, ControlPlane, Events, Key, Paths, Readers, Store } from "../services.ts";
 import { Notifier } from "../cloud/notify.ts";
+import type { Cloud as CloudState } from "../cloud/state.ts";
 import { adbTools } from "../tools/adb.ts";
 import { archiveTools } from "../tools/archive.ts";
 import { feedbackTools, tellFixed } from "../tools/feedback.ts";
@@ -73,6 +74,8 @@ export type AgentsParts = {
   slack: SlackParts;
   /// Where the station is in its control plane while in a workspace.
   place(): { origin: string; workspace: string; station: string; name: string } | null;
+  /// Where the station stands with its control plane: the workspaces it is in (docs/multi-workspace.md).
+  cloud: CloudState;
   /// GET /overview as `viewer` sees it.
   overview(viewer: Viewer, lang: Lang): Promise<unknown>;
 };
@@ -128,9 +131,11 @@ export const AgentsLive = (control: Control) =>
       };
       const bound = () => place() !== null;
       // Session pages are still.fail cloud's (`<origin>/o/…`); other control planes have none to link to.
+      // In the workspace its chat is in (docs/multi-workspace.md).
       const pageOf = (key: string) => {
         const s = place();
-        return s && plane.spec().pages ? `${s.origin}/o/${s.workspace}/${s.station}/${encode(key)}` : undefined;
+        const ws = store.getSession(key)?.ws ?? s?.workspace;
+        return s && plane.spec().pages && (ws === s.workspace || cloud.membership(ws!) !== null) ? `${s.origin}/o/${ws}/${s.station}/${encode(key)}` : undefined;
       };
 
       const settings = () => hubConfig(config.raw(), data);
@@ -154,6 +159,7 @@ export const AgentsLive = (control: Control) =>
         mcpUrl: () => door?.url ?? "",
         internal: new InternalChat(),
         link: pageOf,
+        workspaces: () => cloud.memberships().map((m) => m.workspace),
         cold: new ColdRooms(() => hub),
       });
       // Background jobs and web services: their agents told through the hub; a service's link is its session's page
@@ -344,10 +350,22 @@ export const AgentsLive = (control: Control) =>
         cloud.listen(() => events.overviewChanged()),
       ];
 
-      // In a workspace, or out of it, as cloud.json says, from now on.
+      // In a workspace, or out of it, as cloud.json says, from now on; and in which of them (docs/multi-workspace.md).
       let inWorkspace = bound();
+      let joinedNow = new Set(cloud.memberships().filter((m) => !m.home).map((m) => m.workspace));
       const follow = async () => {
         const now = bound();
+        const joined = new Set(cloud.memberships().filter((m) => !m.home).map((m) => m.workspace));
+        const left = [...joinedNow].filter((w) => !joined.has(w) && cloud.memberships()[0]?.workspace !== w);
+        const back = [...joined].filter((w) => !joinedNow.has(w));
+        joinedNow = joined;
+        if (now && now === inWorkspace) {
+          for (const ws of left) {
+            log.warn("station", "out of a workspace it had joined: its sessions' runtimes end", { workspace: ws });
+            await hub.leftWorkspace(ws);
+          }
+          for (const ws of back) hub.backIn(ws);
+        }
         if (now === inWorkspace) return;
         inWorkspace = now;
         if (now) {
@@ -516,6 +534,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, slack, overview: view, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      return Agents.of({ hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, slack, overview: view, cloud, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
     }),
   );

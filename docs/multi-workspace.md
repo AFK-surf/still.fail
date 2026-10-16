@@ -32,11 +32,13 @@
 
 ### 登记
 
-`POST /v1/stations/enroll` 的请求体多一个可选的 `join: true`（签名内容不变：token 已经决定了去哪个 workspace，签名证明持有密钥）。
+`POST /v1/stations/enroll` 不变：照旧**搬家**，删掉它所有的 membership，再加这一条。
 
-- 没有 `join`（旧 station，或新 station 首次登记）：和以前一样**搬家**，删掉它所有的 membership，再加这一条。
-- `join: true`：已经在这个 workspace 就只更新名字；否则**加一条** membership，套餐上限按目标 workspace 算。station 钉了锁，或目标 workspace 开了锁、而 station 已经在别的 workspace，就拒绝（`409 locked_workspace`）。
-- 回应和以前一样带 `workspace`、`workspace_name`、`name`，另外带 `home`（主 workspace 的 id）。
+新增 `POST /v1/stations/join`（Comma 是 `/v1/comma/stations/join`），请求体和签名都和 enroll 一样（token 已经决定了去哪个 workspace，签名证明持有密钥）。用新路径而不是在 enroll 上加参数：旧 cloud 会忽略不认识的参数，结果是搬家；新路径在旧 cloud 上是 404，什么都不会变。
+
+- 已经在这个 workspace 就只更新名字；否则**加一条** membership，套餐上限按目标 workspace 算。
+- station 钉了锁，或目标 workspace 开了锁、而 station 已经在别的 workspace，就拒绝（`409 locked_workspace`）。
+- 回应和 enroll 一样带 `workspace`、`workspace_name`、`name`，另外带 `home`（主 workspace 的 id）。
 
 ### presence socket
 
@@ -44,7 +46,7 @@
 
 - 顶层字段照旧，说的是**主 workspace**：`workspace`、`workspace_name`、`name`、`peers`、`revocations`、`lock`。旧 station 只认这些，它也只会有一个 membership。
 - `relay_urls`：still.fail 的 relay 加上**所有** membership 的 workspace 自带 relay（去重）。endpoint 只有一个，relay 合在一起。
-- 新增 `workspaces: [{workspace, workspace_name, name, peers, revocations}]`：主 workspace 之外的每个 membership。没有就是空数组。
+- 新增 `workspaces: [{workspace, workspace_name, name, peers, revocations}]`：主 workspace 之外的每个 membership。没有也要带上空数组，station 靠它判断 cloud 支不支持多个 workspace。
 
 其他帧：
 
@@ -62,7 +64,7 @@
 在 workspace B 里「添加 station」时，可以选一台**已有的** station：列出调用者在它的主 workspace 里是 owner/admin 的 station。选中后客户端：
 
 1. 在 B 里建一个登记 token（已有的 `createEnrollment`）；
-2. 通过主 workspace 的连接让 station 带 `join: true` 去登记（station 的 `POST /cloud/join {origin, token}`，只有主 workspace 的 owner/admin 能调）。
+2. 通过主 workspace 的连接让 station 去 `join`（station 的 `POST /workspaces/join {token}`，只有主 workspace 的 owner/admin 能调）。
 
 在机器上跑 `stillfail station enroll <origin> <token> --join` 效果一样。
 
@@ -109,7 +111,7 @@ workspace 的 admin 在 B 里移除这台 station：cloud 删掉 membership，�
 
 ## 兼容
 
-- 旧 station + 新 cloud：旧 station 登记不带 `join`，照旧搬家；`state` 顶层字段照旧，它只有一个 membership，`workspaces` 是空的。
-- 新 station + 旧 cloud：`state` 没有 `workspaces`，`joined` 保持为空；`join` 被旧 cloud 忽略，那就是搬家。所以 station 在回应里没看到 `home` 时要报错，不写 `cloud.json`（不能让用户以为加入了，其实是被搬走了）。
+- 旧 station + 新 cloud：旧 station 只会调 enroll，照旧搬家；`state` 顶层字段照旧，它只有一个 membership，`workspaces` 是空的。
+- 新 station + 旧 cloud：`state` 没有 `workspaces`，`joined` 保持为空；`/v1/stations/join` 是 404，station 说明「这个控制面还不支持」，什么都没变。
 - 旧客户端 + 新 station：旧 core 按 station id 复用连接，同一个人在两个 workspace 里都能看到这台 station 时，另一个 workspace 里显示的会是先连上的那个 workspace 的内容（都是他有权看的，不会漏给别人）。加入第二个 workspace 的入口只在新客户端里有，可以接受。
 - 数据：`sessions.ws`、`archive_policy.ws` 用加列迁移，旧行为主 workspace。

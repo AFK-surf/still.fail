@@ -3,6 +3,7 @@
 // overview's `updates` says them too). A station with nothing to update (tests, a part not made) answers 404.
 import { type Request, type Answer, error, json } from "../request.ts";
 import type { Route } from "../admin.ts";
+import { managesStation } from "../../mesh/credential.ts";
 import { tr } from "../../ops/i18n.ts";
 import type { Updates } from "../../updates/updates.ts";
 import { channelOfId } from "../../updates/versions.ts";
@@ -32,7 +33,7 @@ function input(r: Request): Record<string, unknown> {
 }
 
 /// Whether they manage the workspace (its owner or an admin).
-const manages = (r: Request) => r.viewer.role === "owner" || r.viewer.role === "admin";
+const manages = (r: Request) => managesStation(r.viewer);
 
 export const routes = ({ updates }: UpdatesDeps): Route[] => {
   /// The updates, for someone who may update what runs on the machine; what `f` refuses is a 400 with its words.

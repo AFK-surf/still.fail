@@ -5,12 +5,12 @@ import { type Request, type Answer, error, json, percentDecode } from "../reques
 import type { Route } from "../admin.ts";
 import { type Accounts, Refusal } from "../../accounts/index.ts";
 import type { Sharing } from "../../share/index.ts";
-import type { Viewer } from "../../mesh/credential.ts";
+import { type Viewer, managesStation } from "../../mesh/credential.ts";
 import { tr, type Lang } from "../../ops/i18n.ts";
 
 /// Who may share: a workspace manager.
 function manager(viewer: Viewer, lang: Lang) {
-  if (viewer.role !== "owner" && viewer.role !== "admin") throw new Refusal(403, tr(lang, "station.share.managersOnly"));
+  if (!managesStation(viewer)) throw new Refusal(403, tr(lang, "station.share.managersOnly"));
 }
 
 /// Which stations may use a share: null (every one), or station ids.

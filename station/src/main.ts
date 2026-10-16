@@ -3,7 +3,7 @@
 // interrupting it: every part's scope closes, and with it what it opened. Commands as the Rust station takes them:
 //
 //   run --app DIR [--port N] [--data DIR] [--with-parent] [--launcher-fds a,b,c]
-//   enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--data DIR]   status [--data DIR]   id [--data DIR]
+//   enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--join] [--data DIR]   status [--data DIR]   id [--data DIR]
 //   channel [stable|beta] [--app DIR] [--data DIR]   update [--beta|--stable] --app DIR [--data DIR]
 //   lock status|reset [--data DIR]
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -11,12 +11,14 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { Effect, Fiber, Layer, SubscriptionRef } from "effect";
-import { enroll, id, lockCommand, status } from "./cli.ts";
+import { enroll, id, joinWorkspace, lockCommand, status } from "./cli.ts";
+import { readState } from "./cloud/state.ts";
+import { loadKey } from "./cloud/key.ts";
 import { MeshLive } from "./mesh/mesh.ts";
 import { AwakeLive } from "./ops/awake.ts";
 import { AgentsLive } from "./sessions/agents.ts";
 import { dataDir, flag, ownData } from "./ops/files.ts";
-import { setStationLang } from "./ops/i18n.ts";
+import { setStationLang, stationLang, tr } from "./ops/i18n.ts";
 import { type Control, launcher } from "./ops/launcher.ts";
 import { hearErrors, log } from "./ops/log.ts";
 import { ConfigFile } from "./ops/config.ts";
@@ -48,7 +50,7 @@ try {
 } catch {}
 
 function usage(): never {
-  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] | status | id | channel [stable|beta] | update [--beta|--stable] --app DIR | lock status|reset");
+  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--join] | status | id | channel [stable|beta] | update [--beta|--stable] --app DIR | lock status|reset");
   process.exit(2);
 }
 
@@ -166,6 +168,17 @@ switch (command) {
     const provider = (flag(args, "--provider") ?? "stillfail") as Provider;
     const lock = flag(args, "--lock");
     if (!origin || !token || !PROVIDERS.includes(provider) || (lock !== undefined && !/^[0-9a-f]{64}$/.test(lock))) usage();
+    // One more workspace, staying in those it is in (docs/multi-workspace.md): at the control plane it is enrolled with.
+    if (args.includes("--join")) {
+      const at = readState(data)?.origin;
+      if (at !== undefined && at !== origin.replace(/\/+$/, "")) {
+        console.error(`this station is enrolled at ${at}; it joins workspaces there only`);
+        process.exit(1);
+      }
+      const joined = await joinWorkspace(data, token);
+      console.log(tr(stationLang(), "station.cli.joined", { workspace: joined.workspace_name, name: joined.name, id: loadKey(data).id.slice(0, 12) }));
+      break;
+    }
     await enroll(data, origin.replace(/\/+$/, ""), token, provider, lock);
     break;
   }

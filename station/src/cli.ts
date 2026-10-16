@@ -20,26 +20,7 @@ const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((s): s is
 export async function enroll(data: string, origin: string, token: string, provider: Provider = "stillfail", lock?: string) {
   const plane = specOf(provider);
   const key = loadKey(data);
-  let response: Response | undefined;
-  // The new proof first; the old spelling only when a pre-rename cloud explicitly refuses the signature.
-  for (const prefix of plane.enrollPrefixes) {
-    const signature = key.sign(`${prefix}-station-enroll-v1:${origin}:${token}:${key.id}`);
-    response = await fetch(`${origin}${plane.enrollPath}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token, station: key.id, signature, version: version() }),
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (prefix === plane.enrollPrefixes.at(-1) || response.status !== 401) break;
-    const text = await response.text();
-    let error: unknown;
-    try {
-      error = JSON.parse(text).error;
-    } catch {}
-    if (error !== "invalid_signature") throw new Error(`${plane.name} answered ${response.status}: ${text}`);
-  }
-  if (!response!.ok) throw new Error(`${plane.name} answered ${response!.status}: ${await response!.text()}`);
-  const body: any = await response!.json();
+  const body = await redeem(data, origin, token, provider, plane.enrollPath);
   const text = (k: string) => (typeof body[k] === "string" ? body[k] : "");
   const relays = strings(body.relay_urls);
   const state: CloudState = {
@@ -57,6 +38,60 @@ export async function enroll(data: string, origin: string, token: string, provid
   if (lock !== undefined) writePrivate(pendingLockPath(data), JSON.stringify({ hash: lock }));
   console.log(tr(stationLang(), "station.cli.joined", { workspace: state.workspace_name, name: state.name, id: key.id.slice(0, 12) }));
   if (lock !== undefined) console.log(tr(stationLang(), "station.cli.lock.pending", { code: shortCode(key.id) }));
+}
+
+/// Joins one more workspace with its one-time token, staying in those the station is in (docs/multi-workspace.md):
+/// at the control plane it is enrolled with, which then names it in its `state` frames. Kept in cloud.json's `joined`
+/// at once, so `status` says it before the running station hears. A locked station joins none: its lock is one
+/// workspace's. What it joined.
+export async function joinWorkspace(data: string, token: string): Promise<{ workspace: string; workspace_name: string; name: string }> {
+  const state = readState(data);
+  if (state === null || !state.workspace || state.removed_at !== undefined) throw new Error("this station is in no workspace: enroll it first");
+  const lock = readLock(data);
+  if (lock !== null && !lock.state?.disabled) throw new Error("this station's workspace is locked: a locked station stays in that one workspace");
+  const provider = state.provider ?? "stillfail";
+  const body = await redeem(data, state.origin, token, provider, specOf(provider).joinPath);
+  const text = (k: string) => (typeof body[k] === "string" ? body[k] : "");
+  const joined = { workspace: text("workspace"), workspace_name: text("workspace_name"), name: text("name") };
+  if (joined.workspace === "") throw new Error(`${specOf(provider).name} did not say which workspace was joined`);
+  const now = readState(data) ?? state;
+  if (joined.workspace !== now.workspace) {
+    now.joined = [...(now.joined ?? []).filter((j) => j.workspace !== joined.workspace), { ...joined, peers: [], revocations: [] }];
+    writeState(data, now);
+  }
+  return joined;
+}
+
+/// A one-time token redeemed at `path` (enroll or join): proves this station holds its key; the control plane's answer.
+async function redeem(data: string, origin: string, token: string, provider: Provider, path: string): Promise<any> {
+  const plane = specOf(provider);
+  const key = loadKey(data);
+  let response: Response | undefined;
+  // The new proof first; the old spelling only when a pre-rename cloud explicitly refuses the signature.
+  for (const prefix of plane.enrollPrefixes) {
+    const signature = key.sign(`${prefix}-station-enroll-v1:${origin}:${token}:${key.id}`);
+    response = await fetch(`${origin}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token, station: key.id, signature, version: version() }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (prefix === plane.enrollPrefixes.at(-1) || response.status !== 401) break;
+    const text = await response.text();
+    let error: unknown;
+    try {
+      error = JSON.parse(text).error;
+    } catch {}
+    if (error !== "invalid_signature") throw new Error(`${plane.name} answered ${response.status}: ${text}`);
+  }
+  // A control plane from before several workspaces has no join: nothing changed there.
+  if (path === plane.joinPath && response!.status === 404) {
+    const text = await response!.text();
+    if (!text.includes("enrollment_not_found")) throw new Error(`${plane.name} cannot add a station to more than one workspace yet; nothing changed`);
+    throw new Error(`${plane.name} answered 404: ${text}`);
+  }
+  if (!response!.ok) throw new Error(`${plane.name} answered ${response!.status}: ${await response!.text()}`);
+  return await response!.json();
 }
 
 /// `lock status`: whether a workspace lock is pinned here and how far it goes; `lock reset`: takes it away (kept beside

@@ -10,7 +10,7 @@ import WebSocket from "ws";
 import { log } from "../ops/log.ts";
 import { nowSecs } from "../ops/files.ts";
 import { version } from "../ops/version.ts";
-import { type Cloud as CloudState, type Revocation, pendingLockPath } from "./state.ts";
+import { type Cloud as CloudState, isRevocation, joinedOf, pendingLockPath } from "./state.ts";
 import { type Entry, asEntry, entryHash } from "./lock.ts";
 import type { StationKey } from "./key.ts";
 import { type ProviderSpec, signedHeaders } from "./provider.ts";
@@ -216,6 +216,10 @@ export function applyState(s: CloudState, text: string, send: (frame: unknown) =
       // Kept as said; once locked, credentials are checked with the lock's keys instead (cloud/state.ts `grantKeys`).
       if (body.grant_keys && typeof body.grant_keys === "object" && !Array.isArray(body.grant_keys)) st.grant_keys = body.grant_keys;
       if (Array.isArray(body.revocations) && body.revocations.every(isRevocation)) st.revocations = body.revocations;
+      // The workspaces it joined besides its home one: none from planes of before them.
+      const joined = joinedOf(body.workspaces);
+      if (joined.length > 0) st.joined = joined;
+      else delete st.joined;
       // Missing roster means an old cloud: never keep peers from another binding. Who may call the device tools
       // (Comma's gateways): only from a control plane that names them.
       const { peers, gateways } = s.filtered(st);
@@ -224,9 +228,13 @@ export function applyState(s: CloudState, text: string, send: (frame: unknown) =
     });
     syncLock(s, body.lock, send);
   } else if (body?.type === "revoke" && isRevocation(body)) {
+    // Of the workspace it names (planes of before say none: the home one's).
     s.update((st) => {
-      st.revocations = st.revocations.filter((r) => !(r.kind === body.kind && r.id === body.id));
-      st.revocations.push({ kind: body.kind, id: body.id, at: body.at });
+      const joined = typeof body.workspace === "string" && body.workspace !== st.workspace ? st.joined?.find((j) => j.workspace === body.workspace) : undefined;
+      if (typeof body.workspace === "string" && body.workspace !== st.workspace && joined === undefined) return;
+      const of = joined ?? st;
+      of.revocations = of.revocations.filter((r) => !(r.kind === body.kind && r.id === body.id));
+      of.revocations.push({ kind: body.kind, id: body.id, at: body.at });
     });
   } else if (body?.type === "lock" && Array.isArray(body.entries)) {
     takeFromPlane(s, body.entries);
@@ -276,5 +284,3 @@ export function pendingLock(data: string): string | null {
     return null;
   }
 }
-
-const isRevocation = (r: any): r is Revocation => typeof r?.kind === "string" && typeof r?.id === "string" && Number.isInteger(r?.at) && r.at >= 0;

@@ -29,6 +29,8 @@ export type NewChat = {
   createdBy: string;
   /// The key the asking client knows it by until it is made (`clientKey`): the sidebar's rows say it for a while.
   clientKey?: string | null;
+  /// The workspace its chat is in (the asker's, or the opening session's); absent: the station's home one.
+  ws?: string | null;
 };
 
 const trimmed = (v: string | null | undefined) => {
@@ -144,6 +146,7 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
     token: newToken(),
     createdAt: now,
     lastActiveAt: now,
+    ws: options.ws ?? null,
   });
   log.info("hub", "session created", { session: key, connect: INTERNAL_CONNECT, runtime, profile: profile.id, model });
   return [key, openChat(hub, key, options.createdBy, title)];

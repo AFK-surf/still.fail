@@ -12,13 +12,16 @@ import { answerLock } from "./lock-sync.ts";
 export const PEER_ALPN = Buffer.from("stillfail/station/1");
 const MAX_MESSAGE = 1024 * 1024;
 
-/// The workspace a peer is asked or heard in, if it is another station of it now; throws why not.
+/// The workspace a peer is asked or heard in, if it is another station of it now; throws why not. Without one said,
+/// the first workspace of this station's (its home one first) the peer is in too.
 export function member(cloud: Cloud, peer: string, workspace: string | null): string {
   if (!cloud.peersCurrent) throw new Error("workspace peer roster is not current; waiting for the control plane");
   const s = cloud.state;
-  if (s === null || cloud.removed() || (workspace !== null && workspace !== s.workspace)) throw new Error("station is outside this workspace");
-  if (!s.peers.some((p) => p?.id === peer) || peer === s.station) throw new Error("peer is not another station in this workspace");
-  return s.workspace;
+  const all = cloud.memberships();
+  const of = workspace === null ? (all.find((m) => m.peers.some((p) => p?.id === peer)) ?? all[0]) : cloud.membership(workspace);
+  if (s === null || of === undefined || of === null) throw new Error("station is outside this workspace");
+  if (!of.peers.some((p) => p?.id === peer) || peer === s.station) throw new Error("peer is not another station in this workspace");
+  return of.workspace;
 }
 
 /// All of a stream, at most `limit` bytes.
@@ -41,9 +44,8 @@ export type Outside = { reaches(target: string, workspace: string): boolean };
 /// The workspace a request to `target` goes to: this one's, when it is one of its stations; another, when it is a
 /// station this one shares chats with (`outside`). Throws why not otherwise.
 function workspaceFor(cloud: Cloud, target: string, workspace: string | null, outside: Outside | undefined): string {
-  const own = cloud.state?.workspace ?? null;
-  if (workspace === null || workspace === own || outside === undefined) return member(cloud, target, workspace);
-  if (own === null || cloud.removed()) throw new Error("station is outside this workspace");
+  if (workspace === null || cloud.membership(workspace) !== null || outside === undefined) return member(cloud, target, workspace);
+  if (cloud.home() === null) throw new Error("station is outside this workspace");
   if (!outside.reaches(target, workspace)) throw new Error("that station is of another workspace that shares no chat with this one");
   return workspace;
 }
@@ -54,8 +56,8 @@ export function peerCall(endpoint: Endpoint, cloud: Cloud, addr: (id: string) =>
   const connections = new Map<string, Connection>();
   return async (target, workspace, request) => {
     if (target === "" && request?.method === "peers") {
-      const s = cloud.state;
-      return { workspace: s?.workspace ?? "", stations: s?.peers ?? [], current: cloud.peersCurrent };
+      const of = workspace === null ? (cloud.memberships()[0] ?? null) : cloud.membership(workspace);
+      return { workspace: of?.workspace ?? "", stations: of?.peers ?? [], current: cloud.peersCurrent };
     }
     const ws = workspaceFor(cloud, target, workspace, outside);
     // Requests are bounded and retriable by their task key: a timeout is never "not run" (ask again by the key).
@@ -96,7 +98,7 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Remote) 
   try {
     member(cloud, peer, null);
   } catch (error) {
-    if (!remote.hearsOutside?.() || !cloud.state || cloud.removed() || peer === cloud.state.station) throw error;
+    if (!remote.hearsOutside?.() || !cloud.state || cloud.home() === null || peer === cloud.state.station) throw error;
     inside = false;
   }
   for (;;) {
@@ -111,8 +113,8 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Remote) 
         const method = envelope.request?.method;
         answer = { result: typeof method === "string" && method.startsWith("lock.") ? answerLock(cloud, envelope.request) : await remote.handle(envelope.workspace, peer, envelope.request ?? null) };
       } else {
-        if (cloud.removed() || envelope.workspace !== cloud.state?.workspace) throw new Error("station is outside this workspace");
-        answer = { result: await remote.handleOutside(peer, envelope.request ?? null) };
+        if (cloud.membership(envelope.workspace) === null) throw new Error("station is outside this workspace");
+        answer = { result: await remote.handleOutside(peer, envelope.request ?? null, envelope.workspace) };
       }
     } catch (error) {
       answer = { error: (error as Error).message };
@@ -127,9 +129,9 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Remote) 
 /// changes.
 export function followRoster(cloud: Cloud, remote: Remote, config: { listen(f: () => void): () => void }): () => void {
   const look = () => {
-    const s = cloud.state;
+    const rosters = cloud.memberships().map((m) => ({ workspace: m.workspace, peers: m.peers.flatMap((p) => (typeof p?.id === "string" ? [p.id as string] : [])) }));
     void remote
-      .revoke(s?.workspace ?? "", (s?.peers ?? []).flatMap((p) => (typeof p?.id === "string" ? [p.id] : [])), cloud.peersCurrent)
+      .revoke(rosters, cloud.peersCurrent)
       .catch((error) => log.warn("peer", "revoking tasks failed", { error: (error as Error).message }));
   };
   look();

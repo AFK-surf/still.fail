@@ -19,7 +19,7 @@ import type { Env, MachineToken } from "../agents/machine-logins.ts";
 import { linkCodexAuth } from "../agents/machine-logins.ts";
 import { type AccessKind, accessKind, profileVia, type Runtime, type Via } from "../agents/profiles.ts";
 import { cleanEndpoint, endpoints, find, groupOf, LEGACY, runtimesOf as runtimesOfEndpoints, SOURCES } from "../agents/providers.ts";
-import type { Viewer } from "../mesh/credential.ts";
+import { type Viewer, managesStation } from "../mesh/credential.ts";
 import type { ConfigFile } from "../ops/config.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
@@ -120,7 +120,7 @@ export type AccountsDeps = {
 type Pending = { runtime: Runtime; home: string; by: Viewer; created: string | null; error: string | null };
 
 const isObject = (v: unknown): v is Record<string, any> => v !== null && typeof v === "object" && !Array.isArray(v);
-const manages = (viewer: Viewer) => viewer.role === "owner" || viewer.role === "admin";
+const manages = managesStation;
 const runtimeOf = (v: unknown): Runtime | undefined => (v === "claude" || v === "codex" ? v : undefined);
 const ACCESS_KINDS: AccessKind[] = ["subscription", "opencode-go", "anthropic-api", "env", "api-provider"];
 const accessKindOf = (v: unknown): AccessKind | undefined => (ACCESS_KINDS.includes(v as AccessKind) ? (v as AccessKind) : undefined);
