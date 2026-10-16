@@ -5,7 +5,6 @@ import { list, pageNarrow } from "./styles/pages.css.ts";
 import { dialogError, dialogLead, dialogTitle, tooltip } from "./ui.css.ts";
 import { newChat } from "./NewChat.css.ts";
 import { pageBar } from "./styles/sidebar.css.ts";
-import { clearOfWindowButtons } from "./styles/windowButtons.ts";
 import { neg, outset } from "./styles/align.ts";
 
 export const brandLockup = style({ display: "block" });
@@ -60,7 +59,11 @@ const wide = "(min-width: 701px)";
 globalStyle(`${railed} ${sidebarUpdate}`, { "@media": { [wide]: { left: "calc(56px + var(--sidebar-w, 240px) - 12px)" } } });
 globalStyle(`${railed}[data-sidebar="closed"] ${sidebarUpdate}`, { "@media": { [wide]: { left: "68px", transform: "none" } } });
 globalStyle(`${railed}[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] ${sidebarUpdate}`, { "@media": { [wide]: { left: "80px" } } });
-clearOfWindowButtons(pageBar, sidebarUpdate);
+globalStyle(`${railed}[data-sidebar="closed"] ${pageBar}`, { "@media": { [wide]: { paddingLeft: "12px" } } });
+// The window's buttons reach 12 px past the rail.
+globalStyle(`${railed}[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] ${pageBar}`, { "@media": { [wide]: { paddingLeft: "28px" } } });
+globalStyle(`${railed}:has(${sidebarUpdate})[data-sidebar="closed"] ${pageBar}`, { "@media": { [wide]: { paddingLeft: "72px" } } });
+globalStyle(`${railed}:has(${sidebarUpdate})[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] ${pageBar}`, { "@media": { [wide]: { paddingLeft: "84px" } } });
 
 export const brandWordmark = style({
   display: "block",

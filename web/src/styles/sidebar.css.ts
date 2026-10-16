@@ -15,7 +15,12 @@ export const pageBar = style({
     "(max-width: 700px)": {
       gridTemplateColumns: "auto minmax(0, 1fr) auto", gap: "8px",
     },
-    // Clear of the window's buttons with the sidebar closed: brand.css.ts clearOfWindowButtons.
+    "(min-width: 701px)": {
+      selectors: {
+        "[data-sidebar=\"closed\"] &": { paddingLeft: "52px" },
+        "[data-desktop=\"inset\"]:not([data-fullscreen])[data-sidebar=\"closed\"] &": { paddingLeft: "124px" },
+      },
+    },
   },
 });
 globalStyle(`[data-desktop] ${pageBar} :is(a, button, input, select, textarea, [role="button"], [tabindex])`, { WebkitAppRegion: "no-drag" });

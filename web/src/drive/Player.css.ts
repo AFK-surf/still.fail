@@ -1,7 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
-import { sidebarUpdate } from "../brand.css.ts";
-import { clearOfWindowButtons } from "../styles/windowButtons.ts";
 import { glass } from "../FilePreview.css.ts";
 import { vvBar } from "../VideoViewer.css.ts";
 import { spinner as turning } from "../styles/waiting.css.ts";
@@ -77,8 +75,6 @@ globalStyle(`${desk} ${name}`, { flex: "1" });
 // The desktop app has no title bar: the toolbar, over the page's top row (styles/shell.css.ts main), drags the window, all
 // but what is pressed in it; on Windows what is at its right end stays clear of the window's buttons (styles/sidebar.css.ts pageBar).
 globalStyle(`[data-desktop] ${desk} ${head}`, { WebkitAppRegion: "drag" });
-// Its way back clear of the window's buttons with the sidebar closed, as a page's bar is.
-clearOfWindowButtons(`${desk} ${head}`, sidebarUpdate);
 globalStyle(`:is([data-desktop="overlay"], [data-desktop="custom"]) ${desk} ${head}`, { paddingRight: "calc(var(--window-buttons, 0px) + 12px)" });
 globalStyle(`[data-desktop] ${desk} ${head} :is(a, button, input, select, [role="button"], [tabindex])`, { WebkitAppRegion: "no-drag" });
 // Narrow or full screen, its floating bar, awake, takes the pointer over that row (FilePreview.css.ts).
