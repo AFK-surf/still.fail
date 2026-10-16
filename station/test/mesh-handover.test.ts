@@ -3,7 +3,7 @@ import { test, type TestContext } from "node:test";
 import { Effect, Fiber, Layer } from "effect";
 import { MeshLive } from "../src/mesh/mesh.ts";
 import { Agents, type AgentsParts } from "../src/sessions/agents.ts";
-import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, Store, Up } from "../src/services.ts";
+import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, ScreenRegistry, Store, Up } from "../src/services.ts";
 import type { Mesh } from "../src/mesh/native.ts";
 import { memoryMesh } from "./memory-mesh.ts";
 import { settle } from "./hub-fakes.ts";
@@ -33,7 +33,7 @@ function startup(t: TestContext, bindAddr: string | undefined) {
       return endpoint;
     } } as unknown as Mesh),
     Layer.succeed(Store)(null!), Layer.succeed(AdminApi)(null!),
-    Layer.succeed(Up)(null!), Layer.succeed(AdbShares)(null!),
+    Layer.succeed(Up)(null!), Layer.succeed(AdbShares)(null!), Layer.succeed(ScreenRegistry)(null!),
   );
   const running = Effect.runFork(Effect.scoped(Effect.gen(function* () {
     yield* Layer.build(MeshLive.pipe(Layer.provide(inputs)));
