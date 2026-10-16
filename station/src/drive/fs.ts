@@ -163,6 +163,7 @@ export interface Protected {
   known(top: string): Access | undefined;
   /// Looked at in the background (the helper started for it), told (`changed`) when it is not what was known.
   check(tops: string[]): void;
-  /// The helper's window asking for `grant`, on this Mac; whether it is up.
-  ask(grant: Grant, top: string): Promise<boolean>;
+  /// The helper's window asking for `grant`, on this Mac, unless it is up or was shown for it a moment ago: `up`,
+  /// `closed` (shown a moment ago, closed since, not shown again yet) or `none` (it could not be shown).
+  ask(grant: Grant, top: string): Promise<"up" | "closed" | "none">;
 }

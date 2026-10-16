@@ -2,8 +2,9 @@
 // this checkout started as launchd starts one (a job in the GUI session running the launcher itself; macOS keeps
 // Documents from it), still.fail Helper started by it, and a member's device on iroh using the drive in ~/Documents:
 // a folder of its own there (made by this script, removed at the end), pinned, listed, a file read whole and in part,
-// one uploaded in parts, renamed, removed. Without the grant the helper's window is up on this Mac; this waits (WAIT
-// seconds, default 1800) for a person to allow it there, then goes on.
+// one uploaded in parts, renamed, removed. Without the grant the first listing puts the helper's window up on this
+// Mac; this waits (WAIT seconds, default 1800) for a person to allow it there, asking the helper itself whether it has
+// the grant (never the drive again, which would be one more attempt), then goes on.
 //
 //   node station/side/drive-e2e.ts    (a worktree with `pnpm run build` done in station/ and `pnpm run build:cloud`
 //                                      at the top, the iroh dev relay on :3340; PORT, default 8917, and PORT+1..+4
@@ -13,6 +14,7 @@
 // signed one keeps its grant across builds: verify.md); WORK: where the station goes (default /tmp/drive-e2e). Real
 // processes, a person's grant: a side script, not a test.
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
+import net from "node:net";
 import { randomBytes } from "node:crypto";
 import { cpSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -127,6 +129,24 @@ async function member(device: Endpoint, station: string, credential: string): Pr
   if (!hello?.ok) throw new Error(`not admitted: ${JSON.stringify(hello)}`);
   return conn;
 }
+/// What the station's helper says of Documents now (its socket and token in the station's data): nothing shown.
+function helperSays(): Promise<string> {
+  const dir = join(data, "helper");
+  const token = readFileSync(join(dir, "token"), "utf8").trim();
+  return new Promise((resolve, reject) => {
+    const s = net.createConnection(join(dir, "helper.sock"));
+    let got = "";
+    s.on("data", (c) => {
+      got += c;
+      if (!got.includes("\n")) return;
+      s.destroy();
+      resolve(JSON.parse(got).access?.[0]?.state ?? "unknown");
+    });
+    s.on("error", reject);
+    s.write(`${JSON.stringify({ op: "files.access", paths: [DOCS], token })}\n`);
+  });
+}
+
 /// One request of the admin API on its own stream: its status, headers and body.
 async function ask(conn: Connection, method: string, path: string, query: Record<string, string> = {}, body?: Buffer | unknown): Promise<{ status: number; headers: Record<string, string>; body: Buffer; json: any }> {
   const s = await conn.openBi();
@@ -186,14 +206,13 @@ async function main() {
       console.log(`REFUSED ${listed.status}: ${listed.json?.error}`);
       console.log(`GRANT-WAITING: the helper's window is up on this Mac; waiting up to ${WAIT} s for Documents to be allowed`);
       const deadline = Date.now() + WAIT * 1000;
-      for (;;) {
+      while ((await helperSays().catch(() => "unknown")) !== "granted") {
         if (Date.now() > deadline) throw new Error("not granted in time");
         await sleep(3000);
-        if (conn.isClosed()) conn = await member(device, station, credential);
-        listed = await list().catch(() => listed);
-        if (listed.status === 200) break;
       }
       console.log("GRANTED");
+      if (conn.isClosed()) conn = await member(device, station, credential);
+      listed = await list();
     }
     check(JSON.stringify(listed.json.entries.map((e: any) => e.name)) === JSON.stringify(["big.bin", "hello.txt"]), `listed ${FOLDER}: ${listed.json.entries.map((e: any) => `${e.name} ${e.size}`).join(", ")}`);
     const pinned = await ask(conn, "PUT", "/drive/roots", {}, { roots: [mine] });

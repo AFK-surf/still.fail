@@ -15,7 +15,7 @@ import type { Request } from "../src/api/request.ts";
 import { Drive, DriveError } from "../src/drive/drive.ts";
 import { protectedTop } from "../src/drive/fs.ts";
 import { HELPER_APP, HelperApp } from "../src/helper/app.ts";
-import { HelperFiles } from "../src/helper/files.ts";
+import { AGAIN_MS, HelperFiles } from "../src/helper/files.ts";
 import { ConfigFile } from "../src/ops/config.ts";
 import { WINDOWS } from "../src/platform/index.ts";
 
@@ -287,10 +287,12 @@ function machine() {
   fake.grants.set("documents", "granted");
   const helper = new HelperApp({ app, dir: join(base, "helper"), launch: fake.launch });
   let changed = 0;
-  const files = new HelperFiles({ helper, changed: () => changed++, lang: () => "zh" });
+  // The station's clock, moved by the test (the window not shown again within AGAIN_MS).
+  const clock = { now: 1_000_000 };
+  const files = new HelperFiles({ helper, changed: () => changed++, lang: () => "zh", now: () => clock.now });
   const config = { drive: { roots: [project] } } as any;
   const drive = new Drive({ config: () => config, protect: () => [data], files, home });
-  return { base, home, docs, project, data, fake, helper, files, drive, config, changed: () => changed };
+  return { base, home, docs, project, data, fake, helper, files, drive, config, clock, changed: () => changed };
 }
 
 const code = async (p: Promise<unknown>) => {
@@ -432,7 +434,7 @@ test("without the grant: refused saying so, the helper's window up on that Mac o
   // A person opens it: refused, the window up asking for Documents, in the station's words.
   const e = (await drive.list(project, "").catch((x) => x)) as DriveError;
   assert.equal(e.code, "permission");
-  assert.deepEqual(e.need, { grant: "documents", top: join(fake.home, "Documents"), asking: true });
+  assert.deepEqual(e.need, { grant: "documents", top: join(fake.home, "Documents"), window: "up" });
   assert.equal(fake.shown.length, 1);
   assert.deepEqual(fake.shown[0].grants, ["documents"]);
   assert.equal(fake.shown[0].words.title, "允许 still.fail 打开这台 Mac 上的文件夹");
@@ -454,6 +456,39 @@ test("without the grant: refused saying so, the helper's window up on that Mac o
   await until(() => changed() > told);
   assert.equal(drive.roots()[0]!.state, "ok");
   assert.deepEqual((await drive.list(project, "")).entries.map((e) => e.name), ["Season 1", "notes.md"]);
+  fake.close();
+});
+
+test("the window for a grant is shown once: not again while it asks, nor for a while after it is closed, whatever reads", { skip: WINDOWS }, async () => {
+  const { project, fake, drive, clock } = machine();
+  fake.grants.set("documents", "unknown");
+  const table = routes({ drive, config: new ConfigFile(join(fake.home, "config.json")) });
+  const list = async () => {
+    const r: Request = { method: "GET", path: "/drive/list", query: [["root", project], ["path", ""]], headers: {}, body: Buffer.alloc(0), viewer: { sub: "u", email: "a@x", name: "A", role: "member", workspace: "w", device: "d" }, lang: "en" };
+    const answer = await table.find((x) => x.pattern.test("/drive/list"))!.handle(r, []);
+    return { status: answer.status, error: JSON.parse((answer.body as Buffer).toString()).error as string };
+  };
+  // A client retrying every few seconds while the window asks: shown once, never brought forward again.
+  for (let i = 0; i < 10; i++) {
+    const a = await list();
+    assert.equal(a.status, 403);
+    assert.match(a.error, /A window is up on that Mac/);
+    clock.now += 3_000;
+  }
+  assert.equal(fake.shown.length, 1);
+  // Closed without the grant: read again and again within AGAIN_MS, still not shown; the refusal says it was closed.
+  fake.windowUp = false;
+  for (let i = 0; i < 5; i++) {
+    const a = await list();
+    assert.match(a.error, /was just closed/);
+    clock.now += 10_000;
+  }
+  assert.equal(fake.shown.length, 1);
+  // Opened once that while has gone by: shown again, once.
+  clock.now += AGAIN_MS;
+  assert.match((await list()).error, /A window is up on that Mac/);
+  assert.match((await list()).error, /A window is up on that Mac/);
+  assert.equal(fake.shown.length, 2);
   fake.close();
 });
 

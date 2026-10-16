@@ -50,9 +50,9 @@ export class DriveError extends Error {
   readonly have?: number;
   /// The path it is about, when that is not the one asked (a root named).
   about?: string;
-  /// For `permission`: still.fail Helper may not open that protected folder yet (its grant, the folder), and whether its
-  /// window asking for it is up on that Mac.
-  need?: { grant: Grant; top: string; asking: boolean };
+  /// For `permission`: still.fail Helper may not open that protected folder yet (its grant, the folder), and what became
+  /// of its window asking for it on that Mac (Protected.ask).
+  need?: { grant: Grant; top: string; window: "up" | "closed" | "none" };
   constructor(code: Code, message: string, have?: number) {
     super(message);
     this.code = code;
@@ -150,7 +150,7 @@ function failed(e: unknown): DriveError {
       return new DriveError("protected", "the station's own data is not part of its drive");
     case "grant": {
       const d = new DriveError("permission", "macOS has not let still.fail Helper open that folder");
-      d.need = { grant: err.grant!, top: err.top ?? "", asking: false };
+      d.need = { grant: err.grant!, top: err.top ?? "", window: "none" };
       return d;
     }
     case "ENOENT":
@@ -270,13 +270,13 @@ export class Drive {
   }
 
   /// `run`, its refusal a DriveError; one for a grant still.fail Helper lacks puts the helper's window up on this Mac
-  /// (once an attempt), and says whether it is.
+  /// unless it is up or was shown a moment ago (helper/files.ts AGAIN_MS), and says which.
   async #run<T>(run: () => Promise<T>): Promise<T> {
     try {
       return await run();
     } catch (e) {
       const d = failed(e);
-      if (d.need && this.deps.files) d.need.asking = await this.deps.files.ask(d.need.grant, d.need.top).catch(() => false);
+      if (d.need && this.deps.files) d.need.window = await this.deps.files.ask(d.need.grant, d.need.top).catch(() => "none" as const);
       throw d;
     }
   }

@@ -6,7 +6,7 @@
 // the bytes; a write is answered once the file is open, then the station sends the bytes, then it answers again.
 //
 // Without the grant the helper refuses (`grant`) and touches nothing (macOS would put up its prompt and hold the call
-// until a person answers): the drive puts the helper's window up on this Mac for it (`ask`), once an attempt. What is
+// until a person answers): the drive puts the helper's window up on this Mac for it (`ask`), once in AGAIN_MS. What is
 // known of each folder's grant is kept (`known`), looked at in the background where it is not (`check`), and looked at
 // again when the helper says a grant changed or comes back; the drive's roots are told again (`changed`) when it is
 // not what it was.
@@ -21,8 +21,14 @@ import type { HelperApp } from "./app.ts";
 
 /// What a write sends at a time (the socket takes it as it can).
 const CHUNK = 256 * 1024;
-/// The window asked for the same grant this recently is not asked again (a page reads a folder and its parent at once).
-const AGAIN_MS = 5_000;
+/// The window shown for a grant is not shown (nor brought forward) again for that grant this soon after: a page read
+/// again, a client retrying, a person refreshing are never what puts it up; a person opening the folder once it has
+/// been closed this long is.
+export const AGAIN_MS = 3 * 60_000;
+
+/// What became of the helper's window for a grant missing: `up` (shown now, or already up asking for it), `closed`
+/// (shown a moment ago and closed since: not shown again yet), `none` (it could not be shown).
+export type WindowState = "up" | "closed" | "none";
 
 /// The helper's window's words for the drive's folders, in `lang` (Permissions.swift).
 export function filesWords(lang: Lang): Record<string, string> {
@@ -57,11 +63,13 @@ export class HelperFiles {
   readonly #states = new Map<Grant, Access["state"]>();
   readonly #checking = new Set<string>();
   readonly #asked = new Map<Grant, number>();
+  readonly #now: () => number;
 
-  constructor(options: { helper: HelperApp; changed: () => void; lang?: () => Lang }) {
+  constructor(options: { helper: HelperApp; changed: () => void; lang?: () => Lang; now?: () => number }) {
     this.#helper = options.helper;
     this.#changed = options.changed;
     this.#lang = options.lang ?? stationLang;
+    this.#now = options.now ?? (() => wall.now());
     // A grant changed (its window saw it), or the helper came back: what is known is looked at again.
     options.helper.listen((event) => {
       if (event.event === "grants") this.#again();
@@ -120,20 +128,21 @@ export class HelperFiles {
     if (this.#grantOf.size > 0) void this.#look([...this.#grantOf.keys()]);
   }
 
-  async ask(grant: Grant, top: string): Promise<boolean> {
+  async ask(grant: Grant, top: string): Promise<WindowState> {
     this.#grantOf.set(top, grant);
     const status = await this.#helper.request({ op: "status" }).catch(() => null);
-    // Up already asking for it: left as it is (not brought up again and again by a page reading).
-    if (status?.asking === true && Array.isArray(status.asked) && status.asked.includes(grant)) return true;
-    const last = this.#asked.get(grant) ?? -Infinity;
-    if (wall.now() - last < AGAIN_MS) return true;
-    this.#asked.set(grant, wall.now());
+    // Up already asking for it: left as it is, not brought forward.
+    if (status?.asking === true && Array.isArray(status.asked) && status.asked.includes(grant)) return "up";
+    // Shown for it a moment ago: not again (whatever reads the folder again), until AGAIN_MS have gone by.
+    const last = this.#asked.get(grant);
+    if (last !== undefined && this.#now() - last < AGAIN_MS) return status === null ? "up" : "closed";
+    this.#asked.set(grant, this.#now());
     try {
       await this.#helper.request({ op: "permissions.show", words: filesWords(this.#lang()), grants: [grant], paths: { [grant]: top } });
-      return true;
+      return "up";
     } catch (error) {
       log.warn("drive", "still.fail Helper's window did not show", { error: (error as Error).message });
-      return false;
+      return "none";
     }
   }
 

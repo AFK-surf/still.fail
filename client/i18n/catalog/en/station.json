@@ -389,6 +389,7 @@
   "station.drive.tooBigToSend": "Too big to send (1 GB at most)",
   "station.drive.io": "Read or write error",
   "station.drive.helperAsking": "This Mac hasn't let still.fail Helper open “{folder}” yet. A window is up on that Mac: click Allow there and it opens.",
+  "station.drive.helperClosed": "This Mac hasn't let still.fail Helper open “{folder}” yet. The window asking for it on that Mac was just closed; open this folder again in a few minutes and it comes up again.",
   "station.drive.helperNeeded": "This Mac hasn't let still.fail Helper open “{folder}” yet. On that Mac, allow it in System Settings → Privacy & Security → Files and Folders.",
   "station.drive.place.home": "Home",
   "station.drive.place.Desktop": "Desktop",

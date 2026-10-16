@@ -30,11 +30,11 @@ const anywhere = (r: { viewer: Request["viewer"] }) => !readOnly(r.viewer);
 const driveOf = (drive: Drive, r: { viewer: Request["viewer"] }) => (r.viewer.home === false ? drive.scoped(r.viewer.workspace) : drive);
 
 /// A refusal in the asker's words (`station.drive.<code>`, after the path it is about, if any). One for a folder macOS
-/// keeps from the station that still.fail Helper may not open yet says so, and that its window is up on that Mac.
+/// keeps from the station that still.fail Helper may not open yet says so, and whether its window is up on that Mac.
 const refused = (e: unknown, lang: Lang): Answer => {
   const d = e instanceof DriveError ? e : new DriveError("io", (e as Error).message);
   const words = d.need
-    ? tr(lang, d.need.asking ? "station.drive.helperAsking" : "station.drive.helperNeeded", { folder: folderWords(d.need.grant, d.need.top, lang) })
+    ? tr(lang, d.need.window === "up" ? "station.drive.helperAsking" : d.need.window === "closed" ? "station.drive.helperClosed" : "station.drive.helperNeeded", { folder: folderWords(d.need.grant, d.need.top, lang) })
     : tr(lang, d.code === "permission" && d.message === MANAGE ? "station.drive.manage" : d.code === "too_large" && d.message === TOO_BIG ? "station.drive.tooBigToSend" : `station.drive.${d.code}`);
   return json(CODES[d.code], JSON.stringify({ error: d.about ? `${d.about}: ${words}` : words, code: d.code, ...(d.have !== undefined ? { have: d.have } : {}) }));
 };

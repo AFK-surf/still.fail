@@ -383,6 +383,7 @@
   "station.drive.tooBigToSend": "文件过大，无法发送（上限 1 GB）",
   "station.drive.io": "读写出错",
   "station.drive.helperAsking": "这台 Mac 尚未允许 still.fail Helper 访问「{folder}」。已在该 Mac 上弹出授权窗口，点击「允许」即可打开。",
+  "station.drive.helperClosed": "这台 Mac 尚未允许 still.fail Helper 访问「{folder}」。该 Mac 上的授权窗口刚被关闭，几分钟后再打开此文件夹会重新弹出。",
   "station.drive.helperNeeded": "这台 Mac 尚未允许 still.fail Helper 访问「{folder}」。请在该 Mac 的「系统设置 → 隐私与安全性 → 文件与文件夹」中允许。",
   "station.drive.place.home": "主目录",
   "station.drive.place.Desktop": "桌面",
