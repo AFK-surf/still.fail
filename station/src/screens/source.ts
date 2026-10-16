@@ -21,6 +21,18 @@ export type ScreenInput =
 
 export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[] };
 
+/// What a screen's clipboard holds, as a view carries it (docs/remote-screens.md `clipboard`): text, or a PNG picture.
+export type ClipType = "text" | "png";
+export type Clip = { type: "text"; text: string } | { type: "png"; data: Uint8Array };
+/// The most a clipboard carries each way: text (its UTF-8 bytes), a picture.
+export const CLIP_TEXT_MAX = 1024 * 1024;
+export const CLIP_PNG_MAX = 8 * 1024 * 1024;
+
+/// Whether a clip is within its bounds.
+export function clipFits(clip: Clip): boolean {
+  return clip.type === "text" ? clip.text !== "" && Buffer.byteLength(clip.text, "utf8") <= CLIP_TEXT_MAX : clip.data.length > 0 && clip.data.length <= CLIP_PNG_MAX;
+}
+
 export interface ScreenView {
   /// The next frame once there is a new one, or null when the view ended (the source went away).
   next(): Promise<Frame | null>;
@@ -29,6 +41,15 @@ export interface ScreenView {
   input(event: ScreenInput): Promise<void>;
   /// Stops capturing; a pending `next` resolves null.
   close(): void;
+  /// The source's clipboard set (of a type its `clipboard()` names), then, with `paste`, pasted where its focus is (the
+  /// machine's paste key, a tab's insertion). Only a view a person drives is asked.
+  setClipboard?(clip: Clip, paste: boolean): Promise<void>;
+  /// Hears the source's clipboard each time it changes (a copy made on it; not what it holds as this starts), until
+  /// the returned function. Only a view a person drives is asked, for as long as it is open.
+  watchClipboard?(heard: (clip: Clip) => void): () => void;
+  /// Shows a file in the machine's file manager (a file dropped into the view, put on the machine): the source's
+  /// `reveal` says it can.
+  reveal?(path: string): Promise<void>;
 }
 
 export type ScreenKind = "desktop" | "browser";
@@ -49,6 +70,11 @@ export interface ScreenSource {
   open(options: ViewOptions): Promise<ScreenView>;
   /// Whether it can be seen and driven now; none: always.
   access?(): ScreenAccess;
+  /// The clipboard types its views carry both ways while a person drives (`setClipboard`, `watchClipboard`); none: no
+  /// clipboard.
+  clipboard?(): ClipType[];
+  /// Its views can show a file in the machine's file manager (`reveal`).
+  readonly reveal?: boolean;
 }
 
 /// The station's sources: parts add theirs (the desktop at start, the browser per tab) and take them away.

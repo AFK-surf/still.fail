@@ -95,6 +95,21 @@ export function rootView(path: string): RootView {
   return { path, name, state: unreadableDir(path) ? "unreadable" : "ok" };
 }
 
+/// Where a file a person drops into one of the station's screens is put (docs/remote-screens.md `drop`): the machine's
+/// Downloads, where files from elsewhere land (a browser's, AirDrop's) and where its file dialogs look first; the home
+/// where it has none. Only the folder's own entry is looked at, never what is in it: on macOS listing a protected
+/// folder can put a privacy prompt up and hold the caller until it is answered (a whole station, for a sync call). A
+/// station kept from writing there is refused as an upload is (`permission`); one that reaches it another way (still.fail
+/// Helper) puts it there.
+export function dropFolder(home: string): string {
+  const downloads = join(home, "Downloads");
+  try {
+    return statSync(downloads).isDirectory() ? downloads : home;
+  } catch {
+    return home;
+  }
+}
+
 /// A file's type by its name, as a page needs it to open it: what plays, what is read, what is shown.
 export function typeOf(name: string): string {
   const dot = name.lastIndexOf(".");

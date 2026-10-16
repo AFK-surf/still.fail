@@ -2,10 +2,15 @@
 // Input.dispatch* for what they do, on a connection and a session of the view's own, so the agents' own sessions on
 // the tab are left as they are.
 //
+// While a person drives it, its clipboard's text goes both ways: what the page copies (a copy or cut, as the page put it
+// on the clipboard or as it was selected; what it writes with navigator.clipboard.writeText) is heard through a binding
+// the view's session adds while it is watched (Chrome stops telling of it as the watch ends; a page open then keeps the
+// function until it loads again, a page loaded after has none), and a paste is the text inserted where the focus is.
+//
 // Pull-driven: Chrome casts a frame only once those before it are acknowledged (it keeps at most two out), and a frame
 // is acknowledged only when the one after it is asked for (`next`), so a slow viewer slows the casting rather than
 // having frames pile up. Of two waiting, the newer is given and the older let go.
-import type { Frame, FrameConfig, ScreenInput, ScreenView, ViewOptions } from "../screens/source.ts";
+import { type Clip, type Frame, type FrameConfig, type ScreenInput, type ScreenView, type ViewOptions, CLIP_TEXT_MAX } from "../screens/source.ts";
 import type { Cdp, CdpEvent } from "./cdp.ts";
 
 /// The page's viewport in CSS pixels, as Page.getLayoutMetrics says it (what the screencast's frames show); null when
@@ -114,6 +119,41 @@ export function keyEvent(e: Extract<ScreenInput, { t: "key" }>): Record<string, 
   const commands = command === undefined ? undefined : command === "undo" && (modifiers & SHIFT) !== 0 ? ["redo"] : [command];
   return { type: "rawKeyDown", ...base, ...(commands ? { commands } : {}) };
 }
+
+/// The binding a tab's copies call while a person driving it watches its clipboard.
+export const COPY_BINDING = "__stillfailCopied";
+/// What hears a page's copies, run in it (and in each document it opens while watched): a copy's or a cut's text, as
+/// the page set it (read as the event reaches the window) or as it was selected (a field's selection, else the
+/// page's), and what it writes with navigator.clipboard.writeText. Once a page; it says nothing once the binding went.
+export const COPY_HOOK = `(() => {
+  if (window.__stillfailCopyHook) return;
+  window.__stillfailCopyHook = true;
+  const say = (text) => { try { if (typeof text === "string" && text !== "" && typeof window.${COPY_BINDING} === "function") window.${COPY_BINDING}(text.slice(0, ${CLIP_TEXT_MAX / 4})); } catch {} };
+  const selected = () => {
+    const el = document.activeElement;
+    if (el && (el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && /^(text|search|url|tel|email|number)$/i.test(el.type || "text")))) {
+      try { if (el.selectionStart !== el.selectionEnd) return el.value.slice(el.selectionStart, el.selectionEnd); } catch {}
+      return "";
+    }
+    return String(window.getSelection() || "");
+  };
+  let pending = null;
+  const started = () => {
+    pending = selected();
+    setTimeout(() => { if (pending) say(pending); pending = null; }, 0);
+  };
+  const reached = (e) => {
+    let set = "";
+    try { set = e.clipboardData ? e.clipboardData.getData("text/plain") : ""; } catch {}
+    if (set) { pending = null; say(set); }
+  };
+  for (const type of ["copy", "cut"]) { window.addEventListener(type, started, true); window.addEventListener(type, reached); }
+  const board = navigator.clipboard;
+  if (board && typeof board.writeText === "function") {
+    const write = board.writeText.bind(board);
+    board.writeText = (text) => { say(String(text)); return write(text); };
+  }
+})()`;
 
 type Cast = { ack: number; data: Uint8Array; meta: any };
 
@@ -241,6 +281,43 @@ export class TabView implements ScreenView {
         if (event.text !== "") await cdp.send("Input.insertText", { text: event.text }, session);
         return;
     }
+  }
+
+  /// A paste: the text inserted where the tab's focus is (Chrome's own clipboard is the machine's, left as it is).
+  async setClipboard(clip: Clip, paste: boolean): Promise<void> {
+    if (this.#ended || clip.type !== "text" || !paste) return;
+    await this.#p.cdp.send("Input.insertText", { text: clip.text }, this.#p.session);
+  }
+
+  watchClipboard(heard: (clip: Clip) => void): () => void {
+    const { cdp, session } = this.#p;
+    let on = true;
+    let script: string | null = null;
+    const unlisten = cdp.on((e) => {
+      if (on && e.method === "Runtime.bindingCalled" && e.sessionId === session && e.params?.name === COPY_BINDING && typeof e.params.payload === "string" && e.params.payload !== "") {
+        heard({ type: "text", text: e.params.payload });
+      }
+    });
+    const undo = () => {
+      if (this.#ended) return;
+      void cdp.send("Runtime.removeBinding", { name: COPY_BINDING }, session).catch(() => {});
+      if (script !== null) void cdp.send("Page.removeScriptToEvaluateOnNewDocument", { identifier: script }, session).catch(() => {});
+    };
+    void (async () => {
+      try {
+        // The binding needs no Runtime.enable (which a page could tell).
+        await cdp.send("Runtime.addBinding", { name: COPY_BINDING }, session);
+        script = (await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: COPY_HOOK }, session))?.identifier ?? null;
+        await cdp.send("Runtime.evaluate", { expression: COPY_HOOK }, session);
+        if (!on) undo();
+      } catch {}
+    })();
+    return () => {
+      if (!on) return;
+      on = false;
+      unlisten();
+      undo();
+    };
   }
 
   close() {

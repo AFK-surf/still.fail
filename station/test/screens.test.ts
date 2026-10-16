@@ -1,7 +1,8 @@
 // The station's screens (docs/remote-screens.md): the view wire over a member's link in memory (framing, at most
 // UNACKED frames not acknowledged, read-only members, who is on a screen, how a view ends), with a fake source; the
 // list (GET /screens, `screens` on the event stream); a person's input as macOS posts it; the desktop source with a
-// fake helper (its grants, its view protocol). Nothing here captures a screen: side/screen-desktop.test.ts does.
+// fake helper (its grants, its view protocol); the clipboard both ways and files dropped (only for a view that drives,
+// within bounds, of the types a source carries). Nothing here captures a screen: side/screen-desktop.test.ts does.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -12,13 +13,14 @@ import { test } from "node:test";
 import { Admin } from "../src/api/admin.ts";
 import { Events } from "../src/api/events.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
-import { FrameIn, KIND, MAX_IN, SCREEN_TYPE, UNACKED, answerScreen, frame, parseInput } from "../src/mesh/screens.ts";
+import { FrameIn, KIND, MAX_CLIP_IN, MAX_IN, SCREEN_TYPE, UNACKED, answerScreen, frame, parseClip, parseInput } from "../src/mesh/screens.ts";
 import { ALPN, Reader, writeLine } from "../src/mesh/serve.ts";
 import { HELPER_APP, HelperApp } from "../src/helper/app.ts";
-import { Desktop, helperMessage } from "../src/screens/desktop.ts";
+import { Desktop, TO_HELPER, helperClip, helperMessage } from "../src/screens/desktop.ts";
+import { dropFolder } from "../src/drive/drive.ts";
 import { ScreenHub, ScreenRefused } from "../src/screens/hub.ts";
 import { CLICK_MS, FLAGS, KEYCODES, MacInput } from "../src/screens/mac-input.ts";
-import type { Frame, ScreenAccess, ScreenInput, ScreenSource, ScreenView, ViewOptions } from "../src/screens/source.ts";
+import { CLIP_PNG_MAX, CLIP_TEXT_MAX, type Clip, type ClipType, type Frame, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions } from "../src/screens/source.ts";
 import { WINDOWS } from "../src/platform/index.ts";
 import { settle } from "./hub-fakes.ts";
 import { memoryMesh } from "./memory-mesh.ts";
@@ -32,6 +34,11 @@ class FakeView implements ScreenView {
   asked = 0;
   keyframes = 0;
   inputs: ScreenInput[] = [];
+  /// What was asked of its clipboard, in order with its input (`input` the key or text, `clip` a clipboard set).
+  asks: ({ input: ScreenInput } | { clip: Clip; paste: boolean } | { reveal: string })[] = [];
+  /// Who hears its clipboard while it is watched.
+  copied: ((clip: Clip) => void) | null = null;
+  watched = 0;
   closed = false;
   /// After this many frames, none more (the source has nothing more to show).
   last = Infinity;
@@ -46,6 +53,20 @@ class FakeView implements ScreenView {
   }
   async input(event: ScreenInput) {
     this.inputs.push(event);
+    this.asks.push({ input: event });
+  }
+  async setClipboard(clip: Clip, paste: boolean) {
+    this.asks.push({ clip, paste });
+  }
+  watchClipboard(heard: (clip: Clip) => void) {
+    this.watched++;
+    this.copied = heard;
+    return () => {
+      if (this.copied === heard) this.copied = null;
+    };
+  }
+  async reveal(path: string) {
+    this.asks.push({ reveal: path });
   }
   close() {
     this.closed = true;
@@ -58,6 +79,8 @@ class FakeSource implements ScreenSource {
   opened: ViewOptions[] = [];
   name = "Tab";
   refuse: Error | null = null;
+  types: ClipType[] = [];
+  reveal = false;
   readonly id: string;
   constructor(id = "fake") {
     this.id = id;
@@ -67,6 +90,9 @@ class FakeSource implements ScreenSource {
   }
   size() {
     return { width: 1280, height: 720 };
+  }
+  clipboard() {
+    return this.types;
   }
   async open(options: ViewOptions): Promise<ScreenView> {
     this.opened.push(options);
@@ -397,6 +423,11 @@ class FakeHelperApp {
   shown: any[] = [];
   inputs: any[] = [];
   views: any[] = [];
+  /// What views asked of the clipboard (messages 4, 5, 6), and how the latest view is told of a copy (message 5).
+  clips: Buffer[] = [];
+  watches: number[] = [];
+  reveals: string[] = [];
+  copy: ((payload: Buffer) => void) | null = null;
   asking = false;
   restartOnce = false;
   status: any;
@@ -483,6 +514,7 @@ class FakeHelperApp {
             return;
           }
           conn.write(helperMessage(1, Buffer.from(JSON.stringify({ width: 64, height: 36, encoder: "fake" }))));
+          this.copy = (payload) => conn.write(helperMessage(5, payload));
           let n = 0;
           let key = true;
           let inbox = Buffer.alloc(0);
@@ -507,6 +539,9 @@ class FakeHelperApp {
                 conn.write(helperMessage(3, Buffer.concat([head, Buffer.from([0, 0, 0, 1, n])])));
               } else if (kind === 2) key = true;
               else if (kind === 3) this.inputs.push(JSON.parse(payload.toString()));
+              else if (kind === 4) this.clips.push(Buffer.from(payload));
+              else if (kind === 5) this.watches.push(payload[0]!);
+              else if (kind === 6) this.reveals.push(payload.toString());
             }
           };
           if (rest.length > 0) viewing(rest);
@@ -698,5 +733,180 @@ test("the helper watched: ended by itself it is started again, once, its window 
   await settle();
   await new Promise((r) => setTimeout(r, 50));
   assert.equal(fake.launches, 2);
+  fake.close();
+});
+
+// ── the clipboard and files dropped ──
+
+const clipFrame = (flags: number, type: number, body: Buffer) => frame(KIND.setClipboard, Buffer.concat([Buffer.from([flags, type]), body]));
+
+test("the clipboard: a view that drives it hears the source's copies and sets it, pasted after the keys before it", async () => {
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  source.types = ["text", "png"];
+  hub.add(source);
+  const v = await open(hub, member);
+  await until(v.frames, KIND.video);
+  const view = source.views[0]!;
+  assert.equal(view.watched, 1, "watched for as long as the view drives it");
+  // A copy made on it: to the client as it comes (type byte, then the bytes).
+  view.copied!({ type: "text", text: "复制的" });
+  const copied = await until(v.frames, KIND.clipboard);
+  assert.equal(copied[0], 1);
+  assert.equal(copied.subarray(1).toString("utf8"), "复制的");
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+  view.copied!({ type: "png", data: new Uint8Array(png) });
+  const picture = await until(v.frames, KIND.clipboard);
+  assert.equal(picture[0], 2);
+  assert.deepEqual(picture.subarray(1), png);
+  // The client's paste: after the key it sent before it, in order.
+  await v.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "key", kind: "down", key: "Meta", code: "MetaLeft", mods: 4 }))));
+  await v.stream.write(clipFrame(1, 1, Buffer.from("粘贴的")));
+  await v.stream.write(clipFrame(0, 2, png));
+  await settle();
+  assert.deepEqual(view.asks, [
+    { input: { t: "key", kind: "down", key: "Meta", code: "MetaLeft", mods: 4 } },
+    { clip: { type: "text", text: "粘贴的" }, paste: true },
+    { clip: { type: "png", data: new Uint8Array(png) }, paste: false },
+  ]);
+  await v.stream.finish();
+  await v.served;
+  assert.equal(view.copied, null, "no longer watched once the view ended");
+});
+
+test("the clipboard only for a view that drives it: one that looks, a read-only member's, never hear it nor set it", async () => {
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  source.types = ["text"];
+  hub.add(source);
+  const looker = await open(hub, member, { codecs: ["jpeg"], control: false });
+  const reader_ = await open(hub, reader);
+  await until(looker.frames, KIND.video);
+  await until(reader_.frames, KIND.video);
+  assert.deepEqual(source.views.map((v) => v.watched), [0, 0], "not watched for them: nothing looked at");
+  for (const v of [looker, reader_]) {
+    await v.stream.write(clipFrame(1, 1, Buffer.from("nope")));
+    await v.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "reveal", path: "/tmp/x" }))));
+  }
+  await settle();
+  assert.deepEqual(source.views.map((v) => v.asks), [[], []]);
+  for (const v of [looker, reader_]) await v.stream.finish();
+  await Promise.all([looker.served, reader_.served]);
+});
+
+test("the clipboard's bounds and types: past its bound or of a type the source does not carry, dropped; a frame past the most ends the view", async () => {
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  source.types = ["text"];
+  hub.add(source);
+  const v = await open(hub, member);
+  await until(v.frames, KIND.video);
+  const view = source.views[0]!;
+  // A picture to a source of text only; text past 1 MB; no type; nothing; then one within bounds.
+  await v.stream.write(clipFrame(1, 2, Buffer.from([0x89, 0x50, 0x4e, 0x47])));
+  await v.stream.write(clipFrame(1, 1, Buffer.alloc(CLIP_TEXT_MAX + 1, 0x61)));
+  await v.stream.write(clipFrame(1, 9, Buffer.from("x")));
+  await v.stream.write(clipFrame(1, 1, Buffer.alloc(0)));
+  await v.stream.write(clipFrame(1, 1, Buffer.alloc(CLIP_TEXT_MAX, 0x62)));
+  await settle();
+  assert.equal(view.asks.length, 1);
+  assert.equal((view.asks[0] as { clip: Clip }).clip.type, "text");
+  assert.equal(((view.asks[0] as { clip: { text: string } }).clip.text).length, CLIP_TEXT_MAX);
+  // A copy past its bound is not sent; one of a type not carried is not either.
+  view.copied!({ type: "text", text: "a".repeat(CLIP_TEXT_MAX + 1) });
+  view.copied!({ type: "png", data: new Uint8Array([1]) });
+  view.copied!({ type: "text", text: "fits" });
+  assert.equal((await until(v.frames, KIND.clipboard)).subarray(1).toString(), "fits");
+  // A clipboard frame may be a picture's size (an input frame may not); past it, the view ends.
+  assert.equal(MAX_CLIP_IN, 2 + CLIP_PNG_MAX);
+  const head = Buffer.alloc(5);
+  head[0] = KIND.setClipboard;
+  head.writeUInt32BE(MAX_CLIP_IN + 1, 1);
+  await v.stream.write(head);
+  await v.served;
+  assert.equal(view.closed, true);
+  // Parsed alone: a PNG of the most size is one; a byte more is none.
+  assert.ok(parseClip(Buffer.concat([Buffer.from([0, 2]), Buffer.alloc(CLIP_PNG_MAX)])));
+  assert.equal(parseClip(Buffer.concat([Buffer.from([0, 2]), Buffer.alloc(CLIP_PNG_MAX + 1)])), null);
+  assert.equal(MAX_IN, 64 * 1024, "other frames keep their bound");
+});
+
+test("reveal: a file shown in the file manager by a view that drives a source that can; not by one that cannot", async () => {
+  const hub = new ScreenHub();
+  const can = new FakeSource("can");
+  can.reveal = true;
+  const cannot = new FakeSource("cannot");
+  hub.add(can);
+  hub.add(cannot);
+  const a = await open(hub, member, undefined, "/admin/api/screens/can/view");
+  const b = await open(hub, member, undefined, "/admin/api/screens/cannot/view");
+  const reveal = (v: typeof a, path: unknown) => v.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "reveal", path }))));
+  await reveal(a, "/Users/pat/Downloads/a.pdf");
+  await reveal(a, 7);
+  await reveal(b, "/Users/pat/Downloads/a.pdf");
+  await settle();
+  assert.deepEqual(can.views[0]!.asks, [{ reveal: "/Users/pat/Downloads/a.pdf" }]);
+  assert.deepEqual(cannot.views[0]!.asks, []);
+  for (const v of [a, b]) await v.stream.finish();
+  await Promise.all([a.served, b.served]);
+});
+
+test("the list says what each screen carries: its clipboard's types, where a file dropped goes and whether it can be shown", () => {
+  const hub = new ScreenHub({ drop: () => "/Users/pat/Downloads" });
+  const tab = new FakeSource("tab");
+  tab.types = ["text"];
+  const plain = new FakeSource("plain");
+  plain.reveal = true;
+  hub.add(tab);
+  hub.add(plain);
+  const [a, b] = hub.listed("en").screens;
+  assert.deepEqual(a!.clipboard, ["text"]);
+  assert.deepEqual(a!.drop, { folder: "/Users/pat/Downloads", reveal: false });
+  assert.equal("clipboard" in b!, false, "none said for a source without a clipboard");
+  assert.deepEqual(b!.drop, { folder: "/Users/pat/Downloads", reveal: true });
+  // A station that takes no files says no `drop` (as one from before them).
+  const none = new ScreenHub();
+  none.add(new FakeSource());
+  assert.equal("drop" in none.listed("en").screens[0]!, false);
+  // The desktop: text and pictures, shown in Finder, wherever its helper is; none where it is not supported.
+  const { app, dir } = helperRelease();
+  assert.deepEqual(new Desktop({ supported: true, helper: new HelperApp({ app, dir }), changed: () => {} }).clipboard(), ["text", "png"]);
+  assert.deepEqual(new Desktop({ supported: false, helper: null, changed: () => {} }).clipboard(), []);
+});
+
+test("where a dropped file goes: the home's Downloads, else the home (what is in it never listed)", () => {
+  const home = mkdtempSync(join(tmpdir(), "drop-"));
+  assert.equal(dropFolder(home), home, "no Downloads: the home");
+  mkdirSync(join(home, "Downloads"));
+  assert.equal(dropFolder(home), join(home, "Downloads"));
+  rmSync(home, { recursive: true, force: true });
+});
+
+test("the desktop's clipboard: set and pasted, watched and heard, a file revealed, as the helper's messages", { skip: WINDOWS }, async () => {
+  const { app, dir } = helperRelease();
+  const fake = new FakeHelperApp({ capture: true, control: true, display, live: { capture: true, control: true } });
+  const desktop = new Desktop({ supported: true, helper: new HelperApp({ app, dir, launch: fake.launch }), changed: () => {} });
+  const view = await desktop.open({ maxWidth: 1280, maxHeight: 720, codecs: ["h264"] });
+  const heard: Clip[] = [];
+  const unwatch = view.watchClipboard!((clip) => heard.push(clip));
+  await view.setClipboard!({ type: "text", text: "你好" }, true);
+  await view.setClipboard!({ type: "png", data: new Uint8Array([9, 8]) }, false);
+  await view.reveal!("/Users/pat/Downloads/a.pdf");
+  // The helper reads in order: had by the time the next frame is answered.
+  await view.next();
+  assert.deepEqual(fake.watches, [1]);
+  assert.deepEqual(fake.clips, [Buffer.concat([Buffer.from([1, 1]), Buffer.from("你好")]), Buffer.from([0, 2, 9, 8])]);
+  assert.deepEqual(fake.reveals, ["/Users/pat/Downloads/a.pdf"]);
+  assert.equal(TO_HELPER.clipboard, 4);
+  // What the helper says was copied; past the bound, nothing.
+  fake.copy!(helperClip({ type: "text", text: "copied" }));
+  fake.copy!(Buffer.concat([Buffer.from([1]), Buffer.alloc(CLIP_TEXT_MAX + 1, 0x61)]));
+  fake.copy!(helperClip({ type: "png", data: new Uint8Array([7]) }));
+  await view.next();
+  assert.deepEqual(heard, [{ type: "text", text: "copied" }, { type: "png", data: new Uint8Array([7]) }]);
+  unwatch();
+  await view.next();
+  assert.deepEqual(fake.watches, [1, 0], "no longer watched: the helper stops looking");
+  view.close();
   fake.close();
 });

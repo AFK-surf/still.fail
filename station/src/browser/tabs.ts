@@ -1,7 +1,7 @@
 // The tabs of the station's browser, as its DevTools tell of them (Target.setDiscoverTargets on the station's own
 // connection): listed to the agents, and each a screen source (`browser:<targetId>`) in the station's Screens while it
 // is there (docs/remote-screens.md).
-import type { ScreenSource, ScreenView, Screens, ViewOptions } from "../screens/source.ts";
+import type { ClipType, ScreenSource, ScreenView, Screens, ViewOptions } from "../screens/source.ts";
 import { wall } from "../ops/fibers.ts";
 import type { Cdp, CdpEvent } from "./cdp.ts";
 import { TabView, viewportOf } from "./view.ts";
@@ -48,6 +48,11 @@ class Tab implements ScreenSource {
 
   size() {
     return this.#size;
+  }
+
+  /// Text: what the page copies is heard (view.ts COPY_HOOK), what the viewer pastes is inserted where its focus is.
+  clipboard(): ClipType[] {
+    return ["text"];
   }
 
   /// Its viewport, as measured or as a view's frames say it: the screens' watchers hear when it changed.

@@ -1,6 +1,7 @@
 // The station's browser on the machine's real Chrome (src/browser/): started as the station starts it, driven by an
 // agent's own DevTools connection while a person's view of the same tab casts frames and types into it, let go of by
-// one station process and taken up by the next, started again when it dies, then closed. Real processes over real time: beside the checks
+// one station process and taken up by the next, started again when it dies, then closed; a person's view of a tab
+// hearing what the page copies and pasting into it. Real processes over real time: beside the checks
 // (`pnpm test:side`), skipped where there is no Chrome.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -12,7 +13,8 @@ import { test } from "node:test";
 import { StationBrowser } from "../src/browser/browser.ts";
 import { type Cdp, connectCdp } from "../src/browser/cdp.ts";
 import { chromeHost } from "../src/browser/chrome.ts";
-import { jpegSize } from "../src/browser/view.ts";
+import { COPY_BINDING, jpegSize } from "../src/browser/view.ts";
+import type { Clip } from "../src/screens/source.ts";
 import { makeScreens } from "../src/screens/source.ts";
 import { platform } from "../src/platform/index.ts";
 
@@ -134,3 +136,68 @@ for (const headless of process.env.CI ? [true] : [false, true]) {
     }
   });
 }
+
+test("a tab's clipboard, for a person driving it: what the page copies is heard, a paste goes in where its focus is", { skip: binary === undefined && "no Chrome here" }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "side-browser-clip-"));
+  const screens = makeScreens();
+  const browser = new StationBrowser({ dir, chrome: chromeHost({ dir, headless: true }), screens });
+  const page = `<title>clip</title><body><input id=i value="select me"><button id=b onclick="navigator.clipboard.writeText('from the button').catch(()=>{})">copy</button><div id=c contenteditable>set by the page</div>
+<script>c.addEventListener("copy",(e)=>{e.clipboardData.setData("text/plain","the page's own");e.preventDefault()})</script>`;
+  const server = createServer((_, res) => res.writeHead(200, { "content-type": "text/html" }).end(page));
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  let agent: Cdp | null = null;
+  try {
+    const s = await browser.endpoint();
+    agent = await connectCdp(s.ws!);
+    const { targetId } = await agent.send("Target.createTarget", { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/` });
+    const { sessionId } = await agent.send("Target.attachToTarget", { targetId, flatten: true });
+    const evaluate = async (expression: string) => (await agent!.send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true }, sessionId)).result?.value;
+    await until(async () => (await evaluate("document.readyState")) === "complete", "the page loads");
+    const tab = await until(() => screens.get(`browser:${targetId}`), "the tab is a screen");
+    assert.deepEqual(tab.clipboard?.(), ["text"]);
+    const view = await tab.open({ maxWidth: 800, maxHeight: 600, codecs: ["jpeg"] });
+    await view.next();
+    const heard: Clip[] = [];
+    const unwatch = view.watchClipboard!((clip) => heard.push(clip));
+    await until(async () => (await evaluate(`typeof window.${COPY_BINDING}`)) === "function", "the binding is there");
+    const copy = async () => {
+      await view.input({ t: "key", kind: "down", key: "Meta", code: "MetaLeft", mods: 4 });
+      await view.input({ t: "key", kind: "down", key: "c", code: "KeyC", mods: 4 });
+      await view.input({ t: "key", kind: "up", key: "c", code: "KeyC", mods: 4 });
+      await view.input({ t: "key", kind: "up", key: "Meta", code: "MetaLeft", mods: 0 });
+    };
+    // A field's selection copied with ⌘C.
+    await evaluate("i.focus(); i.select(); true");
+    await copy();
+    await until(() => heard.find((c) => c.type === "text" && c.text === "select me"), "a selection copied is heard");
+    // What the page sets as it is copied, over what was selected.
+    await evaluate("c.focus(); getSelection().selectAllChildren(c); true");
+    await copy();
+    await until(() => heard.find((c) => c.type === "text" && c.text === "the page's own"), "what the page put on the clipboard is heard");
+    // A copy button (navigator.clipboard.writeText).
+    await evaluate("b.click(); true");
+    await until(() => heard.find((c) => c.type === "text" && c.text === "from the button"), "a page's writeText is heard");
+    // A paste: in where the focus is.
+    await evaluate("i.value = ''; i.focus(); true");
+    await view.setClipboard!({ type: "text", text: "pasted 你好" }, true);
+    assert.equal(await evaluate("i.value"), "pasted 你好");
+    // No longer watched: a copy is not heard (Chrome stops telling of the binding; the page keeps its function until
+    // it loads again), and a page loaded since has none.
+    unwatch();
+    await new Promise((r) => setTimeout(r, 200));
+    const before = heard.length;
+    await evaluate("b.click(); true");
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(heard.length, before);
+    await evaluate("location.reload(); true");
+    await until(async () => (await evaluate("document.readyState")) === "complete" && (await evaluate(`typeof window.${COPY_BINDING}`)) === "undefined", "a page loaded since has no binding");
+    assert.equal(await evaluate("navigator.webdriver"), false, "still not said to be automated");
+    view.close();
+  } finally {
+    agent?.close();
+    await browser.stop().catch(() => {});
+    await browser.close();
+    server.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

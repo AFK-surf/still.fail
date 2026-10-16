@@ -31,6 +31,14 @@ final class ScreenInput {
     event.post(tap: .cghidEventTap)
   }
 
+  /// ⌘V where the focus is (what the viewer set on the clipboard, pasted); on this queue, after the input before it.
+  func paste() {
+    guard Status.inputAllowed() else { return }
+    let command = CGEventFlags.maskCommand.rawValue
+    send(CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true), flags: command)
+    send(CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false), flags: command)
+  }
+
   func perform(_ op: [String: Any]) {
     if !Status.inputAllowed() {
       if !refusedTold {

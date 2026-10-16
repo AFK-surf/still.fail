@@ -7,6 +7,9 @@
 // row per grant, Allow opens System Settings with the app to drag into its list. The helper starts itself again once a
 // grant is taken, so the grant is in effect; the station's process is never restarted for it. What is missing, and
 // whether the window is up, is told with the screens (`access`).
+//
+// A view a person drives carries the Mac's clipboard both ways (text, PNG): the helper sets NSPasteboard and pastes with
+// ⌘V, and, while the view watches it, looks at its changeCount every half a second and says what was copied.
 import type net from "node:net";
 import { hostname } from "node:os";
 import type { HelperApp } from "../helper/app.ts";
@@ -15,7 +18,7 @@ import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { ScreenRefused } from "./hub.ts";
 import { MacInput } from "./mac-input.ts";
-import type { Codec, Frame, FrameConfig, ScreenAccess, ScreenInput, ScreenSource, ScreenView, ViewOptions } from "./source.ts";
+import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions, clipFits } from "./source.ts";
 
 /// What the helper's `status` says.
 export type HelperStatus = {
@@ -76,6 +79,7 @@ export function windowWords(lang: Lang): Record<string, unknown> {
 export class Desktop implements ScreenSource {
   readonly id = "desktop";
   readonly kind = "desktop" as const;
+  readonly reveal = true;
   readonly #o: DesktopOptions;
   #status: HelperStatus | null = null;
   #checked = -Infinity;
@@ -94,6 +98,11 @@ export class Desktop implements ScreenSource {
 
   size(): { width: number; height: number } {
     return { width: this.#status?.display?.width ?? 0, height: this.#status?.display?.height ?? 0 };
+  }
+
+  /// Text and pictures, wherever the helper is.
+  clipboard(): ClipType[] {
+    return this.#o.supported && this.#o.helper !== null ? ["text", "png"] : [];
   }
 
   access(): ScreenAccess {
@@ -197,6 +206,16 @@ export class Desktop implements ScreenSource {
 type HelperError = Error & { code?: string };
 
 /// The helper's messages: a kind byte, the payload's length (4 bytes), the payload (native/helper's ScreenView.swift).
+/// To it: 1 next, 2 keyframe, 3 input, 4 clipboard (flags: bit 0 paste; type: 1 text, 2 PNG; the bytes), 5 watch the
+/// clipboard (1 on, 0 off), 6 reveal (the path). From it: 1 info, 2 config, 3 frame, 4 event, 5 clipboard (type, bytes).
+export const TO_HELPER = { next: 1, keyframe: 2, input: 3, clipboard: 4, watch: 5, reveal: 6 } as const;
+const CLIP_BYTE: Record<ClipType, number> = { text: 1, png: 2 };
+
+/// A clip as the helper's `clipboard` message has it: from the helper (`flags` none) or to it.
+export function helperClip(clip: Clip, flags?: number): Buffer {
+  const body = clip.type === "text" ? Buffer.from(clip.text, "utf8") : Buffer.from(clip.data);
+  return Buffer.concat([Buffer.from(flags === undefined ? [CLIP_BYTE[clip.type]] : [flags, CLIP_BYTE[clip.type]]), body]);
+}
 export function helperMessage(kind: number, payload: Buffer = Buffer.alloc(0)): Buffer {
   const head = Buffer.alloc(5);
   head[0] = kind;
@@ -215,6 +234,8 @@ class HelperView implements ScreenView {
   #ended = false;
   #settle!: { resolve: (v: { width: number; height: number }) => void; reject: (e: Error) => void };
   readonly #gone: () => void;
+  /// Who hears the clipboard as it changes, while it is watched.
+  #clipboard: ((clip: Clip) => void) | null = null;
 
   readonly #codec: Codec;
 
@@ -269,6 +290,12 @@ class HelperView implements ScreenView {
       case 4:
         log.info("screens", "still.fail Helper", { said: payload.toString() });
         return;
+      case 5: {
+        const body = payload.subarray(1);
+        const clip: Clip | null = payload[0] === 1 ? { type: "text", text: body.toString("utf8") } : payload[0] === 2 ? { type: "png", data: new Uint8Array(body) } : null;
+        if (clip !== null && clipFits(clip)) this.#clipboard?.(clip);
+        return;
+      }
     }
   }
 
@@ -281,16 +308,34 @@ class HelperView implements ScreenView {
     if (this.#ended) return Promise.resolve(null);
     return new Promise((resolve) => {
       this.#waiting.push(resolve);
-      this.#send(1);
+      this.#send(TO_HELPER.next);
     });
   }
 
   keyframe() {
-    this.#send(2);
+    this.#send(TO_HELPER.keyframe);
   }
 
   async input(event: ScreenInput): Promise<void> {
-    for (const op of this.#input.ops(event, wall.now())) this.#send(3, Buffer.from(JSON.stringify(op)));
+    for (const op of this.#input.ops(event, wall.now())) this.#send(TO_HELPER.input, Buffer.from(JSON.stringify(op)));
+  }
+
+  async setClipboard(clip: Clip, paste: boolean): Promise<void> {
+    this.#send(TO_HELPER.clipboard, helperClip(clip, paste ? 1 : 0));
+  }
+
+  watchClipboard(heard: (clip: Clip) => void): () => void {
+    this.#clipboard = heard;
+    this.#send(TO_HELPER.watch, Buffer.from([1]));
+    return () => {
+      if (this.#clipboard !== heard) return;
+      this.#clipboard = null;
+      this.#send(TO_HELPER.watch, Buffer.from([0]));
+    };
+  }
+
+  async reveal(path: string): Promise<void> {
+    this.#send(TO_HELPER.reveal, Buffer.from(path, "utf8"));
   }
 
   close() {

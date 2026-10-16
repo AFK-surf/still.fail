@@ -9,11 +9,15 @@
 //        3 input     JSON     {op:"mouse", type:"move"|"down"|"up", x, y, button, buttons, clicks, flags},
 //                             {op:"scroll", x, y, dx, dy, flags}, {op:"key", keycode, down, flags}, {op:"text", text};
 //                             x, y are 0..1 of the display, flags CGEventFlags
+//        4 clipboard 1 byte flags (bit 0: paste with ⌘V), 1 byte type (1 text, 2 PNG), the bytes: set (Clipboard.swift)
+//        5 watch     1 byte       1: say each copy made on the Mac from now on (message 5 out), 0: stop
+//        6 reveal    UTF-8        a file's path, shown selected in Finder
 //   out  1 info      JSON     first: {width, height, encoder}, or {error, code: "capture"|"restart"|"display"|"encoder"}
 //        2 config    4 bytes width, 4 bytes height, then the avcC (none for JPEG): before the first frame and whenever
 //                             it changes
 //        3 frame     1 byte flags (bit 0: key frame), 8 bytes timestamp (µs), then the frame (AVCC, or one JPEG)
 //        4 event     JSON     {refused: "control"}: input was posted without the grant (macOS drops it)
+//        5 clipboard 1 byte type (1 text, 2 PNG), the bytes: what was copied, while watched
 // The view ends when the connection does. `synthetic: "moving"|"still"` encodes made-up pictures instead of capturing
 // (the side test's measurement of the encoder and the link): never what a person sees.
 import AppKit
@@ -40,6 +44,7 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   /// Everything below happens on this queue.
   let queue = DispatchQueue(label: "fail.still.helper.screen", qos: .userInteractive)
   let input: ScreenInput
+  lazy var clipboard = Clipboard(channel: channel, input: input)
   var stream: SCStream?
   var timer: DispatchSourceTimer?
   var session: VTCompressionSession?
@@ -73,15 +78,20 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   /// Until the connection ends: the capture started, the station's asks answered.
   func run() {
     start()
-    while let (kind, payload) = channel.message() {
+    // A picture on the clipboard is the largest message.
+    while let (kind, payload) = channel.message(limit: 2 + Clipboard.pngMax) {
       switch kind {
       case 1: next()
       case 2: keyframe()
       case 3:
         if let op = (try? JSONSerialization.jsonObject(with: payload)) as? [String: Any] { input.post(op) }
+      case 4: clipboard.set(payload)
+      case 5: clipboard.watch(payload)
+      case 6: clipboard.reveal(payload)
       default: break
       }
     }
+    clipboard.stop()
     stop()
   }
 

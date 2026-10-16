@@ -43,11 +43,15 @@ JPEG frames are all key frames and their config has no `description`.
 
 ### Wire (member link, ALPN `stillfail/admin/1`)
 
-- **List**: `GET /admin/api/screens` → `{"screens":[{id, kind, title, width, height, viewers, controlledBy, access?}]}`;
-  changes come on the station's event stream as `screens` (same shape). `viewers`: the names of those with a view of it
-  open; `controlledBy`: those of them whose input is taken. `access`, only when something is missing:
+- **List**: `GET /admin/api/screens` →
+  `{"screens":[{id, kind, title, width, height, viewers, controlledBy, access?, clipboard?, drop?}]}`; changes come on
+  the station's event stream as `screens` (same shape). `viewers`: the names of those with a view of it open;
+  `controlledBy`: those of them whose input is taken. `access`, only when something is missing:
   `{capture, control, message, app?, path?}` (`message` in the asker's language says what to turn on where; the desktop
-  without macOS's grants, or on a machine it is not supported on). An old station answers this route 404: a client
+  without macOS's grants, or on a machine it is not supported on). `clipboard`: the types a view that drives it carries
+  both ways (`"text"`, `"png"`; the desktop both, a browser tab text); `drop`: `{folder, reveal}`, where a file a person
+  drops into a view is put on the machine (with the drive's upload, `root` the folder: docs/drive.md) and whether the
+  view can show it in the machine's file manager. A station from before them says neither: clients offer neither. An old station answers this route 404: a client
   opens a view only on a station that listed the screen (an old one would read the view's head as a request whose
   body never ends).
 - **View**: a stream whose head line carries a `screen` object:
@@ -62,11 +66,15 @@ JPEG frames are all key frames and their config has no `description`.
 | 1 `config` | station → client | JSON `{codec:"h264"\|"jpeg", width, height, description?}`: `description` is the avcC (base64) for H.264. Sent first and whenever size or codec changes; the next video frame after it is a key frame. |
 | 2 `video` | station → client | 1 byte flags (bit 0: key frame), 8 bytes timestamp (µs, big-endian), then the frame: H.264 in AVCC (length-prefixed NALs), or one JPEG. |
 | 3 `state` | station → client | JSON `{cursor?: {x, y, shape}, title?, control?, access?, viewers?: [names], controlledBy?: [names], ended?: reason}`: first `{title, control, access?}` (`control`: whether this view's input is taken), then what changes; `ended`: `finished` (the client finished), `gone` (the source went), `stopping` (the station stops) |
-| 16 `input` | client → station | JSON, coordinates normalised to 0..1 of the frame: `{t:"pointer", x, y, buttons, kind:"down"\|"up"\|"move"}`, `{t:"wheel", x, y, dx, dy}`, `{t:"key", kind:"down"\|"up", key, code, mods}`, `{t:"text", text}` (IME/paste result) |
+| 4 `clipboard` | station → client | 1 byte type (1 text in UTF-8, 2 PNG), the content: the screen's clipboard each time it changes (a copy made on it), only to a view that drives it; not what it held as the view opened. |
+| 16 `input` | client → station | JSON, coordinates normalised to 0..1 of the frame: `{t:"pointer", x, y, buttons, kind:"down"\|"up"\|"move"}`, `{t:"wheel", x, y, dx, dy}`, `{t:"key", kind:"down"\|"up", key, code, mods}`, `{t:"text", text}` (IME/paste result), `{t:"reveal", path}` (the file manager showing a file dropped into the view; a screen whose `drop` says `reveal`) |
 | 17 `ack` | client → station | 8 bytes: the timestamp of the last frame it decoded. The station keeps at most 2 frames unacknowledged. |
 | 18 `keyframe` | client → station | empty: decoder lost its state, send a key frame |
+| 19 `clipboard` | client → station | 1 byte flags (bit 0: paste it), 1 byte type (1 text, 2 PNG), the content: sets the screen's clipboard and, with paste, pastes it where its focus is. Only from a view that drives it, of a type its `clipboard` names; text at most 1 MB, a PNG 8 MB (a larger frame ends the view, as any client frame past its bound does) |
 
-- Read-only members (`viewer` role) may view but not send input (`control` ignored, input frames dropped).
+- Read-only members (`viewer` role) may view but not send input (`control` ignored, input and clipboard frames
+  dropped). The clipboard goes only to and from a view that drives the screen (never one that only looks, nor an
+  agent's), and is not looked at while no such view is open.
   Anyone else may drive. Every active view shows in `controlledBy` / `viewers`, so people and the agent see who is on it.
 - Ending: either side finishes the stream (the station says `ended` first). When the stream or its connection breaks,
   the view ends with it; the source's capture stops either way.
@@ -88,6 +96,26 @@ grant is missing puts the helper's window up on that Mac (as Cue's Computer Use 
 grant, Allow opens the System Settings pane with a panel holding the app to drag into its list. The 503 and the list's
 `access` say what is missing and that the window is up (`asking`), or that opening the screen puts it up. The system's
 own prompt is not used (it would fight the window).
+
+### Clipboard and files
+
+While a person drives a screen, its clipboard goes both ways. The desktop: the helper sets NSPasteboard (text, or PNG
+with a TIFF beside it) and, to paste, posts ⌘V after the input before it; while a view that drives it is open it looks
+at NSPasteboard's changeCount every half a second (nothing else is read until it changes, and what the view set is not
+said back) and sends what was copied: text first, else a picture as PNG; what is past its bound is not sent. A tab of
+the station's browser: text only. The view's own CDP session adds a binding (`Runtime.addBinding`, no `Runtime.enable`)
+and a script that calls it with what the page copies (a copy or cut, as the page set it or as it was selected;
+`navigator.clipboard.writeText`), both taken away as the view ends (Chrome then stops telling of the binding; a page
+open then keeps the function until it loads again); a paste is `Input.insertText` where the focus is.
+
+A file dropped into the view (the web) or picked (Android) goes up with the drive's upload (`drive.upload.part`, root
+the screen's `drop.folder`, a free name beside one already there) while its progress shows; once there the page says
+where it is, offers to show it in the machine's file manager (`reveal`) and to paste its path (`clipboard` with paste).
+The folder is the machine's Downloads, where files from elsewhere land (a browser's, AirDrop's) and file dialogs look
+first; the home where there is none (drive/drive.ts `dropFolder`). Only the folder's entry is looked at to say so,
+never what is in it: on macOS listing a protected folder can put a privacy prompt up and hold the station until it is
+answered. A station macOS keeps from Downloads is refused as any upload there is (`permission`, said on the file's
+row) until the drive reaches protected folders through still.fail Helper.
 
 ### Clients
 

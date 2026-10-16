@@ -2,6 +2,7 @@
 // long-lived work is Effect (fibers in scopes: a part stopped stops all it started); computing what to answer is plain
 // functions (src/read). docs/station-ts.md, 「模块划分」.
 import { Context, Effect, Layer, Queue, Stream, SubscriptionRef } from "effect";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { Admin } from "./api/admin.ts";
 import { Shares } from "./mesh/adb.ts";
@@ -21,6 +22,7 @@ import { log } from "./ops/log.ts";
 import { platform } from "./platform/index.ts";
 import { ScreenHub } from "./screens/hub.ts";
 import { Desktop } from "./screens/desktop.ts";
+import { dropFolder } from "./drive/drive.ts";
 import { HelperApp, helperApp } from "./helper/app.ts";
 
 /// Where the station keeps its data, and the release it runs from.
@@ -107,7 +109,7 @@ export class ScreenRegistry extends Context.Service<ScreenRegistry, ScreenHub>()
     ScreenRegistry,
     Effect.gen(function* () {
       const { data } = yield* Paths;
-      const hub = yield* Effect.acquireRelease(Effect.sync(() => new ScreenHub()), (hub) => Effect.sync(() => hub.close()));
+      const hub = yield* Effect.acquireRelease(Effect.sync(() => new ScreenHub({ drop: () => dropFolder(homedir()) })), (hub) => Effect.sync(() => hub.close()));
       // still.fail Helper (macOS), installed and talked to under <data>/helper.
       const app = platform.hasDesktopScreen ? helperApp() : null;
       // Back after it ended by itself: the desktop asks again for a grant still missing.

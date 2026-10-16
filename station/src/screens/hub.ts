@@ -42,14 +42,22 @@ export function accessShown(access: ScreenAccess | undefined, lang: Lang): Acces
   return { capture: access.capture, control: access.control, message, ...(access.app ? { app: access.app } : {}), ...(access.path ? { path: access.path } : {}), ...(access.asking ? { asking: true } : {}) };
 }
 
+export type HubOptions = {
+  /// Where a file a person drops into a view is put on this machine (docs/remote-screens.md `drop`, the drive's
+  /// `dropFolder`); none: files are not taken.
+  drop?: () => string | null;
+};
+
 export class ScreenHub implements Screens {
   readonly #sources = makeScreens();
+  readonly #o: HubOptions;
   readonly #views = new Map<string, Set<Watcher>>();
   readonly #listeners = new Set<() => void>();
   readonly #refreshers = new Set<() => Promise<void>>();
   readonly #stopping = new Set<() => void>();
 
-  constructor() {
+  constructor(options: HubOptions = {}) {
+    this.#o = options;
     this.#sources.watch(() => this.#changed());
   }
 
@@ -145,13 +153,21 @@ export class ScreenHub implements Screens {
     for (const stop of [...this.#stopping]) stop();
   }
 
-  /// GET /admin/api/screens, in `lang`: `{screens: [{id, kind, title, width, height, viewers, controlledBy, access?}]}`.
+  /// GET /admin/api/screens, in `lang`: `{screens: [{id, kind, title, width, height, viewers, controlledBy, access?,
+  /// clipboard?, drop?}]}`: `clipboard`, the types a view that drives it carries both ways; `drop`, where a file
+  /// dropped into a view is put (`folder`) and whether the view can show it in the machine's file manager (`reveal`).
   listed(lang: Lang): { screens: Record<string, unknown>[] } {
+    const folder = this.#o.drop?.() ?? null;
     return {
       screens: this.list().map((s) => {
         const { width, height } = s.size();
         const access = accessShown(s.access?.(), lang);
-        return { id: s.id, kind: s.kind, title: s.title(), width, height, ...this.people(s.id), ...(access ? { access } : {}) };
+        const clipboard = s.clipboard?.() ?? [];
+        return {
+          id: s.id, kind: s.kind, title: s.title(), width, height, ...this.people(s.id), ...(access ? { access } : {}),
+          ...(clipboard.length > 0 ? { clipboard } : {}),
+          ...(folder !== null ? { drop: { folder, reveal: s.reveal === true } } : {}),
+        };
       }),
     };
   }
