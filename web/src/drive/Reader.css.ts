@@ -295,10 +295,6 @@ globalStyle(`[data-desktop] ${reader}[data-narrow] ${top}[data-shown]`, { Webkit
 globalStyle(`${desk} ${topEnd}`, { gap: "2px" });
 globalStyle(`${desk} ${topButton}`, { width: "34px", height: "34px", borderRadius: `calc(10px * ${vars.cornerScale})`, color: "var(--r-muted)" });
 globalStyle(`${desk} ${topButton}:hover, ${desk} ${topButton}[data-on]`, { color: "var(--r-ink)" });
-// Docked, as a page's bar is, its buttons take the app's grounds (as a page's bar's do), not the paper's frosted ones,
-// which are for the bar floating over the text.
-globalStyle(`${desk} :is(${back}, ${topButton}):hover`, { background: vars.hover });
-globalStyle(`${desk} ${topButton}[data-on]`, { background: vars.selected });
 /** The text under it, and clear of the panel docked at the right. */
 globalStyle(`${desk} ${scroller}`, { top: `${BAR}px`, paddingTop: "40px", outline: "none" });
 globalStyle(`${desk} ${scroller}[data-panel]`, { paddingRight: `${PANEL}px` });
