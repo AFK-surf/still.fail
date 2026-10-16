@@ -92,7 +92,18 @@ pinned, the station's name at the end of each. A folder's page has the way up
 to the home (or the disk's top), a pin, and each row's path to copy; a row
 dragged out carries the file and its path. A chat's 文件 tab
 (web/src/pages/DriveTab.tsx) browses every station's files beside the chat, to
-drag into the composer or add to the message. The phone reaches a drive from
+drag into the composer or add to the message. On both, a folder is worked
+as in Finder (web/src/drive/browse.ts): a press chooses a row (⌘ adds or takes one
+away, ⇧ the ones between), a double click or ⌘↓ opens it, ⌘↑ goes up, the arrows
+move (→ and ← into and out of a folder in columns and a tree), typed letters go to
+a name, ⏎ changes a name in place, space previews, ⌘⌫ deletes what is chosen,
+⌘⇧N makes a folder (named as Finder names one, its name then changed). Hidden
+files (a name starting with `.`) show only after ⌘⇧. ; the order (name, time,
+size or kind, by the list's heads or the folder's right-click menu) and that are
+the person's on the device (prefs `driveViews`). On the files' page what is
+dragged onto a folder (its row, a column, the list) goes into it: a station's own
+files moved (`drive.rename`; by the top of the disk for one from another folder
+pinned), the computer's put up, a folder of them made there and filled. The phone reaches a drive from
 its station's page, and puts a station's files into a message from ＋'s Station
 文件 (web/src/mobile/StationFiles.tsx, apps/android/…/screens/StationFiles.kt):
 the places, a folder entered, files (or the folder as a whole) ticked; each goes

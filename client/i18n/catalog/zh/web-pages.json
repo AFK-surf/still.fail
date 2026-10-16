@@ -1303,5 +1303,34 @@
   "web-pages.screen.and": "、",
   "web-pages.screen.someone": "他人",
   "web-pages.screen.takeOver": "接管",
-  "web-pages.screen.takeOverTip": "暂停 {names}，由你控制"
+  "web-pages.screen.takeOverTip": "暂停 {names}，由你控制",
+  "web-pages.drive.untitledFolder": "未命名文件夹",
+  "web-pages.drive.moveWhat": "移动",
+  "web-pages.drive.uploadWhat": "上传",
+  "web-pages.drive.downloadMany": {
+    "one": "下载 {n} 个文件",
+    "other": "下载 {n} 个文件"
+  },
+  "web-pages.drive.copyPaths": "复制路径",
+  "web-pages.drive.deleteMany": {
+    "one": "删除 {n} 项",
+    "other": "删除 {n} 项"
+  },
+  "web-pages.drive.deleteManyAsk": {
+    "one": "删除这 {n} 项？",
+    "other": "删除这 {n} 项？"
+  },
+  "web-pages.drive.sendManyToChat": {
+    "one": "将 {n} 项添加到消息",
+    "other": "将 {n} 项添加到消息"
+  },
+  "web-pages.drive.sortBy.name": "按名称排列",
+  "web-pages.drive.sortBy.time": "按修改时间排列",
+  "web-pages.drive.sortBy.size": "按大小排列",
+  "web-pages.drive.sortBy.kind": "按类型排列",
+  "web-pages.drive.sortBy.nameHead": "名称",
+  "web-pages.drive.sortBy.sizeHead": "大小",
+  "web-pages.drive.sortBy.timeHead": "修改时间",
+  "web-pages.drive.showHidden": "显示隐藏文件",
+  "web-pages.drive.hideHidden": "不显示隐藏文件"
 }

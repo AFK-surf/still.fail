@@ -19,16 +19,18 @@ import { useAct } from "@stillfail/ui/toast.tsx";
 import type { DriveEntry, DriveRoot, StationView } from "../core/shapes.ts";
 import { useTopicSelect } from "../core/react.ts";
 import { Button, Confirm, Dialog, ICON, IconButton, Menu, Tip, type MenuItem } from "../ui.tsx";
-import { ChevronLeft, ChevronRight, Close, Copy, Disk, Server, Download, Edit, Folder, FolderPlus, Pin, Plus, Refresh, Retry, Trash, Upload } from "@stillfail/ui/icons.tsx";
+import { Check, ChevronLeft, ChevronRight, Close, Copy, Disk, Server, Download, Edit, Folder, FolderPlus, Pin, Plus, Refresh, Retry, Trash, Upload } from "@stillfail/ui/icons.tsx";
 import { KindIcon } from "../drive/KindIcon.tsx";
 import { Reader } from "@stillfail/ui/viewer/Reader.tsx";
 import { Player } from "@stillfail/ui/viewer/Player.tsx";
 import { cancel, download, joinPath, nameOf, openerOf, parentOf, refresh, retry, rootLabel, settle, sizeOf, upload, useFolder, useUploads, type At, type Upload as Up } from "../drive/model.ts";
 import { useDriveFile } from "../drive/viewerFile.ts";
-import { absoluteOf, childOf, drive, drivePath, filtered, folderName, nameProblem, rootTrouble, trailOf, useDrive, type DriveState, type PickFolder } from "../drive/useDrive.ts";
-import { draggedOf, endDrag, startDrag } from "../drive/drag.ts";
-import { keepFilesPage, keepOpened, lastFilesPage, lastOpened, useKeptScroll } from "../drive/kept.ts";
-import { ColumnsView, TreeView, useDriveView, ViewSwitch, type RowOf } from "./DriveViews.tsx";
+import { absoluteOf, childOf, drive, drivePath, filtered, folderName, rootTrouble, trailOf, useDrive, type DriveState, type PickFolder } from "../drive/useDrive.ts";
+import { carriesDrive, draggedNow, draggedOf, endDrag, startDrag } from "../drive/drag.ts";
+import { keepFilesPage, keepOpened, lastFilesPage, useKeptScroll } from "../drive/kept.ts";
+import { dropInto, rowKey, takes, useBrowse } from "../drive/browse.ts";
+import type { Arrangement, SortBy } from "../drive/order.ts";
+import { ColumnsView, TreeView, useDriveView, useDropZone, ViewSwitch, type DropTarget, type RowOf, type RowProps, type Shown } from "./DriveViews.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { DrivePreview, FilterField, useFolders } from "../mobile/Drive.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
@@ -174,17 +176,16 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
   const manage = useManage(d);
   const files = useRef<HTMLInputElement>(null);
   const [refreshing, setRefreshing] = useState(false);
-  // What is named, removed or previewed, with the folder it is in (a tree or columns show more than the one folder).
-  const [naming, setNaming] = useState<{ at: At; entry: DriveEntry | null } | null>(null);
-  const [removing, setRemoving] = useState<{ at: At; entry: DriveEntry } | null>(null);
+  // What is removed or previewed, with the folder it is in (a tree or columns show more than the one folder).
+  const [removing, setRemoving] = useState<{ at: At; entry: DriveEntry }[] | null>(null);
   const [preview, setPreview] = useState<{ at: At; entries: readonly DriveEntry[]; entry: DriveEntry } | null>(null);
   const [view, setView] = useDriveView("page");
   // Back where it was, as each folder was left (the page scrolls, the list in it); the folder kept for the rail's 文件
   // to come back to.
   const list = useKeptScroll<HTMLDivElement>("page", at, view, folder.value !== undefined || folder.error !== null, (el) => el.parentElement);
   useEffect(() => keepFilesPage(station.address.split("/")[0] ?? "", pathname + search), [station.address, pathname, search]);
-  const last = lastOpened("page", at);
   const [dragging, setDragging] = useState(false);
+  const stationName = useStationName(station.address);
   const here = absoluteOf(root, path);
   const name = path ? nameOf(path) : d.anywhere && !d.roots.some((r) => r.path === root) ? (here === d.home ? t("web-pages.drive.home") : folderName(here)) : rootLabel(d.roots, root);
   const pinned = d.roots.some((r) => r.path === here);
@@ -209,9 +210,33 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
       default: return save(in_, e);
     }
   };
-  const open = (e: DriveEntry) => openIn(at, e, entries);
   const save = (in_: At, e: DriveEntry) => act(download({ ...in_, path: joinPath(in_.path, e.name) }, e), t("web-pages.drive.downloadWhat"));
-  const itemsIn = (in_: At, e: DriveEntry): MenuItem[] => [
+  // A picture or code previewed with those beside it, as shown, to step through.
+  const openRow = (in_: At, e: DriveEntry) => openIn(in_, e, in_.path === path ? browse.arranged(entries) : [e]);
+  const browse = useBrowse({
+    owner: "page", view, at, write: d.write, act, open: openRow, preview: openRow,
+    go: (p, replace) => go(drivePath(station.base, root, p), replace ? { replace: true } : undefined),
+    remove: setRemoving,
+  });
+  const shownEntries = browse.arranged(entries);
+  // What goes into a folder dropped on it: this station's files moved, the computer's put up.
+  const into = (folder: At): DropTarget | undefined => d.write
+    ? { takes: (dt) => takes(dt, station.address, draggedNow()), drop: (dt) => act(dropInto(dt, folder, d.anywhere), t(carriesDrive(dt) ? "web-pages.drive.moveWhat" : "web-pages.drive.uploadWhat")) }
+    : undefined;
+  const itemsIn = (in_: At, e: DriveEntry): MenuItem[] => {
+    const all = browse.chosenWith(in_, e);
+    return all.length > 1 ? manyItems(all) : oneItems(in_, e);
+  };
+  // What is chosen, several at once.
+  const manyItems = (all: { at: At; entry: DriveEntry }[]): MenuItem[] => {
+    const files = all.filter((x) => !x.entry.dir);
+    return [
+      ...(files.length ? [{ label: t("web-pages.drive.downloadMany", { n: files.length }), icon: Download, onSelect: () => { for (const x of files) save(x.at, x.entry); } }] : []),
+      { label: t("web-pages.drive.copyPaths"), icon: Copy, onSelect: () => copyPath(all.map((x) => absoluteOf(root, joinPath(x.at.path, x.entry.name))).join("\n")) },
+      ...(d.write ? [{ label: t("web-pages.drive.deleteMany", { n: all.length }), icon: Trash, danger: true, onSelect: () => setRemoving(all) }] : []),
+    ];
+  };
+  const oneItems = (in_: At, e: DriveEntry): MenuItem[] => [
     { label: t("web-pages.drive.open"), onSelect: () => openIn(in_, e) },
     ...(e.dir ? [] : [{ label: t("web-pages.drive.download"), icon: Download, onSelect: () => save(in_, e) }]),
     { label: t("web-pages.drive.copyPath"), icon: Copy, onSelect: () => copyPath(absoluteOf(root, joinPath(in_.path, e.name))) },
@@ -221,17 +246,52 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
       return { label: t(on ? "web-pages.drive.unpin" : "web-pages.drive.pin"), icon: Pin, onSelect: () => pin(abs, !on) };
     })()] : []),
     ...(d.write ? [
-      { label: t("web-pages.drive.rename"), icon: Edit, onSelect: () => setNaming({ at: in_, entry: e }) },
-      { label: t("web-pages.drive.delete"), icon: Trash, danger: true, onSelect: () => setRemoving({ at: in_, entry: e }) },
+      { label: t("web-pages.drive.rename"), icon: Edit, onSelect: () => browse.startRename(in_, e.name) },
+      { label: t("web-pages.drive.delete"), icon: Trash, danger: true, onSelect: () => setRemoving([{ at: in_, entry: e }]) },
     ] : []),
   ];
-  const items = (e: DriveEntry) => itemsIn(at, e);
-  const rowOf: RowOf = (in_, e) => ({ items: itemsIn(in_, e), open: () => openIn(in_, e) });
+  const rowOf: RowOf = (in_, e) => ({
+    items: itemsIn(in_, e),
+    open: () => openRow(in_, e),
+    press: (ev) => browse.press(in_, e, ev),
+    menu: () => browse.choose(in_, e.name),
+    chosen: browse.isChosen(in_, e.name),
+    renaming: browse.renaming === rowKey(in_.path, e.name),
+    rename: (to) => browse.rename(in_, e, to),
+    dragged: () => browse.chosenWith(in_, e).map((x) => draggedOf(x.at, x.entry, stationName)),
+    drop: e.dir ? into({ ...in_, path: joinPath(in_.path, e.name) }) : undefined,
+  });
+  const shown: Shown = { rowOf, arranged: browse.arranged, dropOn: into, clear: browse.clear };
+  const newFolder = () => act(browse.newFolder(at, entries), t("web-pages.drive.mkdirWhat"));
   const empty = <Empty text={t("web-pages.drive.emptyFolder")} action={d.write ? <Button icon={Upload} onClick={() => files.current?.click()}>{t("web-pages.drive.upload")}</Button> : undefined} />;
+  const newFolderRef = useRef(newFolder);
+  newFolderRef.current = newFolder;
+  // The keys are the rows' wherever on the page they are pressed (a folder gone into leaves nothing focused), but in a
+  // field, a dialog or a menu.
+  const keysRef = useRef(browse.onKeyDown);
+  keysRef.current = browse.onKeyDown;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const at = document.activeElement;
+      if (e.defaultPrevented || !(at === document.body || at === null || list.current?.contains(at))) return;
+      keysRef.current(e);
+    };
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, [list]);
+  // A folder gone into (the row pressed gone with the one left): the list keeps the focus, as Finder's window does.
+  useEffect(() => {
+    if (document.activeElement === document.body || document.activeElement === null) list.current?.focus({ preventScroll: true });
+  }, [path, view, list]);
   // ⌘/Ctrl+U puts files up into the folder shown.
   useEffect(() => {
     if (!d.write) return;
-    const onKey = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "u") { e.preventDefault(); files.current?.click(); } };
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.key.toLowerCase() === "u") { e.preventDefault(); files.current?.click(); }
+      // ⌘⇧N: a new folder, as Finder makes one.
+      if (e.shiftKey && e.key.toLowerCase() === "n") { e.preventDefault(); newFolderRef.current(); }
+    };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
   }, [d.write]);
@@ -272,7 +332,7 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
         <div className={css.actions}>
           <ViewSwitch value={view} onChange={setView} />
           {d.write && <IconButton label={t("web-pages.drive.upload")} icon={Upload} onClick={() => files.current?.click()} />}
-          {d.write && <IconButton label={t("web-pages.drive.mkdir")} icon={FolderPlus} onClick={() => setNaming({ at, entry: null })} />}
+          {d.write && <IconButton label={t("web-pages.drive.mkdir")} icon={FolderPlus} onClick={newFolder} />}
           <span className={css.spin} data-on={refreshing || undefined}><IconButton label={t("web-pages.drive.refresh")} icon={Refresh} onClick={reload} /></span>
           {d.anywhere && <span className={css.pin} data-on={pinned || undefined}><IconButton label={t(pinned ? "web-pages.drive.unpin" : "web-pages.drive.pin")} icon={Pin} onClick={() => pin(here, !pinned)} /></span>}
           <Menu items={[
@@ -281,36 +341,49 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
           ]} />
         </div>
       </header>
-      <div ref={list} className={css.list} data-dragging={dragging || undefined} data-view={view}
-        onDragOver={(e) => { if (d.write && e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDragging(true); } }}
+      <ContextMenu.Root modal={false}>
+      <ContextMenu.Trigger asChild>
+      <div ref={list} className={css.list} data-dragging={dragging || undefined} data-view={view} tabIndex={-1}
+        onKeyUp={(e) => { if (e.key === " ") e.preventDefault(); }}
+        onClick={(e) => { if (e.target === e.currentTarget) browse.clear(); }}
+        // Dropped where no folder takes it (not on a folder's row or a column): into the folder shown.
+        onDragOver={(e) => { const here = into(at); if (!here?.takes(e.dataTransfer)) return; e.preventDefault(); setDragging(!(e.target as Element).closest("[data-drop-into]")); }}
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
-        onDrop={(e) => { if (!d.write || !e.dataTransfer.files.length) return; e.preventDefault(); setDragging(false); upload(station.address, root, path, [...e.dataTransfer.files]); }}>
+        onDrop={(e) => { setDragging(false); const here = into(at); if (!here?.takes(e.dataTransfer)) return; e.preventDefault(); here.drop(e.dataTransfer); }}>
         {/* Columns stay while the folder opened is read (each column says its own reading or trouble), not redrawn whole. */}
         {view === "columns" ? (
           <>
             {uploads.map((u) => <UploadRow key={u.key} u={u} />)}
-            <ColumnsView owner="page" at={{ ...at, path: "" }} open={path} onGo={(p) => go(drivePath(station.base, root, p))} rowOf={rowOf} empty={uploads.length ? <></> : empty} />
+            <ColumnsView owner="page" at={{ ...at, path: "" }} open={path} shown={shown} empty={uploads.length ? <></> : empty} />
           </>
         ) : folder.error ? (
           <div className={css.problem}><p className={controlsCss.fieldError}>{folder.error.message}</p><Button variant="ghost" icon={Retry} onClick={reload}>{t("web-pages.drive.retry")}</Button></div>
         ) : !folder.value ? <p className={shellCss.muted}>{t("web-pages.drive.reading")}</p> : (
           <>
             {uploads.map((u) => <UploadRow key={u.key} u={u} />)}
-            {view === "tree" ? <TreeView key={path} owner="page" at={at} rowOf={rowOf} empty={uploads.length ? <></> : empty} />
+            {view === "list" && shownEntries.length > 0 && <ListHead arrangement={browse.arrangement} onSort={(by) => browse.arrangeAs(by === browse.arrangement.by ? { down: !browse.arrangement.down } : { by, down: false })} />}
+            {view === "tree" ? <TreeView key={path} owner="page" at={at} shown={shown} empty={uploads.length ? <></> : empty} />
               : <>
-                {entries.length === 0 && uploads.length === 0 && empty}
-                {entries.map((e) => <EntryRow key={e.name} at={at} entry={e} items={items(e)} selected={e.name === last} onOpen={() => open(e)} />)}
+                {shownEntries.length === 0 && uploads.length === 0 && empty}
+                {shownEntries.map((e) => <DriveRow key={e.name} at={at} entry={e} row={rowOf(at, e)} />)}
               </>}
           </>
         )}
         {dragging && <div className={css.drop}><Upload size={22} /><span>{t("web-pages.drive.dropHere", { name })}</span></div>}
       </div>
+      </ContextMenu.Trigger>
+      <MenuContent items={[
+        ...(d.write ? [{ label: t("web-pages.drive.mkdir"), icon: FolderPlus, onSelect: newFolder }, { label: t("web-pages.drive.upload"), icon: Upload, onSelect: () => files.current?.click() }] : []),
+        ...(["name", "time", "size", "kind"] as const).map((by) => ({ label: t(`web-pages.drive.sortBy.${by}`), ...(browse.arrangement.by === by ? { icon: Check } : {}), onSelect: () => browse.arrangeAs({ by, down: false }) })),
+        { label: t(browse.arrangement.hidden ? "web-pages.drive.hideHidden" : "web-pages.drive.showHidden"), onSelect: () => browse.arrangeAs({ hidden: !browse.arrangement.hidden }) },
+        { label: t("web-pages.drive.refresh"), icon: Refresh, onSelect: reload },
+      ]} />
+      </ContextMenu.Root>
       <input ref={files} type="file" multiple hidden onChange={(e) => { const list = [...(e.target.files ?? [])]; e.target.value = ""; if (list.length) upload(station.address, root, path, list); }} />
-      {naming && <NameDialog at={naming.at} entry={naming.entry} onClose={() => setNaming(null)} />}
       <Confirm open={removing !== null} onClose={() => setRemoving(null)}
-        title={removing ? t(removing.entry.dir ? "web-pages.drive.deleteFolderAsk" : "web-pages.drive.deleteAsk", { name: removing.entry.name }) : ""}
-        description={removing?.entry.dir ? t("web-pages.drive.deleteFolderText") : t("web-pages.drive.deleteText")} action={t("web-pages.drive.delete")}
-        onConfirm={() => { const r = removing; setRemoving(null); if (r) act(drive.remove(r.at, r.entry), t("web-pages.drive.deleteWhat")); }} />
+        title={!removing ? "" : removing.length > 1 ? t("web-pages.drive.deleteManyAsk", { n: removing.length }) : t(removing[0]!.entry.dir ? "web-pages.drive.deleteFolderAsk" : "web-pages.drive.deleteAsk", { name: removing[0]!.entry.name })}
+        description={removing?.some((r) => r.entry.dir) ? t("web-pages.drive.deleteFolderText") : t("web-pages.drive.deleteText")} action={t("web-pages.drive.delete")}
+        onConfirm={() => { const r = removing; setRemoving(null); if (r) act(Promise.all(r.map((x) => drive.remove(x.at, x.entry))), t("web-pages.drive.deleteWhat")); }} />
       {preview && <DrivePreview at={preview.at} entries={preview.entries} entry={preview.entry} onClose={() => setPreview(null)} />}
       {manage.dialogs}
     </>
@@ -322,54 +395,109 @@ export function useStationName(station: string): string {
   return useTopicSelect<StationView[], string>({ topic: "stations", scope: station.split("/")[0] ?? "" }, (s) => s.value?.find((x) => x.station === station)?.name ?? station);
 }
 
-function EntryRow({ at, entry, items, selected, onOpen }: { at: At; entry: DriveEntry; items: MenuItem[]; selected: boolean; onOpen: () => void }) {
-  return <DriveRow at={at} entry={entry} items={items} selected={selected} onOpen={onOpen} />;
-}
-
 /**
  * A row of a folder's list, as the files' page and a chat's 文件 tab draw it: its mark, name, size and time (`compact`:
- * the size alone), the … on hover and the same on a right click; dragged out, it carries the file and its path. In a
- * tree (`depth`), in by its depth, a folder with its disclosure (`expanded`); in columns, a folder with › at its end
- * (`column`), the one open `selected` (in a list or a tree, the one last opened).
+ * the size alone), the … on hover and the same on a right click. Pressed it is chosen, a double click opens it, its name
+ * is changed in place; dragged out it carries the file (what is chosen with it) and its path, and a folder takes what
+ * is dropped on it. In a tree (`depth`), in by its depth, a folder with its disclosure (`expanded`, `onToggle`); in
+ * columns, a folder with › at its end (`column`), the one open (`along`) marked as the way to the next column.
  */
-export function DriveRow({ at, entry, items, onOpen, compact = false, depth, expanded, column = false, selected = false }: {
-  at: At; entry: DriveEntry; items: MenuItem[]; onOpen: () => void; compact?: boolean;
-  depth?: number | undefined; expanded?: boolean | undefined; column?: boolean; selected?: boolean;
+export function DriveRow({ at, entry, row, compact = false, depth, expanded, onToggle, column = false, along = false }: {
+  at: At; entry: DriveEntry; row: RowProps; compact?: boolean;
+  depth?: number | undefined; expanded?: boolean | undefined; onToggle?: (() => void) | undefined; column?: boolean; along?: boolean;
 }) {
   // In a column a folder has › at its end, a file nothing: its name takes the room.
   const next = column && entry.dir;
-  const stationName = useStationName(at.station);
   const full = joinPath(at.path, entry.name);
   const removing = useDoing("drive.remove", { station: at.station, root: at.root, path: full });
-  const renaming = useDoing("drive.rename", { station: at.station, root: at.root, from: full });
-  const busy = removing || renaming;
-  const row = (
-    <div className={css.entry} data-busy={busy || undefined} draggable={!busy} onDragStart={(e) => startDrag(e, [draggedOf(at, entry, stationName)])} onDragEnd={endDrag}>
-      <button type="button" className={css.row} data-compact={compact || undefined} data-tree={depth !== undefined || undefined} data-selected={selected || undefined}
-        style={depth !== undefined ? { "--depth": depth } as CSSProperties : undefined} onClick={onOpen} disabled={busy} title={compact ? entry.name : undefined}
-        aria-expanded={depth !== undefined && entry.dir ? !!expanded : undefined}>
-        {depth !== undefined && <span className={css.disclosure} data-open={expanded || undefined}>{entry.dir && <ChevronRight size={12} strokeWidth={2} />}</span>}
-        <KindIcon kind={entry.kind} size={compact ? 18 : 20} className={css.icon} />
-        <span className={css.name}>{entry.name}</span>
-        <span className={css.size}>{entry.dir ? (next ? <ChevronRight size={12} strokeWidth={2} className={shellCss.muted} /> : "") : column ? "" : entry.sizeText}</span>
-        {!compact && <span className={css.time}>{entry.timeText}</span>}
-      </button>
-      <span className={css.more}>{busy ? <span className={`${spinnerCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" /> : <Menu items={items} />}</span>
+  const renamed = useDoing("drive.rename", { station: at.station, root: at.root, from: full });
+  const busy = removing || renamed;
+  const zone = useDropZone(row.drop);
+  const shared = {
+    className: css.row, "data-row": rowKey(at.path, entry.name), "data-compact": compact || undefined, "data-tree": depth !== undefined || undefined,
+    "data-chosen": row.chosen || undefined, "data-along": (along && !row.chosen) || undefined,
+    style: depth !== undefined ? { "--depth": depth } as CSSProperties : undefined, title: compact ? entry.name : undefined,
+  };
+  const parts = <>
+    {depth !== undefined && (
+      <span className={css.disclosure} data-open={expanded || undefined}
+        onClick={onToggle ? (e) => { e.stopPropagation(); onToggle(); } : undefined} onDoubleClick={(e) => e.stopPropagation()}>
+        {entry.dir && <ChevronRight size={12} strokeWidth={2} />}
+      </span>
+    )}
+    <KindIcon kind={entry.kind} size={compact ? 18 : 20} className={css.icon} />
+    {row.renaming ? <NameField name={entry.name} dir={entry.dir} onDone={row.rename} /> : <span className={css.name}>{entry.name}</span>}
+    <span className={css.size}>{entry.dir ? (next ? <ChevronRight size={12} strokeWidth={2} className={shellCss.muted} /> : "") : column ? "" : entry.sizeText}</span>
+    {!compact && <span className={css.time}>{entry.timeText}</span>}
+  </>;
+  const el = (
+    <div className={css.entry} data-busy={busy || undefined} data-drop={zone.over || undefined} data-drop-into={row.drop ? "" : undefined}
+      draggable={!busy && !row.renaming} onDragStart={(e) => startDrag(e, row.dragged())} onDragEnd={endDrag} onContextMenu={row.menu} {...zone.props}>
+      {row.renaming ? <div {...shared}>{parts}</div> : (
+        <button type="button" {...shared} onClick={row.press} onDoubleClick={row.open} disabled={busy}
+          aria-selected={row.chosen} aria-expanded={depth !== undefined && entry.dir ? !!expanded : undefined}>
+          {parts}
+        </button>
+      )}
+      <span className={css.more}>{busy ? <span className={`${spinnerCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" /> : <Menu items={row.items} />}</span>
     </div>
   );
   return (
     <ContextMenu.Root modal={false}>
-      <ContextMenu.Trigger asChild disabled={busy}>{row}</ContextMenu.Trigger>
-      <ContextMenu.Portal>
-        <ContextMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList}`} collisionPadding={8} onCloseAutoFocus={(e) => e.preventDefault()}>
-          {items.map((item) => (
-            <ContextMenu.Item key={item.label} className={controlsCss.menuItem} data-danger={item.danger || undefined} onSelect={item.onSelect}>
-              {item.icon && <item.icon {...ICON} />}{item.label}
-            </ContextMenu.Item>
-          ))}
-        </ContextMenu.Content>
-      </ContextMenu.Portal>
+      <ContextMenu.Trigger asChild disabled={busy || row.renaming}>{el}</ContextMenu.Trigger>
+      <MenuContent items={row.items} />
     </ContextMenu.Root>
+  );
+}
+
+/** A right click's menu: what can be done, each a line. */
+function MenuContent({ items }: { items: MenuItem[] }) {
+  return (
+    <ContextMenu.Portal>
+      <ContextMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList}`} collisionPadding={8} onCloseAutoFocus={(e) => e.preventDefault()}>
+        {items.map((item) => (
+          <ContextMenu.Item key={item.label} className={controlsCss.menuItem} data-danger={item.danger || undefined} onSelect={item.onSelect}>
+            {item.icon && <item.icon {...ICON} />}{item.label}
+          </ContextMenu.Item>
+        ))}
+      </ContextMenu.Content>
+    </ContextMenu.Portal>
+  );
+}
+
+/** A name changed in place: the name but its extension chosen; ⏎ or leaving it keeps it, esc leaves it as it was. */
+function NameField({ name, dir, onDone }: { name: string; dir: boolean; onDone: (to: string | null) => void }) {
+  const done = useRef(false);
+  const finish = (to: string | null) => { if (done.current) return; done.current = true; onDone(to); };
+  return (
+    <input className={css.nameField} defaultValue={name} autoFocus aria-label={t("web-pages.drive.nameLabel")} spellCheck={false}
+      onFocus={(e) => { const dot = e.currentTarget.value.lastIndexOf("."); e.currentTarget.setSelectionRange(0, !dir && dot > 0 ? dot : e.currentTarget.value.length); }}
+      onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.nativeEvent.isComposing) return;
+        if (e.key === "Enter") { e.preventDefault(); finish(e.currentTarget.value); }
+        if (e.key === "Escape") { e.preventDefault(); finish(null); }
+      }}
+      onBlur={(e) => finish(e.currentTarget.value)} />
+  );
+}
+
+/** Over a list, what its columns are, each ordering it (again: the other way). */
+function ListHead({ arrangement, onSort }: { arrangement: Arrangement; onSort: (by: SortBy) => void }) {
+  const head = (by: SortBy, label: string) => (
+    <button type="button" data-on={arrangement.by === by || undefined} onClick={() => onSort(by)}>
+      {label}{arrangement.by === by && <ChevronRight size={10} strokeWidth={2} style={{ transform: `rotate(${arrangement.down ? -90 : 90}deg)` }} />}
+    </button>
+  );
+  return (
+    <div className={css.listHead}>
+      <span />
+      {head("name", t("web-pages.drive.sortBy.nameHead"))}
+      {head("size", t("web-pages.drive.sortBy.sizeHead"))}
+      {head("time", t("web-pages.drive.sortBy.timeHead"))}
+      <span />
+    </div>
   );
 }
 
@@ -408,29 +536,6 @@ function Empty({ text, action }: { text: string; action?: ReactNode }) {
       <p>{text}</p>
       {action}
     </div>
-  );
-}
-
-/** A new folder's name (`entry` null), or an entry's new one. */
-function NameDialog({ at, entry, onClose }: { at: At; entry: DriveEntry | null; onClose: () => void }) {
-  const act = useAct();
-  const [name, setName] = useState(entry?.name ?? "");
-  const problem = name.trim() ? nameProblem(name) : null;
-  const ok = !!name.trim() && !problem && name.trim() !== entry?.name;
-  const go = () => {
-    if (!ok) return;
-    onClose();
-    if (entry) act(drive.rename(at, entry, name.trim()), t("web-pages.drive.renameWhat"));
-    else act(drive.mkdir(at, name.trim()), t("web-pages.drive.mkdirWhat"));
-  };
-  return (
-    <Dialog open onClose={onClose} title={entry ? t("web-pages.drive.renameTitle") : t("web-pages.drive.mkdir")}
-      footer={<><Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button><Button variant="primary" disabled={!ok} onClick={go}>{entry ? t("common.save") : t("web-pages.drive.make")}</Button></>}>
-      <input className={controlsCss.input} value={name} autoFocus placeholder={entry ? entry.name : t("web-pages.drive.mkdirPlaceholder")} aria-label={t("web-pages.drive.nameLabel")}
-        onFocus={(e) => { if (entry && !entry.dir) { const dot = e.currentTarget.value.lastIndexOf("."); if (dot > 0) e.currentTarget.setSelectionRange(0, dot); } }}
-        onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) go(); }} />
-      {problem && <p className={controlsCss.fieldError}>{problem}</p>}
-    </Dialog>
   );
 }
 

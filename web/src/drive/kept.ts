@@ -2,7 +2,7 @@
 // folder was scrolled (by where it is shown and how), the folders a tree had open, what was last opened in each folder
 // (marked when it is shown again), the folder last open in a workspace's files' page (the rail's 文件 comes back to it)
 // and in its chats' 文件 tab (the same over each chat, as the tab is kept while chats change beside it).
-import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useSyncExternalStore, type RefObject } from "react";
 import type { At } from "./model.ts";
 
 /** Where a folder is shown: the files' page, or a chat's 文件 tab. */
@@ -47,12 +47,25 @@ export function useKeptScroll<T extends HTMLElement>(owner: Owner, at: At, how: 
   return own;
 }
 
-/** The folders a tree had open under the folder at `at`, kept for when it is shown again. */
+/** The folders a tree has open under the folder at `at` (by their paths under its root), kept for when it is shown again. */
 export function keptTree(owner: Owner, at: At): ReadonlySet<string> {
-  return trees.get(keyOf(owner, at)) ?? new Set();
+  return trees.get(keyOf(owner, at)) ?? NONE;
 }
 export function keepTree(owner: Owner, at: At, open: ReadonlySet<string>): void {
   trees.set(keyOf(owner, at), open);
+  for (const f of treeWatchers) f();
+}
+/** A folder of the tree at `at` opened or closed (a click on its disclosure, → and ←). */
+export function toggleTree(owner: Owner, at: At, path: string, on?: boolean): void {
+  const next = new Set(keptTree(owner, at));
+  if (on ?? !next.has(path)) next.add(path); else next.delete(path);
+  keepTree(owner, at, next);
+}
+const NONE: ReadonlySet<string> = new Set();
+const treeWatchers = new Set<() => void>();
+export function useTree(owner: Owner, at: At): ReadonlySet<string> {
+  const key = keyOf(owner, at);
+  return useSyncExternalStore((f) => { treeWatchers.add(f); return () => { treeWatchers.delete(f); }; }, () => trees.get(key) ?? NONE, () => NONE);
 }
 
 /** What was last opened in the folder at `at` (a folder gone into, a file), by its name. */

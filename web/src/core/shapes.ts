@@ -3520,8 +3520,9 @@ export interface PrefsView {
 	 */
 	dropFiles?: Record<string, boolean>;
 	/**
-	 * How each place lists a station's files (`page`: the files' page, `tab`: a chat's 文件 tab): tree, columns
-	 * or list (none: tree).
+	 * How a station's files are listed on this device: each place's view (`page`: the files' page, `tab`: a
+	 * chat's 文件 tab; tree, columns or list, none: columns), their order (`sort`: name, time, size or kind, `-down`
+	 * after it for the other way; none: name) and whether hidden files show (`hidden`: shown).
 	 */
 	driveViews?: Record<string, string>;
 	/** How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path. */

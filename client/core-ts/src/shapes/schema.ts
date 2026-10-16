@@ -1230,7 +1230,7 @@ export const SHAPES: Record<string, Shape> = {
     ["openChat", map("OpenChat"), { default: true, doc: "The chat last open, by workspace, as the core keeps it from `client.focus` (a settings page leaves it as it\nwas): what the workspace's page goes back to." }],
     ["chatTabs", map("KeptTabs"), { default: true, doc: "Each chat's history tabs, by `<station>:<chat>` (the latest 200)." }],
     ["dropFiles", map("bool"), { default: true, doc: "Chats whose files dragged in go otherwise than `dropAs` says, by `<station>:<chat>`: true as files, false\nnamed by their path (folders are named all the same)." }],
-    ["driveViews", map("String"), { default: true, doc: "How each place lists a station's files (`page`: the files' page, `tab`: a chat's 文件 tab): tree, columns\nor list (none: tree)." }],
+    ["driveViews", map("String"), { default: true, doc: "How a station's files are listed on this device: each place's view (`page`: the files' page, `tab`: a\nchat's 文件 tab; tree, columns or list, none: columns), their order (`sort`: name, time, size or kind, `-down`\nafter it for the other way; none: name) and whether hidden files show (`hidden`: shown)." }],
     ["dropAs", opt("String"), { doc: "How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path." }],
     ["resume", map("String"), { default: true, doc: "A Slack app made for a new connect, to go on with, by station (the Android app's)." }],
     ["stationUpdatesDismissed", map("String"), { default: true, doc: "Versions dismissed on this device, by workspace/station." }],
