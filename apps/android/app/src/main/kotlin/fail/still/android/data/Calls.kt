@@ -253,6 +253,13 @@ class StationApi(private val core: StillFailCore, val station: String) {
     }
 
     /**
+     * A file of the station's drive put among its uploads, as one sent up would be (a folder: zipped there, `zip`), for a
+     * message to send (`drive.stage`): the phone's Station 文件 switched to a file (StationFiles.kt).
+     */
+    suspend fun driveStage(root: String, path: String, zip: Boolean): Attachment =
+        decode(Attachment.serializer(), ops.driveStage(root, path) { if (zip) this.zip = true })
+
+    /**
      * A big file sent to the session, onto the disk at `into` a part at a time (`station.file.part`), never all in
      * memory; `onProgress` hears the bytes so far and the whole size (`size`, as its message says, until the station
      * says), at once and then as each part comes. What is already in `into` is gone on from. Throws `unsupported` from a

@@ -9,6 +9,7 @@ import { StationContext, type Station } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { ChatScreen, openAttach, openedAs, sendSharing, useComposerBar, type Draft } from "./Chat.tsx";
 import { ComposerExtras } from "../Chat.tsx";
+import { openRefSheet, openStationFiles } from "./StationFiles.tsx";
 import { useDraft } from "../draft.ts";
 import { settling, useMorph } from "../morph.ts";
 import { useStationCall, type Attachment } from "../api.ts";
@@ -148,7 +149,7 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, inli
   }, [root]);
   const { menu, bar, expanded } = useComposerBar({
     draft, draftKey, sessionKey: shown.session ?? null, placeholder: shown.placeholder, locked,
-    onPlus: () => openAttach(app, upload), onType: () => latest.current?.type?.(), onSend: () => {
+    onPlus: () => openAttach(app, upload, () => openStationFiles(app, shown.station, (items) => now.current.addDropped(items))), onType: () => latest.current?.type?.(), onSend: () => {
       // What it refers to of other workspaces is shared first, when the viewer says (Chat.tsx sendSharing).
       const spec = latest.current;
       if (spec) sendSharing(app, spec.station, now.current.text, () => spec.send(now.current));
@@ -166,7 +167,13 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, inli
         onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!locked) upload(e.dataTransfer.files); } }}>
         {shown.archived && <ArchiveNotice className={css.mComposerOffline} offline={shown.offline} restore={() => latest.current?.restore?.() ?? Promise.resolve()} />}
         {shown.offline && <p className={css.mComposerOffline}>{t("web-mobile.chat.offline")}</p>}
-        <ComposerExtras draft={draft} focusQuote={draft.focusQuote} onFocused={draft.quoteFocused} onDone={draft.bumpFocus} />
+        <ComposerExtras draft={draft} focusQuote={draft.focusQuote} onFocused={draft.quoteFocused} onDone={draft.bumpFocus}
+          onRef={(f) => openRefSheet(app, f, {
+            // A folder goes as a zip only from the chat's own station (zipped there).
+            zips: !!f.ref?.dir && f.ref.station === shown.station,
+            setMode: (mode) => now.current.setMode(f.id, mode),
+            asFiles: draft.asFiles, setAsFiles: (on) => now.current.setAsFiles(on),
+          })} />
         {bar}
         {draft.error && <p className={`${partsCss.mError} ${css.mComposerError}`}>{draft.error}</p>}
       </div>

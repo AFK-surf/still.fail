@@ -131,6 +131,7 @@ export const PARAMS: Record<string, string> = {
   "drive.mkdir": "root:string path:string",
   "drive.rename": "root:string from:string to:string",
   "drive.remove": "root:string path:string",
+  "drive.stage": "root:string path:string zip?:boolean",
   "software.auto": "on?:boolean",
   "workspace.create": "name?:string invite_code?:string",
   "workspace.rename": "workspace:string name?:string emoji?:string icon?:string",
@@ -430,6 +431,10 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => "/drive/rename", p.pick(["root", "from", "to"]), drive(p.str("root"), [p.str("from"), p.str("to")]));
     case "drive.remove":
       return op("POST", () => "/drive/remove", p.pick(["root", "path"]), drive(p.str("root"), [p.str("path")]));
+    // A file of the drive (a folder: zipped there) put among the uploads, as one sent up would be, for a message to send
+    // (the phone's Station 文件 switched to a file; the web's composer stages its own: composer.ts).
+    case "drive.stage":
+      return op("POST", () => "/drive/stage", p.pick(["root", "path", "zip"]), NONE);
     default:
       return null;
   }

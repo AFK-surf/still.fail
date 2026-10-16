@@ -1913,7 +1913,11 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
  * (the one just added, `focusQuote`, takes the focus; Enter in it goes back to the text, `onDone`), then the files, an
  * image as its picture.
  */
-export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft: Draft; focusQuote: string | null; onFocused(): void; onDone(): void }) {
+export function ComposerExtras({ draft, focusQuote, onFocused, onDone, onRef }: {
+  draft: Draft; focusQuote: string | null; onFocused(): void; onDone(): void;
+  /** A station's file's card tapped, where there is no hover (a phone's: mobile/StationFiles.tsx RefSheet). */
+  onRef?: ((f: Pending) => void) | undefined;
+}) {
   const { quotes, files } = draft;
   const rest = besideQuotes(quotes, files) ?? [];
   const quoteInputs = useRef(new Map<string, HTMLInputElement>());
@@ -1944,7 +1948,7 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft
       )}
       {rest.length > 0 && (
         <div className={css.composerFiles}>
-          {rest.map((f) => f.ref ? <RefCard key={f.id} file={f} draft={draft} onRemove={() => draft.remove(f.id)} /> : <PendingFile key={f.id} file={f} onRemove={() => draft.remove(f.id)}
+          {rest.map((f) => f.ref ? <RefCard key={f.id} file={f} draft={draft} onRemove={() => draft.remove(f.id)} onTap={onRef && (() => onRef(f))} /> : <PendingFile key={f.id} file={f} onRemove={() => draft.remove(f.id)}
             onRetry={f.pastedFile && f.error ? () => { draft.remove(f.id); draft.add([f.pastedFile!], f.pasted); } : undefined}
             onRestore={f.pasted?.text === undefined || draft.starting ? undefined : () => {
               draft.setText(draft.text ? `${draft.text}\n${f.pasted!.text}` : f.pasted!.text!);
@@ -1962,7 +1966,7 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft
  * (a folder of the chat's own station as a zip). Hovered, the card says all of it, and switches it there; as it does
  * whether this chat takes what is dragged in as files.
  */
-function RefCard({ file: f, draft, onRemove }: { file: Pending; draft: Draft; onRemove: () => void }) {
+function RefCard({ file: f, draft, onRemove, onTap }: { file: Pending; draft: Draft; onRemove: () => void; onTap?: (() => void) | undefined }) {
   const ref = f.ref!;
   const station = useStation();
   const asFile = ref.mode === "file";
@@ -1994,18 +1998,19 @@ function RefCard({ file: f, draft, onRemove }: { file: Pending; draft: Draft; on
       </label>
     </div>
   );
-  return (
-    <Hover tile content={info}>
-      <span className={css.fileCard} data-card="" data-error={asFile && f.error ? true : undefined} data-named={!asFile || undefined}>
-        <FileTile land name={asFile && ref.dir ? `${f.name}.zip` : f.name} dir={ref.dir && !asFile} progress={pending ? (f.sent ?? 0) / Math.max(1, f.size) : undefined} error={asFile && !!f.error} />
-        <span className={css.fileCardText}>
-          <FileName name={asFile && ref.dir ? `${f.name}.zip` : f.name} />
-          <span className={css.fileCardMeta}>{meta}</span>
-        </span>
-        <button type="button" className={css.fileCardRemove} aria-label={t("web-main.file.remove", { name: f.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>
+  const card = (
+    <span className={css.fileCard} data-card="" data-error={asFile && f.error ? true : undefined} data-named={!asFile || undefined}
+      {...(onTap ? { role: "button", tabIndex: 0, onClick: onTap, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onTap(); } } } : {})}>
+      <FileTile land name={asFile && ref.dir ? `${f.name}.zip` : f.name} dir={ref.dir && !asFile} progress={pending ? (f.sent ?? 0) / Math.max(1, f.size) : undefined} error={asFile && !!f.error} />
+      <span className={css.fileCardText}>
+        <FileName name={asFile && ref.dir ? `${f.name}.zip` : f.name} />
+        <span className={css.fileCardMeta}>{meta}</span>
       </span>
-    </Hover>
+      <button type="button" className={css.fileCardRemove} aria-label={t("web-main.file.remove", { name: f.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>
+    </span>
   );
+  // Where nothing hovers, a tap says all of it (`onTap`); else hovered.
+  return onTap ? card : <Hover tile content={info}>{card}</Hover>;
 }
 
 /** A file waiting to go with the message: an image as its picture (clicked, shown whole), anything else a card. */

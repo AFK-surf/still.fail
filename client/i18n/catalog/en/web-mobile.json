@@ -673,5 +673,9 @@
   "web-mobile.bar.remove": "Remove {place} from this bar",
   "web-mobile.bar.count": "{n} bars",
   "web-mobile.bar.oneLeft": "With only one bar left, swiping up on the bar does nothing.",
-  "web-mobile.bar.onlyOne": "There is only one bar, so swiping up on it does nothing."
+  "web-mobile.bar.onlyOne": "There is only one bar, so swiping up on it does nothing.",
+  "web-mobile.files.places": "Places",
+  "web-mobile.files.wholeFolder": "This whole folder",
+  "web-mobile.files.add": "Add",
+  "web-mobile.files.addCount": "Add {n}"
 }

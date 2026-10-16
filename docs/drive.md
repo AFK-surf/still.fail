@@ -93,7 +93,12 @@ to the home (or the disk's top), a pin, and each row's path to copy; a row
 dragged out carries the file and its path. A chat's 文件 tab
 (web/src/pages/DriveTab.tsx) browses every station's files beside the chat, to
 drag into the composer or add to the message. The phone reaches a drive from
-its station's page.
+its station's page, and puts a station's files into a message from ＋'s Station
+文件 (web/src/mobile/StationFiles.tsx, apps/android/…/screens/StationFiles.kt):
+the places, a folder entered, files (or the folder as a whole) ticked; each goes
+in named by its path, or as a file where the chat says so, its card tapped to
+switch it. The Android app stages a file of the chat's own station with
+`drive.stage`, and reads one of another station's and sends it up.
 
 The Android app keeps a file it has read on the phone (apps/android/…/drive/DriveCache.kt), so it opens again without
 asking the station: by station, root and path, and by the `mtime` and `size` its folder says (a file changed is fetched

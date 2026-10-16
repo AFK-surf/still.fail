@@ -318,6 +318,16 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
     fun setReader(shown: fail.still.android.data.ReaderPrefs, field: String, value: kotlinx.serialization.json.JsonPrimitive) =
         setPrefs(kept.copy(reader = shown), buildJsonObject { putJsonObject("reader") { put(field, value) } })
 
+    /** Whether files of a station's put into the chat `key` ("<station>:<chat>") go as files, not named by their path: the
+     *  chat's own say (`prefs.dropFiles`), else the settings' (`dropAs`). */
+    fun dropsAsFiles(key: String): Boolean = kept.dropFiles?.get(key) ?: (kept.dropAs == "file")
+    /** The chat `key` takes such files as files, or not (the same as the settings say: its own say dropped). */
+    fun setDropsAsFiles(key: String, on: Boolean) {
+        val own = if (on == (kept.dropAs == "file")) null else on
+        val files = (kept.dropFiles.orEmpty() - key).let { if (own == null) it else it + (key to own) }
+        setPrefs(kept.copy(dropFiles = files), buildJsonObject { putJsonObject("dropFiles") { put(key, own) } })
+    }
+
     /** 语言: "zh" or "en" as chosen; null follows the phone. The words change at once, then as the core says (its `lang`). */
     val language: String? get() = kept.language
     fun setLanguage(value: String?) {

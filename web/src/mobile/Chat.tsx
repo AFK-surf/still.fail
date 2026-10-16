@@ -18,7 +18,7 @@ import { chatPage, useChatPageActions } from "../chatPage.ts";
 import { useChatFind } from "../ChatFind.tsx";
 import { ChatRows, historyLinkClicked, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
 import { jumpTo } from "../jumpTo.ts";
-import { Archive, ArrowDown, ArrowUp, Bell, Camera, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Search, Stop, Users, Web } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowDown, ArrowUp, Bell, Camera, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Search, Server, Stop, Users, Web } from "@stillfail/ui/icons.tsx";
 import { scopeOf, stationBase, useStation } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { StationCornerDot, StationDot, useStationLink } from "../StationLink.tsx";
@@ -394,8 +394,8 @@ function useLinkHold(list: RefObject<HTMLElement | null>) {
 /** What is being written (../draft.ts), and asking for the field's focus (a quote's comment done, a tap on the capsule). */
 export type Draft = SharedDraft & { focus: number; bumpFocus(): void };
 
-/** ＋: take a photo, pick photos, pick files. */
-export function openAttach(app: MobileApp, onPicked: (files: FileList) => void) {
+/** ＋: take a photo, pick photos, pick files; or (`onStation`) a station's files, named by their path (StationFiles.tsx). */
+export function openAttach(app: MobileApp, onPicked: (files: FileList) => void, onStation?: () => void) {
   const pick = (accept: string, capture: boolean) => {
     const input = document.createElement("input");
     input.type = "file";
@@ -412,7 +412,8 @@ export function openAttach(app: MobileApp, onPicked: (files: FileList) => void) 
         <SheetGrab />
         <SheetHead title={t("web-mobile.chat.attach")} />
         <div className={css.mAttach}>
-          {([[t("web-mobile.chat.camera"), <Camera key="c" size={24} />, () => pick("image/*", true)], [t("web-mobile.chat.photos"), <Photo key="p" size={24} />, () => pick("image/*", false)], [t("web-mobile.chat.files"), <File key="f" size={24} />, () => pick("*/*", false)]] as const).map(([label, icon, go]) => (
+          {([[t("web-mobile.chat.camera"), <Camera key="c" size={24} />, () => pick("image/*", true)], [t("web-mobile.chat.photos"), <Photo key="p" size={24} />, () => pick("image/*", false)], [t("web-mobile.chat.files"), <File key="f" size={24} />, () => pick("*/*", false)],
+            ...(onStation ? [[t("web-pages.chat.files"), <Server key="s" size={24} />, onStation] as const] : [])] as const).map(([label, icon, go]) => (
             <button key={label} type="button" onClick={() => { app.sheet(null); go(); }}>{icon}<span>{label}</span></button>
           ))}
         </div>

@@ -164,11 +164,13 @@ import kotlinx.serialization.builtins.serializer
  * whole), what the viewer shows it from before it is sent (no session keeps it yet), with its size. `pasted`: the text
  * it was made of, pasted (PastedText.kt).
  */
-class Pending(val id: Long, val name: String, val size: Long, val preview: ImageBitmap?, val local: ByteArray? = null, val width: Int? = null, val height: Int? = null, val pasted: PastedText? = null) {
+class Pending(val id: Long, val name: String, val size: Long, val preview: ImageBitmap?, val local: ByteArray? = null, val width: Int? = null, val height: Int? = null, val pasted: PastedText? = null, val ref: RefFile? = null) {
     var done by mutableStateOf<Attachment?>(null)
     /** How much of it the station has, as it goes up in parts. */
     var sent by mutableStateOf<Long?>(null)
     var error by mutableStateOf<String?>(null)
+    /** A file of a station's named by its path (StationFiles.kt): it goes as words, nothing goes up. */
+    val named get() = ref?.mode == "path"
 }
 
 /** A passage quoted in the message being written, with what is said about it. */
@@ -204,10 +206,10 @@ class Draft {
     /** Bumped to put the cursor in the text. */
     var focus by mutableIntStateOf(0)
     var warmed = 0L
-    val uploading get() = files.any { it.done == null && it.error == null }
+    val uploading get() = files.any { it.done == null && it.error == null && !it.named }
     /** Nothing can be sent (its station is offline, or the chat archived). */
     var locked by mutableStateOf(false)
-    val ready get() = (text.isNotBlank() || files.any { it.done != null } || quotes.isNotEmpty()) && !uploading && !starting && !locked
+    val ready get() = (text.isNotBlank() || files.any { it.done != null || it.named } || quotes.isNotEmpty()) && !uploading && !starting && !locked
     /** The text box has the focus (the menu of chats shows only then). */
     var focused by mutableStateOf(false)
     /** Where an `@` was put away (its menu closed by picking a chat): not offered again. */
@@ -233,20 +235,23 @@ class Draft {
         focusQuote = q.id
     }
 
-    /** Empties it, for what is sent: the text (its references' marks, which the core makes links), the files up, the quotes. */
+    /** Empties it, for what is sent: the text (its references' marks, which the core makes links) with where each file
+     *  named by its path is (StationFiles.kt), the files up, the quotes. */
     fun take(): Taken {
-        val taken = Taken(text.trim(), files.toList(), quotes.toList(), text)
+        val named = files.filter { it.named }
+        val words = (listOf(text.trim()) + named.map { pathWords(it.ref!!) }).filter { it.isNotEmpty() }.joinToString("\n")
+        val taken = Taken(words, files.filter { !it.named }, quotes.toList(), text, named)
         text = ""; files.clear(); quotes.clear(); error = null; refClosed = null
         save()
         return taken
     }
 
     /** Puts back what `take` took (sending it failed). */
-    fun restore(t: Taken) { text = t.written; files.addAll(t.files); quotes.addAll(t.quotes); save() }
+    fun restore(t: Taken) { text = t.written; files.addAll(t.named + t.files); quotes.addAll(t.quotes); save() }
 }
 
 /** What a draft held when it was sent: `text` as it goes (trimmed), `written` as it was typed. */
-class Taken(val text: String, val files: List<Pending>, val quotes: List<DraftQuote>, val written: String)
+class Taken(val text: String, val files: List<Pending>, val quotes: List<DraftQuote>, val written: String, val named: List<Pending> = emptyList())
 
 @Serializable
 private class KeptQuote(val author: String, val text: String, val comment: String = "", val ts: String? = null, val role: String = "person", val file: String? = null)
@@ -634,7 +639,7 @@ fun AppState.upload(draft: Draft, station: String, picked: Picked, scope: Corout
 }
 
 /** What a file going up says: how far it has gone, when it is more than a part. */
-private fun uploadingText(f: Pending): String {
+internal fun uploadingText(f: Pending): String {
     val sent = f.sent
     return if (sent == null || f.size <= 4L * 1024 * 1024) t("android-chat.file.uploading")
     else t("android-chat.file.uploading.part", "percent" to (sent * 100 / f.size).toInt(), "size" to fileSize(f.size))
@@ -658,13 +663,14 @@ fun AttachLaunchers(onPicked: (Picked) -> Unit): Triple<() -> Unit, () -> Unit, 
     )
 }
 
-/** ＋: take a photo, pick photos, pick files. */
-fun openAttach(app: AppState, launchers: Triple<() -> Unit, () -> Unit, () -> Unit>) {
+/** ＋: take a photo, pick photos, pick files; or (`station`) a station's files, named by their path (StationFiles.kt). */
+fun openAttach(app: AppState, launchers: Triple<() -> Unit, () -> Unit, () -> Unit>, station: (() -> Unit)? = null) {
     app.sheet = SheetSpec(0.32f) {
         SheetGrab()
         SheetHead(t("android-chat.attach.title"))
         Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            listOf(Triple(t("android-chat.attach.camera"), Icons.Camera, launchers.first), Triple(t("android-chat.attach.photos"), Icons.Photo, launchers.second), Triple(t("android-chat.attach.files"), Icons.File, launchers.third)).forEach { (label, icon, go) ->
+            (listOf(Triple(t("android-chat.attach.camera"), Icons.Camera, launchers.first), Triple(t("android-chat.attach.photos"), Icons.Photo, launchers.second), Triple(t("android-chat.attach.files"), Icons.File, launchers.third))
+                + listOfNotNull(station?.let { Triple(t("web-pages.chat.files"), Icons.Server, it) })).forEach { (label, icon, go) ->
                 Column(
                     Modifier.weight(1f).clip(Smooth(18.dp)).background(C.chip).clickable { app.sheet = null; go() }.padding(top = 16.dp, bottom = 12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -734,6 +740,8 @@ fun DraftExtras(draft: Draft, host: Host? = null) {
                 PastedCard(f, pasted, onRemove = remove,
                     onRetry = if (f.error != null && station != null) ({ draft.files.remove(f); pasteAsFile(app, draft, station, pasted.text) }) else null,
                     onRestore = if (pasted.restorable && !draft.starting) ({ draft.files.remove(f); draft.text = if (draft.text.isEmpty()) pasted.text else "${draft.text}\n${pasted.text}"; draft.focus++ }) else null)
+            } else if (f.ref != null && station != null) Box(Modifier.sendTile(host, f.id)) {
+                RefCard(f, onRemove = remove, shape = InComposer) { openRefSheet(app, draft, f, station) }
             } else Box(Modifier.sendTile(host, f.id)) {
                 FileCard(f.done?.name ?: f.name, f.done?.size ?: f.size, f.error ?: if (f.done == null) uploadingText(f) else null, busy = f.done == null && f.error == null, onRemove = remove, shape = InComposer)
             }
@@ -828,7 +836,8 @@ fun ComposerBar(
     // Keep the field in one composition slot while the buttons move below it, preserving focus and the IME.
     Layout(content = {
         Box(
-            Modifier.part(morph, "plus").size(36.dp).clip(CircleShape).clickable(enabled = !locked, onClick = onPlus),
+            Modifier.part(morph, "plus").size(36.dp).clip(CircleShape).clickable(enabled = !locked, onClick = onPlus)
+                .semantics { contentDescription = t("android-chat.attach.title") },
             contentAlignment = Alignment.Center,
         ) { IconIn(Icons.Plus, 18.dp, if (locked) C.ink.copy(alpha = 0.35f) else C.ink) }
         Box(
@@ -1064,7 +1073,7 @@ internal fun chatComposer(host: Host, station: String, of: ChatOf, view: ChatVie
             if (archived) ArchiveNotice(view.offline) { api.setArchived(thread?.id, (of as? ChatOf.Session)?.key ?: keeper ?: "", false) }
             if (view.offline) Text(t("android-chat.composer.offline"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
         },
-        onPlus = { openAttach(app, launchers) },
+        onPlus = { openAttach(app, launchers) { openStationFiles(app, draft, station) } },
         // Typing starts the session's runtime, so a cold start overlaps the writing.
         onType = {
             if (!draft.locked && keeper != null && System.currentTimeMillis() - draft.warmed > 60_000) {

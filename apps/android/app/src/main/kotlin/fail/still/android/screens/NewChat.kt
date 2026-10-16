@@ -241,7 +241,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
     if (leaving) return
     host.spec = ComposerSpec(
         station = view.station, here = null, draft = draft, placeholder = t("android-chat.new.placeholder"),
-        onPlus = { openAttach(app, launchers) },
+        onPlus = { openAttach(app, launchers) { openStationFiles(app, draft, view.station) } },
         // Once what it refers to can be read in this workspace (sendSharing).
         onSend = { app.sendSharing(draft, view.station) {
             // Its words stay where they were in the composer until the chat's page takes them (ChatHost.kt).

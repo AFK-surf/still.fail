@@ -518,6 +518,15 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         values["path"] = JsonPrimitive(path)
         return call("drive.remove", JsonObject(values))
     }
+    class DriveStageFields : OperationFields() {
+        var zip: Boolean? by field<Boolean>("zip") { JsonPrimitive(it) }
+    }
+    suspend fun driveStage(root: String, path: String, fill: DriveStageFields.() -> Unit = {}): JsonElement {
+        val values = DriveStageFields().apply(fill).fields
+        values["root"] = JsonPrimitive(root)
+        values["path"] = JsonPrimitive(path)
+        return call("drive.stage", JsonObject(values))
+    }
     class SoftwareAutoFields : OperationFields() {
         var on: Boolean? by field<Boolean>("on") { JsonPrimitive(it) }
     }
