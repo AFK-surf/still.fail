@@ -33,7 +33,7 @@ import * as settingsCss from "./styles/settings.css.ts";
 import { Tip } from "../ui.tsx";
 import { useCopyChatLink } from "../ChatRef.tsx";
 import { AgentNotes, AgentStatus, AgentTiles } from "./AgentSheet.tsx";
-import { FillChip, MeterChips } from "../components.tsx";
+import { QuotaChip, MeterChips } from "../components.tsx";
 import * as chatPageCss from "../pages/ChatPage.css.ts";
 
 import { NAME } from "../channel.ts";
@@ -114,7 +114,7 @@ function Summary({ agent }: { agent: ChatAgent }) {
   return (
     <div className={css.mHSummary}>
       {agent.attention.map((a, i) => a.quota
-        ? <span key={i} className={`${chatPageCss.attention} ${chatPageCss.attentionQuota}`}><FillChip fill={a.quota.left} level={a.quota.level} mark={a.quota.mark} label={t("web-main.quota.leftAlone", { left: a.quota.left })} small bare /></span>
+        ? <span key={i} className={`${chatPageCss.attention} ${chatPageCss.attentionQuota}`}><QuotaChip window={a.quota} small bare /></span>
         : <span key={i} className={a.kind === "disk" ? css.mWarn : partsCss.mRed}>{a.text}</span>)}
     </div>
   );

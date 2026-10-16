@@ -6,7 +6,7 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react
 import { Link, Navigate, NavLink, useParams } from "react-router";
 import { stamp, useStations, type StationView } from "../api.ts";
 import { useGo } from "../go.ts";
-import { FillChip, MeterDials } from "../components.tsx";
+import { MeterChip, MeterDials } from "../components.tsx";
 import { RetryPill } from "../Connection.tsx";
 import { drivePath } from "../drive/useDrive.ts";
 import { ChevronRight, Folder, Plus } from "../icons.tsx";
@@ -71,7 +71,7 @@ function StationRow({ s, to }: { s: StationView; to: string }) {
       <NavLine><span className={navFill}>{s.host?.identity ?? (s.online ? t("web-pages.stations.connecting") : t("web-pages.stations.offline"))}</span></NavLine>
       {meters.length > 0 && (
         <span className={css.rowMeters}>
-          {meters.map((m) => <FillChip key={m.label} small bare fill={m.left} level={m.level} mark={m.short} text={`${m.big}${m.unit === "%" ? "%" : m.unit.slice(0, 1)}`} label={`${m.label} ${m.remaining}`} />)}
+          {meters.map((m) => <MeterChip key={m.label} meter={m} brief bare />)}
         </span>
       )}
       {s.online && (s.net || newer) && (

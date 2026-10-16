@@ -4,7 +4,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 // be opened beside them, one tab per agent.
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
-import { CreatorText, FillChip, MeterChips, PeopleStack } from "../components.tsx";
+import { CreatorText, QuotaChip, MeterChips, PeopleStack } from "../components.tsx";
 import { Archive, Boxes, Close, File, Info, PanelClose, PanelOpen, Users, Web } from "../icons.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
@@ -789,7 +789,7 @@ function HistorySummary({ agent }: { agent: ChatAgent }) {
       {agent.attention.map((a, i) => (
         a.quota ? (
           <Tip key={i} label={<>{a.text}{a.more && <><br />{a.more}</>}</>}>
-            <span className={`${css.attention} ${css.attentionQuota}`}><FillChip fill={a.quota.left} level={a.quota.level} mark={a.quota.mark} label={t("web-main.quota.leftAlone", { left: a.quota.left })} small bare /></span>
+            <span className={`${css.attention} ${css.attentionQuota}`}><QuotaChip window={a.quota} small bare /></span>
           </Tip>
         ) : (
           <span key={i} className={css.attention} data-tone={a.kind === "disk" ? "amber" : "red"}>{a.text}</span>

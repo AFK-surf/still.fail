@@ -95,41 +95,45 @@ export function OwnerLabel({ owner }: { owner: { id: string; shown?: PersonShown
 
 /**
  * A profile's allowance, as the core puts its windows (shortest first, each marked): compact, a rounded box per window
- * with what is left written in it (its mark too when there is more than one), its ground filled as far as is left.
- * `small`: where a line is lower than a row (the model control).
+ * (QuotaChip); else each window's number large over its cells (Dial). `small`: where a line is lower than a row (the
+ * model control).
  */
 export function QuotaBars({ quota, compact, small, bare }: { quota: Quota | null | undefined; compact?: boolean; small?: boolean; bare?: boolean }) {
   if (!quota) return compact ? null : <p className={`${shellCss.muted} ${css.quotaNote}`}>{t("web-main.quota.unchecked")}</p>;
   if (quota.state !== "ok" || quota.windows.length === 0) return compact ? null : <p className={`${shellCss.muted} ${css.quotaNote}`}>{quota.detail ?? t("web-main.quota.unknown")}</p>;
   if (compact) {
-    const lone = quota.windows.length === 1;
     return (
       <span className={css.quotaChips}>
         {quota.windows.map((w) => (
           // Bare: inside a control, so not a stop of their own for the keyboard; the tip still shows on hover.
-          <Tip key={w.label} label={<>{t("web-main.quota.left", { label: w.label, left: w.left })}{w.refills && <><br />{w.refills}</>}</>}>
-            <FillChip fill={w.left} level={w.level} mark={lone ? null : w.mark} label={t("web-main.quota.left", { label: w.label, left: w.left })} small={small} bare={bare} />
+          <Tip key={w.label} label={<>{quotaLeft(w)}{w.refills && <><br />{w.refills}</>}</>}>
+            <QuotaChip window={w} marked={quota.windows.length > 1} small={small} bare={bare} />
           </Tip>
         ))}
       </span>
     );
   }
-  // The profile's own page: each window's number large, ten cells lit as far as is left, its name and when it refills.
+  // The profile's own page: each window's number large, its cells, its name and when it refills.
   return (
     <div className={css.quotaDials}>
-      {quota.windows.map((w) => <Dial key={w.label} number={String(w.left)} unit="%" left={w.left} level={w.level} label={w.label} note={w.refills} aria={t("web-main.quota.left", { label: w.label, left: w.left })} />)}
+      {quota.windows.map((w) => <Dial key={w.label} number={String(w.left)} unit="%" left={w.left} level={w.level} label={w.label} note={w.refills} aria={quotaLeft(w)} />)}
     </div>
   );
 }
 
-/** A figure large, ten cells lit as far as is left (0–100) in the colour of its level, its name and a quiet note under:
- * an allowance's window on its profile's page, a machine's CPU, memory or disk on its own. */
+// How full a meter or an allowance's window is drawn, everywhere: as far as it is used (100 less what is left), so that
+// a fuller box or more cells lit means less room, as a disk's bar is read; its words still say what is left.
+const usedOf = (left: number) => 100 - Math.max(0, Math.min(100, left));
+
+/** A figure large (what is left), ten cells lit as far as is used, in the colour of its level, its name and a quiet note
+ * under: an allowance's window on its profile's page, a machine's CPU, memory or disk on its own. */
 function Dial({ number, unit, left, level, label, note, aria }: { number: string; unit: string; left: number; level: Level | string; label: string; note: string | null | undefined; aria: string }) {
+  const lit = Math.round(usedOf(left) / 10);
   return (
     <div className={css.quotaDial} data-level={level}>
       <span className={css.quotaDialNumber}>{number}<small>{unit}</small></span>
       <span className={css.quotaDialCells} role="img" aria-label={aria}>
-        {Array.from({ length: 10 }, (_, i) => <i key={i} data-on={i < Math.round(left / 10) || undefined} />)}
+        {Array.from({ length: 10 }, (_, i) => <i key={i} data-on={i < lit || undefined} />)}
       </span>
       <span className={css.quotaDialLabel}>{label}</span>
       <span className={css.quotaDialReset}>{note ?? "\u00a0"}</span>
@@ -143,28 +147,50 @@ export function MeterDials({ meters, row = false }: { meters: Meter[]; row?: boo
   return <div className={css.quotaDials} data-row={row || undefined}>{meters.map((m) => <Dial key={m.label} number={m.big} unit={m.unit} left={m.left} level={m.level} label={m.title} note={m.total} aria={`${m.title} ${m.big} ${m.unit}`} />)}</div>;
 }
 
+type ChipProps = { small?: boolean | undefined; bare?: boolean | undefined } & Omit<ComponentProps<"span">, "children">;
+
 /** A rounded box with a figure in it (its mark before it, when given) and its ground filled from the left as far as
- * `fill` (0–100): grey while there is plenty, in the colour of the core's `level` once it runs low: an allowance's
- * window, a machine's meter; or, as level `progress`, how much of a download is in (in the accent, its fill moving
- * smoothly to each new share). What else it is given (a tip's trigger props and ref) goes on the box. */
-export function FillChip({ fill, level, mark, label, text, small, bare, ...rest }: { fill: number; level: Level | string; mark?: ReactNode; label: string; text?: string | undefined; small?: boolean | undefined; bare?: boolean | undefined } & Omit<ComponentProps<"span">, "children">) {
-  const p = Math.max(0, Math.min(100, fill));
+ * `fill` (0–100): grey while there is plenty, in the colour of the core's `level` once it runs low; as level `progress`,
+ * in the accent, its fill moving smoothly to each new share. What else it is given (a tip's trigger props and ref) goes
+ * on the box. Drawn only through QuotaChip, MeterChip and ProgressChip, which say how full. */
+function FillChip({ fill, level, mark, label, text, small, bare, ...rest }: { fill: number; level: Level | string; mark?: ReactNode; label: string; text: string } & ChipProps) {
   return (
     <span {...rest} className={css.quotaChip} data-level={level} data-small={small || undefined} tabIndex={bare ? undefined : 0} role="img" aria-label={label}>
-      <i className={css.quotaChipFill} style={{ width: `${p}%` }} aria-hidden="true" />
-      <span className={css.quotaChipText}>{mark != null && <span className={css.quotaChipMark}>{mark}</span>}<span>{text ?? `${fill}%`}</span></span>
+      <i className={css.quotaChipFill} style={{ width: `${Math.max(0, Math.min(100, fill))}%` }} aria-hidden="true" />
+      <span className={css.quotaChipText}>{mark != null && <span className={css.quotaChipMark}>{mark}</span>}<span>{text}</span></span>
     </span>
   );
 }
 
-/** A machine's CPU, memory and disk as the allowance's boxes are drawn: each its name and what is left, its ground filled
- * as far as that; what it is in the tip. `alerts`: only those running low. */
+/** What is left of an allowance's window, in words: with its name when it has one. */
+const quotaLeft = (w: { label?: string; left: number }) =>
+  w.label ? t("web-main.quota.left", { label: w.label, left: w.left }) : t("web-main.quota.leftAlone", { left: w.left });
+
+/** An allowance's window (or the one an agent is short of): what is left written in it, filled as far as is used.
+ * `marked`: its mark before it (where there is more than one). */
+export function QuotaChip({ window: w, marked = true, ...rest }: { window: { label?: string; mark: string; left: number; level: Level | string }; marked?: boolean } & ChipProps) {
+  return <FillChip {...rest} fill={usedOf(w.left)} level={w.level} mark={marked ? w.mark : null} text={`${w.left}%`} label={quotaLeft(w)} />;
+}
+
+/** A machine's CPU, memory or disk: its name and what is left, filled as far as is used. `brief`: the figure alone,
+ * small (a station's row). */
+export function MeterChip({ meter: m, brief = false, ...rest }: { meter: Meter; brief?: boolean } & ChipProps) {
+  const text = brief ? `${m.big}${m.unit === "%" ? "%" : m.unit.slice(0, 1)}` : m.remaining;
+  return <FillChip small={brief} {...rest} fill={usedOf(m.left)} level={m.level} mark={m.short} text={text} label={`${m.label} ${m.remaining}`} />;
+}
+
+/** How much of something coming is in (0–100): in the accent, filled as far as that. */
+export function ProgressChip({ percent, label, ...rest }: { percent: number; label: string } & ChipProps) {
+  return <FillChip {...rest} fill={percent} level="progress" text={`${percent}%`} label={label} />;
+}
+
+/** A machine's CPU, memory and disk, each a MeterChip; what it is in the tip. `alerts`: only those running low. */
 export function MeterChips({ meters, bare, alerts = false }: { meters: Meter[]; bare?: boolean; alerts?: boolean }) {
   return (
     <span className={css.quotaChips}>
       {meters.filter((m) => !alerts || m.level !== "ok").map((m) => (
         <Tip key={m.label} label={`${m.label} ${m.value}${m.note ? ` · ${m.note}` : ""}`}>
-          <FillChip fill={m.left} level={m.level} mark={m.short} text={m.remaining} label={`${m.label} ${m.remaining}`} bare={bare} />
+          <MeterChip meter={m} bare={bare} />
         </Tip>
       ))}
     </span>
