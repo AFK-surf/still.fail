@@ -18,6 +18,7 @@ test("a_connection_is_said_in_words_and_only_what_is_off_is_coloured", () => {
   const raw: J = { path: "direct", rttMs: 38.4, rxBytes: 222_298_112, txBytes: 10_066_329, samples: [sample(40, 50, 0), sample(38.4, 50, 0)] };
   let shown = p.net(raw, unnamed);
   assert.equal(shown.path, "直连");
+  assert.equal(shown.via, "direct");
   assert.deepEqual(shown.rtt, { text: "38 ms", level: "ok" });
   assert.deepEqual(shown.rttHistory, [40, 38.4]);
   assert.deepEqual([shown.down, shown.up], ["1.4 MB/s", "82 KB/s"]);
@@ -32,6 +33,7 @@ test("a_connection_is_said_in_words_and_only_what_is_off_is_coloured", () => {
   const relay: J = { path: "relay", relay: "relay.still.fail", rttMs: 286, rxBytes: 0, txBytes: 0, samples: [sample(1200, 200, 10)] };
   shown = p.net(relay, unnamed);
   assert.equal(shown.path, "中继 relay.still.fail");
+  assert.equal(shown.via, "relay");
   const named = (host: string) => (host === "relay.still.fail" ? "北京" : null);
   assert.equal(p.net(relay, named).path, "北京中继");
   assert.equal(shown.rtt.level, "ok");
@@ -50,7 +52,7 @@ test("a_connection_is_said_in_words_and_only_what_is_off_is_coloured", () => {
     moved: "hk.test",
   });
   shown = p.net({ path: null, rttMs: 1500, rxBytes: 0, txBytes: 0, samples: [] }, unnamed);
-  assert.deepEqual([shown.path, shown.down], ["正在选路", "—"]);
+  assert.deepEqual([shown.path, shown.via, shown.down], ["正在选路", "choosing", "—"]);
   assert.deepEqual(shown.rtt, { text: "1.5 s", level: "red" });
 });
 
