@@ -407,7 +407,10 @@ class FakeHelperApp {
   constructor(status: any) {
     this.status = status;
   }
+  #closed = false;
   launch = async (_app: string, env: Record<string, string>) => {
+    // Closed with the test: a station still watching it must not have it listen again (the test would never end).
+    if (this.#closed) throw new Error("the test's helper is closed");
     this.launches++;
     this.#where = { path: env.STILLFAIL_HELPER_SOCKET!, token: env.STILLFAIL_HELPER_TOKEN! };
     await this.#listen();
@@ -425,12 +428,13 @@ class FakeHelperApp {
     rmSync(this.#where!.path, { force: true });
   }
   close() {
-    this.#stop();
-    for (const c of this.#conns) c.destroy();
+    this.#closed = true;
+    this.crash();
   }
   /// It ends by itself (macOS's Quit & Reopen, a crash): its socket gone, every connection with it.
   crash() {
-    this.close();
+    this.#stop();
+    for (const c of this.#conns) c.destroy();
   }
   /// macOS starts it again itself, from its place (not the station's launch).
   async reopen() {
@@ -567,22 +571,28 @@ test("the desktop: unsupported, or without its helper, says so; a grant missing 
   fake.asking = false;
   await desktop.refresh(true);
   assert.deepEqual(desktop.access(), { capture: true, control: true, app: "still.fail Helper", path: join(dir, HELPER_APP) });
+  await desktop.close();
   fake.close();
 });
 
 test("the helper app: found again by the station's next process, started anew when its code changed", { skip: WINDOWS }, async () => {
   const { app, dir } = helperRelease();
   const fake = new FakeHelperApp({ capture: true, control: true, display });
-  await new HelperApp({ app, dir, launch: fake.launch }).request({ op: "status" });
+  // Each made when its process starts: it reads the token the one before left.
+  const stations: HelperApp[] = [];
+  const station = () => (stations.push(new HelperApp({ app, dir, launch: fake.launch })), stations.at(-1)!);
+  await station().request({ op: "status" });
   // The next station process (a handover): the same app, by the token the first one left.
-  await new HelperApp({ app, dir, launch: fake.launch }).request({ op: "status" });
+  await station().request({ op: "status" });
   assert.equal(fake.launches, 1);
   // A release with other code: the running one quits, the new copy starts.
   writeFileSync(join(app, "Contents/MacOS/stillfail-helper"), "code 2");
-  await new HelperApp({ app, dir, launch: fake.launch }).request({ op: "status" });
+  await station().request({ op: "status" });
   assert.equal(fake.quits, 1);
   assert.equal(fake.launches, 2);
   assert.equal(readFileSync(join(dir, HELPER_APP, "Contents/MacOS/stillfail-helper"), "utf8"), "code 2");
+  // All of them stopping at once: none watching starts it again when another's quit ends it.
+  await Promise.all(stations.map((s) => s.quit()));
   fake.close();
 });
 
@@ -610,6 +620,7 @@ test("the desktop's view: a connection to the helper, asked for each frame, its 
   view.close();
   assert.equal(await pending, null);
   assert.equal(await view.next(), null);
+  await desktop.close();
   fake.close();
 });
 
@@ -622,6 +633,7 @@ test("the desktop for a view without H.264 (an agent's): JPEG pictures, its conf
   assert.equal(fake.views[0].codec, "jpeg");
   assert.deepEqual((await view.next())!.config, { codec: "jpeg", width: 64, height: 36 });
   view.close();
+  await desktop.close();
   fake.close();
 });
 
