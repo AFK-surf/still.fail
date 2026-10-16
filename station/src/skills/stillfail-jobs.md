@@ -1,6 +1,6 @@
 ---
 name: stillfail-jobs
-description: Run background jobs, long-running watches, web previews or tasks on another still.fail station, or reach a web service on another station. Use for work that outlives a turn, a browser service people need to use, or a service (an LLM server, an API) another station runs.
+description: Run background jobs, long-running watches, web previews or tasks on another still.fail station, or reach a service on another station (its HTTP API by URL, or any port forwarded here). Use for work that outlives a turn, a browser service people need to use, or a service (an LLM server, an API, a dev server, a database) another station runs.
 ---
 
 # Jobs and services
@@ -87,12 +87,24 @@ uploaded again before start.
 After a timeout, inspect or retry the same key: work may already have run. Lost remote processes are not restarted
 automatically; `failed` without an exit code means the outcome may be uncertain. Inspect before using a new key.
 
-## Another station's web services
+## Another station's services
 
-A program here reaches an HTTP or WebSocket service listening on another station's localhost through this station,
-with no port opened: `$STILLFAIL_PEER_HTTP/<station>/<port>/<path>` is `http://localhost:<port>/<path>` there
-(streams, large bodies and WebSockets pass as they come), e.g. `OLLAMA_HOST=$STILLFAIL_PEER_HTTP/studio/11434`.
-Without the variable, it is your stillfail MCP URL with `/mcp` replaced by `/peer`. `<station>` is its name from
-`station_list` (any case) or, when a name is not unique, its id. Only programs on this machine use it (Host
-127.0.0.1, no browser `Origin`); for people's browsers start a job with a port instead. A 502 saying the station needs
-an update means it is from before this; 504 means it is offline.
+Services listening on another station's localhost are reachable from here with no port opened anywhere, two ways.
+`<station>` is its name from `station_list` (any case) or, when a name is not unique, its id.
+
+- **A program calling an HTTP API with a base URL** (an LLM server, a REST API, a script): use the path form,
+  `$STILLFAIL_PEER_HTTP/<station>/<port>/<path>` = `http://localhost:<port>/<path>` there (streams, large bodies and
+  WebSockets pass as they come), e.g. `OLLAMA_HOST=$STILLFAIL_PEER_HTTP/studio/11434`. Without the variable, it is
+  your stillfail MCP URL with `/mcp` replaced by `/peer`. Programs only (Host 127.0.0.1, no browser `Origin`). 502
+  "needs an update": that station is from before this; 504: it is offline.
+- **Anything else: a browser, web pages, dev servers (HMR), databases, any TCP protocol**: forward the port with
+  `peer_forward {station, port}`, like `ssh -L`. It listens on 127.0.0.1 here, at the same port when free (the answer
+  gives the address and URL), and passes bytes as they are, so absolute paths, client routing, redirects, cookies and
+  WebSockets work as on that machine, and `psql -h 127.0.0.1 -p <port>`, `redis-cli` and the like too. It closes
+  when this chat is archived, when the `job` you tie it to ends, after 30 minutes with no connection, or when this
+  station restarts (then open it again). `peer_forward {}` lists yours and whether each station is online;
+  `peer_forward {close: <local port>}` closes one. A path prefix breaks web pages, so do not use the path form for them.
+- To drive another station's Chrome over CDP, its DevTools WebSocket works through either: forward its debugging
+  port and use `ws://127.0.0.1:<port>/devtools/...` as `/json/version` gives it, or take that URL's path under
+  `$STILLFAIL_PEER_HTTP/<station>/<port>` (with `ws://`).
+- For people's browsers (a link to post), start a job with a port instead: forwards are this machine's only.
