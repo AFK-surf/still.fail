@@ -506,7 +506,7 @@ export const quoteCardRemove = style({
   padding: "0", border: "0", borderRadius: "50%", background: "none", color: vars.subtle, cursor: "pointer",
   selectors: {
     "&:hover": { background: vars.hover, color: vars.text },
-    [`${composerQuote} &`]: { top: "8px", right: "10px" },
+    [`${composerQuote} &`]: { top: "8px", right: "8px" },
   },
   // No hover on a touch screen: it shows as it would under the pointer.
   "@media": { "(hover: none)": { background: vars.hover } },
