@@ -106,3 +106,19 @@ opening a stream (such a station would take the stream for a request and wait fo
 The agents' `screen` tool lists the station's screens and gives a link to one: `<cloud>/w/<workspace>/s/<station>/screen/<id>`.
 The agent posts it with `chat_post` (need_human: "log in here", "solve the captcha") and ends its turn; clients open
 the link in their screen viewer (web: a page; Android: a full-screen activity; in a chat, `link.parse` → `screen`).
+
+### Agents on a screen (station/src/tools/computer.ts)
+
+The agents' `computer` tool operates a screen the way a person's view does, on the same contract: `screenshot`, then
+`click`/`move`/`drag`/`scroll`/`type`/`key` (and `wait`), with a fresh screenshot after each action unless
+`screenshot: false` (`wait` ms first, 500 by default). A session keeps one view per screen open while it uses it
+(`codecs: ["jpeg"]`, scaled into 1280×1280), closed after 60 s unused or when its chat is archived; it joins the
+screen's people as `agent: <chat title>` with control, so it is in `controlledBy` and a person watching sees it work.
+The screenshot is the newest frame the view had (a source sends one only when the screen changed), given as MCP image
+content with its size and its scale to the source's; coordinates are the screenshot's pixels, sent as 0..1. A click
+is move, down, up (twice for a double click); a drag is move, down, 8 moves held, up; a key combination (`cmd+c`) is
+the modifiers down, the key down and up, the modifiers up; text goes as `text`, a newline as Enter. While a person
+(any view in `controlledBy` that is not an agent's) drives the screen, the agent's input is refused with a message to
+wait or ask; screenshots still work. A missing grant answers with the access message and the screen's link, for the
+agent to post with need_human. Clients open a view with `control: false` while a person only watches, so the agent is
+not held off by a watcher.

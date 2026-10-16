@@ -13,12 +13,18 @@ export const OUTWARD = ["chat_post", "slack_api", "job_start", "station_list", "
 export const UNBOUND_REFUSAL =
   "Refused: this station is not in a still.fail workspace right now (it was removed from it, or has not joined one), so it does not post to chats or Slack, call Slack, or start jobs. Nothing was sent. Stop here and do not retry: when the station is back in its workspace, the interrupted work resumes and you can post then.";
 
+/// A tool result's parts (MCP's content): text, or an image as base64 with its type.
+export type Content = { type: "text"; text: string } | { type: "image"; data: string; mimeType: string };
+export type ToolReply = { content: Content[]; isError?: boolean };
+
 export type Tool = {
   name: string;
   description: string;
   inputSchema: unknown;
   /// The text the agent sees; a thrown error's message comes back as a tool error.
   run(session: string, args: Record<string, unknown>): Promise<string>;
+  /// What the agent sees when it is more than text (a screenshot): called instead of `run` where there is one.
+  content?(session: string, args: Record<string, unknown>): Promise<ToolReply>;
 };
 
 export type Reply = { status: number; body?: unknown };
@@ -78,6 +84,10 @@ export class McpEndpoint {
         }
         const args = params?.arguments && typeof params.arguments === "object" && !Array.isArray(params.arguments) ? params.arguments : {};
         try {
+          if (tool.content) {
+            const { content, isError } = await tool.content(session, args);
+            return reply({ result: { content, ...(isError ? { isError: true } : {}) } });
+          }
           return reply({ result: { content: [{ type: "text", text: await tool.run(session, args) }] } });
         } catch (error) {
           log.warn("mcp", "tool call failed", { session, tool: name, error: (error as Error).message });

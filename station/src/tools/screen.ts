@@ -7,7 +7,7 @@ import type { Tool } from "./mcp.ts";
 export const SCREEN = {
   name: "screen",
   description:
-    "The screens of this station a person can see and drive from their still.fail app (this machine's display; tabs of the station's browser), each with who is viewing or controlling it now and the link that opens it there. When a person has to act on one (log in, solve a captcha, approve a prompt), post its link with chat_post kind=need_human and end your turn; call this again to see whether someone is on it.",
+    "The screens of this station a person can see and drive from their still.fail app (this machine's display; tabs of the station's browser), each with who is viewing or controlling it now and the link that opens it there. When a person has to act on one (log in, solve a captcha, approve a prompt), post its link with chat_post kind=need_human and end your turn; call this again to see whether someone is on it. To see and operate one yourself, use the computer tool with its id.",
   inputSchema: {
     "type": "object",
     "properties": {

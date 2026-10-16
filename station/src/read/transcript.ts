@@ -176,6 +176,8 @@ function toText(v: Json): string {
   if (Array.isArray(v)) {
     return v
       .map((item) => {
+        // A screenshot a tool gave (the computer tool's): named, not its base64.
+        if (get(item, "type") === "image") return "[image]";
         const text = get(item, "text");
         return text !== undefined ? (isStr(text) ? text : JSON.stringify(text)) : toText(item);
       })
