@@ -581,20 +581,23 @@ test("a_link_leaves_a_relay_found_slow_for_one_that_brings_replies_sooner", { sk
   const [[a, ra], [b, rb]] = await Promise.all([relay(), relay()]);
   const station = await Station.on(b, await slowed(a, 100, 1));
   const id = station.id();
+  // Its address, as the wire asks: the mesh keeps a link by address (a station in two workspaces has one in each), and
+  // the link steered here must be the one the large replies come on (by its id alone, another: 2026-10-16).
+  const key = `w/${id}`;
   const slowB = await slowed(b, 40, 0, 256 * 1024);
   const e = env(new FakeHost(), new Wakes(), quickClock(new Map()));
   const mesh = await e.runner.run(Mesh.make(e, [a]));
   const runner = e.runner;
   let link: Link | null = null;
   for (let i = 0; i < 40 && link === null; i++) {
-    const tried = await runner.run(mesh.link(id, grants("ok", { n: 0 }))).catch(() => null);
+    const tried = await runner.run(mesh.link(key, grants("ok", { n: 0 }))).catch(() => null);
     if (tried && (await request(runner, tried, head("/admin/api/overview")).then((r) => r.status === 200, () => false))) link = tried;
     else await sleep(250);
   }
   assert.ok(link, "reached through a");
   const status = new Status(e.host, runner);
   const wire = new MeshWire({ mesh: () => Effect.succeed(mesh), meshNow: () => mesh, credentials: () => grants("ok", { n: 0 }), relays: () => [], status: () => status });
-  const addr = StationAddr.parse(`w/${id}`);
+  const addr = StationAddr.parse(key);
   // A large reply, as the core reads one: how long it takes.
   const big = async () => {
     const started = Date.now();
@@ -603,15 +606,15 @@ test("a_link_leaves_a_relay_found_slow_for_one_that_brings_replies_sooner", { sk
     return Date.now() - started;
   };
   (mesh.relays as string[]).push(slowB);
-  await runner.run(mesh.remeasure(id));
-  assert.ok(sameRelay(mesh.current(id)!.via(), slowB), `still through ${mesh.current(id)!.via()}: ${JSON.stringify(mesh.measured(id))}`);
+  await runner.run(mesh.remeasure(key));
+  assert.ok(sameRelay(mesh.current(key)!.via(), slowB), `still through ${mesh.current(key)!.via()}: ${JSON.stringify(mesh.measured(key))}`);
   const throughB = await big();
-  assert.ok(mesh.speed(id, slowB) !== null, "how fast b is, seen");
+  assert.ok(mesh.speed(key, slowB) !== null, "how fast b is, seen");
   // Measured again, as the core does every few minutes. Once on Linux CI (2026-10-06) it stayed on b after one
   // measuring: either b's speed was taken for faster than it is (then measuring again changes nothing: the fastest
   // seen counts) or the link through a did not open in time (then it does). What failing says tells which.
-  for (let i = 0; i < 3 && !sameRelay(mesh.current(id)!.via(), a); i++) await runner.run(mesh.remeasure(id));
-  assert.ok(sameRelay(mesh.current(id)!.via(), a), `still through ${mesh.current(id)!.via()}: ${JSON.stringify({ ...mesh.measured(id), speedB: mesh.speed(id, slowB), throughB })}`);
+  for (let i = 0; i < 3 && !sameRelay(mesh.current(key)!.via(), a); i++) await runner.run(mesh.remeasure(key));
+  assert.ok(sameRelay(mesh.current(key)!.via(), a), `still through ${mesh.current(key)!.via()}: ${JSON.stringify({ ...mesh.measured(key), speedB: mesh.speed(key, slowB), throughB })}`);
   const throughA = await big();
   assert.ok(throughA < throughB, `the reply through a ${throughA} ms, through b ${throughB} ms`);
   await runner.run(mesh.close());
