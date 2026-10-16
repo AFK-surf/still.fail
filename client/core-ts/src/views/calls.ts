@@ -41,6 +41,8 @@ function outgoing(inner: Inner, station: string, text: string, attachments: unkn
   inner.host.randomBytes(key);
   // An image's size the page had not heard of yet when it sent it: as the core has read it since.
   uploads = uploads.map((u) => u.width && u.height ? u : { ...u, ...inner.composers.sizeOf(u.id) });
+  // And how far it has gone already: its card goes on from there.
+  uploads = uploads.map((u) => ({ ...u, ...inner.composers.sentOf(u.id) }));
   const message: J = { text: refs.expand(inner.data, station, text), attachments, quotes, queued: true, ...(uploads.length ? { uploads } : {}), idem: hex(key) };
   const from = client ?? prefs.sentFrom(inner.data);
   if (from !== null && from !== "") message.client = from;

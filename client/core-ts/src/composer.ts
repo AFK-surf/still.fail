@@ -83,6 +83,9 @@ export class Composers {
   /// Images' sizes as read here, by upload id, until the upload is let go: a message the page sent before it heard of
   /// one is given it all the same (`sizeOf`).
   #sizes = new Map<string, { width: number; height: number }>();
+  /// How much of each the station has, by upload id, while it goes up: a message sent part way through starts from there
+  /// (`sentOf`).
+  #sent = new Map<string, number>();
 
   constructor(inner: Inner) {
     this.#inner = inner;
@@ -366,6 +369,12 @@ export class Composers {
         this.#changed(k, s, true, false);
       }
     };
+    // How far it has gone: in the composer, and in a message sent before it is up (one sent later starts from here).
+    const went = (sent: number) => {
+      if (this.#uploads.get(f.id) === upload) this.#sent.set(f.id, sent);
+      change({ sent });
+      inner.views.local.uploadChanged(f.id, { sent });
+    };
     // An image's size, read while it goes up: every page holds its place from the first (the outbox's row too, before it
     // is up, even when it was sent before its size was read), and it travels with the file.
     // Another station's file: read from there a part at a time, as a picked one is read from the page.
@@ -408,10 +417,7 @@ export class Composers {
         if (told.file !== undefined) saved = told.file;
         else if (told.have === have) return yield* Effect.fail(new CoreError("upload", t("core-misc.composer.upload_failed")));
         else have = told.have;
-        const sent = told.file !== undefined ? f.size : have;
-        change({ sent });
-        // A message sent before it is up says how far it has gone, as the composer did.
-        inner.views.local.uploadChanged(f.id, { sent });
+        went(told.file !== undefined ? f.size : have);
       }
       const size = yield* Effect.promise(() => sizing);
       if (size) saved = { ...saved, ...size };
@@ -453,9 +459,16 @@ export class Composers {
     return this.#sizes.get(id) ?? {};
   }
 
+  /// How much of a file the station has so far (`{}` before its first part), for a message that takes it.
+  sentOf(id: string): { sent?: number } {
+    const sent = this.#sent.get(id);
+    return sent !== undefined ? { sent } : {};
+  }
+
   release(files: { id: string }[]): void {
     for (const f of files) {
       this.#sizes.delete(f.id);
+      this.#sent.delete(f.id);
       const held = this.#held.get(f.id)?.file.blob;
       if (held instanceof FileSource && this.#uploads.get(f.id)?.file?.blob !== held) held.close();
       this.#held.delete(f.id);

@@ -423,18 +423,34 @@ test("an_image_sent_before_the_page_heard_its_size_goes_with_its_size_all_the_sa
 
 test("a_message_sent_before_its_file_is_up_says_how_far_the_file_has_gone", async () => {
   const t = await setup();
-  const last = Deferred.makeUnsafe<J, CoreError>();
-  (t.core.inner.stations.requests as J).uploadPart = (_addr: unknown, q: J, bytes: Uint8Array) =>
-    q.offset === 0 ? Effect.succeed({ have: bytes.length }) : Deferred.await(last);
+  const PART = 4 * 1024 * 1024;
+  const parts = [Deferred.makeUnsafe<J, CoreError>(), Deferred.makeUnsafe<J, CoreError>(), Deferred.makeUnsafe<J, CoreError>()];
+  (t.core.inner.stations.requests as J).uploadPart = (_addr: unknown, q: J) => Deferred.await(parts[q.offset / PART]!);
   (t.core.inner.stations as J).post = () => Effect.succeed(1);
   await t.watch(1, "ws/st:k");
-  const size = 4 * 1024 * 1024 + 3;
-  const file = { id: "big", name: "big.bin", size, blob: new Blob([new Uint8Array(size)]) };
-  await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [file] });
-  call(t.core, t.ui, 501, "chat.send", { station: "ws/st", thread: 7, text: "", uploads: [{ id: file.id, name: file.name, size }] });
+  const size = 2 * PART + 3;
+  const file = (id: string) => ({ id, name: `${id}.bin`, size, blob: new Blob([new Uint8Array(size)]) });
+  const sent = (n: number) => t.core.inner.views.local.outbox("ws/st", 7)[n].uploads[0].sent;
+  const send = (id: number, f: { id: string; name: string }) => call(t.core, t.ui, id, "chat.send", { station: "ws/st", thread: 7, text: "", uploads: [{ id: f.id, name: f.name, size }] });
+  // Sent before any of it is up: its row says so as each part goes.
+  const a = file("a");
+  await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [a] });
+  send(501, a);
   await t.settle();
-  assert.equal(t.core.inner.views.local.outbox("ws/st", 7)[0].uploads[0].sent, 4 * 1024 * 1024);
-  Deferred.doneUnsafe(last, Effect.succeed({ have: size, file: { name: file.name, size, path: "/u/big.bin" } }));
+  assert.equal(sent(0), undefined);
+  Deferred.doneUnsafe(parts[0]!, Effect.succeed({ have: PART }));
+  await t.settle();
+  assert.equal(sent(0), PART);
+  // Sent part way through (another file of the same parts): it starts from there.
+  const b = file("b");
+  await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [b] });
+  await t.settle();
+  Deferred.doneUnsafe(parts[1]!, Effect.succeed({ have: 2 * PART }));
+  await t.settle();
+  send(502, b);
+  await t.settle();
+  assert.deepEqual([sent(0), sent(1)], [2 * PART, 2 * PART]);
+  Deferred.doneUnsafe(parts[2]!, Effect.succeed({ have: size, file: { name: "x.bin", size, path: "/u/x.bin" } }));
   await t.settle();
   t.core.close();
 });
