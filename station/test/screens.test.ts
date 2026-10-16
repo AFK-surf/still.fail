@@ -4,7 +4,8 @@
 // fake helper (its grants, its view protocol). Nothing here captures a screen: side/screen-desktop.test.ts does.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -13,12 +14,12 @@ import { Events } from "../src/api/events.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
 import { FrameIn, KIND, MAX_IN, SCREEN_TYPE, UNACKED, answerScreen, frame, parseInput } from "../src/mesh/screens.ts";
 import { ALPN, Reader, writeLine } from "../src/mesh/serve.ts";
-import { Desktop } from "../src/screens/desktop.ts";
+import { HELPER_APP, HelperApp } from "../src/helper/app.ts";
+import { Desktop, helperMessage } from "../src/screens/desktop.ts";
 import { ScreenHub, ScreenRefused } from "../src/screens/hub.ts";
 import { CLICK_MS, FLAGS, KEYCODES, MacInput } from "../src/screens/mac-input.ts";
 import type { Frame, ScreenAccess, ScreenInput, ScreenSource, ScreenView, ViewOptions } from "../src/screens/source.ts";
 import { WINDOWS } from "../src/platform/index.ts";
-import { exe, script } from "./accounts-fakes.ts";
 import { settle } from "./hub-fakes.ts";
 import { memoryMesh } from "./memory-mesh.ts";
 
@@ -304,14 +305,17 @@ test("what a view cannot be: answered with a status and why, in the asker's lang
   assert.equal(codecs.answer.status, 400);
   const path = await open(hub, member, { codecs: ["h264"] }, "/admin/api/screens/fake");
   assert.equal(path.answer.status, 404);
-  const access: ScreenAccess = { capture: false, control: false, app: "stillfail-station", path: "/x/stillfail-station" };
-  source.refuse = new ScreenRefused(503, "station.screen.captureOff", { app: "stillfail-station", path: "/x/stillfail-station" }, access);
+  // What is missing, and that a window on the machine asks for it now.
+  const access: ScreenAccess = { capture: false, control: false, app: "still.fail Helper", path: "/x/still.fail Helper.app", asking: true };
+  source.refuse = new ScreenRefused(503, "station.screen.captureOff", { app: "still.fail Helper" }, access);
   const refused = await open(hub, member, { codecs: ["h264"] });
   assert.equal(refused.answer.status, 503);
   const said = await body(refused);
-  assert.match(said.error, /Screen Recording is off for stillfail-station/);
-  assert.equal(said.access.capture, false);
-  assert.match(said.access.message, /Accessibility is off for stillfail-station/);
+  assert.equal(
+    said.error,
+    "This Mac hasn't let still.fail Helper record its screen yet. This Mac hasn't let still.fail Helper control it yet (Accessibility), so the screen can be seen but not driven. A window on that Mac is asking for it now: click Allow there and drag still.fail Helper into the list System Settings shows, then open the screen again.",
+  );
+  assert.deepEqual(said.access, { capture: false, control: false, message: said.error, app: "still.fail Helper", path: "/x/still.fail Helper.app", asking: true });
   source.refuse = new Error("tab crashed");
   const failed = await open(hub, member, { codecs: ["h264"] });
   assert.equal(failed.answer.status, 503);
@@ -382,102 +386,250 @@ test("input as macOS posts it: buttons, click counts, drags, keys by their place
   assert.equal(parseInput({ t: "key", kind: "down", key: "x".repeat(65), code: "KeyX" }), null);
 });
 
-/// A helper as native/screen's is, in Node: `status` from status.json, `request` noted, `view` answering the framed
-/// protocol with made-up frames and noting the input it is given.
-function fakeHelper(status: object) {
-  const dir = mkdtempSync(join(tmpdir(), "fake-screen-"));
-  writeFileSync(join(dir, "status.json"), JSON.stringify(status));
-  const path = join(dir, "stillfail-screen");
-  script(path, `#!/usr/bin/env node
-const fs = require("node:fs"), path = require("node:path");
-const dir = ${JSON.stringify(dir)};
-const note = (line) => fs.appendFileSync(path.join(dir, "log"), line + "\\n");
-const cmd = process.argv[2];
-note(process.argv.slice(2).join(" "));
-if (cmd === "status" || cmd === "request") { process.stdout.write(fs.readFileSync(path.join(dir, "status.json"), "utf8") + "\\n"); process.exit(0); }
-const send = (kind, payload) => { const head = Buffer.alloc(5); head[0] = kind; head.writeUInt32BE(payload.length, 1); process.stdout.write(Buffer.concat([head, payload])); };
-send(1, Buffer.from(JSON.stringify({ width: 64, height: 36, encoder: "fake" })));
-let carry = Buffer.alloc(0), n = 0, key = true;
-process.stdin.on("data", (chunk) => {
-  carry = Buffer.concat([carry, chunk]);
-  while (carry.length >= 5 && carry.length >= 5 + carry.readUInt32BE(1)) {
-    const kind = carry[0], payload = carry.subarray(5, 5 + carry.readUInt32BE(1));
-    carry = carry.subarray(5 + payload.length);
-    if (kind === 1) {
-      n++;
-      if (n === 1) { const c = Buffer.alloc(8); c.writeUInt32BE(64, 0); c.writeUInt32BE(36, 4); send(2, Buffer.concat([c, Buffer.from([1, 66, 0, 30])])); }
-      const f = Buffer.alloc(9); f[0] = key ? 1 : 0; f.writeBigUInt64BE(BigInt(n * 1000), 1); key = false;
-      send(3, Buffer.concat([f, Buffer.from([0, 0, 0, 1, n])]));
-    } else if (kind === 2) key = true;
-    else if (kind === 3) note("input " + payload.toString());
+
+/// still.fail Helper as native/helper's is, in this process: started by `launch` (the station's `open`) with its socket
+/// and token; `status` as `status` is, `permissions.show` noted (its window then up), `quit` noted, `screen.view`
+/// answering with made-up frames and noting the input. `restartOnce`: its next view asks to start again (a grant taken
+/// since it started), and it is back on its socket a moment later, as the app started again is.
+class FakeHelperApp {
+  launches = 0;
+  quits = 0;
+  shown: any[] = [];
+  inputs: any[] = [];
+  views: any[] = [];
+  asking = false;
+  restartOnce = false;
+  status: any;
+  #server: net.Server | null = null;
+  #where: { path: string; token: string } | null = null;
+  constructor(status: any) {
+    this.status = status;
   }
-});
-process.stdin.on("end", () => process.exit(0));
-`);
-  const log = () => {
-    try {
-      return readFileSync(join(dir, "log"), "utf8").split("\n").filter(Boolean);
-    } catch {
-      return [];
-    }
+  launch = async (_app: string, env: Record<string, string>) => {
+    this.launches++;
+    this.#where = { path: env.STILLFAIL_HELPER_SOCKET!, token: env.STILLFAIL_HELPER_TOKEN! };
+    await this.#listen();
   };
-  return { path: exe(path), dir, log, set: (s: object) => writeFileSync(join(dir, "status.json"), JSON.stringify(s)) };
+  async #listen() {
+    const { path, token } = this.#where!;
+    rmSync(path, { force: true });
+    const server = net.createServer((conn) => this.#serve(conn, token));
+    await new Promise<void>((resolve) => server.listen(path, resolve));
+    this.#server = server;
+  }
+  #stop() {
+    this.#server?.close();
+    this.#server = null;
+    rmSync(this.#where!.path, { force: true });
+  }
+  close() {
+    this.#stop();
+  }
+  #serve(conn: net.Socket, token: string) {
+    let carry = Buffer.alloc(0);
+    let viewing: ((chunk: Buffer) => void) | null = null;
+    const line = (v: unknown) => conn.end(`${JSON.stringify(v)}\n`);
+    // The station closing a view while a frame is on its way: nothing to it.
+    conn.on("error", () => {});
+    conn.on("data", (chunk: Buffer) => {
+      if (viewing) return viewing(chunk);
+      carry = Buffer.concat([carry, chunk]);
+      const at = carry.indexOf(10);
+      if (at < 0) return;
+      const ask = JSON.parse(carry.subarray(0, at).toString());
+      const rest = carry.subarray(at + 1);
+      if (ask.token !== token) return line({ error: "not the station's token" });
+      switch (ask.op) {
+        case "hello":
+          return line({ ok: true, v: 1 });
+        case "status":
+          return line({ ...this.status, asking: this.asking });
+        case "permissions.show":
+          this.shown.push(ask.words);
+          this.asking = true;
+          return line({ ok: true });
+        case "quit":
+          this.quits++;
+          line({ ok: true });
+          return this.#stop();
+        case "screen.view": {
+          this.views.push(ask);
+          if (this.restartOnce) {
+            this.restartOnce = false;
+            conn.end(helperMessage(1, Buffer.from(JSON.stringify({ error: "restarting", code: "restart" }))));
+            this.#stop();
+            setImmediate(() => void this.#listen());
+            return;
+          }
+          conn.write(helperMessage(1, Buffer.from(JSON.stringify({ width: 64, height: 36, encoder: "fake" }))));
+          let n = 0;
+          let key = true;
+          let inbox = Buffer.alloc(0);
+          viewing = (more) => {
+            inbox = Buffer.concat([inbox, more]);
+            while (inbox.length >= 5 && inbox.length >= 5 + inbox.readUInt32BE(1)) {
+              const kind = inbox[0]!;
+              const payload = inbox.subarray(5, 5 + inbox.readUInt32BE(1));
+              inbox = inbox.subarray(5 + payload.length);
+              if (kind === 1) {
+                n++;
+                if (n === 1) {
+                  const size = Buffer.alloc(8);
+                  size.writeUInt32BE(64, 0);
+                  size.writeUInt32BE(36, 4);
+                  conn.write(helperMessage(2, Buffer.concat([size, Buffer.from([1, 66, 0, 30])])));
+                }
+                const head = Buffer.alloc(9);
+                head[0] = key ? 1 : 0;
+                head.writeBigUInt64BE(BigInt(n * 1000), 1);
+                key = false;
+                conn.write(helperMessage(3, Buffer.concat([head, Buffer.from([0, 0, 0, 1, n])])));
+              } else if (kind === 2) key = true;
+              else if (kind === 3) this.inputs.push(JSON.parse(payload.toString()));
+            }
+          };
+          if (rest.length > 0) viewing(rest);
+          return;
+        }
+      }
+    });
+  }
 }
 
-const responsible = { pid: 1, path: "/Users/x/.stillfail/app/mesh/target/release/stillfail-station", name: "stillfail-station" };
-const display = { id: 1, width: 3024, height: 1964 };
+/// A release's helper app (its code files only) and a station's data directory for it.
+function helperRelease() {
+  const root = mkdtempSync(join(tmpdir(), "helper-"));
+  const app = join(root, "release", HELPER_APP);
+  mkdirSync(join(app, "Contents/MacOS"), { recursive: true });
+  mkdirSync(join(app, "Contents/_CodeSignature"), { recursive: true });
+  writeFileSync(join(app, "Contents/MacOS/stillfail-helper"), "code 1");
+  writeFileSync(join(app, "Contents/Info.plist"), "<plist/>");
+  writeFileSync(join(app, "Contents/_CodeSignature/CodeResources"), "signed 1");
+  return { app, dir: join(root, "data", "helper") };
+}
 
-// The helper is a process the station runs by its path (execFile, spawn): a .cmd stand-in is not one on Windows, where
-// the desktop is not supported anyway.
-test("the desktop: unsupported, without its helper, or refused for want of a grant, says so; macOS is asked once", { skip: WINDOWS }, async () => {
-  const off = new Desktop({ supported: false, helper: "/nowhere", changed: () => {} });
+const display = { id: 1, width: 3024, height: 1964 };
+const responsible = (dir: string) => ({ pid: 1, path: join(dir, HELPER_APP), name: "still.fail Helper" });
+
+// Unix sockets: the helper is macOS's; Windows' pipes are not these paths.
+test("the desktop: unsupported, or without its helper, says so; a grant missing puts the helper's window up, once an attempt", { skip: WINDOWS }, async () => {
+  const off = new Desktop({ supported: false, helper: null, changed: () => {} });
   assert.deepEqual(off.access(), { capture: false, control: false, unsupported: "platform" });
   await assert.rejects(off.open({ maxWidth: 1920, maxHeight: 1080, codecs: ["h264"] }), (e: ScreenRefused) => e.status === 501 && e.key === "station.screen.unsupported");
   const lost = new Desktop({ supported: true, helper: null, changed: () => {} });
   assert.equal(lost.access().unsupported, "helper");
-  const helper = fakeHelper({ capture: false, control: false, responsible, display });
+
+  const { app, dir } = helperRelease();
+  const fake = new FakeHelperApp({ capture: false, control: false, display, responsible: responsible(dir), live: { capture: false, control: false } });
+  const helper = new HelperApp({ app, dir, launch: fake.launch });
   let changed = 0;
-  const desktop = new Desktop({ supported: true, helper: helper.path, changed: () => changed++ });
-  await assert.rejects(desktop.open({ maxWidth: 1920, maxHeight: 1080, codecs: ["jpeg"] }), (e: ScreenRefused) => e.status === 415);
-  await desktop.refresh();
-  assert.equal(changed, 1);
-  assert.deepEqual(desktop.size(), { width: 3024, height: 1964 });
-  assert.deepEqual(desktop.access(), { capture: false, control: false, app: "stillfail-station", path: responsible.path });
-  for (let i = 0; i < 2; i++) {
-    await assert.rejects(desktop.open({ maxWidth: 1920, maxHeight: 1080, codecs: ["h264"] }), (e: ScreenRefused) => e.status === 503 && e.key === "station.screen.captureOff" && e.args.path === responsible.path);
-  }
-  // Asked of macOS once, its answer not waited for.
-  await settle();
-  for (;;) {
-    if (helper.log().includes("request")) break;
-    await settle();
-  }
-  assert.equal(helper.log().filter((l) => l === "request").length, 1);
-  // Granted since: seen at the next look.
-  helper.set({ capture: true, control: true, responsible, display });
+  const desktop = new Desktop({ supported: true, helper, changed: () => changed++, lang: () => "en" });
+  // Nothing said before it is looked at; the helper not started for nothing.
+  assert.deepEqual(desktop.access(), { capture: true, control: true });
+  assert.equal(fake.launches, 0);
+  await assert.rejects(desktop.open({ maxWidth: 1920, maxHeight: 1080, codecs: [] }), (e: ScreenRefused) => e.status === 415);
+  await assert.rejects(desktop.open({ maxWidth: 1920, maxHeight: 1080, codecs: ["h264"] }), (e: ScreenRefused) => e.status === 503 && e.key === "station.screen.captureOff" && e.access?.asking === true);
+  // Started once, from its copy in the station's data, its token the station's only.
+  assert.equal(fake.launches, 1);
+  assert.ok(existsSync(join(dir, HELPER_APP, "Contents/MacOS/stillfail-helper")));
+  assert.equal(statSync(join(dir, "token")).mode & 0o777, 0o600);
+  // Its window up, in the station's words; the grants it asks for those it has.
+  assert.equal(fake.shown.length, 1);
+  assert.equal(fake.shown[0].title, "Let still.fail see and control this Mac");
+  assert.equal(fake.shown[0].panel["permission_flow.panel.title"], "Drag the app below into the list above to allow **%2$@**.");
+  assert.equal(fake.shown[0].panel["permission_flow.pane.screen_recording"], "Screen Recording");
+  assert.deepEqual(desktop.access(), { capture: false, control: false, app: "still.fail Helper", path: join(dir, HELPER_APP), asking: true });
+  assert.equal(desktop.size().width, 3024);
+  assert.ok(changed >= 1);
+  // Opened again: up again (it is brought to the front), not twice at once.
+  await assert.rejects(desktop.open({ maxWidth: 1920, maxHeight: 1080, codecs: ["h264"] }));
+  assert.equal(fake.shown.length, 2);
+  assert.equal(fake.launches, 1);
+  // Granted: seen at the next look.
+  fake.status = { ...fake.status, capture: true, control: true };
+  fake.asking = false;
   await desktop.refresh(true);
-  assert.equal(changed, 2);
-  assert.deepEqual(desktop.access(), { capture: true, control: true, app: "stillfail-station", path: responsible.path });
+  assert.deepEqual(desktop.access(), { capture: true, control: true, app: "still.fail Helper", path: join(dir, HELPER_APP) });
+  fake.close();
 });
 
-test("the desktop's view: the helper per view, asked for each frame, its config on the first, input as macOS's", { skip: WINDOWS }, async () => {
-  const helper = fakeHelper({ capture: true, control: true, responsible, display });
-  const desktop = new Desktop({ supported: true, helper: helper.path, changed: () => {} });
+test("the helper app: found again by the station's next process, started anew when its code changed", { skip: WINDOWS }, async () => {
+  const { app, dir } = helperRelease();
+  const fake = new FakeHelperApp({ capture: true, control: true, display });
+  await new HelperApp({ app, dir, launch: fake.launch }).request({ op: "status" });
+  // The next station process (a handover): the same app, by the token the first one left.
+  await new HelperApp({ app, dir, launch: fake.launch }).request({ op: "status" });
+  assert.equal(fake.launches, 1);
+  // A release with other code: the running one quits, the new copy starts.
+  writeFileSync(join(app, "Contents/MacOS/stillfail-helper"), "code 2");
+  await new HelperApp({ app, dir, launch: fake.launch }).request({ op: "status" });
+  assert.equal(fake.quits, 1);
+  assert.equal(fake.launches, 2);
+  assert.equal(readFileSync(join(dir, HELPER_APP, "Contents/MacOS/stillfail-helper"), "utf8"), "code 2");
+  fake.close();
+});
+
+test("the desktop's view: a connection to the helper, asked for each frame, its config on the first, input as macOS's", { skip: WINDOWS }, async () => {
+  const { app, dir } = helperRelease();
+  const fake = new FakeHelperApp({ capture: true, control: true, display, live: { capture: false, control: true } });
+  // Granted since it started: its first view has it start again, and the view is asked for once more.
+  fake.restartOnce = true;
+  const desktop = new Desktop({ supported: true, helper: new HelperApp({ app, dir, launch: fake.launch }), changed: () => {} });
   const view = await desktop.open({ maxWidth: 1280, maxHeight: 720, codecs: ["h264", "jpeg"] });
-  assert.ok(helper.log().includes("view --max-width 1280 --max-height 720 --display 1"));
+  assert.equal(fake.shown.length, 0, "nothing missing, no window");
+  assert.equal(fake.views.length, 2);
+  assert.deepEqual(fake.views[1], { op: "screen.view", codec: "h264", maxWidth: 1280, maxHeight: 720, display: 1, token: fake.views[1].token });
   const first = (await view.next())!;
   assert.deepEqual(first, { key: true, ts: 1000, data: new Uint8Array([0, 0, 0, 1, 1]), config: { codec: "h264", width: 64, height: 36, description: new Uint8Array([1, 66, 0, 30]) } });
-  const second = (await view.next())!;
-  assert.deepEqual(second, { key: false, ts: 2000, data: new Uint8Array([0, 0, 0, 1, 2]) });
+  assert.deepEqual(await view.next(), { key: false, ts: 2000, data: new Uint8Array([0, 0, 0, 1, 2]) });
   view.keyframe();
   assert.equal((await view.next())!.key, true);
   await view.input({ t: "key", kind: "down", key: "v", code: "KeyV", mods: 4 });
-  // Its input is noted before the next frame is answered (the helper reads in order).
+  // Its input is had before the next frame is answered (the helper reads in order).
   await view.next();
-  assert.deepEqual(helper.log().filter((l) => l.startsWith("input ")).map((l) => JSON.parse(l.slice(6))), [{ op: "key", keycode: KEYCODES.KeyV, down: true, flags: FLAGS.command }]);
-  // Closed: a pending frame is none, the helper goes.
+  assert.deepEqual(fake.inputs, [{ op: "key", keycode: KEYCODES.KeyV, down: true, flags: FLAGS.command }]);
+  // Closed: a pending frame is none.
   const pending = view.next();
   view.close();
   assert.equal(await pending, null);
   assert.equal(await view.next(), null);
+  fake.close();
+});
+
+test("the desktop for a view without H.264 (an agent's): JPEG pictures, its config without a description", { skip: WINDOWS }, async () => {
+  const { app, dir } = helperRelease();
+  const fake = new FakeHelperApp({ capture: true, control: true, display, live: { capture: true, control: true } });
+  const desktop = new Desktop({ supported: true, helper: new HelperApp({ app, dir, launch: fake.launch }), changed: () => {} });
+  await assert.rejects(desktop.open({ maxWidth: 1280, maxHeight: 720, codecs: [] }), (e: ScreenRefused) => e.status === 415);
+  const view = await desktop.open({ maxWidth: 1280, maxHeight: 720, codecs: ["jpeg"] });
+  assert.equal(fake.views[0].codec, "jpeg");
+  assert.deepEqual((await view.next())!.config, { codec: "jpeg", width: 64, height: 36 });
+  view.close();
+  fake.close();
+});
+
+test("a view the station opens itself (an agent's) shows who has it, driving or not, until it closes", async () => {
+  const hub = new ScreenHub();
+  const source = new FakeSource();
+  hub.add(source);
+  let told = 0;
+  hub.onChange(() => told++);
+  const view = await hub.openAs("fake", { maxWidth: 800, maxHeight: 600, codecs: ["jpeg"] }, { name: "agent: 登录 GitHub", control: true });
+  assert.deepEqual(hub.people("fake"), { viewers: ["agent: 登录 GitHub"], controlledBy: ["agent: 登录 GitHub"] });
+  // A person on it too is told who drives it.
+  const person = await open(hub, member, { codecs: ["jpeg"], control: false });
+  const states: any[] = [];
+  await until(person.frames, KIND.video, states);
+  assert.deepEqual(states[1], { viewers: ["agent: 登录 GitHub", "Pat"], controlledBy: ["agent: 登录 GitHub"] });
+  // Its input goes to the source with nobody's link in between.
+  await view.input({ t: "text", text: "hello" });
+  assert.deepEqual(source.views[0]!.inputs, [{ t: "text", text: "hello" }]);
+  assert.equal((await view.next())!.ts, 1000);
+  view.close();
+  assert.equal(source.views[0]!.closed, true);
+  assert.deepEqual(hub.people("fake"), { viewers: ["Pat"], controlledBy: [] });
+  await assert.rejects(hub.openAs("elsewhere", { maxWidth: 800, maxHeight: 600, codecs: ["jpeg"] }, { name: "agent", control: false }), (e: ScreenRefused) => e.status === 404);
+  assert.ok(told >= 3);
+  await person.stream.finish();
+  await person.served;
 });

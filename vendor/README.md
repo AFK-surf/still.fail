@@ -3,6 +3,16 @@
 Crates taken from crates.io and changed for still.fail; `[patch.crates-io]` in mesh/ and client/ points at them. Each
 change is marked `ember:` in the source. Drop a crate here once upstream has the same.
 
+- **PermissionFlow** (Swift, EYHN/PermissionFlow at 9b02967, as Cue's Computer Use pins it; only SystemSettingsKit and
+  PermissionFlow; station/native/screen uses it for its permission window)
+  - Cue's patches (Cue `systems/connector/salix-connect/native/macos/patches/`): the panel lists the steps
+    (`guidanceSteps`) with a header that keeps its width, the drag card says the app's display name, its "Drag" label
+    is the localizer's.
+  - The floating panel takes any file to drag, not only an `.app` (PermissionFlowController.swift).
+  - Its words are the host's (`PermissionFlowLocalizer.words`, the station's language), not a resource bundle: the
+    helper ships as one app with nothing beside its executable. PermissionFlowButton (unused, its words a bundle's)
+    is left out.
+
 - **swarm-discovery 0.6.3**
   - src/receiver.rs: a peer's addresses are read from the answers as well as the additionals, and records with
     mDNS's cache-flush bit count as class IN. A router reflecting mDNS between subnets sends the addresses on as

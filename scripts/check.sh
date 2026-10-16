@@ -319,8 +319,8 @@ if [ $full = 1 ]; then
       if has cargo; then remembered "Rust: station/native/$crate" "$inputs" heavy cargo_test "station/native/$crate" --locked -q; else later "Rust: station/native/$crate"; fi
     fi
   done
-  # The desktop's screen helper (Swift, station/native/screen): built where it changed, on a Mac.
-  if part station && touches '^station/native/screen/' && has swift; then step "Swift: station/native/screen" node scripts/native.ts path screen; fi
+  # still.fail Helper (Swift, station/native/helper and the PermissionFlow it uses): built where it changed, on a Mac.
+  if part station && touches '^station/native/helper/|^vendor/PermissionFlow/' && has swift; then step "Swift: station/native/helper" node scripts/native.ts path helper; fi
   # The core's native shells (client/shell for Android, client/iroh-wasm for the web).
   if part core && touches '^client/(shell|iroh-wasm)/|^client/Cargo\.(toml|lock)$|^vendor/'; then
     if has cargo; then remembered "Rust: client" "client vendor" heavy cargo_test client --workspace -q; else later "Rust: client"; fi

@@ -229,19 +229,25 @@ const PARTS: Record<string, Part> = {
       copyFileSync(join(scratch, "arm64-apple-macosx/release/StillfailDock"), join(out, "StillfailDock"));
     },
   },
-  // The station's desktop as a screen (station/native/screen, docs/remote-screens.md): a Swift helper the station starts
-  // per view (ScreenCaptureKit, VideoToolbox, CGEvent), built with the Xcode the Mac has.
-  screen: {
-    files: () => ["stillfail-screen"],
+  // still.fail Helper (station/native/helper, docs/station-ts-native.md §4): the station's macOS app for what macOS
+  // grants an app (the screen, docs/remote-screens.md), Swift built with the Mac's Xcode, put in its bundle with its
+  // Info.plist and signed ad hoc (a release signs it again, scripts/station-bundle.sh).
+  helper: {
+    files: () => [HELPER_APP],
     targets: ["darwin-arm64"],
-    env: "STILLFAIL_SCREEN",
-    inputs: ["station/native/screen"],
-    recipe: () => ({ swift: DOCK_BUILD }),
+    env: "STILLFAIL_HELPER",
+    inputs: ["station/native/helper", "vendor/PermissionFlow"],
+    recipe: () => ({ swift: DOCK_BUILD, app: HELPER_APP }),
     build(_t, out) {
-      const dir = join(ROOT, "station/native/screen");
-      const scratch = process.env.CARGO_TARGET_DIR ? join(process.env.CARGO_TARGET_DIR, "native", "screen") : join(dir, ".build");
+      const dir = join(ROOT, "station/native/helper");
+      const scratch = process.env.CARGO_TARGET_DIR ? join(process.env.CARGO_TARGET_DIR, "native", "helper") : join(dir, ".build");
       run("swift", [...DOCK_BUILD, "--scratch-path", scratch], { cwd: dir });
-      copyFileSync(join(scratch, "arm64-apple-macosx/release/stillfail-screen"), join(out, "stillfail-screen"));
+      const app = join(out, HELPER_APP);
+      mkdirSync(join(app, "Contents/MacOS"), { recursive: true });
+      copyFileSync(join(scratch, "arm64-apple-macosx/release/stillfail-helper"), join(app, "Contents/MacOS/stillfail-helper"));
+      copyFileSync(join(dir, "Info.plist"), join(app, "Contents/Info.plist"));
+      writeFileSync(join(app, "Contents/PkgInfo"), "APPL????");
+      run("codesign", ["--force", "--sign", "-", "--identifier", "fail.still.helper", app]);
     },
   },
   // iroh's relay in dev mode, for the core's mesh tests (client/core-ts/test/mesh.test.ts): n0's own build, the
@@ -269,6 +275,7 @@ const RELAY: Record<string, { url: string; sha256: string }> = {
   "linux-arm64": { url: RELAY_URL("aarch64-unknown-linux-musl"), sha256: "1b4261b6dd0d17ae9a7516aa6d122b296a77678bac174ce30262702c9f91cb00" },
 };
 const DOCK_BUILD = ["build", "-c", "release", "--arch", "arm64"];
+const HELPER_APP = "still.fail Helper.app";
 const SHELL_RUSTFLAGS = "-C link-arg=-Wl,-z,max-page-size=16384";
 const shellCommand = () => [
   "rustc", "--locked", "-p", "stillfail-shell", "--lib", "--crate-type", "cdylib", "--target", "aarch64-linux-android", "--release",

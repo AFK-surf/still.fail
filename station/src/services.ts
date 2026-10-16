@@ -20,7 +20,8 @@ import { Agents } from "./sessions/agents.ts";
 import { log } from "./ops/log.ts";
 import { platform } from "./platform/index.ts";
 import { ScreenHub } from "./screens/hub.ts";
-import { Desktop, screenHelper } from "./screens/desktop.ts";
+import { Desktop } from "./screens/desktop.ts";
+import { HelperApp, helperApp } from "./helper/app.ts";
 
 /// Where the station keeps its data, and the release it runs from.
 export class Paths extends Context.Service<Paths, { readonly data: string; readonly app: string }>()("stillfail/Paths") {}
@@ -105,15 +106,18 @@ export class ScreenRegistry extends Context.Service<ScreenRegistry, ScreenHub>()
   static readonly layer = Layer.effect(
     ScreenRegistry,
     Effect.gen(function* () {
+      const { data } = yield* Paths;
       const hub = yield* Effect.acquireRelease(Effect.sync(() => new ScreenHub()), (hub) => Effect.sync(() => hub.close()));
-      const desktop = new Desktop({ supported: platform.hasDesktopScreen, helper: screenHelper(), changed: () => hub.changed() });
+      // still.fail Helper (macOS), installed and talked to under <data>/helper.
+      const app = platform.hasDesktopScreen ? helperApp() : null;
+      const helper = app === null ? null : new HelperApp({ app, dir: join(data, "helper") });
+      const desktop = new Desktop({ supported: platform.hasDesktopScreen, helper, changed: () => hub.changed() });
       yield* Effect.acquireRelease(
         Effect.sync(() => {
           const remove = hub.add(desktop);
+          // Its size and grants are looked at as the screens are asked for (the helper started then, not before).
           const unrefresh = hub.refresher(() => desktop.refresh());
-          // Its size and grants as they are at start.
-          void desktop.refresh();
-          return () => (unrefresh(), remove(), desktop.close());
+          return () => (unrefresh(), remove(), void desktop.close());
         }),
         (stop) => Effect.sync(stop),
       );

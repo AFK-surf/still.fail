@@ -34,6 +34,13 @@ captured/encoded only when the previous ones were taken, so a slow link lowers t
 Each source picks its codec among those the client accepts: the desktop is H.264 (hardware encoder), a browser tab may
 be JPEG (CDP screencast) or H.264. Clients decode both.
 
+The station's own users of a screen (the agents' computer-use tool) open views in the process with
+`ScreenHub.openAs(id, options, {name, control})` (station/src/screens/hub.ts): the view is the source's, with no member
+link in between (its `input` posted as a person's is), and while it is open `name` (e.g. `agent: <chat title>`) is in
+the screen's `viewers`, and with `control` in `controlledBy`, told to people on it and in the list like theirs. The
+desktop gives H.264 when the codecs take it and else a JPEG a picture (quality 0.8, same bounds, pull-driven alike);
+JPEG frames are all key frames and their config has no `description`.
+
 ### Wire (member link, ALPN `stillfail/admin/1`)
 
 - **List**: `GET /admin/api/screens` → `{"screens":[{id, kind, title, width, height, viewers, controlledBy, access?}]}`;
@@ -64,18 +71,23 @@ be JPEG (CDP screencast) or H.264. Clients decode both.
 - Ending: either side finishes the stream (the station says `ended` first). When the stream or its connection breaks,
   the view ends with it; the source's capture stops either way.
 
-### The desktop (station/src/screens/desktop.ts, station/native/screen)
+### The desktop (station/src/screens/desktop.ts, station/native/helper)
 
-macOS only (elsewhere it is listed with `access` saying it is not supported, and opens nothing). A helper per view,
-`stillfail-screen` (Swift, a native part beside `mesh.node` in the release): ScreenCaptureKit captures the main display
-scaled into `maxWidth`×`maxHeight`; VideoToolbox encodes H.264 on the hardware encoder with low-latency rate control
-(constrained baseline, no reordering, AVCC with the avcC as `description`), a picture only when one is asked for and
-the screen changed (a still screen sends nothing), a key frame on request; CGEvent posts the input (mouse with click
-counts, wheel in pixels, keys by their `code` as the Mac's virtual keys, text as Unicode). macOS grants Screen
-Recording and Accessibility to the process responsible for the helper: the station's launcher `stillfail-station`
-(`~/.stillfail/app/mesh/target/release/`, signed `fail.still.station` in releases, so a grant outlasts updates) under
-launchd, the app in the desktop app. A view refused for want of a grant asks macOS once (its prompt on that Mac lists
-the launcher in System Settings), and `access.message` names it and its path.
+macOS only (elsewhere it is listed with `access` saying it is not supported, and opens nothing). still.fail Helper
+(`still.fail Helper.app`, bundle id `fail.still.helper`, beside `mesh.node` in the release; docs/station-ts-native.md
+§4) does it: ScreenCaptureKit captures the main display scaled into `maxWidth`×`maxHeight`; VideoToolbox encodes H.264
+on the hardware encoder with low-latency rate control (constrained baseline, no reordering, AVCC with the avcC as
+`description`), a picture only when one is asked for and the screen changed (a still screen sends nothing), a key frame
+on request; CGEvent posts the input (mouse with click counts, wheel in pixels, keys by their `code` as the Mac's virtual
+keys, text as Unicode). A view is a connection to the helper's socket.
+
+Screen Recording and Accessibility are granted to the helper app, not to the station: LaunchServices starts it as its
+own process, and a grant, which takes effect only once the process holding it starts again, restarts the helper alone
+(the station and its sessions run on; a view open then ends and the client opens it again). Opening the desktop while a
+grant is missing puts the helper's window up on that Mac (as Cue's Computer Use has it, with PermissionFlow): a row per
+grant, Allow opens the System Settings pane with a panel holding the app to drag into its list. The 503 and the list's
+`access` say what is missing and that the window is up (`asking`), or that opening the screen puts it up. The system's
+own prompt is not used (it would fight the window).
 
 ### Clients
 

@@ -34,8 +34,9 @@ export interface ScreenView {
 export type ScreenKind = "desktop" | "browser";
 
 /// Whether a source can be seen and driven now, for one that may not be (the desktop: macOS's grants, a machine it is
-/// not supported on). `app` and `path`: what a person turns on in System Settings for it.
-export type ScreenAccess = { capture: boolean; control: boolean; unsupported?: "platform" | "helper"; app?: string; path?: string };
+/// not supported on). `app` and `path`: what a person turns on in System Settings for it; `asking`: a window on the
+/// machine asks for it now.
+export type ScreenAccess = { capture: boolean; control: boolean; unsupported?: "platform" | "helper"; app?: string; path?: string; asking?: boolean };
 
 export interface ScreenSource {
   /// Stable while the source lasts: `desktop`, `browser:<targetId>`.

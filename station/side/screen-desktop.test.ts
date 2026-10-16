@@ -1,12 +1,13 @@
-// The desktop as a screen (docs/remote-screens.md) on a real Mac: the helper (native/screen, prebuilt by
-// scripts/native.ts) encoding H.264 on the hardware encoder, its frames over a real iroh link on this machine to a
+// The desktop as a screen (docs/remote-screens.md) on a real Mac: still.fail Helper (native/helper, prebuilt by
+// scripts/native.ts; STILLFAIL_HELPER another, a signed one), started as the station starts it, encoding H.264 on the
+// hardware encoder, its frames over a real iroh link on this machine to a
 // client that acknowledges them as it gets them, and decoded afterwards with ffmpeg (when the machine has it) into a
 // PNG. Says the frame rate and bitrate it measured. Real time and real processes: a side test.
 //
-// Two of them: made-up 1080p pictures (the helper's --synthetic: the encoder and the link, whether or not this
-// process may capture the screen), moving and still; and the display itself, which macOS lets the helper capture only
-// when the process responsible for it (the terminal, sshd, a launchd job…) has Screen Recording: skipped, saying
-// which, when it has not. SCREEN_OUT: where the streams and PNGs are kept (default: a temporary directory).
+// Two of them: made-up 1080p pictures (the helper's `synthetic`: the encoder and the link, whether or not the helper
+// may capture the screen), moving and still; and the display itself, which macOS lets the helper capture once it was
+// granted Screen Recording (its window asks for it on this Mac; this skips, saying so, until it was).
+// SCREEN_OUT: where the streams and PNGs are kept (default: a temporary directory).
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -19,6 +20,7 @@ import type { Viewer } from "../src/mesh/credential.ts";
 import { loadMesh } from "../src/mesh/native.ts";
 import { FrameIn, KIND, answerScreen, frame } from "../src/mesh/screens.ts";
 import { ALPN, Reader, writeLine } from "../src/mesh/serve.ts";
+import { HelperApp } from "../src/helper/app.ts";
 import { Desktop, type HelperStatus } from "../src/screens/desktop.ts";
 import { ScreenHub } from "../src/screens/hub.ts";
 
@@ -28,7 +30,10 @@ const SECONDS = Number(process.env.SCREEN_SECONDS ?? 5);
 const OUT = process.env.SCREEN_OUT ?? mkdtempSync(join(tmpdir(), "screen-side-"));
 const viewer: Viewer = { sub: "u", email: "side@example.com", name: "Side", role: "member", workspace: "w", device: "d" };
 
-const helper = () => process.env.STILLFAIL_SCREEN ?? execFileSync(process.execPath, [join(ROOT, "scripts/native.ts"), "file", "screen"], { encoding: "utf8" }).trim();
+const release = () => process.env.STILLFAIL_HELPER ?? execFileSync(process.execPath, [join(ROOT, "scripts/native.ts"), "file", "helper"], { encoding: "utf8" }).trim();
+/// The helper as the station has it: its copy in a data directory of this test's own, started by LaunchServices.
+const HELPER = join(OUT, "data", "helper");
+const helper = () => new HelperApp({ app: release(), dir: HELPER });
 const ffmpeg = () => [process.env.FFMPEG, "/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"].find((p) => p && existsSync(p)) ?? null;
 
 /// A station with `hub`'s screens and a device, linked over iroh on this machine (no relay).
@@ -142,16 +147,16 @@ test("made-up 1080p pictures: encoded on the hardware, over iroh, decoded; a sti
       assert.ok(m.keys >= 1);
       decodes(m, `synthetic-${mode}`);
     } finally {
-      desktop.close();
+      await desktop.close();
       await link.close();
     }
   }
 });
 
 test("the display itself: still, then with the pointer moving", { skip: !MAC }, async (t) => {
-  const status: HelperStatus = JSON.parse(execFileSync(helper(), ["status"], { encoding: "utf8" }));
+  const status: HelperStatus = await helper().request({ op: "status" });
   console.log(`screen: status ${JSON.stringify(status)}`);
-  if (!status.capture) return t.skip(`Screen Recording is not granted to ${status.responsible?.path || "the process responsible for this one"}`);
+  if (!status.capture) return t.skip(`Screen Recording is not granted to ${status.responsible?.path || "still.fail Helper"} (opening the desktop puts its window up)`);
   const hub = new ScreenHub();
   const desktop = new Desktop({ supported: true, helper: helper(), changed: () => {} });
   hub.add(desktop);
@@ -163,7 +168,7 @@ test("the display itself: still, then with the pointer moving", { skip: !MAC }, 
     assert.ok(moving.frames > SECONDS);
     decodes(moving, "display-moving");
   } finally {
-    desktop.close();
+    await desktop.close();
     await link.close();
   }
 });

@@ -2,14 +2,14 @@
 // `makeScreens`), and who is on each now. What members are told of them (GET /admin/api/screens, `screens` on the
 // event stream, the agents' `screen` tool) is said here; the views themselves go over the member link (mesh/screens.ts).
 import { type Lang, tr } from "../ops/i18n.ts";
-import { type ScreenAccess, type ScreenSource, type Screens, makeScreens } from "./source.ts";
+import { type ScreenAccess, type ScreenSource, type ScreenView, type Screens, type ViewOptions, makeScreens } from "./source.ts";
 
 /// One view open now: whose, whether its input is taken, and how it is told its people changed.
 export type Watcher = { name: string; control: boolean; tell(state: Record<string, unknown>): void };
 
 /// What a person is told of a source's access when something is missing: whether it can be seen and driven, why not,
 /// in their language, and what to turn on.
-export type AccessShown = { capture: boolean; control: boolean; message: string; app?: string; path?: string };
+export type AccessShown = { capture: boolean; control: boolean; message: string; app?: string; path?: string; asking?: boolean };
 
 /// A source that cannot be opened now, and why, in words a person reads (`key` of client/i18n's station part).
 export class ScreenRefused extends Error {
@@ -29,12 +29,17 @@ export class ScreenRefused extends Error {
 /// The message for what is missing; none when nothing is.
 export function accessShown(access: ScreenAccess | undefined, lang: Lang): AccessShown | undefined {
   if (access === undefined || (access.capture && access.control && access.unsupported === undefined)) return undefined;
-  const named = { app: access.app || "stillfail-station", path: access.path || "" };
+  const named = { app: access.app || "still.fail Helper" };
   const message =
     access.unsupported === "platform" ? tr(lang, "station.screen.unsupported")
     : access.unsupported === "helper" ? tr(lang, "station.screen.noHelper")
-    : [!access.capture ? tr(lang, "station.screen.captureOff", named) : "", !access.control ? tr(lang, "station.screen.controlOff", named) : ""].filter(Boolean).join(" ");
-  return { capture: access.capture, control: access.control, message, ...(access.app ? { app: access.app } : {}), ...(access.path ? { path: access.path } : {}) };
+    : [
+        !access.capture ? tr(lang, "station.screen.captureOff", named) : "",
+        !access.control ? tr(lang, "station.screen.controlOff", named) : "",
+        // Where it is granted: the window on the machine, up now or once the screen is opened.
+        tr(lang, access.asking ? "station.screen.asking" : "station.screen.toAsk", named),
+      ].filter(Boolean).join(" ");
+  return { capture: access.capture, control: access.control, message, ...(access.app ? { app: access.app } : {}), ...(access.path ? { path: access.path } : {}), ...(access.asking ? { asking: true } : {}) };
 }
 
 export class ScreenHub implements Screens {
@@ -109,6 +114,24 @@ export class ScreenHub implements Screens {
     const people = this.people(id);
     for (const w of [...(this.#views.get(id) ?? [])]) w.tell(people);
     this.#changed();
+  }
+
+  /// A view opened by the station itself (the agents' computer-use tool), shown as `who` while it is open: in
+  /// `viewers`, and with `control` in `controlledBy` (a name such as "agent: <chat title>"). Closing it leaves.
+  async openAs(id: string, options: ViewOptions, who: { name: string; control: boolean }): Promise<ScreenView> {
+    const source = this.get(id);
+    if (source === undefined) throw new ScreenRefused(404, "station.screen.notFound");
+    const view = await source.open(options);
+    const leave = this.join(id, { name: who.name, control: who.control, tell: () => {} });
+    return {
+      next: () => view.next(),
+      keyframe: () => view.keyframe(),
+      input: (event) => view.input(event),
+      close: () => {
+        leave();
+        view.close();
+      },
+    };
   }
 
   /// What ends a view as the station stops.

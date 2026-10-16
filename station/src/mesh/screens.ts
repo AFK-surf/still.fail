@@ -140,8 +140,9 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
     view = await source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs });
   } catch (error) {
     if (error instanceof ScreenRefused) {
+      // What is missing says it all, and where it is granted.
       const access = accessShown(error.access, lang);
-      return refuse(error.status, tr(lang, error.key, error.args), access ? { access } : {});
+      return refuse(error.status, access?.message ?? tr(lang, error.key, error.args), access ? { access } : {});
     }
     return refuse(503, tr(lang, "station.screen.failed", { said: (error as Error).message }));
   }
