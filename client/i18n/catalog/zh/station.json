@@ -397,9 +397,7 @@
   "station.machineLogin.cannotRun": "无法运行登录命令：{error}",
   "station.machineLogin.timedOut": "15 分钟内没有完成登录，已结束",
   "station.machineLogin.exited": "登录命令退出了（{code}）",
-  "station.machineLogin.unknownService": "这台 station 不认识 {service}：可以直接给登录命令",
-  "station.machineLogin.notInstalled": "这台 station 上没装 {name}（找不到 {bin}）",
-  "station.machineLogin.badCommand": "要一条登录命令，比如 vercel login",
+  "station.machineLogin.badCommand": "要一条登录命令，用工具自己的，比如 gh auth login",
   "station.machineLogin.unknown": "没有这个登录（可能已经结束很久了）",
   "station.machineLogin.ended": "这个登录已经结束了"
 }

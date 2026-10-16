@@ -87,21 +87,12 @@ export function domainOf(url: string): string | null {
   return parsed(url)?.host ?? null;
 }
 
-/// A device code in some output: by the service's own pattern (its first group, if it has one), else one like
-/// ABCD-1234 (four capitals or digits, a dash, four to six more), else on a line that says "code", a word of six to ten
-/// capitals and digits with a digit in it or right after the word "code".
-export function deviceCodeIn(text: string, pattern?: string | null): string | null {
-  if (pattern) {
-    let re: RegExp;
-    try {
-      re = new RegExp(pattern);
-    } catch {
-      re = /$^/;
-    }
-    const m = re.exec(text);
-    if (m) return m[1] ?? m[0];
-    return null;
-  }
+/// A device code in some output, whichever tool says it: a `user_code=` in a page's address (Vercel's); one like
+/// ABCD-1234 (four capitals or digits, a dash, four to six more: gh, Docker, AWS, Cloudflare); else on a line that says
+/// "code", a word of six to ten capitals and digits right after the word "code" or with a digit in it (az).
+export function deviceCodeIn(text: string): string | null {
+  const given = /[?&]user_code=([A-Z0-9]{4,}-?[A-Z0-9]{4,})/.exec(text);
+  if (given) return given[1]!;
   for (const word of text.split(/[^A-Za-z0-9_-]/)) {
     const parts = word.split("-");
     const code = (s: string, min: number, max: number) => s.length >= min && s.length <= max && /^[A-Z0-9]+$/.test(s);
@@ -125,8 +116,9 @@ export function deviceUrls(urls: string[], code: string): { url: string | null; 
   return { url: verify, codeUrl: withCode };
 }
 
-/// Whether a line asks for Enter to go on (gh, npm, docker: "Press Enter to open … in your browser").
-export const asksEnter = (line: string) => /press\s+(enter|return)\b/i.test(line);
+/// Whether a line asks only for Enter to open a page in a browser (gh, npm, docker: "Press Enter to open … in your
+/// browser…", "Press ENTER to open in the browser…"): nothing to choose there.
+export const asksEnter = (line: string) => /press\s+(enter|return)\b[^?]*\b(open|browser)/i.test(line) && !/\([yn]\/[yn]\)|\[[yn]\/[yn]\]/i.test(line);
 
 /// Whether a line looks like a question waiting for an answer (ends in :, ?, >, a (Y/n), or a choice's arrow).
 export const prompts = (line: string) => /(\?|:|>|\)|\]|＞|：|？)\s*$/.test(line.trim()) || /\([yY]\/[nN]\)|\[[yY]\/[nN]\]/.test(line) || /^\s*[>❯]\s/.test(line);

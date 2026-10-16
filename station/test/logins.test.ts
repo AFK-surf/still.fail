@@ -12,7 +12,7 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { Logins, type Login, Refused } from "../src/logins/index.ts";
 import type { Callback } from "../src/logins/relay.ts";
-import { commandWords, deviceCodeIn, deviceUrls, loopbackOf, plainText, urlsIn } from "../src/logins/parse.ts";
+import { asksEnter, commandWords, deviceCodeIn, deviceUrls, loopbackOf, plainText, prompts, urlsIn } from "../src/logins/parse.ts";
 import { QUIET_MS, TIMEOUT_MS } from "../src/logins/run.ts";
 import { routes } from "../src/api/routes/logins.ts";
 import { WINDOWS, platform } from "../src/platform/index.ts";
@@ -41,12 +41,20 @@ test("pages, loopback callbacks and device codes are read as the CLIs say them",
   assert.equal(deviceCodeIn("! First copy your one-time code: 1A2B-C3D4\nPress Enter to open https://github.com/login/device"), "1A2B-C3D4");
   assert.equal(deviceCodeIn("Your one-time device confirmation code is: WXYZ-1234"), "WXYZ-1234");
   assert.equal(deviceCodeIn("open the page https://login.microsoft.com/device and enter the code GQGFJ2QXM to authenticate."), "GQGFJ2QXM");
-  assert.equal(deviceCodeIn("open the page and enter the code GQGFJ2QXM to authenticate.", "enter the code ([A-Z0-9]{8,10})"), "GQGFJ2QXM");
+  assert.equal(deviceCodeIn("Visit https://vercel.com/oauth/device?user_code=ABCD-EFGH"), "ABCD-EFGH");
+  assert.equal(deviceCodeIn("To finish, open https://login.example.org/activate and enter code: WDJB-MJHT"), "WDJB-MJHT");
   assert.equal(deviceCodeIn("Then enter the code:\n\nKXQB-RMTD\n"), "KXQB-RMTD");
   assert.equal(deviceCodeIn("Press ENTER to open in the browser..."), null);
   assert.equal(deviceCodeIn("Authenticate Git with your GitHub credentials? (Y/n)"), null);
   assert.deepEqual(deviceUrls(["https://vercel.com/oauth/device?user_code=ABCD-EFGH"], "ABCD-EFGH"), { url: "https://vercel.com/oauth/device?user_code=ABCD-EFGH", codeUrl: "https://vercel.com/oauth/device?user_code=ABCD-EFGH" });
   assert.deepEqual(deviceUrls(["https://docs.github.com/x", "https://github.com/login/device"], "AB12-CD34"), { url: "https://github.com/login/device", codeUrl: null });
+  // Only Enter to open a page is pressed for the person; a question is theirs.
+  assert.ok(asksEnter("Press Enter to open https://github.com/login/device in your browser... "));
+  assert.ok(asksEnter("Press ENTER to open in the browser..."));
+  assert.ok(asksEnter("Press ENTER to open your browser or submit your device code here: https://login.docker.com/activate"));
+  assert.ok(!asksEnter("? Authenticate Git with your GitHub credentials? (Y/n) "));
+  assert.ok(!asksEnter("Press Enter to continue"));
+  assert.ok(prompts("? Authenticate Git with your GitHub credentials? (Y/n) "));
   assert.deepEqual(commandWords(`vercel login --scope "my team" 'a b' c\\ d`), ["vercel", "login", "--scope", "my team", "a b", "c d"]);
   assert.equal(commandWords(`gh "open`), null);
   assert.deepEqual(commandWords("  "), []);
@@ -86,15 +94,9 @@ function machine() {
   return { home, bin, env, time, logins, until, quietAt, screen, by };
 }
 
-/// A service described for a stand-in: logged in once `<home>/.fake-logged` says who.
-function describeFake(m: ReturnType<typeof machine>, id: string, login: string[], more: Json = {}) {
-  script(join(m.bin, `${id}-status`), `#!/bin/sh\n[ -f "$HOME/.fake-logged" ] || { echo "not logged in"; exit 1; }\necho "Logged in to example.com account $(cat "$HOME/.fake-logged")"\n`);
-  return m.logins.describe({ id, name: `Fake ${id}`, bin: login[0]!.split("/").at(-1), status: { command: [`${id}-status`], in: { exit: 0 }, account: "account (\\S+)" }, login: { command: login, flow: "device", ...more } });
-}
-
 const skipped = WINDOWS && "logins run in a pseudo-terminal: script is Unix's";
 
-test("a device-code login: Enter pressed where the description says so, the page it opens and its code told, done with the account", { skip: skipped }, async () => {
+test("a device-code login, as any tool runs it: its question left to the person, Enter pressed only to open its page, the page and the code told", { skip: skipped }, async () => {
   const m = machine();
   const approved = approval(m.home);
   script(join(m.bin, "fakegh"), `#!/bin/sh
@@ -107,37 +109,45 @@ read go
 "$BROWSER" https://github.com/login/device
 echo "Waiting for the browser"
 read ok < '${approved.path}'
-echo octocat > "$HOME/.fake-logged"
 echo "Logged in as octocat"
 `);
-  describeFake(m, "fakegh", ["fakegh", "auth", "login"], { enter: true, code: "\\b([A-Z0-9]{4}-[A-Z0-9]{4})\\b", answers: [{ match: "Authenticate Git", text: "" }] });
   try {
-    await m.logins.refresh();
-    assert.equal(m.logins.service("fakegh")!.state, "out");
-    const started = await m.logins.start({ service: "fakegh" }, m.by);
-    assert.deepEqual([started.service, started.name, started.by], ["fakegh", "Fake fakegh", m.by.by]);
-    // One under way for the service is given rather than another.
-    assert.equal((await m.logins.start({ service: "fakegh" }, m.by)).id, started.id);
-    assert.equal(m.logins.service("fakegh")!.login, started.id);
+    const started = await m.logins.start("fakegh auth login", m.by);
+    assert.deepEqual([started.name, started.command, started.by], ["fakegh", ["fakegh", "auth", "login"], m.by.by]);
+    // The same command under way is given rather than another.
+    assert.equal((await m.logins.start(["fakegh", "auth", "login"], m.by)).id, started.id);
+    // Its question is the person's: it waits for them, in the terminal.
     await m.quietAt(started.id, "Authenticate Git");
+    const asks = await m.until(started.id, (l) => l.waiting, "waiting");
+    assert.deepEqual([asks.state, asks.step], ["input", "terminal"]);
+    assert.ok(!m.screen(started.id).includes("answered"), "not answered for them");
+    m.logins.input(started.id, { text: "n" });
+    m.logins.input(started.id, { key: "Enter" });
     const device = await m.until(started.id, (l) => l.step === "device" && l.url !== undefined, "device");
     assert.equal(device.code, "1A2B-C3D4");
-    assert.ok(m.screen(started.id).includes("answered []"), "the prompt answered with the tool's default");
+    assert.ok(m.screen(started.id).includes("answered [n]"));
     await m.quietAt(started.id, "Press Enter to open");
     // Enter pressed: the page goes to the station's BROWSER, not a browser on this machine.
     await upon((w) => m.logins.follow(started.id, w), () => m.screen(started.id).includes("Waiting for the browser"), "opened");
     const opened = m.logins.get(started.id)!;
-    assert.deepEqual([opened.state, opened.step, opened.url, opened.domain, opened.code], ["code", "device", "https://github.com/login/device", "github.com", "1A2B-C3D4"]);
+    assert.deepEqual([opened.state, opened.step, opened.url, opened.domain, opened.code, opened.waiting], ["code", "device", "https://github.com/login/device", "github.com", "1A2B-C3D4", false]);
     await approved.approve();
-    const done = await m.until(started.id, (l) => l.state === "done", "done");
-    assert.equal(done.account, "octocat");
-    const service = m.logins.service("fakegh")!;
-    assert.deepEqual([service.state, service.account, service.by, service.login], ["in", "octocat", m.by.by, undefined]);
-    const kept = JSON.parse(readFileSync(join(m.home, "data", "logins", "state.json"), "utf8"));
-    assert.equal(kept.fakegh.account, "octocat");
+    await m.until(started.id, (l) => l.state === "done", "done");
     // A read-only member sees how it stands, not its page or code.
     const limited = Logins.limited(opened);
     assert.deepEqual([limited.url, limited.code, limited.domain, limited.state], [undefined, undefined, "github.com", "code"]);
+  } finally {
+    await m.logins.close();
+  }
+});
+
+test("a tool nobody described: its device code and page read from what it says", { skip: skipped }, async () => {
+  const m = machine();
+  script(join(m.bin, "acme"), `#!/bin/sh\necho "Acme CLI 3.1"\necho "To finish, open https://login.acme.example/activate and enter code: WDJB-MJHT"\necho "(the code lasts 10 minutes)"\nread forever\n`);
+  try {
+    const login = await m.logins.start("acme login --device", m.by);
+    const device = await m.until(login.id, (l) => l.step === "device", "device");
+    assert.deepEqual([device.code, device.url, device.domain, device.state], ["WDJB-MJHT", "https://login.acme.example/activate", "login.acme.example", "code"]);
   } finally {
     await m.logins.close();
   }
@@ -181,7 +191,7 @@ process.stdin.on("data", (d) => {
 });
 `);
   try {
-    const login = await m.logins.start({ command: "fakeprompt --user" }, m.by);
+    const login = await m.logins.start("fakeprompt --user", m.by);
     assert.deepEqual(login.command, ["fakeprompt", "--user"]);
     await m.quietAt(login.id, "Username:");
     const waiting = await m.until(login.id, (l) => l.waiting, "waiting");
@@ -196,7 +206,7 @@ process.stdin.on("data", (d) => {
     await upon((w) => m.logins.follow(login.id, w), () => echo === false, "no echo");
     m.logins.input(login.id, { text: "s3cret\r" });
     const done = await m.until(login.id, (l) => l.state === "done", "done");
-    assert.equal(done.service, undefined);
+    assert.equal(done.state, "done");
     assert.ok(m.screen(login.id).includes("welcome alice"));
     assert.ok(!m.screen(login.id).includes("s3cret"), "the password was not echoed");
     stop();
@@ -239,7 +249,7 @@ for (const [host, mode] of [["::1", "get"], ["127.0.0.1", "get"], ["127.0.0.1", 
     const m = machine();
     script(join(m.bin, "fakeloop"), LOOPBACK);
     try {
-      const login = await m.logins.start({ command: ["fakeloop", host, mode] }, m.by);
+      const login = await m.logins.start(["fakeloop", host, mode], m.by);
       const waiting = await m.until(login.id, (l) => l.step === "loopback", "loopback");
       // The page it opened, not the one it printed.
       assert.ok(waiting.url!.includes("state=s3cret"), waiting.url);
@@ -261,8 +271,7 @@ for (const [host, mode] of [["::1", "get"], ["127.0.0.1", "get"], ["127.0.0.1", 
       assert.equal(answered.headers["x-fake"], "1");
       // Once only.
       await assert.rejects(m.logins.callback(login.id, request("s3cret")), (e: unknown) => e instanceof Refused && e.status === 409);
-      const done = await m.until(login.id, (l) => l.state === "done", "done");
-      assert.equal(done.service, undefined);
+      await m.until(login.id, (l) => l.state === "done", "done");
       assert.match(m.screen(login.id), mode === "post" ? /got POST \/ code=c0de&state=s3cret host=localhost:\d+/ : /got GET \/callback\?code=c0de&state=s3cret  host=localhost:\d+/);
     } finally {
       await m.logins.close();
@@ -280,7 +289,7 @@ test("a callback is refused when the port is not the command's, or the command h
   script(join(m.bin, "fakeport"), `#!/bin/sh\n"$BROWSER" "https://idp.example.com/auth?redirect_uri=http%3A%2F%2F127.0.0.1%3A${port}%2Fcb&state=s1"\necho waiting\nread forever\n`);
   script(join(m.bin, "fakegone"), `#!/bin/sh\n"$BROWSER" "https://idp.example.com/auth?redirect_uri=http%3A%2F%2F127.0.0.1%3A${port}%2Fcb&state=s1"\necho bye\nexit 3\n`);
   try {
-    const taken = await m.logins.start({ command: ["fakeport"] }, m.by);
+    const taken = await m.logins.start(["fakeport"], m.by);
     await m.until(taken.id, (l) => l.step === "loopback", "loopback");
     await assert.rejects(
       m.logins.callback(taken.id, { method: "GET", path: "/cb?state=s1&code=x", headers: { host: `127.0.0.1:${port}` } }),
@@ -289,7 +298,7 @@ test("a callback is refused when the port is not the command's, or the command h
     assert.equal(reached, 0, "the code never went to the other program");
     const cancelled = m.logins.cancel(taken.id);
     assert.equal(cancelled.state, "cancelled");
-    const gone = await m.logins.start({ command: ["fakegone"] }, m.by);
+    const gone = await m.logins.start(["fakegone"], m.by);
     const failed = await m.until(gone.id, (l) => l.state === "failed", "failed");
     assert.ok(failed.error!.includes("bye"), failed.error);
     await assert.rejects(m.logins.callback(gone.id, { method: "GET", path: "/cb?state=s1", headers: {} }), (e: unknown) => e instanceof Refused && e.status === 409);
@@ -305,38 +314,40 @@ test("a login not finished in time ends, its command with it; one that cannot ru
   const m = machine();
   script(join(m.bin, "fakeslow"), `#!/bin/sh\necho "Visit https://example.com/activate"\nread forever\n`);
   try {
-    const slow = await m.logins.start({ command: ["fakeslow"] }, m.by);
+    const slow = await m.logins.start(["fakeslow"], m.by);
     await m.until(slow.id, (l) => l.step === "open", "open");
     await m.time.adjust(TIMEOUT_MS);
     const ended = await m.until(slow.id, (l) => l.state === "failed", "timed out");
     assert.equal(ended.error, "15 分钟内没有完成登录，已结束");
-    assert.equal((await m.logins.list()).logins[0]!.id, slow.id);
-    const none = await m.logins.start({ command: ["no-such-login-command"] }, m.by);
+    assert.equal(m.logins.logins()[0]!.id, slow.id);
+    const none = await m.logins.start(["no-such-login-command"], m.by);
     const failed = await m.until(none.id, (l) => l.state === "failed", "cannot run");
     assert.ok(failed.error !== undefined && failed.error !== "", JSON.stringify(failed));
-    await assert.rejects(m.logins.start({ service: "nope" }, m.by), (e: unknown) => e instanceof Refused && e.status === 404);
-    await assert.rejects(m.logins.start({ command: "gh 'open" }, m.by), (e: unknown) => e instanceof Refused && e.status === 400);
+    await assert.rejects(m.logins.start("gh 'open", m.by), (e: unknown) => e instanceof Refused && e.status === 400);
+    await assert.rejects(m.logins.start("  ", m.by), (e: unknown) => e instanceof Refused && e.status === 400);
   } finally {
     await m.logins.close();
   }
 });
 
-test("the services: built in, an agent's description winning over one of the same id, not installed said so", { skip: skipped }, async () => {
+test("the logins done here are kept: command, who, when and how each ended, without its page, code or output", { skip: skipped }, async () => {
   const m = machine();
+  script(join(m.bin, "fakeok"), `#!/bin/sh\necho "Open https://example.com/device and enter WXYZ-1234"\necho done\n`);
+  script(join(m.bin, "fakewait"), `#!/bin/sh\necho "Open https://example.com/device and enter WXYZ-5678"\nread forever\n`);
   try {
-    const services = m.logins.services();
-    for (const id of ["gh", "gcloud", "npm", "docker", "aws", "az", "vercel", "wrangler", "firebase", "fly", "huggingface"]) assert.ok(services.some((s) => s.id === id && s.builtin), id);
-    // None of them is on this PATH.
-    assert.deepEqual([m.logins.service("gh")!.installed, m.logins.service("gh")!.state], [false, "out"]);
-    await assert.rejects(m.logins.start({ service: "gh" }, m.by), (e: unknown) => e instanceof Refused && e.status === 409);
-    script(join(m.bin, "gh"), `#!/bin/sh\necho "  ✓ Logged in to github.com account mona (keyring)"\n`);
-    await m.logins.refresh();
-    assert.deepEqual([m.logins.service("gh")!.installed, m.logins.service("gh")!.state, m.logins.service("gh")!.account], [true, "in", "mona"]);
-    const own = describeFake(m, "gh", ["gh", "auth", "login", "--hostname", "ghe.example.com"]);
-    assert.deepEqual([own.name, own.builtin], ["Fake gh", true]);
-    assert.deepEqual(m.logins.description("gh")!.login.command.at(-1), "ghe.example.com");
-    assert.throws(() => m.logins.describe({ id: "Bad Id", name: "x", bin: "x", status: { command: ["x"] }, login: { command: ["x"] } }), /id:/);
-    assert.throws(() => m.logins.describe({ id: "x", name: "x", bin: "x", status: { command: ["x"] }, login: { command: ["x"], code: "(" } }), /login.code/);
+    const ok = await m.logins.start("fakeok", m.by);
+    await m.until(ok.id, (l) => l.state === "done", "done");
+    const waits = await m.logins.start("fakewait", { ...m.by, chat: "ember:c-1" });
+    await m.until(waits.id, (l) => l.step === "device", "device");
+    m.logins.cancel(waits.id);
+    // A station started again: what it kept.
+    const again = new Logins({ data: join(m.home, "data"), env: () => m.env, clock: m.time.clock, lang: () => "zh" });
+    const kept = again.logins();
+    assert.deepEqual(kept.map((l) => [l.command.join(" "), l.state, l.by.name]), [["fakewait", "cancelled", "张三"], ["fakeok", "done", "张三"]]);
+    assert.ok(kept.every((l) => l.url === undefined && l.code === undefined && l.error === undefined && typeof l.endedAt === "number"));
+    assert.equal(again.get(ok.id)!.state, "done");
+    assert.equal(kept[0]!.chat, "ember:c-1");
+    await again.close();
   } finally {
     await m.logins.close();
   }
@@ -354,6 +365,7 @@ test("the routes: a read-only member's list has no pages or codes; what a reques
   };
   try {
     const started = await read(ask(start, "member", { command: "fakecode" }));
+    assert.equal((await read(ask(start, "member", { service: "gh" }))).status, 400, "a command, not a service");
     assert.equal(started.status, 200);
     await m.until(started.body.id, (l) => l.step === "device", "device");
     const member = await read(ask(list, "member"));

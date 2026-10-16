@@ -42,8 +42,7 @@ export const routes = (logins: () => Logins | undefined): Route[] => {
       pattern: /^\/machine-logins\/*$/,
       handle: (r) =>
         answer(async (l) => {
-          const list = await l.list();
-          return ok({ services: list.services, logins: list.logins.map((x) => seen(r, x)) });
+          return ok({ logins: l.logins().map((x) => seen(r, x)) });
         }),
     },
     {
@@ -52,10 +51,9 @@ export const routes = (logins: () => Logins | undefined): Route[] => {
       handle: (r) =>
         answer(async (l) => {
           const body = input(r);
-          const service = typeof body.service === "string" ? body.service : null;
           const command = typeof body.command === "string" || Array.isArray(body.command) ? (body.command as string | string[]) : null;
-          if (service === null && command === null) throw new Refused(400, "service or command");
-          return ok(await l.start({ service, command }, { by: { email: r.viewer.email, name: r.viewer.name }, workspace: r.viewer.workspace ?? null }));
+          if (command === null) throw new Refused(400, "command: the tool's own login command");
+          return ok(await l.start(command, { by: { email: r.viewer.email, name: r.viewer.name }, workspace: r.viewer.workspace ?? null }));
         }),
     },
     {
@@ -102,20 +100,6 @@ export const routes = (logins: () => Logins | undefined): Route[] => {
         answer((l) => {
           l.input(id(login!), input(r));
           return ok({ ok: true });
-        }),
-    },
-    {
-      // A service described (by an agent's tool, or a member here): kept, its status read.
-      method: "POST",
-      pattern: /^\/machine-services\/*$/,
-      handle: (r) =>
-        answer((l) => {
-          try {
-            return ok(l.describe(input(r)));
-          } catch (e) {
-            if (e instanceof Refused) throw e;
-            throw new Refused(400, (e as Error).message);
-          }
         }),
     },
   ];

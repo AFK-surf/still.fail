@@ -325,14 +325,8 @@ export const AgentsLive = (control: Control) =>
       };
       const unlistenLogins = [
         logins.changes((change) => {
-          if (change.login !== undefined) {
-            const login = logins.get(change.login);
-            if (login) events.machineLogins({ login }, { login: Logins.limited(login) }, readOnly, `login\0${login.id}`);
-          }
-          if (change.service !== undefined) {
-            const service = logins.service(change.service);
-            if (service) events.machineLogins({ service }, { service }, readOnly, `service\0${service.id}`);
-          }
+          const login = logins.get(change.login);
+          if (login) events.machineLogins({ login }, { login: Logins.limited(login) }, readOnly, `login\0${login.id}`);
         }),
         // Told: the agent that started it, and each that posted its card (one may post a card for a login under way).
         logins.onEnded((login, starter) => {

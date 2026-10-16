@@ -137,9 +137,9 @@ export class Events {
     this.emit(event, data, (c) => to(c.viewer), of);
   }
 
-  /// A login or a service changed (docs/remote-login.md): told to everyone as `machine-logins`, a read-only member
-  /// given `limited` (how it stands only).
-  machineLogins(data: { login?: unknown; service?: unknown }, limited: { login?: unknown; service?: unknown }, readOnly: (viewer: Viewer) => boolean, of: string) {
+  /// A login changed (docs/remote-login.md): told to everyone as `machine-logins`, a read-only member given `limited`
+  /// (how it stands only).
+  machineLogins(data: { login: unknown }, limited: { login: unknown }, readOnly: (viewer: Viewer) => boolean, of: string) {
     this.emit("machine-logins", data, (c) => !readOnly(c.viewer), `machine-logins\0${of}`);
     this.emit("machine-logins", limited, (c) => readOnly(c.viewer), `machine-logins-limited\0${of}`);
   }

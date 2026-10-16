@@ -14,7 +14,6 @@ import { type Lang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { endCommand, startCommand } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
-import type { Description } from "./builtin.ts";
 import { type Loopback, asksEnter, deviceCodeIn, deviceUrls, loopbackOf, plainText, prompts, secretAsked, urlsIn } from "./parse.ts";
 
 export const COLS = 200;
@@ -45,15 +44,12 @@ export type RunOptions = {
   /// Where the stand-ins are (one directory for all logins), and the file this login's write the pages to.
   shims: string;
   opened: string;
-  description: Description | null;
   fibers: Fibers;
   lang: Lang;
   /// Its state, step, page or code changed.
   changed(): void;
   /// Its screen changed.
   drawn(): void;
-  /// Exit 0: who is logged in now (the description's status), read before it is done.
-  verify(): Promise<string | null>;
 };
 
 export class LoginRun {
@@ -70,7 +66,6 @@ export class LoginRun {
   waiting = false;
   echo = true;
   error: string | null = null;
-  account: string | null = null;
   endedAt: number | null = null;
   /// Its callback was relayed (once only).
   relayed = false;
@@ -131,7 +126,6 @@ export class LoginRun {
       BROWSER: browser,
       GH_BROWSER: browser,
       STILLFAIL_LOGIN_OPENED: this.#o.opened,
-      ...(this.#o.description?.env ?? {}),
     });
     const wrapped = platform.terminal(program!, args, COLS, ROWS) ?? [program!, args];
     const r = platform.runnable(wrapped[0], wrapped[1], env);
@@ -192,6 +186,11 @@ export class LoginRun {
     this.#said = said.length > SAID_KEPT ? said.slice(said.length - SAID_KEPT) : said;
     this.#term.write(text, () => {
       this.#draw();
+      // Saying more, it no longer waits on what it asked (whether it waits now is asked once it is quiet again).
+      if (this.waiting) {
+        this.waiting = false;
+        this.#o.changed();
+      }
       this.#read();
     });
     // Quiet again from now: whether it waits is asked once it has said its piece.
@@ -224,7 +223,7 @@ export class LoginRun {
     const page = this.#opened.at(-1) ?? null;
     const back = page !== null ? loopbackOf(page) : null;
     const printedBack = page === null ? printed.find((u) => loopbackOf(u) !== null) ?? null : null;
-    const code = deviceCodeIn(this.#said, this.#o.description?.login.code ?? null);
+    const code = deviceCodeIn(this.#said);
     if (this.state === "verifying") {
       // The browser came back: nothing more to do but wait for it to finish.
     } else if (back !== null || printedBack !== null) {
@@ -248,24 +247,17 @@ export class LoginRun {
     if (JSON.stringify([this.state, this.step, this.url, this.loopback, this.code, this.codeUrl, this.waiting]) !== before) this.#o.changed();
   }
 
-  /// Its output has been quiet a while: a prompt the description answers is answered, Enter pressed where it asks for
-  /// it and the description says to; else, stopped on a prompt, it waits for a person.
+  /// Its output has been quiet a while: Enter pressed where it only asks for Enter to open its page in a browser (gh,
+  /// npm, docker: nothing to choose, and the stand-in takes the page); any other prompt, a question (Y/n) included, is
+  /// the person's to answer in the terminal: it waits for them.
   async #settled(): Promise<void> {
     this.#quiet = null;
     if (!this.active || this.#exited) return;
     const line = this.#rows[this.#cursor.y] ?? "";
     const place = `${this.#cursor.y}\0${line}`;
-    const d = this.#o.description;
-    const answer = d?.login.answers?.find((a) => {
-      try {
-        return new RegExp(a.match).test(line);
-      } catch {
-        return false;
-      }
-    });
-    if (place !== this.#answered && (answer !== undefined || (d?.login.enter === true && asksEnter(line)))) {
+    if (place !== this.#answered && asksEnter(line)) {
       this.#answered = place;
-      this.#write(`${answer?.text ?? ""}\r`);
+      this.#write("\r");
       return;
     }
     const waiting = line.trim() !== "" && prompts(line) && this.state !== "verifying";
@@ -306,18 +298,7 @@ export class LoginRun {
   async #closed(code: number | null, signal: NodeJS.Signals | null): Promise<void> {
     this.#exited = true;
     if (!this.active) return;
-    if (code === 0) {
-      this.state = "verifying";
-      this.waiting = false;
-      this.#o.changed();
-      let account: string | null = null;
-      try {
-        account = await this.#o.verify();
-      } catch {}
-      if (!this.active) return;
-      this.account = account;
-      return this.#end("done", null);
-    }
+    if (code === 0) return this.#end("done", null);
     const said = lastLines(this.#said);
     this.#end("failed", said !== "" ? said : tr(this.#o.lang, "station.machineLogin.exited", { code: code !== null ? String(code) : (signal ?? "signal") }));
   }
