@@ -40,7 +40,7 @@ private class FakeEngines {
     val last get() = opened.last()
 }
 
-private class FakeEngine(val deliver: (Engine, String) -> Unit) : Engine {
+private class FakeEngine(val deliver: (Engine, String, ByteArray?) -> Unit) : Engine {
     val sent = mutableListOf<JsonElement>()
     var closed = false
     override fun connect() = 1L
@@ -50,7 +50,7 @@ private class FakeEngine(val deliver: (Engine, String) -> Unit) : Engine {
     override fun close() {
         closed = true
     }
-    fun reply(text: String) = deliver(this, text)
+    fun reply(text: String, bytes: ByteArray? = null) = deliver(this, text, bytes)
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -81,7 +81,7 @@ class StillFailCoreTest {
         val core = StillFailCore({ callback ->
             val first = created.getAndIncrement() == 0
             object : Engine {
-                init { if (first) fatal = { callback(this, """{"fatal":"restart during receive"}""") } }
+                init { if (first) fatal = { callback(this, """{"fatal":"restart during receive"}""", null) } }
                 override fun connect() = 1L
                 override fun receive(client: Long, json: String) {
                     if (first) { entered.countDown(); release.await() }
@@ -119,6 +119,39 @@ class StillFailCoreTest {
     }
 
     @Test
+    fun valuesWithBytesKeepTheirPlaceAmongTheOthers() = runTest {
+        val engines = FakeEngines(); val core = core(engines)
+        val events = mutableListOf<String>()
+        val call = async {
+            core.stream("screen.view", obj("{}")) { value, bytes -> events += "$value${bytes?.let { ":" + String(it) } ?: ""}" }
+                .also { events += it.toString() }
+        }
+        runCurrent()
+        engines.last.reply("""{"id":1,"value":{"state":"a"}}""")
+        engines.last.reply("""{"id":1,"value":{"config":1}}""", "avcC".toByteArray())
+        engines.last.reply("""{"id":1,"value":{"frame":1}}""", "f1".toByteArray())
+        engines.last.reply("""{"id":1,"value":{"state":"b"}}""")
+        engines.last.reply("""{"id":1,"value":{"frame":2}}""", "f2".toByteArray())
+        engines.last.reply("""{"id":1,"ok":null}""")
+        runCurrent(); call.await()
+        assertEquals(
+            listOf("""{"state":"a"}""", """{"config":1}:avcC""", """{"frame":1}:f1""", """{"state":"b"}""", """{"frame":2}:f2""", "null"),
+            events,
+        )
+    }
+
+    @Test
+    fun aToldCallIsSentAndItsAnswerLetGo() = runTest {
+        val engines = FakeEngines(); val core = core(engines)
+        core.tell("screen.ack", obj("""{"view":"v","ts":5}"""))
+        runCurrent()
+        val sent = engines.last.sent.single().jsonObject
+        assertEquals(json("\"screen.ack\""), sent["call"])
+        engines.last.reply("""{"id":${sent["id"]},"error":{"code":"gone","message":"x"}}""")
+        runCurrent()
+    }
+
+    @Test
     fun aSlowReplyParserCannotBlockTopicUpdatesOrNewCalls() {
         val parsing = java.util.concurrent.CountDownLatch(1)
         val release = java.util.concurrent.CountDownLatch(1)
@@ -129,7 +162,7 @@ class StillFailCoreTest {
         lateinit var deliver: (String) -> Unit
         val core = StillFailCore({ callback ->
             object : Engine {
-                init { deliver = { callback(this, it) } }
+                init { deliver = { callback(this, it, null) } }
                 override fun connect() = 1L
                 override fun receive(client: Long, json: String) { sent += obj(json); posted.release() }
                 override fun close() {}
