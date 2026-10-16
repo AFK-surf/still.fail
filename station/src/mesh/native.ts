@@ -52,6 +52,12 @@ export type Mesh = {
 /// Loaded once: the mesh (services.ts) and the thumbnails (sessions/thumbs.ts) share it.
 let loaded: Mesh | undefined;
 
+/// A fixed UDP address lets an operator admit LAN connections through an egress firewall. The native bind rejects
+/// invalid or occupied addresses; never fall back to a random port when an address was explicitly configured.
+export function bindStation(mesh: Mesh, options: Parameters<Mesh["bind"]>[0], env: NodeJS.ProcessEnv = process.env): Promise<Endpoint> {
+  return mesh.bind({ ...options, bindAddr: env.STILLFAIL_MESH_BIND_ADDR });
+}
+
 export function loadMesh(): Mesh {
   if (loaded !== undefined) return loaded;
   const candidates = [
