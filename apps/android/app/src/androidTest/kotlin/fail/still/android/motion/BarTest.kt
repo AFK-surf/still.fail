@@ -441,8 +441,11 @@ class BarTest {
         fun open(name: String, tap: Boolean): List<Float> {
             val f = Finger(h.record(name), Offset(g.left + 28 * d, closed + 28 * d))
             f.down()
-            // Over the line and let go at once, the panel just opening (not yet 85%, so nothing chosen): it opens on.
+            // Over the line and let go half open (not yet 85%, so nothing chosen): it opens on.
             f.to(Offset(f.at.x, closed - 40 * d), 2)
+            var n = 0
+            while (openness(closed) < 0.5f && n++ < 30) f.r.frame()
+            assertTrue("let go before 85%: ${openness(closed)}", openness(closed) < 0.85f)
             f.up()
             val path = ArrayList<Float>()
             for (i in 1..30) {
