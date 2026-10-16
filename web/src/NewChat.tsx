@@ -130,10 +130,14 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
     return (
       <div className={css.newChat}>
         <div className={css.newChatInner}>
-          <FirstOne art={<Illustration name="no-profile" />} title={blocked === "profile" ? t("web-main.newChat.addProfileFor", { name: station.name || t("web-main.newChat.thisMachine") }) : t("web-main.newChat.pickModels")}
-            lead={blocked === "profile" ? PROFILE_LEAD : t("web-main.newChat.noModelsLead", { name: station.name || t("web-main.newChat.thisMachine") })}>
+          {/* A station this workspace joined, none of whose profiles is open here: whom to ask, and nothing to do here. */}
+          <FirstOne art={<Illustration name="no-profile" />}
+            title={blocked === "profile" ? t("web-main.newChat.addProfileFor", { name: station.name || t("web-main.newChat.thisMachine") })
+              : blocked === "shared" ? t("web-main.newChat.notShared", { name: station.name || t("web-main.newChat.thisMachine") }) : t("web-main.newChat.pickModels")}
+            lead={blocked === "profile" ? PROFILE_LEAD : blocked === "shared" ? choice.problem : t("web-main.newChat.noModelsLead", { name: station.name || t("web-main.newChat.thisMachine") })}>
             {blocked === "profile"
               ? <Button variant="primary" icon={Plus} onClick={() => navigate(addProfilePath(workspace, station.address))}>{t("web-main.newChat.addProfile")}</Button>
+              : blocked === "shared" ? null
               : <Link className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} to={profilesPage(station)}>{t("web-main.newChat.goPickModels")}</Link>}
             {stations.length > 1 && (
               <Chooser side="bottom" label={<><StationMark {...markOf(stations.find((s) => s.station === station.address))} />{station.name}</>}>

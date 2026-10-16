@@ -239,8 +239,17 @@ export class Choose implements Owner {
     const overview = isObject(station.overview) ? station.overview : null;
     const profiles = overview !== null ? arr(overview.profiles) : [];
     view.waiting = overview === null;
-    view.blocked = overview !== null && profiles.length === 0 ? "profile" : overview !== null && options.length === 0 ? "models" : null;
-    view.problem = overview === null ? t("core-logic.choose.problem.loading", { name }) : profiles.length > 0 && options.length === 0 ? t("core-logic.choose.problem.no_models") : null;
+    // A station this workspace joined shows only the profiles its home's managers opened to it (docs/multi-workspace.md):
+    // none is not one to add here, but one to ask them for.
+    const joined = station.joined === true;
+    view.blocked = overview !== null && profiles.length === 0 ? (joined ? "shared" : "profile") : overview !== null && options.length === 0 ? "models" : null;
+    const here = get(this.#env.data.shared({ topic: "workspace", workspace: scope }), "name");
+    const notShared = () => typeof station.home === "string" && station.home !== ""
+      ? t("core-logic.choose.problem.not_shared", { name, home: station.home, workspace: typeof here === "string" ? here : "" })
+      : t("core-logic.choose.problem.not_shared_elsewhere", { name, workspace: typeof here === "string" ? here : "" });
+    view.problem = overview === null ? t("core-logic.choose.problem.loading", { name })
+      : view.blocked === "shared" ? notShared()
+      : profiles.length > 0 && options.length === 0 ? t("core-logic.choose.problem.no_models") : null;
     if (r.entry !== null && isObject(r.entry.spent)) {
       const n = typeof r.entry.name === "string" ? r.entry.name : "";
       const back = text(r.entry.spent.back);

@@ -48,6 +48,8 @@ export interface ProfileInput {
   /** Claude Code: a message to a running turn moves what it waits on to the background first. */
   backgroundOnMessage?: boolean;
   fast?: boolean;
+  /** The workspaces the station joined whose chats may run on it too ([] or null: its home's only); its home's managers'. */
+  workspaces?: string[] | null;
 }
 
 /** The groups of scopes and events a Slack app made here asks for (the Rust station's chat/slack_apps.rs). */

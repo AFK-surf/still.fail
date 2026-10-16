@@ -388,6 +388,7 @@
   "web-main.newChat.noModels": "没有可用模型 · 去勾选",
   "web-main.newChat.noModelsLead": "{name} 的 Profile 还没有启用模型，勾选之后就能开始对话。",
   "web-main.newChat.noStation": "没有在线的 station。到设置里添加一台，或者启动已添加的 station。",
+  "web-main.newChat.notShared": "{name} 还没有给这个 workspace 用的 Profile",
   "web-main.newChat.pickModels": "勾选要用的模型",
   "web-main.newChat.placeholder": "做任何事",
   "web-main.newChat.readingStation": "正在读取 station…",

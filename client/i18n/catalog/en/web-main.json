@@ -427,6 +427,7 @@
   "web-main.newChat.noModels": "No models · Choose some",
   "web-main.newChat.noModelsLead": "Profiles on {name} have no models enabled. Choose some to start chatting.",
   "web-main.newChat.noStation": "No station online. Add one in Settings, or start one you've added.",
+  "web-main.newChat.notShared": "{name} has no profile for this workspace yet",
   "web-main.newChat.pickModels": "Choose models to use",
   "web-main.newChat.placeholder": "Do anything",
   "web-main.newChat.readingStation": "Loading station…",

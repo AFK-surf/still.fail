@@ -1019,7 +1019,10 @@ data class Profile (
 	/// Where the decision probe is, in words (what it found, or why it found none).
 	val decisionText: String? = null,
 	/// Shared with the workspace's other stations, or another station's (absent: neither, or a station older than sharing).
-	val share: ProfileShare? = null
+	val share: ProfileShare? = null,
+	/// The workspaces the station joined whose chats may run on it too (docs/multi-workspace.md; none: its home's
+	/// only), as its home's managers set it (`profile.put` `input.workspaces`); to a member of a joined one, that one.
+	val workspaces: List<String>? = null
 )
 
 @Serializable
@@ -3351,7 +3354,8 @@ data class NewChatView (
 	val pickAccount: Boolean,
 	/// Its profiles are being read.
 	val waiting: Boolean,
-	/// What keeps a chat from starting: `profile` (none added) or `models` (none enabled).
+	/// What keeps a chat from starting: `profile` (none added), `shared` (a station this workspace joined, none of
+	/// whose profiles its home's managers opened to it: asked of them, not added here; `problem` says so) or `models` (none enabled).
 	val blocked: String? = null,
 	/// In a line under the page's words: the profiles being read, or no model enabled.
 	val problem: String? = null,

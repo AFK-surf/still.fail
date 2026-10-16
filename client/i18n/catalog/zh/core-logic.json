@@ -45,6 +45,8 @@
   "core-logic.choose.pick_model": "选一个模型",
   "core-logic.choose.problem.loading": "正在读取 {name} 的 Profile…",
   "core-logic.choose.problem.no_models": "这台 station 的 Profile 都还没有启用模型。点下面的「去勾选」，勾选可以用的模型。",
+  "core-logic.choose.problem.not_shared": "{name} 来自 {home}，它的 Profile 还没开放给这个 workspace：请 {home} 的管理员在 Profile 页打开「也给 {workspace} 用」",
+  "core-logic.choose.problem.not_shared_elsewhere": "{name} 来自别的 workspace，它的 Profile 还没开放给这个 workspace：请那边的管理员在 Profile 页打开「也给 {workspace} 用」",
   "core-logic.choose.quota.low": "{label}只剩 {left}%",
   "core-logic.choose.save": "改成 {model} · {effort} · {account}",
   "core-logic.choose.save.unchanged": "不变",

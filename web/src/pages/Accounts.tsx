@@ -3,7 +3,7 @@ import { profilesPage, stationBase, useStation, useLink } from "../station.tsx";
 import { Chart, ChevronRight, Edit, External, LogIn, Plus, Refresh, Trash } from "@stillfail/ui/icons.tsx";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useAction, useApi, useOverview, useProfiles, type AccessKind, type LoginJob, type Overview, type ProfileInput, type Profile, type RuntimeKind } from "../api.ts";
+import { useAction, useApi, useMemberships, useOverview, useProfiles, type AccessKind, type LoginJob, type Overview, type ProfileInput, type Profile, type RuntimeKind } from "../api.ts";
 import { ACCESS, KEYED } from "../format.ts";
 import { useUsage, usageCss } from "../Usage.tsx";
 import { useProfilesSidebar } from "../ProfilesNav.tsx";
@@ -162,6 +162,8 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
 
       {overview.sharing && <ShareSection profile={profile} />}
 
+      {!copy && <WorkspacesSection profile={profile} />}
+
       {!copy && profile.fast !== undefined && profile.fast !== null && <FastSection profile={profile} />}
 
       {!copy && <ModelPool profile={profile} found={latest?.models ?? null} onSave={(models) => save.run({ models })} />}
@@ -244,6 +246,39 @@ function StationsSection({ entry, here }: { entry: WorkspaceProfile; here: strin
           </li>
         ))}
       </ul>
+    </Section>
+  );
+}
+
+/**
+ * Which of the workspaces the station joined may run their chats on it too (docs/multi-workspace.md), a switch each:
+ * for the owners and admins of its home workspace (the core's `memberships`), once the station is in more than one.
+ * None is ticked at first: a profile is its home's.
+ */
+function WorkspacesSection({ profile }: { profile: Profile }) {
+  const station = useStation();
+  const api = useApi();
+  const toast = useToast();
+  const m = useMemberships(station.address).value;
+  const joined = m?.manages ? m.workspaces.filter((w) => !w.home) : [];
+  const now = profile.workspaces ?? [];
+  const put = useAction((next: string[]) => api.putProfile(profile.id, { workspaces: next }));
+  // What is being saved shows at once, its switch turning beside its ring.
+  const shown = put.busy && put.args ? put.args[0] : now;
+  if (joined.length === 0) return null;
+  return (
+    <Section title={t("web-pages.profiles.workspaces.title")} description={t("web-pages.profiles.workspaces.lead")}>
+      {joined.map((w) => {
+        const on = shown.includes(w.workspace);
+        return (
+          <SwitchRow key={w.workspace} title={t("web-pages.profiles.workspaces.for", { name: w.name })} checked={on}
+            description={t(on ? "web-pages.profiles.workspaces.on" : "web-pages.profiles.workspaces.off", { name: w.name })}
+            busy={put.busy && (put.args?.[0].includes(w.workspace) ?? false) !== now.includes(w.workspace)} disabled={put.busy}
+            onChange={(next) => void put.run(next ? [...now, w.workspace] : now.filter((x) => x !== w.workspace)).then((ok) => {
+              if (ok) toast(t(next ? "web-pages.profiles.workspaces.turnedOn" : "web-pages.profiles.workspaces.turnedOff", { name: w.name }));
+            })} />
+        );
+      })}
     </Section>
   );
 }

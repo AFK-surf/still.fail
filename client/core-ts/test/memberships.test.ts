@@ -10,7 +10,7 @@ import type { StationAddr } from "../src/station/addr.ts";
 import { HostWire, type RequestHead, type StationWire, type WireReply } from "../src/station/wire.ts";
 import { jsonResponse, type FakeHost } from "../src/testing.ts";
 import { apply, call, subscribe, v } from "./helpers.ts";
-import { base, started } from "./station-fixture.ts";
+import { base, overview, started } from "./station-fixture.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -47,10 +47,10 @@ class Wire implements StationWire {
 /// The viewer: an admin of W (`ws`, the fixture's `st`, and x1, which W joined: its home is 甲), the owner of 甲 (`wa`:
 /// a1 up, a2 joined from elsewhere, st which 甲 joined, x1), a member of 丙 (`wc`, c1) and an admin of 乙 (`wb`, b1
 /// down). What still.fail cloud was asked to make (enrollments) is kept.
-async function setUp() {
+async function setUp(o: { stJoined?: boolean; answers?: ReturnType<typeof base> } = {}) {
   let wire: Wire | null = null;
   const made: { path: string; body: J }[] = [];
-  const s = await started(base(), 0, (host) => (wire = new Wire(host)), ({ host }) => {
+  const s = await started(o.answers ?? base(), 0, (host) => (wire = new Wire(host)), ({ host }) => {
     const fetch = host.fetch.bind(host);
     host.fetch = (req: HttpRequest) => {
       const path = req.url.replace(ORIGIN, "");
@@ -62,12 +62,12 @@ async function setUp() {
           relay_url: null,
         }));
       }
-      if (path === "/v1/workspaces/ws") return ws("ws", [{ id: "st", name: "studio", online: true, last_seen: null }, { id: "x1", name: "X1", online: true, last_seen: null, joined: true }]);
+      if (path === "/v1/workspaces/ws") return ws("ws", [{ id: "st", name: "studio", online: true, last_seen: null, ...(o.stJoined ? { joined: true } : {}) }, { id: "x1", name: "X1", online: true, last_seen: null, joined: true }]);
       if (path === "/v1/workspaces/wa") {
         return ws("wa", [
           { id: "a1", name: "A1", online: true, last_seen: null },
           { id: "a2", name: "A2", online: true, last_seen: null, joined: true },
-          { id: "st", name: "studio", online: true, last_seen: null, joined: true },
+          { id: "st", name: "studio", online: true, last_seen: null, ...(o.stJoined ? {} : { joined: true }) },
           { id: "x1", name: "X1", online: true, last_seen: null },
         ]);
       }
@@ -203,5 +203,20 @@ test("only_the_managers_of_a_station's_home_see_its_workspaces", async () => {
   await host.settle();
   apply(host, values);
   assert.deepEqual(v(values, 3), { manages: true, loading: false, canJoin: false, workspaces: [], error: "这台 station 还不能在多个 workspace 里，先更新它" });
+  core.close();
+});
+
+test("a_new_chat_on_a_joined_station_none_of_whose_profiles_is_open_here_says_whom_to_ask", async () => {
+  // st's home is 甲; W joined it, and none of its profiles is open to W (its overview to W lists none).
+  const { host, core } = await setUp({ stJoined: true, answers: { ...base(), "GET /overview": { ...overview, profiles: [] } } });
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "newChat", scope: "ws" });
+  await host.settle();
+  apply(host, values);
+  const n = v(values, 1);
+  assert.equal(n.station.id, "st");
+  assert.equal(n.blocked, "shared");
+  assert.equal(n.problem, "studio 来自 甲，它的 Profile 还没开放给这个 workspace：请 甲 的管理员在 Profile 页打开「也给 W 用」");
   core.close();
 });

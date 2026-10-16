@@ -1010,6 +1010,11 @@ export interface Profile {
 	decisionText?: string;
 	/** Shared with the workspace's other stations, or another station's (absent: neither, or a station older than sharing). */
 	share?: ProfileShare;
+	/**
+	 * The workspaces the station joined whose chats may run on it too (docs/multi-workspace.md; none: its home's
+	 * only), as its home's managers set it (`profile.put` `input.workspaces`); to a member of a joined one, that one.
+	 */
+	workspaces?: string[];
 }
 
 export interface TurnRecord {
@@ -3340,7 +3345,10 @@ export interface NewChatView {
 	pickAccount: boolean;
 	/** Its profiles are being read. */
 	waiting: boolean;
-	/** What keeps a chat from starting: `profile` (none added) or `models` (none enabled). */
+	/**
+	 * What keeps a chat from starting: `profile` (none added), `shared` (a station this workspace joined, none of
+	 * whose profiles its home's managers opened to it: asked of them, not added here; `problem` says so) or `models` (none enabled).
+	 */
 	blocked?: string;
 	/** In a line under the page's words: the profiles being read, or no model enabled. */
 	problem?: string;

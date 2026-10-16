@@ -4,7 +4,7 @@
 // key or variables; renaming, checking and deleting under "…"), and a new one.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
-import { stationApi, useAction, useOverview, useProfiles, useStationCall, useStations, type LoginJob, type Profile, type Quota, type StationView, type Tone } from "../api.ts";
+import { stationApi, useAction, useMemberships, useOverview, useProfiles, useStationCall, useStations, type LoginJob, type Profile, type Quota, type StationView, type Tone } from "../api.ts";
 import type { MachineLogin, ProfileFlowView, WorkspaceProfile } from "../core/shapes.ts";
 import { hosts, profileGroups } from "../cloud/settings.tsx";
 import { ACCESS, KEYED } from "../format.ts";
@@ -378,6 +378,7 @@ function ProfilePage({ p }: { p: Profile }) {
         {!copy && p.access.kind === "subscription" && !p.machine && <SignIn p={p} needed={p.check?.state === "login" || signingIn} />}
         {p.trouble?.action !== "quota" && <Quota p={p} />}
         {overview?.sharing && <ShareRows p={p} />}
+        {!copy && <WorkspaceRows p={p} />}
         {!copy && p.fast != null && <><SectionHeader title={t("web-mobile.profiles.run")} start={24} /><ListCard><FastRow p={p} /></ListCard></>}
         {!copy && <Models p={p} put={(models) => api.putProfile(p.id, { models })} />}
         {/* A station older than the setting says nothing of it. */}
@@ -493,6 +494,42 @@ function ProfileMenu({ p }: { p: Profile }) {
           run: () => { app.pop(); return api.deleteProfile(p.id).then(() => app.toast(t("web-mobile.profiles.deleted"))); },
         })} />
       </div>
+    </>
+  );
+}
+
+/**
+ * Which of the workspaces the station joined may run their chats on it too (as the desktop's WorkspacesSection), a
+ * switch each: for its home workspace's owners and admins, once the station is in more than one.
+ */
+function WorkspaceRows({ p }: { p: Profile }) {
+  const api = useApi();
+  const station = useStation();
+  const act = useAct();
+  const m = useMemberships(station.address).value;
+  const busy = useDoing("profile.put", { station: station.address, id: p.id });
+  const joined = m?.manages ? m.workspaces.filter((w) => !w.home) : [];
+  const now = p.workspaces ?? [];
+  if (joined.length === 0) return null;
+  return (
+    <>
+      <SectionHeader title={t("web-pages.profiles.workspaces.title")} start={24} />
+      <ListCard>
+        {joined.map((w) => {
+          const on = now.includes(w.workspace);
+          return (
+            <ListRow key={w.workspace} onClick={busy ? undefined : () => act(api.putProfile(p.id, { workspaces: on ? now.filter((x) => x !== w.workspace) : [...now, w.workspace] }),
+              t("web-pages.profiles.workspaces.what"), t(on ? "web-pages.profiles.workspaces.turnedOff" : "web-pages.profiles.workspaces.turnedOn", { name: w.name }))}>
+              <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+                <span className={listsCss.mRowTitle}>{t("web-pages.profiles.workspaces.for", { name: w.name })}</span>
+                <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{t(on ? "web-pages.profiles.workspaces.on" : "web-pages.profiles.workspaces.off", { name: w.name })}</span>
+              </span>
+              {busy && <Spinner size={14} />}
+              <span className={connectsCss.mSwitch} data-on={on || undefined} />
+            </ListRow>
+          );
+        })}
+      </ListCard>
     </>
   );
 }

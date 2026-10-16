@@ -456,6 +456,7 @@ export const SHAPES: Record<string, Shape> = {
     ["decisionModels", vec("String"), { default: true }],
     ["decisionText", opt("String"), { doc: "Where the decision probe is, in words (what it found, or why it found none)." }],
     ["share", opt("ProfileShare"), { doc: "Shared with the workspace's other stations, or another station's (absent: neither, or a station older than sharing)." }],
+    ["workspaces", vec("String"), { default: true, doc: "The workspaces the station joined whose chats may run on it too (docs/multi-workspace.md; none: its home's\nonly), as its home's managers set it (`profile.put` `input.workspaces`); to a member of a joined one, that one." }],
   ], { doc: "A profile, with its last check in words and its models' makers." }),
   ProfileShare: struct([
     ["id", "String", { doc: "The share's id: the same on every station that has the profile." }],
@@ -1270,7 +1271,7 @@ export const SHAPES: Record<string, Shape> = {
     ["accounts", vec("RunnableProfile")],
     ["pickAccount", "bool"],
     ["waiting", "bool", { doc: "Its profiles are being read." }],
-    ["blocked", opt("String"), { doc: "What keeps a chat from starting: `profile` (none added) or `models` (none enabled)." }],
+    ["blocked", opt("String"), { doc: "What keeps a chat from starting: `profile` (none added), `shared` (a station this workspace joined, none of\nwhose profiles its home's managers opened to it: asked of them, not added here; `problem` says so) or `models` (none enabled)." }],
     ["problem", opt("String"), { doc: "In a line under the page's words: the profiles being read, or no model enabled." }],
     ["spent", opt("String"), { doc: "Every account of the model has used up its allowance: what is sent waits for it." }],
     ["pick", opt("PickView"), { doc: "Its model control (the `pick` topic of `new` on the station), with the page." }],

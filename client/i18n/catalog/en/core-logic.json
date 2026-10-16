@@ -45,6 +45,8 @@
   "core-logic.choose.pick_model": "Pick a model",
   "core-logic.choose.problem.loading": "Loading {name}'s profiles…",
   "core-logic.choose.problem.no_models": "No profile on this station has models enabled. Use the link below to enable some.",
+  "core-logic.choose.problem.not_shared": "{name} is from {home} and none of its profiles is open to this workspace yet: ask {home}'s admins to turn on “Also for {workspace}” on a profile",
+  "core-logic.choose.problem.not_shared_elsewhere": "{name} is from another workspace and none of its profiles is open to this one yet: ask its admins there to turn on “Also for {workspace}” on a profile",
   "core-logic.choose.quota.low": "{label}: {left}% left",
   "core-logic.choose.save": "Change to {model} · {effort} · {account}",
   "core-logic.choose.save.unchanged": "No change",
