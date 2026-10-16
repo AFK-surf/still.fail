@@ -2,6 +2,7 @@
 // (admin/mod.rs: GET /usage, /machine-sessions, /machine-sessions/:runtime/:id, /memory, /host, /footprint).
 import { type Request, type Answer, HOME_ONLY, error, json, param, percentDecode } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
+import { memory } from "../../read/memory.ts";
 
 const I64_MIN = -9223372036854775808n;
 const I64_MAX = 9223372036854775807n;
@@ -59,7 +60,20 @@ export const routes = ({ read, host, agents }: Tools): Route[] => {
         r.viewer.home === false ? error(403, HOME_ONLY) : read(r, "machineSession", { lang: r.lang, runtime: segment(runtime!), id: segment(id!), limit: param(r, "limit") }),
     },
     // The agents' memory, for the pages to show: the global one, and the shared skills (projects' memories among them).
-    { method: "GET", pattern: /^\/memory$/, handle: (r: Request) => read(r, "memory", {}) },
+    // A member of a workspace the station joined sees that workspace's (docs/multi-workspace.md).
+    {
+      method: "GET",
+      pattern: /^\/memory$/,
+      handle: async (r: Request): Promise<Answer> => {
+        if (r.viewer.home !== false) return read(r, "memory", {});
+        if (!agents) return error(503, "station starting");
+        try {
+          return json(200, JSON.stringify(memory(agents.config.data, r.viewer.workspace)));
+        } catch (e) {
+          return error(400, (e as Error).message);
+        }
+      },
+    },
     // The machine's state, at most ten seconds old.
     {
       method: "GET",

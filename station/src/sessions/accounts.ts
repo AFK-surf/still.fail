@@ -25,6 +25,8 @@ export type AccountsDeps = {
   running(): string[];
   /// Its time.
   clock: Clock.Clock;
+  /// Whether session `key` may run on a profile: one allowed in its workspace (docs/multi-workspace.md); absent: any.
+  allows?(key: string, profile: Profile): boolean;
 };
 
 export class Accounts {
@@ -64,15 +66,24 @@ export class Accounts {
     return profile;
   }
 
+  /// Whether session `key` may run on `profile` (its workspace's, docs/multi-workspace.md).
+  allows(key: string, profile: Profile): boolean {
+    return this.deps.allows?.(key, profile) ?? true;
+  }
+
   /// The profile a session's runtime starts on: its own while usable (the account's cache is warm there), else the one
-  /// the pool picks among those of its runtime (transcripts are shared, so it resumes with all it had there).
+  /// the pool picks among those of its runtime allowed in its workspace (transcripts are shared, so it resumes with all
+  /// it had there).
   runOn(key: string): RunOn {
     const { store } = this.deps;
     const row = store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
     const runtime = runtimeNamed(row.runtime);
     if (!runtime) throw new Error(`session ${key} runs an unknown runtime ${row.runtime}`);
-    const candidates = this.deps.config().profiles.filter((p) => p.runtimes.includes(runtime));
+    const all = this.deps.config().profiles.filter((p) => p.runtimes.includes(runtime));
+    const candidates = all.filter((p) => this.allows(key, p));
+    // Profiles there are, none of them for its workspace: said so, for people to allow one.
+    if (candidates.length === 0 && all.length > 0) throw new Error(tr(stationLang(), "station.session.noProfileHere", { runtime: runtimeTitle(runtime) }));
     const withSpelling = (p: Profile): RunOn => ({ ...p, spelling: (model: string) => spelling(p, model) });
     // Kept to it by hand: that one, whatever it says. Otherwise its own while it can run it: usable, and with its model
     // enabled.
@@ -101,7 +112,7 @@ export class Accounts {
     const config = this.deps.config();
     // As the pool: those with its model enabled, or, when none has (a connect's binding from before models were
     // enabled), all of its runtime's.
-    const all = config.profiles.filter((p) => p.runtimes.includes(runtime));
+    const all = config.profiles.filter((p) => p.runtimes.includes(runtime) && this.allows(key, p));
     const strict = all.some((p) => serves(p, row.model));
     const candidates = all.filter((p) => p.id !== row.profile && (!strict || serves(p, row.model)) && usable(this.healthOf(p.id)));
     if (candidates.length === 0) return null;
@@ -113,11 +124,11 @@ export class Accounts {
   }
 
   /// The reasoning levels every eligible account offers for a model (a pinned account may offer more): automatic
-  /// selection must work on every one, quota failover included.
-  modelEfforts(runtime: "claude" | "codex", model: string | null, pinned: string | null): string[] {
+  /// selection must work on every one, quota failover included. `allowed`: the profiles of the workspace asked for.
+  modelEfforts(runtime: "claude" | "codex", model: string | null, pinned: string | null, allowed: (p: Profile) => boolean = () => true): string[] {
     const profiles = this.deps
       .config()
-      .profiles.filter((p) => p.runtimes.includes(runtime))
+      .profiles.filter((p) => p.runtimes.includes(runtime) && allowed(p))
       .filter((p) => pinned === null || p.id === pinned)
       .filter((p) => model === null || runs(p, model));
     return commonEfforts(
@@ -143,10 +154,12 @@ export class Accounts {
     const newModel = nonEmpty(change.model);
     const newEffort = nonEmpty(change.effort);
     if (change.fast !== undefined && change.fast !== null && runtime !== "codex") throw new Error(t("station.session.fastOpenAiOnly"));
+    const allowed = (p: Profile) => this.allows(key, p);
     if (typeof wantedProfile === "string") {
       const next = config.profiles.find((p) => p.id === wantedProfile);
       if (!next) throw new Error(`unknown profile ${wantedProfile}`);
       if (!next.runtimes.includes(runtime)) throw new Error(t("station.profile.cannotRun", { profile: next.name, runtime: name }));
+      if (!allowed(next)) throw new Error(t("station.profile.notHere", { profile: next.name }));
       const model = newModel !== undefined ? newModel : row.model;
       if (model !== null && !runs(next, model)) throw new Error(t("station.session.modelOff", { profile: next.name, model }));
     }
@@ -156,13 +169,13 @@ export class Accounts {
     if (!remodel) model = row.model;
     const effort = newEffort !== undefined ? newEffort : remodel ? null : row.effort;
     // What changes is checked; what stays is as it was.
-    if (typeof newModel === "string" && model !== null && !config.profiles.some((p) => p.runtimes.includes(runtime) && runs(p, model!))) {
+    if (typeof newModel === "string" && model !== null && !config.profiles.some((p) => p.runtimes.includes(runtime) && allowed(p) && runs(p, model!))) {
       throw new Error(t("station.session.noProfileForModel", { model, runtime: name }));
     }
     if (effort !== null && (newEffort !== undefined || wantedProfile !== undefined || remodel)) {
       const pinned = wantedProfile !== undefined ? wantedProfile : !remodel && row.profilePinned ? row.profile : null;
-      const allowed = this.modelEfforts(runtime, model, pinned);
-      if (!allowed.includes(effort)) throw new Error(t("station.profile.efforts", { runtime: name, efforts: allowed.join(t("station.list.separator")) }));
+      const efforts = this.modelEfforts(runtime, model, pinned, allowed);
+      if (!efforts.includes(effort)) throw new Error(t("station.profile.efforts", { runtime: name, efforts: efforts.join(t("station.list.separator")) }));
     }
     const profile = wantedProfile !== undefined ? wantedProfile : remodel ? null : undefined;
     return { row, model, effort, profile };

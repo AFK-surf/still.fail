@@ -10,6 +10,7 @@ import { fromPeer, sender } from "../src/sessions/messages.ts";
 import { chatsTouched, forPeer, READ } from "../src/sessions/others.ts";
 import { FILE, fileForPeer, PUT, putForPeer } from "../src/sessions/peer-files.ts";
 import { ChatShares } from "../src/xshare/index.ts";
+import { Cloud } from "../src/cloud/state.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { Rig, say, settle } from "./hub-fakes.ts";
 
@@ -30,12 +31,12 @@ function side(workspace: string, station: string, name: string, other: () => Sid
         return fromPeer(hub, peer, request);
     }
   };
-  const cloud: any = {
+  const cloud: any = Object.assign(Object.create(Cloud.prototype), {
     peersCurrent: true,
-    state: { station, workspace, workspace_name: name, peers: [{ id: station, name }] },
-    removed: () => false,
+    lock: null,
+    state: { station, workspace, workspace_name: name, peers: [{ id: station, name }], revocations: [] },
     listen: () => () => {},
-  };
+  });
   const me: Side = { rig, xshare: null as any };
   // The transport: only the other station, of another workspace, and only when this one reaches it (peer.ts).
   const ask = async (to: string, request: any) => {

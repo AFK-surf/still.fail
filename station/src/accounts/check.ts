@@ -76,6 +76,10 @@ export function checkConfig(raw: any, _data: string): void {
     if (p.env !== undefined && p.env !== null && (!isObject(p.env) || Object.values(p.env).some((v) => typeof v !== "string"))) {
       throw new Error("invalid type: expected a map of strings");
     }
+    // The joined workspaces it serves too (docs/multi-workspace.md).
+    if (p.workspaces !== undefined && p.workspaces !== null && (!Array.isArray(p.workspaces) || p.workspaces.some((w: unknown) => typeof w !== "string"))) {
+      throw new Error("invalid type: expected a sequence of strings");
+    }
 
     if (!idOk(p.id)) throw new Error(`profile id ${JSON.stringify(p.id)}: use lowercase letters, digits and dashes`);
     if (p.home === "") throw new Error(`profile ${p.id}: home is required`);

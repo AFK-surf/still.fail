@@ -2,13 +2,28 @@
 // both runtimes. It lives in the data dir, not the repository, since it holds team-specific memory. Each profile home
 // links to it under the name its runtime loads automatically; the station's own skills are written into it at start.
 // Their text is src/skills/*.md, read from there when running from source and from dist/skills/ (copied there by the
-// build) when bundled.
+// build) when bundled. A workspace the station joined has its own, beside it (`workspaceAgentHome`,
+// docs/multi-workspace.md).
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { log } from "../ops/log.ts";
 import type { Runtime } from "./config.ts";
 
 export const agentHomePaths = (agentHome: string): [string, string] => [join(agentHome, "MEMORY.md"), join(agentHome, "skills")];
+
+/// The agent home of workspace `ws` (docs/multi-workspace.md): the home workspace's (`home`; null outside any, when
+/// there is no telling) is the agent home itself, a joined one's workspaces/<ws> in it, made with its MEMORY.md and skills/ when missing. A session
+/// is told its workspace's (its instructions name its MEMORY.md, the skills beside it); the station shares the home
+/// workspace's skills only (share/index.ts).
+export function workspaceAgentHome(agentHome: string, ws: string | null, home: string | null): string {
+  if (ws === null || home === null || ws === home) return agentHome;
+  if (!/^[0-9A-Za-z_-]{1,128}$/.test(ws)) throw new Error(`not a workspace id: ${JSON.stringify(ws)}`);
+  const dir = join(agentHome, "workspaces", ws);
+  const [memory, skills] = agentHomePaths(dir);
+  if (!existsSync(skills)) mkdirSync(skills, { recursive: true });
+  if (!existsSync(memory)) writeFileSync(memory, "# still.fail memory\n");
+  return dir;
+}
 
 /// The skills the station brings, by directory name: about its own tools, so they are rewritten at every start and
 /// change with the station (the team's own skills sit beside them).

@@ -28,10 +28,10 @@ export class McpEndpoint {
   private byName: Map<string, Tool>;
   /// A bearer token's session key.
   private resolve: (token: string) => string | undefined;
-  /// Why the OUTWARD tools are refused now, if they are.
-  private gate?: () => string | undefined;
+  /// Why the OUTWARD tools are refused now for a session, if they are.
+  private gate?: (session: string) => string | undefined;
 
-  constructor(resolve: (token: string) => string | undefined, tools: Tool[], gate?: () => string | undefined) {
+  constructor(resolve: (token: string) => string | undefined, tools: Tool[], gate?: (session: string) => string | undefined) {
     this.tools = tools;
     this.byName = new Map(tools.map((t) => [t.name, t]));
     this.resolve = resolve;
@@ -70,7 +70,7 @@ export class McpEndpoint {
         const tool = this.byName.get(name);
         if (!tool) return reply({ error: { code: -32602, message: `unknown tool ${name}` } });
         if (OUTWARD.includes(name)) {
-          const why = this.gate?.();
+          const why = this.gate?.(session);
           if (why !== undefined) {
             log.warn("mcp", "outward tool refused: the station is in no workspace", { session, tool: name });
             return reply({ result: { content: [{ type: "text", text: why }], isError: true } });

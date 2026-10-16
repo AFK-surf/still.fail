@@ -105,23 +105,30 @@ export function say(hub: Hub, thread: number, user: string, text: string, attach
 }
 
 /// A session of its own, talked to in the station's chat: the runtime, model and effort chosen by whoever starts it
-/// rather than a connect's, and the profile: one given keeps it there; else the pool picks one with the model on.
+/// rather than a connect's, and the profile: one given keeps it there; else the pool picks one with the model on. Only
+/// the profiles allowed in its workspace (docs/multi-workspace.md).
 export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang()): [string, ThreadRow] {
   const config = hub.config();
   const runtime = options.runtime;
-  const profiles = config.profiles.filter((p) => p.runtimes.includes(runtime));
-  if (profiles.length === 0) throw new Error(`no ${runtime} profile configured`);
+  const all = config.profiles.filter((p) => p.runtimes.includes(runtime));
+  if (all.length === 0) throw new Error(`no ${runtime} profile configured`);
+  const here = new Set(hub.profilesIn(options.ws ?? null).map((p) => p.id));
+  const profiles = all.filter((p) => here.has(p.id));
+  if (profiles.length === 0) throw new Error(tr(lang, "station.session.noProfileHere", { runtime: runtimeTitle(runtime) }));
   const model = trimmed(options.model);
   const pinned = options.profile ?? null;
   let profile;
   if (pinned !== null) {
     profile = profiles.find((p) => p.id === pinned);
-    if (!profile) throw new Error(`no ${runtime} profile ${pinned}`);
+    if (!profile) {
+      const there = all.find((p) => p.id === pinned);
+      throw new Error(there ? tr(lang, "station.profile.notHere", { profile: there.name }) : `no ${runtime} profile ${pinned}`);
+    }
     if (model !== null && !runs(profile, model)) throw new Error(tr(lang, "station.profile.modelOff", { profile: profile.name, model }));
   } else profile = hub.accounts.pick(profiles, model, true);
   const effort = options.effort ? options.effort : null;
   if (effort !== null) {
-    const allowed = hub.accounts.modelEfforts(runtime, model, pinned);
+    const allowed = hub.accounts.modelEfforts(runtime, model, pinned, (p) => here.has(p.id));
     if (!allowed.includes(effort)) throw new Error(`effort must be one of ${allowed.join(", ")}`);
   }
   const key = newChatKey();
@@ -345,7 +352,8 @@ export function continueMachineSession(hub: Hub, roots: Roots, found: MachineSes
   if (!(statSync(found.cwd, { throwIfNoEntry: false })?.isDirectory() ?? false)) throw new Error(tr(lang, "station.session.cwdGone", { cwd: found.cwd }));
   if (unreadableDir(found.cwd)) throw new Error(unreadableDirMessage(lang, found.cwd));
   const config = hub.config();
-  const profiles = config.profiles.filter((p) => p.runtimes.includes(runtime));
+  // The machine's own sessions are its home workspace's: their chats are too, on any profile.
+  const profiles = hub.profilesIn(null).filter((p) => p.runtimes.includes(runtime));
   if (profiles.length === 0) throw new Error(tr(lang, "station.session.noProfile", { runtime: runtimeTitle(runtime) }));
   // The model it ran, where a profile has it enabled; else the one picked runs its own.
   const keptModel = found.model !== null && profiles.some((p) => p.models.includes(found.model!)) ? found.model : null;

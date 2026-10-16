@@ -7,7 +7,7 @@ import type { Hub } from "../sessions/hub.ts";
 import { sessionSend } from "../sessions/messages.ts";
 import { chatCreate } from "../sessions/opened.ts";
 import type { Args } from "../sessions/args.ts";
-import { chatList, chatRead, elsewhere, readAfar, sessionHistory } from "../sessions/others.ts";
+import { chatList, chatRead, elsewhere, readAfar, scopeOf, sessionHistory } from "../sessions/others.ts";
 import { suggestArchive } from "../sessions/review.ts";
 import type { Tool } from "./mcp.ts";
 import { slackTools } from "./slack.ts";
@@ -415,7 +415,8 @@ export const SESSION_HISTORY = {
   },
 };
 
-/// A chat on another station of the workspace, by its link: read there (others.ts `readAfar`); null to read it here.
+/// A chat on another station, by its link: read there, in the session's workspace (others.ts `readAfar`); null to read it
+/// here.
 function afar(hub: Hub, key: string, tool: "chat_read" | "session_history", args: Args): Promise<string> | null {
   const station = typeof args.chat === "string" ? elsewhere(hub, key, args.chat) : null;
   return station !== null ? readAfar(hub, key, station, tool, args) : null;
@@ -437,9 +438,9 @@ export function chatTools(hub: Hub): Tool[] {
     { ...CHAT_STATE, run: (key, args) => chatState(hub, key, args) },
     { ...CHAT_HISTORY, run: (key, args) => chatHistory(hub, key, args) },
     { ...CHAT_LIST, run: async (key, args) => chatList(hub, key, args) },
-    { ...CHAT_READ, run: (key, args) => afar(hub, key, "chat_read", args) ?? chatRead(hub, key, args) },
+    { ...CHAT_READ, run: (key, args) => afar(hub, key, "chat_read", args) ?? chatRead(hub, key, args, undefined, scopeOf(hub, key)) },
     { ...SESSION_SEND, run: (key, args) => sessionSend(hub, key, args) },
     { ...CHAT_CREATE, run: (key, args) => chatCreate(hub, key, args) },
-    { ...SESSION_HISTORY, run: async (key, args) => afar(hub, key, "session_history", args) ?? sessionHistory(hub, args) },
+    { ...SESSION_HISTORY, run: async (key, args) => afar(hub, key, "session_history", args) ?? sessionHistory(hub, args, scopeOf(hub, key)) },
   ];
 }

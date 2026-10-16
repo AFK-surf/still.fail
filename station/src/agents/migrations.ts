@@ -35,6 +35,7 @@ export const NOTES: [number, string][] = [
   [28, "A chat may now be shared with other workspaces (a person @-mentions it in a chat of another workspace and confirms, or from its info): chat_list also lists chats other workspaces share with this one, and chat_read, session_history and session_send (where writing is allowed) take their links. chat_create does not reach other workspaces."],
   [29, "station_task and station_file no longer need the target's remoteTasks.allow: any station of the workspace accepts them (an old station still refuses until it updates)."],
   [30, "chat_list and chat_read now show each chat's link. To point a person to a chat, give that link (in a still.fail chat as [its title](link)), not its address or session key. In still.fail chats a bare URL is a link too, and a chat's link shows as a chip with its title."],
+  [31, "A station may now be in several workspaces: chat_list, station_list, chat_read, session_send, chat_create and station_task reach only your chat's workspace (its chats and stations). A chat of another workspace, even on this station, is reached only when it is shared with yours."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

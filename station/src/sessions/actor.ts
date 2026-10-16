@@ -83,7 +83,8 @@ export type SessionDeps = {
   spend(key: string): [string, string] | null;
   mcpUrl(): string;
   reposDir(): string;
-  memoryPath(): string;
+  /// Session `key`'s MEMORY.md: its workspace's (agent-home.ts `workspaceAgentHome`).
+  memoryPath(key: string): string;
   maxNudges(): number;
   backgroundOnMessage(key: string): boolean;
   /// Where the runtime's live steps go, for whoever watches the session (and that it went on in a new runtime session).
@@ -657,7 +658,7 @@ export class SessionActor {
       let agent = await this.ensureAgent();
       const row = store.getSession(this.key);
       // A session begun in a terminal and continued here: its first turn here says so, with how still.fail works.
-      const continued = row && row.cwd && !store.hasTurns(this.key) ? continuedHere(sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath())) : null;
+      const continued = row && row.cwd && !store.hasTurns(this.key) ? continuedHere(sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath(this.key))) : null;
       const lost = this.resumeLost;
       this.resumeLost = false;
       let prompt = lost ? `${RESUME_LOST}\n\n${text}` : text;
@@ -672,7 +673,7 @@ export class SessionActor {
         if (row) {
           const { writeFileSync } = await import("node:fs");
           try {
-            writeFileSync(full, sessionInstructions(row.workspace, row.cwd ?? null, this.deps.reposDir(), this.deps.memoryPath()));
+            writeFileSync(full, sessionInstructions(row.workspace, row.cwd ?? null, this.deps.reposDir(), this.deps.memoryPath(this.key)));
           } catch {}
         }
         store.setToldNotes(this.key, latestNote());
@@ -1072,7 +1073,7 @@ export function openOptions(row: any, profile: Profile & { spelling?(model: stri
     model,
     effort: row.effort ?? undefined,
     // A session continued from a terminal keeps the system prompt it began with (its cache holds).
-    instructions: row.cwd ? "" : sessionInstructions(row.workspace, null, deps.reposDir(), deps.memoryPath()),
+    instructions: row.cwd ? "" : sessionInstructions(row.workspace, null, deps.reposDir(), deps.memoryPath(row.key)),
     mcpToken: row.token,
     mcpUrl: deps.mcpUrl(),
     route: row.key,

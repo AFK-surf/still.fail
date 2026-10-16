@@ -15,7 +15,7 @@ import { INTERNAL_CONNECT } from "./internal.ts";
 import { newSession } from "./lifecycle.ts";
 import { chatNamed, postFrom, sender } from "./messages.ts";
 import { Refused } from "./neighbours.ts";
-import { fromBefore, linkedStation, sessionThreadOf } from "./others.ts";
+import { fromBefore, linkedStation, peersOf, sessionThreadOf } from "./others.ts";
 import { sendable, sendAlong } from "./peer-files.ts";
 
 type Json = any;
@@ -65,9 +65,9 @@ function starterOf(hub: Hub, key: string): string {
 }
 
 /// A new session in a chat of its own for an opener: its runtime, model and effort as asked; the model and effort it
-/// takes after its opener's (`inherited`) are dropped where no profile here runs them.
-function makeChat(hub: Hub, o: { runtime: RuntimeName; model: string | null; effort: string | null; inherited: boolean; title: string | null; createdBy: string }) {
-  const options = { runtime: o.runtime, model: o.model, effort: o.effort, title: o.title, createdBy: o.createdBy };
+/// takes after its opener's (`inherited`) are dropped where no profile here runs them. In workspace `ws` (the opener's).
+function makeChat(hub: Hub, o: { runtime: RuntimeName; model: string | null; effort: string | null; inherited: boolean; title: string | null; createdBy: string; ws: string | null }) {
+  const options = { runtime: o.runtime, model: o.model, effort: o.effort, title: o.title, createdBy: o.createdBy, ws: o.ws };
   try {
     return newSession(hub, options);
   } catch (error) {
@@ -79,13 +79,14 @@ function makeChat(hub: Hub, o: { runtime: RuntimeName; model: string | null; eff
 /// Where a session's chat is, as an agent names it.
 const addressOf = (thread: SessionThread) => threadAddress(thread.thread.channel, thread.thread.threadTs);
 
-/// The station a chat is to be opened on, by its id or name in the workspace's roster; null for this one.
+/// The station a chat is to be opened on, by its id or name in the roster of session `key`'s workspace; null for this
+/// one.
 async function stationNamed(hub: Hub, key: string, named: string | null): Promise<string | null> {
   if (named === null) return null;
   const link = hub.link(key);
   const here = link !== undefined ? linkedStation(link) : null;
   if (named === here) return null;
-  const call = hub.peers();
+  const call = peersOf(hub, key);
   if (!call) throw new Error("other stations cannot be reached from this one yet: leave station out to open the chat here");
   const roster: Json = await call("", { method: "peers" });
   const stations: Json[] = Array.isArray(roster?.stations) ? roster.stations : [];
@@ -171,7 +172,7 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
   }
 
   if (there === null) {
-    const [child, chat] = makeChat(hub, { ...choice, title, createdBy });
+    const [child, chat] = makeChat(hub, { ...choice, title, createdBy, ws: row.ws ?? null });
     const link = hub.link(child) ?? null;
     hub.store.insertOpened({ childStation: "", child, parentStation: "", parent: key, key: k, title, link });
     const thread: SessionThread = { thread: chat, connect: INTERNAL_CONNECT };
@@ -180,7 +181,7 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
     return opened({ session: child, link, thread: addressOf(thread) }, null, false);
   }
 
-  const call = hub.peers()!;
+  const call = peersOf(hub, key)!;
   const request: Json = { method: CREATE, session: key, key: k, title, ...choice, createdBy, from: { title: from, link: fromLink } };
   let made: Json;
   try {
@@ -209,9 +210,9 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
   return opened(result, there, false);
 }
 
-/// A chat another station's session opens here (chat_create there, from station `peer`): made once per its key; the
-/// answer says whether its first message has come yet.
-export function createForPeer(hub: Hub, peer: string, request: Json): Json {
+/// A chat another station's session opens here (chat_create there, from station `peer`): made once per its key, in the
+/// workspace it was asked in (`ws`); the answer says whether its first message has come yet.
+export function createForPeer(hub: Hub, peer: string, request: Json, ws: string | null = null): Json {
   const parent = typeof request?.session === "string" ? request.session : "";
   if (parent === "") throw new Error("session is required");
   const k = keyOf(request);
@@ -221,13 +222,13 @@ export function createForPeer(hub: Hub, peer: string, request: Json): Json {
     const said = hub.store.messagesBefore(thread.thread.id, null, 200).some((m) => m.author === `${peer}/${parent}`);
     return { session: child, link: hub.link(child) ?? null, thread: addressOf(thread), said };
   };
-  if (before !== null && hub.store.getSession(before.child) !== null) return answer(before.child);
-  if (before !== null) throw new Error(`the chat key ${k} opened here is gone (deleted): use another key`);
+  if (before !== null && hub.store.getSession(before.child) !== null && (ws === null || hub.inWorkspace(before.child, ws))) return answer(before.child);
+  if (before !== null) throw new Error(`the chat key ${k} opened here is gone (deleted, or of another workspace): use another key`);
   const runtime = typeof request?.runtime === "string" ? request.runtime : "";
   if (!RUNTIMES.includes(runtime as RuntimeName)) throw new Error(`runtime must be one of ${RUNTIMES.join(", ")}`);
   const title = given(request, "title");
   const createdBy = given(request, "createdBy") ?? `${peer}/${parent}`;
-  const [child] = makeChat(hub, { runtime: runtime as RuntimeName, model: given(request, "model"), effort: given(request, "effort"), inherited: request?.inherited === true, title, createdBy });
+  const [child] = makeChat(hub, { runtime: runtime as RuntimeName, model: given(request, "model"), effort: given(request, "effort"), inherited: request?.inherited === true, title, createdBy, ws });
   hub.store.insertOpened({ childStation: "", child, parentStation: peer, parent, key: k, title, link: hub.link(child) ?? null });
   log.info("hub", "chat opened for another station's session", { session: child, station: peer, opener: parent });
   return answer(child);
@@ -259,7 +260,7 @@ export function settled(hub: Hub, key: string, state: Settled, words: string | n
     }
     return;
   }
-  const call = hub.peers();
+  const call = peersOf(hub, key);
   const tell = async () => {
     if (!call) throw new Error("other stations cannot be reached from this one yet");
     await call(opener.parentStation, { method: NOTICE, session: key, to: opener.parent, state, words, title });
@@ -277,10 +278,12 @@ export function settled(hub: Hub, key: string, state: Settled, words: string | n
   });
 }
 
-/// How a turn of a chat this station's session opened on station `peer` ended (`settled` there).
-export function noticeForPeer(hub: Hub, peer: string, request: Json): Json {
+/// How a turn of a chat this station's session opened on station `peer` ended (`settled` there), told in workspace `ws`
+/// (the opener's; null: any).
+export function noticeForPeer(hub: Hub, peer: string, request: Json, ws: string | null = null): Json {
   const child = typeof request?.session === "string" ? request.session : "";
   const parent = typeof request?.to === "string" ? request.to : "";
+  if (ws !== null && !hub.inWorkspace(parent, ws)) throw new Error(`${parent} opened no chat ${child} on that station`);
   const state = request?.state;
   if (!["all_done", "need_human", "failed", "stopped"].includes(state)) throw new Error("state must be all_done, need_human, failed or stopped");
   const record = hub.store.openedBy(parent).find((o) => o.childStation === peer && o.child === child);

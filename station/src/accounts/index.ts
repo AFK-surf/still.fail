@@ -278,15 +278,22 @@ export class Accounts {
     log.info("accounts", "config changed from the admin page", { what, by: viewer.email });
   }
 
-  /// PUT /profiles/:id: a profile made or edited. Its new state is checked after (in the background).
+  /// PUT /profiles/:id: a profile made or edited. Its new state is checked after (in the background). `workspaces`: the
+  /// joined workspaces whose sessions may run on it too (docs/multi-workspace.md; [] or null: the home one's only), set
+  /// by those who manage the station only.
   putProfile(id: string, given: Record<string, unknown>, viewer: Viewer, lang: Lang = stationLang()) {
     this.own(id, lang);
+    const givenWorkspaces = given.workspaces;
+    if (givenWorkspaces !== undefined && !manages(viewer)) throw new Refusal(403, tr(lang, "station.share.managersOnly"));
+    if (givenWorkspaces !== undefined && givenWorkspaces !== null && (!Array.isArray(givenWorkspaces) || !givenWorkspaces.every((w) => typeof w === "string" && /^[0-9A-Za-z_-]{1,128}$/.test(w)))) {
+      throw new Refusal(400, "workspaces must be workspace ids");
+    }
     this.save(viewer, `profile ${id}`, (raw) => {
       const list: Json[] = Array.isArray(raw.profiles) ? raw.profiles : [];
       const existing: Json | undefined = list.find((p) => p?.id === id);
       const machine = existing?.machine === true;
       // One on the machine's login is the machine's: only which of its models are used, and how it runs, are chosen.
-      const get = (key: string): unknown => (machine && !["model", "models", "backgroundOnMessage", "fast"].includes(key) ? undefined : given[key]);
+      const get = (key: string): unknown => (machine && !["model", "models", "backgroundOnMessage", "fast", "workspaces"].includes(key) ? undefined : given[key]);
       // env: a string sets the value; null removes the key; an omitted key keeps it (so masked secrets survive edits).
       const env: Record<string, string> = isObject(existing?.env) ? { ...existing.env } : {};
       const givenEnv = get("env");
@@ -342,6 +349,7 @@ export class Accounts {
       else fast = typeof existing?.fast === "boolean" ? existing.fast : undefined;
       const givenBackground = get("backgroundOnMessage");
       const background = typeof givenBackground === "boolean" ? givenBackground : typeof existing?.backgroundOnMessage === "boolean" ? existing.backgroundOnMessage : undefined;
+      const workspaces: string[] = Array.isArray(givenWorkspaces) ? [...new Set(givenWorkspaces as string[])] : givenWorkspaces === null ? [] : Array.isArray(existing?.workspaces) ? existing.workspaces : [];
       const givenHome = get("home");
       const home = typeof givenHome === "string" && givenHome.trim() !== "" ? givenHome.trim() : typeof existing?.home === "string" ? existing.home : `homes/${id}`;
       const api = kind === "api-provider";
@@ -366,6 +374,7 @@ export class Accounts {
       // Only the default's opposite is written.
       if (background === false) next.backgroundOnMessage = false;
       if (fast === true) next.fast = true;
+      if (workspaces.length > 0) next.workspaces = workspaces;
       if (existing) {
         const kept = runtimesFor(next.access, next.runtime);
         for (const r of runtimesFor(existing.access, existing.runtime)) if (!kept.includes(r)) lastOfRuntime(raw, r, id, lang);
@@ -945,11 +954,13 @@ export class Accounts {
     if (changed !== null) this.deps.reviewUndecided?.();
   }
 
-  /// The overview's `profiles`.
-  profilesView(): Json[] {
+  /// The overview's `profiles`. A member of a workspace the station joined (`viewer.home` false) sees those its sessions
+  /// may run on, without their keys, environment or files (docs/multi-workspace.md).
+  profilesView(viewer?: Viewer): Json[] {
     const raw = this.deps.config.raw();
     const config = hubConfig(raw, this.deps.data);
-    return config.profiles.map((p) => {
+    const joined = viewer !== undefined && viewer.home === false ? viewer.workspace : null;
+    const views = config.profiles.filter((p) => joined === null || (p.workspaces ?? []).includes(joined)).map((p) => {
       const kind = accessKind(p);
       const a: Json = isObject(p.access) ? p.access : {};
       const via = profileVia(p);
@@ -985,8 +996,23 @@ export class Accounts {
         quota: this.quotas.get(p.id) ?? null,
         // Shared with the workspace's other stations, or another station's (absent: neither; old clients ignore it).
         share: this.deps.shared?.view(p) ?? null,
+        // The joined workspaces whose sessions may run on it too.
+        workspaces: p.workspaces ?? [],
       };
     });
+    if (joined === null) return views;
+    // Only how it runs there: what its connects of that workspace are, nothing of its secrets or its home.
+    const connects = new Set(config.connects.filter((c) => c.workspace === joined).map((c) => c.id));
+    return views.map((v) => ({
+      ...v,
+      access: { ...v.access, key: "" },
+      env: [],
+      home: "",
+      loginCommand: "",
+      usedBy: v.usedBy.filter((c: string) => connects.has(c)),
+      login: undefined,
+      workspaces: [joined],
+    }));
   }
 
   /// The account a subscription profile is signed in as: a borrowed one's as its host said, one on the machine's login
@@ -998,8 +1024,9 @@ export class Accounts {
     return accountEmail(p.runtime, p.home);
   }
 
-  /// The overview's `logins`: sign-ins for new profiles.
-  loginsView(): Json[] {
+  /// The overview's `logins`: sign-ins for new profiles (none for a member of a workspace the station joined).
+  loginsView(viewer?: Viewer): Json[] {
+    if (viewer !== undefined && viewer.home === false) return [];
     return [...this.pending.entries()].map(([id, p]) => ({ id, runtime: p.runtime, job: this.logins.get(id), created: p.created, error: p.error }));
   }
 

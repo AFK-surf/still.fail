@@ -647,12 +647,16 @@ export class Remote {
     });
   }
 
-  /// The workspace this station is in now (mesh/cloud.json).
-  private workspace(): string {
+  /// The workspace a session's tasks go in (mesh/cloud.json): its chat's, the home one for those from before; while the
+  /// station is still in it (docs/multi-workspace.md).
+  private workspace(own: string | null): string {
     const state = readJson(join(this.data, "mesh", "cloud.json"));
     if (field(state, "removed_at") !== null) throw new Error("station was removed from workspace");
-    const ws = text(state, "workspace");
-    if (ws === "") throw new Error("station has no workspace");
+    const home = text(state, "workspace");
+    if (home === "") throw new Error("station has no workspace");
+    const ws = own ?? home;
+    const joined = field(state, "joined");
+    if (ws !== home && !(Array.isArray(joined) && joined.some((j: Json) => text(j, "workspace") === ws))) throw new Error("station is no longer in this chat's workspace");
     return ws;
   }
 
@@ -710,16 +714,16 @@ export class Remote {
     ).catch(() => undefined);
   }
 
-  /// What the station_* tools do, as `session`.
+  /// What the station_* tools do, as `session`: among the stations of its workspace.
   async tool(tool: string, session: string, args: Json): Promise<Json> {
     const row = this.store.getSession(session);
     if (!row) throw new Error("unknown session");
     const station = text(args, "station");
-    if (tool === "station_list") return this.ask(station, { method: station === "" ? "peers" : "describe" });
+    if (tool === "station_list") return this.ask(station, { method: station === "" ? "peers" : "describe", workspace: this.workspace(row.ws ?? null) });
     const key = text(args, "key");
     const listing = tool === "station_task" && field(args, "action") === "list";
     if (station === "" || (key === "" && !listing)) throw new Error("station and key are required (list needs only station)");
-    const workspace = this.workspace();
+    const workspace = this.workspace(row.ws ?? null);
     if (!listing) this.recordUse(workspace, session, station);
     const request: Json = { workspace, session, key };
     if (tool === "station_task") {

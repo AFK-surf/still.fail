@@ -14,7 +14,7 @@ import { roomOf } from "./footprint.ts";
 import type { Hub } from "./hub.ts";
 import { imageSize } from "./image-size.ts";
 import { Refused } from "./neighbours.ts";
-import { fromBefore, named } from "./others.ts";
+import { fromBefore, named, reachable } from "./others.ts";
 
 type Json = any;
 type Call = (station: string, request: Json) => Promise<Json>;
@@ -57,13 +57,13 @@ function attachment(name: string, path: string, size: number): Attachment {
 
 /// What another station's session reads of a chat's attachment here (`fetchAttachments` there): a chunk of a file in
 /// the uploads of one of its sessions, the files its page shows (GET /sessions/:key/files), maybe packed with its
-/// archived workspace.
-export async function fileForPeer(hub: Hub, request: Json): Promise<Json> {
+/// archived workspace. `ws`: the workspace it was asked in, whose chats it reads (null: any, as xshare/index.ts checked).
+export async function fileForPeer(hub: Hub, request: Json, ws: string | null = null): Promise<Json> {
   const chat = typeof request?.chat === "string" ? request.chat : "";
   const given = typeof request?.path === "string" ? request.path : "";
   const offset = typeof request?.offset === "number" && Number.isSafeInteger(request.offset) && request.offset >= 0 ? request.offset : 0;
   if (chat.trim() === "" || given === "") throw new Error("chat and path are required");
-  const what = named(hub, chat);
+  const what = named(hub, chat, ws);
   const sessions = what.type === "session" ? [what.key] : hub.store.threadSessions(what.thread.id).map((m) => m.session);
   const path = clean(given);
   const base = basename(path);
@@ -238,14 +238,15 @@ export async function sendAlong(call: Call, station: string, key: string, to: st
 const stagedDir = (hub: Hub) => join(hub.config().dataDir, "remote", "staged");
 const staged = (hub: Hub, peer: string, from: string, id: string) => join(stagedDir(hub), hash([peer, from, id]));
 
-/// A chunk of a file another station's session sends along with a message to a session here (`sendAlong` there).
-export function putForPeer(hub: Hub, peer: string, request: Json): Json {
+/// A chunk of a file another station's session sends along with a message to a session here (`sendAlong` there), in
+/// workspace `ws` (null: any, as xshare/index.ts checked).
+export function putForPeer(hub: Hub, peer: string, request: Json, ws: string | null = null): Json {
   const from = typeof request?.session === "string" ? request.session : "";
   const to = typeof request?.to === "string" ? request.to : "";
   const id = typeof request?.id === "string" ? request.id : "";
   const offset = typeof request?.offset === "number" && Number.isSafeInteger(request.offset) && request.offset >= 0 ? request.offset : null;
   if (from === "" || id === "" || id.length > 64 || offset === null) throw new Error("a file needs session, id and offset");
-  if (hub.store.getSession(to) === null) throw new Error(`no session ${to} on this station (it may have been deleted)`);
+  if (hub.store.getSession(to) === null || !reachable(hub, to, ws, true)) throw new Error(`no session ${to} on this station (it may have been deleted)`);
   const data = Buffer.from(typeof request?.data === "string" ? request.data : "", "base64");
   if (data.length > CHUNK || offset + data.length > MAX_SENT) throw new Error("too large (over 50 MB)");
   const dir = stagedDir(hub);

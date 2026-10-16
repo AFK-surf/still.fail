@@ -80,6 +80,54 @@ export function linkedStation(reference: string): string | null {
   return parts.length === 3 && parts[1] !== "" ? parts[1]! : null;
 }
 
+/// The workspace a link to a chat names: a still.fail link (…/o/<workspace>/<station>/<key>) or a chat's page under its
+/// station's (…/w/<workspace>/s/<station>/chats/<key>).
+export function linkedWorkspace(reference: string): string | null {
+  const page = /\/w\/([^/\s]+)\/s\/[^/?#\s]+\/chats\//u.exec(reference);
+  if (page) return page[1]!;
+  const at = reference.indexOf("/o/");
+  if (at < 0) return null;
+  const parts = splitN(reference.slice(at + 3), "/", 3);
+  return parts.length === 3 && parts[0] !== "" ? parts[0]! : null;
+}
+
+/// The key a thread goes by where it is shared (xshare/index.ts): its own session's, else its first agent's.
+const chatKeyOf = (hub: Hub, t: ThreadRow) => t.home ?? hub.store.threadSessions(t.id)[0]?.session ?? "";
+
+/// Whether workspace `ws` may reach session `key`'s chat (docs/multi-workspace.md): one of that workspace's, or one
+/// another workspace of this station shares with it (to write in: shared to write). `ws` null: any.
+export function reachable(hub: Hub, key: string, ws: string | null, write = false): boolean {
+  if (ws === null || hub.inWorkspace(key, ws)) return true;
+  const chats = new Set([key, ...hub.store.sessionThreads(key).map((t) => chatKeyOf(hub, t.thread))]);
+  return [...chats].some((c) => {
+    const share = hub.store.chatShare(c);
+    return share !== null && share.to.some((t) => t.workspace === ws) && (!write || share.write);
+  });
+}
+
+/// Whether a thread is a chat of workspace `ws` (null: any): its own session's, else its agents'; one without any is
+/// the home workspace's.
+export function threadIn(hub: Hub, thread: ThreadRow, ws: string | null): boolean {
+  if (ws === null) return true;
+  const keys = thread.home !== null ? [thread.home] : hub.store.threadSessions(thread.id).map((m) => m.session);
+  return keys.length === 0 ? hub.wsOf(null) === ws : keys.some((k) => hub.inWorkspace(k, ws));
+}
+
+/// The workspace whose chats and stations session `key` reaches (docs/multi-workspace.md): its chat's; null (any) on
+/// a station in no workspace, where there is no telling.
+export function scopeOf(hub: Hub, key: string): string | null {
+  return hub.workspaces().length === 0 ? null : hub.wsOf(key);
+}
+
+/// The station transport as session `key` asks it: in its chat's workspace (docs/multi-workspace.md), whose stations
+/// alone it reaches (and those sharing chats with that workspace); null while there is none.
+export function peersOf(hub: Hub, key: string): ((station: string, request: Json) => Promise<Json>) | null {
+  const call = hub.peers();
+  if (!call) return null;
+  const ws = scopeOf(hub, key);
+  return ws === null ? call : (station, request) => call(station, { workspace: ws, ...request });
+}
+
 /// What another station answers with when it is from before a request (it took it for a task).
 export function fromBefore(refusal: string): boolean {
   return refusal.includes("remote tasks are not enabled") || refusal.includes("task key");
@@ -96,7 +144,7 @@ export function elsewhere(hub: Hub, key: string, reference: string): string | nu
 
 /// chat_read or session_history of a chat on another station of the workspace: asked of that station (`forPeer` there).
 export async function readAfar(hub: Hub, key: string, station: string, tool: "chat_read" | "session_history", args: Args): Promise<string> {
-  const call = hub.peers();
+  const call = peersOf(hub, key);
   if (!call) throw new Error("other stations cannot be reached from this one yet");
   const given = Object.fromEntries(["chat", "before", "limit", "max_chars"].filter((k) => args[k] !== undefined).map((k) => [k, args[k]]));
   let answer: Json;
@@ -126,7 +174,8 @@ export async function readAfar(hub: Hub, key: string, station: string, tool: "ch
 }
 
 /// What another station's session reads here (`readAfar` there), from station `peer`: its own chats are not involved.
-export async function forPeer(hub: Hub, peer: string, request: Json): Promise<Json> {
+/// `ws`: the workspace it was asked in, whose chats it reads (absent: any, as xshare/index.ts checked).
+export async function forPeer(hub: Hub, peer: string, request: Json, ws: string | null = null): Promise<Json> {
   const tool = request?.tool;
   const args: Args = request?.args !== null && typeof request?.args === "object" && !Array.isArray(request.args) ? request.args : {};
   const from = typeof request?.session === "string" ? request.session : "";
@@ -134,17 +183,17 @@ export async function forPeer(hub: Hub, peer: string, request: Json): Promise<Js
   if (tool === "chat_read") {
     // With the attachments of what it read, for that station to fetch (session.file, peer-files.ts).
     const seen: Attachment[] = [];
-    const text = await chatRead(hub, `${peer}/${from}`, args, seen);
+    const text = await chatRead(hub, `${peer}/${from}`, args, seen, ws);
     return { text, files: seen.map(({ path, name, size }) => ({ path, name, size })) };
   }
-  if (tool === "session_history") return { text: sessionHistory(hub, args) };
+  if (tool === "session_history") return { text: sessionHistory(hub, args, ws) };
   throw new Error(`cannot read with ${JSON.stringify(tool)}`);
 }
 
 /// The chats (by the session keys their links name) a session.* request of another station reads or writes in: what
 /// must be shared with its workspace when it is not this one's (xshare/index.ts).
 export function chatsTouched(hub: Hub, request: Json): string[] {
-  const keyOf = (t: ThreadRow) => t.home ?? hub.store.threadSessions(t.id)[0]?.session ?? "";
+  const keyOf = (t: ThreadRow) => chatKeyOf(hub, t);
   const ofSession = (key: string) => hub.store.sessionThreads(key).map((t) => keyOf(t.thread));
   switch (request?.method) {
     case READ: {
@@ -202,23 +251,28 @@ export function formatSteps(start: number, entries: TimelineEntry[], maxChars: n
 }
 
 /// What a reference names on this station: a chat link, an execution history link, a thread address (CHANNEL/THREAD_TS)
-/// or a session key.
-export function named(hub: Hub, given: string): Named {
+/// or a session key. Of the chats workspace `ws` reaches (`reachable`; null: any): one of another workspace is not there
+/// for it unless shared with it (`write`: to write in).
+export function named(hub: Hub, given: string, ws: string | null = null, write = false): Named {
   const reference = given.trim();
   if (reference === "") throw new Error("chat is required: a chat's link, a thread address (CHANNEL/THREAD_TS) or a session key; chat_list lists them");
   const linked = linkedSession(reference);
   if (linked) {
     const [key, entry] = linked;
-    if (hub.store.getSession(key) === null) throw new Error(`${reference} names session ${key}, which is not on this station (it may be another station's, or deleted)`);
+    const there = linkedWorkspace(reference);
+    const known = hub.store.getSession(key) !== null;
+    if (known && !reachable(hub, key, ws, false) && there !== null && there !== ws) throw new Error(`${reference} is a chat of another workspace: that chat is not shared with your workspace`);
+    if (!known || !reachable(hub, key, ws, false)) throw new Error(`${reference} names session ${key}, which is not on this station (it may be another station's, or deleted)`);
+    if (!reachable(hub, key, ws, write)) throw new Error(`${reference} is shared with your workspace to read only: nothing can be sent to it`);
     return { type: "session", key, entry };
   }
   const address = parseThreadAddress(reference);
   if (address) {
-    const found = hub.store.threadsAt(address[0], address[1]);
+    const found = hub.store.threadsAt(address[0], address[1]).filter((t) => threadIn(hub, t, ws));
     if (found.length === 0) throw new Error(`no conversation ${reference} on this station`);
     return { type: "thread", thread: found[0]! };
   }
-  if (hub.store.getSession(reference) !== null) return { type: "session", key: reference, entry: null };
+  if (hub.store.getSession(reference) !== null && reachable(hub, reference, ws, write)) return { type: "session", key: reference, entry: null };
   throw new Error(`${JSON.stringify(reference)} is not a chat of this station: give a chat's link, a thread address (CHANNEL/THREAD_TS) or a session key; chat_list lists them`);
 }
 
@@ -231,13 +285,20 @@ export function sessionThreadOf(hub: Hub, key: string): SessionThread {
   return latest;
 }
 
-/// chat_list: the station's conversations, the latest first, each with its agents (session keys).
+/// chat_list: the station's conversations of session `key`'s workspace, the latest first, each with its agents
+/// (session keys).
 export function chatList(hub: Hub, key: string, args: Args): string {
   const given = args.limit === undefined ? null : jsNumber(args.limit);
   const limit = given === null ? 20 : Number.isNaN(given) ? 0 : Math.trunc(Math.min(100, Math.max(1, given)));
   const query = (args.query === undefined ? "" : jsString(args.query)).trim().toLowerCase();
   const sessions = new Map<string, SessionRow>(hub.store.listSessions().map((s) => [s.key, s]));
-  const threads = hub.store.listThreads("", null, null);
+  // Its workspace's only (docs/multi-workspace.md): a thread is its own session's, else its agents'.
+  const ws = scopeOf(hub, key);
+  const home = hub.wsOf(null);
+  const inWs = (k: string) => (sessions.get(k)?.ws ?? home) === ws;
+  const ours = (t: { thread: ThreadRow; sessions: { session: string }[] }) =>
+    ws === null || (t.thread.home !== null ? inWs(t.thread.home) : t.sessions.length === 0 ? home === ws : t.sessions.some((m) => inWs(m.session)));
+  const threads = hub.store.listThreads("", null, null).filter(ours);
   const when = (t: (typeof threads)[number]) => t.lastMessage?.createdAt ?? t.thread.createdAt;
   threads.sort((a, b) => when(b) - when(a));
   const lines: string[] = [];
@@ -265,7 +326,7 @@ export function chatList(hub: Hub, key: string, args: Args): string {
     lines.push(entry);
   }
   // Chats other workspaces share with this one: read with chat_read, written to with session_send where allowed.
-  const outside = hub.outsideChats().filter((c) => query === "" || `${c.title} ${c.workspaceName} ${c.link}`.toLowerCase().includes(query));
+  const outside = hub.outsideChats(ws).filter((c) => query === "" || `${c.title} ${c.workspaceName} ${c.link}`.toLowerCase().includes(query));
   const shared = outside.slice(0, limit).map((c) => `- ${c.link} (shared from workspace "${line(c.workspaceName, 40)}", ${c.write ? "you may send to it" : "read only"}) "${line(c.title, 80)}"`);
   const sharedMore = outside.length > shared.length ? `\n(${outside.length - shared.length} more shared; narrow query)` : "";
   const sharedPart = shared.length > 0 ? `\n\nShared with this workspace by other workspaces (read with chat_read, by the link):\n${shared.join("\n")}${sharedMore}` : "";
@@ -274,10 +335,11 @@ export function chatList(hub: Hub, key: string, args: Args): string {
   return `${lines.join("\n")}${more}${sharedPart}`;
 }
 
-/// chat_read: the messages of any conversation of the station. `seen` gets the attachments of the messages given.
-export async function chatRead(hub: Hub, key: string, args: Args, seen?: Attachment[]): Promise<string> {
+/// chat_read: the messages of any conversation of the station that workspace `ws` reaches (`named`). `seen` gets the
+/// attachments of the messages given.
+export async function chatRead(hub: Hub, key: string, args: Args, seen: Attachment[] | undefined, ws: string | null): Promise<string> {
   const reference = args.chat === undefined ? "" : jsString(args.chat);
-  const what = named(hub, reference);
+  const what = named(hub, reference, ws);
   let thread: ThreadRow;
   let connect: string;
   let note = "";
@@ -300,10 +362,11 @@ export async function chatRead(hub: Hub, key: string, args: Args, seen?: Attachm
   return `Conversation ${address}${link ? ` (${link})` : ""}; its agents: ${agents.length === 0 ? "none" : agents.join(", ")}.\n${text}${note}`;
 }
 
-/// session_history: what a session's agent did (its execution history, as the pages show it), from its transcript.
-export function sessionHistory(hub: Hub, args: Args): string {
+/// session_history: what a session's agent did (its execution history, as the pages show it), from its transcript; of
+/// the sessions workspace `ws` reaches (`named`).
+export function sessionHistory(hub: Hub, args: Args, ws: string | null): string {
   const reference = args.chat === undefined ? "" : jsString(args.chat);
-  const what = named(hub, reference);
+  const what = named(hub, reference, ws);
   let session: string;
   let entry: number | null = null;
   if (what.type === "session") [session, entry] = [what.key, what.entry];

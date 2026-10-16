@@ -9,7 +9,7 @@ import { type Args, jsString, slackWithFiles } from "./args.ts";
 import { attach } from "./conversations.ts";
 import type { Hub } from "./hub.ts";
 import { Refused } from "./neighbours.ts";
-import { fromBefore, linkedSession, linkedStation, named, sessionThreadOf } from "./others.ts";
+import { fromBefore, linkedSession, linkedStation, named, peersOf, reachable, scopeOf, sessionThreadOf } from "./others.ts";
 import { claim, sendable, sendAlong } from "./peer-files.ts";
 import { dir as thumbsDir, keep } from "./thumbs.ts";
 
@@ -52,7 +52,8 @@ export function sender(hub: Hub, key: string): [string, string | null] {
   return [shown, hub.link(key) ?? null];
 }
 
-/// session_send from session `key`.
+/// session_send from session `key`: to a chat of its workspace (or one shared with it to write in), on this station or
+/// another of that workspace (docs/multi-workspace.md).
 export async function sessionSend(hub: Hub, key: string, args: Args): Promise<string> {
   const to = (args.to === undefined ? "" : jsString(args.to)).trim();
   const text = (args.text === undefined ? "" : jsString(args.text)).trim();
@@ -66,7 +67,7 @@ export async function sessionSend(hub: Hub, key: string, args: Args): Promise<st
   if (there !== null && there !== here) {
     const target = linkedSession(to)?.[0];
     if (target === undefined) throw new Error(`${to} names no chat`);
-    const call = hub.peers();
+    const call = peersOf(hub, key);
     if (!call) throw new Error("other stations cannot be reached from this one yet");
     const files = sendable(hub, key, paths);
     const request: Json = { method: METHOD, session: key, to: target, text, from: { title, link } };
@@ -87,7 +88,7 @@ export async function sessionSend(hub: Hub, key: string, args: Args): Promise<st
     const place = typeof answer?.thread === "string" ? answer.thread : "its chat";
     return `Sent to ${target} on station ${there} (${place}). Its agent answers with session_send to your chat.`;
   }
-  const what = named(hub, to);
+  const what = named(hub, to, scopeOf(hub, key), true);
   let thread: SessionThread;
   let targets: string[];
   if (what.type === "session") {
@@ -111,13 +112,14 @@ export async function sessionSend(hub: Hub, key: string, args: Args): Promise<st
   return `Sent to ${place} (agents there: ${targets.join(", ")}). They answer with session_send to your chat.`;
 }
 
-/// A message another station's session sent here (session_send there), from station `peer`.
-export async function fromPeer(hub: Hub, peer: string, request: Json): Promise<Json> {
+/// A message another station's session sent here (session_send there), from station `peer`. `ws`: the workspace it was
+/// sent in, whose chats (and those shared with it to write in) it reaches (null: any, as xshare/index.ts checked).
+export async function fromPeer(hub: Hub, peer: string, request: Json, ws: string | null = null): Promise<Json> {
   const text = typeof request?.text === "string" ? request.text.trim() : "";
   const target = typeof request?.to === "string" ? request.to : "";
   const from = typeof request?.session === "string" ? request.session : "";
   if (text === "" || target === "" || from === "" || chars(text) > MAX_TEXT) throw new Error(`a message needs to, session and text (at most ${MAX_TEXT} characters)`);
-  if (hub.store.getSession(target) === null) throw new Error(`no session ${target} on this station (it may have been deleted)`);
+  if (hub.store.getSession(target) === null || !reachable(hub, target, ws, true)) throw new Error(`no session ${target} on this station (it may have been deleted)`);
   const thread = sessionThreadOf(hub, target);
   if (hub.store.manuallyArchived(thread.thread.id)) throw new Error(`that chat was archived by hand: it takes no messages until someone restores it`);
   const targets = hub.store.threadSessions(thread.thread.id).map((m) => m.session);

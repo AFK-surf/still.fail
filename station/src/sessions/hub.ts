@@ -36,11 +36,11 @@ import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./ac
 import { isStopCommand } from "./args.ts";
 import type { ChatEvent, ChatSurface, InboundFile, InboundMessage, ThreadRef } from "./chat.ts";
 import { toolStatus } from "./chat.ts";
-import { type Connect, type HubConfig, profilesFor, runtimeNamed } from "./config.ts";
+import { type Connect, type HubConfig, type Profile, allowedIn, profilesFor, runtimeNamed, runtimeTitle } from "./config.ts";
 import { INTERNAL_CONNECT, type InternalChat, nextTsAt } from "./internal.ts";
 import { LiveHub } from "./live.ts";
 import type { Jobs } from "./neighbours.ts";
-import { agentHomePaths } from "./agent-home.ts";
+import { agentHomePaths, workspaceAgentHome } from "./agent-home.ts";
 import { startsAfresh } from "./afresh.ts";
 import { serves } from "./pool.ts";
 import { settled } from "./opened.ts";
@@ -144,7 +144,7 @@ export class Hub {
   jobs: Jobs | null = null;
   private closedHook: ((key: string) => void) | null = null;
   private peersHook: ((station: string, request: Json) => Promise<Json>) | null = null;
-  private outsideHook: (() => OutsideChat[]) | null = null;
+  private outsideHook: ((ws: string | null) => OutsideChat[]) | null = null;
   readonly deps: SessionDeps;
 
   constructor(options: HubOptions) {
@@ -161,6 +161,7 @@ export class Hub {
       store: this.store,
       running: () => [...this.actors.values()].filter((a) => a.processState() !== "cold").flatMap((a) => this.store.getSession(a.key)?.profile ?? []),
       clock: this.clock,
+      allows: (key, profile) => allowedIn(profile, this.wsOf(key), this.workspaces()[0] ?? null),
     });
     this.live = new LiveHub(
       (key) => {
@@ -705,12 +706,13 @@ export class Hub {
   }
 
   /// Hooks chat_list up to the chats other workspaces share with this one (xshare/index.ts).
-  onOutsideChats(list: () => OutsideChat[]) {
+  onOutsideChats(list: (ws: string | null) => OutsideChat[]) {
     this.outsideHook = list;
   }
 
-  outsideChats(): OutsideChat[] {
-    return this.outsideHook?.() ?? [];
+  /// The chats other workspaces share with workspace `ws` (null: the home one).
+  outsideChats(ws: string | null = null): OutsideChat[] {
+    return this.outsideHook?.(ws) ?? [];
   }
 
   async shutdown() {
@@ -793,6 +795,12 @@ export class Hub {
     return s?.ws ?? this.workspaces()[0] ?? null;
   }
 
+  /// The profiles sessions of workspace `ws` may run on (docs/multi-workspace.md): every one for the home workspace's.
+  profilesIn(ws: string | null): Profile[] {
+    const home = this.workspaces()[0] ?? null;
+    return this.config().profiles.filter((p) => allowedIn(p, ws, home));
+  }
+
   /// Whether a session's chat is in `workspace` (a viewer's): what a member of one workspace may see and use.
   inWorkspace(row: SessionRow | string | null, workspace: string): boolean {
     const s = typeof row === "string" ? this.store.getSession(row) : row;
@@ -802,7 +810,8 @@ export class Hub {
   /// A session for a connect: the connect's own profile when it keeps to one (and it still can run it); else any of its
   /// runtime, the model's first (pool.ts).
   createSession(config: HubConfig, key: string, connect: Connect, scope: "thread" | "all", message: InboundMessage | null, title: string | null, createdBy: string | null) {
-    const fits = profilesFor(config, connect);
+    const fits = profilesFor(config, connect, this.workspaces()[0] ?? null);
+    if (fits.length === 0 && profilesFor(config, connect).length > 0) throw new Error(tr(stationLang(), "station.session.noProfileHere", { runtime: runtimeTitle(connect.bind.runtime) }));
     const model = connect.bind.model ?? null;
     const kept = connect.bind.profile !== undefined ? fits.find((p) => p.id === connect.bind.profile && serves(p, model)) : undefined;
     const profile = kept ?? this.accounts.pick(fits, model, false);
@@ -871,7 +880,7 @@ export class Hub {
       spend: (key) => this.accounts.spend(key),
       mcpUrl: () => (typeof this.options.mcpUrl === "string" ? this.options.mcpUrl : this.options.mcpUrl()),
       reposDir: () => this.reposDir(),
-      memoryPath: () => agentHomePaths(this.config().agentHome)[0],
+      memoryPath: (key) => agentHomePaths(workspaceAgentHome(this.config().agentHome, this.wsOf(key), this.workspaces()[0] ?? null))[0],
       maxNudges: () => this.config().maxNudges,
       backgroundOnMessage: (key) => {
         const row = this.store.getSession(key);

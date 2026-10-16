@@ -227,7 +227,8 @@ export const reply = (to: InboundMessage, ts: string, text: string, over: Partia
   ...over,
 });
 
-export type Setup = { maxNudges?: number; maxWarmClaude?: number; warmMinutes?: number; teamRequireMention?: boolean; link?: boolean; cold?: ColdStorage; clock?: Clock.Clock; place?: { workspace: string; station: string } };
+/// `workspaces`: those the station is in, its home one first (docs/multi-workspace.md); a session's link names its own.
+export type Setup = { maxNudges?: number; maxWarmClaude?: number; warmMinutes?: number; teamRequireMention?: boolean; link?: boolean; cold?: ColdStorage; clock?: Clock.Clock; place?: { workspace: string; station: string }; workspaces?: string[] };
 
 /// A TestClock for a rig (its hub's, its store's, its sessions'): `adjust(ms)` moves it on, and what was due by then runs.
 /// `asked()` counts the waits begun on it; `begun(n)` resolves once `n` have, each then sleeping on it (an adjust
@@ -292,11 +293,13 @@ export class Rig {
       ["team", this.teamChat],
     ]);
     this.place = o.place ?? { workspace: "ws", station: "st" };
+    this.workspaces = o.workspaces;
     this.hub = this.newHub({ chats: (id) => chats.get(id), link: o.link, cold: o.cold });
   }
 
   /// The workspace and station its links name.
   place: { workspace: string; station: string };
+  workspaces: string[] | undefined;
 
   /// A hub over this rig's store and config (another station's, after a restart: given its own drivers).
   newHub(o: { chats: (id: string) => ChatSurface | undefined; link?: boolean; cold?: ColdStorage; drivers?: AgentDriver[]; internal?: boolean; mcpUrl?: string }) {
@@ -307,7 +310,8 @@ export class Rig {
       drivers: o.drivers ?? [this.claude, this.codex],
       mcpUrl: o.mcpUrl ?? "http://127.0.0.1:1/mcp",
       internal: o.internal === false ? null : new InternalChat(),
-      link: o.link ? (key) => `https://ember.test/o/${this.place.workspace}/${this.place.station}/${key.replaceAll(":", "%3A")}` : undefined,
+      link: o.link ? (key) => `https://ember.test/o/${this.hub?.wsOf(key) ?? this.place.workspace}/${this.place.station}/${key.replaceAll(":", "%3A")}` : undefined,
+      workspaces: this.workspaces ? () => this.workspaces! : undefined,
       runners: () => [],
       cold: o.cold,
       clock: this.clock,

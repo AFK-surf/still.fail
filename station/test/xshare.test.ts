@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { Refused } from "../src/jobs/remote.ts";
 import { ChatShares } from "../src/xshare/index.ts";
+import { Cloud } from "../src/cloud/state.ts";
 
 const X = "x".repeat(64);
 const X2 = "2".repeat(64);
@@ -31,17 +32,18 @@ class Roster {
   }
   cloudFor(station: string) {
     const roster = this;
-    return {
+    // On Cloud's own methods (memberships, home…), its state this roster.
+    return Object.defineProperties(Object.create(Cloud.prototype), Object.getOwnPropertyDescriptors({
       peersCurrent: true,
+      lock: null,
       get state() {
-        return { station, workspace: roster.workspace, workspace_name: roster.name, peers: roster.stations } as any;
+        return { station, workspace: roster.workspace, workspace_name: roster.name, peers: roster.stations, revocations: [] } as any;
       },
-      removed: () => false,
       listen(f: () => void) {
         roster.listeners.add(f);
         return () => roster.listeners.delete(f);
       },
-    } as any;
+    })) as any;
   }
   tell() {
     for (const f of this.listeners) f();
@@ -217,6 +219,9 @@ test("a session that wrote to another workspace may be answered by it, no other"
   await assert.rejects(outside(x, p, { method: "session.message", session: "c1", to: "s2", text: "unasked" }), /shares no chat/);
   // A station of this workspace is asked as before: nothing added.
   assert.deepEqual(p.xshare.address(P, { method: "session.read" }), { method: "session.read" });
+  // One asking for a workspace of its own it says (`as`, docs/multi-workspace.md) reaches what is shared with that one.
+  await outside(p, x, { method: "session.read", args: { chat: "c1" }, as: W2 });
+  await assert.rejects(outside(p, x, { method: "session.read", args: { chat: "c1" }, as: "01W9" }), /shares no chat/);
 });
 
 test("the pages share a chat (its starter or a manager) and say which station to take chats from; its view says with whom", async () => {

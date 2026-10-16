@@ -182,22 +182,28 @@ export const AgentsLive = (control: Control) =>
       const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text) });
       hub.setJobs(jobs);
       hub.onClose((session) => remote.closeSession(session));
-      const inbox = async (peer: string, request: any) => {
+      // What other stations' sessions ask of this one's chats: those of the workspace asked in (`ws`; none: any, once
+      // xshare checked what is shared).
+      const local = async (peer: string, request: any, ws: string | null = null) => {
         switch (request?.method) {
           case READ:
-            return forPeer(hub, peer, request);
+            return forPeer(hub, peer, request, ws);
           case FILE:
-            return fileForPeer(hub, request);
+            return fileForPeer(hub, request, ws);
           case PUT:
-            return putForPeer(hub, peer, request);
+            return putForPeer(hub, peer, request, ws);
           case CREATE:
-            return createForPeer(hub, peer, request);
+            return createForPeer(hub, peer, request, ws);
           case NOTICE:
-            return noticeForPeer(hub, peer, request);
+            return noticeForPeer(hub, peer, request, ws);
           default:
-            return fromPeer(hub, peer, request);
+            return fromPeer(hub, peer, request, ws);
         }
       };
+      // A station of the workspace asking for a session of another of its workspaces (`as`, docs/multi-workspace.md)
+      // reaches what is shared with that one only.
+      const inbox = async (peer: string, request: any, workspace?: string) =>
+        typeof request?.as === "string" && workspace !== undefined && request.as !== workspace ? xshare.outside(peer, request, workspace) : local(peer, request, workspace ?? null);
       remote.setInbox(inbox);
       // Chats shared with other workspaces, and theirs shared with this one (docs/chat-share.md): their stations are
       // asked and heard through it, for those chats only.
@@ -215,11 +221,12 @@ export const AgentsLive = (control: Control) =>
           return first.trim() !== "" ? Array.from(first.trim().split(/\s+/u).join(" ")).slice(0, 80).join("") : named;
         },
         touches: (request) => chatsTouched(hub, request),
-        inbox,
+        inbox: (peer, request) => local(peer, request),
+        chatWs: (chat) => hub.wsOf(chat),
       });
       hub.onPeer((station, request) => remote.ask(station, xshare.address(station, request)));
-      hub.onOutsideChats(() => xshare.borrowed());
-      remote.setOutside({ inside: (peer, request) => xshare.inside(peer, request), outside: (peer, request) => xshare.outside(peer, request) });
+      hub.onOutsideChats((ws) => xshare.borrowed(ws));
+      remote.setOutside({ inside: (peer, request, ws) => xshare.inside(peer, request, ws), outside: (peer, request, ws) => xshare.outside(peer, request, ws) });
 
       const tools = [
         ...chatTools(hub),
@@ -259,7 +266,12 @@ export const AgentsLive = (control: Control) =>
       };
       if (stable) tools.push(...feedbackTools(store, (k) => pageOf(k) ?? null, () => (cloud.state ? sendReport : null)));
       // Outside a workspace its agents do not reach out of it: their outward tools are refused.
-      const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, tools, () => (bound() ? undefined : UNBOUND_REFUSAL));
+      // So are those of a session of a workspace the station has left (docs/multi-workspace.md).
+      const inItsWorkspace = (session: string) => {
+        const ws = store.getSession(session)?.ws ?? null;
+        return ws === null || cloud.membership(ws) !== null;
+      };
+      const mcp = new McpEndpoint((token) => store.sessionByToken(token)?.key, tools, (session) => (bound() && inItsWorkspace(session) ? undefined : UNBOUND_REFUSAL));
 
       // The connects' Slack: connected while the station is in its workspace, once the sessions are taken up (a
       // Socket Mode event goes to one connection of an app; two processes' would split them).
@@ -306,7 +318,8 @@ export const AgentsLive = (control: Control) =>
       accounts.start();
       sharing = new Sharing({
         data, config, cloud,
-        ask: (station, request) => remote.ask(station, request),
+        // What the station shares is its home workspace's (docs/multi-workspace.md).
+        ask: (station, request) => remote.ask(station, { workspace: cloud.home() ?? undefined, ...request }),
         agentHome: () => settings().agentHome,
         env: process.env as Record<string, string | undefined>,
         claudeToken: (p, rejected) => accounts.claudeToken(p, rejected),
@@ -315,7 +328,10 @@ export const AgentsLive = (control: Control) =>
         changed: () => events.overviewChanged(),
         recheck: () => accounts.recheckBorrowed(),
       });
-      remote.setShares((peer, request) => sharing!.handle(peer, request));
+      remote.setShares(async (peer, request, workspace) => {
+        if (workspace !== undefined && workspace !== cloud.home()) throw new Error("this station shares profiles and skills with its home workspace's stations only");
+        return sharing!.handle(peer, request);
+      });
       sharing.start();
       xshare.start();
       const slackView = {

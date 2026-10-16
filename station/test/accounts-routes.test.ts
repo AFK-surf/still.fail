@@ -87,6 +87,30 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
 }
 
 describe("the accounts routes", { concurrency: true }, () => {
+  test("which joined workspaces a profile serves is set by the station's managers; a joined workspace's members see only those, without secrets", async () => {
+    const t = await rig();
+    const joined = { ...viewer("guest@example.com", "admin"), workspace: "W2", home: false };
+    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["W2"] }, member))[0], 403);
+    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["W2"] }, joined))[0], 403);
+    assert.equal((await t.call("PUT", "/profiles/cc", { name: "x" }, joined))[0], 403);
+    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["../x"] }))[0], 400);
+    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["W2", "W2"] }))[0], 200);
+    assert.deepEqual(t.profile("cc")?.workspaces, ["W2"]);
+    // Kept through other edits; null takes it back.
+    assert.equal((await t.call("PUT", "/profiles/cc", { name: "Claude" }, member))[0], 200);
+    assert.deepEqual(JSON.parse(readFileSync(t.path, "utf8")).profiles[0].workspaces, ["W2"]);
+    assert.deepEqual(t.view("cc")?.workspaces, ["W2"]);
+    const seen = t.accounts.profilesView(joined);
+    assert.deepEqual(seen.map((p) => p.id), ["cc"]);
+    assert.deepEqual([seen[0].env, seen[0].access.key, seen[0].home, seen[0].usedBy], [[], "", "", []]);
+    assert.deepEqual(t.accounts.profilesView(owner).map((p) => p.id), ["cc", "cx"]);
+    assert.deepEqual(t.accounts.loginsView(joined), []);
+    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: null }))[0], 200);
+    assert.equal(JSON.parse(readFileSync(t.path, "utf8")).profiles[0].workspaces, undefined);
+    assert.deepEqual(t.accounts.profilesView(joined), []);
+    await t.close();
+  });
+
   test("invalid edits are refused and leave the config unchanged", async () => {
     const t = await rig();
     const before = readFileSync(t.path, "utf8");

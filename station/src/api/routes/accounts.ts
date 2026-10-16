@@ -1,7 +1,7 @@
 // The accounts' part of the admin API (admin/mod.rs, admin/edits.rs, admin/decision.rs): profiles made, edited,
 // checked, signed in and deleted; allowances read and reset; sign-ins for new profiles; the automatic decisions'
 // settings. Edits answer with the overview, as the Rust station's do.
-import { type Request, type Answer, error, json, percentDecode } from "../request.ts";
+import { type Request, type Answer, HOME_ONLY, error, json, percentDecode } from "../request.ts";
 import type { Route } from "../admin.ts";
 import { type Accounts, Refusal } from "../../accounts/index.ts";
 import type { Sharing } from "../../share/index.ts";
@@ -80,7 +80,13 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
     }
     if (changed !== null) policies.review();
   };
-  const route = (method: string, pattern: RegExp, handle: (r: Request, args: string[]) => Promise<Answer>): Route => ({ method, pattern, handle });
+  // The station's accounts are its home workspace's to change (docs/multi-workspace.md): a member of a workspace it
+  // joined only reads what it may use there, and changes its own workspace's archive policy (`joined`).
+  const route = (method: string, pattern: RegExp, handle: (r: Request, args: string[]) => Promise<Answer>, joined = false): Route => ({
+    method,
+    pattern,
+    handle: (r, args) => (method !== "GET" && r.viewer.home === false && !joined ? Promise.resolve(error(403, HOME_ONLY)) : handle(r, args)),
+  });
 
   return [
     // A profile on the machine's own login.
@@ -111,6 +117,7 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
         else a.putArchivePolicy(input(r), r.viewer, r.lang);
         return ok(await view(r));
       }),
+      true,
     ),
     route("POST", /^\/*automatic-decisions\/+review\/*$/, (r) =>
       answer(async (a) => {

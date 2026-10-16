@@ -8,6 +8,7 @@ import { test } from "node:test";
 import { checkConfig } from "../src/accounts/check.ts";
 import { ConfigFile } from "../src/ops/config.ts";
 import { Sharing } from "../src/share/index.ts";
+import { Cloud } from "../src/cloud/state.ts";
 
 const A = "a".repeat(64);
 const B = "b".repeat(64);
@@ -18,17 +19,18 @@ class FakeCloud {
   listeners = new Set<() => void>();
   cloudFor(station: string) {
     const cloud = this;
-    return {
+    // On Cloud's own methods (memberships, home…), its state this roster.
+    return Object.defineProperties(Object.create(Cloud.prototype), Object.getOwnPropertyDescriptors({
       peersCurrent: true,
+      lock: null,
       get state() {
-        return { station, workspace: "w", peers: cloud.peers } as any;
+        return { station, workspace: "w", workspace_name: "w", peers: cloud.peers, revocations: [] } as any;
       },
-      removed: () => false,
       listen(f: () => void) {
         cloud.listeners.add(f);
         return () => cloud.listeners.delete(f);
       },
-    } as any;
+    })) as any;
   }
   tell() {
     for (const f of this.listeners) f();
