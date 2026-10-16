@@ -109,8 +109,9 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
   assert.equal(g.rows[1].content.meta, "2 秒");
   assert.equal(g.rows[2].content.meta, "进行中");
   assert.deepEqual(items[1].entries, [1, 6]);
-  assert.deepEqual([items[2].body.content.block, items[2].body.content.place.name], [true, "#ops"]);
-  assert.equal(items[3].body.content.text, "标记为做完了");
+  assert.deepEqual([items[2].body.content.block, items[2].body.content.place.name, items[2].body.content.ends], [true, "#ops", "human"]);
+  assert.deepEqual([items[3].body.content.text, items[3].body.content.ends], ["标记为做完了", "done"]);
+  assert.deepEqual(items[0].turn, { text: "3 步 · 发出 1 条" });
   const waits = (a: string, next: string | null) => {
     const timeline: J[] = [{ kind: "tool_call", tool: "mcp__ember__chat_state", text: a, at: "2026-09-27T00:00:00.000Z" }];
     if (next !== null) timeline.push({ kind: "user", text: '<message via="ember">done</message>', at: next });
@@ -187,4 +188,34 @@ test("a_post_read_from_the_transcript_stands_where_it_was_made", () => {
   const items = presentHistory({ loaded: true, timeline }, cx([], [], [])).items;
   assert.deepEqual(items.map((i: J) => i.body.kind), ["group", "post", "text"]);
   assert.equal(items[1].body.content.text, "done");
+});
+
+test("each_prompt_that_woke_the_agent_begins_a_turn_saying_when_and_what_it_did", () => {
+  const timeline = [
+    { kind: "tool_call", tool: "Bash", text: '{"command":"ls"}', callId: "z" },
+    { kind: "user", text: '<message via="web" from="Ada (a@x.com)" ts="1.2" thread="EMBER/1.0">\nhi\n</message>', at: "2026-09-27T01:02:00.000Z" },
+    { kind: "tool_call", tool: "Read", text: '{"file_path":"/a.ts"}', callId: "a" },
+    { kind: "tool_result", callId: "a", ok: true, text: "x" },
+    { kind: "user", text: "do this", subagent: true },
+    { kind: "tool_call", tool: "Bash", text: '{"command":"ls"}', callId: "b", subagent: true },
+    { kind: "tool_call", tool: "mcp__stillfail__chat_post", text: '{"to":"EMBER/1.0","text":"done","kind":"all_done"}', callId: "p" },
+    { kind: "user", text: "Your turn ended without a state.", at: "2026-09-28T03:00:00.000Z" },
+    { kind: "tool_call", tool: "mcp__stillfail__chat_state", text: '{"kind":"waiting","seconds":60,"for":"CI"}', at: "2026-09-28T03:00:01.000Z" },
+    { kind: "assistant", text: "waiting on CI" },
+  ];
+  const at = (iso: string) => Date.parse(iso);
+  const items = presentHistory({ loaded: true, timeline }, { ...cx([], [], []), now: at("2026-09-28T04:00:00.000Z") }).items;
+  assert.deepEqual(items.map((i: J) => i.body.kind), ["group", "received", "group", "received", "group", "post", "received", "mark", "text"]);
+  // A page that begins mid-turn has no turn for what came before its first prompt; a sub-agent's prompt begins none.
+  assert.deepEqual(items.map((i: J) => i.turn === undefined ? null : i.turn.text), [null, "2 步 · 发出 1 条", null, null, null, null, "没发消息", null, null]);
+  // Said in the viewer's time (UTC+8 here): today's by its clock alone, an earlier day's with its date.
+  assert.deepEqual([items[1].turn.at, items[1].turn.time], [at("2026-09-27T01:02:00.000Z"), "9/27 09:02"]);
+  assert.equal(items[6].turn.time, "11:00");
+  // How each post and mark left the turn.
+  assert.equal(items[5].body.content.ends, "done");
+  assert.equal(items[7].body.content.ends, "waiting");
+  const state = (kind: string) => presentHistory({ loaded: true, timeline: [{ kind: "tool_call", tool: "mcp__stillfail__chat_state", text: `{"kind":"${kind}"}` }] }, cx([], [], [])).items[0].body.content;
+  assert.deepEqual([state("all_done").ends, state("need_human").ends, state("need_human").text, state("odd").ends], ["done", "human", "停下来等人处理", undefined]);
+  const post = presentHistory({ loaded: true, timeline: [{ kind: "tool_call", tool: "mcp__stillfail__chat_post", text: '{"to":"x","text":"t"}' }] }, cx([], [], [])).items[0].body.content;
+  assert.equal(post.ends, undefined);
 });

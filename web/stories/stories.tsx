@@ -24,7 +24,7 @@ import {
 import { Archive, Bell, Close, Copy, Download, Edit, Folder, Plus, Refresh, Search, Trash } from "@stillfail/ui/icons.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { AT, apk, clips, folder, JOIN_REFUSED, JOINABLE, MEMBERSHIPS, note, NOTE, novel, picture } from "./data.ts";
+import { AT, apk, clips, folder, HISTORY, JOIN_REFUSED, JOINABLE, MEMBERSHIPS, note, NOTE, novel, picture } from "./data.ts";
 import type { DemoExtension } from "../src/demo/mount.tsx";
 import CLIP_URL from "./assets/story-clip.mp4?url";
 import PICTURE_URL from "./assets/story-picture.png?url";
@@ -62,6 +62,8 @@ const joining = (kind: "list" | "error"): DemoExtension => ({
   topic: (t) => (t.topic === "joinable" ? JOINABLE : undefined),
   call: (name) => (name === "station.join" ? (kind === "error" ? Promise.reject(new Error(JOIN_REFUSED)) : { joined: null }) : undefined),
 });
+/** An agent's history in turns (data.ts HISTORY), for whichever agent's is opened. */
+const historyTurns: DemoExtension = { topic: (t) => (t.topic === "history" ? HISTORY : undefined) };
 /** A workspace with no station yet (its first station's page), with stations of other workspaces to add. */
 const firstJoining: DemoExtension = {
   topic: (t) => (t.topic === "joinable" ? JOINABLE : t.topic === "stations" ? [] : undefined),
@@ -255,6 +257,7 @@ export const stories: Story[] = [
   { id: "app-chat-files", group: "应用", title: "对话 · 消息里的附件", app: true, files: true },
   { id: "phone-chat-files", group: "手机", title: "对话 · 消息里的附件", app: true, phone: true, files: true },
   { id: "app-chat-history", group: "应用", title: "执行历史", app: true, steps: [{ click: '[aria-label$="的执行历史"]' }] },
+  { id: "app-chat-history-turns", group: "应用", title: "执行历史 · 一轮一轮", app: true, steps: [{ click: '[aria-label$="的执行历史"]' }], demo: historyTurns },
   { id: "app-chat-side", group: "应用", title: "对话 · 侧栏打开", app: true, steps: [{ click: '[aria-label="打开侧栏"]' }] },
   { id: "app-sidebar-folded", group: "应用", title: "侧栏收起", app: true, steps: [{ click: '[aria-label="对话"]' }] },
   { id: "app-sidebar-peek", group: "应用", title: "侧栏收起后临时展开", app: true, steps: [{ click: '[aria-label="对话"]' }, { hover: '[aria-label="对话"]' }, { move: [150, 60] }] },

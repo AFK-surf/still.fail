@@ -313,8 +313,21 @@
     "other": "{n} in progress"
   },
   "web-main.history.reading": "Loading run history…",
-  "web-main.history.reminder.after": "",
-  "web-main.history.reminder.before": "Reminder from ",
+  "web-main.history.reminder": "{name} reminder",
+  "web-main.history.notSent": "Not sent",
+  "web-main.history.subagent": "Sub-agent",
+  "web-main.history.onlyIo": "Messages only",
+  "web-main.history.onlyIoTip": "Show only the messages in and out and how each turn ended; hide tool steps and the agent's own words",
+  "web-main.history.more": {
+    "one": "Show 1 more line",
+    "other": "Show {n} more lines"
+  },
+  "web-main.history.moreAbout": {
+    "one": "Show about 1 more line",
+    "other": "Show about {n} more lines"
+  },
+  "web-main.history.ends.done": "Marked as done",
+  "web-main.history.ends.human": "Stopped for a person",
   "web-main.history.sendFailed": "Send failed",
   "web-main.history.sentTo": "Sent to ",
   "web-main.history.thinking": "Thinking",

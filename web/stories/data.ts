@@ -1,6 +1,7 @@
 // What the stories show that the site's demo has none of (src/demo/mount.tsx extendDemo): a novel and a note to read,
 // a clip and a picture in a folder, the changelog's news. Made up here, the same every time.
-import type { DriveEntry, DriveKind } from "../src/core/shapes.ts";
+import type { DriveEntry, DriveKind, HistoryItem, HistoryStep, HistoryView } from "../src/core/shapes.ts";
+import { markdown } from "../../client/core-ts/src/markdown.ts";
 import clipUrl from "./assets/story-clip.mp4?url";
 import pictureUrl from "./assets/story-picture.png?url";
 
@@ -144,4 +145,39 @@ export const MEMBERSHIPS = {
     { workspace: "demo", name: "Acme", stationName: "Studio", home: true, here: true, line: "主 workspace" },
     { workspace: "lab", name: "Lab", stationName: "Studio", home: false, here: false, line: "加入的 workspace" },
   ],
+};
+
+// ── An agent's execution history in turns (History.tsx): a person's message answered and left to them, a reminder
+// answered while it waits on work it started, and a sub-agent's end while it still waits. Its times as the core says them.
+
+const call = (name: string, hint: string, meta: string): HistoryStep =>
+  ({ name, hint, meta, failed: false, call: JSON.stringify({ hint }), result: "ok", entries: [], brief: false });
+const posted = (text: string, ends?: string): HistoryItem["body"] =>
+  ({ kind: "post", content: { text, md: markdown(text), place: { name: "看看我的 screencam 的 Windows 版本", surface: "stillfail" }, block: false, failed: false, ...(ends ? { ends } : {}) } });
+const own = (text: string): HistoryItem["body"] => ({ kind: "text", content: { text, md: markdown(text), subagent: false } });
+const WAITED_AT = Date.parse("2026-10-16T08:27:00Z");
+const WAITING_SINCE = Date.now() - 23_000;
+const HISTORY_ITEMS: { body: HistoryItem["body"]; turn?: HistoryItem["turn"] }[] = [
+  { turn: { time: "16:12", text: "5 步 · 发出 1 条" }, body: { kind: "received", content: { tasks: [], messages: [{ key: "m1", from: { name: "林晓", bound: false }, text: "看看我的 screencam 的 Windows 版本，我感觉某些 UI 还是粗糙" }] } } },
+  { body: { kind: "group", content: { summary: "读取 4 个文件 · 共 5 项", title: "读取 4 个文件、运行 1 条命令", failures: 0, pending: 0, rows: [
+    { kind: "step", content: call("Read", "src/ui/Toolbar.tsx", "0.2 秒") }, { kind: "step", content: call("Read", "src/ui/Countdown.tsx", "0.1 秒") },
+    { kind: "step", content: call("Read", "src/ui/Tray.tsx", "0.1 秒") }, { kind: "step", content: call("Read", "src/ui/Export.tsx", "0.1 秒") },
+    { kind: "step", content: call("Bash", "pnpm shot --platform win", "12 秒") },
+  ] } } },
+  { body: posted("看了一圈，有三处确实粗糙：\n\n- 工具栏图标在 125% 缩放下发虚；\n- 倒计时的数字会跳宽度；\n- 托盘菜单还是系统默认样式。\n\n先改哪个？", "human") },
+  { turn: { time: "16:29", text: "3 步 · 发出 1 条" }, body: { kind: "received", content: { note: "Your turn ended without a state. If you need a clarification, visibly ask for it; need alone is only a status summary. Cards are optional. Do not reopen a decision the user already made.", tasks: [], messages: [] } } },
+  { body: { kind: "group", content: { summary: "SendMessage · 共 3 项", title: "其他 3 项", failures: 0, pending: 0, rows: [
+    { kind: "step", content: call("TaskOutput", "摄像头 agent", "0.4 秒") }, { kind: "step", content: call("SendMessage", "摄像头 agent", "0.8 秒") },
+    { kind: "step", content: call("SendMessage", "导出 agent", "0.9 秒") },
+  ] } } },
+  { body: posted("中途会话重启了一次，两路的工作都已提交保存，没丢，现在已经让它们接着做。\n\n**摄像头 + 打包**（4 个提交，基本做完，正在补跑测试）：\n\n- 原生端新增摄像头 H.264 写入器和 DirectShow 采集图；\n- 摄像头录制改用共享的 QPC 时钟，跟录屏时间轴对齐；\n- 安装包里不再带 ffmpeg。\n\n**导出**（还在做）：剩下 GIF 和混音两项。") },
+  { body: { kind: "mark", content: { text: "去 ffmpeg 两路收尾（重启后续跑） · 等待了 1m 54s / 1h", wait: { since: WAITED_AT, until: WAITED_AT + 114_000, seconds: 3600, what: "去 ffmpeg 两路收尾（重启后续跑）" }, ends: "waiting" } } },
+  { body: own("The session restarted partway through, but both parts had already committed their work, so nothing was lost and both are running again.") },
+  { turn: { time: "16:31", text: "没发消息" }, body: { kind: "received", content: { tasks: [{ text: "子 agent 完成：Camera recording without ffmpeg", agent: true, failed: false, result: "Waiting for the NativeEngine results before sending the final report.", md: markdown("Waiting for the NativeEngine results before sending the final report.") }], messages: [] } } },
+  { body: { kind: "mark", content: { text: "去 ffmpeg 两路收尾 · 等待中，最长 1h", wait: { since: WAITING_SINCE, seconds: 3600, what: "去 ffmpeg 两路收尾" }, ends: "waiting" } } },
+  { body: own("Both parts of the ffmpeg removal are still finishing. The camera part is waiting on its last test run before reporting, and the export part is working through its remaining items.") },
+];
+export const HISTORY: HistoryView = {
+  items: HISTORY_ITEMS.map(({ body, turn }, n) => ({ key: `e${n}`, entries: [n, n], body, ...(turn ? { turn } : {}) })),
+  live: [], edge: "已到 Session 开始处", empty: false, loaded: true,
 };

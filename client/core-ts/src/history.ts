@@ -22,6 +22,8 @@ export type Context = {
   started: boolean;
   offsetMin: number;
   workspaces: Map<string, format.SlackWorkspace>;
+  /// Now, for the day a turn's time is said with (a turn of today says only its clock); absent: every turn says its clock alone.
+  now?: number;
 };
 
 function kindKey(kind: string): string {
@@ -315,6 +317,8 @@ export function presentHistory(live: J, cx: Context): J {
         const text = (k: string): string | null => (typeof a[k] === "string" ? a[k] : null);
         const kind = text("kind");
         v = { kind: "post", text: text("text") ?? "", md: markdown(text("text") ?? ""), place: place(text("to")), block: kind === "block" || kind === "need_help" || kind === "need_decision", failed: failedOf(steps[item.step]) };
+        const ends = endsOf(kind);
+        if (ends !== null && ends !== "waiting") v.ends = ends;
         break;
       }
       case "mark":
@@ -348,7 +352,7 @@ export function presentHistory(live: J, cx: Context): J {
                   : t("core-logic.history.waiting");
           // What it waited for (chat_state's `for`) leads, as the activity line says it.
           const text = item.what !== null ? `${item.what} · ${how}` : how;
-          v = { kind: "mark", text, wait: since !== null ? { since, until, seconds: item.seconds, what: item.what } : null };
+          v = { kind: "mark", text, wait: since !== null ? { since, until, seconds: item.seconds, what: item.what } : null, ends: "waiting" };
         } else {
           const m = item.mark;
           v = {
@@ -356,12 +360,16 @@ export function presentHistory(live: J, cx: Context): J {
             text:
               m === "final" || m === "all_done"
                 ? t("core-logic.history.mark.final")
-                : m === "block" || m === "need_help"
-                  ? t("core-logic.history.mark.block")
-                  : m === "need_decision"
-                    ? t("core-logic.history.mark.decision")
-                    : t("core-logic.history.mark.other", { mark: m }),
+                : m === "need_human"
+                  ? t("core-logic.history.mark.human")
+                  : m === "block" || m === "need_help"
+                    ? t("core-logic.history.mark.block")
+                    : m === "need_decision"
+                      ? t("core-logic.history.mark.decision")
+                      : t("core-logic.history.mark.other", { mark: m }),
           };
+          const ends = endsOf(m);
+          if (ends !== null) v.ends = ends;
         }
         break;
       case "group":
@@ -370,8 +378,35 @@ export function presentHistory(live: J, cx: Context): J {
     }
     const kind = v.kind ?? null;
     delete v.kind;
-    return { key: `e${base + first}`, entries: [base + first, base + last], body: { kind, content: v } };
+    return { key: `e${base + first}`, entries: [base + first, base + last], body: { kind, content: v } } as J;
   });
+
+  // Turns: each prompt that woke the agent (not one of a sub-agent's) begins one, on its item, saying when and what the
+  // turn did up to the next: how many calls, how many messages it sent (or that it sent none). Items before the first
+  // loaded one belong to a turn that began on an earlier page.
+  type Turn = { at: number | null; steps: number; posts: number; item: J };
+  let turn: Turn | null = null;
+  const turns: Turn[] = [];
+  items.forEach(([item, first], n) => {
+    if (item.kind === "received" && !flag(timeline[item.i], "subagent")) {
+      const at = typeof timeline[first]?.at === "string" ? epochMs(timeline[first].at) : null;
+      turn = { at: at === null ? null : Math.trunc(at), steps: 0, posts: 0, item: shown[n] };
+      turns.push(turn);
+    } else if (turn !== null) {
+      if (item.kind === "group") turn.steps += item.rows.filter((r) => "step" in r).length;
+      else if (item.kind === "post") turn.posts++;
+    }
+  });
+  for (const { at, steps: n, posts, item } of turns) {
+    const did = [
+      ...(n > 0 ? [t("core-logic.history.turn.steps", { n })] : []),
+      posts > 0 ? t("core-logic.history.turn.posts", { n: posts }) : t("core-logic.history.turn.silent"),
+    ].join(" · ");
+    item.turn = {
+      ...(at !== null ? { at, time: cx.now !== undefined ? format.dayClock(at, cx.now, cx.offsetMin) : format.clock(at, cx.offsetMin) } : {}),
+      text: did,
+    };
+  }
 
   const pushedNow = pushed(live, cx.runtime);
   const liveSteps = pushedNow.liveSteps.map(({ id, text }) => ({ id, text }));
@@ -439,6 +474,15 @@ export function usageOf(live: J): { usage: J[] | null; usageLine: string | null;
       })()
     : null;
   return { usage, usageLine, context, contextPercent, cost };
+}
+
+/// The state a post or a mark ended its turn in, as the clients colour it: done, waiting on a person, or waiting on work
+/// it started; null for one that ended nothing (a progress post) or words the station no longer uses.
+function endsOf(kind: string | null): "done" | "human" | "waiting" | null {
+  if (kind === "all_done" || kind === "final") return "done";
+  if (kind === "need_human" || kind === "block" || kind === "need_help" || kind === "need_decision") return "human";
+  if (kind === "waiting") return "waiting";
+  return null;
 }
 
 /// A group of the history; `base`: the transcript entry its timeline starts at (what a step's or thought's `entries` count
