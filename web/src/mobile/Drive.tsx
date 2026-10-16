@@ -12,7 +12,7 @@ import { useDoing } from "../doing.ts";
 import { useAct } from "../toast.tsx";
 import type { Attachment, DriveEntry, DriveRoot } from "../core/shapes.ts";
 import { ChevronRight, Close, Disk, Download, Edit, Folder, FolderPlus, More, Plus, Refresh, Retry, Trash, Upload } from "../icons.tsx";
-import { FilePreview, FileSource, Gallery, type FileSourceOf, type Shown } from "../FilePreview.tsx";
+import { FilePreview, FileSource, Gallery, PreviewBack, type FileSourceOf, type Shown } from "../FilePreview.tsx";
 import { KindIcon } from "../drive/KindIcon.tsx";
 import { Reader } from "../drive/Reader.tsx";
 import { Player } from "../drive/Player.tsx";
@@ -481,10 +481,16 @@ export function DrivePreview({ at, entries, entry, onClose }: { at: At; entries:
   }), [byPath, at.station, at.root]); // eslint-disable-line react-hooks/exhaustive-deps
   const images = useMemo(() => entries.filter((e) => e.kind === "image").map((e): Shown => ({ sessionKey: key, file: asFile(at.path, e) })), [entries, at.path, key]);
   const gallery = useMemo(() => ({ list: () => images }), [images]);
+  // Closed, back to the folder it is in: named so on its bar.
+  // (As a text's or a video's bar names it: drive/Drive.tsx useOpened.)
+  const roots = useDrive(at.station).roots;
+  const folder = at.path ? nameOf(at.path) : rootLabel(roots, at.root);
   return (
     <FileSource.Provider value={source}>
       <Gallery.Provider value={gallery}>
-        <FilePreview open onClose={onClose} sessionKey={key} file={asFile(at.path, entry)} />
+        <PreviewBack.Provider value={folder}>
+          <FilePreview open onClose={onClose} sessionKey={key} file={asFile(at.path, entry)} />
+        </PreviewBack.Provider>
       </Gallery.Provider>
     </FileSource.Provider>
   );

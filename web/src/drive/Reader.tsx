@@ -16,7 +16,8 @@ import { Segmented, Tip } from "../ui.tsx";
 import { useAppearance, useDark, type Appearance } from "../theme.ts";
 import { REST_MS, TAP_REST_MS } from "../FilePreview.tsx";
 import { placeStrokes, strokeLayer } from "../strokes.ts";
-import { placeAt, readWhole, sizeOf, usePlace, type At, type Got } from "./model.ts";
+import { download, placeAt, readWhole, sizeOf, usePlace, type At, type Got } from "./model.ts";
+import { ViewerBar, ViewerDownload, ViewerTool } from "../viewer/ViewerBar.tsx";
 import { isHeading, search, type Book, type Chapter } from "./text.ts";
 import { LINES, MARGINS, SIZES, setReaderStyle, useReaderStyle, type Paper } from "./readerStyle.ts";
 import * as css from "./Reader.css.ts";
@@ -436,20 +437,25 @@ export function Reader({ at, name, size, mtime, markdown, backLabel, onBack }: {
       </div>
       {/* With the bars away, how far through it is: a hairline along the bottom. */}
       <div className={css.hairline} aria-hidden="true"><span style={{ transform: `scaleX(${share})` }} /></div>
-      <header className={css.top} data-shown={shown || undefined} inert={!shown}
+      {!narrow ? (
+        <ViewerBar back={{ label: backLabel, onClick: onBack }} name={name} title={at.path}
+          meta={[book ? [chapter, `${Math.round(share * 100)}%`].filter(Boolean).join(" · ") : null, sizeOf(size)].filter(Boolean).join(" · ")}
+          tools={<>
+            <ViewerTool label={t("web-pages.drive.reader.contents")} on={panel === "contents"} onClick={() => open("contents")}><List size={18} /></ViewerTool>
+            <ViewerTool label={t("web-pages.drive.reader.find")} on={panel === "find"} onClick={() => open("find")}><Search size={18} /></ViewerTool>
+            <ViewerTool label={t("web-pages.drive.reader.layout")} on={panel === "layout"} onClick={() => open("layout")}><TextIcon size={18} /></ViewerTool>
+            <ViewerTool label={t(paper === "night" ? "web-pages.drive.reader.day" : "web-pages.drive.reader.night")} onClick={night}>{paper === "night" ? <Sun size={18} /> : <Moon size={18} />}</ViewerTool>
+            <ViewerDownload name={name} onSave={() => void download(at, { name, size, type: "" })} />
+          </>} />
+      ) : <header className={css.top} data-shown={shown || undefined} inert={!shown}
         onPointerEnter={(e) => { if (e.pointerType === "mouse") { onBars.current = true; clearTimeout(resting.current); } }}
         onPointerLeave={(e) => { if (e.pointerType === "mouse") { onBars.current = false; wake(); } }}>
         <button type="button" className={css.back} onClick={onBack} aria-label={backLabel}><ChevronLeft size={20} /><span>{backLabel}</span></button>
         <span className={css.title}><b>{name}</b>{book && <small>{[chapter, `${Math.round(share * 100)}%`].filter(Boolean).join(" · ")}</small>}</span>
         <span className={css.topEnd}>
-          {narrow ? <button type="button" className={css.topButton} aria-label={t("web-pages.drive.reader.find")} data-on={panel === "find" || undefined} onClick={() => open("find")}><Search size={20} /></button> : <>
-            <TopTool label={t("web-pages.drive.reader.contents")} on={panel === "contents"} onClick={() => open("contents")}><List size={18} /></TopTool>
-            <TopTool label={t("web-pages.drive.reader.find")} on={panel === "find"} onClick={() => open("find")}><Search size={18} /></TopTool>
-            <TopTool label={t("web-pages.drive.reader.layout")} on={panel === "layout"} onClick={() => open("layout")}><TextIcon size={18} /></TopTool>
-            <TopTool label={t(paper === "night" ? "web-pages.drive.reader.day" : "web-pages.drive.reader.night")} on={false} onClick={night}>{paper === "night" ? <Sun size={18} /> : <Moon size={18} />}</TopTool>
-          </>}
+          <button type="button" className={css.topButton} aria-label={t("web-pages.drive.reader.find")} data-on={panel === "find" || undefined} onClick={() => open("find")}><Search size={20} /></button>
         </span>
-      </header>
+      </header>}
       {found && (
         <div className={css.findStrip} data-bars={shown || undefined}>
           <span className={css.findWords}>{t("web-pages.drive.reader.foundAt", { query: found.query, at: found.ranges.length ? found.at + 1 : 0, n: found.ranges.length })}</span>
@@ -505,11 +511,6 @@ const shareNow = (s: HTMLElement | null) => {
   const most = s.scrollHeight - s.clientHeight;
   return most > 0 ? Math.min(1, s.scrollTop / most) : 0;
 };
-
-/** A desktop toolbar's button: its icon, its name on hover. */
-function TopTool({ label, on, onClick, children }: { label: string; on: boolean; onClick: () => void; children: ReactNode }) {
-  return <Tip label={label}><button type="button" className={css.topButton} aria-label={label} data-on={on || undefined} onClick={onClick}>{children}</button></Tip>;
-}
 
 function Tool({ icon, label, on, onClick }: { icon: ReactNode; label: string; on: boolean; onClick: () => void }) {
   return <button type="button" className={css.tool} data-on={on || undefined} onClick={onClick}>{icon}<span>{label}</span></button>;

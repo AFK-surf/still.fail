@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
+import { VIEWER_BAR } from "../viewer/ViewerBar.css.ts";
 import { panel as panelGround } from "../styles/glass.ts";
 
 /**
@@ -24,6 +25,8 @@ const PAPER = {
 
 export const reader = style({
   position: "absolute", inset: "0", overflow: "hidden", background: "var(--r-bg)", color: "var(--r-ink)",
+  // The bar over it (viewer/ViewerBar.tsx) on the paper, in its ink.
+  vars: { "--viewer-ground": "var(--r-bg)", "--viewer-ink": "var(--r-ink)", "--viewer-muted": "var(--r-muted)", "--viewer-line": "var(--r-line)" },
   selectors: {
     '&[data-paper="white"]': { vars: PAPER.white, colorScheme: "light" },
     '&[data-paper="green"]': { vars: PAPER.green, colorScheme: "light" },
@@ -272,27 +275,11 @@ export const sliderValue = style({ textAlign: "right", fontSize: vars.textMeta, 
 
 // ── with a mouse: a desktop's reader ──
 const desk = `${reader}:not([data-narrow])`;
-const BAR = 52;
+const BAR = VIEWER_BAR;
 const PANEL = 320;
-/** The toolbar across the top, on the paper itself, a line under it: the way back, the name in the middle, the tools. */
-globalStyle(`${desk} ${top}`, {
-  top: "0", left: "0", right: "0", transform: "none", translate: "0 0", width: "auto", maxWidth: "none", height: `${BAR}px`, padding: "0 12px",
-  gridTemplateColumns: "minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr)", gap: "16px", borderRadius: "0",
-  background: "var(--r-bg)", WebkitBackdropFilter: "none", backdropFilter: "none", boxShadow: "inset 0 -1px 0 var(--r-line)",
-});
-globalStyle(`${desk} ${back}`, { justifySelf: "start" });
-// The desktop app has no title bar: the toolbar, over the page's top row (styles/shell.css.ts main), drags the window, all
-// but what is pressed in it; on Windows what is at its right end stays clear of the window's buttons (styles/sidebar.css.ts pageBar).
-globalStyle(`[data-desktop] ${desk} ${top}`, { WebkitAppRegion: "drag" });
-// Over the whole window: in the macOS app its way back clear of the window's buttons at the left of its row.
-globalStyle(`:root[data-desktop="inset"]:not([data-fullscreen]) ${desk} ${top}`, { paddingLeft: "84px" });
-globalStyle(`:is([data-desktop="overlay"], [data-desktop="custom"]) ${desk} ${top}`, { paddingRight: "calc(var(--window-buttons, 0px) + 12px)" });
-globalStyle(`[data-desktop] ${desk} ${top} :is(a, button, input, select, [role="button"], [tabindex])`, { WebkitAppRegion: "no-drag" });
-// In a narrow window its floating bar, shown, takes the pointer over that row (FilePreview.css.ts).
+// Its bar is the one every file opened has (viewer/ViewerBar.tsx), on the paper. In a narrow window its floating bar,
+// shown, takes the pointer over the window's top row (FilePreview.css.ts).
 globalStyle(`[data-desktop] ${reader}[data-narrow] ${top}[data-shown]`, { WebkitAppRegion: "no-drag" });
-globalStyle(`${desk} ${topEnd}`, { gap: "2px" });
-globalStyle(`${desk} ${topButton}`, { width: "34px", height: "34px", borderRadius: `calc(10px * ${vars.cornerScale})`, color: "var(--r-muted)" });
-globalStyle(`${desk} ${topButton}:hover, ${desk} ${topButton}[data-on]`, { color: "var(--r-ink)" });
 /** The text under it, and clear of the panel docked at the right. */
 globalStyle(`${desk} ${scroller}`, { top: `${BAR}px`, paddingTop: "40px", outline: "none" });
 globalStyle(`${desk} ${scroller}[data-panel]`, { paddingRight: `${PANEL}px` });

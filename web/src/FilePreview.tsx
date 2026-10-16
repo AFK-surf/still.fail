@@ -5,8 +5,10 @@
 import { Dialog as RDialog } from "radix-ui";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { BIG_FILE, useApi, type Api, type Attachment, type FileProgress } from "./api.ts";
-import { useTopic } from "./core/react.ts";
-import type { ImageNear } from "./core/shapes.ts";
+import { useTopic, useTopicSelect } from "./core/react.ts";
+import { useNarrow } from "./mobile/app.tsx";
+import { ViewerBar, ViewerDownload } from "./viewer/ViewerBar.tsx";
+import type { ChatView, ImageNear } from "./core/shapes.ts";
 import { Check, ChevronLeft, ChevronRight, Close, Copy, Download, File as FileMark, Minus, Plus } from "./icons.tsx";
 import { Prose } from "./Prose.tsx";
 import { FrameHost, isFragment, vizDocument } from "./Viz.tsx";
@@ -294,6 +296,10 @@ export interface Shown { sessionKey: string; file: Attachment }
 export type GalleryOf = { chat: { thread: number } | { session: string } } | { list: () => Shown[] };
 export const Gallery = createContext<GalleryOf | null>(null);
 
+/** Where closing a preview goes back to, by name (a drive's folder: mobile/Drive.tsx DrivePreview); a chat's file's is
+ * its chat's title, else 关闭. */
+export const PreviewBack = createContext<string | null>(null);
+
 /** A file already on this device (one in the draft, not sent yet): shown as it is, not fetched from the station. */
 export interface LocalFile { blob: Blob; url: string }
 
@@ -493,6 +499,12 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
     const w = el.getBoundingClientRect().width;
     if (w > widest.current) { widest.current = w; el.style.minWidth = `min(${w}px, 100% - 32px)`; }
   });
+  // With a mouse on a wide screen, the bar every file opened has (viewer/ViewerBar.tsx), along the top and always there:
+  // the way back named by where it goes. On a phone, the bar floats over the file.
+  const docked = !useNarrow();
+  const backTo = useContext(PreviewBack);
+  const chatTitle = useTopicSelect<ChatView, string | null>(docked && !backTo && sessionKey && !sessionKey.startsWith("drive:") ? { topic: "chat", station: station.address, session: sessionKey } : null, (s) => s.value?.title ?? null);
+  const backLabel = backTo ?? chatTitle ?? t("common.close");
   // The bar floats over the file, and fades when the pointer leaves it or rests a while (not over it, not while it comes).
   const [awake, setAwake] = useState(true);
   const resting = useRef(0);
@@ -541,7 +553,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
     }
   }
   return (
-    <RDialog.Content ref={content} className={css2.fp} data-kind={kind ?? undefined} aria-describedby={undefined} data-awake={awake || coming !== undefined || marking || undefined}
+    <RDialog.Content ref={content} className={css2.fp} data-kind={kind ?? undefined} data-docked={docked || undefined} aria-describedby={undefined} data-awake={awake || coming !== undefined || marking || undefined}
       // A mouse wakes the bars by moving; a finger has no hover, and a tap on the file shows or hides them.
       onPointerMove={(e) => { if (e.pointerType === "mouse") wake(); }}
       onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; clearTimeout(resting.current); if (!onBar.current) setAwake(false); }}
@@ -553,7 +565,17 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
       }}
       // The page itself takes focus, not its first button: no ring on the close button for a tap or click.
       onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.focus(); }}>
-      <header ref={head} className={css2.fpHead} data-floats
+      {docked ? (
+        <ViewerBar back={{ label: backLabel, onClick: onClose }} title={file.path}
+          name={<RDialog.Title asChild><span>{file.name}</span></RDialog.Title>}
+          meta={`${count > 1 && at >= 0 ? `${at + 1} / ${count} · ` : ""}${fileSize(file.size)}${kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}`}
+          tools={<>
+            {coming !== undefined && <Progress got={coming} size={file.size} inBar />}
+            {controls}
+            {kind === "image" && !marking && loaded.state === "ready" && <CopyImage key={file.path} image={loaded.blob} />}
+            {!marking && loaded.state === "ready" && <ViewerDownload name={file.name} href={source?.save ? undefined : loaded.url} onSave={source?.save ? () => source.save?.(file, loaded.blob) : undefined} />}
+          </>} />
+      ) : <header ref={head} className={css2.fpHead} data-floats
         onPointerEnter={(e) => { if (e.pointerType !== "mouse") return; onBar.current = true; clearTimeout(resting.current); setAwake(true); }}
         onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; onBar.current = false; wake(); }}>
         <div className={css2.fpTitle}>
@@ -574,7 +596,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
           // Its place kept until it comes.
           : <span className={pagesCss.iconBtn} aria-hidden="true" style={{ visibility: "hidden" }}><Download size={18} /></span>}
         <Tip label={t("web-main.preview.closeKey")}><RDialog.Close className={pagesCss.iconBtn} aria-label={t("common.close")}><Close size={18} /></RDialog.Close></Tip>
-      </header>
+      </header>}
       <div className={css2.fpBody}>
         <div ref={slide} className={css2.fpSlide}>
           {body}

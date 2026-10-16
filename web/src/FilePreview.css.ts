@@ -1,5 +1,6 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
+import { VIEWER_BAR } from "./viewer/ViewerBar.css.ts";
 import { fadeInKeyframes } from "./styles/keyframes.css.ts";
 import { iconBtn } from "./styles/pages.css.ts";
 import { spinner } from "./styles/waiting.css.ts";
@@ -55,6 +56,8 @@ export const fpHead = style({
   },
 });
 globalStyle(`${fp}[data-kind="image"] ${fpHead}`, glass);
+// With the bar along its top (viewer/ViewerBar.tsx), the file under it.
+globalStyle(`${fp}[data-docked]`, { paddingTop: `${VIEWER_BAR}px` });
 globalStyle(`${fp}[data-awake] ${fpHead}, ${fpHead}:hover, ${fpHead}:has(:focus-visible)`, {
   opacity: "1", transitionDuration: "120ms",
 });

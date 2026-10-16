@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
+import { VIEWER_BAR } from "../viewer/ViewerBar.css.ts";
 import { glass } from "../FilePreview.css.ts";
 import { vvBar } from "../VideoViewer.css.ts";
 import { spinner as turning } from "../styles/waiting.css.ts";
@@ -62,26 +63,12 @@ globalStyle(`${timeTop} b`, { color: vars.text, fontWeight: "600" });
 export const timeRow = style({ "@media": { "(max-width: 640px)": { visibility: "hidden" } } });
 
 // ── with a mouse: a desktop's player ──
-const BAR = 52;
+const BAR = VIEWER_BAR;
 const LIST = 320;
 const desk = `${player}:not([data-narrow]):not(:fullscreen)`;
-/** The toolbar over the picture, always there (out of full screen): the way back, the name, 选集. */
-globalStyle(`${desk} ${head}`, {
-  top: "0", left: "0", right: "0", transform: "none", width: "auto", maxWidth: "none", height: `${BAR}px`, padding: "0 12px 0 8px",
-  borderRadius: "0", background: vars.canvas, WebkitBackdropFilter: "none", backdropFilter: "none", boxShadow: `inset 0 -1px 0 ${vars.line}`,
-  opacity: "1", pointerEvents: "auto",
-});
-globalStyle(`${desk} ${name}`, { flex: "1" });
-// The desktop app has no title bar: the toolbar, over the page's top row (styles/shell.css.ts main), drags the window, all
-// but what is pressed in it; on Windows what is at its right end stays clear of the window's buttons (styles/sidebar.css.ts pageBar).
-globalStyle(`[data-desktop] ${desk} ${head}`, { WebkitAppRegion: "drag" });
-// Over the whole window: in the macOS app its way back clear of the window's buttons at the left of its row.
-globalStyle(`:root[data-desktop="inset"]:not([data-fullscreen]) ${desk} ${head}`, { paddingLeft: "84px" });
-globalStyle(`:is([data-desktop="overlay"], [data-desktop="custom"]) ${desk} ${head}`, { paddingRight: "calc(var(--window-buttons, 0px) + 12px)" });
-globalStyle(`[data-desktop] ${desk} ${head} :is(a, button, input, select, [role="button"], [tabindex])`, { WebkitAppRegion: "no-drag" });
+// Its bar out of full screen is the one every file opened has (viewer/ViewerBar.tsx).
 // Narrow or full screen, its floating bar, awake, takes the pointer over that row (FilePreview.css.ts).
 globalStyle(`[data-desktop] ${head}[data-awake]`, { WebkitAppRegion: "no-drag" });
-export const listButton = style({ flex: "none", selectors: { '&[aria-pressed="true"]': { background: vars.selected, color: `${vars.text} !important` } } });
 /** The picture under it, clear of the list docked at the right; the controls and a subtitle over the picture's middle. */
 globalStyle(`${desk} ${stage}`, { top: `${BAR}px` });
 globalStyle(`${desk}[data-list] ${stage}`, { right: `${LIST}px` });

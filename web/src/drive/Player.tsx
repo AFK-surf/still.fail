@@ -19,6 +19,7 @@ import * as vvCss from "../VideoViewer.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import { compareNatural, download, joinPath, parentOf, placeAt, readKept, readWhole, sideSubtitle, sizeOf, usePlace, type At, type Got } from "./model.ts";
 import { streaming, streamUrl } from "./stream.ts";
+import { ViewerBar, ViewerDownload, ViewerTool } from "../viewer/ViewerBar.tsx";
 import { decodeText } from "./text.ts";
 import { toVtt } from "./subtitles.ts";
 import * as css from "./Player.css.ts";
@@ -299,15 +300,19 @@ export function Player({ at, entry, siblings, backLabel, onBack, onGo }: {
         {waiting && source.state === "ready" && !failed && <span className={css.spinner} aria-hidden="true" />}
       </div>
       {captions && cue && <div className={css.cue} data-awake={awake || undefined}><span>{cue.replace(/<[^>]+>/g, "")}</span></div>}
-      <header className={css.head} data-awake={awake || undefined} {...keep}>
-        <Tip label={backLabel}><button type="button" className={`${pagesCss.iconBtn} ${css.bright}`} aria-label={backLabel} onClick={onBack}><ChevronLeft size={20} /></button></Tip>
-        <span className={css.name}><b>{entry.name}</b>{list.length > 1 && index >= 0 && <small>{index + 1} / {list.length}</small>}</span>
-        {desk && list.length > 1 && (
-          <Tip label={t("web-pages.drive.player.list")}>
-            <button type="button" className={`${pagesCss.iconBtn} ${css.listButton}`} aria-label={t("web-pages.drive.player.list")} aria-pressed={listing} onClick={() => setListing((l) => !l)}><List size={18} /></button>
-          </Tip>
-        )}
-      </header>
+      {desk && !full ? (
+        <ViewerBar back={{ label: backLabel, onClick: onBack }} name={entry.name} title={at.path}
+          meta={[list.length > 1 && index >= 0 ? `${index + 1} / ${list.length}` : null, sizeOf(entry.size)].filter(Boolean).join(" · ")}
+          tools={<>
+            {list.length > 1 && <ViewerTool label={t("web-pages.drive.player.list")} on={listing} onClick={() => setListing((l) => !l)}><List size={18} /></ViewerTool>}
+            <ViewerDownload name={entry.name} onSave={() => void download(at, entry)} />
+          </>} />
+      ) : (
+        <header className={css.head} data-awake={awake || undefined} {...keep}>
+          <Tip label={backLabel}><button type="button" className={`${pagesCss.iconBtn} ${css.bright}`} aria-label={backLabel} onClick={onBack}><ChevronLeft size={20} /></button></Tip>
+          <span className={css.name}><b>{entry.name}</b>{list.length > 1 && index >= 0 && <small>{index + 1} / {list.length}</small>}</span>
+        </header>
+      )}
       {desk && listing && list.length > 1 && (
         <aside className={css.list}>
           <div className={css.listHead}>
