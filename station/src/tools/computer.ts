@@ -212,7 +212,6 @@ class AgentView {
   #codec: string | null = null;
   #waiters: ((ok: boolean) => void)[] = [];
   #ended = false;
-  #leave: () => void = () => {};
   #idle: () => void = () => {};
   readonly #timers: Timers;
   readonly #gone: (v: AgentView) => void;
@@ -227,8 +226,7 @@ class AgentView {
     this.#gone = o.gone;
   }
 
-  start(hub: ScreenHub) {
-    this.#leave = hub.join(this.id, { name: this.name, control: true, tell: () => {} });
+  start() {
     this.touch();
     void this.#pump();
   }
@@ -285,7 +283,6 @@ class AgentView {
     this.#ended = true;
     this.#idle();
     this.#view.close();
-    this.#leave();
     for (const w of this.#waiters.splice(0)) w(false);
     this.#gone(this);
   }
@@ -354,7 +351,8 @@ export class Computer {
   async #openView(session: string, source: ScreenSource, key: string): Promise<AgentView> {
     let view: ScreenView;
     try {
-      view = await source.open({ maxWidth: SHOT_MAX, maxHeight: SHOT_MAX, codecs: ["jpeg"] });
+      // Among the screen's people while it is open (closing it leaves).
+      view = await this.#p.hub.openAs(source.id, { maxWidth: SHOT_MAX, maxHeight: SHOT_MAX, codecs: ["jpeg"] }, { name: this.#p.name(session), control: true });
     } catch (error) {
       if (error instanceof ScreenRefused) {
         if (error.status === 415 || error.status === 400) throw new Refused(`The screen ${source.id} does not send pictures an agent can take on this station (it sends no JPEG): update the station.`);
@@ -375,7 +373,7 @@ export class Computer {
       },
     });
     this.#views.set(key, v);
-    v.start(this.#p.hub);
+    v.start();
     return v;
   }
 
