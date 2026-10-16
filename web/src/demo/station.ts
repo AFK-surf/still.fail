@@ -66,6 +66,9 @@ type Made = [name: string, kind: DriveKind, size: number, minutes: number];
 const FOLDERS: Record<string, Made[]> = {
   "/Users/lin": [["code", "folder", 0, 30], ["Desktop", "folder", 0, 300], ["Documents", "folder", 0, 2_000], ["Downloads", "folder", 0, 40], ["Movies", "folder", 0, 9_000], ["Pictures", "folder", 0, 9_000]],
   "/Users/lin/code": [["acme", "folder", 0, 30], ["notes", "folder", 0, 4_000]],
+  "/Users/lin/code/acme/web": [["src", "folder", 0, 30], ["public", "folder", 0, 900], ["index.html", "html", 1_536, 900], ["vite.config.ts", "code", 812, 1_400], ["package.json", "code", 2_048, 600]],
+  "/Users/lin/code/acme/web/src": [["pages", "folder", 0, 30], ["App.tsx", "code", 4_210, 30], ["main.tsx", "code", 620, 2_000], ["styles.css", "code", 3_100, 300]],
+  "/Users/lin/code/notes": [["2026-10.md", "markdown", 12_288, 60], ["ideas.md", "markdown", 4_096, 3_000]],
   "/Users/lin/Downloads": [
     ["设计稿", "folder", 0, 40], ["login-375.png", "image", 319_488, 52], ["发版录屏 1014.mp4", "video", 50_541_773, 175],
     ["orders-慢查询.md", "markdown", 9_216, 240], ["export-1013.csv", "csv", 225_280, 1_500], ["合同-2026Q4.pdf", "pdf", 1_468_006, 1_380],

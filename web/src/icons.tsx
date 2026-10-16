@@ -485,6 +485,14 @@ export function Users(props: IconProps) {
   return <Svg {...props}><path d="M12 8Q12 11.5 8.5 11.5Q5 11.5 5 8Q5 4.5 8.5 4.5Q12 4.5 12 8Z M3 20V18.5Q3 15 8.5 15Q14 15 14 18.5V20 M15 4.5Q19 4.5 19 8Q19 11.5 15 11.5 M17 15Q21 15.5 21 18.5V20" /></Svg>;
 }
 
+export function ViewColumns(props: IconProps) {
+  return <Svg {...props}><path d="M6 4.5H18Q20.5 4.5 20.5 7V17Q20.5 19.5 18 19.5H6Q3.5 19.5 3.5 17V7Q3.5 4.5 6 4.5Z M9.5 4.5V19.5 M15 4.5V19.5" /></Svg>;
+}
+
+export function ViewTree(props: IconProps) {
+  return <Svg {...props}><path d="M4 5.5H11 M10 12H20 M10 18.5H20 M6.5 8V16Q6.5 18.5 9 18.5H10 M6.5 12H10" /></Svg>;
+}
+
 export function VolumeX(props: IconProps) {
   return <Svg {...props}><path d="M4.5 9H7.5L12 5V19L7.5 15H4.5Q3 15 3 13.5V10.5Q3 9 4.5 9Z M16 9.5L21 14.5 M21 9.5L16 14.5" /></Svg>;
 }
@@ -629,6 +637,8 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "user-plus": UserPlus,
   "user": User,
   "users": Users,
+  "view-columns": ViewColumns,
+  "view-tree": ViewTree,
   "volume-x": VolumeX,
   "volume": Volume,
   "wait": Wait,

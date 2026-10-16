@@ -3426,6 +3426,9 @@ data class PrefsView (
 	/// Chats whose files dragged in go otherwise than `dropAs` says, by `<station>:<chat>`: true as files, false
 	/// named by their path (folders are named all the same).
 	val dropFiles: Map<String, Boolean>? = null,
+	/// How each place lists a station's files (`page`: the files' page, `tab`: a chat's 文件 tab): tree, columns
+	/// or list (none: tree).
+	val driveViews: Map<String, String>? = null,
 	/// How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path.
 	val dropAs: String? = null,
 	/// A Slack app made for a new connect, to go on with, by station (the Android app's).

@@ -7,7 +7,7 @@
 // list go up into the folder shown, ⌘/Ctrl+U puts files up.
 // The reader and the player are pages of their own (`files/read`, `files/play`); images, PDFs and code open in the
 // chat's preview over the page. The phone's pages are ../mobile/Drive.tsx, with the same parts under them.
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Navigate, useSearchParams } from "react-router";
 import { ContextMenu } from "radix-ui";
 import { stationBase, useStation } from "../station.tsx";
@@ -26,6 +26,7 @@ import { Player } from "../drive/Player.tsx";
 import { cancel, download, joinPath, nameOf, openerOf, parentOf, refresh, retry, rootLabel, settle, sizeOf, upload, useFolder, useUploads, type At, type Upload as Up } from "../drive/model.ts";
 import { absoluteOf, childOf, drive, drivePath, filtered, folderName, nameProblem, rootTrouble, trailOf, useDrive, type DriveState, type PickFolder } from "../drive/useDrive.ts";
 import { draggedOf, endDrag, startDrag } from "../drive/drag.ts";
+import { ColumnsView, TreeView, useDriveView, ViewSwitch, type RowOf } from "./DriveViews.tsx";
 import { useToast } from "../toast.tsx";
 import { DrivePreview, FilterField, useFolders } from "../mobile/Drive.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
@@ -170,9 +171,11 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
   const manage = useManage(d);
   const files = useRef<HTMLInputElement>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [naming, setNaming] = useState<{ entry: DriveEntry | null } | null>(null);
-  const [removing, setRemoving] = useState<DriveEntry | null>(null);
-  const [preview, setPreview] = useState<DriveEntry | null>(null);
+  // What is named, removed or previewed, with the folder it is in (a tree or columns show more than the one folder).
+  const [naming, setNaming] = useState<{ at: At; entry: DriveEntry | null } | null>(null);
+  const [removing, setRemoving] = useState<{ at: At; entry: DriveEntry } | null>(null);
+  const [preview, setPreview] = useState<{ at: At; entries: readonly DriveEntry[]; entry: DriveEntry } | null>(null);
+  const [view, setView] = useDriveView("page");
   const [dragging, setDragging] = useState(false);
   const here = absoluteOf(root, path);
   const name = path ? nameOf(path) : d.anywhere && !d.roots.some((r) => r.path === root) ? (here === d.home ? t("web-pages.drive.home") : folderName(here)) : rootLabel(d.roots, root);
@@ -185,31 +188,37 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
     setRefreshing(true);
     act(refresh(at).finally(() => setRefreshing(false)), t("web-pages.drive.refreshWhat"));
   };
-  const open = (e: DriveEntry) => {
-    const full = joinPath(path, e.name);
+  // An entry of the folder `in` (the one shown, or one under it a tree or columns show) opened: a folder gone into, a
+  // text read, a video played, a picture or code previewed, the rest downloaded.
+  const openIn = (in_: At, e: DriveEntry, siblings: readonly DriveEntry[] = [e]) => {
+    const full = joinPath(in_.path, e.name);
     switch (openerOf(e.kind)) {
       case "folder": return go(drivePath(station.base, root, full));
       case "read": return go(drivePath(station.base, root, full, "read"));
       case "play": return go(drivePath(station.base, root, full, "play"));
-      case "preview": return setPreview(e);
-      default: return save(e);
+      case "preview": return setPreview({ at: in_, entries: siblings, entry: e });
+      default: return save(in_, e);
     }
   };
-  const save = (e: DriveEntry) => act(download({ ...at, path: joinPath(path, e.name) }, e), t("web-pages.drive.downloadWhat"));
-  const items = (e: DriveEntry): MenuItem[] => [
-    { label: t("web-pages.drive.open"), onSelect: () => open(e) },
-    ...(e.dir ? [] : [{ label: t("web-pages.drive.download"), icon: Download, onSelect: () => save(e) }]),
-    { label: t("web-pages.drive.copyPath"), icon: Copy, onSelect: () => copyPath(absoluteOf(root, joinPath(path, e.name))) },
+  const open = (e: DriveEntry) => openIn(at, e, entries);
+  const save = (in_: At, e: DriveEntry) => act(download({ ...in_, path: joinPath(in_.path, e.name) }, e), t("web-pages.drive.downloadWhat"));
+  const itemsIn = (in_: At, e: DriveEntry): MenuItem[] => [
+    { label: t("web-pages.drive.open"), onSelect: () => openIn(in_, e) },
+    ...(e.dir ? [] : [{ label: t("web-pages.drive.download"), icon: Download, onSelect: () => save(in_, e) }]),
+    { label: t("web-pages.drive.copyPath"), icon: Copy, onSelect: () => copyPath(absoluteOf(root, joinPath(in_.path, e.name))) },
     ...(e.dir && d.anywhere ? [(() => {
-      const abs = absoluteOf(root, joinPath(path, e.name));
+      const abs = absoluteOf(root, joinPath(in_.path, e.name));
       const on = d.roots.some((r) => r.path === abs);
       return { label: t(on ? "web-pages.drive.unpin" : "web-pages.drive.pin"), icon: Pin, onSelect: () => pin(abs, !on) };
     })()] : []),
     ...(d.write ? [
-      { label: t("web-pages.drive.rename"), icon: Edit, onSelect: () => setNaming({ entry: e }) },
-      { label: t("web-pages.drive.delete"), icon: Trash, danger: true, onSelect: () => setRemoving(e) },
+      { label: t("web-pages.drive.rename"), icon: Edit, onSelect: () => setNaming({ at: in_, entry: e }) },
+      { label: t("web-pages.drive.delete"), icon: Trash, danger: true, onSelect: () => setRemoving({ at: in_, entry: e }) },
     ] : []),
   ];
+  const items = (e: DriveEntry) => itemsIn(at, e);
+  const rowOf: RowOf = (in_, e) => ({ items: itemsIn(in_, e), open: () => openIn(in_, e) });
+  const empty = <Empty text={t("web-pages.drive.emptyFolder")} action={d.write ? <Button icon={Upload} onClick={() => files.current?.click()}>{t("web-pages.drive.upload")}</Button> : undefined} />;
   // ⌘/Ctrl+U puts files up into the folder shown.
   useEffect(() => {
     if (!d.write) return;
@@ -252,8 +261,9 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
           </p>
         </div>
         <div className={css.actions}>
+          <ViewSwitch value={view} onChange={setView} />
           {d.write && <IconButton label={t("web-pages.drive.upload")} icon={Upload} onClick={() => files.current?.click()} />}
-          {d.write && <IconButton label={t("web-pages.drive.mkdir")} icon={FolderPlus} onClick={() => setNaming({ entry: null })} />}
+          {d.write && <IconButton label={t("web-pages.drive.mkdir")} icon={FolderPlus} onClick={() => setNaming({ at, entry: null })} />}
           <span className={css.spin} data-on={refreshing || undefined}><IconButton label={t("web-pages.drive.refresh")} icon={Refresh} onClick={reload} /></span>
           {d.anywhere && <span className={css.pin} data-on={pinned || undefined}><IconButton label={t(pinned ? "web-pages.drive.unpin" : "web-pages.drive.pin")} icon={Pin} onClick={() => pin(here, !pinned)} /></span>}
           <Menu items={[
@@ -262,7 +272,7 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
           ]} />
         </div>
       </header>
-      <div className={css.list} data-dragging={dragging || undefined}
+      <div className={css.list} data-dragging={dragging || undefined} data-view={view}
         onDragOver={(e) => { if (d.write && e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDragging(true); } }}
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
         onDrop={(e) => { if (!d.write || !e.dataTransfer.files.length) return; e.preventDefault(); setDragging(false); upload(station.address, root, path, [...e.dataTransfer.files]); }}>
@@ -271,19 +281,23 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
         ) : !folder.value ? <p className={shellCss.muted}>{t("web-pages.drive.reading")}</p> : (
           <>
             {uploads.map((u) => <UploadRow key={u.key} u={u} />)}
-            {entries.length === 0 && uploads.length === 0 && <Empty text={t("web-pages.drive.emptyFolder")} action={d.write ? <Button icon={Upload} onClick={() => files.current?.click()}>{t("web-pages.drive.upload")}</Button> : undefined} />}
-            {entries.map((e) => <EntryRow key={e.name} at={at} entry={e} items={items(e)} onOpen={() => open(e)} />)}
+            {view === "columns" ? <ColumnsView at={{ ...at, path: "" }} open={path} onGo={(p) => go(drivePath(station.base, root, p))} rowOf={rowOf} empty={uploads.length ? <></> : empty} />
+              : view === "tree" ? <TreeView key={path} at={at} rowOf={rowOf} empty={uploads.length ? <></> : empty} />
+              : <>
+                {entries.length === 0 && uploads.length === 0 && empty}
+                {entries.map((e) => <EntryRow key={e.name} at={at} entry={e} items={items(e)} onOpen={() => open(e)} />)}
+              </>}
           </>
         )}
         {dragging && <div className={css.drop}><Upload size={22} /><span>{t("web-pages.drive.dropHere", { name })}</span></div>}
       </div>
       <input ref={files} type="file" multiple hidden onChange={(e) => { const list = [...(e.target.files ?? [])]; e.target.value = ""; if (list.length) upload(station.address, root, path, list); }} />
-      {naming && <NameDialog at={at} entry={naming.entry} onClose={() => setNaming(null)} />}
+      {naming && <NameDialog at={naming.at} entry={naming.entry} onClose={() => setNaming(null)} />}
       <Confirm open={removing !== null} onClose={() => setRemoving(null)}
-        title={removing ? t(removing.dir ? "web-pages.drive.deleteFolderAsk" : "web-pages.drive.deleteAsk", { name: removing.name }) : ""}
-        description={removing?.dir ? t("web-pages.drive.deleteFolderText") : t("web-pages.drive.deleteText")} action={t("web-pages.drive.delete")}
-        onConfirm={() => { const e = removing; setRemoving(null); if (e) act(drive.remove(at, e), t("web-pages.drive.deleteWhat")); }} />
-      {preview && <DrivePreview at={at} entries={entries} entry={preview} onClose={() => setPreview(null)} />}
+        title={removing ? t(removing.entry.dir ? "web-pages.drive.deleteFolderAsk" : "web-pages.drive.deleteAsk", { name: removing.entry.name }) : ""}
+        description={removing?.entry.dir ? t("web-pages.drive.deleteFolderText") : t("web-pages.drive.deleteText")} action={t("web-pages.drive.delete")}
+        onConfirm={() => { const r = removing; setRemoving(null); if (r) act(drive.remove(r.at, r.entry), t("web-pages.drive.deleteWhat")); }} />
+      {preview && <DrivePreview at={preview.at} entries={preview.entries} entry={preview.entry} onClose={() => setPreview(null)} />}
       {manage.dialogs}
     </>
   );
@@ -300,9 +314,16 @@ function EntryRow({ at, entry, items, onOpen }: { at: At; entry: DriveEntry; ite
 
 /**
  * A row of a folder's list, as the files' page and a chat's 文件 tab draw it: its mark, name, size and time (`compact`:
- * the size alone), the … on hover and the same on a right click; dragged out, it carries the file and its path.
+ * the size alone), the … on hover and the same on a right click; dragged out, it carries the file and its path. In a
+ * tree (`depth`), in by its depth, a folder with its disclosure (`expanded`); in columns, a folder with › at its end
+ * (`column`), the one open `selected`.
  */
-export function DriveRow({ at, entry, items, onOpen, compact = false }: { at: At; entry: DriveEntry; items: MenuItem[]; onOpen: () => void; compact?: boolean }) {
+export function DriveRow({ at, entry, items, onOpen, compact = false, depth, expanded, column = false, selected = false }: {
+  at: At; entry: DriveEntry; items: MenuItem[]; onOpen: () => void; compact?: boolean;
+  depth?: number | undefined; expanded?: boolean | undefined; column?: boolean; selected?: boolean;
+}) {
+  // In a column a folder has › at its end, a file nothing: its name takes the room.
+  const next = column && entry.dir;
   const stationName = useStationName(at.station);
   const full = joinPath(at.path, entry.name);
   const removing = useDoing("drive.remove", { station: at.station, root: at.root, path: full });
@@ -310,10 +331,13 @@ export function DriveRow({ at, entry, items, onOpen, compact = false }: { at: At
   const busy = removing || renaming;
   const row = (
     <div className={css.entry} data-busy={busy || undefined} draggable={!busy} onDragStart={(e) => startDrag(e, [draggedOf(at, entry, stationName)])} onDragEnd={endDrag}>
-      <button type="button" className={css.row} data-compact={compact || undefined} onClick={onOpen} disabled={busy} title={compact ? entry.name : undefined}>
+      <button type="button" className={css.row} data-compact={compact || undefined} data-tree={depth !== undefined || undefined} data-selected={selected || undefined}
+        style={depth !== undefined ? { "--depth": depth } as CSSProperties : undefined} onClick={onOpen} disabled={busy} title={compact ? entry.name : undefined}
+        aria-expanded={depth !== undefined && entry.dir ? !!expanded : undefined}>
+        {depth !== undefined && <span className={css.disclosure} data-open={expanded || undefined}>{entry.dir && <ChevronRight size={12} strokeWidth={2} />}</span>}
         <KindIcon kind={entry.kind} size={compact ? 18 : 20} className={css.icon} />
         <span className={css.name}>{entry.name}</span>
-        <span className={css.size}>{entry.dir ? "" : entry.sizeText}</span>
+        <span className={css.size}>{entry.dir ? (next ? <ChevronRight size={12} strokeWidth={2} className={shellCss.muted} /> : "") : column ? "" : entry.sizeText}</span>
         {!compact && <span className={css.time}>{entry.timeText}</span>}
       </button>
       <span className={css.more}>{busy ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" /> : <Menu items={items} />}</span>

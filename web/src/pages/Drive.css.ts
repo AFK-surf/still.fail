@@ -55,12 +55,18 @@ export const row = style({
     "&:disabled": { cursor: "default" },
     // In a chat's 文件 tab: narrow, the size alone.
     "&[data-compact]": { gridTemplateColumns: "18px minmax(0, 1fr) auto 28px", columnGap: "10px", minHeight: "36px", padding: "6px 10px" },
+    // In a tree: in by its depth, its disclosure before its mark.
+    "&[data-tree]": { gridTemplateColumns: "12px 20px minmax(0, 1fr) 96px 104px 36px", columnGap: "8px", paddingLeft: "calc(6px + var(--depth, 0) * 18px)" },
+    "&[data-tree][data-compact]": { gridTemplateColumns: "12px 18px minmax(0, 1fr) auto 28px" },
+    "&[data-selected]": { background: vars.list },
     // A folder lent, or one of the station's to pick: no columns of sizes and times.
     [`${list} > &, [role=dialog] &`]: { gridTemplateColumns: "20px minmax(0, 1fr) 16px", minHeight: "44px" },
     [`${list} > &:hover, [role=dialog] &:hover`]: { background: vars.list },
   },
 });
 export const icon = style({ color: vars.muted, flex: "none" });
+/** A tree's folder: › turning ⌄ as it opens. */
+export const disclosure = style({ display: "grid", placeItems: "center", color: vars.muted, transition: `transform ${vars.dur} ${vars.easeOut}`, selectors: { "&[data-open]": { transform: "rotate(90deg)" } } });
 export const text = style({ display: "grid", gap: "2px", minWidth: "0" });
 export const name = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const meta = style({ color: vars.muted, fontSize: vars.textMeta, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
@@ -137,3 +143,23 @@ export const pickNote = style({ color: vars.muted, fontSize: vars.textCaption, f
 export const opened = style({ position: "relative", flex: "1", minHeight: "0", overflow: "hidden" });
 export const dark = style({ background: "#000" });
 export const openedNote = style({ padding: "40px" });
+
+/** The way a folder is shown, switched (DriveViews.tsx): three icon buttons in a quiet track, the one shown raised. */
+export const views = style({ display: "inline-flex", alignItems: "center", gap: "2px", padding: "2px", borderRadius: "999px", background: `color-mix(in srgb, ${vars.text} 6%, transparent)` });
+export const viewButton = style({
+  display: "grid", placeItems: "center", width: "28px", height: "28px", padding: "0", border: "0", borderRadius: "999px", background: "none",
+  color: vars.muted, cursor: "pointer", transition: `background ${vars.dur} ${vars.easeOut}, color ${vars.dur} ${vars.easeOut}`,
+  selectors: {
+    "&:hover": { color: vars.text },
+    "&[data-on]": { background: vars.canvas, color: vars.text, boxShadow: `0 0 2px ${vars.shadow}, 0 0 0 .5px ${vars.line}` },
+  },
+});
+/** A tree's line about a folder not listed (being read, empty, refused): in by its depth, on the line its names start. */
+export const treeNote = style({ margin: "0", padding: "8px 10px", paddingLeft: "calc(46px + var(--depth, 0) * 18px)", fontSize: vars.textMeta });
+export const treeError = style({ color: vars.red });
+/** Columns, a folder each, side by side; more than fit scroll sideways, the last kept in view. */
+export const columns = style({ display: "flex", alignItems: "stretch", gap: "6px", minHeight: "0", overflowX: "auto", overscrollBehaviorX: "contain" });
+export const column = style({ flex: "0 0 240px", display: "grid", alignContent: "start", gap: "2px", minWidth: "0", overflowY: "auto" });
+// On the files' page, columns as tall as the window leaves them: each scrolls on its own.
+globalStyle(`${list}[data-view="columns"]`, { display: "block", height: "calc(100dvh - 150px)", minHeight: "240px" });
+globalStyle(`${list}[data-view="columns"] > ${columns}`, { height: "100%" });

@@ -19,6 +19,7 @@ import { absoluteOf, drive, drivePath, folderName, rootTrouble, trailOf, useDriv
 import { draggedOf, droppedFrom } from "../drive/drag.ts";
 import { DrivePreview } from "../mobile/Drive.tsx";
 import { DriveRow } from "./Drive.tsx";
+import { ColumnsView, TreeView, useDriveView, ViewSwitch, type RowOf } from "./DriveViews.tsx";
 import * as shellCss from "../styles/shell.css.ts";
 import * as controlsCss from "../styles/controls.css.ts";
 import * as driveCss from "./Drive.css.ts";
@@ -118,6 +119,10 @@ function FolderList({ station, root, path, chat, onGo, onPlaces, onOpen }: {
   const here = absoluteOf(root, path);
   const pinned = d.roots.some((r) => r.path === here);
   const [refreshing, setRefreshing] = useState(false);
+  const [view, setView] = useDriveView("tab");
+  const rowOf: RowOf = (in_, e) => ({ items: items(in_, e), open: () => onOpen(in_, folderOf(in_), e) });
+  // A folder's entries as read (for a preview to step through the pictures beside it): the one shown's, else the file alone.
+  const folderOf = (in_: At) => (in_.path === path ? entries : []);
   const reload = () => {
     if (refreshing) return;
     setRefreshing(true);
@@ -135,13 +140,13 @@ function FolderList({ station, root, path, chat, onGo, onPlaces, onOpen }: {
     else if (abs.startsWith(prefix)) onGo(root, abs.slice(prefix.length));
     else onGo(abs, "");
   };
-  const items = (e: DriveEntry): MenuItem[] => {
-    const abs = absoluteOf(root, joinPath(path, e.name));
+  const items = (in_: At, e: DriveEntry): MenuItem[] => {
+    const abs = absoluteOf(root, joinPath(in_.path, e.name));
     const on = d.roots.some((r) => r.path === abs);
     return [
-      { label: t("web-pages.drive.sendToChat"), icon: Send, onSelect: () => offerToDraft(chat, { files: [], quotes: [], dropped: [droppedFrom(draggedOf(at, e, name))] }) },
+      { label: t("web-pages.drive.sendToChat"), icon: Send, onSelect: () => offerToDraft(chat, { files: [], quotes: [], dropped: [droppedFrom(draggedOf(in_, e, name))] }) },
       { label: t("web-pages.drive.copyPath"), icon: Copy, onSelect: () => copyPath(abs) },
-      ...(e.dir ? [] : [{ label: t("web-pages.drive.download"), icon: Download, onSelect: () => act(download({ ...at, path: joinPath(path, e.name) }, e), t("web-pages.drive.downloadWhat")) }]),
+      ...(e.dir ? [] : [{ label: t("web-pages.drive.download"), icon: Download, onSelect: () => act(download({ ...in_, path: joinPath(in_.path, e.name) }, e), t("web-pages.drive.downloadWhat")) }]),
       ...(e.dir && d.anywhere ? [{ label: t(on ? "web-pages.drive.unpin" : "web-pages.drive.pin"), icon: Pin, onSelect: () => pin(abs, !on) }] : []),
     ];
   };
@@ -159,16 +164,19 @@ function FolderList({ station, root, path, chat, onGo, onPlaces, onOpen }: {
         </span>
         <span className={driveCss.actions}>
           {d.anywhere && <span className={driveCss.pin} data-on={pinned || undefined}><IconButton label={t(pinned ? "web-pages.drive.unpin" : "web-pages.drive.pin")} icon={Pin} onClick={() => pin(here, !pinned)} /></span>}
+          <ViewSwitch value={view} onChange={setView} />
           <IconButton label={t("web-pages.drive.copyPath")} icon={Copy} onClick={() => copyPath(here)} />
           <span className={driveCss.spin} data-on={refreshing || undefined}><IconButton label={t("web-pages.drive.refresh")} icon={Refresh} onClick={reload} /></span>
         </span>
       </div>
-      <div className={`${driveCss.list} ${css.list}`}>
-        {folder.error ? (
+      <div className={`${driveCss.list} ${css.list}`} data-view={view}>
+        {view === "columns" ? <ColumnsView at={{ ...at, path: "" }} open={path} onGo={(p) => onGo(root, p)} rowOf={rowOf} />
+          : view === "tree" ? <TreeView key={path} at={at} rowOf={rowOf} compact />
+          : folder.error ? (
           <div className={driveCss.problem}><p className={controlsCss.fieldError}>{folder.error.message}</p><Button variant="ghost" icon={Retry} onClick={reload}>{t("web-pages.drive.retry")}</Button></div>
         ) : !folder.value ? <p className={`${shellCss.muted} ${css.note}`}>{t("web-pages.drive.reading")}</p>
           : entries.length === 0 ? <p className={`${shellCss.muted} ${css.note}`}>{t("web-pages.drive.emptyFolder")}</p>
-          : entries.map((e) => <DriveRow key={e.name} at={at} entry={e} items={items(e)} compact onOpen={() => onOpen(at, entries, e)} />)}
+          : entries.map((e) => <DriveRow key={e.name} at={at} entry={e} items={items(at, e)} compact onOpen={() => onOpen(at, entries, e)} />)}
       </div>
     </>
   );

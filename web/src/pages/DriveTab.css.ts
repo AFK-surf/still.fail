@@ -21,3 +21,8 @@ export const note = style({ margin: "0", padding: "12px 16px" });
 export const group = style({
   display: "flex", alignItems: "baseline", gap: "6px", padding: "8px 10px 4px", color: vars.muted, fontSize: vars.textMeta, fontWeight: "500", minWidth: "0",
 });
+// Columns fill the tab: each scrolls on its own, narrower than the page's.
+globalStyle(`${list}[data-view="columns"]`, { display: "block", overflowY: "hidden" });
+globalStyle(`${list}[data-view="columns"] > *`, { height: "100%" });
+// Two columns in view at a time: the one open and the one before it.
+globalStyle(`${list}[data-view="columns"] > * > *`, { flexBasis: "calc(50% - 3px)" });

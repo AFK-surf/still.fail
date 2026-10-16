@@ -3426,6 +3426,11 @@ export interface PrefsView {
 	 * named by their path (folders are named all the same).
 	 */
 	dropFiles?: Record<string, boolean>;
+	/**
+	 * How each place lists a station's files (`page`: the files' page, `tab`: a chat's 文件 tab): tree, columns
+	 * or list (none: tree).
+	 */
+	driveViews?: Record<string, string>;
 	/** How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path. */
 	dropAs?: string;
 	/** A Slack app made for a new connect, to go on with, by station (the Android app's). */
