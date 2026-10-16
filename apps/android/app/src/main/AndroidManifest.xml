@@ -60,7 +60,8 @@
                 <data android:scheme="https" android:host="ember.3720.org" android:pathPrefix="/o/" />
             </intent-filter>
             <!-- An invitation's link (/invite#<token>), a chat's link as chats refer to each other (/w/<ws>/s/<station>/chats/<key>),
-                 and a station's 共享调试 an agent asks for (/w/<ws>/s/<station>/adb; AdbShare.kt). -->
+                 a station's 共享调试 an agent asks for (/w/<ws>/s/<station>/adb; AdbShare.kt), and one of its screens an agent
+                 asks a person to take over (/w/<ws>/s/<station>/screen/<id>; remote/ScreenActivity.kt). -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -68,11 +69,20 @@
                 <data android:scheme="https" android:host="app.still.fail" android:path="/invite" />
                 <data android:scheme="https" android:host="app.still.fail" android:pathPattern="/w/.*/s/.*/chats/.*" />
                 <data android:scheme="https" android:host="app.still.fail" android:pathPattern="/w/.*/s/.*/adb" />
+                <data android:scheme="https" android:host="app.still.fail" android:pathPattern="/w/.*/s/.*/screen/.*" />
                 <data android:scheme="https" android:host="ember.3720.org" android:path="/invite" />
                 <data android:scheme="https" android:host="ember.3720.org" android:pathPattern="/w/.*/s/.*/chats/.*" />
                 <data android:scheme="https" android:host="ember.3720.org" android:pathPattern="/w/.*/s/.*/adb" />
+                <data android:scheme="https" android:host="ember.3720.org" android:pathPattern="/w/.*/s/.*/screen/.*" />
             </intent-filter>
         </activity>
+        <!-- A station's screen, seen and driven (remote/ScreenActivity.kt): opened by the app only (its links come to
+             MainActivity, which asks the core what they open). Turning the phone keeps it, and the view with it. -->
+        <activity
+            android:name=".remote.ScreenActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard|navigation|uiMode" />
         <!-- What the installer says of an update (Updates.kt). -->
         <receiver android:name=".InstallResult" android:exported="false" />
         <service android:name=".AdbShareService" android:exported="false" android:foregroundServiceType="specialUse">

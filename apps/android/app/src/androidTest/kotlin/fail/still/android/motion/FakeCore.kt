@@ -1,11 +1,13 @@
 // The core for the motion tests: topics answered from values the test sets (and set again mid-motion: a message
 // arriving, the station taking one), calls answered by the test's `answer`; what the app called is kept in `calls`.
+// Calls named in `streams` (`screen.view`) are held open: the test says their values (with bytes beside them, as a
+// screen's frames come) and ends them.
 package fail.still.android.motion
 
 import fail.still.android.data.StillFailJson
 import fail.still.core.CoreException
 import fail.still.core.StillFailCore
-import fail.still.core.scripted
+import fail.still.core.scriptedBytes
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.serialization.json.Json
@@ -23,7 +25,7 @@ import kotlinx.serialization.json.put
 class FakeCore {
     private val values = ConcurrentHashMap<JsonObject, JsonElement>()
     private val subs = ConcurrentHashMap<Long, JsonObject>()
-    @Volatile private var reply: ((String) -> Unit)? = null
+    @Volatile private var reply: ((String, ByteArray?) -> Unit)? = null
 
     /** How long (ms, on the system's clock) a topic's first value takes to come once subscribed, where not at once. */
     val lags = ConcurrentHashMap<JsonObject, Long>()
@@ -34,10 +36,16 @@ class FakeCore {
     /** The answer to a call (`ok`); throwing a [CoreException] answers it as an error. */
     @Volatile var answer: (name: String, params: JsonObject) -> JsonElement = { _, _ -> JsonNull }
 
-    val core: StillFailCore = StillFailCore.scripted { json, reply -> handle(json, reply) }
+    /** The calls held open rather than answered (a screen's view), by name. */
+    val streams: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    /** The open ones now: name → their request's id. */
+    private val open = ConcurrentHashMap<String, Long>()
+    /** The streamed calls the app cancelled, by name. */
+    val cancelled = CopyOnWriteArrayList<String>()
+
+    val core: StillFailCore = StillFailCore.scriptedBytes { json, reply -> this.reply = reply; handle(json) { text -> reply(text, null) } }
 
     private fun handle(json: String, reply: (String) -> Unit) {
-        this.reply = reply
         val m = Json.parseToJsonElement(json).jsonObject
         val id = m["id"]!!.jsonPrimitive.long
         m["subscribe"]?.let { topic ->
@@ -49,10 +57,14 @@ class FakeCore {
             return
         }
         if (m["unsubscribe"] != null) { subs.remove(id); return }
+        if (m["cancel"] != null) {
+            open.entries.firstOrNull { it.value == id }?.let { open.remove(it.key); cancelled += it.key }
+            return
+        }
         val name = m["call"]?.jsonPrimitive?.contentOrNull ?: return
-        if (m["cancel"] != null) return
         val params = m["params"]?.jsonObject ?: JsonObject(emptyMap())
         calls += name to params
+        if (name in streams) { open[name] = id; return }
         val out = try {
             buildJsonObject { put("id", id); put("ok", answer(name, params)) }
         } catch (e: CoreException) {
@@ -67,10 +79,31 @@ class FakeCore {
     fun set(topic: JsonObject, value: JsonElement) {
         values[topic] = value
         val to = reply ?: return
-        subs.filterValues { it == topic }.keys.forEach { to(valueOf(it, value)) }
+        subs.filterValues { it == topic }.keys.forEach { to(valueOf(it, value), null) }
     }
 
     inline fun <reified T> put(topic: JsonObject, value: T) = set(topic, StillFailJson.encodeToJsonElement(value))
+
+    /** Whether the streamed call `name` is open now. */
+    fun opened(name: String) = open.containsKey(name)
+
+    /** A value of the open call `name` (`{id, value}`), with `bytes` beside it when given. */
+    fun say(name: String, value: JsonElement, bytes: ByteArray? = null) {
+        val id = open[name] ?: error("$name is not open")
+        reply?.invoke(valueOf(id, value), bytes)
+    }
+
+    /** The open call `name` answered (it ended). */
+    fun finish(name: String, ok: JsonElement = JsonNull) {
+        val id = open.remove(name) ?: return
+        reply?.invoke(buildJsonObject { put("id", id); put("ok", ok) }.toString(), null)
+    }
+
+    /** The open call `name` failed (`{id, error}`). */
+    fun fail(name: String, code: String, message: String) {
+        val id = open.remove(name) ?: return
+        reply?.invoke(buildJsonObject { put("id", id); put("error", buildJsonObject { put("code", code); put("message", message) }) }.toString(), null)
+    }
 
     /** Whether the app is subscribed to `topic` now. */
     fun subscribed(topic: JsonObject) = subs.containsValue(topic)

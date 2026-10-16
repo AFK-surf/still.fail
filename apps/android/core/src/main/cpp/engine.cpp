@@ -192,6 +192,25 @@ class Engine {
     if (e->ExceptionCheck()) e->ExceptionClear();
   }
 
+  /// What the core says to the app with bytes beside it (a screen view's frame: client/core-ts hosts/bridge.ts
+  /// emitBytes): the JSON without them, and the bytes copied once, straight from the JS heap into a Java array.
+  void sayBytes(const std::string& json, const uint8_t* data, size_t size) {
+    JNIEnv* e = env();
+    if (!onFrame_) {
+      jclass cls = e->GetObjectClass(listener_);
+      onFrame_ = e->GetMethodID(cls, "onFrame", "([B[B)V");
+      e->DeleteLocalRef(cls);
+    }
+    jbyteArray head = e->NewByteArray(jsize(json.size()));
+    e->SetByteArrayRegion(head, 0, jsize(json.size()), reinterpret_cast<const jbyte*>(json.data()));
+    jbyteArray bytes = e->NewByteArray(jsize(size));
+    if (size > 0) e->SetByteArrayRegion(bytes, 0, jsize(size), reinterpret_cast<const jbyte*>(data));
+    e->CallVoidMethod(listener_, onFrame_, head, bytes);
+    e->DeleteLocalRef(head);
+    e->DeleteLocalRef(bytes);
+    if (e->ExceptionCheck()) e->ExceptionClear();
+  }
+
   void fatal(const std::string& reason) {
     if (dead_) return;
     dead_ = true;
@@ -227,6 +246,16 @@ class Engine {
     });
     fn("emit", 2, [this](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
       say(a[1].asString(rt).utf8(rt));
+      return jsi::Value::undefined();
+    });
+    fn("emitBytes", 3, [this](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t n) -> jsi::Value {
+      std::string json = a[1].asString(rt).utf8(rt);
+      if (n > 2 && a[2].isObject() && a[2].asObject(rt).isArrayBuffer(rt)) {
+        jsi::ArrayBuffer b = a[2].asObject(rt).getArrayBuffer(rt);
+        sayBytes(json, b.data(rt), b.size(rt));
+      } else {
+        sayBytes(json, nullptr, 0);
+      }
       return jsi::Value::undefined();
     });
     fn("fatal", 1, [this](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
@@ -347,6 +376,7 @@ class Engine {
   JavaVM* vm_;
   jobject listener_;
   jmethodID onBytes_ = nullptr;
+  jmethodID onFrame_ = nullptr;
   std::string script_, url_, dataDir_, cloudOrigin_;
   bool beta_;
   void* shell_ = nullptr;
