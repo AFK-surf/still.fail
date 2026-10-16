@@ -127,8 +127,8 @@ function ChoicesDemo() {
   const [v, setV] = useState<string>("all");
   return <div style={{ width: 420 }}><Choices label="范围" value={v} onChange={setV} options={[{ value: "all", title: "全部会话", description: "workspace 里所有人的对话" }, { value: "mine", title: "我参与的", description: "只看自己发起或参与的" }]} /></div>;
 }
-/** What can wait in a composer to be sent, each kind once: a file up, one going up, one that failed, one named by its
- * path, a folder named by its path, pasted words, a folder of the station going as a zip. */
+/** What can wait in a composer to be sent, each kind once: a page's mark with its note, a file up, one going up, one
+ * that failed, one named by its path, a folder named by its path, pasted words, a folder of the station going as a zip. */
 function ComposerCards() {
   const ref = (path: string, dir = false, mode: "path" | "file" = "path") => ({ station: "demo/studio", stationName: "Studio", path, dir, mode });
   const files: Pending[] = [
@@ -140,7 +140,8 @@ function ComposerCards() {
     { id: "6", name: "pasted.txt", size: 5120, done: { name: "pasted.txt", path: "/u/p.txt", size: 5120 }, error: null, pasted: { preview: "error: connect ECONNREFUSED 127.0.0.1:5432 at TCPConnectWrap", characters: 5120 } as never },
     { id: "7", name: "acme", size: 0, sent: 0, done: null, error: null, ref: ref("/Users/lin/code/acme", true, "file") },
   ];
-  const draft = { quotes: [], files, text: "", starting: false, asFiles: false, remove: noop, setMode: noop, setAsFiles: noop, add: noop, setText: noop, unquote: noop, comment: noop } as unknown as Draft;
+  const quotes = [{ id: "q1", author: "定价页 · 1", role: "page", text: "「专业版 ¥99/月」这一行", comment: "改成按年付的价格，月付放到下面" }];
+  const draft = { quotes, files, text: "", starting: false, asFiles: false, remove: noop, setMode: noop, setAsFiles: noop, add: noop, setText: noop, unquote: noop, comment: noop } as unknown as Draft;
   return (
     <div style={{ padding: 40, maxWidth: 820 }}>
       <form className={composerCss.composerBox} data-multiline="" style={{ display: "flex" }}>

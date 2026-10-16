@@ -712,7 +712,8 @@ globalStyle(`${composerFiles} :is(${fileCard}, ${pasteSnippet})`, { boxSizing: "
 globalStyle(`${composerFiles} ${fileCard}`, { padding: "0 14px" });
 // Off the composer's frosted ground: a file to send stands on the page's own (a step up in the dark); one named by its
 // path, which stays where it is, is only outlined, dashed.
-globalStyle(`${composerFiles} :is(${fileCard}, ${pasteSnippet})`, {
+// A quote (a mark, a note) waiting there stands on the same ground.
+globalStyle(`:is(${composerFiles} :is(${fileCard}, ${pasteSnippet}), ${composerQuote} ${quoteCard})`, {
   background: `light-dark(${vars.canvas}, color-mix(in srgb, ${vars.text} 9%, ${vars.raised}))`, boxShadow: "0 1px 2px rgb(0 0 0 / .05)",
 });
 globalStyle(`${composerFiles} ${fileCard}[data-named]`, { background: "none", boxShadow: "none", border: `1px dashed ${vars.lineStrong}` });
