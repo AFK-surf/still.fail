@@ -307,7 +307,8 @@ function StartedIn({ station, login, link }: { station: string; login: MachineLo
 
 /** A login done here: its command, then which chat's agent started it, who finished it, when, how it stands or ended. */
 function LoginRow({ station, login, onOpen }: { station: string; login: MachineLoginShown; onOpen(login: LoginOpen): void }) {
-  const rest = [login.doneByText ? t("web-main.logins.doneBy", { name: login.doneByText }) : null, login.whenText, login.statusText].filter(Boolean).join(" · ");
+  // Who ended it says how it ended (张三 取消): the status then says nothing more.
+  const rest = [login.doneByText, login.whenText, login.doneByText ? null : login.statusText].filter(Boolean).join(" · ");
   const said = (link: boolean) => (
     <span className={login.active ? css.stateActive : login.state === "failed" ? css.stateFailed : css.state}>
       {login.chat && <><StartedIn station={station} login={login} link={link} />{" · "}</>}{rest}

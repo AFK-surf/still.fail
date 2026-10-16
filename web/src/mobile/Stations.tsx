@@ -316,7 +316,7 @@ function Logins({ station }: { station: string }) {
       <SectionHeader title={t("web-main.logins.title")} start={24} />
       <ListCard>
         {view.logins.map((l) => {
-          const said = [l.chatTitle ? t("web-main.logins.startedIn", { chat: l.chatTitle }) : null, l.doneByText ? t("web-main.logins.doneBy", { name: l.doneByText }) : null, l.whenText, l.statusText].filter(Boolean).join(" · ");
+          const said = [l.chatTitle ? t("web-main.logins.startedIn", { chat: l.chatTitle }) : null, l.doneByText, l.whenText, l.doneByText ? null : l.statusText].filter(Boolean).join(" · ");
           return <PickRow key={l.id} label={l.command} sub={said} enabled={l.active} onClick={() => openLoginSheet(app, { station, id: l.id })} />;
         })}
       </ListCard>

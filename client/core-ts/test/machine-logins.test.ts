@@ -15,7 +15,7 @@ import { base, started, stationReplies } from "./station-fixture.ts";
 const ST = "ws/st";
 
 const device = { id: "l1", name: "gh", command: ["gh", "auth", "login"], state: "code", step: "device", url: "https://github.com/login/device", domain: "github.com", code: "1A2B-C3D4", waiting: false, by: { email: "a@x.com", name: "张三" }, chat: "ember:c-1", chatTitle: "部署", startedAt: Date.UTC(2026, 9, 12, 4), expiresAt: 2 };
-const past = { id: "l0", name: "npm", command: ["npm", "login"], state: "done", waiting: false, by: { email: "b@x.com", name: "李四" }, startedAt: Date.UTC(2026, 9, 11, 4), expiresAt: 2, endedAt: Date.UTC(2026, 9, 11, 4, 3) };
+const past = { id: "l0", name: "npm", command: ["npm", "login"], state: "done", waiting: false, by: { email: "b@x.com", name: "李四" }, doneBy: { email: "c@x.com", name: "王五" }, startedAt: Date.UTC(2026, 9, 11, 4), expiresAt: 2, endedAt: Date.UTC(2026, 9, 11, 4, 3) };
 const loopback = { id: "l2", name: "gcloud", command: ["gcloud", "auth", "login"], state: "browser", step: "loopback", url: "https://accounts.google.com/o/oauth2/auth?redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F&state=s3", domain: "accounts.google.com", callback: { host: "localhost", port: 8085, path: "/", state: "s3", post: false }, waiting: false, by: { email: "a@x.com", name: "张三" }, startedAt: 3, expiresAt: 4 };
 
 /// What the core sent since: each subscription's value (deltas applied) into `values`; the messages, for the answers.
@@ -48,7 +48,7 @@ test("a station's logins: read as its stream opens, in words, told as they chang
   assert.match(one.whenText, /^10\/12 \d{1,2}:\d{2}$/);
   assert.deepEqual([one.chat, one.chatTitle], ["ember:c-1", "部署"]);
   const done = all.logins.find((l: any) => l.id === "l0");
-  assert.deepEqual([done.statusText, done.active, done.byText, done.command], ["登录完成", false, "李四", "npm login"]);
+  assert.deepEqual([done.statusText, done.active, done.byText, done.doneByText, done.command], ["登录完成", false, "李四", "王五 完成", "npm login"]);
   assert.equal(v(values, 3), null, "a login the station does not have");
   assert.equal(all.logins.find((l: any) => l.id === "l2").statusText, "等你打开浏览器");
   // Told as it ends: in place.
@@ -114,7 +114,7 @@ test("cancelling: the station's answer is in place at once; nothing else a clien
   await host.settle();
   drain(host, values);
   assert.deepEqual(asked, [{ method: "DELETE", path: "/machine-logins/l1" }]);
-  assert.deepEqual([v(values, 1).statusText, v(values, 1).doneByText], ["已取消", "张三"]);
+  assert.deepEqual([v(values, 1).statusText, v(values, 1).doneByText], ["已取消", "张三 取消"]);
   // Starting one, or typing into one, is its agent's (the login tool), not a client's.
   call(core, ui, 3, "machineLogin.start", { station: ST, command: "gh auth login" });
   call(core, ui, 4, "machineLogin.input", { station: ST, id: "l1", key: "Enter" });

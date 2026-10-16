@@ -146,7 +146,10 @@ export function loginShown(l: J, station: string, stationName: string, now: numb
     ...(person(l.by) !== "" ? { byText: person(l.by) } : {}),
     ...(str(l.chat) !== null ? { chat: l.chat } : {}),
     ...(str(l.chatTitle) !== null ? { chatTitle: l.chatTitle } : {}),
-    ...(isObject(l.doneBy) && person(l.doneBy) !== "" ? { doneByText: person(l.doneBy) } : {}),
+    // Who ended it and how, in words (张三 完成, 张三 取消): only where it is known, and only for one done or cancelled.
+    ...(isObject(l.doneBy) && person(l.doneBy) !== "" && (state === "done" || state === "cancelled")
+      ? { doneByText: t(state === "done" ? "core-logic.machineLogin.doneBy" : "core-logic.machineLogin.cancelledBy", { name: person(l.doneBy) }) }
+      : {}),
     whenText: typeof l.startedAt === "number" ? when(l.startedAt, now, offsetMin) : "",
     startedAt: typeof l.startedAt === "number" ? l.startedAt : 0,
     expiresAt: typeof l.expiresAt === "number" ? l.expiresAt : 0,

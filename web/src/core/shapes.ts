@@ -3139,7 +3139,10 @@ export interface MachineLoginShown {
 	chat?: string;
 	/** That chat's title, when it began. */
 	chatTitle?: string;
-	/** Who finished it: whose browser came back through their client, or who cancelled it. */
+	/**
+	 * Who ended it and how, in words: 张三 完成 (their browser came back through their client), 张三 取消; it says the
+	 * outcome then. Absent when nobody is known, or it failed.
+	 */
 	doneByText?: string;
 	/** When it started, in words: 14:05 today, 10/16 14:05 before. */
 	whenText: string;

@@ -1974,7 +1974,7 @@ export const SHAPES: Record<string, Shape> = {
     ["byText", opt("String"), { doc: "Whose chat it was started for (the chat's starter)." }],
     ["chat", opt("String"), { doc: "The session of the agent that started it (its chat opens by it)." }],
     ["chatTitle", opt("String"), { doc: "That chat's title, when it began." }],
-    ["doneByText", opt("String"), { doc: "Who finished it: whose browser came back through their client, or who cancelled it." }],
+    ["doneByText", opt("String"), { doc: "Who ended it and how, in words: 张三 完成 (their browser came back through their client), 张三 取消; it says the\noutcome then. Absent when nobody is known, or it failed." }],
     ["whenText", "String", { doc: "When it started, in words: 14:05 today, 10/16 14:05 before." }],
     ["startedAt", "i64", { client: "I54" }],
     ["expiresAt", "i64", { client: "I54" }],

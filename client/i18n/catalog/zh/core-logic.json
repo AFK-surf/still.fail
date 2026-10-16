@@ -475,5 +475,7 @@
   "core-logic.machineLogin.pageNot": "still.fail 没有转发这个请求",
   "core-logic.machineLogin.pageFailedTitle": "登录没能转回 station",
   "core-logic.machineLogin.gone": "没有这个登录（可能已经结束很久了）",
-  "core-logic.machineLogin.noPage": "这个登录现在没有要打开的网页"
+  "core-logic.machineLogin.noPage": "这个登录现在没有要打开的网页",
+  "core-logic.machineLogin.doneBy": "{name} 完成",
+  "core-logic.machineLogin.cancelledBy": "{name} 取消"
 }

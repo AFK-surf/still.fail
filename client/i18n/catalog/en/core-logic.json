@@ -577,5 +577,7 @@
   "core-logic.machineLogin.pageNot": "still.fail didn't pass this request on",
   "core-logic.machineLogin.pageFailedTitle": "The login didn't reach the station",
   "core-logic.machineLogin.gone": "No such login (it may have ended a while ago)",
-  "core-logic.machineLogin.noPage": "This login has no page to open now"
+  "core-logic.machineLogin.noPage": "This login has no page to open now",
+  "core-logic.machineLogin.doneBy": "Completed by {name}",
+  "core-logic.machineLogin.cancelledBy": "Cancelled by {name}"
 }
