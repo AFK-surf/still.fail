@@ -7,7 +7,7 @@ import { createContext, useCallback, useContext, useEffect, useLayoutEffect, use
 import { BIG_FILE, useApi, type Api, type Attachment, type FileProgress } from "./api.ts";
 import { useTopic } from "./core/react.ts";
 import type { ImageNear } from "./core/shapes.ts";
-import { Check, ChevronLeft, ChevronRight, Close, Copy, Download, Minus, Plus } from "./icons.tsx";
+import { Check, ChevronLeft, ChevronRight, Close, Copy, Download, File as FileMark, Minus, Plus } from "./icons.tsx";
 import { Prose } from "./Prose.tsx";
 import { FrameHost, isFragment, vizDocument } from "./Viz.tsx";
 import { fileLink } from "./Prose.css.ts";
@@ -102,6 +102,8 @@ const fileId = (station: string, sessionKey: string, file: Attachment, thumb: bo
 export interface FileSourceOf {
   file(sessionKey: string, file: Attachment, thumb: boolean, onProgress?: (got: FileProgress) => void): Promise<Blob>;
   save?(file: Attachment, blob: Blob): void;
+  /** Its first `length` bytes, where the source can read a part (else the whole is fetched to tell what it is). */
+  head?(sessionKey: string, file: Attachment, length: number): Promise<Blob>;
 }
 export const FileSource = createContext<FileSourceOf | null>(null);
 
@@ -129,8 +131,8 @@ function fetchFile(api: Api, station: string, sessionKey: string, file: Attachme
 
 type Loaded = { state: "loading"; got?: FileProgress | null } | { state: "error"; message: string } | { state: "ready"; blob: Blob; url: string };
 
-/** A file as a blob and its URL, fetched from the station once and kept while shown. */
-function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb = false): Loaded {
+/** A file as a blob and its URL, fetched from the station once and kept while shown; `again`: asked again after it failed. */
+function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb = false, again = 0): Loaded {
   const api = useApi();
   const station = useStation();
   const source = useContext(FileSource);
@@ -163,8 +165,41 @@ function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb =
       unstand?.();
       if (u) URL.revokeObjectURL(u);
     };
-  }, [api, station.address, sessionKey, file.path, enabled, thumb, source]);
+  }, [api, station.address, sessionKey, file.path, enabled, thumb, source, again]);
   return loaded;
+}
+
+/** How many of a file's first bytes tell whether it is text. */
+const SNIFF_BYTES = 8192;
+
+/**
+ * What a file of no known kind is, by its first bytes only: text, or not (`binary`; also from a station from before
+ * parts, which cannot say); `whole` where its source reads no parts (the whole of it is looked at once it comes);
+ * null while it is asked.
+ */
+function useHead(sessionKey: string, file: Attachment, enabled: boolean): "text" | "binary" | "whole" | null {
+  const api = useApi();
+  const station = useStation();
+  const source = useContext(FileSource);
+  const [head, setHead] = useState<{ path: string; is: "text" | "binary" | "whole" } | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    const kept = blobs.get(fileId(station.address, sessionKey, file, false));
+    const read = kept ?? (source ? source.head?.(sessionKey, file, SNIFF_BYTES) : api.fileHead(sessionKey, storedName(file), SNIFF_BYTES));
+    if (!read) { setHead({ path: file.path, is: "whole" }); return; }
+    let live = true;
+    void read.then((blob) => looksLikeText(blob), () => false).then((text) => { if (live) setHead({ path: file.path, is: text ? "text" : "binary" }); });
+    return () => { live = false; };
+  }, [api, station.address, sessionKey, file.path, enabled, source]); // eslint-disable-line react-hooks/exhaustive-deps
+  return enabled && head?.path === file.path ? head.is : null;
+}
+
+/** A blob handed to the browser to download, as the bar's link would. */
+function saveBlob(url: string, name: string) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
 }
 
 /** A text file's content, fetched from the station once. */
@@ -415,9 +450,26 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
     closing.current = (done) => flight.close(showing.current, done);
     return () => { closing.current = null; flight.stop(); };
   }, [flight, closing]);
-  const fetched = useFile(sessionKey, file, !local);
-  const loaded: Loaded = local ? { state: "ready", ...local } : fetched;
   const known = kindOf(file.name);
+  // A file of no known kind is not fetched to tell what it is: its first bytes are. One that is not text is told of
+  // (its name, size and kind) and fetched only when asked to be downloaded.
+  const front = useHead(sessionKey, file, known.kind === null && !local);
+  const toldOf = !local && known.kind === null && front === "binary";
+  const [asked, setAsked] = useState<{ path: string; tries: number; save: boolean } | null>(null);
+  const askedNow = asked?.path === file.path ? asked : null;
+  const fetched = useFile(sessionKey, file, !local && (known.kind !== null || front === "text" || front === "whole" || askedNow !== null), false, askedNow?.tries ?? 0);
+  const loaded: Loaded = local ? { state: "ready", ...local } : fetched;
+  const save = (l: Extract<Loaded, { state: "ready" }>) => { if (source?.save) source.save(file, l.blob); else saveBlob(l.url, file.name); };
+  // Asked for and come: downloaded.
+  useEffect(() => {
+    if (!askedNow?.save || loaded.state !== "ready") return;
+    setAsked({ ...askedNow, save: false });
+    save(loaded);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+  const ask = () => {
+    if (loaded.state === "ready") save(loaded);
+    else setAsked({ path: file.path, tries: (askedNow?.tries ?? 0) + (loaded.state === "error" ? 1 : 0), save: true });
+  };
   // An image stands in as the chat showed it (its thumbnail, kept) while the whole of it comes.
   const thumb = useFileUrl(sessionKey, file, known.kind === "image" && loaded.state === "loading", true);
   const [sniffed, setSniffed] = useState<PreviewKind | "binary" | null>(null);
@@ -429,7 +481,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
     void looksLikeText(blob).then((text) => { if (live) setSniffed(text ? "text" : "binary"); });
     return () => { live = false; };
   }, [blob, known.kind]);
-  const kind = known.kind ?? sniffed;
+  const kind = known.kind ?? (front === "text" ? "text" : front === "binary" ? null : sniffed);
   // An image on its way: its thumbnail stands in, and how far the whole of it has come shows in the bar.
   const coming = known.kind === "image" && loaded.state === "loading" && thumb ? loaded.got : undefined;
   // The bar is as wide as what it holds, and once open it only grows: its buttons stay where they are to be clicked.
@@ -453,10 +505,24 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
   }, []);
   useEffect(() => { wake(); return () => clearTimeout(resting.current); }, [wake, file.path]);
   let body: ReactNode;
-  if (known.kind === "image" && (loaded.state === "ready" || (loaded.state === "loading" && thumb))) {
+  if (toldOf) {
+    const ext = file.name.includes(".") ? file.name.split(".").at(-1)!.toUpperCase() : "";
+    body = <div className={css2.fpNote}>
+      <FileMark size={44} className={css2.fpFactsMark} />
+      <div className={css2.fpFactsName}>{file.name}</div>
+      <div>{[fileSize(file.size), ext && ext.length <= 12 ? ext : ""].filter(Boolean).join(" · ")}</div>
+      <div>{t("web-main.preview.unsupported")}</div>
+      {askedNow && loaded.state === "loading"
+        ? (loaded.got ? <Progress got={loaded.got} size={file.size} /> : <span className={waitingCss.spinner} aria-hidden="true" />)
+        : <>
+          {loaded.state === "error" && <div className={css2.fpFactsFailed}>{t("web-main.preview.loadFailed", { error: loaded.message })}</div>}
+          <button type="button" className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} onClick={ask}><Download size={16} />{t("web-main.preview.download")}</button>
+        </>}
+    </div>;
+  } else if (known.kind === "image" && (loaded.state === "ready" || (loaded.state === "loading" && thumb))) {
     body = <ImageViewer key={file.path} url={loaded.state === "ready" ? loaded.url : thumb!} file={file} setControls={setControls} swipe={swipe}
       waiting={loaded.state === "loading"} onMarking={setMarking} onClose={onClose} />;
-  } else if (loaded.state === "loading" || (kind === null && loaded.state === "ready")) {
+  } else if (loaded.state === "loading" || (kind === null && loaded.state === "ready") || (known.kind === null && !local && front === null)) {
     body = <div className={css2.fpNote}>{loaded.state === "loading" && loaded.got ? <Progress got={loaded.got} size={file.size} /> : <><span className={waitingCss.spinner} aria-hidden="true" />{t("web-main.preview.loading")}</>}</div>;
   }
   else if (loaded.state === "error") body = <div className={css2.fpNote}>{t("web-main.preview.loadFailed", { error: loaded.message })}</div>;
@@ -499,7 +565,9 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
         {kind === "image" && !marking && (loaded.state === "ready"
           ? <CopyImage key={file.path} image={loaded.blob} />
           : <span className={pagesCss.iconBtn} aria-hidden="true" style={{ visibility: "hidden" }}><Copy size={18} /></span>)}
-        {marking ? null : loaded.state === "ready"
+        {marking ? null : toldOf && loaded.state !== "ready"
+          ? <Tip label={t("web-main.preview.download")}><button type="button" className={pagesCss.iconBtn} onClick={ask} disabled={askedNow !== null && loaded.state === "loading"} aria-label={t("web-main.preview.download")}><Download size={18} /></button></Tip>
+          : loaded.state === "ready"
           ? <Tip label={t("web-main.preview.download")}>{source?.save
             ? <button type="button" className={pagesCss.iconBtn} onClick={() => source.save?.(file, loaded.blob)} aria-label={t("web-main.preview.download")}><Download size={18} /></button>
             : <a className={pagesCss.iconBtn} href={loaded.url} download={file.name} aria-label={t("web-main.preview.download")}><Download size={18} /></a>}</Tip>

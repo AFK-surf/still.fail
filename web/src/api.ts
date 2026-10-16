@@ -225,6 +225,9 @@ export interface StationCall {
   file(key: string, name: string, thumb?: boolean, onProgress?: (got: FileProgress) => void, size?: number): Promise<Blob>;
   /** A video's poster as the station makes it (a small JPEG of its first frame); null when it has none. */
   poster(key: string, name: string): Promise<Blob | null>;
+  /** A file's first `length` bytes (`station.file.part`): enough to tell what it is without fetching all of it. Throws
+   * `unsupported` from a station from before parts. */
+  head(key: string, name: string, length: number): Promise<Blob>;
 }
 
 /** Over this a file comes a part at a time; a part's bytes. */
@@ -319,6 +322,10 @@ export function stationCall(call: ReturnType<typeof useCall>, station: string): 
         onProgress?.({ loaded: at, total });
       }
       return new Blob(parts, { type });
+    },
+    head: async (key, name, length) => {
+      const got = await call("station.file.part", { station, key, name, offset: 0, length }) as { bytes: string };
+      return new Blob([fromBase64(got.bytes)]);
     },
     poster: async (key, name) => {
       const got = await call("station.poster", { station, key, name }) as { type: string; bytes: string } | null;
@@ -416,6 +423,7 @@ export function stationApi(t: StationCall) {
     continueMachineSession: (runtime: RuntimeKind, id: string) => ops.machineSessionsContinue<{ key: string; thread: ChatThread }>({ runtime, id }),
     file: t.file,
     poster: t.poster,
+    fileHead: t.head,
     uploadFile: t.upload,
     startLogin: (profile: string) => ops.profileLogin<{ job: LoginJob }>({ id: profile }),
     cancelLogin: (profile: string) => ops.profileCancelLogin<{ job: LoginJob | null }>({ id: profile }),

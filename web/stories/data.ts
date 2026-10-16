@@ -72,6 +72,8 @@ export const note = entry("orders-慢查询.md", "markdown", NOTE_BYTES.length, 
 const clipSize = 108045;
 export const clips = ["发版录屏 1014.mp4", "发版录屏 1015.mp4", "发版录屏 1016.mp4", "周会 1013.mp4"].map((n) => entry(n, "video", clipSize, "video/mp4"));
 export const picture = entry("login-375.png", "image", 19013, "image/png");
+/** A file no viewer shows (its bytes are the picture's: not text). */
+export const apk = entry("still.fail-beta-0.1.3021.apk", "other", 31_457_280, "application/vnd.android.package-archive");
 export const folder: DriveEntry[] = [novel, note, ...clips, picture];
 
 const fetched = new Map<string, Promise<Uint8Array>>();

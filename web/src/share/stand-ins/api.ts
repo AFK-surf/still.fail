@@ -14,6 +14,7 @@ const none = {
   setWidgetState: async (_key: string, _path: string, _state: unknown) => ({ ok: true as const }),
   file: (_key: string, _name: string, _thumb?: boolean, _onProgress?: (got: FileProgress) => void, _size?: number): Promise<Blob> => noSession(),
   poster: (_key: string, _name: string): Promise<Blob | null> => noSession(),
+  fileHead: (_key: string, _name: string, _length: number): Promise<Blob> => noSession(),
 };
 export type Api = typeof none;
 

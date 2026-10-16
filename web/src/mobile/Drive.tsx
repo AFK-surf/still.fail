@@ -16,7 +16,7 @@ import { FilePreview, FileSource, Gallery, type FileSourceOf, type Shown } from 
 import { KindIcon } from "../drive/KindIcon.tsx";
 import { Reader } from "../drive/Reader.tsx";
 import { Player } from "../drive/Player.tsx";
-import { cancel, download, joinPath, nameOf, openerOf, parentOf, readKept, refresh, retry, rootLabel, settle, sizeOf, upload, useFolder, useUploads, type At, type Upload as Up } from "../drive/model.ts";
+import { cancel, download, joinPath, nameOf, openerOf, parentOf, readKept, readPart, refresh, retry, rootLabel, settle, sizeOf, upload, useFolder, useUploads, type At, type Upload as Up } from "../drive/model.ts";
 import { childOf, drive, drivePath, filtered, nameProblem, rootTrouble, useDrive, type DriveState, type Folders, type PickFolder } from "../drive/useDrive.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { ask, confirm } from "./sheets.tsx";
@@ -477,6 +477,7 @@ export function DrivePreview({ at, entries, entry, onClose }: { at: At; entries:
       const e = byPath.get(file.path);
       return readKept({ ...at, path: file.path }, { size: e?.size ?? file.size, mtime: e?.mtime ?? 0 }, "", onProgress && ((got) => onProgress({ loaded: got.loaded, total: got.total })));
     },
+    head: async (_key, file, length) => new Blob([(await readPart({ ...at, path: file.path }, 0, length)).bytes]),
   }), [byPath, at.station, at.root]); // eslint-disable-line react-hooks/exhaustive-deps
   const images = useMemo(() => entries.filter((e) => e.kind === "image").map((e): Shown => ({ sessionKey: key, file: asFile(at.path, e) })), [entries, at.path, key]);
   const gallery = useMemo(() => ({ list: () => images }), [images]);

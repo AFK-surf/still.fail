@@ -728,7 +728,7 @@ private fun Facts(file: Attachment, kind: PreviewKind?, cantShow: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         IconIn(if (kind == null) Icons.File else Icons.FileText, 44.dp, C.muted)
         Text(file.name, Modifier.padding(top = 6.dp), fontSize = 17.sp, lineHeight = 23.sp, fontWeight = FontWeight.SemiBold, color = C.ink, textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis)
-        val ext = file.name.substringAfterLast('.', "").takeIf { it.isNotEmpty() && it.length <= 8 && it != file.name }?.uppercase()
+        val ext = file.name.substringAfterLast('.', "").takeIf { it.isNotEmpty() && it.length <= 12 && it != file.name }?.uppercase()
         Text(listOfNotNull(fileSize(file.size), ext).joinToString(" · "), fontSize = 13.sp, color = C.muted)
         Text(cantShow, Modifier.padding(top = 4.dp), fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
     }

@@ -224,6 +224,12 @@ export const fpRow = style({
 export const fpNote = style({
   display: "grid", justifyItems: "center", gap: "14px", color: vars.muted, fontSize: vars.textUi,
 });
+/** A file not shown here, told of: its kind's mark, its name and what it is, then what can be done with it. */
+export const fpFactsMark = style({ color: vars.muted });
+export const fpFactsName = style({
+  maxWidth: "min(480px, 100%)", color: vars.text, fontSize: vars.textBody, fontWeight: "600", textAlign: "center", overflowWrap: "anywhere",
+});
+export const fpFactsFailed = style({ color: vars.red, textAlign: "center" });
 globalStyle(`${fpHeadProgress} ${fpProgressTrack}`, { width: "120px" });
 globalStyle(`${fpHead} ${segmented}`, {
   width: "120px",

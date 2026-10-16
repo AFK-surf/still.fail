@@ -22,7 +22,7 @@ import {
 import { Archive, Bell, Close, Copy, Download, Edit, Folder, Plus, Refresh, Search, Trash } from "../src/icons.tsx";
 import * as controlsCss from "../src/styles/controls.css.ts";
 import { vars } from "../src/styles/tokens.css.ts";
-import { AT, clips, folder, note, novel, picture } from "./data.ts";
+import { AT, apk, clips, folder, note, novel, picture } from "./data.ts";
 
 /**
  * What takes a story to its state, as the tests do it (Playwright's selectors); shown beside it in the gallery. `hold`:
@@ -282,6 +282,8 @@ export const stories: Story[] = [
   { id: "player-list", group: "文件", title: "播放器 · 选集", render: () => stage(<Player at={at(clips[0]!.name)} entry={clips[0]!} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />), steps: [{ click: '[aria-label="选集"]' }, { move: [500, 400] }] },
   { id: "player-phone", group: "文件", title: "播放器 · 手机", phone: true, render: () => stage(<Player at={at(clips[0]!.name)} entry={clips[0]!} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />) },
   { id: "preview-picture", group: "文件", title: "图片预览", render: () => stage(<DrivePreview at={at(picture.name)} entries={folder} entry={picture} onClose={noop} />), steps: [{ move: [640, 400] }] },
+  { id: "preview-unshown", group: "文件", title: "预览 · 不能预览的文件", render: () => stage(<DrivePreview at={at(apk.name)} entries={[...folder, apk]} entry={apk} onClose={noop} />), steps: [{ move: [640, 400] }] },
+  { id: "preview-unshown-phone", group: "文件", title: "预览 · 不能预览的文件 · 手机", phone: true, render: () => stage(<DrivePreview at={at(apk.name)} entries={[...folder, apk]} entry={apk} onClose={noop} />) },
 
   // ── the phone ──
   { id: "phone-chat", group: "手机", title: "对话", app: true, phone: true },
