@@ -25,7 +25,10 @@ User-decided (2026-10-08, chat EMBER/1791405826.815000):
 - **Collapsed:** nothing on the screen while nothing waits. With something waiting, a thin sliver of glass on the
   edge, tinted as the loudest mark (red failed, else blue); it can be dragged along the edge and stays where it was
   put. The mouse touching the screen's right edge anywhere along it opens what waits (2026-10-08: the always-there half
-  circle was 「不太合理」).
+  circle was 「不太合理」): the card comes out where the mouse is, and once
+  it has closed the edge opens nothing again until the mouse has left it (2026-10-16: away from the sliver it opened
+  and closed again and again). The edge is one no other screen goes on from: the menu bar's screen's, or with a screen
+  to its right, the rightmost one's.
 - **Peek:** something new (a message key the dock had not had) stretches the sliver into a capsule with its title,
   station and one line. It does not go away by itself: only once it has been seen.
 - **Card:** the mouse resting on the peek (or on the edge with no peek) pours the card out of it: the messages one

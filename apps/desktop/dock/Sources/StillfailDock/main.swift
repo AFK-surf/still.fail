@@ -42,6 +42,8 @@ final class Dock: NSObject, NSApplicationDelegate {
   var suppressed = false
   var swipedAt = Date.distantPast
   var swipe: CGFloat = 0
+  /// The card closed with the mouse still on the screen's edge: the edge opens nothing again until the mouse has left it.
+  var edgeSpent = false
 
   /// How long the mouse rests on the handle before the card opens (longer on a peek, so a swipe on it can start), and
   /// how long it is off the glass before the card closes.
@@ -65,10 +67,15 @@ final class Dock: NSObject, NSApplicationDelegate {
     listen()
   }
 
-  /// On the screen with the menu bar, its right edge, full height.
+  /// On a right edge no other screen goes on from (the mouse stops there, not passing into the next screen): the menu
+  /// bar's screen's when it is one, else the rightmost screen's. Full height.
   @objc func place() {
-    guard let screen = NSScreen.screens.first else { return }
-    let frame = screen.frame
+    let screens = NSScreen.screens.map(\.frame)
+    let edges = screens.filter { s in
+      !screens.contains { $0 != s && abs($0.minX - s.maxX) < 1 && $0.maxY > s.minY && $0.minY < s.maxY }
+    }
+    let main = screens.first
+    guard let frame = edges.contains(where: { $0 == main }) ? main : edges.max(by: { $0.maxX < $1.maxX }) ?? main else { return }
     let width = Size.handle + Size.gap + Size.card + 40
     panel.setFrame(NSRect(x: frame.maxX - width, y: frame.minY, width: width, height: frame.height), display: true)
   }
@@ -83,13 +90,17 @@ final class Dock: NSObject, NSApplicationDelegate {
     let mouse = NSEvent.mouseLocation
     let handle = toScreen(model.handleRect).insetBy(dx: -slack, dy: -slack)
     let card = toScreen(model.cardRect)
-    // With the card out, the gap between it and the handle counts too, so crossing it does not close the card.
-    let over = model.phase == .card && card != .zero ? handle.union(card.insetBy(dx: -slack, dy: -slack)) : handle
+    let screen = panel.screen?.frame ?? panel.frame
+    // With the card out, the gap between it and the handle counts too, so crossing it does not close the card; the
+    // gap between it and the edge, when it came out away from the handle.
+    let reach = model.cardY == nil ? handle : CGRect(x: card.maxX, y: card.minY, width: screen.maxX - card.maxX, height: card.height)
+    let over = model.phase == .card && card != .zero ? reach.union(card.insetBy(dx: -slack, dy: -slack)) : handle
     let now = Date()
     // The screen's right edge, anywhere along it, opens what waits (nothing waiting, there is nothing to open).
-    let screen = panel.screen?.frame ?? panel.frame
     let atEdge = !model.items.isEmpty && mouse.x >= screen.maxX - 2 && mouse.y >= screen.minY && mouse.y <= screen.maxY
-    let isIn = model.dragging || over.contains(mouse) || (atEdge && model.phase != .card)
+    if !atEdge { edgeSpent = false }
+    let edgeOpens = atEdge && !edgeSpent && model.phase != .card && !over.contains(mouse)
+    let isIn = model.dragging || over.contains(mouse) || edgeOpens
     panel.ignoresMouseEvents = !isIn
     if isIn != inside { inside = isIn; since = now }
     if !inside { suppressed = false }
@@ -97,11 +108,15 @@ final class Dock: NSObject, NSApplicationDelegate {
     case .collapsed, .peek:
       let delay = model.phase == .peek ? peekOpenDelay : openDelay
       if inside, !model.items.isEmpty, !suppressed, !model.dragging, now.timeIntervalSince(since) >= delay, now.timeIntervalSince(swipedAt) > 0.5 {
-        withAnimation(spring) { model.openCard() }
+        // Opened from the edge away from the handle: the card comes out where the mouse is, so it is under it.
+        withAnimation(spring) { model.openCard(at: edgeOpens ? panel.frame.maxY - mouse.y : nil) }
       }
     case .card:
       // Seen is enough: the card closing takes the peek with it; what it showed waits in the half circle, unread.
-      if !inside, now.timeIntervalSince(since) >= closeDelay { withAnimation(spring) { model.putAway() } }
+      if !inside, now.timeIntervalSince(since) >= closeDelay {
+        if atEdge { edgeSpent = true }
+        withAnimation(spring) { model.putAway() }
+      }
     }
   }
 

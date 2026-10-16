@@ -57,6 +57,8 @@ enum Phase { case collapsed, peek, card }
     didSet { UserDefaults.standard.set(handleY, forKey: "handleY") }
   }
   var dragging = false
+  /// Where the card comes out, from the top of the screen, when it is not by the handle (opened from the edge elsewhere).
+  var cardY: CGFloat?
 
   /// The keys of every message the dock has had: one not among them is new. The first list counts as known.
   @ObservationIgnored private var known = Set<String>()
@@ -99,12 +101,14 @@ enum Phase { case collapsed, peek, card }
   /// Back into the half circle: the peek is gone, what it showed stays unread.
   func putAway() {
     peeking = nil
+    cardY = nil
     unseen = 0
     phase = .collapsed
   }
 
-  /// The card for what the peek shows, else the first.
-  func openCard() {
+  /// The card for what the peek shows, else the first; by the handle, or at `y` (from the top of the screen).
+  func openCard(at y: CGFloat? = nil) {
+    cardY = y
     current = peeking.flatMap { p in items.firstIndex(where: { $0.id == p.id }) } ?? 0
     phase = .card
   }

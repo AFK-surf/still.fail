@@ -32,7 +32,7 @@ struct DockView: View {
     GeometryReader { proxy in
       let width = proxy.size.width, height = proxy.size.height
       let handleY = clampY(model.handleY == 0 ? height * 0.42 : model.handleY, half: handleSize.height / 2, height: height)
-      let cardY = clampY(handleY, half: cardHeight / 2, height: height)
+      let cardY = clampY(model.cardY ?? handleY, half: cardHeight / 2, height: height)
 
       glassGroup {
         ZStack(alignment: .topLeading) {
