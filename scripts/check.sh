@@ -253,7 +253,10 @@ if part ts; then
     prep cloud-types after_cloud_types
     step "typecheck: cloud" after cloud after cloud-types sh -c 'cd cloud && pnpm run check'
   fi
-  if touches "$ts_desktop"; then prep desktop deps apps/desktop; step "typecheck: desktop" after desktop sh -c 'cd apps/desktop && pnpm run typecheck'; fi
+  if touches "$ts_desktop"; then prep desktop deps apps/desktop; step "typecheck: desktop" after desktop sh -c 'cd apps/desktop && pnpm run typecheck'
+    # What the app's bundles take from the repository is its shell's (scripts/desktop-web.ts SHELL): a change to one of
+    # them is a new app, not a web release alone.
+    step "desktop: its shell's files" after desktop node scripts/desktop-web.ts check; fi
   # The TypeScript core (docs/core-ts.md): its own tsconfig.
   if touches "$ts_core"; then prep core deps client/core-ts; step "typecheck: core-ts" after core sh -c 'cd client/core-ts && pnpm exec tsgo --noEmit'; fi
   # What makes the views writes only on what it made, never on what it was given (docs/core-ts.md「谁能改什么」).

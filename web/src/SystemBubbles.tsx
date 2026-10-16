@@ -68,13 +68,15 @@ function AppBubble() {
   const [away, setAway] = useState(false);
   if (!updates || !state || (away && state.phase !== "downloading" && state.phase !== "installing")) return null;
   const busy = state.phase === "downloading" || state.phase === "installing";
+  // A newer web app alone: the pages reload on it, the app does not restart.
+  const web = state.kind === "web";
   const text = state.phase === "downloading" ? t("web-main.appUpdate.downloading", { percent: state.percent })
-    : state.phase === "installing" ? t("web-main.appUpdate.restarting")
+    : state.phase === "installing" ? t(web ? "web-main.appUpdate.reloading" : "web-main.appUpdate.restarting")
     : state.phase === "failed" ? state.message || t("web-main.appUpdate.failed")
-    : t("web-main.appUpdate.title", { version: state.version, app: NAME });
+    : t(web ? "web-main.appUpdate.webTitle" : "web-main.appUpdate.title", { version: state.version, app: NAME });
   return (
     <Bubble icon={<Download size={16} />} closeLabel={t("web-main.webUpdate.later")} onClose={busy ? undefined : () => setAway(true)}
-      action={!busy && (() => <button type="button" className={css.action} data-tone="accent" onClick={() => updates.start()}>{state.phase === "failed" ? t("web-main.appUpdate.failed") : t("web-main.versions.update")}</button>)}>
+      action={!busy && (() => <button type="button" className={css.action} data-tone="accent" onClick={() => updates.start()}>{state.phase === "failed" ? t("web-main.appUpdate.failed") : t(web ? "web-main.webUpdate.refresh" : "web-main.versions.update")}</button>)}>
       {text}
     </Bubble>
   );

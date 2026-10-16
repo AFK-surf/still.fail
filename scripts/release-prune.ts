@@ -3,7 +3,8 @@
 // (zip, exe, apk) and 30 .blockmap/.sig. Older installers are deleted, and older beta blockmaps; a stable release's
 // blockmaps all stay (a few hundred KB each). A desktop app updates from the version it runs by fetching that
 // version's blockmap (when it has not kept it) and the new file's changed blocks: no old installer is needed, so a beta
-// up to 30 releases behind still updates by difference. The stations', Node and the feeds are never touched.
+// up to 30 releases behind still updates by difference. The beta desktop app's web archives (docs/desktop-web-updates.md):
+// the one its feed names, any newer, and the newest 5. The stations', Node and the feeds are never touched.
 // CI runs it after `put` (.github/workflows/pipeline.yml).
 //   node scripts/release-prune.ts [--dry-run]
 // Needs CLOUDFLARE_API_TOKEN (and CLOUDFLARE_ACCOUNT_ID, else the token's first account).
@@ -18,6 +19,10 @@ const INSTALLER = /^((?:desktop|android)\/stillfail-(?:beta-)?)(\d+(?:\.\d+\.\d+
 /** How many of a beta's newest installers, and of its blockmaps, stay. */
 const BETA_INSTALLERS = 5;
 const BETA_BLOCKMAPS = 30;
+/** The beta desktop app's web app: its feed, its archives, and how many of the newest stay. */
+const WEB_FEED = "desktop/web/stillfail-beta-web.json";
+const WEB_ARCHIVE = /^desktop\/web\/stillfail-beta-web-0\.1\.(\d+)\.tar\.gz$/;
+const WEB_ARCHIVES = 5;
 
 const dryRun = process.argv.includes("--dry-run");
 const token = process.env.CLOUDFLARE_API_TOKEN;
@@ -81,7 +86,15 @@ for (const key of keys) {
 }
 for (const list of versions.values()) list.sort((a, b) => (older(a, b) ? 1 : older(b, a) ? -1 : 0));
 
+// The web archives: the build the feed names (none: the feed is not out yet, and nothing goes).
+const webFeed = await api(`${objects}/${WEB_FEED}`);
+if (!webFeed.ok && webFeed.status !== 404) throw new Error(`${WEB_FEED}: ${webFeed.status}`);
+const webNamed = webFeed.ok ? Number((await webFeed.json()).build) : null;
+const webBuilds = keys.map((key) => Number(key.match(WEB_ARCHIVE)?.[1])).filter((n) => Number.isSafeInteger(n)).sort((a, b) => b - a);
+
 const doomed = keys.filter((key) => {
+  const web = Number(key.match(WEB_ARCHIVE)?.[1]);
+  if (Number.isSafeInteger(web)) return webNamed !== null && web < webNamed && webBuilds.indexOf(web) >= WEB_ARCHIVES;
   const file = installer(key);
   const named = file && current.get(file.group);
   if (!file || !named || !older(file.version, named)) return false;

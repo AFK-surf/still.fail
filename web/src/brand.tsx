@@ -211,15 +211,20 @@ export function useAppUpdate(): AppUpdate | null {
 
 /**
  * The desktop app has a newer build: 更新 beside the buddy, wherever it stands. Clicked, the build is downloaded (the
- * button says how far) and the app restarts as it.
+ * button says how far) and the app restarts as it; a newer web app alone (kind "web") is downloaded already, and
+ * clicked, the pages reload on it.
  */
 function UpdateButton() {
   const updates = window.stillfailDesktop?.appUpdate;
   const state = useAppUpdate();
   if (!updates || !state) return null;
-  const label = state.phase === "downloading" ? t("web-main.appUpdate.downloading", { percent: state.percent }) : state.phase === "installing" ? t("web-main.appUpdate.restarting") : state.phase === "failed" ? t("web-main.appUpdate.failed") : t("web-main.versions.update");
+  const web = state.kind === "web";
+  const label = state.phase === "downloading" ? t("web-main.appUpdate.downloading", { percent: state.percent })
+    : state.phase === "installing" ? t(web ? "web-main.appUpdate.reloading" : "web-main.appUpdate.restarting")
+    : state.phase === "failed" ? t("web-main.appUpdate.failed")
+    : t(web ? "web-main.webUpdate.refresh" : "web-main.versions.update");
   const busy = state.phase === "downloading" || state.phase === "installing";
-  const title = state.phase === "failed" ? state.message : t("web-main.appUpdate.title", { version: state.version, app: NAME });
+  const title = state.phase === "failed" ? state.message : t(web ? "web-main.appUpdate.webTitle" : "web-main.appUpdate.title", { version: state.version, app: NAME });
   return onPage(
     <Tip label={title}><button type="button" className={css.sidebarUpdate} disabled={busy} aria-busy={busy} onClick={() => updates.start()}>
       {label}

@@ -9,6 +9,10 @@ import * as css from "./AppVersion.css.ts";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
+declare const __BUILD__: string | null;
+/** The web app's build, which the beta desktop app may run newer than its own (apps/desktop/src/web-update.mts). */
+const BUILD = typeof __BUILD__ === "string" ? __BUILD__ : null;
+
 /** Only the desktop app has a version of its own to show. */
 export const HAS_VERSION = typeof window !== "undefined" && !!window.stillfailDesktop?.version;
 
@@ -42,10 +46,11 @@ function AppVersion() {
     setParams((p) => { p.delete("check"); return p; }, { replace: true });
     if (!update) run();
   }, [params]);
+  const web = update?.kind === "web";
   const note = update?.phase === "downloading" ? t("web-pages.version.downloading", { version: update.version, percent: update.percent })
-    : update?.phase === "installing" ? t("web-pages.version.installing", { version: update.version })
+    : update?.phase === "installing" ? t(web ? "web-pages.version.reloading" : "web-pages.version.installing", { version: update.version })
     : update?.phase === "failed" ? t("web-pages.version.failed", { version: update.version, error: update.message })
-    : update ? t("web-pages.version.available", { version: update.version })
+    : update ? t(web ? "web-pages.version.webReady" : "web-pages.version.available", { version: update.version })
     : checking ? t("web-pages.version.checking")
     : found?.error ? t("web-pages.version.checkFailed", { error: found.error })
     : found ? t("web-pages.version.latest")
@@ -55,11 +60,11 @@ function AppVersion() {
   return (
     <div className={css.row}>
       <div className={css.text}>
-        <span>{desktop?.version}</span>
+        <span>{desktop?.version}{BUILD && BUILD !== desktop?.version ? ` · ${t("web-pages.version.web", { version: BUILD })}` : ""}</span>
         {note && <span className={bad ? css.failed : css.note}>{note}</span>}
       </div>
       {update
-        ? <Button variant="primary" busy={busy} onClick={() => desktop?.appUpdate?.start()}>{update.phase === "failed" ? t("common.retry") : t("web-pages.version.updateTo", { version: update.version })}</Button>
+        ? <Button variant="primary" busy={busy} onClick={() => desktop?.appUpdate?.start()}>{update.phase === "failed" ? t("common.retry") : t(web ? "web-pages.version.reloadTo" : "web-pages.version.updateTo", { version: update.version })}</Button>
         : check && <Button busy={checking} onClick={run}>{t("web-pages.version.check")}</Button>}
     </div>
   );

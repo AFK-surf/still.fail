@@ -22,7 +22,7 @@
 - 不绑定渠道：`release.sh promote` 原样把 beta 拷成 stable 也能用。
 - key id 是公钥原始字节 sha256 的前 16 位十六进制（`keyId`）。
 
-Windows 桌面版（NSIS 安装包，没有代码签名）同样签：`desktop/<安装包>.exe.sig`，内容 `{kind: "stillfail-desktop-win", version, build, file, sha256, size}`。mac 桌面版由 Squirrel 验代码签名，安卓由系统验 APK 签名，不另外签。
+Windows 桌面版（NSIS 安装包，没有代码签名）同样签：`desktop/<安装包>.exe.sig`，内容 `{kind: "stillfail-desktop-win", version, build, file, sha256, size}`。mac 桌面版由 Squirrel 验代码签名，安卓由系统验 APK 签名，不另外签。测试版桌面 app 单独更新的网页包也签：feed `desktop/web/stillfail-beta-web.json`，内容 `{kind: "stillfail-desktop-web", version, build, needs, file, sha256, size}`（[desktop-web-updates.md](desktop-web-updates.md)）。
 
 ## 谁验、怎么验
 
@@ -31,6 +31,7 @@ Windows 桌面版（NSIS 安装包，没有代码签名）同样签：`desktop/<
 - **`stillfail update`**（`bin/stillfail`、`bin/stillfail.ps1`）：用本版本的 Node 跑 `station/main.js update [--beta|--stable] --app … --data …`（`station/src/updates/command.ts`），它验签后只输出要运行的脚本和环境变量，由 shell 去运行（Windows 上安装脚本会结束从 `<app>` 跑的进程，包括这个 Node）。原生 launcher 不转发 `update`。
 - **Comma**：station 读的是 `<origin>/stations/releases/…`，一样要 still.fail 的 key 签过，Comma 只能原样转发我们签好的 feed。
 - **Windows 桌面版**（`apps/desktop/src/main.ts` `verifyWindowsUpdates`）：electron-updater 下载完安装包后调 `verifyUpdateCodeSignature`，取同目录的 `.sig` 验签、核版本（等于 feed 说的、比自己新）和字节；不过就丢掉不装。electron-updater 只在 app-update.yml 有 `publisherName` 时才调这个钩子，`build.sh --win` 给 publish 配置写了一个。
+- **桌面版的网页包**（`apps/desktop/src/web-update.mts`）：下载前用 `verifyDesktopWeb` 验 feed（签名、`needs` 不超过 app 自己的 build、比当前网页新），下载后核对字节，解压时只接受目录里的普通文件。
 
 `STILLFAIL_RELEASE_KEYS`（逗号分隔的公钥）可以在 station 的环境里多加几把 key，只用于测试（dev cloud 上用测试 key 发的版本）。只有机器的用户能设这个环境变量。
 

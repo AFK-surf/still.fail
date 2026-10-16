@@ -76,6 +76,10 @@ const APP_FILES: [RegExp, string][] = [
   [/^desktop\/stillfail-(beta-)?[0-9.]+-x64-win\.exe\.blockmap$/, "application/octet-stream"],
   // Its signature (scripts/release-sign.ts), which the app checks before installing it (docs/release-signing.md).
   [/^desktop\/stillfail-(beta-)?[0-9.]+-x64-win\.exe\.sig$/, "application/json"],
+  // The web app the beta desktop app takes without a new app (docs/desktop-web-updates.md): its signed feed and the
+  // archives it names.
+  [/^desktop\/web\/stillfail-beta-web\.json$/, "application/json"],
+  [/^desktop\/web\/stillfail-beta-web-[0-9.]+\.tar\.gz$/, "application/gzip"],
   [/^android\/latest\.json$/, "application/json"],
   // Builds from before the rename were android/ember-<n>.apk: the latest.json of then and the apps it updated name them.
   [/^android\/(stillfail|ember|stillfail-beta)-[0-9]+\.apk$/, "application/vnd.android.package-archive"],

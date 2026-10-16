@@ -5,6 +5,9 @@
 //       Node binary in its Node (scripts/node-dist.sh's: bin/node in the tarball, node.exe in nodejs.org's zip)
 //   release-sign.ts file FILE --kind stillfail-desktop-win --build N
 //       FILE.sig: the signed words naming FILE (the Windows desktop app's installer)
+//   release-sign.ts desktop-web FEED ARCHIVE --build N --needs M
+//       the feed of the web app the beta desktop app takes without a new one (docs/desktop-web-updates.md): its
+//       version, the oldest app it works in (M) and the signed words naming ARCHIVE
 //   release-sign.ts keygen PRIVATE_FILE
 //       a new key: the private one written to PRIVATE_FILE (PEM), the public one (for RELEASE_KEYS) said
 // Without a key: in CI (CI set) an error; elsewhere, with --unsigned-ok, a warning and the feed unsigned (a release for
@@ -26,7 +29,7 @@ const fail = (why: string): never => {
   process.exit(1);
 };
 const usage = (): never => {
-  console.error("usage: release-sign.ts station OUT --build N --commit SHA --node VERSION PLATFORM=ARCHIVE,NODE_DIST… | file FILE --kind KIND --build N | keygen PRIVATE_FILE");
+  console.error("usage: release-sign.ts station OUT --build N --commit SHA --node VERSION PLATFORM=ARCHIVE,NODE_DIST… | file FILE --kind KIND --build N | desktop-web FEED ARCHIVE --build N --needs M | keygen PRIVATE_FILE");
   process.exit(2);
 };
 
@@ -126,6 +129,21 @@ switch (positional[0]) {
     const { sha256, size } = await hashFile(file);
     writeFileSync(`${file}.sig`, `${JSON.stringify(signed({ kind, version: `0.1.${n}`, build: n, file: basename(file), sha256, size }, k))}\n`);
     console.error(`release-sign: ${file}.sig: signed by ${keyId(k.raw)}`);
+    break;
+  }
+  case "desktop-web": {
+    const out = positional[1] ?? usage();
+    const archive = positional[2] ?? usage();
+    const n = build();
+    const needs = Number(flag("--needs"));
+    if (!Number.isSafeInteger(needs) || needs <= 0 || needs > n) usage();
+    const k = keyOrNone();
+    const version = `0.1.${n}`;
+    const { sha256, size } = await hashFile(archive);
+    const file = basename(archive);
+    const feed = { version, build: n, needs, file, ...(k ? signed({ kind: "stillfail-desktop-web", version, build: n, needs, file, sha256, size }, k) : {}) };
+    writeFileSync(out, `${JSON.stringify(feed)}\n`);
+    console.error(`release-sign: ${out}: ${version} for apps from 0.1.${needs}${k ? `, signed by ${keyId(k.raw)}` : ", NOT signed"}`);
     break;
   }
   case "keygen": {

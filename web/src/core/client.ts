@@ -669,11 +669,16 @@ export interface LocalStationState {
 /** What a check asked for now found: the newer build (`latest`), none (neither), or why it could not tell. */
 export type UpdateCheck = { current: string; latest?: string; error?: string };
 
-export type AppUpdate =
+/**
+ * `kind: "web"`: a newer build of the web app alone (apps/desktop/src/web-update.mts, the beta app's), downloaded already:
+ * taking it reloads the pages, the app does not restart. Without it, the app's own update, which restarts it.
+ */
+export type AppUpdate = (
   | { phase: "available"; version: string }
   | { phase: "downloading"; version: string; percent: number }
   | { phase: "installing"; version: string }
-  | { phase: "failed"; version: string; message: string };
+  | { phase: "failed"; version: string; message: string }
+) & { kind?: "web" };
 
 declare global {
   interface Window {

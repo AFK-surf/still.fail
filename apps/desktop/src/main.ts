@@ -24,6 +24,7 @@ import { Dock, dockHelper, dockKinds, type DockKinds, type DockSettings } from "
 import { moveUserData } from "./moves.mts";
 import { attachWindowControls, loadSnapTarget } from "./window-controls.ts";
 import { exportOriginStorage, importOriginStorage, type OriginSnapshot } from "./origin-storage";
+import { WebUpdates } from "./web-update.mts";
 import zhWords from "../../../client/i18n/catalog/zh/desktop.json" with { type: "json" };
 import enWords from "../../../client/i18n/catalog/en/desktop.json" with { type: "json" };
 
@@ -71,6 +72,13 @@ function t(key: string, args?: Record<string, string | number>): string {
 const resources = app.isPackaged ? process.resourcesPath : join(__dirname, "..");
 const snapTarget = loadSnapTarget(resources);
 const web = join(resources, "web");
+/**
+ * The web app newer than the one the app carries, on the beta app (web-update.mts, docs/desktop-web-updates.md): set as
+ * the app is ready; none run from the source, or on the released app.
+ */
+let webUpdates: WebUpdates | null = null;
+/** This app's build: 0.1.<build>. */
+const appBuild = () => Number(app.getVersion().split(".").at(-1));
 const station = new LocalStation(join(resources, app.isPackaged ? "station" : "station/stillfail"));
 
 /**
@@ -107,12 +115,19 @@ protocol.registerSchemesAsPrivileged([
   { scheme: "stillfail-drive", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
 ]);
 
-/** A file of the web app, or for any other path (a client-side route) its index.html, as the cloud serves it (cloud/src/index.ts). */
+/**
+ * A file of the web app, or for any other path (a client-side route) its index.html, as the cloud serves it
+ * (cloud/src/index.ts). A newer web app taken (webUpdates) is looked in first, then the ones before it: a page opened on
+ * one of them asks for its own files (a chunk it loads late).
+ */
 async function serve(request: Request): Promise<Response> {
   if (new URL(request.url).pathname === "/__stillfail_storage_migration__") return new Response("<!doctype html><title>Storage migration</title>", { headers: { "content-type": "text/html" } });
-  const file = join(web, normalize(decodeURIComponent(new URL(request.url).pathname)));
-  const found = await stat(file).then((s) => s.isFile(), () => false);
-  return net.fetch(pathToFileURL(found ? file : join(web, "index.html")).toString());
+  const path = normalize(decodeURIComponent(new URL(request.url).pathname));
+  for (const root of webUpdates?.roots() ?? [web]) {
+    const file = join(root, path);
+    if (await stat(file).then((s) => s.isFile(), () => false)) return net.fetch(pathToFileURL(file).toString());
+  }
+  return net.fetch(pathToFileURL(join(webUpdates?.current().dir ?? web, "index.html")).toString());
 }
 
 /** Copy origin-bound settings and the former browser core before loading application code. On failure use the old
@@ -792,28 +807,45 @@ ipcMain.handle("station:act", async (event, action: unknown) => {
 // first) and opens as the new one.
 const UPDATE_EVERY = 4 * 60 * 60 * 1000;
 
-/** What the pages are told of an update (web/src/core/client.ts, AppUpdate). */
-type UpdateState =
+/**
+ * What the pages are told of an update (web/src/core/client.ts, AppUpdate): the app's (it restarts), else a newer web
+ * app's, downloaded already (kind "web": the pages reload, the app does not restart).
+ */
+type UpdateState = (
   | { phase: "available"; version: string }
   | { phase: "downloading"; version: string; percent: number }
   | { phase: "installing"; version: string }
-  | { phase: "failed"; version: string; message: string };
+  | { phase: "failed"; version: string; message: string }
+) & { kind?: "web" };
 let update: UpdateState | null = null;
+let webUpdate: UpdateState | null = null;
+/** What the pages are shown: a new app comes with its web app, so it is said before a web app alone. */
+const shownUpdate = () => update ?? webUpdate;
 
-function sayUpdate(next: UpdateState | null): void {
-  update = next;
+function tellUpdate(): void {
   for (const window of BrowserWindow.getAllWindows()) {
-    if (!window.isDestroyed()) window.webContents.send("update:state", next);
+    if (!window.isDestroyed()) window.webContents.send("update:state", shownUpdate());
   }
 }
 
-ipcMain.handle("update:state", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? update : null);
+function sayUpdate(next: UpdateState | null): void {
+  update = next;
+  tellUpdate();
+}
+
+function sayWebUpdate(next: UpdateState | null): void {
+  webUpdate = next;
+  tellUpdate();
+}
+
+ipcMain.handle("update:state", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? shownUpdate() : null);
 
 /** Downloads the update said to be there (set by keepUpdated). */
 let download = () => {};
 
-/** Downloads the newer build found, unless one is under way already. */
+/** Downloads the newer build found, unless one is under way already; a newer web app alone, the pages reload on it. */
 function startUpdate(): void {
+  if (!update && webUpdate && webUpdate.phase !== "installing") return void takeWebUpdate();
   if (!update || update.phase === "downloading" || update.phase === "installing") return;
   sayUpdate({ phase: "downloading", version: update.version, percent: 0 });
   download();
@@ -1025,6 +1057,65 @@ function setMenu(): void {
   ]));
 }
 
+/** How often the beta app asks for a newer web app (its feed is a few hundred bytes; the web app changes a commit). */
+const WEB_UPDATE_EVERY = 30 * 60 * 1000;
+
+/** Asks for a newer web app: one downloaded is offered to the pages (刷新). */
+async function lookForWeb(): Promise<boolean> {
+  if (!webUpdates) return false;
+  // One downloaded before and not taken yet is still the one to offer (the feed says nothing newer than it).
+  const ready = (await webUpdates.check()) ?? webUpdates.ready;
+  if (ready && webUpdate?.phase !== "installing") sayWebUpdate({ phase: "available", version: `0.1.${ready.build}`, kind: "web" });
+  return !!ready;
+}
+
+function keepWebUpdated(): void {
+  if (!webUpdates) return;
+  const check = () => void lookForWeb().catch((error: Error) => console.warn("looking for a newer web app failed", error.message));
+  check();
+  setInterval(check, WEB_UPDATE_EVERY);
+  // The menu's 检查更新… and the version page ask for the app first, then for a web app alone.
+  const appCheck = checkNow;
+  checkNow = async () => {
+    const found = await appCheck();
+    const current = `0.1.${webUpdates!.current().build}`;
+    if (found.latest) return found;
+    try {
+      return (await lookForWeb()) && webUpdate ? { current, latest: webUpdate.version } : { ...found, current };
+    } catch (error) {
+      return { current, error: found.error ?? (error as Error).message };
+    }
+  };
+}
+
+/** The newer web app downloaded made the one served, and the app's pages reloaded on it: no restart. */
+async function takeWebUpdate(): Promise<void> {
+  if (!webUpdates || !webUpdate) return;
+  const version = webUpdate.version;
+  sayWebUpdate({ phase: "installing", version, kind: "web" });
+  try {
+    await webUpdates.take();
+  } catch (error) {
+    sayWebUpdate({ phase: "failed", version, message: (error as Error).message, kind: "web" });
+    return;
+  }
+  sayWebUpdate(null);
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed() && window.webContents.getURL().startsWith(`${APP_ORIGIN}/`)) window.webContents.reload();
+  }
+}
+
+/**
+ * A page of a web app downloaded that did not come up (its load failed, or its renderer went away at once): that build
+ * is put away (webUpdates.back) and the page loads again on the one before it, else the one the app carries.
+ */
+function backFromWeb(window: BrowserWindow): void {
+  if (!webUpdates || webUpdates.current().dir === web) return;
+  void webUpdates.back().then((went) => {
+    if (went && !window.isDestroyed()) window.webContents.reload();
+  }).catch((error: Error) => console.warn("going back from the web app failed", error.message));
+}
+
 function keepUpdated(): void {
   if (!app.isPackaged) return;
   // The feed is asked again first: what a check found hours ago is often not the latest any more (the beta app gets a
@@ -1087,7 +1178,7 @@ function verifyWindowsUpdates(): void {
       const url = new URL(`${exe.url}.sig`, `${CLOUD_ORIGIN}/releases/desktop/`);
       const response = await net.fetch(url.href, { cache: "no-store" });
       if (!response.ok) return `${url.href}: ${response.status}`;
-      const build = Number(app.getVersion().split(".").at(-1));
+      const build = appBuild();
       verifyDesktop(await response.json(), await readFile(file), info.version, build);
       return null;
     } catch (error) {
@@ -1227,6 +1318,15 @@ function open(path = "/", titled = false): BrowserWindow {
   });
   // A right-click gets a menu, as in a browser (showContextMenu).
   window.webContents.on("context-menu", (_event, params) => showContextMenu(window, params));
+  // A newer web app that does not come up is put away (backFromWeb). -3 is a load stopped for another (a reload).
+  let loaded = Date.now();
+  window.webContents.on("did-start-loading", () => (loaded = Date.now()));
+  window.webContents.on("did-fail-load", (_event, code, _description, url, mainFrame) => {
+    if (mainFrame && code !== -3 && url.startsWith(`${APP_ORIGIN}/`)) backFromWeb(window);
+  });
+  window.webContents.on("render-process-gone", (_event, details) => {
+    if (details.reason !== "clean-exit" && Date.now() - loaded < 30_000) backFromWeb(window);
+  });
   void window.loadURL(`${APP_ORIGIN}${path}`);
   return window;
 }
@@ -1401,6 +1501,14 @@ if (!app.requestSingleInstanceLock()) {
     else BrowserWindow.getAllWindows()[0]?.focus();
   });
   startup = app.whenReady().then(async () => {
+    // The beta app takes newer web apps (web-update.mts); run from the source the page is the source's.
+    if (app.isPackaged && BETA && !DEV_URL) {
+      webUpdates = new WebUpdates({
+        dir: join(app.getPath("userData"), "web"), carried: web, app: appBuild(),
+        feed: `${CLOUD_ORIGIN}/releases/desktop/web/stillfail-beta-web.json`, fetch: (url) => net.fetch(url, { cache: "no-store" }),
+      });
+      void webUpdates.settle().catch((error: Error) => console.warn("settling the web apps downloaded failed", error.message));
+    }
     protocol.handle("app", serve);
     await migrateOrigin();
     protocol.handle("stillfail-preview", preview);
@@ -1410,6 +1518,7 @@ if (!app.requestSingleInstanceLock()) {
     open();
     station.start();
     keepUpdated();
+    keepWebUpdated();
     try { notifyOn = JSON.parse(readFileSync(NOTIFY_FILE(), "utf8")).on !== false; } catch { /* on, as it starts */ }
     followNotices();
     followBadge();
