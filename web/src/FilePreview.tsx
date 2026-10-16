@@ -557,18 +557,12 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
   }
   // A text and a video open in the reader and the player, as a station's file does (drive/Reader.tsx, drive/Player.tsx):
   // one viewer of each kind wherever a file is opened, each with the same bar; here they read what this has fetched.
-  const save = loaded.state === "ready" ? () => {
-    if (source?.save) { source.save(file, loaded.blob); return; }
-    const a = document.createElement("a");
-    a.href = loaded.url;
-    a.download = file.name;
-    a.click();
-  } : undefined;
+  const saveShown = loaded.state === "ready" ? () => save(loaded) : undefined;
   const whole = loaded.state !== "ready" ? null
     : kind === "markdown" || kind === "text"
-      ? <Reader key={file.path} blob={loaded.blob} onSave={save} name={file.name} size={file.size} mtime={0} markdown={kind === "markdown"} backLabel={backLabel} onBack={onClose} />
+      ? <Reader key={file.path} blob={loaded.blob} onSave={saveShown} name={file.name} size={file.size} mtime={0} markdown={kind === "markdown"} backLabel={backLabel} onBack={onClose} />
       : kind === "video" || kind === "audio"
-        ? <Player key={file.path} blob={loaded.blob} onSave={save} backLabel={backLabel} onBack={onClose}
+        ? <Player key={file.path} blob={loaded.blob} onSave={saveShown} backLabel={backLabel} onBack={onClose}
           entry={{ name: file.name, size: file.size, mtime: 0, dir: false, type: loaded.blob.type, kind, sizeText: fileSize(file.size), timeText: "" } as DriveEntry} />
         : null;
   if (whole) {
@@ -604,7 +598,9 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
             {coming !== undefined && <Progress got={coming} size={file.size} inBar />}
             {controls}
             {kind === "image" && !marking && loaded.state === "ready" && <CopyImage key={file.path} image={loaded.blob} />}
-            {!marking && loaded.state === "ready" && <ViewerDownload name={file.name} href={source?.save ? undefined : loaded.url} onSave={source?.save ? () => source.save?.(file, loaded.blob) : undefined} />}
+            {/* One told of (not fetched to be shown): fetched as it is asked to be downloaded. */}
+            {!marking && (toldOf && loaded.state !== "ready" ? <ViewerDownload name={file.name} onSave={ask} />
+              : loaded.state === "ready" && <ViewerDownload name={file.name} href={source?.save ? undefined : loaded.url} onSave={source?.save ? () => source.save?.(file, loaded.blob) : undefined} />)}
           </>} />
       ) : <header ref={head} className={css2.fpHead} data-floats
         onPointerEnter={(e) => { if (e.pointerType !== "mouse") return; onBar.current = true; clearTimeout(resting.current); setAwake(true); }}
