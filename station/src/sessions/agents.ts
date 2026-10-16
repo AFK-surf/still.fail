@@ -381,10 +381,15 @@ export const AgentsLive = (control: Control) =>
           starter: (session) => {
             const row = store.getSession(session);
             const email = row?.createdBy ?? "";
+            // Its chat's name; one not named yet, by what was first said in it (as a shared chat is titled).
             let chatTitle: string | null = null;
             try {
               chatTitle = sender(hub, session)[0];
             } catch {}
+            if (chatTitle === null || chatTitle === session) {
+              const first = store.listThreads("", session, null)[0]?.firstText?.trim() ?? "";
+              chatTitle = first !== "" ? Array.from(first.split(/\s+/u).join(" ")).slice(0, 80).join("") : null;
+            }
             return { by: { email, name: readers.names.get(email) ?? "" }, workspace: row?.ws ?? place()?.workspace ?? null, chat: session, chatTitle };
           },
           link: (session, id) => loginLink(session, id),
