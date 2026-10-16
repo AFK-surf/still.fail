@@ -27,25 +27,46 @@ be JPEG (CDP screencast) or H.264. Clients decode both.
 
 ### Wire (member link, ALPN `stillfail/admin/1`)
 
-- **List**: `GET /admin/api/screens` → `{"screens":[{id, kind, title, width, height, viewers}]}`; changes come on the
-  station's event stream as `screens` (same shape).
+- **List**: `GET /admin/api/screens` → `{"screens":[{id, kind, title, width, height, viewers, controlledBy, access?}]}`;
+  changes come on the station's event stream as `screens` (same shape). `viewers`: the names of those with a view of it
+  open; `controlledBy`: those of them whose input is taken. `access`, only when something is missing:
+  `{capture, control, message, app?, path?}` (`message` in the asker's language says what to turn on where; the desktop
+  without macOS's grants, or on a machine it is not supported on). An old station answers this route 404: a client
+  opens a view only on a station that listed the screen (an old one would read the view's head as a request whose
+  body never ends).
 - **View**: a stream whose head line carries a `screen` object:
   `{"method":"POST","path":"/admin/api/screens/<id>/view","headers":{},"screen":{"maxWidth":1920,"maxHeight":1080,"codecs":["h264","jpeg"],"control":true}}`.
-  The station answers `{"status":200,"headers":{"content-type":"application/x-stillfail-screen"}}` (or an error status
-  with `{error}`), then both directions carry frames: a kind byte, the payload's length (4 bytes big-endian), the payload.
+  The station answers `{"status":200,"headers":{"content-type":"application/x-stillfail-screen"}}`, or an error status
+  with `{error, access?}` (404 no such screen, 400 no codec it knows, 415 none it sends, 501 not supported here, 503
+  not now: no grant, the capture failed), then both directions carry frames: a kind byte, the payload's length
+  (4 bytes big-endian), the payload. Input frames of more than 64 KB end the view.
 
 | kind | direction | payload |
 |---|---|---|
 | 1 `config` | station → client | JSON `{codec:"h264"\|"jpeg", width, height, description?}`: `description` is the avcC (base64) for H.264. Sent first and whenever size or codec changes; the next video frame after it is a key frame. |
 | 2 `video` | station → client | 1 byte flags (bit 0: key frame), 8 bytes timestamp (µs, big-endian), then the frame: H.264 in AVCC (length-prefixed NALs), or one JPEG. |
-| 3 `state` | station → client | JSON `{cursor?: {x, y, shape}, title?, controlledBy?: [names], ended?: reason}` |
+| 3 `state` | station → client | JSON `{cursor?: {x, y, shape}, title?, control?, access?, viewers?: [names], controlledBy?: [names], ended?: reason}`: first `{title, control, access?}` (`control`: whether this view's input is taken), then what changes; `ended`: `finished` (the client finished), `gone` (the source went), `stopping` (the station stops) |
 | 16 `input` | client → station | JSON, coordinates normalised to 0..1 of the frame: `{t:"pointer", x, y, buttons, kind:"down"\|"up"\|"move"}`, `{t:"wheel", x, y, dx, dy}`, `{t:"key", kind:"down"\|"up", key, code, mods}`, `{t:"text", text}` (IME/paste result) |
 | 17 `ack` | client → station | 8 bytes: the timestamp of the last frame it decoded. The station keeps at most 2 frames unacknowledged. |
 | 18 `keyframe` | client → station | empty: decoder lost its state, send a key frame |
 
 - Read-only members (`viewer` role) may view but not send input (`control` ignored, input frames dropped).
   Anyone else may drive. Every active view shows in `controlledBy` / `viewers`, so people and the agent see who is on it.
-- Ending: either side finishes the stream.
+- Ending: either side finishes the stream (the station says `ended` first). When the stream or its connection breaks,
+  the view ends with it; the source's capture stops either way.
+
+### The desktop (station/src/screens/desktop.ts, station/native/screen)
+
+macOS only (elsewhere it is listed with `access` saying it is not supported, and opens nothing). A helper per view,
+`stillfail-screen` (Swift, a native part beside `mesh.node` in the release): ScreenCaptureKit captures the main display
+scaled into `maxWidth`×`maxHeight`; VideoToolbox encodes H.264 on the hardware encoder with low-latency rate control
+(constrained baseline, no reordering, AVCC with the avcC as `description`), a picture only when one is asked for and
+the screen changed (a still screen sends nothing), a key frame on request; CGEvent posts the input (mouse with click
+counts, wheel in pixels, keys by their `code` as the Mac's virtual keys, text as Unicode). macOS grants Screen
+Recording and Accessibility to the process responsible for the helper: the station's launcher `stillfail-station`
+(`~/.stillfail/app/mesh/target/release/`, signed `fail.still.station` in releases, so a grant outlasts updates) under
+launchd, the app in the desktop app. A view refused for want of a grant asks macOS once (its prompt on that Mac lists
+the launcher in System Settings), and `access.message` names it and its path.
 
 ### Asking a person to take over
 
