@@ -66,7 +66,12 @@ fun FilesScreen(current: WorkspaceEntry) {
     val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(ws.id))
     val workspace by rememberTopic<WorkspaceView>(app.core, Topics.workspace(ws.id))
     val list = stations.value
-    val lent = list.orEmpty().flatMap { s -> s.overview?.drive?.roots.orEmpty().map { Lent(s, it) } }
+    // Each station's home first, for a member who browses every folder of it (as the web's sidebar), then its folders lent.
+    val lent = list.orEmpty().flatMap { s ->
+        val drive = s.overview?.drive
+        val home = drive?.home?.takeIf { drive.anywhere == true }
+        listOfNotNull(home?.let { Lent(s, DriveRoot(it, t("web-pages.drive.home"), "ok")) }) + drive?.roots.orEmpty().map { Lent(s, it) }
+    }
     // Where another folder can be lent: a station online that has a drive (a station from before it has none), by
     // whoever may name its folders (the workspace's owners and admins).
     val lenders = if (workspace.value?.manager == true) list.orEmpty().filter { it.online && it.overview?.drive != null } else emptyList()

@@ -2,7 +2,10 @@
 // going in and coming back is the stack's slide and the edge swipe. One root shows what is in it at once; several are
 // listed as folders, one that cannot be browsed in red with why. A row opens by its kind: a folder goes in, text and
 // Markdown are read (Reader.kt), video and audio play (Player.kt), pictures, PDFs, code, tables and pages open in the
-// chat's viewer (FilePreview.kt), the rest goes to another app. Held, a row offers rename, remove, download and share.
+// chat's viewer (FilePreview.kt), the rest goes to another app. Held, a row is chosen (others then by a tap, as the
+// phone's own file managers do), and what is chosen is downloaded, its paths copied, deleted (to the machine's trash
+// where the station has one), one renamed or shared. The order and whether hidden files show are the device's, as the
+// web's (prefs `driveViews`); a folder shown is kept as it is on the station's disk (the core watches it).
 // The workspace's owners and admins choose the folders (⋯); read-only members get no way to change anything. Laid out
 // as the phone web's (web/src/mobile/Drive.tsx), the reference for the phone (docs/mobile-parity.md).
 package fail.still.android.drive
@@ -116,6 +119,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.lazy.items
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -168,6 +172,29 @@ fun freeName(name: String, taken: Set<String>): String {
     return "$stem ($n)$ext"
 }
 
+/**
+ * A folder's entries as shown, as the web's (web/src/drive/order.ts): hidden ones (a name starting with `.`) left out
+ * unless asked, folders first, then by name (the station's order), time or size (the newest and largest first) or kind;
+ * `-down` turns it the other way.
+ */
+fun arranged(entries: List<DriveEntry>, sort: String, hidden: Boolean): List<DriveEntry> {
+    val by = sort.substringBefore('-')
+    val down = sort.endsWith("-down")
+    val shown = if (hidden) entries else entries.filterNot { it.name.startsWith('.') }
+    val named = entries.withIndex().associate { it.value.name to it.index }
+    val byName = compareBy<DriveEntry> { named[it.name] ?: 0 }
+    val order: Comparator<DriveEntry> = when (by) {
+        "time" -> compareByDescending<DriveEntry> { it.mtime }.then(byName)
+        "size" -> compareByDescending<DriveEntry> { it.size }.then(byName)
+        "kind" -> compareBy<DriveEntry>({ it.kind.toString() }, { it.name.substringAfterLast('.', "").lowercase() }).then(byName)
+        else -> byName
+    }
+    return shown.sortedWith(compareBy<DriveEntry> { !it.dir }.then(if (down) order.reversed() else order))
+}
+
+/** Where a path under a root is on the station. */
+fun absoluteIn(root: String, path: String) = if (path.isEmpty()) root else root.trimEnd('/', '\\') + "/" + path
+
 /** What a name a file or folder may have says is wrong with it (empty, a slash, . or ..); null when nothing is. */
 fun nameProblem(name: String): String? {
     val n = name.trim()
@@ -177,13 +204,14 @@ fun nameProblem(name: String): String? {
 }
 
 /** What the viewer may do with a station's drive: name the folders it lends (owners and admins), change what is in them (not a read-only member). */
-private class DriveRights(val manage: Boolean, val write: Boolean)
+private class DriveRights(val manage: Boolean, val write: Boolean, val trash: Boolean = false, val zip: Boolean = false)
 
 @Composable
 private fun rights(current: WorkspaceEntry, s: StationView?): DriveRights {
     val app = LocalApp.current
     val ws by rememberTopic<WorkspaceView>(app.core, Topics.workspace(current.workspace.id))
-    return DriveRights(manage = ws.value?.manager == true, write = s?.overview?.viewer?.role != "viewer" && ws.value?.role != "viewer")
+    val drive = s?.overview?.drive
+    return DriveRights(manage = ws.value?.manager == true, write = s?.overview?.viewer?.role != "viewer" && ws.value?.role != "viewer", trash = drive?.trash == true, zip = drive?.zip == true)
 }
 
 // ── uploads ─────────────────────────────────────────────────────────────
@@ -203,6 +231,8 @@ class DriveUpload(val station: String, val root: String, val dir: String, name: 
     internal var answer: CompletableDeferred<Boolean?>? = null
     /** Replace a file of its name when it goes up. */
     internal var replace = false
+    /** What its folder holds now, for a name taken there and another to keep both by. */
+    internal var held: () -> List<DriveEntry> = { emptyList() }
 }
 
 /** The uploads, whatever page is shown (they go on past the page that started them), one going at a time. */
@@ -211,8 +241,9 @@ object DriveUploads {
     private var pumping = false
 
     fun add(app: AppState, context: Context, ups: List<DriveUpload>, held: () -> List<DriveEntry>) {
+        ups.forEach { it.held = held }
         list += ups
-        pump(app, context, held)
+        pump(app, context)
     }
 
     /** Its name taken: replaced (`true`) or both kept (`false`). */
@@ -222,16 +253,16 @@ object DriveUploads {
     fun cancel(up: DriveUpload) { up.answer?.complete(null); up.job?.cancel(); list.remove(up) }
 
     /** Failed: tried again from the start. */
-    fun retry(app: AppState, context: Context, up: DriveUpload, held: () -> List<DriveEntry>) { up.state = "waiting"; up.error = null; up.sent = 0; pump(app, context, held) }
+    fun retry(app: AppState, context: Context, up: DriveUpload, held: () -> List<DriveEntry>) { up.held = held; up.state = "waiting"; up.error = null; up.sent = 0; pump(app, context) }
 
-    private fun pump(app: AppState, context: Context, held: () -> List<DriveEntry>) {
+    private fun pump(app: AppState, context: Context) {
         if (pumping) return
         pumping = true
         app.scope.launch {
             try {
                 while (true) {
                     val up = list.firstOrNull { it.state == "waiting" } ?: break
-                    val job = launch { send(app, context, up, held) }
+                    val job = launch { send(app, context, up) }
                     up.job = job
                     job.join()
                 }
@@ -239,7 +270,8 @@ object DriveUploads {
         }
     }
 
-    private suspend fun send(app: AppState, context: Context, up: DriveUpload, held: () -> List<DriveEntry>) {
+    private suspend fun send(app: AppState, context: Context, up: DriveUpload) {
+        val held = up.held
         val resolver = context.contentResolver
         up.state = "going"
         try {
@@ -440,7 +472,8 @@ private fun FolderPage(app: AppState, station: String, s: StationView, roots: Li
     val entries = folder.value?.entries.orEmpty()
     val latest by rememberUpdatedState(entries)
     val held = { latest }
-    val name = if (path.isEmpty()) rootLabel(roots, root) else nameOf(path)
+    val home = s.overview?.drive?.home
+    val name = if (path.isNotEmpty()) nameOf(path) else if (root == home && roots.none { it.path == root }) t("web-pages.drive.home") else rootLabel(roots, root)
     val back = when {
         top -> s.name
         path.isEmpty() -> t("android-misc.drive.title")
@@ -460,9 +493,25 @@ private fun FolderPage(app: AppState, station: String, s: StationView, roots: Li
         }
     }
     val uploads = DriveUploads.list.filter { it.station == station && it.root == root && it.dir == path }
+    val shownEntries = arranged(entries, app.driveSort, app.driveHidden)
+    // What is chosen (a row held, then others tapped), by name: what the bar on top then acts on.
+    val chosen = remember(station, root, path) { mutableStateListOf<String>() }
+    val choosing = chosen.isNotEmpty()
+    BackHandler(enabled = choosing) { chosen.clear() }
+    val chosenEntries = { entries.filter { it.name in chosen } }
 
     Column(Modifier.fillMaxSize().background(c.bg)) {
-        NavBar(back, app::pop, name, trailing = {
+        if (choosing) NavBar(t("common.cancel"), { chosen.clear() }, t("android-misc.drive.chosen", "n" to chosen.size), trailing = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    t(if (chosen.size == shownEntries.size) "android-misc.drive.chooseNone" else "android-misc.drive.chooseAll"), fontSize = 15.sp, color = c.accent,
+                    modifier = Modifier.clip(Smooth(6.dp)).clickable { if (chosen.size == shownEntries.size) chosen.clear() else { chosen.clear(); chosen.addAll(shownEntries.map { it.name }) } }.padding(horizontal = 8.dp, vertical = 6.dp),
+                )
+                Box(Modifier.semantics { contentDescription = t("android-misc.drive.chosenActions") }) {
+                    NavButton(Icons.More, { openChosenSheet(app, context, station, root, path, chosenEntries(), can, entries.map { it.name }.toSet()) { chosen.clear() } })
+                }
+            }
+        }) else NavBar(back, app::pop, name, trailing = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(34.dp).clip(CircleShape).clickable(enabled = !refreshing) { reload() }.semantics { contentDescription = t("android-misc.drive.refresh") }, contentAlignment = Alignment.Center) {
                     if (refreshing) Spinner(16.dp) else IconIn(Icons.Refresh, 18.dp)
@@ -480,14 +529,22 @@ private fun FolderPage(app: AppState, station: String, s: StationView, roots: Li
                             }
                         }, 20.dp)
                     }
-                    can.manage && top -> NavButton(Icons.More, { openRoots(app, station) })
                 }
+                // How the folder is shown (its order, hidden files), and the folders lent for those who name them.
+                Box(Modifier.semantics { contentDescription = t("android-misc.drive.view") }) { NavButton(Icons.More, { openViewSheet(app, station, can.manage && top) }) }
             }
         })
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 30.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())) {
             if (path.isNotEmpty()) item(key = "crumbs") { Crumbs(app, station, root, rootLabel(roots, root), path) }
             val error = folder.error
             val value = folder.value
+            // Not read now (the station away, the folder refused): what was read last stays, said to be so.
+            if (error != null && value != null) item(key = "stale") {
+                Row(Modifier.padding(horizontal = 20.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(t("android-misc.drive.stale", "error" to (error.message ?: "")), fontSize = 13.sp, color = c.muted, modifier = Modifier.weight(1f, fill = false), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(t("android-misc.drive.retry"), fontSize = 13.sp, color = c.accent, modifier = Modifier.clip(Smooth(6.dp)).clickable { reload() }.padding(4.dp))
+                }
+            }
             when {
                 error != null && value == null -> item(key = "error") {
                     Row(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -499,14 +556,16 @@ private fun FolderPage(app: AppState, station: String, s: StationView, roots: Li
                 else -> {
                     item(key = "count") { Count(value.countText + if (value.truncated == true) " · " + t("android-misc.drive.truncated") else "") }
                     itemsIndexed(uploads, key = { _, u -> "up:" + System.identityHashCode(u) }) { i, u -> UploadRow(app, context, u, i == 0, i == uploads.lastIndex, held) }
-                    if (entries.isEmpty() && uploads.isEmpty()) item(key = "empty") {
+                    if (shownEntries.isEmpty() && uploads.isEmpty()) item(key = "empty") {
                         Empty(t("android-misc.drive.empty")) { if (can.write) Button(t("android-misc.drive.upload"), primary = false) { upload() } }
                     }
-                    itemsIndexed(entries, key = { _, e -> "e:" + e.name }) { i, e ->
+                    itemsIndexed(shownEntries, key = { _, e -> "e:" + e.name }) { i, e ->
                         val full = join(path, e.name)
-                        EntryRow(station, root, full, e, i == 0, i == entries.lastIndex,
-                            onOpen = { open(app, context, station, root, path, e) { previewing = it } },
-                            onHold = { openEntrySheet(app, context, station, root, path, e, can.write, entries.map { it.name }.toSet()) },
+                        val toggle = { if (e.name in chosen) chosen.remove(e.name) else chosen.add(e.name); Unit }
+                        EntryRow(station, root, full, e, i == 0, i == shownEntries.lastIndex, chosen = if (choosing) e.name in chosen else null,
+                            onOpen = { if (choosing) toggle() else open(app, context, station, root, path, e) { previewing = it } },
+                            // Held: chosen, as the phone's own file managers do; what is chosen is acted on from the bar.
+                            onHold = toggle,
                         )
                     }
                 }
@@ -566,7 +625,8 @@ private fun Crumbs(app: AppState, station: String, root: String, rootName: Strin
                 label, fontSize = 13.sp, color = if (last) C.ink else C.muted, fontWeight = if (last) FontWeight.SemiBold else null, maxLines = 1,
                 modifier = Modifier.clip(Smooth(6.dp)).clickable(enabled = !last) {
                     // Back to it where it is in the stack; else opened there.
-                    val at = app.stack.indexOfLast { it == to }
+                    // The root as the drive's own page with one root has it (no root named) is the same page.
+                    val at = app.stack.indexOfLast { it == to || (to.path.isEmpty() && it is Screen.Drive && it.station == station && it.root == null && it.path.isEmpty()) }
                     if (at >= 0) repeat(app.stack.size - 1 - at) { app.pop() } else app.push(to)
                 }.padding(horizontal = 3.dp, vertical = 2.dp),
             )
@@ -588,17 +648,21 @@ private fun open(app: AppState, context: Context, station: String, root: String,
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun EntryRow(station: String, root: String, path: String, e: DriveEntry, first: Boolean, last: Boolean, onOpen: () -> Unit, onHold: () -> Unit) {
+private fun EntryRow(station: String, root: String, path: String, e: DriveEntry, first: Boolean, last: Boolean, chosen: Boolean? = null, onOpen: () -> Unit, onHold: () -> Unit) {
     val app = LocalApp.current
     val c = C
     val busy = app.isDoing("drive.remove", "root" to root, "path" to path) || app.isDoing("drive.rename", "root" to root, "from" to path)
     val failed = app.failedOf("drive.remove", "root" to root, "path" to path) ?: app.failedOf("drive.rename", "root" to root, "from" to path)
     val fetching = DriveFetches.progress[DriveFetches.id(station, root, path)]
     Row(
-        Modifier.cardRow(first, last).background(c.surface).combinedClickable(enabled = !busy, onClick = onOpen, onLongClick = onHold).padding(horizontal = 16.dp, vertical = 11.dp),
+        Modifier.cardRow(first, last).background(if (chosen == true) c.accent.copy(alpha = 0.12f) else c.surface).combinedClickable(enabled = !busy, onClick = onOpen, onLongClick = onHold).padding(horizontal = 16.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        IconIn(kindIcon(e.kind), 22.dp, c.muted)
+        // Choosing: each row's mark says whether it is chosen.
+        if (chosen != null) Box(Modifier.size(22.dp).clip(CircleShape).background(if (chosen) c.accent else c.ink.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
+            if (chosen) IconIn(Icons.Check, 14.dp, c.surface)
+        }
+        else IconIn(kindIcon(e.kind), 22.dp, c.muted)
         Column(Modifier.weight(1f)) {
             Text(e.name, fontSize = 15.sp, lineHeight = 20.sp, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val line = if (e.dir) e.timeText else listOf(e.sizeText, e.timeText).filter { it.isNotEmpty() }.joinToString(" · ")
@@ -665,16 +729,56 @@ private fun ReadShare(station: String, root: String, path: String) {
 
 // ── what can be done to an entry ────────────────────────────────────────
 
-/** Held: what can be done to it (rename and delete for those who may change the drive; download and share a file). */
-private fun openEntrySheet(app: AppState, context: Context, station: String, root: String, dir: String, e: DriveEntry, writable: Boolean, names: Set<String>) {
+/** How a folder is shown on this device, as the web's: its order, and whether hidden files show; with the folders lent, for those who name them. */
+private fun openViewSheet(app: AppState, station: String, manage: Boolean) {
+    val sorts = listOf("name", "time", "size", "kind")
+    app.sheet = SheetSpec(0.5f, fit = fit(sorts.size + 1 + if (manage) 1 else 0)) {
+        SheetGrab()
+        SheetHead(t("android-misc.drive.view"))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            sorts.forEach { by ->
+                PickRow(t("web-pages.drive.sortBy.$by"), checked = app.driveSort.substringBefore('-') == by) { app.setDriveView("sort", if (by == "name") null else by) }
+            }
+            PickRow(t("web-pages.drive.showHidden"), checked = app.driveHidden) { app.setDriveView("hidden", if (app.driveHidden) null else "shown") }
+            if (manage) PickRow(t("android-misc.drive.roots.manage"), leading = { IconIn(Icons.Folder, 20.dp, C.ink) }) { openRoots(app, station) }
+        }
+    }
+}
+
+/** What is chosen, from the bar over it: one as a row held always was (rename, download, share…); several downloaded, their paths copied, deleted. */
+private fun openChosenSheet(app: AppState, context: Context, station: String, root: String, dir: String, items: List<DriveEntry>, can: DriveRights, names: Set<String>, done: () -> Unit) {
+    if (items.isEmpty()) return
+    if (items.size == 1) return openEntrySheet(app, context, station, root, dir, items[0], can, names, done)
+    val files = items.filter { !it.dir }
+    app.sheet = SheetSpec(0.4f, fit = fit((if (files.isNotEmpty()) 1 else 0) + 1 + if (can.write) 1 else 0)) {
+        SheetGrab()
+        SheetHead(t("android-misc.drive.chosen", "n" to items.size))
+        if (files.isNotEmpty()) PickRow(t("web-pages.drive.downloadMany", "n" to files.size), leading = { IconIn(Icons.Download, 20.dp, C.ink) }) {
+            app.sheet = null; done()
+            files.forEach { saveToDownloads(app, context, station, root, it, join(dir, it.name)) }
+        }
+        PickRow(t("web-pages.drive.copyPaths"), leading = { IconIn(Icons.Copy, 20.dp, C.ink) }) {
+            app.sheet = null; done()
+            copyPaths(app, context, items.map { absoluteIn(root, join(dir, it.name)) })
+        }
+        if (can.write) PickRow(t(if (can.trash) "web-pages.drive.toTrashMany" else "web-pages.drive.deleteMany", "n" to items.size), color = C.accent, leading = { IconIn(Icons.Trash, 20.dp, C.accent) }) {
+            app.sheet = null; done()
+            removeAll(app, station, root, dir, items, can.trash)
+        }
+    }
+}
+
+/** One entry: renamed and deleted by those who may change the drive; a file downloaded and shared, a folder downloaded as a zip; its path copied. */
+private fun openEntrySheet(app: AppState, context: Context, station: String, root: String, dir: String, e: DriveEntry, can: DriveRights, names: Set<String>, done: () -> Unit) {
     val path = join(dir, e.name)
-    val rows = (if (writable) 2 else 0) + (if (e.dir) 0 else 2)
-    if (rows == 0) return
+    val zip = e.dir && can.zip
+    val rows = (if (can.write) 2 else 0) + (if (e.dir) (if (zip) 1 else 0) else 2) + 1
     app.sheet = SheetSpec(0.5f, fit = fit(rows)) {
         SheetGrab()
         SheetHead(e.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            if (writable) PickRow(t("android-misc.drive.rename"), leading = { IconIn(Icons.Edit, 20.dp, C.ink) }) {
+            if (can.write) PickRow(t("android-misc.drive.rename"), leading = { IconIn(Icons.Edit, 20.dp, C.ink) }) {
+                done()
                 ask(app, t("android-misc.drive.rename"), e.name, e.name, t("common.save"), what = t("android-misc.drive.rename.what")) { name ->
                     nameProblem(name)?.let { throw CoreException("invalid", it, null) }
                     if (name != e.name && name in names) throw CoreException("exists", t("station.drive.exists"), null)
@@ -683,20 +787,62 @@ private fun openEntrySheet(app: AppState, context: Context, station: String, roo
             }
             if (!e.dir) {
                 PickRow(t("android-misc.drive.download"), leading = { IconIn(Icons.Download, 20.dp, C.ink) }) {
-                    app.sheet = null
+                    app.sheet = null; done()
                     app.toast = t("android-misc.drive.downloading", "name" to e.name)
                     saveToDownloads(app, context, station, root, e, path)
                 }
-                PickRow(t("android-misc.drive.share"), leading = { IconIn(Icons.External, 20.dp, C.ink) }) { app.sheet = null; openElsewhere(app, context, station, root, e, path, share = true) }
+                PickRow(t("android-misc.drive.share"), leading = { IconIn(Icons.External, 20.dp, C.ink) }) { app.sheet = null; done(); openElsewhere(app, context, station, root, e, path, share = true) }
+            } else if (zip) PickRow(t("web-pages.drive.downloadZip"), leading = { IconIn(Icons.Download, 20.dp, C.ink) }) {
+                app.sheet = null; done()
+                app.toast = t("android-misc.drive.downloading", "name" to "${e.name}.zip")
+                saveZip(app, context, station, root, path)
             }
-            if (writable) PickRow(t("android-misc.drive.remove"), color = C.accent, leading = { IconIn(Icons.Trash, 20.dp, C.accent) }) {
-                confirm(
-                    app, t(if (e.dir) "android-misc.drive.remove.folderTitle" else "android-misc.drive.remove.fileTitle", "name" to e.name),
-                    t(if (e.dir) "android-misc.drive.remove.folderText" else "android-misc.drive.remove.fileText"),
-                    t("android-misc.drive.remove"), danger = true, what = t("android-misc.drive.remove.what"),
-                ) { app.api(station).driveRemove(root, path) }
+            PickRow(t("web-pages.drive.copyPath"), leading = { IconIn(Icons.Copy, 20.dp, C.ink) }) { app.sheet = null; done(); copyPaths(app, context, listOf(absoluteIn(root, path))) }
+            if (can.write) PickRow(t(if (can.trash) "web-pages.drive.toTrash" else "android-misc.drive.remove"), color = C.accent, leading = { IconIn(Icons.Trash, 20.dp, C.accent) }) {
+                done()
+                removeAll(app, station, root, dir, listOf(e), can.trash)
             }
         }
+    }
+}
+
+/** Paths on the clipboard, a line each. */
+private fun copyPaths(app: AppState, context: Context, paths: List<String>) {
+    (context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("path", paths.joinToString("\n")))
+    app.toast = t("web-pages.drive.pathCopied")
+}
+
+/** A folder zipped on the station and saved into the phone's Downloads. */
+private fun saveZip(app: AppState, context: Context, station: String, root: String, path: String) {
+    app.scope.launch {
+        try {
+            val z = app.api(station).driveZip(root, path)
+            saveToDownloads(app, context, station, z.root, DriveEntry(z.name, false, z.size, 0, "application/zip", "other", "", ""), z.path)
+        } catch (e: CoreException) {
+            app.toast = t("android-misc.drive.fetchFailed", "name" to nameOf(path), "error" to e.message)
+        }
+    }
+}
+
+/**
+ * Deleted: to the machine's trash where the station has one, nothing asked (said once done); where none takes them (or
+ * a station without one), asked first, then for good.
+ */
+private fun removeAll(app: AppState, station: String, root: String, dir: String, items: List<DriveEntry>, trash: Boolean) {
+    fun forGood(list: List<DriveEntry>) {
+        val one = list.singleOrNull()
+        confirm(
+            app, if (one != null) t(if (one.dir) "android-misc.drive.remove.folderTitle" else "android-misc.drive.remove.fileTitle", "name" to one.name) else t("web-pages.drive.deleteManyAsk", "n" to list.size),
+            t(if (list.any { it.dir }) "android-misc.drive.remove.folderText" else "android-misc.drive.remove.fileText"),
+            t("android-misc.drive.remove"), danger = true, what = t("android-misc.drive.remove.what"),
+        ) { list.forEach { app.api(station).driveRemove(root, join(dir, it.name), permanent = true) } }
+    }
+    if (!trash) return forGood(items)
+    app.act(t("android-misc.drive.remove.what")) {
+        val left = items.filter { e ->
+            try { app.api(station).driveRemove(root, join(dir, e.name)); false } catch (x: CoreException) { if (x.code == "no_trash") true else throw x }
+        }
+        if (left.isNotEmpty()) forGood(left) else app.toast = t("web-pages.drive.trashed", "n" to items.size)
     }
 }
 
@@ -776,7 +922,8 @@ fun openFolderPicker(app: AppState, station: String, lent: List<String>) {
         SheetHead(t("android-misc.drive.pick.title"))
         PickCrumbs(way) { i, c -> go(PickAt(c.path, way.take(i + 1), false)) }
         PickFilter(filter) { filter = it }
-        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 8.dp)) {
+        // Each folder from its top (one list's scroll is not the next folder's).
+        androidx.compose.runtime.key(at.path) { LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 8.dp)) {
             when {
                 error != null -> item(key = "error") { Text(error!!, fontSize = 13.sp, color = C.red, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) }
                 denied -> item(key = "denied") { Note(t("android-misc.drive.pick.unreadable")) }
@@ -796,7 +943,7 @@ fun openFolderPicker(app: AppState, station: String, lent: List<String>) {
                     items(listed, key = { "f:" + it.path }) { e -> PickFolderRow(e) { go(PickAt(e.path, way + DriveCrumb(e.name, e.path), e.unreadable)) } }
                 }
             }
-        }
+        } }
         if (denied) Text(t("android-misc.drive.pick.unreadableNote"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp))
         val taken = here != null && here.path in lent
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
