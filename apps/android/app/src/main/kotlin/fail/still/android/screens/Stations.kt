@@ -454,7 +454,11 @@ fun openStationPeek(app: AppState, address: String) {
                 if (s.online) StationFigures(s, peek = true)
                 else Text(t("android-settings.stations.offline", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
             }
-            ListCard { GoRow(t("android-chat.station.details")) { app.sheet = null; app.push(Screen.Station(address)) } }
+            ListCard {
+                // Its files (docs/drive.md), where it has a drive: a way there from where it is named, as the wide screen's card has.
+                s?.overview?.drive?.let { drive -> GoRow(t("android-misc.drive.title"), fail.still.android.drive.driveValue(drive.roots)) { app.sheet = null; app.push(Screen.Drive(address, null, "")) } }
+                GoRow(t("android-chat.station.details")) { app.sheet = null; app.push(Screen.Station(address)) }
+            }
         }
     }
 }

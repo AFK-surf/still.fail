@@ -319,6 +319,7 @@ export const stories: Story[] = [
   { id: "phone-chat", group: "手机", title: "对话", app: true, phone: true },
   { id: "phone-station-files", group: "手机", title: "对话 · Station 文件", app: true, phone: true, steps: [{ click: '[aria-label="添加文件"]' }, { text: "Station 文件" }, { text: "主目录" }, { text: "Downloads" }, { text: "login-375.png" }] },
   { id: "phone-station-file-card", group: "手机", title: "对话 · Station 文件的卡片", app: true, phone: true, steps: [{ click: '[aria-label="添加文件"]' }, { text: "Station 文件" }, { text: "下载" }, { text: "login-375.png" }, { text: "添加 1 个" }, { click: "[data-card]" }] },
+  { id: "phone-chat-station", group: "手机", title: "对话 · station 卡片", app: true, phone: true, steps: [{ click: '[aria-label$="的名片"]' }, { text: "Station" }] },
   { id: "phone-chat-pick", group: "手机", title: "对话 · 选取一段", app: true, phone: true, steps: [{ hold: '[data-role="agent"][data-ts] li' }] },
   { id: "phone-home", group: "手机", title: "首页", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }] },
   { id: "phone-agent", group: "手机", title: "agent 名片", app: true, phone: true, steps: [{ click: '[aria-label$="的名片"]' }] },

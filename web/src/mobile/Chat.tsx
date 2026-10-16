@@ -225,7 +225,11 @@ function StationSheet({ station }: { station: string }) {
     <>
       <SheetGrab />
       <div className={`${sheetsCss.mSheetScroll} ${css.mStationSheet}`}>
-        {s && <StationPeek s={s} footer={<GoRow title={t("web-mobile.chat.stationDetails")} onClick={() => { app.sheet(null); app.push(app.at(`/s/${s.id}/overview`)); }} />} />}
+        {s && <StationPeek s={s} footer={<>
+          {/* Its files (docs/drive.md), where it has a drive: a way there from where it is named, as the wide screen's card has. */}
+          {s.overview?.drive && <GoRow title={t("web-pages.drive.title")} value={s.overview.drive.roots.length ? t("web-pages.drive.rootsCount", { n: s.overview.drive.roots.length }) : t("web-pages.drive.notShared")} onClick={() => { app.sheet(null); app.push(app.at(`/s/${s.id}/files`)); }} />}
+          <GoRow title={t("web-mobile.chat.stationDetails")} onClick={() => { app.sheet(null); app.push(app.at(`/s/${s.id}/overview`)); }} />
+        </>} />}
       </div>
     </>
   );
