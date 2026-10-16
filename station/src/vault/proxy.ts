@@ -168,7 +168,8 @@ export class Proxy {
     const out = httpsRequest({ host, port, servername: host, method: req.method, path: req.url, headers, ALPNProtocols: ["http/1.1"], ...(this.#trust ? { ca: this.#trust } : {}) }, (answer) => {
       const back: Record<string, string | string[]> = {};
       for (const [name, value] of Object.entries(answer.headers)) if (value !== undefined && !HOP.includes(name)) back[name] = value;
-      res.writeHead(answer.statusCode ?? 502, answer.statusMessage, back);
+      if (answer.statusMessage) res.statusMessage = answer.statusMessage;
+      res.writeHead(answer.statusCode ?? 502, back);
       answer.pipe(res);
     });
     out.on("error", (e) => {

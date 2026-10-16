@@ -36,7 +36,10 @@ const mpint = (b: Buffer) => {
 /// Reads SSH's wire types off a buffer, throwing past its end.
 class Reader {
   at = 0;
-  constructor(readonly b: Buffer) {}
+  readonly b: Buffer;
+  constructor(b: Buffer) {
+    this.b = b;
+  }
   u32(): number {
     if (this.at + 4 > this.b.length) throw new Error("truncated");
     const v = this.b.readUInt32BE(this.at);

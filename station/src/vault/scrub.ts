@@ -29,7 +29,7 @@ export class Scrubber {
   readonly #forms: Buffer[];
   readonly #mark: Buffer;
   readonly #keep: number;
-  #held = Buffer.alloc(0);
+  #held: Buffer = Buffer.alloc(0);
 
   constructor(values: string[], mark = HIDDEN) {
     // The longest first: a form inside another is hidden with it.
