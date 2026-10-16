@@ -241,6 +241,13 @@ export const fileCardMeta = style({
   },
 });
 export const fileCardText = style({ flex: "1", minWidth: "0", display: "grid" });
+/** A file's kind at a glance (Chat.tsx FileTile): a sheet with its extension, in the text's colour; dashed when only its
+ * path goes; filling with the accent as it goes up; its extension red when it failed. */
+export const fileTile = style({ flex: "none", fill: "none", stroke: vars.muted, strokeWidth: 1.5, strokeLinecap: "round", strokeLinejoin: "round" });
+export const fileTileExt = style({ fill: vars.text, stroke: "none", fontSize: ".62em", fontWeight: 600, letterSpacing: ".02em", selectors: { [`${fileTile}[data-error] &`]: { fill: vars.red } } });
+export const fileTileFill = style({ fill: `color-mix(in srgb, ${vars.accent} 22%, transparent)`, stroke: "none", transition: "y 200ms linear" });
+export const fileCardStem = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const fileCardExt = style({ flex: "none", whiteSpace: "nowrap" });
 /** What a file dragged in is, on its card's hover: its name and where it is beside how it goes; under them, how the
  * chat takes what is dragged in. Words only where they say something; the controls small. */
 export const refInfo = style({ display: "grid", gap: "10px", minWidth: "0", width: "300px", maxWidth: "100%" });
@@ -253,7 +260,7 @@ export const refInfoMode = style({ flex: "none", vars: { "--pad": "2px", "--gap"
 globalStyle(`${refInfoMode} > button`, { height: "24px", padding: "0 10px", fontSize: vars.textMeta });
 export const refInfoChat = style({ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", color: vars.muted, fontSize: vars.textMeta, cursor: "pointer" });
 export const fileCardName = style({
-  fontSize: vars.textUi, lineHeight: "20px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  display: "flex", minWidth: "0", fontSize: vars.textUi, lineHeight: "20px", whiteSpace: "nowrap",
 });
 export const fileCardRemove = style({
   display: "grid", placeItems: "center", width: "22px", height: "22px", padding: "0", border: "0", borderRadius: "50%",
@@ -693,10 +700,17 @@ globalStyle(`${composerFiles} :is(${composerThumb}, ${fileCard}, ${pasteSnippet}
 });
 globalStyle(`${composerFiles} :is(${fileCard}, ${pasteSnippet})`, { boxSizing: "border-box", height: "64px", alignItems: "center" });
 globalStyle(`${composerFiles} ${fileCard}`, { padding: "0 14px" });
+// Off the composer's frosted ground: a file to send stands on the page's own (a step up in the dark); one named by its
+// path, which stays where it is, is only outlined, dashed.
+globalStyle(`${composerFiles} :is(${fileCard}, ${pasteSnippet})`, {
+  background: `light-dark(${vars.canvas}, color-mix(in srgb, ${vars.text} 9%, ${vars.raised}))`, boxShadow: "0 1px 2px rgb(0 0 0 / .05)",
+});
+globalStyle(`${composerFiles} ${fileCard}[data-named]`, { background: "none", boxShadow: "none", border: `1px dashed ${vars.lineStrong}` });
 /** Its name on one line, what it is and its buttons on the next: two lines, as a file's card has. */
 globalStyle(`${composerFiles} ${pasteSnippetBody}`, {
-  flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", columnGap: "8px", rowGap: "0", padding: "0 0 0 14px",
+  flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", columnGap: "8px", rowGap: "0", padding: "0 0 0 10px",
 });
+globalStyle(`${composerFiles} ${pasteSnippet} > ${fileTile}`, { marginLeft: "14px" });
 globalStyle(`${composerFiles} ${pasteSnippetTitle}`, { flexBasis: "100%", fontSize: vars.textUi, lineHeight: "20px" });
 globalStyle(`${composerFiles} :is(${pasteSnippetHint}, ${pasteSnippetOpen})`, { fontSize: vars.textCaption, lineHeight: "16px" });
 globalStyle(`${composerFiles} ${pasteSnippetRemove}`, { margin: "0 14px 0 0" });

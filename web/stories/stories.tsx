@@ -9,6 +9,9 @@ import { Reader } from "../src/drive/Reader.tsx";
 import { Player } from "../src/drive/Player.tsx";
 import { DrivePreview } from "../src/mobile/Drive.tsx";
 import { useToast } from "../src/toast.tsx";
+import { ComposerExtras } from "../src/Chat.tsx";
+import type { Draft, Pending } from "../src/draft.ts";
+import * as composerCss from "../src/styles/composer.css.ts";
 import {
   AgentMark, Button, Choices, Confirm, CopyCommand, Dialog, Empty, Field, IconButton, Loading, Menu, ModelLogo, PanelButton, PanelGroup,
   PanelHead, PanelIconButton, PanelRow, PanelText, Pill, RuntimeTags, Section, Segmented, Select, SkeletonRows, StatusDot, StatusText,
@@ -74,6 +77,29 @@ function ChoicesDemo() {
   const [v, setV] = useState<string>("all");
   return <div style={{ width: 420 }}><Choices label="范围" value={v} onChange={setV} options={[{ value: "all", title: "全部会话", description: "workspace 里所有人的对话" }, { value: "mine", title: "我参与的", description: "只看自己发起或参与的" }]} /></div>;
 }
+/** What can wait in a composer to be sent, each kind once: a file up, one going up, one that failed, one named by its
+ * path, a folder named by its path, pasted words, a folder of the station going as a zip. */
+function ComposerCards() {
+  const ref = (path: string, dir = false, mode: "path" | "file" = "path") => ({ station: "demo/studio", stationName: "Studio", path, dir, mode });
+  const files: Pending[] = [
+    { id: "1", name: "合同-2026Q4.pdf", size: 1_468_006, done: { name: "合同-2026Q4.pdf", path: "/u/a.pdf", size: 1_468_006 }, error: null },
+    { id: "2", name: "export-1013.csv", size: 22_528_000, sent: 9_000_000, done: null, error: null },
+    { id: "3", name: "build.log", size: 4096, done: null, error: "station 没有回应" },
+    { id: "4", name: "发版录屏 1014.mp4", size: 50_541_773, done: null, error: null, ref: ref("/Users/lin/Downloads/发版录屏 1014.mp4") },
+    { id: "5", name: "设计稿", size: 0, done: null, error: null, ref: ref("/Users/lin/Downloads/设计稿", true) },
+    { id: "6", name: "pasted.txt", size: 5120, done: { name: "pasted.txt", path: "/u/p.txt", size: 5120 }, error: null, pasted: { preview: "error: connect ECONNREFUSED 127.0.0.1:5432 at TCPConnectWrap", characters: 5120 } as never },
+    { id: "7", name: "acme", size: 0, sent: 0, done: null, error: null, ref: ref("/Users/lin/code/acme", true, "file") },
+  ];
+  const draft = { quotes: [], files, text: "", starting: false, asFiles: false, remove: noop, setMode: noop, setAsFiles: noop, add: noop, setText: noop, unquote: noop, comment: noop } as unknown as Draft;
+  return (
+    <div style={{ padding: 40, maxWidth: 820 }}>
+      <form className={composerCss.composerBox} data-multiline="" style={{ display: "flex" }}>
+        <ComposerExtras draft={draft} focusQuote={null} onFocused={noop} onDone={noop} />
+      </form>
+    </div>
+  );
+}
+
 function ToastDemo({ text }: { text: string }) {
   const toast = useToast();
   useEffect(() => { toast(text); }, [toast, text]);
@@ -154,6 +180,8 @@ export const stories: Story[] = [
     ]),
   },
 
+  { id: "composer-cards", group: "对话", title: "输入框里的附件", render: () => stage(<ComposerCards />) },
+
   // ── dialogs and toasts ──
   { id: "dialog", group: "弹窗", title: "弹窗", render: () => stage(<Dialog open title="添加 station" description="在要接入的机器上运行这条命令。" onClose={noop} footer={<><Button variant="ghost">取消</Button><Button variant="primary">完成</Button></>}><CopyCommand text="curl -fsSL https://still.fail/install.sh | sh" /></Dialog>) },
   { id: "dialog-wide", group: "弹窗", title: "弹窗 · 宽", render: () => stage(<Dialog open wide title="分享对话" onClose={noop} footer={<Button variant="primary">完成</Button>}><Choices label="范围" value="all" onChange={noop} options={[{ value: "all", title: "全部", description: "workspace 里的所有人" }, { value: "mine", title: "只给我", description: "只有自己能看" }]} /></Dialog>) },
@@ -178,7 +206,7 @@ export const stories: Story[] = [
   { id: "app-chat-files-folder", group: "应用", title: "对话 · Station 文件 · 文件夹", app: true, steps: [{ click: '[aria-label="Station 文件"]' }, { text: "Downloads" }] },
   { id: "app-chat-files-menu", group: "应用", title: "对话 · Station 文件 · 右键", app: true, steps: [{ click: '[aria-label="Station 文件"]' }, { text: "Downloads" }, { rightClick: "button:has-text(\"login-375.png\")" }] },
   { id: "app-chat-files-added", group: "应用", title: "对话 · Station 文件 · 发路径", app: true, steps: [{ click: '[aria-label="Station 文件"]' }, { text: "Downloads" }, { rightClick: "button:has-text(\"发版录屏 1014.mp4\")" }, { text: "添加到消息" }] },
-  { id: "app-chat-files-card", group: "应用", title: "对话 · 文件卡片悬停", app: true, steps: [{ click: '[aria-label="Station 文件"]' }, { text: "Downloads" }, { rightClick: "button:has-text(\"发版录屏 1014.mp4\")" }, { text: "添加到消息" }, { hover: "text=Studio 上的路径" }] },
+  { id: "app-chat-files-card", group: "应用", title: "对话 · 文件卡片悬停", app: true, steps: [{ click: '[aria-label="Station 文件"]' }, { text: "Downloads" }, { rightClick: "button:has-text(\"发版录屏 1014.mp4\")" }, { text: "添加到消息" }, { hover: "text=Studio · 路径" }] },
   { id: "app-station", group: "应用", title: "station", app: true, steps: [{ click: '[aria-label^="Station"]' }] },
   { id: "app-station-mark", group: "应用", title: "station · 选图标", app: true, steps: [{ click: '[aria-label^="Station"]' }, { click: '[aria-label^="给 Studio 选个图标"]' }] },
   { id: "app-profile", group: "应用", title: "Profile", app: true, steps: [{ click: '[aria-label="Profile"]' }] },

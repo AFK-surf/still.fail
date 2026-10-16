@@ -6,7 +6,7 @@ import { makePastedFile, pastedInfo, PASTE_THRESHOLD } from "./pastedText.ts";
 import { sentFileKey, sentImage, sentImageKey, uploadImageKey } from "./sentImages.ts";
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
 import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Check, Close, Command, Edit, Folder, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Web } from "./icons.tsx";
-import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { Link, useHref, useSearchParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
@@ -1420,6 +1420,44 @@ function Waiting({ hash, fit }: { hash: string | undefined; fit?: { width: strin
 /** How the chat draws a file: an image's button, the box it takes before it loads and what shows until then; a file's card and its button. */
 const look = { image: css.msgImage, wait: css.msgImageWait, box: (f: Attachment, least?: number) => imageBox(f, least), open: css.fileCardOpen, card: (f: Attachment) => <FileCard file={f} /> };
 
+/** A file's name as its card shows it: what is cut is the middle of its name, never its extension. */
+function FileName({ name }: { name: string }) {
+  const dot = name.lastIndexOf(".");
+  const [stem, ext] = dot > 0 && name.length - dot <= 8 ? [name.slice(0, dot), name.slice(dot)] : [name, ""];
+  return <span className={css.fileCardName}><span className={css.fileCardStem}>{stem}</span>{ext && <span className={css.fileCardExt}>{ext}</span>}</span>;
+}
+
+/**
+ * What a file is, at a glance: a sheet with its extension on it (a folder its own shape), drawn in the text's colour.
+ * One going up fills from the bottom as it goes; one that failed has its extension in red.
+ */
+export function FileTile({ name, dir = false, progress, error = false }: { name: string; dir?: boolean; progress?: number | undefined; error?: boolean }) {
+  const dot = name.lastIndexOf(".");
+  const ext = dot > 0 && name.length - dot <= 6 ? name.slice(dot + 1).toUpperCase() : "";
+  const id = useId();
+  return (
+    <svg className={css.fileTile} width="30" height="36" viewBox="0 0 30 36" aria-hidden="true" data-error={error || undefined}>
+      {dir ? (
+        <path d="M2.75 8.5Q2.75 5.75 5.5 5.75H11.5L14.5 9H24.5Q27.25 9 27.25 11.75V28.5Q27.25 31.25 24.5 31.25H5.5Q2.75 31.25 2.75 28.5Z"/>
+      ) : (
+        <>
+          {progress !== undefined && (
+            <>
+              <clipPath id={id}><path d="M6 1.75H19L26.25 9V31Q26.25 34.25 23 34.25H6Q2.75 34.25 2.75 31V5Q2.75 1.75 6 1.75Z" /></clipPath>
+              <rect className={css.fileTileFill} x="0" width="30" y={36 - 36 * Math.max(0, Math.min(1, progress))} height="36" clipPath={`url(#${id})`} />
+            </>
+          )}
+          <path d="M6 1.75H19L26.25 9V31Q26.25 34.25 23 34.25H6Q2.75 34.25 2.75 31V5Q2.75 1.75 6 1.75Z"/>
+          <path d="M19 1.75V6.5Q19 9 21.5 9H26.25" />
+          {ext
+            ? <text x="14.5" y="27" textAnchor="middle" className={css.fileTileExt} textLength={ext.length >= 3 ? 17 : undefined} lengthAdjust="spacingAndGlyphs">{ext}</text>
+            : <path d="M8.5 19H20.5M8.5 23.5H17" />}
+        </>
+      )}
+    </svg>
+  );
+}
+
 function FileCard({ file, onRemove, pending, sent, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; pending?: boolean; sent?: number | undefined; error?: string | null }) {
   // A file of more than one part says how far it has gone.
   const going = pending && sent !== undefined && file.size > 4 * 1024 * 1024
@@ -1427,9 +1465,9 @@ function FileCard({ file, onRemove, pending, sent, error }: { file: Pick<Attachm
     : t("web-main.file.uploading");
   return (
     <Tip label={file.path ?? file.name} cut={!file.path}><span className={css.fileCard} data-error={error ? true : undefined}>
-      {pending ? <span className={waitingCss.spinner} aria-hidden="true" /> : <Read size={16} aria-hidden="true" />}
+      <FileTile name={file.name} progress={pending ? (sent ?? 0) / Math.max(1, file.size) : undefined} error={!!error} />
       <span className={css.fileCardText}>
-        <span className={css.fileCardName}>{file.name}</span>
+        <FileName name={file.name} />
         <span className={css.fileCardMeta}>{error ?? (pending ? going : fileSize(file.size))}</span>
       </span>
       {onRemove && <button type="button" className={css.fileCardRemove} aria-label={t("web-main.file.remove", { name: file.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
@@ -1914,7 +1952,7 @@ function RefCard({ file: f, draft, onRemove }: { file: Pending; draft: Draft; on
     : t("web-main.file.uploading");
   // A folder goes as a zip only from the chat's own station (zipped there).
   const zips = ref.dir && ref.station === station.address;
-  const meta = asFile ? f.error ?? (pending ? going : fileSize(f.done?.size ?? f.size)) : t(ref.dir ? "web-main.file.folderOn" : "web-main.file.pathOn", { station: ref.stationName });
+  const meta = asFile ? f.error ?? (pending ? going : fileSize(f.done?.size ?? f.size)) : `${ref.stationName} · ${t("web-main.file.modePath")}`;
   // Hovered: its name, where it is (its station, its folder), how it goes (a path, the file, a folder as a zip), and how
   // this chat takes what is dragged in; each switched there.
   const where = ref.path.slice(0, Math.max(ref.path.lastIndexOf("/"), ref.path.lastIndexOf("\\"))) || ref.path;
@@ -1938,10 +1976,10 @@ function RefCard({ file: f, draft, onRemove }: { file: Pending; draft: Draft; on
   );
   return (
     <Hover tile content={info}>
-      <span className={css.fileCard} data-error={asFile && f.error ? true : undefined}>
-        {pending ? <span className={waitingCss.spinner} aria-hidden="true" /> : ref.dir && !asFile ? <Folder size={16} aria-hidden="true" /> : <Read size={16} aria-hidden="true" />}
+      <span className={css.fileCard} data-error={asFile && f.error ? true : undefined} data-named={!asFile || undefined}>
+        <FileTile name={asFile && ref.dir ? `${f.name}.zip` : f.name} dir={ref.dir && !asFile} progress={pending ? (f.sent ?? 0) / Math.max(1, f.size) : undefined} error={asFile && !!f.error} />
         <span className={css.fileCardText}>
-          <span className={css.fileCardName}>{asFile && ref.dir ? `${f.name}.zip` : f.name}</span>
+          <FileName name={asFile && ref.dir ? `${f.name}.zip` : f.name} />
           <span className={css.fileCardMeta}>{meta}</span>
         </span>
         <button type="button" className={css.fileCardRemove} aria-label={t("web-main.file.remove", { name: f.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>
@@ -1957,6 +1995,7 @@ function PendingFile({ file: f, onRemove, onRestore, onRetry }: { file: Pending;
   // Not sent yet: no session keeps it, it is shown from this device.
   const shown: Attachment = { name: f.name, path: `draft:${f.id}`, size: f.size };
   if (f.pasted) return <><div className={css.pasteSnippet}>
+    <FileTile name={f.name} progress={!f.done && !f.error ? (f.sent ?? 0) / Math.max(1, f.size) : undefined} error={!!f.error} />
     <div className={css.pasteSnippetBody}>
       <button type="button" className={css.pasteSnippetTitle} onClick={(e) => { e.stopPropagation(); setOpen(true); }}>{f.pasted.preview || t("web-main.composer.pastedText")}</button>
       <span className={css.pasteSnippetHint}>{f.error ?? (!f.done ? t("web-main.composer.pasteUploading") : t("web-main.composer.pasteAttachment", { count: f.pasted.characters }))}</span>
