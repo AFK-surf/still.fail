@@ -33,7 +33,7 @@ export const spin = style({ display: "contents" });
 globalStyle(`${spin}[data-on] svg`, { animation: `${turn} 900ms linear infinite` });
 
 /** The entries: rows on the page, a row's ground on hover; files dropped on it go into the folder. */
-export const list = style({ position: "relative", display: "grid", gap: "2px", minHeight: "200px", borderRadius: vars.rCard, cornerShape: vars.cornerShape });
+export const list = style({ position: "relative", display: "grid", gap: "2px", minHeight: "200px", borderRadius: vars.rCard, cornerShape: vars.cornerShape, outline: "none" });
 // As the settings lists: rows reaching a little past the column, their text in line with the page's.
 globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "none", marginLeft: `max(${neg(12)}, calc(50% - 392px))`, marginRight: `max(${neg(12)}, calc(50% - 392px))` });
 /** A line about the folders where there are none to show (none lent yet, or none matching). */
@@ -43,7 +43,12 @@ export const entry = style({
   position: "relative", borderRadius: vars.rField, cornerShape: vars.cornerShape, transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: {
     "&:hover, &:has([data-state=open])": { background: vars.list },
+    // Chosen (a press, the keys), and in columns the folder open on the way to the next column.
+    "&:has(> [data-chosen])": { background: vars.selected },
+    "&:has(> [data-along])": { background: vars.list },
     "&[data-busy]": { opacity: ".6" },
+    // A folder something dragged over it would go into.
+    "&[data-drop]": { background: vars.accentBg, boxShadow: `inset 0 0 0 1px ${vars.accent}` },
   },
 });
 export const row = style({
@@ -52,13 +57,15 @@ export const row = style({
   textAlign: "left", fontSize: vars.textUi, cursor: "pointer", borderRadius: vars.rField, cornerShape: vars.cornerShape,
   selectors: {
     "span&": { cursor: "default" },
+    // What is chosen says where the keys are (its ground): no ring around it besides, as Finder draws none.
+    "&:focus-visible": { outline: "none" },
     "&:disabled": { cursor: "default" },
     // In a chat's 文件 tab: narrow, the size alone.
     "&[data-compact]": { gridTemplateColumns: "18px minmax(0, 1fr) auto 28px", columnGap: "10px", minHeight: "36px", padding: "6px 10px" },
     // In a tree: in by its depth, its disclosure before its mark.
     "&[data-tree]": { gridTemplateColumns: "12px 20px minmax(0, 1fr) 96px 104px 36px", columnGap: "8px", paddingLeft: "calc(6px + var(--depth, 0) * 18px)" },
     "&[data-tree][data-compact]": { gridTemplateColumns: "12px 18px minmax(0, 1fr) auto 28px" },
-    "&[data-selected]": { background: vars.list },
+
     // A folder lent, or one of the station's to pick: no columns of sizes and times.
     [`${list} > &, [role=dialog] &`]: { gridTemplateColumns: "20px minmax(0, 1fr) 16px", minHeight: "44px" },
     [`${list} > &:hover, [role=dialog] &:hover`]: { background: vars.list },
@@ -167,7 +174,22 @@ export const treeNote = style({ margin: "0", padding: "8px 10px", paddingLeft: "
 export const treeError = style({ color: vars.red });
 /** Columns, a folder each, side by side; more than fit scroll sideways, the last kept in view. */
 export const columns = style({ display: "flex", alignItems: "stretch", gap: "6px", minHeight: "0", overflowX: "auto", overscrollBehaviorX: "contain" });
-export const column = style({ flex: "0 0 240px", display: "grid", alignContent: "start", gap: "2px", minWidth: "0", overflowY: "auto" });
+export const column = style({
+  flex: "0 0 240px", display: "grid", alignContent: "start", gap: "2px", minWidth: "0", overflowY: "auto", borderRadius: vars.rField, cornerShape: vars.cornerShape,
+  selectors: { "&[data-drop]": { background: vars.accentBg } },
+});
+/** A name being changed in place, where the name was. */
+export const nameField = style({
+  minWidth: "0", width: "100%", boxSizing: "border-box", margin: `${neg(3)} 0`, padding: "2px 6px", border: `1px solid ${vars.accent}`, borderRadius: vars.rOption,
+  cornerShape: vars.cornerShape, background: vars.canvas, color: vars.text, font: "inherit", outline: "none",
+});
+/** Over a list, its columns' names, each ordering it. */
+export const listHead = style({
+  display: "grid", gridTemplateColumns: "20px minmax(0, 1fr) 96px 104px 36px", columnGap: "12px", padding: "0 12px 4px", color: vars.muted, fontSize: vars.textMeta,
+});
+globalStyle(`${listHead} button`, { display: "inline-flex", alignItems: "center", gap: "4px", padding: "0", border: "0", background: "none", color: "inherit", font: "inherit", cursor: "pointer", textAlign: "left" });
+globalStyle(`${listHead} button:nth-of-type(n+2)`, { justifySelf: "end" });
+globalStyle(`${listHead} button:hover, ${listHead} button[data-on]`, { color: vars.text });
 // On the files' page, columns as tall as the window leaves them: each scrolls on its own.
 globalStyle(`${list}[data-view="columns"]`, { display: "block", height: "calc(100dvh - 150px)", minHeight: "240px" });
 globalStyle(`${list}[data-view="columns"] > ${columns}`, { height: "100%" });

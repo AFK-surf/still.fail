@@ -6,7 +6,7 @@
 // anywhere that takes text. A folder is entered, or pinned. Images, PDFs and code open in the chat's preview over the
 // page; what reads or plays opens on the files' page. Come back to (from another page, as from another tab), it is where
 // it was, each folder scrolled as far (../drive/kept.ts).
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { stationBase, useStation } from "../station.tsx";
 import { useStations } from "../api.ts";
 import { useGo } from "../go.ts";
@@ -16,12 +16,13 @@ import type { DriveEntry, StationView } from "../core/shapes.ts";
 import { Button, IconButton, ICON, type MenuItem } from "../ui.tsx";
 import { ChevronRight, Copy, Download, Folder, Pin, Refresh, Retry, Send, Server } from "@stillfail/ui/icons.tsx";
 import { download, joinPath, openerOf, refresh, useFolder, type At } from "../drive/model.ts";
-import { keepOpened, keepTab, keptTab, lastOpened, useKeptScroll, type Owner } from "../drive/kept.ts";
+import { keepOpened, keepTab, keptTab, useKeptScroll, type Owner } from "../drive/kept.ts";
+import { useBrowse } from "../drive/browse.ts";
 import { absoluteOf, drive, drivePath, folderName, rootTrouble, trailOf, useDrive } from "../drive/useDrive.ts";
 import { draggedOf, droppedFrom } from "../drive/drag.ts";
 import { DrivePreview } from "../mobile/Drive.tsx";
 import { DriveRow } from "./Drive.tsx";
-import { ColumnsView, TreeView, useDriveView, ViewSwitch, type RowOf } from "./DriveViews.tsx";
+import { ColumnsView, TreeView, useDriveView, ViewSwitch, type RowOf, type Shown } from "./DriveViews.tsx";
 import * as shellCss from "../styles/shell.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as driveCss from "./Drive.css.ts";
@@ -127,10 +128,31 @@ function FolderList({ owner, station, root, path, chat, onGo, onPlaces, onOpen }
   const [refreshing, setRefreshing] = useState(false);
   const [view, setView] = useDriveView("tab");
   const scroller = useKeptScroll<HTMLDivElement>(owner, at, view, folder.value !== undefined || folder.error !== null);
-  const last = lastOpened(owner, at);
-  const rowOf: RowOf = (in_, e) => ({ items: items(in_, e), open: () => onOpen(in_, folderOf(in_), e) });
-  // A folder's entries as read (for a preview to step through the pictures beside it): the one shown's, else the file alone.
-  const folderOf = (in_: At) => (in_.path === path ? entries : []);
+  // As on the files' page, but nothing here changes the files: ⏎ opens what is chosen rather than renaming it.
+  const browse = useBrowse({
+    owner, view, at, write: false, act,
+    open: (in_, e) => onOpen(in_, folderOf(in_), e), preview: (in_, e) => onOpen(in_, folderOf(in_), e),
+    go: (p) => onGo(root, p), remove: () => undefined,
+  });
+  // A folder's entries as shown (for a preview to step through the pictures beside it): the one shown's, else the file alone.
+  const folderOf = (in_: At) => (in_.path === path ? browse.arranged(entries) : []);
+  const rowOf: RowOf = (in_, e) => ({
+    items: items(in_, e),
+    open: () => onOpen(in_, folderOf(in_), e),
+    press: (ev) => browse.press(in_, e, ev),
+    menu: () => browse.choose(in_, e.name),
+    chosen: browse.isChosen(in_, e.name),
+    renaming: false,
+    rename: () => undefined,
+    dragged: () => browse.chosenWith(in_, e).map((x) => draggedOf(x.at, x.entry, name)),
+  });
+  const shown: Shown = { rowOf, arranged: browse.arranged, clear: browse.clear };
+  const shownEntries = browse.arranged(entries);
+  // Going into a folder by the keys leaves nothing focused (the row pressed is gone): the keys stay the tab's.
+  const focused = useRef(false);
+  useEffect(() => {
+    if (focused.current && (document.activeElement === document.body || document.activeElement === null)) scroller.current?.focus({ preventScroll: true });
+  }, [path, scroller]);
   const reload = () => {
     if (refreshing) return;
     setRefreshing(true);
@@ -151,6 +173,13 @@ function FolderList({ owner, station, root, path, chat, onGo, onPlaces, onOpen }
   const items = (in_: At, e: DriveEntry): MenuItem[] => {
     const abs = absoluteOf(root, joinPath(in_.path, e.name));
     const on = d.roots.some((r) => r.path === abs);
+    const all = browse.chosenWith(in_, e);
+    if (all.length > 1) {
+      return [
+        { label: t("web-pages.drive.sendManyToChat", { n: all.length }), icon: Send, onSelect: () => offerToDraft(chat, { files: [], quotes: [], dropped: all.map((x) => droppedFrom(draggedOf(x.at, x.entry, name))) }) },
+        { label: t("web-pages.drive.copyPaths"), icon: Copy, onSelect: () => copyPath(all.map((x) => absoluteOf(root, joinPath(x.at.path, x.entry.name))).join("\n")) },
+      ];
+    }
     return [
       { label: t("web-pages.drive.sendToChat"), icon: Send, onSelect: () => offerToDraft(chat, { files: [], quotes: [], dropped: [droppedFrom(draggedOf(in_, e, name))] }) },
       { label: t("web-pages.drive.copyPath"), icon: Copy, onSelect: () => copyPath(abs) },
@@ -177,14 +206,16 @@ function FolderList({ owner, station, root, path, chat, onGo, onPlaces, onOpen }
           <span className={driveCss.spin} data-on={refreshing || undefined}><IconButton label={t("web-pages.drive.refresh")} icon={Refresh} onClick={reload} /></span>
         </span>
       </div>
-      <div ref={scroller} className={`${driveCss.list} ${css.list}`} data-view={view}>
-        {view === "columns" ? <ColumnsView owner={owner} at={{ ...at, path: "" }} open={path} onGo={(p) => onGo(root, p)} rowOf={rowOf} />
-          : view === "tree" ? <TreeView key={path} owner={owner} at={at} rowOf={rowOf} compact />
+      <div ref={scroller} className={`${driveCss.list} ${css.list}`} data-view={view} tabIndex={-1}
+        onKeyDown={(e) => browse.onKeyDown(e.nativeEvent)} onFocus={() => { focused.current = true; }}
+        onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) focused.current = e.relatedTarget === null; }} onKeyUp={(e) => { if (e.key === " ") e.preventDefault(); }} onClick={(e) => { if (e.target === e.currentTarget) browse.clear(); }}>
+        {view === "columns" ? <ColumnsView owner={owner} at={{ ...at, path: "" }} open={path} shown={shown} />
+          : view === "tree" ? <TreeView key={path} owner={owner} at={at} shown={shown} compact />
           : folder.error ? (
           <div className={driveCss.problem}><p className={controlsCss.fieldError}>{folder.error.message}</p><Button variant="ghost" icon={Retry} onClick={reload}>{t("web-pages.drive.retry")}</Button></div>
         ) : !folder.value ? <p className={`${shellCss.muted} ${css.note}`}>{t("web-pages.drive.reading")}</p>
-          : entries.length === 0 ? <p className={`${shellCss.muted} ${css.note}`}>{t("web-pages.drive.emptyFolder")}</p>
-          : entries.map((e) => <DriveRow key={e.name} at={at} entry={e} items={items(at, e)} compact selected={e.name === last} onOpen={() => onOpen(at, entries, e)} />)}
+          : shownEntries.length === 0 ? <p className={`${shellCss.muted} ${css.note}`}>{t("web-pages.drive.emptyFolder")}</p>
+          : shownEntries.map((e) => <DriveRow key={e.name} at={at} entry={e} row={rowOf(at, e)} compact />)}
       </div>
     </>
   );

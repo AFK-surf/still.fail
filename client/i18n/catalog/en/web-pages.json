@@ -1375,5 +1375,34 @@
   "web-pages.screen.and": ", ",
   "web-pages.screen.someone": "them",
   "web-pages.screen.takeOver": "Take over",
-  "web-pages.screen.takeOverTip": "Pause {names} and take control"
+  "web-pages.screen.takeOverTip": "Pause {names} and take control",
+  "web-pages.drive.untitledFolder": "untitled folder",
+  "web-pages.drive.moveWhat": "move",
+  "web-pages.drive.uploadWhat": "upload",
+  "web-pages.drive.downloadMany": {
+    "one": "Download 1 file",
+    "other": "Download {n} files"
+  },
+  "web-pages.drive.copyPaths": "Copy paths",
+  "web-pages.drive.deleteMany": {
+    "one": "Delete 1 item",
+    "other": "Delete {n} items"
+  },
+  "web-pages.drive.deleteManyAsk": {
+    "one": "Delete 1 item?",
+    "other": "Delete {n} items?"
+  },
+  "web-pages.drive.sendManyToChat": {
+    "one": "Add 1 item to message",
+    "other": "Add {n} items to message"
+  },
+  "web-pages.drive.sortBy.name": "Sort by name",
+  "web-pages.drive.sortBy.time": "Sort by date modified",
+  "web-pages.drive.sortBy.size": "Sort by size",
+  "web-pages.drive.sortBy.kind": "Sort by kind",
+  "web-pages.drive.sortBy.nameHead": "Name",
+  "web-pages.drive.sortBy.sizeHead": "Size",
+  "web-pages.drive.sortBy.timeHead": "Date modified",
+  "web-pages.drive.showHidden": "Show hidden files",
+  "web-pages.drive.hideHidden": "Hide hidden files"
 }
