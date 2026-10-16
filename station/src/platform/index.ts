@@ -142,6 +142,14 @@ export type Platform = {
   /// returned function lets go, or the station is gone; none where there is no way to.
   holdAwake(why: string): (() => void) | null;
 
+  // The station's browser (src/browser/).
+  /// Where a Chrome may be on this machine, best first: Google Chrome's, then Chromium's and Edge's (each a file that
+  /// is there).
+  browsers(env: Env): string[];
+  /// Whether a program here can show windows (a browser with its own): a Mac's or Windows' desktop; on Linux a display
+  /// the environment names (DISPLAY, WAYLAND_DISPLAY).
+  hasDisplay(env: Env): boolean;
+
   // What only some machines have.
   /// The macOS keychain (Claude Code keeps its login there).
   hasKeychain: boolean;

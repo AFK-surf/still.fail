@@ -9,11 +9,20 @@
 - Each station keeps one real Chrome (Google Chrome, not a bundled Chromium; Chromium/Edge only when no Chrome is
   installed), started on demand as a normal browser with its own persistent profile (`<data>/browser/profile`) and
   `--remote-debugging-port=0` (a non-default user data dir, so Chrome honours it); the port is read from
-  `DevToolsActivePort`. It stays up while used, and goes after a long idle; logins persist in the profile.
-- Agents get its CDP endpoint (`ws://127.0.0.1:<port>/devtools/browser/<id>`) from the `browser` tool and drive it with
-  chrome-devtools-mcp (`--wsEndpoint`) or Playwright (`connectOverCDP`). Sessions share the browser (and its logins)
-  and open their own tabs.
-- Every tab is a screen source (`browser:<targetId>`): CDP screencast for frames, `Input.dispatch*` for input.
+  `DevToolsActivePort`. It stays up while used, and goes after a long idle (an hour); logins persist in the profile.
+  It outlives a station process (as jobs do): the next one finds it by `DevToolsActivePort` and takes it up; one that
+  dies in use is started again, on the same port when it is free (`station/src/browser/`).
+- Sites must see a person's browser: headful wherever the machine shows windows (`--headless=new` only where it
+  shows none), no automation switches, and two tells undone: Chrome reports `navigator.webdriver = true` for any
+  debuggable browser (`--disable-blink-features=AutomationControlled`), and headless says `HeadlessChrome` in its user
+  agent (given the headful one's). With either, Google's sign-in answers "This browser or app may not be secure";
+  without them it goes on to the next step, headful or headless, with Playwright attached (Chrome 155, 2026-10-17).
+- Agents get its CDP endpoint (`http://127.0.0.1:<port>`, and the `ws://127.0.0.1:<port>/devtools/browser/<id>` it
+  names) from the `browser` tool and drive it with chrome-devtools-mcp (`--browserUrl`/`--wsEndpoint`) or Playwright
+  (`connectOverCDP`). Sessions share the browser (and its logins) and open their own tabs.
+- Every tab is a screen source (`browser:<targetId>`): CDP screencast for frames, `Input.dispatch*` for input, on a
+  CDP connection of the view's own. Chrome draws (and casts) only the front tab of a window, so a view brings its tab
+  to the front when it opens, when a key frame is asked for and when the person clicks.
 
 ## Remote control
 

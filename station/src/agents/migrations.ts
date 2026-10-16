@@ -37,6 +37,7 @@ export const NOTES: [number, string][] = [
   [30, "chat_list and chat_read now show each chat's link. To point a person to a chat, give that link (in a still.fail chat as [its title](link)), not its address or session key. In still.fail chats a bare URL is a link too, and a chat's link shows as a chip with its title."],
   [31, "A station may now be in several workspaces: chat_list, station_list, chat_read, session_send, chat_create and station_task reach only your chat's workspace (its chats and stations). A chat of another workspace, even on this station, is reached only when it is shared with yours."],
   [32, "station_task prepare takes dir (an absolute local directory: each start syncs it, only what changed, into a mirror on the target and runs the command there; changed synced files come back as a patch) and back (paths downloaded into station-back/<key>/ after it ends)."],
+  [33, "New tool browser: the station's own Chrome with a persistent profile (sign-ins stay, shared by the station's sessions); it gives the DevTools endpoint for chrome-devtools-mcp or Playwright. Use it for web work behind a login, and give a person its tab with the screen tool to sign in or solve a captcha (skill stillfail-browser)."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

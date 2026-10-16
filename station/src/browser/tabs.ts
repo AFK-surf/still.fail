@@ -1,0 +1,200 @@
+// The tabs of the station's browser, as its DevTools tell of them (Target.setDiscoverTargets on the station's own
+// connection): listed to the agents, and each a screen source (`browser:<targetId>`) in the station's Screens while it
+// is there (docs/remote-screens.md).
+import type { ScreenSource, ScreenView, Screens, ViewOptions } from "../screens/source.ts";
+import { wall } from "../ops/fibers.ts";
+import type { Cdp, CdpEvent } from "./cdp.ts";
+import { TabView } from "./view.ts";
+
+export type TabInfo = { id: string; title: string; url: string; attached: boolean };
+
+/// What the tabs need of the browser.
+export type TabsParts = {
+  /// The station's connection to the browser (its watch on the targets).
+  cdp: Cdp;
+  /// Where the tabs are added as screens (a registry made by `makeScreens`: its `changed` says a title changed).
+  screens?: Screens & { changed?(): void };
+  /// A new connection to the browser, for a view of its own.
+  connect(): Promise<Cdp>;
+  /// Milliseconds.
+  now(): number;
+  /// Something happened in the browser (a tab came, went, was navigated), or a view opened or ended.
+  activity(): void;
+  /// `f` once, `ms` from now (Chrome's time: the machine's); the function returned calls it off.
+  later?(ms: number, f: () => void): () => void;
+};
+
+/// Chrome tells of a tab's new address, not of its title, which the page sets after (Chrome 155): the titles are read
+/// again this long after a tab came or changed.
+const TITLES_AFTER_MS = [1000, 5000];
+
+/// A tab as a screen source.
+class Tab implements ScreenSource {
+  readonly id: string;
+  readonly kind = "browser" as const;
+  info: { targetId: string; title: string; url: string; attached: boolean };
+  #size = { width: 0, height: 0 };
+  readonly #tabs: Tabs;
+
+  constructor(tabs: Tabs, info: Tab["info"]) {
+    this.#tabs = tabs;
+    this.info = info;
+    this.id = `browser:${info.targetId}`;
+  }
+
+  title(): string {
+    return this.info.title || this.info.url;
+  }
+
+  size() {
+    return this.#size;
+  }
+
+  sized(size: { width: number; height: number }) {
+    this.#size = size;
+  }
+
+  open(options: ViewOptions): Promise<ScreenView> {
+    return this.#tabs.open(this, options);
+  }
+}
+
+export class Tabs {
+  readonly #p: TabsParts;
+  readonly #tabs = new Map<string, { tab: Tab; remove: () => void }>();
+  readonly #views = new Set<TabView>();
+  #unlisten: () => void = () => {};
+  #closed = false;
+  /// Past the tabs that were there at start (told as created): what comes now is the browser being used.
+  #ready = false;
+  #rereads: (() => void)[] = [];
+
+  constructor(p: TabsParts) {
+    this.#p = p;
+  }
+
+  /// Starts watching: the tabs there now come as created.
+  async start() {
+    this.#unlisten = this.#p.cdp.on((e) => this.#heard(e));
+    await this.#p.cdp.send("Target.setDiscoverTargets", { discover: true });
+    this.#ready = true;
+  }
+
+  list(): TabInfo[] {
+    return [...this.#tabs.values()].map(({ tab }) => ({ id: tab.info.targetId, title: tab.info.title, url: tab.info.url, attached: tab.info.attached }));
+  }
+
+  /// How many views of the tabs are open.
+  viewing(): number {
+    return this.#views.size;
+  }
+
+  /// Stops watching: every tab leaves the screens, every view ends.
+  close() {
+    if (this.#closed) return;
+    this.#closed = true;
+    this.#unlisten();
+    for (const stop of this.#rereads.splice(0)) stop();
+    for (const view of [...this.#views]) view.close();
+    for (const { remove } of this.#tabs.values()) remove();
+    this.#tabs.clear();
+  }
+
+  async open(tab: Tab, options: ViewOptions): Promise<ScreenView> {
+    if (!options.codecs.includes("jpeg")) throw new Error("A tab of the station's browser is seen as JPEG frames, which this viewer does not take.");
+    if (this.#closed || !this.#tabs.has(tab.info.targetId)) throw new Error("This tab is closed.");
+    const cdp = await this.#p.connect();
+    try {
+      const { sessionId } = await cdp.send("Target.attachToTarget", { targetId: tab.info.targetId, flatten: true });
+      const view: TabView = new TabView({
+        cdp, session: sessionId, targetId: tab.info.targetId, now: () => this.#p.now(),
+        sized: (size) => tab.sized(size),
+        ended: () => {
+          this.#views.delete(view);
+          this.#p.activity();
+        },
+      });
+      this.#views.add(view);
+      this.#p.activity();
+      await view.start(options);
+      return view;
+    } catch (e) {
+      cdp.close();
+      throw e;
+    }
+  }
+
+  #heard(e: CdpEvent) {
+    if (e.sessionId !== undefined) return;
+    const activity = () => {
+      this.#titlesLater();
+      if (this.#ready) this.#p.activity();
+    };
+    const info = e.params?.targetInfo;
+    switch (e.method) {
+      case "Target.targetCreated":
+        if (info?.type !== "page") return;
+        if (!this.#tabs.has(info.targetId)) {
+          const tab = new Tab(this, { targetId: info.targetId, title: info.title ?? "", url: info.url ?? "", attached: Boolean(info.attached) });
+          const remove = this.#p.screens?.add(tab) ?? (() => {});
+          this.#tabs.set(info.targetId, { tab, remove });
+          void this.#measure(tab);
+        }
+        activity();
+        return;
+      case "Target.targetInfoChanged": {
+        const known = info ? this.#tabs.get(info.targetId) : undefined;
+        if (known === undefined) return;
+        const before = known.tab.title();
+        known.tab.info = { targetId: info.targetId, title: info.title ?? "", url: info.url ?? "", attached: Boolean(info.attached) };
+        if (known.tab.title() !== before) this.#retitled(known);
+        activity();
+        return;
+      }
+      case "Target.targetDestroyed": {
+        const known = this.#tabs.get(e.params.targetId);
+        if (known === undefined) return;
+        this.#tabs.delete(e.params.targetId);
+        known.remove();
+        activity();
+        return;
+      }
+    }
+  }
+
+  /// The titles read again a little later (and again after that), once a tab came or changed.
+  #titlesLater() {
+    for (const stop of this.#rereads.splice(0)) stop();
+    const later = this.#p.later ?? wall.after;
+    this.#rereads = TITLES_AFTER_MS.map((ms) => later(ms, () => void this.#titles()));
+  }
+
+  async #titles() {
+    if (this.#closed) return;
+    const { targetInfos } = await this.#p.cdp.send("Target.getTargets").catch(() => ({ targetInfos: [] }));
+    for (const info of targetInfos ?? []) {
+      const known = this.#tabs.get(info.targetId);
+      if (known === undefined || (info.title ?? "") === known.tab.info.title) continue;
+      const before = known.tab.title();
+      known.tab.info = { ...known.tab.info, title: info.title ?? "", url: info.url ?? known.tab.info.url };
+      if (known.tab.title() !== before) this.#retitled(known);
+    }
+  }
+
+  /// A tab's title changed: the screens' watchers hear of it.
+  #retitled(known: { tab: Tab; remove: () => void }) {
+    const screens = this.#p.screens;
+    if (screens === undefined) return;
+    if (screens.changed) screens.changed();
+    // A registry that cannot say so: the same source added again (its list is told).
+    else known.remove = screens.add(known.tab);
+  }
+
+  /// A tab's size before a view says its viewport: its window's.
+  async #measure(tab: Tab) {
+    try {
+      const { bounds } = await this.#p.cdp.send("Browser.getWindowForTarget", { targetId: tab.info.targetId });
+      if (tab.size().width === 0 && bounds?.width > 0) tab.sized({ width: bounds.width, height: bounds.height });
+    } catch {}
+  }
+}
