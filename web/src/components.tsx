@@ -116,19 +116,21 @@ export function QuotaBars({ quota, compact, small, bare }: { quota: Quota | null
   // The profile's own page: each window's number large, its cells, its name and when it refills.
   return (
     <div className={css.quotaDials}>
-      {quota.windows.map((w) => <Dial key={w.label} number={String(w.left)} unit="%" left={w.left} level={w.level} label={w.label} note={w.refills} aria={quotaLeft(w)} />)}
+      {quota.windows.map((w) => <Dial key={w.label} number={String(w.left)} unit="%" fill={leftOf(w.left)} level={w.level} label={w.label} note={w.refills} aria={quotaLeft(w)} />)}
     </div>
   );
 }
 
-// How full a meter or an allowance's window is drawn, everywhere: as far as it is used (100 less what is left), so that
-// a fuller box or more cells lit means less room, as a disk's bar is read; its words still say what is left.
-const usedOf = (left: number) => 100 - Math.max(0, Math.min(100, left));
+// How far a box is filled or its cells lit, decided here for all of them, as each is read: an allowance as a battery,
+// as far as is left (what it says); a machine's CPU, memory or disk as a disk's bar, as far as is used (100 less what
+// is left), so that a fuller one means less room though its words say what is left.
+const leftOf = (left: number) => Math.max(0, Math.min(100, left));
+const usedOf = (left: number) => 100 - leftOf(left);
 
-/** A figure large (what is left), ten cells lit as far as is used, in the colour of its level, its name and a quiet note
- * under: an allowance's window on its profile's page, a machine's CPU, memory or disk on its own. */
-function Dial({ number, unit, left, level, label, note, aria }: { number: string; unit: string; left: number; level: Level | string; label: string; note: string | null | undefined; aria: string }) {
-  const lit = Math.round(usedOf(left) / 10);
+/** A figure large (what is left), ten cells lit as far as `fill` (0–100) in the colour of its level, its name and a
+ * quiet note under: an allowance's window on its profile's page, a machine's CPU, memory or disk on its own. */
+function Dial({ number, unit, fill, level, label, note, aria }: { number: string; unit: string; fill: number; level: Level | string; label: string; note: string | null | undefined; aria: string }) {
+  const lit = Math.round(fill / 10);
   return (
     <div className={css.quotaDial} data-level={level}>
       <span className={css.quotaDialNumber}>{number}<small>{unit}</small></span>
@@ -144,7 +146,7 @@ function Dial({ number, unit, left, level, label, note, aria }: { number: string
 /** A machine's CPU, memory and disk on its own page (a station's details): as an allowance's windows on its profile's,
  * each what is left large over its cells. `row`: the three across the width however narrow (the phone's page). */
 export function MeterDials({ meters, row = false }: { meters: Meter[]; row?: boolean }) {
-  return <div className={css.quotaDials} data-row={row || undefined}>{meters.map((m) => <Dial key={m.label} number={m.big} unit={m.unit} left={m.left} level={m.level} label={m.title} note={m.total} aria={`${m.title} ${m.big} ${m.unit}`} />)}</div>;
+  return <div className={css.quotaDials} data-row={row || undefined}>{meters.map((m) => <Dial key={m.label} number={m.big} unit={m.unit} fill={usedOf(m.left)} level={m.level} label={m.title} note={m.total} aria={`${m.title} ${m.big} ${m.unit}`} />)}</div>;
 }
 
 type ChipProps = { small?: boolean | undefined; bare?: boolean | undefined } & Omit<ComponentProps<"span">, "children">;
@@ -166,10 +168,10 @@ function FillChip({ fill, level, mark, label, text, small, bare, ...rest }: { fi
 const quotaLeft = (w: { label?: string; left: number }) =>
   w.label ? t("web-main.quota.left", { label: w.label, left: w.left }) : t("web-main.quota.leftAlone", { left: w.left });
 
-/** An allowance's window (or the one an agent is short of): what is left written in it, filled as far as is used.
+/** An allowance's window (or the one an agent is short of): what is left written in it, filled as far as that.
  * `marked`: its mark before it (where there is more than one). */
 export function QuotaChip({ window: w, marked = true, ...rest }: { window: { label?: string; mark: string; left: number; level: Level | string }; marked?: boolean } & ChipProps) {
-  return <FillChip {...rest} fill={usedOf(w.left)} level={w.level} mark={marked ? w.mark : null} text={`${w.left}%`} label={quotaLeft(w)} />;
+  return <FillChip {...rest} fill={leftOf(w.left)} level={w.level} mark={marked ? w.mark : null} text={`${w.left}%`} label={quotaLeft(w)} />;
 }
 
 /** A machine's CPU, memory or disk: its name and what is left, filled as far as is used. `brief`: the figure alone,
