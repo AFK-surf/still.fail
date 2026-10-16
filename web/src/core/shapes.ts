@@ -3729,6 +3729,21 @@ export interface PublishPreview {
 	hiddenText?: string;
 }
 
+/**
+ * What a screen's station lacks for it (docs/remote-screens.md `access`): macOS's Screen Recording and Accessibility
+ * grants, or a machine it is not supported on.
+ */
+export interface ScreenAccess {
+	/** It can be seen. */
+	capture: boolean;
+	/** It can be driven. */
+	control: boolean;
+	/** What to turn on where, in the viewer's words (the station's). */
+	message?: string;
+	app?: string;
+	path?: string;
+}
+
 /** Where a screen's pointer is, as its station says. */
 export interface ScreenCursor {
 	/** 0..1 of the frame's width. */
@@ -3750,6 +3765,10 @@ export interface ScreenItem {
 	height: number;
 	/** Who is on it now, by name. */
 	viewers?: string[];
+	/** Those of them whose input is taken. */
+	controlledBy?: string[];
+	/** What is missing for it to be seen or driven (macOS's grants), when something is. */
+	access?: ScreenAccess;
 	/** What the core says of it under its title: what it is, its size, who is on it (core). */
 	line: string;
 	/** Its page in the app: `/w/<workspace>/s/<station>/screen/<id>` (the id encoded), as the agents' links name it. */
@@ -3781,6 +3800,8 @@ export interface ScreenViewState {
 	width?: number;
 	height?: number;
 	cursor?: ScreenCursor;
+	/** What the station lacks for it, when it says (with `denied`, or while it is seen but cannot be driven). */
+	access?: ScreenAccess;
 }
 
 /** A station's screens (the `screens` topic; docs/remote-screens.md, client/core-ts/src/screens.ts). */

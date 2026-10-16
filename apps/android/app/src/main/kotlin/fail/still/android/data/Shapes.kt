@@ -3719,6 +3719,20 @@ data class PublishPreview (
 	val hiddenText: String? = null
 )
 
+/// What a screen's station lacks for it (docs/remote-screens.md `access`): macOS's Screen Recording and Accessibility
+/// grants, or a machine it is not supported on.
+@Serializable
+data class ScreenAccess (
+	/// It can be seen.
+	val capture: Boolean,
+	/// It can be driven.
+	val control: Boolean,
+	/// What to turn on where, in the viewer's words (the station's).
+	val message: String? = null,
+	val app: String? = null,
+	val path: String? = null
+)
+
 /// Where a screen's pointer is, as its station says.
 @Serializable
 data class ScreenCursor (
@@ -3742,6 +3756,10 @@ data class ScreenItem (
 	val height: UInt,
 	/// Who is on it now, by name.
 	val viewers: List<String>? = null,
+	/// Those of them whose input is taken.
+	val controlledBy: List<String>? = null,
+	/// What is missing for it to be seen or driven (macOS's grants), when something is.
+	val access: ScreenAccess? = null,
 	/// What the core says of it under its title: what it is, its size, who is on it (core).
 	val line: String,
 	/// Its page in the app: `/w/<workspace>/s/<station>/screen/<id>` (the id encoded), as the agents' links name it.
@@ -3771,7 +3789,9 @@ data class ScreenViewState (
 	val codec: String? = null,
 	val width: UInt? = null,
 	val height: UInt? = null,
-	val cursor: ScreenCursor? = null
+	val cursor: ScreenCursor? = null,
+	/// What the station lacks for it, when it says (with `denied`, or while it is seen but cannot be driven).
+	val access: ScreenAccess? = null
 )
 
 /// A station's screens (the `screens` topic; docs/remote-screens.md, client/core-ts/src/screens.ts).

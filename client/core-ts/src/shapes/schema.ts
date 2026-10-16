@@ -1173,6 +1173,8 @@ export const SHAPES: Record<string, Shape> = {
     ["width", "u32"],
     ["height", "u32"],
     ["viewers", vec("String"), { default: true, doc: "Who is on it now, by name." }],
+    ["controlledBy", vec("String"), { default: true, doc: "Those of them whose input is taken." }],
+    ["access", opt("ScreenAccess"), { doc: "What is missing for it to be seen or driven (macOS's grants), when something is." }],
     ["line", "String", { doc: "What the core says of it under its title: what it is, its size, who is on it (core)." }],
     ["link", "String", { doc: "Its page in the app: `/w/<workspace>/s/<station>/screen/<id>` (the id encoded), as the agents' links name it." }],
   ], { doc: "A screen of a station a person can see and drive (docs/remote-screens.md)." }),
@@ -1183,6 +1185,13 @@ export const SHAPES: Record<string, Shape> = {
     ["known", "bool", { doc: "The station said which it has (false while it has not been reached since the core started)." }],
     ["note", opt("String"), { doc: "Why there are none to show, when there is a reason (the station needs an update, is offline)." }],
   ], { doc: "A station's screens (the `screens` topic; docs/remote-screens.md, client/core-ts/src/screens.ts)." }),
+  ScreenAccess: struct([
+    ["capture", "bool", { doc: "It can be seen." }],
+    ["control", "bool", { doc: "It can be driven." }],
+    ["message", opt("String"), { doc: "What to turn on where, in the viewer's words (the station's)." }],
+    ["app", opt("String")],
+    ["path", opt("String")],
+  ], { doc: "What a screen's station lacks for it (docs/remote-screens.md `access`): macOS's Screen Recording and Accessibility\ngrants, or a machine it is not supported on." }),
   ScreenCursor: struct([
     ["x", "f64", { doc: "0..1 of the frame's width." }],
     ["y", "f64", { doc: "0..1 of the frame's height." }],
@@ -1201,6 +1210,7 @@ export const SHAPES: Record<string, Shape> = {
     ["width", opt("u32")],
     ["height", opt("u32")],
     ["cursor", opt("ScreenCursor")],
+    ["access", opt("ScreenAccess"), { doc: "What the station lacks for it, when it says (with `denied`, or while it is seen but cannot be driven)." }],
   ], { doc: "A screen view as its page draws it (`screen.view`'s `{state}` values): each one whole, the latest is how it is." }),
   PrefsView: struct([
     ["onlyMine", "bool", { default: true, doc: "The lists show only the chats and connects the viewer takes part in." }],
