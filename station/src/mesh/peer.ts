@@ -113,7 +113,7 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Remote) 
       if (there || (inside && !remote.hearsOutside?.())) {
         member(cloud, peer, envelope.workspace);
         const method = envelope.request?.method;
-        answer = { result: typeof method === "string" && method.startsWith("lock.") ? answerLock(cloud, envelope.request) : await remote.handle(envelope.workspace, peer, envelope.request ?? null) };
+        answer = { result: typeof method === "string" && method.startsWith("lock.") ? answerLock(cloud, envelope.request, envelope.workspace) : await remote.handle(envelope.workspace, peer, envelope.request ?? null) };
       } else {
         if (cloud.membership(envelope.workspace) === null) throw new Error("station is outside this workspace");
         answer = { result: await remote.handleOutside(peer, envelope.request ?? null, envelope.workspace) };

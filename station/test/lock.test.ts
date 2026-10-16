@@ -37,8 +37,8 @@ type Key = ReturnType<typeof ed>;
 const signed = (e: Omit<Entry, "sig">, key: Key): Entry => ({ ...e, sig: { key: key.id, alg: "Ed25519", sig: key.sign(signedBytes(entryHash(e as Entry))) } });
 const after = (head: { seq: number; head: string }, kind: string, body: unknown, at = 1000): Omit<Entry, "sig"> => ({ v: 1, ws: WS, seq: head.seq + 1, prev: head.head, at, kind, body });
 
-/// A workspace: owner alice (an app device that signs), admin bob, member carol, two stations.
-function workspace() {
+/// A workspace (`ws`, WS by default): owner alice (an app device that signs), admin bob, member carol, two stations.
+function workspace(ws = WS) {
   const alice = { sub: "alice", signer: ed(), base: ed() };
   const bob = { sub: "bob", signer: ed(), base: ed() };
   const carol = { sub: "carol", signer: ed(), base: ed() };
@@ -50,7 +50,7 @@ function workspace() {
     devices: [alice, bob, carol].map((p) => ({ id: p.base.hex, sub: p.sub, kind: "app", label: p.sub, sign_key: p.signer.id })),
     passkeys: [], stations: stations.map((s, i) => ({ key: s.hex, name: `s${i}` })), gateways: [],
   };
-  const first = signed({ v: 1, ws: WS, seq: 0, prev: null, at: 1000, kind: "genesis", body }, alice.signer);
+  const first = signed({ v: 1, ws, seq: 0, prev: null, at: 1000, kind: "genesis", body }, alice.signer);
   return { alice, bob, carol, grant, stations, first, state: genesis(first) };
 }
 
@@ -289,6 +289,60 @@ test("an unlocked station pins no lock the control plane offers, but the one its
   writeFileSync(pendingLockPath(cloud.data), JSON.stringify({ hash: entryHash(w.first) }));
   applyState(cloud, JSON.stringify({ type: "lock", entries: [w.first] }));
   assert.equal(cloud.locked()?.state?.genesis, entryHash(w.first));
+});
+
+test("a station in a second workspace pins that one's lock there: none of its members until then, then only those it names", async () => {
+  const { joinedPendingPath, joinedLockPath } = await import("../src/cloud/state.ts");
+  const { mkdirSync, writeFileSync, existsSync } = await import("node:fs");
+  const { dirname } = await import("node:path");
+  const { verifyMemberOf } = await import("../src/mesh/credential.ts");
+  const B = "01HBBBBBBBBBBBBBBBBBBBBBBB";
+  const C = "01HCCCCCCCCCCCCCCCCCCCCCCC";
+  const w = workspace();
+  const b = workspace(B);
+  const me = w.stations[0]!.hex;
+  const cloud = stationData(w, me);
+  const intruder = ed().hex;
+  const sent: any[] = [];
+  const frame = (joined: unknown[], lock: unknown = null) => JSON.stringify({ type: "state", workspace: WS, workspace_name: "Team", name: "s0", peers: w.stations.map((s) => ({ id: s.hex })), grant_keys: { keys: [w.grant.jwk] }, revocations: [], lock, workspaces: joined });
+  const inB = { workspace: B, workspace_name: "B", name: "s0", peers: [{ id: b.stations[0]!.hex }, { id: intruder }], revocations: [], lock: { seq: 0, hash: entryHash(b.first) }, locked: true };
+  const ws = () => cloud.memberships().map((m) => m.workspace);
+  // In security mode, as the plane says, its lock not pinned here: none of B's members are taken, nor its lock asked.
+  applyState(cloud, frame([inB]), (f) => sent.push(f));
+  assert.deepEqual(ws(), [WS]);
+  assert.equal(sent.length, 0);
+  // Joined naming B's lock: asked for it, pinned once the plane brings that one.
+  mkdirSync(dirname(joinedPendingPath(cloud.data, B)), { recursive: true });
+  writeFileSync(joinedPendingPath(cloud.data, B), JSON.stringify({ hash: entryHash(b.first) }));
+  applyState(cloud, frame([inB]), (f) => sent.push(f));
+  assert.deepEqual(sent.pop(), { type: "lock.get", after: -1, workspace: B });
+  applyState(cloud, JSON.stringify({ type: "lock", workspace: B, entries: [workspace(B).first] }));
+  assert.equal(cloud.locked(B), null, "another lock of B's name is not the one it joined with");
+  applyState(cloud, JSON.stringify({ type: "lock", workspace: B, entries: [b.first] }));
+  assert.equal(cloud.locked(B)?.state?.genesis, entryHash(b.first));
+  assert.equal(cloud.locked(), null, "its home is as it was");
+  assert.ok(existsSync(joinedLockPath(cloud.data, B)) && !existsSync(joinedPendingPath(cloud.data, B)));
+  assert.deepEqual(ws(), [WS, B]);
+  assert.deepEqual(cloud.membership(B)!.peers.map((p) => p.id), [b.stations[0]!.hex], "the stations B's lock names only");
+  // B's members: with B's lock's keys, on devices it names, as it says.
+  const endpoint = ed().hex;
+  const keys = (x: string) => cloud.grantKeys(x === WS ? null : x);
+  const carol = verifyMemberOf(credential(b.grant, B, endpoint, "owner"), keys, cloud.memberships(), endpoint);
+  assert.throws(() => inLock(cloud, carol, "owner", endpoint), LockRefusal);
+  carol.viewer.lockDevice = { base: b.carol.base.hex, proof: b.carol.base.sign(endpointBytes(B, endpoint)) };
+  assert.equal(inLock(cloud, carol, "owner", endpoint).viewer.role, "member");
+  assert.throws(() => verifyMemberOf(credential(w.grant, B, endpoint, "owner"), keys, cloud.memberships(), endpoint), /unknown credential key|signature invalid/);
+  // The home's members go by the plane, as before.
+  const home = verifyMemberOf(credential(w.grant, WS, endpoint, "owner"), keys, cloud.memberships(), endpoint);
+  assert.equal(inLock(cloud, home, "owner", endpoint).viewer.role, "owner");
+  // Its home locked: an unlocked workspace it is in is none of its; the locked one stays.
+  cloud.takeLock([w.first]);
+  applyState(cloud, frame([inB, { workspace: C, workspace_name: "C", name: "s0", peers: [], revocations: [], lock: null }], { seq: 0, hash: entryHash(w.first) }));
+  assert.deepEqual(ws(), [WS, B]);
+  // Taken out of B: its lock forgotten here.
+  applyState(cloud, frame([], { seq: 0, hash: entryHash(w.first) }));
+  assert.deepEqual(ws(), [WS]);
+  assert.equal(existsSync(joinedLockPath(cloud.data, B)), false);
 });
 
 const VECTOR_HASH = "27e965570b626031e9640b781bdba3b5bb111ba2307b81bd9af8d14158f8578a";

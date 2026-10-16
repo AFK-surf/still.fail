@@ -145,7 +145,7 @@ test("a station joins a second workspace: named there; its home's at the top of 
     const both = await sx.state();
     assert.deepEqual([both.workspace, both.workspace_name, both.name, both.lock], [home, "Home", "studio", null], "the home's at the top, as before");
     assert.deepEqual(both.peers.map((p: any) => p.id), [x.id, y.id]);
-    assert.deepEqual(both.workspaces, [{ workspace: lab, workspace_name: "Lab", name: "lab box", peers: [{ id: x.id, name: "lab box", version: "0.5.0" }], revocations: [] }]);
+    assert.deepEqual(both.workspaces, [{ workspace: lab, workspace_name: "Lab", name: "lab box", peers: [{ id: x.id, name: "lab box", version: "0.5.0" }], revocations: [], lock: null }]);
     assert.deepEqual(both.relay_urls, [h.origin, "https://relay-a.example", "https://relay-b.example"], "every workspace's relays, each once");
     assert.equal((await sy.state())?.workspaces.length ?? 0, 0, "the home's other station hears nothing of the lab");
 
@@ -240,7 +240,7 @@ async function entry(ws: string, prev: LockEntry | null, kind: string, body: unk
   return { v: 1, ws, seq: prev ? prev.seq + 1 : 0, prev: prev ? await entryHash(prev) : null, at: 1000, kind, body, sig: { key: "ed25519:00", alg: "Ed25519", sig: "00" } };
 }
 
-test("joining across a lock is refused: into a locked workspace from another, or out of a locked home", async () => {
+test("a station whose home is locked joins locked workspaces only; each one's lock is said and carried for it", async () => {
   const h = await harness();
   try {
     const alice = h.as(await h.login("alice"));
@@ -249,20 +249,32 @@ test("joining across a lock is refused: into a locked workspace from another, or
     assert.equal((await enroll(h, p, await token(alice, a, "p"))).status, 200);
     const genesis = await entry(b, null, "genesis", { owner: "alice" });
     assert.equal((await alice("POST", `/v1/workspaces/${b}/lock`, { entries: [genesis] })).status, 200);
+    // A station of an unlocked home joins a locked workspace when it pins that lock there (`locks`); one from before
+    // would take its members on the cloud's word.
     assert.deepEqual(Object.values(await enroll(h, p, await token(alice, b, "p"), true)), [409, { error: "locked_workspace" }]);
-    // A station in no other workspace joins it as it would enroll.
-    assert.equal((await enroll(h, q, await token(alice, b, "q"), true)).status, 200);
-    // Its lock turned off, it may be joined.
-    assert.equal((await alice("POST", `/v1/workspaces/${b}/lock`, { entries: [await entry(b, genesis, "disable", {})] })).status, 200);
-    assert.equal((await enroll(h, p, await token(alice, b, "p"), true)).status, 200);
-    // A station whose home is locked joins nothing more; nor is a locked workspace joined by a station of another.
+    assert.equal((await enroll(h, p, await token(alice, b, "p"), true, { locks: true })).status, 200);
+    // Its home locked, it joins no unlocked workspace; a locked one it does.
+    assert.equal((await enroll(h, q, await token(alice, b, "q"))).status, 200);
+    assert.deepEqual(Object.values(await enroll(h, q, await token(alice, c, "q"), true)), [409, { error: "locked_workspace" }]);
     assert.equal((await alice("POST", `/v1/workspaces/${a}/lock`, { entries: [await entry(a, null, "genesis", { owner: "alice" })] })).status, 200);
-    assert.deepEqual(Object.values(await enroll(h, p, await token(alice, c, "p"), true)), [409, { error: "locked_workspace" }]);
-    assert.deepEqual(Object.values(await enroll(h, q, await token(alice, a, "q"), true)), [409, { error: "locked_workspace" }]);
-    // Where it is already, only its name changes; and enrolling moves it, lock or none, as before.
-    assert.equal((await enroll(h, p, await token(alice, b, "p renamed"), true)).status, 200);
-    assert.equal((await enroll(h, p, await token(alice, c, "p"))).status, 200);
-    assert.deepEqual([await count(alice, a), await count(alice, b), await count(alice, c)], [0, 1, 1]);
+    assert.equal((await enroll(h, q, await token(alice, a, "q"), true, { locks: true })).status, 200);
+    // Each workspace's lock head in the state frame; its entries asked by naming it, said back with its name.
+    const sq = await connect(h, q);
+    const state = await sq.state();
+    assert.equal(state.workspace, b);
+    assert.equal(state.lock.seq, 0);
+    assert.deepEqual(state.workspaces.map((w: { workspace: string; lock: { seq: number } | null }) => [w.workspace, w.lock?.seq]), [[a, 0]]);
+    sq.ws.send(JSON.stringify({ type: "lock.get", after: -1, workspace: a }));
+    const got = (await sq.told()).filter((f) => f.type === "lock");
+    assert.deepEqual(got.map((f) => [f.workspace, f.entries.map((e: LockEntry) => e.ws)]), [[a, [a]]]);
+    // A workspace it is not in is no lock of its to ask; none named, its home's.
+    sq.ws.send(JSON.stringify({ type: "lock.get", after: -1, workspace: c }));
+    sq.ws.send(JSON.stringify({ type: "lock.get", after: -1 }));
+    const home = (await sq.told()).filter((f) => f.type === "lock");
+    assert.deepEqual(home.map((f) => [f.workspace, f.entries.map((e: LockEntry) => e.ws)]), [[undefined, [b]]]);
+    // Its home locked since, p joins no unlocked workspace either.
+    assert.deepEqual(Object.values(await enroll(h, p, await token(alice, c, "p"), true, { locks: true })), [409, { error: "locked_workspace" }]);
+    assert.deepEqual([await count(alice, a), await count(alice, b), await count(alice, c)], [2, 2, 0]);
   } finally {
     await h.close();
   }

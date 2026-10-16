@@ -475,6 +475,13 @@ export function enrolled(inner: Inner, sub: string, ws: string, made: unknown): 
   });
 }
 
+/// A station that joined a locked workspace from its home (docs/multi-workspace.md) taken into that workspace's lock, as
+/// one enrolled with its hash is, by this device's signature: its code is worked out here, the same person having asked
+/// it to join.
+export function takeInJoined(inner: Inner, sub: string, ws: string, station: string): Effect.Effect<unknown, CoreError> {
+  return new Lock(inner, ws, sub, null).addStation(station, shortCode(station));
+}
+
 class Lock {
   readonly #inner: Inner;
   readonly ws: string;

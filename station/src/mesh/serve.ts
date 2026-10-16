@@ -84,9 +84,23 @@ function lockProof(v: any): { base: string; proof: string } | undefined {
   return typeof v?.device === "string" && typeof v?.proof === "string" && v.device.length === 64 && v.proof.length === 128 ? { base: v.device, proof: v.proof } : undefined;
 }
 
-/// How far this station's lock goes, for the device to bring it what it has more (null: no lock pinned here).
-export function lockHead(cloud: Cloud): { seq: number; hash: string; genesis: string } | null {
-  const s = cloud.locked()?.state;
+/// `ws` when it is a workspace the station joined, null for its home one (whose lock is the home's).
+const joinedOf = (cloud: Cloud, ws: string) => (ws && ws !== cloud.home() ? ws : null);
+
+/// The workspace a hello's credential names, as it says (checked by verifyMember: only to say which lock refused it).
+function claimed(hello: any): string {
+  try {
+    const ws = JSON.parse(Buffer.from(String(hello?.credential ?? "").split(".")[1] ?? "", "base64url").toString())?.ws;
+    return typeof ws === "string" ? ws : "";
+  } catch {
+    return "";
+  }
+}
+
+/// How far this station's lock goes in `ws` (the home workspace when null), for the device to bring it what it has
+/// more (null: no lock pinned there).
+export function lockHead(cloud: Cloud, ws: string | null = null): { seq: number; hash: string; genesis: string } | null {
+  const s = cloud.locked(ws)?.state;
   return s ? { seq: s.seq, hash: s.head, genesis: s.genesis } : null;
 }
 
@@ -94,10 +108,12 @@ export function lockHead(cloud: Cloud): { seq: number; hash: string; genesis: st
 /// {entries}: more of the pinned lock, checked entry by entry; or, unpinned, a lock to pin, from its genesis: brought by
 /// its owner, on a device the genesis names (until then the control plane's word is what this station goes by, and the
 /// owner it names is who may turn the lock on).
+/// The lock is the asker's workspace's (each workspace the station is in has its own, docs/multi-workspace.md).
 export function lockRoute(cloud: Cloud, method: string, query: [string, string][], body: Buffer, viewer: Admitted["viewer"]): [number, unknown] {
+  const ws = viewer.workspace && viewer.workspace !== cloud.home() ? viewer.workspace : null;
   if (method === "GET") {
     const after = Number(query.find(([k]) => k === "after")?.[1] ?? -1);
-    return [200, { head: lockHead(cloud), entries: cloud.lockAfter(Number.isSafeInteger(after) ? after : -1) }];
+    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(Number.isSafeInteger(after) ? after : -1, ws) }];
   }
   if (method !== "POST") return [405, { error: "GET or POST" }];
   let entries: (Entry | null)[];
@@ -109,23 +125,25 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
   }
   if (entries.length === 0 || entries.some((e) => e === null)) return [400, { error: "entries: lock entries" }];
   try {
-    if (cloud.locked() === null) {
+    if (cloud.locked(ws) === null) {
       if (viewer.role !== "owner") return [403, { error: "only the workspace's owner turns its lock on" }];
       const first = genesis(entries[0]!);
       admit(first, { sub: viewer.sub, endpoint: viewer.device, base: viewer.lockDevice?.base, proof: viewer.lockDevice?.proof }, nowSecs());
       if (first.members.get(viewer.sub)?.role !== "owner") return [403, { error: "the lock is brought by its owner" }];
     }
-    const taken = cloud.takeLock(entries as Entry[]);
-    return [200, { taken, head: lockHead(cloud) }];
+    const taken = cloud.takeLock(entries as Entry[], ws);
+    return [200, { taken, head: lockHead(cloud, ws) }];
   } catch (e) {
-    return [409, { error: (e as Error).message, head: lockHead(cloud) }];
+    return [409, { error: (e as Error).message, head: lockHead(cloud, ws) }];
   }
 }
 
 /// With a lock pinned: the member admitted only on a device the lock names, with the lower of the lock's role and the
 /// credential's (`named`). Without one, as the credential says. Throws a LockRefusal why not.
 export function inLock(cloud: Cloud, admitted: Admitted, named: string, endpoint: string): Admitted {
-  const locked = cloud.locked();
+  // The lock of the workspace the member is in.
+  const ws = admitted.viewer.workspace && admitted.viewer.workspace !== cloud.home() ? admitted.viewer.workspace : null;
+  const locked = cloud.locked(ws);
   if (locked === null) return { ...admitted, viewer: { ...admitted.viewer, role: named } };
   if (locked.state === null) throw new LockRefusal("this station's workspace lock is broken; run `stillfail lock reset` on it");
   const v = admitted.viewer;
@@ -165,7 +183,7 @@ export async function serve(m: Members, conn: Connection) {
   let named = "";
   const check = (line: any) => {
     // Of any workspace the station is in: the viewer's is the one its requests are answered for.
-    const admitted = verifyMemberOf(typeof line?.credential === "string" ? line.credential : "", m.cloud.grantKeys(), m.cloud.memberships(), device, m.accepted?.());
+    const admitted = verifyMemberOf(typeof line?.credential === "string" ? line.credential : "", (ws: string) => m.cloud.grantKeys(ws === m.cloud.home() ? null : ws), m.cloud.memberships(), device, m.accepted?.());
     named = admitted.viewer.role;
     if (proof) admitted.viewer.lockDevice = proof;
     return inLock(m.cloud, admitted, named, device);
@@ -174,14 +192,14 @@ export async function serve(m: Members, conn: Connection) {
   try {
     current = check(hello);
   } catch (e) {
-    const refusal = e instanceof LockRefusal ? { code: e.code, lock: lockHead(m.cloud) } : {};
+    const refusal = e instanceof LockRefusal ? { code: e.code, lock: lockHead(m.cloud, joinedOf(m.cloud, claimed(hello))) } : {};
     await writeLine(first, { error: (e as Error).message, ...refusal }).catch(() => {});
     await first.finish().catch(() => {});
     wall.after(200, () => conn.close(1, e instanceof LockRefusal ? "lock_unconfirmed" : "credential_refused"));
     throw e;
   }
   // How far its lock goes, when it has one (a device that has more brings it, docs/workspace-lock.md).
-  const head = lockHead(m.cloud);
+  const head = lockHead(m.cloud, joinedOf(m.cloud, current.viewer.workspace));
   await writeLine(first, { ok: true, station: m.cloud.membership(current.viewer.workspace)?.name ?? state().name, expires_at: current.exp, ...(head ? { lock: head } : {}) });
   log.info("mesh", "client connected", { email: current.viewer.email, device: device.slice(0, 12) });
 

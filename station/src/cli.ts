@@ -1,9 +1,9 @@
 // The station's commands other than `run` (the Rust station's main.rs `main`): enroll, status, id. Their output is what
 // people and `bin/stillfail` read, so its words are the catalog's, as the Rust station says them.
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { loadKey } from "./cloud/key.ts";
-import { Cloud, pendingLockPath, readLock, readState, writeState, type CloudState } from "./cloud/state.ts";
+import { Cloud, joinedPendingPath, pendingLockPath, readLock, readState, writeState, type CloudState } from "./cloud/state.ts";
 import { writePrivate } from "./ops/files.ts";
 import { shortCode } from "./cloud/lock.ts";
 import { rmSync } from "node:fs";
@@ -44,16 +44,23 @@ export async function enroll(data: string, origin: string, token: string, provid
 /// at the control plane it is enrolled with, which then names it in its `state` frames. Kept in cloud.json's `joined`
 /// at once, so `status` says it before the running station hears. A locked station joins none: its lock is one
 /// workspace's. What it joined.
-export async function joinWorkspace(data: string, token: string): Promise<{ workspace: string; workspace_name: string; name: string }> {
+export async function joinWorkspace(data: string, token: string, lock?: string): Promise<{ workspace: string; workspace_name: string; name: string }> {
   const state = readState(data);
   if (state === null || !state.workspace || state.removed_at !== undefined) throw new Error("this station is in no workspace: enroll it first");
-  const lock = readLock(data);
-  if (lock !== null && !lock.state?.disabled) throw new Error("this station's workspace is locked: a locked station stays in that one workspace");
+  // A locked station joins locked workspaces only: an unlocked one's members are the control plane's word, which its
+  // home's lock took away. Which lock to pin is the joining device's word (`lock`, the head it has), as `enroll --lock`.
+  const home = readLock(data);
+  if (home !== null && !home.state?.disabled && lock === undefined) throw new Error("this station's workspace is locked: it joins only a workspace with a lock of its own");
   const provider = state.provider ?? "stillfail";
   const body = await redeem(data, state.origin, token, provider, specOf(provider).joinPath);
   const text = (k: string) => (typeof body[k] === "string" ? body[k] : "");
   const joined = { workspace: text("workspace"), workspace_name: text("workspace_name"), name: text("name") };
   if (joined.workspace === "") throw new Error(`${specOf(provider).name} did not say which workspace was joined`);
+  // Its lock to pin once the control plane brings it: until then the station takes nobody of it.
+  if (lock !== undefined && joined.workspace !== state.workspace) {
+    mkdirSync(dirname(joinedPendingPath(data, joined.workspace)), { recursive: true });
+    writePrivate(joinedPendingPath(data, joined.workspace), JSON.stringify({ hash: lock }));
+  }
   const now = readState(data) ?? state;
   if (joined.workspace !== now.workspace) {
     now.joined = [...(now.joined ?? []).filter((j) => j.workspace !== joined.workspace), { ...joined, peers: [], revocations: [] }];
@@ -73,7 +80,9 @@ async function redeem(data: string, origin: string, token: string, provider: Pro
     response = await fetch(`${origin}${path}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token, station: key.id, signature, version: version() }),
+      // Joining: it pins the lock of a locked workspace it joins (docs/multi-workspace.md), which the plane asks before
+      // letting it into one.
+      body: JSON.stringify({ token, station: key.id, signature, version: version(), ...(path === plane.joinPath ? { locks: true } : {}) }),
       signal: AbortSignal.timeout(20_000),
     });
     if (prefix === plane.enrollPrefixes.at(-1) || response.status !== 401) break;

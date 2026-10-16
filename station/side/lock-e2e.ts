@@ -13,6 +13,7 @@ import { randomBytes } from "node:crypto";
 import { mkdirSync, openSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { StationKey } from "../src/cloud/key.ts";
+import { Cloud } from "../src/cloud/state.ts";
 import { loadMesh, type Connection, type Endpoint } from "../src/mesh/native.ts";
 import { PEER_ALPN, peerCall } from "../src/mesh/peer.ts";
 import { ALPN } from "../src/mesh/serve.ts";
@@ -262,7 +263,9 @@ async function main() {
   // Each station's roster as it keeps it, once the cloud's new one came.
   await until(async () => stationState(B).peers.some((p: any) => p.id === evilKey.id), "unlocked-b heard the roster");
   const evilEndpoint = await endpointOf(evilSeed, PEER_ALPN);
-  const asPeer = peerCall(evilEndpoint, { state: { workspace: ws, station: evilKey.id, peers: [{ id: A.id }, { id: B.id }] }, peersCurrent: true, removed: () => false, relays: () => [RELAY] } as any);
+  // Its own cloud.json, read as a station reads one (Cloud's own memberships).
+  const evilCloud = Object.assign(Object.create(Cloud.prototype), { state: { workspace: ws, workspace_name: "", name: "", station: evilKey.id, peers: [{ id: A.id }, { id: B.id }], revocations: [] }, lock: null, peersCurrent: true, relays: () => [RELAY] });
+  const asPeer = peerCall(evilEndpoint, evilCloud);
   const ask = (id: string) => asPeer(id, ws, { method: "task.prepare", session: "s", key: "k", spec: { command: "id" } }).then((r) => `answered ${JSON.stringify(r)}`, (e) => `refused: ${e.message}`);
   const peerA = await ask(A.id);
   const peerB = await ask(B.id);

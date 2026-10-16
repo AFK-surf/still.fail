@@ -14,6 +14,7 @@ import { Effect, Fiber, Layer, SubscriptionRef } from "effect";
 import { enroll, id, joinWorkspace, lockCommand, status } from "./cli.ts";
 import { readState } from "./cloud/state.ts";
 import { loadKey } from "./cloud/key.ts";
+import { shortCode } from "./cloud/lock.ts";
 import { MeshLive } from "./mesh/mesh.ts";
 import { AwakeLive } from "./ops/awake.ts";
 import { AgentsLive } from "./sessions/agents.ts";
@@ -175,8 +176,10 @@ switch (command) {
         console.error(`this station is enrolled at ${at}; it joins workspaces there only`);
         process.exit(1);
       }
-      const joined = await joinWorkspace(data, token);
+      const joined = await joinWorkspace(data, token, lock);
       console.log(tr(stationLang(), "station.cli.joined", { workspace: joined.workspace_name, name: joined.name, id: loadKey(data).id.slice(0, 12) }));
+      // A locked workspace: its owner confirms this station by its code, as one enrolled with `--lock`.
+      if (lock !== undefined) console.log(tr(stationLang(), "station.cli.lock.pending", { code: shortCode(loadKey(data).id) }));
       break;
     }
     await enroll(data, origin.replace(/\/+$/, ""), token, provider, lock);

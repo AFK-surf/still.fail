@@ -89,7 +89,9 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     if (!(await verifyAnySignature(input.station, input.signature, messages))) return reply({ error: "invalid_signature" }, 401);
     const version = typeof input.version === "string" ? input.version.slice(0, 40) : null;
     return directory(async () => ({
-      ...(await env.DIRECTORY.getByName("primary").enroll(input.token as string, input.station as string, version, path === "/v1/stations/join")),
+      // `locks`: a station that pins a lock in each workspace it joins (one from before would take a locked one's
+      // members on this cloud's word).
+      ...(await env.DIRECTORY.getByName("primary").enroll(input.token as string, input.station as string, version, path === "/v1/stations/join", input.locks === true)),
       station: input.station,
       ...relays(env),
       grant_keys: grantKeys(env),

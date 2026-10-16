@@ -15,7 +15,7 @@
 - **按 workspace 分开的**：chat（会话、thread、奏、归档和归档策略）、Slack connect、agent 的记忆和 skills（`agent/`）、文件根目录（`drive.roots`）、chat 分享（xshare）、station 之间的调用（session_send、chat_list、station_list、任务）都只在同一个 workspace 的 station 之间。
 - **账号可以共用**：每个 profile 默认只给主 workspace 用；主 workspace 的管理员可以给它勾上加入的 workspace（`profiles[].workspaces`）。加入的 workspace 一个能用的 profile 都没有时，那里的 chat 开不了轮次，界面说明原因。
 - **软隔离**：所有 agent 用同一个系统用户跑，A 的 agent 想读 B 的会话目录，物理上拦不住。这里隔离的是数据、列表和 agent 的工具，不是沙盒。界面上加入 workspace 时写明这一点。
-- **workspace 锁（安全模式）先只支持主 workspace**：station 钉了锁就不能再加入别的 workspace；开了锁的 workspace 也不能被已在别处的 station 加入（cloud 和 station 都拒绝，说明原因）。以后再做每个 workspace 一把锁。
+- **workspace 锁（安全模式）**（2026-10-17 用户定）：开了锁的 station 只能加入同样开了锁的 workspace。没锁的 workspace 的成员由 cloud 说了算，这正是主 workspace 的锁要去掉的信任。station 在每个开了锁的 workspace 里各钉一把那个 workspace 的锁：主 workspace 的在 `mesh/lock.json`，加入的在 `mesh/locks/<ws>.json`，各自只认各自锁链里的成员、设备和 station。没开锁的 station 照旧可以加入任何 workspace，加入开了锁的 workspace 时同样要钉住那把锁。
 
 ## cloud
 
@@ -37,7 +37,8 @@
 新增 `POST /v1/stations/join`（Comma 是 `/v1/comma/stations/join`），请求体和签名都和 enroll 一样（token 已经决定了去哪个 workspace，签名证明持有密钥）。用新路径而不是在 enroll 上加参数：旧 cloud 会忽略不认识的参数，结果是搬家；新路径在旧 cloud 上是 404，什么都不会变。
 
 - 已经在这个 workspace 就只更新名字；否则**加一条** membership，套餐上限按目标 workspace 算。
-- station 钉了锁，或目标 workspace 开了锁、而 station 已经在别的 workspace，就拒绝（`409 locked_workspace`）。
+- station 的主 workspace 开了锁、目标 workspace 没开锁，就拒绝（`409 locked_workspace`）；目标开了锁、而 station 没在请求里说 `locks: true`（会在每个 workspace 钉锁的版本才说），也拒绝：旧版 station 会把那里的成员当成 cloud 说了算。目标开了锁时，加入方的设备在请求里带上它手上那把锁的头（`lock`，和 `enroll --lock` 一样），station 记下这个哈希；cloud 把那把锁带过来、锁链里有这一条时才钉住。在这之前，这个 workspace 的人一个都不放进来。core 的 `station.join` 接着用这台设备的签名把 station 加进那把锁（`lock.addStation`，短码由 core 自己算）；签不了的话，由那个 workspace 的 owner 照短码确认。
+- state 帧的 `workspaces[]` 每项带自己的 `lock`（锁头）和 `locked: true`（开着锁）；`lock.get`/`lock.put`/`lock` 帧可带 `workspace`，不带就是主 workspace 的。cloud 的 workspace 视图多一个 `locked: true`，core 用它决定候选列表里要不要列出主 workspace 开了锁的 station。
 - 回应和 enroll 一样带 `workspace`、`workspace_name`、`name`，另外带 `home`（主 workspace 的 id）。
 
 ### presence socket

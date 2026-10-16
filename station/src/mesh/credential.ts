@@ -45,7 +45,8 @@ export function verifyMember(credential: string, keys: any, workspace: string, d
 }
 
 /// A credential for any of the workspaces the station is in (docs/multi-workspace.md), checked as `verifyMember` does
-/// against that workspace's revocations.
+/// against that workspace's revocations, with that workspace's keys (`keys` a function of it: a locked workspace's are
+/// its lock's).
 export function verifyMemberOf(credential: string, keys: any, memberships: { workspace: string; revocations: Revocation[] }[], device: string, accepted: Accepted = STILLFAIL.credential): Admitted {
   let ws = "";
   try {
@@ -54,7 +55,7 @@ export function verifyMemberOf(credential: string, keys: any, memberships: { wor
     // Malformed: verifyMember says how.
   }
   const of = memberships.find((m) => m.workspace === ws) ?? memberships[0];
-  return verifyMember(credential, keys, of?.workspace ?? "", device, of?.revocations ?? [], accepted);
+  return verifyMember(credential, typeof keys === "function" ? keys(of?.workspace ?? "") : keys, of?.workspace ?? "", device, of?.revocations ?? [], accepted);
 }
 
 /// Roles that may read but not write: no messages sent, nothing changed (contract §4).

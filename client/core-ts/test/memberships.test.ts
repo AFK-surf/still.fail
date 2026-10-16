@@ -158,7 +158,7 @@ test("a_station_that_cannot_join_says_why_in_words", async () => {
     [[404, { error: "no route POST /workspaces/join" }], "这台 station 还不能在多个 workspace 里，先更新它"],
     // A cloud from before them: the station says so.
     [[409, { error: "still.fail cannot add a station to more than one workspace yet; nothing changed" }], "cloud 还不支持一台 station 在多个 workspace 里，什么都没变"],
-    [[409, { error: "still.fail answered 409: {\"error\":\"locked_workspace\"}" }], "这个 workspace 开了安全模式，不能加入已经在别处的 station"],
+    [[409, { error: "still.fail answered 409: {\"error\":\"locked_workspace\"}" }], "这台 station 的 workspace 开了安全模式，它只能加入同样开了安全模式的 workspace"],
     [[409, { error: "something else" }], "没能加入：something else"],
   ];
   for (const [said, words] of cases) {

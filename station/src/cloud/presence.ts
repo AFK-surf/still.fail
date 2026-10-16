@@ -10,7 +10,7 @@ import WebSocket from "ws";
 import { log } from "../ops/log.ts";
 import { nowSecs } from "../ops/files.ts";
 import { version } from "../ops/version.ts";
-import { type Cloud as CloudState, isRevocation, joinedOf, pendingLockPath } from "./state.ts";
+import { type Cloud as CloudState, isRevocation, joinedOf, joinedPendingPath, pendingLockPath } from "./state.ts";
 import { type Entry, asEntry, entryHash } from "./lock.ts";
 import type { StationKey } from "./key.ts";
 import { type ProviderSpec, signedHeaders } from "./provider.ts";
@@ -92,14 +92,23 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
     let ping: (() => void) | undefined;
     let answered = true;
     // Entries this station took from devices and other stations, given to the plane too (it keeps the lock for whoever
-    // asks it next).
-    let told = s.locked()?.state?.seq ?? -1;
-    const unlisten = s.listen(() => {
-      const seq = s.locked()?.state?.seq;
-      if (seq === undefined || seq <= told || socket.readyState !== WebSocket.OPEN || s.planeLockSeq === null) return;
-      socket.send(JSON.stringify({ type: "lock.put", entries: s.lockAfter(Math.max(s.planeLockSeq, -1)) }));
-      told = seq;
-    });
+    // asks it next): the home workspace's, and each joined one's (`workspace` says which).
+    const told = new Map<string, number>();
+    const tell = () => {
+      for (const m of s.memberships()) {
+        const ws = m.home ? null : m.workspace;
+        const seq = s.locked(ws)?.state?.seq;
+        const plane = ws === null ? s.planeLockSeq : (s.planeLockSeqs.get(ws) ?? null);
+        const was = told.get(m.workspace) ?? (s.locked(ws)?.state?.seq ?? -1);
+        if (!told.has(m.workspace)) told.set(m.workspace, was);
+        if (seq === undefined || seq <= was || socket.readyState !== WebSocket.OPEN || plane === null) continue;
+        const entries = s.lockAfter(Math.max(plane, -1), ws);
+        if (entries.length > 0) socket.send(JSON.stringify({ type: "lock.put", entries, ...(ws === null ? {} : { workspace: ws }) }));
+        told.set(m.workspace, seq);
+      }
+    };
+    tell();
+    const unlisten = s.listen(tell);
     let failed: Error | null = null;
     socket.on("unexpected-response", (_, response) => {
       if (response.statusCode === 404) {
@@ -216,8 +225,10 @@ export function applyState(s: CloudState, text: string, send: (frame: unknown) =
       // Kept as said; once locked, credentials are checked with the lock's keys instead (cloud/state.ts `grantKeys`).
       if (body.grant_keys && typeof body.grant_keys === "object" && !Array.isArray(body.grant_keys)) st.grant_keys = body.grant_keys;
       if (Array.isArray(body.revocations) && body.revocations.every(isRevocation)) st.revocations = body.revocations;
-      // The workspaces it joined besides its home one: none from planes of before them.
+      // The workspaces it joined besides its home one: none from planes of before them. One it is no longer in: its
+      // lock forgotten.
       const joined = joinedOf(body.workspaces);
+      for (const was of st.joined ?? []) if (!joined.some((j) => j.workspace === was.workspace)) s.forgetJoined(was.workspace);
       if (joined.length > 0) st.joined = joined;
       else delete st.joined;
       // Missing roster means an old cloud: never keep peers from another binding. Who may call the device tools
@@ -227,6 +238,10 @@ export function applyState(s: CloudState, text: string, send: (frame: unknown) =
       if (Array.isArray(body.gateway_keys)) st.gateway_keys = gateways;
     });
     syncLock(s, body.lock, send);
+    // Each joined workspace's lock too, level with the plane's.
+    if (Array.isArray(body.workspaces)) {
+      for (const j of body.workspaces) if (typeof j?.workspace === "string" && s.state?.joined?.some((x) => x.workspace === j.workspace)) syncLock(s, j.lock, send, j.workspace);
+    }
   } else if (body?.type === "revoke" && isRevocation(body)) {
     // Of the workspace it names (planes of before say none: the home one's).
     const named: unknown = (body as any).workspace;
@@ -239,39 +254,42 @@ export function applyState(s: CloudState, text: string, send: (frame: unknown) =
       of.revocations.push({ kind: body.kind, id: body.id, at: body.at });
     });
   } else if (body?.type === "lock" && Array.isArray(body.entries)) {
-    takeFromPlane(s, body.entries);
+    takeFromPlane(s, body.entries, typeof body.workspace === "string" && body.workspace !== s.state?.workspace ? body.workspace : null);
   }
 }
 
-/// The control plane's lock head against this station's: asks for what it lacks, gives what the plane lacks (the
-/// plane only keeps and carries the lock: a station brings it back what it lost). An unlocked station asks only for a
-/// lock `enroll --lock` named.
-function syncLock(s: CloudState, head: any, send: (frame: unknown) => unknown) {
+/// The control plane's lock head against this station's, in `ws` (the home workspace when null): asks for what it
+/// lacks, gives what the plane lacks (the plane only keeps and carries the lock: a station brings it back what it
+/// lost). Where none is pinned, it asks only for a lock `enroll --lock` (or joining) named.
+function syncLock(s: CloudState, head: any, send: (frame: unknown) => unknown, ws: string | null = null) {
   const theirs = head !== null && typeof head === "object" && Number.isSafeInteger(head.seq) ? (head.seq as number) : -1;
+  const which = ws === null ? {} : { workspace: ws };
   // A cloud from before locks says nothing of one: nothing is given to it.
-  s.planeLockSeq = head === undefined ? null : theirs;
-  const mine = s.locked()?.state?.seq;
+  if (ws === null) s.planeLockSeq = head === undefined ? null : theirs;
+  else s.planeLockSeqs.set(ws, head === undefined ? null : theirs);
+  const mine = s.locked(ws)?.state?.seq;
   if (mine === undefined) {
-    if (theirs >= 0 && pendingLock(s.data) !== null) send({ type: "lock.get", after: -1 });
+    const pending = ws === null ? pendingLock(s.data) : s.pendingLock(ws);
+    if (theirs >= 0 && pending !== null) send({ type: "lock.get", after: -1, ...which });
     return;
   }
-  if (theirs > mine) send({ type: "lock.get", after: mine });
-  else if (theirs < mine) send({ type: "lock.put", entries: s.lockAfter(theirs) });
+  if (theirs > mine) send({ type: "lock.get", after: mine, ...which });
+  else if (theirs < mine) send({ type: "lock.put", entries: s.lockAfter(theirs, ws), ...which });
 }
 
-/// Entries the control plane brought: more of the pinned lock, or the lock `enroll --lock` named (pinned only when its
-/// chain holds that entry).
-function takeFromPlane(s: CloudState, raw: unknown[]) {
+/// Entries the control plane brought, of `ws`'s lock (the home workspace's when null): more of the pinned lock, or the
+/// lock `enroll --lock` (or joining) named (pinned only when its chain holds that entry).
+function takeFromPlane(s: CloudState, raw: unknown[], ws: string | null = null) {
   const entries = raw.map(asEntry);
   if (entries.some((e) => e === null)) return log.warn("lock", "the control plane sent a malformed lock entry");
   try {
-    if (s.locked() === null) {
-      const pending = pendingLock(s.data);
+    if (s.locked(ws) === null) {
+      const pending = ws === null ? pendingLock(s.data) : s.pendingLock(ws);
       if (pending === null) return;
-      if (!entries.some((e) => entryHash(e!) === pending)) return log.warn("lock", "the control plane's lock is not the one this station was enrolled with");
-      s.takeLock(entries as Entry[]);
-      rmSync(pendingLockPath(s.data), { force: true });
-    } else s.takeLock(entries as Entry[]);
+      if (!entries.some((e) => entryHash(e!) === pending)) return log.warn("lock", "the control plane's lock is not the one this station was enrolled with", ws === null ? {} : { workspace: ws });
+      s.takeLock(entries as Entry[], ws);
+      rmSync(ws === null ? pendingLockPath(s.data) : joinedPendingPath(s.data, ws), { force: true });
+    } else s.takeLock(entries as Entry[], ws);
   } catch (e) {
     log.warn("lock", "the control plane's lock entries were refused", { error: (e as Error).message });
   }

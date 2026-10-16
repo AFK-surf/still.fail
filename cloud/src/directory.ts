@@ -435,7 +435,7 @@ export class Directory extends DurableObject<Env> {
     const added = MANAGERS.includes(role)
       ? this.#rows("SELECT email, role, added_by, added_at FROM added WHERE workspace = ? ORDER BY added_at", id) as unknown as AddedView[]
       : [];
-    return { id, name: w.name as string, ...marks(w.emoji, w.icon), role, created_at: w.created_at as number, members, stations, invitations, added, relays: parseRelays(w.relays), lock: this.#lockHead(id), lock_requests: this.#lockRequestCount(id, sub, role) };
+    return { id, name: w.name as string, ...marks(w.emoji, w.icon), role, created_at: w.created_at as number, members, stations, invitations, added, relays: parseRelays(w.relays), lock: this.#lockHead(id), ...(this.#locked(id) ? { locked: true } : {}), lock_requests: this.#lockRequestCount(id, sub, role) };
   }
 
   /**
@@ -792,18 +792,19 @@ export class Directory extends DurableObject<Env> {
   /**
    * A station redeems an enrollment token. The caller has checked that the station holds the key for `station`.
    * Re-enrolling moves the station: it leaves every other workspace it is in. Joining (`join`, POST /v1/stations/join)
-   * it stays in them and joins this one too (docs/multi-workspace.md), unless that would take it across a lock: its
-   * home's (the lock it pins), or this workspace's while it is in another. `home` is the workspace it joined first,
-   * whose say goes for the machine.
+   * it stays in them and joins this one too (docs/multi-workspace.md); a station whose home is locked joins locked
+   * workspaces only (an unlocked one's members are this cloud's word, which the home's lock took away). It pins each
+   * locked workspace's lock there. `home` is the workspace it joined first, whose say goes for the machine.
    */
-  async enroll(token: string, station: string, version: string | null, join = false): Promise<{ workspace: string; workspace_name: string; name: string; home: string }> {
+  async enroll(token: string, station: string, version: string | null, join = false, locks = false): Promise<{ workspace: string; workspace_name: string; name: string; home: string }> {
     const hash = await digest(token);
     const row = this.#one("SELECT workspace, name, created_by FROM enrollments WHERE token_hash = ? AND expires_at > ?", hash, nowSeconds());
     if (!row) fail(404, "enrollment_not_found");
     const workspace = row!.workspace as string;
     const was = this.#memberships(station);
     const member = was.includes(workspace);
-    if (join && !member && was.length > 0 && (this.#locked(workspace) || this.#locked(was[0]!))) fail(409, "locked_workspace");
+    // Across a lock: a locked home into an unlocked workspace; or into a locked one, by a station that would not pin it.
+    if (join && !member && was.length > 0 && (this.#locked(was[0]!) ? !this.#locked(workspace) : this.#locked(workspace) && !locks)) fail(409, "locked_workspace");
     // Several tokens may be out at once: the last free place goes to the first redeemed.
     if (!member && this.#stationsFull(workspace)) fail(429, "too_many_stations");
     const left = join ? [] : was.filter((w) => w !== workspace);
@@ -1301,7 +1302,7 @@ export class Directory extends DurableObject<Env> {
    * Where a station is and what it is called, and the cloud's own addresses as it has them now (a station enrolled
    * under an old host follows them: its links then use the new one); sent on connect and when that changes. What it
    * says at the top is of the station's home, as it was when a station was in one workspace (all a station from before
-   * several knows); `workspaces`, each other one it is in, with its own peers and revocations. Its lock is the home's.
+   * several knows); `workspaces`, each other one it is in, with its own peers, revocations and lock head.
    */
   #sendState(station: string): void {
     const sockets = this.#presence(station);
@@ -1314,8 +1315,10 @@ export class Directory extends DurableObject<Env> {
       ...(row as { workspace: string; workspace_name: string; name: string }),
       peers: this.#rows("SELECT m.station AS id, m.name, s.version FROM station_members m LEFT JOIN stations s ON s.id = m.station WHERE m.workspace = ? ORDER BY m.enrolled_at, m.rowid", row.workspace),
       revocations: this.#rows("SELECT kind, id, at FROM revocations WHERE workspace = ? AND at >= ?", row.workspace, since),
+      lock: this.#lockHead(row.workspace as string),
+      ...(this.#locked(row.workspace as string) ? { locked: true } : {}),
     }));
-    const { peers, revocations, ...row } = home!;
+    const { peers, revocations, lock: _, locked: __, ...row } = home! as typeof home & { locked?: true };
     // Every workspace's own relays after still.fail's (one endpoint, homed on any of them): a station from before them
     // keeps one more relay as it keeps the rest.
     const told = relays(this.env);
@@ -1331,21 +1334,24 @@ export class Directory extends DurableObject<Env> {
     this.#run("UPDATE stations SET last_seen = ? WHERE id = ?", nowSeconds(), station);
   }
 
-  /** "ping" is answered by the runtime; a station speaks otherwise only of the workspace lock, its home's: it asks for
-   * entries it lacks (`lock.get {after}`, answered `{type: "lock", entries}`) or brings ones the cloud lacks (`lock.put`). */
+  /** "ping" is answered by the runtime; a station speaks otherwise only of the workspace locks: it asks for entries it
+   * lacks (`lock.get {after}`, answered `{type: "lock", entries}`) or brings ones the cloud lacks (`lock.put`), of its
+   * home's lock, or of another workspace's it is in that it names (`workspace`, said back with the entries). */
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const attachment = ws.deserializeAttachment() as Attachment;
     if (typeof message !== "string" || !("station" in attachment)) return;
-    let body: { type?: unknown; after?: unknown; entries?: unknown };
+    let body: { type?: unknown; after?: unknown; entries?: unknown; workspace?: unknown };
     try {
       body = JSON.parse(message);
     } catch {
       return;
     }
-    const workspace = this.#memberships(attachment.station)[0];
+    const all = this.#memberships(attachment.station);
+    const named = typeof body.workspace === "string" ? body.workspace : null;
+    const workspace = named === null ? all[0] : all.includes(named) ? named : undefined;
     if (!workspace) return;
     if (body.type === "lock.get") {
-      ws.send(JSON.stringify({ type: "lock", entries: this.#lockAfter(workspace, Number.isSafeInteger(body.after) ? (body.after as number) : -1) }));
+      ws.send(JSON.stringify({ type: "lock", entries: this.#lockAfter(workspace, Number.isSafeInteger(body.after) ? (body.after as number) : -1), ...(named === null ? {} : { workspace }) }));
     } else if (body.type === "lock.put") {
       // Refused when it does not follow: the station hears the cloud's head in the state frame and asks again.
       await this.#appendLock(workspace, body.entries).catch(() => this.#sendState(attachment.station));

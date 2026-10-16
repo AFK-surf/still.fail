@@ -23,6 +23,7 @@ import { StationAddr } from "../station/addr.ts";
 import { Priority } from "../sync/scheduler.ts";
 import { arr as arrU, get as getU, isObject } from "../util.ts";
 import { places, type Place } from "./xshare.ts";
+import { enrolled, takeInJoined } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -54,6 +55,13 @@ function stationsOf(inner: Inner, workspace: string): J[] | null {
   return isObject(v) && Array.isArray(v.stations) ? v.stations : null;
 }
 
+/// Whether a workspace is in security mode as the cloud lists it (`locked`: a lock not turned off; none from a cloud
+/// from before it, which is taken as no).
+function lockedWs(inner: Inner, workspace: string): boolean {
+  const v = inner.data.shared({ topic: "workspace", workspace });
+  return isObject(v) && v.locked === true;
+}
+
 /// The name of a station's home workspace, when it is one of the viewer's: the one listing it but not as joined. None
 /// where the station's home is this workspace, or one the viewer is not in.
 export function homeName(inner: Inner, workspace: string, id: string): string | null {
@@ -71,10 +79,13 @@ export function joinable(inner: Inner, workspace: string): J {
   const here = new Set((stationsOf(inner, workspace) ?? []).map((s) => get(s, "id")));
   const theirs = all.filter((p) => p.id !== workspace && manager(p.role));
   let loading = stationsOf(inner, workspace) === null;
+  // A station whose home is in security mode joins only workspaces in it too.
+  const locked = lockedWs(inner, workspace);
   const items: J[] = [];
   const seen = new Set<string>();
   for (const p of theirs) {
     const stations = stationsOf(inner, p.id);
+    if (!locked && lockedWs(inner, p.id)) continue;
     if (stations === null) {
       loading = true;
       continue;
@@ -189,10 +200,14 @@ function join(inner: Inner, c: Of, ctx: J): Effect.Effect<unknown, CoreError> {
     const sub = inner.workspaces.owner(c.workspace);
     if (sub === null) return yield* Effect.fail(new CoreError("not_found", t("core-misc.account.no_access"), 404));
     const name = c.name ?? inner.cloudSync.nameOf(c.station) ?? addr.station;
-    const made = yield* inner.provider.request(sub, "POST", `/v1/workspaces/${encode(c.workspace)}/enrollments`, { name }, ctx);
+    // A locked workspace's enrollment names its lock's head as this device has it: the station pins that lock there.
+    const made = yield* enrolled(inner, sub, c.workspace, yield* inner.provider.request(sub, "POST", `/v1/workspaces/${encode(c.workspace)}/enrollments`, { name }, ctx));
     const token = str(get(made, "token"));
     if (token === null) return yield* Effect.fail(new CoreError("invalid", t("core-misc.join.noToken")));
-    const answer = yield* Effect.mapError(inner.stations.requests.call(addr, "POST", "/workspaces/join", { token }, { ctx }), joinError);
+    const lock = str(get(made, "lock"));
+    const answer = yield* Effect.mapError(inner.stations.requests.call(addr, "POST", "/workspaces/join", lock === null ? { token } : { token, lock }, { ctx }), joinError);
+    // Then taken into that lock, where this device may sign it in; else that workspace's owner confirms it by its code.
+    if (lock !== null) yield* Effect.ignore(takeInJoined(inner, sub, c.workspace, addr.station));
     inner.data.put(RECORD, c.station, { workspaces: arr(get(answer, "workspaces")), canJoin: get(answer, "canJoin") === true });
     invalidate(inner, c.station);
     // Listed in the workspace it joined.
