@@ -120,7 +120,7 @@ export const MeshLive = Layer.effectDiscard(
           connections,
           Effect.tryPromise(() =>
             conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, agents.remote)
-            : conn.alpn().equals(PEER_HTTP_ALPN) ? serveHttp(conn, cloud.state)
+            : conn.alpn().equals(PEER_HTTP_ALPN) ? serveHttp(conn, cloud.state, { forwarded: (port) => agents.forwards?.forwarded(port) === true })
             : conn.alpn().equals(TOOLS_ALPN) ? serveTools(gateways, conn)
             : conn.alpn().equals(GUEST_ALPN) ? guests.serve(conn)
             : serve(members, conn),

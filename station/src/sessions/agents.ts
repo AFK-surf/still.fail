@@ -34,6 +34,9 @@ import { version } from "../ops/version.ts";
 import { chatTools } from "../tools/chat.ts";
 import { type AgentsDoor, type PeerRoute, openAgentsDoor } from "../tools/http.ts";
 import { jobTools } from "../tools/jobs.ts";
+import { forwardTools } from "../tools/forward.ts";
+import { Forwards } from "../mesh/peer-forward.ts";
+import { nameOf, peerNamed } from "../mesh/peer-http.ts";
 import { McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
 import { remoteTools } from "../tools/remote.ts";
 import { UsageCounter } from "../usage/counter.ts";
@@ -85,6 +88,8 @@ export type AgentsParts = {
   /// Where the agents' door sends /peer requests: the mesh's way to other stations' web services, once it is up
   /// (mesh/peer-http.ts).
   peers: { route: PeerRoute | null };
+  /// Ports of other stations forwarded here (mesh/peer-forward.ts).
+  forwards: Forwards;
   slack: SlackParts;
   /// Where the station is in its control plane while in a workspace.
   place(): { origin: string; workspace: string; station: string; name: string } | null;
@@ -202,7 +207,31 @@ export const AgentsLive = (control: Control) =>
       });
       const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text) });
       hub.setJobs(jobs);
-      hub.onClose((session) => (remote.closeSession(session), computer.closeSession(session)));
+      // Ports of other stations forwarded here (mesh/peer-forward.ts), each its session's: through the mesh's way, once
+      // it is up (`peers`, below).
+      const peers: { route: PeerRoute | null } = { route: null };
+      const forwards = new Forwards({
+        route: () => peers.route,
+        resolve: (station) => {
+          const { id } = peerNamed(cloud, station);
+          return { id, name: nameOf(cloud, id) };
+        },
+        jobs: {
+          job: (id) => {
+            const job = store.getJob(id);
+            return job ? { session: job.sessionKey, state: job.state, port: job.port } : null;
+          },
+          changes: (changed) => store.subscribe((change) => {
+            if (change.type === "job" || change.type === "jobRemoved") changed(change.id);
+          }),
+        },
+        clock: hub.clock,
+      });
+      hub.onClose((session) => {
+        remote.closeSession(session);
+        computer.closeSession(session);
+        forwards.closeSession(session);
+      });
       // How busy this station is, told to the others' station_list (`describe`): the host page's measurements, the
       // GPUs (looked at once now, so the first to ask need not wait), what runs here and the relay.
       const gpus = new Gpus();
@@ -295,6 +324,7 @@ export const AgentsLive = (control: Control) =>
         }),
         ...browserTools(browser),
         ...computerTools(computer),
+        ...forwardTools(forwards),
       ];
       // The vault's secrets, asked for by agents and granted from the members' apps (docs/vault.md).
       const vaults = vaultStore(store.db);
@@ -483,7 +513,6 @@ export const AgentsLive = (control: Control) =>
       );
 
       let door: AgentsDoor | null = null;
-      const peers: { route: PeerRoute | null } = { route: null };
       const peerRoute = () => peers.route;
       let handing = false;
       // Taken up once the previous process is gone; then the door opens, and what was cut off resumes.
@@ -612,6 +641,7 @@ export const AgentsLive = (control: Control) =>
           unlearnConnected();
           await slack.close();
           await door?.close(30_000);
+          await forwards.close();
           try {
             await hub.handOver();
           } catch (error) {
@@ -631,6 +661,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ previousGone: previous, hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, peers, slack, overview: view, cloud, net, secrets, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      return Agents.of({ previousGone: previous, hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, peers, forwards, slack, overview: view, cloud, net, secrets, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
     }),
   );

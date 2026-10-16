@@ -7,6 +7,7 @@ import type { AddressInfo } from "node:net";
 import type { Duplex } from "node:stream";
 import { log } from "../ops/log.ts";
 import { ownPorts } from "../ops/own.ts";
+import type { Tunnels } from "../mesh/peer-forward.ts";
 import type { McpEndpoint } from "./mcp.ts";
 import { wall } from "../ops/fibers.ts";
 
@@ -29,8 +30,9 @@ export type AgentsDoor = {
 /// path with its query, as asked.
 export type PeerTarget = { station: string; given: string; port: number; path: string };
 
-/// Where the door sends /peer requests (mesh/peer-http.ts `PeerHttp`): none until the mesh is up.
-export type PeerRoute = {
+/// Where the door sends /peer requests (mesh/peer-http.ts `PeerHttp`), and forwarded ports their connections
+/// (mesh/peer-forward.ts): none until the mesh is up.
+export type PeerRoute = Tunnels & {
   request(req: IncomingMessage, res: ServerResponse, target: PeerTarget): Promise<void>;
   upgrade(req: IncomingMessage, socket: Duplex, head: Buffer, target: PeerTarget): Promise<void>;
 };

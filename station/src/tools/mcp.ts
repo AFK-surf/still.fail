@@ -5,9 +5,9 @@ import { log } from "../ops/log.ts";
 
 /// The tools that reach out of the station, refused while it is in no workspace (`gated`): what posts or sends to
 /// people (chat_post, into still.fail chats and Slack, with its files), slack_api (as the workspace's Slack bot) and
-/// job_start, and the peer stations' tools. The rest only read the station's own records, record the turn's state
+/// job_start, and the peer stations' tools (peer_forward too). The rest only read the station's own records, record the turn's state
 /// (chat_state) or stop something (job_stop), and stay open.
-export const OUTWARD = ["chat_post", "slack_api", "job_start", "station_list", "station_task", "station_file"];
+export const OUTWARD = ["chat_post", "slack_api", "job_start", "station_list", "station_task", "station_file", "peer_forward"];
 
 /// What a refused outward call says.
 export const UNBOUND_REFUSAL =

@@ -5,8 +5,11 @@
 // closed while they are not current). One request a stream: a JSON head line `{workspace, port, method, path, headers,
 // body}` and its body as it comes, answered with a JSON head line `{status, headers}` (headers as [name, value] pairs)
 // and the service's body as it comes; a WebSocket's (`socket: true`) answered 101, then its messages framed both ways as
-// a preview's are. The station there reaches its service as a preview's page does (jobs/preview.ts).
+// a preview's are. The station there reaches its service as a preview's page does (jobs/preview.ts). A forwarded TCP
+// connection's (`tcp: true`, peer-forward.ts) is answered 200 once the station there has connected to its localhost port,
+// then its bytes go both ways as they are; with `probe: true` it is only said whether it would be taken.
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { Socket } from "node:net";
 import { Readable, type Duplex } from "node:stream";
 import { WebSocketServer } from "ws";
 import type { Cloud } from "../cloud/state.ts";
@@ -18,6 +21,7 @@ import { ownPorts } from "../ops/own.ts";
 import { type PeerRoute, type PeerTarget, refuseUpgrade } from "../tools/http.ts";
 import type { Addr, Connection, Endpoint, Stream } from "./native.ts";
 import { PEER_ALPN, member } from "./peer.ts";
+import { pipeTcp, reachLocal } from "./peer-forward.ts";
 import { Reader, writeLine } from "./serve.ts";
 
 export const PEER_HTTP_ALPN = Buffer.from("stillfail/http/1");
@@ -35,14 +39,20 @@ const MAX_REFUSAL = 64 * 1024;
 const HOP = ["connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "te", "trailer", "host", "expect", "sec-websocket-key", "sec-websocket-version", "sec-websocket-extensions", "sec-websocket-accept"];
 const TIMED_OUT = "peer http: no connection in time";
 
-/// Why a request was not passed on: its status and words.
+/// Why a request was not passed on: its status and words; `unreachable` when the station itself was not reached (no
+/// connection, or none in time), not refused by it.
 export class HttpRefusal extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  readonly unreachable: boolean;
+  constructor(status: number, message: string, unreachable = false) {
     super(message);
     this.status = status;
+    this.unreachable = unreachable;
   }
 }
+
+/// A forwarded TCP connection to a port on another station, taken there: its stream, with what came after the answer.
+export type Tunnel = { stream: Stream; carry: Buffer };
 
 /// [name, value] pairs, names lowercase, what is not one left out.
 function pairs(raw: unknown): [string, string][] {
@@ -62,6 +72,12 @@ function passed(raw: string[]): [string, string][] {
     if (!HOP.includes(name) && !named.has(name)) out.push([name, raw[i + 1]!]);
   }
   return out;
+}
+
+/// Station `id`'s name in this station's workspaces, or its id when it has none.
+export function nameOf(cloud: Cloud, id: string): string {
+  const named = cloud.memberships().flatMap((m) => m.peers).find((p) => p?.id === id)?.name;
+  return typeof named === "string" && named !== "" ? named : id;
 }
 
 /// The station a /peer URL names, by its id or its name (as cased anywhere) among the stations of the workspaces this
@@ -183,9 +199,9 @@ export class PeerHttp implements PeerRoute {
     try {
       conn = await wall.within(this.connectMs, connecting, TIMED_OUT);
     } catch (error) {
-      if ((error as Error).message !== TIMED_OUT) throw new HttpRefusal(502, `station ${given} cannot be reached: ${(error as Error).message}`);
+      if ((error as Error).message !== TIMED_OUT) throw new HttpRefusal(502, `station ${given} cannot be reached: ${(error as Error).message}`, true);
       connecting.then((late) => late.close(0, "too late"), () => {});
-      throw new HttpRefusal(504, `station ${given} did not answer within ${Math.round(this.connectMs / 1000)} s: it is offline, or cannot be reached from here`);
+      throw new HttpRefusal(504, `station ${given} did not answer within ${Math.round(this.connectMs / 1000)} s: it is offline, or cannot be reached from here`, true);
     }
     if (!conn.alpn().equals(PEER_HTTP_ALPN)) {
       conn.close(0, "web requests unsupported");
@@ -210,8 +226,37 @@ export class PeerHttp implements PeerRoute {
         return await conn.openBi();
       } catch (error) {
         this.forget(id, made);
-        if (attempt > 0) throw new HttpRefusal(502, `station ${given} cannot be reached: ${(error as Error).message}`);
+        if (attempt > 0) throw new HttpRefusal(502, `station ${given} cannot be reached: ${(error as Error).message}`, true);
       }
+    }
+  }
+
+  /// A TCP connection to localhost:`port` on `station` (by its name or id, as /peer has it), for a forward
+  /// (peer-forward.ts): once that station has connected to the port, the stream its bytes go on; else an HttpRefusal
+  /// saying why. `probe`: only whether that station would take one (it knows forwards, the port is not one it refuses),
+  /// nothing connected; resolves with no stream then.
+  async tunnel(given: string, port: number, probe = false): Promise<Tunnel | null> {
+    const peer = peerNamed(this.cloud, given);
+    // Named in what it says by its name (a forward asks by the id).
+    const station = nameOf(this.cloud, peer.id);
+    const s = await this.stream(peer.id, station);
+    try {
+      await writeLine(s, { workspace: peer.workspace, port, tcp: true, ...(probe ? { probe: true } : {}) });
+      if (probe) await s.finish();
+      const reader = new Reader(s, MAX_HEAD);
+      const answer = await reader.line();
+      if (answer?.status !== 200) {
+        let said = reader.carry;
+        for (let more = await s.read(); more !== null && said.length < MAX_REFUSAL; more = await s.read()) said = Buffer.concat([said, more]);
+        const status = Number.isInteger(answer?.status) ? answer.status : 502;
+        throw new HttpRefusal(status, said.length > 0 ? said.subarray(0, MAX_REFUSAL).toString() : `station ${station} ended the connection without an answer`);
+      }
+      if (!probe) return { stream: s, carry: reader.carry };
+      void s.reset(0).catch(() => {});
+      return null;
+    } catch (error) {
+      void s.reset(0).catch(() => {});
+      throw error;
     }
   }
 
@@ -291,10 +336,16 @@ export class PeerHttp implements PeerRoute {
   }
 }
 
+/// What a station serving others' requests knows of this machine: how a forwarded connection reaches a port here
+/// (peer-forward.ts `reachLocal`; tests map ports), and which ports are this station's own forwards (refused: a forward
+/// reaching another would carry it on, around in a loop when two stations forward to each other).
+export type HereLocal = { reach?: (port: number) => Promise<Socket>; forwarded?: (port: number) => boolean };
+
 /// Another station's connection on this protocol: each stream a request to a web service on this machine, while that
 /// station is in a workspace with this one. Out of it, its connection ends; a roster not current ends nothing (losing
-/// still.fail cloud alone stops nothing), though new connections wait for one.
-export async function serveHttp(conn: Connection, cloud: Cloud): Promise<void> {
+/// still.fail cloud alone stops nothing), though new connections wait for one. `local`: this machine as its requests
+/// reach it (HereLocal).
+export async function serveHttp(conn: Connection, cloud: Cloud, local: HereLocal = {}): Promise<void> {
   const peer = conn.remoteId();
   try {
     member(cloud, peer, null);
@@ -318,7 +369,7 @@ export async function serveHttp(conn: Connection, cloud: Cloud): Promise<void> {
   try {
     for (let stream = await conn.acceptBi(); stream !== null; stream = await conn.acceptBi()) {
       const s = stream;
-      answer(cloud, peer, s).catch((error) => {
+      answer(cloud, peer, s, local).catch((error) => {
         log.info("mesh", "a web request of another station failed", { error: (error as Error).message });
         void s.reset(0).catch(() => {});
       });
@@ -343,7 +394,7 @@ async function refusal(stream: Stream, why: string) {
 }
 
 /// One request: refused, or passed to the service on this machine and its answer sent back as it comes.
-async function answer(cloud: Cloud, peer: string, stream: Stream): Promise<void> {
+async function answer(cloud: Cloud, peer: string, stream: Stream, local: HereLocal): Promise<void> {
   const reader = new Reader(stream, MAX_HEAD);
   const head = await wall.within(HEAD_MS, reader.line(), "no request head in time");
   if (head === null) return;
@@ -361,6 +412,27 @@ async function answer(cloud: Cloud, peer: string, stream: Stream): Promise<void>
   if (!Number.isInteger(port) || port < 1 || port > 65535) return refuse(400, "port: 1 to 65535");
   // The station's own (its agents' door would carry the request on to a third).
   if (ownPorts.has(port)) return refuse(403, `port ${port} is the station's own there, not a service's`);
+  if (local.forwarded?.(port) === true) return refuse(403, `port ${port} there is a port that station forwards from another (peer_forward), not a service's: reach that one directly`);
+  // A forwarded connection: its bytes as they are, to the port as a program on this machine reaches it.
+  if (head.tcp === true) {
+    if (head.probe === true) {
+      await writeLine(stream, { status: 200 });
+      return ended(stream);
+    }
+    let socket: Socket;
+    try {
+      socket = await (local.reach ?? reachLocal)(port);
+    } catch (error) {
+      return refuse(502, `nothing takes connections on port ${port} there: ${(error as Error).message}`);
+    }
+    try {
+      await writeLine(stream, { status: 200 });
+    } catch (error) {
+      socket.destroy();
+      throw error;
+    }
+    return pipeTcp(socket, stream, reader.carry);
+  }
   if (typeof head.path !== "string" || !head.path.startsWith("/")) return refuse(400, "path: from /");
   const method = typeof head.method === "string" ? head.method : "GET";
   const headers = pairs(head.headers);
