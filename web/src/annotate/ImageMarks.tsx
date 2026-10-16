@@ -12,7 +12,7 @@ import * as css from "./ImageMarks.css.ts";
 import * as marksCss from "./Marks.css.ts";
 import { useNarrow } from "../mobile/app.tsx";
 import { NoteBox, NoteCard, type NoteView } from "../mobile/Notes.tsx";
-import * as annotateCss from "../mobile/Annotate.css.ts";
+import * as notesCss from "../mobile/Notes.css.ts";
 import * as rootCss from "../mobile/styles/root.css.ts";
 import { t } from "../i18n.ts";
 
@@ -650,8 +650,8 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
     {pins(place)}
   </>) : null;
 
-  // On a phone, the foot as a message's notes page has it (../mobile/Annotate.tsx): the note being written in its box
-  // over the keyboard, else the notes as cards over the tools (a tap opens one again). In the narrow screen's dark.
+  // On a phone, the notes at the foot (../mobile/Notes.tsx): the note being written in its box over the keyboard, else
+  // the notes as cards over the tools (a tap opens one again). In the narrow screen's dark.
   const notes: (NoteView & { id: number })[] = shapes.flatMap((s) => {
     const n = numbers.get(s.id);
     return n === undefined ? [] : [{ id: s.id, n, text: s.tool === "rect" ? t("web-main.annotate.tool.rect") : t("web-main.annotate.tool.arrow"), comment: comments.get(s.id) ?? "", color: s.color }];
@@ -662,12 +662,12 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
     <div className={`${css.foot} ${rootCss.mDark}`} data-floats style={{ bottom: keyboard ? keyboard + 8 : undefined }}
       onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
       {openNote
-        ? <NoteBox key={openNote.id} note={openNote} className={annotateCss.mNoteBox} reveal={false}
+        ? <NoteBox key={openNote.id} note={openNote} className={notesCss.mNoteBox} reveal={false}
             onComment={(comment) => setComments((all) => new Map(all).set(openNote.id, comment))}
             onDone={() => setNote(null)} onRemove={() => remove(openNote.id)} />
         : <>
             {notes.length > 0 && (
-              <ol className={annotateCss.mTray}>
+              <ol className={notesCss.mTray}>
                 {notes.map((x) => <li key={x.id}><NoteCard note={x} open={false} onClick={() => { putDown(); setPicked(null); setNote(x.id); }} /></li>)}
               </ol>
             )}

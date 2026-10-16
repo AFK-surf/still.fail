@@ -69,10 +69,13 @@ export const mBarJoinedStation = style({
   display: "inline-flex", alignItems: "center", height: "var(--mark)", maxWidth: "96px", overflow: "hidden", textOverflow: "ellipsis",
   selectors: { "&[data-name]": { display: "block", lineHeight: "var(--mark)" } },
 });
-/** A message held for its menu (a long press): its words marked while the menu is open; the system's own menu never comes. */
-globalStyle(`${mMessages} [data-author]`, { WebkitTouchCallout: "none" });
-globalStyle(`${mMessages} [data-pressed]`, {
-  boxShadow: "inset 0 0 0 999px color-mix(in srgb, var(--m-accent) 12%, transparent)",
+/**
+ * A message's words are picked by the page where a finger holds them (pick.tsx): the system's own menu never comes, and
+ * for a finger the browser's own selection is off (on a phone it fights the list's scrolling and brings its own menus).
+ */
+globalStyle(`${mMessages} [data-author]`, {
+  WebkitTouchCallout: "none",
+  "@media": { "(hover: none)": { userSelect: "none", WebkitUserSelect: "none" } },
 });
 export const mJump = style({
   position: "absolute", right: "18px", bottom: "calc(var(--m-composer-room) + var(--asks-height, 0px) + 2px)", zIndex: "2", display: "grid",

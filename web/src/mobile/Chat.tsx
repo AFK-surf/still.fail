@@ -2,11 +2,12 @@ import { StationUpdate } from "../StationUpdate.tsx";
 // An item's page on a narrow screen: its chat's messages (none before its agent has a chat), the composer, and each
 // agent's execution history as a page opened from its mark or name. The messages are the wide screen's own (../Chat.tsx:
 // the same rows, avatars, names, quotes, files, activity and list behaviour), with the avatar and name in line with the
-// words rather than out in a margin. Long-press opens a message on its own page (Annotate.tsx); ＋ adds files.
+// words rather than out in a margin. A long press on a message's words picks a passage of them where it is, to quote or
+// copy (pick.tsx); ＋ adds files.
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { topicNow, useReady, useTopicSelect } from "../core/react.ts";
-import { stationApi, useApi, useChat, useChatJobs, useLives, useStationCall, useStationLook, useStations, type ChatAgent, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
+import { stationApi, useApi, useChat, useChatJobs, useLives, useStationCall, useStationLook, useStations, type ChatAgent, type ChatThread, type ChatView, type Quote } from "../api.ts";
 import { draftKeyOf, useHost, type HostComposer } from "./ChatHost.tsx";
 import { DraftKey } from "../draft.ts";
 import { OpenFile } from "../Viz.tsx";
@@ -29,7 +30,7 @@ import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { openHistory } from "./History.tsx";
 import { AgentSince, openAgent } from "./AgentSheet.tsx";
-import { annotatePath } from "./Annotate.tsx";
+import { HOLD, usePick } from "./pick.tsx";
 import { Button, GroupLabel, InfoList, InfoRow, LinkButton, ModelMark, NavButton, PickRow, QuotaRings, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
 import { AgentMark } from "../ui.tsx";
 import { OutsideList, outsideOf, shareOutside, type Outside } from "../OutsideShare.tsx";
@@ -49,8 +50,6 @@ import * as partsCss from "./styles/parts.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as rootCss from "./styles/root.css.ts";
 import * as sharedCss from "../Chat.css.ts";
-import * as conversationCss from "../styles/conversation.css.ts";
-import * as chatCss2 from "../styles/chat.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
 import * as sheetsCss from "./styles/sheets.css.ts";
 import * as homeCss from "./styles/home.css.ts";
@@ -279,15 +278,15 @@ function Messages({ view, lives, list, draft, here, stationName }: {
   });
   const [stable] = useState(() => ({
     quote: (q: Omit<Quote, "comment">) => latest.current.draft.current.quote(q),
-    hold: (ts: string) => { const { app, here } = latest.current; app.push(annotatePath(here.station, here.key, ts)); },
     file: (session: string, file: { path: string; name: string }) => {
       const { app, here } = latest.current;
       app.push(servicePath(here.station, here.key, fileService({ session, path: file.path, name: file.name })));
     },
   }));
-  // Words selected with a mouse inside one message offer to quote them; a finger holds a message for its menu.
+  // Words selected with a mouse inside one message offer to quote them; a finger held on them picks them in place.
   const quoting = useSelectionQuote(list, stable.quote);
-  const hold = useHold(list, rows.messages, stable.hold);
+  const picking = usePick(list, stable.quote);
+  const hold = useLinkHold(list);
   const askedFile = useAskedFile(list, rows.messages);
   // still.fail's own links (/o/<workspace>/<station>/<session>, as agents post them; a chat's page, as a reference is
   // written), on any of its cloud's hosts, open here, as pages over this one (the chat and what is being written stay under them): one of this chat's agents' web services, or another session. A
@@ -328,6 +327,7 @@ function Messages({ view, lives, list, draft, here, stationName }: {
         </DraftKey.Provider>
       </div>
       </Gallery.Provider>
+      {picking}
       {/* Over the send button, in line with it; it comes up growing and goes the way it came. */}
       {/* Short of the chat's end (a window of it), with how many new messages wait there. */}
       <button type="button" className={`${css.mJump} ${pagesCss.mFloating}`} data-shown={rows.away || undefined} data-count={rows.waiting > 0 || undefined}
@@ -339,39 +339,15 @@ function Messages({ view, lives, list, draft, here, stationName }: {
   );
 }
 
-/** A message's words as read, without markdown's marks: what a quote carries. */
-function plain(text: string): string {
-  return text.replace(/[`*#>]/g, "").replace(/\s+/g, " ").trim();
-}
-
 /**
- * Long-press on a message in the list (a right click with a mouse): its page, to pick passages of it to say something
- * about or to copy (Annotate.tsx). Not on what does its own thing in it (a name, a quote, a file). Long-press on a web
- * link in it: the link's menu instead (open it, copy it), as the Android app has it; a right click there is the
- * browser's own menu, with its link items.
+ * Long-press on a web link in a message of the list: the link's menu (open it, copy it), as the Android app has it; a
+ * right click there is the browser's own menu, with its link items. A long press elsewhere on a message's words picks
+ * them (pick.tsx); the system's own menu for it never comes.
  */
-function useHold(list: RefObject<HTMLElement | null>, messages: ChatMessage[], onHold: (ts: string) => void) {
+function useLinkHold(list: RefObject<HTMLElement | null>) {
   const app = useApp();
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const touched = useRef(false);
-  const shown = useRef(messages);
-  shown.current = messages;
-  const held = (event: React.SyntheticEvent) => {
-    const at = event.target as Element;
-    const row = at.closest?.<HTMLElement>("[data-author][data-ts]");
-    if (!row || !list.current?.contains(row) || at.closest("button, input, textarea")) return null;
-    const m = shown.current.find((x) => x.ts === row.dataset.ts);
-    if (!m || m.system || !m.text.trim()) return null;
-    const words = row.querySelector<HTMLElement>(`.${conversationCss.msgBubble}, .${conversationCss.markdown}, .${chatCss2.msgPlain}`) ?? row;
-    return { m, words };
-  };
-  const open = ({ m, words }: NonNullable<ReturnType<typeof held>>) => {
-    // Marked for a moment as the page comes over it.
-    words.dataset.pressed = "";
-    setTimeout(() => { delete words.dataset.pressed; }, 600);
-    navigator.vibrate?.(10);
-    onHold(m.ts);
-  };
   /** The web link pressed in one of the messages (a reference to a chat too), or null. */
   const linkAt = (event: React.SyntheticEvent) => {
     const a = (event.target as Element).closest?.<HTMLAnchorElement>("a[href]");
@@ -389,27 +365,21 @@ function useHold(list: RefObject<HTMLElement | null>, messages: ChatMessage[], o
     ] });
   };
   const cancel = () => clearTimeout(timer.current);
-  // A finger holds for the menu; a mouse right-clicks for it (and selects words to quote a passage of them).
   return {
     onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
       touched.current = e.pointerType !== "mouse";
       cancel();
       if (!touched.current) return;
       const link = linkAt(e);
-      const at = link ? null : held(e);
       const { clientX: x, clientY: y } = e;
-      if (link) timer.current = setTimeout(() => linkMenu(link, x, y), 480);
-      else if (at) timer.current = setTimeout(() => open(at), 480);
+      if (link) timer.current = setTimeout(() => linkMenu(link, x, y), HOLD);
     },
     onPointerUp: cancel, onPointerCancel: cancel,
     onPointerMove: (e: React.PointerEvent) => { if (Math.abs(e.movementY) > 4 || Math.abs(e.movementX) > 4) cancel(); },
-    // A right click opens it; a long press, where the browser asks for its own menu too, already has.
+    // Where a long press asks for the browser's own menu too: not over a message.
     onContextMenu: (e: React.MouseEvent<HTMLElement>) => {
-      if (!touched.current && linkAt(e)) return;
-      const at = held(e);
-      if (!at) return;
-      e.preventDefault();
-      if (!touched.current) open(at);
+      const row = (e.target as Element).closest?.("[data-author][data-ts]");
+      if (touched.current && row && list.current?.contains(row)) e.preventDefault();
     },
   };
 }

@@ -87,6 +87,8 @@ function showPage(path: string): void {
   for (const heard of shownHeard) heard();
 }
 const hearShown = (heard: () => void) => { shownHeard.add(heard); return () => { shownHeard.delete(heard); }; };
+/** Hears the page in view change (another pushed over it, or it gone back from): what is picked on a page lets go then (pick.tsx). */
+export const hearPageShown = hearShown;
 
 /** Whether `path` is the page in view (the latest chats mark its row): redrawn only when that changes. */
 export function useOpenPage(path: string): boolean {

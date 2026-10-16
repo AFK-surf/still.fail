@@ -55,6 +55,15 @@ try {
         if (step.text) await page.getByText(step.text, { exact: true }).filter({ visible: true }).first().click({ timeout: 5000 });
         if (step.key) await page.keyboard.press(step.key);
         if (step.move) await page.mouse.move(step.move[0], step.move[1]);
+        if (step.hold) {
+          // A real finger, held on its middle as long as a long press.
+          const box = await at(step.hold).boundingBox({ timeout: 5000 });
+          const cdp = await page.context().newCDPSession(page);
+          await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: box.x + box.width / 2, y: box.y + box.height / 2 }] });
+          await page.waitForTimeout(800);
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        }
         await settle(page, 450);
       } catch (e) {
         reached = false;

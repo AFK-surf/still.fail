@@ -1,13 +1,7 @@
 {
-  "web-mobile.annotate.cannotSend": "这个对话现在不能发消息",
   "web-mobile.annotate.copied": "已拷贝",
-  "web-mobile.annotate.copyAll": "复制全文",
   "web-mobile.annotate.copyFailed": "没能拷贝",
-  "web-mobile.annotate.notFound": "找不到这条消息",
-  "web-mobile.annotate.quoteAll": "引用全文",
   "web-mobile.annotate.selectAll": "全选",
-  "web-mobile.annotate.title": "批注",
-  "web-mobile.annotate.toChat": "放进对话 · {n}",
   "web-mobile.annotate.you": "你",
   "web-mobile.app.recent": "最近的会话",
   "web-mobile.app.runHistory": "执行历史",

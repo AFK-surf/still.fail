@@ -19,8 +19,11 @@ import * as controlsCss from "../src/styles/controls.css.ts";
 import { vars } from "../src/styles/tokens.css.ts";
 import { AT, clips, folder, note, novel, picture } from "./data.ts";
 
-/** What takes a story to its state, as the tests do it (Playwright's selectors); shown beside it in the gallery. */
-export interface Step { click?: string; rightClick?: string; hover?: string; key?: string; move?: [number, number]; text?: string }
+/**
+ * What takes a story to its state, as the tests do it (Playwright's selectors); shown beside it in the gallery. `hold`:
+ * a finger held on the middle of it as long as a long press, then lifted.
+ */
+export interface Step { click?: string; rightClick?: string; hover?: string; key?: string; move?: [number, number]; text?: string; hold?: string }
 export interface Story {
   id: string;
   group: string;
@@ -225,6 +228,7 @@ export const stories: Story[] = [
 
   // ── the phone ──
   { id: "phone-chat", group: "手机", title: "对话", app: true, phone: true },
+  { id: "phone-chat-pick", group: "手机", title: "对话 · 选取一段", app: true, phone: true, steps: [{ hold: '[data-role="agent"][data-ts] li' }] },
   { id: "phone-home", group: "手机", title: "首页", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }] },
   { id: "phone-agent", group: "手机", title: "agent 名片", app: true, phone: true, steps: [{ click: '[aria-label$="的名片"]' }] },
   { id: "phone-chat-info", group: "手机", title: "对话信息", app: true, phone: true, steps: [{ click: '[aria-label="对话信息"]' }] },

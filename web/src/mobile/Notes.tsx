@@ -1,9 +1,9 @@
-// A numbered note as a narrow screen shows it, wherever it is made: a passage of a message's (Annotate.tsx) or a mark on
-// an image (../annotate/ImageMarks.tsx). Being written, in a frosted box like the chat's composer; written, as a card
-// in a row at the foot. The Android app's are its Annotate.kt NoteBox and Card.
+// A numbered note as a narrow screen shows it: a mark on an image (../annotate/ImageMarks.tsx). Being written, in a
+// frosted box like the chat's composer; written, as a card in a row at the foot. The Android app's are its
+// screens/Notes.kt NoteBox and Card.
 import { useEffect, useLayoutEffect, useRef, type CSSProperties } from "react";
 import { Check, Trash } from "../icons.tsx";
-import * as css from "./Annotate.css.ts";
+import * as css from "./Notes.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import { t } from "../i18n.ts";
 
@@ -11,10 +11,10 @@ import { t } from "../i18n.ts";
 export interface NoteView { n: number; text: string; comment: string; color?: string | undefined }
 
 /**
- * Saying something about it, its number and what it is over what is written. `className`/`style`: where it goes (by
- * default under its passage, `style.top`); `reveal`: scrolled into sight as it opens.
+ * Saying something about it, its number and what it is over what is written. `className`/`style`: where it goes;
+ * `reveal`: scrolled into sight as it opens.
  */
-export function NoteBox({ note, className = css.mNote, style, reveal = true, onComment, onDone, onRemove }: {
+export function NoteBox({ note, className = css.mNoteBox, style, reveal = true, onComment, onDone, onRemove }: {
   note: NoteView; className?: string; style?: CSSProperties; reveal?: boolean; onComment(comment: string): void; onDone(): void; onRemove(): void;
 }) {
   const input = useRef<HTMLTextAreaElement>(null);

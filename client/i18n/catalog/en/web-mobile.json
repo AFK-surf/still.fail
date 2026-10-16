@@ -1,13 +1,7 @@
 {
-  "web-mobile.annotate.cannotSend": "Can't send to this chat now",
   "web-mobile.annotate.copied": "Copied",
-  "web-mobile.annotate.copyAll": "Copy all",
   "web-mobile.annotate.copyFailed": "Copy failed",
-  "web-mobile.annotate.notFound": "Message not found",
-  "web-mobile.annotate.quoteAll": "Quote all",
   "web-mobile.annotate.selectAll": "Select all",
-  "web-mobile.annotate.title": "Notes",
-  "web-mobile.annotate.toChat": "Add to chat · {n}",
   "web-mobile.annotate.you": "You",
   "web-mobile.app.recent": "Recent chats",
   "web-mobile.app.runHistory": "Run history",

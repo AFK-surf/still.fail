@@ -57,6 +57,15 @@ export async function play(steps: Step[]): Promise<void> {
     }
     if (step.rightClick) point(await waitFor(step.rightClick), ["pointerdown", "mousedown", "pointerup", "mouseup", "contextmenu"], { button: 2 });
     if (step.hover) point(await waitFor(step.hover), ["pointerover", "pointerenter", "pointermove", "mouseover", "mouseenter", "mousemove"]);
+    // A finger held on it, where the browser has touch events (the tests send a real touch).
+    if (step.hold && "TouchEvent" in window) {
+      const el = await waitFor(step.hold);
+      const touch = new Touch({ identifier: 1, target: el, ...at(el) });
+      const init = { bubbles: true, cancelable: true, composed: true, changedTouches: [touch] };
+      el.dispatchEvent(new TouchEvent("touchstart", { ...init, touches: [touch], targetTouches: [touch] }));
+      await settle(800);
+      el.dispatchEvent(new TouchEvent("touchend", init));
+    }
     if (step.move) {
       const el = document.elementFromPoint(step.move[0], step.move[1]);
       if (el) point(el, ["pointermove", "mousemove"], { clientX: step.move[0], clientY: step.move[1] });
