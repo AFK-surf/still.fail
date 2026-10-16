@@ -17,6 +17,7 @@ import { loadKey } from "./cloud/key.ts";
 import { MeshLive } from "./mesh/mesh.ts";
 import { AwakeLive } from "./ops/awake.ts";
 import { AgentsLive } from "./sessions/agents.ts";
+import { Browser } from "./browser/service.ts";
 import { dataDir, flag, ownData } from "./ops/files.ts";
 import { setStationLang, stationLang, tr } from "./ops/i18n.ts";
 import { type Control, launcher } from "./ops/launcher.ts";
@@ -125,6 +126,8 @@ function run() {
     Layer.provideMerge(Events.layer),
     Layer.provideMerge(AdminHost.layer),
     Layer.provideMerge(AdbShares.layer),
+    // The station's browser, its tabs screens (docs/remote-screens.md).
+    Layer.provideMerge(Browser.layer),
     Layer.provideMerge(parts),
   );
   const main = Effect.gen(function* () {

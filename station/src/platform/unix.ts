@@ -310,6 +310,21 @@ export const unix: Platform = {
     return holder(spawn("systemd-inhibit", ["--what=idle:sleep", "--who=still.fail", `--why=${why}`, "--mode=block", "cat"], { stdio: ["pipe", "ignore", "ignore"] }));
   },
 
+  browsers(env) {
+    const home = env.HOME ?? "";
+    const apps = (name: string, binary: string) => [`/Applications/${name}.app/Contents/MacOS/${binary}`, join(home, "Applications", `${name}.app`, "Contents", "MacOS", binary)];
+    const onPath = (names: string[]) => names.flatMap((n) => unix.findCommand(n, env)?.onPath ?? []);
+    const found = MACOS
+      ? [...apps("Google Chrome", "Google Chrome"), ...apps("Chromium", "Chromium"), ...apps("Microsoft Edge", "Microsoft Edge")]
+      : [
+          ...onPath(["google-chrome-stable", "google-chrome"]),
+          "/opt/google/chrome/chrome",
+          ...onPath(["chromium", "chromium-browser", "microsoft-edge-stable", "microsoft-edge"]),
+        ];
+    return [...new Set(found)].filter(executable);
+  },
+  hasDisplay: (env) => MACOS || Boolean(env.DISPLAY || env.WAYLAND_DISPLAY),
+
   hasKeychain: MACOS,
   hasQuickLook: MACOS,
   hasFolderPermissions: MACOS,
