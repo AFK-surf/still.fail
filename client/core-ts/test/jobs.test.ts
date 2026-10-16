@@ -74,7 +74,7 @@ test("those_up_long_are_grouped_oldest_first_with_where_they_are", () => {
   );
   const g = v.groups;
   assert.deepEqual([g[0].key, g[0].head, g[0].jobs[0].whereText], ["services", "长时间运行的网页服务 · 1", "不属于任何对话"]);
-  assert.deepEqual([g[1].head, g[1].jobs[0].id, g[1].jobs[0].whereText, g[1].jobs[0].age], ["一直在跑的后台任务 · 2", "j1", "studio · 对话", "3 小时"]);
+  assert.deepEqual([g[1].head, g[1].jobs[0].id, g[1].jobs[0].whereText, g[1].jobs[0].age], ["长时间运行的后台任务 · 2", "j1", "studio · 对话", "3 小时"]);
   assert.equal(g[1].jobs[1].whereText, "studio · 修登录 · 已归档");
   assert.deepEqual(longJobs([st(null, [job("new")])], c()), { groups: [] });
   const watch = job("w", { startedAt: NOW - 5 * LONG, watch: true });

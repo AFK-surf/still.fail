@@ -909,7 +909,7 @@ test("a_chats_jobs_are_shown_as_the_core_puts_them_and_a_jobs_output_says_when_i
   assert.deepEqual([jobs.alarm, jobs.servicesNote, jobs.jobsNote], ["restart", "1 个在重启", "1 个运行中"]);
   assert.deepEqual([jobs.ended, jobs.clear, jobs.clearText], [1, ["k1"], "清除 1 个已结束的"]);
   const w = jobs.jobs[1];
-  assert.deepEqual([w.tone, w.meta[0].text, w.meta[1].text, w.detail], ["live", "CI 还在跑", " · 2 分钟前", "在盯着 · 1 分钟 · 1 条通知"]);
+  assert.deepEqual([w.tone, w.meta[0].text, w.meta[1].text, w.detail], ["live", "CI 还在跑", " · 2 分钟前", "运行中 · 1 分钟 · 1 条通知"]);
   assert.deepEqual([jobs.jobs[0].meta[0].text, jobs.jobs[2].tone], ["正在重启", "off"]);
   // Its output: the last line and when, in words; the station follows it, so it is not read again.
   assert.deepEqual([v(values, 2).last, v(values, 2).said], ["step 3", "最后输出 · 3 分钟前"]);

@@ -95,7 +95,7 @@ test("files shared in Slack are fetched into the session's uploads and given to 
   assert.equal(readFileSync(shot!.path, "utf8"), "error overlay");
   const prompt = r.claude.last().prompts[0]!;
   assert.ok(prompt.includes(`Attached files:\n- ${shot!.path} (shot.png, 13 bytes)`), prompt);
-  assert.ok(prompt.includes("log.txt 没拿到"), prompt);
+  assert.ok(prompt.includes("无法获取文件 log.txt"), prompt);
   await r.close();
 });
 
@@ -1245,7 +1245,7 @@ test("a session changes profile, model and effort by hand, and is taken on by an
   r.edit(withProfile("cc3", "third", []));
   assert.ok((await refused(configure(r.hub, key, { profile: "cc3" }))).includes("「third」未启用 opus"), "only one with its model enabled");
   // Its model and effort change too, to what a profile of its runtime runs.
-  assert.ok((await refused(configure(r.hub, key, { model: "gpt-5" }))).includes("没有能跑 gpt-5 的 Claude Code Profile"));
+  assert.ok((await refused(configure(r.hub, key, { model: "gpt-5" }))).includes("没有可运行 gpt-5 的 Claude Code Profile"));
   assert.ok((await refused(configure(r.hub, key, { effort: "ultra" }))).includes("思考深度只有"));
   r.edit((raw) => raw.profiles.filter((p: any) => p.id === "cc" || p.id === "cc2").forEach((p: any) => (p.models = [...(p.models ?? []), "sonnet"])));
   // Another model on the same profile while a turn runs: its process takes it in place before the next turn, nothing
@@ -1737,7 +1737,7 @@ test("a directory the station may not read is told as that, not left to the agen
     assert.equal(r.claude.count(), 0);
     const notice = r.said(thread.id).at(-1)!;
     assert.equal(notice.authorKind, "ember");
-    assert.ok(notice.text.includes("没有权限读取目录") && notice.text.includes(project), notice.text);
+    assert.ok(notice.text.includes("无权读取目录") && notice.text.includes(project), notice.text);
   } finally {
     chmodSync(project, 0o755);
   }

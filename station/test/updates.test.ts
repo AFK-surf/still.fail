@@ -534,7 +534,7 @@ describe("updates", { concurrency: true }, () => {
     await unjoined.check();
     line = station(unjoined);
     assert.equal(line.note, "尚未加入 workspace，无法更新");
-    await assert.rejects(unjoined.update("nope", "zh"), (e: Error) => e.message === "没有 nope 这一项");
+    await assert.rejects(unjoined.update("nope", "zh"), (e: Error) => e.message === "不存在 nope");
   });
 
   describe("Codex installed by npm (one build file in the temp directory: one at a time)", () => {
