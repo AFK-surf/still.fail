@@ -75,8 +75,8 @@ class StationJoinTest {
         h.fake.put(Topics.joinable(ws), joinable)
         h.fake.put(Topics.memberships("$ws/studio"), MembershipsView(
             manages = true, loading = false, canJoin = true, workspaces = listOf(
-                StationMembership(workspace = ws, name = "Dev", stationName = "studio", home = true, here = true, line = "主 workspace", roots = emptyList()),
-                StationMembership(workspace = "ws-acme", name = "Acme", stationName = "studio", home = false, here = false, line = "开放的文件夹：still.fail、notes", roots = emptyList()),
+                StationMembership(workspace = ws, name = "Dev", stationName = "studio", home = true, here = true, line = "主 workspace"),
+                StationMembership(workspace = "ws-acme", name = "Acme", stationName = "studio", home = false, here = false, line = "加入的 workspace"),
             ),
         ))
         h.launch(listOf(Screen.Stations), dark)
@@ -154,7 +154,7 @@ class StationJoinTest {
         // Its page in its home workspace: the workspaces it is in.
         rule.runOnUiThread { h.app.push(Screen.Station("$ws/studio")) }
         h.settle()
-        rule.onNodeWithText("开放的文件夹：still.fail、notes").assertIsDisplayed()
+        rule.onNodeWithText("加入的 workspace").assertIsDisplayed()
         picture(h, "join-page-workspaces-$tone")
 
         // A joined station's page: where it is at home, under its name; no workspaces of its own here.
@@ -188,8 +188,8 @@ class StationJoinTest {
 
     private fun lab(manages: Boolean) = MembershipsView(
         manages = manages, loading = false, canJoin = true, workspaces = listOf(
-            StationMembership(workspace = ws, name = "Dev", stationName = "studio", home = true, here = true, line = "主 workspace", roots = emptyList()),
-            StationMembership(workspace = "lab", name = "Lab", stationName = "studio", home = false, here = false, line = "没有开放的文件夹", roots = emptyList()),
+            StationMembership(workspace = ws, name = "Dev", stationName = "studio", home = true, here = true, line = "主 workspace"),
+            StationMembership(workspace = "lab", name = "Lab", stationName = "studio", home = false, here = false, line = "加入的 workspace"),
         ),
     )
 
