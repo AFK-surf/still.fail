@@ -165,9 +165,13 @@ describe("the desktop app's web app without a new app", () => {
     served.files[good.file] = good.bytes;
     await web.check();
     await web.take();
-    assert.equal(await web.back(), true);
+    // A page on another build than the one served says it failed: not this one's to put away.
+    assert.equal(await web.back(3011), false);
+    assert.equal(web.current().build, 3012);
+    assert.equal(await web.back(3012), true);
     assert.equal(web.current().build, 3000);
-    assert.equal(await web.back(), false);
+    // A second window on 3012 says so too: 3000 is served now, and stays.
+    assert.equal(await web.back(3012), false);
     // Offered again, it is not downloaded again.
     const count = asked.filter((a) => a === good.file).length;
     assert.equal(await web.check(), null);
@@ -175,7 +179,9 @@ describe("the desktop app's web app without a new app", () => {
   });
 
   test("a change to the web app alone is a web release; one to the shell, a new app", () => {
-    assert.deepEqual(plan(["web/src/App.tsx", "pnpm-lock.yaml"]), { desktop: false, desktopWeb: true });
+    assert.deepEqual(plan(["web/src/App.tsx", "web/src/i18n.ts"]), { desktop: false, desktopWeb: true });
+    // The root's packages: the shell's bundles take some of them too.
+    assert.deepEqual(plan(["pnpm-lock.yaml"]), { desktop: true, desktopWeb: false });
     assert.deepEqual(plan(["web/src/App.tsx", "client/core-ts/src/core.ts"]), { desktop: true, desktopWeb: true });
     // What the shell's bundles take from web/ is the shell's.
     assert.deepEqual(plan(["web/src/core/delta.ts"]), { desktop: true, desktopWeb: false });

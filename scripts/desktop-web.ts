@@ -19,18 +19,20 @@ const root = join(import.meta.dirname, "..");
 
 /**
  * The shell: what the desktop app carries besides the web app. The app's code, the core (client/: its utility
- * process's client/core-ts, the words), the station and its native parts, the release scripts and installers, and the
- * files of web/ and cloud/ its bundles take (`check` says when one is missing).
+ * process's client/core-ts, the words), the station and its native parts, the release scripts and installers, the
+ * files of web/ and cloud/ its bundles take (`check` says when one is missing) and the root's packages they take.
  */
 export const SHELL = new RegExp([
   "^apps/desktop/", "^client/", "^station/(src|native)/", "^station/(package\\.json|pnpm-lock\\.yaml)$", "^vendor/", "^bin/",
   "^scripts/(release|station-bundle)\\.sh$", "^\\.github/release-desktop\\.py$", "^scripts/(posthog-key|native|installers|release-sign)\\.ts$",
   "^cloud/src/(install|install-windows|i18n|previewSocket)\\.ts$",
+  // The root's packages: the shell's bundles take some (the page marking's modern-screenshot), as the web app does.
+  "^package\\.json$", "^pnpm-lock\\.yaml$",
   "^web/src/core/delta\\.ts$", "^web/src/annotate/frame\\.ts$", "^web/public/avatars/index\\.json$",
 ].join("|"));
 
-/** The web app the app carries: dist/cloud-web, built from web/ with the root's packages. */
-export const WEB = /^(web\/|package\.json$|pnpm-lock\.yaml$)/;
+/** The web app the app carries: dist/cloud-web, built from web/ (and the root's packages, which are the shell's too). */
+export const WEB = /^web\//;
 
 /** What the files change: the shell (a new app), or the web app alone (a web release). */
 export function plan(files: string[]): { desktop: boolean; desktopWeb: boolean } {
@@ -91,7 +93,9 @@ async function shellInputs(): Promise<string[]> {
     const result = await esbuild.build({ ...run, absWorkingDir: desktop, bundle: true, write: false, metafile: true, logLevel: "error" });
     for (const input of Object.keys(result.metafile.inputs)) {
       const path = relative(root, join(desktop, input)).split(sep).join("/");
-      if (!path.includes("node_modules/") && !path.startsWith("..")) files.add(path);
+      // A package of the root's (not apps/desktop's own) is the root's package.json and lockfile.
+      if (path.startsWith("node_modules/")) files.add("pnpm-lock.yaml");
+      else if (!path.includes("node_modules/") && !path.startsWith("..")) files.add(path);
     }
   }
   return [...files].sort();

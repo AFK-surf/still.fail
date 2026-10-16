@@ -90,11 +90,12 @@ export class WebUpdates {
   }
 
   /**
-   * The build served failed to load (its page did not come up): it is removed, and the one before it served (one taken
-   * earlier this run, else the one the app carries). False when what is served is the one the app carries.
+   * The build `failed` failed to load (its page did not come up): if it is the one served, it is removed, and the one
+   * before it served (one taken earlier this run, else the one the app carries). False otherwise.
    */
-  async back(): Promise<boolean> {
-    if (this.served.dir === this.options.carried) return false;
+  async back(failed: number): Promise<boolean> {
+    // Another window on the same build said so first: what is served now is another one, and not this page's.
+    if (this.served.dir === this.options.carried || this.served.build !== failed) return false;
     const bad = this.served;
     this.served = this.before.shift() ?? { build: this.options.app, needs: this.options.app, dir: this.options.carried };
     if (this.ready?.build === bad.build) this.ready = null;
@@ -192,6 +193,8 @@ export class WebUpdates {
     } catch {}
     for (const name of names) {
       const n = /^0\.1\.(\d+)(\.part)?$/.exec(name);
+      // A build being opened (.part) while a check is under way is that check's.
+      if (n?.[2] && this.checking) continue;
       if (n && (n[2] || !keep.has(Number(n[1])))) await rm(join(this.options.dir, name), { recursive: true, force: true });
     }
   }

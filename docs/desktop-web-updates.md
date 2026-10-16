@@ -13,7 +13,7 @@
 
 ## 怎么判断哪种
 
-`scripts/desktop-web.ts` 里的 `SHELL` 列出壳包含的路径，`WEB` 列出网页包含的路径（`web/`、根目录的 `package.json` 和 `pnpm-lock.yaml`）。CI 的 plan 用它算出：
+`scripts/desktop-web.ts` 里的 `SHELL` 列出壳包含的路径，`WEB` 是网页的路径（`web/`）。根目录的 `package.json` 和 `pnpm-lock.yaml` 算壳：壳的 bundle 也用到根目录的包（页面标注用的 modern-screenshot），所以升级依赖还是发整个 app。CI 的 plan 用它算出：
 
 - `desktop=true`：改到了壳，desktop job 照旧打整个 app（新 app 里也带着新网页）。
 - `desktop_web=true` 且壳没改：desktop-web job 只打网页包。
@@ -53,7 +53,7 @@ app 端用 `verifyDesktopWeb`（`station/src/updates/signed.ts`）验证：签�
 - 点「刷新更新」：之后的新请求都从新目录提供，然后所有窗口重新加载，app 不重启。
 - 已经打开的旧页面，晚些时候才加载的 chunk 按顺序去找：当前目录 → 本次运行里之前用过的目录（最多 2 个）→ app 内置的目录。所以切换网页时旧窗口不会 404。
 - 下次启动时直接用已下载的最新包（前提是它比 app 内置的新，且 `needs` 符合），其余的删掉。`userData/web/state.json` 记录当前用的是哪个。
-- 回退：如果新网页的页面加载失败，或者加载后 30 秒内渲染进程崩溃，就把这个 build 删掉、标记为 `0.1.N.rejected`（之后不会再下载它），回到上一个版本（没有的话回到 app 内置的），然后重新加载。
+- 回退：如果新网页的页面找不到（`ERR_FILE_NOT_FOUND`），或者开始加载后 30 秒内渲染进程崩溃（`crashed`、`launch-failed`；被系统因内存杀掉的不算），就把这个页面开始加载时用的 build 删掉、标记为 `0.1.N.rejected`（之后不会再下载它），回到上一个版本（没有的话回到 app 内置的），然后重新加载。多个窗口同时报同一个 build 时只回退一次。
 - 「整个 app」的更新优先：如果两种更新都有，页面只显示整个 app 的那个，因为新 app 本身就带着新网页。
 
 ## 还没做

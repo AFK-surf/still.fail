@@ -122,7 +122,12 @@ protocol.registerSchemesAsPrivileged([
  */
 async function serve(request: Request): Promise<Response> {
   if (new URL(request.url).pathname === "/__stillfail_storage_migration__") return new Response("<!doctype html><title>Storage migration</title>", { headers: { "content-type": "text/html" } });
-  const path = normalize(decodeURIComponent(new URL(request.url).pathname));
+  let path: string;
+  try {
+    path = normalize(decodeURIComponent(new URL(request.url).pathname));
+  } catch {
+    return new Response("Bad path", { status: 400 });
+  }
   for (const root of webUpdates?.roots() ?? [web]) {
     const file = join(root, path);
     if (await stat(file).then((s) => s.isFile(), () => false)) return net.fetch(pathToFileURL(file).toString());
@@ -1106,12 +1111,12 @@ async function takeWebUpdate(): Promise<void> {
 }
 
 /**
- * A page of a web app downloaded that did not come up (its load failed, or its renderer went away at once): that build
- * is put away (webUpdates.back) and the page loads again on the one before it, else the one the app carries.
+ * A page of a web app downloaded that did not come up (its page was not there, or its renderer crashed as it started):
+ * that build is put away (webUpdates.back) and the page loads again on the one before it, else the one the app carries.
  */
-function backFromWeb(window: BrowserWindow): void {
-  if (!webUpdates || webUpdates.current().dir === web) return;
-  void webUpdates.back().then((went) => {
+function backFromWeb(window: BrowserWindow, build: number): void {
+  if (!webUpdates) return;
+  void webUpdates.back(build).then((went) => {
     if (went && !window.isDestroyed()) window.webContents.reload();
   }).catch((error: Error) => console.warn("going back from the web app failed", error.message));
 }
@@ -1318,14 +1323,18 @@ function open(path = "/", titled = false): BrowserWindow {
   });
   // A right-click gets a menu, as in a browser (showContextMenu).
   window.webContents.on("context-menu", (_event, params) => showContextMenu(window, params));
-  // A newer web app that does not come up is put away (backFromWeb). -3 is a load stopped for another (a reload).
-  let loaded = Date.now();
-  window.webContents.on("did-start-loading", () => (loaded = Date.now()));
+  // A newer web app that does not come up is put away (backFromWeb): the build the page started on, when its page was
+  // not there (-6, ERR_FILE_NOT_FOUND) or its renderer crashed within 30 s of it starting. Not for what any page may
+  // meet (a renderer killed for memory, a frame's load failing).
+  let started = { at: 0, build: 0 };
+  window.webContents.on("did-start-navigation", (details) => {
+    if (details.isMainFrame && !details.isSameDocument && webUpdates) started = { at: Date.now(), build: webUpdates.current().build };
+  });
   window.webContents.on("did-fail-load", (_event, code, _description, url, mainFrame) => {
-    if (mainFrame && code !== -3 && url.startsWith(`${APP_ORIGIN}/`)) backFromWeb(window);
+    if (mainFrame && code === -6 && url.startsWith(`${APP_ORIGIN}/`)) backFromWeb(window, started.build);
   });
   window.webContents.on("render-process-gone", (_event, details) => {
-    if (details.reason !== "clean-exit" && Date.now() - loaded < 30_000) backFromWeb(window);
+    if ((details.reason === "crashed" || details.reason === "launch-failed") && Date.now() - started.at < 30_000) backFromWeb(window, started.build);
   });
   void window.loadURL(`${APP_ORIGIN}${path}`);
   return window;
