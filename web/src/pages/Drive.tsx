@@ -27,6 +27,7 @@ import { cancel, download, joinPath, nameOf, openerOf, parentOf, refresh, retry,
 import { useDriveFile } from "../drive/viewerFile.ts";
 import { absoluteOf, childOf, drive, drivePath, filtered, folderName, nameProblem, rootTrouble, trailOf, useDrive, type DriveState, type PickFolder } from "../drive/useDrive.ts";
 import { draggedOf, endDrag, startDrag } from "../drive/drag.ts";
+import { useJoinedPins } from "../drive/joinedPins.ts";
 import { ColumnsView, TreeView, useDriveView, ViewSwitch, type RowOf } from "./DriveViews.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { DrivePreview, FilterField, useFolders } from "../mobile/Drive.tsx";
@@ -184,6 +185,8 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
   const toast = useToast();
   const copyPath = (abs: string) => void navigator.clipboard.writeText(abs).then(() => toast(t("web-pages.drive.pathCopied")), (e: unknown) => toast(t("web-main.copyFailed", { error: e instanceof Error ? e.message : String(e) })));
   const pin = (abs: string, on: boolean) => act(drive.pin(station.address, d.roots, abs, on), t("web-pages.drive.rootsWhat"), t(on ? "web-pages.drive.shared" : "web-pages.drive.unpinned", { name: folderName(abs) }));
+  // Lent to the workspaces the station joined, for its managers.
+  const pinsFor = useJoinedPins(station.address, d.anywhere === true);
   const reload = () => {
     if (refreshing) return;
     setRefreshing(true);
@@ -211,7 +214,7 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
       const abs = absoluteOf(root, joinPath(in_.path, e.name));
       const on = d.roots.some((r) => r.path === abs);
       return { label: t(on ? "web-pages.drive.unpin" : "web-pages.drive.pin"), icon: Pin, onSelect: () => pin(abs, !on) };
-    })()] : []),
+    })(), ...pinsFor(absoluteOf(root, joinPath(in_.path, e.name)))] : []),
     ...(d.write ? [
       { label: t("web-pages.drive.rename"), icon: Edit, onSelect: () => setNaming({ at: in_, entry: e }) },
       { label: t("web-pages.drive.delete"), icon: Trash, danger: true, onSelect: () => setRemoving({ at: in_, entry: e }) },

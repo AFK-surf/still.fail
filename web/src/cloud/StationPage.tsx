@@ -4,7 +4,7 @@
 // settings' list of cards stays, each name opening this page.
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Link, Navigate, NavLink, useParams } from "react-router";
-import { stamp, useStations, type StationView } from "../api.ts";
+import { stamp, useMemberships, useStations, type StationView } from "../api.ts";
 import { useGo } from "../go.ts";
 import { MeterChip, MeterDials } from "../components.tsx";
 import { RetryPill } from "../Connection.tsx";
@@ -17,7 +17,7 @@ import { same } from "../stationPick.ts";
 import { BackLink, Button, ICON, Loading, Menu, MobileBack, Pill, Section, StatusDot, Time } from "../ui.tsx";
 import { SoftwareList } from "../Versions.tsx";
 import { WorkspaceMark } from "../WorkspaceMark.tsx";
-import { HostDetails, Net, problems, state, useLong } from "./StationCards.tsx";
+import { HostDetails, joinedText, Net, problems, state, useLong } from "./StationCards.tsx";
 import { MarkPick } from "./MarkPick.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
 import { NavAction, NavList, NavItem, NavLine, NavTop, navFill } from "../SidebarList.tsx";
@@ -68,7 +68,7 @@ function StationRow({ s, to }: { s: StationView; to: string }) {
     <NavItem to={to} title={s.name}
       mark={s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={16} /> : <WorkspaceMark w={{ name: s.name }} size={16} />}
       end={<><span className={railCss.dot} data-online={s.online || undefined} />{brief(s)}</>}>
-      <NavLine><span className={navFill}>{s.host?.identity ?? (s.online ? t("web-pages.stations.connecting") : t("web-pages.stations.offline"))}</span></NavLine>
+      <NavLine><span className={navFill}>{[s.host?.identity ?? (s.online ? t("web-pages.stations.connecting") : t("web-pages.stations.offline")), joinedText(s)].filter(Boolean).join(" · ")}</span></NavLine>
       {meters.length > 0 && (
         <span className={css.rowMeters}>
           {meters.map((m) => <MeterChip key={m.label} meter={m} brief bare />)}
@@ -150,6 +150,7 @@ function Head({ s, manager, edits }: { s: StationView; manager: boolean; edits: 
             <span className={css.status}><StatusDot state={s.online ? "online" : "offline"} />{state(s)}</span>
             {s.host && <span>{s.host.identity}</span>}
             {s.version && <span>Station {s.version}</span>}
+            {joinedText(s) && <span>{joinedText(s)}</span>}
           </p>
           {/* What is wrong with it, under how it is. */}
           {wrong.length > 0 && <div className={css.warn}>{wrong.map((p) => <span key={p.key} data-level={p.level}>{p.text}</span>)}</div>}
@@ -239,6 +240,7 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
           </ul>
         </Section>
       )}
+      {manager && !s.joined && <Workspaces s={s} />}
       <Section title={t("web-pages.stations.software")}>
         {s.online ? <SoftwareList station={s.station} updates={o?.updates} manager={manager} beta={s.betaOffered ?? false} /> : <p className={css.note}>{t("web-pages.stations.softwareOffline")}</p>}
         {!o?.updates?.length && s.version && <p className={css.note}>Station {s.version}</p>}
@@ -248,6 +250,26 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
           : <p className={css.note}>{s.online ? t("web-pages.stations.deviceLoading") : t("web-pages.stations.deviceOffline")}</p>}
       </Section>
     </>
+  );
+}
+
+/**
+ * The workspaces it is in (docs/multi-workspace.md), for the owners and admins of its home one (this), once it is in more
+ * than one: its home first, and what each has of the machine (the folders pinned for it).
+ */
+function Workspaces({ s }: { s: StationView }) {
+  const m = useMemberships(s.station).value;
+  if (!m?.manages || m.workspaces.length < 2) return null;
+  return (
+    <Section title={<>Workspace<span className={settingsCss.titleCount}>{m.workspaces.length}</span></>} description={t("web-pages.stations.workspacesLead")}>
+      <div className={pagesCss.card}>
+        {m.workspaces.map((w) => (
+          <div key={w.workspace} className={pagesCss.cardRow}>
+            <span className={pagesCss.cardRowText}><strong>{w.name}</strong><span className={shellCss.muted}>{w.line}</span></span>
+          </div>
+        ))}
+      </div>
+    </Section>
   );
 }
 

@@ -22,6 +22,8 @@ export const firstThisMac = style({ marginTop: "12px" });
 export const enroll = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "20px" });
 /** The command under what to do with it. */
 export const enrollStep = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "8px" });
+/** 添加 station's two ways (a new machine, one of another workspace's): as wide as its options. */
+export const addKinds = style({ justifySelf: "start" });
 /** Which system's command it is (macOS and Linux's, Windows'): as wide as its options. */
 export const enrollSystem = style({ justifySelf: "start" });
 export const enrollLabel = style({ display: "flex", alignItems: "center", gap: "4px", margin: "0", fontSize: vars.textUi, fontWeight: "500" });

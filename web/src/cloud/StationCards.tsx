@@ -81,6 +81,13 @@ function PeekNet({ net }: { net: StationNet }) {
   );
 }
 
+/** Where a station the workspace joined is from (its home workspace, which manages the machine: docs/multi-workspace.md),
+ * in words; null for one whose home is here. */
+export function joinedText(s: StationView): string | null {
+  if (!s.joined) return null;
+  return s.home ? t("web-pages.stations.joinedFrom", { name: s.home }) : t("web-pages.stations.joinedElsewhere");
+}
+
 /** Whether its agents are at work, or when it was last seen. */
 export function state(s: StationView): ReactNode {
   if (!s.online) return s.lastSeen ? tx("web-pages.stations.lastSeen", { time: <Time stamp={stamp(s, "lastSeen")} /> }) : t("web-pages.stations.neverOnline");
@@ -185,6 +192,7 @@ export function useLong(waiting: boolean, ms: number): boolean {
 function StationCard({ s, menu, page, manager, onMark, markBusy }: { s: StationView; menu: ReactNode; page: string; manager: boolean; onMark: ((s: StationView, mark: Mark) => void) | undefined; markBusy: boolean }) {
   const silent = useLong(s.online && !s.host, 15_000);
   const wrong = problems(s, silent);
+  const foot = [s.host?.identity, joinedText(s)].filter(Boolean).join(" · ");
   return (
     <div className={css.card} data-online={s.online || undefined}>
       <div className={css.cardHead}>
@@ -199,7 +207,7 @@ function StationCard({ s, menu, page, manager, onMark, markBusy }: { s: StationV
         {(!s.online || silent) && <RetryPill />}
         <span className={css.menu}>{menu}</span>
       </div>
-      {s.host && <div className={css.cardFoot}>{s.host.identity}</div>}
+      {foot && <div className={css.cardFoot}>{foot}</div>}
       {wrong.length > 0 && <div className={css.warn}>{wrong.map((p) => <span key={p.key} data-level={p.level}>{p.text}</span>)}</div>}
       {s.online && s.net && <Net net={s.net} />}
       {s.online && <div className={css.cardVersions}><UpdateSummary station={s.station} updates={s.overview?.updates} manager={manager} /></div>}

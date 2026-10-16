@@ -7,8 +7,8 @@ import { useReady } from "../core/react.ts";
 import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
-import { useStations, type StationView } from "../api.ts";
-import type { Host, StationNet } from "../core/shapes.ts";
+import { useJoinable, useMemberships, useStations, type StationView } from "../api.ts";
+import type { Host, JoinableView, StationNet } from "../core/shapes.ts";
 import { illustrationUrl } from "../brand.tsx";
 import { ChevronRight, Close, ImageUpload, More } from "@stillfail/ui/icons.tsx";
 import { cloud, useWorkspace } from "../cloud/api.ts";
@@ -18,14 +18,14 @@ import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { GoRow } from "./Settings.tsx";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import { Versions } from "./Versions.tsx";
-import { MachineDetails, Net } from "../cloud/StationCards.tsx";
+import { joinedText, MachineDetails, Net } from "../cloud/StationCards.tsx";
 import { ColorRow, EmojiGrid, GlyphGrid } from "../cloud/MarkPick.tsx";
 import { glyphColor, isPicture, StationMark, stationGlyph } from "../StationMark.tsx";
 import { emojiMark, firstEmoji, glyphMark, kindOf, NO_MARK, pictureMark, pictureOf, same, type Kind, type Mark } from "../stationPick.ts";
 import * as markCss from "../StationMark.css.ts";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
-import { Button, Card, Field, Illustration, ListCard, Loading, NavBar, NavButton, PickRow, PlaceHead, SectionHeader, Seg, Spinner } from "./parts.tsx";
+import { Button, Card, Field, Illustration, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, PlaceHead, SectionHeader, Seg, Spinner } from "./parts.tsx";
 import { usePlaceActions } from "./placeActions.tsx";
 import * as css from "./Stations.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -33,6 +33,8 @@ import * as partsCss from "./styles/parts.css.ts";
 import * as sheetsCss from "./styles/sheets.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
 import * as settingsCss from "./styles/settings.css.ts";
+import * as settingsPageCss from "./Settings.css.ts";
+import * as listsCss from "./styles/lists.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as newChatCss from "./styles/new-chat.css.ts";
 
@@ -68,7 +70,7 @@ export function StationsScreen() {
         <Card key={s.station} onClick={() => app.push(app.at(`/s/${s.id}/overview`))}>
           <span className={css.mStationHead}>
             <Buddy s={s} />
-            <span className={partsCss.mGrow}><b className={css.mStationName}>{(s.emoji || s.icon) && <StationMark emoji={s.emoji} icon={s.icon} size={16} className={markCss.inline} />}{s.name}</b><span className={css.mStationSummary}>{s.summary}</span></span>
+            <span className={partsCss.mGrow}><b className={css.mStationName}>{(s.emoji || s.icon) && <StationMark emoji={s.emoji} icon={s.icon} size={16} className={markCss.inline} />}{s.name}</b><span className={css.mStationSummary}>{[s.summary, joinedText(s)].filter(Boolean).join(" · ")}</span></span>
             {s.reconnecting && <Reconnecting />}
             <ChevronRight size={14} className={partsCss.mSubtle} />
           </span>
@@ -161,12 +163,19 @@ export function AddStationSheet({ known }: { known: string[] }) {
   const busy = useDoing("workspace.enroll", { account: me.sub, workspace: app.entry.id });
   const [error, setError] = useState<string | null>(null);
   const joined = made && stations.find((s) => !known.includes(s.id));
+  // A station the viewer manages in another workspace, offered beside a new machine (docs/multi-workspace.md).
+  const joinable = useJoinable(app.entry.id).value;
+  const [existing, setExisting] = useState(false);
   return (
     <>
       <SheetGrab />
       <SheetHead title={t("web-mobile.stations.add")} />
       <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
-        {!made ? (
+        {joinable?.offered && !made && (
+          <Seg options={[t("web-pages.settings.stations.kindNew"), t("web-pages.settings.stations.kindExisting")]} selected={existing ? 1 : 0}
+            onSelect={(i) => setExisting(i === 1)} fill height={34} radius={17} />
+        )}
+        {joinable?.offered && existing && !made ? <JoinStation joinable={joinable} /> : !made ? (
           <>
             <p className={partsCss.mMuted}>{t("web-mobile.stations.addNote", { name: NAME })}</p>
             <b className={sheetsCss.mFormLabel}>{t("web-mobile.workspaces.name")}</b>
@@ -191,6 +200,50 @@ export function AddStationSheet({ known }: { known: string[] }) {
   );
 }
 
+/**
+ * 添加 station with a station the viewer manages in another workspace: picked from those not here yet (the core's
+ * `joinable`), then added as it is (`station.join`). What that shares of the machine is said under the list.
+ */
+function JoinStation({ joinable }: { joinable: JoinableView }) {
+  const app = useApp();
+  const [picked, setPicked] = useState<string>(joinable.items[0]?.station ?? "");
+  const chosen = joinable.items.find((s) => s.station === picked) ?? joinable.items[0];
+  const busy = useDoing("station.join", { workspace: app.entry.id, station: chosen?.station ?? "" });
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  if (done !== null) {
+    return (
+      <>
+        <p>{t("web-pages.settings.stations.joinedHere", { name: done })}</p>
+        <div className={sheetsCss.mFormActions}><Button label={t("common.done")} primary onClick={() => app.sheet(null)} /></div>
+      </>
+    );
+  }
+  return (
+    <>
+      <p className={partsCss.mMuted}>{t("web-pages.settings.stations.existingLead")}</p>
+      {joinable.items.length > 0 ? (
+        <ListCard>
+          {joinable.items.map((s) => (
+            <PickRow key={s.station} label={s.name} sub={s.line} checked={s.station === chosen?.station}
+              leading={s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={20} /> : undefined} onClick={() => setPicked(s.station)} />
+          ))}
+        </ListCard>
+      ) : <p className={partsCss.mMuted}>{joinable.loading ? t("web-mobile.reading") : t("web-pages.settings.stations.existingNone")}</p>}
+      <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-pages.settings.stations.softIsolation")}</p>
+      {error && <p className={partsCss.mError}>{error}</p>}
+      <div className={sheetsCss.mFormActions}>
+        <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
+        <Button label={t("web-pages.settings.stations.joinAction")} primary busy={busy} enabled={!!chosen} onClick={() => {
+          if (!chosen) return;
+          setError(null);
+          cloud.joinStation(app.entry.id, chosen.station).then(() => setDone(chosen.name), (e: Error) => setError(e.message));
+        }} />
+      </div>
+    </>
+  );
+}
+
 export function StationScreen() {
   const app = useApp();
   const { station: id = "" } = useParams();
@@ -201,7 +254,7 @@ export function StationScreen() {
   const manager = useManager();
   return (
     <div className={pagesCss.mScreen}>
-      <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s?.reconnecting ? <Reconnecting /> : s ? <span className={barsCss.mNavbarNote}>{s.host?.identity || (s.online ? t("web-mobile.stations.online") : t("web-mobile.stations.offline"))}</span> : undefined}
+      <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s?.reconnecting ? <Reconnecting /> : s ? <span className={barsCss.mNavbarNote}>{[s.host?.identity || (s.online ? t("web-mobile.stations.online") : t("web-mobile.stations.offline")), joinedText(s)].filter(Boolean).join(" · ")}</span> : undefined}
         trailing={s && manager ? <NavButton icon={More} label={t("common.more")} onClick={() => app.sheet({ height: 0.34, content: () => <StationMenu s={s} /> })} /> : undefined} />
       {!s ? <Loading text={stations.error?.message ?? t("web-mobile.reading")} /> : (
         <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
@@ -220,11 +273,32 @@ export function StationScreen() {
             {s.overview?.drive && <GoRow title={t("web-pages.drive.title")} value={s.overview.drive.roots.length ? t("web-pages.drive.rootsCount", { n: s.overview.drive.roots.length }) : t("web-pages.drive.notShared")}
               onClick={() => app.push(app.at(`/s/${s.id}/files`))} />}
           </ListCard>
+          {manager && !s.joined && <Workspaces s={s} />}
           {s.online && s.overview && <Versions station={s.station} updates={s.overview.updates} manager={manager} beta={s.betaOffered ?? false} />}
           <div style={{ height: 30 }} />
         </div>
       )}
     </div>
+  );
+}
+
+/** The workspaces it is in, for the owners and admins of its home one (this), once it is in more than one (as the wide
+ * screen's station page, ../cloud/StationPage.tsx): its home first, what each has of the machine. */
+function Workspaces({ s }: { s: StationView }) {
+  const m = useMemberships(s.station).value;
+  if (!m?.manages || m.workspaces.length < 2) return null;
+  return (
+    <>
+      <SectionHeader title="Workspace" start={24} />
+      <ListCard>
+        {m.workspaces.map((w) => (
+          <ListRow key={w.workspace}>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{w.name}</span>
+            <span className={settingsPageCss.mValue}>{w.line}</span>
+          </ListRow>
+        ))}
+      </ListCard>
+    </>
   );
 }
 

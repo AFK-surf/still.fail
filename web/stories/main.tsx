@@ -31,6 +31,8 @@ if (theme === "light" || theme === "dark") document.documentElement.dataset.them
 const worn = device(query.get("device"));
 if (worn) wear(worn);
 
+// A story's own state (stations of other workspaces to add, a station's workspaces), before the rest.
+if (story?.demo) extendDemo(story.demo);
 // What the stories show that the site's demo has none of: files to read and play, and (for those that show it) the
 // changelog's news.
 extendDemo({

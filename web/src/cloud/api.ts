@@ -70,6 +70,9 @@ export const cloud = {
   /** Its icon and emoji together (../stationPick.ts); "" takes either away. */
   setStationMark: (sub: string, id: string, station: string, mark: { emoji: string; icon: string }) => operations(sub).workspaceRenameStation<WorkspaceView>({ workspace: id, station, emoji: mark.emoji, icon: mark.icon }),
   removeStation: (sub: string, id: string, station: string) => operations(sub).workspaceRemoveStation<{ ok: true }>({ workspace: id, station }),
+  /** A station of another workspace (its address there, in its home workspace) added to `workspace` as it is: the core
+   * makes the enrollment here and has the station join with it (client/core-ts/src/views/memberships.ts). */
+  joinStation: (workspace: string, station: string) => core().call("station.join", { workspace, station }) as Promise<{ joined: { workspace: string; workspaceName: string; name: string } | null }>,
   revokeLoginSession: (sub: string, id: string) => operations(sub).loginSessionRevoke<{ ok: true }>({ id }),
 };
 

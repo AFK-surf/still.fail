@@ -17,6 +17,7 @@ import { ChevronRight, Copy, Download, Folder, Pin, Refresh, Retry, Send, Server
 import { download, joinPath, openerOf, refresh, useFolder, type At } from "../drive/model.ts";
 import { absoluteOf, drive, drivePath, folderName, rootTrouble, trailOf, useDrive } from "../drive/useDrive.ts";
 import { draggedOf, droppedFrom } from "../drive/drag.ts";
+import { useJoinedPins } from "../drive/joinedPins.ts";
 import { DrivePreview } from "../mobile/Drive.tsx";
 import { DriveRow } from "./Drive.tsx";
 import { ColumnsView, TreeView, useDriveView, ViewSwitch, type RowOf } from "./DriveViews.tsx";
@@ -130,6 +131,8 @@ function FolderList({ station, root, path, chat, onGo, onPlaces, onOpen }: {
   };
   const copyPath = (abs: string) => void navigator.clipboard.writeText(abs).then(() => toast(t("web-pages.drive.pathCopied")), (e: unknown) => toast(t("web-main.copyFailed", { error: e instanceof Error ? e.message : String(e) })));
   const pin = (abs: string, on: boolean) => act(drive.pin(station, d.roots, abs, on), t("web-pages.drive.rootsWhat"), t(on ? "web-pages.drive.shared" : "web-pages.drive.unpinned", { name: folderName(abs) }));
+  // Lent to the workspaces the station joined, for its managers.
+  const pinsFor = useJoinedPins(station, d.anywhere === true);
   // The way here: from the home (or the disk's top) for a member who browses every folder, else from the folder pinned.
   const way = d.anywhere
     ? trailOf(here, d.home, t("web-pages.drive.home"))
@@ -147,7 +150,7 @@ function FolderList({ station, root, path, chat, onGo, onPlaces, onOpen }: {
       { label: t("web-pages.drive.sendToChat"), icon: Send, onSelect: () => offerToDraft(chat, { files: [], quotes: [], dropped: [droppedFrom(draggedOf(in_, e, name))] }) },
       { label: t("web-pages.drive.copyPath"), icon: Copy, onSelect: () => copyPath(abs) },
       ...(e.dir ? [] : [{ label: t("web-pages.drive.download"), icon: Download, onSelect: () => act(download({ ...in_, path: joinPath(in_.path, e.name) }, e), t("web-pages.drive.downloadWhat")) }]),
-      ...(e.dir && d.anywhere ? [{ label: t(on ? "web-pages.drive.unpin" : "web-pages.drive.pin"), icon: Pin, onSelect: () => pin(abs, !on) }] : []),
+      ...(e.dir && d.anywhere ? [{ label: t(on ? "web-pages.drive.unpin" : "web-pages.drive.pin"), icon: Pin, onSelect: () => pin(abs, !on) }, ...pinsFor(abs)] : []),
     ];
   };
   return (

@@ -9,7 +9,7 @@ import { createContext, useCallback, useContext, useMemo, useRef } from "react";
 import { useCall, useTopic, useTopicSelect, useTopics, type TopicState } from "./core/react.ts";
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
-import type { AgentCardView, ArchiveView, Attachment, ChatJobsView, ChatSearchView, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, Live, Overview, ProfilesView, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
+import type { AgentCardView, ArchiveView, Attachment, ChatJobsView, ChatSearchView, ChatsView, Quote, ChatView, ConnectsView, HistoryView, Host, JoinableView, Live, MembershipsView, Overview, ProfilesView, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
 import type { AccessKind, ConnectMode, Job, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackIdentity } from "./core/shapes.ts";
 import type { ChatPublished, PublishPreview } from "./core/shapes.ts";
 import type { SlackPerson } from "./cloud/adding.ts";
@@ -114,6 +114,17 @@ export function useArchiveView(scope: string, q = "", limit = 0): TopicState<Arc
 
 export function useStations(scope: string): TopicState<StationView[]> {
   return useTopic<StationView[]>({ topic: "stations", scope });
+}
+
+/** The stations 添加 station offers to add to a workspace as they are: those of the viewer's other workspaces whose home
+ * workspace they manage, not in this one yet (client/core-ts/src/views/memberships.ts). */
+export function useJoinable(workspace: string): TopicState<JoinableView> {
+  return useTopic<JoinableView>({ topic: "joinable", workspace });
+}
+
+/** The workspaces a station is in, for its home workspace's owners and admins (`manages`); null: not asked. */
+export function useMemberships(station: string | null): TopicState<MembershipsView> {
+  return useTopic<MembershipsView>(station ? { topic: "memberships", station } : null);
 }
 
 /**

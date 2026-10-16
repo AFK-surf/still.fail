@@ -24,7 +24,8 @@ import {
 import { Archive, Bell, Close, Copy, Download, Edit, Folder, Plus, Refresh, Search, Trash } from "@stillfail/ui/icons.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { AT, apk, clips, folder, note, NOTE, novel, picture } from "./data.ts";
+import { AT, apk, clips, folder, JOIN_REFUSED, JOINABLE, JOINABLE_NONE, MEMBERSHIPS, note, NOTE, novel, picture } from "./data.ts";
+import type { DemoExtension } from "../src/demo/mount.tsx";
 import CLIP_URL from "./assets/story-clip.mp4?url";
 import PICTURE_URL from "./assets/story-picture.png?url";
 
@@ -50,9 +51,26 @@ export interface Story {
   files?: boolean;
   /** A file its chat's agent names in a message, read for its card (data.ts PEEK), or not to be found. */
   peek?: "file" | "missing";
+  /** What it adds to the demo's core, asked before everything else (topics and calls of its own state). */
+  demo?: DemoExtension;
 }
 
 const at = (name: string) => ({ ...AT, path: name });
+
+/** The demo with stations of other workspaces to add (`list`), none to add, or one that refuses to join. */
+const joining = (kind: "list" | "none" | "error"): DemoExtension => ({
+  topic: (t) => (t.topic === "joinable" ? (kind === "none" ? JOINABLE_NONE : JOINABLE) : undefined),
+  call: (name) => (name === "station.join" ? (kind === "error" ? Promise.reject(new Error(JOIN_REFUSED)) : { joined: null }) : undefined),
+});
+/** The demo's station in Lab too (the core's `memberships`), and, with `joined`, Lab's Mini1 in this workspace. */
+const memberships = (joined = false): DemoExtension => ({
+  topic: (t) => (t.topic === "memberships" ? MEMBERSHIPS : undefined),
+  then: (t, value) => {
+    if (!joined || t.topic !== "stations" || !Array.isArray(value)) return undefined;
+    const first = value[0] as Record<string, unknown>;
+    return [...value, { ...first, station: "demo/mini1", id: "mini1", name: "Mini1", emoji: undefined, icon: "glyph:dice-1", joined: true, home: "Lab" }];
+  },
+});
 const ANTHROPIC = { id: "anthropic", name: "Anthropic" };
 const OPENAI = { id: "openai", name: "OpenAI" };
 const noop = () => undefined;
@@ -236,6 +254,12 @@ export const stories: Story[] = [
   { id: "app-chat-files-card", group: "应用", title: "对话 · 文件卡片悬停", app: true, steps: [{ click: '[aria-label="Station 文件"]' }, { text: "Downloads" }, { rightClick: "button:has-text(\"发版录屏 1014.mp4\")" }, { text: "添加到消息" }, { hover: "text=Studio · 路径" }] },
   { id: "app-station", group: "应用", title: "station", app: true, steps: [{ click: '[aria-label^="Station"]' }] },
   { id: "app-station-mark", group: "应用", title: "station · 选图标", app: true, steps: [{ click: '[aria-label^="Station"]' }, { click: '[aria-label^="给 Studio 选个图标"]' }] },
+  { id: "app-station-workspaces", group: "应用", title: "station · 在几个 workspace 里", app: true, demo: memberships(), steps: [{ click: '[aria-label^="Station"]' }] },
+  { id: "app-station-joined", group: "应用", title: "station · 从别的 workspace 加入的", app: true, demo: memberships(true), steps: [{ click: '[aria-label^="Station"]' }, { text: "Mini1" }] },
+  { id: "app-station-add-existing", group: "应用", title: "添加 station · 已有的", app: true, demo: joining("list"), steps: [{ click: '[aria-label^="Station"]' }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }] },
+  { id: "app-station-add-existing-none", group: "应用", title: "添加 station · 已有的 · 没有", app: true, demo: joining("none"), steps: [{ click: '[aria-label^="Station"]' }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }] },
+  { id: "app-station-add-existing-error", group: "应用", title: "添加 station · 加入失败", app: true, demo: joining("error"), steps: [{ click: '[aria-label^="Station"]' }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }, { text: "加进来" }] },
+  { id: "app-files-row-menu-joined", group: "应用", title: "文件 · 文件夹右键 · 开放给加入的 workspace", app: true, demo: memberships(), steps: [{ click: '[aria-label="文件"]' }, { text: "主目录" }, { rightClick: "button:has-text(\"Movies\")" }] },
   { id: "app-profile", group: "应用", title: "Profile", app: true, steps: [{ click: '[aria-label="Profile"]' }] },
   { id: "app-connects", group: "应用", title: "连接", app: true, steps: [{ click: '[aria-label="连接"]' }] },
   { id: "app-usage", group: "应用", title: "用量", app: true, steps: [{ click: '[aria-label="用量"]' }] },
@@ -328,4 +352,7 @@ export const stories: Story[] = [
   { id: "phone-profile", group: "手机", title: "Profile", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }] },
   { id: "phone-memory", group: "手机", title: "记忆", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }] },
   { id: "phone-memory-skill", group: "手机", title: "记忆 · 项目", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }, { text: "acme-web" }] },
+  { id: "phone-station-add-existing", group: "手机", title: "添加 station · 已有的", app: true, phone: true, demo: joining("list"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Station"]' }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }] },
+  { id: "phone-station-add-existing-error", group: "手机", title: "添加 station · 加入失败", app: true, phone: true, demo: joining("error"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Station"]' }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }, { text: "加进来" }] },
+  { id: "phone-station-workspaces", group: "手机", title: "station · 在几个 workspace 里", app: true, phone: true, demo: memberships(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Station"]' }, { text: "Studio" }] },
 ];

@@ -118,3 +118,34 @@ export const PEEK = {
   kind: "text", name: "login.css.ts", path: "web/src/login.css.ts", size: 1840, mtime: MTIME,
   lines: { start: 12, at: 14, text: ["export const form = style({", "  display: \"grid\", gap: 12,", "  padding: \"0 16px\",", "  maxWidth: 360,", "});"] },
 };
+
+// ── One station in several workspaces (docs/multi-workspace.md): what the core's `joinable` and `memberships` say ──
+
+/** The stations of the viewer's other workspaces that could be added to this one, as the core lists them. */
+export const JOINABLE = {
+  offered: true,
+  loading: false,
+  items: [
+    { station: "lab/mini1", id: "mini1", name: "Mini1", icon: "glyph:dice-1", workspace: "lab", workspaceName: "Lab", online: true, line: "Lab · 在线" },
+    { station: "lab/gpu", id: "gpu", name: "GPU 主机", emoji: "🔥", workspace: "lab", workspaceName: "Lab", online: false, line: "Lab · 离线" },
+    { station: "home/nas", id: "nas", name: "NAS", workspace: "home", workspaceName: "家里", online: true, line: "家里 · 在线" },
+  ],
+};
+/** None to add: the viewer manages another workspace, but its stations are all here already. */
+export const JOINABLE_NONE = { offered: true, loading: false, items: [] };
+/** What a station from before several workspaces answers, in the core's words. */
+export const JOIN_REFUSED = "这台 station 还不能在多个 workspace 里，先更新它";
+
+/** The demo's station in its home workspace (Acme) and in Lab, which it joined, with two folders lent to Lab. */
+export const MEMBERSHIPS = {
+  manages: true,
+  loading: false,
+  canJoin: true,
+  workspaces: [
+    { workspace: "demo", name: "Acme", stationName: "Studio", home: true, here: true, line: "主 workspace", roots: [] },
+    {
+      workspace: "lab", name: "Lab", stationName: "Studio", home: false, here: false, line: "开放的文件夹：datasets、notebooks",
+      roots: [{ path: "/Users/lin/datasets", name: "datasets", state: "ok" }, { path: "/Users/lin/notebooks", name: "notebooks", state: "ok" }],
+    },
+  ],
+};

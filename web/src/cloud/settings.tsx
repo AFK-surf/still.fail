@@ -13,11 +13,12 @@ import { SecurityNotice } from "./Security.tsx";
 import { useCommands } from "../commands.ts";
 import { Fragment, useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import { Link, Navigate, NavLink, useNavigate, useParams, useSearchParams } from "react-router";
-import { useProfiles, useStations, type Profile, type StationView } from "../api.ts";
+import { useJoinable, useProfiles, useStations, type Profile, type StationView } from "../api.ts";
 import { same, type Mark } from "../stationPick.ts";
 import { MarkPick } from "./MarkPick.tsx";
 import { WorkspaceMark } from "../WorkspaceMark.tsx";
-import type { WorkspaceProfile } from "../core/shapes.ts";
+import type { JoinableView, WorkspaceProfile } from "../core/shapes.ts";
+import { StationMark } from "../StationMark.tsx";
 import { ConnectList } from "../pages/Connects.tsx";
 import { ACCESS, RUNTIME_LABEL } from "../format.ts";
 import { stamp } from "../api.ts";
@@ -33,7 +34,7 @@ import { addProfilePath } from "../pages/AddProfile.tsx";
 import { profilePath, useProfilesSidebar } from "../ProfilesNav.tsx";
 import { useCall, useTopic } from "../core/react.ts";
 import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
-import { About, BackLink, Button, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Segmented, Select, StatusDot, Time } from "../ui.tsx";
+import { About, BackLink, Button, Choices, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Segmented, Select, StatusDot, Time } from "../ui.tsx";
 import { useSignOut, type Account } from "./accounts.ts";
 import { useLastChat } from "../lastChat.ts";
 import { parseEmails, useSlackPeople } from "./adding.ts";
@@ -612,9 +613,15 @@ function RenameStationDialog({ station, onClose, onRename }: { station: StationV
   );
 }
 
+/** Which way a station is added: a new machine (its command), or one of the viewer's other workspaces' as it is. */
+type AddKind = "new" | "existing";
+
 /** `thisMac`: 添加这台 Mac in it too, where the app offers it (the sidebar's 添加 station; the list has it beside). */
 export function AddStationDialog({ view, account, stations, onClose, thisMac = false }: { view: WorkspaceView; account: Account; stations: StationView[]; onClose(): void; thisMac?: boolean }) {
   const [name, setName] = useState("");
+  // A station the viewer manages in another workspace, offered beside a new machine (docs/multi-workspace.md).
+  const joinable = useJoinable(view.id).value;
+  const [kind, setKind] = useState<AddKind>("new");
   // The stations there before: the one that joins is the one not among them.
   const [known] = useState(() => new Set(stations.map((s) => s.id)));
   const enroll = useAction(() => cloud.enroll(account.sub, view.id, name));
@@ -623,6 +630,7 @@ export function AddStationDialog({ view, account, stations, onClose, thisMac = f
   const shown = useRef(0);
   useEffect(() => { if (enroll.result) shown.current = performance.now(); }, [enroll.result]);
   useEffect(() => { if (joined) track("station_added", { ms: Math.round(performance.now() - shown.current) }); }, [Boolean(joined)]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (kind === "existing" && joinable?.offered) return <JoinStationDialog view={view} joinable={joinable} onKind={setKind} onClose={onClose} />;
   return (
     <Dialog open onClose={onClose} wide title={t("web-pages.settings.stations.add")}
       description={t("web-pages.settings.stations.addLead")}
@@ -630,6 +638,7 @@ export function AddStationDialog({ view, account, stations, onClose, thisMac = f
         <Button variant="ghost" onClick={onClose}>{enroll.result ? t("common.close") : t("common.cancel")}</Button>
         {!enroll.result && <Button variant="primary" disabled={!name.trim()} busy={enroll.busy} onClick={() => enroll.run()}>{t("web-pages.settings.stations.generate")}</Button>}
       </>}>
+      {joinable?.offered && !enroll.result && <AddKinds kind={kind} onKind={setKind} />}
       {!enroll.result ? (
         <Field label={t("web-pages.settings.stations.nameLabel")} htmlFor="station-name">
           <input id="station-name" className={controlsCss.input} value={name} autoFocus placeholder={t("web-pages.settings.stations.namePlaceholder")} onChange={(e) => setName(e.target.value)} maxLength={80}
@@ -640,6 +649,50 @@ export function AddStationDialog({ view, account, stations, onClose, thisMac = f
       ) : <EnrollSteps enrollment={enroll.result} />}
       {enroll.error && <p className={controlsCss.fieldError} role="alert">{enroll.error.message}</p>}
       {thisMac && !enroll.result && <JoinThisMac account={account} workspace={view.id} className={css.firstThisMac} />}
+    </Dialog>
+  );
+}
+
+/** A new machine, or a station the viewer has elsewhere: at the top of 添加 station, where both are offered. */
+function AddKinds({ kind, onKind }: { kind: AddKind; onKind(kind: AddKind): void }) {
+  return (
+    <Segmented<AddKind> className={css.addKinds} label={t("web-pages.settings.stations.kind")} value={kind} onChange={onKind}
+      options={[{ value: "new", label: t("web-pages.settings.stations.kindNew") }, { value: "existing", label: t("web-pages.settings.stations.kindExisting") }]} />
+  );
+}
+
+/**
+ * 添加 station with a station the viewer manages in another workspace (its home): picked from those not here yet
+ * (the core's `joinable`), then added as it is (`station.join`: the core makes the enrollment here and has the station
+ * join with it). What that shares of the machine is said under the list: one system user, kept apart, not a sandbox.
+ */
+export function JoinStationDialog({ view, joinable, onKind, onClose }: { view: WorkspaceView; joinable: JoinableView; onKind(kind: AddKind): void; onClose(): void }) {
+  const [picked, setPicked] = useState<string>(joinable.items[0]?.station ?? "");
+  const chosen = joinable.items.find((s) => s.station === picked) ?? joinable.items[0];
+  const join = useAction((station: string) => cloud.joinStation(view.id, station));
+  const busy = useDoing("station.join", { workspace: view.id, station: chosen?.station ?? "" }) || join.busy;
+  const done = join.result ? joinable.items.find((s) => s.station === join.arg) ?? chosen : undefined;
+  return (
+    <Dialog open onClose={onClose} wide title={t("web-pages.settings.stations.add")}
+      description={t("web-pages.settings.stations.existingLead")}
+      footer={done ? <Button variant="primary" onClick={onClose}>{t("common.done")}</Button> : <>
+        <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
+        <Button variant="primary" disabled={!chosen} busy={busy} onClick={() => { if (chosen) join.run(chosen.station); }}>{t("web-pages.settings.stations.joinAction")}</Button>
+      </>}>
+      {!done && <AddKinds kind="existing" onKind={onKind} />}
+      {done ? (
+        <div className={additionsCss.callout} data-tone="green"><Check {...ICON} /><span>{t("web-pages.settings.stations.joinedHere", { name: done.name })}</span></div>
+      ) : joinable.items.length > 0 ? (
+        <Field label={t("web-pages.settings.stations.existingLabel")} hint={t("web-pages.settings.stations.softIsolation")}>
+          <Choices<string> label={t("web-pages.settings.stations.existingLabel")} value={chosen?.station ?? ""} onChange={setPicked}
+            options={joinable.items.map((s) => ({
+              value: s.station, title: s.name, description: s.line,
+              icon: s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={20} /> : <WorkspaceMark w={{ name: s.name }} size={20} />,
+            }))} />
+        </Field>
+      ) : joinable.loading ? <Loading label={t("web-pages.settings.workspace.loading")} fill={false} />
+        : <Empty>{t("web-pages.settings.stations.existingNone")}</Empty>}
+      {join.error && <p className={controlsCss.fieldError} role="alert">{join.error.message}</p>}
     </Dialog>
   );
 }
