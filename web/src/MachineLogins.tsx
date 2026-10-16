@@ -1,6 +1,6 @@
 // Logging a station in to the command-line tools its agents use (docs/remote-login.md): the login runs on the station,
 // in a terminal there, and is finished here, in this person's own browser. Drawn in three places: the station page's
-// 登录 list (each service it knows, how it stands, logging in; a command of one's own), the login panel (a dialog; the
+// 登录 (a login command to run, the tool's own, and the logins done there through still.fail), the login panel (a dialog; the
 // phone's sheet from the bottom) and a chat's login card. What each shows is the core's (`machineLogins`,
 // `machineLogin`, `machineLoginScreen`); what is done goes through its calls, under way on its button (doing.ts), a
 // failure said by a toast (useAct).
@@ -10,13 +10,13 @@
 // browser's callback back to the station, which only the desktop app can (`canRelay`): the core listens, then answers
 // what to open.
 import { useContext, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import type { MachineLoginScreen, MachineLoginShown, MachineLoginsView, MachineService } from "./core/shapes.ts";
+import type { MachineLoginScreen, MachineLoginShown, MachineLoginsView } from "./core/shapes.ts";
 import { useCall, useTopic } from "./core/react.ts";
 import { useDoing } from "./doing.ts";
 import { useThisMachineAddress } from "./thisMachine.ts";
 import { Button, Dialog, PanelButton, Section } from "./ui.tsx";
 import { useAct, useToast } from "@stillfail/ui/toast.tsx";
-import { ChevronRight, Key, Plus } from "@stillfail/ui/icons.tsx";
+import { ChevronRight, Key } from "@stillfail/ui/icons.tsx";
 import { MobileContext } from "./mobile/narrow.ts";
 import { SheetGrab, SheetHead, type MobileApp } from "./mobile/app.tsx";
 import { Button as PhoneButton } from "./mobile/parts.tsx";
@@ -41,8 +41,8 @@ function useLogin(station: string, id: string): MachineLoginShown | null | undef
   return useTopic<MachineLoginShown | null>(loginTopic(station, id)).value;
 }
 
-/** Starting a login (a service's, or a command of one's own): `then` with its id once the station has it. */
-export function useStartLogin(station: string): (params: { service?: string; command?: string }, what: string, then: (id: string) => void) => void {
+/** Starting a login (its command, the tool's own): `then` with its id once the station has it. */
+export function useStartLogin(station: string): (params: { command: string }, what: string, then: (id: string) => void) => void {
   const call = useCall();
   const act = useAct();
   return (params, what, then) => act(call("machineLogin.start", { station, ...params }).then((answer) => then((answer as { id: string }).id)), what);
@@ -118,12 +118,12 @@ function LoginFoot({ station, login, canLogin, onRetry }: { station: string; log
   );
 }
 
-/** Cancelling a login under way, or one that ended without logging in started again as it was (its service, its command). */
+/** Cancelling a login under way, or one that ended without logging in started again as it was (its command). */
 function LoginEnd({ station, login, canLogin, onRetry }: { station: string; login: MachineLoginShown | null | undefined; canLogin: boolean; onRetry(id: string): void }) {
   const call = useCall();
   const act = useAct();
   const start = useStartLogin(station);
-  const again = login?.service ? { service: login.service } : { command: login?.command ?? "" };
+  const again = { command: login?.command ?? "" };
   const cancelling = useDoing("machineLogin.cancel", { station, id: login?.id });
   const starting = useDoing("machineLogin.start", { station, ...again });
   if (!login || !canLogin) return null;
@@ -133,8 +133,8 @@ function LoginEnd({ station, login, canLogin, onRetry }: { station: string; logi
 }
 
 /**
- * What the login asks of the person now: who is logged in before it goes further; then by its step the browser's
- * (loopback, device code, a page to open) and the terminal; ended, how (logged in, or why not).
+ * What the login asks of the person now: its command, then by its step the browser's (loopback, device code, a page
+ * to open) and the terminal; ended, how (logged in, or why not).
  */
 function LoginBody({ station, login, logins, terminal }: {
   station: string; login: MachineLoginShown | null | undefined; logins: MachineLoginsView | null | undefined; terminal?: boolean | undefined;
@@ -146,12 +146,7 @@ function LoginBody({ station, login, logins, terminal }: {
   const known = step === "loopback" || step === "device" || step === "open" || step === "terminal";
   return (
     <div className={css.body}>
-      {login.before && login.active && login.state !== "verifying" && (
-        <div className={css.step}>
-          <p className={css.line}>{login.before}</p>
-          <p className={css.quiet}>{t("web-main.logins.beforeNote")}</p>
-        </div>
-      )}
+      <p className={css.commandLine}>{login.command}</p>
       {!login.active ? <Ended login={login} />
         // Nothing asked yet, or the viewer may only look: how it stands.
         : !canLogin || !step ? <p className={css.waitingLine}>{login.active && canLogin && <span className={spinnerCss.spinner} aria-hidden="true" />}{login.statusText}</p>
@@ -165,7 +160,7 @@ function LoginBody({ station, login, logins, terminal }: {
 
 /** How it ended: logged in (as whom), or why not (the command's last lines) for trying again. */
 function Ended({ login }: { login: MachineLoginShown }) {
-  if (login.state === "done") return <p className={css.done}>{login.account ? t("web-main.logins.done", { account: login.account }) : login.statusText}</p>;
+  if (login.state === "done") return <p className={css.done}>{login.statusText}</p>;
   return (
     <div className={css.step}>
       <p className={login.state === "cancelled" ? css.quiet : css.failed}>{login.statusText}</p>
@@ -277,7 +272,10 @@ const KEYS = [
  */
 function Terminal({ station, login, first }: { station: string; login: MachineLoginShown; first: boolean }) {
   const [chosen, setChosen] = useState<boolean | null>(null);
-  const open = chosen ?? first;
+  // Opened by itself once (the command waited), it stays open while the person types: their typing ends the wait.
+  const [opened, setOpened] = useState(first);
+  useEffect(() => { if (first) setOpened(true); }, [first]);
+  const open = chosen ?? (first || opened);
   const screen = useTopic<MachineLoginScreen | null>(open ? { topic: "machineLoginScreen", station, id: login.id } : null).value;
   const call = useCall();
   const act = useAct();
@@ -343,9 +341,9 @@ function Screen({ screen }: { screen: MachineLoginScreen | null | undefined }) {
 // ── the station page ──
 
 /**
- * A station page's 登录 (docs/remote-login.md): the services the station knows, each with how it stands and logging in
- * (again), then a command of one's own to run. A read-only member sees how they stand only; an older station says to
- * update it.
+ * A station page's 登录 (docs/remote-login.md): one way for every tool (用户定): a login command to run, the tool's own,
+ * and below it only the logins done there through still.fail: under way, then how each ended, by whom and when; nothing
+ * else when there are none. A read-only member sees them only; an older station says to update it.
  */
 export function LoginsSection({ station }: { station: string }) {
   const view = useMachineLogins(station);
@@ -354,62 +352,51 @@ export function LoginsSection({ station }: { station: string }) {
   return (
     <Section title={t("web-main.logins.title")} description={view.supported ? t("web-main.logins.lead") : undefined}>
       {!view.supported ? <p className={css.note}>{t("web-main.logins.update")}</p> : (
-        <div className={pagesCss.list}>
-          {view.services.map((s) => <ServiceRow key={s.id} station={station} s={s} canLogin={view.canLogin} onOpen={panel.open} />)}
+        <>
           {view.canLogin && <CommandRow station={station} onOpen={panel.open} />}
-        </div>
+          {view.logins.length > 0 && (
+            <div className={pagesCss.list}>
+              {view.logins.map((l) => <LoginRow key={l.id} station={station} login={l} onOpen={panel.open} />)}
+            </div>
+          )}
+        </>
       )}
       {panel.panel}
     </Section>
   );
 }
 
-/** A service: its name and how it stands; logging in (again: its login under way goes on), where it is installed. */
-function ServiceRow({ station, s, canLogin, onOpen }: { station: string; s: MachineService; canLogin: boolean; onOpen(login: LoginOpen): void }) {
-  const start = useStartLogin(station);
-  const busy = useDoing("machineLogin.start", { station, service: s.id });
-  const label = s.login ? t("web-main.logins.continue") : s.state === "in" ? t("web-main.logins.relogin") : t("web-main.logins.login");
-  const go = () => s.login ? onOpen({ station, id: s.login }) : start({ service: s.id }, t("web-main.logins.startWhat", { name: s.name }), (id) => onOpen({ station, id }));
+/** A login done here: its command, who and when, how it stands or ended; its panel opened when pressed. */
+function LoginRow({ station, login, onOpen }: { station: string; login: MachineLoginShown; onOpen(login: LoginOpen): void }) {
+  const said = [login.byText, login.whenText, login.statusText].filter(Boolean).join(" · ");
   return (
-    <div className={`${pagesCss.listRow} ${css.row}`}>
+    <button type="button" className={`${pagesCss.listRow} ${css.loginRow}`} onClick={() => onOpen({ station, id: login.id })}>
       <span className={`${pagesCss.mark} ${css.mark}`}><Key size={18} strokeWidth={1.7} /></span>
       <span className={pagesCss.cardRowText}>
-        <strong className={css.name}>{s.name}</strong>
-        <span className={css.state}>{s.stateText}</span>
+        <strong className={css.name}>{login.command}</strong>
+        <span className={login.active ? css.stateActive : login.state === "failed" ? css.stateFailed : css.state}>{said}</span>
       </span>
-      {canLogin && s.installed && <Button busy={busy} onClick={go}>{label}</Button>}
-    </div>
+      <ChevronRight size={16} strokeWidth={1.7} className={css.rowChevron} />
+    </button>
   );
 }
 
-/** 运行登录命令…: opened into a field, a command run as a login (`vercel login`), its panel opened once it is. */
+/** The login command to run (`gh auth login`): its panel opened once the station has started it. */
 function CommandRow({ station, onOpen }: { station: string; onOpen(login: LoginOpen): void }) {
-  const [open, setOpen] = useState(false);
   const [command, setCommand] = useState("");
   const start = useStartLogin(station);
   const typed = command.trim();
   const busy = useDoing("machineLogin.start", { station, command: typed });
   const run = () => {
     if (!typed || busy) return;
-    start({ command: typed }, t("web-main.logins.runWhat", { command: typed }), (id) => { setOpen(false); setCommand(""); onOpen({ station, id }); });
+    start({ command: typed }, t("web-main.logins.runWhat", { command: typed }), (id) => { setCommand(""); onOpen({ station, id }); });
   };
-  const mark = <span className={`${pagesCss.mark} ${css.mark}`}><Plus size={18} strokeWidth={1.7} /></span>;
-  if (!open) {
-    return <button type="button" className={`${pagesCss.listRow} ${css.commandRow}`} onClick={() => setOpen(true)}>{mark}<span className={css.commandLabel}>{t("web-main.logins.command")}</span></button>;
-  }
   return (
-    <div className={`${pagesCss.listRow} ${css.row}`}>
-      {mark}
-      <span className={css.commandForm}>
-        <input className={`${controlsCss.input} ${css.commandField}`} autoFocus value={command} disabled={busy} spellCheck={false} autoCapitalize="off"
-          placeholder={t("web-main.logins.commandPlaceholder")} aria-label={t("web-main.logins.command")} onChange={(e) => setCommand(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.nativeEvent.isComposing) run();
-            if (e.key === "Escape") { setOpen(false); setCommand(""); }
-          }} />
-        <Button variant="ghost" onClick={() => { setOpen(false); setCommand(""); }}>{t("common.cancel")}</Button>
-        <Button variant="primary" busy={busy} disabled={!typed} onClick={run}>{t("web-main.logins.run")}</Button>
-      </span>
+    <div className={css.commandForm}>
+      <input className={`${controlsCss.input} ${css.commandField}`} value={command} disabled={busy} spellCheck={false} autoCapitalize="off"
+        placeholder={t("web-main.logins.commandPlaceholder")} aria-label={t("web-main.logins.command")} onChange={(e) => setCommand(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) run(); }} />
+      <Button variant="primary" busy={busy} disabled={!typed} onClick={run}>{t("web-main.logins.run")}</Button>
     </div>
   );
 }

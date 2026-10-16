@@ -81,7 +81,7 @@ export interface OperationParams {
   "drive.zip": { root: string; path: string };
   "drive.stage": { root: string; path: string; zip?: boolean | null | undefined };
   "software.auto": { on?: boolean | null | undefined };
-  "machineLogin.start": { service?: string | null | undefined; command?: string | null | undefined };
+  "machineLogin.start": { command: string };
   "machineLogin.cancel": { id: string };
   "machineLogin.input": { id: string; text?: string | null | undefined; key?: string | null | undefined };
   "machineLogin.paste": { id: string; text: string };
@@ -201,7 +201,7 @@ export function bindStationOperations(call: Call) {
     driveZip: <T = unknown>(params: OperationParams["drive.zip"]) => call("drive.zip", params) as Promise<T>,
     driveStage: <T = unknown>(params: OperationParams["drive.stage"]) => call("drive.stage", params) as Promise<T>,
     softwareAuto: <T = unknown>(params: OperationParams["software.auto"] = {}) => call("software.auto", params) as Promise<T>,
-    machineLoginStart: <T = unknown>(params: OperationParams["machineLogin.start"] = {}) => call("machineLogin.start", params) as Promise<T>,
+    machineLoginStart: <T = unknown>(params: OperationParams["machineLogin.start"]) => call("machineLogin.start", params) as Promise<T>,
     machineLoginCancel: <T = unknown>(params: OperationParams["machineLogin.cancel"]) => call("machineLogin.cancel", params) as Promise<T>,
     machineLoginInput: <T = unknown>(params: OperationParams["machineLogin.input"]) => call("machineLogin.input", params) as Promise<T>,
     machineLoginPaste: <T = unknown>(params: OperationParams["machineLogin.paste"]) => call("machineLogin.paste", params) as Promise<T>,

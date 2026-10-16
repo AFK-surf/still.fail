@@ -159,8 +159,8 @@ const sharing = (state: "kept" | "new" | "none" | "loading" | "search"): Pick<St
  * `canRelay` false as a web page has them (no callback taken), `old` a station from before them; `card`, the chat's
  * first agent message carrying that login's card.
  */
-const logins = ({ canLogin = true, canRelay = true, old = false, card }: { canLogin?: boolean; canRelay?: boolean; old?: boolean; card?: string } = {}): DemoExtension => ({
-  topic: (t) => t.topic === "machineLogins" ? (old ? { ...loginsView(), supported: false, services: [], logins: [] } : loginsView(canLogin, canRelay))
+const logins = ({ canLogin = true, canRelay = true, old = false, card, listed }: { canLogin?: boolean; canRelay?: boolean; old?: boolean; card?: string; listed?: string[] } = {}): DemoExtension => ({
+  topic: (t) => t.topic === "machineLogins" ? (old ? { ...loginsView(), supported: false, logins: [] } : loginsView(canLogin, canRelay, listed))
     : t.topic === "machineLogin" ? (canLogin ? LOGINS[t.id] ?? null : t.id === "device" ? VIEWER_LOGIN : LOGINS[t.id] ?? null)
     : t.topic === "machineLoginScreen" ? SCREENS[t.id] ?? null
     : undefined,
@@ -408,8 +408,9 @@ export const stories: Story[] = [
   { id: "app-share-search", group: "应用", title: "分享进来 · 搜索 chat", app: true, ...sharing("search"), steps: [{ text: "搜索" }, { key: "N" }, { key: "A" }, { key: "S" }] },
 
   // ── a station's logins (docs/remote-login.md) ──
-  { id: "logins-section", group: "登录", title: "station 页 · 登录", render: loginsSection, demo: logins() },
-  { id: "logins-section-command", group: "登录", title: "station 页 · 运行登录命令", render: loginsSection, demo: logins(), steps: [{ text: "运行登录命令…" }] },
+  { id: "logins-section", group: "登录", title: "station 页 · 登录（进行中和做过的）", render: loginsSection, demo: logins() },
+  { id: "logins-section-empty", group: "登录", title: "station 页 · 登录（还没有）", render: loginsSection, demo: logins({ listed: [] }) },
+  { id: "logins-section-under-way", group: "登录", title: "station 页 · 登录（一个进行中）", render: loginsSection, demo: logins({ listed: ["device"] }) },
   { id: "logins-section-readonly", group: "登录", title: "station 页 · 只读成员", render: loginsSection, demo: logins({ canLogin: false }) },
   { id: "logins-section-old", group: "登录", title: "station 页 · 旧 station", render: loginsSection, demo: logins({ old: true }) },
   { id: "app-station-logins", group: "登录", title: "station 页 · 在页面里", app: true, demo: logins(), steps: [{ click: '[aria-label^="Station"]' }] },
@@ -417,7 +418,7 @@ export const stories: Story[] = [
   { id: "login-loopback-web", group: "登录", title: "面板 · 回环（网页）", render: loginPanel("loopback"), demo: logins({ canRelay: false }) },
   { id: "login-loopback-listening", group: "登录", title: "面板 · 回环 · 等浏览器回来", render: loginPanel("listening"), demo: logins() },
   { id: "login-device", group: "登录", title: "面板 · 设备码", render: loginPanel("device"), demo: logins() },
-  { id: "login-device-again", group: "登录", title: "面板 · 重新登录", render: loginPanel("again"), demo: logins() },
+  { id: "login-question", group: "登录", title: "面板 · 命令在问 Y/n", render: loginPanel("question"), demo: logins() },
   { id: "login-open", group: "登录", title: "面板 · 打开网址", render: loginPanel("open"), demo: logins() },
   { id: "login-terminal", group: "登录", title: "面板 · 终端在等输入", render: loginPanel("terminal"), demo: logins() },
   { id: "login-password", group: "登录", title: "面板 · 终端要密码", render: loginPanel("password"), demo: logins() },

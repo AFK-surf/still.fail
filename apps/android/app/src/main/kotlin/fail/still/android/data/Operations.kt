@@ -543,12 +543,9 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         val values = SoftwareAutoFields().apply(fill).fields
         return call("software.auto", JsonObject(values))
     }
-    class MachineLoginStartFields : OperationFields() {
-        var service: String? by field<String>("service") { JsonPrimitive(it) }
-        var command: String? by field<String>("command") { JsonPrimitive(it) }
-    }
-    suspend fun machineLoginStart(fill: MachineLoginStartFields.() -> Unit = {}): JsonElement {
-        val values = MachineLoginStartFields().apply(fill).fields
+    suspend fun machineLoginStart(command: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["command"] = JsonPrimitive(command)
         return call("machineLogin.start", JsonObject(values))
     }
     suspend fun machineLoginCancel(id: String): JsonElement {

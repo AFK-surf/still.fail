@@ -7,8 +7,7 @@ import { useCall, useReady } from "../core/react.ts";
 import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
-import { openLoginSheet, useMachineLogins, useStartLogin } from "../MachineLogins.tsx";
-import type { MachineService } from "../core/shapes.ts";
+import { openLoginSheet, useMachineLogins } from "../MachineLogins.tsx";
 import * as loginsCss from "../MachineLogins.css.ts";
 import { useJoinable, useMemberships, useStations, type StationView } from "../api.ts";
 import type { Host, JoinableView, StationNet } from "../core/shapes.ts";
@@ -306,7 +305,7 @@ export function StationScreen() {
 
 /**
  * The command-line tools its agents use, logged in on it for every chat (as the wide screen's station page,
- * ../MachineLogins.tsx LoginsSection): each service, how it stands and logging in; a command of one's own to run.
+ * ../MachineLogins.tsx LoginsSection): a login command to run, the tool's own, and the logins done there.
  */
 function Logins({ station }: { station: string }) {
   const app = useApp();
@@ -318,7 +317,6 @@ function Logins({ station }: { station: string }) {
       <SectionHeader title={t("web-main.logins.title")} start={24} />
       <ListCard>
         {!view.supported ? <ListRow><span className={partsCss.mMuted}>{t("web-main.logins.update")}</span></ListRow> : <>
-          {view.services.map((x) => <LoginRow key={x.id} station={station} s={x} canLogin={view.canLogin} />)}
           {view.canLogin && <PickRow label={t("web-main.logins.command")} onClick={() => ask(app, {
             title: t("web-main.logins.command"), value: "", placeholder: t("web-main.logins.commandPlaceholder"), action: t("web-main.logins.run"),
             // Its sheet says why the station would not; else it gives way to the login's (once it has closed).
@@ -327,25 +325,13 @@ function Logins({ station }: { station: string }) {
               setTimeout(() => openLoginSheet(app, { station, id }), 0);
             }),
           })} />}
+          {view.logins.map((l) => (
+            <PickRow key={l.id} label={l.command} sub={[l.byText, l.whenText, l.statusText].filter(Boolean).join(" · ")} onClick={() => openLoginSheet(app, { station, id: l.id })} />
+          ))}
         </>}
       </ListCard>
       {view.supported && <p className={loginsCss.phoneLead}>{t("web-main.logins.lead")}</p>}
     </>
-  );
-}
-
-/** A service: its name over how it stands, logging in (again) at its end where it is installed. */
-function LoginRow({ station, s, canLogin }: { station: string; s: MachineService; canLogin: boolean }) {
-  const app = useApp();
-  const start = useStartLogin(station);
-  const busy = useDoing("machineLogin.start", { station, service: s.id });
-  const go = () => s.login ? openLoginSheet(app, { station, id: s.login })
-    : start({ service: s.id }, t("web-main.logins.startWhat", { name: s.name }), (id) => openLoginSheet(app, { station, id }));
-  return (
-    <ListRow>
-      <span className={loginsCss.phoneRowText}><span className={listsCss.mRowTitle}>{s.name}</span><span className={loginsCss.phoneState}>{s.stateText}</span></span>
-      {canLogin && s.installed && <LinkButton busy={busy} label={s.login ? t("web-main.logins.continue") : s.state === "in" ? t("web-main.logins.relogin") : t("web-main.logins.login")} onClick={go} />}
-    </ListRow>
   );
 }
 

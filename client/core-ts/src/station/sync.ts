@@ -751,12 +751,11 @@ export class StationsSync {
       case "screens":
         this.#heldScreens(address, { screens: Array.isArray(get(data, "screens")) ? (get(data, "screens") as unknown[]) : [], outdated: false });
         return;
-      // A login or a service of the station's (docs/remote-login.md).
+      // A login of the station's (docs/remote-login.md).
       case "machine-logins": {
         const link = this.#links.get(address);
         if (!link) return;
         if (isObject(get(data, "login"))) this.putMachineLogin(address, get(data, "login"));
-        if (isObject(get(data, "service")) && logins.putService(link, get(data, "service"))) this.onChange(address, "logins");
         return;
       }
       // A login's terminal as it changes (while one is shown).

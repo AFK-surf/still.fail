@@ -3099,10 +3099,9 @@ export interface MachineLoginShown {
 	id: string;
 	station: string;
 	stationName: string;
-	service?: string;
-	/** The service's name (GitHub), or the command's first word for a command of its own. */
+	/** Its command's program (gh, gcloud). */
 	name: string;
-	/** 在 studio 上登录 GitHub. */
+	/** 在 studio 上登录 gh. */
 	title: string;
 	/** The command it runs, as one line. */
 	command: string;
@@ -3130,41 +3129,22 @@ export interface MachineLoginShown {
 	waiting: boolean;
 	/** This device listens for its loopback callback now (opened here, in the desktop app): 等浏览器回来. */
 	listening: boolean;
-	/** How it stands, in a line: 等你打开浏览器, 验证码 ABCD-1234, 命令在等你输入, 已登录 octocat, 超时了… */
+	/** How it stands, in a line: 等你打开浏览器, 验证码 ABCD-1234, 命令在等你输入, 登录完成, 超时了… */
 	statusText: string;
 	/** Failed: why (the command's last lines). */
 	error?: string;
-	/** Done: the account it logged in, as its status command says. */
-	account?: string;
-	/** Who was logged in when it started (现在登录的是 octocat（张三 10-12 登录）), for one that logs in again. */
-	before?: string;
 	/** Who started it. */
 	byText?: string;
+	/** When it started, in words: 14:05 today, 10/16 14:05 before. */
+	whenText: string;
 	startedAt: number;
 	expiresAt: number;
 	endedAt?: number;
 }
 
-/** A service a station can be logged in to (gh, gcloud, npm…), as its station page lists it. */
-export interface MachineService {
-	id: string;
-	name: string;
-	installed: boolean;
-	/** in | out | unknown */
-	state: string;
-	account?: string;
-	/** How it stands, in words: 已登录 octocat · 张三 10-17, 没登录, 没装, 查不出来. */
-	stateText: string;
-	/** What its login asks of a person, as described: device | loopback | open | terminal. */
-	flow: string;
-	builtin: boolean;
-	/** Its login under way, if one is. */
-	login?: string;
-}
-
 /**
- * A station's logins to the command-line tools its agents use (the `machineLogins` topic; docs/remote-login.md): the
- * services it knows (built in, or described by an agent) and how each stands, and its logins under way or ended lately.
+ * A station's logins to the command-line tools its agents use (the `machineLogins` topic; docs/remote-login.md): any
+ * login command, run one way; those under way and those done here.
  */
 export interface MachineLoginsView {
 	/** False for a station from before remote login (it answers 404): the page offers none, or says to update it. */
@@ -3175,8 +3155,7 @@ export interface MachineLoginsView {
 	canLogin: boolean;
 	/** This device can take a login's loopback callback for its station (the desktop app): web pages cannot listen. */
 	canRelay: boolean;
-	services: MachineService[];
-	/** Under way first, then those ended lately, newest first. */
+	/** The logins done through still.fail on this station: under way first, then those ended, newest first. */
 	logins: MachineLoginShown[];
 }
 

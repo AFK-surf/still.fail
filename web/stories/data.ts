@@ -191,49 +191,44 @@ export const HISTORY: HistoryView = {
 
 const LOGIN_AT = Date.UTC(2026, 9, 17, 8, 0);
 /** A login on the demo's station as the core shows it, in one state or another. */
-const login = (id: string, name: string, more: Partial<MachineLoginShown>): MachineLoginShown => ({
-  id, station: "demo/local", stationName: "Studio", name, title: `在 Studio 上登录 ${name}`, command: "", state: "browser",
-  active: true, waiting: false, listening: false, statusText: "", byText: "林", startedAt: LOGIN_AT, expiresAt: LOGIN_AT + 15 * 60_000, ...more,
+const login = (id: string, command: string, more: Partial<MachineLoginShown>): MachineLoginShown => ({
+  id, station: "demo/local", stationName: "Studio", name: command.split(" ")[0]!, title: `在 Studio 上登录 ${command.split(" ")[0]}`, command, state: "browser",
+  active: true, waiting: false, listening: false, statusText: "", byText: "林", whenText: "16:00", startedAt: LOGIN_AT, expiresAt: LOGIN_AT + 15 * 60_000, ...more,
 });
 /** Logins in each of their states, by id. */
 export const LOGINS: Record<string, MachineLoginShown> = {
-  device: login("device", "GitHub", {
-    service: "gh", command: "gh auth login --web", state: "code", step: "device", url: "https://github.com/login/device", domain: "github.com",
-    code: "ABCD-1234", statusText: "验证码 ABCD-1234",
+  device: login("device", "gh auth login", {
+    state: "code", step: "device", url: "https://github.com/login/device", domain: "github.com", code: "ABCD-1234", statusText: "验证码 ABCD-1234",
   }),
-  again: login("again", "GitHub", {
-    service: "gh", command: "gh auth login --web", state: "code", step: "device", url: "https://github.com/login/device", domain: "github.com",
-    code: "WXYZ-9876", statusText: "验证码 WXYZ-9876", before: "现在登录的是 octocat（林 10/12 登录）",
-  }),
-  loopback: login("loopback", "Google Cloud", {
-    service: "gcloud", command: "gcloud auth login", step: "loopback", port: 8085, domain: "accounts.google.com",
+  loopback: login("loopback", "gcloud auth login", {
+    step: "loopback", port: 8085, domain: "accounts.google.com",
     url: "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=32555940559.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F",
     statusText: "等你打开浏览器",
   }),
-  listening: login("listening", "Google Cloud", {
-    service: "gcloud", command: "gcloud auth login", step: "loopback", port: 8085, domain: "accounts.google.com", listening: true,
+  listening: login("listening", "gcloud auth login", {
+    step: "loopback", port: 8085, domain: "accounts.google.com", listening: true,
     url: "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=32555940559.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F",
     statusText: "等浏览器回来",
   }),
-  open: login("open", "npm", {
-    service: "npm", command: "npm login", step: "open", url: "https://www.npmjs.com/login?next=/login/cli/6f1c2b", domain: "www.npmjs.com",
-    statusText: "在浏览器里完成登录",
-  }),
-  terminal: login("terminal", "vercel", { command: "vercel login", state: "input", step: "terminal", waiting: true, statusText: "命令在等你输入" }),
-  password: login("password", "Docker Hub", { service: "docker", command: "docker login", state: "input", step: "terminal", waiting: true, statusText: "命令在等你输入" }),
-  done: login("done", "GitHub", { service: "gh", command: "gh auth login --web", state: "done", active: false, account: "octocat", statusText: "已登录 octocat", endedAt: LOGIN_AT + 60_000 }),
-  failed: login("failed", "Google Cloud", {
-    service: "gcloud", command: "gcloud auth login", state: "failed", active: false, statusText: "登录失败", endedAt: LOGIN_AT + 120_000,
+  open: login("open", "npm login", { step: "open", url: "https://www.npmjs.com/login?next=/login/cli/6f1c2b", domain: "www.npmjs.com", statusText: "在浏览器里完成登录" }),
+  question: login("question", "gh auth login", { state: "input", step: "terminal", waiting: true, statusText: "命令在等你输入" }),
+  terminal: login("terminal", "vercel login", { state: "input", step: "terminal", waiting: true, statusText: "命令在等你输入" }),
+  password: login("password", "docker login", { state: "input", step: "terminal", waiting: true, statusText: "命令在等你输入" }),
+  done: login("done", "gh auth login", { state: "done", active: false, statusText: "登录完成", whenText: "10/16 11:20", startedAt: LOGIN_AT - 86_400_000, endedAt: LOGIN_AT - 86_400_000 + 60_000 }),
+  failed: login("failed", "gcloud auth login", {
+    state: "failed", active: false, statusText: "登录失败", byText: "Ada", whenText: "10/15 09:05", endedAt: LOGIN_AT + 120_000,
     error: "Your browser has been opened to visit:\n\n    https://accounts.google.com/o/oauth2/auth?...\n\nERROR: (gcloud.auth.login) There was a problem with web authentication.\nTry running again with --no-browser.",
   }),
-  timeout: login("timeout", "Google Cloud", { service: "gcloud", command: "gcloud auth login", state: "failed", active: false, statusText: "超时了，没等到浏览器回来", endedAt: LOGIN_AT + 15 * 60_000 }),
+  timeout: login("timeout", "gcloud auth login", { state: "failed", active: false, statusText: "超时了，没等到浏览器回来", endedAt: LOGIN_AT + 15 * 60_000 }),
+  cancelled: login("cancelled", "npm login", { state: "cancelled", active: false, statusText: "已取消", whenText: "10/14 18:42", endedAt: LOGIN_AT + 60_000 }),
 };
 /** A login seen by a read-only member: no page, no code, only how it stands. */
 export const VIEWER_LOGIN: MachineLoginShown = (({ url: _u, code: _c, ...rest }) => rest)(LOGINS.device!);
 
 const row = (text: string) => text.padEnd(200, " ");
-/** The terminals of those that wait on typing: a menu to pick from, a password asked for. */
+/** The terminals of those that wait on typing: a question, a menu to pick from, a password asked for. */
 export const SCREENS: Record<string, MachineLoginScreen> = {
+  question: { rows: [row("? Authenticate Git with your GitHub credentials? (Y/n) "), row("")], cursorX: 55, cursorY: 0, echo: true, live: true },
   terminal: {
     rows: [row("Vercel CLI 39.1.0"), row("? Log in to Vercel (Use arrow keys)"), row("❯ Continue with GitHub"), row("  Continue with GitLab"), row("  Continue with Bitbucket"), row("  Continue with Email"), row("  Continue with SAML Single Sign-On"), row(""), row("")],
     cursorX: 0, cursorY: 2, echo: true, live: true,
@@ -244,15 +239,7 @@ export const SCREENS: Record<string, MachineLoginScreen> = {
   },
 };
 
-/** The demo's station's logins: GitHub logged in, Google Cloud not, npm not installed, Docker that cannot tell. */
-export function loginsView(canLogin = true, canRelay = true): MachineLoginsView {
-  return {
-    supported: true, loaded: true, canLogin, canRelay, logins: Object.values(LOGINS),
-    services: [
-      { id: "gh", name: "GitHub", installed: true, state: "in", account: "octocat", stateText: "已登录 octocat · 林 10/17", flow: "device", builtin: true },
-      { id: "gcloud", name: "Google Cloud", installed: true, state: "out", stateText: "没登录", flow: "loopback", builtin: true },
-      { id: "npm", name: "npm", installed: false, state: "out", stateText: "没装", flow: "open", builtin: true },
-      { id: "docker", name: "Docker Hub", installed: true, state: "unknown", stateText: "查不出来", flow: "terminal", builtin: true },
-    ],
-  };
+/** The demo's station's logins: `listed`, those done there (under way first). */
+export function loginsView(canLogin = true, canRelay = true, listed: string[] = ["device", "done", "failed", "cancelled"]): MachineLoginsView {
+  return { supported: true, loaded: true, canLogin, canRelay, logins: listed.map((id) => LOGINS[id]!) };
 }

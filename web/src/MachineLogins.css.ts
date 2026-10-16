@@ -10,21 +10,24 @@ const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", wh
 
 // ── the station page's list ──
 
-/** A service's row, as the page's software rows (not pressed: no ground on hover). */
-export const row = style({ selectors: { "&:hover": { background: "none" } } });
+/** A login done there, as the page's list rows, pressed to open its panel. */
+export const loginRow = style({ width: "100%", border: "0", background: "none", color: vars.text, font: "inherit", textAlign: "left", cursor: "pointer" });
 export const mark = style({ width: "36px", height: "36px", color: vars.muted });
-export const name = style({ fontWeight: "500", color: vars.text, ...ellipsis });
+export const name = style({ fontWeight: "500", color: vars.text, fontFamily: vars.fontMono, ...ellipsis });
 export const state = style({ color: vars.muted, ...ellipsis });
-/** The last row: a command of one's own to run, a row to press until it is opened into a field. */
-export const commandRow = style({ width: "100%", border: "0", background: "none", color: vars.text, font: "inherit", textAlign: "left", cursor: "pointer" });
-export const commandLabel = style({ flex: "1", minWidth: 0, color: vars.muted });
-export const commandForm = style({ flex: "1", minWidth: 0, display: "flex", alignItems: "center", gap: "8px" });
+export const stateActive = style({ color: vars.accentText, ...ellipsis });
+export const stateFailed = style({ color: vars.red, ...ellipsis });
+export const rowChevron = style({ flex: "none", color: vars.muted });
+/** The login command to run: a field and its button, the section's main action. */
+export const commandForm = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, marginBottom: "8px" });
 export const commandField = style({ flex: "1", minWidth: 0, fontFamily: vars.fontMono });
 export const note = style({ margin: "0", fontSize: vars.textUi, color: vars.muted });
 
 // ── the panel ──
 
 export const body = style({ display: "grid", gap: "14px", minWidth: 0 });
+/** The command it runs, under the panel's title. */
+export const commandLine = style({ margin: "0", fontFamily: vars.fontMono, fontSize: vars.textMeta, color: vars.muted, overflowWrap: "anywhere" });
 export const line = style({ margin: "0", fontSize: vars.textUi, lineHeight: "20px", overflowWrap: "anywhere" });
 export const quiet = style([line, { color: vars.muted }]);
 export const failed = style([line, { color: vars.red, fontWeight: "500" }]);
@@ -66,9 +69,6 @@ export const foot = style({ flex: "1", minWidth: 0, margin: "0", fontSize: vars.
 export const sheetBody = style({ padding: "0 20px 24px" });
 export const sheetFoot = style({ margin: "16px 0 0", fontSize: vars.textMeta, color: vars.muted });
 
-/** The phone's station page: a service's name over how it stands. */
-export const phoneRowText = style({ flex: "1", minWidth: 0, display: "grid", gap: "2px" });
-export const phoneState = style({ fontSize: vars.textMeta, color: "var(--m-muted)", ...ellipsis });
 export const phoneLead = style({ margin: "8px 24px 0", fontSize: vars.textCaption, color: "var(--m-muted)" });
 
 // ── a chat's card ──

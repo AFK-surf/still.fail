@@ -3117,10 +3117,9 @@ data class MachineLoginShown (
 	val id: String,
 	val station: String,
 	val stationName: String,
-	val service: String? = null,
-	/// The service's name (GitHub), or the command's first word for a command of its own.
+	/// Its command's program (gh, gcloud).
 	val name: String,
-	/// 在 studio 上登录 GitHub.
+	/// 在 studio 上登录 gh.
 	val title: String,
 	/// The command it runs, as one line.
 	val command: String,
@@ -3146,41 +3145,21 @@ data class MachineLoginShown (
 	val waiting: Boolean,
 	/// This device listens for its loopback callback now (opened here, in the desktop app): 等浏览器回来.
 	val listening: Boolean,
-	/// How it stands, in a line: 等你打开浏览器, 验证码 ABCD-1234, 命令在等你输入, 已登录 octocat, 超时了…
+	/// How it stands, in a line: 等你打开浏览器, 验证码 ABCD-1234, 命令在等你输入, 登录完成, 超时了…
 	val statusText: String,
 	/// Failed: why (the command's last lines).
 	val error: String? = null,
-	/// Done: the account it logged in, as its status command says.
-	val account: String? = null,
-	/// Who was logged in when it started (现在登录的是 octocat（张三 10-12 登录）), for one that logs in again.
-	val before: String? = null,
 	/// Who started it.
 	val byText: String? = null,
+	/// When it started, in words: 14:05 today, 10/16 14:05 before.
+	val whenText: String,
 	val startedAt: Long,
 	val expiresAt: Long,
 	val endedAt: Long? = null
 )
 
-/// A service a station can be logged in to (gh, gcloud, npm…), as its station page lists it.
-@Serializable
-data class MachineService (
-	val id: String,
-	val name: String,
-	val installed: Boolean,
-	/// in | out | unknown
-	val state: String,
-	val account: String? = null,
-	/// How it stands, in words: 已登录 octocat · 张三 10-17, 没登录, 没装, 查不出来.
-	val stateText: String,
-	/// What its login asks of a person, as described: device | loopback | open | terminal.
-	val flow: String,
-	val builtin: Boolean,
-	/// Its login under way, if one is.
-	val login: String? = null
-)
-
-/// A station's logins to the command-line tools its agents use (the `machineLogins` topic; docs/remote-login.md): the
-/// services it knows (built in, or described by an agent) and how each stands, and its logins under way or ended lately.
+/// A station's logins to the command-line tools its agents use (the `machineLogins` topic; docs/remote-login.md): any
+/// login command, run one way; those under way and those done here.
 @Serializable
 data class MachineLoginsView (
 	/// False for a station from before remote login (it answers 404): the page offers none, or says to update it.
@@ -3191,8 +3170,7 @@ data class MachineLoginsView (
 	val canLogin: Boolean,
 	/// This device can take a login's loopback callback for its station (the desktop app): web pages cannot listen.
 	val canRelay: Boolean,
-	val services: List<MachineService>,
-	/// Under way first, then those ended lately, newest first.
+	/// The logins done through still.fail on this station: under way first, then those ended, newest first.
 	val logins: List<MachineLoginShown>
 )
 

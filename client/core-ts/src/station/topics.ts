@@ -242,7 +242,7 @@ export class StationTopics implements Owner {
     const now = this.#core.host.nowMs();
     const offset = this.#core.host.utcOffsetMin(now);
     const name = this.#core.views.stationName(station);
-    const shown = (l: unknown) => logins.loginShown(l, station, name, offset, this.#sync.relays.listening(station, String(get(l, "id"))));
+    const shown = (l: unknown) => logins.loginShown(l, station, name, now, offset, this.#sync.relays.listening(station, String(get(l, "id"))));
     if (topic.topic === "machineLogin") {
       const found = held.logins.find((l) => l.id === topic.id);
       if (found !== undefined) return { ok: shown(found) };
@@ -258,7 +258,6 @@ export class StationTopics implements Owner {
         loaded: held.supported !== null,
         canLogin: role !== "viewer",
         canRelay: this.#core.host.listen !== undefined,
-        services: held.services.map((s) => logins.serviceShown(s, offset)),
         logins: [...held.logins].sort((a, b) => active(a) - active(b) || started(b) - started(a)).map(shown),
       },
     };

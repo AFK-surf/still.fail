@@ -14,10 +14,8 @@ import { base, started, stationReplies } from "./station-fixture.ts";
 
 const ST = "ws/st";
 
-const gh = { id: "gh", name: "GitHub", installed: true, state: "in", account: "octocat", by: { email: "a@x.com", name: "张三" }, at: Date.UTC(2026, 9, 12, 4), flow: "device", builtin: true };
-const npm = { id: "npm", name: "npm", installed: true, state: "out", flow: "open", builtin: true };
-const fly = { id: "fly", name: "Fly.io", installed: false, state: "out", flow: "open", builtin: true };
-const device = { id: "l1", service: "gh", name: "GitHub", command: ["gh", "auth", "login"], state: "code", step: "device", url: "https://github.com/login/device", domain: "github.com", code: "1A2B-C3D4", waiting: false, by: { email: "a@x.com", name: "张三" }, startedAt: 1, expiresAt: 2, before: { account: "octocat", by: { email: "a@x.com", name: "张三" }, at: Date.UTC(2026, 9, 12, 4) } };
+const device = { id: "l1", name: "gh", command: ["gh", "auth", "login"], state: "code", step: "device", url: "https://github.com/login/device", domain: "github.com", code: "1A2B-C3D4", waiting: false, by: { email: "a@x.com", name: "张三" }, startedAt: Date.UTC(2026, 9, 12, 4), expiresAt: 2 };
+const past = { id: "l0", name: "npm", command: ["npm", "login"], state: "done", waiting: false, by: { email: "b@x.com", name: "李四" }, startedAt: Date.UTC(2026, 9, 11, 4), expiresAt: 2, endedAt: Date.UTC(2026, 9, 11, 4, 3) };
 const loopback = { id: "l2", name: "gcloud", command: ["gcloud", "auth", "login"], state: "browser", step: "loopback", url: "https://accounts.google.com/o/oauth2/auth?redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F&state=s3", domain: "accounts.google.com", callback: { host: "localhost", port: 8085, path: "/", state: "s3", post: false }, waiting: false, by: { email: "a@x.com", name: "张三" }, startedAt: 3, expiresAt: 4 };
 
 /// What the core sent since: each subscription's value (deltas applied) into `values`; the messages, for the answers.
@@ -31,7 +29,7 @@ function drain(host: FakeHost, values: Map<number, unknown>) {
   return emitted;
 }
 
-const listed = () => ({ ...base(), "GET /machine-logins": { services: [gh, npm, fly], logins: [device, loopback] } });
+const listed = () => ({ ...base(), "GET /machine-logins": { logins: [device, loopback, past] } });
 
 test("a station's logins: read as its stream opens, in words, told as they change; a station from before has none", async () => {
   const { host, core, push } = await started(listed());
@@ -44,22 +42,22 @@ test("a station's logins: read as its stream opens, in words, told as they chang
   drain(host, values);
   const all = v(values, 1);
   assert.deepEqual([all.supported, all.loaded, all.canLogin, all.canRelay], [true, true, true, false]);
-  assert.deepEqual(all.services.map((s: any) => [s.id, s.stateText]), [["gh", "已登录 octocat · 张三 10/12"], ["npm", "没登录"], ["fly", "没装"]]);
+  assert.equal(all.services, undefined, "no list of services: any login command, one way");
   const one = v(values, 2);
-  assert.deepEqual([one.title, one.statusText, one.code, one.url, one.domain, one.active, one.byText], ["在 studio 上登录 GitHub", "验证码 1A2B-C3D4", "1A2B-C3D4", "https://github.com/login/device", "github.com", true, "张三"]);
-  assert.equal(one.before, "现在登录的是 octocat（张三 10/12 登录）");
+  assert.deepEqual([one.title, one.command, one.statusText, one.code, one.url, one.domain, one.active, one.byText], ["在 studio 上登录 gh", "gh auth login", "验证码 1A2B-C3D4", "1A2B-C3D4", "https://github.com/login/device", "github.com", true, "张三"]);
+  assert.match(one.whenText, /^10\/12 \d{1,2}:\d{2}$/);
+  const done = all.logins.find((l: any) => l.id === "l0");
+  assert.deepEqual([done.statusText, done.active, done.byText, done.command], ["登录完成", false, "李四", "npm login"]);
   assert.equal(v(values, 3), null, "a login the station does not have");
   assert.equal(all.logins.find((l: any) => l.id === "l2").statusText, "等你打开浏览器");
   // Told as it ends: in place.
-  push("machine-logins", { login: { ...device, state: "done", step: undefined, code: undefined, account: "monalisa", endedAt: 9 } });
-  push("machine-logins", { service: { ...gh, account: "monalisa", by: undefined } });
+  push("machine-logins", { login: { ...device, state: "failed", step: undefined, code: undefined, error: "gh: device code expired", endedAt: Date.UTC(2026, 9, 12, 5) } });
   await host.settle();
   drain(host, values);
-  const done = v(values, 2);
-  assert.deepEqual([done.statusText, done.active, done.account, done.code, done.step], ["已登录 monalisa", false, "monalisa", undefined, undefined]);
-  assert.equal(v(values, 1).services[0].stateText, "已登录 monalisa");
-  // Under way first, then those ended.
-  assert.deepEqual(v(values, 1).logins.map((l: any) => l.id), ["l2", "l1"]);
+  const failed = v(values, 2);
+  assert.deepEqual([failed.statusText, failed.active, failed.error, failed.code, failed.step], ["登录失败", false, "gh: device code expired", undefined, undefined]);
+  // Under way first, then those ended, the newest first.
+  assert.deepEqual(v(values, 1).logins.map((l: any) => l.id), ["l2", "l1", "l0"]);
   core.close();
 
   // A station from before: GET /machine-logins is no route.
@@ -69,7 +67,7 @@ test("a station's logins: read as its stream opens, in words, told as they chang
   subscribe(old.core, ui2, 1, { topic: "machineLogins", station: ST });
   await old.host.settle();
   drain(old.host, values2);
-  assert.deepEqual([v(values2, 1).supported, v(values2, 1).loaded, v(values2, 1).services], [false, true, []]);
+  assert.deepEqual([v(values2, 1).supported, v(values2, 1).loaded, v(values2, 1).logins], [false, true, []]);
   old.core.close();
 });
 
@@ -105,7 +103,7 @@ test("starting, cancelling, typing: the station's answer is in place at once", a
     const path = req.url.replace("https://stillfail.test/admin/api", "");
     if (!path.startsWith("/machine-logins/") && !(path === "/machine-logins" && req.method === "POST")) return undefined;
     asked.push({ method: req.method, path, body: req.body && req.body.length > 0 ? JSON.parse(new TextDecoder().decode(req.body)) : null });
-    if (req.method === "POST" && path === "/machine-logins") return { ...device, id: "l3", service: "npm", name: "npm", code: undefined, step: undefined, state: "starting" };
+    if (req.method === "POST" && path === "/machine-logins") return { ...device, id: "l3", name: "npm", command: ["npm", "login"], code: undefined, step: undefined, state: "starting" };
     if (req.method === "DELETE") return { ...device, state: "cancelled", endedAt: 5 };
     return { ok: true };
   });
@@ -113,7 +111,7 @@ test("starting, cancelling, typing: the station's answer is in place at once", a
   const values = new Map();
   subscribe(core, ui, 1, { topic: "machineLogin", station: ST, id: "l3" });
   await host.settle();
-  call(core, ui, 2, "machineLogin.start", { station: ST, service: "npm" });
+  call(core, ui, 2, "machineLogin.start", { station: ST, command: "npm login" });
   await host.settle();
   assert.equal(answers(drain(host, values), 2)?.ok !== undefined, true);
   drain(host, values);
@@ -122,7 +120,7 @@ test("starting, cancelling, typing: the station's answer is in place at once", a
   call(core, ui, 4, "machineLogin.cancel", { station: ST, id: "l1" });
   await host.settle();
   assert.deepEqual(asked.map((a) => [a.method, a.path, a.body]), [
-    ["POST", "/machine-logins", { service: "npm" }],
+    ["POST", "/machine-logins", { command: "npm login" }],
     ["POST", "/machine-logins/l3/input", { key: "Enter" }],
     ["DELETE", "/machine-logins/l1", null],
   ]);

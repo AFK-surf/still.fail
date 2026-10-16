@@ -12,7 +12,7 @@
 import { Effect, Exit, type Fiber, Scope } from "effect";
 import type { Inner } from "../core.ts";
 import { CoreError } from "../error.ts";
-import { local } from "../format.ts";
+import { clock, local, localDay } from "../format.ts";
 import type { LoopbackRequest, Pull } from "../host.ts";
 import { t } from "../i18n.ts";
 import { encode } from "../ops.ts";
@@ -33,25 +33,24 @@ export const AFTER_MS = 10_000;
 export const RELAY_MOST_MS = 15 * 60_000;
 
 /// `supported`: null until read; false for a station from before (404).
-export type Held = { supported: boolean | null; services: J[]; logins: J[] };
+export type Held = { supported: boolean | null; logins: J[] };
 
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 
 export function held(link: Link | undefined): Held {
   const h = link?.memory.get(HELD) as Held | undefined;
-  return h ?? { supported: null, services: [], logins: [] };
+  return h ?? { supported: null, logins: [] };
 }
 
 /// The station's list read whole: what it holds now.
 export function putList(link: Link, answer: unknown): void {
-  const services = Array.isArray(get(answer, "services")) ? (get(answer, "services") as J[]).filter(isObject) : [];
   const logins = Array.isArray(get(answer, "logins")) ? (get(answer, "logins") as J[]).filter(isObject) : [];
-  link.memory.set(HELD, { supported: true, services, logins } satisfies Held);
+  link.memory.set(HELD, { supported: true, logins } satisfies Held);
 }
 
 /// A station from before remote login: none.
 export function unsupported(link: Link): void {
-  link.memory.set(HELD, { supported: false, services: [], logins: [] } satisfies Held);
+  link.memory.set(HELD, { supported: false, logins: [] } satisfies Held);
 }
 
 /// One login as the station says it now: in place (new ones first).
@@ -62,17 +61,6 @@ export function putLogin(link: Link, login: unknown): boolean {
   const at = h.logins.findIndex((l) => l.id === id);
   const logins = at >= 0 ? h.logins.map((l, i) => (i === at ? login : l)) : [login, ...h.logins];
   link.memory.set(HELD, { ...h, supported: h.supported ?? true, logins });
-  return true;
-}
-
-/// One service as the station says it now: in place.
-export function putService(link: Link, service: unknown): boolean {
-  const id = str(get(service, "id"));
-  if (id === null || !isObject(service)) return false;
-  const h = held(link);
-  const at = h.services.findIndex((s) => s.id === id);
-  const services = at >= 0 ? h.services.map((s, i) => (i === at ? service : s)) : [...h.services, service];
-  link.memory.set(HELD, { ...h, supported: h.supported ?? true, services });
   return true;
 }
 
@@ -99,54 +87,27 @@ export function putScreen(link: Link, told: unknown): string | null {
 
 // ── as shown ──
 
-const day = (ms: number, offsetMin: number) => {
+/// When, in words: 14:05 today, 10/16 14:05 before.
+export function when(ms: number, now: number, offsetMin: number): string {
   const [, month, d] = local(ms, offsetMin);
-  return `${month}/${d}`;
-};
+  const time = clock(ms, offsetMin);
+  return localDay(ms, offsetMin) === localDay(now, offsetMin) ? time : `${month}/${d} ${time}`;
+}
 const person = (by: J) => str(get(by, "name")) || str(get(by, "email")) || "";
 /// Only an https page is opened.
 const https = (url: unknown) => (typeof url === "string" && url.startsWith("https://") ? url : null);
 
-/// A service as the station page lists it.
-export function serviceShown(s: J, offsetMin: number): J {
-  const installed = s.installed === true;
-  const state = s.state === "in" || s.state === "out" ? s.state : "unknown";
-  const account = str(s.account);
-  const by = isObject(s.by) && typeof s.at === "number" ? `${person(s.by)} ${day(s.at, offsetMin)}`.trim() : null;
-  const stateText = !installed
-    ? t("core-logic.machineLogin.notInstalled")
-    : state === "in"
-      ? account !== null
-        ? by !== null && by !== "" ? t("core-logic.machineLogin.inBy", { account, by }) : t("core-logic.machineLogin.inAs", { account })
-        : t("core-logic.machineLogin.in")
-      : state === "out"
-        ? t("core-logic.machineLogin.out")
-        : t("core-logic.machineLogin.unknown");
-  return {
-    id: String(s.id ?? ""),
-    name: String(s.name ?? s.id ?? ""),
-    installed,
-    state,
-    ...(account !== null ? { account } : {}),
-    stateText,
-    flow: str(s.flow) ?? "terminal",
-    builtin: s.builtin === true,
-    ...(str(s.login) !== null ? { login: s.login } : {}),
-  };
-}
-
 /// A login as the panel and the card show it. `listening`: this device takes its callback now.
-export function loginShown(l: J, station: string, stationName: string, offsetMin: number, listening: boolean): J {
+export function loginShown(l: J, station: string, stationName: string, now: number, offsetMin: number, listening: boolean): J {
   const state = str(l.state) ?? "starting";
   const step = str(l.step);
   const active = l.endedAt === undefined || l.endedAt === null;
   const code = str(l.code);
-  const account = str(l.account);
   const name = str(l.name) ?? "";
   const waiting = l.waiting === true && active;
   const statusText = !active
     ? state === "done"
-      ? account !== null ? t("core-logic.machineLogin.doneAs", { account }) : t("core-logic.machineLogin.done")
+      ? t("core-logic.machineLogin.done")
       : state === "cancelled"
         ? t("core-logic.machineLogin.cancelled")
         : l.timedOut === true ? t("core-logic.machineLogin.timedOut") : t("core-logic.machineLogin.failed")
@@ -161,18 +122,12 @@ export function loginShown(l: J, station: string, stationName: string, offsetMin
             : step === "open"
               ? t("core-logic.machineLogin.finishInBrowser")
               : t("core-logic.machineLogin.starting");
-  const before = isObject(l.before) && str(l.before.account) !== null
-    ? isObject(l.before.by) && typeof l.before.at === "number"
-      ? t("core-logic.machineLogin.beforeBy", { account: l.before.account, by: `${person(l.before.by)} ${day(l.before.at, offsetMin)}`.trim() })
-      : t("core-logic.machineLogin.before", { account: l.before.account })
-    : null;
   const url = https(l.url);
   const command = Array.isArray(l.command) ? l.command.filter((w: unknown) => typeof w === "string").join(" ") : String(l.command ?? "");
   return {
     id: String(l.id),
     station,
     stationName,
-    ...(str(l.service) !== null ? { service: l.service } : {}),
     name,
     title: t("core-logic.machineLogin.title", { name, station: stationName }),
     command,
@@ -188,9 +143,8 @@ export function loginShown(l: J, station: string, stationName: string, offsetMin
     listening: listening && active,
     statusText,
     ...(str(l.error) !== null && !active ? { error: l.error } : {}),
-    ...(account !== null ? { account } : {}),
-    ...(before !== null ? { before } : {}),
     ...(person(l.by) !== "" ? { byText: person(l.by) } : {}),
+    whenText: typeof l.startedAt === "number" ? when(l.startedAt, now, offsetMin) : "",
     startedAt: typeof l.startedAt === "number" ? l.startedAt : 0,
     expiresAt: typeof l.expiresAt === "number" ? l.expiresAt : 0,
     ...(typeof l.endedAt === "number" ? { endedAt: l.endedAt } : {}),

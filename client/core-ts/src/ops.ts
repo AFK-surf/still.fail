@@ -136,7 +136,7 @@ export const PARAMS: Record<string, string> = {
   "drive.zip": "root:string path:string",
   "drive.stage": "root:string path:string zip?:boolean",
   "software.auto": "on?:boolean",
-  "machineLogin.start": "service?:string command?:string",
+  "machineLogin.start": "command:string",
   "machineLogin.cancel": "id:string",
   "machineLogin.input": "id:string text?:string key?:string",
   "machineLogin.paste": "id:string text:string",
@@ -446,11 +446,10 @@ function stationOp(name: string, params: unknown): Request | null {
     // (the phone's Station 文件 switched to a file; the web's composer stages its own: composer.ts).
     case "drive.stage":
       return op("POST", () => "/drive/stage", p.pick(["root", "path", "zip"]), NONE);
-    // Logins to the station's command-line tools (docs/remote-login.md): one started for a service it knows or a command
-    // of the person's, cancelled, typed into (text, or a key: Enter, Backspace, Up, Down, Left, Right, Tab, Ctrl-C), or
+    // Logins to the station's command-line tools (docs/remote-login.md): one started (the tool's own login command), cancelled, typed into (text, or a key: Enter, Backspace, Up, Down, Left, Right, Tab, Ctrl-C), or
     // given what the browser came back to. How each stands comes on the station's stream (`machineLogins`).
     case "machineLogin.start":
-      return op("POST", () => "/machine-logins", p.pick(["service", "command"]), { kind: "machineLogins" });
+      return op("POST", () => "/machine-logins", { command: p.str("command") }, { kind: "machineLogins" });
     case "machineLogin.cancel":
       return op("DELETE", () => `/machine-logins/${p.at("id")}`, null, { kind: "machineLogins" });
     case "machineLogin.input":
