@@ -307,7 +307,7 @@ object DriveUploads {
 }
 
 /** A picked document's name and size, as its provider says. */
-private fun picked(resolver: ContentResolver, uri: Uri): Pair<String, Long> {
+internal fun picked(resolver: ContentResolver, uri: Uri): Pair<String, Long> {
     var name = uri.lastPathSegment?.substringAfterLast('/') ?: "file"
     var size = -1L
     resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { c ->

@@ -472,6 +472,16 @@
   "android-misc.screen.drives": "{who} 正在控制",
   "android-misc.screen.someoneDrives": "他人正在控制",
   "android-misc.screen.takeOver": "接管",
+  "android-misc.screen.paste": "粘贴手机剪贴板",
+  "android-misc.screen.pasteWhat": "粘贴",
+  "android-misc.screen.clipboardEmpty": "剪贴板是空的",
+  "android-misc.screen.copied": "已复制远端剪贴板",
+  "android-misc.screen.copiedImage": "远端复制了图片，手机上暂不支持",
+  "android-misc.screen.sendFile": "发送文件",
+  "android-misc.screen.sendWaiting": "等待发送",
+  "android-misc.screen.pastePath": "粘贴路径",
+  "android-misc.screen.reveal": "在访达中显示",
+  "android-misc.screen.revealWhat": "在访达中显示",
   "android-misc.drive.chosen": {
     "one": "已选 {n} 项",
     "other": "已选 {n} 项"

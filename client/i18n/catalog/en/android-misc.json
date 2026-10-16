@@ -499,6 +499,16 @@
   "android-misc.screen.drives": "{who} is in control",
   "android-misc.screen.someoneDrives": "Someone else is in control",
   "android-misc.screen.takeOver": "Take over",
+  "android-misc.screen.paste": "Paste the phone's clipboard",
+  "android-misc.screen.pasteWhat": "paste",
+  "android-misc.screen.clipboardEmpty": "The clipboard is empty",
+  "android-misc.screen.copied": "Copied from the remote clipboard",
+  "android-misc.screen.copiedImage": "The remote copied an image; the phone takes text only",
+  "android-misc.screen.sendFile": "Send a file",
+  "android-misc.screen.sendWaiting": "Waiting to send",
+  "android-misc.screen.pastePath": "Paste path",
+  "android-misc.screen.reveal": "Show in Finder",
+  "android-misc.screen.revealWhat": "show it in Finder",
   "android-misc.drive.chosen": {
     "one": "1 selected",
     "other": "{n} selected"

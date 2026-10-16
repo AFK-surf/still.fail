@@ -1,7 +1,9 @@
 // One view of a station's screen (docs/remote-screens.md, docs/client-core.md `screen.view`): the core's call kept open
 // while the viewer is on screen, its values taken apart (the state, a config, frames with their bytes), frames handed to
-// the decoders, each acknowledged once shown; input, 只看/控制 and key frames told back to the core. The connection, the
-// credentials and the reconnecting are the core's; this only draws what it says.
+// the decoders, each acknowledged once shown; input, 只看/控制 and key frames told back to the core. While it drives the
+// screen, the screen's clipboard goes both ways (a copy made on it comes as a `{clipboard}` value, `screen.clipboard`
+// pastes) and files picked go onto its machine (ScreenDrops.kt). The connection, the credentials and the reconnecting
+// are the core's; this only draws what it says.
 package fail.still.android.remote
 
 import android.graphics.Bitmap
@@ -12,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.IntSize
+import fail.still.android.data.ScreenDrop
 import fail.still.android.data.ScreenViewState
 import fail.still.android.data.decode
 import fail.still.core.CoreException
@@ -99,6 +102,21 @@ class ScreenSession(
     /** Input goes to the station now: it is live and driven by this viewer. */
     val driving: Boolean get() = phase == "live" && state?.control == true
 
+    /** Text pasted from the phone goes to the screen (`screen.clipboard`): driving it, and the station carries text. */
+    val pastes: Boolean get() = driving && state?.clipboard.orEmpty().contains("text")
+
+    /** Where a file picked goes on the screen's machine, while driving it (none from a station before files). */
+    val dropsTo: ScreenDrop? get() = if (driving) state?.drop else null
+
+    /** The files picked for its machine, going up or there. */
+    val drops = ScreenDrops(core, station, scope)
+
+    /**
+     * A copy made on the screen, on the main thread: its text, or null for a picture (the phone takes text only). The
+     * viewer puts it on the phone's clipboard.
+     */
+    var copied: ((String?) -> Unit)? = null
+
     /** Opens the view (again: after a pause, or 再试一次). */
     fun open() {
         if (job?.isActive == true) return
@@ -134,9 +152,10 @@ class ScreenSession(
         job = null
     }
 
-    /** Ends it for good: the view, the decoders. */
+    /** Ends it for good: the view, the decoders, the files still going up. */
     fun close() {
         pause()
+        drops.list.toList().forEach(drops::dismiss)
         video.release()
         jpeg.release()
     }
@@ -157,6 +176,16 @@ class ScreenSession(
     fun input(input: JsonObject) {
         if (!driving) return
         core.tell("screen.input", buildJsonObject { put("view", view); put("input", input) })
+    }
+
+    /** `text` onto the screen's clipboard and pasted where its focus is (`screen.clipboard`). Throws [CoreException]. */
+    suspend fun paste(text: String) {
+        core.call("screen.clipboard", buildJsonObject { put("view", view); put("text", text); put("paste", true) })
+    }
+
+    /** A file dropped onto the machine, shown in its file manager (`screen.input` reveal). Throws [CoreException]. */
+    suspend fun reveal(path: String) {
+        core.call("screen.input", buildJsonObject { put("view", view); put("input", buildJsonObject { put("t", "reveal"); put("path", path) }) })
     }
 
     /** The viewer drew `p`: acknowledged, and the bitmap two frames back given to the decoder again. */
@@ -192,6 +221,11 @@ class ScreenSession(
             if (kind == "h264" && bytes != null) video.configure(bytes, w, h)
             main.post { codec = kind; if (w > 0 && h > 0) size = IntSize(w, h) }
             synchronized(lock) { this.kind = kind }
+        }
+        (o["clipboard"] as? JsonObject)?.let { c ->
+            // Text for the phone's clipboard; a picture (its PNG beside) only said, the phone taking text alone.
+            val text = if ((c["type"] as? JsonPrimitive)?.contentOrNull == "text") (c["text"] as? JsonPrimitive)?.contentOrNull ?: return@let else null
+            main.post { copied?.invoke(text) }
         }
         (o["frame"] as? JsonObject)?.let { f ->
             val ts = (f["ts"] as? JsonPrimitive)?.let { it.longOrNull ?: it.contentOrNull?.toDoubleOrNull()?.toLong() } ?: return@let

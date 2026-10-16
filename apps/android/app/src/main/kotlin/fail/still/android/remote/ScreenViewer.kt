@@ -1,15 +1,22 @@
 // A station's screen, full screen (docs/remote-screens.md): the frame fitted whole (letterboxed), zoomed in place with
 // two fingers; while driving it, a tap clicks, a long press right-clicks, a drag drags, two fingers moving together
 // scroll, and the keyboard types into it. Upright, the bar is above the frame (close, the title and who is on it,
-// 只看/控制, the keyboard); sideways, a rail beside it. How the view is (connecting, reconnecting, ended…) is the
-// core's, said over the frame, which stays as it was last shown.
+// 只看/控制, sending a file, pasting, the keyboard); sideways, a rail beside it. While driving it, a copy made on the
+// screen lands on the phone's clipboard, the phone's text is pasted into it, and files picked go onto its machine (how
+// far they have got, then where they are, over the frame's foot). How the view is (connecting, reconnecting, ended…) is
+// the core's, said over the frame, which stays as it was last shown.
 package fail.still.android.remote
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.SurfaceTexture
+import android.os.Build
 import android.view.Surface
 import android.view.TextureView
 import android.view.inputmethod.InputMethodManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -38,11 +45,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -81,14 +91,20 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.viewinterop.AndroidView
 import fail.still.android.data.ScreenCursor
+import fail.still.android.data.ScreenDrop
+import fail.still.android.data.errorText
 import fail.still.android.data.t
+import fail.still.android.screens.fileSize
 import fail.still.android.screens.Button
 import fail.still.android.screens.Spinner
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.Seg
+import fail.still.android.ui.ToastHost
 import fail.still.android.ui.floatingStill
+import fail.still.core.CoreException
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -156,23 +172,82 @@ fun ScreenViewer(session: ScreenSession, title: String?, onExit: () -> Unit) {
             view.clearFocus()
         }
     }
+    // A short note over the viewer (a copy taken, the clipboard empty, what failed and why).
+    var note by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val clipboard = remember(context) { context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager }
+    // A copy made on the screen: onto the phone's clipboard. Android 13 and later say so themselves; before, it is said here.
+    DisposableEffect(session, clipboard) {
+        session.copied = { text ->
+            if (text == null) note = t("android-misc.screen.copiedImage")
+            else {
+                clipboard.setPrimaryClip(ClipData.newPlainText(session.state?.title ?: "still.fail", text))
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) note = t("android-misc.screen.copied")
+            }
+        }
+        onDispose { session.copied = null }
+    }
+    /** `run` (a call to the screen), its failure said as 没能<what>：<why>. */
+    fun act(what: String, run: suspend () -> Unit) {
+        scope.launch {
+            try { run() } catch (e: CoreException) { note = t("android-misc.act.failed", "what" to what, "error" to errorText(e)) }
+        }
+    }
+    var pasting by remember { mutableStateOf(false) }
+    // The phone's clipboard, pasted into the screen where its focus is.
+    fun paste() {
+        if (pasting) return
+        val text = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString().orEmpty()
+        if (text.isEmpty()) { note = t("android-misc.screen.clipboardEmpty"); return }
+        pasting = true
+        act(t("android-misc.screen.pasteWhat")) { try { session.paste(text) } finally { pasting = false } }
+    }
+    // Where the files picked go: as the state said when the picker was asked for (the view opens again meanwhile, the
+    // activity out of sight under the picker).
+    var dropTo by remember { mutableStateOf<ScreenDrop?>(null) }
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        dropTo?.let { session.drops.send(context.contentResolver, uris, it) }
+    }
+    fun send() {
+        dropTo = session.dropsTo ?: return
+        pick.launch(arrayOf("*/*"))
+    }
+    val tools = Tools(pasting, ::paste, ::send)
+    val dropActs = DropActs(
+        pastePath = { d -> act(t("android-misc.screen.pasteWhat")) { session.paste(d.path) } },
+        reveal = { d -> act(t("android-misc.screen.revealWhat")) { session.reveal(d.path) } },
+    )
     BoxWithConstraints(Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.safeDrawing)) {
         // Unseen, where the keyboard's input goes.
         AndroidView({ KeyCatcher(it) { input -> session.input(input) }.also { catcher = it } }, Modifier.size(1.dp).alpha(0f))
         val sideways = maxWidth > maxHeight
         if (sideways) Row(Modifier.fillMaxSize()) {
-            Rail(session, typing, ::keyboard, onExit)
+            Rail(session, typing, ::keyboard, tools, onExit)
             Box(Modifier.weight(1f).fillMaxHeight()) {
-                Stage(session, zoom, Modifier.fillMaxSize(), onExit)
+                Stage(session, zoom, dropActs, Modifier.fillMaxSize(), onExit)
                 // Sideways the frame takes the height: who drives it floats over its top, while it does.
                 if (session.canTakeOver) TakeOver(session, Modifier.align(Alignment.TopCenter).padding(top = 12.dp))
             }
         } else Column(Modifier.fillMaxSize()) {
-            Bar(session, title, typing, ::keyboard, onExit)
+            Bar(session, title, typing, ::keyboard, tools, onExit)
             if (session.canTakeOver) TakeOver(session, Modifier.align(Alignment.CenterHorizontally).padding(horizontal = 12.dp, vertical = 4.dp))
-            Stage(session, zoom, Modifier.weight(1f).fillMaxWidth(), onExit)
+            Stage(session, zoom, dropActs, Modifier.weight(1f).fillMaxWidth(), onExit)
         }
+        ToastHost(note) { note = null }
     }
+}
+
+/** The clipboard and files, from the bar: pasting the phone's text (under way: `pasting`), picking files to send. */
+private class Tools(val pasting: Boolean, val paste: () -> Unit, val send: () -> Unit)
+
+/** What can be done with a file once it is on the machine: its path pasted, shown in the machine's file manager. */
+private class DropActs(val pastePath: (Drop) -> Unit, val reveal: (Drop) -> Unit)
+
+/** Sending a file (where the station takes them) and pasting (where it carries text), while driving it. */
+@Composable
+private fun ClipButtons(session: ScreenSession, tools: Tools) {
+    if (session.dropsTo != null) RoundButton(Icons.Upload, t("android-misc.screen.sendFile"), onClick = tools.send)
+    if (session.pastes) RoundButton(Icons.Paste, t("android-misc.screen.paste"), pressed = tools.pasting, onClick = tools.paste)
 }
 
 /** The view is open (on its way, live, or back on its way), not over. */
@@ -193,7 +268,7 @@ private fun undriven(session: ScreenSession): String? {
 
 /** Upright: close, the title over the core's line (只看 or 控制, who else is on it), 只看/控制, the keyboard. */
 @Composable
-private fun Bar(session: ScreenSession, title: String?, typing: Boolean, keyboard: () -> Unit, onExit: () -> Unit) {
+private fun Bar(session: ScreenSession, title: String?, typing: Boolean, keyboard: () -> Unit, tools: Tools, onExit: () -> Unit) {
     val state = session.state
     Row(
         Modifier.fillMaxWidth().height(56.dp).padding(start = 6.dp, end = 10.dp),
@@ -209,13 +284,14 @@ private fun Bar(session: ScreenSession, title: String?, typing: Boolean, keyboar
             listOf(t("android-misc.screen.look"), t("android-misc.screen.drive")), if (session.controlling) 1 else 0,
             { session.control(it == 1) }, height = 32.dp, radius = 16.dp,
         )
+        ClipButtons(session, tools)
         if (session.driving) RoundButton(Icons.Keyboard, t("android-misc.screen.keyboard"), pressed = typing, onClick = keyboard)
     }
 }
 
 /** Sideways: the same down the side, the line said when the people on it are tapped. */
 @Composable
-private fun Rail(session: ScreenSession, typing: Boolean, keyboard: () -> Unit, onExit: () -> Unit) {
+private fun Rail(session: ScreenSession, typing: Boolean, keyboard: () -> Unit, tools: Tools, onExit: () -> Unit) {
     val state = session.state
     var saying by remember { mutableStateOf(false) }
     LaunchedEffect(saying) { if (saying) { kotlinx.coroutines.delay(3000); saying = false } }
@@ -238,6 +314,7 @@ private fun Rail(session: ScreenSession, typing: Boolean, keyboard: () -> Unit, 
                 if (session.controlling) t("android-misc.screen.drive") else t("android-misc.screen.look"),
                 pressed = session.controlling,
             ) { session.control(!session.controlling) }
+            ClipButtons(session, tools)
             if (session.driving) RoundButton(Icons.Keyboard, t("android-misc.screen.keyboard"), pressed = typing, onClick = keyboard)
         }
         if (saying && state != null) Text(
@@ -284,9 +361,9 @@ private fun RoundButton(icon: ImageVector, label: String, pressed: Boolean = fal
     ) { IconIn(icon, 20.dp, C.ink) }
 }
 
-/** The frame, fitted and zoomed, its pointer; the gestures; how the view is, over it. */
+/** The frame, fitted and zoomed, its pointer; the gestures; how the view is, and the files sent, over it. */
 @Composable
-private fun Stage(session: ScreenSession, zoom: ViewZoom, modifier: Modifier, onExit: () -> Unit) {
+private fun Stage(session: ScreenSession, zoom: ViewZoom, dropActs: DropActs, modifier: Modifier, onExit: () -> Unit) {
     val picture = session.picture
     val size = session.size ?: picture?.let { IntSize(it.bitmap.width, it.bitmap.height) }
     var box by remember { mutableStateOf(Size.Zero) }
@@ -324,17 +401,77 @@ private fun Stage(session: ScreenSession, zoom: ViewZoom, modifier: Modifier, on
             }
         }
         Over(session, phase, Modifier.align(Alignment.Center), onExit)
-        undriven(session)?.let { why ->
-            Row(
-                Modifier.align(Alignment.BottomCenter).padding(16.dp).widthIn(max = 420.dp).floatingStill(RoundedCornerShape(18.dp))
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                IconIn(Icons.Info, 16.dp, C.muted)
-                Text(why, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        Column(
+            Modifier.align(Alignment.BottomCenter).padding(16.dp).widthIn(max = 420.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Drops(session, dropActs)
+            undriven(session)?.let { why ->
+                Row(
+                    Modifier.floatingStill(RoundedCornerShape(18.dp)).padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    IconIn(Icons.Info, 16.dp, C.muted)
+                    Text(why, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
     }
+}
+
+/** The files sent to the machine, one row each, until let go of: how far each has got, or where it is now, or why it failed. */
+@Composable
+private fun Drops(session: ScreenSession, acts: DropActs) {
+    val list = session.drops.list
+    if (list.isEmpty()) return
+    // Its corner as the panel the view's end is said in (Over).
+    Column(Modifier.fillMaxWidth().floatingStill(RoundedCornerShape(24.dp)).padding(vertical = 6.dp)) {
+        list.forEach { d -> key(d) { DropRow(session, d, acts) } }
+    }
+}
+
+@Composable
+private fun DropRow(session: ScreenSession, d: Drop, acts: DropActs) {
+    val resolver = LocalContext.current.contentResolver
+    Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        when (d.state) {
+            "done" -> IconIn(Icons.CheckCircle, 20.dp, C.accent, Modifier.padding(top = 1.dp))
+            "failed" -> IconIn(Icons.Info, 20.dp, C.red, Modifier.padding(top = 1.dp))
+            else -> IconIn(Icons.Upload, 20.dp, C.muted, Modifier.padding(top = 1.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(d.name, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            when (d.state) {
+                "done" -> {
+                    Text(d.path, fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    // What is done with it there goes through the view: while driving it.
+                    if (session.driving) Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (session.pastes) Button(t("android-misc.screen.pastePath"), primary = false) { acts.pastePath(d) }
+                        if (d.reveal) Button(t("android-misc.screen.reveal"), primary = false) { acts.reveal(d) }
+                    }
+                }
+                "failed" -> Text(t("android-misc.drive.upload.failed", "error" to (d.error ?: "")), fontSize = 12.sp, lineHeight = 16.sp, color = C.red, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                else -> {
+                    Text(
+                        if (d.size < 0) t("android-misc.screen.sendWaiting") else t("android-misc.drive.upload.going", "sent" to fileSize(d.sent), "size" to fileSize(d.size)),
+                        fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1,
+                    )
+                    val share = if (d.size > 0) (d.sent.toFloat() / d.size).coerceIn(0f, 1f) else 0f
+                    Box(Modifier.padding(top = 5.dp).fillMaxWidth().height(3.dp).clip(CircleShape).background(C.ink.copy(alpha = 0.08f))) {
+                        Box(Modifier.fillMaxWidth(share).height(3.dp).clip(CircleShape).background(C.accent))
+                    }
+                }
+            }
+        }
+        if (d.state == "failed") RowKey(Icons.Retry, t("android-misc.drive.retry")) { session.drops.retry(resolver, d) }
+        RowKey(Icons.Close, if (d.state == "done" || d.state == "failed") t("common.close") else t("common.cancel")) { session.drops.dismiss(d) }
+    }
+}
+
+/** A small round key at a row's end (DriveScreen's). */
+@Composable
+private fun RowKey(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Box(Modifier.size(34.dp).clip(CircleShape).clickable(onClick = onClick).semantics { contentDescription = label }, contentAlignment = Alignment.Center) { IconIn(icon, 16.dp, C.muted) }
 }
 
 /** H.264 decoded straight onto a texture of the frame's size (MediaCodec, Decoders.kt). */

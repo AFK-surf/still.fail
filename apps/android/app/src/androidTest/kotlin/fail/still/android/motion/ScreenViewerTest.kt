@@ -1,10 +1,14 @@
 // A station's screen in the viewer (remote/ScreenViewer.kt) on a fake core: `screen.view` held open, its states and
 // JPEG frames said as the core would (bytes beside the JSON). Each state is pictured (settled.png under motion/screen-*);
 // a live frame is drawn and acknowledged, a tap is a click at the right place in the frame, a press held a right click,
-// a drag a drag; 只看 sends nothing.
+// a drag a drag; 只看 sends nothing. Driving it, the clipboard goes both ways and files picked go onto its machine.
 package fail.still.android.motion
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.pm.ActivityInfo
+import android.net.Uri
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -25,6 +29,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
@@ -32,12 +37,17 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.unit.IntSize
 import fail.still.android.data.ScreenAccess
+import fail.still.android.data.ScreenDrop
 import fail.still.android.data.ScreenViewState
 import fail.still.android.data.StillFailJson
 import fail.still.android.remote.ScreenSession
 import fail.still.android.remote.ScreenViewer
 import fail.still.android.remote.STAGE
 import fail.still.android.remote.fitIn
+import fail.still.core.CoreException
+import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import fail.still.android.ui.StillFailTheme
 import java.io.ByteArrayOutputStream
 import kotlin.math.abs
@@ -45,6 +55,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -55,6 +66,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -100,12 +112,14 @@ class ScreenViewerTest {
         fun state(
             phase: String, control: Boolean = true, may: Boolean = true, others: List<String> = listOf("李雷"), message: String? = null,
             access: ScreenAccess? = null, controllers: List<String>? = null, takeOver: Boolean? = null, line: String? = null,
+            clipboard: List<String>? = null, drop: ScreenDrop? = null,
         ) =
             say(buildJsonObject {
                 put("state", StillFailJson.encodeToJsonElement(ScreenViewState(
                     phase = phase, message = message, title = "still.fail — Chrome", kind = "browser", control = control, may = may, others = others,
                     line = line ?: ((if (control) "控制" else "只看") + (if (others.isEmpty()) "" else " · ${others.joinToString("、")}也在看")),
                     codec = "jpeg", width = W.toUInt(), height = H.toUInt(), access = access, controllers = controllers, takeOver = takeOver,
+                    clipboard = clipboard, drop = drop,
                 )))
             })
 
@@ -451,4 +465,160 @@ class ScreenViewerTest {
 
     private fun MotionRule.onAllNodesWithTextCount(text: String) =
         onAllNodes(androidx.compose.ui.test.hasText(text)).fetchSemanticsNodes().size
+
+    private fun MotionRule.countLabelled(label: String) =
+        onAllNodes(androidx.compose.ui.test.hasContentDescription(label)).fetchSemanticsNodes().size
+
+    private val clipboard: ClipboardManager get() = rule.activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+
+    /** The phone's clipboard's text now (read on the main thread, as the app in front). */
+    private fun phoneClip(): String? {
+        var text: String? = null
+        rule.runOnUiThread { text = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString() }
+        return text
+    }
+
+    private val DROP = ScreenDrop(folder = "/Users/alice/Downloads", reveal = true)
+
+    /** Live and driven, a station that carries the clipboard both ways and takes files (or, `old`, one from before them). */
+    private fun driven(v: Viewer, old: Boolean = false): ScreenSession {
+        val s = v.open()
+        if (old) v.state("live", others = emptyList()) else v.state("live", others = emptyList(), clipboard = listOf("text", "png"), drop = DROP)
+        v.config()
+        v.frame(1000)
+        rule.waitUntil(5_000) { v.acked(1000) }
+        return s
+    }
+
+    /** Driving it: 发送文件 and 粘贴 beside the keyboard; 粘贴 sends the phone's clipboard (`screen.clipboard`, pasted). */
+    @Test fun pastesThePhonesClipboard() {
+        val v = Viewer()
+        val s = driven(v)
+        v.shot("screen-clipboard-driving")
+        rule.onNodeWithContentDescription("发送文件").assertIsDisplayed()
+        rule.onNodeWithContentDescription("粘贴手机剪贴板").assertIsDisplayed()
+        rule.onNodeWithContentDescription("键盘").assertIsDisplayed()
+
+        rule.runOnUiThread { clipboard.setPrimaryClip(ClipData.newPlainText("test", "hello from the phone")) }
+        rule.onNodeWithContentDescription("粘贴手机剪贴板").performTouchInput { click() }
+        rule.waitUntil(5_000) { v.told("screen.clipboard").isNotEmpty() }
+        val asked = v.told("screen.clipboard").single()
+        assertEquals(s.view, asked["view"]!!.jsonPrimitive.contentOrNull)
+        assertEquals("hello from the phone", asked["text"]!!.jsonPrimitive.contentOrNull)
+        assertEquals(true, asked["paste"]!!.jsonPrimitive.boolean)
+
+        // Refused (the core says why): said.
+        v.h.fake.answer = { name, _ -> if (name == "screen.clipboard") throw CoreException("unsupported", "这个屏幕不支持剪贴板", null) else JsonNull }
+        rule.onNodeWithContentDescription("粘贴手机剪贴板").performTouchInput { click() }
+        rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("无法粘贴：这个屏幕不支持剪贴板") == 1 }
+        v.h.settle(3000)
+
+        // Nothing on the phone's clipboard: said, nothing sent.
+        rule.runOnUiThread { clipboard.clearPrimaryClip() }
+        rule.onNodeWithContentDescription("粘贴手机剪贴板").performTouchInput { click() }
+        v.h.deliver()
+        rule.onNodeWithText("剪贴板是空的").assertIsDisplayed()
+        v.shot("screen-clipboard-empty")
+        assertEquals(2, v.told("screen.clipboard").size)
+    }
+
+    /** A copy made on the screen lands on the phone's clipboard; a picture is only said (the phone takes text). */
+    @Test fun aCopyOnTheScreenLandsOnThePhone() {
+        val v = Viewer()
+        driven(v)
+        rule.runOnUiThread { clipboard.setPrimaryClip(ClipData.newPlainText("test", "before")) }
+        v.say(buildJsonObject { put("clipboard", buildJsonObject { put("type", "text"); put("text", "copied on the Mac 复制的") }) })
+        rule.waitUntil(5_000) { phoneClip() == "copied on the Mac 复制的" }
+
+        v.say(buildJsonObject { put("clipboard", buildJsonObject { put("type", "png"); put("size", 8) }) }, byteArrayOf(-119, 80, 78, 71, 13, 10, 26, 10))
+        rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("远端复制了图片，手机上暂不支持") == 1 }
+        v.shot("screen-clipboard-image")
+        assertEquals("copied on the Mac 复制的", phoneClip())
+    }
+
+    /** A station from before the clipboard and files, or only looking: neither offered (the keyboard types, as before). */
+    @Test fun anOldStationOffersNeither() {
+        val v = Viewer()
+        driven(v, old = true)
+        v.shot("screen-clipboard-old-station")
+        rule.onNodeWithContentDescription("键盘").assertIsDisplayed()
+        assertEquals(0, rule.countLabelled("发送文件"))
+        assertEquals(0, rule.countLabelled("粘贴手机剪贴板"))
+
+        // Only looking, the core says neither (they go only to a view that drives it).
+        v.state("live", control = false, others = emptyList())
+        v.h.settle()
+        assertEquals(0, rule.countLabelled("发送文件"))
+        assertEquals(0, rule.countLabelled("粘贴手机剪贴板"))
+        assertEquals(0, rule.countLabelled("键盘"))
+    }
+
+    @Test fun filesGoOntoTheMachine() = filesGoOntoTheMachine(dark = false)
+
+    @Test fun filesGoOntoTheMachineInTheDark() = filesGoOntoTheMachine(dark = true)
+
+    /**
+     * Files picked go up one after another into the state's `drop` folder (the drive's upload, `root` the folder), the
+     * first under a free name as its own is taken there; how far each has got shows over the frame, then where it is,
+     * its path pasted (`screen.clipboard`) or shown in Finder (`screen.input` reveal); let go of, gone.
+     */
+    private fun filesGoOntoTheMachine(dark: Boolean) {
+        val v = Viewer(dark = dark)
+        val s = driven(v)
+        val dir = File(rule.activity.cacheDir, "picked").apply { deleteRecursively(); mkdirs() }
+        val report = File(dir, "季度报告.pdf").apply { writeBytes(ByteArray(1_200_000) { (it % 251).toByte() }) }
+        val notes = File(dir, "notes.txt").apply { writeText("still.fail\n".repeat(400)) }
+        val held = CountDownLatch(1)
+        var parts = 0
+        v.h.fake.answer = { name, p ->
+            if (name != "drive.upload.part") JsonNull
+            else {
+                val path = p["path"]!!.jsonPrimitive.contentOrNull!!
+                val offset = p["offset"]!!.jsonPrimitive.long
+                val total = p["total"]!!.jsonPrimitive.long
+                val got = android.util.Base64.decode(p["bytes"]!!.jsonPrimitive.contentOrNull!!, android.util.Base64.NO_WRAP).size
+                assertEquals("/Users/alice/Downloads", p["root"]!!.jsonPrimitive.contentOrNull)
+                // A file of its name there already.
+                if (path == "季度报告.pdf") throw CoreException("exists", "there is already a file by that name", 409)
+                // Its second part waits while it is pictured going.
+                if (path == "季度报告 (1).pdf" && offset > 0 && parts++ == 0) held.await(20, TimeUnit.SECONDS)
+                val have = offset + got
+                buildJsonObject {
+                    put("have", have)
+                    if (have >= total) put("entry", buildJsonObject { put("name", path.substringAfterLast('/')); put("dir", false) })
+                }
+            }
+        }
+        rule.runOnUiThread { s.drops.send(rule.activity.contentResolver, listOf(Uri.fromFile(report), Uri.fromFile(notes)), DROP) }
+        try { rule.waitUntil(10_000) { s.drops.list.size == 2 && s.drops.list[0].state == "going" && s.drops.list[0].sent > 0 } }
+        catch (e: Throwable) { throw AssertionError("drops: " + s.drops.list.map { "${it.name} ${it.state} ${it.sent}/${it.size} ${it.error}" } + " parts: " + v.told("drive.upload.part").map { "${it["path"]} ${it["offset"]}" }, e) }
+        v.h.deliver()
+        rule.onNodeWithText("季度报告 (1).pdf").assertIsDisplayed()
+        rule.onNodeWithText("等待发送").assertIsDisplayed()
+        v.shot(if (dark) "screen-files-going-dark" else "screen-files-going")
+
+        held.countDown()
+        rule.waitUntil(10_000) { s.drops.list.all { it.state == "done" } }
+        v.h.deliver()
+        rule.onNodeWithText("/Users/alice/Downloads/季度报告 (1).pdf").assertIsDisplayed()
+        rule.onNodeWithText("/Users/alice/Downloads/notes.txt").assertIsDisplayed()
+        v.shot(if (dark) "screen-files-done-dark" else "screen-files-done")
+        if (dark) return
+
+        rule.onAllNodes(androidx.compose.ui.test.hasText("粘贴路径"))[0].performTouchInput { click() }
+        rule.waitUntil(5_000) { v.told("screen.clipboard").isNotEmpty() }
+        assertEquals("/Users/alice/Downloads/季度报告 (1).pdf", v.told("screen.clipboard").single()["text"]!!.jsonPrimitive.contentOrNull)
+        rule.onAllNodes(androidx.compose.ui.test.hasText("在访达中显示"))[1].performTouchInput { click() }
+        rule.waitUntil(5_000) { v.told("screen.input").isNotEmpty() }
+        val reveal = v.told("screen.input").single()
+        assertEquals(s.view, reveal["view"]!!.jsonPrimitive.contentOrNull)
+        assertEquals("reveal", reveal["input"]!!.jsonObject["t"]!!.jsonPrimitive.contentOrNull)
+        assertEquals("/Users/alice/Downloads/notes.txt", reveal["input"]!!.jsonObject["path"]!!.jsonPrimitive.contentOrNull)
+
+        // Let go of, one and then the other: the panel goes.
+        rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("关闭") and androidx.compose.ui.test.hasClickAction()).fetchSemanticsNodes().size.let { assertEquals(3, it) }
+        repeat(2) { rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("关闭"))[1].performTouchInput { click() }; v.h.deliver() }
+        assertEquals(0, s.drops.list.size)
+        assertEquals(0, rule.onAllNodesWithTextCount("粘贴路径"))
+    }
 }
