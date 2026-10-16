@@ -70,7 +70,8 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
     const plain = (l: string) => ADDED.reduce((t, [table, column]) => (t.startsWith(`table ${table}:`) ? t.replace(new RegExp(`, ${column} [A-Z]+(?=\\)$)`), "") : t), l);
     const mine = (l: string) => ADDED.some(([table, column]) => l.startsWith(`  ${table}.${column} `));
     const was = before.map(plain);
-    const now = opened.filter((l) => !mine(l)).map(plain);
+    // Ignore only newly added columns; columns already present must still survive opening.
+    const now = opened.filter((l) => !mine(l) || before.includes(l)).map(plain);
     assert.deepEqual(was.filter((l) => !now.includes(l)), [], "nothing changed or gone");
     const added = now.filter((l) => !was.includes(l));
     for (const line of added) {

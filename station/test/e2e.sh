@@ -82,7 +82,7 @@ done
 [ "$ended" -ge 2 ]
 port=$(udp_port "$third")
 [ "$port" = "$mesh_port" ]
-ask GET /admin/api/sessions > /dev/null
+ask GET /admin/api/sessions '' > /dev/null
 echo "turns: $(sqlite3 "$work/data/stillfail.db" "select outcome || '/' || coalesce(declared,'-') from turns where session_key='$key'" | tr '\n' ' ')"
 echo "chat:"
 sqlite3 "$work/data/stillfail.db" "select '  ' || author_kind || ': ' || text from entries where thread=$thread order by n"
