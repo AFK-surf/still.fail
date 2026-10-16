@@ -270,6 +270,25 @@ export class FakeHost implements Host {
     return Effect.sync(() => void this.storage.delete(key));
   }
 
+  /// The system's secure storage, in memory (an app's host has one; a test of a web page's sets these undefined):
+  /// what was kept (and whether reading it asks the person), what was asked of the person, and whether they say no.
+  readonly secure = new Map<string, { value: Uint8Array; user: boolean }>();
+  readonly secureAsked: { key: string; reason?: string }[] = [];
+  secureRefused = false;
+  secureGet?: (key: string, opts: { user: boolean; reason?: string }) => Effect.Effect<Uint8Array | null, HostError> = (key, opts) =>
+    Effect.suspend(() => {
+      const kept = this.secure.get(key);
+      if (kept === undefined) return Effect.succeed(null);
+      if (kept.user || opts.user) {
+        this.secureAsked.push({ key, ...(opts.reason !== undefined ? { reason: opts.reason } : {}) });
+        if (this.secureRefused) return Effect.fail(new HostError("the person did not confirm"));
+      }
+      return Effect.succeed(kept.value.slice());
+    });
+  secureSet?: (key: string, value: Uint8Array, opts: { user: boolean }) => Effect.Effect<void, HostError> = (key, value, opts) =>
+    Effect.sync(() => void this.secure.set(key, { value: value.slice(), user: opts.user }));
+  secureDelete?: (key: string) => Effect.Effect<void, HostError> = (key) => Effect.sync(() => void this.secure.delete(key));
+
   legacyRead(range: DbRange): Effect.Effect<[string, Uint8Array][], HostError> {
     return Effect.sync(() => {
       const out: [string, Uint8Array][] = [];
