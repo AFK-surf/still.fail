@@ -638,10 +638,10 @@ fun AppState.upload(draft: Draft, station: String, picked: Picked, scope: Corout
     }
 }
 
-/** What a file going up says: how far it has gone, when it is more than a part. */
+/** What a file going up says: how far it has gone, once that is known. */
 internal fun uploadingText(f: Pending): String {
     val sent = f.sent
-    return if (sent == null || f.size <= 4L * 1024 * 1024) t("android-chat.file.uploading")
+    return if (sent == null || f.size <= 0) t("android-chat.file.uploading")
     else t("android-chat.file.uploading.part", "percent" to (sent * 100 / f.size).toInt(), "size" to fileSize(f.size))
 }
 

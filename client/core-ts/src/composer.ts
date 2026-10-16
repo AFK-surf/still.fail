@@ -67,6 +67,8 @@ type State = {
 export const MAX_FILE = 1024 * 1024 * 1024;
 /// How much of a file goes up in one part.
 const PART = 4 * 1024 * 1024;
+/// How much more of a file has gone before it is said again, at the least.
+const SENT_STEP = 64 * 1024;
 
 const topicOf = (key: string): Topic => ({ topic: "composer", key });
 const empty = (db?: AccountDb): State => ({ db, edited: 0, joined: null, text: "", rev: 0, quotes: [], focus: null, files: [], starting: false, error: null, version: 0, taken: null });
@@ -369,8 +371,13 @@ export class Composers {
         this.#changed(k, s, true, false);
       }
     };
-    // How far it has gone: in the composer, and in a message sent before it is up (one sent later starts from here).
+    // How far it has gone: in the composer, and in a message sent before it is up (one sent later starts from here). Said
+    // as the bytes go, a step at a time (a big file's at most some 200 times: a waiting message is kept on each).
+    const step = Math.max(SENT_STEP, Math.ceil(f.size / 200));
+    let said = -1;
     const went = (sent: number) => {
+      if (sent !== f.size && said >= 0 && Math.abs(sent - said) < step) return;
+      said = sent;
       if (this.#uploads.get(f.id) === upload) this.#sent.set(f.id, sent);
       change({ sent });
       inner.views.local.uploadChanged(f.id, { sent });
@@ -410,10 +417,13 @@ export class Composers {
       const addr = yield* Effect.try({ try: () => StationAddr.parse(station), catch: asCoreError });
       let have = 0;
       let saved: J;
+      // Nothing yet, out of its size: said at once.
+      went(0);
       while (saved === undefined) {
         if (!blob) return yield* Effect.fail(new CoreError("upload", t("core-misc.composer.upload_missing", { name: f.name })));
         const bytes = new Uint8Array(yield* Effect.tryPromise({ try: () => blob.slice(have, have + PART).arrayBuffer(), catch: asCoreError }));
-        const told = yield* inner.stations.requests.uploadPart(addr, { id, name: f.name, size: f.size, offset: have }, bytes, null);
+        const from = have;
+        const told = yield* inner.stations.requests.uploadPart(addr, { id, name: f.name, size: f.size, offset: have }, bytes, null, (n) => went(from + n));
         if (told.file !== undefined) saved = told.file;
         else if (told.have === have) return yield* Effect.fail(new CoreError("upload", t("core-misc.composer.upload_failed")));
         else have = told.have;

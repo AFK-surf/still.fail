@@ -83,9 +83,10 @@ export function install(): void {
     const c = call as Extract<Call, { kind: "stationUpload" }>;
     return inner.stations.upload(c.station, c.name, c.bytes, ctx);
   };
-  handlers.stationUploadPart = (inner, call, _p, _a, ctx) => {
+  // `progress`: the bytes of the part gone so far, as they go (a part is megabytes: its end alone is too seldom to show).
+  handlers.stationUploadPart = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationUploadPart" }>;
-    return Effect.flatMap(parse(c.station), (addr) => inner.stations.requests.uploadPart(addr, c, c.bytes, ctx));
+    return Effect.flatMap(parse(c.station), (addr) => inner.stations.requests.uploadPart(addr, c, c.bytes, ctx, c.progress ? (sent) => progress({ sent }) : undefined));
   };
   handlers.stationFile = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationFile" }>;

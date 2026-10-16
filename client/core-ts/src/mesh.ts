@@ -62,6 +62,8 @@ const DEAD_PINGS = 3;
 export const HEDGE_FLOOR_MS = 1_000;
 /// How often a read gone slow looks again for another way to be asked on, while there is none.
 const HEDGE_RECHECK_MS = 250;
+/// How much of a request's body goes on a stream at a time when how far it has gone is told of (a part is 4 MB).
+export const BODY_STEP = 64 * 1024;
 export const NET_DAY_KEY = "net-day";
 export const TALLY_EVERY_MS = 60_000;
 export const SPEED_KEY = "relay-speed";
@@ -332,12 +334,19 @@ export class Link {
     return this.#lock.withPermits(1)(f(this.#control));
   }
 
-  #open(head: J, finish: boolean, body: Uint8Array | null): Effect.Effect<[IrohStream, Lines, J], CoreError> {
+  #open(head: J, finish: boolean, body: Uint8Array | null, wrote?: (sent: number) => void): Effect.Effect<[IrohStream, Lines, J], CoreError> {
     const sent = (e: { message: string }) => meshError(t("core-logic.mesh.request_unsent", { error: e.message }));
     return Effect.gen({ self: this }, function* () {
       const stream = yield* Effect.mapError(this.conn.openBi(), sent);
       yield* Effect.mapError(stream.write(utf8(`${JSON.stringify(head)}\n`)), sent);
-      if (body !== null && body.length > 0) yield* Effect.mapError(stream.write(body), sent);
+      // A body that is told of goes a step at a time, each said as the stream takes it (as far as the link lets it).
+      if (body !== null && body.length > 0 && wrote) {
+        for (let at = 0; at < body.length; at += BODY_STEP) {
+          const end = Math.min(at + BODY_STEP, body.length);
+          yield* Effect.mapError(stream.write(body.subarray(at, end)), sent);
+          wrote(end);
+        }
+      } else if (body !== null && body.length > 0) yield* Effect.mapError(stream.write(body), sent);
       if (finish) yield* Effect.mapError(stream.finish(), sent);
       const lines = new Lines(stream);
       const line = yield* lines.next();
@@ -376,11 +385,11 @@ export class Link {
     };
   }
 
-  /// One request on its own stream.
-  request(head: RequestHead, body: Uint8Array): Effect.Effect<Reply, CoreError> {
+  /// One request on its own stream; `wrote`: how much of its body has gone, as it goes.
+  request(head: RequestHead, body: Uint8Array, wrote?: (sent: number) => void): Effect.Effect<Reply, CoreError> {
     const wire = { method: head.method, path: head.path, headers: Object.fromEntries(head.headers) };
     return Effect.mapError(
-      Effect.map(this.#open(wire, true, body), ([stream, lines, reply]) => ({ status: reply.status, headers: headersOf(reply.headers), body: Link.#body(stream, lines), cancel: () => stream.reset(0) })),
+      Effect.map(this.#open(wire, true, body, wrote), ([stream, lines, reply]) => ({ status: reply.status, headers: headersOf(reply.headers), body: Link.#body(stream, lines), cancel: () => stream.reset(0) })),
       (e) => this.refused ?? e,
     );
   }
@@ -1493,7 +1502,7 @@ export class MeshWire implements StationWire {
     this.#env = env;
   }
 
-  request(station: StationAddr, head: RequestHead, body: Uint8Array): Effect.Effect<WireReply, CoreError, import("effect").Scope.Scope> {
+  request(station: StationAddr, head: RequestHead, body: Uint8Array, wrote?: (sent: number) => void): Effect.Effect<WireReply, CoreError, import("effect").Scope.Scope> {
     const env = this.#env;
     const idempotent = this.#idempotent;
     const workspace = station.workspace;
@@ -1512,7 +1521,10 @@ export class MeshWire implements StationWire {
       const link = yield* waiting(status, address, t("station.core.connecting"), mesh.link(key, credentials, theirs));
       const repeats = mayRepeat(head, idempotent.has(key));
       const write = !["GET", "HEAD"].includes(head.method.toUpperCase()) && !onlyReads(head);
-      const ask = (l: Link) => Effect.map(l.request(head, body), (reply) => [l, reply] as [Link, Reply]);
+      // Asked on more than one way (or again), the body is told of as far as the furthest has gone.
+      let furthest = 0;
+      const told = wrote && ((n: number) => { if (n > furthest) wrote((furthest = n)); });
+      const ask = (l: Link) => Effect.map(l.request(head, body, told), (reply) => [l, reply] as [Link, Reply]);
       let answered: [Link, Reply];
       if (repeats) {
         // Asked on its link; on another way as well if not answered within what its way is expected to take

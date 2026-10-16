@@ -1477,8 +1477,8 @@ export function FileTile({ name, dir = false, progress, error = false, land = fa
 }
 
 export function FileCard({ file, onRemove, pending, sent, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; pending?: boolean; sent?: number | undefined; error?: string | null }) {
-  // A file of more than one part says how far it has gone.
-  const going = pending && sent !== undefined && file.size > 4 * 1024 * 1024
+  // How far it has gone, once that is known.
+  const going = pending && sent !== undefined && file.size > 0
     ? t("web-main.file.uploadingPart", { percent: Math.floor((sent / file.size) * 100), size: fileSize(file.size) })
     : t("web-main.file.uploading");
   return (

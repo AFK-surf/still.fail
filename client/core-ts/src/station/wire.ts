@@ -67,7 +67,8 @@ export type WireSocket = { reply: WireReply; send: SocketOut };
 /// How requests reach a station. A request for an event stream carries `accept: text/event-stream`. What is open (a
 /// reply's body, a socket) closes with the scope it was asked in.
 export interface StationWire {
-  request(station: StationAddr, head: RequestHead, body: Uint8Array): Effect.Effect<WireReply, CoreError, Scope.Scope>;
+  /// `wrote`: how much of the body has gone out, now and then as it goes (a wire that sends it whole says nothing).
+  request(station: StationAddr, head: RequestHead, body: Uint8Array, wrote?: (sent: number) => void): Effect.Effect<WireReply, CoreError, Scope.Scope>;
   /// The way to the station is taken for gone: what is open to it closes.
   reset?(station: StationAddr): void;
   /// Whether the wire itself finds another way to a station when the UI comes back.

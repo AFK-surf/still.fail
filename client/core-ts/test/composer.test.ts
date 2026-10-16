@@ -437,7 +437,7 @@ test("a_message_sent_before_its_file_is_up_says_how_far_the_file_has_gone", asyn
   await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [a] });
   send(501, a);
   await t.settle();
-  assert.equal(sent(0), undefined);
+  assert.equal(sent(0), 0);
   Deferred.doneUnsafe(parts[0]!, Effect.succeed({ have: PART }));
   await t.settle();
   assert.equal(sent(0), PART);
@@ -451,6 +451,36 @@ test("a_message_sent_before_its_file_is_up_says_how_far_the_file_has_gone", asyn
   await t.settle();
   assert.deepEqual([sent(0), sent(1)], [2 * PART, 2 * PART]);
   Deferred.doneUnsafe(parts[2]!, Effect.succeed({ have: size, file: { name: "x.bin", size, path: "/u/x.bin" } }));
+  await t.settle();
+  t.core.close();
+});
+
+test("a_file_says_how_far_it_has_gone_as_a_part_goes_not_only_when_the_part_is_in", async () => {
+  const t = await setup();
+  const part = Deferred.makeUnsafe<J, CoreError>();
+  let wrote: (n: number) => void = () => {};
+  (t.core.inner.stations.requests as J).uploadPart = (_addr: unknown, _q: J, _bytes: Uint8Array, _ctx: unknown, w: (n: number) => void) => { wrote = w; return Deferred.await(part); };
+  (t.core.inner.stations as J).post = () => Effect.succeed(1);
+  await t.watch(1, "ws/st:k");
+  // Under one part: nothing yet, said at once, then as it goes, a step (64 KB) at a time.
+  const size = 1024 * 1024;
+  const file = { id: "small", name: "small.bin", size, blob: new Blob([new Uint8Array(size)]) };
+  await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [file] });
+  await t.settle();
+  const shown = () => v(t.values, 1).files.find((f: J) => f.id === "small").sent;
+  assert.equal(shown(), 0);
+  call(t.core, t.ui, 501, "chat.send", { station: "ws/st", thread: 7, text: "", uploads: [{ id: file.id, name: file.name, size }] });
+  await t.settle();
+  wrote(1000);
+  wrote(300 * 1024);
+  wrote(300 * 1024 + 1000);
+  await t.settle();
+  // The composer's file and the waiting message's, alike; what is under a step from what was said waits.
+  assert.equal(t.core.inner.views.local.outbox("ws/st", 7)[0].uploads[0].sent, 300 * 1024);
+  wrote(size);
+  await t.settle();
+  assert.equal(t.core.inner.views.local.outbox("ws/st", 7)[0].uploads[0].sent, size);
+  Deferred.doneUnsafe(part, Effect.succeed({ have: size, file: { name: file.name, size, path: "/u/small.bin" } }));
   await t.settle();
   t.core.close();
 });

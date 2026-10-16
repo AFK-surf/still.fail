@@ -28,6 +28,9 @@ private const val UPLOAD_PART = 4 * 1024 * 1024
 /** How much of a part has come, as a part read with `progress` says while it comes. */
 private fun partLoaded(heard: kotlinx.serialization.json.JsonElement): Long? =
     ((heard as? JsonObject)?.get("loaded") as? JsonPrimitive)?.content?.toDoubleOrNull()?.toLong()
+/** How much of a part has gone, as a part sent with `progress` says while it goes. */
+private fun partSent(heard: kotlinx.serialization.json.JsonElement): Long? =
+    ((heard as? JsonObject)?.get("sent") as? JsonPrimitive)?.content?.toDoubleOrNull()?.toLong()
 
 /** The bytes of a file in one `station.file.part`. */
 private const val FILE_PART = 4 * 1024 * 1024
@@ -226,6 +229,8 @@ class StationApi(private val core: StillFailCore, val station: String) {
             try {
                 var have = 0L
                 var done: Attachment? = null
+                // Said at once (nothing yet), then as each part goes.
+                onProgress(0)
                 while (done == null) {
                     // The station goes on from what it has: elsewhere than where the file was read to, read again from there.
                     if (at != have) { input.close(); input = open(); var left = have; while (left > 0) { val n = input.skip(left); if (n <= 0) throw java.io.IOException("short file"); left -= n }; at = have }
@@ -233,10 +238,11 @@ class StationApi(private val core: StillFailCore, val station: String) {
                     var got = 0
                     while (got < part.size) { val n = input.read(part, got, part.size - got); if (n < 0) throw java.io.IOException("short file"); got += n }
                     at += got
+                    val from = have
                     val told = core.call("station.upload.part", buildJsonObject {
                         put("station", station); put("id", id); put("name", name); put("size", size); put("offset", have)
-                        put("bytes", Base64.encodeToString(part, Base64.NO_WRAP))
-                    }).jsonObject
+                        put("bytes", Base64.encodeToString(part, Base64.NO_WRAP)); put("progress", true)
+                    }) { heard -> partSent(heard)?.let { onProgress(from + it) } }.jsonObject
                     val file = told["file"]?.takeIf { it !is JsonNull }
                     if (file != null) { done = decode(Attachment.serializer(), file); onProgress(size); break }
                     val next = told["have"]?.jsonPrimitive?.long ?: (have + got)

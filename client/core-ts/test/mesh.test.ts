@@ -159,6 +159,18 @@ sim("opens_requests_and_streams_the_reply", async (s) => {
   await close(s, station, mesh);
 });
 
+sim("tells_how_far_a_body_has_gone_as_it_goes", async (s) => {
+  const { mesh, station } = await setup(s);
+  const link = await s.run(mesh.link(station.id(), grants("ok", { n: 0 })));
+  const body = new Uint8Array(200 * 1024).fill(97);
+  const wrote: number[] = [];
+  const reply = await s.run(link.request(head("/admin/api/sessions"), body, (n) => wrote.push(n)));
+  assert.deepEqual(wrote, [65536, 131072, 196608, 204800]);
+  // All of it went, in its order.
+  assert.equal(text(await s.run(readAll(reply.body))).split("|")[1], "a".repeat(200 * 1024));
+  await close(s, station, mesh);
+});
+
 sim("streams_a_reply_as_it_comes", async (s) => {
   const { mesh, station } = await setup(s);
   const link = await s.run(mesh.link(station.id(), grants("ok", { n: 0 })));

@@ -124,8 +124,9 @@ export class Requests {
   }
 
   /// One whole request: its status, its reply's head, its body. `quiet`: in the background, not said to be waited on.
-  /// `heard`: how much of the body has come, now and then as it comes (every PART_STEP).
-  exchange(station: StationAddr, method: string, path: string, headers: [string, string][], body: Uint8Array, quiet: boolean, ctx: SpanContext | null, heard?: (loaded: number) => void): Effect.Effect<{ status: number; headers: [string, string][]; body: Uint8Array }, CoreError> {
+  /// `heard`: how much of the body has come, now and then as it comes (every PART_STEP); `wrote`: how much of what is
+  /// sent has gone, as it goes (a wire that sends it whole says nothing).
+  exchange(station: StationAddr, method: string, path: string, headers: [string, string][], body: Uint8Array, quiet: boolean, ctx: SpanContext | null, heard?: (loaded: number) => void, wrote?: (sent: number) => void): Effect.Effect<{ status: number; headers: [string, string][]; body: Uint8Array }, CoreError> {
     return Effect.scoped(
       Effect.gen({ self: this }, function* () {
         const status = this.#status(station);
@@ -133,7 +134,7 @@ export class Requests {
         const [span, head] = this.#head(station, method, path, headers, body.length, ctx);
         const result = yield* Effect.result(
           Effect.gen({ self: this }, function* () {
-            const reply = yield* this.wire.request(station, head, body);
+            const reply = yield* this.wire.request(station, head, body, wrote);
             answered(span, reply);
             // What came over the link is counted (and said in the span); what it says, decompressed.
             let came = 0;
@@ -224,10 +225,11 @@ export class Requests {
   /// POST /uploads/parts?id=&name=&size=&offset= with a part's bytes: `{ have }`, how much of the file the station has
   /// (the next part starts there), and `file` once it is whole. A broken connection is the wire's to ask again over
   /// (the same key, the same offset). A station from before parts (it does not know the route) gets the file whole in
-  /// one upload once all of it is here, as long as that takes it (UPLOAD_WHOLE_MAX).
-  uploadPart(station: StationAddr, q: { id: string; name: string; size: number; offset: number }, bytes: Uint8Array, ctx: SpanContext | null): Effect.Effect<{ have: number; file?: unknown }, CoreError> {
+  /// one upload once all of it is here, as long as that takes it (UPLOAD_WHOLE_MAX). `wrote`: the part's bytes gone so
+  /// far, as they go.
+  uploadPart(station: StationAddr, q: { id: string; name: string; size: number; offset: number }, bytes: Uint8Array, ctx: SpanContext | null, wrote?: (sent: number) => void): Effect.Effect<{ have: number; file?: unknown }, CoreError> {
     const path = `/uploads/parts?id=${encode(q.id)}&name=${encode(q.name)}&size=${q.size}&offset=${q.offset}`;
-    return Effect.flatMap(this.exchange(station, "POST", path, [["content-type", "application/octet-stream"]], bytes, false, ctx), (r) => {
+    return Effect.flatMap(this.exchange(station, "POST", path, [["content-type", "application/octet-stream"]], bytes, false, ctx, undefined, wrote), (r) => {
       const parsed = parseJson(r.body);
       const data = parsed === undefined ? {} : parsed;
       if (r.status === 404 || r.status === 405) return this.#wholeUpload(station, q, bytes, ctx);

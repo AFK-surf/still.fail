@@ -284,9 +284,13 @@ export function stationCall(call: ReturnType<typeof useCall>, station: string): 
       // A part at a time (`station.upload.part`), read from the file as it goes: a big one is never all in memory.
       const id = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
       let saved: Attachment | undefined;
+      // Said at once (nothing yet), then as each part goes.
+      onProgress?.(0);
       for (let have = 0; saved === undefined;) {
         const bytes = await toBase64(file.slice(have, have + UPLOAD_PART));
-        const told = await call("station.upload.part", { station, id, name: file.name, size: file.size, offset: have, bytes }) as { have: number; file?: Attachment };
+        const from = have;
+        const told = await call("station.upload.part", { station, id, name: file.name, size: file.size, offset: have, bytes, ...(onProgress ? { progress: true } : {}) },
+          onProgress && ((p) => onProgress(from + (p as { sent: number }).sent))) as { have: number; file?: Attachment };
         if (told.file) saved = told.file;
         // The station goes on from what it has (less, after it lost a part); nothing more is a part it could not take.
         else if (told.have === have) throw new Error(t("web-main.draft.uploadFailed"));
