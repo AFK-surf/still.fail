@@ -374,12 +374,16 @@ internal fun StationFile(station: String, key: String, file: Attachment) {
     if (open) FilePreview(station, key, file) { open = false }
 }
 
-/** Images and video stills show in a box of their own proportions; other files are a card. Either opens in a preview. */
+/**
+ * Images and video stills show in a box of their own proportions; other files are a card. Either opens in a preview.
+ * An image sent from here before its chat has a session to keep it (a new chat still being made) shows the picture it
+ * had in the composer, as web Chat.tsx FileItem does, rather than a card until the session comes.
+ */
 @Composable
 private fun FileItem(station: String, key: String?, file: Attachment, onOpen: () -> Unit) {
     val kind = kindOf(file.name).kind
     when {
-        key != null && kind == PreviewKind.Image -> ChatImage(station, key, file, onOpen = onOpen)
+        kind == PreviewKind.Image && (key != null || FileData.sentPicture(station, file.path) != null) -> ChatImage(station, key, file, onOpen = onOpen)
         key != null && kind == PreviewKind.Video -> ChatVideo(station, key, file, onOpen)
         else -> FileCard(file.name, file.size, onClick = if (key != null) onOpen else null)
     }
@@ -405,11 +409,14 @@ private val EaseOut = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
 /** Images already brushed in on this run (station, session and path): shown again, they just show. */
 private val revealed = HashSet<String>()
 
-/** An image's box; until it loads, its likeness (or the blots drifting); one that takes a while is brushed in from the top. */
+/**
+ * An image's box; until it loads, its likeness (or the blots drifting); one that takes a while is brushed in from the top.
+ * Without a session (`key` null) only the picture it was sent with shows, and it does not open yet.
+ */
 @Composable
-private fun ChatImage(station: String, key: String, file: Attachment, size: Modifier? = null, onOpen: () -> Unit) {
+private fun ChatImage(station: String, key: String?, file: Attachment, size: Modifier? = null, onOpen: () -> Unit) {
     val app = LocalApp.current
-    val id = FileData.id(station, key, file, thumb = true)
+    val id = FileData.id(station, key ?: "", file, thumb = true)
     val longest = with(LocalDensity.current) { 360.dp.roundToPx() }
     // One sent from here shows the picture it had in the composer until the station's comes (it flies in from there).
     val sent = remember(id) { FileData.sentPicture(station, file.path) }
@@ -419,7 +426,7 @@ private fun ChatImage(station: String, key: String, file: Attachment, size: Modi
     val born = remember(id) { System.currentTimeMillis() }
     var reveal by remember(id) { mutableStateOf(false) }
     LaunchedEffect(id) {
-        if (FileData.keptPicture(id, longest) != null) return@LaunchedEffect
+        if (key == null || FileData.keptPicture(id, longest) != null) return@LaunchedEffect
         try {
             val bytes = FileData.fetch(app, station, key, file, thumb = true).await()
             val got = FileData.picture(id, bytes, longest)
@@ -434,13 +441,13 @@ private fun ChatImage(station: String, key: String, file: Attachment, size: Modi
         }
     }
     // What the viewer grows out of and shrinks back into (FilePreview.kt).
-    val thumb = FileViewers.id(station, key, file.path)
+    val thumb = FileViewers.id(station, key ?: "", file.path)
     ForgetThumb(thumb)
     val radius = with(LocalDensity.current) { 10.dp.toPx() }
     val box = imageBox(file)
     // Letterboxed only in its own box (one given it is filled).
     val fit = box.fit.takeIf { size == null }
-    MediaBox(box, Modifier.clickable(enabled = image != null || failed, onClick = onOpen), background = if (fit != null && !failed) Color.Transparent else C.chip, size = size, thumb = Modifier.viewerThumb(thumb, radius, letterbox = fit != null) { image }) {
+    MediaBox(box, Modifier.clickable(enabled = key != null && (image != null || failed), onClick = onOpen), background = if (fit != null && !failed) Color.Transparent else C.chip, size = size, thumb = Modifier.viewerThumb(thumb, radius, letterbox = fit != null) { image }) {
         if (!instant) Waiting(file.thumbhash, loaded = image != null, still = failed, fit = fit)
         if (failed) Unavailable(20.dp, null)
         image?.let { Revealed(it, file.name, reveal, if (fit != null) ContentScale.Fit else ContentScale.Crop) }
