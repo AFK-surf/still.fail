@@ -280,10 +280,12 @@ export const edge = style({
   animation: `${turn} 7s linear infinite`,
   "@media": { [NARROW]: { borderRadius: "14px" }, [PHONE_BOX]: { borderRadius: "37px" }, [STILL]: { animation: "none" } },
 });
-/** The demo's box (demo/): the app in it, at its size. */
+/** The demo's box (demo/): the app in it, at its size. Its corners cut by a clip, not a rounded overflow: under one,
+ *  Chromium ignored the phone bar's glass's clip-path (a frosted layer, mobile/Bar.tsx) set while it was out of view,
+ *  and drew the bar as a plain rectangle. */
 export const demo = style({
-  position: "relative", height: "720px", borderRadius: "19px", overflow: "hidden", background: vars.canvas,
-  "@media": { [NARROW]: { borderRadius: "13px", height: "620px" }, [PHONE_BOX]: { borderRadius: "36px" } },
+  position: "relative", height: "720px", overflow: "hidden", clipPath: "inset(0 round 19px)", background: vars.canvas,
+  "@media": { [NARROW]: { clipPath: "inset(0 round 13px)", height: "620px" }, [PHONE_BOX]: { clipPath: "inset(0 round 36px)" } },
 });
 /** The demo's opening frame, built into the page: the phone's app where the box is narrow (as the demo picks: under
  *  700 wide, the box being the page's width less its margins), the desktop's elsewhere. */
