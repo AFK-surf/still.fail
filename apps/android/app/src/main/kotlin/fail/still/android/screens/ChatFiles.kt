@@ -640,7 +640,8 @@ internal fun FileCard(
         if (busy) Spinner(14.dp) else IconIn(Icons.Read, 16.dp, C.muted)
         Column(Modifier.weight(1f)) {
             Text(name, fontSize = 15.sp, lineHeight = 20.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(note ?: fileSize(size), fontSize = 11.sp, lineHeight = 16.sp, color = if (note != null && !busy) C.red else C.muted)
+            // Digits all one width: a percentage counting up keeps its place (uploadingText).
+            Text(note ?: fileSize(size), fontSize = 11.sp, lineHeight = 16.sp, color = if (note != null && !busy) C.red else C.muted, style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"))
         }
         if (onRemove != null) Box(Modifier.size(22.dp).clip(CircleShape).background(C.ink.copy(alpha = 0.06f)).clickable(onClick = onRemove), contentAlignment = Alignment.Center) {
             IconIn(Icons.Close, 12.dp, C.muted)

@@ -159,6 +159,11 @@ function OutboxUpload() {
         <MineBubble text="帮我看看是否正常" />
         <FileCard file={{ name: "Trace-20261017T025130.json.gz", size: 38_400_000 }} pending sent={16_777_216} />
       </MineMessage>
+      {/* As it counts, what follows the number stands still: one, two and three digits alike. */}
+      <MineMessage data-role="person">
+        <FileCard file={{ name: "Trace-20261017T025130.json.gz", size: 38_400_000 }} pending sent={2_000_000} />
+        <FileCard file={{ name: "Trace-20261017T025130.json.gz", size: 38_400_000 }} pending sent={38_400_000} />
+      </MineMessage>
     </div>
   );
 }
