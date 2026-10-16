@@ -456,8 +456,14 @@ class ChatMotionTest {
     @Test
     fun pictureSentBeforeTheChatIsMade() {
         val h = Harness(rule)
-        val preview = android.graphics.Bitmap.createScaledBitmap(picture(), 240, 160, true).asImageBitmap()
+        val big = picture()
+        val preview = android.graphics.Bitmap.createScaledBitmap(big, 240, 160, true).asImageBitmap()
+        val png = java.io.ByteArrayOutputStream().also { big.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
         fail.still.android.screens.FileData.keepSent(Fixtures.STATION, photo.path, preview)
+        h.fake.answer = { call, _ ->
+            if (call == "station.file") buildJsonObject { put("type", "image/png"); put("bytes", android.util.Base64.encodeToString(png, android.util.Base64.NO_WRAP)) }
+            else JsonNull
+        }
         val said = Fixtures.chat(talk + Fixtures.mine(5, "Safari 上是这样的", said = true).copy(attachments = listOf(photo)))
         h.fake.put(topic, said.copy(pending = true))
         h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
