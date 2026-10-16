@@ -260,6 +260,8 @@ async function tabs() {
   let used = 0;
   const views: FakeCdp[] = [];
   const timers: { ms: number; f: () => void }[] = [];
+  // The tabs' viewport as the page says it (Page.getLayoutMetrics).
+  const viewport = { clientWidth: 1200, clientHeight: 845 };
   const t = new Tabs({
     cdp, screens, now: () => 0, activity: () => used++,
     later: (ms, f) => {
@@ -271,6 +273,7 @@ async function tabs() {
       const c = new FakeCdp();
       c.answers["Target.attachToTarget"] = () => ({ sessionId: `V${views.length}` });
       c.answers["Runtime.evaluate"] = () => ({ result: { value: "visible" } });
+      c.answers["Page.getLayoutMetrics"] = () => ({ cssVisualViewport: { ...viewport } });
       views.push(c);
       return c;
     },
@@ -282,7 +285,7 @@ async function tabs() {
     return {};
   };
   await t.start();
-  return { cdp, screens, lists, t, views, timers, used: () => used };
+  return { cdp, screens, lists, t, views, timers, viewport, used: () => used };
 }
 
 test("every page of the browser is a screen while it is there; its title follows it", async () => {
@@ -323,13 +326,35 @@ test("a tab's view is on a connection of its own, and only for viewers that take
   const { cdp, screens, views, t } = await tabs();
   const tab = screens.get("browser:A")!;
   await assert.rejects(tab.open({ maxWidth: 100, maxHeight: 100, codecs: ["h264"] }), /JPEG/);
-  const v = await tab.open({ maxWidth: 100, maxHeight: 100, codecs: ["jpeg"] });
+  await turn();
+  // The connection that measured the tab's viewport, closed.
   assert.equal(views.length, 1);
-  assert.deepEqual(views[0]!.of("Target.attachToTarget")[0]!.params, { targetId: "A", flatten: true });
+  assert.equal(views[0]!.gone, true);
+  const v = await tab.open({ maxWidth: 100, maxHeight: 100, codecs: ["jpeg"] });
+  assert.equal(views.length, 2);
+  assert.deepEqual(views[1]!.of("Target.attachToTarget")[0]!.params, { targetId: "A", flatten: true });
   assert.equal(cdp.of("Target.attachToTarget").length, 0, "not on the browser's own connection");
   assert.equal(t.viewing(), 1);
   v.close();
   assert.equal(t.viewing(), 0);
+});
+
+test("a tab's size is its viewport (not its window), measured as it comes and told again as a view finds it changed", async () => {
+  const { cdp, screens, lists, viewport } = await tabs();
+  cdp.answers["Browser.getWindowForTarget"] = () => ({ bounds: { width: 1200, height: 932 } });
+  await turn();
+  const tab = screens.get("browser:A")!;
+  assert.deepEqual(tab.size(), { width: 1200, height: 845 });
+  // The window made shorter: a view reads the viewport as it starts, and the list hears of it.
+  const told = lists.length;
+  viewport.clientHeight = 700;
+  const v = await tab.open({ maxWidth: 100, maxHeight: 100, codecs: ["jpeg"] });
+  assert.deepEqual(tab.size(), { width: 1200, height: 700 });
+  assert.equal(lists.length, told + 1);
+  v.close();
+  // The same size again is no change.
+  (await tab.open({ maxWidth: 100, maxHeight: 100, codecs: ["jpeg"] })).close();
+  assert.equal(lists.length, told + 1);
 });
 
 /// A Chrome of the test's making: started, found, killed, each a connection the test can end (the browser dying).
@@ -479,7 +504,10 @@ test("a station process that ends leaves the browser running, and the next takes
     return cdp;
   };
   await next.resume();
-  assert.equal(chrome.made.length, connected + 1);
+  await turn();
+  // Its own connection, and one that measured the tab's viewport and closed.
+  assert.equal(chrome.made.length, connected + 2);
+  assert.equal(chrome.made[connected + 1]!.gone, true);
   assert.equal(next.status().running, true);
   assert.deepEqual(screens.list().map((s) => s.id), ["browser:A"]);
   assert.equal((await next.endpoint()).ws, r.ws, "the same browser");

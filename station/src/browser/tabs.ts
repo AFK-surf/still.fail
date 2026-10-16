@@ -4,7 +4,7 @@
 import type { ScreenSource, ScreenView, Screens, ViewOptions } from "../screens/source.ts";
 import { wall } from "../ops/fibers.ts";
 import type { Cdp, CdpEvent } from "./cdp.ts";
-import { TabView } from "./view.ts";
+import { TabView, viewportOf } from "./view.ts";
 
 export type TabInfo = { id: string; title: string; url: string; attached: boolean };
 
@@ -50,8 +50,11 @@ class Tab implements ScreenSource {
     return this.#size;
   }
 
+  /// Its viewport, as measured or as a view's frames say it: the screens' watchers hear when it changed.
   sized(size: { width: number; height: number }) {
+    if (size.width === this.#size.width && size.height === this.#size.height) return;
     this.#size = size;
+    this.#tabs.resized(this);
   }
 
   open(options: ViewOptions): Promise<ScreenView> {
@@ -181,6 +184,12 @@ export class Tabs {
     }
   }
 
+  /// A tab's size changed: the screens' watchers hear of it.
+  resized(tab: Tab) {
+    const known = this.#tabs.get(tab.info.targetId);
+    if (known !== undefined && known.tab === tab) this.#retitled(known);
+  }
+
   /// A tab's title changed: the screens' watchers hear of it.
   #retitled(known: { tab: Tab; remove: () => void }) {
     const screens = this.#p.screens;
@@ -190,8 +199,22 @@ export class Tabs {
     else known.remove = screens.add(known.tab);
   }
 
-  /// A tab's size before a view says its viewport: its window's.
+  /// A tab's size before a view says it: its viewport (what its frames show, not its window with the toolbar),
+  /// read on a connection of its own (the browser's own attaches to no tab); its window's when that cannot be read.
   async #measure(tab: Tab) {
+    let cdp: Cdp | null = null;
+    try {
+      cdp = await this.#p.connect();
+      const { sessionId } = await cdp.send("Target.attachToTarget", { targetId: tab.info.targetId, flatten: true });
+      const viewport = viewportOf(await cdp.send("Page.getLayoutMetrics", {}, sessionId));
+      if (viewport !== null) {
+        if (tab.size().width === 0) tab.sized(viewport);
+        return;
+      }
+    } catch {
+    } finally {
+      cdp?.close();
+    }
     try {
       const { bounds } = await this.#p.cdp.send("Browser.getWindowForTarget", { targetId: tab.info.targetId });
       if (tab.size().width === 0 && bounds?.width > 0) tab.sized({ width: bounds.width, height: bounds.height });

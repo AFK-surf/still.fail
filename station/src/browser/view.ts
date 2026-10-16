@@ -8,6 +8,14 @@
 import type { Frame, FrameConfig, ScreenInput, ScreenView, ViewOptions } from "../screens/source.ts";
 import type { Cdp, CdpEvent } from "./cdp.ts";
 
+/// The page's viewport in CSS pixels, as Page.getLayoutMetrics says it (what the screencast's frames show); null when
+/// it says none.
+export function viewportOf(m: any): { width: number; height: number } | null {
+  const v = m?.cssVisualViewport ?? m?.cssLayoutViewport ?? m?.layoutViewport;
+  const width = Math.round(Number(v?.clientWidth)), height = Math.round(Number(v?.clientHeight));
+  return width > 0 && height > 0 ? { width, height } : null;
+}
+
 /// JPEG quality of the cast frames.
 const QUALITY = 70;
 /// At most this many frames are held unacknowledged (as Chrome sends at most).
@@ -149,9 +157,12 @@ export class TabView implements ScreenView {
     const { cdp, session } = this.#p;
     await cdp.send("Page.enable", {}, session);
     if (!viewport) {
-      const m = await cdp.send("Page.getLayoutMetrics", {}, session).catch(() => null);
-      const v = m?.cssLayoutViewport ?? m?.layoutViewport;
-      if (v) this.#viewport = { width: v.clientWidth, height: v.clientHeight };
+      const v = viewportOf(await cdp.send("Page.getLayoutMetrics", {}, session).catch(() => null));
+      // The tab's size is its viewport's: told now, not only when a frame says another.
+      if (v) {
+        this.#viewport = v;
+        this.#p.sized?.(v);
+      }
     }
     await this.front();
     await cdp.send(
