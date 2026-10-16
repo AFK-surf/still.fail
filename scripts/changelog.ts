@@ -117,18 +117,27 @@ export function changelog(root: string, rev = "HEAD"): Entry[] {
   const notesFile = join(root, "docs/changelog-notes.json");
   const notes: Notes = existsSync(notesFile) ? JSON.parse(readFileSync(notesFile, "utf8")) : {};
   const notCarried = readNotCarried(root);
-  // Newest first, one record a commit: its hash, time and message, then its files.
-  const log = git("log", "--first-parent", "--diff-merges=first-parent", "--name-only", "--format=%x1e%H%x1f%ct%x1f%B%x1f", rev);
+  // Newest first, one record a commit: its hash, its parents, time and message, then its files.
+  const log = git("log", "--first-parent", "--diff-merges=first-parent", "--name-only", "--format=%x1e%H%x1f%P%x1f%ct%x1f%B%x1f", rev);
+  const records = log.split("\x1e").slice(1).map((record) => record.split("\x1f") as [string, string, string, string, string]);
+  // Each one's version, oldest first: the one before it on this line, and what it brings that that one has not (itself;
+  // a merge, the branch too, which early history has). One git a merge, not one a commit counting the whole history
+  // again (562 of them took the changelog ~20 s in CI).
+  const versions = new Map<string, number>();
+  let before = 0;
+  for (const [commit, parents] of [...records].reverse()) {
+    const [first, ...merged] = parents.split(" ").filter(Boolean);
+    before += first && merged.length ? Number(git("rev-list", "--count", `${first}..${commit}`).trim()) : 1;
+    versions.set(commit, before);
+  }
   const entries: Entry[] = [];
-  for (const record of log.split("\x1e").slice(1)) {
-    const [commit, at, message, rest] = record.split("\x1f") as [string, string, string, string];
+  for (const [commit, , at, message, rest] of records) {
     const said = readMessage(message);
     const note = Object.entries(notes).find(([start]) => start.length >= 7 && commit.startsWith(start))?.[1];
     const text = note?.text ?? said.text;
     const fixes = [...new Set([...said.fixes, ...(note?.fixes ?? [])])];
     if (!text.length && !fixes.length) continue;
-    // Counted for each (early history has merges, so its place in this list is not its number).
-    const version = Number(git("rev-list", "--count", commit).trim());
+    const version = versions.get(commit)!;
     entries.push({ version, commit, at: Number(at), text, fixes, parts: partsOf(rest.split("\n").filter(Boolean), notCarried) });
   }
   return entries;
