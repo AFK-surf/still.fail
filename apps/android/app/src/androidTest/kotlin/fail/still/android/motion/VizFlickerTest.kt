@@ -65,7 +65,7 @@ class VizFlickerTest {
     }
 
     /** The chat's words with `html` placed in them, watched for `ms`: answers how many pictures differed from the one before. */
-    private fun watch(name: String, text: String, html: String?, dark: Boolean = false, ms: Long = 6000, glass: Boolean = false, churn: Boolean = false, loading: Boolean = false): Int {
+    private fun watch(name: String, text: String, html: String?, dark: Boolean = false, ms: Long = 6000, glass: Boolean = false, churn: Boolean = false, loading: Boolean = false, panes: Int = 1): Int {
         val h = Harness(rule)
         val context = rule.activity
         val b64 = html?.let { Base64.encodeToString(it.toByteArray(), Base64.NO_WRAP) }
@@ -103,6 +103,8 @@ class VizFlickerTest {
                         if (glass) Box(Modifier.fillMaxWidth().height(100.dp).glass(haze)) {
                             Box(Modifier.padding(top = 60.dp, start = (16 + tick.intValue % 20 * 8).dp).size(16.dp).background(C.ink))
                         }
+                        // More glass over the page, as a chat has (its composer, the bottom bar's glass and ball, a pill).
+                        if (glass) for (i in 1 until panes) Box(Modifier.padding(top = (140 + i * 90).dp, start = (24 * i).dp).size(120.dp, 56.dp).glass(haze))
                     }
                 }
             }
@@ -159,6 +161,12 @@ class VizFlickerTest {
     @Test fun viewportTall() { assertTrue(watch("vh", "[卡片](vh.html)", """<div style="min-height:100vh;background:var(--muted)">按窗口高度的</div>""") == 0) }
     @Test fun churn() { assertTrue(watch("churn", "[卡片](churn.html)", tall, churn = true) == 0) }
     @Test fun glass() { assertTrue(watch("glass", "[卡片](glass.html)", tall, glass = true, churn = true) == 0) }
+
+    /**
+     * Under four panes of glass at once, each drawing the page again: the system's WebView (154, drawing with Vulkan)
+     * ended the app on a page drawn a fourth time in a frame, so the page is drawn once, into a layer of its own.
+     */
+    @Test fun glassFour() { assertTrue(watch("glass4", "[卡片](glass4.html)", tall, glass = true, churn = true, panes = 4) == 0) }
 
     /**
      * Loading, the page comes in at once: its room (and the icons under it), then the page drawn whole; no blank page,
