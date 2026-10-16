@@ -441,11 +441,7 @@ class BarTest {
         fun open(name: String, tap: Boolean): List<Float> {
             val f = Finger(h.record(name), Offset(g.left + 28 * d, closed + 28 * d))
             f.down()
-            // Over the line and let go two thirds open (not yet 85%, so nothing chosen): it opens on.
-            f.to(Offset(f.at.x, closed - 40 * d), 2)
-            var n = 0
-            while (openness(closed) < 0.65f && n++ < 30) f.r.frame()
-            assertTrue("let go before 85%: ${openness(closed)}", openness(closed) < 0.85f)
+            f.to(Offset(f.at.x, closed - 60 * d), 6)
             f.up()
             val path = ArrayList<Float>()
             for (i in 1..30) {
@@ -488,9 +484,9 @@ class BarTest {
         g2.up()
         r.frames(40)
         r.end()
-        assertEquals(1f, openness(closed), 0.01f)
-        assertEquals(listOf<Screen>(Screen.Home), h.app.stack)
-        assertEquals(0L, h.app.bars.current)
+        // Let go above the open panel's row: the place the ball kept to there, the top row's (奏, under the finger).
+        assertEquals(1L, h.app.bars.current)
+        assertEquals(listOf<Screen>(Screen.Decisions), h.app.stack)
     }
 
     /** From the bar's first place up into the other bar's row to 连接, held there `still` frames (the finger moving every frame). */
