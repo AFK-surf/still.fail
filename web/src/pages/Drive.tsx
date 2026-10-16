@@ -8,7 +8,7 @@
 // The reader and the player are pages of their own (`files/read`, `files/play`); images, PDFs and code open in the
 // chat's preview over the page. The phone's pages are ../mobile/Drive.tsx, with the same parts under them.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Navigate, useSearchParams } from "react-router";
+import { Navigate, useLocation, useSearchParams } from "react-router";
 import { ContextMenu } from "radix-ui";
 import { stationBase, useStation } from "../station.tsx";
 import { useStations } from "../api.ts";
@@ -27,6 +27,7 @@ import { cancel, download, joinPath, nameOf, openerOf, parentOf, refresh, retry,
 import { useDriveFile } from "../drive/viewerFile.ts";
 import { absoluteOf, childOf, drive, drivePath, filtered, folderName, nameProblem, rootTrouble, trailOf, useDrive, type DriveState, type PickFolder } from "../drive/useDrive.ts";
 import { draggedOf, endDrag, startDrag } from "../drive/drag.ts";
+import { keepFilesPage, keepOpened, lastFilesPage, lastOpened, useKeptScroll } from "../drive/kept.ts";
 import { ColumnsView, TreeView, useDriveView, ViewSwitch, type RowOf } from "./DriveViews.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { DrivePreview, FilterField, useFolders } from "../mobile/Drive.tsx";
@@ -53,12 +54,12 @@ export function DrivePage() {
   );
 }
 
-/** 文件 in the rail (`/w/<ws>/files`): the first folder pinned on any station (the sidebar lists them all), else the
- * first station's home; none, says so. */
+/** 文件 in the rail (`/w/<ws>/files`): the folder last open there, else the first folder pinned on any station (the
+ * sidebar lists them all), else the first station's home; none, says so. */
 export function DriveHome({ scope }: { scope: string }) {
   const stations = useStations(scope).value;
   const add = useAddFolder(scope);
-  const first = (stations ?? []).flatMap((s) => (s.overview?.drive?.roots ?? []).map((r) => drivePath(stationBase(s.station), r.path)))[0]
+  const first = lastFilesPage(scope) ?? (stations ?? []).flatMap((s) => (s.overview?.drive?.roots ?? []).map((r) => drivePath(stationBase(s.station), r.path)))[0]
     ?? (stations ?? []).flatMap((s) => (s.overview?.drive?.anywhere && s.overview.drive.home ? [drivePath(stationBase(s.station), s.overview.drive.home)] : []))[0];
   if (first) return <Navigate to={first} replace />;
   return (
@@ -163,6 +164,7 @@ function RootRow({ root, onOpen }: { root: DriveRoot; onOpen: () => void }) {
 
 function FolderView({ d, root, path }: { d: DriveState; root: string; path: string }) {
   const station = useStation();
+  const { pathname, search } = useLocation();
   const go = useGo();
   const act = useAct();
   const folder = useFolder(station.address, root, path);
@@ -177,6 +179,11 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
   const [removing, setRemoving] = useState<{ at: At; entry: DriveEntry } | null>(null);
   const [preview, setPreview] = useState<{ at: At; entries: readonly DriveEntry[]; entry: DriveEntry } | null>(null);
   const [view, setView] = useDriveView("page");
+  // Back where it was, as each folder was left (the page scrolls, the list in it); the folder kept for the rail's 文件
+  // to come back to.
+  const list = useKeptScroll<HTMLDivElement>("page", at, view, folder.value !== undefined || folder.error !== null, (el) => el.parentElement);
+  useEffect(() => keepFilesPage(station.address.split("/")[0] ?? "", pathname + search), [station.address, pathname, search]);
+  const last = lastOpened("page", at);
   const [dragging, setDragging] = useState(false);
   const here = absoluteOf(root, path);
   const name = path ? nameOf(path) : d.anywhere && !d.roots.some((r) => r.path === root) ? (here === d.home ? t("web-pages.drive.home") : folderName(here)) : rootLabel(d.roots, root);
@@ -193,6 +200,7 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
   // text read, a video played, a picture or code previewed, the rest downloaded.
   const openIn = (in_: At, e: DriveEntry, siblings: readonly DriveEntry[] = [e]) => {
     const full = joinPath(in_.path, e.name);
+    keepOpened("page", in_, e.name);
     switch (openerOf(e.kind)) {
       case "folder": return go(drivePath(station.base, root, full));
       case "read": return go(drivePath(station.base, root, full, "read"));
@@ -273,7 +281,7 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
           ]} />
         </div>
       </header>
-      <div className={css.list} data-dragging={dragging || undefined} data-view={view}
+      <div ref={list} className={css.list} data-dragging={dragging || undefined} data-view={view}
         onDragOver={(e) => { if (d.write && e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDragging(true); } }}
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
         onDrop={(e) => { if (!d.write || !e.dataTransfer.files.length) return; e.preventDefault(); setDragging(false); upload(station.address, root, path, [...e.dataTransfer.files]); }}>
@@ -281,17 +289,17 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
         {view === "columns" ? (
           <>
             {uploads.map((u) => <UploadRow key={u.key} u={u} />)}
-            <ColumnsView at={{ ...at, path: "" }} open={path} onGo={(p) => go(drivePath(station.base, root, p))} rowOf={rowOf} empty={uploads.length ? <></> : empty} />
+            <ColumnsView owner="page" at={{ ...at, path: "" }} open={path} onGo={(p) => go(drivePath(station.base, root, p))} rowOf={rowOf} empty={uploads.length ? <></> : empty} />
           </>
         ) : folder.error ? (
           <div className={css.problem}><p className={controlsCss.fieldError}>{folder.error.message}</p><Button variant="ghost" icon={Retry} onClick={reload}>{t("web-pages.drive.retry")}</Button></div>
         ) : !folder.value ? <p className={shellCss.muted}>{t("web-pages.drive.reading")}</p> : (
           <>
             {uploads.map((u) => <UploadRow key={u.key} u={u} />)}
-            {view === "tree" ? <TreeView key={path} at={at} rowOf={rowOf} empty={uploads.length ? <></> : empty} />
+            {view === "tree" ? <TreeView key={path} owner="page" at={at} rowOf={rowOf} empty={uploads.length ? <></> : empty} />
               : <>
                 {entries.length === 0 && uploads.length === 0 && empty}
-                {entries.map((e) => <EntryRow key={e.name} at={at} entry={e} items={items(e)} onOpen={() => open(e)} />)}
+                {entries.map((e) => <EntryRow key={e.name} at={at} entry={e} items={items(e)} selected={e.name === last} onOpen={() => open(e)} />)}
               </>}
           </>
         )}
@@ -314,15 +322,15 @@ export function useStationName(station: string): string {
   return useTopicSelect<StationView[], string>({ topic: "stations", scope: station.split("/")[0] ?? "" }, (s) => s.value?.find((x) => x.station === station)?.name ?? station);
 }
 
-function EntryRow({ at, entry, items, onOpen }: { at: At; entry: DriveEntry; items: MenuItem[]; onOpen: () => void }) {
-  return <DriveRow at={at} entry={entry} items={items} onOpen={onOpen} />;
+function EntryRow({ at, entry, items, selected, onOpen }: { at: At; entry: DriveEntry; items: MenuItem[]; selected: boolean; onOpen: () => void }) {
+  return <DriveRow at={at} entry={entry} items={items} selected={selected} onOpen={onOpen} />;
 }
 
 /**
  * A row of a folder's list, as the files' page and a chat's 文件 tab draw it: its mark, name, size and time (`compact`:
  * the size alone), the … on hover and the same on a right click; dragged out, it carries the file and its path. In a
  * tree (`depth`), in by its depth, a folder with its disclosure (`expanded`); in columns, a folder with › at its end
- * (`column`), the one open `selected`.
+ * (`column`), the one open `selected` (in a list or a tree, the one last opened).
  */
 export function DriveRow({ at, entry, items, onOpen, compact = false, depth, expanded, column = false, selected = false }: {
   at: At; entry: DriveEntry; items: MenuItem[]; onOpen: () => void; compact?: boolean;
