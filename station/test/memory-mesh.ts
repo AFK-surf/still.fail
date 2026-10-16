@@ -17,6 +17,8 @@ class End implements Stream {
   peer!: End;
   #queue: (Buffer | null)[] = [];
   #error: Error | null = null;
+  /// Reset here: a read gives up (null), as the addon's does.
+  #reset = false;
   #waiting: (() => void) | null = null;
   #stopped: Promise<void>;
   #stop!: () => void;
@@ -39,6 +41,7 @@ class End implements Stream {
   }
   async read(): Promise<Buffer | null> {
     for (;;) {
+      if (this.#reset) return null;
       if (this.#queue.length > 0) {
         const b = this.#queue.shift()!;
         // Its end read: the other side's finish is acknowledged.
@@ -60,6 +63,8 @@ class End implements Stream {
     return this.#stopped;
   }
   async reset(code: number): Promise<void> {
+    this.#reset = true;
+    this.#wake();
     this.#stop();
     this.peer.fail(new Error(`stream reset (${code})`));
   }
@@ -172,10 +177,12 @@ class MemoryEndpoint implements Endpoint {
     if (this.#closed) return null;
     return new Promise((r) => (this.#accepting = r));
   }
-  async connect(addr: Addr, alpn: Buffer): Promise<Connection> {
+  async connect(addr: Addr, offered: Buffer, additional: Buffer[] = []): Promise<Connection> {
     const there = this.#net.get(addr.id);
     if (!there || there.#closed || this.#closed) throw new Error(`no endpoint ${addr.id} here`);
-    if (!there.#alpns.some((a) => a.equals(alpn))) throw new Error("peer doesn't support any known protocol");
+    // The other's first protocol that is offered: the accepting side's order decides, as with iroh (rustls).
+    const alpn = there.#alpns.find((b) => [offered, ...additional].some((a) => a.equals(b)));
+    if (alpn === undefined) throw new Error("peer doesn't support any known protocol");
     const [mine, theirs] = [new Conn(addr.id, alpn), new Conn(this.#id, alpn)];
     mine.peer = theirs;
     theirs.peer = mine;

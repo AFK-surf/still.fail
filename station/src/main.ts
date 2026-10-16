@@ -26,6 +26,7 @@ import { hearErrors, log } from "./ops/log.ts";
 import { ConfigFile } from "./ops/config.ts";
 import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
+import { ownPorts } from "./ops/own.ts";
 import { version } from "./ops/version.ts";
 import { AdbShares, AdminApi, AdminHost, ControlPlane, Events, Key, MeshNative, Paths, Readers, ScreenRegistry, Store, Up } from "./services.ts";
 import { PROVIDERS, type Provider } from "./cloud/provider.ts";
@@ -76,6 +77,7 @@ const Loopback = (control: Control) =>
             const port = (server.address() as AddressInfo).port;
             // Behind the launcher's entrance, the launcher's port is the one there is (the launcher wrote it too).
             const shown = control.ports?.admin ?? port;
+            ownPorts.add(port).add(shown);
             mkdirSync(join(data, "run"), { recursive: true });
             writeFileSync(join(data, "run", "ports.json"), `{"admin":${shown}}\n`);
             control.serving("admin", port);

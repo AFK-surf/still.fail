@@ -21,6 +21,7 @@ import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, run
 import { bothNames, expandRoute, isMachine, profileEnv, profileModel } from "./profiles.ts";
 import { TOOL_SERVERS, cleanEnv, unreachable, uuid, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import { wall } from "../ops/fibers.ts";
+import { peerHttpBase } from "../tools/http.ts";
 
 type Json = any;
 
@@ -237,6 +238,8 @@ export class ClaudeDriver implements AgentDriver {
     const env: Record<string, string> = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(options.profile, "claude"), options.route) };
     env.CLAUDE_CONFIG_DIR = home;
     env[MCP_TOKEN_VAR] = options.mcpToken;
+    // Web services of the workspace's other stations: <this>/<station>/<port>/<path> (mesh/peer-http.ts).
+    env.STILLFAIL_PEER_HTTP = peerHttpBase(options.mcpUrl);
     // Lets the agent name its own transcript, e.g. for an independent reviewer (codex has CODEX_THREAD_ID).
     for (const name of bothNames("RUNTIME_SESSION_ID")) env[name] = sessionId;
     // A machine profile runs on the machine's own login, handed over as its current token (machine_logins.rs).

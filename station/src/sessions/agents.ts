@@ -32,7 +32,7 @@ import { feedbackTools, tellFixed } from "../tools/feedback.ts";
 import { signedPost } from "../cloud/signed.ts";
 import { version } from "../ops/version.ts";
 import { chatTools } from "../tools/chat.ts";
-import { type AgentsDoor, openAgentsDoor } from "../tools/http.ts";
+import { type AgentsDoor, type PeerRoute, openAgentsDoor } from "../tools/http.ts";
 import { jobTools } from "../tools/jobs.ts";
 import { McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
 import { remoteTools } from "../tools/remote.ts";
@@ -82,6 +82,9 @@ export type AgentsParts = {
   sharing: Sharing;
   /// Chats shared with other workspaces, and theirs shared with this one.
   xshare: ChatShares;
+  /// Where the agents' door sends /peer requests: the mesh's way to other stations' web services, once it is up
+  /// (mesh/peer-http.ts).
+  peers: { route: PeerRoute | null };
   slack: SlackParts;
   /// Where the station is in its control plane while in a workspace.
   place(): { origin: string; workspace: string; station: string; name: string } | null;
@@ -480,6 +483,8 @@ export const AgentsLive = (control: Control) =>
       );
 
       let door: AgentsDoor | null = null;
+      const peers: { route: PeerRoute | null } = { route: null };
+      const peerRoute = () => peers.route;
       let handing = false;
       // Taken up once the previous process is gone; then the door opens, and what was cut off resumes.
       const previous = previousGone(run);
@@ -493,15 +498,15 @@ export const AgentsLive = (control: Control) =>
         // remembered (the agents left running know it), 4750 on the machine's own data directory, any free one.
         const named = config.raw()?.http?.port;
         const notified = (authorization: string | undefined, body: Buffer) => notifyEndpoint(jobs, authorization, body);
-        if (control.mcpFd !== undefined) door = await openAgentsDoor({ fd: control.mcpFd }, mcp, notified);
+        if (control.mcpFd !== undefined) door = await openAgentsDoor({ fd: control.mcpFd }, mcp, notified, peerRoute);
         // Behind the launcher's entrance (launcher.ts `ports`): any port here, its port the one agents are told.
-        else if (control.ports) door = await openAgentsDoor({ port: 0, shown: control.ports.mcp }, mcp, notified);
+        else if (control.ports) door = await openAgentsDoor({ port: 0, shown: control.ports.mcp }, mcp, notified, peerRoute);
         else {
           const remembered = rememberedMcpPort(data);
           const tries = portsToTry(named === undefined ? undefined : Number(named), remembered, 4750, ownData(data));
           for (const [i, port] of tries.entries()) {
             try {
-              door = await openAgentsDoor({ port }, mcp, notified);
+              door = await openAgentsDoor({ port }, mcp, notified, peerRoute);
               break;
             } catch (error) {
               // The one remembered is passed over whatever keeps it; the usual one only when it is taken.
@@ -626,6 +631,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ previousGone: previous, hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, slack, overview: view, cloud, net, secrets, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      return Agents.of({ previousGone: previous, hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, peers, slack, overview: view, cloud, net, secrets, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
     }),
   );

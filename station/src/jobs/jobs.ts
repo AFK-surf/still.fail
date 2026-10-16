@@ -310,6 +310,8 @@ export class Jobs {
       env[`${prefix}JOB_TOKEN`] = job.token;
       env[`${prefix}JOB_NOTIFY`] = this.notifyUrl;
     }
+    // Web services of the workspace's other stations, through the same door (mesh/peer-http.ts).
+    if (this.notifyUrl !== "") env.STILLFAIL_PEER_HTTP = this.notifyUrl.replace(/\/jobs\/notify$/, "/peer");
     if (job.port !== null) env.PORT = String(job.port);
     // A group of its own (detached: pgid = its pid; on Windows the job of the runner it runs under), not ended with the
     // station. The shell appends to the log itself: Git's sh on Windows cannot write to a file Node opened for

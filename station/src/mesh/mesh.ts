@@ -9,6 +9,7 @@ import { ownPaths } from "../ops/own.ts";
 import { TOOLS_ALPN, adminSessions, presenceTools, serveTools } from "./tools.ts";
 import { Agents } from "../sessions/agents.ts";
 import { PEER_ALPN, followRoster, peerCall, servePeer } from "./peer.ts";
+import { PEER_HTTP_ALPN, PeerHttp, serveHttp } from "./peer-http.ts";
 import { followLock } from "./lock-sync.ts";
 import { Traces } from "./traces.ts";
 import { SubscriptionRef } from "effect";
@@ -38,8 +39,10 @@ export const MeshLive = Layer.effectDiscard(
       if (Number(process.env.STILLFAIL_MESH_BIND_ADDR?.split(":").at(-1)) > 0) {
         yield* Effect.promise(() => agents.previousGone);
       }
+      // The order is the one the endpoint prefers: a station asking for web requests offers the station transport's
+      // protocol after it (to tell a station from before it), and is to be answered in the first (peer-http.ts).
       const endpoint = yield* Effect.acquireRelease(
-        Effect.promise(() => bindStation(native, { secretKey: key.seed, alpns: [ALPN, FORMER_ALPN, PEER_ALPN, TOOLS_ALPN, GUEST_ALPN], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1" })),
+        Effect.promise(() => bindStation(native, { secretKey: key.seed, alpns: [ALPN, FORMER_ALPN, PEER_HTTP_ALPN, PEER_ALPN, TOOLS_ALPN, GUEST_ALPN], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1" })),
         // iroh closes gracefully, waiting on every connection (the keepers' too): up to ~12 s. A station stopping or
         // handing over doesn't wait that long: a second, then it is gone (clients reconnect, as they do anyway).
         (endpoint) => Effect.ignore(Effect.timeoutOption(Effect.promise(() => endpoint.close()), "1 second")),
@@ -57,6 +60,18 @@ export const MeshLive = Layer.effectDiscard(
       // And the stations of other workspaces chats are shared with or from (xshare/index.ts).
       const call = peerCall(endpoint, cloud.state, undefined, agents.xshare);
       agents.remote.attach(call);
+      // The agents' door's way to the other stations' web services (peer-http.ts).
+      yield* Effect.acquireRelease(
+        Effect.sync(() => {
+          const http = new PeerHttp(endpoint, cloud.state);
+          agents.peers.route = http;
+          return http;
+        }),
+        (http) => Effect.sync(() => {
+          if (agents.peers.route === http) agents.peers.route = null;
+          http.close();
+        }),
+      );
       // The workspace lock, kept level with the other stations it names (lock-sync.ts).
       yield* Effect.acquireRelease(
         Effect.sync(() => followLock(cloud.state, call)),
@@ -105,6 +120,7 @@ export const MeshLive = Layer.effectDiscard(
           connections,
           Effect.tryPromise(() =>
             conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, agents.remote)
+            : conn.alpn().equals(PEER_HTTP_ALPN) ? serveHttp(conn, cloud.state)
             : conn.alpn().equals(TOOLS_ALPN) ? serveTools(gateways, conn)
             : conn.alpn().equals(GUEST_ALPN) ? guests.serve(conn)
             : serve(members, conn),

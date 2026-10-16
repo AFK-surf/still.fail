@@ -32,7 +32,8 @@ export type Endpoint = {
   publicRelays(on: boolean): Promise<void>;
   keep(urls: string[]): void;
   accept(): Promise<Connection | null>;
-  connect(addr: Addr, alpn: Buffer): Promise<Connection>;
+  /// `additional`: protocols offered after `alpn` (the connection's `alpn()` says which one it speaks).
+  connect(addr: Addr, alpn: Buffer, additional?: Buffer[]): Promise<Connection>;
   close(): Promise<void>;
 };
 export type Mesh = {
