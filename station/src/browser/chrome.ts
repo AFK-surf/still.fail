@@ -176,11 +176,12 @@ export function chromeHost(o: ChromeOptions): ChromeHost {
     };
   }
 
-  /// `retried`: started again for its user agent; `anyPort`: the port it had last time was not had.
-  async function launch(retried = false, anyPort = false): Promise<Running> {
+  /// `retried`: started again for its user agent; `anyPort`: the port it had last time was not had; `windowless`:
+  /// headless whatever the machine says.
+  async function launch(retried = false, anyPort = false, windowless = false): Promise<Running> {
     const binary = o.binary ?? platform.browsers(process.env)[0];
     if (binary === undefined) throw new Error("There is no Chrome on this machine: install Google Chrome (or Chromium or Edge) and ask again.");
-    const headless = o.headless ?? !platform.hasDisplay(process.env);
+    const headless = windowless || (o.headless ?? !platform.hasDisplay(process.env));
     mkdirSync(profile, { recursive: true });
     rmSync(activePort, { force: true });
     const state = readState(o.dir);
@@ -208,7 +209,7 @@ export function chromeHost(o: ChromeOptions): ChromeHost {
         if (pid !== null) platform.signalGroup(pid, "SIGKILL");
         log.warn("browser", "Chrome did not answer on the port it had; starting it on another", { port });
         await wall.sleep(END_MS);
-        return launch(retried, true);
+        return launch(retried, true, windowless);
       }
       if (waited >= START_MS) {
         if (pid !== null) platform.signalGroup(pid, "SIGKILL");
@@ -224,7 +225,7 @@ export function chromeHost(o: ChromeOptions): ChromeHost {
     if (headless && agent === undefined && /HeadlessChrome/.test(said.agent) && !retried) {
       writeState(o.dir, (s) => ({ ...s, headlessAgent: { binary, mtimeMs, agent: headfulAgent(said.agent) } }));
       await closeAndKill(running);
-      return launch(true);
+      return launch(true, anyPort, windowless);
     }
     writeState(o.dir, (s) => ({ ...s, running, port: running.port }));
     log.info("browser", "Chrome started", { binary, port: running.port, pid, headless });
@@ -255,5 +256,20 @@ export function chromeHost(o: ChromeOptions): ChromeHost {
     if (readActive()?.port === running.port && (await version(running.port)) === null) rmSync(activePort, { force: true });
   }
 
-  return { find, launch: () => launch(), kill, connect: connectCdp };
+  return {
+    find,
+    async launch() {
+      try {
+        return await launch();
+      } catch (e) {
+        // A machine said to show windows that shows none to this process (a Mac's station with no one logged in):
+        // headless, then.
+        if (o.headless !== undefined || !platform.hasDisplay(process.env)) throw e;
+        log.warn("browser", "Chrome did not start with windows; starting it headless", { error: (e as Error).message });
+        return launch(false, false, true);
+      }
+    },
+    kill,
+    connect: connectCdp,
+  };
 }
