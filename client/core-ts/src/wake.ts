@@ -174,17 +174,6 @@ export class WakingHost implements Host {
     if (inner.secureDelete) this.secureDelete = (key) => inner.secureDelete!(key);
   }
 
-  // The system's secure storage: the device's, as the host has it (none on a web page).
-  get secureGet(): Host["secureGet"] {
-    return this.inner.secureGet?.bind(this.inner);
-  }
-  get secureSet(): Host["secureSet"] {
-    return this.inner.secureSet?.bind(this.inner);
-  }
-  get secureDelete(): Host["secureDelete"] {
-    return this.inner.secureDelete?.bind(this.inner);
-  }
-
   cloudOrigin(): string {
     return this.inner.cloudOrigin();
   }

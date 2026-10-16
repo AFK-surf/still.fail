@@ -482,7 +482,8 @@ class Vaults {
   #boxKey(reason: string): Effect.Effect<Uint8Array, CoreError> {
     const inner = this.#inner;
     return Effect.gen(function* () {
-      const priv = yield* Effect.mapError(inner.host.secureGet!(BOX_KEY, { user: true, reason }), (e) => new CoreError("vault_refused", e.message));
+      // The host says why in its words (`user_cancelled`, `no_device_lock`, `not_in_front`, …): the code a page goes by.
+      const priv = yield* Effect.mapError(inner.host.secureGet!(BOX_KEY, { user: true, reason }), (e) => new CoreError(/^[a-z][a-z_]*$/.test(e.message) ? e.message : "vault_refused", e.message));
       if (priv === null || priv.length !== 32) return yield* fail("vault_not_set_up", t("core-misc.vault.notSetUp"));
       return priv;
     });

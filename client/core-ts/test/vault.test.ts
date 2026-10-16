@@ -159,13 +159,15 @@ function fakeStation() {
 }
 
 /// A core on an app's host (keys kept, secure storage), reaching `ws/st` (the fake station); its lock put in place.
-async function rig() {
+/// `web`: a web page's host (no secure storage).
+async function rig(web = false) {
   const st = fakeStation();
   const me = { signer: null as Signer | null };
   const phone = key(fill(2)), other = key(fill(3));
   const s = await started(undefined, 0, undefined, (x) => {
     x.host.appKeys = true;
     me.signer = Effect.runSync(Signer.make(x.host));
+    if (web) x.host.secureGet = undefined;
     stationReplies(x.host, st.reply);
   });
   const genesis = lockOf({ id: me.signer!.id, signBytes: (b) => me.signer!.signBytes(b) }, phone, other);
@@ -343,9 +345,8 @@ test("vault calls: an agent's request approved (sealed to its keeper, signed) or
 });
 
 test("a web page keeps no keys: the vault is refused there", async () => {
-  const r = await rig();
+  const r = await rig(true);
   r.putLock();
-  r.host.secureGet = undefined;
   await fails(r.ask("vault.setup", {}), "vault_unavailable");
   const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
   assert.equal(vaults().available, false);

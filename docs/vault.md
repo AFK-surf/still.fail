@@ -60,9 +60,9 @@
 
 ## 存储和同步
 
-- **station**：新表 `vaults`、`vault_items`（`CREATE TABLE IF NOT EXISTS`），只存密文和签名。一个库挂在一台 station 上（host），别的 station 存一份副本，做法照搬「分享」：host 是正本，副本只读，host 离线时照样能读。
-- **core**：两个新 topic，`vaults` 和 `vaultItems`，按 id 增量同步，和其他数据一样存进 core 的 db。解锁后的明文只放在内存里，app 退到后台 N 分钟（默认 5）就清掉。
-- **冲突**：条目按 `version` 写入，带上 `base`；`base` 对不上就拒绝，客户端把两份都留下，标成「有冲突」。
+- **station**：新表 `vaults`、`vault_items`、`vault_boxes`（`CREATE TABLE IF NOT EXISTS`，`station/src/vault/store.ts`），只存密文和签名，每个库、条目、设备只留最新一版。一个库挂在一台 station 上（建库时选，默认 workspace 里第一台能放库的）。**以后**再做副本：别的 station 存一份，做法照搬「分享」，host 是正本，副本只读，host 离线时照样能读；这一期没有副本，那台 station 离线时库读不到新的（core 里缓存的照样显示）。
+- **core**：两个新 topic，`vaults` 和 `vaultItems`（`client/core-ts/src/views/vault.ts`），按 id 增量发给界面；station 给的库、条目、证书、申请存进 core 的 db（workspace 的 `vault`、`vaultItems:<库>` 记录），station 每次重新读（事件流重开）时一起读，之后靠事件。解开的库钥匙只放在内存里，最后一次解开后 5 分钟清掉（`vault.lock` 立刻清）；明文不缓存。
+- **冲突**：条目按 `version` 写入，station 只收恰好大一的，不是就回 `vault_conflict`（带上 station 手上的那版）；core 重新读这个库的条目，调用以 `vault_conflict` 失败，由人决定再写一次。「两份都留下」以后再做。
 - **cloud**：什么都不加。
 
 ## agent 用密钥
@@ -148,7 +148,7 @@ sequenceDiagram
 
 - 二进制一律 base64url（不带 `=`），公钥 `x25519:<hex>`，签名钥匙沿用锁的 `ed25519:<hex>`、`p256:<b64url>`。
 - 要签名、要做附加数据的 JSON 都用锁的 `canonical`（键排序、无空白、只有整数）。
-- 签名：`sig = {key, alg, sig}`，和锁的 `Sig` 一样（这一期不收 passkey 签名），签的字节是 `"<标签>\0" + sha256(canonical(去掉 sig 的对象))`。标签：箱钥匙证书 `stillfail-vault-box/1`，库 `stillfail-vault/1`，条目 `stillfail-vault-item/1`，授权 `stillfail-vault-grant/1`，拒绝 `stillfail-vault-deny/1`。
+- 签名：`sig = {key, alg, sig}`，和锁的 `Sig` 一样（这一期不收 passkey 签名），签的字节是 `"<标签>\0" + sha256(canonical(去掉 sig 的对象))`（sha256 的 32 个原始字节，不是 hex）。标签：箱钥匙证书 `stillfail-vault-box/1`，库 `stillfail-vault/1`，条目 `stillfail-vault-item/1`，授权 `stillfail-vault-grant/1`，拒绝 `stillfail-vault-deny/1`。
 
 ### 封装（seal）
 
@@ -157,8 +157,12 @@ sequenceDiagram
 ### 箱钥匙证书
 
 ```
-BoxCert = {v: 1, ws, device: <锁里设备的基础公钥 hex>, box: "x25519:<hex>", at, sig}   // sig.key 必须是锁里这台设备的 sign_key
+BoxCert = {v: 1, ws, device: <锁里设备的基础公钥 hex>, box: "x25519:<hex>", recovery?: "x25519:<hex>", at, sig}   // sig.key 必须是锁里这台设备的 sign_key
 ```
+
+- 发布在 station 上：`PUT vault/boxes`（body 是证书），`GET vault/boxes` 列出这个 workspace 里锁还认的设备的证书，每台设备留 `at` 最新的一张。谁拿来都行，签名说了算。
+- `recovery`（新加的可选字段，在签名里）：这个人恢复码的公钥。他任何一台设备建库时把库钥匙也封给它；第一台设置的设备生成恢复码，之后的设备从同一个人的证书里拿，不再生成。
+- 一台设备一把箱钥匙（`vault-box`，各 workspace 共用），每个 workspace 各签一张证书。
 
 ### 库
 
@@ -169,7 +173,9 @@ Vault = {v: 1, ws, id: "v_<ULID>", seq, owner: <sub>, name, members: [<sub>],
 ```
 
 - `sig.key` 是锁里 `owner` 的某台 app 设备的 `sign_key`。`owner` 不能变；`seq` 每版加一，station 只收 `seq` 恰好大一的（第一次是 0）。
-- `keys` 里每张证书都要验：签名对、设备在锁里、设备属于 `members` 里的人。
+- `keys` 里每张证书都要验：签名对、设备在锁里、设备属于 `members` 里的人；一台设备一把。`members` 都要在锁里，`owner` 在 `members` 里。
+- 比上一版少了人或少了设备，`epoch` 必须变大（station 检查）；`epoch` 不往回走。加设备、加人不换 `epoch`。
+- core 也不信 station 给的库：用库钥匙之前验这一版是 owner 的设备签的，封钥匙给证书之前验证书；锁本身由 core 逐条验签和权限（`client/core-ts/src/vault/lock-check.ts`，和 station 的 `apply` 同一套规则），不信 cloud 和 station 拼出来的锁。
 - 恢复码：24 个词（BIP-39 英文词表）= 32 字节熵，`恢复私钥 = HKDF-SHA256(熵, info="stillfail-vault-recovery/1")` 当 X25519 私钥用。
 - 换 `epoch`（删人、删设备）时重新生成库钥匙，`keys` 全部重包。
 
@@ -184,6 +190,8 @@ Item = {v: 1, ws, vault, id: "i_<ULID>", version, epoch, deleted?: true,
 明文 = {kind: "token"|"ssh_key"|"login", name, fields: {…}, domains: [], notes}
        token: {value}; ssh_key: {private_key(OpenSSH PEM), public_key}; login: {username, password, totp?}
 ```
+
+- 第一版 `version` 是 0。写入时 `epoch` 必须等于库现在的 `epoch`；删除那一版的 `epoch` 不大于它就行。删掉的条目不能再写。
 
 - `sig` 是写入设备的 `sign_key`（锁里的、属于库 `members`）。station 只收 `version` 恰好大一的；删除是写一版 `deleted: true` 的空密文。
 - 没有 `listing` 的条目 agent 看不到。`hosts` 支持 `*.example.com`。
@@ -207,10 +215,17 @@ core → station（走现有的 admin/工作区路由，按锁认出设备和成
 
 | 调用 | 做什么 |
 |---|---|
-| `GET vault/vaults`、`GET vault/items?vault=` | 列出这个人能看到的库和条目（全量密文；core 按 id 增量存） |
-| `PUT vault/vaults`、`PUT vault/items` | 写一版（验签、验 seq/version） |
+| `GET vault/vaults`、`GET vault/items?vault=` | 列出这个人能看到的库和条目（全量密文；core 按 id 增量存）：`{vaults}`、`{items}`。不带 `vault=` 是他所在的所有库的条目 |
+| `PUT vault/vaults`、`PUT vault/items` | 写一版（验签、验 seq/version），回 `{vault}`、`{item}` |
+| `GET vault/boxes`、`PUT vault/boxes` | 箱钥匙证书（见上） |
 | `GET vault/requests` | 这个人能批准的、还在等的申请 |
 | `POST vault/grants`、`POST vault/denials` | 批准、拒绝 |
+
+- 都要 station 钉住了这个 workspace 的锁，否则回 409 `{code: "vault_needs_lock"}`。其他拒绝也带 `code`：`vault_invalid`（400，格式或签名不对，`error` 说为什么）、`vault_conflict`（409，不是下一版，带 station 手上的 `vault`/`item`）、`vault_unknown`（404，没有这个库或不是他的）。core 把 `code` 原样当错误码（`station/requests.ts` 的 `httpError`）。
+- 推送（事件流，和其他数据一样，断线续传）：`vault`（一版库，发给它的成员）、`vault-gone` `{id}`（被移出库的人）、`vault-item`（一版条目，发给库的成员）、`vault-box`（证书，发给 workspace 的人）、`vault-request`（申请，状态变了也发，发给库的成员）。
+- 旧 station 回 404，core 记成这台不能放库（`vaults` topic 的 `refused`）。
+
+core 的调用（`vault.<名字> {workspace, …}`，`client/core-ts/src/views/vault.ts`）：`setup`（建箱钥匙、发证书；第一次回 24 个词，只回这一次）、`create {name, station?}`、`addDevice {vault, device?}`（owner 把库钥匙封给成员新设置的设备）、`putItem {vault, id?, plain, listing?}`、`deleteItem {vault, item}`、`open {item}`、`recover {words}`（用恢复码把这台设备加回自己的库）、`approve {request, scope}`（`once`/`hour` 授权一小时，`chat` 24 小时）、`deny {request}`、`lock`。网页 host 没有 `secure*`，这些调用都回 `vault_unavailable`。这一期只有个人库：加人（`members` 变多）的调用还没做，格式和 station 已经支持。
 
 agent → station（MCP 工具，在 `stillfail` 服务器里）：
 
