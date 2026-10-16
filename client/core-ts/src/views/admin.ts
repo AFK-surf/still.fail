@@ -334,7 +334,7 @@ function row(list: string, v: J, now: number): J {
     note: strOf(v, "note"),
     line,
     state,
-    marks: [mark(codeLabel(state), tone)],
+    marks: get(v, "beta") === true ? [mark(codeLabel(state), tone), mark(channelLabel("beta"), "accent")] : [mark(codeLabel(state), tone)],
     url: orNull(get(v, "url")),
     user: user !== null ? strOf(user, "sub") : null,
     created_at: orNull(get(v, "created_at")),

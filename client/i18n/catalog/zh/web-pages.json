@@ -9,6 +9,8 @@
   "web-pages.addProfile.station": "添加到哪台 station",
   "web-pages.admin.backToList": "返回列表",
   "web-pages.admin.changeFailed": "没能更改：{error}",
+  "web-pages.admin.code.beta": "附带测试版",
+  "web-pages.admin.code.betaHint": "用这个码的人同时开通测试版",
   "web-pages.admin.code.copyLink": "复制注册链接",
   "web-pages.admin.code.days": "{n} 天",
   "web-pages.admin.code.link": "注册链接",

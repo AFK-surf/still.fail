@@ -111,6 +111,8 @@ export interface AdminFeedback {
 export interface InviteCodeView {
   code: string;
   note: string;
+  /** Whoever redeems it is let into the test channel too. Missing from a cloud from before. */
+  beta?: boolean;
   created_at: number;
   expires_at: number;
   revoked_at: number | null;

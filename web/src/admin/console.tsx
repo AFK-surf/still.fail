@@ -513,7 +513,8 @@ const DAYS = [7, 14, 30, 90];
 function NewCodeDialog({ account, onClose }: { account: Account; onClose(): void }) {
   const [note, setNote] = useState("");
   const [days, setDays] = useState("14");
-  const make = useAction(() => admin.createCode(account.sub, note, Number(days)));
+  const [beta, setBeta] = useState(false);
+  const make = useAction(() => admin.createCode(account.sub, note, Number(days), beta));
   const made = make.result;
   return (
     <Dialog open onClose={onClose} wide title={made ? t("web-pages.admin.code.made") : t("web-pages.admin.code.make")}
@@ -536,6 +537,7 @@ function NewCodeDialog({ account, onClose }: { account: Account; onClose(): void
           <Field label={t("web-pages.admin.code.validity")}>
             <Select value={days} onChange={setDays} label={t("web-pages.admin.code.validity")} options={DAYS.map((d) => ({ value: String(d), label: t("web-pages.admin.code.days", { n: d }) }))} />
           </Field>
+          <SwitchRow title={t("web-pages.admin.code.beta")} description={t("web-pages.admin.code.betaHint")} checked={beta} onChange={setBeta} />
         </>
       )}
       {make.error && <p className={controlsCss.fieldError} role="alert">{make.error.message}</p>}

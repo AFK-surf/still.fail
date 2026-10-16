@@ -77,7 +77,8 @@ export const cloud = {
 export const admin = {
   me: (sub: string) => operations(sub).adminMe<{ email: string }>(),
   /** Each with its sign-up link on the web app. */
-  createCode: (sub: string, note: string, days: number) => operations(sub).adminCreateCode<InviteCodeView & { url: string }>({ note, days }),
+  /** With `beta`, whoever redeems it is let into the test channel too. */
+  createCode: (sub: string, note: string, days: number, beta = false) => operations(sub).adminCreateCode<InviteCodeView & { url: string }>({ note, days, ...(beta ? { beta } : {}) }),
   revokeCode: (sub: string, code: string) => operations(sub).adminRevokeCode<{ ok: true }>({ code }),
   /** Lets the account `user` into the test channel (app.youdid.wtf), or out of it. */
   setBeta: (sub: string, user: string, on: boolean) => operations(sub).adminSetBeta<{ sub: string; beta: boolean }>({ user, on }),

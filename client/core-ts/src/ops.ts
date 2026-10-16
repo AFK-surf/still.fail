@@ -150,7 +150,7 @@ export const PARAMS: Record<string, string> = {
   "invitation.decline": "id:string",
   "loginSession.revoke": "id:string",
   "admin.me": "",
-  "admin.createCode": "note?:string days?:number",
+  "admin.createCode": "note?:string days?:number beta?:boolean",
   "admin.revokeCode": "code:string",
   "admin.setBeta": "user:string on?:boolean",
   "admin.setMayCreate": "user:string on?:boolean",
@@ -480,7 +480,7 @@ function cloudOp(name: string, params: unknown): Request | null {
     case "admin.me":
       return op("GET", () => "/v1/admin/me", null);
     case "admin.createCode":
-      return op("POST", () => "/v1/admin/invite-codes", p.pick(["note", "days"]));
+      return op("POST", () => "/v1/admin/invite-codes", p.pick(["note", "days", "beta"]));
     case "admin.revokeCode":
       return op("POST", () => `/v1/admin/invite-codes/${p.at("code")}/revoke`, null);
     case "admin.setBeta":

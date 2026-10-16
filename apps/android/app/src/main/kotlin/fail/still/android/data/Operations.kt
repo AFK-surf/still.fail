@@ -661,6 +661,7 @@ class CloudOperations(private val call: suspend (String, JsonObject) -> JsonElem
     class AdminCreateCodeFields : OperationFields() {
         var note: String? by field<String>("note") { JsonPrimitive(it) }
         var days: Long? by field<Long>("days") { JsonPrimitive(it) }
+        var beta: Boolean? by field<Boolean>("beta") { JsonPrimitive(it) }
     }
     suspend fun adminCreateCode(fill: AdminCreateCodeFields.() -> Unit = {}): JsonElement {
         val values = AdminCreateCodeFields().apply(fill).fields

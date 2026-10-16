@@ -79,6 +79,11 @@ test("emails_given_rights_before_a_sign_in_are_listed_with_the_users_and_have_a_
   assert.equal(list("users", users(), "", null, null, null, NOW).total, 3);
 });
 
+test("a_code_with_the_test_channel_says_so", () => {
+  const v = list("invite-codes", { codes: [{ code: "AAAA-BBBB-CCCC", note: "", beta: true, created_at: NOW - 60, expires_at: NOW + DAY, revoked_at: null, used_at: null, used_by: null, workspace: null }] }, "", null, null, null, NOW);
+  assert.deepEqual(v.rows[0].marks.map((m: J) => m.label), ["可用", "测试版"]);
+});
+
 test("workspaces_say_what_is_off", () => {
   const all = list("workspaces", workspaces(), "", null, null, null, NOW);
   assert.deepEqual(ids(all), ["w1", "w2"]);

@@ -97,7 +97,7 @@ export interface OperationParams {
   "invitation.decline": { id: string };
   "loginSession.revoke": { id: string };
   "admin.me": {  };
-  "admin.createCode": { note?: string | null | undefined; days?: number | null | undefined };
+  "admin.createCode": { note?: string | null | undefined; days?: number | null | undefined; beta?: boolean | null | undefined };
   "admin.revokeCode": { code: string };
   "admin.setBeta": { user: string; on?: boolean | null | undefined };
   "admin.setMayCreate": { user: string; on?: boolean | null | undefined };

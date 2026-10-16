@@ -307,9 +307,11 @@ export async function adminApi(request: Request, env: Env, path: string): Promis
   if (remove && method === "POST") return directory(() => dir.adminDeleteWorkspace(remove[1]!));
   // Each with its sign-up link: that is the web app's, on the other origin.
   if (path === "/v1/admin/invite-codes" && method === "GET") return directory(async () => ({ codes: (await dir.inviteCodes()).map((c) => ({ ...c, url: inviteUrl(env, c.code) })) }));
+  // { note?, days?, beta?: boolean }: with beta, whoever redeems it is let into the test channel too.
   if (path === "/v1/admin/invite-codes" && method === "POST") {
+    if (input.beta !== undefined && input.beta !== null && typeof input.beta !== "boolean") return reply({ error: "invalid_request" }, 400);
     return directory(async () => {
-      const made = await dir.createInviteCode(claims.sub, input.note, input.days);
+      const made = await dir.createInviteCode(claims.sub, input.note, input.days, input.beta === true);
       return { ...made, url: inviteUrl(env, made.code) };
     });
   }

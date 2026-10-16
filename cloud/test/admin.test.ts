@@ -396,3 +396,26 @@ test("the admin gives an email the test channel and the standard plan before any
     await h.close();
   }
 });
+
+test("an invite code made with the test channel lets whoever redeems it in too; one without does not", async () => {
+  const h = await harness();
+  try {
+    const aliceAdmin = h.as(await h.login("alice"), "admin");
+    const beta = await (await aliceAdmin("POST", "/v1/admin/invite-codes", { beta: true })).json() as any;
+    const plain = await (await aliceAdmin("POST", "/v1/admin/invite-codes", {})).json() as any;
+    assert.deepEqual([beta.beta, plain.beta], [true, false]);
+    assert.equal((await aliceAdmin("POST", "/v1/admin/invite-codes", { beta: "yes" })).status, 400);
+
+    const dave = h.as(await h.login("dave"));
+    const erin = h.as(await h.login("erin"));
+    const me = async (as: typeof dave) => ((await (await as("GET", "/v1/me")).json()) as any).user;
+    assert.equal((await dave("POST", "/v1/workspaces", { name: "D", invite_code: beta.code })).status, 200);
+    assert.equal((await erin("POST", "/v1/workspaces", { name: "E", invite_code: plain.code })).status, 200);
+    assert.equal((await me(dave)).beta, true);
+    assert.equal("beta" in (await me(erin)), false);
+    const { codes } = await (await aliceAdmin("GET", "/v1/admin/invite-codes")).json() as any;
+    assert.equal(codes.find((c: any) => c.code === beta.code).beta, true);
+  } finally {
+    await h.close();
+  }
+});

@@ -124,6 +124,8 @@ export class Directory extends DurableObject<Env> {
     for (const column of ["fixed_in INTEGER", "fixed_parts TEXT", "told_at INTEGER"]) {
       if (!reported.has(column.split(" ")[0]!)) this.#run(`ALTER TABLE feedback ADD COLUMN ${column}`);
     }
+    // Nor had invite codes the test channel to give with them (1), before they could.
+    if (!this.#rows("PRAGMA table_info(invite_codes)").some((r) => r.name === "beta")) this.#run("ALTER TABLE invite_codes ADD COLUMN beta INTEGER");
     // Nor had workspaces relays of their own (a JSON array of URLs, null for none), before they could have.
     if (!this.#rows("PRAGMA table_info(workspaces)").some((r) => r.name === "relays")) this.#run("ALTER TABLE workspaces ADD COLUMN relays TEXT");
     // Nor did push keep a device's language, before there were languages.
@@ -343,6 +345,8 @@ export class Directory extends DurableObject<Env> {
       this.#run("INSERT INTO members (workspace, sub, role, added_at) VALUES (?, ?, 'owner', ?)", id, sub, now);
       if (redeem) {
         this.#run("UPDATE invite_codes SET used_by = ?, used_at = ?, workspace = ? WHERE code = ?", sub, now, id, redeem);
+        // A code made with the test channel lets its account in too.
+        this.#run("UPDATE users SET beta = 1 WHERE sub = ? AND (SELECT beta FROM invite_codes WHERE code = ?) = 1", sub, redeem);
         this.#run("UPDATE users SET admitted = 'code' WHERE sub = ? AND (admitted IS NULL OR admitted IN ('invitation', 'free'))", sub);
       } else if (!standard) {
         // In a workspace, but not from before codes (#standard).
@@ -1025,10 +1029,11 @@ export class Directory extends DurableObject<Env> {
   }
 
   inviteCodes(): InviteCodeView[] {
-    return this.#rows(`SELECT c.code, c.note, c.created_at, c.expires_at, c.revoked_at, c.used_at, u.sub, u.email, u.name, u.picture, w.id, w.name AS workspace_name
+    return this.#rows(`SELECT c.code, c.note, c.beta, c.created_at, c.expires_at, c.revoked_at, c.used_at, u.sub, u.email, u.name, u.picture, w.id, w.name AS workspace_name
       FROM invite_codes c LEFT JOIN users u ON u.sub = c.used_by LEFT JOIN workspaces w ON w.id = c.workspace ORDER BY c.created_at DESC, c.code`).map((row) => ({
       code: row.code as string,
       note: row.note as string,
+      beta: Boolean(row.beta),
       created_at: row.created_at as number,
       expires_at: row.expires_at as number,
       revoked_at: row.revoked_at as number | null,
@@ -1038,13 +1043,14 @@ export class Directory extends DurableObject<Env> {
     }));
   }
 
-  createInviteCode(sub: string, note: unknown, days: unknown): InviteCodeView {
+  /** A code; with `beta`, the account that redeems it is let into the test channel too. */
+  createInviteCode(sub: string, note: unknown, days: unknown, beta = false): InviteCodeView {
     const clean = typeof note === "string" ? note.trim().replace(/\s+/g, " ") : "";
     if (clean.length > 200) fail(400, "invalid_note");
     const ttl = days === undefined ? CODE_TTL_DAYS : Number.isInteger(days) && (days as number) >= 1 && (days as number) <= 365 ? (days as number) : fail(400, "invalid_expiry");
     const code = newCode();
     const now = nowSeconds();
-    this.#run("INSERT INTO invite_codes (code, note, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?)", code, clean, sub, now, now + ttl * 24 * 60 * 60);
+    this.#run("INSERT INTO invite_codes (code, note, created_by, created_at, expires_at, beta) VALUES (?, ?, ?, ?, ?, ?)", code, clean, sub, now, now + ttl * 24 * 60 * 60, beta ? 1 : null);
     return this.inviteCodes().find((c) => c.code === code)!;
   }
 

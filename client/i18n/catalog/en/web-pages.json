@@ -9,6 +9,8 @@
   "web-pages.addProfile.station": "Add on station",
   "web-pages.admin.backToList": "Back",
   "web-pages.admin.changeFailed": "Couldn't change: {error}",
+  "web-pages.admin.code.beta": "With the test channel",
+  "web-pages.admin.code.betaHint": "Whoever uses it is let into the test channel too",
   "web-pages.admin.code.copyLink": "Copy link",
   "web-pages.admin.code.days": {
     "one": "1 day",
