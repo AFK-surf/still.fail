@@ -197,7 +197,7 @@ class AgentSheetTest {
         picture(h, if (dark) "chat-info-share-dark" else "chat-info-share")
         rule.onNodeWithText("分享给其他 workspace").performClick()
         h.settle()
-        rule.onNodeWithText("所选 workspace 中的 agent 可读取此对话").assertIsDisplayed()
+        rule.onNodeWithText("所选 workspace 中的 agent 可读取此对话；连续 6 小时未使用即失效，需重新分享").assertIsDisplayed()
         rule.onNodeWithText("个人").performClick()
         rule.onNodeWithText("可发送消息").performClick()
         h.settle()
@@ -221,7 +221,7 @@ class AgentSheetTest {
         rule.onNodeWithText("设计组、Acme 海外 · 只读").assertIsDisplayed()
         rule.onNodeWithText("分享给其他 workspace").performClick()
         h.settle()
-        rule.onNodeWithText("所选 workspace 中的 agent 可读取此对话").assertDoesNotExist()
+        rule.onNodeWithText("所选 workspace 中的 agent 可读取此对话；连续 6 小时未使用即失效，需重新分享").assertDoesNotExist()
         assertTrue(h.fake.calls.none { it.first == "chat.xshare" })
     }
 
