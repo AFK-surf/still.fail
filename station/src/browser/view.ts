@@ -137,10 +137,14 @@ export const COPY_HOOK = `(() => {
     }
     return String(window.getSelection() || "");
   };
+  // What was selected, said once the copy's dispatch is over (a message to itself: a task after it) unless the page
+  // set its own by then.
   let pending = null;
+  const after = new MessageChannel();
+  after.port1.onmessage = () => { if (pending) say(pending); pending = null; };
   const started = () => {
     pending = selected();
-    setTimeout(() => { if (pending) say(pending); pending = null; }, 0);
+    after.port2.postMessage(0);
   };
   const reached = (e) => {
     let set = "";
