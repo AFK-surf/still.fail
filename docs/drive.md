@@ -99,8 +99,8 @@ move (→ and ← into and out of a folder in columns and a tree), typed letters
 a name, ⏎ changes a name in place, space previews, ⌘⌫ deletes what is chosen,
 ⌘⇧N makes a folder (named as Finder names one, its name then changed). Hidden
 files (a name starting with `.`) show only after ⌘⇧. ; the order (name, time,
-size or kind, by the list's heads or the folder's right-click menu) and that are
-the person's on the device (prefs `driveViews`). On the files' page what is
+size or kind, by the list's heads or the folder's right-click menu) and whether
+they show are the person's, on the device (prefs `driveViews`). On the files' page what is
 dragged onto a folder (its row, a column, the list) goes into it: a station's own
 files moved (`drive.rename`; by the top of the disk for one from another folder
 pinned), the computer's put up, a folder of them made there and filled. The phone reaches a drive from
