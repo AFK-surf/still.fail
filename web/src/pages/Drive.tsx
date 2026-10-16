@@ -277,13 +277,18 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
         onDragOver={(e) => { if (d.write && e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDragging(true); } }}
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
         onDrop={(e) => { if (!d.write || !e.dataTransfer.files.length) return; e.preventDefault(); setDragging(false); upload(station.address, root, path, [...e.dataTransfer.files]); }}>
-        {folder.error ? (
+        {/* Columns stay while the folder opened is read (each column says its own reading or trouble), not redrawn whole. */}
+        {view === "columns" ? (
+          <>
+            {uploads.map((u) => <UploadRow key={u.key} u={u} />)}
+            <ColumnsView at={{ ...at, path: "" }} open={path} onGo={(p) => go(drivePath(station.base, root, p))} rowOf={rowOf} empty={uploads.length ? <></> : empty} />
+          </>
+        ) : folder.error ? (
           <div className={css.problem}><p className={controlsCss.fieldError}>{folder.error.message}</p><Button variant="ghost" icon={Retry} onClick={reload}>{t("web-pages.drive.retry")}</Button></div>
         ) : !folder.value ? <p className={shellCss.muted}>{t("web-pages.drive.reading")}</p> : (
           <>
             {uploads.map((u) => <UploadRow key={u.key} u={u} />)}
-            {view === "columns" ? <ColumnsView at={{ ...at, path: "" }} open={path} onGo={(p) => go(drivePath(station.base, root, p))} rowOf={rowOf} empty={uploads.length ? <></> : empty} />
-              : view === "tree" ? <TreeView key={path} at={at} rowOf={rowOf} empty={uploads.length ? <></> : empty} />
+            {view === "tree" ? <TreeView key={path} at={at} rowOf={rowOf} empty={uploads.length ? <></> : empty} />
               : <>
                 {entries.length === 0 && uploads.length === 0 && empty}
                 {entries.map((e) => <EntryRow key={e.name} at={at} entry={e} items={items(e)} onOpen={() => open(e)} />)}

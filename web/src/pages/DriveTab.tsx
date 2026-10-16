@@ -47,7 +47,7 @@ export function DriveTab({ chat }: {
     <div className={css.tab}>
       {place === null
         ? <Places scope={here.address.split("/")[0] ?? ""} onGo={(station, root) => setAsked({ station, root, path: "" })} />
-        : <FolderList key={`${place.station}\n${place.root}\n${place.path}`} station={place.station} root={place.root} path={place.path} chat={chat}
+        : <FolderList key={`${place.station}\n${place.root}`} station={place.station} root={place.root} path={place.path} chat={chat}
           onGo={(root, path) => setAsked({ station: place.station, root, path })} onPlaces={() => setAsked(null)}
           onOpen={(at, entries, entry) => {
             const full = joinPath(at.path, entry.name);
