@@ -249,3 +249,12 @@ globalStyle(`${sidePanel} ${resizeHandle}`, {
 globalStyle(`${sideBar} ${sideTabList}`, { flex: "1", minWidth: "0", height: "auto", padding: "0", borderBottom: "0" });
 /** Ending its warm process, in its details' line: a link's look, as the profile's beside it. */
 export const evict = style({ padding: "0", border: "0", background: "none", color: "inherit", font: "inherit", cursor: "pointer" });
+
+/** The chat takes files dropped anywhere on it (ChatPage.tsx useChatDrop): what letting go does, said over it meanwhile. */
+export const dropZone = style({ position: "relative" });
+export const dropHint = style({
+  position: "absolute", inset: "0", zIndex: 30, display: "grid", placeItems: "center", pointerEvents: "none",
+  background: `color-mix(in srgb, ${vars.canvas} 82%, transparent)`,
+  boxShadow: `inset 0 0 0 2px color-mix(in srgb, ${vars.accent} 60%, transparent)`,
+  color: vars.text, fontSize: vars.textUi,
+});

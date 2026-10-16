@@ -3,6 +3,7 @@
 // copied by the chat's station when it is the one that has it, else read from the other and sent up); and its path as
 // plain text, for anywhere else (a text field, a terminal).
 import type { DriveEntry } from "../core/shapes.ts";
+import type { Dropped } from "../draft.ts";
 import { absoluteOf } from "./useDrive.ts";
 import { joinPath, type At } from "./model.ts";
 
@@ -43,4 +44,27 @@ export function droppedOf(dt: DataTransfer): Dragged[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * Files dropped from Finder (or Explorer) in the desktop app on a machine that is one of the workspace's stations: named
+ * by their path there, each kept to send as a file if switched. Elsewhere (a browser, an app from before, a machine that
+ * is no station of the workspace) none is: they go up as files.
+ */
+export function droppedFromFinder(dt: DataTransfer, here: { station: string; name: string } | null): Dropped[] | null {
+  const pathOf = window.stillfailDesktop?.pathOf;
+  if (!here || !pathOf) return null;
+  const items = [...dt.items].filter((i) => i.kind === "file");
+  const out: Dropped[] = [];
+  for (const item of items) {
+    const file = item.getAsFile();
+    const path = file ? pathOf(file) : "";
+    if (!file || !path) return null;
+    const dir = item.webkitGetAsEntry?.()?.isDirectory === true;
+    // Sent to the station it is on, it is copied there from where it is; to another, it goes up from here.
+    const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+    const drive = cut > 0 ? { station: here.station, root: path.slice(0, cut), path: path.slice(cut + 1) } : undefined;
+    out.push({ name: file.name, size: dir ? 0 : file.size, ref: { station: here.station, stationName: here.name, path, dir }, ...(dir ? {} : { blob: file, ...(drive ? { drive } : {}) }) });
+  }
+  return out.length ? out : null;
 }

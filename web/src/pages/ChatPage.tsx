@@ -7,6 +7,9 @@ import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, QuotaChip, MeterChips, PeopleStack } from "../components.tsx";
 import { Archive, Boxes, Close, File, Folder, Info, PanelClose, PanelOpen, Users, Web } from "../icons.tsx";
 import { DriveTab } from "./DriveTab.tsx";
+import { carriesDrive, droppedFrom, droppedFromFinder, droppedOf } from "../drive/drag.ts";
+import { offerToDraft } from "../draft.ts";
+import { useThisMachine } from "../thisMachine.ts";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
@@ -337,6 +340,8 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   useShortcut("chat.jobs", () => (shown === JOBS ? closeTab(JOBS) : openJobs()));
   // The stations' files beside the chat (DriveTab.tsx), where they have them: pressed again while in front, closed.
   const drive = useStationDrive(station.address);
+  // Files dragged anywhere over the chat go into its message (useChatDrop).
+  const drop = useChatDrop(chatKey, station.address);
   const toggleFiles = () => (open.includes(FILES) && shown === FILES ? closeTab(FILES) : openTab(FILES));
   useShortcut("panel.close", open.length ? () => saveTabs([]) : null);
   const thread = chatView.value?.thread?.id ?? null;
@@ -383,7 +388,8 @@ function ChatScreen({ session: chatSession }: { session: string }) {
     <div ref={pageRef} className={sessionCss.sessionPage} data-panel={panel || leaving !== null}>
       {chat.watch && <Confirm open={askArchive} title={t("web-pages.chat.archiveConfirm", { title: chat.title })} description={chat.watch.ask} action={t("web-pages.chat.archive")}
         onConfirm={() => { setAskArchive(false); void archive(); }} onClose={() => setAskArchive(false)} />}
-      <div className={jobsCss.sessionMain}>
+      <div className={`${jobsCss.sessionMain} ${css.dropZone}`} {...drop.handlers}>
+      {drop.over && <div className={css.dropHint} aria-hidden="true"><span>{t(drop.over === "path" ? "web-pages.chat.dropPath" : "web-pages.chat.dropFile")}</span></div>}
       <header className={sidebarCss.pageBar}>
         <MobileBack to={link("/chats")} label={t("web-pages.decisions.back")} />
         {/* The chat's title, then who is in it: its people, then its agents (each opens its history). */}
@@ -600,6 +606,34 @@ const AgentHistory = memo(function AgentHistory({ station, session, agent: key, 
 /** One of a chat's agents, by its key: the same object while it is. */
 function useChatAgent(station: string, session: string, key: string): ChatAgent | undefined {
   return useTopicSelect<ChatView, ChatAgent | undefined>({ topic: "chat", station, session }, (s) => s.value?.agents.find((a) => a.session.key === key));
+}
+
+/**
+ * The chat as a place to drop files on, all of it: while they are over it, what letting go does is said over it (a
+ * station's files, or Finder's on a machine that is a station, are named by their path; others go up as files); let go,
+ * they go into its message. The composer's own drop (Chat.tsx) comes first where it is.
+ */
+function useChatDrop(chat: string, station: string) {
+  const here = useThisMachine(station);
+  const [over, setOver] = useState<"path" | "file" | null>(null);
+  const depth = useRef(0);
+  const kind = (dt: DataTransfer): "path" | "file" | null =>
+    carriesDrive(dt) ? "path" : dt.types.includes("Files") ? (here && window.stillfailDesktop?.pathOf ? "path" : "file") : null;
+  const handlers = {
+    onDragEnter: (e: React.DragEvent) => { if (!kind(e.dataTransfer)) return; depth.current++; setOver(kind(e.dataTransfer)); },
+    onDragOver: (e: React.DragEvent) => { if (!kind(e.dataTransfer)) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; },
+    onDragLeave: (e: React.DragEvent) => { if (!kind(e.dataTransfer)) return; depth.current = Math.max(0, depth.current - 1); if (depth.current === 0) setOver(null); },
+    onDrop: (e: React.DragEvent) => {
+      depth.current = 0;
+      setOver(null);
+      if (e.defaultPrevented || !kind(e.dataTransfer)) return;
+      e.preventDefault();
+      if (carriesDrive(e.dataTransfer)) { offerToDraft(chat, { files: [], quotes: [], dropped: droppedOf(e.dataTransfer).map(droppedFrom) }); return; }
+      const named = droppedFromFinder(e.dataTransfer, here);
+      offerToDraft(chat, named ? { files: [], quotes: [], dropped: named } : { files: [...e.dataTransfer.files], quotes: [] });
+    },
+  };
+  return { over, handlers };
 }
 
 /** The 任务 tab's key: every service and job of the chat's agents. */

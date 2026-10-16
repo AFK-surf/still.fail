@@ -29,7 +29,7 @@ import { animate, arrive, EASE_OUT, follower, glider, moveState, type AnimationP
 import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
 import { DraftKey, offerToDraft, pathWords, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
-import { carriesDrive, droppedFrom, droppedOf } from "./drive/drag.ts";
+import { carriesDrive, droppedFrom, droppedFromFinder, droppedOf } from "./drive/drag.ts";
 import { useThisMachine } from "./thisMachine.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
@@ -1577,7 +1577,7 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
             e.preventDefault(); setDragging(false);
             if (locked) return;
             // From Finder on a machine that is a station: named by their path there, as a station's files are.
-            const named = droppedHere(e.dataTransfer, here);
+            const named = droppedFromFinder(e.dataTransfer, here);
             if (named) draft.addDropped(named); else add(e.dataTransfer.files);
           }
         }}>
@@ -1589,29 +1589,6 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
       {draft.error && <p className={`${controlsCss.fieldError} ${css.chatError}`} role="alert">{draft.error}</p>}
     </div>
   );
-}
-
-/**
- * Files dropped from Finder (or Explorer) in the desktop app on a machine that is one of the workspace's stations: named
- * by their path there, each kept to send as a file if switched. Elsewhere (a browser, an app from before, a machine that
- * is no station of the workspace) none is: they go up as files.
- */
-function droppedHere(dt: DataTransfer, here: { station: string; name: string } | null): Parameters<Draft["addDropped"]>[0] | null {
-  const pathOf = window.stillfailDesktop?.pathOf;
-  if (!here || !pathOf) return null;
-  const items = [...dt.items].filter((i) => i.kind === "file");
-  const out: Parameters<Draft["addDropped"]>[0] = [];
-  for (const item of items) {
-    const file = item.getAsFile();
-    const path = file ? pathOf(file) : "";
-    if (!file || !path) return null;
-    const dir = item.webkitGetAsEntry?.()?.isDirectory === true;
-    // Sent to the station it is on, it is copied there from where it is; to another, it goes up from here.
-    const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
-    const drive = cut > 0 ? { station: here.station, root: path.slice(0, cut), path: path.slice(cut + 1) } : undefined;
-    out.push({ name: file.name, size: dir ? 0 : file.size, ref: { station: here.station, stationName: here.name, path, dir }, ...(dir ? {} : { blob: file, ...(drive ? { drive } : {}) }) });
-  }
-  return out.length ? out : null;
 }
 
 /**
