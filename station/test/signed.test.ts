@@ -166,7 +166,7 @@ describe("signed releases", () => {
       assert.match(said.pop()!, /签名校验失败/);
       feed = feedOf(1290);
       assert.equal(await updateCommand(["update", "--app", app, "--data", data], data, trusted), 1);
-      assert.match(said.pop()!, /0\.1\.1290 比现在的 0\.1\.1300 旧/);
+      assert.match(said.pop()!, /0\.1\.1290 早于当前的 0\.1\.1300/);
       assert.equal(await updateCommand(["update", "--app", app, "--beta", "--stable", "--data", data], data, trusted), 2);
     } finally {
       console.log = log;
