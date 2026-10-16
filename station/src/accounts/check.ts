@@ -49,6 +49,9 @@ export function checkConfig(raw: any, _data: string): void {
     if (!isObject(raw.drive)) throw new Error(`invalid type: ${describe(raw.drive)}, expected struct RawDrive`);
     const roots = raw.drive.roots;
     if (roots !== undefined && roots !== null && (!Array.isArray(roots) || roots.some((r: unknown) => typeof r !== "string"))) throw new Error("drive.roots: a list of paths");
+    // Those of the workspaces the station joined (docs/multi-workspace.md), by workspace id.
+    const joined = raw.drive.workspaces;
+    if (joined !== undefined && joined !== null && (!isObject(joined) || Object.values(joined).some((l) => !Array.isArray(l) || l.some((r: unknown) => typeof r !== "string")))) throw new Error("drive.workspaces: a list of paths for each workspace");
   }
   const profiles = raw.profiles ?? [];
   if (!Array.isArray(profiles)) throw new Error(`invalid type: ${describe(profiles)}, expected a sequence`);

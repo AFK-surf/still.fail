@@ -69,9 +69,10 @@ const AT_ONCE = 64;
 const key = (path: string) => platform.paths.key(path);
 const within = (path: string, dir: string) => platform.paths.within(key(path), key(dir));
 
-/// The roots config.json names (`drive.roots`): absolute paths, as written.
-export function rootsOf(raw: any): string[] {
-  const roots = raw?.drive?.roots;
+/// The roots config.json names (`drive.roots`): absolute paths, as written. Those of a workspace the station joined are
+/// `drive.workspaces[<id>]` (docs/multi-workspace.md); none named, its home workspace's.
+export function rootsOf(raw: any, workspace: string | null = null): string[] {
+  const roots = workspace === null ? raw?.drive?.roots : raw?.drive?.workspaces?.[workspace];
   return Array.isArray(roots) ? roots.filter((r: unknown): r is string => typeof r === "string" && platform.paths.rooted(r)).map((r) => platform.paths.clean(r)) : [];
 }
 
@@ -185,6 +186,14 @@ export class Drive {
 
   roots(): RootView[] {
     return rootsOf(this.deps.config()).map(rootView);
+  }
+
+  /// The drive as a workspace the station joined has it: its own pinned folders only.
+  scoped(workspace: string): Drive {
+    return new Drive({ ...this.deps, config: () => {
+      const raw = this.deps.config() ?? {};
+      return { ...raw, drive: { ...(raw.drive ?? {}), roots: rootsOf(raw, workspace) } };
+    } });
   }
 
   /// What is protected, as named and as found (links followed): asked once a request.

@@ -184,6 +184,15 @@ export const routes = (deps: SlackRoutesDeps): Route[] => {
   };
   const raw = () => config.raw();
   const connectsRaw = (raw: Json): Json[] => (Array.isArray(raw.connects) ? raw.connects : (raw.connects = []));
+  /// A connect is of the workspace it was added in (docs/multi-workspace.md; none said: the station's home one), and
+  /// only that workspace's people see and change it. One of another workspace is no connect of theirs (404).
+  const home = () => deps.place?.()?.workspace ?? null;
+  const ofViewer = (r: Request, c: Json) => home() === null || ((typeof c?.workspace === "string" && c.workspace !== "" ? c.workspace : home()) === r.viewer.workspace);
+  const mine = (r: Request, id: string) => {
+    const c = (Array.isArray(raw().connects) ? raw().connects : []).find((c: Json) => c?.id === id);
+    if (c !== undefined && !ofViewer(r, c)) throw new Refused(404, `unknown connect ${id}`);
+    return id;
+  };
 
   /// A Slack app made here and not connected yet, by its app id or its install's state.
   const madeApp = (key: string): SlackAppMade | undefined => madeApps(raw()).find((a) => a.appId === key || a.oauth?.state === key);
@@ -234,6 +243,7 @@ export const routes = (deps: SlackRoutesDeps): Route[] => {
       const lang = r.lang;
       const connects = connectsRaw(raw);
       const existing = connects.find((c) => c?.id === id);
+      if (existing !== undefined && !ofViewer(r, existing)) throw new Refused(404, `unknown connect ${id}`);
       const slackIn = i.slack;
       const old: Json = isObject(existing?.slack) ? existing.slack : {};
       const token = (key: string, stored: unknown) => field(slackIn, key)[1] ?? (typeof stored === "string" ? stored : null);
@@ -309,6 +319,8 @@ export const routes = (deps: SlackRoutesDeps): Route[] => {
         next.slack = s;
       }
       if (owner !== null) next.createdBy = owner;
+      // Added in a workspace the station joined: that workspace's (one of the home workspace says none, as before).
+      if (existing === undefined && home() !== null && r.viewer.workspace !== home()) next.workspace = r.viewer.workspace;
       const b: Json = { runtime };
       if (model !== null) b.model = model;
       if (effort !== null) b.effort = effort;
@@ -543,7 +555,7 @@ export const routes = (deps: SlackRoutesDeps): Route[] => {
   /// token can be checked alone; an app installed through Slack's OAuth (`install`) checks with the bot token it got.
   const verify = async (r: Request, i: Input) => {
     const connectId = str(i.connect);
-    const stored = connectId !== undefined ? slack.connects().find((c) => c.id === connectId) : undefined;
+    const stored = connectId !== undefined ? slack.connects().find((c) => c.id === mine(r, connectId)) : undefined;
     const pick = (key: string, kept: string | undefined) => {
       const given = str(i[key])?.trim();
       return given !== undefined && given !== "" ? given : (kept ?? "");
@@ -564,6 +576,7 @@ export const routes = (deps: SlackRoutesDeps): Route[] => {
     const seen = new Set<string>();
     const errors: string[] = [];
     for (const connect of slack.connects()) {
+      if (!ofViewer(r, (Array.isArray(raw().connects) ? raw().connects : []).find((c: Json) => c?.id === connect.id))) continue;
       const chat = slack.chat(connect.id);
       if (!chat?.api) continue;
       let cursor = "";
@@ -661,12 +674,12 @@ export const routes = (deps: SlackRoutesDeps): Route[] => {
         );
       }),
     },
-    { method: "PUT", pattern: /^\/*connects\/+([^/]+)\/*$/, handle: answer(async (r, [id]) => ok(await putConnect(r, segment(id!), input(r)))) },
+    { method: "PUT", pattern: /^\/*connects\/+([^/]+)\/*$/, handle: answer(async (r, [id]) => ok(await putConnect(r, mine(r, segment(id!)), input(r)))) },
     {
       method: "DELETE",
       pattern: /^\/*connects\/+([^/]+)\/*$/,
       handle: answer(async (r, [raw]) => {
-        const id = segment(raw!);
+        const id = mine(r, segment(raw!));
         return ok(
           await save(r, `delete connect ${id}`, (raw) => {
             const connects = connectsRaw(raw);
@@ -680,7 +693,7 @@ export const routes = (deps: SlackRoutesDeps): Route[] => {
       method: "POST",
       pattern: /^\/*connects\/+([^/]+)\/+session(?:\/.*)?$/,
       handle: answer((r, [raw]) => {
-        const id = segment(raw!);
+        const id = mine(r, segment(raw!));
         const i = input(r);
         const target = str(i.session);
         const key = bindSingle(hub(), id, target !== undefined && target !== "" ? target : null, str(i.title) ?? null, idOf(r.viewer));
@@ -692,16 +705,16 @@ export const routes = (deps: SlackRoutesDeps): Route[] => {
       method: "POST",
       pattern: /^\/*connects\/+([^/]+)\/+reconnect(?:\/.*)?$/,
       handle: answer(async (r, [raw]) => {
-        const id = segment(raw!);
+        const id = mine(r, segment(raw!));
         await slack.reconcile();
         // Who the bot is, read again: a name changed in Slack shows now.
         await slack.refreshIdentity(id).catch((e) => log.warn("slack", "slack identity refresh failed", { connect: id, error: (e as Error).message }));
         return ok({ ok: true });
       }),
     },
-    { method: "GET", pattern: /^\/*connects\/+([^/]+)\/+slack-app(?:\/.*)?$/, handle: answer((r, [id]) => slackApp(r, segment(id!))) },
-    { method: "PUT", pattern: /^\/*connects\/+([^/]+)\/+slack-app(?:\/.*)?$/, handle: answer((r, [id]) => putSlackApp(r, segment(id!), input(r))) },
-    { method: "POST", pattern: /^\/*connects\/+([^/]+)\/+slack-app(?:\/.*)?$/, handle: answer((r, [id]) => createSlackApp(r, segment(id!), input(r))) },
+    { method: "GET", pattern: /^\/*connects\/+([^/]+)\/+slack-app(?:\/.*)?$/, handle: answer((r, [id]) => slackApp(r, mine(r, segment(id!)))) },
+    { method: "PUT", pattern: /^\/*connects\/+([^/]+)\/+slack-app(?:\/.*)?$/, handle: answer((r, [id]) => putSlackApp(r, mine(r, segment(id!)), input(r))) },
+    { method: "POST", pattern: /^\/*connects\/+([^/]+)\/+slack-app(?:\/.*)?$/, handle: answer((r, [id]) => createSlackApp(r, mine(r, segment(id!)), input(r))) },
   ];
 };
 

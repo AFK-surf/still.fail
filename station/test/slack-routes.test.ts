@@ -582,3 +582,27 @@ test("a message a connect hears in Slack reaches the hub and its session", async
     await t.close();
   }
 });
+
+test("a station in several workspaces: a connect is the workspace's it was added in, and nobody else's", async () => {
+  const t = await rig({ cloud: "http://cloud" });
+  try {
+    // Of a workspace the station joined: an owner there, not of the station's home workspace.
+    const joined: Viewer = { ...viewer("cy@example.com", "Cy", "owner"), workspace: "w2", home: false };
+    const [status, answer] = await t.ask("PUT", "/connects/theirs", { bind: { runtime: "claude" } }, joined);
+    assert.equal(status, 200, JSON.stringify(answer));
+    assert.equal(t.saved().connects.find((c: Json) => c.id === "theirs").workspace, "w2");
+    // The home workspace's connect says no workspace, as before; each is unknown to the other workspace.
+    assert.equal(t.saved().connects.find((c: Json) => c.id === "ds").workspace, undefined);
+    assert.deepEqual(await t.ask("PUT", "/connects/ds", { enabled: false }, joined), [404, { error: "unknown connect ds" }]);
+    assert.deepEqual(await t.ask("DELETE", "/connects/ds", undefined, joined), [404, { error: "unknown connect ds" }]);
+    assert.deepEqual(await t.ask("DELETE", "/connects/theirs"), [404, { error: "unknown connect theirs" }]);
+    assert.deepEqual(await t.ask("POST", "/connects/theirs/reconnect"), [404, { error: "unknown connect theirs" }]);
+    // Its own people change it.
+    assert.equal((await t.ask("PUT", "/connects/theirs", { enabled: false }, joined))[0], 200);
+    assert.equal(t.saved().connects.find((c: Json) => c.id === "theirs").workspace, "w2");
+    assert.equal((await t.ask("DELETE", "/connects/theirs", undefined, joined))[0], 200);
+    assert.deepEqual(t.saved().connects.map((c: Json) => c.id), ["ds"]);
+  } finally {
+    await t.close();
+  }
+});

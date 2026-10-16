@@ -27,6 +27,9 @@ export type SlackOptions = {
   receive: (connect: string, event: ChatEvent) => Promise<void>;
   /// Whether the station is in its workspace: only then are connects connected.
   bound: () => boolean;
+  /// Whether the station is in a connect's workspace (null: its home one) now: a joined workspace's connects
+  /// disconnect once it leaves that workspace (docs/multi-workspace.md). Absent: every one.
+  inWorkspace?: (workspace: string | null) => boolean;
   /// Where Slack's Web API is (tests: a stand-in); default $STILLFAIL_SLACK_API, else Slack.
   client?: SlackClient;
   /// Socket Mode's ping and silence limits (tests make them short).
@@ -99,7 +102,7 @@ export function makeConnections(options: SlackOptions) {
   /// In line with config.json while in the workspace; out of it, none connected.
   const reconcile = async () => {
     if (closed) return;
-    if (options.bound()) await connections.reconcile(connects());
+    if (options.bound()) await connections.reconcile(connects().filter((c) => options.inWorkspace?.(c.workspace ?? null) ?? true));
     else await connections.stopAll();
   };
 

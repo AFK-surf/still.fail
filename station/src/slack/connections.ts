@@ -18,6 +18,8 @@ export type SlackConnect = {
   team: { id: string; name: string } | null;
   botName: string | null;
   botImage: string | null;
+  /// The still.fail workspace it was added in (docs/multi-workspace.md); null: the station's home one.
+  workspace?: string | null;
 };
 
 /// What a connect is called: its bot's name in its Slack workspace, else its id.
@@ -39,6 +41,7 @@ export function slackConnects(raw: Json): SlackConnect[] {
       team: team !== null && typeof team === "object" && nonEmpty(team.id) !== null ? { id: team.id, name: typeof team.name === "string" ? team.name : "" } : null,
       botName: nonEmpty(slack.botName),
       botImage: nonEmpty(slack.botImage),
+      workspace: nonEmpty(c?.workspace),
     };
   });
 }

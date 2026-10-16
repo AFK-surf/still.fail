@@ -263,7 +263,10 @@ export const AgentsLive = (control: Control) =>
 
       // The connects' Slack: connected while the station is in its workspace, once the sessions are taken up (a
       // Socket Mode event goes to one connection of an app; two processes' would split them).
-      const slack: SlackParts = makeConnections({ data, store, config, receive: (connect, event) => hub.receive(connect, event), bound: () => taken && bound() });
+      const slack: SlackParts = makeConnections({
+        data, store, config, receive: (connect, event) => hub.receive(connect, event), bound: () => taken && bound(),
+        inWorkspace: (ws) => ws === null || cloud.membership(ws) !== null,
+      });
       let taken = false;
       // The names the pages show of Slack people and channels are the readers' (from the names book); a connection
       // looks up those it does not know yet as it hears of them: who wrote, and where.
@@ -365,6 +368,8 @@ export const AgentsLive = (control: Control) =>
             await hub.leftWorkspace(ws);
           }
           for (const ws of back) hub.backIn(ws);
+          // Its connects: those of a workspace left disconnect, those of one back connect.
+          if (left.length > 0 || back.length > 0) await slack.reconcile();
         }
         if (now === inWorkspace) return;
         inWorkspace = now;
