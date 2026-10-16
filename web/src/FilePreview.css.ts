@@ -50,7 +50,7 @@ export const fpHead = style({
   // Under the Windows app's window buttons, which the system draws over the page's top right (styles/global.css.ts).
   selectors: { ':is([data-desktop="overlay"], [data-desktop="custom"]):not([data-fullscreen]) &': { top: "calc(env(titlebar-area-height, 44px) + 8px)" } },
   "@media": {
-    "(max-width: 640px)": { top: "max(8px, var(--safe-top))", maxWidth: "calc(100% - 16px)", gap: "4px", padding: "0 2px 0 12px" },
+    "(max-width: 640px)": { top: "max(8px, var(--safe-top))", maxWidth: "calc(100% - 16px)", gap: "4px", padding: "0 6px 0 12px" },
     "(prefers-reduced-motion: reduce)": { transition: "none" },
   },
 });
