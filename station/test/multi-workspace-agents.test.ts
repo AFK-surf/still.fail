@@ -69,7 +69,7 @@ async function twoWorkspaces() {
     inbox: async () => ({}),
     chatWs: (chat) => rig.hub.wsOf(chat),
   });
-  rig.hub.onPeer((station, request) => remote.ask(station, xshare.address(station, request)));
+  rig.hub.onPeer((station, request) => xshare.send(station, request, (r) => remote.ask(station, r)));
   rig.hub.onOutsideChats((ws) => xshare.borrowed(ws));
   const stationTool = remoteTools(remote);
   const station = async (key: string, name: string, args: any) => JSON.parse(await stationTool.find((t) => t.name === name)!.run(key, args));

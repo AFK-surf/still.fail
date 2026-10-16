@@ -61,7 +61,7 @@ function side(workspace: string, station: string, name: string, other: () => Sid
     inbox,
     clock,
   });
-  hub.onPeer((to, request) => ask(to, me.xshare.address(to, request)));
+  hub.onPeer((to, request) => me.xshare.send(to, request, (r) => ask(to, r)));
   hub.onOutsideChats(() => me.xshare.borrowed());
   return me;
 }
@@ -155,23 +155,24 @@ test("a share lapses once its agents have not read or written for six hours, unt
   await near.xshare.trust("W1", "Team", "far", "studio");
   await both();
 
-  // Each use goes on from then: read at 5 hours, written to at 10, answered at 15, read at 20, all inside six hours.
+  // Each use goes on from then: read at 5 hours, written to at 10 (answered at 14), read at 15, each inside six hours of
+  // the one before.
   await time.adjust(5 * HOUR);
   assert.ok((await near.rig.call(keyN, "chat_read", { chat: linkA })).includes("the release plan"));
   await time.adjust(5 * HOUR);
   await near.rig.call(keyN, "session_send", { to: linkA, text: "send me the plan" });
-  await time.adjust(5 * HOUR);
+  await time.adjust(4 * HOUR);
   await far.rig.call(keyA, "session_send", { to: linkN, text: "here it is" });
-  await time.adjust(5 * HOUR);
+  await time.adjust(HOUR);
   await near.rig.call(keyN, "session_history", { chat: linkA });
-  assert.ok((await near.rig.call(keyN, "chat_list", {})).includes(linkA));
+  assert.ok((await near.rig.call(keyN, "chat_list", {})).includes(`${linkA} (shared from`));
 
   // Six hours without: the chat is no longer shared with W2 (its row says so, its list no longer has it), its agents
   // are told why, and its agent no longer answers the session that wrote.
   await time.adjust(XSHARE_IDLE_MS);
   await both();
   assert.equal(far.rig.store.chatShare(keyA), null);
-  assert.ok(!(await near.rig.call(keyN, "chat_list", {})).includes(linkA));
+  assert.ok(!(await near.rig.call(keyN, "chat_list", {})).includes(`${linkA} (shared from`));
   assert.match(await near.rig.refused(keyN, "chat_read", { chat: linkA }), /lapsed, unused for 6 hours/);
   assert.match(await near.rig.refused(keyN, "session_send", { to: linkA, text: "still there?" }), /lapsed/);
   assert.match(await far.rig.refused(keyA, "session_send", { to: linkN, text: "one more thing" }), /./);
@@ -180,7 +181,7 @@ test("a share lapses once its agents have not read or written for six hours, unt
   await far.xshare.share(keyA, to, true, "a@example.com");
   await both();
   assert.ok((await near.rig.call(keyN, "chat_read", { chat: linkA })).includes("the release plan"));
-  assert.ok((await near.rig.call(keyN, "chat_list", {})).includes(linkA));
+  assert.ok((await near.rig.call(keyN, "chat_list", {})).includes(`${linkA} (shared from`));
   await Promise.all([far.xshare.close(), near.xshare.close()]);
   await far.rig.close();
   await near.rig.close();

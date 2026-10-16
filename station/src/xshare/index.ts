@@ -50,6 +50,8 @@ export type Target = { workspace: string; name: string; stations: Station[] };
 /// A chat of another workspace shared with this one, as the agents' chat_list shows it.
 /// `as`: the workspace of this station's it is shared with (absent: the home one, as kept before).
 export type Borrowed = { workspace: string; workspaceName: string; station: string; chat: string; title: string; link: string; write: boolean; version: number; as?: string };
+/// A chat's share as the pages are told it.
+type Shown = Omit<ChatShare, "to"> & { to: { workspace: string; name: string }[] };
 type Hosted = { version: number; hash: string; told: Record<string, number> };
 /// `as`: the workspace of this station's whose member said so (absent: the home one, as kept before).
 type Host = { workspace: string; name: string; stationName: string; as?: string };
@@ -233,9 +235,9 @@ export class ChatShares {
     return target in (state.guests[workspace]?.stations ?? {});
   }
 
-  /// A request to another station as it is sent: to one of another workspace with that workspace, noting (for
-  /// session.message) that it may answer the session that wrote. `request.workspace`, when given, is the one of this
-  /// station's it is asked for (a session's); a station of another goes the shared way only, saying for which (`as`).
+  /// A request to another station as it is sent (`send` sends it): to one of another workspace with that workspace.
+  /// `request.workspace`, when given, is the one of this station's it is asked for (a session's); a station of another
+  /// goes the shared way only, saying for which (`as`).
   address(station: string, request: Json): Json {
     const as = typeof request?.workspace === "string" ? request.workspace : this.home();
     const own = as === null ? null : this.deps.cloud.membership(as);
@@ -243,17 +245,38 @@ export class ChatShares {
     if (own === null || own.peers.some((p: Json) => p?.id === station)) return request;
     const workspace = this.workspaceOf(station, as);
     if (workspace === null) return request;
-    if (request?.method === "session.message" && typeof request?.session === "string") this.noteSent(request.session, station);
     // For which of this station's workspaces, when it is not plain: not the home one, or the host's is one of this
     // station's too (it would take the request for one of that workspace's).
     return as !== this.home() || this.deps.cloud.membership(workspace) !== null ? { ...request, workspace, as } : { ...request, workspace };
+  }
+
+  /// A request to another station as `address` makes it, sent (`send`). A message of a session to another workspace's
+  /// lets that station answer it from then; one not taken, no more than before.
+  async send(station: string, request: Json, send: (request: Json) => Promise<Json>): Promise<Json> {
+    const addressed = this.address(station, request);
+    const session = request?.method === "session.message" && addressed !== request && typeof request?.session === "string" ? (request.session as string) : null;
+    if (session === null) return send(addressed);
+    const state = this.readState();
+    const before = { replies: state.replies[session], answered: state.answered[session] };
+    this.noteSent(session, station);
+    try {
+      return await send(addressed);
+    } catch (e) {
+      const now = this.readState();
+      if (before.replies === undefined) delete now.replies[session];
+      else now.replies[session] = before.replies;
+      if (before.answered === undefined) delete now.answered[session];
+      else now.answered[session] = before.answered;
+      this.writeState();
+      throw e;
+    }
   }
 
   private noteSent(session: string, station: string) {
     const state = this.readState();
     const had = state.replies[session] ?? [];
     if (!had.includes(station)) state.replies[session] = [...had, station];
-    (state.answered[session] ??= {})[station] = this.time.now();
+    state.answered[session] = { ...state.answered[session], [station]: this.time.now() };
     const keys = Object.keys(state.replies);
     for (const k of keys.slice(0, Math.max(0, keys.length - MAX_REPLIES))) {
       delete state.replies[k];
@@ -637,7 +660,7 @@ export class ChatShares {
   // ── the pages ──
 
   /// Shares chat `chat` (by the session key its link names) with workspaces `to` (none: no longer), as `by`.
-  async share(chat: string, to: Target[], write: boolean, by: string): Promise<ChatShare | null> {
+  async share(chat: string, to: Target[], write: boolean, by: string): Promise<Shown | null> {
     if (this.home() === null) throw new Error("this station is in no workspace");
     if (to.length > MAX_TO) throw new Error(`at most ${MAX_TO} workspaces`);
     const state = this.readState();
@@ -651,7 +674,8 @@ export class ChatShares {
     this.deps.store.setChatShare(chat, to.map((t) => ({ workspace: t.workspace, name: text(t.name, 80) || t.workspace })), write, by);
     this.lapseLater();
     void this.reconcile();
-    return this.deps.store.chatShare(chat);
+    const now = this.deps.store.chatShare(chat);
+    return now === null ? null : { ...now, to: now.to.map(({ workspace, name }) => ({ workspace, name })) };
   }
 
   /// A member of workspace `as` of this station's (absent: the home one) says it takes chats from `station`, of

@@ -226,7 +226,7 @@ export const AgentsLive = (control: Control) =>
         inbox: (peer, request) => local(peer, request),
         chatWs: (chat) => hub.wsOf(chat),
       });
-      hub.onPeer((station, request) => remote.ask(station, xshare.address(station, request)));
+      hub.onPeer((station, request) => xshare.send(station, request, (r) => remote.ask(station, r)));
       hub.onOutsideChats((ws) => xshare.borrowed(ws));
       remote.setOutside({ inside: (peer, request, ws) => xshare.inside(peer, request, ws), outside: (peer, request, ws) => xshare.outside(peer, request, ws) });
 

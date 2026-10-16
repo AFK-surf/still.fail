@@ -224,7 +224,10 @@ test("a session that wrote to another workspace may be answered by it, no other"
   await x.xshare.share("c1", [{ workspace: W2, name: "Home", stations: w2.stations }], true, "a@x");
   await settle(x, p);
   // P's session s1 writes to c1: addressed to W1, and X may answer s1 from now on.
-  assert.deepEqual(p.xshare.address(X, { method: "session.message", session: "s1", to: "c1" }), { method: "session.message", session: "s1", to: "c1", workspace: W1 });
+  const sent = await p.xshare.send(X, { method: "session.message", session: "s1", to: "c1" }, async (r) => r);
+  assert.deepEqual(sent, { method: "session.message", session: "s1", to: "c1", workspace: W1 });
+  // One not taken lets it answer no other.
+  await assert.rejects(p.xshare.send(X, { method: "session.message", session: "s2", to: "c1" }, async () => Promise.reject(new Error("refused"))), /refused/);
   assert.equal(x.xshare.address(P, { method: "session.message", session: "c1", to: "s1" }).workspace, W2);
   await outside(x, p, { method: "session.message", session: "c1", to: "s1", text: "answer" });
   assert.equal(p.inbox.length, 1);
