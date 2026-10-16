@@ -161,7 +161,10 @@ jobs:
   check:
     needs: plan
     runs-on: [self-hosted, mini1]
-    timeout-minutes: 60
+    # Usually under 2 minutes, all of it with Rust built anew a few: a test that hangs (one waiting on what never comes,
+    # up to its 10 minutes each) held one of mini1's four runners for most of an hour, and every run behind it waited
+    # (2026-10-16, station/test/mesh-handover.test.ts on branches whose mesh needed a service it did not give).
+    timeout-minutes: 20
     env:
       STILLFAIL_CHECK_PART: station core
     steps:
