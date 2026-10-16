@@ -72,6 +72,7 @@ test("a host that seals keeps the signing key sealed, read without asking; one i
   // An app from before kept it as a file: the same key, now sealed, and the file gone.
   const before = new FakeHost();
   before.appKeys = true;
+  before.secureGet = before.secureSet = before.secureDelete = undefined;
   const old = await Effect.runPromise(Signer.make(before));
   const moved = new SealingHost();
   moved.store("lock-signer", before.stored("lock-signer")!);
