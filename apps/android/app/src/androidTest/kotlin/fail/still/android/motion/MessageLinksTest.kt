@@ -11,7 +11,9 @@ import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -36,8 +38,8 @@ import java.util.concurrent.CopyOnWriteArrayList
 /**
  * Links in a chat's messages (ui/Links.kt): a tap on one opens it (an agent's Markdown link, an address written bare or
  * alone in code, one in someone's words or in yours), the address written bare ending where the Chinese after it
- * begins; a long press on one is its menu (open it, copy it), not the message's page and not the link opening as the
- * finger lifts; a long press on the other words is the message's page still. `shots` pictures the menu into files/shots.
+ * begins; a long press on one is its menu (open it, copy it), not a passage picked (MessagePickTest) and not the link
+ * opening as the finger lifts. `shots` pictures the menu into files/shots.
  */
 class MessageLinksTest {
     @get:Rule val rule: MotionRule = createAndroidComposeRule<ComponentActivity>()
@@ -103,7 +105,8 @@ class MessageLinksTest {
         text("PR #138").hold("PR #138")
         h.settle()
         assertEquals("opened as the finger lifted", emptyList<String>(), opened.toList())
-        assertTrue("the message's page opened", h.app.stack.last() is Screen.Chat)
+        assertTrue("another page opened", h.app.stack.last() is Screen.Chat)
+        rule.onAllNodesWithText("引用").assertCountEquals(0)
         rule.onNodeWithText("复制链接").performClick()
         h.settle()
         val clip = rule.activity.getSystemService(ClipboardManager::class.java).primaryClip
@@ -119,13 +122,6 @@ class MessageLinksTest {
         h.settle()
         assertEquals(listOf("https://example.com/person-bare", "https://example.com/mine-bare"), opened.toList())
         assertTrue(h.app.stack.last() is Screen.Chat)
-    }
-
-    @Test fun aHoldOnTheOtherWordsIsTheMessagesPage() {
-        val h = open()
-        text("链接测试").hold("链接测试")
-        h.settle()
-        assertTrue("its page", h.app.stack.last() is Screen.Annotate)
     }
 
     @Test fun shotsLight() = shots(false)

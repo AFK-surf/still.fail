@@ -65,6 +65,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
@@ -618,8 +619,13 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
     var footHeight by remember(item.key) { mutableIntStateOf(0) }
     // The room an expanded composer's toolbar takes, kept clear at the messages' end.
     val room = remember(item.key) { mutableIntStateOf(0) }
-    Box(Modifier.weight(1f).fillMaxWidth()) {
-        Column(
+    // A passage of a message picked where it is (MessagePick.kt): quoted into the reply's draft (DecisionComposer's), or
+    // only copied where there is no composer.
+    val replies = type == "options" || type == "text"
+    val draft = if (replies) rememberDraft("decision:${item.station}:${item.thread}:${item.seq}") else null
+    val pick = remember(item.key, draft) { MessagePick(draft) }
+    Box(Modifier.weight(1f).fillMaxWidth().letsGoOfPick(pick)) {
+        CompositionLocalProvider(LocalMessagePick provides pick) { Column(
             Modifier.fillMaxSize().hazeSource(host.haze).background(C.bg).verticalScroll(scroll)
                 .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 10.dp + with(density) { (footHeight + room.intValue).toDp() }),
             verticalArrangement = Arrangement.spacedBy(20.dp),
@@ -643,7 +649,9 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
                 }
             }
         }
-        if (type == "options" || type == "text") {
+        PickLayer(pick, follow = { scroll.value }, moving = scroll.isScrollInProgress, top = 0.dp, bottom = with(density) { footHeight.toDp() }, modifier = Modifier.matchParentSize())
+        }
+        if (replies) {
             Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { footHeight = it.height }) {
                 DecisionComposer(item, host, if (type == "text") card?.placeholder else null, room, onField, onReply)
             }

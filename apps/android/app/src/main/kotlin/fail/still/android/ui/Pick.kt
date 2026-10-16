@@ -1,6 +1,6 @@
-// Words a finger picks passages of (the annotate page, screens/Annotate.kt; web mobile/Annotate.tsx): each text in
-// them (a paragraph of Markdown, a person's words) says where it is and what it holds; the page takes them, in the
-// order they read, as one text, and each draws over itself what is picked and what has a note.
+// Words a finger picks passages of (a message in its chat, screens/MessagePick.kt; web mobile/pick.tsx): each text in
+// them (a paragraph of Markdown, a person's words) says where it is and what it holds; they are taken, in the order
+// they read, as one text, and each draws over itself what is picked.
 package fail.still.android.ui
 
 import android.icu.text.BreakIterator
@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -19,6 +20,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 
@@ -44,6 +46,8 @@ class PickedWords {
     var base: LayoutCoordinates? = null
     /** What is drawn over the words now. */
     var drawn by mutableStateOf<List<Pair<Span, Drawn>>>(emptyList())
+    /** Something is picked or noted in them: their links are drawn, not tapped, meanwhile (a tap lets go). */
+    val picking by derivedStateOf { drawn.isNotEmpty() }
     /** Bumped when a text is laid out again (what is placed over the words follows). */
     var laidOut by mutableStateOf(0)
 
@@ -106,7 +110,7 @@ class PickedWords {
     }
 }
 
-/** The words being picked from, for the texts inside (none: they are only read). */
+/** The words that may be picked from, for the texts inside (none: they are only read). */
 val LocalPickedWords = compositionLocalOf<PickedWords?> { null }
 
 /**
@@ -129,6 +133,7 @@ fun pickable(text: String): Pair<Modifier, (TextLayoutResult) -> Unit> {
             if (at != piece.at) { piece.at = at; words.laidOut++ }
         }
         .drawBehind {
+            if (words.drawn.isEmpty()) return@drawBehind
             val l = piece.layout ?: return@drawBehind
             val start = words.order().firstOrNull { it.first === piece }?.second ?: return@drawBehind
             for ((span, how) in words.drawn) {
@@ -148,6 +153,11 @@ fun pickable(text: String): Pair<Modifier, (TextLayoutResult) -> Unit> {
         }
     return modifier to { l -> if (piece.layout?.size != l.size || piece.layout?.layoutInput?.text != l.layoutInput.text) words.laidOut++; piece.layout = l }
 }
+
+/** `text` as the words it is in show it: while something is picked in them, its links drawn but not to tap (Links.kt). */
+@Composable
+fun pickedText(text: AnnotatedString): AnnotatedString =
+    if (LocalPickedWords.current?.picking == true) remember(text) { text.inert() } else text
 
 /** A range's boxes in a text, a line each (none when it is empty). */
 fun lineRects(l: TextLayoutResult, start: Int, end: Int): List<Rect> {

@@ -117,10 +117,6 @@ sealed interface Screen {
     data class Chat(val station: String, val of: ChatOf, val at: Long? = null, val words: List<String>? = null) : Screen {
         override val id = "chat/$station/" + when (of) { is ChatOf.Thread -> of.id.toString(); is ChatOf.Session -> of.key }
     }
-    /** One message of a chat on a page of its own, to pick passages of and say something about (a long press on it). */
-    data class Annotate(val station: String, val of: ChatOf, val ts: String) : Screen {
-        override val id = "annotate/$station/" + (when (of) { is ChatOf.Thread -> of.id.toString(); is ChatOf.Session -> of.key }) + "/$ts"
-    }
     /** Rises from the bottom rather than coming in from the side. */
     data object NewChat : Screen { override val id = "new" }
     data object Stations : Screen { override val id = "stations" }
@@ -835,22 +831,16 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         transitionSpec = {
             // Switched on the bar: in place, nothing slides.
             if (app.switched) return@AnimatedContent placeSwitch(initialState, targetState, app.bars, still, with(density) { 30.dp.roundToPx() })
-            // A message's page and its chat are one place (Annotate.kt): no slide either way, the page's own parts move.
             // Layered by depth in the stack, the deeper page over: a page's zIndex is fixed when it comes in (AnimatedContent
             // keeps the first spec's), so by the way it came it was wrong later (one come back to, then swiped away, went under).
             val z = app.stack.indexOfLast { app.pageOf(it) == app.pageOf(targetState) }.coerceAtLeast(0).toFloat()
-            if (targetState is Screen.Annotate || initialState is Screen.Annotate) (EnterTransition.None togetherWith ExitTransition.KeepUntilTransitionsFinished)
-                .apply { targetContentZIndex = z }
-            else {
-                // Sharing the host keeps the composer in place, but only an unsent new chat exits down.
-                val rose = initialState == Screen.NewChat
-                if (swiped) swipe(toLeft = initialState == Screen.Settings, z, rose) else transition(initialState, targetState, app.forward, z, rose)
-            }
+            // Sharing the host keeps the composer in place, but only an unsent new chat exits down.
+            val rose = initialState == Screen.NewChat
+            if (swiped) swipe(toLeft = initialState == Screen.Settings, z, rose) else transition(initialState, targetState, app.forward, z, rose)
         },
         // A new chat and the chat it becomes are one page (ChatHost.kt): it stays, rather than slide in again.
         contentKey = { app.pageOf(it) },
     ) { screen ->
-        val pageScope = this
         val page = keyOf(screen)
         val topics = followed.getOrPut(page) { fail.still.android.data.PageTopics() }
         DisposableEffect(page) {
@@ -875,8 +865,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
             LocalPlaceRoot provides placeRoot,
             LocalBarRoom provides if (placeRoot != PlaceRoot.Bar) 0.dp else BAR_ROOM,
         ) {
-            // A message's page draws its own ground, coming in over its chat (Annotate.kt).
-            Box(Modifier.fillMaxSize().then(if (screen is Screen.Annotate) Modifier else Modifier.background(C.bg)).then(BarTiming.page(screen))) {
+            Box(Modifier.fillMaxSize().background(C.bg).then(BarTiming.page(screen))) {
                 when (screen) {
                     Screen.Home -> fail.still.android.screens.LockGate(current) { HomeScreen(current) }
                     is Screen.Chat, Screen.NewChat -> fail.still.android.screens.ChatHost(current, screen)
@@ -920,14 +909,11 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     is Screen.Drive -> fail.still.android.drive.DriveScreen(current, screen.station, screen.root, screen.path)
                     is Screen.DriveRead -> fail.still.android.drive.ReaderScreen(screen.station, screen.root, screen.path)
                     is Screen.DrivePlay -> fail.still.android.drive.PlayerScreen(screen.station, screen.root, screen.path)
-                    is Screen.Annotate -> CompositionLocalProvider(fail.still.android.screens.LocalPageTransition provides pageScope.transition) {
-                        fail.still.android.screens.AnnotateScreen(screen.station, screen.of, screen.ts)
-                    }
                 }
                 // The page scrolls under the status bar; it keeps the paper behind its icons, moving with its page (the
                 // list, a place's top page with the bar and a chat have frosted bars there instead, which show what runs
                 // under them). A book and a film draw their own paper (or black) there.
-                if (screen !is Screen.Home && placeRoot != PlaceRoot.Bar && screen !is Screen.Chat && screen != Screen.NewChat && screen !is Screen.Annotate && screen !is Screen.DriveRead && screen !is Screen.DrivePlay)
+                if (screen !is Screen.Home && placeRoot != PlaceRoot.Bar && screen !is Screen.Chat && screen != Screen.NewChat && screen !is Screen.DriveRead && screen !is Screen.DrivePlay)
                     Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(C.bg))
             }
         } }

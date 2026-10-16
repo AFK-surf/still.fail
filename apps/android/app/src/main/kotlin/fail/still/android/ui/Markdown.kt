@@ -658,11 +658,11 @@ private fun inlineText(n: Node): String = when (n) {
 
 @Composable
 private fun MdText(raw: AnnotatedString, fontSize: TextUnit, lineHeight: TextUnit, fontWeight: FontWeight? = null, inline: Map<String, InlineTextContent> = emptyMap()) {
-    // A search's words in bold where it led (TextMark.kt); on the annotate page, its links drawn but not to tap (Links.kt).
-    val text = markWeight(if (LocalPickedWords.current != null) remember(raw) { raw.inert() } else raw)
+    // A search's words in bold where it led (TextMark.kt); while a passage of them is picked, its links drawn but not to tap (Pick.kt).
+    val text = markWeight(pickedText(raw))
     // A passage a quote led to, marked in these words (TextMark.kt).
     val (mark, laid) = passageMark(text.text)
-    // On the annotate page, a passage picked from them or noted (Pick.kt).
+    // A passage picked from them (Pick.kt).
     val (pick, picking) = pickable(text.text)
     // A link held: its menu (Links.kt).
     val (hold, held) = linkHold(text)

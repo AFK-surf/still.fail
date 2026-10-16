@@ -548,7 +548,7 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
                 comments[id]?.trim().orEmpty(), null, "image")
         }
 
-    /** A numbered mark as its note's box and card show it (Annotate.kt): its number, what it is, what is said about it. */
+    /** A numbered mark as its note's box and card show it (Notes.kt): its number, what it is, what is said about it. */
     inner class ImageNote(val id: Int, override val n: Int, override val text: String, override val color: Color) : NoteLike {
         override var comment: String
             get() = comments[id].orEmpty()
@@ -873,7 +873,7 @@ fun MarksTools(marks: ImageMarks, glass: Modifier) {
 }
 
 /**
- * The foot while marking, as a message's notes page's (Annotate.kt), in the viewer's dark: the note being written in
+ * The foot while marking, as the notes have it (Notes.kt), in the viewer's dark: the note being written in
  * its box (over the keyboard), else the notes as cards over the tools (a tap opens one again).
  */
 @Composable

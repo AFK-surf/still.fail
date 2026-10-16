@@ -116,7 +116,7 @@ fun Modifier.letsGoOfKeyboard(): Modifier {
                 val change = event.changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
                 moved += change.positionChange()
                 if (moved.getDistance() > slop) break
-                // A long press is not a tap: what it opens (a message's page) may take the keyboard itself.
+                // A long press is not a tap: it picks a passage there (MessagePick.kt), whose quote may want the keyboard.
                 if (!change.pressed) {
                     if (change.uptimeMillis - down.uptimeMillis >= viewConfiguration.longPressTimeoutMillis) return@awaitEachGesture
                     break

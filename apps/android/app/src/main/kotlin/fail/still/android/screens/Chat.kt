@@ -31,11 +31,9 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -832,8 +830,10 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
 
     // A new chat's first words on their way (ChatHost.kt): the list comes up after them, out of the composer's top edge.
     val flight = host.flight
-    Box(modifier.fillMaxWidth().onGloballyPositioned { motion.pane = it; box = it }) {
-      CompositionLocalProvider(LocalChatMotion provides motion) {
+    // A passage of a message picked where it is, to quote into the draft or copy (MessagePick.kt).
+    val pick = remember(draft) { MessagePick(draft) }
+    Box(modifier.fillMaxWidth().onGloballyPositioned { motion.pane = it; box = it }.letsGoOfPick(pick)) {
+      CompositionLocalProvider(LocalChatMotion provides motion, LocalMessagePick provides pick) {
         // The list is what the bars and capsules over it frost (the button over it too, so it is not in it).
         LazyColumn(
             Modifier.fillMaxSize()
@@ -885,6 +885,8 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                 }
             }
         }
+        // Over the list, under the bar and the composer: the picked passage's handles and what to do with it.
+        PickLayer(pick, follow = { list.firstVisibleItemIndex; list.firstVisibleItemScrollOffset }, moving = list.isScrollInProgress, top = top, bottom = bottom, modifier = Modifier.matchParentSize())
         // Over the send button, in line with it (the composer's capsule insets it 18dp from the edge); it comes up
         // growing and goes the way it came (web mobile/Chat.css.ts → mJump: from translateY(18px) scale(.6), its
         // opacity 180ms and the rest 220ms --m-standard; going, 150ms and 180ms; turned back mid-way from where it is).
@@ -1042,36 +1044,14 @@ internal fun AgentAvatar(maker: Maker?, runtime: String?) {
     }
 }
 
-/**
- * Long-press on a message: its page, to pick passages of it to say something about or to copy (Annotate.kt; web
- * mobile/Chat.tsx → useHold). Its words are marked for a moment as the page comes over them.
- */
-@OptIn(ExperimentalFoundationApi::class)
+/** Someone's words as they wrote them (web Chat.tsx → PersonWords): a reference to another chat as its chip, a link held its menu. */
 @Composable
-private fun holdMenu(ctx: Here, text: String, ts: String, inset: androidx.compose.ui.unit.DpOffset = androidx.compose.ui.unit.DpOffset.Zero): Pair<Modifier, Color> {
-    val app = LocalApp.current
-    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
-    var pressed by remember { mutableStateOf(false) }
-    LaunchedEffect(pressed) { if (pressed) { kotlinx.coroutines.delay(600); pressed = false } }
-    if (text.isBlank()) return Modifier to Color.Transparent
-    val key = "${ctx.station}/$ts"
-    val density = LocalDensity.current
-    // Where its words are, for them to fly to its page and back (Annotate.kt); away there, not here.
-    val modifier = Modifier.onGloballyPositioned { c ->
-        val box = c.boundsInRoot()
-        val (x, y) = with(density) { inset.x.toPx() to inset.y.toPx() }
-        if (!box.isEmpty) AnnotateFlight.sources[key] = Rect(box.left + x, box.top + y, box.right - x, box.bottom - y)
-    }
-        .graphicsLayer { alpha = if (AnnotateFlight.away == key) 0f else 1f }
-        .combinedClickable(
-        interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {},
-        onLongClick = {
-            pressed = true
-            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-            app.push(Screen.Annotate(ctx.station, ctx.of, ts))
-        },
-    )
-    return modifier to if (pressed) C.accent.copy(alpha = 0.12f) else Color.Transparent
+private fun PersonWords(text: String) {
+    val words = fail.still.android.ui.markWeight(fail.still.android.ui.pickedText(fail.still.android.ui.withRefs(text)))
+    val (mark, laid) = passageMark(words.text)
+    val (links, linked) = fail.still.android.ui.linkHold(words)
+    val (pick, picking) = fail.still.android.ui.pickable(words.text)
+    Text(words, mark.then(links).then(pick), fontSize = 15.sp, lineHeight = 23.sp, color = chatInk().text, onTextLayout = { laid(it); linked(it); picking(it) })
 }
 
 /** A message's words as read, without markdown's marks: what a quote carries. */
@@ -1150,10 +1130,11 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
     val motion = LocalChatMotion.current
     val flash = accentBg()
     if (ctx.mine(m)) {
-        val (hold, press) = holdMenu(ctx, m.text, m.ts, androidx.compose.ui.unit.DpOffset(14.dp, 8.dp))
+        // A finger held on the words picks a passage of them, here (MessagePick.kt).
+        val (hold, words) = messagePick(m.ts, t("android-chat.annotate.you"), "person", m.text)
         Column(Modifier.fillMaxWidth().flashed(motion, m.ts, flash), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             QuoteCards(m.quotes, jump, Alignment.End)
-            if (m.text.isNotEmpty()) Bubble(m.text, hold, press)
+            if (m.text.isNotEmpty()) CompositionLocalProvider(fail.still.android.ui.LocalPickedWords provides words) { Bubble(m.text, hold) }
             Files(ctx, m.attachments, mine = true)
             // Not taken by its agents yet: after a second it says it waits.
             if (waitingNow) Waiting(t("android-chat.chat.waitingAgent"))
@@ -1166,7 +1147,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
     // agent's opens its card (AgentSheet.kt).
     val agent = m.by.agent?.let { ctx.agent(it) }
     val who = m.by.name
-    val (hold, press) = holdMenu(ctx, m.text, m.ts)
+    val (hold, words) = messagePick(m.ts, who, if (m.authorKind == "agent") "agent" else "person", m.text)
     Box(Modifier.fillMaxWidth().flashed(motion, m.ts, flash)) {
         // Where a message out of an agent's avatar lands: its own avatar, hidden while the flying one is over it.
         Box(
@@ -1190,11 +1171,11 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
                 MessageTime(m.time?.get("createdAt"))
             }
             QuoteCards(m.quotes, jump, Alignment.Start)
-            Box(hold.drawBehind { drawSmooth(press, 12.dp.toPx()) }) {
+            Box(hold) { CompositionLocalProvider(fail.still.android.ui.LocalPickedWords provides words) {
                 // A person's words as yours are drawn: a reference to another chat as its chip (web Chat.tsx → PersonWords).
-                if (m.authorKind == "person") { if (m.text.isNotEmpty()) { val words = fail.still.android.ui.markWeight(fail.still.android.ui.withRefs(m.text)); val (mark, laid) = passageMark(words.text); val (links, linked) = fail.still.android.ui.linkHold(words); Text(words, mark.then(links), fontSize = 15.sp, lineHeight = 23.sp, color = ink.text, onTextLayout = { laid(it); linked(it) }) } }
+                if (m.authorKind == "person") { if (m.text.isNotEmpty()) PersonWords(m.text) }
                 else AgentWords(ctx, m.text, m.attachments, m.placed.orEmpty(), draft)
-            }
+            } }
             // An agent's files are placed in its words (Prose.kt), the rest below them there.
             if (m.authorKind == "person") Files(ctx, m.attachments)
             // A decision it asks (its options): them under it, a line saying how it went once it has.
@@ -1311,7 +1292,7 @@ private fun Waiting(text: String) {
 
 /** Your words, in their bubble on the right, a reference to another chat as its chip (ui/Markdown.kt → withRefs). */
 @Composable
-private fun Bubble(text: String, hold: Modifier, press: Color) {
+private fun Bubble(text: String, hold: Modifier) {
     val ink = chatInk()
     // Words flying here from the composer (ChatHost.kt): their bubble forms round them as they come.
     val flight = LocalFlight.current
@@ -1320,13 +1301,15 @@ private fun Bubble(text: String, hold: Modifier, press: Color) {
     val fieldWidth = LocalSendTextWidth.current
     if (flight != null) flight.groundColor = ink.neutral
     BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-        val words = fail.still.android.ui.markWeight(fail.still.android.ui.withRefs(text))
+        val words = fail.still.android.ui.markWeight(fail.still.android.ui.pickedText(fail.still.android.ui.withRefs(text)))
         val (mark, laid) = passageMark(words.text)
         // A link in them held: its menu (ui/Links.kt).
         val (links, linked) = fail.still.android.ui.linkHold(words)
+        // A passage picked from them (MessagePick.kt).
+        val (pick, picking) = fail.still.android.ui.pickable(words.text)
         Text(
             // A lone full-width mark (？ ！ 。) sits at the left of its wide cell: proportional alternates ("palt") cut that cell to the glyph, so the bubble's padding centres it.
-            words, style = SendTextStyle.copy(color = ink.text, fontFeatureSettings = if (text.trim().let { it.codePointCount(0, it.length) == 1 && !it[0].isLetterOrDigit() }) "palt" else null), onTextLayout = { laid(it); linked(it); flight?.words = it },
+            words, style = SendTextStyle.copy(color = ink.text, fontFeatureSettings = if (text.trim().let { it.codePointCount(0, it.length) == 1 && !it[0].isLetterOrDigit() }) "palt" else null), onTextLayout = { laid(it); linked(it); picking(it); flight?.words = it },
             modifier = Modifier.widthIn(max = if (fieldWidth > 0) with(density) { fieldWidth.toDp() } + 28.dp else maxWidth * 0.78f).then(hold)
                 .let { m ->
                     if (flight == null || host == null) m else m.onGloballyPositioned {
@@ -1337,7 +1320,7 @@ private fun Bubble(text: String, hold: Modifier, press: Color) {
                     // Flown in piece by piece, its ground is the host's (round the words on their way); else it comes in with them.
                     val alpha = when { flight == null -> 1f; !flight.carried && host?.flight === flight && flight.pieces() != null -> 0f; else -> flight.e() }
                     drawRect(ink.neutral, alpha = alpha)
-                }.background(press).padding(horizontal = 14.dp, vertical = 8.dp).then(mark).then(links)
+                }.padding(horizontal = 14.dp, vertical = 8.dp).then(mark).then(links).then(pick)
                 // On their way, its words are drawn piece by piece over the composer (ChatHost.kt FlightLayer), not here.
                 .drawWithContent { if (flight == null || host?.flight !== flight || flight.pieces() == null) drawContent() },
         )
@@ -1362,7 +1345,7 @@ private fun Out(ctx: Here, o: Outgoing) {
         // Not sent: what was written faded.
         Column(Modifier.fillMaxWidth().graphicsLayer { alpha = if (failed) 0.55f else 1f }, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             QuoteCards(o.quotes, null, Alignment.End)
-            if (o.text.isNotEmpty()) Bubble(o.text, Modifier, Color.Transparent)
+            if (o.text.isNotEmpty()) Bubble(o.text, Modifier)
             Files(ctx, o.attachments, mine = true)
         }
         // Said briefly (a tap says why); sending it again or dropping it right beside.

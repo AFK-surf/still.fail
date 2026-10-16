@@ -1,16 +1,9 @@
 {
   "android-chat.annotate.copied": "Copied",
-  "android-chat.annotate.copyAll": "Copy all",
   "android-chat.annotate.done": "Done",
-  "android-chat.annotate.locked": "Can't send in this chat now",
-  "android-chat.annotate.missing": "Message not found",
-  "android-chat.annotate.note": "Note",
-  "android-chat.annotate.put": "Add to chat · {n}",
-  "android-chat.annotate.quoteAll": "Quote all",
   "android-chat.annotate.quoteOnly": "Quote only",
   "android-chat.annotate.remove": "Delete note",
   "android-chat.annotate.selectAll": "All",
-  "android-chat.annotate.title": "Annotate",
   "android-chat.annotate.write": "Add a note (optional)",
   "android-chat.annotate.you": "You",
   "android-chat.archive": "Archive",
@@ -336,5 +329,6 @@
   "android-chat.agent.usage": "Usage",
   "android-chat.info.startedAt": "{name} started it {ago}",
   "android-chat.info.latestAt": "latest {ago}",
-  "android-chat.info.title": "Chat info"
+  "android-chat.info.title": "Chat info",
+  "android-chat.pick.quote": "Quote"
 }

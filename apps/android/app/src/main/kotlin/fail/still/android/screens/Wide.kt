@@ -93,8 +93,6 @@ fun BoxScope.WideCorners(current: WorkspaceEntry, top: Screen) {
                 NewChatDisc()
             }
         }
-        // A message's page is the chat's own, over it (Annotate.kt).
-        is Screen.Annotate -> {}
         // The decisions: one at a time, back to the list; their foot is theirs.
         Screen.Decisions -> {}
         // The drive's reader and player take the whole screen: their controls are where the button would be.

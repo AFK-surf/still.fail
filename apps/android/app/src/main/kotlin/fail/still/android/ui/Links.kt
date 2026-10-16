@@ -93,12 +93,12 @@ fun AnnotatedString.inert(): AnnotatedString {
  * The hook for words with links in them: a long press on one is its menu (open it, copy it), as the app's other long-
  * press menus are (Sheet.kt MenuHost), not the message's own (its page) and not the link opening as the finger lifts;
  * a tap stays the link's. A modifier to put on the text (inside its padding) and what to give its onTextLayout.
- * Nothing where words are picked from (the annotate page: a hold there picks words).
+ * Nothing while a passage of the words is picked (Pick.kt: a tap there lets go of it).
  */
 @Composable
 fun linkHold(text: AnnotatedString): Pair<Modifier, (TextLayoutResult) -> Unit> {
     val links = remember(text) { text.getLinkAnnotations(0, text.length).filter { it.item is LinkAnnotation.Url } }
-    if (links.isEmpty() || LocalPickedWords.current != null) return Modifier to {}
+    if (links.isEmpty() || LocalPickedWords.current?.picking == true) return Modifier to {}
     val ui = LocalUi.current
     val uris = LocalUriHandler.current
     val haptics = LocalHapticFeedback.current

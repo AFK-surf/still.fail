@@ -1,16 +1,9 @@
 {
   "android-chat.annotate.copied": "已拷贝",
-  "android-chat.annotate.copyAll": "复制全文",
   "android-chat.annotate.done": "写好了",
-  "android-chat.annotate.locked": "这个对话现在不能发消息",
-  "android-chat.annotate.missing": "找不到这条消息",
-  "android-chat.annotate.note": "批注",
-  "android-chat.annotate.put": "放进对话 · {n}",
-  "android-chat.annotate.quoteAll": "引用全文",
   "android-chat.annotate.quoteOnly": "只引用",
   "android-chat.annotate.remove": "删掉这条批注",
   "android-chat.annotate.selectAll": "全选",
-  "android-chat.annotate.title": "批注",
   "android-chat.annotate.write": "写批注（可以不写）",
   "android-chat.annotate.you": "你",
   "android-chat.archive": "归档",
@@ -318,5 +311,6 @@
   "android-chat.agent.usage": "用量",
   "android-chat.info.startedAt": "{name} {ago}开的",
   "android-chat.info.latestAt": "最新 {ago}",
-  "android-chat.info.title": "对话信息"
+  "android-chat.info.title": "对话信息",
+  "android-chat.pick.quote": "引用"
 }
