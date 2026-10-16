@@ -19,6 +19,9 @@ export function AppearancePage({ back }: { back: string }) {
       <Section title={t("common.language")} description={t("web-pages.appearance.language.description")}>
         <div className={chatCss.appearanceSetting}><LanguageSetting /></div>
       </Section>
+      <Section title={t("web-pages.appearance.drop.title")} description={t("web-pages.appearance.drop.description")}>
+        <div className={chatCss.appearanceSetting}><DropSetting /></div>
+      </Section>
       {/* The rail is the wide screen's (Rail.tsx). */}
       <div className={railCss.wideOnly}>
         <Section title={t("web-main.rail.title")} description={t("web-main.rail.lead")}>
@@ -26,6 +29,20 @@ export function AppearancePage({ back }: { back: string }) {
         </Section>
       </div>
     </div>
+  );
+}
+
+/** Files dragged into a chat: named by their path (the default), or sent as files; a chat may say otherwise (its file
+ * cards' hover). */
+function DropSetting() {
+  const value = usePrefs((p) => p.dropAs) === "file" ? "file" : "path";
+  return (
+    <Segmented label={t("web-pages.appearance.drop.title")} value={value}
+      onChange={(v) => setPrefs({ dropAs: v === "file" ? "file" : null })}
+      options={[
+        { value: "path", label: t("web-pages.appearance.drop.path") },
+        { value: "file", label: t("web-pages.appearance.drop.file") },
+      ]} />
   );
 }
 

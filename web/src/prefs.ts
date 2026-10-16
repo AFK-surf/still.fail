@@ -15,12 +15,12 @@ const COPY = "stillfail.prefs";
 const APPEARANCE = "stillfail.appearance";
 
 /** The prefs with what the core fills in when nothing was chosen (its shape leaves them optional). */
-export type Prefs = Required<Omit<PrefsView, "workspace" | "invite" | "device" | "language" | "lang" | "badge" | "rail">> & Pick<PrefsView, "workspace" | "invite" | "language" | "lang" | "badge" | "rail"> & { device: Required<Omit<DeviceView, "locale">> & Pick<DeviceView, "locale"> };
+export type Prefs = Required<Omit<PrefsView, "workspace" | "invite" | "device" | "language" | "lang" | "badge" | "rail" | "dropAs">> & Pick<PrefsView, "workspace" | "invite" | "language" | "lang" | "badge" | "rail" | "dropAs"> & { device: Required<Omit<DeviceView, "locale">> & Pick<DeviceView, "locale"> };
 /** What `prefs.set` takes: a field, or a map's entries (null: gone). */
 export type PrefsPatch = { [K in keyof Omit<Prefs, "device">]?: NonNullable<Prefs[K]> extends Record<string, infer V> ? Record<string, V | null> : Prefs[K] | null };
 
 const DEFAULTS: Prefs = {
-  onlyMine: false, onlyWatching: false, onlyDecisions: false, listFilter: {}, appearance: "system", rowPicture: "auto", absoluteTime: false, keys: {}, lastChat: {}, openChat: {}, chatTabs: {}, resume: {}, stationUpdatesDismissed: {}, rails: {},
+  onlyMine: false, onlyWatching: false, onlyDecisions: false, listFilter: {}, appearance: "system", rowPicture: "auto", absoluteTime: false, keys: {}, lastChat: {}, openChat: {}, chatTabs: {}, dropFiles: {}, resume: {}, stationUpdatesDismissed: {}, rails: {},
   // As the core fills it in (prefs.ts readerOf), before it has answered.
   reader: { size: 18, line: 1.7, margin: 22, face: "sans", indent: true, paper: "follow" },
   // As the core fills it in (prefs.ts barsOf).

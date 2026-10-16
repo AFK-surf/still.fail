@@ -3398,6 +3398,13 @@ export interface PrefsView {
 	openChat?: Record<string, OpenChat>;
 	/** Each chat's history tabs, by `<station>:<chat>` (the latest 200). */
 	chatTabs?: Record<string, KeptTabs>;
+	/**
+	 * Chats whose files dragged in go otherwise than `dropAs` says, by `<station>:<chat>`: true as files, false
+	 * named by their path (folders are named all the same).
+	 */
+	dropFiles?: Record<string, boolean>;
+	/** How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path. */
+	dropAs?: string;
 	/** A Slack app made for a new connect, to go on with, by station (the Android app's). */
 	resume?: Record<string, string>;
 	/** Versions dismissed on this device, by workspace/station. */

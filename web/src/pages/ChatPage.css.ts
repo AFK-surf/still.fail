@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
+import { panel } from "../styles/glass.ts";
 import { muted } from "../styles/shell.css.ts";
 import { sessionPage } from "../styles/session.css.ts";
 import { pageBarTitle } from "../styles/conversation.css.ts";
@@ -250,11 +251,19 @@ globalStyle(`${sideBar} ${sideTabList}`, { flex: "1", minWidth: "0", height: "au
 /** Ending its warm process, in its details' line: a link's look, as the profile's beside it. */
 export const evict = style({ padding: "0", border: "0", background: "none", color: "inherit", font: "inherit", cursor: "pointer" });
 
-/** The chat takes files dropped anywhere on it (ChatPage.tsx useChatDrop): what letting go does, said over it meanwhile. */
+/** The chat takes files dropped anywhere on it (ChatPage.tsx useChatDrop): while they are over it, a ring round it and,
+ * in its middle, what letting go does, on a panel's ground (the messages do not read through it). */
 export const dropZone = style({ position: "relative" });
 export const dropHint = style({
-  position: "absolute", inset: "0", zIndex: 30, display: "grid", placeItems: "center", pointerEvents: "none",
-  background: `color-mix(in srgb, ${vars.canvas} 82%, transparent)`,
-  boxShadow: `inset 0 0 0 2px color-mix(in srgb, ${vars.accent} 60%, transparent)`,
-  color: vars.text, fontSize: vars.textUi,
+  position: "absolute", inset: "8px", zIndex: 30, display: "grid", placeItems: "center", pointerEvents: "none",
+  borderRadius: vars.rCard, cornerShape: vars.cornerShape,
+  background: `color-mix(in srgb, ${vars.accent} 5%, color-mix(in srgb, ${vars.canvas} 55%, transparent))`,
+  boxShadow: `inset 0 0 0 1.5px color-mix(in srgb, ${vars.accent} 55%, transparent)`,
 });
+export const dropCard = style({
+  ...panel, display: "grid", justifyItems: "center", gap: "4px", maxWidth: "320px", padding: "18px 24px",
+  borderRadius: vars.rCard, cornerShape: vars.cornerShape, boxShadow: "0 8px 28px rgb(0 0 0 / .10)", textAlign: "center",
+});
+globalStyle(`${dropCard} svg`, { color: vars.accent, marginBottom: "6px" });
+export const dropTitle = style({ color: vars.text, fontSize: vars.textUi, fontWeight: 600 });
+export const dropNote = style({ color: vars.muted, fontSize: vars.textMeta, lineHeight: "1.5" });

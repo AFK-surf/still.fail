@@ -13,6 +13,7 @@ import { track } from "./telemetry.ts";
 import { useStation } from "./station.tsx";
 import { keepSentImage, uploadImageKey } from "./sentImages.ts";
 import { useToast } from "./toast.tsx";
+import { setPrefs, usePrefs } from "./prefs.ts";
 import { t } from "./i18n.ts";
 
 export const MAX_FILE = 1024 * 1024 * 1024;
@@ -42,6 +43,8 @@ export interface Draft {
   addDropped(items: Dropped[]): void;
   /** A file dragged in, named by its path or sent as a file. */
   setMode(id: string, mode: "path" | "file"): void;
+  /** Whether this chat takes files dragged in as files (folders are named by their path all the same), and setting it. */
+  asFiles: boolean; setAsFiles(on: boolean): void;
   remove(id: string): void;
   quotes: DraftQuote[];
   /** Quotes added (a preview's marks), as they are. */
@@ -235,8 +238,12 @@ export function useDraft({ key: given, station, carry }: {
       if (answer === undefined) setShown((x) => ({ ...x, files: x.files.map((f) => (ids.has(f.id) && !f.done && !f.error ? { ...f, error: t("web-main.draft.uploadFailed") } : f)) }));
     });
   };
+  // Files dragged in go as files where this chat says so (prefs' `dropFiles`), else as the settings say (`dropAs`);
+  // folders are named by their path all the same.
+  const byDefault = usePrefs((p) => p.dropAs === "file");
+  const asFiles = usePrefs((p) => p.dropFiles[key]) ?? byDefault;
   const addDropped = (items: Dropped[]) => {
-    const files = items.map((f) => ({ id: `f${Date.now()}-${nextId++}`, name: f.name, size: f.size, ref: { ...f.ref, mode: "path" as const }, ...(f.drive ? { drive: f.drive } : {}), ...(f.blob ? { blob: f.blob } : {}) }));
+    const files = items.map((f) => ({ id: `f${Date.now()}-${nextId++}`, name: f.name, size: f.size, ref: { ...f.ref, mode: asFiles && !f.ref.dir ? "file" as const : "path" as const }, ...(f.drive ? { drive: f.drive } : {}), ...(f.blob ? { blob: f.blob } : {}) }));
     void act("add", { station: station ?? contextStation, files }, (s) => ({
       ...s,
       files: [...s.files, ...files.map((f): ComposerFile => ({ id: f.id, name: f.name, size: f.size, ref: f.ref }))],
@@ -342,7 +349,7 @@ export function useDraft({ key: given, station, carry }: {
   };
 
   return {
-    text, setText, files, add, addDropped, setMode, remove, quotes, addQuotes, comment, unquote, quote, focusQuote: shown.focus, quoteFocused,
+    text, setText, files, add, addDropped, setMode, asFiles, setAsFiles: (on: boolean) => setPrefs({ dropFiles: { [key]: on === byDefault ? null : on } }), remove, quotes, addQuotes, comment, unquote, quote, focusQuote: shown.focus, quoteFocused,
     uploading, ready, starting: shown.starting, error: shown.error, setError, take, restore: () => restore(), send,
   };
 }

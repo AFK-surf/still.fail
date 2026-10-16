@@ -5,7 +5,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, QuotaChip, MeterChips, PeopleStack } from "../components.tsx";
-import { Archive, Boxes, Close, File, Folder, Info, PanelClose, PanelOpen, Users, Web } from "../icons.tsx";
+import { Archive, Boxes, Close, File, Folder, Info, PanelClose, PanelOpen, Upload, Users, Web } from "../icons.tsx";
 import { DriveTab } from "./DriveTab.tsx";
 import { carriesDrive, droppedFrom, droppedFromFinder, droppedOf } from "../drive/drag.ts";
 import { offerToDraft } from "../draft.ts";
@@ -389,7 +389,15 @@ function ChatScreen({ session: chatSession }: { session: string }) {
       {chat.watch && <Confirm open={askArchive} title={t("web-pages.chat.archiveConfirm", { title: chat.title })} description={chat.watch.ask} action={t("web-pages.chat.archive")}
         onConfirm={() => { setAskArchive(false); void archive(); }} onClose={() => setAskArchive(false)} />}
       <div className={`${jobsCss.sessionMain} ${css.dropZone}`} {...drop.handlers}>
-      {drop.over && <div className={css.dropHint} aria-hidden="true"><span>{t(drop.over === "path" ? "web-pages.chat.dropPath" : "web-pages.chat.dropFile")}</span></div>}
+      {drop.over && (
+        <div className={css.dropHint} aria-hidden="true">
+          <div className={css.dropCard}>
+            <Upload size={28} strokeWidth={1.6} />
+            <span className={css.dropTitle}>{t("web-pages.chat.dropTitle")}</span>
+            <span className={css.dropNote}>{t(drop.over === "path" ? "web-pages.chat.dropPath" : "web-pages.chat.dropFile", { station: station.name })}</span>
+          </div>
+        </div>
+      )}
       <header className={sidebarCss.pageBar}>
         <MobileBack to={link("/chats")} label={t("web-pages.decisions.back")} />
         {/* The chat's title, then who is in it: its people, then its agents (each opens its history). */}

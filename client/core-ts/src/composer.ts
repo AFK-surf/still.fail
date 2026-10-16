@@ -32,7 +32,7 @@ export type ComposerFile = { id: string; name: string; size: number; sent?: numb
 
 /// A file or folder dragged in from where it is (a station's files, or Finder on a machine that is a station): named by
 /// its path (`mode: "path"`: the message says which station has it and where, nothing goes up), or sent (`file`: it goes
-/// up to the chat's station as a picked one would). A folder is only named.
+/// up to the chat's station as a picked one would; a folder of the chat's own station zipped there first).
 export type ComposerRef = { station: string; stationName: string; path: string; dir: boolean; mode: "path" | "file" };
 
 /// A file handed to the core to send up: the page's id for it, and the file itself (`blob`), or where it is in a
@@ -311,7 +311,7 @@ export class Composers {
   add(key: string, station: string, files: FileIn[]): number {
     const s = this.#state(key);
     for (const f of files) {
-      const ref = f.ref ? { ...f.ref, mode: f.ref.dir ? "path" as const : f.ref.mode } : undefined;
+      const ref = f.ref ? { ...f.ref, mode: f.ref.dir && !zippable(f, station) ? "path" as const : f.ref.mode } : undefined;
       if (ref?.mode === "path") {
         // Named by its path: nothing goes up unless it is switched to a file.
         s.files = [...s.files, { id: f.id, name: f.name, size: f.size, done: null, error: null, ref }];
@@ -331,11 +331,11 @@ export class Composers {
   mode(key: string, id: string, mode: "path" | "file"): number {
     const s = this.#state(key);
     const f = s.files.find((x) => x.id === id);
-    if (!f?.ref || f.ref.mode === mode || (mode === "file" && f.ref.dir)) return s.version;
+    const held = this.#held.get(id);
+    if (!f?.ref || f.ref.mode === mode || (mode === "file" && f.ref.dir && !(held && zippable(held.file, held.station)))) return s.version;
     const ref = { ...f.ref, mode };
     s.files = s.files.map((x) => (x.id === id ? { ...x, ref } : x));
     if (mode === "file" && !this.#uploads.has(id)) {
-      const held = this.#held.get(id);
       if (!held) s.files = s.files.map((x) => (x.id === id ? { ...x, error: t("core-misc.composer.upload_missing", { name: x.name }) } : x));
       else if (f.size > MAX_FILE) s.files = s.files.map((x) => (x.id === id ? { ...x, error: t("core-misc.composer.too_big") } : x));
       else this.#upload(key, held.station, held.file);
@@ -374,7 +374,7 @@ export class Composers {
     if (f.drive && !elsewhere) {
       const drive = f.drive;
       inner.runner.fork(
-        Effect.flatMap(Effect.try({ try: () => StationAddr.parse(station), catch: asCoreError }), (addr) => inner.stations.requests.driveStage(addr, drive.root, drive.path, null)).pipe(
+        Effect.flatMap(Effect.try({ try: () => StationAddr.parse(station), catch: asCoreError }), (addr) => inner.stations.requests.driveStage(addr, drive.root, drive.path, null, f.ref?.dir === true)).pipe(
           Effect.match({
             onSuccess: (done) => { upload.file = null; change({ sent: f.size, done }); Deferred.doneUnsafe(upload.done, Effect.succeed(done)); },
             onFailure: (e) => { upload.error = true; change({ error: e.message || t("core-misc.composer.upload_failed") }); Deferred.doneUnsafe(upload.done, Effect.fail(e)); },
@@ -530,6 +530,9 @@ export class Composers {
   }
 }
 
+/// Whether a folder dragged in can be sent as a file: one of the chat's own station's drive, zipped there.
+const zippable = (f: FileIn, station: string) => !!f.drive && (f.drive.station === undefined || f.drive.station === station);
+
 /// Where a file named by its path is, as the message says it: its station's name and its path there.
 export const pathWords = (ref: ComposerRef) => t(ref.dir ? "common.folderOn" : "common.pathOn", { station: ref.stationName, path: ref.path });
 
@@ -598,7 +601,7 @@ export function parseComposer(name: string, params: unknown): Call | null {
           const blob = x.blob instanceof Blob || x.blob instanceof FileSource ? { blob: x.blob } : {};
           return { id: x.id, name: typeof x.name === "string" ? x.name : x.drive.path.split("/").at(-1) ?? "", size: typeof x.size === "number" ? x.size : 0, drive, ...blob, ...ref } as FileIn;
         }
-        // A folder named by its path: nothing to send.
+        // A folder named by its path, with no drive to zip it from: nothing to send.
         if (ref.ref?.dir) return { id: x.id, name: typeof x.name === "string" ? x.name : "", size: 0, ...ref } as FileIn;
         if (!(x.blob instanceof Blob || x.blob instanceof FileSource)) throw CoreError.invalid(t("core-misc.params.missing", { field: "files" }));
         return { id: x.id, name: typeof x.name === "string" ? x.name : x.blob.name ?? "", size: typeof x.size === "number" ? x.size : x.blob.size, blob: x.blob, ...(isObject(x.pasted) ? { pasted: x.pasted } : {}), ...ref } as FileIn;

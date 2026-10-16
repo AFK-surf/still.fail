@@ -251,3 +251,34 @@ test("stage: a file copied among the uploads for a message to send; not a folder
   assert.equal((await ask(table, request("POST", "/drive/stage", {}, { root, path: "notes.md" }, "viewer"))).status, 403);
   assert.equal((await ask(table, request("POST", "/drive/stage", {}, { root: base, path: "outside.txt" }))).json.name, "outside.txt");
 });
+
+test("stage a folder as a zip: every file under it, links not followed, the station's own data left out", async () => {
+  const { root, data } = place();
+  const { inflateRawSync } = await import("node:zlib");
+  const config = new ConfigFile(mkdtempSync(join(tmpdir(), "drive-config-")));
+  const drive = new Drive({ config: () => config.raw(), protect: () => [data] });
+  const uploads = mkdtempSync(join(tmpdir(), "drive-uploads-"));
+  const table = routes({ drive, config, home: root, stage: (name) => ({ safe: name, path: join(uploads, name) }) });
+  writeFileSync(join(root, "Season 1", "big.txt"), "x".repeat(10_000));
+  symlinkSync(join(root, "notes.md"), join(root, "Season 1", "link.md"));
+  const staged = await ask(table, request("POST", "/drive/stage", {}, { root, path: "", zip: true }));
+  assert.equal(staged.json.name, "root.zip");
+  // Read back from its central directory.
+  const zip = readFileSync(staged.json.path);
+  const end = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  let at = zip.readUInt32LE(end + 16);
+  const files: Record<string, string> = {};
+  for (let i = 0; i < zip.readUInt16LE(end + 10); i++) {
+    const [method, packed, n, local] = [zip.readUInt16LE(at + 10), zip.readUInt32LE(at + 20), zip.readUInt16LE(at + 28), zip.readUInt32LE(at + 42)];
+    const name = zip.subarray(at + 46, at + 46 + n).toString();
+    const body = zip.subarray(local + 30 + zip.readUInt16LE(local + 26), local + 30 + zip.readUInt16LE(local + 26) + packed);
+    files[name] = (method === 8 ? inflateRawSync(body) : body).toString();
+    at += 46 + n;
+  }
+  assert.deepEqual(Object.keys(files).sort(), ["root/", "root/Season 1/", "root/Season 1/E10.mp4", "root/Season 1/E2.mp4", "root/Season 1/big.txt", "root/Season 1/e1.mp4", "root/notes.md"]);
+  assert.equal(files["root/Season 1/big.txt"], "x".repeat(10_000));
+  assert.equal(files["root/notes.md"], "# hello\n");
+  assert.equal(staged.json.size, zip.length);
+  // A file is not zipped; a folder not asked to be is refused.
+  assert.equal((await ask(table, request("POST", "/drive/stage", {}, { root, path: "Season 1" }))).json.code, "is_a_directory");
+});

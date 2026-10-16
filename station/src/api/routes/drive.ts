@@ -4,7 +4,7 @@
 // between components; `root` any absolute path for a member who may write, one pinned for a read-only one): GET
 // /drive/list, /drive/stat and /drive/read (a part of a file: `offset`, `length`); PUT /drive/upload (a part of a file
 // written: `id`, `offset`, `total`, `replace`; its bytes the body), POST /drive/mkdir, /drive/rename, /drive/remove
-// and /drive/stage (a file copied among the uploads, for a message to send; a JSON body). Read-only members only read
+// and /drive/stage (a file copied among the uploads, or a folder zipped there, for a message to send; a JSON body). Read-only members only read
 // (the admin API refuses their writes). A refusal is `{error, code}` with the code's status (CODES).
 import { homedir } from "node:os";
 import { type Answer, type Request, json, param } from "../request.ts";
@@ -159,7 +159,7 @@ export function routes({ drive, config, home = homedir(), changed, stage }: Driv
             // Sending is writing (a read-only member sends nothing; the admin API refuses it first).
             if (readOnly(r.viewer)) throw new DriveError("permission", "a read-only member sends nothing");
             const b = body(r);
-            return drive.stage(text(b.root, "root"), text(b.path, "path"), stage, MOST_STAGED, anywhere(r));
+            return drive.stage(text(b.root, "root"), text(b.path, "path"), stage, MOST_STAGED, anywhere(r), b.zip === true);
           }),
         } as Route]
       : []),

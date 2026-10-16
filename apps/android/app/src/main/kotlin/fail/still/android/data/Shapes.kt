@@ -3401,6 +3401,11 @@ data class PrefsView (
 	val openChat: Map<String, OpenChat>? = null,
 	/// Each chat's history tabs, by `<station>:<chat>` (the latest 200).
 	val chatTabs: Map<String, KeptTabs>? = null,
+	/// Chats whose files dragged in go otherwise than `dropAs` says, by `<station>:<chat>`: true as files, false
+	/// named by their path (folders are named all the same).
+	val dropFiles: Map<String, Boolean>? = null,
+	/// How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path.
+	val dropAs: String? = null,
 	/// A Slack app made for a new connect, to go on with, by station (the Android app's).
 	val resume: Map<String, String>? = null,
 	/// Versions dismissed on this device, by workspace/station.

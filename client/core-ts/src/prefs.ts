@@ -8,8 +8,8 @@ import { fromLocale, follows, setCurrent, t, tr, type Lang } from "./i18n.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "resume", "invite", "badge", "reader", "lockNotice", "rail", "rails", "bars"];
-const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "resume", "lockNotice", "rails"];
+const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "resume", "invite", "badge", "reader", "lockNotice", "rail", "rails", "bars"];
+const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "resume", "lockNotice", "rails"];
 const TABS_KEPT = 200;
 const DEFERRED_KEPT = 200;
 const PREFS = { topic: "prefs" };
@@ -118,6 +118,7 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
     for (const [, key] of byUse.slice(0, byUse.length - TABS_KEPT)) delete tabs[key];
   }
   if ("badge" in prefs && !["decisions", "attention", "all"].includes(prefs.badge as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "badge" }));
+  if ("dropAs" in prefs && prefs.dropAs !== "file" && prefs.dropAs !== "path") throw CoreError.invalid(t("core-misc.params.invalid", { error: "dropAs" }));
   if ("language" in prefs && !(prefs.language === "zh" || prefs.language === "en")) throw CoreError.invalid(t("core-misc.params.language"));
   withLang(prefs);
   const shaped = conform("PrefsView", prefs);

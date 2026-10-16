@@ -11,6 +11,7 @@ import { copyFile, lstat, mkdir, open, readdir, realpath, rename, rm, stat, unli
 import { basename, dirname, join } from "node:path";
 import { platform } from "../platform/index.ts";
 import { unreadableDir } from "../ops/files.ts";
+import { TooBig, zipFolder } from "./zip.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 
 /// Why a request was refused (zdrive's codes, and `protected` for the station's own data), each with its status.
@@ -383,11 +384,23 @@ export class Drive {
 
   /// A file copied to `into` (where a chat's uploads wait for the message that sends them), for a member to send it in a
   /// chat as if it had been uploaded: a clone where the disk can make one (APFS, btrfs), so even a big one costs nothing.
-  async stage(root: string, path: string, into: (name: string) => { safe: string; path: string }, most: number, anywhere = false): Promise<{ name: string; path: string; size: number }> {
+  /// `zip`: a folder put into a zip of its own name instead (links not followed, the station's own data left out).
+  async stage(root: string, path: string, into: (name: string) => { safe: string; path: string }, most: number, anywhere = false, zip = false): Promise<{ name: string; path: string; size: number }> {
     const at = await this.place(root, path, anywhere);
     const name = at.parts.at(-1) ?? rootName(at.root);
     try {
       const s = await stat(at.found);
+      if (s.isDirectory() && zip) {
+        const to = into(`${name}.zip`);
+        const protect = await this.protectedNow();
+        const skip = async (p: string, n: string) => PART.test(n) || (await this.isProtected(p, await real(p), protect));
+        try {
+          return { name: to.safe, path: to.path, size: await zipFolder(at.found, to.path, most, skip) };
+        } catch (e) {
+          await unlink(to.path).catch(() => {});
+          throw e instanceof TooBig ? new DriveError("too_large", TOO_BIG) : e;
+        }
+      }
       if (s.isDirectory()) throw new DriveError("is_a_directory", "that is a folder");
       if (s.size > most) throw new DriveError("too_large", TOO_BIG);
       const to = into(name);

@@ -241,12 +241,9 @@ export const fileCardMeta = style({
   },
 });
 export const fileCardText = style({ flex: "1", minWidth: "0", display: "grid" });
-/** A file dragged in: named by its path or sent as a file, switched here. */
-export const fileCardMode = style({
-  flex: "none", padding: "0", border: "0", background: "none", color: vars.muted, fontSize: vars.textCaption, cursor: "pointer",
-  textDecoration: "underline", textDecorationColor: "transparent", textUnderlineOffset: "3px",
-  selectors: { "&:hover": { color: vars.text, textDecorationColor: "currentColor" } },
-});
+/** What a file dragged in is, on its card's hover: its name, where it is, what sending does. */
+export const refInfo = style({ display: "grid", gap: "2px", minWidth: "0" });
+export const refInfoPath = style({ color: vars.muted, fontSize: vars.textMeta, overflowWrap: "anywhere" });
 export const fileCardName = style({
   fontSize: vars.textUi, lineHeight: "20px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });

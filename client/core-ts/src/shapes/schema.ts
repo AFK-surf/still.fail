@@ -1179,6 +1179,8 @@ export const SHAPES: Record<string, Shape> = {
     ["lastChat", map("String"), { default: true, doc: "The chat page last open, by scope (a workspace; `local` in what a station's own page kept, before it went)." }],
     ["openChat", map("OpenChat"), { default: true, doc: "The chat last open, by workspace, as the core keeps it from `client.focus` (a settings page leaves it as it\nwas): what the workspace's page goes back to." }],
     ["chatTabs", map("KeptTabs"), { default: true, doc: "Each chat's history tabs, by `<station>:<chat>` (the latest 200)." }],
+    ["dropFiles", map("bool"), { default: true, doc: "Chats whose files dragged in go otherwise than `dropAs` says, by `<station>:<chat>`: true as files, false\nnamed by their path (folders are named all the same)." }],
+    ["dropAs", opt("String"), { doc: "How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path." }],
     ["resume", map("String"), { default: true, doc: "A Slack app made for a new connect, to go on with, by station (the Android app's)." }],
     ["stationUpdatesDismissed", map("String"), { default: true, doc: "Versions dismissed on this device, by workspace/station." }],
     ["badge", opt("String"), { default: true, doc: "What the app's badge counts: decisions (the cards waiting for them), attention (those and the chats of\ntheirs that went wrong; none: this), all (those and the unread)." }],

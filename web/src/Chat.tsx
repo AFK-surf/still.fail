@@ -5,15 +5,15 @@ import { makePastedFile, pastedInfo, PASTE_THRESHOLD } from "./pastedText.ts";
 // can be quoted with a comment, and files ride along as cards (images shown).
 import { sentFileKey, sentImage, sentImageKey, uploadImageKey } from "./sentImages.ts";
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
-import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Close, Command, Edit, Folder, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Web } from "./icons.tsx";
+import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Check, Close, Command, Edit, Folder, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Web } from "./icons.tsx";
 import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { Link, useHref, useSearchParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
 import { scopeOf, stationBase, usePerson, useStation } from "./station.tsx";
 import { chatOfLink } from "./chatRefs.ts";
-import { PathSession } from "./Peeks.tsx";
-import { Avatar, ICON, ModelLogo, Pill, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
+import { Hover, PathSession } from "./Peeks.tsx";
+import { Avatar, ICON, ModelLogo, PanelRow, PanelText, Pill, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { chatPage } from "./chatPage.ts";
 import { Prose, withBareLinks } from "./Prose.tsx";
@@ -1883,7 +1883,7 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft
       )}
       {rest.length > 0 && (
         <div className={css.composerFiles}>
-          {rest.map((f) => f.ref ? <RefCard key={f.id} file={f} onMode={(mode) => draft.setMode(f.id, mode)} onRemove={() => draft.remove(f.id)} /> : <PendingFile key={f.id} file={f} onRemove={() => draft.remove(f.id)}
+          {rest.map((f) => f.ref ? <RefCard key={f.id} file={f} draft={draft} onRemove={() => draft.remove(f.id)} /> : <PendingFile key={f.id} file={f} onRemove={() => draft.remove(f.id)}
             onRetry={f.pastedFile && f.error ? () => { draft.remove(f.id); draft.add([f.pastedFile!], f.pasted); } : undefined}
             onRestore={f.pasted?.text === undefined || draft.starting ? undefined : () => {
               draft.setText(draft.text ? `${draft.text}\n${f.pasted!.text}` : f.pasted!.text!);
@@ -1897,26 +1897,47 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft
 }
 
 /**
- * A file or folder dragged in from where it is: named by its path (which station has it, and where), or, switched, sent
- * as a file (going up as any file does). A folder is only named.
+ * A file or folder dragged in from where it is: named by its path (which station has it, and where), or sent as a file
+ * (a folder of the chat's own station as a zip). Hovered, the card says all of it, and switches it there; as it does
+ * whether this chat takes what is dragged in as files.
  */
-function RefCard({ file: f, onMode, onRemove }: { file: Pending; onMode: (mode: "path" | "file") => void; onRemove: () => void }) {
+function RefCard({ file: f, draft, onRemove }: { file: Pending; draft: Draft; onRemove: () => void }) {
   const ref = f.ref!;
+  const station = useStation();
   const asFile = ref.mode === "file";
   const pending = asFile && !f.done && !f.error;
   const going = f.sent !== undefined && f.size > 0
     ? t("web-main.file.uploadingPart", { percent: Math.floor((f.sent / f.size) * 100), size: fileSize(f.size) })
     : t("web-main.file.uploading");
+  // A folder goes as a zip only from the chat's own station (zipped there).
+  const zips = ref.dir && ref.station === station.address;
+  const meta = asFile ? f.error ?? (pending ? going : fileSize(f.done?.size ?? f.size)) : t(ref.dir ? "web-main.file.folderOn" : "web-main.file.pathOn", { station: ref.stationName });
+  const info = (
+    <>
+      <PanelText className={css.refInfo}>
+        <b>{asFile && ref.dir ? `${f.name}.zip` : f.name}</b>
+        <span className={css.refInfoPath}>{t(ref.dir ? "web-main.file.folderOn" : "web-main.file.pathOn", { station: ref.stationName })} · {ref.path}</span>
+        <span>{asFile ? t(ref.dir ? "web-main.file.sendsZip" : "web-main.file.sendsFile", { station: station.name }) : t("web-main.file.sendsPath", { station: ref.stationName })}</span>
+      </PanelText>
+      <div className={controlsCss.panelEdge}>
+        {asFile
+          ? <PanelRow icon={<Read size={16} />} label={t("web-main.file.asPath")} onClick={() => draft.setMode(f.id, "path")} />
+          : (!ref.dir || zips) && <PanelRow icon={<Send size={16} />} label={t(ref.dir ? "web-main.file.asZip" : "web-main.file.asFile")} onClick={() => draft.setMode(f.id, "file")} />}
+        <PanelRow icon={<Folder size={16} />} label={t("web-main.file.chatAsFiles")} end={draft.asFiles ? <Check size={16} /> : undefined} onClick={() => draft.setAsFiles(!draft.asFiles)} />
+      </div>
+    </>
+  );
   return (
-    <Tip label={pathWords(ref)}><span className={css.fileCard} data-error={asFile && f.error ? true : undefined}>
-      {pending ? <span className={waitingCss.spinner} aria-hidden="true" /> : ref.dir ? <Folder size={16} aria-hidden="true" /> : <Read size={16} aria-hidden="true" />}
-      <span className={css.fileCardText}>
-        <span className={css.fileCardName}>{f.name}</span>
-        <span className={css.fileCardMeta}>{asFile ? f.error ?? (pending ? going : fileSize(f.size)) : t("web-main.file.pathOn", { station: ref.stationName })}</span>
+    <Hover tile content={info}>
+      <span className={css.fileCard} data-error={asFile && f.error ? true : undefined}>
+        {pending ? <span className={waitingCss.spinner} aria-hidden="true" /> : ref.dir && !asFile ? <Folder size={16} aria-hidden="true" /> : <Read size={16} aria-hidden="true" />}
+        <span className={css.fileCardText}>
+          <span className={css.fileCardName}>{asFile && ref.dir ? `${f.name}.zip` : f.name}</span>
+          <span className={css.fileCardMeta}>{meta}</span>
+        </span>
+        <button type="button" className={css.fileCardRemove} aria-label={t("web-main.file.remove", { name: f.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>
       </span>
-      {!ref.dir && <button type="button" className={css.fileCardMode} onClick={(e) => { e.stopPropagation(); onMode(asFile ? "path" : "file"); }}>{t(asFile ? "web-main.file.asPath" : "web-main.file.asFile")}</button>}
-      <button type="button" className={css.fileCardRemove} aria-label={t("web-main.file.remove", { name: f.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>
-    </span></Tip>
+    </Hover>
   );
 }
 
