@@ -1,0 +1,251 @@
+// A station's logins in the core (docs/remote-login.md): read when its stream opens and told as they change, shown in
+// words; a station from before has none; a terminal's screen told on the stream while it is shown; a loopback login's
+// callback taken on this device (a host that can listen) and handed to the station, only the one it waits for, once.
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { Effect, Queue } from "effect";
+import type { LoopbackRequest, Pull } from "../src/host.ts";
+import { HostError } from "../src/error.ts";
+import { AFTER_MS, isCallback } from "../src/station/machine-logins.ts";
+import { apply as applyOps } from "../src/delta.ts";
+import type { FakeHost } from "../src/testing.ts";
+import { answers, call, subscribe, v } from "./helpers.ts";
+import { base, started, stationReplies } from "./station-fixture.ts";
+
+const ST = "ws/st";
+
+const gh = { id: "gh", name: "GitHub", installed: true, state: "in", account: "octocat", by: { email: "a@x.com", name: "张三" }, at: Date.UTC(2026, 9, 12, 4), flow: "device", builtin: true };
+const npm = { id: "npm", name: "npm", installed: true, state: "out", flow: "open", builtin: true };
+const fly = { id: "fly", name: "Fly.io", installed: false, state: "out", flow: "open", builtin: true };
+const device = { id: "l1", service: "gh", name: "GitHub", command: ["gh", "auth", "login"], state: "code", step: "device", url: "https://github.com/login/device", domain: "github.com", code: "1A2B-C3D4", waiting: false, by: { email: "a@x.com", name: "张三" }, startedAt: 1, expiresAt: 2, before: { account: "octocat", by: { email: "a@x.com", name: "张三" }, at: Date.UTC(2026, 9, 12, 4) } };
+const loopback = { id: "l2", name: "gcloud", command: ["gcloud", "auth", "login"], state: "browser", step: "loopback", url: "https://accounts.google.com/o/oauth2/auth?redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F&state=s3", domain: "accounts.google.com", callback: { host: "localhost", port: 8085, path: "/", state: "s3", post: false }, waiting: false, by: { email: "a@x.com", name: "张三" }, startedAt: 3, expiresAt: 4 };
+
+/// What the core sent since: each subscription's value (deltas applied) into `values`; the messages, for the answers.
+function drain(host: FakeHost, values: Map<number, unknown>) {
+  const emitted = host.takeEmitted();
+  for (const [, message] of emitted) {
+    const m = message as Record<string, unknown>;
+    if ("value" in m) values.set(m.id as number, m.value);
+    else if ("delta" in m) values.set(m.id as number, applyOps(values.get(m.id as number), m.delta as never));
+  }
+  return emitted;
+}
+
+const listed = () => ({ ...base(), "GET /machine-logins": { services: [gh, npm, fly], logins: [device, loopback] } });
+
+test("a station's logins: read as its stream opens, in words, told as they change; a station from before has none", async () => {
+  const { host, core, push } = await started(listed());
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "machineLogins", station: ST });
+  subscribe(core, ui, 2, { topic: "machineLogin", station: ST, id: "l1" });
+  subscribe(core, ui, 3, { topic: "machineLogin", station: ST, id: "nope" });
+  await host.settle();
+  drain(host, values);
+  const all = v(values, 1);
+  assert.deepEqual([all.supported, all.loaded, all.canLogin, all.canRelay], [true, true, true, false]);
+  assert.deepEqual(all.services.map((s: any) => [s.id, s.stateText]), [["gh", "已登录 octocat · 张三 10/12"], ["npm", "没登录"], ["fly", "没装"]]);
+  const one = v(values, 2);
+  assert.deepEqual([one.title, one.statusText, one.code, one.url, one.domain, one.active, one.byText], ["在 studio 上登录 GitHub", "验证码 1A2B-C3D4", "1A2B-C3D4", "https://github.com/login/device", "github.com", true, "张三"]);
+  assert.equal(one.before, "现在登录的是 octocat（张三 10/12 登录）");
+  assert.equal(v(values, 3), null, "a login the station does not have");
+  assert.equal(all.logins.find((l: any) => l.id === "l2").statusText, "等你打开浏览器");
+  // Told as it ends: in place.
+  push("machine-logins", { login: { ...device, state: "done", step: undefined, code: undefined, account: "monalisa", endedAt: 9 } });
+  push("machine-logins", { service: { ...gh, account: "monalisa", by: undefined } });
+  await host.settle();
+  drain(host, values);
+  const done = v(values, 2);
+  assert.deepEqual([done.statusText, done.active, done.account, done.code, done.step], ["已登录 monalisa", false, "monalisa", undefined, undefined]);
+  assert.equal(v(values, 1).services[0].stateText, "已登录 monalisa");
+  // Under way first, then those ended.
+  assert.deepEqual(v(values, 1).logins.map((l: any) => l.id), ["l2", "l1"]);
+  core.close();
+
+  // A station from before: GET /machine-logins is no route.
+  const old = await started();
+  const ui2 = old.core.connect();
+  const values2 = new Map();
+  subscribe(old.core, ui2, 1, { topic: "machineLogins", station: ST });
+  await old.host.settle();
+  drain(old.host, values2);
+  assert.deepEqual([v(values2, 1).supported, v(values2, 1).loaded, v(values2, 1).services], [false, true, []]);
+  old.core.close();
+});
+
+test("a login's terminal: its stream asks for it while it is shown, all of it first, then the rows that changed", async () => {
+  const { host, core, push, streams } = await started(listed());
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "machineLoginScreen", station: ST, id: "l1" });
+  await host.settle();
+  assert.ok(streams.some((s) => !s.closed && s.path.includes("login=l1")), streams.map((s) => s.path).join(" "));
+  drain(host, values);
+  assert.equal(v(values, 1), null, "nothing told yet");
+  push("login-screen", { id: "l1", full: true, rows: { 0: "? Authenticate Git (Y/n)", 1: "", 2: "Username: " }, cursor: { x: 10, y: 2 }, echo: true, live: true });
+  await host.settle();
+  drain(host, values);
+  assert.deepEqual(v(values, 1), { rows: ["? Authenticate Git (Y/n)", "", "Username: "], cursorX: 10, cursorY: 2, echo: true, live: true });
+  push("login-screen", { id: "l1", rows: { 2: "Username: alice", 3: "Password: " }, cursor: { x: 10, y: 3 }, echo: false, live: true });
+  await host.settle();
+  drain(host, values);
+  assert.deepEqual(v(values, 1).rows, ["? Authenticate Git (Y/n)", "", "Username: alice", "Password: "]);
+  assert.equal(v(values, 1).echo, false);
+  // Not shown any more: the stream lets it go.
+  core.receive(ui, { kind: "unsubscribe", id: 1, unsubscribe: true });
+  await host.time.pass(120_000, 1_000);
+  assert.ok(!streams.some((s) => !s.closed && s.path.includes("login=l1")));
+  core.close();
+});
+
+test("starting, cancelling, typing: the station's answer is in place at once", async () => {
+  const { host, core } = await started(listed());
+  const asked: { method: string; path: string; body: any }[] = [];
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (!path.startsWith("/machine-logins/") && !(path === "/machine-logins" && req.method === "POST")) return undefined;
+    asked.push({ method: req.method, path, body: req.body && req.body.length > 0 ? JSON.parse(new TextDecoder().decode(req.body)) : null });
+    if (req.method === "POST" && path === "/machine-logins") return { ...device, id: "l3", service: "npm", name: "npm", code: undefined, step: undefined, state: "starting" };
+    if (req.method === "DELETE") return { ...device, state: "cancelled", endedAt: 5 };
+    return { ok: true };
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "machineLogin", station: ST, id: "l3" });
+  await host.settle();
+  call(core, ui, 2, "machineLogin.start", { station: ST, service: "npm" });
+  await host.settle();
+  assert.equal(answers(drain(host, values), 2)?.ok !== undefined, true);
+  drain(host, values);
+  assert.equal(v(values, 1).statusText, "正在启动登录命令");
+  call(core, ui, 3, "machineLogin.input", { station: ST, id: "l3", key: "Enter" });
+  call(core, ui, 4, "machineLogin.cancel", { station: ST, id: "l1" });
+  await host.settle();
+  assert.deepEqual(asked.map((a) => [a.method, a.path, a.body]), [
+    ["POST", "/machine-logins", { service: "npm" }],
+    ["POST", "/machine-logins/l3/input", { key: "Enter" }],
+    ["DELETE", "/machine-logins/l1", null],
+  ]);
+  core.close();
+});
+
+/// Listeners as a desktop app's host has them, here a queue a test hands requests to; what was opened, and what each
+/// request was answered.
+function listeners(refuse: string[] = []) {
+  const opened: { port: number; host: string; closed: boolean; queue: Queue.Queue<LoopbackRequest | null> }[] = [];
+  const listen = (port: number, host: string) =>
+    Effect.gen(function* () {
+      if (refuse.includes(host)) return yield* Effect.fail(new HostError("EADDRINUSE"));
+      const queue = yield* Queue.unbounded<LoopbackRequest | null>();
+      const one = { port, host, closed: false, queue };
+      opened.push(one);
+      yield* Effect.addFinalizer(() => Effect.sync(() => (one.closed = true)));
+      return { take: Queue.take(queue) } as Pull<LoopbackRequest>;
+    });
+  const ask = (host: string, method: string, path: string, headers: [string, string][], body = "") =>
+    new Promise<{ status: number; body: string }>((resolve) => {
+      const l = opened.find((o) => o.host === host && !o.closed)!;
+      Queue.offerUnsafe(l.queue, { method, path, headers, body: new TextEncoder().encode(body), respond: (status, _h, b) => resolve({ status, body: new TextDecoder().decode(b) }) });
+    });
+  return { opened, listen, ask };
+}
+
+test("a loopback login's callback: listened for here once opened, the one it waits for relayed to the station once", async () => {
+  const { host, core, push } = await started(listed());
+  const l = listeners();
+  host.listen = l.listen;
+  const relayed: any[] = [];
+  stationReplies(host, (req) => {
+    if (!req.url.endsWith("/machine-logins/l2/callback")) return undefined;
+    relayed.push(JSON.parse(new TextDecoder().decode(req.body!)));
+    return { status: 200, headers: { "content-type": "text/html" }, body: Buffer.from("<h1>signed in</h1>").toString("base64") };
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "machineLogins", station: ST });
+  subscribe(core, ui, 2, { topic: "machineLogin", station: ST, id: "l2" });
+  await host.settle();
+  drain(host, values);
+  assert.equal(v(values, 1).canRelay, true);
+  // A device code's page opens as it is: nothing listens.
+  call(core, ui, 3, "machineLogin.open", { station: ST, id: "l1" });
+  await host.settle();
+  assert.deepEqual(answers(drain(host, values), 3)?.ok, { url: "https://github.com/login/device" });
+  assert.equal(l.opened.length, 0);
+  // The station on this machine: the command takes its own callback.
+  call(core, ui, 4, "machineLogin.open", { station: ST, id: "l2", here: true });
+  await host.settle();
+  assert.equal(l.opened.length, 0);
+  call(core, ui, 5, "machineLogin.open", { station: ST, id: "l2" });
+  await host.settle();
+  assert.deepEqual(answers(drain(host, values), 5)?.ok, { url: loopback.url });
+  assert.deepEqual(l.opened.map((o) => [o.host, o.port]), [["127.0.0.1", 8085], ["::1", 8085]], "localhost: both, for the browser may try either");
+  drain(host, values);
+  assert.deepEqual([v(values, 2).listening, v(values, 2).statusText], [true, "等浏览器回来"]);
+  // Not the one it waits for: answered here, never sent.
+  const wrong = [
+    l.ask("127.0.0.1", "GET", "/?code=c&state=guess", [["Host", "localhost:8085"]]),
+    l.ask("127.0.0.1", "GET", "/favicon.ico", [["Host", "localhost:8085"]]),
+    l.ask("::1", "GET", "/?code=c&state=s3", [["Host", "evil.example:8085"]]),
+    l.ask("127.0.0.1", "POST", "/?code=c&state=s3", [["Host", "localhost:8085"]]),
+  ];
+  await host.settle();
+  for (const w of await Promise.all(wrong)) assert.equal(w.status, 404);
+  assert.equal(relayed.length, 0);
+  const right = l.ask("::1", "GET", "/?code=c0de&state=s3&scope=openid", [["Host", "localhost:8085"], ["User-Agent", "Safari"]]);
+  await host.settle();
+  assert.deepEqual(await right, { status: 200, body: "<h1>signed in</h1>" });
+  assert.deepEqual(relayed, [{ method: "GET", path: "/?code=c0de&state=s3&scope=openid", headers: { host: "localhost:8085", "user-agent": "Safari" } }]);
+  // After it, only a page saying it is done; then the listeners close.
+  const after = l.ask("127.0.0.1", "GET", "/?code=c0de&state=s3", [["Host", "localhost:8085"]]);
+  await host.settle();
+  assert.equal((await after).status, 200);
+  assert.equal(relayed.length, 1, "once");
+  push("machine-logins", { login: { ...loopback, state: "done", endedAt: 9 } });
+  await host.time.pass(AFTER_MS + 1_000, 500);
+  assert.ok(l.opened.every((o) => o.closed));
+  drain(host, values);
+  assert.equal(v(values, 2).listening, false);
+  core.close();
+});
+
+test("a loopback login's port taken on this device says so; a page that cannot listen cannot relay", async () => {
+  const { host, core } = await started(listed());
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "machineLogins", station: ST });
+  await host.settle();
+  call(core, ui, 2, "machineLogin.open", { station: ST, id: "l2" });
+  await host.settle();
+  assert.match(String((answers(drain(host, values), 2)?.error as any)?.message), /桌面 app/);
+  const l = listeners(["127.0.0.1"]);
+  host.listen = l.listen;
+  call(core, ui, 3, "machineLogin.open", { station: ST, id: "l2" });
+  await host.settle();
+  assert.equal((answers(drain(host, values), 3)?.error as any)?.message, "本机 8085 端口被占用");
+  // Only ::1 refused (a machine without IPv6): 127.0.0.1 alone.
+  const v6 = listeners(["::1"]);
+  host.listen = v6.listen;
+  call(core, ui, 4, "machineLogin.open", { station: ST, id: "l2" });
+  await host.settle();
+  assert.ok(answers(drain(host, values), 4)?.ok);
+  assert.deepEqual(v6.opened.map((o) => o.host), ["127.0.0.1"]);
+  call(core, ui, 5, "machineLogin.open", { station: ST, id: "gone" });
+  await host.settle();
+  assert.equal((answers(drain(host, values), 5)?.error as any)?.status, 404);
+  core.close();
+});
+
+test("only the callback a login waits for is taken: its Host, method, path and state; a form's state in its body", () => {
+  const get = { port: 8085, hosts: ["127.0.0.1"], path: "/callback", state: "s", post: false };
+  const ask = (method: string, path: string, host: string, body = "") => ({ method, path, headers: [["host", host]] as [string, string][], body: new TextEncoder().encode(body) });
+  assert.ok(isCallback(get, ask("GET", "/callback?state=s&code=1", "127.0.0.1:8085")));
+  assert.ok(isCallback(get, ask("GET", "/callback?state=s", "[::1]:8085")));
+  assert.ok(!isCallback(get, ask("GET", "/callback?state=s", "localhost:9999")));
+  assert.ok(!isCallback(get, ask("GET", "/callback/x?state=s", "localhost:8085")));
+  assert.ok(!isCallback(get, ask("GET", "/callback", "localhost:8085")));
+  const post = { ...get, path: "/", post: true };
+  assert.ok(isCallback(post, ask("POST", "/", "localhost:8085", "code=1&state=s")));
+  assert.ok(!isCallback(post, ask("POST", "/", "localhost:8085", "code=1&state=t")));
+  assert.ok(!isCallback(post, ask("GET", "/?state=s", "localhost:8085")));
+});

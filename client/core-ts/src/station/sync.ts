@@ -32,6 +32,8 @@ import { type Channel, Channels } from "../channels/channels.ts";
 import { ENTRIES, PAGE, TRANSCRIPT_PAGE, entriesOf, heldIn, transcriptOf } from "./channel-kinds.ts";
 import { HOST_KEY, HOST_SAVE_MS, type HistoryRead, type Link, Links, type LiveView } from "./link.ts";
 import { readAll, type StationWire } from "./wire.ts";
+import * as logins from "./machine-logins.ts";
+import { Relays } from "./machine-logins.ts";
 
 export { HOST_KEY, HOST_SAVE_MS, LINK_KEY, LONG_MISSES, MISSES, OFFLINE_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS, STREAM_QUIET_MS, Link } from "./link.ts";
 export type { EventsFor, LiveView } from "./link.ts";
@@ -92,9 +94,11 @@ export class StationsSync {
   /// Its stations' links: their streams, opened and tried again (link.ts).
   readonly #links: Links;
   /// What the station topics want of a stream beyond what the sync wants (host samples, logs, sessions shown).
-  wanted: (address: string) => { host: boolean; live: string[]; logs: [string, number][] } = () => ({ host: false, live: [], logs: [] });
+  wanted: (address: string) => { host: boolean; live: string[]; logs: [string, number][]; logins?: string[] } = () => ({ host: false, live: [], logs: [] });
   /// Told when what a station holds beyond the records changed (link, live views, host, logs).
-  onChange: (address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens", key?: string) => void = () => {};
+  onChange: (address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens" | "logins" | "loginScreen", key?: string) => void = () => {};
+  /// The loopback relays of logins this device takes the callback of (docs/remote-login.md).
+  readonly relays: Relays;
   /// Told of entries that came as they were said (an event): they come in with a motion.
   onTold: (address: string, id: number, entries: unknown[]) => void = () => {};
   /// What other parts read of a station whenever it is read again (its stream opened afresh), each a task of its own
@@ -113,6 +117,8 @@ export class StationsSync {
       gone: (address) => this.channels.forget(address),
     });
     this.requests.onAnswered = (station) => this.#links.answered(station.toString());
+    this.relays = new Relays(core);
+    this.relays.onChange = (station) => this.onChange(station, "logins");
     this.channels = new Channels(heldIn(core.data), {
       read: (station, path, options) => Effect.suspend(() => this.requests.call(this.#links.get(station)?.addr ?? StationAddr.parse(station), "GET", path, null, options)),
       reached: (station) => this.#links.has(station) && this.reachable(station),
@@ -164,6 +170,8 @@ export class StationsSync {
     if (how.away) this.#catchUpShown(address);
     // Its screens are held in memory only: read again whenever the stream was not there to hear them change.
     if (how.away || how.restored || this.screens(address) === undefined) this.#enqueue(address, "screens", Priority.background, this.#screens(address));
+    // Its logins are held in memory only: read once where this run has not yet.
+    if (logins.held(this.#links.get(address)).supported === null) this.#enqueue(address, "machineLogins", Priority.background, this.#machineLogins(address));
     if (how.restored) this.#historyStart(address);
   }
 
@@ -190,6 +198,7 @@ export class StationsSync {
       this.#enqueue(address, "jobs", p, read({ topic: "jobs", station: address }, "/jobs")),
       this.#enqueue(address, "footprint", Priority.background, read({ topic: "footprint", station: address }, "/footprint")),
       this.#enqueue(address, "screens", Priority.background, this.#screens(address, ctx)),
+      this.#enqueue(address, "machineLogins", Priority.background, this.#machineLogins(address, ctx)),
       ...this.#usageChanged(address, ctx),
       ...this.#slackConnects(address).map((id) => this.#enqueue(address, `slackApp/${id}`, Priority.background, read({ topic: "slackApp", station: address, connect: id }, `/connects/${encode(id)}/slack-app`))),
       ...this.also.map((part, i) => this.#enqueue(address, `also/${i}`, Priority.background, part.read(address))),
@@ -340,6 +349,29 @@ export class StationsSync {
       }
       return list;
     });
+  }
+
+  /// The station's logins (docs/remote-login.md), read whole: in memory, as its stream then tells them. A station from
+  /// before them answers 404: it has none (the page offers none).
+  #machineLogins(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link || !this.reachable(address)) return;
+      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", "/machine-logins", null, { quiet: true, ctx }));
+      if (answer._tag === "Success") logins.putList(link, answer.success);
+      else if (answer.failure.status === 404) logins.unsupported(link);
+      else return;
+      this.onChange(address, "logins");
+    });
+  }
+
+  /// A login as its station says it now (an event, or a write's answer): in place; ended, its relay stops.
+  putMachineLogin(address: string, login: unknown): void {
+    const link = this.#links.get(address);
+    if (!link || !logins.putLogin(link, login)) return;
+    const id = str(get(login, "id"));
+    if (id !== null && typeof get(login, "endedAt") === "number") this.relays.ended(address, id);
+    this.onChange(address, "logins");
   }
 
   /// The station's usage changed (or may have: read again): read while a page shows it, else only marked to be read once
@@ -719,6 +751,21 @@ export class StationsSync {
       case "screens":
         this.#heldScreens(address, { screens: Array.isArray(get(data, "screens")) ? (get(data, "screens") as unknown[]) : [], outdated: false });
         return;
+      // A login or a service of the station's (docs/remote-login.md).
+      case "machine-logins": {
+        const link = this.#links.get(address);
+        if (!link) return;
+        if (isObject(get(data, "login"))) this.putMachineLogin(address, get(data, "login"));
+        if (isObject(get(data, "service")) && logins.putService(link, get(data, "service"))) this.onChange(address, "logins");
+        return;
+      }
+      // A login's terminal as it changes (while one is shown).
+      case "login-screen": {
+        const link = this.#links.get(address);
+        const id = link ? logins.putScreen(link, data) : null;
+        if (id !== null) this.onChange(address, "loginScreen", id);
+        return;
+      }
       default:
         for (const part of this.also) part.event(address, name, data);
     }
@@ -957,6 +1004,10 @@ export class StationsSync {
           read("overview", { topic: "overview", station: address }, "/overview");
           rows();
           break;
+        // A login started, cancelled or given its callback: as it is now, at once (its station tells the rest).
+        case "machineLogins":
+          this.putMachineLogin(address, isObject(get(answer, "login")) ? get(answer, "login") : answer);
+          break;
         // The folders a change of the drive was in: read again where they are held or shown.
         case "drive":
           for (const path of new Set(effect.paths)) {
@@ -1060,6 +1111,7 @@ export class StationsSync {
 
   /// Lets go of every link (the core closes).
   close(): void {
+    this.relays.close();
     this.#links.close();
   }
 

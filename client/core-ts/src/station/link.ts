@@ -49,12 +49,12 @@ export const STREAM_QUIET_MS = 30_000;
 export type LiveView = { steps: unknown[]; phase: unknown | null; rate: number | null; usage: unknown; loaded: boolean };
 
 /// What a station's `/events` stream is opened for: host samples, the sessions followed as they run, the jobs' logs.
-export type EventsFor = { host: boolean; live: string[]; logs: [string, number][] };
+export type EventsFor = { host: boolean; live: string[]; logs: [string, number][]; logins?: string[] };
 
 /// Whether a stream opened for `open` gives what `wants` asks: the same host samples and logs, and every session it
 /// asks among those it follows. One that follows more is kept: a session no longer at work or shown says little more.
 function covers(open: EventsFor, wants: EventsFor): boolean {
-  return open.host === wants.host && equal(open.logs, wants.logs) && wants.live.every((key) => open.live.includes(key));
+  return open.host === wants.host && equal(open.logs, wants.logs) && equal(open.logins ?? [], wants.logins ?? []) && wants.live.every((key) => open.live.includes(key));
 }
 
 /// A read of a station's history (sync.ts `#history`): its path, how much of a batch it takes, and what its answer
@@ -309,7 +309,7 @@ export class Links {
         if (key && get(agent, "process") === "running") live.add(key);
       }
     }
-    return { host: shown.host, live: [...live].sort(), logs: [...shown.logs].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1])) };
+    return { host: shown.host, live: [...live].sort(), logs: [...shown.logs].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] - b[1])), logins: [...(shown.logins ?? [])].sort() };
   }
 
   /// Opens the station's stream for what it is wanted for now, unless the one open gives that (or `anew`): the new one
@@ -346,6 +346,8 @@ export class Links {
     // Their transcript entries in brief: what a history shows before a step is opened (`detail` reads it whole then).
     if (wants.live.length > 0) query.push("brief=1");
     for (const [job, lines] of wants.logs) query.push(`job=${encode(job)}&lines=${lines}`);
+    // The logins' terminals shown (docs/remote-login.md).
+    for (const id of wants.logins ?? []) query.push(`login=${encode(id)}`);
     if (since !== null) query.push(`since=${encode(since)}`);
     return query.length === 0 ? "/events" : `/events?${query.join("&")}`;
   }

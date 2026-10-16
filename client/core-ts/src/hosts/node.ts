@@ -12,6 +12,7 @@ import { webcrypto } from "node:crypto";
 import { Effect, Queue, Scope } from "effect";
 import WebSocket from "ws";
 import { connect as tcpConnect } from "node:net";
+import { createServer as createHttpServer } from "node:http";
 import { Core } from "../core.ts";
 import type { AccountProviderFactory } from "../account-provider.ts";
 // What an app embedding this bundle gives `start` (one bundle: one copy of the core's classes).
@@ -21,7 +22,7 @@ import { nodeIroh } from "./node-iroh.ts";
 import { NodeSql } from "./node-sql.ts";
 import { HostWire } from "../station/wire.ts";
 import { HostError } from "../error.ts";
-import { SOCKET_PING, SOCKET_PING_MS, type TcpConnection, type DbRange, type Host, type Sql, SqlError, sqlError, type HttpRequest, type HttpResponse, type Pull, type StreamResponse } from "../host.ts";
+import { SOCKET_PING, SOCKET_PING_MS, type TcpConnection, type DbRange, type Host, type LoopbackRequest, type Sql, SqlError, sqlError, type HttpRequest, type HttpResponse, type Pull, type StreamResponse } from "../host.ts";
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { service } from "../trace.ts";
 import { t } from "../i18n.ts";
@@ -164,6 +165,10 @@ export class NodeHost implements Host {
 
   tcp(port: number): Effect.Effect<TcpConnection, HostError, Scope.Scope> {
     return nodeTcp(port);
+  }
+
+  listen(port: number, host: string): Effect.Effect<Pull<LoopbackRequest>, HostError, Scope.Scope> {
+    return nodeListen(port, host);
   }
 
   /// Keys may hold anything; file names only letters, digits, `-` and `_` (the rest is %XX).
@@ -383,6 +388,58 @@ export function start(dataDir: string, cloudOrigin: string, listener: Listener, 
       host.close();
     },
   };
+}
+
+/// Most of a request's body a loopback listener takes (a login's callback: a query, or a small form).
+const LISTEN_BODY = 1_000_000;
+
+/// An HTTP listener on loopback `host` at `port` (a login's browser coming back), open while the scope is.
+export function nodeListen(port: number, host: string): Effect.Effect<Pull<LoopbackRequest>, HostError, Scope.Scope> {
+  return Effect.gen(function* () {
+    if (host !== "127.0.0.1" && host !== "::1") return yield* Effect.fail(new HostError(`not a loopback address: ${host}`));
+    const requests = yield* Queue.unbounded<LoopbackRequest | null>();
+    yield* Effect.acquireRelease(
+      Effect.callback<import("node:http").Server, HostError>((resume) => {
+        const server = createHttpServer((req, res) => {
+          const parts: Buffer[] = [];
+          let size = 0;
+          req.on("data", (chunk: Buffer) => {
+            size += chunk.length;
+            if (size <= LISTEN_BODY) parts.push(chunk);
+          });
+          req.on("end", () => {
+            const headers: [string, string][] = [];
+            for (let i = 0; i + 1 < req.rawHeaders.length; i += 2) headers.push([req.rawHeaders[i]!, req.rawHeaders[i + 1]!]);
+            let answered = false;
+            Queue.offerUnsafe(requests, {
+              method: req.method ?? "GET",
+              path: req.url ?? "/",
+              headers,
+              body: new Uint8Array(Buffer.concat(parts)),
+              respond: (status, headers, body) => {
+                if (answered) return;
+                answered = true;
+                const out: Record<string, string> = {};
+                for (const [k, v] of headers) if (!["connection", "transfer-encoding", "content-length", "keep-alive"].includes(k.toLowerCase())) out[k] = v;
+                res.writeHead(status, { ...out, connection: "close", "content-length": String(body.length) });
+                res.end(Buffer.from(body));
+              },
+            });
+          });
+        });
+        server.once("error", (e) => resume(Effect.fail(new HostError(e.message))));
+        server.listen({ port, host, exclusive: true }, () => resume(Effect.succeed(server)));
+        return Effect.sync(() => server.close());
+      }),
+      (server) =>
+        Effect.sync(() => {
+          Queue.offerUnsafe(requests, null);
+          server.close();
+          server.closeAllConnections();
+        }),
+    );
+    return { take: Queue.take(requests) };
+  });
 }
 
 /// A TCP connection to this machine's `port` (adbd), open while the scope is.

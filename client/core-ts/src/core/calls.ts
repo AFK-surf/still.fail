@@ -65,6 +65,9 @@ export type Call =
   | { kind: "driveRead"; station: string; root: string; path: string; offset: number; length: number; progress: boolean }
   | { kind: "driveUploadPart"; station: string; root: string; path: string; id: string; offset: number; total: number; replace: boolean; bytes: Uint8Array }
   | { kind: "driveRefresh"; station: string; root: string; path: string }
+  /// A login's page to open (docs/remote-login.md): a loopback login's callback listened for here first, unless the
+  /// station is this machine (`here`).
+  | { kind: "machineLoginOpen"; station: string; id: string; here: boolean }
   | { kind: "drivePlace"; station: string; root: string; path: string; at: number; of: number | null }
   | { kind: "cacheUsage" }
   | { kind: "cacheClear"; station: string; thread: number }
@@ -164,6 +167,7 @@ export function counts(call: Call, name: string): boolean {
     case "chatDiscard":
     case "chatDiscardIn":
       return true;
+    case "machineLoginOpen":
     case "chatLatest":
     case "signOut":
     case "authBegin":
@@ -691,6 +695,14 @@ export function parseCall(name: string, params: unknown): Call {
         ["of", "f64", "opt"],
       ]);
       return { kind: "drivePlace", station: p.station as string, root: p.root as string, path: p.path as string, at: p.at as number, of: (p.of as number | null) ?? null };
+    }
+    case "machineLogin.open": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["id", S, "req"],
+        ["here", "bool", "default"],
+      ]);
+      return { kind: "machineLoginOpen", station: p.station as string, id: p.id as string, here: p.here === true };
     }
     case "drive.refresh": {
       const p = read(params, [

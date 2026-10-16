@@ -6,7 +6,7 @@ import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
 /** A field is absent until assigned; assigning null sends JSON null (reset to default). */
-val UNTRACKED_OPERATIONS = setOf("admin.me", "chats.archived", "drive.folders", "file.open", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "tools.access", "widget.setState", "widget.state")
+val UNTRACKED_OPERATIONS = setOf("admin.me", "chats.archived", "drive.folders", "file.open", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineLogin.input", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "tools.access", "widget.setState", "widget.state")
 
 open class OperationFields {
     internal val fields = mutableMapOf<String, JsonElement>()
@@ -542,6 +542,34 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
     suspend fun softwareAuto(fill: SoftwareAutoFields.() -> Unit = {}): JsonElement {
         val values = SoftwareAutoFields().apply(fill).fields
         return call("software.auto", JsonObject(values))
+    }
+    class MachineLoginStartFields : OperationFields() {
+        var service: String? by field<String>("service") { JsonPrimitive(it) }
+        var command: String? by field<String>("command") { JsonPrimitive(it) }
+    }
+    suspend fun machineLoginStart(fill: MachineLoginStartFields.() -> Unit = {}): JsonElement {
+        val values = MachineLoginStartFields().apply(fill).fields
+        return call("machineLogin.start", JsonObject(values))
+    }
+    suspend fun machineLoginCancel(id: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["id"] = JsonPrimitive(id)
+        return call("machineLogin.cancel", JsonObject(values))
+    }
+    class MachineLoginInputFields : OperationFields() {
+        var text: String? by field<String>("text") { JsonPrimitive(it) }
+        var key: String? by field<String>("key") { JsonPrimitive(it) }
+    }
+    suspend fun machineLoginInput(id: String, fill: MachineLoginInputFields.() -> Unit = {}): JsonElement {
+        val values = MachineLoginInputFields().apply(fill).fields
+        values["id"] = JsonPrimitive(id)
+        return call("machineLogin.input", JsonObject(values))
+    }
+    suspend fun machineLoginPaste(id: String, text: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["id"] = JsonPrimitive(id)
+        values["text"] = JsonPrimitive(text)
+        return call("machineLogin.paste", JsonObject(values))
     }
 }
 

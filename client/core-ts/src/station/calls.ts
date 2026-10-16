@@ -12,6 +12,7 @@ import * as looks from "../looks.ts";
 import { machineMeta } from "../views/models.ts";
 import { StationAddr } from "./addr.ts";
 import { readAll, replyHeader, takeFrames, encodeFrame, type Frame } from "./wire.ts";
+import * as logins from "./machine-logins.ts";
 
 const parse = (station: string) => Effect.try({ try: () => StationAddr.parse(station), catch: asCoreError });
 
@@ -143,6 +144,23 @@ export function install(): void {
   handlers.driveRefresh = (inner, call) => {
     const c = call as Extract<Call, { kind: "driveRefresh" }>;
     return Effect.andThen(parse(c.station), Effect.as(inner.stations.driveRefresh(c.station, c.root, c.path), null));
+  };
+  // A login's page to open (docs/remote-login.md): its device code's page, the page to open, or a loopback login's,
+  // whose callback this device listens for first (on a host that can: the desktop app), unless the station is this
+  // machine. Answers what to open; fails (the port taken here) before anything is.
+  handlers.machineLoginOpen = (inner, call) => {
+    const c = call as Extract<Call, { kind: "machineLoginOpen" }>;
+    return Effect.gen(function* () {
+      yield* parse(c.station);
+      const login = logins.held(inner.stations.link(c.station)).logins.find((l) => l.id === c.id);
+      if (login === undefined) return yield* Effect.fail(new CoreError("http_404", t("core-logic.machineLogin.gone"), 404));
+      const page = (v: unknown) => (typeof v === "string" && v.startsWith("https://") ? v : null);
+      const url = page(login.codeUrl) ?? page(login.url);
+      if (url === null) return yield* Effect.fail(CoreError.invalid(t("core-logic.machineLogin.noPage")));
+      const expect = logins.expectOf(login);
+      if (login.step === "loopback" && expect !== null && !c.here && typeof login.endedAt !== "number") yield* inner.stations.relays.start(c.station, c.id, expect);
+      return { url };
+    });
   };
   handlers.drivePlace = (inner, call) => {
     const c = call as Extract<Call, { kind: "drivePlace" }>;

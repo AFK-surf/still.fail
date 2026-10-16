@@ -1318,14 +1318,18 @@ data class MessageCard (
 	val assignee: String? = null,
 	/// Who needs to decide, in the viewer's words; prepared by the core.
 	val assigneeText: String? = null,
-	/// options | text
+	/// options | text | login
 	val type: String,
 	val options: List<DecisionOption>? = null,
 	val placeholder: String? = null,
 	/// An agent's request to use a vault item (docs/vault.md): the request's id. An app shows approving it (the options,
 	/// then the person confirms: `vault.approve` with the option's scope, `vault.deny`) rather than answering in the chat;
 	/// a web page says to approve it in the app.
-	val vault: String? = null
+	val vault: String? = null,
+	/// A login card: the login's id on its station (the `machineLogin` topic has the rest).
+	val login: String? = null,
+	/// A login card for a login on another station than the chat's: that station's key.
+	val station: String? = null
 )
 
 /// A chat's card still pending (a row's, a chat page's; named for when the only cards were decisions): its post's entry,
@@ -3092,6 +3096,104 @@ data class MachineLogin (
 	val text: String,
 	/// Offered for a profile: signed in, on a plan, and no profile on it yet.
 	val offered: Boolean? = null
+)
+
+/// A login's terminal as its station keeps it (the `machineLoginScreen` topic), in memory only.
+@Serializable
+data class MachineLoginScreen (
+	/// The terminal's lines, top to bottom (200 columns: a UI wraps them to its width).
+	val rows: List<String>,
+	val cursorX: UInt,
+	val cursorY: UInt,
+	/// False while the command reads without echo (a password): the input is a password field.
+	val echo: Boolean,
+	/// The command still runs.
+	val live: Boolean
+)
+
+/// One login on a station (a command run in a terminal there, finished by a person from their client).
+@Serializable
+data class MachineLoginShown (
+	val id: String,
+	val station: String,
+	val stationName: String,
+	val service: String? = null,
+	/// The service's name (GitHub), or the command's first word for a command of its own.
+	val name: String,
+	/// 在 studio 上登录 GitHub.
+	val title: String,
+	/// The command it runs, as one line.
+	val command: String,
+	/// starting | browser | code | input | verifying | done | failed | cancelled
+	val state: String,
+	/// What a person has to do now: loopback (open the browser here, its callback relayed), device (a code to enter at a page),
+	/// open (a page to open), terminal (the command waits for typing). Absent: nothing yet, or it ended. A step a core does not
+	/// know reads as open + terminal.
+	val step: String? = null,
+	/// Under way (not ended).
+	val active: Boolean,
+	/// The page to open (https only); absent for viewers.
+	val url: String? = null,
+	/// The page's host, always shown beside its button.
+	val domain: String? = null,
+	/// A device code to enter.
+	val code: String? = null,
+	/// The page with the code already in it, where the service gives one.
+	val codeUrl: String? = null,
+	/// Loopback: the port its callback comes to.
+	val port: UInt? = null,
+	/// The command waits on a prompt with nothing else to do: its terminal opens by itself.
+	val waiting: Boolean,
+	/// This device listens for its loopback callback now (opened here, in the desktop app): 等浏览器回来.
+	val listening: Boolean,
+	/// How it stands, in a line: 等你打开浏览器, 验证码 ABCD-1234, 命令在等你输入, 已登录 octocat, 超时了…
+	val statusText: String,
+	/// Failed: why (the command's last lines).
+	val error: String? = null,
+	/// Done: the account it logged in, as its status command says.
+	val account: String? = null,
+	/// Who was logged in when it started (现在登录的是 octocat（张三 10-12 登录）), for one that logs in again.
+	val before: String? = null,
+	/// Who started it.
+	val byText: String? = null,
+	val startedAt: Long,
+	val expiresAt: Long,
+	val endedAt: Long? = null
+)
+
+/// A service a station can be logged in to (gh, gcloud, npm…), as its station page lists it.
+@Serializable
+data class MachineService (
+	val id: String,
+	val name: String,
+	val installed: Boolean,
+	/// in | out | unknown
+	val state: String,
+	val account: String? = null,
+	/// How it stands, in words: 已登录 octocat · 张三 10-17, 没登录, 没装, 查不出来.
+	val stateText: String,
+	/// What its login asks of a person, as described: device | loopback | open | terminal.
+	val flow: String,
+	val builtin: Boolean,
+	/// Its login under way, if one is.
+	val login: String? = null
+)
+
+/// A station's logins to the command-line tools its agents use (the `machineLogins` topic; docs/remote-login.md): the
+/// services it knows (built in, or described by an agent) and how each stands, and its logins under way or ended lately.
+@Serializable
+data class MachineLoginsView (
+	/// False for a station from before remote login (it answers 404): the page offers none, or says to update it.
+	val supported: Boolean,
+	/// What the station has was read (or told) at least once.
+	val loaded: Boolean,
+	/// The viewer may start, cancel and complete logins here (a read-only member only sees how they stand).
+	val canLogin: Boolean,
+	/// This device can take a login's loopback callback for its station (the desktop app): web pages cannot listen.
+	val canRelay: Boolean,
+	val services: List<MachineService>,
+	/// Under way first, then those ended lately, newest first.
+	val logins: List<MachineLoginShown>
 )
 
 /// A chat the badge counts (`WorkspaceMark.items`).

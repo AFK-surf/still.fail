@@ -4,7 +4,7 @@ import { Deferred, Duration, Effect, Queue, Scope, type Clock } from "effect";
 import { TestClock } from "effect/testing";
 import { COALESCE_MS } from "./store.ts";
 import { HostError } from "./error.ts";
-import type { DbRange, Host, HttpRequest, HttpResponse, Pull, Sql, StreamResponse, TcpConnection } from "./host.ts";
+import type { DbRange, Host, HttpRequest, HttpResponse, LoopbackRequest, Pull, Sql, StreamResponse, TcpConnection } from "./host.ts";
 import { DatabaseSync } from "node:sqlite";
 import { NodeSql } from "./hosts/node-sql.ts";
 import type { ClientId, CoreMessage } from "./protocol.ts";
@@ -259,6 +259,10 @@ export class FakeHost implements Host {
   tcp(port: number): Effect.Effect<TcpConnection, HostError, Scope.Scope> {
     return this.tcpConnect ? this.tcpConnect(port) : Effect.fail(new HostError(`nothing listens on ${port}`));
   }
+
+  /// This machine's loopback listeners (a login's callback, station/machine-logins.ts): none unless a test sets it,
+  /// as a web page has none.
+  listen?: (port: number, host: string) => Effect.Effect<Pull<LoopbackRequest>, HostError, Scope.Scope>;
 
   storageGet(key: string): Effect.Effect<Uint8Array | null, HostError> {
     return Effect.sync(() => this.storage.get(key) ?? null);

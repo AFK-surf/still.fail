@@ -18,6 +18,8 @@ import { PAGE, TRANSCRIPT_PAGE, entriesOf, transcriptOf } from "./channel-kinds.
 import type { StationsSync } from "./sync.ts";
 import type { LinkNet } from "./wire.ts";
 import { screensChanged, screensView } from "../screens.ts";
+import type { Link } from "./link.ts";
+import * as logins from "./machine-logins.ts";
 
 /// A chat shows a window of its thread's entries: at most this many.
 export const WINDOW = 3 * PAGE;
@@ -34,7 +36,7 @@ export function packetsSince(was: LinkNet["packets"], now: LinkNet["packets"]): 
   return { sent: now.sent - was.sent, lost: now.lost - was.lost };
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "job", "drive", "screens"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "job", "drive", "screens", "machineLogins", "machineLogin", "machineLoginScreen"]);
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
@@ -83,12 +85,13 @@ export class StationTopics implements Owner {
   }
 
   /// What the station topics shown want of each station's stream: host samples, the sessions shown, the logs shown.
-  #wanted(address: string): { host: boolean; live: string[]; logs: [string, number][] } {
+  #wanted(address: string): { host: boolean; live: string[]; logs: [string, number][]; logins: string[] } {
     const topics = this.#core.store.liveTopics().filter((t) => t.station === address);
     return {
       host: topics.some((t) => t.topic === "host"),
       live: topics.filter((t) => t.topic === "live").map((t) => t.key as string),
       logs: topics.filter((t) => t.topic === "jobLog").map((t) => [t.job as string, t.lines as number] as [string, number]),
+      logins: [...new Set(topics.filter((t) => t.topic === "machineLoginScreen").map((t) => t.id as string))],
     };
   }
 
@@ -103,6 +106,8 @@ export class StationTopics implements Owner {
       screensChanged(this.#core, address);
     }
     else if (what === "log" || what === "errors") of((t) => key === undefined || topicKey(t) === key);
+    else if (what === "logins") of((t) => t.topic === "machineLogins" || t.topic === "machineLogin");
+    else if (what === "loginScreen") of((t) => t.topic === "machineLoginScreen" && (key === undefined || t.id === key));
   }
 
   /// What a topic shown makes urgent in the sync.
@@ -151,7 +156,7 @@ export class StationTopics implements Owner {
     this.resume(topic);
     // A job's log: what it is now read once; from then on the station says how it grows, on its stream.
     if (topic.topic === "jobLog") this.#sync.readLog(station, topic.job as string, topic.lines as number);
-    if (["host", "live", "jobLog"].includes(topic.topic)) this.#sync.openEvents(station, false);
+    if (["host", "live", "jobLog", "machineLoginScreen"].includes(topic.topic)) this.#sync.openEvents(station, false);
   }
 
   /// Shown, as it starts or again while kept after the last showed it: what is read only while shown is brought up to
@@ -181,7 +186,7 @@ export class StationTopics implements Owner {
       this.#core.runner.interrupt(sampler as Fiber.Fiber<unknown, unknown>);
       this.#samplers.delete(key);
     }
-    if (["host", "live", "jobLog"].includes(topic.topic)) this.#sync.openEvents(station, false);
+    if (["host", "live", "jobLog", "machineLoginScreen"].includes(topic.topic)) this.#sync.openEvents(station, false);
   }
 
   compute(topic: Topic): Value | undefined {
@@ -210,6 +215,15 @@ export class StationTopics implements Owner {
         return this.#nets.has(topicKey(topic)) ? { ok: this.#nets.get(topicKey(topic)) } : undefined;
       case "live":
         return this.#live(topic);
+      case "machineLogins":
+      case "machineLogin":
+        return this.#logins(topic, link);
+      case "machineLoginScreen": {
+        const held = logins.held(link);
+        const screen = link?.memory.get(logins.screenKey(topic.id as string));
+        if (screen !== undefined) return { ok: screen };
+        return held.supported === null ? undefined : { ok: null };
+      }
       case "thread":
         if (error) return { err: error };
         return this.#thread(topic);
@@ -217,6 +231,37 @@ export class StationTopics implements Owner {
         // Held: what is held goes out (the store reads it); with nothing held, why not, once known.
         return error ? { err: error } : undefined;
     }
+  }
+
+  // ── logins ──
+
+  /// A station's logins (`machineLogins`), or one of them (`machineLogin`), as shown: none while never read.
+  #logins(topic: Topic, link: Link | undefined): Value | undefined {
+    const station = topic.station as string;
+    const held = logins.held(link);
+    const now = this.#core.host.nowMs();
+    const offset = this.#core.host.utcOffsetMin(now);
+    const name = this.#core.views.stationName(station);
+    const shown = (l: unknown) => logins.loginShown(l, station, name, offset, this.#sync.relays.listening(station, String(get(l, "id"))));
+    if (topic.topic === "machineLogin") {
+      const found = held.logins.find((l) => l.id === topic.id);
+      if (found !== undefined) return { ok: shown(found) };
+      return held.supported === null ? undefined : { ok: null };
+    }
+    const ws = station.slice(0, Math.max(0, station.indexOf("/")));
+    const role = get(this.#core.data.shared({ topic: "workspace", workspace: ws }), "role");
+    const active = (l: unknown) => (typeof get(l, "endedAt") === "number" ? 1 : 0);
+    const started = (l: unknown) => (typeof get(l, "startedAt") === "number" ? (get(l, "startedAt") as number) : 0);
+    return {
+      ok: {
+        supported: held.supported !== false,
+        loaded: held.supported !== null,
+        canLogin: role !== "viewer",
+        canRelay: this.#core.host.listen !== undefined,
+        services: held.services.map((s) => logins.serviceShown(s, offset)),
+        logins: [...held.logins].sort((a, b) => active(a) - active(b) || started(b) - started(a)).map(shown),
+      },
+    };
   }
 
   // ── live ──

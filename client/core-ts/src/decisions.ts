@@ -64,6 +64,12 @@ export function cardShown(card: J): J {
   else if (kind(card) === "text") {
     const p = trimmed(get(card, "placeholder"));
     if (p !== null) v.placeholder = p;
+  } else if (kind(card) === "login") {
+    // A login a person finishes from the card (docs/remote-login.md): its id, and its station when another's.
+    const login = trimmed(get(card, "login"));
+    const station = trimmed(get(card, "station"));
+    if (login !== null) v.login = login;
+    if (station !== null) v.station = station;
   }
   return v;
 }

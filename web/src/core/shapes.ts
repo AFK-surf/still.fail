@@ -1303,7 +1303,7 @@ export interface MessageCard {
 	assignee?: string;
 	/** Who needs to decide, in the viewer's words; prepared by the core. */
 	assigneeText?: string;
-	/** options | text */
+	/** options | text | login */
 	type: string;
 	options?: DecisionOption[];
 	placeholder?: string;
@@ -1313,6 +1313,10 @@ export interface MessageCard {
 	 * a web page says to approve it in the app.
 	 */
 	vault?: string;
+	/** A login card: the login's id on its station (the `machineLogin` topic has the rest). */
+	login?: string;
+	/** A login card for a login on another station than the chat's: that station's key. */
+	station?: string;
 }
 
 /**
@@ -3076,6 +3080,104 @@ export interface MachineLogin {
 	text: string;
 	/** Offered for a profile: signed in, on a plan, and no profile on it yet. */
 	offered?: boolean;
+}
+
+/** A login's terminal as its station keeps it (the `machineLoginScreen` topic), in memory only. */
+export interface MachineLoginScreen {
+	/** The terminal's lines, top to bottom (200 columns: a UI wraps them to its width). */
+	rows: string[];
+	cursorX: number;
+	cursorY: number;
+	/** False while the command reads without echo (a password): the input is a password field. */
+	echo: boolean;
+	/** The command still runs. */
+	live: boolean;
+}
+
+/** One login on a station (a command run in a terminal there, finished by a person from their client). */
+export interface MachineLoginShown {
+	id: string;
+	station: string;
+	stationName: string;
+	service?: string;
+	/** The service's name (GitHub), or the command's first word for a command of its own. */
+	name: string;
+	/** 在 studio 上登录 GitHub. */
+	title: string;
+	/** The command it runs, as one line. */
+	command: string;
+	/** starting | browser | code | input | verifying | done | failed | cancelled */
+	state: string;
+	/**
+	 * What a person has to do now: loopback (open the browser here, its callback relayed), device (a code to enter at a page),
+	 * open (a page to open), terminal (the command waits for typing). Absent: nothing yet, or it ended. A step a core does not
+	 * know reads as open + terminal.
+	 */
+	step?: string;
+	/** Under way (not ended). */
+	active: boolean;
+	/** The page to open (https only); absent for viewers. */
+	url?: string;
+	/** The page's host, always shown beside its button. */
+	domain?: string;
+	/** A device code to enter. */
+	code?: string;
+	/** The page with the code already in it, where the service gives one. */
+	codeUrl?: string;
+	/** Loopback: the port its callback comes to. */
+	port?: number;
+	/** The command waits on a prompt with nothing else to do: its terminal opens by itself. */
+	waiting: boolean;
+	/** This device listens for its loopback callback now (opened here, in the desktop app): 等浏览器回来. */
+	listening: boolean;
+	/** How it stands, in a line: 等你打开浏览器, 验证码 ABCD-1234, 命令在等你输入, 已登录 octocat, 超时了… */
+	statusText: string;
+	/** Failed: why (the command's last lines). */
+	error?: string;
+	/** Done: the account it logged in, as its status command says. */
+	account?: string;
+	/** Who was logged in when it started (现在登录的是 octocat（张三 10-12 登录）), for one that logs in again. */
+	before?: string;
+	/** Who started it. */
+	byText?: string;
+	startedAt: number;
+	expiresAt: number;
+	endedAt?: number;
+}
+
+/** A service a station can be logged in to (gh, gcloud, npm…), as its station page lists it. */
+export interface MachineService {
+	id: string;
+	name: string;
+	installed: boolean;
+	/** in | out | unknown */
+	state: string;
+	account?: string;
+	/** How it stands, in words: 已登录 octocat · 张三 10-17, 没登录, 没装, 查不出来. */
+	stateText: string;
+	/** What its login asks of a person, as described: device | loopback | open | terminal. */
+	flow: string;
+	builtin: boolean;
+	/** Its login under way, if one is. */
+	login?: string;
+}
+
+/**
+ * A station's logins to the command-line tools its agents use (the `machineLogins` topic; docs/remote-login.md): the
+ * services it knows (built in, or described by an agent) and how each stands, and its logins under way or ended lately.
+ */
+export interface MachineLoginsView {
+	/** False for a station from before remote login (it answers 404): the page offers none, or says to update it. */
+	supported: boolean;
+	/** What the station has was read (or told) at least once. */
+	loaded: boolean;
+	/** The viewer may start, cancel and complete logins here (a read-only member only sees how they stand). */
+	canLogin: boolean;
+	/** This device can take a login's loopback callback for its station (the desktop app): web pages cannot listen. */
+	canRelay: boolean;
+	services: MachineService[];
+	/** Under way first, then those ended lately, newest first. */
+	logins: MachineLoginShown[];
 }
 
 /** A chat the badge counts (`WorkspaceMark.items`). */

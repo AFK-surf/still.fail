@@ -54,6 +54,9 @@ export const TOPICS: Record<string, Spec> = {
   slackApp: { station: S, connect: S },
   jobs: { station: S },
   jobLog: { station: S, job: S, lines: ["u64", "req"] },
+  machineLogins: { station: S },
+  machineLogin: { station: S, id: S },
+  machineLoginScreen: { station: S, id: S },
   loginSessions: { account: S },
   admin: { account: S, list: S },
   adminList: { account: S, list: S, query: ["string", "def"], filter: ["string", "skip"], sort: ["string", "skip"], limit: ["u32", "skip"] },
@@ -152,7 +155,7 @@ export function sameTopic(a: Topic, b: Topic): boolean {
   return topicKey(a) === topicKey(b);
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "drive", "screens"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "drive", "screens", "machineLogins", "machineLogin", "machineLoginScreen"]);
 const VIEWS = new Set(["chats", "stations", "profiles", "connects", "chat", "history", "agentCard", "chatSearch", "archive", "chatJobs", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "adminList", "adminItem", "adminOverview"]);
 
 /// The station a station topic belongs to; null for the account topics, the core's own and the views.

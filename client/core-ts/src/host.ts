@@ -141,7 +141,22 @@ export interface Host {
   /// A TCP connection to this machine's `port` (adbd, for the adb share: adb.ts), open while the scope is; only a
   /// native host has one.
   tcp?(port: number): Effect.Effect<TcpConnection, HostError, Scope.Scope>;
+
+  /// An HTTP listener on this machine's loopback `host` (127.0.0.1 or ::1, nothing else) at `port`, open while the scope
+  /// is: what comes to it, a request at a time (a login's browser coming back, docs/remote-login.md). Fails when the port
+  /// is taken there. Only a native host has one (a web page cannot listen).
+  listen?(port: number, host: "127.0.0.1" | "::1" | string): Effect.Effect<Pull<LoopbackRequest>, HostError, Scope.Scope>;
 }
+
+/// A request that came to a loopback listener (`Host.listen`): what it asked, and how it is answered (once).
+export type LoopbackRequest = {
+  method: string;
+  /// With its query.
+  path: string;
+  headers: [string, string][];
+  body: Uint8Array;
+  respond(status: number, headers: [string, string][], body: Uint8Array): void;
+};
 
 /// A TCP connection: what comes in, as it comes; what goes out; `end`, no more goes out.
 export type TcpConnection = { read: Pull<Uint8Array>; write(bytes: Uint8Array): Effect.Effect<void, HostError>; end(): void };

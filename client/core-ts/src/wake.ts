@@ -174,6 +174,12 @@ export class WakingHost implements Host {
     if (inner.secureDelete) this.secureDelete = (key) => inner.secureDelete!(key);
   }
 
+  /// A loopback listener (a login's callback): the device's, nothing of a UI's to wait on.
+  get listen(): Host["listen"] {
+    const inner = this.inner;
+    return inner.listen ? (port, host) => inner.listen!(port, host) : undefined;
+  }
+
   cloudOrigin(): string {
     return this.inner.cloudOrigin();
   }
