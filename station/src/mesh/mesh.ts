@@ -33,7 +33,10 @@ export const MeshLive = Layer.effectDiscard(
       if (!cloud.state.state) yield* cloud.changes.pipe(Stream.filter(() => cloud.state.state !== null), Stream.runHead);
       // The launcher starts this process before stopping the old one. Its fixed UDP socket cannot be shared;
       // wait in this background fiber (not layer construction, which must signal ready to start the handover).
-      yield* Effect.promise(() => agents.previousGone);
+      // An unset address or port 0 gets a fresh port and can bind alongside the old process.
+      if (Number(process.env.STILLFAIL_MESH_BIND_ADDR?.split(":").at(-1)) > 0) {
+        yield* Effect.promise(() => agents.previousGone);
+      }
       const endpoint = yield* Effect.acquireRelease(
         Effect.promise(() => bindStation(native, { secretKey: key.seed, alpns: [ALPN, FORMER_ALPN, PEER_ALPN, TOOLS_ALPN, GUEST_ALPN], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1" })),
         // iroh closes gracefully, waiting on every connection (the keepers' too): up to ~12 s. A station stopping or

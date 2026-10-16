@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test, type TestContext } from "node:test";
 import { Effect, Fiber, Layer } from "effect";
 import { MeshLive } from "../src/mesh/mesh.ts";
 import { Agents, type AgentsParts } from "../src/sessions/agents.ts";
@@ -8,7 +8,14 @@ import type { Mesh } from "../src/mesh/native.ts";
 import { memoryMesh } from "./memory-mesh.ts";
 import { settle } from "./hub-fakes.ts";
 
-function startup() {
+function startup(t: TestContext, bindAddr: string | undefined) {
+  const original = process.env.STILLFAIL_MESH_BIND_ADDR;
+  if (bindAddr === undefined) delete process.env.STILLFAIL_MESH_BIND_ADDR;
+  else process.env.STILLFAIL_MESH_BIND_ADDR = bindAddr;
+  t.after(() => {
+    if (original === undefined) delete process.env.STILLFAIL_MESH_BIND_ADDR;
+    else process.env.STILLFAIL_MESH_BIND_ADDR = original;
+  });
   const previous = Promise.withResolvers<void>();
   const built = Promise.withResolvers<void>();
   const binding = Promise.withResolvers<void>();
@@ -36,8 +43,8 @@ function startup() {
   return { previous, built, binding, running, calls: () => calls };
 }
 
-test("startup can signal ready while the old station still owns its mesh port", async () => {
-  const s = startup();
+test("startup can signal ready while the old station still owns its mesh port", async (t) => {
+  const s = startup(t, "0.0.0.0:4770");
   try {
     await s.built.promise; // main can now signal ready, letting the launcher stop the old process.
     await settle();
@@ -50,11 +57,25 @@ test("startup can signal ready while the old station still owns its mesh port", 
   }
 });
 
-test("a station stopped during handover does not bind after its predecessor exits", async () => {
-  const s = startup();
+test("a station stopped during handover does not bind after its predecessor exits", async (t) => {
+  const s = startup(t, "0.0.0.0:4770");
   await s.built.promise;
   await Effect.runPromise(Fiber.interrupt(s.running));
   s.previous.resolve();
   await settle();
   assert.equal(s.calls(), 0);
 });
+
+for (const bindAddr of [undefined, "0.0.0.0:0", "[::]:0"]) {
+  test(`random-port mesh starts before its predecessor exits (${bindAddr ?? "default"})`, async (t) => {
+    const s = startup(t, bindAddr);
+    try {
+      await s.built.promise;
+      await settle();
+      assert.equal(s.calls(), 1);
+    } finally {
+      await Effect.runPromise(Fiber.interrupt(s.running));
+      s.previous.resolve();
+    }
+  });
+}
