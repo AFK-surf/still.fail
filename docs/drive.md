@@ -34,12 +34,15 @@ about it. The drive takes them through still.fail Helper (the station's macOS
 app, docs/remote-screens.md, native/helper's Files.swift), which macOS asks
 about and which holds the grants, so they open without the station restarting:
 
-- Per path, on macOS with the helper: one at or under such a folder that the
-  station may not open itself (it may, when the desktop app runs it and has the
-  grant) goes through the helper; everything else, and every other system, is
-  read directly, as before. The station checks the path first as it does any
-  (its root, `..`, links out for a viewer, its own data); the helper is told
-  the root it may reach and what it may not, and refuses anything else.
+- Per path, on macOS with the helper: one at or under such a folder (by its
+  name) goes through the helper; everything else, and every other system, is
+  read directly, as before. The station does not touch those folders itself,
+  not even to see whether it may: macOS can hold such a call on a prompt for
+  the station's launcher that nobody answers (macOS 27 on studio, 2026-10-17:
+  the station's main thread stayed in `opendir` on ~/Documents until killed).
+  The station checks the path first as it does any (its root, `..`, links out
+  for a viewer, its own data); the helper is told the root it may reach and
+  what it may not, and refuses anything else.
 - The helper's `files.*` requests (main.swift, Files.swift) list, stat, read a
   range, write, make a folder, rename, remove, put in the trash (macOS's own,
   as Finder does: the home's, a disk's); a file's bytes go over the

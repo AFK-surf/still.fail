@@ -1,8 +1,8 @@
 // The drive's protected folders through still.fail Helper (src/drive/fs.ts, src/helper/files.ts; docs/drive.md): which
 // path goes through the helper, the bytes streamed both ways, what the station checks before asking and what the helper
 // is told, a grant missing (the window, once an attempt), and the helper ending in the middle of a read. The helper is a
-// fake in this process, speaking native/helper's `files.*` as Files.swift does, on the real file system; whether the
-// station "may open" a protected folder itself is given (`readable`), as only macOS's privacy protection refuses it.
+// fake in this process, speaking native/helper's `files.*` as Files.swift does, on the real file system (macOS's
+// privacy protection refuses nothing here: what goes through the helper is decided by the folders' names).
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { chmodSync, closeSync, existsSync, fstatSync, fsyncSync, ftruncateSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
@@ -259,8 +259,8 @@ class FakeHelper {
   }
 }
 
-/// A machine: a home with Documents (a pinned project in it, the station's data in it too), the helper's release, a
-/// drive with the helper, and which protected folders the station may not open itself (`locked`).
+/// A machine: a home with Documents (a pinned project in it, the station's data in it too), the helper's release, and
+/// a drive with the helper.
 function machine() {
   const base = realpathSync(mkdtempSync(join(tmpdir(), "drive-helper-")));
   const home = join(base, "home");
@@ -288,10 +288,9 @@ function machine() {
   const helper = new HelperApp({ app, dir: join(base, "helper"), launch: fake.launch });
   let changed = 0;
   const files = new HelperFiles({ helper, changed: () => changed++, lang: () => "zh" });
-  const locked = new Set([docs]);
   const config = { drive: { roots: [project] } } as any;
-  const drive = new Drive({ config: () => config, protect: () => [data], files, home, readable: (top) => !locked.has(top) });
-  return { base, home, docs, project, data, fake, helper, files, drive, config, locked, changed: () => changed };
+  const drive = new Drive({ config: () => config, protect: () => [data], files, home });
+  return { base, home, docs, project, data, fake, helper, files, drive, config, changed: () => changed };
 }
 
 const code = async (p: Promise<unknown>) => {
@@ -310,19 +309,18 @@ const until = async (what: () => boolean) => {
 
 const ops = (fake: FakeHelper) => fake.asked.map((a) => a.op).filter((o) => o.startsWith("files."));
 
-test("which way: a protected folder the station may open is read directly, one it may not through still.fail Helper", { skip: WINDOWS }, async () => {
-  const { home, docs, project, fake, drive, locked } = machine();
+test("which way: a protected folder through still.fail Helper, by its name; any other directly", { skip: WINDOWS }, async () => {
+  const { home, docs, project, fake, drive } = machine();
   // Documents, Desktop, Downloads and the disks are the protected folders, by name, case aside; the rest is not.
   assert.equal(protectedTop(join(project, "notes.md"), home), docs);
   assert.equal(protectedTop(join(home, "documents", "x"), home), docs);
   assert.equal(protectedTop(join(home, "Movies", "film.mp4"), home), null);
   assert.equal(protectedTop("/Volumes/Nope/x", home), null);
-  // Readable by the station itself (a station the desktop app runs, with its grant): the helper is not even started.
-  locked.clear();
-  assert.deepEqual((await drive.list(project, "")).entries.map((e) => e.name), ["Season 1", "notes.md"]);
+  // Elsewhere, for a member who reaches every folder: directly, the helper not even started.
+  assert.deepEqual((await drive.list(join(home, "Movies"), "", true)).entries.map((e) => e.name), ["film.mp4"]);
+  assert.deepEqual((await drive.list(home, "", true)).entries.map((e) => e.name), ["Documents", "Movies"]);
   assert.equal(fake.launches, 0);
-  // Not readable: the same answers, through the helper.
-  locked.add(docs);
+  // In Documents: the same answers as the file system's, through the helper.
   const listed = await drive.list(project, "");
   assert.deepEqual(listed.entries.map((e) => [e.name, e.dir, e.type]), [["Season 1", true, ""], ["notes.md", false, "text/markdown; charset=utf-8"]]);
   assert.deepEqual((await drive.list(project, "Season 1")).entries.map((e) => e.name), ["E2.mp4", "E10.mp4"]);
@@ -330,7 +328,10 @@ test("which way: a protected folder the station may open is read directly, one i
   assert.equal((await drive.stat(project, "notes.md")).size, 8);
   assert.equal(fake.launches, 1);
   assert.ok(ops(fake).includes("files.list") && ops(fake).includes("files.read"));
-  // A folder outside the protected ones, for a member who reaches every folder: directly, nothing asked of the helper.
+  // Documents from the home's root (its path a part under the home): through the helper, told Documents as its root.
+  assert.deepEqual((await drive.list(home, "Documents", true)).entries.map((e) => e.name), ["project"]);
+  assert.deepEqual(fake.asked.filter((a) => a.op === "files.list").at(-1).roots, [docs]);
+  // Elsewhere still directly: nothing more asked of the helper.
   const before = fake.asked.length;
   assert.deepEqual((await drive.list(join(home, "Movies"), "", true)).entries.map((e) => e.name), ["film.mp4"]);
   assert.equal(fake.asked.length, before);

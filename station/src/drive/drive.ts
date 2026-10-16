@@ -8,9 +8,11 @@
 // runtime logins) is never reachable, as for the device tools: a listing leaves it out.
 //
 // On macOS the folders its privacy protection keeps from a station launchd runs (Documents, Desktop, Downloads, disks;
-// fs.ts `protectedTop`) are reached through still.fail Helper (helper/files.ts), which holds the grants, when the station
-// may not open them itself: the same checks here first, then the helper's operations instead of the file system's
-// (`Fs`). Without the grant, the helper's window asks for it on that Mac, and the request is refused saying so.
+// fs.ts `protectedTop`) are reached through still.fail Helper (helper/files.ts), which holds the grants: the same checks
+// here first, then the helper's operations instead of the file system's (`Fs`). The station never touches them itself
+// while the helper is there, not even to see whether it may: macOS can hold such a call on a prompt for the station's
+// launcher that nobody answers (seen on macOS 27: the station's thread stayed in opendir on ~/Documents). Without the
+// grant, the helper's window asks for it on that Mac, and the request is refused saying so.
 import { statSync } from "node:fs";
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -172,7 +174,7 @@ function failed(e: unknown): DriveError {
 
 /// A path as the file system has it, links followed, as far as it exists (what is not there yet is under its nearest
 /// parent that is).
-const real = (path: string, fs: Fs = direct) => fs.real(path);
+const real = (path: string) => direct.real(path);
 
 /// A folder to pick a root from: its name, where it is, whether the station may list it, whether it is a disk.
 export type Folder = { name: string; path: string; unreadable: boolean; disk?: boolean };
@@ -211,8 +213,6 @@ export type DriveDeps = {
   files?: Protected | null;
   /// The machine's home: whose trash what is deleted goes to, and where Documents, Desktop and Downloads are (a test's own).
   home?: string;
-  /// Whether the station may open a protected folder itself (by default, whether it may list it).
-  readable?: (top: string) => boolean;
 };
 
 export class Drive {
@@ -240,12 +240,16 @@ export class Drive {
     return known?.state === "granted";
   }
 
-  /// The protected folder `path` is in when the station may not open it itself and still.fail Helper is there for it;
-  /// null when the station reaches `path` directly.
+  /// The protected folder `path` is in (by its name) when still.fail Helper is there for it; null when the station
+  /// reaches `path` directly.
   #locked(path: string): string | null {
-    if (!this.deps.files) return null;
-    const top = protectedTop(path, this.deps.home ?? homedir());
-    return top !== null && !(this.deps.readable ?? ((t: string) => !unreadableDir(t)))(top) ? top : null;
+    return this.deps.files ? protectedTop(path, this.deps.home ?? homedir()) : null;
+  }
+
+  /// `path` with its links followed as far as it exists: by still.fail Helper in a protected folder (never by the station
+  /// there), else by the station.
+  #real(path: string, fs: Fs): Promise<string> {
+    return fs.helper && this.#locked(path) !== null ? fs.real(path) : real(path);
   }
 
   /// Whether the station may not list `dir`, even through still.fail Helper.
@@ -306,15 +310,15 @@ export class Drive {
     if (parts.some((p) => p === ".." || p.includes("\0") || (platform.paths.sep === "\\" && (p.includes("\\") || p.includes(":"))))) {
       throw new DriveError("path_escape", "a path stays in its root");
     }
-    // As far as the station sees it itself; then, in a protected folder it may not open, as still.fail Helper does.
-    let top = await real(named);
+    // The root as the station finds it, or, in a protected folder, as still.fail Helper does.
+    let top = this.#locked(named) === null ? await real(named) : named;
     const { fs, scopes } = await this.#fs([{ path: parts.length === 0 ? top : join(top, ...parts), top }]);
-    if (fs.helper) top = await real(top, fs);
+    if (fs.helper && this.#locked(top) !== null) top = await fs.real(top);
     const asked = parts.length === 0 ? top : join(top, ...parts);
-    const found = await real(asked, fs);
+    const found = await this.#real(asked, fs);
     if (!anywhere && !within(found, top)) throw new DriveError("path_escape", "that path leads out of its root");
     if (await this.isProtected(asked, found)) throw new DriveError("protected", "the station's own data is not part of its drive");
-    const entry = parts.length === 0 ? top : join(await real(dirname(asked), fs), basename(asked));
+    const entry = parts.length === 0 ? top : join(await this.#real(dirname(asked), fs), basename(asked));
     return { root: named, top, asked, found, entry, parts, fs, scope: scopes[0]! };
   }
 
@@ -473,7 +477,7 @@ export class Drive {
         if (s.dir && zip) {
           const to = into(`${name}.zip`);
           const protect = await this.protectedNow();
-          const skip = async (p: string, n: string) => PART.test(n) || (await this.isProtected(p, await real(p, fs), protect));
+          const skip = async (p: string, n: string) => PART.test(n) || (await this.isProtected(p, await this.#real(p, fs), protect));
           try {
             return { name: to.safe, path: to.path, size: await zipFolder(at.found, to.path, most, skip, fs) };
           } catch (e) {
@@ -614,7 +618,7 @@ export class Drive {
       throw about(failed(e));
     });
     if (!s.dir) throw about(new DriveError("not_a_directory", "not a folder"));
-    if (await this.isProtected(clean, await real(clean, fs))) throw about(new DriveError("protected", "the station's own data"));
+    if (await this.isProtected(clean, await this.#real(clean, fs))) throw about(new DriveError("protected", "the station's own data"));
     return clean;
   }
 }
