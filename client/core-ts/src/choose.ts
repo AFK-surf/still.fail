@@ -243,7 +243,9 @@ export class Choose implements Owner {
     // none is not one to add here, but one to ask them for.
     const joined = station.joined === true;
     view.blocked = overview !== null && profiles.length === 0 ? (joined ? "shared" : "profile") : overview !== null && options.length === 0 ? "models" : null;
-    const here = get(this.#env.data.shared({ topic: "workspace", workspace: scope }), "name");
+    // This workspace's name: as it is held, else as an account's `/v1/me` lists it.
+    const here = get(this.#env.data.shared({ topic: "workspace", workspace: scope }), "name")
+      ?? this.#env.data.mes().flatMap(([, me]) => arr(get(me, "workspaces"))).find((w) => get(w, "id") === scope)?.name;
     const notShared = () => typeof station.home === "string" && station.home !== ""
       ? t("core-logic.choose.problem.not_shared", { name, home: station.home, workspace: typeof here === "string" ? here : "" })
       : t("core-logic.choose.problem.not_shared_elsewhere", { name, workspace: typeof here === "string" ? here : "" });
