@@ -354,5 +354,9 @@
   "core-views.screen.reconnecting": "连接断了，正在重连",
   "core-views.screen.control": "控制",
   "core-views.screen.watch": "只看",
-  "core-views.screen.alsoOn": "{names} 也在看"
+  "core-views.screen.alsoOn": "{names} 也在看",
+  "core-views.screen.agent": "Agent「{title}」",
+  "core-views.screen.driving": "{names} 在控制",
+  "core-views.screen.paused": "{names} 暂停中",
+  "core-views.screen.alsoDriving": "{names} 也在控制"
 }

@@ -3781,8 +3781,13 @@ data class ScreenViewState (
 	val control: Boolean,
 	/// May drive it (not a read-only member).
 	val may: Boolean,
-	/// The other people on it now, by name.
+	/// The other people on it now, by name (an agent's as its chat: Agent「…」).
 	val others: List<String>,
+	/// Those of them who drive it now (an agent at work among them).
+	val controllers: List<String>? = null,
+	/// Someone else drives it and this view only looks: 接管 switches to 控制 (an agent's input then
+	/// waits).
+	val takeOver: Boolean? = null,
 	/// What the viewer's bar says: 只看 or 控制, and who else is on it (core).
 	val line: String,
 	/// `h264` or `jpeg`, once the first config came.

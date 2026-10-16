@@ -213,6 +213,10 @@ export function Key(props: IconProps) {
   return <Svg {...props}><circle cx="15.5" cy="8.5" r="5" /><path d="M12 12L3.5 20.5 M5 19L7 21 M8 16L10 18" /></Svg>;
 }
 
+export function Keyboard(props: IconProps) {
+  return <Svg {...props}><rect x="2.5" y="5.5" width="19" height="13" rx="3" /><circle cx="6.5" cy="9.5" r="1" fill="currentColor" stroke="none" /><circle cx="10" cy="9.5" r="1" fill="currentColor" stroke="none" /><circle cx="14" cy="9.5" r="1" fill="currentColor" stroke="none" /><circle cx="17.5" cy="9.5" r="1" fill="currentColor" stroke="none" /><path d="M8 14.5H16" /></Svg>;
+}
+
 export function Landscape(props: IconProps) {
   return <Svg {...props}><path d="M6 9H18Q21 9 21 12V16Q21 19 18 19H6Q3 19 3 16V12Q3 9 6 9Z M8 5.5Q12 3 16.5 5.2 M14.8 3.4L16.5 5.2L14.3 6.4" /></Svg>;
 }
@@ -569,6 +573,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "image-upload": ImageUpload,
   "info": Info,
   "key": Key,
+  "keyboard": Keyboard,
   "landscape": Landscape,
   "ling": Ling,
   "list": List,

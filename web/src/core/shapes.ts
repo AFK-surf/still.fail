@@ -3791,8 +3791,15 @@ export interface ScreenViewState {
 	control: boolean;
 	/** May drive it (not a read-only member). */
 	may: boolean;
-	/** The other people on it now, by name. */
+	/** The other people on it now, by name (an agent's as its chat: Agent「…」). */
 	others: string[];
+	/** Those of them who drive it now (an agent at work among them). */
+	controllers?: string[];
+	/**
+	 * Someone else drives it and this view only looks: 接管 switches to 控制 (an agent's input then
+	 * waits).
+	 */
+	takeOver?: boolean;
 	/** What the viewer's bar says: 只看 or 控制, and who else is on it (core). */
 	line: string;
 	/** `h264` or `jpeg`, once the first config came. */

@@ -121,6 +121,8 @@ test("a_persons_input_is_checked_and_put_in_the_frame", () => {
   assert.deepEqual(othersOf(["a@x.com", "Bob", "a@x.com", "Bob"], ["a@x.com"]), ["Bob", "a@x.com"], "one of the viewer's own is theirs; the others are another window");
   const view = parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", maxWidth: 99999, codecs: ["vp9", "jpeg"] }) as J;
   assert.deepEqual(view.call.ask, { maxWidth: 7680, maxHeight: 1080, codecs: ["jpeg"], control: true });
+  assert.equal(view.call.auto, true, "no mode asked: decided as it opens");
+  assert.equal((parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", control: true }) as J).call.auto, false);
   assert.throws(() => parseCall("screen.view", { station: "ws/st", screen: "desktop", view: "v1", codecs: ["vp9"] }));
   assert.throws(() => parseCall("screen.control", { view: "v1" }));
 });
@@ -409,6 +411,35 @@ test("a_view_the_station_cannot_open_now_is_tried_again_then_given_up", async ()
   said(host, log);
   assert.equal(opens, 8);
   assert.deepEqual(states(log, 1).map((s: J) => s.phase).filter((p: string, i: number, a: string[]) => p !== a[i - 1]), ["connecting", "reconnecting", "failed"]);
+  core.close();
+});
+
+each("a_screen_an_agent_drives_opens_only_looking_and_is_taken_over_in_one_tap", async (seed) => {
+  const answers = { ...base(), "GET /screens": { screens: [{ ...SCREENS.screens[1], viewers: ["agent: 修登录", "Bob"], controlledBy: ["agent: 修登录"] }] } };
+  const { host, core, ui, views } = await viewing(seed, answers);
+  const log: J[] = [];
+  call(core, ui, 1, "screen.view", { station: "ws/st", screen: "browser:T1", view: "v" });
+  await host.settle();
+  assert.equal(views[0]!.ask.control, false, "opened only looking: the agent is not held off");
+  views[0]!.send(join([stateFrame({ title: "登录 - GitHub", control: false }), configFrame({ codec: "jpeg", width: 10, height: 10 }), videoFrame(true, 1, bytesOf(10, seed))]));
+  await host.settle();
+  said(host, log);
+  let s = lastState(log, 1);
+  assert.deepEqual([s.control, s.takeOver, s.controllers, s.others, s.line], [false, true, ["Agent「修登录」"], ["Agent「修登录」", "Bob"], "只看 · Agent「修登录」 在控制 · Bob 也在看"]);
+  // 接管: driving, the agent's input waits.
+  call(core, ui, 2, "screen.control", { view: "v", control: true });
+  await host.settle();
+  assert.equal(views.length, 2);
+  assert.equal(views[1]!.ask.control, true);
+  views[1]!.send(stateFrame({ title: "登录 - GitHub", control: true, viewers: ["a@x.com", "agent: 修登录", "Bob"], controlledBy: ["a@x.com", "agent: 修登录"] }));
+  await host.settle();
+  said(host, log);
+  s = lastState(log, 1);
+  assert.deepEqual([s.control, s.takeOver, s.line], [true, false, "控制 · Agent「修登录」 暂停中 · Bob 也在看"]);
+  // Asked to drive outright (control: true), it drives whoever else does.
+  call(core, ui, 3, "screen.view", { station: "ws/st", screen: "browser:T1", view: "w", control: true });
+  await host.settle();
+  assert.equal(views[2]!.ask.control, true);
   core.close();
 });
 

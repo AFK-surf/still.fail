@@ -34,7 +34,8 @@ const KEY_MAX = 64;
 const TEXT_MAX = 16_384;
 
 export type ScreenCall =
-  | { kind: "view"; station: string; screen: string; view: string; ask: ScreenAsk }
+  /// `ask.control` as asked; `auto` (none asked): control unless someone else drives it as it opens.
+  | { kind: "view"; station: string; screen: string; view: string; ask: ScreenAsk; auto: boolean }
   | { kind: "ack"; view: string; ts: number }
   | { kind: "keyframe"; view: string }
   | { kind: "input"; view: string; input: J }
@@ -68,6 +69,7 @@ export function parseScreen(name: string, params: unknown): ScreenCall | null {
         screen: text(params, "screen"),
         view: text(params, "view"),
         ask: { maxWidth: size("maxWidth", MAX_WIDTH), maxHeight: size("maxHeight", MAX_HEIGHT), codecs, control: control !== false },
+        auto: typeof control !== "boolean",
       };
     }
     case "screen.ack": {
@@ -155,6 +157,14 @@ export function othersOf(names: string[], mine: string[]): string[] {
 
 function names(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((n): n is string => typeof n === "string" && n !== "") : [];
+}
+
+/// The prefix an agent's view has among a screen's people (station/src/tools/computer.ts: `agent: <chat title>`).
+const AGENT = "agent: ";
+
+/// A name among a screen's people as the viewer reads it: an agent's by its chat.
+export function personShown(name: string): string {
+  return name.startsWith(AGENT) ? t("core-views.screen.agent", { title: name.slice(AGENT.length).trim() }) : name;
 }
 
 function listed(names: string[]): string {
@@ -291,6 +301,8 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
     const state: J = { phase: "connecting", title: "", control: false, may, others: [], line: "" };
     // Who is on it as the view's own stream says (else as the station's list does).
     let onIt: string[] | null = null;
+    let driving: string[] | null = null;
+    // Decided once the station's list is read (below) for a view opened with no `control` asked.
     let wanted = c.ask.control && may;
     // The stream open now: where acks, key frames and input go (in order, one writer); null between streams.
     let out: Queue.Queue<Uint8Array> | null = null;
@@ -304,11 +316,28 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       const item = listedItem();
       if (state.title === "" && typeof get(item, "title") === "string") state.title = get(item, "title");
       if (state.kind === undefined && typeof get(item, "kind") === "string") state.kind = get(item, "kind");
-      const others = othersOf(onIt ?? names(get(item, "viewers")), mine);
+      const others = othersOf(onIt ?? names(get(item, "viewers")), mine).map(personShown);
+      // Who else drives it now: an agent at work, another person.
+      const drivers = othersOf(driving ?? names(get(item, "controlledBy")), mine);
+      const controllers = drivers.map(personShown);
       state.others = others;
+      state.controllers = controllers;
+      // Taking over is one tap while another drives it and this view only looks (and may drive).
+      state.takeOver = !state.control && may && controllers.length > 0 && state.access?.control !== false;
       const mode = state.control ? t("core-views.screen.control") : t("core-views.screen.watch");
-      state.line = others.length > 0 ? `${mode} · ${t("core-views.screen.alsoOn", { names: listed(others) })}` : mode;
-      progress({ state: { ...state, others: [...others] } });
+      const watching = others.filter((n) => !controllers.includes(n));
+      const parts = [mode];
+      if (!state.control && controllers.length > 0) parts.push(t("core-views.screen.driving", { names: listed(controllers) }));
+      if (state.control) {
+        // Driving it: an agent's input waits while a person drives (station/src/tools/computer.ts); another person's not.
+        const agents = drivers.filter((n) => n.startsWith(AGENT)).map(personShown);
+        const people = drivers.filter((n) => !n.startsWith(AGENT));
+        if (agents.length > 0) parts.push(t("core-views.screen.paused", { names: listed(agents) }));
+        if (people.length > 0) parts.push(t("core-views.screen.alsoDriving", { names: listed(people) }));
+      }
+      if (watching.length > 0) parts.push(t("core-views.screen.alsoOn", { names: listed(watching) }));
+      state.line = parts.join(" · ");
+      progress({ state: { ...state, others: [...others], controllers: [...controllers] } });
     };
     const write = (bytes: Uint8Array) => {
       if (out !== null) Queue.offerUnsafe(out, bytes);
@@ -351,6 +380,9 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       tell();
       return null;
     }
+    // Opened with no mode asked (a link, the station's page): only looking while someone else (an agent at work, a
+    // person) drives it, so a person who opens it to watch does not hold the agent off; else driving.
+    if (c.auto) wanted = may && othersOf(names(get(listedItem(), "controlledBy")), mine).length === 0;
     tell();
 
     /// One stream: opened, its frames read until it ends, is to be opened again, or fails.
@@ -417,6 +449,7 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                 const access = accessOf(s.access);
                 if (access) state.access = access;
                 if (Array.isArray(s.viewers)) onIt = names(s.viewers);
+                if (Array.isArray(s.controlledBy)) driving = names(s.controlledBy);
                 if (s.ended !== undefined && s.ended !== null && s.ended !== false) {
                   // The station stopping (an update, a restart): opened again once it is back.
                   if (s.ended === "stopping") return { dropped: true, seen } as Outcome;

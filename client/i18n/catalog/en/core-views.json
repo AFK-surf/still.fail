@@ -426,5 +426,9 @@
   "core-views.screen.reconnecting": "Connection lost, reconnecting",
   "core-views.screen.control": "Controlling",
   "core-views.screen.watch": "View only",
-  "core-views.screen.alsoOn": "{names} also on it"
+  "core-views.screen.alsoOn": "{names} also on it",
+  "core-views.screen.agent": "Agent “{title}”",
+  "core-views.screen.driving": "{names} controlling",
+  "core-views.screen.paused": "{names} paused",
+  "core-views.screen.alsoDriving": "{names} also controlling"
 }
