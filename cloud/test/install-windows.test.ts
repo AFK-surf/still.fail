@@ -118,7 +118,7 @@ test("a Windows station updating itself installs only the release its signed wor
       );
     const bad = await run("0".repeat(64));
     assert.equal(bad.code, 1, bad.out);
-    assert.match(bad.out, /not the one its signature names/);
+    assert.match(bad.out, /doesn't match its signature/);
     assert.ok(!existsSync(join(data, "handed")) && !existsSync(join(data, "app")));
     const good = await run(sha);
     assert.equal(good.code, 0, good.out);
