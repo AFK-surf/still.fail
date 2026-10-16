@@ -2509,12 +2509,25 @@ sealed class HistoryBody {
 	data class Group(val content: HistoryGroup): HistoryBody()
 }
 
+/// A turn of an agent's history: from a prompt that woke it until the next.
+@Serializable
+data class HistoryTurn (
+	/// When the prompt came, in ms; absent when its transcript did not say.
+	val at: Long? = null,
+	/// `at` as people read it: 14:05 today, 9/27 14:05 before.
+	val time: String? = null,
+	/// What the turn did, in a line: 3 步 · 发出 1 条, or 没发消息.
+	val text: String
+)
+
 /// One item of an execution history, and the transcript entries it draws (`entries`: first, last).
 @Serializable
 data class HistoryItem (
 	val key: String,
 	val entries: List<Long>,
-	val body: HistoryBody
+	val body: HistoryBody,
+	/// On the item a turn begins with (the prompt that woke the agent); left out of the others.
+	val turn: HistoryTurn? = null
 )
 
 @Serializable
@@ -2538,7 +2551,10 @@ data class HistoryWait (
 @Serializable
 data class HistoryMark (
 	val text: String,
-	val wait: HistoryWait? = null
+	val wait: HistoryWait? = null,
+	/// The state it marked: `done`, `human` (waiting on a person) or `waiting` (on work it started); absent for words
+	/// the station no longer uses.
+	val ends: String? = null
 )
 
 @Serializable
@@ -2564,7 +2580,9 @@ data class HistoryPost (
 	val md: JsonElement,
 	val place: Place? = null,
 	val block: Boolean,
-	val failed: Boolean
+	val failed: Boolean,
+	/// The state it ended its turn in: `done` or `human` (waiting on a person); absent for a progress post.
+	val ends: String? = null
 )
 
 /// Work the agent started in the background telling it how it ended (a task notification).

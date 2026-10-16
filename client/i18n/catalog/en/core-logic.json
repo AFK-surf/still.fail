@@ -325,6 +325,7 @@
   "core-logic.history.mark.block": "Stopped for help",
   "core-logic.history.mark.decision": "Stopped for a decision",
   "core-logic.history.mark.final": "Marked as done",
+  "core-logic.history.mark.human": "Stopped for a person",
   "core-logic.history.mark.other": "Marked as {mark}",
   "core-logic.history.phase.requesting": "Waiting for the model",
   "core-logic.history.phase.starting": "Starting {runtime}",
@@ -333,6 +334,15 @@
   "core-logic.history.step.running": "Running",
   "core-logic.history.steps": "{doing} · {n} steps",
   "core-logic.history.thinking": "Thinking: {text}",
+  "core-logic.history.turn.posts": {
+    "one": "sent 1 message",
+    "other": "sent {n} messages"
+  },
+  "core-logic.history.turn.silent": "sent nothing",
+  "core-logic.history.turn.steps": {
+    "one": "1 step",
+    "other": "{n} steps"
+  },
   "core-logic.history.usage.cached": "Cached",
   "core-logic.history.usage.calls": "Model calls",
   "core-logic.history.usage.calls.value": "{n}",

@@ -87,7 +87,7 @@ export function openingChats(): DemoChat[] {
   addItem(c, said(FIRST.thought));
   c.messages = [...c.messages, message(c, "agent", FIRST.answer, Date.now() - 6 * 60_000)];
   addItem(c, posted(c, FIRST.answer));
-  addItem(c, marked("完成"));
+  addItem(c, marked("完成", "done"));
   said_(LIN, FOLLOW_UP, 1);
   const { result: _, ...building } = SECOND.calls[OPENING_AT]!.step;
   addItem(c, groupOf([...SECOND.calls.slice(0, OPENING_AT).map((x) => x.step), building], 1));
@@ -146,7 +146,7 @@ export function makeStory(stage: Stage) {
     addItem(c, posted(c, answer));
     stage.publish();
     await wait(900);
-    addItem(c, marked("完成"));
+    addItem(c, marked("完成", "done"));
     c.running = null;
     stage.publish();
   }

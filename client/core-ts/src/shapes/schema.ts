@@ -2090,10 +2090,12 @@ export const SHAPES: Record<string, Shape> = {
     ["place", opt("Place")],
     ["block", "bool"],
     ["failed", "bool"],
+    ["ends", opt("String"), { doc: "The state it ended its turn in: `done` or `human` (waiting on a person); absent for a progress post." }],
   ], { doc: "A message the agent posted: where to, whether it ended its work blocked, whether it failed." }),
   HistoryMark: struct([
     ["text", "String"],
     ["wait", opt("HistoryWait")],
+    ["ends", opt("String"), { doc: "The state it marked: `done`, `human` (waiting on a person) or `waiting` (on work it started); absent for words\nthe station no longer uses." }],
   ], { doc: "A state the agent marked, in words; `wait` when it went to wait on work it started (drawn with its waiting mark)." }),
   HistoryWait: struct([
     ["since", "i64", { client: "I54" }],
@@ -2110,10 +2112,16 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "Tool calls and thinking between two boundaries, in the order they came (`rows`): named by its latest call, what it\ndid by kind (`title`), how many failed and are running.", keepNone: true }),
   HistoryRow: tagged("kind", "content", [["thought", "Thought", "HistoryThought"], ["step", "Step", "HistoryStep"]], { doc: "A line of a group: a thought or a call." }),
   HistoryBody: tagged("kind", "content", [["received", "Received", "HistoryReceived"], ["text", "Text", "HistoryText"], ["post", "Post", "HistoryPost"], ["mark", "Mark", "HistoryMark"], ["group", "Group", "HistoryGroup"]], { doc: "What an item of the history is." }),
+  HistoryTurn: struct([
+    ["at", opt("i64"), { client: opt("I54"), doc: "When the prompt came, in ms; absent when its transcript did not say." }],
+    ["time", opt("String"), { doc: "`at` as people read it: 14:05 today, 9/27 14:05 before." }],
+    ["text", "String", { doc: "What the turn did, in a line: 3 步 · 发出 1 条, or 没发消息." }],
+  ], { doc: "A turn of an agent's history: from a prompt that woke it until the next." }),
   HistoryItem: struct([
     ["key", "String"],
     ["entries", vec("i64"), { client: vec("I54") }],
     ["body", "HistoryBody"],
+    ["turn", opt("HistoryTurn"), { skipNone: true, doc: "On the item a turn begins with (the prompt that woke the agent); left out of the others." }],
   ], { doc: "One item of an execution history, and the transcript entries it draws (`entries`: first, last).", keepNone: true }),
   HistoryLive: struct([
     ["id", "String"],

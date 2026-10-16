@@ -2507,11 +2507,23 @@ export type HistoryBody =
 	| { kind: "mark", content: HistoryMark }
 	| { kind: "group", content: HistoryGroup };
 
+/** A turn of an agent's history: from a prompt that woke it until the next. */
+export interface HistoryTurn {
+	/** When the prompt came, in ms; absent when its transcript did not say. */
+	at?: number;
+	/** `at` as people read it: 14:05 today, 9/27 14:05 before. */
+	time?: string;
+	/** What the turn did, in a line: 3 步 · 发出 1 条, or 没发消息. */
+	text: string;
+}
+
 /** One item of an execution history, and the transcript entries it draws (`entries`: first, last). */
 export interface HistoryItem {
 	key: string;
 	entries: number[];
 	body: HistoryBody;
+	/** On the item a turn begins with (the prompt that woke the agent); left out of the others. */
+	turn?: HistoryTurn;
 }
 
 export interface HistoryLive {
@@ -2535,6 +2547,11 @@ export interface HistoryWait {
 export interface HistoryMark {
 	text: string;
 	wait?: HistoryWait;
+	/**
+	 * The state it marked: `done`, `human` (waiting on a person) or `waiting` (on work it started); absent for words
+	 * the station no longer uses.
+	 */
+	ends?: string;
 }
 
 export interface HistoryMessage {
@@ -2558,6 +2575,8 @@ export interface HistoryPost {
 	place?: Place;
 	block: boolean;
 	failed: boolean;
+	/** The state it ended its turn in: `done` or `human` (waiting on a person); absent for a progress post. */
+	ends?: string;
 }
 
 /** Work the agent started in the background telling it how it ended (a task notification). */

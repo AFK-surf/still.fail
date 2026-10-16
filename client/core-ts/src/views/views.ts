@@ -1517,6 +1517,7 @@ export class Views implements Owner {
         runtime: str(get(session, "runtime")) ?? "claude",
         started: typeof get(session, "runtimeSessionId") === "string",
         offsetMin: this.#core.host.utcOffsetMin(now),
+        now,
       }),
     };
   }

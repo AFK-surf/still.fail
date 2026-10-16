@@ -113,7 +113,8 @@ export function outgoing(text: string): Outgoing {
   const at = Date.now();
   return { id: `out-${at}`, text, attachments: [], quotes: [], createdAt: at, state: "sending", time: { createdAt: stamp(at) } };
 }
-export const marked = (text: string): HistoryItem["body"] => ({ kind: "mark", content: { text } });
+/** A state the agent marked; `ends`: done, or waiting on a person (the history colours it so). */
+export const marked = (text: string, ends?: "done" | "human"): HistoryItem["body"] => ({ kind: "mark", content: { text, ...(ends ? { ends } : {}) } });
 
 export function addItem(chat: DemoChat, body: HistoryItem["body"]): void {
   const n = chat.items.length;
@@ -138,7 +139,7 @@ function seed(chat: DemoChat, lines: [Who, string, number][]): DemoChat {
     chat.messages = [...chat.messages, message(chat, by, text, ago(minutes))];
     if (by === "agent") {
       addItem(chat, posted(chat, text));
-      addItem(chat, marked(chat.blocked && chat.messages.length === lines.length ? "等你决定" : "完成"));
+      addItem(chat, chat.blocked && chat.messages.length === lines.length ? marked("等你决定", "human") : marked("完成", "done"));
     } else if (by !== "me" && by !== "ember") addItem(chat, received(chat, by, text));
   }
   return chat;
@@ -292,9 +293,30 @@ export function liveView(chat: DemoChat): Live {
   return { loaded: true, timeline: [], steps: [], ...(chat.running ? { activity: { now: { key: chat.running.activity, text: chat.running.activity } } } : {}) };
 }
 
+/** A chat's history in turns, as the core puts them (client/core-ts/src/history.ts): each message that came in begins
+ * one, saying what it did up to the next. */
+function withTurns(items: HistoryItem[]): HistoryItem[] {
+  const out: HistoryItem[] = [];
+  let begun = -1;
+  let steps = 0;
+  let posts = 0;
+  const close = () => {
+    const first = out[begun];
+    if (first) out[begun] = { ...first, turn: { text: [...(steps ? [`${steps} 步`] : []), posts ? `发出 ${posts} 条` : "没发消息"].join(" · ") } };
+  };
+  for (const item of items) {
+    if (item.body.kind === "received") { close(); begun = out.length; steps = 0; posts = 0; }
+    else if (item.body.kind === "group") steps += item.body.content.rows.filter((r) => r.kind === "step").length;
+    else if (item.body.kind === "post") posts++;
+    out.push(item);
+  }
+  close();
+  return out;
+}
+
 export function historyView(chat: DemoChat): HistoryView {
   return {
-    items: chat.items, live: [], edge: "已到 Session 开始处", empty: chat.items.length === 0, loaded: true,
+    items: withTurns(chat.items), live: [], edge: "已到 Session 开始处", empty: chat.items.length === 0, loaded: true,
     ...(chat.running ? { phase: { phase: "working", text: "执行工具中", since: chat.running.since } } : {}),
   };
 }
