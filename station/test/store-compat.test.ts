@@ -41,6 +41,10 @@ function shape(path: string): string[] {
   }
 }
 
+/// Columns the TS station adds to tables the Rust station made (schema.ts), by table: a station's in several workspaces
+/// (docs/multi-workspace.md).
+const ADDED: [string, string][] = [["sessions", "ws"], ["archive_policy", "ws"]];
+
 const noToken = <T extends { token: string }>(r: T) => {
   const { token: _, ...rest } = r;
   return rest;
@@ -61,8 +65,14 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
     // Opening adds nothing to what the Rust station keeps, beyond the tables and indexes of the Rust SCHEMA a station
     // older than that source had not made yet (CREATE … IF NOT EXISTS, as the Rust's open makes them).
     opened = shape(path);
-    assert.deepEqual(before.filter((l) => !opened.includes(l)), [], "nothing changed or gone");
-    const added = opened.filter((l) => !before.includes(l));
+    // Besides the columns the TS station adds on open itself (schema.ts `add*Columns`), as later ones are: a table's SQL
+    // then says them at its end, and each is a column line of its own.
+    const plain = (l: string) => ADDED.reduce((t, [table, column]) => (t.startsWith(`table ${table}:`) ? t.replace(new RegExp(`, ${column} [A-Z]+(?=\\)$)`), "") : t), l);
+    const mine = (l: string) => ADDED.some(([table, column]) => l.startsWith(`  ${table}.${column} `));
+    const was = before.map(plain);
+    const now = opened.filter((l) => !mine(l)).map(plain);
+    assert.deepEqual(was.filter((l) => !now.includes(l)), [], "nothing changed or gone");
+    const added = now.filter((l) => !was.includes(l));
     for (const line of added) {
       const name = /^(?:table|index) (\w+):/.exec(line)?.[1] ?? /^  (\w+)\./.exec(line)?.[1];
       assert.ok(name && new RegExp(`CREATE (TABLE|INDEX) IF NOT EXISTS ${name} `).test(SCHEMA), `only the Rust SCHEMA's own: ${line.split("\n")[0]}`);
