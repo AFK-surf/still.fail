@@ -326,6 +326,7 @@ export const unix: Platform = {
   hasDisplay: (env) => MACOS || Boolean(env.DISPLAY || env.WAYLAND_DISPLAY),
 
   hasKeychain: MACOS,
+  trash: MACOS ? "finder" : "freedesktop",
   hasQuickLook: MACOS,
   hasFolderPermissions: MACOS,
   hasDesktopScreen: MACOS,

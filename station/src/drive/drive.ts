@@ -12,6 +12,7 @@ import { basename, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { platform } from "../platform/index.ts";
+import { wall } from "../ops/fibers.ts";
 import { unreadableDir } from "../ops/files.ts";
 import { TooBig, zipFolder } from "./zip.ts";
 import { toTrash } from "./trash.ts";
@@ -360,7 +361,7 @@ export class Drive {
 
   /// Uploads in `folder` left unfinished long ago, removed.
   private async sweep(folder: string) {
-    const now = (this.deps.now ?? Date.now)();
+    const now = (this.deps.now ?? wallNow)();
     for (const name of await readdir(folder).catch(() => [] as string[])) {
       if (!PART.test(name)) continue;
       const s = await stat(join(folder, name)).catch(() => null);
@@ -436,7 +437,7 @@ export class Drive {
       // A link is removed as a link, not what it points at.
       await lstat(at.entry);
       if (!permanent) {
-        if ((await toTrash(at.entry, this.deps.home)) === null) throw new DriveError("no_trash", "no trash takes it here");
+        if ((await toTrash(at.entry, platform.trash, (this.deps.now ?? wallNow)(), this.deps.home)) === null) throw new DriveError("no_trash", "no trash takes it here");
         return;
       }
       await rm(at.entry, { recursive: true });
@@ -452,7 +453,7 @@ export class Drive {
     const at = await this.place(root, path, anywhere);
     const name = `${at.parts.at(-1) ?? rootName(at.root)}.zip`;
     const zips = join(tmpdir(), "stillfail-zips");
-    await sweep(zips, ZIPS_KEPT_MS);
+    await sweep(zips, ZIPS_KEPT_MS, (this.deps.now ?? wallNow)());
     const dir = join(zips, randomUUID());
     try {
       if (!(await stat(at.found)).isDirectory()) throw new DriveError("not_a_directory", "that is a file");
@@ -545,12 +546,14 @@ export class Drive {
   }
 }
 
+/// The machine's time, for a drive given no clock.
+const wallNow = () => wall.now();
+
 /// How long a zip made for a download is kept.
 const ZIPS_KEPT_MS = 60 * 60_000;
 
 /// The folders in `dir` made more than `ms` ago, removed.
-async function sweep(dir: string, ms: number): Promise<void> {
-  const now = Date.now();
+async function sweep(dir: string, ms: number, now: number): Promise<void> {
   for (const name of await readdir(dir).catch(() => [] as string[])) {
     const at = join(dir, name);
     const s = await stat(at).catch(() => null);

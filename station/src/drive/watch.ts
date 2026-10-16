@@ -3,6 +3,8 @@
 // while with nothing; it then reads the folder again and asks anew. Each client's asking has its own watch (`id`),
 // kept a minute past its last asking: a change between two askings is told at the next one, not lost.
 import { type FSWatcher, watch } from "node:fs";
+import type { Clock } from "effect";
+import { Fibers } from "../ops/fibers.ts";
 
 /// How long one asking is held, nothing having changed.
 export const HELD_MS = 25_000;
@@ -13,16 +15,18 @@ const MOST = 256;
 /// A burst of writes is one change.
 const SETTLE_MS = 250;
 
-type Watched = { watcher: FSWatcher; changed: boolean; waiting: Set<() => void>; drop: NodeJS.Timeout | null; settle: NodeJS.Timeout | null; asked: number };
+type Watched = { watcher: FSWatcher; changed: boolean; waiting: Set<() => void>; drop: (() => void) | null; settle: (() => void) | null; asked: number };
 
 export class FolderWatches {
   readonly #by = new Map<string, Watched>();
   readonly #held: number;
   readonly #kept: number;
+  readonly #time: Fibers;
 
-  constructor(held = HELD_MS, kept = KEPT_MS) {
+  constructor(held = HELD_MS, kept = KEPT_MS, clock?: Clock.Clock) {
     this.#held = held;
     this.#kept = kept;
+    this.#time = new Fibers("drive watches", clock);
   }
 
   /// Whether the folder at `dir` changed since `id` last asked (at once if it did), else as soon as it does, `held` at
@@ -33,14 +37,14 @@ export class FolderWatches {
     if (!w) {
       const made = this.#watch(key, dir);
       if (!made) {
-        await new Promise((resolve) => setTimeout(resolve, this.#held));
+        await this.#time.sleep(this.#held);
         return false;
       }
       w = made;
     }
-    if (w.drop) clearTimeout(w.drop);
+    w.drop?.();
     w.drop = null;
-    w.asked = Date.now();
+    w.asked = this.#time.now();
     if (w.changed) {
       w.changed = false;
       this.#letGo(key, w);
@@ -48,8 +52,8 @@ export class FolderWatches {
     }
     const watched = w;
     const told = await new Promise<boolean>((resolve) => {
-      const timer = setTimeout(() => { watched.waiting.delete(wake); resolve(false); }, this.#held);
-      const wake = () => { clearTimeout(timer); watched.waiting.delete(wake); resolve(true); };
+      const timer = this.#time.after(this.#held, () => { watched.waiting.delete(wake); resolve(false); });
+      const wake = () => { timer(); watched.waiting.delete(wake); resolve(true); };
       watched.waiting.add(wake);
     });
     if (told) watched.changed = false;
@@ -60,6 +64,7 @@ export class FolderWatches {
   /// Every watch closed (the station stopping).
   close(): void {
     for (const [key, w] of this.#by) this.#close(key, w);
+    void this.#time.close();
   }
 
   #watch(key: string, dir: string): Watched | null {
@@ -74,14 +79,14 @@ export class FolderWatches {
     } catch {
       return null;
     }
-    const w: Watched = { watcher, changed: false, waiting: new Set(), drop: null, settle: null, asked: Date.now() };
+    const w: Watched = { watcher, changed: false, waiting: new Set(), drop: null, settle: null, asked: this.#time.now() };
     watcher.on("change", () => {
       if (w.settle) return;
-      w.settle = setTimeout(() => {
+      w.settle = this.#time.after(SETTLE_MS, () => {
         w.settle = null;
         if (w.waiting.size > 0) for (const wake of [...w.waiting]) wake();
         else w.changed = true;
-      }, SETTLE_MS);
+      });
     });
     // Gone (the folder removed, renamed): told as a change, for the client to read it and be told so.
     watcher.on("error", () => {
@@ -95,15 +100,14 @@ export class FolderWatches {
   /// Kept a while with nobody asking, for the next asking to be told what changed meanwhile.
   #letGo(key: string, w: Watched): void {
     if (w.waiting.size > 0 || this.#by.get(key) !== w) return;
-    if (w.drop) clearTimeout(w.drop);
-    w.drop = setTimeout(() => this.#close(key, w), this.#kept);
-    w.drop.unref?.();
+    w.drop?.();
+    w.drop = this.#time.after(this.#kept, () => this.#close(key, w));
   }
 
   #close(key: string, w: Watched): void {
     if (this.#by.get(key) === w) this.#by.delete(key);
-    if (w.drop) clearTimeout(w.drop);
-    if (w.settle) clearTimeout(w.settle);
+    w.drop?.();
+    w.settle?.();
     w.watcher.close();
   }
 }

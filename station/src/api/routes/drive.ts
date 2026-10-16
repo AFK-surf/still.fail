@@ -14,6 +14,7 @@ import { type Lang, tr } from "../../ops/i18n.ts";
 import { readOnly } from "../../mesh/credential.ts";
 import { CODES, Drive, DriveError, MAX_READ, MOST_ROOTS, TOO_BIG, rootsOf } from "../../drive/drive.ts";
 import { FolderWatches } from "../../drive/watch.ts";
+import { platform } from "../../platform/index.ts";
 
 export type DriveRouteDeps = {
   drive: Drive; config: ConfigFile; home?: string; changed?: () => void;
@@ -61,7 +62,7 @@ export const driveView = (drive: Drive, r: { viewer: Request["viewer"] }, home =
   roots: driveOf(drive, r).roots(), manage: manages(r), write: !readOnly(r.viewer), ...(anywhere(r) ? { anywhere: true, home } : {}),
   // What is deleted goes to the machine's trash (macOS, Linux); folders are watched for what changes in them, and zipped
   // to download.
-  ...(process.platform === "darwin" || process.platform === "linux" ? { trash: true } : {}), watch: true, ...(anywhere(r) ? { zip: true } : {}),
+  ...(platform.trash ? { trash: true } : {}), watch: true, ...(anywhere(r) ? { zip: true } : {}),
 });
 
 /// The most a file sent in a chat from the drive is (as an upload in parts).

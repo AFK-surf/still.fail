@@ -10,6 +10,7 @@ import { routes } from "../src/api/routes/drive.ts";
 import { ConfigFile } from "../src/ops/config.ts";
 import type { Request } from "../src/api/request.ts";
 import { checkConfig } from "../src/accounts/check.ts";
+import { platform } from "../src/platform/index.ts";
 
 function place() {
   const base = realpathSync(mkdtempSync(join(tmpdir(), "drive-")));
@@ -30,7 +31,7 @@ function place() {
 }
 
 /// What every member is told the drive does here: deleting to the trash (where there is one), watching folders.
-const CAN = { ...(process.platform === "darwin" || process.platform === "linux" ? { trash: true } : {}), watch: true };
+const CAN = { ...(platform.trash ? { trash: true } : {}), watch: true };
 
 const code = async (p: Promise<unknown>) => {
   try {
@@ -124,8 +125,8 @@ test("mkdir, rename, remove: within the root, nothing replaced, the root itself 
 
 test("remove puts it in the trash, a name there taken given a number, as the machine's file browser does; for good on asking", async () => {
   const { base, root, drive } = place();
-  if (process.platform !== "darwin" && process.platform !== "linux") return;
-  const trash = process.platform === "darwin" ? join(base, ".Trash") : join(base, ".local", "share", "Trash", "files");
+  if (platform.trash === null) return;
+  const trash = platform.trash === "finder" ? join(base, ".Trash") : join(base, ".local", "share", "Trash", "files");
   writeFileSync(join(root, "a.txt"), "1");
   await drive.remove(root, "a.txt");
   writeFileSync(join(root, "a.txt"), "2");
@@ -133,7 +134,7 @@ test("remove puts it in the trash, a name there taken given a number, as the mac
   assert.equal(existsSync(join(root, "a.txt")), false);
   assert.equal(readFileSync(join(trash, "a.txt"), "utf8"), "1");
   assert.equal(readFileSync(join(trash, "a 2.txt"), "utf8"), "2");
-  if (process.platform === "linux") assert.match(readFileSync(join(trash, "..", "info", "a 2.txt.trashinfo"), "utf8"), /^\[Trash Info\]\nPath=.*a\.txt\nDeletionDate=/);
+  if (platform.trash === "freedesktop") assert.match(readFileSync(join(trash, "..", "info", "a 2.txt.trashinfo"), "utf8"), /^\[Trash Info\]\nPath=.*a\.txt\nDeletionDate=/);
   await drive.remove(root, "Season 1", false, true);
   assert.equal(existsSync(join(root, "Season 1")), false);
   assert.equal(existsSync(join(trash, "Season 1")), false);

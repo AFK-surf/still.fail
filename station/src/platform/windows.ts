@@ -460,6 +460,7 @@ export const windows: Platform = {
   hasDisplay: () => true,
 
   hasKeychain: false,
+  trash: null,
   hasQuickLook: false,
   hasFolderPermissions: false,
   hasDesktopScreen: false,

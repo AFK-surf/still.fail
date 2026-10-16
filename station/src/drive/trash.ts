@@ -7,19 +7,20 @@ import { mkdir, open, rename, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 
-/// Moved to the trash: where it is there now. Null: no trash takes it here.
-/// `home`: whose trash (the machine's own home, its XDG data folder followed, when none is given).
-export async function toTrash(entry: string, home?: string, os: NodeJS.Platform = process.platform): Promise<string | null> {
-  if (os !== "darwin" && os !== "linux") return null;
+/// Moved to the trash `kind` (platform's `trash`): where it is there now. Null: no trash takes it here. `home`: whose
+/// trash (the machine's own home, its XDG data folder followed, when none is given); `now`: when, for the freedesktop's
+/// note of it.
+export async function toTrash(entry: string, kind: "finder" | "freedesktop" | null, now: number, home?: string): Promise<string | null> {
+  if (kind === null) return null;
   const uid = process.getuid?.() ?? 0;
   const dev = (await stat(dirname(entry))).dev;
   const data = (home === undefined ? process.env.XDG_DATA_HOME : undefined) || join(home ?? homedir(), ".local", "share");
   home ??= homedir();
-  const homeTrash = os === "darwin" ? join(home, ".Trash") : join(data, "Trash");
+  const homeTrash = kind === "finder" ? join(home, ".Trash") : join(data, "Trash");
   const onHomeDisk = await stat(home).then((s) => s.dev === dev, () => false);
-  const trash = onHomeDisk ? homeTrash : join(await topOf(dirname(entry), dev), os === "darwin" ? join(".Trashes", String(uid)) : `.Trash-${uid}`);
+  const trash = onHomeDisk ? homeTrash : join(await topOf(dirname(entry), dev), kind === "finder" ? join(".Trashes", String(uid)) : `.Trash-${uid}`);
   try {
-    return os === "darwin" ? await intoMac(entry, trash) : await intoFreedesktop(entry, trash);
+    return kind === "finder" ? await intoMac(entry, trash) : await intoFreedesktop(entry, trash, now);
   } catch (e) {
     const code = (e as NodeJS.ErrnoException).code;
     // A disk that will not take a trash (read-only, one the station may not write the top of), or one across disks.
@@ -54,7 +55,7 @@ async function intoMac(entry: string, trash: string): Promise<string> {
 
 /// The freedesktop trash: `files/` beside `info/`, where a `.trashinfo` (made first, which claims the name) says where
 /// it was and when, for the desktop to put it back.
-async function intoFreedesktop(entry: string, trash: string): Promise<string> {
+async function intoFreedesktop(entry: string, trash: string, now: number): Promise<string> {
   const files = join(trash, "files");
   const info = join(trash, "info");
   await mkdir(files, { recursive: true, mode: 0o700 });
@@ -70,7 +71,7 @@ async function intoFreedesktop(entry: string, trash: string): Promise<string> {
       throw e;
     }
     try {
-      const when = new Date();
+      const when = new Date(now);
       const pad = (v: number) => String(v).padStart(2, "0");
       const date = `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}T${pad(when.getHours())}:${pad(when.getMinutes())}:${pad(when.getSeconds())}`;
       await claim.writeFile(`[Trash Info]\nPath=${encodeURI(entry)}\nDeletionDate=${date}\n`);
