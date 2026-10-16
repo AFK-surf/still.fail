@@ -24,7 +24,7 @@ export const SCREENS_LACKING: ScreensView = { ...SCREENS, screens: SCREENS.scree
 export const OUTDATED: ScreensView = { screens: [], outdated: true, control: true, known: true, note: "这台 station 需要更新才能远程看屏幕" };
 
 /** How a story's view goes: live (driving, or a read-only member's), or the phase it ends up in. */
-export type ViewStory = "connecting" | "live" | "readOnly" | "undrivable" | "reconnecting" | "ended" | "outdated" | "gone" | "denied" | "failed";
+export type ViewStory = "connecting" | "live" | "readOnly" | "undrivable" | "agent" | "reconnecting" | "ended" | "outdated" | "gone" | "denied" | "failed";
 
 const MESSAGES: Partial<Record<ViewStory, string>> = {
   reconnecting: "连接断了，正在重连",
@@ -205,19 +205,36 @@ const heard: unknown[] = [];
 (globalThis as { screenInputs?: unknown[] }).screenInputs = heard;
 
 /** The views open now, by their names: what 只看/控制 changes. */
-const views = new Map<string, { state: ScreenViewState; say: () => void }>();
-const lineOf = (s: ScreenViewState) => `${s.control ? "控制" : "只看"}${s.others.length ? ` · ${s.others.join("、")} 也在看` : ""}`;
+const views = new Map<string, { state: ScreenViewState; say: () => void; agent: boolean }>();
+/** An agent at work on the screen (computer use), named as the core names it: its chat's title. */
+const AGENT = "Agent「修登录」";
+/**
+ * The bar's line, as the core writes it: 只看/控制, who drives it (or the agent paused, once taken over), who else
+ * looks on.
+ */
+function lineOf(s: ScreenViewState, agent: boolean): string {
+  const driving = s.controllers ?? [];
+  const parts = [s.control ? "控制" : "只看"];
+  if (driving.length) parts.push(`${driving.join("、")} 在控制`);
+  else if (agent && s.control) parts.push(`${AGENT} 暂停中`);
+  const rest = s.others.filter((o) => !driving.includes(o) && !(agent && o === AGENT));
+  if (rest.length) parts.push(`${rest.join("、")} 也在看`);
+  return parts.join(" · ");
+}
 
 async function play(story: ViewStory, h264: boolean, params: Record<string, unknown>, emit: (value: unknown, bytes?: Uint8Array) => void, signal: AbortSignal): Promise<null> {
   const may = story !== "readOnly";
   const browser = String(params.screen).startsWith("browser:");
   const state: ScreenViewState = {
     phase: "connecting", title: browser ? "登录 · GitHub" : "桌面", kind: browser ? "browser" : "desktop",
-    control: may && params.control !== false, may, others: ["张三"], line: "",
+    control: may && params.control !== false, may, others: ["张三"], controllers: [], takeOver: false, line: "",
   };
-  const say = () => { state.line = lineOf(state); emit({ state: { ...state, others: [...state.others] } }); };
+  // An agent drives it as it opens: the core opens it to look (no `control` asked), 接管 at hand.
+  const agent = story === "agent";
+  if (agent) Object.assign(state, { control: false, others: [AGENT, "张三"], controllers: [AGENT], takeOver: true });
+  const say = () => { state.line = lineOf(state, agent); emit({ state: { ...state, others: [...state.others], controllers: [...(state.controllers ?? [])] } }); };
   const name = String(params.view);
-  views.set(name, { state, say });
+  views.set(name, { state, say, agent });
   signal.addEventListener("abort", () => views.delete(name), { once: true });
   say();
   if (story === "connecting") return forever(signal);
@@ -266,7 +283,12 @@ export function screensDemo(story: ViewStory = "live", list: ScreensView = SCREE
     call: (name, p) => {
       if (name === "screen.control") {
         const v = views.get(String(p.view));
-        if (v && v.state.may) { v.state.control = p.control === true && v.state.access?.control !== false; v.say(); }
+        if (v && v.state.may) {
+          v.state.control = p.control === true && v.state.access?.control !== false;
+          // Taken over: the agent's input waits (paused) while this view drives; given back, it goes on.
+          if (v.agent) Object.assign(v.state, { controllers: v.state.control ? [] : [AGENT], takeOver: !v.state.control });
+          v.say();
+        }
         return null;
       }
       if (name === "screen.input") { heard.push(p.input); return null; }

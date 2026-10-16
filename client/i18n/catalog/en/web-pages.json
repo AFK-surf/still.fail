@@ -1370,5 +1370,10 @@
   "web-pages.screen.over.outdated": "The station needs an update",
   "web-pages.screen.over.gone": "The screen is gone",
   "web-pages.screen.over.denied": "This screen can't be seen",
-  "web-pages.screen.over.failed": "Couldn't connect"
+  "web-pages.screen.over.failed": "Couldn't connect",
+  "web-pages.screen.controlling": "{names} in control",
+  "web-pages.screen.and": ", ",
+  "web-pages.screen.someone": "them",
+  "web-pages.screen.takeOver": "Take over",
+  "web-pages.screen.takeOverTip": "Pause {names} and take control"
 }

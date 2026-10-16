@@ -121,7 +121,7 @@ globalStyle(`${headText} small`, { color: vars.muted, fontSize: vars.textCaption
 export const foot = style({
   ...glass,
   position: "absolute", zIndex: "3", bottom: `max(${EDGE}px, var(--safe-bottom))`, ...centredX,
-  display: "flex", alignItems: "center", gap: "8px", width: "max-content", boxSizing: "border-box", height: `${FOOT}px`, padding: "6px", borderRadius: "999px",
+  display: "flex", alignItems: "center", gap: "8px", width: "max-content", maxWidth: "calc(100% - 24px)", boxSizing: "border-box", height: `${FOOT}px`, padding: "6px", borderRadius: "999px",
   selectors: { "[data-desktop] &": { WebkitAppRegion: "no-drag" } },
 });
 /** The keyboard: a circle as tall as the switch beside it. */
@@ -133,3 +133,14 @@ export const keyboard = style({
     "&:disabled": { opacity: ".4", cursor: "default" },
   },
 });
+
+/** Someone else driving it, and 接管: in the desktop's bar where 只看/控制 is, in the phone's foot. */
+export const takeOverTools = style({ display: "flex", alignItems: "center", gap: "10px", minWidth: "0" });
+/** Who drives it now: set apart from the plain line by its dot (someone at work, as a chat's) and its weight. */
+export const controllers = style({
+  display: "flex", alignItems: "center", gap: "6px", minWidth: "0", color: vars.text, fontSize: vars.textUi, fontWeight: "500",
+  selectors: { [`${foot} &`]: { paddingInlineStart: "12px" } },
+});
+export const controllersDot = style({ flex: "none", width: "8px", height: "8px", borderRadius: "50%", background: vars.amber });
+export const controllersText = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const takeOver = style({ flex: "none" });

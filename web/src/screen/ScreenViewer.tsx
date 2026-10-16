@@ -10,12 +10,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { core } from "../core/react.ts";
 import type { ScreenViewState } from "../core/shapes.ts";
-import { ChevronLeft, Svg, type IconProps } from "@stillfail/ui/icons.tsx";
+import { ChevronLeft, Keyboard } from "@stillfail/ui/icons.tsx";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { ViewerBar, VIEWER_BAR_REACH } from "@stillfail/ui/viewer/ViewerBar.tsx";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
 import { REST_MS } from "@stillfail/ui/viewer/rest.ts";
-import { PanelButton, Segmented, Tip } from "../ui.tsx";
+import { Button, PanelButton, Segmented, Tip } from "../ui.tsx";
 import { t } from "../i18n.ts";
 import { ScreenFrames, decodable, viewSize, type FrameConfig, type FrameHead } from "./frames.ts";
 import { hearInput, type ScreenInput } from "./input.ts";
@@ -183,8 +183,22 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
     asked.catch(() => setWant(null));
   };
 
+  // Someone else drives it (an agent at work, a person) and this view only looks: who, said apart from the line, and
+  // 接管 at hand (控制, their input waiting) until it is pressed.
+  const controllers = shown?.controllers ?? [];
+  const takeOver = live && shown?.takeOver === true && want !== true;
+  const controlling = controllers.length ? t("web-pages.screen.controlling", { names: controllers.join(t("web-pages.screen.and")) }) : "";
+  const takeOverButton = (
+    <Tip label={t("web-pages.screen.takeOverTip", { names: controllers.join(t("web-pages.screen.and")) || t("web-pages.screen.someone") })}>
+      <Button variant="primary" className={css.takeOver} onClick={() => setControl(true)}>{t("web-pages.screen.takeOver")}</Button>
+    </Tip>
+  );
+  const others = takeOver && (
+    <span className={css.controllers}><span className={css.controllersDot} aria-hidden="true" /><span className={css.controllersText}>{controlling}</span></span>
+  );
+
   // With a mouse, the bar goes after a moment at rest while live, and comes back as the pointer comes to the top (or
-  // anywhere, while only looking). A finger keeps it.
+  // anywhere, while only looking). A finger keeps it; so does someone else driving it (who, and 接管, stay in sight).
   const [awake, setAwake] = useState(true);
   const rest = useRef(0);
   const wake = useCallback(() => {
@@ -201,7 +215,6 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
   };
 
   const title = shown?.title || t("web-pages.screen.title");
-  // Over, the panel says why: not who is on it any more.
   // Over, the panel says why; while it cannot be driven, what to turn on follows who is on it.
   const line = over ? "" : [shown?.line, undrivable ? access?.message : undefined].filter(Boolean).join(" · ");
   const may = shown?.may ?? true;
@@ -256,7 +269,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
           </header>
           {!over && (
             <div className={css.foot}>
-              {modes}
+              {takeOver ? <>{others}{takeOverButton}</> : modes}
               <Tip label={t("web-pages.screen.keyboard")}>
                 <button type="button" className={css.keyboard} aria-label={t("web-pages.screen.keyboard")} aria-pressed={typing} disabled={!driving}
                   // The keyboard comes up for the field only from within the tap itself.
@@ -268,8 +281,9 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
           )}
         </>
       ) : (
-        <ViewerBar back={{ label: backLabel, onClick: onBack }} name={title} meta={line} hidden={live && !awake && !touched.current}
-          tools={over ? undefined : modes} />
+        <ViewerBar back={{ label: backLabel, onClick: onBack }} name={title} meta={line}
+          hidden={live && !awake && !touched.current && !takeOver && controllers.length === 0}
+          tools={over ? undefined : takeOver ? <span className={css.takeOverTools}>{others}{takeOverButton}</span> : modes} />
       )}
     </div>
   );
@@ -282,9 +296,4 @@ function Arrow() {
       <path d="M4 2L14.5 10.2L9.6 10.9L7.2 15.6Z" fill="#fff" stroke="#000" strokeWidth="1.2" strokeLinejoin="round" />
     </svg>
   );
-}
-
-/** A keyboard (still.fail's icons have none yet): drawn as they are, a 24 box, a 1.75 line. */
-function Keyboard(props: IconProps) {
-  return <Svg {...props}><path d="M5.5 6H18.5Q21 6 21 8.5V15.5Q21 18 18.5 18H5.5Q3 18 3 15.5V8.5Q3 6 5.5 6Z M7 10H7.01 M10.3 10H10.31 M13.7 10H13.71 M17 10H17.01 M8 14H16" /></Svg>;
 }

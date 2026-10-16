@@ -147,6 +147,26 @@ try {
   if (out) await p.screenshot({ path: `${out}/screen-input-phone.png` });
   await phone.close();
 
+  // ── an agent driving it: opened to look (nothing goes), 接管 makes it this view's ──
+  const g = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, locale: 'zh-CN' });
+  g.on('pageerror', (e) => errors.push(e.message));
+  await g.goto(`${base}?story=screen-agent-driving&theme=light`);
+  await g.waitForFunction(() => document.querySelector('[data-phase="live"]') && document.querySelector('canvas')?.width === 1600);
+  const told = () => g.evaluate(() => window.screenInputs.splice(0));
+  await told();
+  await g.mouse.click(640, 400);
+  await g.keyboard.press('a');
+  assert.deepEqual(await told(), [], 'while the agent drives, opening it takes nothing over');
+  await g.waitForTimeout(2600);
+  assert.ok(await g.getByText('Agent「修登录」 在控制', { exact: true }).isVisible(), 'who drives it, still in sight after a rest');
+  await g.getByRole('button', { name: '接管' }).click();
+  await g.waitForFunction(() => document.querySelector('[data-driving]'));
+  assert.ok(await g.getByText(/控制 · Agent「修登录」 暂停中/).isVisible(), 'taken over: the agent paused');
+  await g.mouse.click(640, 400);
+  got = (await told()).filter((i) => i.t === 'pointer' && i.kind !== 'move');
+  assert.deepEqual(got.map((i) => i.kind), ['down', 'up'], 'taken over: the click goes');
+  await g.close();
+
   // ── H.264, where the browser has it (Chrome; not Playwright's own Chromium): decoded, drawn, every frame acknowledged ──
   const h = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, locale: 'zh-CN' });
   h.on('pageerror', (e) => errors.push(e.message));
