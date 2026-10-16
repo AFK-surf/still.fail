@@ -2,7 +2,7 @@
 
 > chat EMBER/1792171443.604000（2026-10-17 用户定：不在 station 之间借用、复制登录；每台 station 自己登录、自己持有和续期凭据，人在客户端远程完成；登录是机器级的；通用，跑工具自己的登录命令；浏览器那一步在客户端设备上、用这个人自己的浏览器完成；station 的浏览器和远程屏幕只是兜底；能操作这台 station 的人就能在上面登录，不分是哪个 workspace 的；两种都支持的工具默认用设备码）。
 
-状态：设计稿，还没有实现。
+状态：第一步已实现（PR #496：station `station/src/logins/`、core `client/core-ts/src/station/machine-logins.ts`、web `web/src/MachineLogins.tsx`）；下面写「实现」的地方是代码里实际的做法，和最初的设计不同处随文说明。
 
 ## 要解决的事
 
@@ -124,15 +124,15 @@ station: PTY 输出 "First copy your one-time code: ABCD-1234 … https://github
 station: 命令轮询到结果，写凭据，退出 0 → done
 ```
 
-有的命令显示设备码后还要按一次回车才去开浏览器（gh 的 `Press Enter to open github.com in your browser...`）。station 不等人按：描述里写了 `enter: true` 的，看到提示就替它按；没写的，提示会出现在终端里，人在客户端按。
+有的命令显示设备码后还要按一次回车才去开浏览器（gh 的 `Press Enter to open github.com in your browser...`）。station 不等人按：描述里写了 `enter: true` 的，看到提示就替它按；没写的，提示会出现在终端里，人在客户端按。实现：输出停了 500 ms 才看光标所在行（和人一样等它把话说完），每一处提示只答一次。
 
 能选的时候，描述优先用设备码（gh 只有设备码，Docker、Vercel 默认就是；`az login --use-device-code`、`aws sso login --use-device-code`、`wrangler login --device`、`codex login --device-auth` 也有）：设备码在网页版、手机、别人的电脑上都一样能完成，不依赖客户端能不能监听端口。只有设备码不可用、或者服务商把设备码关了（有的公司的 Entra ID 策略禁设备码）时才走回环。
 
 ### 要输入（PTY）
 
-- station 给登录命令一个固定大小的 PTY（宽 200 列、高 40 行：宽一点是为了长网址不被折行，解析不出错），在 station 上用一个无界面的终端模拟器（`@xterm/headless`）维护屏幕。它要回答程序发来的终端查询（光标位置 `ESC[6n`、背景色 OSC 11）：gh 会问，没人答就一直卡住。
-- 客户端打开面板时订阅这个终端：station 先推整屏，再推改了的行和光标位置；客户端按自己的宽度显示（行太长就折行），不做终端模拟，三端一样。
-- 输入：文字（输入法、粘贴结果）、回车、退格、方向键、Tab、Ctrl-C。终端关了回显（输密码）时客户端的输入框换成密码框。
+- station 给登录命令一个固定大小的 PTY（宽 200 列、高 40 行：宽一点是为了长网址不被折行，解析不出错），在 station 上用一个无界面的终端模拟器（`@xterm/headless`）维护屏幕。它要回答程序发来的终端查询（光标位置 `ESC[6n`、背景色 OSC 11）：gh 会问，没人答就一直卡住。网址和设备码从去掉控制序列的原始输出里读（长网址在屏幕上会折行，输出里是一整串）。
+- 客户端打开面板时订阅这个终端：station 先推整屏，再推改了的行和光标位置；客户端按自己的宽度显示（行太长就折行），不做终端模拟，三端一样。实现：走 station 已有的事件流（`GET /events?login=<id>`，事件 `login-screen` `{id, rows, cursor, echo, live, full?}`，先整屏再只发改了的行），core 的 `machineLoginScreen` topic 被看着时才把它加进流的参数；输入是 `POST /machine-logins/<id>/input`。原来写的「`/term` 双向流、和 screens 的 view 同一种分帧」没有用：remote-screens 不在 main 上，事件流 + 一个写接口已经够，三端都不用新的流类型。
+- 输入：文字（输入法、粘贴结果）、回车、退格、方向键、Tab、Ctrl-C。终端关了回显（输密码）时客户端的输入框换成密码框。实现：命令停在提示上时，station 对命令所在的终端跑 `stty -a`（`ps -o tty=` 找到它的 tty）看有没有 `-echo`；读不到时看提示里有没有 password、token、密码 这类字样。
 - 卡片和面板不默认展开终端；命令停在提示上且没有网址、设备码时自动展开，并说「命令在等你输入」。
 - 屏幕内容只在内存里：core 不写进数据库，station 不写日志。登录结束 10 分钟后丢掉。
 
@@ -163,14 +163,14 @@ station: 命令轮询到结果，写凭据，退出 0 → done
 
 ### PTY
 
-- macOS、Linux 第一步用系统自带的 `script` 包一层（macOS `script -q /dev/null <命令>`，Linux `script -qfec <命令> /dev/null`），开头 `stty cols 200 rows 40`。在 studio 上试过：stdin 是管道也能拿到 PTY、能交互；stdin 关掉会给命令送 EOF，所以登录期间一直开着。不加原生代码。
+- macOS、Linux 第一步用系统自带的 `script` 包一层（macOS `script -q /dev/null <命令>`，Linux `script -qfec <命令> /dev/null`），开头 `stty cols 200 rows 40`。在 studio 上试过：stdin 是管道也能拿到 PTY、能交互；stdin 关掉会给命令送 EOF，所以登录期间一直开着。不加原生代码。实现时发现：macOS 的 `script` 对 stdin 做 `tcgetattr`，遇到 socket 就报「Operation not supported on socket」退出，而 Node 的 `stdio: "pipe"` 和 macOS 的 fifo 都是 socket；所以 macOS 上是 `cat <&3 | script …`（中间是真管道），`script` 结束后 `pkill -P $$ -x cat` 收掉 `cat`，不然整条命令要等 station 关 stdin 才算结束（`station/src/platform/unix.ts` `terminal`）。
 - Windows 没有 `script`，先用普通管道跑（多数 CLI 没有 TTY 时会改成打印网址、设备码，见上面的表），之后在原生插件里加 ConPTY。
-- 登录进程是 station 的子进程，station 重启就结束（登录本来就几分钟内做完，不像 agent 那样要跨重启）；重启后这次登录记为「station 重启了」。
+- 登录进程是 station 的子进程，station 重启就结束（登录本来就几分钟内做完，不像 agent 那样要跨重启）；重启后这次登录记为「station 重启了」。实现：登录只在 station 进程的内存里（结束的留 10 分钟），重启后列表里就没有它了，面板和卡片说「没有这个登录」，卡片随 agent 下一次发言或撤回处理；没有另记「station 重启了」。
 
 ### 网址和端口的解析
 
 - 网址先看 `BROWSER`/替身拿到的，再看输出里的 `https://…`；两样都有时以打开的为准（Claude Code 打印的网址回调到它自己的 https 贴码页，打开的才是回环）。
-- 回环：取网址查询参数里的 `redirect_uri`（也看 `redirect_url`、`redirect`、`callback`，以及这些参数里再套一层的网址），host 是 `localhost`、`127.0.0.1`、`[::1]` 的，取端口和路径；再看 `state`。端口为 0 或没写的不算回环。
+- 回环：取网址查询参数里的 `redirect_uri`（也看 `redirect_url`、`redirect`、`callback`，以及这些参数里再套一层的网址），host 是 `localhost`、`127.0.0.1`、`[::1]` 的，取端口和路径；再看 `state`、`response_mode=form_post`。端口为 0 或没写的不算回环。
 - 设备码：描述里有 `code` 正则就用它；否则用通用规则（`ABCD-1234` 这类，和现有 `deviceCode()` 一样，再加上「code」字样同一行的 6–10 位大写字母数字）。
 - 认不出来的网址也照样给客户端「打开」，由人判断。
 
@@ -210,7 +210,8 @@ station: 命令轮询到结果，写凭据，退出 0 → done
 | `login.command` | 登录命令；选能少问问题的参数（`--web`、`--hostname`） |
 | `login.flow` | `device`、`loopback`、`open`、`terminal`：只是提示，用来在开始前告诉人大概要做什么；实际按运行时看到的走 |
 | `login.enter` | 看到「按回车打开浏览器」的提示时替人按回车 |
-| `login.code` | 设备码的正则 |
+| `login.code` | 设备码的正则（有分组取第一个分组） |
+| `login.answers` | `[{match, text}]`：光标所在行匹配 `match` 时替人输入 `text` 再回车；`text` 为空就是只按回车，取工具自己的默认（实现时加的：gh 的「Authenticate Git with your GitHub credentials? (Y/n)」、az 登录后选订阅都靠它，不然网页版和手机上也要先打开终端答一次） |
 | `logout` | 退出命令（可选） |
 | `signedOut` | 命令失败时输出里出现这些字样，说明是没登录（给 agent 用：看到这些就该调 `login`） |
 | `env` | 额外的环境变量（如 `{"AWS_PROFILE": "dev"}`） |
@@ -231,28 +232,24 @@ station: 命令轮询到结果，写凭据，退出 0 → done
 | `POST /machine-logins` | `{service}` 或 `{command: [..]}`，可带 `stations` 由客户端各自发；要幂等 key。同一服务已有进行中的登录就回那一个 |
 | `GET /machine-logins/<id>` | 一次登录 |
 | `DELETE /machine-logins/<id>` | 取消（结束命令） |
-| `POST /machine-logins/<id>/callback` | `{method, path, headers, body?}` → 命令的回应（`{status, headers}` 头一行，然后正文，和 preview 一样流式） |
+| `POST /machine-logins/<id>/callback` | `{method, path, headers, body?}`（body 是 base64）→ 命令的回应 `{status, headers, body}`（body 是 base64，整份；回调页很小，不做流式） |
 | `POST /machine-logins/<id>/paste` | `{text}`：贴回来的 `http://localhost…` 地址当回调；别的文字写进 PTY 加回车 |
-| `POST /machine-logins/<id>/term` | 终端流：头一行带 `term: {}`，之后两边都是帧（种类 1 字节、长度 4 字节大端、内容），和 screens 的 view 同一种分帧 |
+| `POST /machine-logins/<id>/input` | `{text}` 或 `{key: "Enter" \| "Backspace" \| "Up" \| "Down" \| "Left" \| "Right" \| "Tab" \| "Ctrl-C"}`：写进终端 |
+| `GET /events?login=<id>` | 这次登录的终端（事件 `login-screen`），见上面「要输入」 |
 | `POST /machine-services` | agent 或管理员加、改服务描述（agent 走工具，不走这里也行） |
 
 ```
-Service = {id, name, installed, state: "in" | "out" | "unknown", account?, by?, at?, checkedAt?, flow, builtin}
-Login   = {id, service?, command, state, step?, url?, host?, port?, path?, code?, codeUrl?, waiting?,
-           by, chat?, startedAt, expiresAt, endedAt?, error?, account?}
+Service = {id, name, installed, state: "in" | "out" | "unknown", account?, by?, at?, checkedAt?, flow, builtin, login?}
+Login   = {id, service?, name, command, state, step?, url?, domain?, callback?: {host, port, path, state, post},
+           code?, codeUrl?, waiting, by, workspace?, chat?, startedAt, expiresAt, endedAt?, error?, timedOut?,
+           account?, before?: {account?, by?, at?}}
 state   = starting | browser | code | input | verifying | done | failed | cancelled
 step    = loopback | device | open | terminal          // 现在要人做的那一步
 ```
 
-终端帧：
+`callback.state` 给客户端核对浏览器回来的那一条；只读成员拿到的 `Login` 没有 `url`、`callback`、`code`、`codeUrl`、`error`，只看得到状态（`Logins.limited`）。
 
-| 种类 | 方向 | 内容 |
-|---|---|---|
-| 1 `screen` | station → 客户端 | JSON `{rows?: {<行号>: 文字}, cursor: {x, y}, echo: bool, full?: true}`：先整屏，之后只发改了的行 |
-| 2 `ended` | station → 客户端 | JSON `{state}` |
-| 16 `input` | 客户端 → station | JSON `{text}` 或 `{key: "Enter" \| "Backspace" \| "Up" \| "Down" \| "Left" \| "Right" \| "Tab" \| "Ctrl-C"}` |
-
-事件：station 的事件流加 `machineLogins`，带变了的 `Login` 或 `Service`（订阅时先推当前值，和别的事件一样）。
+事件：station 的事件流加 `machine-logins`（和别的事件一样用连字符），带变了的 `{login}` 或 `{service}`；只读成员收到去掉网址和码的那份。流开时 core 先 `GET /machine-logins` 读一遍，之后靠事件。
 
 能力和兼容：
 
@@ -284,7 +281,7 @@ login {action: "describe", service: {...}}               // 加/改一个服务�
 
 ### `login` 卡片
 
-- 新卡片类型 `{"type": "login", "login": "<id>", "station"?: "<id>", "assignee"?}`（`station/src/sessions/args.ts` 的 `cardArg` 加一种；`station` 是登录在别的 station 上时）。
+- 新卡片类型 `{"type": "login", "login": "<id>", "station"?: "<id>", "assignee"?}`（`station/src/sessions/args.ts` 的 `cardArg` 加一种；`station` 是登录在别的 station 上时）。登录结束时 station 把带这个 id 的卡片记进 `closed_cards`（像 agent 自己撤回，不算谁答了，也不叫醒谁：叫醒它的是那条 station 通知）。
 - 卡片里只有登录的 id。网址、设备码由客户端打开卡片时经 mesh 向 station 要，所以消息、推送、奏都不会带它们走 still.fail cloud 或 Slack。
 - 推送通知只说「需要在 studio 上登录 GitHub」。
 - Slack 里的 chat 没有卡片：agent 只贴登录链接，链接在客户端里打开。
@@ -305,7 +302,7 @@ login {action: "describe", service: {...}}               // 加/改一个服务�
 - 回环：「要在浏览器里登录 accounts.google.com。」[打开浏览器]。点了以后「等浏览器回来…」。网址的域名总是显示出来，人能看清要去哪里登录。
 - 设备码：「打开 github.com/login/device，输入」+ 大字的码 [复制] [打开]；「输完后这里会自己更新。」
 - 只要打开网址：「在浏览器里完成登录。」[打开浏览器]
-- 网页版或端口被占：「这个页面接不住登录回调。登录完浏览器会跳到一个 localhost 开头、打不开的地址，把地址栏里的整个地址粘贴到这里。」输入框 [提交]；下面小字「或者 在 station 的浏览器里登录」。
+- 网页版或端口被占：「这个页面接不住登录回调。登录完浏览器会跳到一个 localhost 开头、打不开的地址，把地址栏里的整个地址粘贴到这里。」输入框 [提交]；下面小字「或者 在 station 的浏览器里登录」。第一步网页版先只说一句「要在 still.fail 桌面 app 里打开这个登录」并显示域名；`paste` 接口已经有，面板上的贴地址放在之后。
 - 终端：一个可展开的「终端」，展开后是等宽字体的屏幕和一个输入框（密码时是密码框），一排按键：回车、↑、↓、Tab、Ctrl-C。
 - 结束：「已登录 octocat」；失败时显示命令最后几行和 [重试]；超时「超时了，没等到浏览器回来」[重试]。
 - 多台：面板上方一排 station 名字，每个带状态（等你、进行中、完成、失败），当前那台高亮；「也在其他 station 上登录」可再勾。
@@ -353,7 +350,7 @@ login {action: "describe", service: {...}}               // 加/改一个服务�
 **第一步**
 
 - station：`logins/` 模块（`script` 包的 PTY、`BROWSER` 和替身截网址、回环端口和设备码解析、回调转发和端口核对、超时取消）、接口和事件、内置描述（先 gh、gcloud、npm，其余照实验表写上）。
-- core：`machineLogins` topic、`machineLogin.start/cancel/paste/open/term/input` 调用；node host（桌面）加只听回环的监听，打开网址走现有的 `openExternal`。
+- core：`machineLogins` topic、`machineLogin.start/cancel/paste/open/term/input` 调用；node host（桌面）加只听回环的监听，打开网址走现有的 `openExternal`。实现：topic 是 `machineLogins`（一台的全部）、`machineLogin`（一次）、`machineLoginScreen`（终端，代替 `term` 调用）；调用是 `machineLogin.start/cancel/input/paste`（station 操作）和 `machineLogin.open`（core 自己的：回环的先在本机听，再回要打开的网址；`here` 是这台 station 就在本机时不听）；监听是 `Host.listen`（只有 node host 有，`canRelay`），打开网址由页面 `window.open`，桌面 app 里会交给系统浏览器（`openExternal`）。全部只在内存里，不进 core 的数据库。
 - 桌面和网页：station 页「登录」区（只放内置的几行）、登录面板（回环转发只桌面有，网页先只有设备码、打开网址、终端）。
 - agent：`login` 工具、`login` 卡片、登录结束的通知、instructions 和 migrations NOTE。
 - 验证：studio 上 dev cloud + 临时 station，临时 HOME，用 gh（设备码）、gcloud（回环 8085）、npm（只打开网址）各走通一次；回环转发（GET 和 form_post 的 POST、只听 `[::1]` 和只听 127.0.0.1 的两种）、端口被占、state 不对、命令已退出时的拒绝写确定性测试（假的登录命令 + 本机 HTTP 服务）。
