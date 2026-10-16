@@ -244,6 +244,11 @@ fun VizFrame(html: String, state: JsonElement? = null, fill: Boolean = false, mo
                 // bars (Haze), which draw it a second time, clipped to the bar; drawn so, the page dropped the rest and
                 // showed blank for a frame each time the bars were drawn again (a caret blinking, an agent at work).
                 settings.offscreenPreRaster = true
+                // Drawn once a frame, into a layer of its own, which the list and each pane of glass over it then draw: the
+                // system WebView (154 at least) ends the app when one WebView is drawn four times before the frame is sent
+                // (its queue of draws grows and drops one, CHECK(state.draw_context) in aw_vulkan_context_provider.cc),
+                // and a tall page under the bar, the composer and the bottom bar's glass and ball is.
+                setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
                 isVerticalScrollBarEnabled = fill
                 isHorizontalScrollBarEnabled = false
                 overScrollMode = WebView.OVER_SCROLL_NEVER
