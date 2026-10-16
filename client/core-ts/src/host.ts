@@ -135,14 +135,6 @@ export interface Host {
   /// page's, whose code the cloud serves. Only such a host keeps a key that signs for the workspace lock (lock.ts).
   appKeys?: boolean;
 
-  /// Values kept by the system's secure storage (docs/vault.md: Android Keystore, the macOS keychain, Electron
-  /// `safeStorage`): the vault's box key, the lock's signing key. `user`: reading it asks the person (biometrics or the
-  /// screen lock), saying `reason`; a read the person turned down fails. Only an app's host has them: a web page's has
-  /// none, and the vault is refused there.
-  secureGet?(key: string, opts: { user: boolean; reason?: string }): Effect.Effect<Uint8Array | null, HostError>;
-  secureSet?(key: string, value: Uint8Array, opts: { user: boolean }): Effect.Effect<void, HostError>;
-  secureDelete?(key: string): Effect.Effect<void, HostError>;
-
   /// Delivers a message to one connected UI.
   emit(client: ClientId, message: CoreMessage): void;
 
