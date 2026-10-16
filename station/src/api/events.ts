@@ -128,6 +128,12 @@ export class Events {
     for (const lang of new Set(this.clients.map((c) => c.lang))) this.emit("screens", listed(lang), (c) => c.lang === lang, `screens\0${lang}`);
   }
 
+  /// A record changed that only some viewers see (a vault's, routes/vault.ts): `data` told to the streams of viewers
+  /// `to` takes, the latest under `of` kept for one coming back.
+  tell(event: string, data: unknown, of: string, to: (viewer: Viewer) => boolean) {
+    this.emit(event, data, (c) => to(c.viewer), of);
+  }
+
   /// Something the overview shows changed (config, accounts, connects, cloud, updates).
   overviewChanged() {
     this.dirty.overview = true;

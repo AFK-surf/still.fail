@@ -21,6 +21,8 @@ import { routes as deviceTools } from "./routes/tools.ts";
 import { routes as links } from "./routes/links.ts";
 import { routes as drive } from "./routes/drive.ts";
 import { routes as workspaces } from "./routes/workspaces.ts";
+import { routes as vault } from "./routes/vault.ts";
+import { vaultStore } from "../vault/store.ts";
 import { Drive } from "../drive/drive.ts";
 import { ownPaths } from "../ops/own.ts";
 import type { AgentsParts } from "../sessions/agents.ts";
@@ -121,6 +123,14 @@ export class Admin {
         : []),
       ...(deps.agents?.config ? deviceTools({ config: deps.agents.config, changed: () => deps.events?.overviewChanged() }) : []),
       ...(deps.agents?.cloud ? workspaces({ cloud: deps.agents.cloud, data: deps.agents.config.data, changed: () => deps.events?.overviewChanged() }) : []),
+      // The vaults (docs/vault.md), by the lock pinned in the asker's workspace.
+      ...(deps.agents?.cloud && deps.store
+        ? vault({
+            vaults: vaultStore(deps.store.db),
+            lock: (ws) => deps.agents!.cloud.locked(ws === deps.agents!.cloud.home() ? null : ws)?.state ?? null,
+            events: deps.events,
+          })
+        : []),
       ...(deps.agents?.config
         ? drive({
             config: deps.agents.config,
