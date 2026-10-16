@@ -282,7 +282,7 @@ class DriveTest {
         DriveCache.clear(InstrumentationRegistry.getInstrumentation().targetContext)
         // The folder as the station has it now: each file's size and time as `drive.read` says them.
         val kinds = mapOf("三体.txt" to "text", "E01.mp4" to "video", "E01.srt" to "subtitle")
-        val exact = DriveFolder(path = "", folders = 0, files = kinds.size, countText = "${kinds.size} 个文件", entries = kinds.map { (name, kind) -> entry(name, kind, files[name]!!.size.toLong()) })
+        val exact = DriveFolder(path = "", folders = 0, files = kinds.size.toLong(), countText = "${kinds.size} 个文件", entries = kinds.map { (name, kind) -> entry(name, kind, files[name]!!.size.toLong()) })
         val h = launch(listOf(Screen.Stations, Screen.Station(st), Screen.Drive(st, books, "")), false, folder = exact)
         val reads = java.util.concurrent.atomic.AtomicInteger()
         h.fake.answer = { name, p -> if (name == "drive.read") reads.incrementAndGet(); answer(name, p) }
