@@ -216,7 +216,10 @@ async function main() {
     }
     check(JSON.stringify(listed.json.entries.map((e: any) => e.name)) === JSON.stringify(["big.bin", "hello.txt"]), `listed ${FOLDER}: ${listed.json.entries.map((e: any) => `${e.name} ${e.size}`).join(", ")}`);
     const pinned = await ask(conn, "PUT", "/drive/roots", {}, { roots: [mine] });
-    check(pinned.status === 200 && pinned.json?.roots?.[0]?.state === "ok", `pinned, its state: ${pinned.status} ${pinned.json?.roots?.[0]?.state ?? pinned.json?.error}`);
+    check(pinned.status === 200, `pinned: ${pinned.status} ${pinned.json?.roots?.[0]?.state ?? pinned.json?.error}`);
+    // Its state is the helper's grant, looked at in the background the first time (the roots told again once known).
+    const state = await until(async () => ((await ask(conn, "GET", "/drive")).json.roots[0]?.state === "ok" ? "ok" : null), "the pinned folder ok", 50).catch(() => "unreadable");
+    check(state === "ok", `the pinned folder's state: ${state}`);
     const hello = await ask(conn, "GET", "/drive/read", { root: mine, path: "hello.txt" });
     check(hello.status === 200 && hello.body.toString() === "hello from Documents\n", `read hello.txt: ${JSON.stringify(hello.body.toString())}`);
     const t0 = performance.now();
