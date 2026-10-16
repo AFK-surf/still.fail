@@ -107,6 +107,15 @@ export class HelperFiles {
     return true;
   }
 
+  /// A request done at `path`: the grant of the protected folder it is in is given.
+  #confirm(path: string) {
+    const lower = path.toLowerCase();
+    for (const [top, grant] of this.#grantOf) {
+      const t = top.toLowerCase();
+      if ((lower === t || lower.startsWith(`${t}/`)) && this.#learn(grant, "granted")) this.#changed();
+    }
+  }
+
   #again() {
     if (this.#grantOf.size > 0) void this.#look([...this.#grantOf.keys()]);
   }
@@ -149,7 +158,11 @@ export class HelperFiles {
   async #learning<T>(op: Record<string, unknown>, ask: () => Promise<T>): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       try {
-        return await ask();
+        const answer = await ask();
+        // Done in a protected folder: its grant is there (its roots told so at once, not only when the window says).
+        const path = typeof op.path === "string" ? op.path : typeof op.from === "string" ? op.from : null;
+        if (path !== null) this.#confirm(path);
+        return answer;
       } catch (e) {
         const r = e as Refusal;
         if (r.code === "restart" && attempt === 0 && typeof r.pid === "number") {
