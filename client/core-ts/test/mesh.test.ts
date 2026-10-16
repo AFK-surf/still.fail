@@ -236,6 +236,8 @@ sim("a_station_in_two_workspaces_has_a_link_in_each_with_its_own_credential", as
   const linkA = await s.run(mesh.link(a, grants("ok-a", countA)));
   const linkB = await s.run(mesh.link(b, grants("ok-b", countB)));
   assert.notEqual(linkA, linkB);
+  // Handed out as its credential is sent: the station reads it a moment later.
+  await s.until(() => station.firsts.length === 2);
   assert.deepEqual(station.firsts, ["ok-a-1", "ok-b-1"]);
   // Each asked again keeps its own.
   assert.equal(await s.run(mesh.link(a, grants("ok-a", countA))), linkA);
@@ -254,6 +256,7 @@ sim("a_station_in_two_workspaces_has_a_link_in_each_with_its_own_credential", as
   // Asked again: opened anew with its own.
   const again = await s.run(mesh.link(a, grants("ok-a", countA)));
   assert.notEqual(again, linkA);
+  await s.until(() => station.firsts.length === 3);
   assert.equal(station.firsts.at(-1), "ok-a-3");
   assert.equal(mesh.current(b), linkB);
   await close(s, station, mesh);

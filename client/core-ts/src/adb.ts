@@ -261,7 +261,7 @@ export class Adb {
         }
         return { lost: link.closed() ?? t("core-misc.adb.link_lost"), pause: true } as Ended;
       });
-      const replaced = Effect.as(mesh.replaced(StationAddr.parse(offer.station).station, link), { lost: null, pause: false } as Ended);
+      const replaced = Effect.as(mesh.replaced(StationAddr.parse(offer.station).toString(), link), { lost: null, pause: false } as Ended);
       const stopped = Effect.as(Deferred.await(changed), { changed: true } as Ended);
       const left = Math.max(this.#until - this.#env.host.nowMs(), 0);
       const expired = Effect.as(Effect.sleep(left), { expired: true } as Ended);
