@@ -20,12 +20,21 @@ agent ─ adb ─ 127.0.0.1:<port> on the station ─ stream on the phone's link
 - **Its ports** are random: the app finds them by DNS-SD on the device
   (`_adb-tls-connect._tcp`, `_adb-tls-pairing._tcp` while the pairing dialog is
   open) and gives them to the core (`adb.share`).
-- **Pairing**, once per station: the person opens 使用配对码配对设备 and types
-  the six digits into the notification that pops up over it (heads-up, channel
-  `adb-pair`, posted while the pairing port is announced): Settings closes the
-  dialog as soon as it is paused, so the code can't be typed in the app unless
-  the screen is split. The station runs `adb pair` through the pairing port
-  (`adb.pair`).
+- **Pairing**, once per station: the person opens 使用配对码配对设备 and the
+  app reads the six digits off the dialog itself (`AdbCodeReader`, an
+  accessibility service the person turns on from 自动填配对码 on the 共享调试
+  page). Settings closes the dialog as soon as it is paused, a field over it
+  (the notification's) hides the code under the keyboard, and Settings hides
+  other apps' windows over it (`HIDE_NON_SYSTEM_OVERLAY_WINDOWS`), so reading
+  it is what is left. The service hears only Settings, looks only while a
+  pairing port is announced for this app's share, takes six digits only from
+  the window that also shows that port (`IP:port`), and tries once per dialog;
+  the code goes nowhere but `adb.pair`. Without it the code is typed into the
+  notification that pops up over the dialog (heads-up, channel `adb-pair`;
+  some phones don't pop it up, and it hides the code), or into the app with
+  the screen split. On Android 13 and later an app installed outside a store
+  can't have an accessibility service turned on until 允许受限设置 in its app
+  info. The station runs `adb pair` through the pairing port (`adb.pair`).
 - **While it is shared** a foreground service holds the app up and says so in a
   notification, with 停止. Sharing ends after an hour, when it is stopped, or when
   the app goes; nothing is kept for a next run.

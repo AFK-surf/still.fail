@@ -91,6 +91,33 @@ android {
     }
 }
 
+// What Android shows of the app outside it (AdbCodeReader's description in Accessibility's settings) is a resource, not
+// the catalog the app reads its words from: written from the catalog (client/i18n) for each language, English the
+// default as for any locale not Chinese (data/I18n.kt). `words`: a resource's name, the catalog's key.
+abstract class SystemWords : DefaultTask() {
+    @get:InputDirectory abstract val catalog: DirectoryProperty
+    @get:Input abstract val words: MapProperty<String, String>
+    @get:OutputDirectory abstract val out: DirectoryProperty
+
+    @TaskAction fun write() {
+        // As aapt reads a string: XML's escapes, and its own for quotes and backslashes.
+        fun escape(text: String) = text.replace("\\", "\\\\").replace("&", "&amp;").replace("<", "&lt;").replace("'", "\\'").replace("\"", "\\\"")
+        for ((lang, dir) in listOf("en" to "values", "zh" to "values-zh")) {
+            val all = catalog.get().asFile.resolve(lang).listFiles { f -> f.extension == "json" }.orEmpty()
+                .flatMap { (groovy.json.JsonSlurper().parse(it) as Map<*, *>).entries }.associate { it.key as String to it.value }
+            val lines = words.get().entries.joinToString("\n") { (name, key) -> "    <string name=\"$name\">${escape(all[key] as String)}</string>" }
+            out.get().asFile.resolve(dir).apply { mkdirs() }.resolve("strings.xml").writeText("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources>\n$lines\n</resources>\n")
+        }
+    }
+}
+
+val systemWords = tasks.register<SystemWords>("systemWords") {
+    catalog.set(rootProject.file("../../client/i18n/catalog"))
+    words.put("adb_reader_about", "android-misc.adb.reader.about")
+    out.set(layout.buildDirectory.dir("generated/systemWords"))
+}
+androidComponents { onVariants { it.sources.res?.addGeneratedSourceDirectory(systemWords, SystemWords::out) } }
+
 dependencies {
     testImplementation(libs.junit)
     implementation(project(":core"))

@@ -78,6 +78,17 @@
         <service android:name=".AdbShareService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Lends this phone's own adb (Wireless debugging) to the user's coding agents over the app's connection, while the user shares it." />
         </service>
+        <!-- Reads the Wireless debugging pairing dialog's code off Settings while 共享调试 pairs (AdbCodeReader.kt), once the
+             person turns it on in Accessibility; only the system binds it. -->
+        <service
+            android:name=".AdbCodeReader"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/adb_code_reader" />
+        </service>
         <!-- FCM's pushes (Push.kt). Firebase is set up by hand from BuildConfig (no google-services.json): its own
              start-up provider is taken out, and no token is made before Push.sync asks for one. -->
         <service android:name=".PushService" android:exported="false">

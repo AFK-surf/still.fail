@@ -188,18 +188,34 @@ private fun Need(title: String, ok: Boolean, value: String) {
     }
 }
 
-/** The first time with a station: its adb pairs with the phone through the pairing dialog's code. */
+/**
+ * The first time with a station: its adb pairs with the phone through the pairing dialog's code, read off the dialog
+ * where the person turned that on (AdbCodeReader, asked for here), else typed into the notification or, split, here.
+ */
 @Composable
 private fun Pairing(view: AdbShareView) {
     val app = LocalApp.current
     val context = LocalContext.current
     val busy = app.isDoing("adb.pair")
+    // Back from Accessibility's settings.
+    var reads by remember { mutableStateOf(AdbShare.reads(context)) }
+    LifecycleResumeEffect(Unit) {
+        reads = AdbShare.reads(context)
+        onPauseOrDispose {}
+    }
     SectionHeader(t("android-misc.adb.pair.title"), start = 24.dp)
     ListCard {
+        ListRow(onClick = { AdbShare.openReader(context) }) {
+            Column(Modifier.weight(1f)) {
+                Text(t("android-misc.adb.reader.title"), fontSize = 15.sp, color = C.ink)
+                Text(t("android-misc.adb.reader.note"), fontSize = 13.sp, color = C.muted)
+            }
+            Text(if (reads) t("android-misc.adb.on") else t("android-misc.adb.reader.turnOn"), fontSize = 14.sp, color = if (reads) C.muted else C.accent)
+        }
         ListRow(onClick = { AdbShare.openWireless(context, beside = true) }) {
             Column(Modifier.weight(1f)) {
                 Text(t("android-misc.adb.pair.open"), fontSize = 15.sp, color = C.ink)
-                Text(t("android-misc.adb.pair.open.note"), fontSize = 13.sp, color = C.muted)
+                Text(if (reads) t("android-misc.adb.pair.open.auto") else t("android-misc.adb.pair.open.note"), fontSize = 13.sp, color = C.muted)
             }
             Text(t("android-misc.adb.pair.go"), fontSize = 14.sp, color = C.accent)
         }

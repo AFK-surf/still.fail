@@ -1,8 +1,9 @@
 // This phone's adb, lent to a station's agents (docs/adb-share.md): Wireless debugging's ports found on the phone
 // (DNS-SD) and given to the core (`adb.share`), which offers them to the station and carries what its agents' adb sends
 // (client/core-ts/src/adb.ts). A foreground service holds the app up meanwhile and says so, with 停止. While the pairing
-// dialog is open a second notification pops up over it with a field for its code: the dialog closes as soon as Settings
-// is paused (left for the app, another app), so the code can only be typed somewhere that leaves Settings in front.
+// dialog is open its code is read off it (AdbCodeReader.kt, where the person turned that on), else a second notification
+// pops up over it with a field for the code: the dialog closes as soon as Settings is paused (left for the app, another
+// app), so the code can only be typed somewhere that leaves Settings in front.
 package fail.still.android
 
 import android.Manifest
@@ -12,6 +13,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.RemoteInput
 import android.app.Service
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -21,6 +23,7 @@ import android.net.NetworkCapabilities
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -52,6 +55,8 @@ object AdbShare {
     internal const val START = "fail.still.android.adb.START"
     internal const val STOP = "fail.still.android.adb.STOP"
     internal const val PAIR = "fail.still.android.adb.PAIR"
+    internal const val READ = "fail.still.android.adb.READ"
+    internal const val PORT = "port"
     private const val CHANNEL = "adb"
     /** The pairing code's: heads-up, so its field shows over Settings without the shade pulled down. */
     private const val PAIR_CHANNEL = "adb-pair"
@@ -97,7 +102,7 @@ object AdbShare {
         manager.createNotificationChannel(NotificationChannel(CHANNEL, t("android-misc.adb.title"), NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val stop = PendingIntent.getService(context, 1, Intent(context, AdbShareService::class.java).setAction(STOP), PendingIntent.FLAG_IMMUTABLE)
-        val text = said ?: line(view)
+        val text = said ?: line(context, view)
         val builder = Notification.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setColor(0xFFE5704A.toInt())
@@ -114,6 +119,30 @@ object AdbShare {
     /** Whether the pairing dialog is open (its port is announced) and its code still wanted. */
     fun pairing(view: AdbShareView?) = view?.pairPort != null && view.adb != "connected"
 
+    /** The pairing port announced for this app's share while its code is wanted (AdbShareService says): what AdbCodeReader reads for. */
+    val pairingPort = MutableStateFlow<UInt?>(null)
+
+    /** Whether the person turned on AdbCodeReader (Accessibility), which fills the pairing code in by itself. */
+    fun reads(context: Context): Boolean {
+        val on = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
+        val reader = ComponentName(context, AdbCodeReader::class.java)
+        return on.split(':').any { ComponentName.unflattenFromString(it) == reader }
+    }
+
+    /** Accessibility's settings, at AdbCodeReader's row where Settings lights it up. */
+    fun openReader(context: Context) {
+        val reader = ComponentName(context, AdbCodeReader::class.java).flattenToString()
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra(":settings:fragment_args_key", reader)
+            .putExtra(":settings:show_fragment_args", Bundle().apply { putString(":settings:fragment_args_key", reader) })
+        runCatching { context.startActivity(intent) }.onFailure { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    /** The code AdbCodeReader read off the dialog at `port`, to pair with (AdbShareService, once per dialog). */
+    internal fun read(context: Context, code: String, port: UInt) {
+        runCatching { context.startService(Intent(context, AdbShareService::class.java).setAction(READ).putExtra(CODE, code).putExtra(PORT, port.toInt())) }
+    }
+
     /**
      * The field for the pairing dialog's code, popping up over it (Settings stays in front, so the dialog stays open):
      * `said` in place of the ask, while a code typed is tried or after it failed.
@@ -127,7 +156,7 @@ object AdbShare {
             .setSmallIcon(R.drawable.ic_notification)
             .setColor(0xFFE5704A.toInt())
             .setContentTitle(t("android-misc.adb.pair.ask"))
-            .setContentText(said ?: t("android-misc.adb.typeCode"))
+            .setContentText(said ?: if (reads(context)) t("android-misc.adb.pair.auto") else t("android-misc.adb.typeCode"))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setCategory(Notification.CATEGORY_MESSAGE)
@@ -136,10 +165,10 @@ object AdbShare {
     }
 
     /** How it stands, in a line. */
-    fun line(view: AdbShareView?): String = when {
+    fun line(context: Context, view: AdbShareView?): String = when {
         view == null || view.phase == "connecting" -> view?.message ?: t("android-misc.adb.connecting")
         view.adb == "connected" -> view.until?.let { t("android-misc.adb.connected.left", "n" to minutesLeft(it)) } ?: t("android-misc.adb.connected")
-        view.adb == "unpaired" -> if (view.pairPort != null) t("android-misc.adb.pair.popped") else t("android-misc.adb.notPaired")
+        view.adb == "unpaired" -> if (view.pairPort == null) t("android-misc.adb.notPaired") else if (reads(context)) t("android-misc.adb.pair.auto") else t("android-misc.adb.pair.popped")
         view.adb == "off" -> t("android-misc.adb.off")
         else -> view.message ?: t("android-misc.adb.attaching")
     }
@@ -149,8 +178,9 @@ object AdbShare {
 
 /**
  * Holds the app up while the phone is lent (a foreground service): finds Wireless debugging's ports and tells the core
- * each time they change, says in its notification how it stands, takes the pairing code typed there, and ends when the
- * core's `adbShare` says the phone is lent no longer (stopped, its hour up, the station too old).
+ * each time they change, says in its notification how it stands, takes the pairing code typed there (or read off the
+ * dialog, AdbCodeReader), and ends when the core's `adbShare` says the phone is lent no longer (stopped, its hour up, the
+ * station too old).
  */
 class AdbShareService : Service() {
     private val scope = MainScope()
@@ -164,6 +194,8 @@ class AdbShareService : Service() {
     private var pairNote: String? = null
     /** The pairing port its notification popped up for: a dialog opened again pops it up again. */
     private var pairShown: UInt? = null
+    /** The pairing port whose code was read off its dialog and tried: not again for that dialog, whatever came of it. */
+    private var read: UInt? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -180,23 +212,34 @@ class AdbShareService : Service() {
             AdbShare.STOP -> scope.launch {
                 try { core().call("adb.stop") } catch (_: CoreException) { stopSelf() }
             }
-            AdbShare.PAIR -> {
-                val code = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(AdbShare.CODE)?.toString().orEmpty()
-                // Said back at once: the notification's field waits (spinning) until it is posted again.
-                pairNote = t("android-misc.adb.pairing")
-                say()
-                scope.launch {
-                    pairNote = try {
-                        core().call("adb.pair", buildJsonObject { put("code", code.filter(Char::isDigit)) })
-                        t("android-misc.adb.paired")
-                    } catch (e: CoreException) {
-                        t("android-misc.adb.pairFailed", "error" to errorText(e))
-                    }
-                    say()
+            AdbShare.PAIR -> pair(RemoteInput.getResultsFromIntent(intent)?.getCharSequence(AdbShare.CODE)?.toString().orEmpty())
+            AdbShare.READ -> {
+                // Only for the dialog open now, once.
+                val port = intent.getIntExtra(AdbShare.PORT, -1).takeIf { it >= 0 }?.toUInt()
+                val code = intent.getStringExtra(AdbShare.CODE)
+                if (code != null && port != null && AdbShare.pairing(view) && view?.pairPort == port && read != port) {
+                    read = port
+                    pair(code)
                 }
             }
         }
         return START_NOT_STICKY
+    }
+
+    /** Pairs with the code typed in the notification or read off the dialog, saying how it goes in the notification. */
+    private fun pair(code: String) {
+        // Said back at once: the notification's field waits (spinning) until it is posted again.
+        pairNote = t("android-misc.adb.pairing")
+        say()
+        scope.launch {
+            pairNote = try {
+                core().call("adb.pair", buildJsonObject { put("code", code.filter(Char::isDigit)) })
+                t("android-misc.adb.paired")
+            } catch (e: CoreException) {
+                t("android-misc.adb.pairFailed", "error" to errorText(e))
+            }
+            say()
+        }
     }
 
     private suspend fun core() = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN, BuildConfig.BETA)
@@ -206,6 +249,7 @@ class AdbShareService : Service() {
         val manager = getSystemService(NotificationManager::class.java)
         manager.notify(AdbShare.ID, AdbShare.notification(this, view, name, note))
         val port = view?.pairPort
+        AdbShare.pairingPort.value = port?.takeIf { AdbShare.pairing(view) }
         if (AdbShare.pairing(view)) {
             // Another dialog: popped up afresh (only once per dialog, not as the minutes go).
             if (pairShown != port) { manager.cancel(AdbShare.PAIR_ID); pairNote = null }
@@ -254,6 +298,7 @@ class AdbShareService : Service() {
                 if (value.adb == "connected") { note = null; pairNote = null }
                 if (value.sharing && value.station == station) lent = true
                 if (lent && (!value.sharing || value.station != station)) {
+                    AdbShare.pairingPort.value = null
                     if (value.station == null) stopSelf()
                     return@collect
                 }
@@ -264,6 +309,7 @@ class AdbShareService : Service() {
 
     override fun onDestroy() {
         getSystemService(NotificationManager::class.java).cancel(AdbShare.PAIR_ID)
+        AdbShare.pairingPort.value = null
         ports?.stop()
         scope.cancel()
         // Gone with the service, whatever ended it.
