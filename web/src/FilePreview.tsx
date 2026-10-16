@@ -7,7 +7,7 @@ import { createContext, type ComponentType, useCallback, useContext, useEffect, 
 import { BIG_FILE, useApi, type Api, type Attachment, type FileProgress } from "./api.ts";
 import { useTopic, useTopicSelect } from "./core/react.ts";
 import { useNarrow } from "./mobile/narrow.ts";
-import { useBarOnScroll, ViewerBar, ViewerDownload } from "./viewer/ViewerBar.tsx";
+import { useBarOnScroll, ViewerBar, ViewerDownload } from "@stillfail/ui/viewer/ViewerBar.tsx";
 import type { ChatView, DriveEntry, ImageNear } from "./core/shapes.ts";
 import { Check, ChevronLeft, ChevronRight, Close, Copy, Download, File as FileMark, Minus, Plus } from "@stillfail/ui/icons.tsx";
 import { Prose } from "./Prose.tsx";
@@ -32,11 +32,14 @@ import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
 export { fileSize };
+import { REST_MS, TAP_REST_MS } from "@stillfail/ui/viewer/rest.ts";
+import { blobFile } from "@stillfail/ui/viewer/file.ts";
+import type { Reader as ReaderOf } from "@stillfail/ui/viewer/Reader.tsx";
+import type { Player as PlayerOf } from "@stillfail/ui/viewer/Player.tsx";
 
-/** The bars over a file (and a video's controls) fade out after the pointer has rested this long. */
-export const REST_MS = 2000;
-/** A finger has no hover to keep them: they stay longer after a tap. */
-export const TAP_REST_MS = 4000;
+/** The bars over a file (and a video's controls) fade out after the pointer has rested this long; after a tap, longer
+ * (a finger has no hover to keep them): @stillfail/ui's viewers' own. */
+export { REST_MS, TAP_REST_MS };
 
 // ── what a file is ─────────────────────────────────────────────────────
 
@@ -297,14 +300,11 @@ export type GalleryOf = { chat: { thread: number } | { session: string } } | { l
 export const Gallery = createContext<GalleryOf | null>(null);
 
 /**
- * The reader and the player a text and a video open in (drive/Reader.tsx, drive/Player.tsx), as the app has them: told
- * here by the app as it starts (main.tsx), not imported, so a page with no core (a published chat's, share/) keeps
- * its own plain viewers and none of what they need.
+ * The reader and the player a text and a video open in (@stillfail/ui viewer/Reader.tsx, viewer/Player.tsx), as the
+ * app has them: told here by the app as it starts (viewer/whole.ts, with what they ask of the page), not imported, so
+ * a page that tells none (a published chat's, share/) keeps its own plain viewers.
  */
-type Whole = {
-  Reader: ComponentType<{ blob: Blob; onSave?: (() => void) | undefined; name: string; size: number; mtime: number; markdown: boolean; backLabel: string; onBack: () => void }>;
-  Player: ComponentType<{ blob: Blob; onSave?: (() => void) | undefined; entry: DriveEntry; backLabel: string; onBack: () => void }>;
-};
+type Whole = { Reader: typeof ReaderOf; Player: typeof PlayerOf };
 let whole: Whole | null = null;
 export const setWholeViewers = (viewers: Whole) => { whole = viewers; };
 
@@ -567,14 +567,15 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
   }
   // A text and a video open in the reader and the player, as a station's file does (drive/Reader.tsx, drive/Player.tsx):
   // one viewer of each kind wherever a file is opened, each with the same bar; here they read what this has fetched.
-  const saveShown = loaded.state === "ready" ? () => save(loaded) : undefined;
+  const saveShown = useRef<(() => void) | undefined>(undefined);
+  saveShown.current = loaded.state === "ready" ? () => save(loaded) : undefined;
+  const shownFile = useMemo(() => blob && blobFile(blob, { name: file.name, size: file.size, type: blob.type, kind: kind ?? "" }, () => saveShown.current?.()), [blob, file.name, file.size, kind]);
   const Reader = whole?.Reader, Player = whole?.Player;
-  const viewer = loaded.state !== "ready" ? null
+  const viewer = loaded.state !== "ready" || !shownFile ? null
     : (kind === "markdown" || kind === "text") && Reader
-      ? <Reader key={file.path} blob={loaded.blob} onSave={saveShown} name={file.name} size={file.size} mtime={0} markdown={kind === "markdown"} backLabel={backLabel} onBack={onClose} />
+      ? <Reader key={file.path} file={shownFile} markdown={kind === "markdown"} backLabel={backLabel} onBack={onClose} />
       : (kind === "video" || kind === "audio") && Player
-        ? <Player key={file.path} blob={loaded.blob} onSave={saveShown} backLabel={backLabel} onBack={onClose}
-          entry={{ name: file.name, size: file.size, mtime: 0, dir: false, type: loaded.blob.type, kind, sizeText: fileSize(file.size), timeText: "" } as DriveEntry} />
+        ? <Player key={file.path} file={shownFile} backLabel={backLabel} onBack={onClose} />
         : null;
   if (viewer) {
     return (

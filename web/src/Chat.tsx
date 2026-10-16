@@ -58,7 +58,7 @@ import { AgentHover, ChatAgentKeys, ChatAgents } from "./AgentCard.tsx";
 import * as decisionsCss from "./Decisions.css.ts";
 import { useDoing } from "./doing.ts";
 import { useChatFind } from "./ChatFind.tsx";
-import { placeStrokes, strokeLayer } from "./strokes.ts";
+import { placeStrokes, strokeLayer } from "@stillfail/ui/strokes.ts";
 import { jumped, jumpTo, jumpWords, useJump } from "./jumpTo.ts";
 import { t } from "./i18n.ts";
 import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";

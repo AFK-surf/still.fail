@@ -1,5 +1,5 @@
-// A video or a song of the drive, played as it comes (stream.ts: the page's service worker answers the player's ranges
-// from `drive.read`), never fetched whole first: it starts at once and seeks anywhere. Its controls are still.fail's
+// A video or a song of the drive, played as it comes (file.ts `stream`: the app's page has its service worker answer
+// the player's ranges from `drive.read`), never fetched whole first: it starts at once and seeks anywhere. Its controls are still.fail's
 // media controls (the chat's VideoViewer): floating frosted glass that fades when the pointer rests (a tap brings them
 // back on a phone), a timeline drawn here, not the browser's. And zdrive's: speed, a subtitle beside it (E01.srt for
 // E01.mp4, E01.zh.srt; SubRip and ASS turned into WebVTT for the <track>), the folder's others as a playlist (the next
@@ -10,20 +10,20 @@
 // Where no service worker runs the page, a file of up to 200 MB is read whole first instead (its progress shown);
 // a bigger one says it cannot be played here and offers the download.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { DriveEntry } from "../core/shapes.ts";
-import { Back15, Captions, Check, ChevronLeft, Close, Download, Expand, FileAudio, Forward15, List, Pause, Play, Shrink, SkipBack, SkipForward, Volume, VolumeX } from "@stillfail/ui/icons.tsx";
-import { useNarrow } from "../mobile/app.tsx";
-import { Tip } from "../ui.tsx";
-import { REST_MS, TAP_REST_MS } from "../FilePreview.tsx";
-import * as vvCss from "../VideoViewer.css.ts";
-import { compareNatural, download, joinPath, parentOf, placeAt, readKept, readWhole, sideSubtitle, sizeOf, usePlace, type At, type Got } from "./model.ts";
-import { streaming, streamUrl } from "./stream.ts";
-import { ViewerBar, ViewerDownload, ViewerTool } from "../viewer/ViewerBar.tsx";
+import { Back15, Captions, Check, ChevronLeft, Close, Download, Expand, FileAudio, Forward15, List, Pause, Play, Shrink, SkipBack, SkipForward, Volume, VolumeX } from "../icons.tsx";
+import { Tip } from "../parts.tsx";
+import { fileSize as sizeOf } from "../fileSize.ts";
+import { t } from "../i18n.ts";
+import * as pageCss from "../styles/page.css.ts";
+import { viewerHost } from "./host.ts";
+import type { Got, ViewerEntry, ViewerFile } from "./file.ts";
+import { compareNatural, sideSubtitle } from "./names.ts";
+import { REST_MS, TAP_REST_MS } from "./rest.ts";
+import * as vvCss from "./media.css.ts";
+import { ViewerBar, ViewerDownload, ViewerTool } from "./ViewerBar.tsx";
 import { decodeText } from "./text.ts";
 import { toVtt } from "./subtitles.ts";
 import * as css from "./Player.css.ts";
-import { t } from "../i18n.ts";
-import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
 /** Without a stream, the most read whole to be played. */
 const WHOLE_MAX = 200 * 1024 * 1024;
@@ -43,26 +43,27 @@ function clock(seconds: number): string {
 const AHEAD_S = 30;
 const AHEAD_BYTES = 4 * 1024 * 1024;
 
-function useSource(at: At | undefined, blob: Blob | undefined, entry: DriveEntry, media: React.RefObject<HTMLVideoElement | null>): Source {
+function useSource(file: ViewerFile, media: React.RefObject<HTMLVideoElement | null>): Source {
+  const { blob, stream } = file;
   const [source, setSource] = useState<Source>({ state: "opening", got: null });
   useEffect(() => {
     let live = true;
     let close: (() => void) | null = null;
     let url: string | null = null;
     // Here already (a chat's file a preview has fetched): played from here.
-    if (blob || !at) {
-      if (blob) { url = URL.createObjectURL(blob); setSource({ state: "ready", url, streamed: false }); }
+    if (blob) {
+      url = URL.createObjectURL(blob);
+      setSource({ state: "ready", url, streamed: false });
       return () => { if (url) URL.revokeObjectURL(url); };
     }
     setSource({ state: "opening", got: null });
-    const type = entry.type || (entry.kind === "audio" ? "audio/mpeg" : "video/mp4");
-    void streaming().then(async (on) => {
-      if (!live) return;
+    const type = file.type || (file.kind === "audio" ? "audio/mpeg" : "video/mp4");
+    void (async () => {
       // Read about what is played soon, not as far as the browser would buffer (by the file's bytes a second).
-      const s = on ? await streamUrl(at, entry.size, type, () => {
+      const s = stream ? await stream(type, () => {
         const v = media.current;
         if (!v || !Number.isFinite(v.duration) || v.duration <= 0) return null;
-        return ((v.currentTime + AHEAD_S) / v.duration) * entry.size + AHEAD_BYTES;
+        return ((v.currentTime + AHEAD_S) / v.duration) * file.size + AHEAD_BYTES;
       }).catch(() => null) : null;
       if (s && !live) { s.close(); return; }
       if (!live) return;
@@ -71,58 +72,57 @@ function useSource(at: At | undefined, blob: Blob | undefined, entry: DriveEntry
         setSource({ state: "ready", url: s.url, streamed: true });
         return;
       }
-      if (entry.size > WHOLE_MAX) {
+      if (file.size > WHOLE_MAX) {
         setSource({ state: "error", message: t("web-pages.drive.player.noStream", { size: sizeOf(WHOLE_MAX) }), save: true });
         return;
       }
-      readWhole(at, entry.size, { type, onProgress: (got) => { if (live) setSource({ state: "opening", got }); } }).then((blob) => {
+      file.read({ type, onProgress: (got) => { if (live) setSource({ state: "opening", got }); } }).then((blob) => {
         if (!live) return;
         url = URL.createObjectURL(blob);
         setSource({ state: "ready", url, streamed: false });
       }, (e: unknown) => { if (live) setSource({ state: "error", message: e instanceof Error ? e.message : String(e) }); });
-    });
+    })();
     return () => { live = false; close?.(); if (url) URL.revokeObjectURL(url); };
-  }, [blob, at?.station, at?.root, at?.path, entry.size, entry.mtime]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [file.blob ?? file.key ?? file, file.size, file.mtime]); // eslint-disable-line react-hooks/exhaustive-deps
   return source;
 }
 
 /** The subtitle beside it, as a WebVTT file's URL (none: null). */
-function useSubtitle(at: At | undefined, entry: DriveEntry, siblings: readonly DriveEntry[]): { url: string; name: string } | null {
-  const name = useMemo(() => sideSubtitle(entry.name, siblings.filter((e) => !e.dir).map((e) => e.name)), [entry.name, siblings]);
+function useSubtitle(file: ViewerFile, siblings: readonly ViewerEntry[]): { url: string; name: string } | null {
+  const name = useMemo(() => sideSubtitle(file.name, siblings.filter((e) => !e.dir).map((e) => e.name)), [file.name, siblings]);
   const side = name ? siblings.find((e) => e.name === name) : undefined;
   const [shown, setShown] = useState<{ url: string; name: string } | null>(null);
   useEffect(() => {
     setShown(null);
-    if (!at || !side || side.size > 8 * 1024 * 1024) return;
+    const beside = file.beside;
+    if (!beside || !side || side.size > 8 * 1024 * 1024) return;
     let live = true;
     let url: string | null = null;
-    const path = joinPath(parentOf(at.path), side.name);
-    readKept({ ...at, path }, side, "text/plain").then(async (blob) => {
+    beside(side, "text/plain").then(async (blob) => {
       const text = decodeText(new Uint8Array(await blob.arrayBuffer())).text;
       if (!live) return;
       url = URL.createObjectURL(new Blob([toVtt(side.name, text)], { type: "text/vtt" }));
       setShown({ url, name: side.name });
     }, () => undefined);
     return () => { live = false; if (url) URL.revokeObjectURL(url); };
-  }, [at?.station, at?.root, at?.path, side?.name, side?.size, side?.mtime]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [file.blob ?? file.key ?? file, side?.name, side?.size, side?.mtime]); // eslint-disable-line react-hooks/exhaustive-deps
   return shown;
 }
 
 /**
- * A video or a sound played: one of a station's drive (`at`, streamed, the folder's others its playlist and its
- * subtitles, where it was left kept on this device), or a chat's file a preview has here already (`blob`, `onSave`
- * downloading it).
+ * A video or a sound played (file.ts): one of a station's drive (streamed, the folder's others its playlist and its
+ * subtitles, where it was left kept), or a chat's file a preview has here already.
  */
-export function Player({ at, blob, onSave, entry, siblings = [], backLabel, onBack, onGo = () => {} }: {
-  at?: At | undefined; blob?: Blob | undefined; onSave?: (() => void) | undefined;
-  entry: DriveEntry; siblings?: readonly DriveEntry[]; backLabel: string; onBack: () => void; onGo?: (name: string) => void;
+export function Player({ file, siblings = [], backLabel, onBack, onGo = () => {} }: {
+  file: ViewerFile; siblings?: readonly ViewerEntry[]; backLabel: string; onBack: () => void; onGo?: (name: string) => void;
 }) {
-  const narrow = useNarrow();
+  const entry = file;
+  const narrow = viewerHost().useNarrow();
   const audio = entry.kind === "audio";
   const media = useRef<HTMLVideoElement>(null);
-  const source = useSource(at, blob, entry, media);
-  const subtitle = useSubtitle(at, entry, siblings);
-  const place = usePlace(at ?? null);
+  const source = useSource(file, media);
+  const subtitle = useSubtitle(file, siblings);
+  const place = file.usePlace();
   const root = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
@@ -166,8 +166,8 @@ export function Player({ at, blob, onSave, entry, siblings = [], backLabel, onBa
   const keepPlace = useCallback(() => {
     const v = media.current;
     if (!v || !resumed.current || !Number.isFinite(v.duration) || v.duration <= 0) return;
-    if (at) placeAt(at, v.currentTime * 1000, v.duration * 1000);
-  }, [at]);
+    file.keepPlace(v.currentTime * 1000, v.duration * 1000);
+  }, [file]);
   useEffect(() => () => keepPlace(), [keepPlace]);
   useEffect(() => {
     const away = () => keepPlace();
@@ -266,7 +266,7 @@ export function Player({ at, blob, onSave, entry, siblings = [], backLabel, onBa
     body = (
       <div className={css.note}>
         <span>{failed ?? (source.state === "error" ? source.message : "")}</span>
-        {source.state === "error" && source.save && <button type="button" className={css.noteButton} onClick={() => { if (at) void download(at, entry); }}><Download size={16} />{t("web-pages.drive.download")}</button>}
+        {source.state === "error" && source.save && <button type="button" className={css.noteButton} onClick={file.save}><Download size={16} />{t("web-pages.drive.download")}</button>}
       </div>
     );
   } else if (source.state === "opening") {
@@ -312,11 +312,11 @@ export function Player({ at, blob, onSave, entry, siblings = [], backLabel, onBa
       </div>
       {captions && cue && <div className={css.cue} data-awake={awake || undefined}><span>{cue.replace(/<[^>]+>/g, "")}</span></div>}
       {desk && !full ? (
-        <ViewerBar back={{ label: backLabel, onClick: onBack }} name={entry.name} title={at?.path} hidden={!awake && !listing}
+        <ViewerBar back={{ label: backLabel, onClick: onBack }} name={entry.name} title={file.title} hidden={!awake && !listing}
           meta={[list.length > 1 && index >= 0 ? `${index + 1} / ${list.length}` : null, sizeOf(entry.size)].filter(Boolean).join(" · ")}
           tools={<>
             {list.length > 1 && <ViewerTool label={t("web-pages.drive.player.list")} on={listing} onClick={() => setListing((l) => !l)}><List size={18} /></ViewerTool>}
-            <ViewerDownload name={entry.name} onSave={onSave ?? (() => { if (at) void download(at, entry); })} />
+            <ViewerDownload name={entry.name} onSave={file.save} />
           </>} />
       ) : (
         <header className={css.head} data-awake={awake || undefined} {...keep}>

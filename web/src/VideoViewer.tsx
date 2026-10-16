@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import type { CanvasSink, Input, WrappedCanvas } from "mediabunny";
 import { REST_MS, TAP_REST_MS, useZoom } from "./FilePreview.tsx";
 import { Camera, ChevronLeft, ChevronRight, Landscape, Pause, Play } from "@stillfail/ui/icons.tsx";
-import * as css from "./VideoViewer.css.ts";
+import * as css from "@stillfail/ui/viewer/media.css.ts";
 import * as fpCss from "./FilePreview.css.ts";
 import { Tip } from "./ui.tsx";
 import { t } from "./i18n.ts";

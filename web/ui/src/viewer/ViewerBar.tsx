@@ -4,11 +4,11 @@
 // middle, its tools on the right as icons, download last. Its ground is the file's (`--viewer-ground`, the paper
 // under a text), its ink and line with it. On a phone each keeps its own floating bars.
 import { useCallback, useRef, useState, type ReactNode, type UIEvent, type PointerEvent } from "react";
-import { ChevronLeft, Download } from "@stillfail/ui/icons.tsx";
-import { Tip } from "../ui.tsx";
+import { ChevronLeft, Download } from "../icons.tsx";
+import { Tip } from "../parts.tsx";
 import * as css from "./ViewerBar.css.ts";
 import { t } from "../i18n.ts";
-import * as pageCss from "@stillfail/ui/styles/page.css.ts";
+import * as pageCss from "../styles/page.css.ts";
 
 export function ViewerBar({ back, name, meta, tools, title, hidden = false }: {
   /** Where its way back goes, by name, and going there (or closing it). */

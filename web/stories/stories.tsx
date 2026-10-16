@@ -5,10 +5,11 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { SystemBubbles } from "../src/SystemBubbles.tsx";
 import { StationUpdate } from "../src/StationUpdate.tsx";
-import { Reader } from "../src/drive/Reader.tsx";
+import { Reader } from "@stillfail/ui/viewer/Reader.tsx";
 import { Tile } from "../src/pages/Notifications.tsx";
 import { PermissionRow } from "../src/pages/Permissions.tsx";
-import { Player } from "../src/drive/Player.tsx";
+import { Player } from "@stillfail/ui/viewer/Player.tsx";
+import { driveFile } from "../src/drive/viewerFile.ts";
 import { DrivePreview } from "../src/mobile/Drive.tsx";
 import { FilePreview } from "../src/FilePreview.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
@@ -298,15 +299,15 @@ export const stories: Story[] = [
   { id: "panel-bubble-hover", group: "小面板", title: "通知气泡 · 悬停按钮", news: true, render: () => stage(<SystemBubbles scope="demo" />), steps: [{ hover: "text=看看" }] },
 
   // ── files ──
-  { id: "reader-txt", group: "文件", title: "阅读器 · 小说", render: () => stage(<Reader at={at(novel.name)} name={novel.name} size={novel.size} mtime={novel.mtime} markdown={false} backLabel="下载" onBack={noop} />) },
-  { id: "reader-contents", group: "文件", title: "阅读器 · 目录", render: () => stage(<Reader at={at(novel.name)} name={novel.name} size={novel.size} mtime={novel.mtime} markdown={false} backLabel="下载" onBack={noop} />), steps: [{ click: '[aria-label="目录"]' }] },
-  { id: "reader-find", group: "文件", title: "阅读器 · 搜索", render: () => stage(<Reader at={at(novel.name)} name={novel.name} size={novel.size} mtime={novel.mtime} markdown={false} backLabel="下载" onBack={noop} />), steps: [{ click: '[aria-label="搜索"]' }] },
-  { id: "reader-layout", group: "文件", title: "阅读器 · 排版", render: () => stage(<Reader at={at(novel.name)} name={novel.name} size={novel.size} mtime={novel.mtime} markdown={false} backLabel="下载" onBack={noop} />), steps: [{ click: '[aria-label="排版"]' }] },
-  { id: "reader-md", group: "文件", title: "阅读器 · Markdown", render: () => stage(<Reader at={at(note.name)} name={note.name} size={note.size} mtime={note.mtime} markdown backLabel="下载" onBack={noop} />) },
-  { id: "reader-phone", group: "文件", title: "阅读器 · 手机", phone: true, render: () => stage(<Reader at={at(novel.name)} name={novel.name} size={novel.size} mtime={novel.mtime} markdown={false} backLabel="下载" onBack={noop} />) },
-  { id: "player", group: "文件", title: "播放器", render: () => stage(<Player at={at(clips[0]!.name)} entry={clips[0]!} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />), steps: [{ move: [640, 400] }] },
-  { id: "player-list", group: "文件", title: "播放器 · 选集", render: () => stage(<Player at={at(clips[0]!.name)} entry={clips[0]!} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />), steps: [{ click: '[aria-label="选集"]' }, { move: [500, 400] }] },
-  { id: "player-phone", group: "文件", title: "播放器 · 手机", phone: true, render: () => stage(<Player at={at(clips[0]!.name)} entry={clips[0]!} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />) },
+  { id: "reader-txt", group: "文件", title: "阅读器 · 小说", render: () => stage(<Reader file={driveFile(at(novel.name), novel)} markdown={false} backLabel="下载" onBack={noop} />) },
+  { id: "reader-contents", group: "文件", title: "阅读器 · 目录", render: () => stage(<Reader file={driveFile(at(novel.name), novel)} markdown={false} backLabel="下载" onBack={noop} />), steps: [{ click: '[aria-label="目录"]' }] },
+  { id: "reader-find", group: "文件", title: "阅读器 · 搜索", render: () => stage(<Reader file={driveFile(at(novel.name), novel)} markdown={false} backLabel="下载" onBack={noop} />), steps: [{ click: '[aria-label="搜索"]' }] },
+  { id: "reader-layout", group: "文件", title: "阅读器 · 排版", render: () => stage(<Reader file={driveFile(at(novel.name), novel)} markdown={false} backLabel="下载" onBack={noop} />), steps: [{ click: '[aria-label="排版"]' }] },
+  { id: "reader-md", group: "文件", title: "阅读器 · Markdown", render: () => stage(<Reader file={driveFile(at(note.name), note)} markdown backLabel="下载" onBack={noop} />) },
+  { id: "reader-phone", group: "文件", title: "阅读器 · 手机", phone: true, render: () => stage(<Reader file={driveFile(at(novel.name), novel)} markdown={false} backLabel="下载" onBack={noop} />) },
+  { id: "player", group: "文件", title: "播放器", render: () => stage(<Player file={driveFile(at(clips[0]!.name), clips[0]!)} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />), steps: [{ move: [640, 400] }] },
+  { id: "player-list", group: "文件", title: "播放器 · 选集", render: () => stage(<Player file={driveFile(at(clips[0]!.name), clips[0]!)} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />), steps: [{ click: '[aria-label="选集"]' }, { move: [500, 400] }] },
+  { id: "player-phone", group: "文件", title: "播放器 · 手机", phone: true, render: () => stage(<Player file={driveFile(at(clips[0]!.name), clips[0]!)} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />) },
   { id: "attachment-md", group: "文件", title: "附件 · Markdown", render: () => stage(<AttachmentDemo name="orders-慢查询.md" url={NOTE_URL} type="text/markdown" />) },
   { id: "attachment-video", group: "文件", title: "附件 · 视频", render: () => stage(<AttachmentDemo name="发版录屏 1014.mp4" url={CLIP_URL} type="video/mp4" />), steps: [{ move: [640, 400] }] },
   { id: "attachment-picture", group: "文件", title: "附件 · 图片", render: () => stage(<AttachmentDemo name="login-375.png" url={PICTURE_URL} type="image/png" />), steps: [{ move: [640, 400] }] },

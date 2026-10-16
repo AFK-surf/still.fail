@@ -3,25 +3,22 @@
 // the top, at the bottom the chapter, a hairline track with a knob to jump anywhere, and 目录 (its chapters: Markdown's
 // headings, a novel's 第X章), 搜索 (in the file, each place marked and stepped through) and 排版 (size, lines, face,
 // paper). A plain-text novel hard-wrapped at a fixed width is joined back into its paragraphs; Markdown is never
-// reflowed, and is drawn as a chat's is (Prose). Where it was left is kept on this device (`drive.place`) and opened at.
-// On a phone the panels are its sheets. With a mouse it is a desktop's: a toolbar always over the text (the way back,
+// reflowed, and is drawn as a chat's is (the page's Markdown: host.ts). Where it was left is kept (file.ts usePlace) and opened at.
+// On a phone the panels are its sheets (the page's: host.ts). With a mouse it is a desktop's: a toolbar always over the text (the way back,
 // the name, 目录 · 搜索 · 排版 · 夜间), the panels docked at its right, the arrow keys from chapter to chapter.
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Prose } from "../Prose.tsx";
-import * as conversationCss from "../styles/conversation.css.ts";
-import { Check, ChevronLeft, ChevronRight, Close, List, Search, Text as TextIcon } from "@stillfail/ui/icons.tsx";
-import { useNarrow, useApp, SheetGrab, SheetHead, type MobileApp } from "../mobile/app.tsx";
-import { Seg } from "../mobile/parts.tsx";
-import { Segmented, Tip } from "../ui.tsx";
-import { useDark } from "../theme.ts";
-import { REST_MS, TAP_REST_MS } from "../FilePreview.tsx";
+import { Check, ChevronLeft, ChevronRight, Close, List, Search, Text as TextIcon } from "../icons.tsx";
+import { Segmented, Tip } from "../parts.tsx";
+import { fileSize as sizeOf } from "../fileSize.ts";
 import { placeStrokes, strokeLayer } from "../strokes.ts";
-import { download, placeAt, readWhole, sizeOf, usePlace, type At, type Got } from "./model.ts";
-import { useBarOnScroll, ViewerBar, ViewerDownload, ViewerTool } from "../viewer/ViewerBar.tsx";
-import { isHeading, search, type Book, type Chapter } from "./text.ts";
-import { LINES, MARGINS, SIZES, setReaderStyle, useReaderStyle, type Paper } from "./readerStyle.ts";
-import * as css from "./Reader.css.ts";
 import { t } from "../i18n.ts";
+import { viewerHost } from "./host.ts";
+import type { Got, ViewerFile } from "./file.ts";
+import { REST_MS, TAP_REST_MS } from "./rest.ts";
+import { useBarOnScroll, ViewerBar, ViewerDownload, ViewerTool } from "./ViewerBar.tsx";
+import { isHeading, search, type Book, type Chapter } from "./text.ts";
+import { LINES, MARGINS, SIZES, type Paper } from "./readerStyle.ts";
+import * as css from "./Reader.css.ts";
 
 /** The most of a file the reader holds (its front, saying so, when it is bigger). */
 const MOST = 32 * 1024 * 1024;
@@ -34,14 +31,15 @@ type Loaded = { state: "loading"; got: Got | null } | { state: "error"; message:
 // The books read lately, while they are the same (their size and time): opened again, at once.
 const books = new Map<string, Promise<{ book: Book; cut: boolean }>>();
 
-/** A file read whole as text: one of a station's drive (`at`), read a part at a time, or one here already (`blob`, a
- * chat's file a preview has fetched). */
-function loadBook(from: At | Blob, size: number, mtime: number, markdown: boolean, onProgress: (got: Got) => void): Promise<{ book: Book; cut: boolean }> {
-  const key = from instanceof Blob ? null : `${from.station}\n${from.root}\n${from.path}\n${size}\n${mtime}`;
+/** A file read whole as text: one of a station's drive, read a part at a time, or one here already (`blob`, a chat's
+ * file a preview has fetched). */
+function loadBook(file: ViewerFile, markdown: boolean, onProgress: (got: Got) => void): Promise<{ book: Book; cut: boolean }> {
+  const size = file.size;
+  const key = file.blob || file.key === undefined ? null : file.key;
   let kept = key === null ? undefined : books.get(key);
   if (!kept) {
     kept = (async () => {
-      const blob = from instanceof Blob ? from.slice(0, MOST) : await readWhole(from, size, { max: MOST, onProgress });
+      const blob = file.blob ? file.blob.slice(0, MOST) : await file.read({ max: MOST, onProgress });
       const bytes = await blob.arrayBuffer();
       const cut = size > MOST;
       // Decoded, joined and searched for its chapters off the page's thread.
@@ -64,17 +62,17 @@ function loadBook(from: At | Blob, size: number, mtime: number, markdown: boolea
   return kept;
 }
 
-function useBook(from: At | Blob, size: number, mtime: number, markdown: boolean): Loaded {
+function useBook(file: ViewerFile, markdown: boolean): Loaded {
   const [loaded, setLoaded] = useState<Loaded>({ state: "loading", got: null });
   useEffect(() => {
     let live = true;
     setLoaded({ state: "loading", got: null });
-    loadBook(from, size, mtime, markdown, (got) => { if (live) setLoaded({ state: "loading", got }); }).then(
+    loadBook(file, markdown, (got) => { if (live) setLoaded({ state: "loading", got }); }).then(
       ({ book, cut }) => { if (live) setLoaded({ state: "ready", book, cut }); },
       (e: unknown) => { if (live) setLoaded({ state: "error", message: e instanceof Error ? e.message : String(e) }); },
     );
     return () => { live = false; };
-  }, [from instanceof Blob ? from : `${from.station}\n${from.root}\n${from.path}`, size, mtime, markdown]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [file.blob ?? file.key ?? file, file.size, file.mtime, markdown]); // eslint-disable-line react-hooks/exhaustive-deps
   return loaded;
 }
 
@@ -132,7 +130,8 @@ const TextBody = memo(function TextBody({ book }: { book: Book }) {
 });
 
 const MarkdownBody = memo(function MarkdownBody({ text }: { text: string }) {
-  return <div className={`${conversationCss.markdown} ${css.markdown}`}><Prose>{text}</Prose></div>;
+  const { Markdown, markdownClass } = viewerHost();
+  return <div className={`${markdownClass} ${css.markdown}`}><Markdown>{text}</Markdown></div>;
 });
 
 /** What was found and which of it is shown. */
@@ -153,22 +152,18 @@ interface Acts {
   close: () => void;
 }
 
-/**
- * A text read: one of a station's drive (`at`, where it was left kept on this device), or a chat's file a preview has
- * here already (`blob`, `onSave` downloading it).
- */
-export function Reader({ at, blob, onSave, name, size, mtime, markdown, backLabel, onBack }: {
-  at?: At | undefined; blob?: Blob | undefined; onSave?: (() => void) | undefined;
-  name: string; size: number; mtime: number; markdown: boolean; backLabel: string; onBack: () => void;
-}) {
-  const narrow = useNarrow();
-  const app = useAppSafe();
-  const style = useReaderStyle();
-  const dark = useDark();
+/** A text read (file.ts): one of a station's drive, where it was left kept, or a chat's file a preview has here already. */
+export function Reader({ file, markdown, backLabel, onBack }: { file: ViewerFile; markdown: boolean; backLabel: string; onBack: () => void }) {
+  const host = viewerHost();
+  const { name, size } = file;
+  const narrow = host.useNarrow();
+  const sheets = host.useSheets();
+  const style = host.useReaderStyle();
+  const dark = host.useDark();
   const paper = paperOf(style.paper, dark);
-  const loaded = useBook(blob ?? at!, size, mtime, markdown);
+  const loaded = useBook(file, markdown);
   const book = loaded.state === "ready" ? loaded.book : null;
-  const place = usePlace(at ?? null);
+  const place = file.usePlace();
   // On a wide screen its bar goes as the text is read down, and comes back up with it (or the pointer at the top).
   const barOnScroll = useBarOnScroll();
   const scroller = useRef<HTMLDivElement>(null);
@@ -247,7 +242,7 @@ export function Reader({ at, blob, onSave, name, size, mtime, markdown, backLabe
 
   // Where it is, kept as it is read, and as the reader goes.
   const keep = useRef(0);
-  const save = useCallback(() => { if (at && book && opened.current) placeAt(at, offsetNow(), book.text.length); }, [at, book, offsetNow]);
+  const save = useCallback(() => { if (book && opened.current) file.keepPlace(offsetNow(), book.text.length); }, [file, book, offsetNow]);
   useEffect(() => () => { clearTimeout(keep.current); save(); }, [save]);
   useEffect(() => {
     const away = () => save();
@@ -390,11 +385,10 @@ export function Reader({ at, blob, onSave, name, size, mtime, markdown, backLabe
     goChapter: (i) => acts.current.goChapter(i), find: (q) => acts.current.find(q), show: (f, i) => acts.current.show(f, i), close: () => acts.current.close(),
   }), []);
   const open = (which: "contents" | "find" | "layout") => {
-    if (narrow && app) {
-      const sheet = which === "contents" ? { height: 0.72, draggable: true, content: () => <ContentsSheet acts={stable} app={app} /> }
-        : which === "find" ? { height: 0.72, draggable: true, content: () => <FindSheet acts={stable} app={app} /> }
-        : { height: 0.5, content: () => <LayoutSheet /> };
-      app.sheet(sheet);
+    if (narrow && sheets) {
+      sheets(which === "contents" ? { height: 0.72, draggable: true, title: t("web-pages.drive.reader.contents"), trailing: () => contentsNote(stable) && <span className={css.headNote}>{contentsNote(stable)}</span>, body: (close) => <Contents acts={stable} done={close} /> }
+        : which === "find" ? { height: 0.72, draggable: true, title: t("web-pages.drive.reader.find"), body: (close) => <Find acts={stable} done={close} /> }
+        : { height: 0.5, title: t("web-pages.drive.reader.layout"), body: () => <div className={css.layoutScroll}><Layout narrow /></div> });
       return;
     }
     setPanel((p) => (p === which ? null : which));
@@ -449,13 +443,13 @@ export function Reader({ at, blob, onSave, name, size, mtime, markdown, backLabe
       {/* With the bars away, how far through it is: a hairline along the bottom. */}
       <div className={css.hairline} aria-hidden="true"><span style={{ transform: `scaleX(${share})` }} /></div>
       {!narrow ? (
-        <ViewerBar back={{ label: backLabel, onClick: onBack }} name={name} title={at?.path} hidden={barOnScroll.hidden && !panel}
+        <ViewerBar back={{ label: backLabel, onClick: onBack }} name={name} title={file.title} hidden={barOnScroll.hidden && !panel}
           meta={[book ? [chapter, `${Math.round(share * 100)}%`].filter(Boolean).join(" · ") : null, sizeOf(size)].filter(Boolean).join(" · ")}
           tools={<>
             <ViewerTool label={t("web-pages.drive.reader.contents")} on={panel === "contents"} onClick={() => open("contents")}><List size={18} /></ViewerTool>
             <ViewerTool label={t("web-pages.drive.reader.find")} on={panel === "find"} onClick={() => open("find")}><Search size={18} /></ViewerTool>
             <ViewerTool label={t("web-pages.drive.reader.layout")} on={panel === "layout"} onClick={() => open("layout")}><TextIcon size={18} /></ViewerTool>
-            <ViewerDownload name={name} onSave={onSave ?? (() => { if (at) void download(at, { name, size, type: "" }); })} />
+            <ViewerDownload name={name} onSave={file.save} />
           </>} />
       ) : <header className={css.top} data-shown={shown || undefined} inert={!shown}
         onPointerEnter={(e) => { if (e.pointerType === "mouse") { onBars.current = true; clearTimeout(resting.current); } }}
@@ -509,11 +503,6 @@ export function Reader({ at, blob, onSave, name, size, mtime, markdown, backLabe
   );
 }
 
-/** The phone app, where there is one (the reader is drawn on a phone's page or a desktop's). */
-function useAppSafe(): MobileApp | null {
-  try { return useApp(); } catch { return null; }
-}
-
 const shareNow = (s: HTMLElement | null) => {
   if (!s) return 0;
   const most = s.scrollHeight - s.clientHeight;
@@ -550,17 +539,6 @@ function Track({ share, onJump }: { share: number; onJump: (share: number) => vo
 /** How many chapters, and how far through it is: beside the contents' title. */
 const contentsNote = (acts: Acts) => acts.chapters().length ? t("web-pages.drive.reader.contentsNote", { n: acts.chapters().length, read: Math.round(acts.share() * 100) }) : undefined;
 
-function ContentsSheet({ acts, app }: { acts: Acts; app: MobileApp }) {
-  const note = contentsNote(acts);
-  return (
-    <>
-      <SheetGrab />
-      <SheetHead title={t("web-pages.drive.reader.contents")} trailing={note ? <span className={css.headNote}>{note}</span> : undefined} />
-      <Contents acts={acts} done={() => app.sheet(null)} />
-    </>
-  );
-}
-
 /** The chapters, numbered, the one being read marked; finding in the whole text from its top. */
 function Contents({ acts, done }: { acts: Acts; done: () => void }) {
   const chapters = acts.chapters();
@@ -578,16 +556,6 @@ function Contents({ acts, done }: { acts: Acts; done: () => void }) {
         </button>
       ))}
     </div>
-  );
-}
-
-function FindSheet({ acts, app }: { acts: Acts; app: MobileApp }) {
-  return (
-    <>
-      <SheetGrab />
-      <SheetHead title={t("web-pages.drive.reader.find")} />
-      <Find acts={acts} done={() => app.sheet(null)} />
-    </>
   );
 }
 
@@ -628,16 +596,6 @@ function Find({ acts, done }: { acts: Acts; done: () => void }) {
   );
 }
 
-function LayoutSheet() {
-  return (
-    <>
-      <SheetGrab />
-      <SheetHead title={t("web-pages.drive.reader.layout")} />
-      <div className={css.layoutScroll}><Layout narrow /></div>
-    </>
-  );
-}
-
 /** The papers to pick: the light ones. Night is the app's dark (its theme, 外观), never picked here. */
 const PAPERS: Exclude<Paper, "follow">[] = ["white", "green", "grey"];
 type Light = "white" | "green" | "grey";
@@ -650,20 +608,23 @@ function paperOf(chosen: Paper, dark: boolean): Exclude<Paper, "follow"> {
 
 /** A paper picked: the day's (light) paper. The app's theme (外观) is never changed from here. */
 function usePickPaper(): (paper: Exclude<Paper, "follow">) => void {
-  return (paper) => setReaderStyle({ paper });
+  return (paper) => viewerHost().setReaderStyle({ paper });
 }
 
 /** The paper under the text, its size, its lines' height, the room either side, its face, and whether paragraphs are
  *  indented: each changed as it is picked (`prefs.set {reader: {…}}`, that one setting). */
 function Layout({ narrow }: { narrow: boolean }) {
-  const style = useReaderStyle();
-  const dark = useDark();
+  const host = viewerHost();
+  const style = host.useReaderStyle();
+  const dark = host.useDark();
+  const setReaderStyle = host.setReaderStyle;
+  const Seg = host.Choice;
   const shownPaper = paperOf(style.paper, dark);
   const pickPaper = usePickPaper();
   const faces = [t("web-pages.drive.reader.serif"), t("web-pages.drive.reader.sans")];
   const indents = [t("web-pages.drive.reader.indent"), t("web-pages.drive.reader.flush")];
   const choose = (label: string, options: string[], at: number, pick: (i: number) => void) => narrow
-    ? <Seg options={options} selected={at} onSelect={pick} fill />
+    ? <Seg options={options} selected={at} onSelect={pick} />
     : <Segmented label={label} value={String(at)} onChange={(v) => pick(Number(v))} options={options.map((o, i) => ({ value: String(i), label: o }))} />;
   return (
     <div className={css.layout}>

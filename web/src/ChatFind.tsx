@@ -10,7 +10,7 @@ import { useChatSend, type ChatFound, type ChatMessage } from "./api.ts";
 import { ChevronDown, ChevronUp, Close } from "@stillfail/ui/icons.tsx";
 import { t } from "./i18n.ts";
 import { useShortcut } from "./keymap.ts";
-import { placeStrokes, strokeLayer } from "./strokes.ts";
+import { placeStrokes, strokeLayer } from "@stillfail/ui/strokes.ts";
 import { Tip } from "./ui.tsx";
 import type { VirtualList } from "./virtual/list.tsx";
 import * as css from "./ChatFind.css.ts";

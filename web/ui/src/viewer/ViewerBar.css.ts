@@ -1,5 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { vars } from "../styles/tokens.css.ts";
 
 /** How tall the bar is: as a page's bar (styles/sidebar.css.ts), a 32px button in it level with the desktop window's
  * buttons. What is under it starts below it, and goes under it as it is scrolled or as the bar goes. */

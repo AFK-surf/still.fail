@@ -14,9 +14,10 @@ import type { Attachment, DriveEntry, DriveRoot } from "../core/shapes.ts";
 import { ChevronRight, Close, Disk, Download, Edit, Folder, FolderPlus, More, Plus, Refresh, Retry, Trash, Upload } from "@stillfail/ui/icons.tsx";
 import { FilePreview, FileSource, Gallery, PreviewBack, type FileSourceOf, type Shown } from "../FilePreview.tsx";
 import { KindIcon } from "../drive/KindIcon.tsx";
-import { Reader } from "../drive/Reader.tsx";
-import { Player } from "../drive/Player.tsx";
+import { Reader } from "@stillfail/ui/viewer/Reader.tsx";
+import { Player } from "@stillfail/ui/viewer/Player.tsx";
 import { cancel, download, joinPath, nameOf, openerOf, parentOf, readKept, readPart, refresh, retry, rootLabel, settle, sizeOf, upload, useFolder, useUploads, type At, type Upload as Up } from "../drive/model.ts";
+import { useDriveFile } from "../drive/viewerFile.ts";
 import { childOf, drive, drivePath, filtered, nameProblem, rootTrouble, useDrive, type DriveState, type Folders, type PickFolder } from "../drive/useDrive.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { ask, confirm } from "./sheets.tsx";
@@ -507,7 +508,9 @@ function useOpened() {
   const entry = folder.value?.entries.find((e) => e.name === nameOf(path)) ?? null;
   const d = useDrive(station.address);
   const back = folderPath ? nameOf(folderPath) : rootLabel(d.roots, root);
-  return { station, root, path, folder, entry, back, at: { station: station.address, root, path } };
+  const at = { station: station.address, root, path };
+  const file = useDriveFile(at, entry);
+  return { station, root, path, folder, entry, back, at, file };
 }
 
 export function DriveReadScreen() {
@@ -515,7 +518,7 @@ export function DriveReadScreen() {
   const o = useOpened();
   return (
     <div className={`${pagesCss.mScreen} ${css.mReaderPage}`}>
-      {o.entry ? <Reader key={o.path} at={o.at} name={o.entry.name} size={o.entry.size} mtime={o.entry.mtime} markdown={o.entry.kind === "markdown"} backLabel={o.back} onBack={app.pop} />
+      {o.file && o.entry ? <Reader key={o.path} file={o.file} markdown={o.entry.kind === "markdown"} backLabel={o.back} onBack={app.pop} />
         : <Missing back={o.back} error={o.folder.error?.message ?? (o.folder.value ? t("web-pages.drive.gone") : null)} />}
     </div>
   );
@@ -526,7 +529,7 @@ export function DrivePlayScreen() {
   const o = useOpened();
   return (
     <div className={`${pagesCss.mScreen} ${css.mPlayerPage}`}>
-      {o.entry ? <Player key={o.path} at={o.at} entry={o.entry} siblings={o.folder.value?.entries ?? []} backLabel={o.back} onBack={app.pop}
+      {o.file ? <Player key={o.path} file={o.file} siblings={o.folder.value?.entries ?? []} backLabel={o.back} onBack={app.pop}
         onGo={(name) => app.replace(drivePath(o.station.base, o.root, joinPath(parentOf(o.path), name), "play"))} />
         : <Missing back={o.back} error={o.folder.error?.message ?? (o.folder.value ? t("web-pages.drive.gone") : null)} />}
     </div>

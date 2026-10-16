@@ -8,11 +8,10 @@ import { codeBar, codeBlock, codeShiki } from "./Prose.css.ts";
 import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
 import { segmented, segmentedOption } from "@stillfail/ui/parts.css.ts";
+import { pictureGlass } from "@stillfail/ui/styles/glass.ts";
 
-/** Frosted glass over a picture, in the theme's colours (a viewer is light in a light app, dark in a dark one). */
-export const glass = {
-  background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, backdropFilter: "blur(24px) saturate(1.6)", WebkitBackdropFilter: "blur(24px) saturate(1.6)",
-};
+/** Frosted glass over a picture (@stillfail/ui's, as its viewers have it). */
+export const glass = pictureGlass;
 /** Dark glass whatever the theme: notes written on a picture (annotate/), read over any of it. */
 export const darkGlass = {
   background: "rgba(18, 18, 20, .62)", backdropFilter: "blur(24px) saturate(1.6)", WebkitBackdropFilter: "blur(24px) saturate(1.6)",

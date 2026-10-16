@@ -1,4 +1,4 @@
-// The two grounds things float on. Each adds its own shadow.
+// The grounds things float on. Each adds its own shadow.
 import { vars } from "./tokens.css.ts";
 
 /**
@@ -19,3 +19,8 @@ export const glass = {
   WebkitBackdropFilter: "blur(20px)",
   backdropFilter: "blur(20px)",
 } as const;
+
+/** Frosted glass over a picture, in the theme's colours (a viewer is light in a light app, dark in a dark one). */
+export const pictureGlass = {
+  background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`, backdropFilter: "blur(24px) saturate(1.6)", WebkitBackdropFilter: "blur(24px) saturate(1.6)",
+};
