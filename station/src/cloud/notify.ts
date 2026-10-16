@@ -31,11 +31,12 @@ export class Notifier {
   private readers: Readers;
   private store: Store;
   private cloud: Cloud;
-  /// Where a batch goes (tests give their own); the control plane's by default (`send`).
-  post: (notices: Notice[]) => Promise<void>;
+  /// Where a batch goes (tests give their own); the control plane's by default (`send`). `workspace`: a joined
+  /// workspace's batch (its sessions' notices); absent, the home one's.
+  post: (notices: Notice[], workspace?: string) => Promise<void>;
 
   /// `send`: a batch to the control plane; `clock`: the clock a batch gathers on (a TestClock in tests).
-  constructor(store: Store, readers: Readers, cloud: Cloud, send: (notices: Notice[]) => Promise<void>, options: { clock?: Clock.Clock } = {}) {
+  constructor(store: Store, readers: Readers, cloud: Cloud, send: (notices: Notice[], workspace?: string) => Promise<void>, options: { clock?: Clock.Clock } = {}) {
     this.scope = Effect.runSync(Scope.make());
     const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope);
     this.run = Effect.runSync(options.clock ? runtime.pipe(Effect.provideService(Clock.Clock, options.clock)) : runtime);
@@ -92,9 +93,21 @@ export class Notifier {
     const batch = this.waiting.splice(0, MAX_BATCH);
     if (this.waiting.length > 0) this.queue(this.waiting.splice(0));
     if (this.cloud.removed() || this.cloud.state === null) return;
-    this.post(batch).then(
-      () => log.info("notify", "notices sent", { n: batch.length }),
-      (error) => log.warn("notify", "notices dropped", { n: batch.length, error: (error as Error).message }),
-    );
+    // Each workspace's people hear of its own chats (docs/multi-workspace.md): one post a workspace, those of a
+    // workspace the station is no longer in dropped.
+    const home = this.cloud.home();
+    const by = new Map<string | undefined, Notice[]>();
+    for (const notice of batch) {
+      const ws = this.store.getSession(notice.session)?.ws ?? home;
+      if (ws === null || this.cloud.membership(ws) === null) continue;
+      const of = ws === home ? undefined : ws;
+      by.set(of, [...(by.get(of) ?? []), notice]);
+    }
+    for (const [ws, notices] of by) {
+      this.post(notices, ws).then(
+        () => log.info("notify", "notices sent", { n: notices.length, ...(ws ? { workspace: ws } : {}) }),
+        (error) => log.warn("notify", "notices dropped", { n: notices.length, error: (error as Error).message }),
+      );
+    }
   }
 }

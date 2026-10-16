@@ -7,13 +7,17 @@ import { test } from "node:test";
 import { Refused } from "../src/jobs/remote.ts";
 import { PEER_ALPN, member, peerCall, servePeer } from "../src/mesh/peer.ts";
 import { memoryMesh } from "./memory-mesh.ts";
+import { Cloud, type Joined } from "../src/cloud/state.ts";
 
-const cloudOf = (station: string, peers: string[]): any => ({
-  state: { workspace: "ws", station, peers: peers.map((id) => ({ id })) },
-  peersCurrent: true,
-  removed: () => false,
-  relays: () => [],
-});
+/// A station's cloud.json in memory, read as the station reads it (Cloud's own memberships): in workspace "ws", and in
+/// those of `joined` too.
+const cloudOf = (station: string, peers: string[], joined: Joined[] = []): any =>
+  Object.assign(Object.create(Cloud.prototype), {
+    state: { workspace: "ws", workspace_name: "ws", name: "", station, peers: peers.map((id) => ({ id })), revocations: [], joined },
+    lock: null,
+    peersCurrent: true,
+    relays: () => [],
+  });
 
 test("a peer's request is answered by the other station's remote tasks", async () => {
   const mesh = memoryMesh();
@@ -96,5 +100,45 @@ test("a station of another workspace is asked only when chats are shared with it
     await assert.rejects(wrong(closed.id(), "ws", { method: "session.read" }), (e) => !(e instanceof Refused));
   } finally {
     await Promise.all([source.close(), target.close(), closed.close()]);
+  }
+});
+
+test("a station in two workspaces asks and hears each one's stations in that workspace only", async () => {
+  const mesh = memoryMesh();
+  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+  const [both, homeMate, joinedMate] = await Promise.all([bind(), bind(), bind()]);
+  // `both` is in "ws" with homeMate and in "w2" with joinedMate; each of those is in its own workspace only.
+  const bothCloud = cloudOf(both.id(), [homeMate.id()], [{ workspace: "w2", workspace_name: "W2", name: "both", peers: [{ id: joinedMate.id() }], revocations: [] }]);
+  const asked: any[] = [];
+  const remote: any = { handle: async (workspace: string, peer: string, request: any) => (asked.push([workspace, peer, request.method]), { ok: workspace }) };
+  void (async () => {
+    for (;;) {
+      const conn = await both.accept();
+      if (!conn) return;
+      void servePeer(conn, bothCloud, remote).catch(() => conn.close(0, "refused"));
+    }
+  })();
+  const port = both.sockets()[0]!.split(":").at(-1);
+  const at = (id: string) => ({ id, ips: [`127.0.0.1:${port}`] });
+  const fromHome = peerCall(homeMate, cloudOf(homeMate.id(), [both.id()]), at);
+  const joinedCloud = cloudOf(joinedMate.id(), [both.id()]);
+  joinedCloud.state.workspace = "w2";
+  const fromJoined = peerCall(joinedMate, joinedCloud, at);
+  try {
+    assert.deepEqual(await fromHome(both.id(), "ws", { method: "describe" }), { ok: "ws" });
+    assert.deepEqual(await fromJoined(both.id(), "w2", { method: "describe" }), { ok: "w2" });
+    assert.deepEqual(asked, [["ws", homeMate.id(), "describe"], ["w2", joinedMate.id(), "describe"]]);
+    // Each is heard in its own workspace only: the joined one's station is no station of the home one's.
+    const sneaky = cloudOf(joinedMate.id(), [both.id()]);
+    await assert.rejects(peerCall(joinedMate, sneaky, at)(both.id(), "ws", { method: "describe" }), (e) => e instanceof Refused && /not another station/.test(e.message));
+    // Asking: each workspace's roster, by the workspace asked in.
+    assert.equal(member(bothCloud, joinedMate.id(), "w2"), "w2");
+    assert.throws(() => member(bothCloud, joinedMate.id(), "ws"), /not another station/);
+    assert.equal(member(bothCloud, joinedMate.id(), null), "w2");
+    const call = peerCall(both, bothCloud, at);
+    assert.deepEqual(await call("", "w2", { method: "peers" }), { workspace: "w2", stations: [{ id: joinedMate.id() }], current: true });
+    assert.deepEqual(await call("", null, { method: "peers" }), { workspace: "ws", stations: [{ id: homeMate.id() }], current: true });
+  } finally {
+    await Promise.all([both.close(), homeMate.close(), joinedMate.close()]);
   }
 });

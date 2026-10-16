@@ -452,7 +452,7 @@ export const AgentsLive = (control: Control) =>
       });
 
       // What the chats' people hear about while no client of theirs runs: pushed by the control plane.
-      const notifier = new Notifier(store, readers, cloud, (notices) => Effect.runPromise(plane.notify(notices)));
+      const notifier = new Notifier(store, readers, cloud, (notices, ws) => Effect.runPromise(plane.notify(notices, ws)));
 
       // The bug reports its agents sent that are fixed and out: each session told, a few minutes after the start and
       // every hour (the cloud has no way to say so as it happens).

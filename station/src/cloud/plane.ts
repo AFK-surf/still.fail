@@ -22,7 +22,8 @@ export type ControlPlaneShape = {
   /// The presence socket, kept for good (until interrupted) while the station answers.
   readonly presence: Effect.Effect<never>;
   /// A batch of notices (at most 50) for people's devices.
-  readonly notify: (notices: Notice[]) => Effect.Effect<void, Error>;
+  /// `workspace`: a joined one's notices (docs/multi-workspace.md); absent, the home one's, as planes before that read.
+  readonly notify: (notices: Notice[], workspace?: string) => Effect.Effect<void, Error>;
   /// A batch of the mesh's spans; dropped where the provider takes none.
   readonly traces: (spans: unknown[]) => Effect.Effect<void, Error>;
   /// Where the station's releases and installer are (`<base>/releases/station.json`, `<base>/install.sh`), while in a
@@ -48,12 +49,12 @@ export function makeControlPlane({ state, changes, key, up, provider }: PlanePar
     changes,
     spec,
     presence: presence({ cloud: { state, changes }, key, up, spec }),
-    notify: (notices) =>
+    notify: (notices, workspace) =>
       Effect.tryPromise({
         try: async () => {
           const plane = spec();
           // Signed over "<tag>:<origin>:<station>:<ts>:<sha256 of the body, hex>"; still.fail's under both names.
-          await signedPost(state, key, plane.notifyPath, plane.notifyTag, { notices }, plane.notifyFormer, plane.name);
+          await signedPost(state, key, plane.notifyPath, plane.notifyTag, workspace === undefined ? { notices } : { notices, workspace }, plane.notifyFormer, plane.name);
         },
         catch: (e) => e as Error,
       }),
