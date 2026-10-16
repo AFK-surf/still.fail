@@ -1077,19 +1077,34 @@ function setMenu(): void {
 /** How often the beta app asks for a newer web app (its feed is a few hundred bytes; the web app changes a commit). */
 const WEB_UPDATE_EVERY = 30 * 60 * 1000;
 
-/** Asks for a newer web app: one downloaded is offered to the pages (刷新). */
-async function lookForWeb(): Promise<boolean> {
+/**
+ * Someone has clicked or typed in a window since the app started: a newer web app found at start is then offered (刷新)
+ * rather than taken under their hands (open).
+ */
+let touched = false;
+
+/**
+ * Asks for a newer web app: one downloaded is offered to the pages (刷新). At start (`take`) it is taken at once and the
+ * pages reload on it, unless someone is using them already: an app just opened, or just updated (the newest app is
+ * often older than the newest web app, docs/desktop-web-updates.md), is not left on an older web app.
+ */
+async function lookForWeb(take = false): Promise<boolean> {
   if (!webUpdates) return false;
   // One downloaded before and not taken yet is still the one to offer (the feed says nothing newer than it).
   const ready = (await webUpdates.check()) ?? webUpdates.ready;
-  if (ready && webUpdate?.phase !== "installing") sayWebUpdate({ phase: "available", version: `0.1.${ready.build}`, kind: "web" });
-  return !!ready;
+  if (!ready || webUpdate?.phase === "installing") return !!ready;
+  const found: UpdateState = { phase: "available", version: `0.1.${ready.build}`, kind: "web" };
+  if (take && !touched) {
+    webUpdate = found;
+    await takeWebUpdate();
+  } else sayWebUpdate(found);
+  return true;
 }
 
 function keepWebUpdated(): void {
   if (!webUpdates) return;
-  const check = () => void lookForWeb().catch((error: Error) => console.warn("looking for a newer web app failed", error.message));
-  check();
+  const check = (take = false) => void lookForWeb(take).catch((error: Error) => console.warn("looking for a newer web app failed", error.message));
+  check(true);
   setInterval(check, WEB_UPDATE_EVERY);
   // The menu's 检查更新… and the version page ask for the app first, then for a web app alone.
   const appCheck = checkNow;
@@ -1332,6 +1347,9 @@ function open(path = "/", titled = false): BrowserWindow {
     if (url.startsWith(`${APP_ORIGIN}/`)) return;
     event.preventDefault();
     external(url);
+  });
+  window.webContents.on("input-event", (_event, input) => {
+    if (input.type === "mouseDown" || input.type === "keyDown" || input.type === "rawKeyDown") touched = true;
   });
   // A right-click gets a menu, as in a browser (showContextMenu).
   window.webContents.on("context-menu", (_event, params) => showContextMenu(window, params));
