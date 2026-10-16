@@ -30,7 +30,7 @@ export function shapeOf(box: HTMLElement): Shape {
 }
 
 /** Each box's motion under way and who started it, so a new one stops the one before and nothing else. */
-const running = new WeakMap<HTMLElement, { by: string; all: Animation[] }>();
+const running = new WeakMap<HTMLElement, { by: string; all: Animation[]; end?: () => void }>();
 
 /**
  * From `from` (read before its layout changed) to how `box` is laid out now, in `timing`; `by` says who moves it (a
@@ -80,6 +80,8 @@ export function grow(box: HTMLElement, by: string, from: Shape, timing: Keyframe
     position: "absolute", zIndex: "-1", pointerEvents: "none", inset: "0",
     background: style.background, boxShadow: style.boxShadow, backdropFilter: style.backdropFilter,
     border: style.border, cornerShape: style.getPropertyValue("corner-shape"),
+    // At rest (its motion over, before it is taken away) it is the box's ground as it ends.
+    borderRadius: `${radius}px`,
   });
   // Its ground drawn by the layer meanwhile, not by the box: the box's own shows nothing.
   const own = { background: box.style.background, boxShadow: box.style.boxShadow, backdropFilter: box.style.backdropFilter, borderColor: box.style.borderColor, isolation: box.style.isolation };
@@ -99,16 +101,25 @@ export function grow(box: HTMLElement, by: string, from: Shape, timing: Keyframe
     if (Math.abs(x) < 0.5 && Math.abs(y) < 0.5) continue;
     all.push(part.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: "none" }], timing));
   }
-  const end = () => { ground.remove(); Object.assign(box.style, own); };
-  void all[0]!.finished.then(end, end);
-  running.set(box, { by, all });
-  void all[0]!.finished.then(() => { if (running.get(box)?.all === all) running.delete(box); }, () => {});
+  // Its ground back on the box, the layer gone: when it is there, or at once when it is stopped (a new shape read from
+  // the box as it is drawn, not from the box the layer draws for).
+  let ended = false;
+  const end = () => {
+    if (ended) return;
+    ended = true;
+    ground.remove();
+    Object.assign(box.style, own);
+  };
+  running.set(box, { by, all, end });
+  void all[0]!.finished.then(() => { end(); if (running.get(box)?.all === all) running.delete(box); }, () => {});
   return all;
 }
 
 /** Stops `box`'s motion (only what `morph` started on it): it is laid out as it is, to be read or moved anew. */
 export function stop(box: HTMLElement): void {
-  for (const a of running.get(box)?.all ?? []) a.cancel();
+  const was = running.get(box);
+  for (const a of was?.all ?? []) a.cancel();
+  was?.end?.();
   running.delete(box);
 }
 
