@@ -49,13 +49,13 @@ export const routes = ({ read, host, agents }: Tools): Route[] => {
     },
     // Sessions this machine's own Claude Code and Codex kept (in a terminal), to go on with one in a chat: the
     // machine's, for its home workspace only (docs/multi-workspace.md).
-    { method: "GET", pattern: /^\/machine-sessions$/, handle: (r: Request) => (r.viewer.home === false ? error(403, HOME_ONLY) : read(r, "machineSessions", {})) },
+    { method: "GET", pattern: /^\/machine-sessions$/, handle: async (r: Request) => (r.viewer.home === false ? error(403, HOME_ONLY) : read(r, "machineSessions", {})) },
     // One of them, to look at before going on with it: what was said, the latest `limit`. As the Rust matches its
     // segments (empty ones dropped, any after the third ignored).
     {
       method: "GET",
       pattern: /^\/+machine-sessions\/+([^/]+)\/+([^/]+)(?:\/.*)?$/,
-      handle: (r: Request, [runtime, id]: string[]) =>
+      handle: async (r: Request, [runtime, id]: string[]) =>
         r.viewer.home === false ? error(403, HOME_ONLY) : read(r, "machineSession", { lang: r.lang, runtime: segment(runtime!), id: segment(id!), limit: param(r, "limit") }),
     },
     // The agents' memory, for the pages to show: the global one, and the shared skills (projects' memories among them).

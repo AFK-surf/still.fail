@@ -229,9 +229,11 @@ export function applyState(s: CloudState, text: string, send: (frame: unknown) =
     syncLock(s, body.lock, send);
   } else if (body?.type === "revoke" && isRevocation(body)) {
     // Of the workspace it names (planes of before say none: the home one's).
+    const named: unknown = (body as any).workspace;
     s.update((st) => {
-      const joined = typeof body.workspace === "string" && body.workspace !== st.workspace ? st.joined?.find((j) => j.workspace === body.workspace) : undefined;
-      if (typeof body.workspace === "string" && body.workspace !== st.workspace && joined === undefined) return;
+      const elsewhere = typeof named === "string" && named !== st.workspace;
+      const joined = elsewhere ? st.joined?.find((j) => j.workspace === named) : undefined;
+      if (elsewhere && joined === undefined) return;
       const of = joined ?? st;
       of.revocations = of.revocations.filter((r) => !(r.kind === body.kind && r.id === body.id));
       of.revocations.push({ kind: body.kind, id: body.id, at: body.at });
