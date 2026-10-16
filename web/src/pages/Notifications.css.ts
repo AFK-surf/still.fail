@@ -19,7 +19,7 @@ export const screen = style({
 export const banner = style({
   position: "absolute", top: `${BANNER_IN}px`, right: `${BANNER_IN}px`, width: `min(320px, calc(100% - ${2 * BANNER_IN}px))`,
   display: "flex", gap: "10px", alignItems: "flex-start", padding: "10px 12px",
-  borderRadius: `${BANNER_CORNER}px`, cornerShape: vars.cornerShape,
+  borderRadius: `${BANNER_CORNER}px`, cornerShape: vars.cornerShape, // own corner: the system's banner, drawn small; the screen round it follows it
   background: vars.raised, boxShadow: `0 1px 6px ${vars.shadow}`,
   transition: `opacity ${vars.dur} ${vars.easeOut}, transform ${vars.dur} ${vars.easeOut}`,
   selectors: { "&[data-off]": { opacity: "0", transform: "translateY(-12px)" } },
@@ -32,7 +32,7 @@ export const bannerBody = style({ overflow: "hidden", display: "-webkit-box", We
 // Half way down the right edge: clear of the banner above and of the screen's corner below.
 export const edge = style({ position: "absolute", right: "0", ...centredY, top: "60%", display: "grid", gap: "4px", justifyItems: "end" });
 export const edgeItem = style({
-  padding: "2px 10px 2px 12px", borderRadius: "999px 0 0 999px", background: vars.raised, color: vars.muted,
+  padding: "2px 10px 2px 12px", borderRadius: "999px 0 0 999px", background: vars.raised, color: vars.muted, // own corner: half a capsule, against the edge
   fontSize: vars.textCaption, lineHeight: vars.leadingCaption,
   selectors: { "&[data-kind=failed]": { color: vars.red }, "&[data-kind=wait]": { color: vars.accentText } },
 });
@@ -41,7 +41,7 @@ export const dockBar = style({
   display: "flex", gap: "10px", padding: "7px", borderRadius: surfaceCorner(7, 8), cornerShape: vars.cornerShape,
   background: `color-mix(in oklab, ${vars.raised} 70%, transparent)`,
 });
-export const appIcon = style({ width: "30px", height: "30px", borderRadius: "8px", background: vars.line });
+export const appIcon = style({ width: "30px", height: "30px", borderRadius: "8px", background: vars.line }); // own corner: an app's icon in the Dock, drawn small
 export const appIconMine = style({ position: "relative", width: "30px", height: "30px" });
 export const appIconImage = style({ display: "block", width: "100%", height: "100%", borderRadius: "22%" });
 export const badge = style({
@@ -73,12 +73,12 @@ export const picAlert = style({
 });
 export const tilePicture = style({
   position: "relative", width: "72px", height: "46px", marginBottom: "4px", overflow: "hidden",
-  borderRadius: "8px", background: vars.canvas, border: `1px solid ${vars.line}`,
+  borderRadius: "8px", background: vars.canvas, border: `1px solid ${vars.line}`, // own corner: a screen, drawn small
 });
 const shape = { position: "absolute", display: "block", background: vars.lineStrong } as const;
 // In the picture's top right corner: as far from both edges, its corner the picture's less that (8 − 5).
 export const picBanner = style({ ...shape, top: "5px", right: "5px", width: "38px", height: "11px", borderRadius: "3px" });
-export const picApp = style({ ...shape, bottom: "5px", left: "26px", width: "18px", height: "18px", borderRadius: "5px", background: vars.accent });
+export const picApp = style({ ...shape, bottom: "5px", left: "26px", width: "18px", height: "18px", borderRadius: "5px", background: vars.accent }); // own corner: the app's icon, drawn small
 export const picBadge = style({ position: "absolute", top: "-4px", right: "-5px", width: "9px", height: "9px", borderRadius: "50%", background: vars.red });
 export const picEdge = style({
   ...shape, right: "0", width: "18px", height: "7px", borderRadius: "4px 0 0 4px",
