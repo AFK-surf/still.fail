@@ -43,6 +43,9 @@ export const entry = style({
   position: "relative", borderRadius: vars.rField, cornerShape: vars.cornerShape, transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: {
     "&:hover, &:has([data-state=open])": { background: vars.list },
+    // Chosen (a press, the keys), and in columns the folder open on the way to the next column.
+    "&:has(> [data-chosen])": { background: vars.selected },
+    "&:has(> [data-along])": { background: vars.list },
     "&[data-busy]": { opacity: ".6" },
     // A folder something dragged over it would go into.
     "&[data-drop]": { background: vars.accentBg, boxShadow: `inset 0 0 0 1px ${vars.accent}` },
@@ -60,9 +63,7 @@ export const row = style({
     // In a tree: in by its depth, its disclosure before its mark.
     "&[data-tree]": { gridTemplateColumns: "12px 20px minmax(0, 1fr) 96px 104px 36px", columnGap: "8px", paddingLeft: "calc(6px + var(--depth, 0) * 18px)" },
     "&[data-tree][data-compact]": { gridTemplateColumns: "12px 18px minmax(0, 1fr) auto 28px" },
-    // Chosen (a press, the keys), and in columns the folder open on the way to the next column.
-    "&[data-chosen]": { background: vars.selected },
-    "&[data-along]": { background: vars.list },
+
     // A folder lent, or one of the station's to pick: no columns of sizes and times.
     [`${list} > &, [role=dialog] &`]: { gridTemplateColumns: "20px minmax(0, 1fr) 16px", minHeight: "44px" },
     [`${list} > &:hover, [role=dialog] &:hover`]: { background: vars.list },
