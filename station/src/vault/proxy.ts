@@ -7,7 +7,7 @@
 import { type KeyObject, createPrivateKey, randomBytes, timingSafeEqual } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { type IncomingMessage, type Server, type ServerResponse, createServer } from "node:http";
-import { request as httpsRequest } from "node:https";
+import { type RequestOptions, request as httpsRequest } from "node:https";
 import { type Socket, connect } from "node:net";
 import { join } from "node:path";
 import { type SecureContext, TLSSocket, createSecureContext, rootCertificates } from "node:tls";
@@ -165,7 +165,8 @@ export class Proxy {
     }
     headers.host = port === 443 ? host : `${host}:${port}`;
     if (swapped) run.used(host);
-    const out = httpsRequest({ host, port, servername: host, method: req.method, path: req.url, headers, ALPNProtocols: ["http/1.1"], ...(this.#trust ? { ca: this.#trust } : {}) }, (answer) => {
+    const options: RequestOptions = { host, port, servername: host, method: req.method, path: req.url, headers, ...(this.#trust ? { ca: this.#trust } : {}) };
+    const out = httpsRequest(options, (answer) => {
       const back: Record<string, string | string[]> = {};
       for (const [name, value] of Object.entries(answer.headers)) if (value !== undefined && !HOP.includes(name)) back[name] = value;
       if (answer.statusMessage) res.statusMessage = answer.statusMessage;
