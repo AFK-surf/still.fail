@@ -22,6 +22,8 @@ import { Notifier } from "../cloud/notify.ts";
 import type { Cloud as CloudState } from "../cloud/state.ts";
 import { adbTools } from "../tools/adb.ts";
 import { screenTools } from "../tools/screen.ts";
+import { Browser } from "../browser/service.ts";
+import { browserTools } from "../tools/browser.ts";
 import { archiveTools } from "../tools/archive.ts";
 import { feedbackTools, tellFixed } from "../tools/feedback.ts";
 import { signedPost } from "../cloud/signed.ts";
@@ -125,6 +127,7 @@ export const AgentsLive = (control: Control) =>
       const key = yield* Key;
       const shares = yield* AdbShares;
       const screens = yield* ScreenRegistry;
+      const browser = yield* Browser;
       const run = join(data, "run");
       const config = new ConfigFile(data);
       // An edit is taken only if it checks out as config.rs `parse_config` would have it.
@@ -245,6 +248,7 @@ export const AgentsLive = (control: Control) =>
           const s = place();
           return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
         }),
+        ...browserTools(browser),
       ];
       // The station's and the runtimes' versions, read at start and every few hours; updated from the pages, or by
       // itself while nothing runs and nothing is asked of it (auto update), watched or not.

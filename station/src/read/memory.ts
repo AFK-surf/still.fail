@@ -7,7 +7,7 @@ import type { Json } from "./store.ts";
 
 /// The skills the station brings (agent_home.rs BUILTIN_SKILLS, and FEEDBACK_SKILL): rewritten at every start, so not
 /// edited on the pages.
-const BUILTIN = ["stillfail-jobs", "stillfail-show", "stillfail-viz", "stillfail-feedback"];
+const BUILTIN = ["stillfail-jobs", "stillfail-show", "stillfail-viz", "stillfail-browser", "stillfail-feedback"];
 /// What a project memory's description starts with.
 const PROJECT_PREFIX = "项目记忆：";
 

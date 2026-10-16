@@ -446,6 +446,19 @@ export const windows: Platform = {
     }));
   },
 
+  browsers(env) {
+    const value = (name: string) => env[Object.keys(env).find((k) => k.toUpperCase() === name.toUpperCase()) ?? ""];
+    const roots = ["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"].flatMap((v) => value(v) ?? []);
+    const under = (...rel: string[]) => roots.map((root) => win32.join(root, ...rel));
+    const found = [
+      ...under("Google", "Chrome", "Application", "chrome.exe"),
+      ...under("Chromium", "Application", "chrome.exe"),
+      ...under("Microsoft", "Edge", "Application", "msedge.exe"),
+    ];
+    return [...new Set(found)].filter((p) => existsSync(p));
+  },
+  hasDisplay: () => true,
+
   hasKeychain: false,
   hasQuickLook: false,
   hasFolderPermissions: false,
