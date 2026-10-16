@@ -315,6 +315,29 @@ class BarTest {
         shot(h, "bar-connects-light")
     }
 
+    /**
+     * Gone up too far: past the panel's top, over 连接's column, and let go there: the bar the ball kept to (the top row's
+     * place) is chosen, as on the web. (It was let go open with nothing chosen: the bar could not be switched.)
+     */
+    @Test fun strokePastTheRows() {
+        val h = launch()
+        val g = bounds("bar-glass")
+        val w = g.width / d
+        val connectsX = g.left + (w - 28 - (w - 56) / 3) * d
+        val r = h.record("bar-stroke-past")
+        val x0 = g.left + 28 * d
+        val y0 = g.top + 28 * d
+        r.touch { down(Offset(x0, y0)) }
+        // Up and across a frame at a time, to 160 over the bar's top: well past the panel's.
+        for (i in 1..30) r.touch { moveTo(Offset(x0 + (connectsX - x0) * i / 30f, y0 - (188 * d) * i / 30f)) }
+        r.frames(20)
+        r.touch { up() }
+        r.frames(40)
+        r.end()
+        assertEquals(1L, h.app.bars.current)
+        assertEquals(listOf<Screen>(Screen.Connects()), h.app.stack)
+    }
+
     /** One frame, the finger doing `block` at its start. */
     private fun Recording.touch(block: TouchInjectionScope.() -> Unit) = frame { rule.onRoot().performTouchInput(block) }
 

@@ -593,13 +593,14 @@ private class BarModel(shown: Boolean, notched: Boolean, ballShown: Boolean) {
     }
 
     /**
-     * The panel let go: on a place in the rows, the panel open (0.85), that bar and that place; elsewhere (on the bar, above
-     * the panel, or the panel not yet open) it ends as the finger left it, open or closed, the lean gone (let go on the
-     * bar, closed: the place under the finger too).
+     * The panel let go: on a place in the rows or above them, the panel open (0.85), that bar and that place (the top row's,
+     * above); elsewhere (on the bar, or the panel not yet open) it ends as the finger left it, open or closed, the lean gone
+     * (let go on the bar, closed: the place under the finger too).
      */
     private fun letGo(g: Geo, p: Offset) {
-        // Over the rows (not above the panel, where it is let go open with nothing chosen).
-        val inRows = p.y >= OVER && p.y < g.rowTop - 4f && g.others.isNotEmpty()
+        // Over the rows, or above the panel (gone up too far: the top row's place the ball keeps to there, as on the web;
+        // it was let go open with nothing chosen, and the bar could not be switched).
+        val inRows = p.y < g.rowTop - 4f && g.others.isNotEmpty()
         if (inRows && o.value >= 0.85f) {
             val i = g.others[g.rowAt(p.y)]
             val set = g.sets[i]
