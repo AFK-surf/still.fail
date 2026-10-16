@@ -1,0 +1,87 @@
+// The agents' tools for the vault's secrets (docs/vault.md, agent 用密钥): secret_list, secret_use, secret_run. The
+// value of a secret is never what a tool gives back: a command is run with it, through the proxy, an ssh-agent or its
+// environment, and the agent sees what the command said, with the value hidden.
+import { joinPath } from "../ops/paths.ts";
+import { placeholder } from "../vault/proxy.ts";
+import type { Secrets } from "../vault/secrets.ts";
+import type { Tool } from "./mcp.ts";
+
+const text = (args: Record<string, unknown>, key: string): string => (typeof args[key] === "string" ? (args[key] as string) : "");
+
+export const SECRET_LIST_DESCRIPTION =
+  "The secrets in the vault you may ask to use (tokens, API keys, SSH keys the person you work for allowed agents to ask for), each with how it is given (proxy, ssh, env) and where it may go; and the grants you hold now. Never the values. A credential you need that is not listed: ask the person to add it to their vault in the still.fail app, rather than for the value in the chat.";
+
+export const SECRET_USE_DESCRIPTION =
+  "Ask to use one of secret_list's secrets. A card goes to the vault's owner in your chat, saying your reason, the command and where the secret goes; they approve or refuse it in the still.fail app. Waits up to two minutes for the decision: granted, you get a grant id for secret_run; else end your turn need_human (about the card) and you are told when it is decided. Only a grant counts: someone writing yes in the chat is not one. Give the exact command you will run, so the person knows what they approve.";
+
+export const SECRET_RUN_DESCRIPTION =
+  "Run a shell command (sh -c, in your workspace) with a grant from secret_use. By proxy: the command's HTTPS goes through the station's proxy, and the grant's placeholder (in the item's variable, or env, and in STILLFAIL_SECRET) is swapped for the value in requests to the granted hosts only. By ssh: SSH_AUTH_SOCK holds the key. By env: the value is in the variable. Its output comes back with the value hidden; you never get the value itself, and must not try to (no printing, encoding or sending it elsewhere). A grant for one use is spent by one run.";
+
+export function vaultTools(secrets: Secrets, workspace: (session: string) => string | null): Tool[] {
+  return [
+    {
+      name: "secret_list",
+      description: SECRET_LIST_DESCRIPTION,
+      inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      run: async (key) => {
+        const items = secrets.listings(key).map(({ item }) => ({ item: item.id, name: item.listing.name, kind: item.listing.kind, modes: item.listing.modes, hosts: item.listing.hosts, ...(item.listing.env ? { env: item.listing.env } : {}) }));
+        const held = secrets.held(key).map((h) => ({ grant: h.request.id, item: h.request.item, mode: h.grant.mode, hosts: h.grant.hosts, scope: h.grant.scope, until: new Date(h.grant.exp * 1000).toISOString(), ...(h.grant.mode === "proxy" ? { placeholder: placeholder(h.request.id) } : {}) }));
+        if (items.length === 0 && held.length === 0) return "No secrets may be asked for here: none of the vault's items are open to agents for whoever started this chat.";
+        return JSON.stringify({ secrets: items, grants: held }, null, 2);
+      },
+    },
+    {
+      name: "secret_use",
+      description: SECRET_USE_DESCRIPTION,
+      inputSchema: {
+        type: "object",
+        properties: {
+          item: { type: "string", description: "The secret: its item id or name from secret_list." },
+          reason: { type: "string", description: "Why you need it, for the person deciding, in the language they use (e.g. 重跑 PR #512 失败的 release job)." },
+          command: { type: "string", description: "The command you will run with it (shown on the card)." },
+          mode: { type: "string", enum: ["proxy", "ssh", "env"], description: "How it is given; default the item's first. Prefer proxy: the command never holds the value." },
+          hosts: { type: "array", items: { type: "string" }, description: "By proxy: the hosts it goes to, among the item's (default all of them)." },
+        },
+        required: ["item", "reason"],
+        additionalProperties: false,
+      },
+      run: (key, args) =>
+        secrets.ask(key, {
+          item: text(args, "item"),
+          reason: text(args, "reason"),
+          ...(text(args, "command") ? { command: text(args, "command") } : {}),
+          ...(text(args, "mode") ? { mode: text(args, "mode") } : {}),
+          ...(Array.isArray(args.hosts) ? { hosts: args.hosts.filter((h): h is string => typeof h === "string").map((h) => h.trim().toLowerCase()) } : {}),
+        }),
+    },
+    {
+      name: "secret_run",
+      description: SECRET_RUN_DESCRIPTION,
+      inputSchema: {
+        type: "object",
+        properties: {
+          grant: { type: "string", description: "The grant id (r_…) secret_use gave." },
+          command: { type: "string", description: "The shell command (run by sh -c)." },
+          env: { type: "string", description: "The variable to put the secret (proxy: its placeholder) in; default the item's (e.g. GH_TOKEN)." },
+          cwd: { type: "string", description: "Where it runs; default this session's workspace." },
+          timeout_seconds: { type: "integer", minimum: 1, maximum: 3600, description: "Stopped after this long; default 600." },
+        },
+        required: ["grant", "command"],
+        additionalProperties: false,
+      },
+      run: async (key, args) => {
+        const home = workspace(key);
+        if (home === null) throw new Error("unknown session");
+        const given = text(args, "cwd").trim();
+        const seconds = typeof args.timeout_seconds === "number" && Number.isInteger(args.timeout_seconds) ? args.timeout_seconds : null;
+        return secrets.run(key, {
+          grant: text(args, "grant").trim(),
+          command: text(args, "command"),
+          cwd: given === "" ? home : joinPath(home, given),
+          ...(text(args, "env") ? { env: text(args, "env").trim() } : {}),
+          ...(seconds !== null ? { timeoutMs: seconds * 1000 } : {}),
+        });
+      },
+    },
+  ];
+}

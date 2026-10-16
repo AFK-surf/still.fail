@@ -57,6 +57,9 @@ import { CREATE, NOTICE, createForPeer, noticeForPeer } from "./opened.ts";
 import { chatsTouched, forPeer, READ } from "./others.ts";
 import { FILE, fileForPeer, PUT, putForPeer } from "./peer-files.ts";
 import { reviewUndecided, startReview } from "./review.ts";
+import { Secrets } from "../vault/secrets.ts";
+import { vaultStore } from "../vault/store.ts";
+import { vaultTools } from "../tools/vault.ts";
 
 /// server.rs `encode` (encodeURIComponent).
 const encode = encodeURIComponent;
@@ -88,6 +91,8 @@ export type AgentsParts = {
   net: Net;
   /// GET /overview as `viewer` sees it.
   overview(viewer: Viewer, lang: Lang): Promise<unknown>;
+  /// The agents' requests for the vault's secrets, and the grants they hold (docs/vault.md).
+  secrets: Secrets;
 };
 
 export class Agents extends Context.Service<Agents, AgentsParts>()("stillfail/Agents") {}
@@ -288,6 +293,11 @@ export const AgentsLive = (control: Control) =>
         ...browserTools(browser),
         ...computerTools(computer),
       ];
+      // The vault's secrets, asked for by agents and granted from the members' apps (docs/vault.md).
+      const vaults = vaultStore(store.db);
+      const secrets = new Secrets({ db: store.db, vaults, hub, data, lock: (ws) => cloud.locked(ws === null || ws === cloud.home() ? null : ws)?.state ?? null, now: () => wall.now() });
+      secrets.listen((r) => events.tell("vault-request", r, `vault-request\0${r.id}`, (viewer) => viewer.workspace === r.ws && vaults.vault(r.ws, r.vault)?.members.includes(viewer.sub) === true));
+      tools.push(...vaultTools(secrets, (k) => store.getSession(k)?.workspace ?? null));
       // The station's and the runtimes' versions, read at start and every few hours; updated from the pages, or by
       // itself while nothing runs and nothing is asked of it (auto update), watched or not.
       const updates = makeUpdates({
@@ -616,6 +626,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ previousGone: previous, hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, slack, overview: view, cloud, net, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      return Agents.of({ previousGone: previous, hub, jobs, remote, mcp, config, usage, updates, accounts, sharing: sharing!, xshare, slack, overview: view, cloud, net, secrets, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
     }),
   );

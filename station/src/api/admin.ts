@@ -22,6 +22,7 @@ import { routes as links } from "./routes/links.ts";
 import { routes as drive } from "./routes/drive.ts";
 import { routes as workspaces } from "./routes/workspaces.ts";
 import { routes as vault } from "./routes/vault.ts";
+import { routes as vaultRequests } from "./routes/vault-requests.ts";
 import { vaultStore } from "../vault/store.ts";
 import { Drive } from "../drive/drive.ts";
 import { ownPaths } from "../ops/own.ts";
@@ -130,6 +131,9 @@ export class Admin {
             lock: (ws) => deps.agents!.cloud.locked(ws === deps.agents!.cloud.home() ? null : ws)?.state ?? null,
             events: deps.events,
           })
+        : []),
+      ...(deps.agents?.cloud && deps.agents.secrets
+        ? vaultRequests({ secrets: deps.agents.secrets, lock: (ws) => deps.agents!.cloud.locked(ws === deps.agents!.cloud.home() ? null : ws)?.state ?? null })
         : []),
       ...(deps.agents?.config
         ? drive({
