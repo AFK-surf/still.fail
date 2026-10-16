@@ -24,7 +24,7 @@ import {
 import { Archive, Bell, Close, Copy, Download, Edit, Folder, Plus, Refresh, Search, Trash } from "@stillfail/ui/icons.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { AT, apk, clips, folder, JOIN_REFUSED, JOINABLE, JOINABLE_NONE, MEMBERSHIPS, note, NOTE, novel, picture } from "./data.ts";
+import { AT, apk, clips, folder, JOIN_REFUSED, JOINABLE, MEMBERSHIPS, note, NOTE, novel, picture } from "./data.ts";
 import type { DemoExtension } from "../src/demo/mount.tsx";
 import CLIP_URL from "./assets/story-clip.mp4?url";
 import PICTURE_URL from "./assets/story-picture.png?url";
@@ -57,9 +57,9 @@ export interface Story {
 
 const at = (name: string) => ({ ...AT, path: name });
 
-/** The demo with stations of other workspaces to add (`list`), none to add, or one that refuses to join. */
-const joining = (kind: "list" | "none" | "error"): DemoExtension => ({
-  topic: (t) => (t.topic === "joinable" ? (kind === "none" ? JOINABLE_NONE : JOINABLE) : undefined),
+/** The demo with stations of other workspaces to add (`list`), or one that refuses to join (none to add: no choice). */
+const joining = (kind: "list" | "error"): DemoExtension => ({
+  topic: (t) => (t.topic === "joinable" ? JOINABLE : undefined),
   call: (name) => (name === "station.join" ? (kind === "error" ? Promise.reject(new Error(JOIN_REFUSED)) : { joined: null }) : undefined),
 });
 /** A workspace with no station yet (its first station's page), with stations of other workspaces to add. */
@@ -278,8 +278,7 @@ export const stories: Story[] = [
   { id: "app-station-joined", group: "应用", title: "station · 从别的 workspace 加入的", app: true, demo: memberships(true), steps: [{ click: '[aria-label^="Station"]' }, { text: "Mini1" }] },
   { id: "app-station-add-existing", group: "应用", title: "添加 station · 已有的", app: true, demo: joining("list"), steps: [{ click: '[aria-label^="Station"]' }, { text: "添加 station" }, { text: "已有的 station" }] },
   { id: "app-first-station-existing", group: "应用", title: "第一台 station · 也可加已有的", app: true, demo: firstJoining },
-  { id: "app-first-station-existing-open", group: "应用", title: "第一台 station · 选已有的", app: true, demo: firstJoining, steps: [{ text: "把别的 workspace 已有的 station 加进来" }] },
-  { id: "app-station-add-existing-none", group: "应用", title: "添加 station · 已有的 · 没有", app: true, demo: joining("none"), steps: [{ click: '[aria-label^="Station"]' }, { text: "添加 station" }, { text: "已有的 station" }] },
+  { id: "app-first-station-existing-open", group: "应用", title: "第一台 station · 选已有的", app: true, demo: firstJoining, steps: [{ text: "加别的 workspace 的 station" }] },
   { id: "app-station-add-existing-error", group: "应用", title: "添加 station · 加入失败", app: true, demo: joining("error"), steps: [{ click: '[aria-label^="Station"]' }, { text: "添加 station" }, { text: "已有的 station" }, { text: "加进来" }] },
   { id: "app-profile", group: "应用", title: "Profile", app: true, steps: [{ click: '[aria-label="Profile"]' }] },
   { id: "app-profile-workspaces", group: "应用", title: "Profile · 也给加入的 workspace 用", app: true, demo: profileFor(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },

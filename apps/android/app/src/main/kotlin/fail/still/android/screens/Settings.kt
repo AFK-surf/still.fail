@@ -516,7 +516,8 @@ fun openAddStation(app: AppState, current: WorkspaceEntry, known: List<String>, 
         var existing by remember { mutableStateOf(existingFirst) }
         // A new machine's command made: that is the way now, the choice gone.
         var made by remember { mutableStateOf(false) }
-        val offered = joinable.value?.offered == true
+        // A station of another workspace to add: offered only while there is one.
+        val offered = joinable.value?.let { it.offered && it.items.isNotEmpty() } == true
         SheetGrab()
         SheetHead(t("android-settings.station.add"))
         // Unpadded itself: the picking rows of an existing station go edge to edge (their words in line with the rest).
@@ -659,10 +660,9 @@ fun FirstStation(current: WorkspaceEntry) {
                     AddStationSteps(current, emptyList(), label = t("android-settings.station.firstName"), placeholder = t("android-settings.station.firstPlaceholder")) {}
                     // A station the viewer manages in another workspace, added here as it is instead (docs/multi-workspace.md).
                     val joinable by rememberTopic<JoinableView>(app.core, Topics.joinable(current.workspace.id))
-                    if (joinable.value?.offered == true) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                            Button(t("web-pages.settings.stations.firstExisting"), primary = false) { openAddStation(app, current, emptyList(), existingFirst = true) }
-                        }
+                    if (joinable.value?.let { it.offered && it.items.isNotEmpty() } == true) {
+                        Text(t("web-pages.settings.stations.firstExisting"), fontSize = 14.sp, color = C.accent,
+                            modifier = Modifier.clickable { openAddStation(app, current, emptyList(), existingFirst = true) })
                     }
                 }
             }

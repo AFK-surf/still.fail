@@ -25,7 +25,7 @@ import { emojiMark, firstEmoji, glyphMark, kindOf, NO_MARK, pictureMark, picture
 import * as markCss from "../StationMark.css.ts";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
-import { Button, Card, Field, Illustration, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, PlaceHead, SectionHeader, Seg, Spinner } from "./parts.tsx";
+import { Button, Card, Field, Illustration, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, PlaceHead, SectionHeader, Seg, Spinner } from "./parts.tsx";
 import { usePlaceActions } from "./placeActions.tsx";
 import * as css from "./Stations.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -172,11 +172,11 @@ export function AddStationSheet({ known, existing: first = false }: { known: str
       <SheetGrab />
       <SheetHead title={t("web-mobile.stations.add")} />
       <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
-        {joinable?.offered && !made && (
+        {joinable?.offered && joinable.items.length > 0 && !made && (
           <Seg options={[t("web-pages.settings.stations.kindNew"), t("web-pages.settings.stations.kindExisting")]} selected={existing ? 1 : 0}
             onSelect={(i) => setExisting(i === 1)} fill height={34} radius={17} />
         )}
-        {joinable?.offered && existing && !made ? <JoinStation joinable={joinable} /> : !made ? (
+        {joinable?.offered && joinable.items.length > 0 && existing && !made ? <JoinStation joinable={joinable} /> : !made ? (
           <>
             <p className={partsCss.mMuted}>{t("web-mobile.stations.addNote", { name: NAME })}</p>
             <b className={sheetsCss.mFormLabel}>{t("web-mobile.workspaces.name")}</b>
@@ -352,7 +352,7 @@ export function FirstStation() {
                 cloud.enroll(app.entry.account.sub, app.entry.id, name.trim()).then(setMade, (e: Error) => setError(e.message));
               }} />
               {/* A station the viewer manages in another workspace, added here as it is instead (docs/multi-workspace.md). */}
-              {joinable?.offered && <Button label={t("web-pages.settings.stations.firstExisting")} primary={false}
+              {joinable?.offered && joinable.items.length > 0 && <LinkButton label={t("web-pages.settings.stations.firstExisting")}
                 onClick={() => app.sheet({ height: 0.72, draggable: true, content: () => <AddStationSheet known={[]} existing /> })} />}
             </>
           )}

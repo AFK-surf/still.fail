@@ -43,7 +43,7 @@ import { AddProfile } from "../pages/AddProfile.tsx";
 import { ProfilesNav } from "../ProfilesNav.tsx";
 import { NavAction, NavList, NavItem, NavTop } from "../SidebarList.tsx";
 import { SecurityOpen, SecurityPrompt, SecuritySettings, SecurityWaiting, useLock } from "./Security.tsx";
-import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemoryDocSettings, MemorySettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
+import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, JoinExistingLink, MemoryDocSettings, MemorySettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, StationContext, stationBase, useSidebarMode, useStationList, type Station } from "../station.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { Button, Dialog, Empty, Field, ICON, Loading, Select, Tip } from "../ui.tsx";
@@ -286,6 +286,7 @@ function Onboarding({ entry }: { entry: WorkspaceEntry }) {
           <Link className={chatCss.inlineLink} to={`/w/${entry.id}/settings/workspace`}>{t("web-pages.workspace.onboarding.invite")}</Link>
           <span aria-hidden="true"> · </span>
           <Link className={chatCss.inlineLink} to={`/w/${entry.id}/settings/workspace`}>{t("web-pages.workspace.onboarding.settings")}</Link>
+          <JoinExistingLink entry={entry} className={`${chatCss.inlineLink} ${css.onboardingLinkButton}`} />
         </p>
       </main>
     </div>

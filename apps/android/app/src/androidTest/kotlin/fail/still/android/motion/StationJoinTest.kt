@@ -140,14 +140,10 @@ class StationJoinTest {
         rule.runOnUiThread { h.app.sheet = null }
         h.settle()
 
-        // None to add: said so; the button stays off.
+        // None to add: no choice, the sheet as it was.
         rule.runOnUiThread { h.fake.put(Topics.joinable(ws), JoinableView(offered = true, loading = false, items = emptyList())) }
         openSheet(h)
-        rule.onNodeWithText("已有的 station").performClick()
-        h.settle()
-        rule.onNodeWithText("你管理的其他 workspace 里没有能加进来的 station").assertIsDisplayed()
-        join().assertIsNotEnabled()
-        picture(h, "join-sheet-empty-$tone")
+        assertEquals(0, rule.onAllNodesWithText("已有的 station").fetchSemanticsNodes().size)
         rule.runOnUiThread { h.app.sheet = null }
         h.settle()
 

@@ -132,7 +132,6 @@ export const JOINABLE = {
   ],
 };
 /** None to add: the viewer manages another workspace, but its stations are all here already. */
-export const JOINABLE_NONE = { offered: true, loading: false, items: [] };
 /** What a station from before several workspaces answers, in the core's words. */
 export const JOIN_REFUSED = "这台 station 还不能在多个 workspace 里，先更新它";
 
