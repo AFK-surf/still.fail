@@ -91,7 +91,8 @@ export class Router implements Source {
   }
 
   /// What is waited on: of a workspace, its own waits, its account's socket and the relay opened for no station; of
-  /// none, every workspace's and all the device's.
+  /// none, every workspace's and all the device's, each station said with its workspace's name when there are several
+  /// (one station may be in several workspaces).
   statusValue(workspace: string | null): unknown {
     const core = this.#core;
     if (workspace !== null) {
@@ -101,8 +102,9 @@ export class Router implements Source {
         [core.status, { for: of.owner !== null ? [of.owner] : [] }],
       ]);
     }
-    const parts: [status.Status, status.Take][] = core.workspaces.all().map((w) => [w.status, "all"]);
-    parts.push([core.status, "all"]);
+    const all = core.workspaces.all();
+    const parts: [status.Status, status.Take, string | null][] = all.map((w) => [w.status, "all", all.length > 1 ? (core.cloudSync.workspaceName(w.id) ?? w.id) : null]);
+    parts.push([core.status, "all", null]);
     return status.value(parts);
   }
 }

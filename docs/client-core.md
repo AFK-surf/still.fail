@@ -15,7 +15,7 @@ client. Only iroh and, on Android, the IO are native:
 The UI never talks to still.fail cloud or a station itself. It sends **calls** and
 holds **subscriptions** to the core over one message channel, and renders the
 snapshots the core pushes. Several UIs (tabs, windows) share one core: one
-device key, one link per station, one token refresh, one cache.
+device key, one link per station address, one token refresh, one cache.
 
 ## Execution model
 
@@ -82,7 +82,12 @@ What differs per platform comes in through one interface, `Host`
 
 iroh comes from the host too (`src/iroh.ts`): the browser's is relay-only (no
 UDP), the native ones are the full endpoint. The credential, renewal, request
-lines and the choice of relay are the core's (`src/mesh.ts`).
+lines and the choice of relay are the core's (`src/mesh.ts`). Links are kept by
+station address: a station in several workspaces (docs/multi-workspace.md) has
+a link in each, dialled to the same station id, each presenting its own
+workspace's credential and renewed, dropped and reopened on its own; how fast
+a relay brought replies and what went over the links today are the station's,
+shared.
 
 ## Protocol (UI ↔ core)
 
@@ -182,9 +187,9 @@ notices are only of the workspace the viewer is in (attend.ts).
 | `thread` | `station`, `thread` (id) | `{ first, last, caught, end, entries, thread }`: a window of the thread's entries `first ..= last` (`EntryView`s, never changed once read), at most 150 (`WINDOW`). It opens where the chat is to be read — the page before the first entry not read and the page from it while something is unread, else where it was left (`chat.place`), else the latest page — and its first value is whole: from what is kept when all of it is and it is current (the station's `threads` say how far each goes), else read first. `chat.older` / `chat.newer` bring in the page before / after (a page is kept ahead either way), as many going at the other end; `end`: it reaches the thread's latest entry, so what is said joins it; short of it, what is said waits on the device. `caught`: its last entry read rather than told as it was said. `thread` is its summary |
 | `live` | `station`, `key` | the session as it runs (below) |
 | `host` | `station` | host samples (`HostInfo`) |
-| `status` | `workspace?` | what the core is waiting on, when it is worth saying (`StatusView`, status.ts): of a workspace its stations' waits (the relay and links opened for them too), its account's still.fail cloud socket down and the relay opened for no station; with none, all of it |
+| `status` | `workspace?` | what the core is waiting on, when it is worth saying (`StatusView`, status.ts): of a workspace its stations' waits (the relay and links opened for them too), its account's still.fail cloud socket down and the relay opened for no station; with none, all of it, each station said with its workspace's name (`bft · Team`) while the core has more than one workspace |
 | `connection` | `station` | what a chat on the station says of its connection (`ConnectionView`, pill.ts): its link down or coming back, else its workspace's `status`; trouble at once, coming back only after 1.5 s, `back` (已连上) 1.5 s only after one was shown. No page shows it any more (the phones dropped the pill over a chat); kept for apps from before |
-| `notices` | `workspace?` | what a person hears about while the client runs: chats of theirs that want them (docs/notifications.md); a workspace's, or every one's |
+| `notices` | `workspace?` | what a person hears about while the client runs: chats of theirs that want them (docs/notifications.md); a workspace's, or every one's (each `Notice` names its `workspace` and `station` address) |
 | `notify` | `workspace?` | notifications on this device: on or off, asked, whether to hold pushes, the notices to show now (docs/notifications.md), only the workspace's for a page in one |
 | `adbShare` | — | this phone's adb as lent to a station's agents (`AdbShareView`, adb.ts; docs/adb-share.md): whether it is and to which, how the offer goes (`phase`), how the station's adb holds the phone (`adb`, `serial`, `message`), until when, the tunnels open now. Kept in memory only |
 
@@ -550,7 +555,7 @@ The core's modules (`client/core-ts/src`):
 - `data.ts`, `db/` — the data (docs/core-db.md): a SQLite database per signed-in account (`db/schema.ts` its tables and migrations, `db/account.ts` its writer and reads), the device's own values, what came before imported once (`db/import.ts`).
 - `sync/scheduler.ts`, `sync/cloud.ts`, `station/sync.ts` — everything kept current, by itself; `station/topics.ts` — the station topics, read from the records; `station/requests.ts`, `station/wire.ts` — requests over a link.
 - `accounts.ts` — sign-in (PKCE), token refresh (one at a time per account), persistence. `cloud.ts` — still.fail cloud's API.
-- `mesh.ts` — the device endpoint and station links: the credential and its renewal, reopening, hedging on a wake, relay measurement and moving.
+- `mesh.ts` — the device endpoint and station links, one per station address: the credential and its renewal, reopening, hedging on a wake, relay measurement and moving.
 - `entries.ts` — a thread's entries merged into messages (edits applied): the one place that does it.
 - `workspace.ts` — the workspaces, each with what is its own. `notices.ts`, `attend.ts` (`client.focus`, `notify`), `status.ts`, `pill.ts`, `doing.ts`, `adb.ts`.
 - `activity.ts`, `history.ts`, `present.ts`, `format.ts`, `decisions.ts`, `jobs.ts`, `looks.ts`, `changelog.ts` — what the clients show, decided once for every client.

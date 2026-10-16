@@ -195,7 +195,7 @@ export class Adb {
     return Effect.gen({ self: this }, function* () {
       const addr = StationAddr.parse(station);
       const mesh = yield* this.#env.mesh();
-      const link = yield* mesh.link(addr.station, this.#env.credentials(addr.workspace), this.#env.relays(addr.workspace));
+      const link = yield* mesh.link(addr.toString(), this.#env.credentials(addr.workspace), this.#env.relays(addr.workspace));
       return [mesh, link] as [Mesh, Link];
     });
   }

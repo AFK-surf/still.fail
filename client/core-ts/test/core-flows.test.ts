@@ -63,6 +63,8 @@ test("two_workspaces_are_kept_apart", async () => {
   assert.ok(String(v(values, 3).text).startsWith("一号 读取对话 · 3 秒"), JSON.stringify(v(values, 3)));
   assert.equal(v(values, 4).state ?? null, null, JSON.stringify(v(values, 4)));
   assert.equal(v(values, 5).items.length, 1);
+  // The plain one says the station's workspace too (its name, not held here: its id): two workspaces are said in it.
+  assert.equal(v(values, 5).items[0].text, "一号 · w1 读取对话", JSON.stringify(v(values, 5)));
   // What a new chat was last started on: each workspace's own.
   call(core, ui, 6, "newChat.pick", { scope: "w1", station: "a" });
   await host.settle();

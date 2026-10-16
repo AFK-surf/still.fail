@@ -227,6 +227,75 @@ sim("reopens_a_closed_link_with_a_new_credential", async (s) => {
   await close(s, station, mesh);
 });
 
+/// docs/multi-workspace.md: a station in two workspaces is reached in each on a link of its own (one station id, two
+/// addresses), opened and renewed with that workspace's credential; one dropped leaves the other.
+sim("a_station_in_two_workspaces_has_a_link_in_each_with_its_own_credential", async (s) => {
+  const { mesh, station } = await setup(s);
+  const [a, b] = [`wa/${station.id()}`, `wb/${station.id()}`];
+  const [countA, countB] = [{ n: 0 }, { n: 0 }];
+  const linkA = await s.run(mesh.link(a, grants("ok-a", countA)));
+  const linkB = await s.run(mesh.link(b, grants("ok-b", countB)));
+  assert.notEqual(linkA, linkB);
+  assert.deepEqual(station.firsts, ["ok-a-1", "ok-b-1"]);
+  // Each asked again keeps its own.
+  assert.equal(await s.run(mesh.link(a, grants("ok-a", countA))), linkA);
+  assert.equal(await s.run(mesh.link(b, grants("ok-b", countB))), linkB);
+  assert.equal(station.conns.length, 2);
+  // Each renewed with its own workspace's.
+  await s.time.pass(RENEW_MS + 1000);
+  assert.deepEqual([linkA.credential, linkB.credential], ["ok-a-2", "ok-b-2"]);
+  // One dropped: the other stays, and still answers.
+  mesh.dropLink(a);
+  await s.until(() => linkA.closed() !== null);
+  assert.equal(mesh.current(a), null);
+  assert.equal(mesh.current(b), linkB);
+  assert.equal(linkB.closed(), null);
+  assert.equal((await request(s, linkB, head("/admin/api/overview"))).status, 200);
+  // Asked again: opened anew with its own.
+  const again = await s.run(mesh.link(a, grants("ok-a", countA)));
+  assert.notEqual(again, linkA);
+  assert.equal(station.firsts.at(-1), "ok-a-3");
+  assert.equal(mesh.current(b), linkB);
+  await close(s, station, mesh);
+});
+
+/// Through the wire, as the core asks: the credential refused in one workspace refuses the station there alone; the
+/// next asking there opens its link anew with a fresh one, and a reset there drops that link alone.
+sim("a_refusal_or_reset_in_one_workspace_leaves_the_stations_link_in_another", async (s) => {
+  const { mesh, station } = await setup(s);
+  const status = new Status(s.host, s.runner);
+  const said = new Map([["wa", "ok-a"], ["wb", "bad-b"]]);
+  const counts = new Map([["wa", { n: 0 }], ["wb", { n: 0 }]]);
+  const credentials = (ws: string): CredentialSource => (device, fresh) => grants(said.get(ws)!, counts.get(ws)!)(device, fresh);
+  const wire = new MeshWire({ mesh: () => Effect.succeed(mesh), meshNow: () => mesh, credentials, relays: () => [], status: () => status });
+  const [a, b] = [new StationAddr("wa", station.id()), new StationAddr("wb", station.id())];
+  const get: RequestHead = { method: "GET", path: "/admin/api/overview", headers: [] };
+  const ask = (at: StationAddr) => s.run(Effect.scoped(Effect.flatMap(wire.request(at, get, new Uint8Array()), (r) => Effect.map(readAll(r.body), () => r.status))));
+  assert.equal(await ask(a), 200);
+  const linkA = mesh.current(a.toString())!;
+  const refused = await ask(b).then(
+    () => null,
+    (e) => e as CoreError,
+  );
+  assert.equal(refused?.code, "credential_refused", JSON.stringify(refused));
+  assert.equal(mesh.current(a.toString()), linkA);
+  assert.equal(linkA.closed(), null);
+  // Its credential good again: b's link opened anew with a fresh one, a's untouched.
+  said.set("wb", "ok-b");
+  assert.equal(await ask(b), 200);
+  const linkB = mesh.current(b.toString())!;
+  assert.notEqual(linkB, linkA);
+  assert.deepEqual(station.firsts, ["ok-a-1", "bad-b-1", "ok-b-2"]);
+  // Reset in b: a's link stays and answers.
+  wire.reset(b);
+  await s.until(() => linkB.closed() !== null);
+  assert.equal(mesh.current(b.toString()), null);
+  assert.equal(await ask(a), 200);
+  assert.equal(mesh.current(a.toString()), linkA);
+  assert.equal(linkA.closed(), null);
+  await close(s, station, mesh);
+});
+
 sim("keeps_the_device_key_and_migrates_to_the_pages", async (s) => {
   const e = env(s);
   const first = await s.run(Mesh.make(e, []));
@@ -284,9 +353,10 @@ sim("a_link_gone_quiet_is_replaced_by_one_opened_beside_it_at_once", async (s) =
 /// read asked then went back on the old, which was closed under it as it retired.
 sim("a_link_lost_soon_after_it_replaced_one_gone_quiet_is_not_traded_for_that_one", async (s) => {
   const { mesh, station } = await setup(s);
-  const id = station.id();
+  // The mesh asked by the station's address, as the wire asks it.
+  const id = `w/${station.id()}`;
   const wire = wireOf(s, mesh);
-  const addr = StationAddr.parse(`w/${id}`);
+  const addr = StationAddr.parse(id);
   const get: RequestHead = { method: "GET", path: "/admin/api/overview", headers: [] };
   const ask = () => s.runner.run(Effect.scoped(Effect.flatMap(wire.request(addr, get, new Uint8Array()), (r) => Effect.map(readAll(r.body), () => r.status))));
   const old = await s.run(mesh.link(id, grants("ok", { n: 0 })));
@@ -479,10 +549,11 @@ sim("a_device_whose_own_relay_loses_the_station_is_linked_through_the_others", a
   const a = s.relay("https://a.relay.test/", { station: { ms: 70, loss: 0.35 } });
   const b = s.relay("https://b.relay.test/", { device: { ms: 30 }, station: { ms: 30 } });
   const c = s.relay("https://c.relay.test/", { device: { ms: 150 }, station: { ms: 5 } });
-  const { station, mesh, id } = await onRelays(s, [a, b, c]);
+  const { station, mesh, id: bare } = await onRelays(s, [a, b, c]);
+  const id = `w/${bare}`;
   // A read as the core asks one, whole: how long it takes.
   const wire = wireOf(s, mesh);
-  const addr = StationAddr.parse(`w/${id}`);
+  const addr = StationAddr.parse(id);
   const read = async () => {
     const started = s.time.now();
     const status = await s.run(Effect.scoped(Effect.flatMap(wire.request(addr, { method: "GET", path: "/admin/api/overview", headers: [] }, new Uint8Array()), (r) => Effect.map(readAll(r.body), () => r.status))));
@@ -585,12 +656,13 @@ sim("requests_leave_a_way_that_turns_bad", async (s) => {
 sim("a_read_slow_on_its_way_is_answered_on_another", async (s) => {
   const a = s.relay("https://a.relay.test/", { station: { ms: 10 } });
   const b = s.relay("https://b.relay.test/", { station: { ms: 40 } });
-  const { station, mesh, id } = await onRelays(s, [a, b]);
+  const { station, mesh, id: bare } = await onRelays(s, [a, b]);
+  const id = `w/${bare}`;
   await reach(s, mesh, id);
   await s.time.pass(60_000);
   assert.ok(sameRelay(via(mesh, id), a), `${via(mesh, id)}`);
   const wire = wireOf(s, mesh);
-  const addr = StationAddr.parse(`w/${id}`);
+  const addr = StationAddr.parse(id);
   // Down: a ping on it tells after PING_TIMEOUT_MS at the soonest, the read is asked on b well before.
   s.net.down(a, 5 * 60_000);
   const started = s.time.now();
@@ -619,10 +691,11 @@ sim("ways_as_good_as_each_other_are_not_swapped", async (s) => {
 sim("requests_leave_a_way_found_slow_for_one_that_brings_replies_sooner", async (s) => {
   const a = s.relay("https://a.relay.test/", { station: { ms: 100 } });
   const b = s.relay("https://b.relay.test/", { device: { ms: 60, bps: 256 * 1024 } });
-  const { station, mesh, id } = await onRelays(s, [b, a]);
+  const { station, mesh, id: bare } = await onRelays(s, [b, a]);
+  const id = `w/${bare}`;
   await reach(s, mesh, id);
   const wire = wireOf(s, mesh);
-  const addr = StationAddr.parse(`w/${id}`);
+  const addr = StationAddr.parse(id);
   const big = async () => {
     const started = s.time.now();
     const bytes = await s.run(Effect.scoped(Effect.flatMap(wire.request(addr, { method: "GET", path: "/admin/api/big", headers: [] }, new Uint8Array()), (r) => readAll(r.body))));

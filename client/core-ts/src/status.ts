@@ -162,11 +162,14 @@ export class Status {
     this.#runner.fork(Effect.repeat(Effect.sleep(TICK_MS).pipe(Effect.andThen(step)), { while: (busy) => busy }));
   }
 
-  #placeName(place: Place): string | null {
+  /// `label`: the workspace a station is said with, when waits of several workspaces are said together (a station may
+  /// be in several, named the same in each).
+  #placeName(place: Place, label: string | null): string | null {
     if ("cloud" in place) return `${brand.name()} cloud`;
     if ("relay" in place) return "relay";
-    const name = this.#nameOf?.(place.station) ?? null;
-    return name === null || name === "" ? null : name;
+    const found = this.#nameOf?.(place.station) ?? null;
+    const name = found === null || found === "" ? null : found;
+    return label === null ? name : `${name ?? "station"} · ${label}`;
   }
 
   /// The `status` topic's value of these waits alone.
@@ -174,7 +177,7 @@ export class Status {
     return value([[this, "all"]]);
   }
 
-  gather(take: Take, into: Gathered): void {
+  gather(take: Take, into: Gathered, label: string | null = null): void {
     const now = this.now();
     const wanted = (sub: string) => take === "all" || take.for.includes(sub);
     for (const sub of [...this.#db.keys()].sort()) {
@@ -189,7 +192,7 @@ export class Status {
       const w = this.#waits.get(id)!;
       if (now - w.since < SLOW_MS) continue;
       if (take !== "all" && !("relay" in w.place)) continue;
-      into.slow.push({ place: this.#placeName(w.place), what: w.what, connecting: w.connecting, age: now - w.since, bytes: w.bytes });
+      into.slow.push({ place: this.#placeName(w.place, label), what: w.what, connecting: w.connecting, age: now - w.since, bytes: w.bytes });
     }
     if (this.#received.length > 0) into.window = Math.max(into.window, Math.min(Math.max(now - this.#received[0][0], 1_000), RATE_WINDOW_MS));
     into.recent += this.#received.filter(([at]) => now - at <= RATE_WINDOW_MS).reduce((s, [, n]) => s + n, 0);
@@ -200,10 +203,10 @@ type Shown = { retryIn: number; message: string; tries: number };
 type Slow = { place: string | null; what: string; connecting: boolean; age: number; bytes: number };
 export type Gathered = { downs: Shown[]; slow: Slow[]; recent: number; window: number; db: { kind: string; detail: string | null }[] };
 
-/// The `status` topic's value (StatusView) of these sets of waits.
-export function value(parts: [Status, Take][]): Record<string, unknown> {
+/// The `status` topic's value (StatusView) of these sets of waits; a set's label says its stations' workspace.
+export function value(parts: ([Status, Take] | [Status, Take, string | null])[]): Record<string, unknown> {
   const all: Gathered = { downs: [], slow: [], recent: 0, window: 0, db: [] };
-  for (const [status, take] of parts) status.gather(take, all);
+  for (const [status, take, label] of parts) status.gather(take, all, label ?? null);
   const items: Record<string, unknown>[] = [];
   // What is kept on the device first: it lasts until something is done about it.
   const said = new Set<string>();

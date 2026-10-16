@@ -72,6 +72,12 @@ export class CloudSync {
     return isObject(station) && typeof station.name === "string" ? station.name : null;
   }
 
+  /// A workspace's name, as it is held; null while not known.
+  workspaceName(id: string): string | null {
+    const workspace = this.#core.data.shared({ topic: "workspace", workspace: id });
+    return isObject(workspace) && typeof workspace.name === "string" && workspace.name !== "" ? workspace.name : null;
+  }
+
   /// Every account with what its `/v1/me` said. `loaded` only once it answered this run.
   workspacesValue(): unknown {
     const core = this.#core;

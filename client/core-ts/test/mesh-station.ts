@@ -15,6 +15,8 @@ export const REAL: World = { bind: (o) => addon.bind(o), sleep: (ms) => new Prom
 export class Station {
   endpoint: J;
   grants: string[] = [];
+  /// Each connection's first credential, in the order they came.
+  firsts: string[] = [];
   conns: J[] = [];
   /// Connections before this one answer nothing more.
   deadBelow = 0;
@@ -98,6 +100,7 @@ export class Station {
     const carry = { bytes: Buffer.alloc(0) };
     const first = await Station.readLine(control, carry);
     if (first === null) return;
+    this.firsts.push(JSON.parse(first).credential);
     const reply = this.#answer(first);
     await control.write(Buffer.from(`${JSON.stringify(reply)}\n`));
     if (reply.error) {
