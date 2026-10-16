@@ -185,12 +185,12 @@
   "core-misc.composer.upload_failed": "上传失败",
   "core-misc.lock.stationOld": "{name} 版本过旧，请先更新再加入",
   "core-misc.lock.stationOffline": "无法连接 {name}，请在其上线后再加入",
-  "core-misc.screen.opening": "打开屏幕",
-  "core-misc.screen.noWire": "这里看不了 station 的屏幕",
-  "core-misc.screen.timeout": "屏幕没有打开：station 没有回应",
-  "core-misc.screen.noCodec": "没有这台设备能解码的格式",
-  "core-misc.screen.badInput": "不认识的输入",
-  "core-misc.screen.closed": "这个屏幕已经关了",
-  "core-misc.screen.open": "这个名字的屏幕已经开着",
-  "core-misc.screen.garbled": "屏幕的数据读不懂：{error}"
+  "core-misc.screen.opening": "正在打开屏幕",
+  "core-misc.screen.noWire": "此处无法查看 station 的屏幕",
+  "core-misc.screen.timeout": "屏幕未能打开：station 无响应",
+  "core-misc.screen.noCodec": "没有此设备可解码的格式",
+  "core-misc.screen.badInput": "无法识别的输入",
+  "core-misc.screen.closed": "此屏幕已关闭",
+  "core-misc.screen.open": "同名屏幕已打开",
+  "core-misc.screen.garbled": "无法解析屏幕数据：{error}"
 }

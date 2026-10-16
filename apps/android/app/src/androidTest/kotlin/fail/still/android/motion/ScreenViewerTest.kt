@@ -301,12 +301,12 @@ class ScreenViewerTest {
         val s = v.open()
         assertEquals(null, v.told(VIEW).single()["control"])
         val agent = "Agent「修登录」"
-        v.state("live", control = false, others = listOf(agent, "Bob"), controllers = listOf(agent), takeOver = true, line = "只看 · $agent 在控制 · Bob 也在看")
+        v.state("live", control = false, others = listOf(agent, "Bob"), controllers = listOf(agent), takeOver = true, line = "只看 · $agent 正在控制 · Bob 也在查看")
         v.config()
         v.frame(1000)
         rule.waitUntil(5_000) { v.acked(1000) }
         v.shot("screen-agent-driving")
-        rule.onNodeWithText("$agent 在控制").assertIsDisplayed()
+        rule.onNodeWithText("$agent 正在控制").assertIsDisplayed()
         // Only looking: a tap is not sent.
         rule.onNodeWithTag(STAGE).performTouchInput { click(v.at(0.5f, 0.5f)) }
         v.h.settle()
@@ -323,7 +323,7 @@ class ScreenViewerTest {
         assertEquals(s.view, asked["view"]!!.jsonPrimitive.contentOrNull)
         assertEquals(true, asked["control"]!!.jsonPrimitive.contentOrNull?.toBoolean())
         // The core opens it again driving; the agent waits.
-        v.state("live", control = true, others = listOf(agent, "Bob"), controllers = emptyList(), takeOver = false, line = "控制 · $agent 暂停中 · Bob 也在看")
+        v.state("live", control = true, others = listOf(agent, "Bob"), controllers = emptyList(), takeOver = false, line = "控制 · $agent 已暂停 · Bob 也在查看")
         v.frame(1066)
         rule.waitUntil(5_000) { v.acked(1066) }
         v.shot("screen-agent-paused-landscape")
@@ -333,7 +333,7 @@ class ScreenViewerTest {
         v.frame(1100)
         rule.waitUntil(5_000) { v.acked(1100) }
         v.shot("screen-agent-paused")
-        rule.onNodeWithText("控制 · $agent 暂停中 · Bob 也在看").assertIsDisplayed()
+        rule.onNodeWithText("控制 · $agent 已暂停 · Bob 也在查看").assertIsDisplayed()
         // Driving now: a tap is a click.
         rule.onNodeWithTag(STAGE).performTouchInput { click(v.at(0.5f, 0.5f)) }
         rule.waitUntil(5_000) { v.inputs().size >= 2 }
@@ -345,7 +345,7 @@ class ScreenViewerTest {
         val v = Viewer(dark = true)
         v.open()
         val agent = "Agent「修登录」"
-        v.state("live", control = false, others = listOf(agent), controllers = listOf(agent), takeOver = true, line = "只看 · $agent 在控制")
+        v.state("live", control = false, others = listOf(agent), controllers = listOf(agent), takeOver = true, line = "只看 · $agent 正在控制")
         v.config()
         v.frame(1000)
         rule.waitUntil(5_000) { v.acked(1000) }
@@ -417,7 +417,7 @@ class ScreenViewerTest {
         v.h.deliver()
         v.shot("screen-ended")
         rule.onNodeWithText("已结束").assertIsDisplayed()
-        rule.onNodeWithText("再试一次").assertIsDisplayed()
+        rule.onNodeWithText("重试").assertIsDisplayed()
 
         for ((phase, why) in listOf(
             "outdated" to "这台 station 的版本还不能共享屏幕，更新后再试",

@@ -300,7 +300,7 @@ test("what a view cannot be: answered with a status and why, in the asker's lang
   const body = async (v: Awaited<ReturnType<typeof open>>) => JSON.parse((await v.client.rest()).toString());
   const none = await open(hub, member, { codecs: ["h264"] }, "/admin/api/screens/elsewhere/view");
   assert.equal(none.answer.status, 404);
-  assert.equal((await body(none)).error, "This screen isn't on this station any more");
+  assert.equal((await body(none)).error, "This screen is no longer on this station");
   const codecs = await open(hub, member, { codecs: ["vp9"] });
   assert.equal(codecs.answer.status, 400);
   const path = await open(hub, member, { codecs: ["h264"] }, "/admin/api/screens/fake");
@@ -313,7 +313,7 @@ test("what a view cannot be: answered with a status and why, in the asker's lang
   const said = await body(refused);
   assert.equal(
     said.error,
-    "This Mac hasn't let still.fail Helper record its screen yet. This Mac hasn't let still.fail Helper control it yet (Accessibility), so the screen can be seen but not driven. A window on that Mac is asking for it now: click Allow there and drag still.fail Helper into the list System Settings shows, then open the screen again.",
+    "This Mac hasn't let still.fail Helper record its screen yet. This Mac hasn't allowed still.fail Helper to control it yet (Accessibility), so the screen can be viewed but not controlled. A permission window is open on that Mac: click Allow there, drag still.fail Helper into the list in System Settings, then open the screen again.",
   );
   assert.deepEqual(said.access, { capture: false, control: false, message: said.error, app: "still.fail Helper", path: "/x/still.fail Helper.app", asking: true });
   source.refuse = new Error("tab crashed");
@@ -333,7 +333,7 @@ test("the list: GET /screens with each source's access; an old station's 404; `s
   assert.equal(answer.status, 200);
   assert.deepEqual(JSON.parse((answer.body as Buffer).toString()).screens[1], {
     id: "desktop", kind: "desktop", title: "studio", width: 0, height: 0, viewers: [], controlledBy: [],
-    access: { capture: false, control: false, message: "目前只能看到 macOS station 的本机屏幕" },
+    access: { capture: false, control: false, message: "目前仅支持查看 macOS station 的本机屏幕" },
   });
   // What a station without screens (one from before) answers.
   assert.equal((await ask(new Admin({ names: new Map(), read: async () => "{}" } as any), "en")).status, 404);
@@ -349,8 +349,8 @@ test("the list: GET /screens with each source's access; an old station's 404; `s
       if (m) return JSON.parse(m[1]!);
     }
   };
-  assert.equal((await told(zh)).screens[1].access.message, "目前只能看到 macOS station 的本机屏幕");
-  assert.equal((await told(en)).screens[1].access.message, "Seeing this machine's screen works only on macOS stations for now");
+  assert.equal((await told(zh)).screens[1].access.message, "目前仅支持查看 macOS station 的本机屏幕");
+  assert.equal((await told(en)).screens[1].access.message, "Only macOS stations' own screens can be viewed for now");
   await zh.return!();
   await en.return!();
 });

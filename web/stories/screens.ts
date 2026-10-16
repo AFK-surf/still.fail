@@ -11,7 +11,7 @@ const LINK = "/w/demo/s/local/screen";
 export const SCREENS: ScreensView = {
   screens: [
     { id: "desktop", kind: "desktop", title: "桌面", width: 3024, height: 1890, viewers: [], line: "桌面 · 3024×1890", link: `${LINK}/desktop` },
-    { id: "browser:7F3A9C", kind: "browser", title: "登录 · GitHub", width: 1600, height: 1000, viewers: ["张三"], line: "浏览器标签页 · 1600×1000 · 张三 在看", link: `${LINK}/browser%3A7F3A9C` },
+    { id: "browser:7F3A9C", kind: "browser", title: "登录 · GitHub", width: 1600, height: 1000, viewers: ["张三"], line: "浏览器标签页 · 1600×1000 · 张三 正在查看", link: `${LINK}/browser%3A7F3A9C` },
   ],
   outdated: false, control: true, known: true,
 };
@@ -21,18 +21,18 @@ const NO_CAPTURE = { capture: false, control: false, message: "在 屏幕录制 
 /** The same screens, the desktop not to be driven until Accessibility is turned on for the station. */
 export const SCREENS_LACKING: ScreensView = { ...SCREENS, screens: SCREENS.screens.map((s) => (s.id === "desktop" ? { ...s, access: NO_CONTROL, line: NO_CONTROL.message } : s)) };
 /** A station from before screens. */
-export const OUTDATED: ScreensView = { screens: [], outdated: true, control: true, known: true, note: "这台 station 需要更新才能远程看屏幕" };
+export const OUTDATED: ScreensView = { screens: [], outdated: true, control: true, known: true, note: "此 station 需要更新才能远程查看屏幕" };
 
 /** How a story's view goes: live (driving, or a read-only member's), or the phase it ends up in. */
 export type ViewStory = "connecting" | "live" | "readOnly" | "undrivable" | "agent" | "reconnecting" | "ended" | "outdated" | "gone" | "denied" | "failed";
 
 const MESSAGES: Partial<Record<ViewStory, string>> = {
-  reconnecting: "连接断了，正在重连",
+  reconnecting: "连接已断开，正在重连",
   ended: "张三 关掉了这个标签页",
-  outdated: "这台 station 需要更新才能远程看屏幕",
-  gone: "这个屏幕已经不在了",
-  denied: "现在看不了这个屏幕",
-  failed: "连不上这个屏幕",
+  outdated: "此 station 需要更新才能远程查看屏幕",
+  gone: "此屏幕已不存在",
+  denied: "暂时无法查看此屏幕",
+  failed: "无法连接此屏幕",
 };
 
 const W = 1600;
@@ -215,10 +215,10 @@ const AGENT = "Agent「修登录」";
 function lineOf(s: ScreenViewState, agent: boolean): string {
   const driving = s.controllers ?? [];
   const parts = [s.control ? "控制" : "只看"];
-  if (driving.length) parts.push(`${driving.join("、")} 在控制`);
-  else if (agent && s.control) parts.push(`${AGENT} 暂停中`);
+  if (driving.length) parts.push(`${driving.join("、")} 正在控制`);
+  else if (agent && s.control) parts.push(`${AGENT} 已暂停`);
   const rest = s.others.filter((o) => !driving.includes(o) && !(agent && o === AGENT));
-  if (rest.length) parts.push(`${rest.join("、")} 也在看`);
+  if (rest.length) parts.push(`${rest.join("、")} 也在查看`);
   return parts.join(" · ");
 }
 

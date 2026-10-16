@@ -187,10 +187,10 @@
   "core-misc.lock.stationOffline": "Can't reach {name}; add it once it's online",
   "core-misc.screen.opening": "Opening a screen",
   "core-misc.screen.noWire": "Station screens can't be viewed here",
-  "core-misc.screen.timeout": "The screen did not open: the station did not answer",
+  "core-misc.screen.timeout": "The screen didn't open: the station isn't responding",
   "core-misc.screen.noCodec": "No format this device can decode",
-  "core-misc.screen.badInput": "Input not understood",
+  "core-misc.screen.badInput": "Unrecognized input",
   "core-misc.screen.closed": "This screen view is closed",
   "core-misc.screen.open": "A screen view of this name is already open",
-  "core-misc.screen.garbled": "The screen's data could not be read: {error}"
+  "core-misc.screen.garbled": "Couldn't read the screen's data: {error}"
 }

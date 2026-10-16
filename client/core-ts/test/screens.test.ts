@@ -218,13 +218,13 @@ each("a_stations_screens_are_listed_and_kept_as_its_events_say", async (seed) =>
     ["desktop", "desktop", "studio 的桌面", "/w/ws/s/st/screen/desktop"],
     ["browser:T1", "browser", "登录 - GitHub", "/w/ws/s/st/screen/browser%3AT1"],
   ]);
-  assert.equal(v.screens[1].line, "浏览器标签页 · 1280×800 · Bob 在看");
+  assert.equal(v.screens[1].line, "浏览器标签页 · 1280×800 · Bob 正在查看");
   push("screens", { screens: [{ ...SCREENS.screens[0], viewers: ["Bob", "Carol", "Dan"] }] });
   await host.settle();
   apply(host, values);
   const after = values.get(1) as J;
   assert.equal(after.screens.length, 1);
-  assert.equal(after.screens[0].line, "桌面 · 3024×1964 · Bob、Carol 等 1 人 在看");
+  assert.equal(after.screens[0].line, "桌面 · 3024×1964 · Bob、Carol 等 1 人 正在查看");
   core.close();
 });
 
@@ -235,7 +235,7 @@ test("a_station_from_before_screens_has_none_and_needs_an_update", async () => {
   subscribe(core, ui, 1, { topic: "screens", station: "ws/st" });
   await host.settle();
   apply(host, values);
-  assert.deepEqual(values.get(1), { screens: [], outdated: true, control: true, known: true, note: "这台 station 需要更新才能远程看屏幕" });
+  assert.deepEqual(values.get(1), { screens: [], outdated: true, control: true, known: true, note: "此 station 需要更新才能远程查看屏幕" });
   // Its link opens the viewer, which says so at once: no stream is opened (such a station would never answer one).
   const log: J[] = [];
   call(core, ui, 2, "screen.view", { station: "ws/st", screen: "desktop", view: "v" });
@@ -291,7 +291,7 @@ each("a_view_brings_its_frames_with_their_bytes_and_takes_acks_key_frames_and_in
   await host.settle();
   said(host, log);
   const now = lastState(log, 1);
-  assert.deepEqual([now.others, now.line, now.cursor], [["Bob"], "控制 · Bob 也在看", { x: 0.1, y: 0.2, shape: "text" }]);
+  assert.deepEqual([now.others, now.line, now.cursor], [["Bob"], "控制 · Bob 也在查看", { x: 0.1, y: 0.2, shape: "text" }]);
   // The page goes: the stream closes.
   core.receive(ui, { kind: "cancel", id: 1, cancel: true });
   await host.settle();
@@ -371,8 +371,8 @@ each("a_view_that_drops_is_opened_again_and_one_the_station_ends_says_why", asyn
 
 test("a_view_refused_says_why_and_is_not_tried_again", async () => {
   const cases: [number | [number, string], string, string][] = [
-    [[404, "no screen browser:T9"], "gone", "这个屏幕已经不在了"],
-    [[404, "no route POST /screens/x/view"], "outdated", "这台 station 需要更新才能远程看屏幕"],
+    [[404, "no screen browser:T9"], "gone", "此屏幕已不存在"],
+    [[404, "no route POST /screens/x/view"], "outdated", "此 station 需要更新才能远程查看屏幕"],
     [[503, "在「屏幕录制」里打开 stillfail-station"], "denied", "在「屏幕录制」里打开 stillfail-station"],
     [[403, "只读成员不能看"], "denied", "只读成员不能看"],
     [[415, "没有共同的格式"], "failed", "没有共同的格式"],
@@ -425,7 +425,7 @@ each("a_screen_an_agent_drives_opens_only_looking_and_is_taken_over_in_one_tap",
   await host.settle();
   said(host, log);
   let s = lastState(log, 1);
-  assert.deepEqual([s.control, s.takeOver, s.controllers, s.others, s.line], [false, true, ["Agent「修登录」"], ["Agent「修登录」", "Bob"], "只看 · Agent「修登录」 在控制 · Bob 也在看"]);
+  assert.deepEqual([s.control, s.takeOver, s.controllers, s.others, s.line], [false, true, ["Agent「修登录」"], ["Agent「修登录」", "Bob"], "只看 · Agent「修登录」 正在控制 · Bob 也在查看"]);
   // 接管: driving, the agent's input waits.
   call(core, ui, 2, "screen.control", { view: "v", control: true });
   await host.settle();
@@ -435,7 +435,7 @@ each("a_screen_an_agent_drives_opens_only_looking_and_is_taken_over_in_one_tap",
   await host.settle();
   said(host, log);
   s = lastState(log, 1);
-  assert.deepEqual([s.control, s.takeOver, s.line], [true, false, "控制 · Agent「修登录」 暂停中 · Bob 也在看"]);
+  assert.deepEqual([s.control, s.takeOver, s.line], [true, false, "控制 · Agent「修登录」 已暂停 · Bob 也在查看"]);
   // Asked to drive outright (control: true), it drives whoever else does.
   call(core, ui, 3, "screen.view", { station: "ws/st", screen: "browser:T1", view: "w", control: true });
   await host.settle();
@@ -476,7 +476,7 @@ each("the_station_says_what_a_view_takes_and_lacks_and_when_it_stops", async (se
   views[1]!.send(stateFrame({ ended: "gone" }));
   await host.settle();
   said(host, log);
-  assert.deepEqual([lastState(log, 1).phase, lastState(log, 1).message], ["ended", "这个屏幕已经不在了"]);
+  assert.deepEqual([lastState(log, 1).phase, lastState(log, 1).message], ["ended", "此屏幕已不存在"]);
   core.close();
 });
 

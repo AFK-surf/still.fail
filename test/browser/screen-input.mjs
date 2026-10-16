@@ -158,10 +158,10 @@ try {
   await g.keyboard.press('a');
   assert.deepEqual(await told(), [], 'while the agent drives, opening it takes nothing over');
   await g.waitForTimeout(2600);
-  assert.ok(await g.getByText('Agent「修登录」 在控制', { exact: true }).isVisible(), 'who drives it, still in sight after a rest');
+  assert.ok(await g.getByText('Agent「修登录」 正在控制', { exact: true }).isVisible(), 'who drives it, still in sight after a rest');
   await g.getByRole('button', { name: '接管' }).click();
   await g.waitForFunction(() => document.querySelector('[data-driving]'));
-  assert.ok(await g.getByText(/控制 · Agent「修登录」 暂停中/).isVisible(), 'taken over: the agent paused');
+  assert.ok(await g.getByText(/控制 · Agent「修登录」 已暂停/).isVisible(), 'taken over: the agent paused');
   await g.mouse.click(640, 400);
   got = (await told()).filter((i) => i.t === 'pointer' && i.kind !== 'move');
   assert.deepEqual(got.map((i) => i.kind), ['down', 'up'], 'taken over: the click goes');
