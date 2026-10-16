@@ -21,6 +21,7 @@ import { jumpTo } from "../jumpTo.ts";
 import { Archive, ArrowDown, ArrowUp, Bell, Camera, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Search, Stop, Users, Web } from "../icons.tsx";
 import { scopeOf, stationBase, useStation } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
+import { StationLinkText, useStationLink } from "../StationLink.tsx";
 import { StationPeek } from "../cloud/StationCards.tsx";
 import { GoRow } from "./Settings.tsx";
 import { LoadingPill, PlaceholderMessages } from "./Loading.tsx";
@@ -149,6 +150,7 @@ const ChatBar = memo(function ChatBar({ station: address, session }: { station: 
   const bar = useTopicSelect<ChatView, Bar | undefined>(topic, (s) => (s.value ? barOf(s.value) : undefined), sameBar);
   const jobs = useChatJobs(address, { session }).value;
   const station = useChatStation(address);
+  const link = useStationLink(address);
   const here = (): Here | null => {
     const view = topicNow<ChatView>(topic);
     return view ? { station: address, key: session, view } : null;
@@ -176,8 +178,9 @@ const ChatBar = memo(function ChatBar({ station: address, session }: { station: 
             {i === 0 && station ? (
               <AgentMark maker={a.maker} runtime={a.runtime} badge={a.badge} badgeText={a.badgeText} size={22}
                 wrap={(logo) => <span className={css.mBarJoinedAgent}>{logo}</span>}>
-                <span className={css.mBarJoinedStation} data-name={station.emoji || station.icon ? undefined : true}>
-                  {station.emoji || station.icon ? <StationMark emoji={station.emoji} icon={station.icon} size={13} /> : station.name}
+                <span className={css.mBarJoinedStation}>
+                  {station.emoji || station.icon ? <StationMark emoji={station.emoji} icon={station.icon} size={13} /> : <span className={css.mBarJoinedName}>{station.name}</span>}
+                  {link && <>{!(station.emoji || station.icon) && " · "}<StationLinkText link={link} /></>}
                 </span>
               </AgentMark>
             ) : <AgentMark maker={a.maker} runtime={a.runtime} badge={a.badge} badgeText={a.badgeText} size={22} />}
@@ -195,10 +198,12 @@ const ChatBar = memo(function ChatBar({ station: address, session }: { station: 
 function StationChip({ station }: { station: string }) {
   const app = useApp();
   const s = useChatStation(station);
+  const link = useStationLink(station);
   if (!s) return null;
   return (
     <button type="button" className={css.mBarStation} aria-label={s.name} onClick={() => openStationSheet(app, station)}>
-      {(s.emoji || s.icon) && <StationMark emoji={s.emoji} icon={s.icon} size={12} />}<span>{s.name}</span>
+      {(s.emoji || s.icon) && <StationMark emoji={s.emoji} icon={s.icon} size={12} />}<span className={css.mBarJoinedName}>{s.name}</span>
+      {link && <StationLinkText link={link} />}
     </button>
   );
 }

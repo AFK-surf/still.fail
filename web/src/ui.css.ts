@@ -50,13 +50,13 @@ export const agentMark = style({
 });
 /**
  * With the station it runs on: one tile, as tall, the maker's part square, the station's (its icon or its name) after it,
- * centred in its own part; a badge sits further out on the corner, so it covers none of the station's.
+ * centred in its own part. The agent's badge stays on the maker's corner: the station's corner is the station's own.
  */
 export const agentMarkJoined = style({
   display: "inline-flex", width: "auto", gap: "0", color: vars.muted, fontSize: vars.textMeta, lineHeight: "1", whiteSpace: "nowrap",
   selectors: {
-    "&[data-badge]::after": { right: "-7px" },
-    "&[data-badge=\"run\"]::before": { right: "-5px" },
+    "&[data-badge]::after": { right: "auto", left: "calc(var(--mark) - 9px)" },
+    "&[data-badge=\"run\"]::before": { right: "auto", left: "calc(var(--mark) - 7px)" },
   },
 });
 // Hover tints meet at straight edges inside the tile; only its two outside ends are rounded.

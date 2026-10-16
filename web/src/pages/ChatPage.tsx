@@ -18,6 +18,7 @@ import type { ChatJobsView, ChatPublish, ChatShare, Host, StationView } from "..
 import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useStationCall, useStationLook, useAgentCard, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { StationMark } from "../StationMark.tsx";
+import { StationLinkText, useStationLink } from "../StationLink.tsx";
 import { StationPeek } from "../cloud/StationCards.tsx";
 import { Hover } from "../Peeks.tsx";
 import { AgentCard, UsageTiles } from "../AgentCard.tsx";
@@ -902,27 +903,33 @@ function StationCard({ address, settings }: { address: string; settings: string 
   return view ? <StationPeek s={view} settings={settings} panel /> : null;
 }
 
-/** The station's part of its agent's tile: its icon, or its name where it has none. */
+/** The station's part of its agent's tile: its icon (or its name where it has none), then how it is reached. */
 function StationPart({ where }: { where: NonNullable<ReturnType<typeof useChatStation>> }) {
-  const { look, name } = where;
+  const { look, name, address } = where;
   const mark = look && (look.emoji || look.icon);
+  const link = useStationLink(address);
   return (
     <StationHover where={where}>
-      <span className={css.agentStationPart} data-name={mark ? undefined : true} tabIndex={look ? 0 : undefined} aria-label={mark ? name : undefined}>
-        {mark ? <StationMark emoji={look.emoji} icon={look.icon} size={12} /> : name}
+      <span className={css.agentStationPart} data-name={mark ? undefined : true} data-link={link ? true : undefined} tabIndex={look ? 0 : undefined} aria-label={mark ? (link ? `${name} · ${link.text}` : name) : undefined}>
+        {mark ? <StationMark emoji={look.emoji} icon={look.icon} size={12} /> : <span className={css.agentStationName}>{name}</span>}
+        {link && <>{!mark && " · "}<StationLinkText link={link} /></>}
       </span>
     </StationHover>
   );
 }
 
-/** The machine the chat runs on, beside its title, while it has no agent to share a tile with. */
+/** The machine the chat runs on, beside its title, while it has no agent to share a tile with: its name, then how it is reached. */
 function ChatStation() {
   const where = useChatStation();
   if (!where) return null;
   const { look, name } = where;
+  const link = useStationLink(where.address);
   return (
     <StationHover where={where}>
-      <span className={css.chatStation} tabIndex={look ? 0 : undefined}>{(look?.emoji || look?.icon) && <StationMark emoji={look.emoji} icon={look.icon} size={12} />}{name}</span>
+      <span className={css.chatStation} tabIndex={look ? 0 : undefined}>
+        {(look?.emoji || look?.icon) && <StationMark emoji={look.emoji} icon={look.icon} size={12} />}<span className={css.agentStationName}>{name}</span>
+        {link && <StationLinkText link={link} />}
+      </span>
     </StationHover>
   );
 }
