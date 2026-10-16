@@ -3,6 +3,10 @@
 // panel beside it holding this app to drag into the list; rows turn granted as macOS records the drop (looked at
 // every 0.8 s), and the window closes itself once all are. A grant taken while it was up starts this app again, the
 // grant then in effect (Daemon.restart). The words are the station's (`permissions.show` {words}), in its language.
+//
+// It shows the grants asked for (`grants`): the screen's two, or the drive's folders (Files.swift). A folder is granted
+// by macOS's own prompt, not in System Settings' lists: its Allow has this app open the folder and macOS asks (or, refused
+// before, opens Files and Folders, where the app has a switch for it). Asked for more while it is up, it shows them too.
 import AppKit
 import Combine
 import PermissionFlow
@@ -11,11 +15,26 @@ import SwiftUI
 enum Grant: String, CaseIterable, Identifiable {
   case screenRecording = "capture"
   case accessibility = "control"
+  case documents, desktop, downloads, removable, network
   var id: String { rawValue }
-  var pane: PermissionFlowPane {
+  /// The System Settings pane it is dragged into; none for a folder (macOS asks).
+  var pane: PermissionFlowPane? {
     switch self {
     case .screenRecording: .screenRecording
     case .accessibility: .accessibility
+    default: nil
+    }
+  }
+  var folder: FileGrant? { FileGrant(rawValue: rawValue) }
+  var symbol: String {
+    switch self {
+    case .screenRecording: "rectangle.dashed.badge.record"
+    case .accessibility: "figure.arms.open"
+    case .documents: "doc"
+    case .desktop: "menubar.dock.rectangle"
+    case .downloads: "arrow.down.circle"
+    case .removable: "externaldrive"
+    case .network: "network"
     }
   }
 }
@@ -31,18 +50,33 @@ final class Permissions {
   private var previous: NSRunningApplication?
 
   var isShown: Bool { windowController != nil }
+  /// The grants it shows.
+  var asked: [String] { model.asked.map(\.rawValue) }
 
-  func show(words: [String: Any], daemon: Daemon) {
+  func show(words: [String: Any], grants: [String], paths: [String: String] = [:], daemon: Daemon) {
     self.daemon = daemon
-    model.words = words.compactMapValues { $0 as? String }
+    let asked = grants.compactMap(Grant.init(rawValue:))
+    // Up already: what it shows, and what is asked now.
+    model.asked = windowController == nil ? asked : model.asked + asked.filter { !model.asked.contains($0) }
+    model.paths.merge(paths) { _, new in new }
+    model.words.merge(words.compactMapValues { $0 as? String }) { _, new in new }
     if let panel = words["panel"] as? [String: String] { PermissionFlowLocalizer.words = panel }
     let flow = self.flow ?? PermissionFlow.makeController(configuration: .init(promptForAccessibilityTrust: false))
     self.flow = flow
-    model.onRowsChanged = { rows in flow.guidanceSteps = rows.map { (pane: $0.grant.pane, granted: $0.granted) } }
-    model.onAuthorize = { grant in
+    model.onRowsChanged = { [weak daemon] rows in
+      flow.guidanceSteps = rows.compactMap { row in row.grant.pane.map { (pane: $0, granted: row.granted) } }
+      // The station hears of it (the drive's folders readable now).
+      daemon?.notify(["event": "grants"])
+    }
+    model.onAuthorize = { [weak model] grant in
+      if let folder = grant.folder {
+        Files.ask(folder, path: model?.paths[grant.rawValue])
+        return
+      }
+      guard let pane = grant.pane else { return }
       flow.resetDroppedApps()
       // This app is what macOS grants: what is dragged in.
-      flow.authorize(pane: grant.pane, suggestedAppURLs: [Bundle.main.bundleURL])
+      flow.authorize(pane: pane, suggestedAppURLs: [Bundle.main.bundleURL])
     }
     model.onAllGranted = { [weak self] in self?.windowController?.window?.performClose(nil) }
 
@@ -104,8 +138,16 @@ final class PermissionsModel: ObservableObject {
     var id: String { grant.rawValue }
   }
 
-  @Published var rows: [Row] = Grant.allCases.map { Row(grant: $0, granted: false) }
+  @Published var rows: [Row] = []
   @Published var words: [String: String] = [:]
+  /// The grants it shows, in order.
+  var asked: [Grant] = [] {
+    didSet { rows = asked.map { grant in Row(grant: grant, granted: rows.first { $0.grant == grant }?.granted ?? false) } }
+  }
+  /// A disk's folder for its grant (removable, network): the one macOS asks about.
+  var paths: [String: String] = [:]
+  /// A folder's grant refused before: its Allow opens System Settings.
+  @Published var denied: Set<Grant> = []
   var onAuthorize: ((Grant) -> Void)?
   var onRowsChanged: (([Row]) -> Void)?
   var onAllGranted: (() -> Void)?
@@ -118,7 +160,7 @@ final class PermissionsModel: ObservableObject {
     words[key] ?? otherwise
   }
 
-  var allGranted: Bool { rows.allSatisfy(\.granted) }
+  var allGranted: Bool { !rows.isEmpty && rows.allSatisfy(\.granted) }
 
   func authorize(_ grant: Grant) {
     active = grant
@@ -147,18 +189,23 @@ final class PermissionsModel: ObservableObject {
     looking = true
     DispatchQueue.global().async {
       let fresh = Status.fresh() ?? [:]
+      let files = fresh["files"] as? [String: String] ?? [:]
       DispatchQueue.main.async { [weak self] in
         guard let self else { return }
         looking = false
-        let next = Grant.allCases.map { Row(grant: $0, granted: (fresh[$0.rawValue] as? Bool) ?? false) }
+        let granted = { (grant: Grant) -> Bool in
+          grant.folder == nil ? (fresh[grant.rawValue] as? Bool) ?? false : files["all"] == "granted" || files[grant.rawValue] == "granted"
+        }
+        let next = asked.map { Row(grant: $0, granted: granted($0)) }
+        denied = Set(asked.filter { $0.folder != nil && files[$0.rawValue] == "denied" })
         if next != rows {
           rows = next
           onRowsChanged?(next)
         }
-        // The one being granted is: on to the next missing one.
+        // The one being granted is: on to the next missing one dragged in (a folder's prompt is a person's own click).
         if let active, next.contains(where: { $0.grant == active && $0.granted }) {
           self.active = nil
-          if let missing = next.first(where: { !$0.granted }) { authorize(missing.grant) }
+          if let missing = next.first(where: { !$0.granted && $0.grant.pane != nil }) { authorize(missing.grant) }
         }
         closeWhenAllGranted()
       }
@@ -229,14 +276,14 @@ private struct PermissionRow: View {
 
   var body: some View {
     HStack(spacing: 12) {
-      Image(systemName: row.grant == .screenRecording ? "rectangle.dashed.badge.record" : "figure.arms.open")
+      Image(systemName: row.grant.symbol)
         .font(.system(size: 22))
         .frame(width: 36, height: 36)
         .opacity(row.granted ? 0.7 : 1)
       VStack(alignment: .leading, spacing: 2) {
-        Text(row.grant == .screenRecording ? model.word("capture", "Screen Recording") : model.word("control", "Accessibility"))
+        Text(model.word(row.grant.rawValue, row.grant.rawValue.capitalized))
           .font(.system(size: 14, weight: .semibold))
-        Text(row.grant == .screenRecording ? model.word("captureWhy", "To show this screen in the still.fail app") : model.word("controlWhy", "To click and type for the person driving it"))
+        Text(model.denied.contains(row.grant) ? model.word("deniedWhy", "Refused before: Allow opens System Settings › Files and Folders, to switch it on there") : model.word("\(row.grant.rawValue)Why", ""))
           .font(.system(size: 11.5))
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)

@@ -61,6 +61,17 @@ final class Channel {
     return data
   }
 
+  /// Up to `n` bytes as they come (at least one), or nil at the end.
+  func read(upTo n: Int) -> Data? {
+    var data = Data(count: n)
+    while true {
+      let got = data.withUnsafeMutableBytes { (raw: UnsafeMutableRawBufferPointer) in Darwin.read(fd, raw.baseAddress!, n) }
+      if got < 0 && errno == EINTR { continue }
+      if got <= 0 { return nil }
+      return data.prefix(got)
+    }
+  }
+
   /// One line (without its newline), at most `limit` bytes; nil at the end or past it.
   func readLine(limit: Int = 1 << 16) -> Data? {
     var line = Data()

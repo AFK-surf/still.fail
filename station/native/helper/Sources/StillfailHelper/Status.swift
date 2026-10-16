@@ -17,6 +17,7 @@ enum Status {
       "responsible": responsible(),
       "display": display(CGMainDisplayID()),
       "app": Bundle.main.bundlePath,
+      "files": Files.grants(),
     ]
   }
 

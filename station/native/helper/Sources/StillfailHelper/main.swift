@@ -10,16 +10,20 @@
 //   one starting itself again (STILLFAIL_HELPER_TAKEOVER), which waits for the lock.
 //
 // Each connection to the socket is one request: a JSON line `{token, op, …}`, the token the station gave it at start.
-//   hello               → {ok, v: 1, pid, app, capabilities: ["screen"]}
-//   status              → {capture, control, display, responsible, live: {capture, control}, asking}: `live` what this
-//                         very process may do (macOS gives a running process a new grant only once it starts again)
-//   permissions.show    {words}: the window that asks for the grants (Permissions.swift) → {ok}
+//   hello               → {ok, v: 1, pid, app, capabilities: ["screen", "files"]}
+//   status              → {capture, control, display, responsible, files, live: {capture, control}, asking, asked}:
+//                         `live` what this very process may do (macOS gives a running process a new grant only once it
+//                         starts again); `files` the folder grants (Files.swift); `asked` what the window shows
+//   permissions.show    {words, grants?, paths?}: the window that asks for the grants (Permissions.swift; `grants` the
+//                       screen's two when none named, `paths` a disk's folder for its grant) → {ok}
 //   screen.view         {maxWidth, maxHeight, display?, fps?, bitrate?, synthetic?}: a view of the display; the
 //                       connection then carries ScreenView.swift's messages both ways until either side closes it
-//   watch               → {ok}, then held open for as long as this process is (the station's supervision)
+//   files.*             the drive's protected folders (Files.swift says them)
+//   watch               → {ok}, then held open for as long as this process is (the station's supervision); a grant
+//                         changing while the window is up is told on it as a line {event: "grants"}
 //   restart             → {ok}, then this app starts again (a grant to take effect)
 //   quit                → {ok}, then it ends
-// Capabilities to come (the drive's protected folders, the camera) are ops of their own namespace in this one app, so
+// Capabilities to come (the camera) are ops of their own namespace in this one app, as `screen.*` and `files.*` are, so
 // they share its one grant identity.
 import AppKit
 

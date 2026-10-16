@@ -17,11 +17,24 @@ final class Daemon {
   private var lastSeen = Date()
   /// What this process may do, as it was when it started: a grant since takes effect once it starts again.
   let started: (capture: Bool, control: Bool)
+  /// The folder grants as they were when it started (Files.grants()).
+  let startedFiles: [String: String]
+  /// The station's watches (`watch`), told when a grant changes.
+  private var watchers: [Channel] = []
 
   init(socketPath: String, token: String) {
     self.socketPath = socketPath
     self.token = token
     started = (CGPreflightScreenCaptureAccess(), Status.inputAllowed())
+    startedFiles = Files.grants()
+  }
+
+  /// Every watch told `event` (a JSON line after its `{ok}`).
+  func notify(_ event: [String: Any]) {
+    lock.lock()
+    let all = watchers
+    lock.unlock()
+    for channel in all { channel.line(event) }
   }
 
   func start() throws {
@@ -93,15 +106,20 @@ final class Daemon {
     }
     switch request["op"] as? String {
     case "hello":
-      channel.line(["ok": true, "v": 1, "pid": Int(getpid()), "app": Bundle.main.bundlePath, "capabilities": ["screen"]])
+      channel.line(["ok": true, "v": 1, "pid": Int(getpid()), "app": Bundle.main.bundlePath, "capabilities": ["screen", "files"]])
     case "status":
       var status = Status.fresh() ?? Status.now()
       status["live"] = ["capture": CGPreflightScreenCaptureAccess(), "control": Status.inputAllowed()]
-      status["asking"] = DispatchQueue.main.sync { MainActor.assumeIsolated { Permissions.shared.isShown } }
+      let window = DispatchQueue.main.sync { MainActor.assumeIsolated { (Permissions.shared.isShown, Permissions.shared.asked) } }
+      status["asking"] = window.0
+      // What its window asks for, while it is up.
+      status["asked"] = window.0 ? window.1 : []
       channel.line(status)
     case "permissions.show":
       let words = request["words"] as? [String: Any] ?? [:]
-      DispatchQueue.main.async { MainActor.assumeIsolated { Permissions.shared.show(words: words, daemon: self) } }
+      let grants = (request["grants"] as? [String]) ?? [Grant.screenRecording.rawValue, Grant.accessibility.rawValue]
+      let paths = request["paths"] as? [String: String] ?? [:]
+      DispatchQueue.main.async { MainActor.assumeIsolated { Permissions.shared.show(words: words, grants: grants, paths: paths, daemon: self) } }
       channel.line(["ok": true])
     case "screen.view":
       // Granted since this process started: it starts again to have it (the station asks again once it is back).
@@ -115,7 +133,13 @@ final class Daemon {
     case "watch":
       // The station's watch: open for as long as this process is (its end is how the station learns this one ended).
       channel.line(["ok": true])
+      lock.lock()
+      watchers.append(channel)
+      lock.unlock()
       while channel.readLine() != nil {}
+      lock.lock()
+      watchers.removeAll { $0 === channel }
+      lock.unlock()
     case "restart":
       channel.line(["ok": true])
       DispatchQueue.main.async { self.restart() }
@@ -125,6 +149,8 @@ final class Daemon {
       close(server)
       channel.line(["ok": true])
       DispatchQueue.main.async { exit(0) }
+    case let op? where Files.serve(op, request, channel, daemon: self):
+      break
     default:
       channel.line(["error": "unknown op \(request["op"] ?? "")"])
     }
