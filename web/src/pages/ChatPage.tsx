@@ -7,13 +7,13 @@ import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, QuotaChip, MeterChips, PeopleStack } from "../components.tsx";
 import { Archive, Boxes, Close, File, Folder, Info, PanelClose, PanelOpen, Users, Web } from "../icons.tsx";
 import { DriveTab } from "./DriveTab.tsx";
-import dropArt from "../drive/drop.svg?raw";
-import { carriesDrive, droppedFrom, droppedFromFinder, droppedOf, setDropOver } from "../drive/drag.ts";
+import { carriesDrive, draggedNow, droppedFrom, droppedFromFinder, droppedOf, endDrag, nameByType, setDropOver } from "../drive/drag.ts";
+import { takeOff } from "../drive/flight.ts";
 import { offerToDraft } from "../draft.ts";
 import { useThisMachine } from "../thisMachine.ts";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
-import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { Link, Navigate, useHref, useNavigate, useParams, useSearchParams } from "react-router";
 import { PENDING } from "../lastChat.ts";
 import { ownOrigin } from "../stillfailLink.ts";
@@ -30,7 +30,7 @@ import { Hover } from "../Peeks.tsx";
 import { AgentCard, UsageTiles } from "../AgentCard.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
 import { usePick } from "../pick.ts";
-import { ChatPanel, goToNeighbour } from "../Chat.tsx";
+import { ChatPanel, FileTile, goToNeighbour } from "../Chat.tsx";
 import { OpenFile } from "../Viz.tsx";
 import { fileService, fileSourceOf } from "../Preview.tsx";
 import { useShortcut } from "../keymap.ts";
@@ -391,7 +391,17 @@ function ChatScreen({ session: chatSession }: { session: string }) {
         onConfirm={() => { setAskArchive(false); void archive(); }} onClose={() => setAskArchive(false)} />}
       <div className={`${jobsCss.sessionMain} ${css.dropZone}`} {...drop.handlers}>
       {/* Files over the chat: it frosts over, and says where they go. */}
-      {drop.over && <div className={css.dropHint} aria-hidden="true"><span className={css.dropArt} dangerouslySetInnerHTML={{ __html: dropArt }} /><span>{t("web-main.composer.dropHere")}</span></div>}
+      {drop.over && (
+        <div className={css.dropHint} aria-hidden="true">
+          {/* What is dragged, each by its mark, a few fanned out as a stack. */}
+          <div ref={drop.shown} className={css.dropMarks} style={{ "--n": Math.min(3, Math.max(1, drop.over.marks.length)) } as CSSProperties}>
+            {(drop.over.marks.length ? drop.over.marks : [{ name: "file", dir: false }]).slice(0, 3).map((m, i) => (
+              <FileTile key={i} name={m.name} dir={m.dir} style={{ "--i": i } as CSSProperties} />
+            ))}
+          </div>
+          <span>{drop.over.marks.length > 1 ? t("web-main.composer.dropMany", { n: drop.over.marks.length }) : t("web-main.composer.dropHere")}</span>
+        </div>
+      )}
       <header className={sidebarCss.pageBar}>
         <MobileBack to={link("/chats")} label={t("web-pages.decisions.back")} />
         {/* The chat's title, then who is in it: its people, then its agents (each opens its history). */}
@@ -610,37 +620,54 @@ function useChatAgent(station: string, session: string, key: string): ChatAgent 
   return useTopicSelect<ChatView, ChatAgent | undefined>({ topic: "chat", station, session }, (s) => s.value?.agents.find((a) => a.session.key === key));
 }
 
+/** What is dragged over the chat, each shown by its mark (Chat.tsx FileTile): its name (or one its type gives), whether
+ * it is a folder. */
+type Over = { kind: "path" | "file"; marks: { name: string; dir: boolean }[] };
+
 /**
- * The chat as a place to drop files on, all of it: while they are over it, its composer (where they go) says what
- * letting go does (a station's files, or Finder's on a machine that is a station, are named by their path; others go up
- * as files); let go, they go into its message. The composer's own drop (Chat.tsx) comes first where it is.
+ * The chat as a place to drop files on, all of it: while they are over it, it frosts over and shows them, each by its
+ * mark (as its card will have it), with what letting go does; let go, they go into its message, and their marks fly
+ * there, each onto its card (drive/flight.ts). The composer leaves a drop on it to this.
  */
 function useChatDrop(chat: string, station: string) {
   const here = useThisMachine(station);
-  const [over, setOver] = useState<"path" | "file" | null>(null);
+  const [over, setOver] = useState<Over | null>(null);
   const depth = useRef(0);
-  // The composer, where what is dropped goes, says so meanwhile (Chat.tsx; its dock is not in the chat's part of the page).
+  const shown = useRef<HTMLDivElement>(null);
+  // The composer knows files are over its chat, and leaves them to it (Chat.tsx).
   useEffect(() => {
-    setDropOver(over);
+    setDropOver(over?.kind ?? null);
     return () => setDropOver(null);
-  }, [over]);
+  }, [over?.kind]);
   const kind = (dt: DataTransfer): "path" | "file" | null =>
     carriesDrive(dt) ? "path" : dt.types.includes("Files") ? (here && window.stillfailDesktop?.pathOf ? "path" : "file") : null;
+  // A station's files dragged from this page are known by name; Finder's only by type, until they are dropped.
+  const marks = (dt: DataTransfer) => carriesDrive(dt)
+    ? (draggedNow() ?? []).map((d) => ({ name: d.name, dir: d.dir }))
+    : [...dt.items].filter((i) => i.kind === "file").map((i) => ({ name: nameByType(i.type), dir: false }));
   const handlers = {
-    onDragEnter: (e: React.DragEvent) => { if (!kind(e.dataTransfer)) return; depth.current++; setOver(kind(e.dataTransfer)); },
+    onDragEnter: (e: React.DragEvent) => {
+      const k = kind(e.dataTransfer);
+      if (!k) return;
+      depth.current++;
+      if (depth.current === 1) setOver({ kind: k, marks: marks(e.dataTransfer) });
+    },
     onDragOver: (e: React.DragEvent) => { if (!kind(e.dataTransfer)) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; },
     onDragLeave: (e: React.DragEvent) => { if (!kind(e.dataTransfer)) return; depth.current = Math.max(0, depth.current - 1); if (depth.current === 0) setOver(null); },
     onDrop: (e: React.DragEvent) => {
       depth.current = 0;
-      setOver(null);
-      if (e.defaultPrevented || !kind(e.dataTransfer)) return;
+      if (e.defaultPrevented || !kind(e.dataTransfer)) { setOver(null); return; }
       e.preventDefault();
+      // Their marks take off from where they are shown, before they go.
+      takeOff([...(shown.current?.querySelectorAll("svg") ?? [])]);
+      setOver(null);
+      endDrag();
       if (carriesDrive(e.dataTransfer)) { offerToDraft(chat, { files: [], quotes: [], dropped: droppedOf(e.dataTransfer).map(droppedFrom) }); return; }
       const named = droppedFromFinder(e.dataTransfer, here);
       offerToDraft(chat, named ? { files: [], quotes: [], dropped: named } : { files: [...e.dataTransfer.files], quotes: [] });
     },
   };
-  return { over, handlers };
+  return { over, handlers, shown };
 }
 
 /** The 任务 tab's key: every service and job of the chat's agents. */

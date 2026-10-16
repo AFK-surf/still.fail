@@ -194,6 +194,7 @@
   "web-main.combos.short": "常用",
   "web-main.composer.attach": "发送文件",
   "web-main.composer.dropHere": "松开添加到消息",
+  "web-main.composer.dropMany": "松开把 {n} 个添加到消息",
   "web-main.composer.label": "消息",
   "web-main.composer.placeholder": "发消息",
   "web-main.composer.pressToType": "按 {key} 输入",

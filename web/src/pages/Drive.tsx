@@ -25,7 +25,7 @@ import { Reader } from "../drive/Reader.tsx";
 import { Player } from "../drive/Player.tsx";
 import { cancel, download, joinPath, nameOf, openerOf, parentOf, refresh, retry, rootLabel, settle, sizeOf, upload, useFolder, useUploads, type At, type Upload as Up } from "../drive/model.ts";
 import { absoluteOf, childOf, drive, drivePath, filtered, folderName, nameProblem, rootTrouble, trailOf, useDrive, type DriveState, type PickFolder } from "../drive/useDrive.ts";
-import { draggedOf, startDrag } from "../drive/drag.ts";
+import { draggedOf, endDrag, startDrag } from "../drive/drag.ts";
 import { useToast } from "../toast.tsx";
 import { DrivePreview, FilterField, useFolders } from "../mobile/Drive.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
@@ -309,7 +309,7 @@ export function DriveRow({ at, entry, items, onOpen, compact = false }: { at: At
   const renaming = useDoing("drive.rename", { station: at.station, root: at.root, from: full });
   const busy = removing || renaming;
   const row = (
-    <div className={css.entry} data-busy={busy || undefined} draggable={!busy} onDragStart={(e) => startDrag(e, [draggedOf(at, entry, stationName)])}>
+    <div className={css.entry} data-busy={busy || undefined} draggable={!busy} onDragStart={(e) => startDrag(e, [draggedOf(at, entry, stationName)])} onDragEnd={endDrag}>
       <button type="button" className={css.row} data-compact={compact || undefined} onClick={onOpen} disabled={busy} title={compact ? entry.name : undefined}>
         <KindIcon kind={entry.kind} size={compact ? 18 : 20} className={css.icon} />
         <span className={css.name}>{entry.name}</span>

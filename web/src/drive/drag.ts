@@ -27,8 +27,14 @@ export function droppedFrom(i: Dragged) {
   };
 }
 
+/** What this page is dragging now (its rows), for what it goes over to show it: a drag's data is unread until a drop. */
+let dragging: Dragged[] | null = null;
+export const draggedNow = () => dragging;
+export const endDrag = () => { dragging = null; };
+
 /** Puts what is dragged on the drag. */
 export function startDrag(e: { dataTransfer: DataTransfer }, items: Dragged[]): void {
+  dragging = items;
   e.dataTransfer.effectAllowed = "copy";
   e.dataTransfer.setData(DRIVE_DRAG, JSON.stringify(items));
   e.dataTransfer.setData("text/plain", items.map((i) => i.abs).join("\n"));
@@ -81,4 +87,16 @@ export function setDropOver(next: "path" | "file" | null): void {
 }
 export function useDropOver(): "path" | "file" | null {
   return useSyncExternalStore((l) => { listeners.add(l); return () => { listeners.delete(l); }; }, () => over, () => null);
+}
+
+/** What a file is by its type (a drag from Finder says its files' types, not their names, until it is dropped): a name
+ * with the extension that type usually has, for its mark. */
+export function nameByType(type: string): string {
+  const known: Record<string, string> = {
+    "application/pdf": "pdf", "application/zip": "zip", "application/json": "json", "text/plain": "txt", "text/markdown": "md", "text/csv": "csv",
+    "text/html": "html", "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp", "image/svg+xml": "svg", "image/heic": "heic",
+    "video/mp4": "mp4", "video/quicktime": "mov", "video/webm": "webm", "audio/mpeg": "mp3", "audio/wav": "wav", "audio/mp4": "m4a",
+  };
+  const ext = known[type] ?? (/^(image|video|audio)\/([a-z0-9]{2,4})$/.exec(type)?.[2] ?? "");
+  return ext ? `file.${ext}` : "file";
 }

@@ -252,12 +252,18 @@ globalStyle(`${sideBar} ${sideTabList}`, { flex: "1", minWidth: "0", height: "au
 export const evict = style({ padding: "0", border: "0", background: "none", color: "inherit", font: "inherit", cursor: "pointer" });
 
 /** The chat takes files dropped anywhere on it (ChatPage.tsx useChatDrop): while they are over it, it frosts over (as the
- * composer's glass) and says in its middle where they go; nothing ringed, nothing in a box. */
+ * composer's glass) and shows them in its middle, with where they go; nothing ringed, nothing in a box. */
 export const dropZone = style({ position: "relative" });
 export const dropHint = style({
   ...glass, position: "absolute", inset: "0", zIndex: 40, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
   gap: "16px", pointerEvents: "none", color: vars.text, fontSize: vars.textUi, fontWeight: 500,
 });
-/** The buddy catching the file (drive/drop.svg, in the text's colour and the accent). */
-export const dropArt = style({ display: "block", width: "200px", height: "144px" });
-globalStyle(`${dropArt} svg`, { display: "block", width: "100%", height: "100%" });
+/** What is dragged, each by its mark (Chat.tsx FileTile) twice the size of a card's, a few fanned out as a stack. */
+export const dropMarks = style({ position: "relative", width: "180px", height: "84px" });
+globalStyle(`${dropMarks} > svg`, {
+  position: "absolute", left: "calc(50% - 30px)", top: "6px", width: "60px", height: "72px",
+  translate: "calc((var(--i) - (var(--n) - 1) / 2) * 44px) 0",
+  rotate: "calc((var(--i) - (var(--n) - 1) / 2) * 7deg)",
+});
+// A sheet hides the one under it.
+globalStyle(`${dropMarks} > svg > path:first-of-type`, { fill: `light-dark(${vars.canvas}, ${vars.raised})` });

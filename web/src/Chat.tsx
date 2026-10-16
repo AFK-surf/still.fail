@@ -30,6 +30,7 @@ import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
 import { DraftKey, offerToDraft, pathWords, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
 import { carriesDrive, droppedFrom, droppedFromFinder, droppedOf, useDropOver } from "./drive/drag.ts";
+import { useLanding } from "./drive/flight.ts";
 import { useThisMachine } from "./thisMachine.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
@@ -1420,6 +1421,8 @@ function Waiting({ hash, fit }: { hash: string | undefined; fit?: { width: strin
 /** How the chat draws a file: an image's button, the box it takes before it loads and what shows until then; a file's card and its button. */
 const look = { image: css.msgImage, wait: css.msgImageWait, box: (f: Attachment, least?: number) => imageBox(f, least), open: css.fileCardOpen, card: (f: Attachment) => <FileCard file={f} /> };
 
+const NO_MARK = { current: null };
+
 /** A file's name as its card shows it: what is cut is the middle of its name, never its extension. */
 function FileName({ name }: { name: string }) {
   const dot = name.lastIndexOf(".");
@@ -1431,12 +1434,18 @@ function FileName({ name }: { name: string }) {
  * What a file is, at a glance: a sheet with its extension on it (a folder its own shape), drawn in the text's colour.
  * One going up fills from the bottom as it goes; one that failed has its extension in red.
  */
-export function FileTile({ name, dir = false, progress, error = false }: { name: string; dir?: boolean; progress?: number | undefined; error?: boolean }) {
+export function FileTile({ name, dir = false, progress, error = false, land = false, style }: {
+  name: string; dir?: boolean; progress?: number | undefined; error?: boolean;
+  /** A card's in the composer: where a mark dropped on the chat lands (drive/flight.ts). */
+  land?: boolean; style?: CSSProperties;
+}) {
+  const own = useRef<SVGSVGElement>(null);
+  useLanding(land ? own : NO_MARK);
   const dot = name.lastIndexOf(".");
   const ext = dot > 0 && name.length - dot <= 6 ? name.slice(dot + 1).toUpperCase() : "";
   const id = useId();
   return (
-    <svg className={css.fileTile} width="30" height="36" viewBox="0 0 30 36" aria-hidden="true" data-error={error || undefined}>
+    <svg ref={own} className={css.fileTile} width="30" height="36" viewBox="0 0 30 36" aria-hidden="true" data-error={error || undefined} style={style}>
       {dir ? (
         <path d="M2.75 8.5Q2.75 5.75 5.5 5.75H11.5L14.5 9H24.5Q27.25 9 27.25 11.75V28.5Q27.25 31.25 24.5 31.25H5.5Q2.75 31.25 2.75 28.5Z"/>
       ) : (
@@ -1465,7 +1474,7 @@ function FileCard({ file, onRemove, pending, sent, error }: { file: Pick<Attachm
     : t("web-main.file.uploading");
   return (
     <Tip label={file.path ?? file.name} cut={!file.path}><span className={css.fileCard} data-error={error ? true : undefined}>
-      <FileTile name={file.name} progress={pending ? (sent ?? 0) / Math.max(1, file.size) : undefined} error={!!error} />
+      <FileTile name={file.name} progress={pending ? (sent ?? 0) / Math.max(1, file.size) : undefined} error={!!error} land={!!onRemove} />
       <span className={css.fileCardText}>
         <FileName name={file.name} />
         <span className={css.fileCardMeta}>{error ?? (pending ? going : fileSize(file.size))}</span>
@@ -1612,6 +1621,8 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
         onDragOver={(e) => { if ((e.dataTransfer.types.includes("Files") || carriesDrive(e.dataTransfer)) && !locked) { e.preventDefault(); if (pageOver === null) setDragging(true); } }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => {
+          // Dropped on a chat's page, the page takes it (ChatPage.tsx useChatDrop: its marks fly here).
+          if (pageOver !== null) return;
           // A station's files (the chat's 文件 tab): named by their path there, until switched to files.
           if (carriesDrive(e.dataTransfer)) { e.preventDefault(); setDragging(false); if (!locked) draft.addDropped(droppedOf(e.dataTransfer).map(droppedFrom)); return; }
           if (e.dataTransfer.files.length) {
@@ -1977,7 +1988,7 @@ function RefCard({ file: f, draft, onRemove }: { file: Pending; draft: Draft; on
   return (
     <Hover tile content={info}>
       <span className={css.fileCard} data-error={asFile && f.error ? true : undefined} data-named={!asFile || undefined}>
-        <FileTile name={asFile && ref.dir ? `${f.name}.zip` : f.name} dir={ref.dir && !asFile} progress={pending ? (f.sent ?? 0) / Math.max(1, f.size) : undefined} error={asFile && !!f.error} />
+        <FileTile land name={asFile && ref.dir ? `${f.name}.zip` : f.name} dir={ref.dir && !asFile} progress={pending ? (f.sent ?? 0) / Math.max(1, f.size) : undefined} error={asFile && !!f.error} />
         <span className={css.fileCardText}>
           <FileName name={asFile && ref.dir ? `${f.name}.zip` : f.name} />
           <span className={css.fileCardMeta}>{meta}</span>
@@ -1991,6 +2002,9 @@ function RefCard({ file: f, draft, onRemove }: { file: Pending; draft: Draft; on
 /** A file waiting to go with the message: an image as its picture (clicked, shown whole), anything else a card. */
 function PendingFile({ file: f, onRemove, onRestore, onRetry }: { file: Pending; onRemove?: () => void; onRestore?: (() => void) | undefined; onRetry?: (() => void) | undefined }) {
   const station = useStation();
+  // A picture dropped on the chat: its mark lands here (drive/flight.ts).
+  const thumb = useRef<HTMLSpanElement>(null);
+  useLanding(thumb);
   const [open, setOpen] = useState(false);
   // Not sent yet: no session keeps it, it is shown from this device.
   const shown: Attachment = { name: f.name, path: `draft:${f.id}`, size: f.size };
@@ -2005,7 +2019,7 @@ function PendingFile({ file: f, onRemove, onRestore, onRetry }: { file: Pending;
     {onRemove && <button type="button" className={`${css.fileCardRemove} ${css.pasteSnippetRemove}`} aria-label={t("web-main.composer.removePaste")} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
   </div>{f.pastedFile && f.preview && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey="" file={shown} local={{ blob: f.pastedFile, url: f.preview }} />}</>;
   return f.preview ? (
-    <Tip label={f.error ?? f.name}><span className={css.composerThumb} data-send-image={f.done ? sentImageKey(f.done.path) : f.error ? undefined : uploadImageKey(f.id)} data-error={f.error ? true : undefined}>
+    <Tip label={f.error ?? f.name}><span ref={thumb} className={css.composerThumb} data-send-image={f.done ? sentImageKey(f.done.path) : f.error ? undefined : uploadImageKey(f.id)} data-error={f.error ? true : undefined}>
       <button type="button" className={css.composerThumbOpen} aria-label={t("web-main.file.view", { name: f.name })} data-viewer-thumb={thumbId(station.address, "", shown.path)}
         onClick={(e) => { e.stopPropagation(); setOpen(true); }}>
         <img src={f.preview} alt={f.name} />
