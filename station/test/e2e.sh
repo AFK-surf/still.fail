@@ -37,7 +37,8 @@ echo '{}' > "$work/data/homes/cc/.credentials.json"
 launcher=$!
 trap 'kill $launcher 2>/dev/null; sleep 3; pkill -f "$work/data" 2>/dev/null || true' EXIT
 node_pid() { pgrep -f "station/main.js run .*$work/data" | head -1; }
-udp_port() { lsof -nP -i4UDP -a -p "$1" | awk 'NR>1 && $9 ~ /^\*:/ {sub("\\*:","",$9); print $9}' | grep -v 5353 | head -1; }
+# DNS and discovery may also own wildcard UDP sockets; select the configured mesh socket.
+udp_port() { lsof -nP -i4UDP -a -p "$1" | awk -v port="$mesh_port" '$9 == "*:" port {print port; exit}'; }
 sleep 5
 first=$(node_pid)
 port=$(udp_port "$first")
