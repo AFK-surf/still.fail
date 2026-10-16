@@ -43,6 +43,7 @@ export const NOTES: [number, string][] = [
   [36, "New tool computer: screenshot and operate one of the station's screens yourself (click, drag, scroll, type, keys, in the screenshot's pixels), the desktop or a browser tab. Prefer the browser's DevTools for web pages; refused while a person drives the screen; when stuck, post the screen's link (screen tool) with need_human."],
   [37, "station_list now shows each station's load and capacity (cores, arch/OS, GPU, CPU busy, load average, free memory and disk, running tasks/jobs/turns): pick the station for station_task by it. There are no machine locks between agents; do not wait for or announce one."],
   [38, "New tools secret_list, secret_use, secret_run: credentials people keep in their still.fail vault. Ask with secret_use (they approve in the app), then run commands with secret_run; you never see the value. Ask people to add a credential to their vault rather than paste it into the chat."],
+  [39, "Programs here can reach an HTTP/WebSocket service on another station's localhost: $STILLFAIL_PEER_HTTP/<station>/<port>/<path> (your stillfail MCP URL with /mcp replaced by /peer), e.g. OLLAMA_HOST=$STILLFAIL_PEER_HTTP/studio/11434. See the stillfail-jobs skill."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

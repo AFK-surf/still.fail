@@ -1,6 +1,6 @@
 ---
 name: stillfail-jobs
-description: Run background jobs, long-running watches, web previews or tasks on another still.fail station. Use for work that outlives a turn or a browser service people need to use.
+description: Run background jobs, long-running watches, web previews or tasks on another still.fail station, or reach a web service on another station. Use for work that outlives a turn, a browser service people need to use, or a service (an LLM server, an API) another station runs.
 ---
 
 # Jobs and services
@@ -86,3 +86,13 @@ uploaded again before start.
 
 After a timeout, inspect or retry the same key: work may already have run. Lost remote processes are not restarted
 automatically; `failed` without an exit code means the outcome may be uncertain. Inspect before using a new key.
+
+## Another station's web services
+
+A program here reaches an HTTP or WebSocket service listening on another station's localhost through this station,
+with no port opened: `$STILLFAIL_PEER_HTTP/<station>/<port>/<path>` is `http://localhost:<port>/<path>` there
+(streams, large bodies and WebSockets pass as they come), e.g. `OLLAMA_HOST=$STILLFAIL_PEER_HTTP/studio/11434`.
+Without the variable, it is your stillfail MCP URL with `/mcp` replaced by `/peer`. `<station>` is its name from
+`station_list` (any case) or, when a name is not unique, its id. Only programs on this machine use it (Host
+127.0.0.1, no browser `Origin`); for people's browsers start a job with a port instead. A 502 saying the station needs
+an update means it is from before this; 504 means it is offline.
