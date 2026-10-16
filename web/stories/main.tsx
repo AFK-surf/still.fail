@@ -17,7 +17,7 @@ import * as shellCss from "../src/styles/shell.css.ts";
 import * as nav from "../src/Sidebar.css.ts";
 import * as pagesCss from "../src/styles/pages.css.ts";
 import { vars } from "../src/styles/tokens.css.ts";
-import { CHANGELOG, readFile } from "./data.ts";
+import { CHANGELOG, SENT, readFile } from "./data.ts";
 import { DEVICES, device, wear, type Device } from "./devices.ts";
 import { play } from "./play.ts";
 import { stories, type Story } from "./stories.tsx";
@@ -35,6 +35,18 @@ if (worn) wear(worn);
 // changelog's news.
 extendDemo({
   topic: (t) => (t.topic === "changelog" ? (story?.news ? CHANGELOG : { tabs: [] }) : undefined),
+  // A chat's messages with files: the last of a person's with the picture and the files, the agent's next with a file.
+  then: (t, value) => {
+    if (!story?.files || t.topic !== "chat" || !value) return undefined;
+    const chat = value as { messages: { authorKind: string; attachments: unknown[] }[] };
+    const person = chat.messages.findLastIndex((m) => m.authorKind === "person");
+    const agent = chat.messages.findLastIndex((m) => m.authorKind === "agent");
+    return {
+      ...chat,
+      messages: chat.messages.map((m, i) => i === person ? { ...m, attachments: [SENT.picture, ...SENT.files] }
+        : i === agent ? { ...m, attachments: [SENT.files[0]] } : m),
+    };
+  },
   call: (name, p) => name === "drive.read" ? readFile(String(p.path), Number(p.offset), Number(p.length))
     : name === "drive.place" || name === "changelog.seen" || name === "station.updateNotice" ? null : undefined,
 });

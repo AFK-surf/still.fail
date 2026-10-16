@@ -102,3 +102,13 @@ export const CHANGELOG = {
   tabs: [],
   news: { build: "0.1.2925", entries: [{ version: 2925, versionName: "0.1.2925", text: ["阅读器支持深色主题，文件页侧栏直接列出文件夹"], lines: [], note: "" }] },
 };
+
+/** What the stories' chats send (stories.tsx `files`): a picture, and files of a few kinds, on a person's message and
+ * an agent's. */
+export const SENT = {
+  picture: { name: "login-375.png", path: "/Users/lin/Downloads/login-375.png", size: 19013, width: 480, height: 320 },
+  files: [
+    { name: "orders-慢查询.md", path: "/Users/lin/Downloads/orders-慢查询.md", size: NOTE_BYTES.length },
+    { name: "发版录屏 1016.mp4", path: "/Users/lin/Downloads/发版录屏 1016.mp4", size: clipSize },
+  ],
+};

@@ -241,6 +241,16 @@ export const fileCardMeta = style({
   },
 });
 export const fileCardText = style({ flex: "1", minWidth: "0", display: "grid" });
+/**
+ * A file's card in a message: its sheet (FileTile, 30 × 36, the sheet drawn 2.75 in from its sides and 1.75 from its
+ * top and foot, its corners rounded 3.25) as far from the card's edges on every side, and the card rounded as the sheet
+ * is less that distance (concentric). A message's pictures and pasted text take its corner too: one corner for what a
+ * message carries.
+ */
+const SHEET = { inX: 2.75, inY: 1.75, corner: 3.25 } as const;
+const SHEET_ROOM = 9.75;
+export const FILE_CARD_PAD = { y: SHEET_ROOM - SHEET.inY, x: SHEET_ROOM - SHEET.inX } as const;
+export const MESSAGE_FILE_CORNER = `calc(${SHEET_ROOM + SHEET.corner}px * ${vars.cornerScale})`;
 /** A file's kind at a glance (Chat.tsx FileTile): a sheet with its extension, in the text's colour; dashed when only its
  * path goes; filling with the accent as it goes up; its extension red when it failed. */
 export const fileTile = style({ flex: "none", fill: "none", stroke: vars.muted, strokeWidth: 1.5, strokeLinecap: "round", strokeLinejoin: "round" });
@@ -277,7 +287,7 @@ export const msgImage = style({
     // Images hold their place: the box is set from the size sent with them.
     "button&": {
       position: "relative", padding: "0", border: "0", cursor: "zoom-in", display: "block", overflow: "hidden",
-      borderRadius: `calc(10px * ${vars.cornerScale})`, background: vars.neutralBg, cornerShape: vars.cornerShape,
+      borderRadius: MESSAGE_FILE_CORNER, background: vars.neutralBg, cornerShape: vars.cornerShape,
     },
   },
 });
@@ -684,7 +694,7 @@ export const activityStop = style({
 });
 
 /** Pasted text uses the regular attachment upload, with a local restore action while composing. */
-export const pasteSnippet = style({ display: "flex", alignItems: "flex-start", width: "236px", maxWidth: "100%", minWidth: 0, flexShrink: 0, borderRadius: `calc(8px * ${vars.cornerScale})`, background: vars.neutralBg, color: vars.text, cornerShape: vars.cornerShape });
+export const pasteSnippet = style({ display: "flex", alignItems: "flex-start", width: "236px", maxWidth: "100%", minWidth: 0, flexShrink: 0, borderRadius: MESSAGE_FILE_CORNER, background: vars.neutralBg, color: vars.text, cornerShape: vars.cornerShape });
 export const pasteSnippetBody = style({ display: "flex", flexDirection: "column", gap: "4px", padding: "10px 12px", flex: 1, minWidth: 0 });
 export const pasteSnippetOpen = style({ textAlign: "left", padding: 0, border: 0, background: "transparent", color: vars.muted, textDecoration: "underline", cursor: "pointer" });
 export const pasteSnippetTitle = style({ padding: 0, border: 0, background: "transparent", textAlign: "left", cursor: "pointer", width: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 });

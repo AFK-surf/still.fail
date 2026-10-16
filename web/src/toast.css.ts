@@ -13,7 +13,7 @@ import { appearanceSetting, chooserCheck, modelPoolList, msgAvatar } from "./sty
 import { groupHead } from "./cloud/settings.css.ts";
 import { details, detailsList, jobsPanel } from "./pages/ChatPage.css.ts";
 import { COMPOSER_BUTTON } from "./styles/composer.css.ts";
-import { activityLine, attachBtn, fileCard, fileCardOpen, msgFiles, msgImage, msgUnsentNote, quoteCards, sendBtn } from "./Chat.css.ts";
+import { FILE_CARD_PAD, MESSAGE_FILE_CORNER, activityLine, attachBtn, fileCard, fileCardOpen, msgFiles, msgImage, msgUnsentNote, quoteCards, sendBtn } from "./Chat.css.ts";
 import { hPlace } from "./History.css.ts";
 import { bleedX, bleedY, overlap } from "./styles/align.ts";
 
@@ -121,13 +121,14 @@ globalStyle(msgAvatar, {
 globalStyle(msgFiles, { display: "flex", flexWrap: "wrap", gap: "6px", minWidth: "0", maxWidth: "100%" });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(fileCard, {
-  display: "inline-flex", alignItems: "center", gap: "10px", width: "236px", maxWidth: "100%", padding: "8px 10px",
-  borderRadius: `calc(8px * ${vars.cornerScale})`, background: vars.neutralBg, color: vars.text, textAlign: "left",
+  display: "inline-flex", alignItems: "center", gap: "10px", width: "236px", maxWidth: "100%",
+  padding: `${FILE_CARD_PAD.y}px 10px ${FILE_CARD_PAD.y}px ${FILE_CARD_PAD.x}px`,
+  borderRadius: MESSAGE_FILE_CORNER, background: vars.neutralBg, color: vars.text, textAlign: "left",
   cornerShape: vars.cornerShape,
 });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(msgImage, {
-  display: "block", borderRadius: `calc(10px * ${vars.cornerScale})`, overflow: "hidden", maxWidth: "min(100%, 360px)",
+  display: "block", borderRadius: MESSAGE_FILE_CORNER, overflow: "hidden", maxWidth: "min(100%, 360px)",
   cornerShape: vars.cornerShape,
 });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
@@ -137,7 +138,7 @@ globalStyle(msgAvatar, { width: "18px", height: "18px", flex: "none" });
 /** Here rather than with its class: it comes after .chat-list > *, and wins over it. */
 globalStyle(fileCardOpen, {
   display: "inline-flex", maxWidth: "100%", padding: "0", border: "0", background: "none", color: "inherit",
-  font: "inherit", textAlign: "left", cursor: "pointer", borderRadius: `calc(8px * ${vars.cornerScale})`,
+  font: "inherit", textAlign: "left", cursor: "pointer", borderRadius: MESSAGE_FILE_CORNER,
   cornerShape: vars.cornerShape,
 });
 /**

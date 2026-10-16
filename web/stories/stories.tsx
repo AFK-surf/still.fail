@@ -45,6 +45,8 @@ export interface Story {
   phone?: boolean;
   /** Shows the changelog's news (the notices' bubble). */
   news?: boolean;
+  /** Its chat's messages carry files (data.ts SENT): pictures and files' cards. */
+  files?: boolean;
 }
 
 const at = (name: string) => ({ ...AT, path: name });
@@ -209,6 +211,8 @@ export const stories: Story[] = [
 
   // ── the app (the site's demo) ──
   { id: "app-chat", group: "应用", title: "对话页", app: true },
+  { id: "app-chat-files", group: "应用", title: "对话 · 消息里的附件", app: true, files: true },
+  { id: "phone-chat-files", group: "手机", title: "对话 · 消息里的附件", app: true, phone: true, files: true },
   { id: "app-chat-history", group: "应用", title: "执行历史", app: true, steps: [{ click: '[aria-label$="的执行历史"]' }] },
   { id: "app-chat-side", group: "应用", title: "对话 · 侧栏打开", app: true, steps: [{ click: '[aria-label="打开侧栏"]' }] },
   { id: "app-sidebar-folded", group: "应用", title: "侧栏收起", app: true, steps: [{ click: '[aria-label="对话"]' }] },
