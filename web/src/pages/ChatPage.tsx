@@ -391,6 +391,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
         onConfirm={() => { setAskArchive(false); void archive(); }} onClose={() => setAskArchive(false)} />}
       <div className={`${jobsCss.sessionMain} ${css.dropZone}`} {...drop.handlers}>
       {/* Files over the chat: it frosts over, and says where they go. */}
+      {drop.leaving && !drop.over && <div className={css.dropHint} data-leaving="" aria-hidden="true" onAnimationEnd={drop.gone}><div className={css.dropMarks} /><span>{drop.leaving}</span></div>}
       {drop.over && (
         <div className={css.dropHint} aria-hidden="true">
           {/* What is dragged, each by its mark, a few fanned out as a stack. */}
@@ -399,7 +400,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
               <FileTile key={i} name={m.name} dir={m.dir} style={{ "--i": i } as CSSProperties} />
             ))}
           </div>
-          <span>{drop.over.marks.length > 1 ? t("web-main.composer.dropMany", { n: drop.over.marks.length }) : t("web-main.composer.dropHere")}</span>
+          <span>{drop.label(drop.over)}</span>
         </div>
       )}
       <header className={sidebarCss.pageBar}>
@@ -632,6 +633,8 @@ type Over = { kind: "path" | "file"; marks: { name: string; dir: boolean }[] };
 function useChatDrop(chat: string, station: string) {
   const here = useThisMachine(station);
   const [over, setOver] = useState<Over | null>(null);
+  // Let go: the frost going while the marks fly off it.
+  const [leaving, setLeaving] = useState<string | null>(null);
   const depth = useRef(0);
   const shown = useRef<HTMLDivElement>(null);
   // The composer knows files are over its chat, and leaves them to it (Chat.tsx).
@@ -645,6 +648,7 @@ function useChatDrop(chat: string, station: string) {
   const marks = (dt: DataTransfer) => carriesDrive(dt)
     ? (draggedNow() ?? []).map((d) => ({ name: d.name, dir: d.dir }))
     : [...dt.items].filter((i) => i.kind === "file").map((i) => ({ name: nameByType(i.type), dir: false }));
+  const label = (o: Over) => (o.marks.length > 1 ? t("web-main.composer.dropMany", { n: o.marks.length }) : t("web-main.composer.dropHere"));
   const handlers = {
     onDragEnter: (e: React.DragEvent) => {
       const k = kind(e.dataTransfer);
@@ -658,8 +662,9 @@ function useChatDrop(chat: string, station: string) {
       depth.current = 0;
       if (e.defaultPrevented || !kind(e.dataTransfer)) { setOver(null); return; }
       e.preventDefault();
-      // Their marks take off from where they are shown, before they go.
+      // Their marks take off from where they are shown; the frost fades as they fly.
       takeOff([...(shown.current?.querySelectorAll("svg") ?? [])]);
+      setLeaving(over ? label(over) : null);
       setOver(null);
       endDrag();
       if (carriesDrive(e.dataTransfer)) { offerToDraft(chat, { files: [], quotes: [], dropped: droppedOf(e.dataTransfer).map(droppedFrom) }); return; }
@@ -667,7 +672,7 @@ function useChatDrop(chat: string, station: string) {
       offerToDraft(chat, named ? { files: [], quotes: [], dropped: named } : { files: [...e.dataTransfer.files], quotes: [] });
     },
   };
-  return { over, handlers, shown };
+  return { over, leaving, gone: () => setLeaving(null), handlers, shown, label };
 }
 
 /** The 任务 tab's key: every service and job of the chat's agents. */

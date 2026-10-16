@@ -43,9 +43,10 @@ export function morph(box: HTMLElement, by: string, from: Shape, frames: [Keyfra
   stop(box);
   const style = getComputedStyle(box);
   const height = box.getBoundingClientRect().height;
+  const radius = Math.min(parseFloat(style.borderTopLeftRadius), height / 2);
   const all = [box.animate([
     { ...frames[0], borderRadius: `${from.radius}px`, cornerShape: from.corner, overflow: "clip" },
-    { ...frames[1], borderRadius: `${Math.min(parseFloat(style.borderTopLeftRadius), height / 2)}px`, cornerShape: style.getPropertyValue("corner-shape"), overflow: "clip" },
+    { ...frames[1], borderRadius: `${radius}px`, cornerShape: style.getPropertyValue("corner-shape"), overflow: "clip" },
   ], timing)];
   // Read with the box at its start: where the new layout puts each part then.
   for (const part of box.querySelectorAll(PARTS)) {
@@ -56,6 +57,50 @@ export function morph(box: HTMLElement, by: string, from: Shape, frames: [Keyfra
     if (Math.abs(x) < 0.5 && Math.abs(y) < 0.5) continue;
     all.push(part.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: "none" }], timing));
   }
+  running.set(box, { by, all });
+  void all[0]!.finished.then(() => { if (running.get(box)?.all === all) running.delete(box); }, () => {});
+  return all;
+}
+
+/**
+ * `box` gone to a new shape in its own place (its text changed: a capsule becoming a box, a file's card come into it):
+ * it is laid out as it ends at once, and only its ground (what it is drawn on: its colour, its frost, its shadow, its
+ * corners) goes from the shape it had to this one, on a layer of its own under what it holds. Nothing in it is cut by
+ * that shape: its text and buttons go from where they showed to their places with the ground; what came into it anew
+ * is in its place from the first (a dropped file's mark arrives there, drive/flight.ts), its place not moving.
+ */
+export function grow(box: HTMLElement, by: string, from: Shape, timing: KeyframeAnimationOptions): Animation[] {
+  stop(box);
+  const style = getComputedStyle(box);
+  const now = box.getBoundingClientRect();
+  const radius = Math.min(parseFloat(style.borderTopLeftRadius), now.height / 2);
+  const ground = document.createElement("span");
+  ground.setAttribute("aria-hidden", "true");
+  Object.assign(ground.style, {
+    position: "absolute", zIndex: "-1", pointerEvents: "none", inset: "0",
+    background: style.background, boxShadow: style.boxShadow, backdropFilter: style.backdropFilter,
+    border: style.border, cornerShape: style.getPropertyValue("corner-shape"),
+  });
+  // Its ground drawn by the layer meanwhile, not by the box: the box's own shows nothing.
+  const own = { background: box.style.background, boxShadow: box.style.boxShadow, backdropFilter: box.style.backdropFilter, borderColor: box.style.borderColor, isolation: box.style.isolation };
+  Object.assign(box.style, { background: "transparent", boxShadow: "none", backdropFilter: "none", borderColor: "transparent", isolation: "isolate" });
+  box.prepend(ground);
+  const was = from.rect;
+  const inset = `${was.top - now.top}px ${now.right - was.right}px ${now.bottom - was.bottom}px ${was.left - now.left}px`;
+  const all = [ground.animate([
+    { inset, borderRadius: `${from.radius}px` },
+    { inset: "0px", borderRadius: `${radius}px` },
+  ], timing)];
+  for (const part of box.querySelectorAll(PARTS)) {
+    const at = from.parts.get(part);
+    if (!at) continue;
+    const to = part.getBoundingClientRect();
+    const x = at.left - to.left, y = at.top - to.top;
+    if (Math.abs(x) < 0.5 && Math.abs(y) < 0.5) continue;
+    all.push(part.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: "none" }], timing));
+  }
+  const end = () => { ground.remove(); Object.assign(box.style, own); };
+  void all[0]!.finished.then(end, end);
   running.set(box, { by, all });
   void all[0]!.finished.then(() => { if (running.get(box)?.all === all) running.delete(box); }, () => {});
   return all;
@@ -102,6 +147,6 @@ export function useMorph(box: RefObject<HTMLElement | null>, laidOut: string, pa
     const height = el.getBoundingClientRect().height;
     // Its size unchanged (a letter more on the same line), nothing moves.
     if (Math.abs(height - was.rect.height) < 0.5 && was.corner === getComputedStyle(el).getPropertyValue("corner-shape")) return;
-    morph(el, "text", was, [{ height: `${was.rect.height}px` }, { height: `${height}px` }], { duration: 260, easing: easeOut() });
+    grow(el, "text", was, { duration: 260, easing: easeOut() });
   }, [laidOut, page]); // eslint-disable-line react-hooks/exhaustive-deps
 }

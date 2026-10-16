@@ -1,4 +1,4 @@
-import { globalStyle, style } from "@vanilla-extract/css";
+import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { glass } from "../styles/glass.ts";
 import { muted } from "../styles/shell.css.ts";
@@ -254,9 +254,12 @@ export const evict = style({ padding: "0", border: "0", background: "none", colo
 /** The chat takes files dropped anywhere on it (ChatPage.tsx useChatDrop): while they are over it, it frosts over (as the
  * composer's glass) and shows them in its middle, with where they go; nothing ringed, nothing in a box. */
 export const dropZone = style({ position: "relative" });
+const frostOut = keyframes({ to: { opacity: 0 } });
 export const dropHint = style({
   ...glass, position: "absolute", inset: "0", zIndex: 40, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
   gap: "16px", pointerEvents: "none", color: vars.text, fontSize: vars.textUi, fontWeight: 500,
+  // Let go: it fades, under the composer, where the dropped files' marks are on their cards (drive/flight.ts).
+  selectors: { "&[data-leaving]": { zIndex: 2, animation: `${frostOut} 260ms ease-out forwards` } },
 });
 /** What is dragged, each by its mark (Chat.tsx FileTile) twice the size of a card's, a few fanned out as a stack. */
 export const dropMarks = style({ position: "relative", width: "180px", height: "84px" });

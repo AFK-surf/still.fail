@@ -1473,7 +1473,7 @@ function FileCard({ file, onRemove, pending, sent, error }: { file: Pick<Attachm
     ? t("web-main.file.uploadingPart", { percent: Math.floor((sent / file.size) * 100), size: fileSize(file.size) })
     : t("web-main.file.uploading");
   return (
-    <Tip label={file.path ?? file.name} cut={!file.path}><span className={css.fileCard} data-error={error ? true : undefined}>
+    <Tip label={file.path ?? file.name} cut={!file.path}><span className={css.fileCard} data-card="" data-error={error ? true : undefined}>
       <FileTile name={file.name} progress={pending ? (sent ?? 0) / Math.max(1, file.size) : undefined} error={!!error} land={!!onRemove} />
       <span className={css.fileCardText}>
         <FileName name={file.name} />
@@ -1987,7 +1987,7 @@ function RefCard({ file: f, draft, onRemove }: { file: Pending; draft: Draft; on
   );
   return (
     <Hover tile content={info}>
-      <span className={css.fileCard} data-error={asFile && f.error ? true : undefined} data-named={!asFile || undefined}>
+      <span className={css.fileCard} data-card="" data-error={asFile && f.error ? true : undefined} data-named={!asFile || undefined}>
         <FileTile land name={asFile && ref.dir ? `${f.name}.zip` : f.name} dir={ref.dir && !asFile} progress={pending ? (f.sent ?? 0) / Math.max(1, f.size) : undefined} error={asFile && !!f.error} />
         <span className={css.fileCardText}>
           <FileName name={asFile && ref.dir ? `${f.name}.zip` : f.name} />
@@ -2019,7 +2019,7 @@ function PendingFile({ file: f, onRemove, onRestore, onRetry }: { file: Pending;
     {onRemove && <button type="button" className={`${css.fileCardRemove} ${css.pasteSnippetRemove}`} aria-label={t("web-main.composer.removePaste")} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
   </div>{f.pastedFile && f.preview && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey="" file={shown} local={{ blob: f.pastedFile, url: f.preview }} />}</>;
   return f.preview ? (
-    <Tip label={f.error ?? f.name}><span ref={thumb} className={css.composerThumb} data-send-image={f.done ? sentImageKey(f.done.path) : f.error ? undefined : uploadImageKey(f.id)} data-error={f.error ? true : undefined}>
+    <Tip label={f.error ?? f.name}><span ref={thumb} data-card="" className={css.composerThumb} data-send-image={f.done ? sentImageKey(f.done.path) : f.error ? undefined : uploadImageKey(f.id)} data-error={f.error ? true : undefined}>
       <button type="button" className={css.composerThumbOpen} aria-label={t("web-main.file.view", { name: f.name })} data-viewer-thumb={thumbId(station.address, "", shown.path)}
         onClick={(e) => { e.stopPropagation(); setOpen(true); }}>
         <img src={f.preview} alt={f.name} />
