@@ -33,6 +33,10 @@ export interface ScreenView {
 
 export type ScreenKind = "desktop" | "browser";
 
+/// Whether a source can be seen and driven now, for one that may not be (the desktop: macOS's grants, a machine it is
+/// not supported on). `app` and `path`: what a person turns on in System Settings for it.
+export type ScreenAccess = { capture: boolean; control: boolean; unsupported?: "platform" | "helper"; app?: string; path?: string };
+
 export interface ScreenSource {
   /// Stable while the source lasts: `desktop`, `browser:<targetId>`.
   readonly id: string;
@@ -42,6 +46,8 @@ export interface ScreenSource {
   size(): { width: number; height: number };
   /// Fails (with a message for the person) when it cannot be seen now: no permission to capture, no display.
   open(options: ViewOptions): Promise<ScreenView>;
+  /// Whether it can be seen and driven now; none: always.
+  access?(): ScreenAccess;
 }
 
 /// The station's sources: parts add theirs (the desktop at start, the browser per tab) and take them away.
