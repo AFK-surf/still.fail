@@ -23,6 +23,10 @@ export interface DriveState {
   home: string | null;
   /** May change what is in them (not a read-only member). */
   write: boolean;
+  /** What is deleted goes to the machine's trash (else it goes for good, asked first). */
+  trash: boolean;
+  /** A folder can be zipped to download. */
+  zip: boolean;
   error: string | null;
 }
 
@@ -43,6 +47,8 @@ export function useDrive(station: string): DriveState {
     anywhere: picked.drive?.anywhere === true,
     home: picked.drive?.home ?? null,
     write: picked.viewer !== "viewer",
+    trash: picked.drive?.trash === true,
+    zip: picked.drive?.zip === true,
     error: picked.error,
   }), [picked, role]);
 }
@@ -89,7 +95,10 @@ export const drive = {
   folders: (station: string, path: string | null) => call("drive.folders", { station, ...(path ? { path } : {}) }).then(foldersOf),
   mkdir: (at: At, name: string) => call("drive.mkdir", { station: at.station, root: at.root, path: joinPath(at.path, name) }),
   rename: (at: At, entry: DriveEntry, to: string) => call("drive.rename", { station: at.station, root: at.root, from: joinPath(at.path, entry.name), to: joinPath(at.path, to) }),
-  remove: (at: At, entry: DriveEntry) => call("drive.remove", { station: at.station, root: at.root, path: joinPath(at.path, entry.name) }),
+  /** To the machine's trash, where there is one (`permanent`: for good). */
+  remove: (at: At, entry: DriveEntry, permanent = false) => call("drive.remove", { station: at.station, root: at.root, path: joinPath(at.path, entry.name), ...(permanent ? { permanent: true } : {}) }),
+  /** A folder zipped on the station: where the zip is, to read as a file of the drive. */
+  zip: (at: At, entry: DriveEntry) => call("drive.zip", { station: at.station, root: at.root, path: joinPath(at.path, entry.name) }) as Promise<{ root: string; path: string; name: string; size: number }>,
 };
 
 /** A name a folder or file may have: not empty, no slash, not . or .. */
