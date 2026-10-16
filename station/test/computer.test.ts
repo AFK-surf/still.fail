@@ -293,7 +293,7 @@ test("a missing grant: the access message and the screen's link for a person; no
   desktop.refuse = null;
   access.capture = true;
   await computer.act("s1", { screen: "desktop" });
-  await assert.rejects(computer.act("s1", { screen: "desktop", action: "click", x: 1, y: 1 }), (e: Error) => /hasn't let still\.fail Helper control it yet \(Accessibility\)/.test(e.message) && /input was not sent/.test(e.message) && e.message.includes("/screen/desktop"));
+  await assert.rejects(computer.act("s1", { screen: "desktop", action: "click", x: 1, y: 1 }), (e: Error) => /hasn't allowed still\.fail Helper to control it yet \(Accessibility\)/.test(e.message) && /input was not sent/.test(e.message) && e.message.includes("/screen/desktop"));
   assert.deepEqual(desktop.views[0]!.inputs, []);
   // A source sending no JPEG (a desktop before its helper did).
   const old = new FakeSource("desktop", "desktop");
