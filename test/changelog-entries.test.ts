@@ -19,6 +19,12 @@ test("a subject, or prose that only mentions a trailer, says nothing", () => {
   assert.deepEqual(readMessage(prose), { text: [], fixes: [] });
 });
 
+test("a Changelog trailer saying there is nothing to tell is no line", () => {
+  for (const nothing of ["none", "None.", "n/a", "无", "-"]) {
+    assert.deepEqual(readMessage(`Subject\n\nSession: ember:c-5\nChangelog: ${nothing}\nFixes: FB-7\n`), { text: [], fixes: [7] });
+  }
+});
+
 test("the words for other parts do not make a commit reach Android", () => {
   const words = (part: string) => [`client/i18n/catalog/en/${part}.json`, `client/i18n/catalog/zh/${part}.json`];
   // The desktop's dock (4fcde680), Slack's files on the station (3f92c1bf): their words are in the core.

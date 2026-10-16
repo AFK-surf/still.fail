@@ -88,6 +88,8 @@ export function readNotCarried(root: string): RegExp | null {
 }
 
 const TRAILER = /^([A-Za-z][A-Za-z0-9-]*):\s*(.*)$/;
+// `Changelog: none` and the like: the commit says there is nothing to tell (67e764d3 and 3 others showed "none" as news).
+const NOTHING = /^(none|n\/?a|nothing|无|没有|-+)[.。]?$/i;
 
 /**
  * A commit's message: the changelog's lines and the fixes in its trailers, from every paragraph after the subject that is
@@ -103,7 +105,7 @@ export function readMessage(message: string): { text: string[]; fixes: number[] 
     if (!lines.length || !lines.every((l, i) => TRAILER.test(l) || (i > 0 && /^\s/.test(l)))) continue;
     for (const line of lines.join("\n").replace(/\n\s+/g, " ").split("\n")) {
       const [, key, value] = TRAILER.exec(line)!;
-      if (/^changelog$/i.test(key!) && value!.trim()) text.push(value!.trim());
+      if (/^changelog$/i.test(key!) && value!.trim() && !NOTHING.test(value!.trim())) text.push(value!.trim());
       if (/^fixes$/i.test(key!)) for (const fb of value!.matchAll(/FB-?(\d+)/gi)) fixes.push(Number(fb[1]));
     }
   }
