@@ -5,15 +5,11 @@
 //   joinable {workspace}     the stations to pick in 添加 station: those whose home workspace (not one they joined) the
 //                            viewer is an owner or admin of, not in this workspace already; from what is held of the
 //                            viewer's workspaces only (nothing is asked for it)
-//   memberships {station}    the workspaces the station is in (its `GET /workspaces`), with each joined one's folders
-//                            (`GET /drive`'s `joined`), for its home workspace's owners and admins: read while a page
-//                            shows it, kept by its address
+//   memberships {station}    the workspaces the station is in (its `GET /workspaces`), for its home workspace's owners
+//                            and admins: read while a page shows it, kept by its address
 // Calls:
 //   station.join {workspace, station, name?}   the station (its address in its home workspace) added to `workspace`:
 //                            an enrollment made there, then the station told to join with it, over its home link
-//
-// What a station's managers pin for a joined workspace (`drive.setRoots` with `workspace`) comes back with the drive as
-// the station has it, `joined` with it (heardDrive).
 import { Effect } from "effect";
 import type { Inner } from "../core.ts";
 import { handlers } from "../core/execute.ts";
@@ -36,9 +32,9 @@ const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 
 type Of = Extract<Call, { kind: "stationJoin" }>;
 
-/// What is held of a station's workspaces (the `memberships` record, by its address): its `GET /workspaces`, and the
-/// folders of each workspace it joined; `old`: a station from before several workspaces (it has no such route).
-type Held = { workspaces: J[]; canJoin: boolean; joined: Record<string, J[]> | null } | { old: true };
+/// What is held of a station's workspaces (the `memberships` record, by its address): its `GET /workspaces`; `old`: a
+/// station from before several workspaces (it has no such route).
+type Held = { workspaces: J[]; canJoin: boolean } | { old: true };
 
 const RECORD = "memberships";
 
@@ -116,9 +112,6 @@ function manages(inner: Inner, address: string, all: Place[] = places(inner)): b
   return s !== undefined && get(s, "joined") !== true && manager(all.find((p) => p.id === workspace)?.role ?? null);
 }
 
-/// A drive root as the clients show it (DriveRoot).
-const root = (r: J) => ({ path: str(get(r, "path")) ?? "", name: str(get(r, "name")) ?? str(get(r, "path")) ?? "", state: str(get(r, "state")) ?? "ok" });
-
 /// The `memberships` topic.
 export function memberships(inner: Inner, address: string): J {
   const all = places(inner);
@@ -133,12 +126,7 @@ export function memberships(inner: Inner, address: string): J {
     const workspace = str(get(w, "workspace"));
     if (workspace === null) return [];
     const home = get(w, "home") === true;
-    const roots = home ? [] : arr(held.joined?.[workspace]).map(root);
-    const line = home
-      ? t("core-views.memberships.home")
-      : roots.length > 0
-        ? t("core-views.memberships.folders", { names: roots.map((r) => r.name).join(t("core-views.list_separator")) })
-        : t("core-views.memberships.noFolders");
+    const line = t(home ? "core-views.memberships.home" : "core-views.memberships.joined");
     return [{
       workspace,
       name: all.find((p) => p.id === workspace)?.name ?? str(get(w, "workspaceName")) ?? workspace,
@@ -146,7 +134,6 @@ export function memberships(inner: Inner, address: string): J {
       home,
       here: workspace === here,
       line,
-      roots,
     }];
   });
   // The home one first.
@@ -156,7 +143,7 @@ export function memberships(inner: Inner, address: string): J {
 
 const invalidate = (inner: Inner, address: string) => inner.store.invalidateAll((t) => t.topic === "memberships" && t.station === address);
 
-/// What the station's admin API says of its workspaces, held; with the folders of those it joined.
+/// What the station's admin API says of its workspaces, held.
 function read(inner: Inner, address: string): Effect.Effect<void, CoreError> {
   return Effect.gen(function* () {
     if (!manages(inner, address)) return;
@@ -172,27 +159,10 @@ function read(inner: Inner, address: string): Effect.Effect<void, CoreError> {
       invalidate(inner, address);
       return;
     }
-    const workspaces = arr(get(answer.success, "workspaces"));
-    let joined: Record<string, J[]> | null = null;
-    if (workspaces.length > 1) {
-      const drive = yield* Effect.result(inner.stations.requests.call(addr, "GET", "/drive", null, { quiet: true }));
-      if (drive._tag === "Success" && isObject(get(drive.success, "joined"))) joined = get(drive.success, "joined");
-    }
     failed(inner).delete(address);
-    inner.data.put(RECORD, address, { workspaces, canJoin: get(answer.success, "canJoin") === true, joined });
+    inner.data.put(RECORD, address, { workspaces: arr(get(answer.success, "workspaces")), canJoin: get(answer.success, "canJoin") === true });
     invalidate(inner, address);
   });
-}
-
-/// The drive as a station answered a change of its pinned folders: the folders of each workspace it joined, as they
-/// are now (`joined`, for its managers), in what is held of its workspaces.
-export function heardDrive(inner: Inner, address: string, answer: unknown): void {
-  const joined = get(answer, "joined");
-  if (!isObject(joined)) return;
-  const held = inner.data.record(RECORD, address) as Held | undefined;
-  if (held === undefined || "old" in held) return;
-  inner.data.put(RECORD, address, { ...held, joined });
-  invalidate(inner, address);
 }
 
 /// What the station's refusal to join says, in words.
@@ -223,14 +193,9 @@ function join(inner: Inner, c: Of, ctx: J): Effect.Effect<unknown, CoreError> {
     const token = str(get(made, "token"));
     if (token === null) return yield* Effect.fail(new CoreError("invalid", t("core-misc.join.noToken")));
     const answer = yield* Effect.mapError(inner.stations.requests.call(addr, "POST", "/workspaces/join", { token }, { ctx }), joinError);
-    const held = inner.data.record(RECORD, c.station) as Held | undefined;
-    inner.data.put(RECORD, c.station, {
-      workspaces: arr(get(answer, "workspaces")),
-      canJoin: get(answer, "canJoin") === true,
-      joined: held !== undefined && !("old" in held) ? held.joined : null,
-    });
+    inner.data.put(RECORD, c.station, { workspaces: arr(get(answer, "workspaces")), canJoin: get(answer, "canJoin") === true });
     invalidate(inner, c.station);
-    // Listed in the workspace it joined (and the folders of the one it joined read with its workspaces).
+    // Listed in the workspace it joined.
     yield* inner.cloudSync.refreshAll();
     readSoon(inner, c.station);
     return { joined: get(answer, "joined") ?? null };

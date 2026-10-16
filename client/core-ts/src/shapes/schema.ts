@@ -1990,8 +1990,7 @@ export const SHAPES: Record<string, Shape> = {
     ["stationName", "String", { doc: "What the station is called there." }],
     ["home", "bool", { doc: "Its home workspace, whose owners and admins manage the machine." }],
     ["here", "bool", { doc: "The workspace the page is in." }],
-    ["line", "String", { doc: "What it has of the machine, in a line: 主 workspace, or the folders pinned for it." }],
-    ["roots", vec("DriveRoot"), { doc: "A joined workspace's folders, as the station's managers pinned them for it (none for the home one:\nits own are the overview's drive)." }],
+    ["line", "String", { doc: "What it is to the station, in a line: 主 workspace, or 加入的 workspace." }],
   ], { doc: "A workspace a station is in." }),
   StationNet: struct([
     ["path", "String", { doc: "直连, 北京中继 (the relay's name, or 中继 host), or 正在选路." }],

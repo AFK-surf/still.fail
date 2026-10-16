@@ -122,7 +122,6 @@ test("a_station_joins_with_an_enrollment_of_the_workspace_over_its_home_link", a
   const { host, core, wire, made } = await setUp();
   wire.table["wa/a1 POST /workspaces/join"] = { joined: { workspace: "ws", workspaceName: "W", name: "A1" }, workspaces: BOTH, canJoin: true };
   wire.table["wa/a1 GET /workspaces"] = { workspaces: BOTH, canJoin: true };
-  wire.table["wa/a1 GET /drive"] = { roots: [], manage: true, write: true, joined: { ws: [{ path: "/srv/w", name: "w", state: "ok" }] } };
   const ui = core.connect();
   const values = new Map<number, unknown>();
   subscribe(core, ui, 1, { topic: "doing" });
@@ -136,7 +135,7 @@ test("a_station_joins_with_an_enrollment_of_the_workspace_over_its_home_link", a
   assert.deepEqual(wire.asked.filter((a) => a.path === "/workspaces/join"), [{ station: "wa/a1", method: "POST", path: "/workspaces/join", body: { token: "tok-1" } }]);
   assert.deepEqual(v(values, 1).doing, []);
 
-  // Its workspaces, its home first, the one joined with the folders pinned for it.
+  // Its workspaces, its home first.
   subscribe(core, ui, 3, { topic: "memberships", station: "wa/a1" });
   await host.settle();
   apply(host, values);
@@ -145,18 +144,11 @@ test("a_station_joins_with_an_enrollment_of_the_workspace_over_its_home_link", a
     loading: false,
     canJoin: true,
     workspaces: [
-      { workspace: "wa", name: "甲", stationName: "A1", home: true, here: true, line: "主 workspace", roots: [] },
-      { workspace: "ws", name: "W", stationName: "A1", home: false, here: false, line: "开放的文件夹：w", roots: [{ path: "/srv/w", name: "w", state: "ok" }] },
+      { workspace: "wa", name: "甲", stationName: "A1", home: true, here: true, line: "主 workspace" },
+      { workspace: "ws", name: "W", stationName: "A1", home: false, here: false, line: "加入的 workspace" },
     ],
   });
 
-  // Folders pinned for W: as the station answers, at once.
-  wire.table["wa/a1 PUT /drive/roots"] = { roots: [], manage: true, write: true, joined: { ws: [] } };
-  call(core, ui, 4, "drive.setRoots", { station: "wa/a1", roots: [], workspace: "ws" });
-  await host.settle();
-  assert.ok("ok" in answerOf(host, values, 4));
-  assert.deepEqual(wire.asked.find((a) => a.method === "PUT")?.body, { roots: [], workspace: "ws" });
-  assert.equal(v(values, 3).workspaces[1].line, "没有开放文件夹");
   core.close();
 });
 

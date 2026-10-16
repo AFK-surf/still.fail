@@ -73,7 +73,7 @@ export interface OperationParams {
   "software.updateAll": {  };
   "software.check": {  };
   "software.channel": { channel?: string | null | undefined };
-  "drive.setRoots": { roots: string[]; workspace?: string | null | undefined };
+  "drive.setRoots": { roots: string[] };
   "drive.folders": { path?: string | null | undefined };
   "drive.mkdir": { root: string; path: string };
   "drive.rename": { root: string; from: string; to: string };

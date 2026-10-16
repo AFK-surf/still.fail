@@ -193,7 +193,7 @@ notices are only of the workspace the viewer is in (attend.ts).
 | `notify` | `workspace?` | notifications on this device: on or off, asked, whether to hold pushes, the notices to show now (docs/notifications.md), only the workspace's for a page in one |
 | `adbShare` | — | this phone's adb as lent to a station's agents (`AdbShareView`, adb.ts; docs/adb-share.md): whether it is and to which, how the offer goes (`phase`), how the station's adb holds the phone (`adb`, `serial`, `message`), until when, the tunnels open now. Kept in memory only |
 | `joinable` | `workspace` | the stations 添加 station offers to add to the workspace as they are (`JoinableView`, views/memberships.ts; docs/multi-workspace.md): those of the viewer's other workspaces whose home workspace (the cloud does not list them there as `joined`) the viewer is an owner or admin of, not in this one already, each with its address in its home workspace and a line (`甲 · 在线`); `offered` while the viewer manages another workspace at all, `loading` while one of them is not read. From what is held of the workspaces only |
-| `memberships` | `station` | the workspaces the station is in (`MembershipsView`): its `GET /workspaces`, each joined one with the folders pinned for it (`GET /drive`'s `joined`), its home one first. Only for the owners and admins of its home workspace (`manages`: the page is in that one, and the viewer manages it); read while a page shows it, kept by its address; again after `station.join`, and the folders as `drive.setRoots` with `workspace` answers. A station from before several workspaces says so (`error`) |
+| `memberships` | `station` | the workspaces the station is in (`MembershipsView`): its `GET /workspaces`, its home one first. Only for the owners and admins of its home workspace (`manages`: the page is in that one, and the viewer manages it); read while a page shows it, kept by its address; again after `station.join`. A station from before several workspaces says so (`error`) |
 
 ```jsonc
 // live
@@ -508,8 +508,8 @@ thread, else its session), `chats.archived`,
 `profile.useMachineLogin`, `profile.put`, `profile.delete`, `profile.quota`,
 `profile.check`, `profile.login`, `profile.cancelLogin`, `profile.loginCode`,
 `login.new`, `login.code`, `login.drop`, `job.get`, `job.log`, `job.stop`,
-`memory.get`, `software.update`, `software.check`, `software.channel`, `drive.setRoots` (with `workspace`, the folders
-of a workspace the station joined: offered only where `memberships` lists one). still.fail cloud's take
+`memory.get`, `software.update`, `software.check`, `software.channel`, `drive.setRoots` (a station in several workspaces keeps a
+list for each: the asker's). still.fail cloud's take
 `account`: `workspace.create`, `workspace.rename`, `workspace.setRelays`, `workspace.delete`,
 `workspace.invite`, `workspace.addMembers`, `workspace.removeAdded`,
 `workspace.revokeInvitation`, `workspace.setRole`, `workspace.removeMember`,

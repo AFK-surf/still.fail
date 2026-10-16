@@ -487,11 +487,8 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         val values = SoftwareChannelFields().apply(fill).fields
         return call("software.channel", JsonObject(values))
     }
-    class DriveSetRootsFields : OperationFields() {
-        var workspace: String? by field<String>("workspace") { JsonPrimitive(it) }
-    }
-    suspend fun driveSetRoots(roots: List<String>, fill: DriveSetRootsFields.() -> Unit = {}): JsonElement {
-        val values = DriveSetRootsFields().apply(fill).fields
+    suspend fun driveSetRoots(roots: List<String>): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
         values["roots"] = JsonArray(roots.map(::JsonPrimitive))
         return call("drive.setRoots", JsonObject(values))
     }

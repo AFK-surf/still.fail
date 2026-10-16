@@ -86,9 +86,6 @@ export const drive = {
   /** `folder` (an absolute path on the station) pinned, or not, among `roots`. */
   pin: (station: string, roots: readonly DriveRoot[], folder: string, pinned: boolean) =>
     call("drive.setRoots", { station, roots: pinned ? [...roots.map((r) => r.path).filter((p) => p !== folder), folder] : roots.map((r) => r.path).filter((p) => p !== folder) }),
-  /** `folder` lent to `workspace`, one the station joined, or not, among the folders pinned for it (`roots`). */
-  pinFor: (station: string, roots: readonly DriveRoot[], folder: string, pinned: boolean, workspace: string) =>
-    call("drive.setRoots", { station, workspace, roots: pinned ? [...roots.map((r) => r.path).filter((p) => p !== folder), folder] : roots.map((r) => r.path).filter((p) => p !== folder) }),
   folders: (station: string, path: string | null) => call("drive.folders", { station, ...(path ? { path } : {}) }).then(foldersOf),
   mkdir: (at: At, name: string) => call("drive.mkdir", { station: at.station, root: at.root, path: joinPath(at.path, name) }),
   rename: (at: At, entry: DriveEntry, to: string) => call("drive.rename", { station: at.station, root: at.root, from: joinPath(at.path, entry.name), to: joinPath(at.path, to) }),

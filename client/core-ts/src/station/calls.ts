@@ -10,7 +10,6 @@ import { base64 } from "../util.ts";
 import { folderOf } from "../ops.ts";
 import * as looks from "../looks.ts";
 import { machineMeta } from "../views/models.ts";
-import { heardDrive } from "../views/memberships.ts";
 import { StationAddr } from "./addr.ts";
 import { readAll, replyHeader, takeFrames, encodeFrame, type Frame } from "./wire.ts";
 
@@ -33,8 +32,6 @@ export function install(): void {
           if (Array.isArray(a.sessions)) a.sessions = a.sessions.map((s) => machineMeta(s, now));
           if (a.session !== undefined) a.session = machineMeta(a.session, now);
         }
-        // The folders pinned for the workspaces it joined, as they are now.
-        if (op.method === "PUT" && op.path === "/drive/roots") heardDrive(inner, (op.target as { station: string }).station, answer);
         // What the clients show of it, put in here.
         looks.answer(op.method, op.path, answer);
         return answer;

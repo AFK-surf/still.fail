@@ -126,7 +126,7 @@ export const PARAMS: Record<string, string> = {
   "software.updateAll": "",
   "software.check": "",
   "software.channel": "channel?:string",
-  "drive.setRoots": "roots:strings workspace?:string",
+  "drive.setRoots": "roots:strings",
   "drive.folders": "path?:string",
   "drive.mkdir": "root:string path:string",
   "drive.rename": "root:string from:string to:string",
@@ -420,11 +420,10 @@ function stationOp(name: string, params: unknown): Request | null {
     case "software.auto":
       return op("POST", () => "/updates/auto", { on: p.bool("on") }, OVERVIEW);
     // The station's drive (docs/drive.md): the folders it lends its members, named by the workspace's owners and admins
-    // (their folders to pick from: `drive.folders`), and changes of what is in them. With `workspace`, those of a workspace
-    // the station joined, named by its home workspace's owners and admins (docs/multi-workspace.md): only offered where
-    // the station says it is in several (a station from before would take them for its own).
+    // (their folders to pick from: `drive.folders`), and changes of what is in them. A station in several workspaces keeps a
+    // list for each: the asker's (docs/multi-workspace.md).
     case "drive.setRoots":
-      return op("PUT", () => "/drive/roots", p.pick(["roots", "workspace"]), OVERVIEW);
+      return op("PUT", () => "/drive/roots", p.pick(["roots"]), OVERVIEW);
     case "drive.folders":
       return op("GET", () => `/drive/folders?path=${encode(p.word("path") ?? "")}`, null, NONE);
     case "drive.mkdir":

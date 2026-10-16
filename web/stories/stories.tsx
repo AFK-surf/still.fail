@@ -274,7 +274,6 @@ export const stories: Story[] = [
   { id: "app-station-add-existing", group: "应用", title: "添加 station · 已有的", app: true, demo: joining("list"), steps: [{ click: '[aria-label^="Station"]' }, { text: "添加 station" }, { text: "已有的 station" }] },
   { id: "app-station-add-existing-none", group: "应用", title: "添加 station · 已有的 · 没有", app: true, demo: joining("none"), steps: [{ click: '[aria-label^="Station"]' }, { text: "添加 station" }, { text: "已有的 station" }] },
   { id: "app-station-add-existing-error", group: "应用", title: "添加 station · 加入失败", app: true, demo: joining("error"), steps: [{ click: '[aria-label^="Station"]' }, { text: "添加 station" }, { text: "已有的 station" }, { text: "加进来" }] },
-  { id: "app-files-row-menu-joined", group: "应用", title: "文件 · 文件夹右键 · 开放给加入的 workspace", app: true, demo: memberships(), steps: [{ click: '[aria-label="文件"]' }, { text: "主目录" }, { rightClick: "button:has-text(\"Movies\")" }] },
   { id: "app-profile", group: "应用", title: "Profile", app: true, steps: [{ click: '[aria-label="Profile"]' }] },
   { id: "app-profile-workspaces", group: "应用", title: "Profile · 也给加入的 workspace 用", app: true, demo: profileFor(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-workspaces-on", group: "应用", title: "Profile · 已开放给加入的 workspace", app: true, demo: profileFor(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },

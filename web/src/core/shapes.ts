@@ -3044,13 +3044,8 @@ export interface StationMembership {
 	home: boolean;
 	/** The workspace the page is in. */
 	here: boolean;
-	/** What it has of the machine, in a line: 主 workspace, or the folders pinned for it. */
+	/** What it is to the station, in a line: 主 workspace, or 加入的 workspace. */
 	line: string;
-	/**
-	 * A joined workspace's folders, as the station's managers pinned them for it (none for the home one:
-	 * its own are the overview's drive).
-	 */
-	roots: DriveRoot[];
 }
 
 /** The workspaces a station is in (the `memberships` topic; views/memberships.ts), for its home workspace's owners and admins. */

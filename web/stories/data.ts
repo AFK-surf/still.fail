@@ -136,16 +136,13 @@ export const JOINABLE_NONE = { offered: true, loading: false, items: [] };
 /** What a station from before several workspaces answers, in the core's words. */
 export const JOIN_REFUSED = "这台 station 还不能在多个 workspace 里，先更新它";
 
-/** The demo's station in its home workspace (Acme) and in Lab, which it joined, with two folders lent to Lab. */
+/** The demo's station in its home workspace (Acme) and in Lab, which it joined. */
 export const MEMBERSHIPS = {
   manages: true,
   loading: false,
   canJoin: true,
   workspaces: [
-    { workspace: "demo", name: "Acme", stationName: "Studio", home: true, here: true, line: "主 workspace", roots: [] },
-    {
-      workspace: "lab", name: "Lab", stationName: "Studio", home: false, here: false, line: "开放的文件夹：datasets、notebooks",
-      roots: [{ path: "/Users/lin/datasets", name: "datasets", state: "ok" }, { path: "/Users/lin/notebooks", name: "notebooks", state: "ok" }],
-    },
+    { workspace: "demo", name: "Acme", stationName: "Studio", home: true, here: true, line: "主 workspace" },
+    { workspace: "lab", name: "Lab", stationName: "Studio", home: false, here: false, line: "加入的 workspace" },
   ],
 };

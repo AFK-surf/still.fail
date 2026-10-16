@@ -3072,11 +3072,8 @@ data class StationMembership (
 	val home: Boolean,
 	/// The workspace the page is in.
 	val here: Boolean,
-	/// What it has of the machine, in a line: 主 workspace, or the folders pinned for it.
-	val line: String,
-	/// A joined workspace's folders, as the station's managers pinned them for it (none for the home one:
-	/// its own are the overview's drive).
-	val roots: List<DriveRoot>
+	/// What it is to the station, in a line: 主 workspace, or 加入的 workspace.
+	val line: String
 )
 
 /// The workspaces a station is in (the `memberships` topic; views/memberships.ts), for its home workspace's owners and admins.
