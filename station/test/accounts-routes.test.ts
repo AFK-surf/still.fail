@@ -181,7 +181,7 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "groq" } }))[0], 400, "a key is needed");
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "nope", key: "k" } }))[0], 400);
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "anthropic", key: "k" } }))[0], 400, "Anthropic is its own kind");
-    assert.deepEqual(await t.call("POST", "/profiles", { access: { kind: "subscription" } }), [400, { error: "订阅账号用登录来添加" }]);
+    assert.deepEqual(await t.call("POST", "/profiles", { access: { kind: "subscription" } }), [400, { error: "订阅账号需通过登录添加" }]);
     assert.deepEqual(await t.call("POST", "/profiles", { access: { kind: "nope" } }), [400, { error: 'unknown access "nope"' }]);
     // What an older core is shown: `env`, with the provider beside it; the list leaves out the two kinds from before.
     const view = t.view("groq")!;
@@ -492,7 +492,7 @@ describe("the accounts routes", { concurrency: true }, () => {
     const t = await rig({ store });
     const view = t.accounts.automaticDecisionsView(owner);
     // Pages from before the policy list the checks one by one.
-    assert.deepEqual(view.recent.map((r: any) => [r.title, r.label]), [["old", "已做完 · 推荐归档"], ["loose", "没检查成"], ["修登录页", "已落地 · 推荐归档"], ["修登录页", "等人看结果 · 不推荐"]]);
+    assert.deepEqual(view.recent.map((r: any) => [r.title, r.label]), [["old", "已做完 · 推荐归档"], ["loose", "检查失败"], ["修登录页", "已落地 · 推荐归档"], ["修登录页", "等人看结果 · 不推荐"]]);
     const policy = view.policy;
     assert.equal(policy.text, DEFAULT_POLICY.policy);
     assert.equal(policy.edited, false);

@@ -89,7 +89,7 @@ class StationsLayoutTest {
             rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), listOf(st)) }
             h.settle()
             h.record(name).end()
-            listOf("在这台上").map { rule.onNodeWithText(it).getBoundsInRoot().top }.also { Log.i("motion", "$name: $it") }
+            listOf("在此 station 上").map { rule.onNodeWithText(it).getBoundsInRoot().top }.also { Log.i("motion", "$name: $it") }
         }
         tops.drop(1).forEach { assertEquals(tops[0], it) }
     }

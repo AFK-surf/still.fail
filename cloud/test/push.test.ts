@@ -107,7 +107,7 @@ test("a notification's text is one line of at most 140 characters, made by its k
   assert.equal(noticeBody("done", "修好了\n\n  部署  完成", "Claude"), "Claude: 修好了 部署 完成");
   assert.equal(noticeBody("message", "hi", "Bob"), "Bob: hi");
   assert.equal(noticeBody("block", "要你确认", "Claude"), "需要处理 · 要你确认");
-  assert.equal(noticeBody("failed", "token runs out"), "出错了 · token runs out");
+  assert.equal(noticeBody("failed", "token runs out"), "出错 · token runs out");
   assert.equal(noticeBody("done", "no one said it"), "no one said it");
   // In the language of the device it goes to.
   assert.equal(noticeBody("block", "confirm this", "Claude", "en"), "Needs you · confirm this");
@@ -388,7 +388,7 @@ test("Android devices get a high-priority FCM data message; an unregistered toke
     assert.equal(toAlice.headers.authorization, "Bearer fcm-access");
     const tag = `${id}/${station.id}/ember:c-1/x y`;
     assert.deepEqual(toAlice.message.android, { priority: "HIGH" }, "no collapse key: the app replaces a chat's notification by its tag");
-    assert.equal(toAlice.message.data.body, "出错了 · token runs out");
+    assert.equal(toAlice.message.data.body, "出错 · token runs out");
     assert.equal(toAlice.message.data.tag, tag);
     assert.equal(toAlice.message.data.seq, "12", "the message it is about (none from an older station: above)");
     assert.equal(toAlice.message.data.url, `/o/${id}/${station.id}/${encodeURIComponent("ember:c-1/x y")}?message=12`, "opened at that message");

@@ -144,7 +144,7 @@ function ComposerCards() {
   const files: Pending[] = [
     { id: "1", name: "合同-2026Q4.pdf", size: 1_468_006, done: { name: "合同-2026Q4.pdf", path: "/u/a.pdf", size: 1_468_006 }, error: null },
     { id: "2", name: "export-1013.csv", size: 22_528_000, sent: 9_000_000, done: null, error: null },
-    { id: "3", name: "build.log", size: 4096, done: null, error: "station 没有回应" },
+    { id: "3", name: "build.log", size: 4096, done: null, error: "station 无响应" },
     { id: "4", name: "发版录屏 1014.mp4", size: 50_541_773, done: null, error: null, ref: ref("/Users/lin/Downloads/发版录屏 1014.mp4") },
     { id: "5", name: "设计稿", size: 0, done: null, error: null, ref: ref("/Users/lin/Downloads/设计稿", true) },
     { id: "6", name: "pasted.txt", size: 5120, done: { name: "pasted.txt", path: "/u/p.txt", size: 5120 }, error: null, pasted: { preview: "error: connect ECONNREFUSED 127.0.0.1:5432 at TCPConnectWrap", characters: 5120 } as never },
@@ -208,7 +208,7 @@ export const stories: Story[] = [
       </>],
       ["图标按钮", <>
         <IconButton label="刷新" icon={Refresh} /><IconButton label="搜索" icon={Search} /><IconButton label="编辑" icon={Edit} />
-        <IconButton label="删除" icon={Trash} /><IconButton label="处理中" icon={Download} busy /><IconButton label="失败" icon={Download} failed="没连上" />
+        <IconButton label="删除" icon={Trash} /><IconButton label="处理中" icon={Download} busy /><IconButton label="失败" icon={Download} failed="未连接" />
       </>],
       ["小面板按钮", <>
         <PanelButton tone="accent">看看</PanelButton><PanelButton>普通</PanelButton><PanelButton tone="quiet">次要</PanelButton>
@@ -221,14 +221,14 @@ export const stories: Story[] = [
     id: "control-fields", group: "基础控件", title: "输入框",
     render: () => sheet([
       ["单行", <div style={{ display: "grid", gap: 12, width: 360 }}>
-        <Field label="名字" hint="会显示在侧栏和对话里"><input className={controlsCss.input} defaultValue="Studio" /></Field>
+        <Field label="名称" hint="会显示在侧栏和对话里"><input className={controlsCss.input} defaultValue="Studio" /></Field>
         <Field label="地址" error="这个地址打不开"><input className={controlsCss.input} defaultValue="http://127.0.0.1:3000" /></Field>
         <Field label="空的"><input className={controlsCss.input} placeholder="还没填" /></Field>
       </div>],
       ["多行", <div style={{ width: 420 }}><Field label="说明"><textarea className={controlsCss.input} rows={3} defaultValue={"归档建议：\n超过 7 天没有新消息、也没有在跑的任务"} /></Field></div>],
     ]),
   },
-  { id: "control-fields-focus", group: "基础控件", title: "输入框 · 聚焦", render: () => sheet([["单行", <div style={{ width: 360 }}><Field label="名字"><input className={controlsCss.input} defaultValue="Studio" /></Field></div>]]), steps: [{ click: "input" }] },
+  { id: "control-fields-focus", group: "基础控件", title: "输入框 · 聚焦", render: () => sheet([["单行", <div style={{ width: 360 }}><Field label="名称"><input className={controlsCss.input} defaultValue="Studio" /></Field></div>]]), steps: [{ click: "input" }] },
   { id: "control-segmented", group: "基础控件", title: "分段控件", render: () => sheet([["两项", <SegmentedDemo n={2} />], ["三项", <SegmentedDemo n={3} />]]) },
   { id: "control-choices", group: "基础控件", title: "选项卡片", render: () => sheet([["单选", <ChoicesDemo />]]) },
   {
@@ -240,7 +240,7 @@ export const stories: Story[] = [
   },
   { id: "control-select", group: "基础控件", title: "下拉框", render: () => sheet([["下拉", <SelectDemo />]]) },
   { id: "control-select-open", group: "基础控件", title: "下拉框 · 展开", render: () => sheet([["下拉", <SelectDemo />]]), steps: [{ click: '[role="combobox"]' }] },
-  { id: "control-menu-open", group: "基础控件", title: "「…」菜单", render: () => sheet([["菜单", <Menu items={[{ label: "改名", icon: Edit, onSelect: noop }, { label: "复制链接", icon: Copy, onSelect: noop }, "separator", { label: "归档", icon: Archive, onSelect: noop }, { label: "删除", icon: Trash, danger: true, onSelect: noop }]} />]]), steps: [{ click: '[aria-label="更多操作"]' }] },
+  { id: "control-menu-open", group: "基础控件", title: "「…」菜单", render: () => sheet([["菜单", <Menu items={[{ label: "重命名", icon: Edit, onSelect: noop }, { label: "复制链接", icon: Copy, onSelect: noop }, "separator", { label: "归档", icon: Archive, onSelect: noop }, { label: "删除", icon: Trash, danger: true, onSelect: noop }]} />]]), steps: [{ click: '[aria-label="更多操作"]' }] },
   { id: "control-tip", group: "基础控件", title: "提示", render: () => sheet([["提示", <Tip label="新建对话"><IconButton label="新建对话" icon={Plus} /></Tip>]]), steps: [{ hover: '[aria-label="新建对话"]' }] },
   {
     id: "control-marks", group: "基础控件", title: "标签、状态和标记",
@@ -277,7 +277,7 @@ export const stories: Story[] = [
   { id: "dialog", group: "弹窗", title: "弹窗", render: () => stage(<Dialog open title="添加 station" description="在要接入的机器上运行这条命令。" onClose={noop} footer={<><Button variant="ghost">取消</Button><Button variant="primary">完成</Button></>}><CopyCommand text="curl -fsSL https://still.fail/install.sh | sh" /></Dialog>) },
   { id: "dialog-wide", group: "弹窗", title: "弹窗 · 宽", render: () => stage(<Dialog open wide title="分享对话" onClose={noop} footer={<Button variant="primary">完成</Button>}><Choices label="范围" value="all" onChange={noop} options={[{ value: "all", title: "全部", description: "workspace 里的所有人" }, { value: "mine", title: "只给我", description: "只有自己能看" }]} /></Dialog>) },
   { id: "dialog-confirm", group: "弹窗", title: "确认", render: () => stage(<Confirm open title="删除「设计稿」？" description="文件夹和里面的文件都会删除，不能恢复。" action="删除" onConfirm={noop} onClose={noop} />) },
-  { id: "dialog-confirm-error", group: "弹窗", title: "确认 · 失败", render: () => stage(<Confirm open title="归档这个对话？" description="归档后有新消息会自动恢复。" action="归档" onConfirm={noop} onClose={noop} error="station 没有回应" />) },
+  { id: "dialog-confirm-error", group: "弹窗", title: "确认 · 失败", render: () => stage(<Confirm open title="归档这个对话？" description="归档后有新消息会自动恢复。" action="归档" onConfirm={noop} onClose={noop} error="station 无响应" />) },
   { id: "toast", group: "弹窗", title: "toast", render: () => stage(<ToastDemo text="已复制链接" />) },
   { id: "toast-long", group: "弹窗", title: "toast · 长", render: () => stage(<ToastDemo text="没能上传：http://127.0.0.1:4760/upload 返回 413，文件超过了 station 允许的大小（200 MB）" />) },
 
@@ -305,13 +305,13 @@ export const stories: Story[] = [
   { id: "app-chat-files-added", group: "应用", title: "对话 · Station 文件 · 发路径", app: true, steps: [{ click: '[aria-label="Station 文件"]' }, { text: "Downloads" }, { rightClick: "button:has-text(\"发版录屏 1014.mp4\")" }, { text: "添加到消息" }] },
   { id: "app-chat-files-card", group: "应用", title: "对话 · 文件卡片悬停", app: true, steps: [{ click: '[aria-label="Station 文件"]' }, { text: "Downloads" }, { rightClick: "button:has-text(\"发版录屏 1014.mp4\")" }, { text: "添加到消息" }, { hover: "text=Studio · 路径" }] },
   { id: "app-station", group: "应用", title: "station", app: true, steps: [{ click: '[aria-label^="Station"]' }] },
-  { id: "app-station-mark", group: "应用", title: "station · 选图标", app: true, steps: [{ click: '[aria-label^="Station"]' }, { click: '[aria-label^="给 Studio 选个图标"]' }] },
+  { id: "app-station-mark", group: "应用", title: "station · 选图标", app: true, steps: [{ click: '[aria-label^="Station"]' }, { click: '[aria-label^="为 Studio 选择图标"]' }] },
   { id: "app-station-workspaces", group: "应用", title: "station · 在几个 workspace 里", app: true, demo: memberships(), steps: [{ click: '[aria-label^="Station"]' }] },
   { id: "app-station-joined", group: "应用", title: "station · 从别的 workspace 加入的", app: true, demo: memberships(true), steps: [{ click: '[aria-label^="Station"]' }, { text: "Mini1" }] },
   { id: "app-station-add-existing", group: "应用", title: "添加 station · 已有的", app: true, demo: joining("list"), steps: [{ click: '[aria-label^="Station"]' }, { text: "添加 station" }, { text: "已有的 station" }] },
   { id: "app-first-station-existing", group: "应用", title: "第一台 station · 也可加已有的", app: true, demo: firstJoining },
-  { id: "app-first-station-existing-open", group: "应用", title: "第一台 station · 选已有的", app: true, demo: firstJoining, steps: [{ text: "加别的 workspace 的 station" }] },
-  { id: "app-station-add-existing-error", group: "应用", title: "添加 station · 加入失败", app: true, demo: joining("error"), steps: [{ click: '[aria-label^="Station"]' }, { text: "添加 station" }, { text: "已有的 station" }, { text: "加进来" }] },
+  { id: "app-first-station-existing-open", group: "应用", title: "第一台 station · 选已有的", app: true, demo: firstJoining, steps: [{ text: "添加其他 workspace 的 station" }] },
+  { id: "app-station-add-existing-error", group: "应用", title: "添加 station · 加入失败", app: true, demo: joining("error"), steps: [{ click: '[aria-label^="Station"]' }, { text: "添加 station" }, { text: "已有的 station" }, { text: "添加到此 workspace" }] },
   { id: "app-profile", group: "应用", title: "Profile", app: true, steps: [{ click: '[aria-label="Profile"]' }] },
   { id: "app-profile-workspaces", group: "应用", title: "Profile · 也给加入的 workspace 用", app: true, demo: profileFor(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-workspaces-on", group: "应用", title: "Profile · 已开放给加入的 workspace", app: true, demo: profileFor(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
@@ -322,12 +322,12 @@ export const stories: Story[] = [
   // ── settings ──
   { id: "settings-appearance", group: "设置", title: "外观", app: true, steps: [{ click: '[aria-label="设置"]' }] },
   { id: "settings-notifications", group: "设置", title: "通知", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "通知" }] },
-  { id: "settings-notifications-type", group: "设置", title: "通知 · 展开一个类别", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "通知" }, { click: 'button:has-text("有人说话")' }] },
+  { id: "settings-notifications-type", group: "设置", title: "通知 · 展开一个类别", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "通知" }, { click: 'button:has-text("有人发言")' }] },
   {
     id: "settings-notifications-refused", group: "设置", title: "通知 · 系统没允许",
     render: () => stage(<div style={{ display: "grid", gap: 10, padding: 32, maxWidth: 720 }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-        <Tile way="banner" on={false} action="去系统设置打开" onChange={noop} /><Tile way="badge" on onChange={noop} /><Tile way="dock" on onChange={noop} />
+        <Tile way="banner" on={false} action="在系统设置中开启" onChange={noop} /><Tile way="badge" on onChange={noop} /><Tile way="dock" on onChange={noop} />
       </div>
     </div>),
   },
@@ -336,7 +336,7 @@ export const stories: Story[] = [
     id: "settings-permissions-states", group: "设置", title: "权限 · 各种状态",
     render: () => stage(<div style={{ display: "grid", gap: 10, padding: 32, maxWidth: 720 }}>
       {(["granted", "default", "denied", "unknown"] as const).map((state) => (
-        <PermissionRow key={state} icon={Bell} name="通知" purpose="等你决定、出错、有人说话时弹横幅" without="没有它：横幅弹不出来，红点和桌面浮窗照常"
+        <PermissionRow key={state} icon={Bell} name="通知" purpose="需要你决定、出错或有人发消息时显示横幅" without="未授权时：无法显示横幅，红点和桌面浮窗不受影响"
           where="系统设置 → 通知 → still.fail → 允许通知" state={state} onAllow={noop} onOpen={noop} />
       ))}
     </div>),
@@ -433,6 +433,6 @@ export const stories: Story[] = [
   { id: "phone-profile-workspaces", group: "手机", title: "Profile · 也给加入的 workspace 用", app: true, phone: true, demo: profileFor(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-new-chat-not-shared", group: "手机", title: "新建对话 · 加入的 station 没有开放的 Profile", app: true, phone: true, demo: notShared, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="新建对话"]' }] },
   { id: "phone-station-add-existing", group: "手机", title: "添加 station · 已有的", app: true, phone: true, demo: joining("list"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }] },
-  { id: "phone-station-add-existing-error", group: "手机", title: "添加 station · 加入失败", app: true, phone: true, demo: joining("error"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }, { text: "加进来" }] },
+  { id: "phone-station-add-existing-error", group: "手机", title: "添加 station · 加入失败", app: true, phone: true, demo: joining("error"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }, { text: "添加到此 workspace" }] },
   { id: "phone-station-workspaces", group: "手机", title: "station · 在几个 workspace 里", app: true, phone: true, demo: memberships(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }] },
 ];

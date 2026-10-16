@@ -129,7 +129,7 @@ test("a_chat_of_mine_is_noticed_as_it_changes_and_not_for_how_it_was_at_first", 
   rows.set("ws/st", [failed]);
   notices.look(stations);
   assert.deepEqual(kinds(notices), ["done", "block", "message", "failed"]);
-  assert.equal(notices.value(null).items[3].body, "出错了 · 无法启动 agent：没有 claude");
+  assert.equal(notices.value(null).items[3].body, "出错 · 无法启动 agent：没有 claude");
   assert.deepEqual(notices.value(null).items.map((i: J) => i.seq), [5, 7, 8, 9]);
 });
 
@@ -207,7 +207,7 @@ test("needing_help_is_told_by_what_it_needs", () => {
 
 test("bodies_are_one_short_line", () => {
   assert.equal(body("done", "Claude", "a\n\n b"), "Claude: a b");
-  assert.equal(body("failed", "Claude", ""), "出错了");
+  assert.equal(body("failed", "Claude", ""), "出错");
   assert.equal(body("wait", "", "设置页间距"), "等你决定 · 设置页间距");
   const long = body("message", "x", "字".repeat(300));
   assert.equal(Array.from(long).length, BODY);

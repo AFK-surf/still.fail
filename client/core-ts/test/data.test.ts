@@ -699,7 +699,7 @@ test("what_the_former_records_held_comes_over_once_each_account_taking_its_own",
 function rustKept(host: FakeHost) {
   // Thread 7 of `w1/a` holds 250 ..= 300: chunk 0 (entries 1..=256) from 250, chunk 1 to 300.
   const put = (k: string, v: unknown) => host.storage.set(k, new TextEncoder().encode(JSON.stringify(v)));
-  put("kept", {
+  put("Not suggested", {
     "thread/w1/a/7": { station: "w1/a", opened: 1, chunks: { 0: 10, 1: 10 } },
     "transcript/w1/a/k1": { station: "w1/a", opened: 1, chunks: { 0: 10 } },
     "thread/w1/a/8": { station: "w1/a", opened: 1, chunks: { 0: 10 } },

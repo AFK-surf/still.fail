@@ -304,7 +304,7 @@ test("the_decisions_page_lists_those_waiting_for_the_viewer_set_aside_last", asy
   assert.deepEqual([it.station, it.stationName, it.thread, it.seq, it.title], ["ws/st", "studio", 8, 3, "k2 的标题"]);
   assert.equal(it.text, "奏 · k2 要合吗？");
   assert.deepEqual(it.options, [{ label: "先不改", detail: "留到下周" }, { label: "合", recommended: true }]);
-  assert.equal(it.card.assigneeText, "需要你决策");
+  assert.equal(it.card.assigneeText, "待你决策");
   assert.deepEqual(it.message.options, it.options);
   assert.deepEqual(it.message.decision, { resolved: false });
   assert.equal(it.message.by.agent, "k2");
@@ -339,9 +339,9 @@ test("the_decisions_page_has_the_starters_unassigned_cards_and_needs_without_one
   await t.read(u, 1);
   const v = u.value;
   assert.deepEqual(v.items.map((i: J) => i.session), ["started", "needs"]);
-  assert.equal(v.items[0].card.assigneeText, "需要你决策");
+  assert.equal(v.items[0].card.assigneeText, "待你决策");
   const need = v.items[1];
-  assert.deepEqual([need.seq, need.card, need.options], [6, { type: "text", assigneeText: "需要你决策" }, []]);
+  assert.deepEqual([need.seq, need.card, need.options], [6, { type: "text", assigneeText: "待你决策" }, []]);
   assert.equal(need.text, "奏 · 要 Stripe 的测试 key");
 });
 
@@ -452,7 +452,7 @@ test("a_text_card_is_on_the_page_and_its_row_whatever_its_agent_does", async () 
   let v = page.value;
   assert.equal(v.count, 1);
   const it = v.items[0];
-  assert.deepEqual([it.card, it.options], [{ type: "text", placeholder: "sk_test_…", assignee: "me@x.com", assigneeText: "需要你决策" }, []]);
+  assert.deepEqual([it.card, it.options], [{ type: "text", placeholder: "sk_test_…", assignee: "me@x.com", assigneeText: "待你决策" }, []]);
   assert.deepEqual([it.message.card, it.message.options, it.text], [it.card, undefined, "奏 · Stripe 的测试 key 是多少？"]);
   v = chats.value;
   const all = v.days.flatMap((d: J) => d.items);
@@ -474,7 +474,7 @@ test("what_is_worth_a_look_about_a_session_is_its_account_its_quota_running_out_
   assert.deepEqual(attention(ov("ok", 50, 500e9), s, 0), []);
   assert.deepEqual(attention(ov("login", 92, 5e9), s, 0), [
     { kind: "account", text: "「A」要重新登录" },
-    { kind: "quota", text: "每周剩余 8%", more: "马上刷新", quota: { left: 8, mark: "W", level: "red", until: 2 } },
+    { kind: "quota", text: "每周剩余 8%", more: "即将刷新", quota: { left: 8, mark: "W", level: "red", until: 2 } },
     { kind: "disk", text: "磁盘剩 5 GB" },
   ]);
 });
@@ -571,10 +571,10 @@ test("chats_puts_together_the_online_stations", async () => {
   assert.deepEqual(v.stations[0], { station: "ws/a", id: "a", name: "alpha", state: "error", message: "坏了" });
   assert.deepEqual(ids(v), ["1"]);
   t.set(rows("ws/a"), [row("1", now - 1000)]);
-  t.set(link("ws/a"), { state: "reconnecting", message: "连接断开了" });
+  t.set(link("ws/a"), { state: "reconnecting", message: "连接已断开" });
   await t.read(u, 1);
   v = u.value;
-  assert.deepEqual([v.stations[0].state, v.stations[0].message], ["connecting", "连接断开了"]);
+  assert.deepEqual([v.stations[0].state, v.stations[0].message], ["connecting", "连接已断开"]);
   assert.equal(ids(v).length, 2);
   assert.deepEqual(v.trouble, { text: "2 台 station 异常", state: "offline", retry: false });
   const reconnecting = (x: J) => x.days[0].items.map((i: J) => [i.station, i.reconnecting ?? null]);
@@ -582,7 +582,7 @@ test("chats_puts_together_the_online_stations", async () => {
   assert.ok(reconnecting(v).every(([s, r]: J) => s === "ws/a" || r === null));
   t.set(link("ws/a"), { state: "error", message: "没有权限" });
   await t.read(u, 1);
-  assert.ok(reconnecting(u.value).some(([s, r]: J) => s === "ws/a" && r === "连不上 alpha，正在重试"));
+  assert.ok(reconnecting(u.value).some(([s, r]: J) => s === "ws/a" && r === "无法连接 alpha，正在重试"));
   t.set(link("ws/a"), { state: "online" });
   await t.read(u, 1);
   assert.ok(reconnecting(u.value).every(([, r]: J) => r === null));
@@ -651,7 +651,7 @@ test("dismissing_archive_reminders_restores_the_rows_color_and_order", async () 
     const shown = v.days[0].items.find((r: J) => r.id === "done");
     assert.equal(shown.settled, dismissed ? undefined : true);
     assert.equal(shown.archivable, dismissed ? undefined : true);
-    assert.equal(shown.stateText, "做完了");
+    assert.equal(shown.stateText, "已完成");
   }
 });
 
@@ -838,7 +838,7 @@ test("stations_shows_each_station_with_its_models", async () => {
   const gpt = v[0].models[3];
   assert.equal(gpt.family, "GPT");
   assert.deepEqual([gpt.maker.id, gpt.efforts.codex[0], gpt.accounts.codex[0].id], ["openai", "minimal", "p1"]);
-  assert.ok(gpt.spent.text.startsWith("额度用完 · "));
+  assert.ok(gpt.spent.text.startsWith("额度已用完 · "));
   assert.deepEqual([gpt.name, gpt.ids], ["GPT-5", ["gpt-5", "openai/gpt-5"]]);
   assert.deepEqual(gpt.accounts.codex.map((a: J) => a.id), ["p1", "p6"]);
   assert.deepEqual(plain(v[1]), { station: "ws/b", id: "b", name: "beta", online: false, reconnecting: false, lastSeen: v[1].lastSeen, link: { state: "offline" }, runtimes: [], models: [], betaOffered: false, joined: false });
@@ -1207,7 +1207,7 @@ test("an_agent_without_a_chat_is_its_page_with_no_messages", async () => {
     assert.equal(u.value.archived, archived !== null);
     assert.equal(u.value.noChat, archived === null ? true : undefined);
   }
-  t.fail(sessionOf("ws/a", "k"), new CoreError("http_404", "这个会话已经删除了", 404));
+  t.fail(sessionOf("ws/a", "k"), new CoreError("http_404", "会话已删除", 404));
   await t.read(u, 1);
   assert.equal(u.error.status, 404);
 });
@@ -1225,10 +1225,10 @@ test("a_sent_message_shows_until_the_chat_has_it", async () => {
   await t.read(u, 1);
   let out = u.value.outbox;
   assert.deepEqual([out[0].id, out[0].text, out[0].state], [id, "你好", "sending"]);
-  views.local.outboxState("ws/a", 7, id, "连不上 station");
+  views.local.outboxState("ws/a", 7, id, "无法连接 station");
   await t.read(u, 1);
   out = u.value.outbox;
-  assert.deepEqual([out[0].state, out[0].error], ["failed", "连不上 station"]);
+  assert.deepEqual([out[0].state, out[0].error], ["failed", "无法连接 station"]);
   views.local.outboxState("ws/a", 7, id, null);
   views.outboxSent("ws/a", 7, id, 6);
   await t.read(u, 1);
@@ -1313,16 +1313,16 @@ test("the_stations_row_covers_a_chat_made_here_before_its_answer_comes", async (
   const idsOf = (): [string, string][] => list.value.days.flatMap((d: J) => d.items).map((i: J) => [i.id ?? "", i.title ?? ""]);
   await t.read(list, 2);
   assert.ok(idsOf().some(([i, ti]) => i === key && ti === "修一下登录"));
-  const theirs = { ...row("ember:c-2", t.host.nowMs()), mine: true, thread: 8, title: "（还没有消息）" };
+  const theirs = { ...row("ember:c-2", t.host.nowMs()), mine: true, thread: 8, title: "（暂无消息）" };
   t.set(rows("ws/st"), [old, theirs]);
   await t.read(list, 2);
   const cmp = (a: [string, string], b: [string, string]) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
-  assert.deepEqual(idsOf().sort(cmp), [["ember:c-0", "ember:c-0 的标题"], ["ember:c-2", "（还没有消息）"], [key, "修一下登录"]].sort(cmp as never));
+  assert.deepEqual(idsOf().sort(cmp), [["ember:c-0", "ember:c-0 的标题"], ["ember:c-2", "（暂无消息）"], [key, "修一下登录"]].sort(cmp as never));
   assert.equal(local.pendingTry(key)?.[1].clientKey, key);
-  const made: J = { ...row("ember:c-1", t.host.nowMs()), mine: true, thread: 9, title: "（还没有消息）", clientKey: key };
+  const made: J = { ...row("ember:c-1", t.host.nowMs()), mine: true, thread: 9, title: "（暂无消息）", clientKey: key };
   t.set(rows("ws/st"), [old, theirs, made]);
   await t.read(list, 2);
-  const expected: [string, string][] = [["ember:c-0", "ember:c-0 的标题"], ["ember:c-1", "修一下登录"], ["ember:c-2", "（还没有消息）"]];
+  const expected: [string, string][] = [["ember:c-0", "ember:c-0 的标题"], ["ember:c-1", "修一下登录"], ["ember:c-2", "（暂无消息）"]];
   assert.deepEqual(idsOf().sort(cmp), expected);
   local.pendingMade(key, "ember:c-1", 9);
   await t.read(list, 2);
@@ -1416,7 +1416,7 @@ test("what_a_chats_agent_sent_to_slack_shows_after_the_message_it_followed_witho
     [0, call("mcp__stillfail__chat_post", { to: "C0OPS/1727.0001", text: "*部署* 好了 <https://x.y|看这里>" }, "1970-01-01T00:00:02Z", "c1")],
     [1, { at: "1970-01-01T00:00:02Z", kind: "tool_result", text: "posted", ok: true, callId: "c1" }],
     // Its own chat's words are its messages already; what goes to a still.fail chat is not Slack's.
-    [2, call("mcp__stillfail__chat_post", { to: "EMBER/1.0", text: "这里" }, "1970-01-01T00:00:02.5Z", "c2")],
+    [2, call("mcp__stillfail__chat_post", { to: "EMBER/1.0", text: "当前" }, "1970-01-01T00:00:02.5Z", "c2")],
     [3, call("mcp__stillfail__slack_api", { method: "chat.postMessage", params: { channel: "C0DEV", text: "新话题" } }, "1970-01-01T00:00:04Z", "c3")],
     // What someone said in Slack, given to it.
     [4, { at: "1970-01-01T00:00:05Z", kind: "user", text: '<message via="slack" thread="C0OPS/1727.0001" from="Mia (U9)" ts="2.5">*收到*，<@U9> 看一下</message>' }],
@@ -1464,7 +1464,7 @@ test("a_chats_page_is_told_by_each_message_whose_its_files_are_and_where_archivi
   // Kept frozen, as the core keeps what it has read: what the page is told goes on copies (written on these, it threw
   // and took the core down).
   const frozen = <T,>(v: T): T => { if (v && typeof v === "object") { for (const x of Object.values(v)) frozen(x); Object.freeze(v); } return v; };
-  t.set(pageOf("ws/a", 7), frozen({ first: 1, last: 3, entries: [{ ...entry(1, "看看"), attachments: [file("a.png")] }, { ...entry(2, "在看"), authorKind: "agent", author: "k" }, done], thread: null }));
+  t.set(pageOf("ws/a", 7), frozen({ first: 1, last: 3, entries: [{ ...entry(1, "查看"), attachments: [file("a.png")] }, { ...entry(2, "在看"), authorKind: "agent", author: "k" }, done], thread: null }));
   const settled = { ...row("k", now), thread: 7 };
   settled.agents[0].lastTurn = { kind: "message", declared: "final", ending: "all_done", outcome: "completed", startedAt: 1, endedAt: 1 };
   t.set(rows("ws/a"), [settled]);

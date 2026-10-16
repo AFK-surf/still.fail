@@ -192,7 +192,7 @@ class DecisionsTest {
         h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, loading = false))
         h.settle()
         rule.runOnIdle { assertEquals(listOf(Screen.Home, Screen.Decisions), h.app.stack) }
-        rule.onNodeWithText("奏折都批完了").assertExists()
+        rule.onNodeWithText("奏折已全部批完").assertExists()
     }
 
     // With none left: the day in numbers, the chats at work and today's answers, each opening its chat.
@@ -403,7 +403,7 @@ class DecisionsTest {
         assertEquals(listOf("decision.reply"), h.acted().map { it.first })
         rule.onNodeWithText("sk_test_kept").assertExists()
         rule.onNodeWithText(keyItem.title).assertExists()
-        rule.onNodeWithText("没能回复", substring = true).assertExists()
+        rule.onNodeWithText("无法回复", substring = true).assertExists()
     }
 
     @Test fun swipeBegunInTheFieldIsNotASwipe() {
@@ -436,11 +436,11 @@ class DecisionsTest {
 
     @Test fun unknownCardGoesToItsChat() {
         val h = textPage(card = MessageCard(type = "date"))
-        rule.onNodeWithText("去 chat 里回").assertExists()
-        tap(bounds("去 chat 里回").center)
+        rule.onNodeWithText("在对话中回复").assertExists()
+        tap(bounds("在对话中回复").center)
         h.settle()
         assertTrue("acted: ${h.acted()}", h.acted().isEmpty())
-        assertTrue(h.fake.calls.toString(), rule.onAllNodesWithText("去 chat 里回").fetchSemanticsNodes().isEmpty())
+        assertTrue(h.fake.calls.toString(), rule.onAllNodesWithText("在对话中回复").fetchSemanticsNodes().isEmpty())
     }
 
     // ── in a chat ──
@@ -471,7 +471,7 @@ class DecisionsTest {
         h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
         rule.onNodeWithText("Stripe 的测试 key", substring = true).assertExists()
         rule.onNodeWithText("sk_test_…").assertDoesNotExist()
-        rule.onNodeWithText("去 chat 里回").assertDoesNotExist()
+        rule.onNodeWithText("在对话中回复").assertDoesNotExist()
     }
 
     @Test fun inChatAnsweredHasItsLineNoButtons() {
@@ -527,8 +527,8 @@ class DecisionsTest {
             row("ember:c-1", "侧栏和设置的几处间距", "改好了", stateText = "奏 · 间距那三处，前后对比在上面", tone = "wait", decision = RowDecision(3, listOf(change, both), text = "奏 · 间距那三处，前后对比在上面")),
             row("ember:c-3", "登录页 Safari 点不动", "表单提交前被吞掉了", stateText = "在等：CI 跑完"),
             row("ember:c-4", "归档页时间", "挪到行尾了", stateText = "奏 · 归档页的时间要不要往右挪", tone = "wait"),
-            row("ember:c-5", "README 里的命令", "改好了，已推到 main", stateText = "做完了", settled = true),
-            row("ember:c-6", "换掉旧的图标", "都换好了", stateText = "做完了", settled = true),
+            row("ember:c-5", "README 里的命令", "改好了，已推到 main", stateText = "已完成", settled = true),
+            row("ember:c-6", "换掉旧的图标", "都换好了", stateText = "已完成", settled = true),
         )
         val chats = ChatsView(
             me = fail.still.android.data.Me(id = Fixtures.account.email), stations = listOf(StationState(Fixtures.STATION, "st", "studio", "online")),

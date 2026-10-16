@@ -1,13 +1,16 @@
 {
   "web-share.title": "still.fail 分享",
   "web-share.connecting": "正在连接 station…",
-  "web-share.malformed": "这个链接不完整，打不开",
-  "web-share.cloud": "连不上 still.fail，稍后再试",
-  "web-share.offline": "连不上这台 station，它可能离线了",
-  "web-share.gone": "这个分享不存在或已撤销",
-  "web-share.busy": "station 正忙，稍后再试",
-  "web-share.broken": "读不了这台 station 给的内容：{error}",
+  "web-share.malformed": "链接不完整，无法打开",
+  "web-share.cloud": "无法连接 still.fail，请稍后重试",
+  "web-share.offline": "无法连接此 station，它可能已离线",
+  "web-share.gone": "此分享不存在或已撤销",
+  "web-share.busy": "station 正忙，请稍后重试",
+  "web-share.broken": "无法读取此 station 返回的内容：{error}",
   "web-share.published": "{by} 发布于 {time}",
-  "web-share.redacted": { "one": "隐藏了 1 处疑似机密", "other": "隐藏了 {n} 处疑似机密" },
-  "web-share.from": "用 still.fail 分享"
+  "web-share.redacted": {
+    "one": "已隐藏 1 处疑似机密",
+    "other": "已隐藏 {n} 处疑似机密"
+  },
+  "web-share.from": "通过 still.fail 分享"
 }

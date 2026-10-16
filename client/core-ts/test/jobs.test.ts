@@ -23,7 +23,7 @@ test("times_in_words_and_when_they_change", () => {
 
 test("a_job_is_shown_by_its_dot_its_word_and_its_line", () => {
   const live = shown(job("w"), c());
-  assert.deepEqual([live.tone, live.word, texts(live)], ["live", "在盯着", "在盯着 · 3 秒"]);
+  assert.deepEqual([live.tone, live.word, texts(live)], ["live", "运行中", "在盯着 · 3 秒"]);
   assert.equal(live.meta[0].kind, "word");
   const said = shown(job("w", { notices: [{ at: NOW - 60_000, text: "CI 绿了" }], outputAt: NOW - 1_000 }), c());
   assert.deepEqual([texts(said), said.meta[0].kind], ["CI 绿了 · 1 分钟前", "notice"]);
@@ -73,7 +73,7 @@ test("those_up_long_are_grouped_oldest_first_with_where_they_are", () => {
     c(),
   );
   const g = v.groups;
-  assert.deepEqual([g[0].key, g[0].head, g[0].jobs[0].whereText], ["services", "开了很久的网页服务 · 1", "不在任何对话里"]);
+  assert.deepEqual([g[0].key, g[0].head, g[0].jobs[0].whereText], ["services", "开了很久的网页服务 · 1", "不属于任何对话"]);
   assert.deepEqual([g[1].head, g[1].jobs[0].id, g[1].jobs[0].whereText, g[1].jobs[0].age], ["一直在跑的后台任务 · 2", "j1", "studio · 对话", "3 小时"]);
   assert.equal(g[1].jobs[1].whereText, "studio · 修登录 · 已归档");
   assert.deepEqual(longJobs([st(null, [job("new")])], c()), { groups: [] });
@@ -104,14 +104,14 @@ function raw(manage: boolean): J {
     chats: [
       { key: "a", chat: { id: "a", title: "预加载", archived: false }, bytes: 3e9, rebuildBytes: 2.9e9, archived: false, lastActiveAt: FNOW - 3_600_000, state: "warm" },
       { key: "b", chat: { id: "b", title: "", archived: true }, bytes: 4e8, rebuildBytes: 1e8, archived: true, lastActiveAt: FNOW - 10 * DAY, state: "cold" },
-      { key: "c", chat: { id: "c", title: "在跑", archived: false }, bytes: 3e8, rebuildBytes: 3e8, archived: false, lastActiveAt: FNOW, state: "running" },
+      { key: "c", chat: { id: "c", title: "运行中", archived: false }, bytes: 3e8, rebuildBytes: 3e8, archived: false, lastActiveAt: FNOW, state: "running" },
       { key: "d", chat: { id: "d", title: "旧的", archived: true }, bytes: 1e8, rebuildBytes: 0, archived: true, lastActiveAt: FNOW - 2 * DAY, state: "cold" },
     ],
     unseen: { count: 0, bytes: 0 },
     memory: { totalBytes: 6e9, usedBytes: 5.2e9, stationBytes: 2.2e7 },
     processes: [
       { pgid: 1, runtime: "claude", rssBytes: 1.3e8, key: "a", chat: { id: "a", title: "预加载" }, state: "warm", lastActiveAt: FNOW - 3_600_000 },
-      { pgid: 2, runtime: "claude", rssBytes: 1.8e8, key: "c", chat: { id: "c", title: "在跑" }, state: "running", lastActiveAt: FNOW },
+      { pgid: 2, runtime: "claude", rssBytes: 1.8e8, key: "c", chat: { id: "c", title: "运行中" }, state: "running", lastActiveAt: FNOW },
       { pgid: 3, runtime: "codex", rssBytes: null, key: null, chat: null, state: null, lastActiveAt: null },
     ],
   };
@@ -134,14 +134,14 @@ test("the_page_says_what_takes_the_disk_and_what_can_be_cleaned", () => {
   assert.equal(v.chats[1].title, "未命名的 chat");
   assert.deepEqual(v.chats[2].choices, []);
   assert.equal(v.chats[1].choices[1].confirms.length, 2);
-  assert.equal(v.memory[2].label, "在跑");
+  assert.equal(v.memory[2].label, "运行中");
   assert.ok(v.memory[4].label.startsWith("Codex"));
   assert.equal(v.memory[3].choice.call, "footprint.evict");
 });
 
 test("members_look_and_a_first_scan_is_waited_for", () => {
   const v = fp.shown(raw(false), fc());
-  assert.deepEqual([v.actions, v.actionsNote], [[], "只有 workspace 的 owner 和管理员能清理"]);
+  assert.deepEqual([v.actions, v.actionsNote], [[], "只有 workspace 的 owner 和管理员可以清理"]);
   assert.ok(v.chats.every((x: J) => x.choices.length === 0));
   const first = fp.shown({ scanning: true, manage: true, disk: {}, parts: [], chats: [], processes: [] }, fc());
   shape(first);

@@ -295,7 +295,7 @@ void navigator.locks.request(tabLock(tab), () => new Promise<void>(() => {}));
 relay.postMessage({ hello: tab } satisfies Relayed);
 /** The lock taken from this worker by another that heard nothing from it: this core is done, and its page starts a worker that follows that one. */
 const lost = (error: unknown) => {
-  if ((error as { name?: unknown } | null)?.name === "AbortError") fatal("核心被另一个页面接管了");
+  if ((error as { name?: unknown } | null)?.name === "AbortError") fatal("核心已被其他页面接管");
   else fault(error);
 };
 // Runs the core once the lock is this worker's: at once when no other tab runs one, else when it goes.
@@ -318,7 +318,7 @@ async function lead(): Promise<void> {
     if (!dead) fault(error);
     fatal(reason);
   }, loadSqlite);
-  ready.catch((error: unknown) => fatal(`核心没有启动：${String(error)}`));
+  ready.catch((error: unknown) => fatal(`核心启动失败：${String(error)}`));
   const running = await ready;
   core = running;
   leader = tab;

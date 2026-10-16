@@ -52,7 +52,7 @@ test("a_connection_is_said_in_words_and_only_what_is_off_is_coloured", () => {
     moved: "hk.test",
   });
   shown = p.net({ path: null, rttMs: 1500, rxBytes: 0, txBytes: 0, samples: [] }, unnamed);
-  assert.deepEqual([shown.path, shown.via, shown.down], ["正在选路", "choosing", "—"]);
+  assert.deepEqual([shown.path, shown.via, shown.down], ["正在选择线路", "choosing", "—"]);
   assert.deepEqual(shown.rtt, { text: "1.5 s", level: "red" });
 });
 
@@ -77,7 +77,7 @@ test("profile_recovery_follows_states_and_clears_after_success", () => {
   q = p.profile(q);
   assert.equal(q.trouble.action, "quota");
   assert.equal(q.checkText, "可用");
-  assert.equal(q.trouble.detail, "暂时查不到额度");
+  assert.equal(q.trouble.detail, "暂时无法获取额度");
   q.quota.state = "ok";
   q = p.profile(q);
   assert.equal(q.trouble, null);
@@ -164,7 +164,7 @@ test("a_session_stands_where_its_process_and_last_turn_say", () => {
 test("an_account_its_provider_refuses_says_so_whatever_its_check_found", () => {
   let q: J = { check: { state: "ok" }, quota: { state: "blocked", windows: [] } };
   q = p.profile(q);
-  assert.deepEqual([q.checkText, q.checkTone], ["被停用", "red"]);
+  assert.deepEqual([q.checkText, q.checkTone], ["已停用", "red"]);
   let ok: J = { check: { state: "ok" }, quota: { state: "unavailable", windows: [] } };
   ok = p.profile(ok);
   assert.equal(ok.checkText, "可用");
@@ -212,14 +212,14 @@ test("how_a_turn_ended_says_itself_in_words", () => {
     s = p.session(s);
     return s.statusText;
   };
-  assert.equal(words({ declared: "final", ending: "all_done", outcome: "completed" }), "做完了");
+  assert.equal(words({ declared: "final", ending: "all_done", outcome: "completed" }), "已完成");
   assert.equal(words({ declared: "block", ending: "need_help", need: "要 Stripe 的测试 key", outcome: "completed" }), "要你帮忙：要 Stripe 的测试 key");
-  assert.equal(words({ declared: "block", outcome: "completed" }), "要你帮忙");
-  assert.equal(words({ declared: "block", ending: "need_decision", outcome: "completed" }), "要你帮忙");
+  assert.equal(words({ declared: "block", outcome: "completed" }), "需要你处理");
+  assert.equal(words({ declared: "block", ending: "need_decision", outcome: "completed" }), "需要你处理");
   assert.equal(words({ outcome: "failed", detail: "rate_limit: You've hit your limit" }), "出问题：额度用完");
   assert.equal(words({ outcome: "failed", detail: "auth: 401" }), "出问题：登录失效");
-  assert.equal(words({ outcome: "aborted" }), "出问题：被停止");
-  assert.equal(words({ outcome: "completed" }), "出问题：没说一声就停了");
+  assert.equal(words({ outcome: "aborted" }), "出错：被停止");
+  assert.equal(words({ outcome: "completed" }), "出问题：意外停止");
   let decided: J = { process: "warm", lastTurn: { declared: "block", ending: "need_decision", outcome: "completed" } };
   decided = p.session(decided);
   assert.equal(decided.mark, "block");
@@ -233,7 +233,7 @@ test("a_decision_agent_passes_the_chat_shape", () => {
   assert.ok("ok" in checked, JSON.stringify(checked));
   assert.equal(checked.ok.status, "block");
   assert.equal(checked.ok.badge, "block");
-  assert.equal(checked.ok.session.statusText, "要你帮忙");
+  assert.equal(checked.ok.session.statusText, "需要你处理");
   const legacy = { ...checked.ok, status: "decision" };
   assert.equal((conform("ChatAgent", legacy) as J).ok.status, "decision");
 });
@@ -254,11 +254,11 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   kept.pinned = 1700000000000;
   assert.ok(p.pinned(kept));
   assert.ok(!p.pinned(row([done], false)));
-  assert.equal(p.rowStateText(row([done], false)), "做完了");
+  assert.equal(p.rowStateText(row([done], false)), "已完成");
   // A recommendation shows in how the row is drawn (archivable, below), not in its words.
   const recommended = row([done], false);
   recommended.archiveRecommended = true;
-  assert.equal(p.rowStateText(recommended), "做完了");
+  assert.equal(p.rowStateText(recommended), "已完成");
   // Where the station's archive review is on, a done chat is offered for the archive only once it recommended so.
   assert.ok(p.archivable(row([done], false)));
   const reviewed = row([done], false);
@@ -383,7 +383,7 @@ test("what_the_clients_show_is_put_in_here", () => {
   const c = { now: 1_790_467_200_000, offsetMin: 480 };
   let s: J = { runtime: "codex", model: "gpt-6-astra", effort: "medium", process: "warm", lastTurn: { declared: "block" }, firstText: "<@U1> 看看 CI" };
   s = p.session(s);
-  assert.deepEqual([s.statusText, s.tone, s.badgeText], ["要你帮忙", "blue", "agent 停下来等人处理"]);
+  assert.deepEqual([s.statusText, s.tone, s.badgeText], ["需要你处理", "blue", "agent 已暂停，等待处理"]);
   assert.deepEqual([s.titleText, s.agentText, s.maker.id], ["看看 CI", "GPT-6 Astra · medium", "openai"]);
   assert.equal(s.modelName, "GPT-6 Astra");
   assert.deepEqual([s.processText, s.efforts[0]], ["保温中", "minimal"]);
@@ -422,7 +422,7 @@ test("what_the_clients_show_is_put_in_here", () => {
   assert.deepEqual([h.meters[2].level, h.meters[2].value, h.emberText], ["red", "剩 50.0 GB / 1000 GB", "still.fail 100 MB"]);
   assert.match(h.usage, /^内存 .+ · 磁盘 剩 50\.0 GB \/ 1000 GB$/);
   assert.equal(h.identity, "Apple M2 Max · 32 GB · macOS 26");
-  assert.deepEqual(h.details.map((d: J) => `${d.label} ${d.value}`), ["主机名 studio", "芯片 Apple M2 Max · 8 核 · arm64", "已运行 1 天 1 小时", "still.fail 进程占 100 MB"]);
+  assert.deepEqual(h.details.map((d: J) => `${d.label} ${d.value}`), ["主机名 studio", "芯片 Apple M2 Max · 8 核 · arm64", "已运行 1 天 1 小时", "still.fail 进程占用 100 MB"]);
   assert.deepEqual([cpu.left, cpu.remaining, cpu.big, cpu.unit, cpu.title, cpu.total], [7, "空闲 7%", "7", "%", "CPU 空闲", "负载 4.0"]);
   const left = h.meters[2];
   assert.deepEqual([left.left, left.big, left.unit, left.title, left.total], [5, "50.0", "GB", "磁盘剩", "共 1000 GB"]);
@@ -432,7 +432,7 @@ test("a_watching_chat_says_what_it_watches_and_what_archiving_it_means", () => {
   const agent = (watch: J) => ({ key: "a", watch });
   assert.equal(p.rowWatch([{ key: "a" }]), null);
   const marked = p.rowWatch([agent({ names: ["盯 CI"], since: 0, at: 1 }), { key: "b" }, agent({ names: ["relay 延迟"], since: 0, at: 0 })]);
-  assert.deepEqual(marked, { text: "监控中：盯 CI、relay 延迟", ask: "「盯 CI」、「relay 延迟」还在监控。归档会停掉它。" });
+  assert.deepEqual(marked, { text: "监控中：盯 CI、relay 延迟", ask: "「盯 CI」、「relay 延迟」仍在监控。归档会停止监控。" });
 });
 
 test("a_meter_is_drawn_as_an_allowance_to_what_is_left", () => {

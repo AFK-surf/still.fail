@@ -155,11 +155,11 @@ test("a_station_joins_with_an_enrollment_of_the_workspace_over_its_home_link", a
 test("a_station_that_cannot_join_says_why_in_words", async () => {
   const cases: [unknown, string][] = [
     // A station from before several workspaces: no such route.
-    [[404, { error: "no route POST /workspaces/join" }], "这台 station 还不能在多个 workspace 里，先更新它"],
+    [[404, { error: "no route POST /workspaces/join" }], "此 station 尚不支持加入多个 workspace，请先更新"],
     // A cloud from before them: the station says so.
-    [[409, { error: "still.fail cannot add a station to more than one workspace yet; nothing changed" }], "cloud 还不支持一台 station 在多个 workspace 里，什么都没变"],
-    [[409, { error: "still.fail answered 409: {\"error\":\"locked_workspace\"}" }], "这台 station 的 workspace 开了安全模式，它只能加入同样开了安全模式的 workspace"],
-    [[409, { error: "something else" }], "没能加入：something else"],
+    [[409, { error: "still.fail cannot add a station to more than one workspace yet; nothing changed" }], "cloud 尚不支持一台 station 加入多个 workspace，未做任何更改"],
+    [[409, { error: "still.fail answered 409: {\"error\":\"locked_workspace\"}" }], "此 station 所在的 workspace 已开启安全模式，只能加入同样开启安全模式的 workspace"],
+    [[409, { error: "something else" }], "无法加入：something else"],
   ];
   for (const [said, words] of cases) {
     const { host, core, wire } = await setUp();
@@ -194,7 +194,7 @@ test("only_the_managers_of_a_station's_home_see_its_workspaces", async () => {
   subscribe(core, ui, 3, { topic: "memberships", station: "wa/a1" });
   await host.settle();
   apply(host, values);
-  assert.deepEqual(v(values, 3), { manages: true, loading: false, canJoin: false, workspaces: [], error: "这台 station 还不能在多个 workspace 里，先更新它" });
+  assert.deepEqual(v(values, 3), { manages: true, loading: false, canJoin: false, workspaces: [], error: "此 station 尚不支持加入多个 workspace，请先更新" });
   core.close();
 });
 

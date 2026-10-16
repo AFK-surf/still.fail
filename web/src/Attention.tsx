@@ -21,7 +21,7 @@ import * as css from "./Attention.css.ts";
 import { t } from "./i18n.ts";
 
 /** Its state line without its lead (要你帮忙：, 出问题：, 奏 · ): the dot before it says that. */
-const line = (i: MarkItem) => i.text.replace(/^(?:要你帮忙|出问题|Needs you|Went wrong|Failed)[：:]\s*|^(?:奏|Decision) · /, "") || i.stationName;
+const line = (i: MarkItem) => i.text.replace(/^(?:要你帮忙|需要你处理|出问题|出错|Needs you|Went wrong|Failed)[：:]\s*|^(?:奏|Decision) · /, "") || i.stationName;
 
 const keyOf = (i: MarkItem) => `${i.station}/${i.session ?? i.thread}`;
 

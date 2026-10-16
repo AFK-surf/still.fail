@@ -76,7 +76,7 @@ test("the_memory_reads_in_parts_with_how_long_each_is", () => {
 test("a_chat_link_is_said_only_while_down_or_coming_back", () => {
   assert.deepEqual(linkShown({ state: "error", message: "连不上这台 station：超时" }, "Studio"), { tone: "trouble", text: "连不上「Studio」", detail: "超时" });
   assert.equal(linkShown({ state: "offline", message: "别的：原因" }, "").detail, "别的：原因");
-  assert.equal(linkShown({ state: "offline" }, "").text, "连不上 station");
+  assert.equal(linkShown({ state: "offline" }, "").text, "无法连接 station");
   assert.deepEqual(linkShown({ state: "reconnecting" }, "S"), { tone: "busy", text: "正在重连「S」" });
   assert.equal(linkShown({ state: "online" }, "S"), null);
   assert.equal(face(true, { counts: { running: 2 } }), "working");

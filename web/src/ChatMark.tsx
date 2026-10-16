@@ -73,9 +73,9 @@ export function MarkCounts({ mark }: { mark: WorkspaceMark | undefined }) {
  * stands in the title's mark's column, centred under it, and what follows starts where the title does.
  */
 export function WaitingText({ text, className, slot = false }: { text: string; className: string; slot?: boolean }) {
-  const need = slot ? /^(?:要你帮忙|Needs you)(?:[：:]\s*|$)/.exec(text) : null;
+  const need = slot ? /^(?:要你帮忙|需要你处理|Needs you)(?:[：:]\s*|$)/.exec(text) : null;
   const lead = /^(?:奏|Decision)(?: · |$)/.test(text) ? text.split(" · ")[0]! : "";
-  const turn = lead !== "" || /^(?:要你帮忙|Needs you:)/.test(text);
+  const turn = lead !== "" || /^(?:要你帮忙|需要你处理|Needs you:)/.test(text);
   const watch = slot && !need ? WATCH.exec(text) : null;
   const icon = slot ? need ?? DONE.exec(text) ?? WAIT.exec(text) ?? watch : null;
   const motion = icon && !need && !DONE.test(text) ? (watch ? "watch" : "wait") : undefined;
@@ -106,8 +106,8 @@ export function WaitingText({ text, className, slot = false }: { text: string; c
 const MOVING = { wait: [2, 3, 4], watch: [1, 2, 3] } as const;
 
 /** The core's done and waiting leads, in either language (as ui.tsx StatusText reads them). */
-const DONE = /^(?:做完了(?:：|$)|Done(?:: |$))/;
-const WAIT = /^(?:在等：|等待中$|Waiting(?:: |$))/;
+const DONE = /^(?:(?:做完了|已完成)(?:：|$)|Done(?:: |$))/;
+const WAIT = /^(?:在等：|等待：|等待中$|Waiting(?:: |$))/;
 /** The core's watching (an agent waiting on a watch of its own, present.ts): 监控中, Watching. */
 const WATCH = /^(?:监控中|Watching)(?:：|: |$)/;
 

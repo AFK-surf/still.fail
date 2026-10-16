@@ -21,7 +21,7 @@ class AdbShareTest {
         h.fake.put(Topics.adbShare, AdbShareView(sharing = true, station = Fixtures.STATION, phase = "offered", adb = "unpaired", tunnels = 0u, connectPort = 37123u, pairPort = 41234u))
         h.launch(listOf(Screen.Home, Screen.AdbShare(Fixtures.STATION)))
         rule.onNodeWithText("自动填配对码").performScrollTo().assertIsDisplayed()
-        rule.onNodeWithText("去打开").assertIsDisplayed()
+        rule.onNodeWithText("前往开启").assertIsDisplayed()
         rule.onNodeWithText("打开配对窗口").assertIsDisplayed()
         val shot = h.record("adb-pairing")
         shot.frame()

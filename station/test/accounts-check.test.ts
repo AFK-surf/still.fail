@@ -39,7 +39,7 @@ test("a key is tried where its provider says whether it works", async () => {
   assert.equal((await checkProfile({ ...base, kind: "api-provider", key: "good", via })).state, "unknown");
   assert.equal((await checkProfile({ ...base, kind: "api-provider", key: "bad", via })).state, "failed");
   assert.equal(own.asked[0]!.url, "/v1/models");
-  assert.equal((await checkProfile({ ...base, kind: "api-provider", via: { provider: "azure-openai" } })).detail, "需要填一个可用的接口地址（http 或 https 开头）");
+  assert.equal((await checkProfile({ ...base, kind: "api-provider", via: { provider: "azure-openai" } })).detail, "请填写有效的接口地址（以 http 或 https 开头）");
   await own.close();
 });
 
@@ -57,7 +57,7 @@ test("a subscription is checked by its runtime's own status command, in the prof
   const claude = await checkProfile({ ...base, kind: "subscription", home, env: m.env, urls });
   assert.deepEqual([claude.state, claude.detail, claude.models], ["ok", "已登录，a@x.com，max", ["claude-opus-5-5"]]);
   const codex = await checkProfile({ ...base, runtime: "codex", kind: "subscription", home: join(m.home, "cx"), env: m.env, urls });
-  assert.deepEqual([codex.state, codex.detail], ["login", "还没登录"]);
+  assert.deepEqual([codex.state, codex.detail], ["login", "未登录"]);
   // A machine profile is handed the machine's token, and never looks in its home's file.
   const machineCheck = await checkProfile({ ...base, kind: "subscription", home: join(m.home, "elsewhere"), env: { ...m.env }, machine: true, machineToken: async () => ({ token: "tok" }), urls });
   assert.equal(machineCheck.state, "failed", "its home is not the one the stand-in answers for");

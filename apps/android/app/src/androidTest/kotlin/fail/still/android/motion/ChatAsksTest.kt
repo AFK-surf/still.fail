@@ -23,7 +23,7 @@ class ChatAsksTest {
         else Fixtures.agent(s, "第 $s 条：" + "改好了，测试都过了。".repeat(if (s == 12L) 4 else 2))
     }
     private val want = "这周要不要把 React Router 一起升到 8？"
-    private val bell = "跳到待决策的消息"
+    private val bell = "跳转到待决策的消息"
     private val topic = Topics.chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))
 
     private fun open(h: Harness, ask: ChatAsk) {

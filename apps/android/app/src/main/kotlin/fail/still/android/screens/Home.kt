@@ -755,7 +755,7 @@ private fun StateLine(state: String, modifier: Modifier = Modifier) {
 }
 
 /** The core's words for an agent needing the viewer, in either language, with what follows them. */
-private val needLead = Regex("^(?:要你帮忙|Needs you)(?:[：:]\\s*|$)")
+private val needLead = Regex("^(?:要你帮忙|需要你处理|Needs you)(?:[：:]\\s*|$)")
 
 /** The core's words for an agent waiting on a watch of its own (present.ts), in either language. */
 private val watchLead = Regex("^(?:监控中|Watching)(?:：|: |$)")

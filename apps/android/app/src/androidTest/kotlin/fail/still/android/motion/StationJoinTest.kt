@@ -93,7 +93,7 @@ class StationJoinTest {
     }
 
     /** The button that adds the one picked (not a row's words). */
-    private fun join() = rule.onNode(hasText("加进来") and hasClickAction())
+    private fun join() = rule.onNode(hasText("添加到此 workspace") and hasClickAction())
 
     @Test fun light() = walk(false)
     @Test fun dark() = walk(true)
@@ -103,7 +103,7 @@ class StationJoinTest {
         val h = start(dark, JoinableView(offered = true, loading = false, items = candidates))
         // The list: a joined station says where it is at home, after what it is.
         rule.onNodeWithText("来自 Acme · 10 核 · 32 GB").assertIsDisplayed()
-        rule.onNodeWithText("来自别的 workspace · 10 核 · 32 GB").assertIsDisplayed()
+        rule.onNodeWithText("来自其他 workspace · 10 核 · 32 GB").assertIsDisplayed()
         picture(h, "join-list-$tone")
 
         // 添加 station: a new machine first, as before; the other way a tap away.
@@ -113,7 +113,7 @@ class StationJoinTest {
         rule.onNodeWithText("已有的 station").performClick()
         h.settle()
         rule.onNodeWithText("Acme · 在线").assertIsDisplayed()
-        rule.onNodeWithText("那台机器上的 agent 用同一个系统用户运行", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("该机器上的 agent 以同一系统用户运行", substring = true).assertIsDisplayed()
         rule.onNodeWithText("box").performClick()
         h.settle()
         picture(h, "join-sheet-existing-$tone")
@@ -135,7 +135,7 @@ class StationJoinTest {
         }
         join().performClick()
         h.settle()
-        rule.onNodeWithText("「box」已加入这个 workspace。").assertIsDisplayed()
+        rule.onNodeWithText("「box」已加入此 workspace").assertIsDisplayed()
         picture(h, "join-sheet-joined-$tone")
         rule.runOnUiThread { h.app.sheet = null }
         h.settle()
@@ -203,7 +203,7 @@ class StationJoinTest {
         val h = profilePage(dark, manages = true, workspaces = null)
         // Off: a switch for Lab, its chats not on this account.
         rule.onNodeWithText("也给 Lab 用").assertIsDisplayed()
-        rule.onNodeWithText("Lab 的对话用不了这个账号").assertIsDisplayed()
+        rule.onNodeWithText("Lab 中的对话无法使用此账号").assertIsDisplayed()
         // A tap opens it to Lab: profile.put with the whole list.
         rule.onNodeWithText("也给 Lab 用").performClick()
         h.settle()
@@ -214,7 +214,7 @@ class StationJoinTest {
         // Open to Lab (as the station says once it has it): on, and a tap would close it again.
         rule.runOnUiThread { h.fake.put(Topics.stations(ws), listOf(station("studio", "studio").copy(overview = overview(listOf(profile(listOf("lab"))))))) }
         h.settle()
-        rule.onNodeWithText("Lab 的对话可以用这个账号跑 agent").assertIsDisplayed()
+        rule.onNodeWithText("Lab 中的对话可使用此账号运行 agent").assertIsDisplayed()
         rule.onNodeWithText("也给 Lab 用").performScrollTo()
         h.settle()
         picture(h, "join-profile-workspaces-${if (dark) "dark" else "light"}")
@@ -256,12 +256,12 @@ class StationJoinTest {
         h.settle()
         rule.onNodeWithText(shared).assertIsDisplayed()
         rule.onNodeWithText("添加 Profile").assertDoesNotExist()
-        rule.onNodeWithText("接着 Studio 终端里的会话").assertDoesNotExist()
+        rule.onNodeWithText("继续 Studio 终端中的会话").assertDoesNotExist()
         picture(h, "join-new-chat-not-shared-${if (dark) "dark" else "light"}")
         // The same page with a profile open: the machine's sessions are offered (so their absence above is the block's).
         rule.runOnUiThread { h.fake.put(Topics.newChat(ws), view.copy(blocked = null, problem = null)) }
         h.settle()
-        rule.onNodeWithText("接着 Studio 终端里的会话").assertIsDisplayed()
+        rule.onNodeWithText("继续 Studio 终端中的会话").assertIsDisplayed()
     }
 
     @Test fun newChatNotSharedLight() = notShared(false)

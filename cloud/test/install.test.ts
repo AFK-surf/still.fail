@@ -280,7 +280,7 @@ test("a handover the new release cannot take leaves the station running on the o
     const update = m.run();
     assert.equal(update.status, 1, update.out);
     assert.match(update.out, /the new release did not start/);
-    assert.match(update.out, /没能交接.*station 继续用原来的版本运行|Not handed over.*runs on the one before/);
+    assert.match(update.out, /无法交接.*station 继续使用原版本运行|Couldn't hand over.*keeps running the previous version/);
     assert.equal(readFileSync(join(data, "app", "VERSION"), "utf8"), "old\n", "the old release back in its place");
     assert.ok(!existsSync(join(data, "app.old")) && !existsSync(join(data, "app.failed")));
     assert.ok(process.kill(pid, 0), "the station still runs");
@@ -353,7 +353,7 @@ test("a station updating itself runs on the Node its signed words name, the mach
 
     const bad = m.run([], { ...told, STILLFAIL_NODE_SHA256: "0".repeat(64) }, bundled);
     assert.equal(bad.status, 1, bad.out);
-    assert.match(bad.out, /Node 24\.21\.0 校验不对/);
+    assert.match(bad.out, /Node 24\.21\.0 校验失败/);
     assert.ok(!existsSync(join(data, "node", "v24.21.0")) && !existsSync(join(data, "node", "v24.21.0.part")));
     // No .sha256 asked for: the signed hash is the binary's own.
     assert.doesNotMatch(bad.said, /\.sha256/);

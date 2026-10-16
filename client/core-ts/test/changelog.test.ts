@@ -12,13 +12,13 @@ test("a_change_says_whether_this_app_has_it", () => {
   const had = item(entry(1320, ["android"]), "android", 1323, released);
   assert.deepEqual([had.has, had.note], [true, ""]);
   const update = item(entry(1335, ["android", "web"]), "android", 1323, released);
-  assert.deepEqual([update.has, update.note], [false, "更新到 0.1.1335 后就有"]);
-  assert.equal(item(entry(1345, ["android"]), "android", 1323, released).note, "还没发布");
-  assert.equal(item(entry(1325, ["web"]), "web", 1323, released).note, "刷新页面后就有");
+  assert.deepEqual([update.has, update.note], [false, "更新到 0.1.1335 后可用"]);
+  assert.equal(item(entry(1345, ["android"]), "android", 1323, released).note, "未发布");
+  assert.equal(item(entry(1325, ["web"]), "web", 1323, released).note, "刷新页面后可用");
   // Another part's, in this app's tab and in its own: only what is not out is said.
   const station = item(entry(1320, ["station"]), "android", 1323, released);
   assert.deepEqual([station.has, station.note, station.mine], [null, "", false]);
-  assert.deepEqual([item(entry(1320, ["station"]), "android", 1323, released, "station").note, item(entry(1320, ["station", "android"]), "web", 1, released, "android").note], ["还没发布", ""]);
+  assert.deepEqual([item(entry(1320, ["station"]), "android", 1323, released, "station").note, item(entry(1320, ["station", "android"]), "web", 1, released, "android").note], ["未发布", ""]);
   assert.equal(item(entry(1350, ["cloud"]), "web", 1, released).note, "");
   assert.equal(item(entry(1320, ["web"]), "desktop", 1323, released).has, true);
   assert.equal(item({ version: 1, text: [], parts: [] }, "web", null, released), null);

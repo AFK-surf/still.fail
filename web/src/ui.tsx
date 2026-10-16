@@ -27,8 +27,8 @@ setShortcuts({ keys: shortcutOf, use: useKeymap });
  * Done, Done: <why>; 等待中, 在等：<what>; Waiting, Waiting: <what>).
  */
 export function StatusText({ text }: { text: string }) {
-  const done = /^(?:做完了(?:：|$)|Done(?:: |$))/.exec(text);
-  const wait = done ? null : /^(?:在等：|等待中$|Waiting(?:: |$))/.exec(text);
+  const done = /^(?:(?:做完了|已完成)(?:：|$)|Done(?:: |$))/.exec(text);
+  const wait = done ? null : /^(?:在等：|等待：|等待中$|Waiting(?:: |$))/.exec(text);
   const lead = done ?? wait;
   if (!lead) return <>{text}</>;
   const label = t(done ? "web-main.status.done" : "web-main.status.waiting");

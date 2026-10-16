@@ -134,7 +134,7 @@ export const JOINABLE = {
 };
 /** None to add: the viewer manages another workspace, but its stations are all here already. */
 /** What a station from before several workspaces answers, in the core's words. */
-export const JOIN_REFUSED = "这台 station 还不能在多个 workspace 里，先更新它";
+export const JOIN_REFUSED = "此 station 尚不支持加入多个 workspace，请先更新";
 
 /** The demo's station in its home workspace (Acme) and in Lab, which it joined. */
 export const MEMBERSHIPS = {
@@ -173,11 +173,11 @@ const HISTORY_ITEMS: { body: HistoryItem["body"]; turn?: HistoryItem["turn"] }[]
   { body: posted("中途会话重启了一次，两路的工作都已提交保存，没丢，现在已经让它们接着做。\n\n**摄像头 + 打包**（4 个提交，基本做完，正在补跑测试）：\n\n- 原生端新增摄像头 H.264 写入器和 DirectShow 采集图；\n- 摄像头录制改用共享的 QPC 时钟，跟录屏时间轴对齐；\n- 安装包里不再带 ffmpeg。\n\n**导出**（还在做）：剩下 GIF 和混音两项。") },
   { body: { kind: "mark", content: { text: "去 ffmpeg 两路收尾（重启后续跑） · 等待了 1m 54s / 1h", wait: { since: WAITED_AT, until: WAITED_AT + 114_000, seconds: 3600, what: "去 ffmpeg 两路收尾（重启后续跑）" }, ends: "waiting" } } },
   { body: own("The session restarted partway through, but both parts had already committed their work, so nothing was lost and both are running again.") },
-  { turn: { time: "16:31", text: "没发消息" }, body: { kind: "received", content: { tasks: [{ text: "子 agent 完成：Camera recording without ffmpeg", agent: true, failed: false, result: "Waiting for the NativeEngine results before sending the final report.", md: markdown("Waiting for the NativeEngine results before sending the final report.") }], messages: [] } } },
+  { turn: { time: "16:31", text: "未发消息" }, body: { kind: "received", content: { tasks: [{ text: "子 agent 完成：Camera recording without ffmpeg", agent: true, failed: false, result: "Waiting for the NativeEngine results before sending the final report.", md: markdown("Waiting for the NativeEngine results before sending the final report.") }], messages: [] } } },
   { body: { kind: "mark", content: { text: "去 ffmpeg 两路收尾 · 等待中，最长 1h", wait: { since: WAITING_SINCE, seconds: 3600, what: "去 ffmpeg 两路收尾" }, ends: "waiting" } } },
   { body: own("Both parts of the ffmpeg removal are still finishing. The camera part is waiting on its last test run before reporting, and the export part is working through its remaining items.") },
 ];
 export const HISTORY: HistoryView = {
   items: HISTORY_ITEMS.map(({ body, turn }, n) => ({ key: `e${n}`, entries: [n, n], body, ...(turn ? { turn } : {}) })),
-  live: [], edge: "已到 Session 开始处", empty: false, loaded: true,
+  live: [], edge: "已到会话开头", empty: false, loaded: true,
 };

@@ -10,7 +10,7 @@ const ToastContext = createContext<(message: string) => void>(() => {});
  * station/sync.ts): said as not known, whatever the page put before it ("没能固定：不确定做没做成：…" → "固定：不确定做没做成：…").
  */
 export function said(message: string): string {
-  return message.replace(/^没能([^：]*)：(不确定做没做成：)/, "$1：$2");
+  return message.replace(/^(?:没能|无法)([^：]*)：((?:不确定做没做成|无法确认是否成功)：)/, "$1：$2");
 }
 
 /** A short confirmation at the bottom of the screen, named after the action that happened. */

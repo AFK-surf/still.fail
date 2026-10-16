@@ -103,7 +103,7 @@ class PublishSheetTest {
 
         rule.onNodeWithText("公开分享").performClick()
         h.settle()
-        rule.onNodeWithText("拿到链接的人都能看到这些消息；station 离线时打不开").assertIsDisplayed()
+        rule.onNodeWithText("持有链接的任何人都可查看这些消息；station 离线时无法打开").assertIsDisplayed()
         rule.onNodeWithText("隐藏了 1 处").assertIsDisplayed()
         picture(h, "publish-sheet$suffix")
         // The log and the cache unticked, where their message has them.
@@ -119,7 +119,7 @@ class PublishSheetTest {
         assertEquals("9", asked["upto"]!!.jsonPrimitive.content)
         assertEquals(listOf("f0"), asked["files"]!!.jsonArray.map { it.jsonPrimitive.content })
         // Published: its link, to copy.
-        rule.onNodeWithText("发布好了").assertIsDisplayed()
+        rule.onNodeWithText("已发布").assertIsDisplayed()
         rule.onNodeWithText("$link-p3").assertIsDisplayed()
         picture(h, "publish-made$suffix")
     }
@@ -132,7 +132,7 @@ class PublishSheetTest {
         h.settle()
         rule.onNodeWithText("撤销").performClick()
         h.settle()
-        rule.onNodeWithText("撤销后，拿到链接的人就打不开了").assertIsDisplayed()
+        rule.onNodeWithText("撤销后，持有链接的人将无法打开").assertIsDisplayed()
         assertTrue(h.fake.calls.none { it.first == "chat.unpublish" })
         rule.onNodeWithText("撤销").performClick()
         h.settle()

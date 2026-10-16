@@ -280,7 +280,7 @@ describe("updates", { concurrency: true }, () => {
     await until("ended", () => station(updates).state === "idle");
     assert.equal(station(updates).percent, undefined);
     // The same version as it started from: it says so.
-    assert.equal(station(updates).done, "已经是最新版");
+    assert.equal(station(updates).done, "已是最新版本");
   });
 
   test("a failed installer says what it said last", async (t) => {
@@ -526,14 +526,14 @@ describe("updates", { concurrency: true }, () => {
     t.after(() => updates.close());
     await updates.check();
     let line = station(updates);
-    assert.deepEqual([line.note, line.updatable, line.channel, line.auto], ["不是用安装脚本装的，没法在这里更新", false, undefined, undefined]);
+    assert.deepEqual([line.note, line.updatable, line.channel, line.auto], ["并非通过安装脚本安装，无法在此更新", false, undefined, undefined]);
     await assert.rejects(updates.update("station", "en"), /Station: /);
     await assert.rejects(updates.setAuto(true, "zh"), (e: Error) => e.message === "Station：不是用安装脚本装的，没法在这里更新");
     const unjoined = installed(temp(), "1300", null, { origin: () => null });
     t.after(() => unjoined.close());
     await unjoined.check();
     line = station(unjoined);
-    assert.equal(line.note, "还没加入 workspace，无从更新");
+    assert.equal(line.note, "尚未加入 workspace，无法更新");
     await assert.rejects(unjoined.update("nope", "zh"), (e: Error) => e.message === "没有 nope 这一项");
   });
 

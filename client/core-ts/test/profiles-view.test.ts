@@ -24,11 +24,11 @@ test("a shared profile is listed once, from its host, with where it is signed in
   assert.deepEqual(shared.members.map((m: any) => [m.stationName, m.role]), [["studio", "host"], ["mini", "user"]]);
   assert.equal(shared.station, `w/${A}`, "its page is on its host");
   assert.equal(shared.profile.id, "max");
-  assert.equal(shared.where, "登录在 studio · 只给 studio、mini");
+  assert.equal(shared.where, "已在 studio 登录 · 仅限 studio、mini");
   assert.equal(shared.usable, true);
   assert.deepEqual(shared.stations.map((s: any) => [s.name, s.allowed]), [["studio", true], ["mini", true]]);
   const local = view.items.find((e: any) => !e.shared);
-  assert.equal(local.where, "只在 studio");
+  assert.equal(local.where, "仅在 studio");
   assert.equal(local.canShare, true);
 });
 
@@ -57,9 +57,9 @@ test("the same account signed in on two stations each is one row, each station a
   ]);
   assert.equal(view.items.length, 1);
   const row = view.items[0];
-  assert.equal(row.where, "登录在 studio、mini");
+  assert.equal(row.where, "已在 studio、mini 登录");
   assert.equal(row.profile.id, "max", "the row shows the first one that is up and has its login");
-  assert.deepEqual(row.members.map((m: any) => [m.stationName, m.role, m.about]), [["studio", "own", "在这台单独登录"], ["mini", "own", "在这台单独登录"]]);
+  assert.deepEqual(row.members.map((m: any) => [m.stationName, m.role, m.about]), [["studio", "own", "在此 station 单独登录"], ["mini", "own", "在此 station 单独登录"]]);
   // Two different accounts stay two rows.
   const two = workspaceProfiles([
     station(A, "studio", true, [profile("a", { email: "a@x.test", runtime: "claude" })]),

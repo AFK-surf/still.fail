@@ -101,7 +101,7 @@ test("an update asked for is refused with what is wrong", async (t) => {
 
 test("a station with nothing to update has no channel to set", async () => {
   const ask = rig(null);
-  assert.deepEqual(await ask("POST", "/updates/channel", { channel: "beta" }), [404, { error: "这台 station 不能在这里更新" }]);
+  assert.deepEqual(await ask("POST", "/updates/channel", { channel: "beta" }), [404, { error: "无法在此更新这台 station" }]);
   // Managers only, before that.
   assert.equal((await ask("POST", "/updates/check", undefined, "member"))[0], 403);
 });

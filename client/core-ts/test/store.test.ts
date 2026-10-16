@@ -139,7 +139,7 @@ test("update_replaces_the_value_and_skips_topics_without_a_value", async () => {
   const session: Topic = { topic: "session", station: "ws/st", key: "k" };
   store.subscribe(1, 1, session);
   store.update(session, () => assert.fail("no value yet"));
-  store.set(session, { err: new CoreError("x", "出错了") });
+  store.set(session, { err: new CoreError("x", "出错") });
   store.update(session, () => assert.fail("an error is not a value"));
   store.set(session, { ok: { timeline: [1] } });
   await pass(COALESCE_MS * 2);

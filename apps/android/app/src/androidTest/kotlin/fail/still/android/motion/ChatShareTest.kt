@@ -44,7 +44,7 @@ class ChatShareTest {
     private val topic = Topics.chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))
     private val talk = Fixtures.talk
 
-    private fun agent(key: String) = RowAgent(key = key, runtime = "claude", process = "warm", pending = 0, agentText = "Opus 5.5", maker = Fixtures.anthropic, statusText = "做完了")
+    private fun agent(key: String) = RowAgent(key = key, runtime = "claude", process = "warm", pending = 0, agentText = "Opus 5.5", maker = Fixtures.anthropic, statusText = "已完成")
 
     private fun item(id: String, title: String, ago: Int, station: String = Fixtures.STATION, stationName: String = "studio", outside: String? = null) = ChatItem(
         id = id, session = "ember:$id", title = title, agents = listOf(agent("ember:$id")), unread = false, mine = true,
@@ -137,10 +137,10 @@ class ChatShareTest {
         h.send()
         h.settle()
         rule.onNodeWithText("分享对话").assertIsDisplayed()
-        rule.onNodeWithText("发送后，这个 workspace 里的 agent 就能读到：").assertIsDisplayed()
+        rule.onNodeWithText("发送后，此 workspace 中的 agent 可读取：").assertIsDisplayed()
         rule.onNodeWithText("来自 设计组").assertIsDisplayed()
         rule.onNodeWithText("来自 Acme 海外").assertIsDisplayed()
-        rule.onNodeWithText("你没有权限分享，需要它的发起人或管理员").assertIsDisplayed()
+        rule.onNodeWithText("你没有分享权限，需由发起人或管理员分享").assertIsDisplayed()
         // Not sent yet.
         assertTrue("chat.send" !in names(h))
         val asked = h.fake.calls.last { it.first == "chat.outsideRefs" }.second
@@ -209,7 +209,7 @@ class ChatShareTest {
         rule.onNodeWithText("分享并发送").performClick()
         h.deliver()
         h.settle()
-        rule.onNodeWithText("没分享成功：mac 离线").assertIsDisplayed()
+        rule.onNodeWithText("分享失败：mac 离线").assertIsDisplayed()
         rule.runOnIdle { assertTrue(h.app.sheet != null) }
         assertTrue("chat.send" !in names(h))
         rule.onNodeWithText("看下 @[首页改版的配色方案]").assertExists()

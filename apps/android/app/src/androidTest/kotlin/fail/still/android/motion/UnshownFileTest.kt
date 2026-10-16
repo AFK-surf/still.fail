@@ -79,7 +79,7 @@ class UnshownFileTest {
         val sniff = h.fake.calls.filter { it.first == "station.file.part" }
         assertEquals("only its first bytes read", listOf(8192), sniff.map { it.second["length"]!!.jsonPrimitive.int })
         rule.onNodeWithText("安装").assertExists()
-        rule.onNodeWithText("这种文件没法在这里预览").assertExists()
+        rule.onNodeWithText("此文件类型不支持预览").assertExists()
         rule.onNodeWithText("下载").performClick()
         h.settle()
         assertTrue("fetched once asked", h.fake.calls.any { it.first == "station.file" })

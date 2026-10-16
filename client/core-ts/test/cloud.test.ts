@@ -58,7 +58,7 @@ test("errors_map_to_codes_and_messages", async () => {
     }
     throw new Error("ok");
   };
-  assert.deepEqual(await err(run(c.request("s", "GET", "/v1/known", null))), { code: "workspace_not_found", message: "找不到这个 workspace，或者你已经不在里面了", status: 404 });
+  assert.deepEqual(await err(run(c.request("s", "GET", "/v1/known", null))), { code: "workspace_not_found", message: "找不到此 workspace，或你已不在其中", status: 404 });
   assert.deepEqual(await err(run(c.request("s", "GET", "/v1/unknown", null))), { code: "something_new", message: "something_new", status: 409 });
   assert.deepEqual(await err(run(c.request("s", "GET", "/v1/html", null))), { code: "http_502", message: "http_502", status: 502 });
   assert.equal((await err(run(c.me("nobody")))).code, "signed_out");
@@ -79,7 +79,7 @@ test("a_credential_is_asked_for_the_device", async () => {
 test("what_the_core_says_names_the_channels_product", () => {
   for (const [on, name] of [[false, "still.fail"], [true, "youdid.wtf"]] as const) {
     brand.setTestChannel(on);
-    assert.equal(cloudError("invalid_email", 400).message, `要填对方登录 ${name} 用的邮箱`);
+    assert.equal(cloudError("invalid_email", 400).message, `请填写对方登录 ${name} 所用的邮箱`);
   }
   brand.setTestChannel(false);
 });

@@ -280,11 +280,11 @@ export class Adb {
       if (line === null) return;
       const kind = (parseJson(utf8(line)) as J)?.tunnel;
       const offer = this.#current(run);
-      if (offer === null) return yield* refuse("已经停止共享");
+      if (offer === null) return yield* refuse("已停止共享");
       const port = kind === "connect" ? offer.connect : kind === "pair" ? offer.pair : null;
-      if (port === null) return yield* refuse(kind === "connect" ? "手机上的无线调试没开" : kind === "pair" ? "手机上的配对窗口没开" : "不认识的通道");
+      if (port === null) return yield* refuse(kind === "connect" ? "手机未开启无线调试" : kind === "pair" ? "手机未打开配对窗口" : "无法识别的通道");
       const tcp = yield* Effect.result(this.#env.host.tcp!(port));
-      if (tcp._tag === "Failure") return yield* refuse(`连不上手机上的 adb：${tcp.failure.message}`);
+      if (tcp._tag === "Failure") return yield* refuse(`无法连接手机上的 adb：${tcp.failure.message}`);
       const conn = tcp.success;
       const ok = yield* Effect.result(stream.write(utf8(`${JSON.stringify({ ok: true })}\n`)));
       if (ok._tag === "Failure") return;

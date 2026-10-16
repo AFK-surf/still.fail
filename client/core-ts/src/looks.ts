@@ -69,7 +69,7 @@ export function linkShown(link: J, name: string): J {
         return i < 0 ? null : [m.slice(0, i), m.slice(i + sep.length)];
       };
       const split = cut("：") ?? cut(": ");
-      why = split && (split[0].includes("连不上") || split[0].startsWith("Can't reach")) ? split[1] : m;
+      why = split && (split[0].includes("连不上") || split[0].includes("无法连接") || split[0].startsWith("Can't reach")) ? split[1] : m;
     }
     return { tone: "trouble", text: said("core-logic.looks.link.down", "core-logic.looks.link.down.named"), detail: why };
   }

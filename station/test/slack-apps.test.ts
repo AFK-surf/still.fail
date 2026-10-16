@@ -160,9 +160,9 @@ test("apps are reached with the person's token that owns them, rotating one abou
     assert.deepEqual(await apps.createApp("me", "T2", slackManifest("ember")), { appId: "A9", clientId: "c1", clientSecret: "fake-secret" });
 
     const none = await apps.exportManifest("stranger", "A2").catch((e) => e);
-    assert.equal(none.message, "你还没有加 Slack App 配置 token");
+    assert.equal(none.message, "尚未添加 Slack App 配置 token");
     assert.equal(slackError(none, "en") !== none.message, true, "said in whoever asked's language");
-    assert.equal((await apps.createApp("me", "T9", {}).catch((e) => e)).message, "你在这个 Slack 工作区没有配置 token");
+    assert.equal((await apps.createApp("me", "T9", {}).catch((e) => e)).message, "此 Slack 工作区没有配置 token");
   } finally {
     await fake.close();
   }

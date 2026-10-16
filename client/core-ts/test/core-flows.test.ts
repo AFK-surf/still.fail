@@ -121,7 +121,7 @@ test("a_chats_connection_says_only_what_is_of_its_workspace", async () => {
   here.end();
   await settle();
   apply(host, values);
-  assert.deepEqual([v(values, 1).tone, v(values, 1).text], ["back", "已连上"]);
+  assert.deepEqual([v(values, 1).tone, v(values, 1).text], ["back", "已连接"]);
   there.end();
   core.close();
 });
@@ -151,7 +151,7 @@ test("a_beta_app_says_so_and_an_account_not_let_in_is_blocked", async () => {
   await host.settle();
   apply(host, values);
   let entry = v(values, 1)[0];
-  assert.deepEqual([entry.blocked, entry.error?.code, entry.workspaces.length], ["这个账号还没开通测试版", "not_beta", 0]);
+  assert.deepEqual([entry.blocked, entry.error?.code, entry.workspaces.length], ["此账号尚未开通测试版", "not_beta", 0]);
   assert.ok(host.requests.filter((r) => r.url.includes("/v1/")).every((r) => r.headers.some(([k]) => k === "x-stillfail-channel")));
   // Let in: its workspaces, marked as let in, nothing blocked.
   letIn = true;
@@ -666,7 +666,7 @@ test("a_sessions_model_control_says_what_changes_and_saves_it_on_the_station", a
   let p = v(values, 1);
   // It runs on p1, the station's pick, with no model set.
   assert.deepEqual([p.runtimeFixed, p.value.model ?? null, p.account.text], [true, null, "自动 · p1@x.com"]);
-  assert.equal(p.saveText, "不变");
+  assert.equal(p.saveText, "无变更");
   // Kept to p2 and moved to Sonnet, which p2 does not run: back to the station's pick, said so.
   await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "session:k1", profile: "p2" });
   await ask(host, core, ui, 3, "pick.set", { station: "ws/st", of: "session:k1", model: "claude-sonnet-5", effort: "high" });
@@ -1094,7 +1094,7 @@ test("the_archive_is_its_stations_archived_chats_newest_first_by_day_and_one_res
   call(core, ui, 3, "session.delete", { station: "ws/st", key: "k2" });
   await host.settle();
   assert.ok("ok" in answersOf(host, values).get(3)!);
-  assert.deepEqual([v(values, 1).days, v(values, 1).note], [[], "没有归档的对话。"]);
+  assert.deepEqual([v(values, 1).days, v(values, 1).note], [[], "暂无已归档的对话"]);
   core.close();
 });
 
@@ -1122,10 +1122,10 @@ test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen
   assert.deepEqual(c.tabs.map((x: J) => [x.part, x.label]), [["android", "安卓"], ["desktop", "桌面"], ["web", "网页"], ["station", "Station"], ["cloud", "云端"]]);
   const notes = (part: string) => c.tabs.find((x: J) => x.part === part).days.flatMap((d: J) => d.entries.map((e: J) => e.note));
   assert.equal(c.tabs[0].days[0].label, "今天");
-  assert.deepEqual(notes("android"), ["还没发布", "更新到 0.1.1330 后就有", ""]);
+  assert.deepEqual(notes("android"), ["未发布", "更新到 0.1.1330 后可用", ""]);
   // Another part's tab says what is not out of that part.
   assert.deepEqual(notes("desktop"), [""]);
-  assert.deepEqual(notes("station"), ["还没发布"]);
+  assert.deepEqual(notes("station"), ["未发布"]);
   assert.deepEqual(notes("cloud"), []);
   // The first build seen here: nothing is news.
   assert.equal(c.news, undefined, JSON.stringify(c));

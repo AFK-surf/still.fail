@@ -137,7 +137,7 @@ test("sign_in_failures", async () => {
   assert.equal((await fails(run(accounts.completeSignIn("error=login_cancelled")))).message, "登录已取消");
   assert.equal(host.stored(LOGIN_KEY), undefined, "a failed login is not retried");
   await begin();
-  assert.equal((await fails(run(accounts.completeSignIn("error=access_denied")))).message, "Google 登录没有成功");
+  assert.equal((await fails(run(accounts.completeSignIn("error=access_denied")))).message, "Google 登录失败");
   await begin();
   assert.equal((await fails(run(accounts.completeSignIn("code=c&state=wrong")))).message, "登录状态不匹配，请重新登录");
   assert.equal((await fails(run(accounts.completeSignIn("code=c&state=wrong")))).message, "登录状态不匹配，请重新登录");
@@ -197,7 +197,7 @@ test("refused_refresh_forgets_the_account", async () => {
   await assert.rejects(run(accounts.accessToken("s")), (e: { code: string; message: string }) => e.code === "signed_out" && e.message === "s@x.com 的登录已过期，请重新登录");
   assert.deepEqual(accounts.list().map((a) => a.sub), ["t"]);
   assert.equal((stored(host, STORAGE_KEY) as StoredAccount[]).length, 1);
-  await assert.rejects(run(accounts.accessToken("s")), (e: { message: string }) => e.message === "这个账号已退出");
+  await assert.rejects(run(accounts.accessToken("s")), (e: { message: string }) => e.message === "此账号已退出登录");
 });
 
 test("refreshes_are_traced_with_why_they_failed", async () => {

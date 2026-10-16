@@ -139,7 +139,7 @@ function seed(chat: DemoChat, lines: [Who, string, number][]): DemoChat {
     chat.messages = [...chat.messages, message(chat, by, text, ago(minutes))];
     if (by === "agent") {
       addItem(chat, posted(chat, text));
-      addItem(chat, chat.blocked && chat.messages.length === lines.length ? marked("等你决定", "human") : marked("完成", "done"));
+      addItem(chat, chat.blocked && chat.messages.length === lines.length ? marked("待你决定", "human") : marked("完成", "done"));
     } else if (by !== "me" && by !== "ember") addItem(chat, received(chat, by, text));
   }
   return chat;
@@ -179,8 +179,8 @@ function rowAgent(chat: DemoChat): RowAgent {
   const mark = chat.running ? "run" : chat.blocked ? "block" : chat.failed ? "failed" : undefined;
   return {
     key: chat.key, runtime: m.runtime, model: m.model, effort: m.effort, process: chat.running ? "running" : "warm", pending: 0,
-    agentText: `${m.name} · ${m.effort}`, maker: m.maker, statusText: chat.running ? "进行中" : chat.blocked ? "等你决定" : chat.failed ? "出错了" : "已完成",
-    ...(mark ? { mark, badgeText: mark === "run" ? "工作中" : mark === "block" ? "需要你" : "出错了" } : {}),
+    agentText: `${m.name} · ${m.effort}`, maker: m.maker, statusText: chat.running ? "进行中" : chat.blocked ? "待你决定" : chat.failed ? "出错" : "已完成",
+    ...(mark ? { mark, badgeText: mark === "run" ? "工作中" : mark === "block" ? "需要你" : "出错" } : {}),
   };
 }
 
@@ -234,7 +234,7 @@ export function chatsView(chats: DemoChat[]): ChatsView {
     me: { id: "local" }, stations: [{ id: "local", station: STATION, name: "Studio", state: "online" }], loading: false,
     days: [{ daysAgo: 0, at: Date.now(), label: "今天", items: today }, ...(earlier.length ? [{ daysAgo: 1, at: ago(24 * 60), label: "昨天", items: earlier }] : [])],
     // As the core puts them (client/core-ts/src/looks.ts): the workspace's one station, at work while a chat runs.
-    glyph: { online: 1, dim: 0, failing: 0, working, summary: working ? "这台机器 · 在干活" : "这台机器", label: working ? "1 台 station，1 台在线，1 台在干活" : "1 台 station，1 台在线" },
+    glyph: { online: 1, dim: 0, failing: 0, working, summary: working ? "这台机器 · 在干活" : "本机", label: working ? "1 台 station，1 台在线，1 台在干活" : "1 台 station，1 台在线" },
     note: { reading: false, failing: [], empty: items.length === 0 },
   };
 }
@@ -302,7 +302,7 @@ function withTurns(items: HistoryItem[]): HistoryItem[] {
   let posts = 0;
   const close = () => {
     const first = out[begun];
-    if (first) out[begun] = { ...first, turn: { text: [...(steps ? [`${steps} 步`] : []), posts ? `发出 ${posts} 条` : "没发消息"].join(" · ") } };
+    if (first) out[begun] = { ...first, turn: { text: [...(steps ? [`${steps} 步`] : []), posts ? `发出 ${posts} 条` : "未发消息"].join(" · ") } };
   };
   for (const item of items) {
     if (item.body.kind === "received") { close(); begun = out.length; steps = 0; posts = 0; }
@@ -316,7 +316,7 @@ function withTurns(items: HistoryItem[]): HistoryItem[] {
 
 export function historyView(chat: DemoChat): HistoryView {
   return {
-    items: withTurns(chat.items), live: [], edge: "已到 Session 开始处", empty: chat.items.length === 0, loaded: true,
-    ...(chat.running ? { phase: { phase: "working", text: "执行工具中", since: chat.running.since } } : {}),
+    items: withTurns(chat.items), live: [], edge: "已到会话开头", empty: chat.items.length === 0, loaded: true,
+    ...(chat.running ? { phase: { phase: "working", text: "正在执行工具", since: chat.running.since } } : {}),
   };
 }

@@ -73,7 +73,7 @@ class PlacePagesTest {
         h.fake.put(Topics.profiles(Fixtures.WS), ProfilesView(emptyList(), loading = false))
         h.fake.put(Topics.usage(Fixtures.WS, 7), UsageView(7u, false, true, emptyList(), emptyList(), emptyList(), 0.0, emptyList(), listOf("没有读到 studio 的用量"), "按各家 API 价折算"))
         h.fake.put(Topics.archive(Fixtures.WS), ArchiveView(listOf(ArchiveDay("今天", (0 until 6).map {
-            ArchiveItem(Fixtures.STATION, "a-$it", "ember:a-$it", 300L + it, listOf("旧的发版清单", "试一下新模型", "周报")[it % 3], "做完了", Fixtures.NOW.toDouble(), "10:0$it", "手动归档", true)
+            ArchiveItem(Fixtures.STATION, "a-$it", "ember:a-$it", 300L + it, listOf("旧的发版清单", "试一下新模型", "周报")[it % 3], "已完成", Fixtures.NOW.toDouble(), "10:0$it", "手动归档", true)
         })), emptyList(), loading = false))
         h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, loading = false, today = DecisionsToday(3u, "6 分钟", 1u), working = listOf(
             DecisionWorking(Fixtures.STATION, "studio", null, null, "ember:w-1", 401L, "官网首屏", "在做 · 截三种首屏"),

@@ -29,8 +29,8 @@ test("a_reference_shows_the_start_of_the_title_on_one_line", () => {
 test("marks_go_out_as_links_while_their_link_is_kept", () => {
   const d = data();
   assert.equal(mark(d, "https://x", "ws/st", "k1", "排查登录"), "@[排查登录]");
-  assert.equal(mark(d, "https://x", "ws/st", "k2", "看看"), "@[看看]");
-  mark(d, "https://x", "ws/st", "k3", "看看");
+  assert.equal(mark(d, "https://x", "ws/st", "k2", "查看"), "@[看看]");
+  mark(d, "https://x", "ws/st", "k3", "查看");
   assert.equal(expand(d, "ws/st", "见 @[排查登录] 和 @[看看]，@[没有] @[ 不完整 @"), "见 [排查登录](https://x/w/ws/s/st/chats/k1) 和 [看看](https://x/w/ws/s/st/chats/k3)，@[没有] @[ 不完整 @");
   keep(d, Array.from({ length: KEPT }, (_, i) => [`t${i}`, `https://x/w/ws/s/st/chats/l${i}`] as [string, string]));
   assert.equal(expand(d, "ws/other", "@[排查登录] @[t0]"), "@[排查登录] [t0](https://x/w/ws/s/st/chats/l0)");
@@ -40,7 +40,7 @@ test("a_mark_is_a_link_only_in_a_chat_of_its_workspace", () => {
   const d = data();
   d.put("chat_ref", "links", [["旧的", "https://x/w/w1/s/st/chats/k0"], ["本机", "/admin/chats/k9"]]);
   mark(d, "https://x", "w1/st", "k1", "排查登录");
-  mark(d, "https://x", "w2/st", "k2", "看看");
+  mark(d, "https://x", "w2/st", "k2", "查看");
   const text = "@[排查登录] @[看看] @[旧的] @[本机]";
   assert.equal(expand(d, "w1/st", text), "[排查登录](https://x/w/w1/s/st/chats/k1) @[看看] [旧的](https://x/w/w1/s/st/chats/k0) @[本机]");
   assert.equal(expand(d, "w2/a", text), "@[排查登录] [看看](https://x/w/w2/s/st/chats/k2) @[旧的] @[本机]");

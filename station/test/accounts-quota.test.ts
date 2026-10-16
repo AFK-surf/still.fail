@@ -18,7 +18,7 @@ describe("allowances and renewing", { concurrency: true }, () => {
     await p.close();
     p = await provider(() => ({ status: 401, body: { error: { message: "OAuth token has expired" } } }));
     const expired = await claudeUsage(p.base, "t", "zh");
-    assert.deepEqual([expired.state, expired.detail], ["unavailable", "登录过期或失效了"]);
+    assert.deepEqual([expired.state, expired.detail], ["unavailable", "登录已过期或失效"]);
     await p.close();
     p = await provider(() => ({ status: 401, body: { detail: "Your account has been deactivated" } }));
     assert.equal((await claudeUsage(p.base, "t", "zh")).state, "blocked");

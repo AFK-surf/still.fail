@@ -69,7 +69,7 @@ class MemoryTest {
         val h = launch(listOf(Screen.Stations, Screen.Station(st), Screen.Memory(st)), dark)
         rule.onNodeWithText("回复和沟通").assertIsDisplayed()
         h.record("memory-list-$tone").end()
-        rule.onNodeWithText("station 自带").performClick(); h.settle()
+        rule.onNodeWithText("station 内置").performClick(); h.settle()
         rule.onNodeWithText("stillfail-show").assertIsDisplayed()
         h.record("memory-builtin-$tone").end()
         rule.onNodeWithText("acme-web").performClick(); h.settle()

@@ -367,9 +367,9 @@ try {
   // What fails, a line each.
   const said = (text) => async (page) => { await page.getByText(text).waitFor({ timeout: 60_000 }); };
   for (const [name, url, text] of [
-    ['malformed', `${shareHost}/#${station.slice(0, 20)}`, '这个链接不完整'],
-    ['gone', linkOf(random(32)), '这个分享不存在或已撤销'],
-    ['offline', linkOf(key, randomBytes(32).toString('hex')), '连不上这台 station'],
+    ['malformed', `${shareHost}/#${station.slice(0, 20)}`, '链接不完整，无法打开'],
+    ['gone', linkOf(random(32)), '此分享不存在或已撤销'],
+    ['offline', linkOf(key, randomBytes(32).toString('hex')), '无法连接此 station'],
   ]) {
     const { context } = await look(`state-${name}`, url, { width: 390, height: 844, mobile: true, scheme: 'light', ready: said(text) });
     await context.close();

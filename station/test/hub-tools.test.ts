@@ -359,7 +359,7 @@ test("a turn ends all_done, needing a decision or help, or waiting, and the word
   assert.ok((await r.refused(key, "chat_state", { kind: "all_done", need: "x", done: "y" })).includes('only with kind "need_human"'));
   assert.ok((await r.refused(key, "chat_state", { kind: "all_done" })).includes("done is required"));
   // done is a reason people can trust, not the word done.
-  for (const empty of ["做完了", " 完成。", "已完成", "Done!", "ok", "好了", "全部搞定"]) {
+  for (const empty of ["已完成", " 完成。", "已完成", "Done!", "ok", "好了", "全部搞定"]) {
     assert.ok((await r.refused(key, "chat_state", { kind: "all_done", done: empty })).includes("done must say why nothing in the chat is left"), empty);
   }
   assert.ok((await r.refused(key, "chat_state", { kind: "need_help", need: "x", done: "y" })).includes('only with kind "all_done"'));

@@ -145,11 +145,11 @@ test("an ask about no offer, or an unknown one, is answered in the asker's langu
   const shares = new Shares();
   const unknown = new Memory();
   await answerAdb(shares, nowhere, viewer, asking({ op: "what" }), unknown as unknown as Stream);
-  assert.deepEqual(unknown.lines(), [{ status: 400, headers: { "content-type": "application/json" } }, { message: "不认识的 adb 请求" }]);
+  assert.deepEqual(unknown.lines(), [{ status: 400, headers: { "content-type": "application/json" } }, { message: "无法识别的 adb 请求" }]);
   assert.ok(unknown.finished);
   const none = new Memory();
   await answerAdb(shares, nowhere, viewer, asking({ op: "pair", code: "123456", phone: PHONE }, { "stillfail-lang": "en" }), none as unknown as Stream);
-  assert.deepEqual(none.lines(), [{ status: 409, headers: { "content-type": "application/json" } }, { message: "This phone isn't sharing for debugging" }]);
+  assert.deepEqual(none.lines(), [{ status: 409, headers: { "content-type": "application/json" } }, { message: "This device isn't sharing debugging" }]);
 });
 
 test("without adb the offer says missing; a phone the station cannot reach says why", async () => {
@@ -159,7 +159,7 @@ test("without adb the offer says missing; a phone the station cannot reach says 
   const offered = answerAdb(missing, nowhere, viewer, asking({ op: "share", phone: PHONE, device: "Pixel 8" }), stream as unknown as Stream);
   const said = await until(() => stream.lines().find((l) => l.adb === "missing"));
   assert.match(said.serial, /^127\.0\.0\.1:\d+$/);
-  assert.equal(said.message, "这台 station 上没有 adb：装上 Android platform-tools（macOS：brew install android-platform-tools），再重新共享");
+  assert.equal(said.message, "此 station 未安装 adb：请安装 Android platform-tools（macOS：brew install android-platform-tools）后重新共享");
   assert.deepEqual(stream.lines()[0], { status: 200, headers: { "content-type": "application/x-ndjson" } });
   assert.deepEqual(missing.list(), [{ serial: said.serial, device: "Pixel 8", android: "", owner: { name: "Pat", email: "pat@example.com" }, adb: "missing", message: said.message }]);
   await stream.reset();
@@ -440,7 +440,7 @@ test("a phone offered over the mesh: adb connects through its tunnel, asks reach
 
     // Asks: pairing through the phone's pairing port, the grant, in the asker's language.
     const paired = await mesh.answer({ op: "pair", code: "12 34 56", phone: PHONE });
-    assert.deepEqual(paired, { head: { status: 200, headers: { "content-type": "application/json" } }, body: { message: "配对好了" } });
+    assert.deepEqual(paired, { head: { status: 200, headers: { "content-type": "application/json" } }, body: { message: "已配对" } });
     assert.ok(adb.dialed().includes("phone:PAIR 123456"));
     assert.ok(mesh.tunnels.includes("pair"));
     assert.ok(adb.calls().some((c) => c[0] === "pair" && c[2] === "123456"));
@@ -451,7 +451,7 @@ test("a phone offered over the mesh: adb connects through its tunnel, asks reach
     const wrong = await mesh.answer({ op: "pair", code: "12345", phone: PHONE }, { "stillfail-lang": "en" });
     assert.deepEqual(wrong, { head: { status: 422, headers: { "content-type": "application/json" } }, body: { message: "The pairing code is 6 digits" } });
     const granted = await mesh.answer({ op: "grant", phone: PHONE });
-    assert.deepEqual(granted.body, { message: "以后 app 可以自己打开无线调试了" });
+    assert.deepEqual(granted.body, { message: "app 现在可以自行开启无线调试" });
     assert.ok(adb.calls().some((c) => c.join(" ") === `-s ${serial} shell pm grant fail.still.android android.permission.WRITE_SECURE_SETTINGS`));
 
     // The phone stops reading the offer: the phone is kept for GRACE, then adb lets it go and its port closes.

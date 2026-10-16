@@ -121,8 +121,8 @@ test("keeps_what_is_under_way_with_its_plain_params", () => {
       { call: "chat.pin", params: { station: "w/s", session: "k", pinned: "true", thread: "7" }, since: 2000, stage: "running" },
     ],
   });
-  doing.fail(a, "连不上这台 station：没有回应");
-  assert.deepEqual((doing.value(() => false) as J).doing[0], { call: "job.stop", params: { station: "w/s", id: "j1" }, since: 1000, stage: "failed", error: "连不上这台 station：没有回应" });
+  doing.fail(a, "无法连接此 station：无响应");
+  assert.deepEqual((doing.value(() => false) as J).doing[0], { call: "job.stop", params: { station: "w/s", id: "j1" }, since: 1000, stage: "failed", error: "无法连接此 station：无响应" });
   doing.end(a);
   doing.end(b);
   assert.deepEqual(doing.value(() => false), { doing: [] });
@@ -193,15 +193,15 @@ test("marks_say_how_many_and_how_urgent", () => {
   assert.equal(counts(0, 1, 3).tone(), "wait");
   assert.equal(counts(0, 0, 3).tone(), "done");
   assert.equal(counts(0, 0, 0).tone(), null);
-  assert.equal(counts(2, 0, 3).label(), "2 个出错了 · 3 个有新消息");
+  assert.equal(counts(2, 0, 3).label(), "2 个出错 · 3 个有新消息");
   assert.equal(counts(0, 1, 1).label(), "1 个在等你 · 1 个有新消息");
   assert.equal(counts(0, 0, 1).label(), "1 个有新消息");
 });
 
 test("marks_are_said_in_english_too", () => {
   const counts = (alert: number, wait: number, unread: number) => new Counts(alert, wait, unread);
-  assert.equal(counts(2, 1, 1).labelIn("en"), "2 went wrong · 1 waiting for you · 1 unread");
-  assert.equal(counts(1, 0, 3).labelIn("en"), "1 went wrong · 3 unread");
+  assert.equal(counts(2, 1, 1).labelIn("en"), "2 failed · 1 waiting for you · 1 unread");
+  assert.equal(counts(1, 0, 3).labelIn("en"), "1 failed · 3 unread");
   assert.equal(counts(0, 0, 1).labelIn("zh"), "1 个有新消息");
 });
 

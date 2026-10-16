@@ -86,14 +86,14 @@ test("uploads_and_reads_files", async () => {
   const { host, core } = await started({
     ...base(),
     "POST /uploads?name=a%20b.png": { name: "a b.png" },
-    "GET /sessions/k/files?name=x": status(404, { error: "没有这个文件" }),
+    "GET /sessions/k/files?name=x": status(404, { error: "文件不存在" }),
   });
   const requests = core.inner.stations.requests;
   const saved = (await run(requests.upload(remote(), "a b.png", new Uint8Array([1, 2, 3]), null))) as J;
   assert.equal(saved.name, "a b.png");
   assert.deepEqual([...host.requests.find((r) => r.url.includes("/uploads"))!.body!], [1, 2, 3]);
   const e = await failure(requests.file(remote(), "k", "x", false, () => {}, null));
-  assert.deepEqual([e.message, e.status], ["读不到文件", 404]);
+  assert.deepEqual([e.message, e.status], ["无法读取文件", 404]);
   core.close();
 });
 
@@ -122,7 +122,7 @@ test("fetches_a_file_in_parts_and_a_poster", async () => {
     ...base(),
     "GET /sessions/k/parts?name=v.mp4&offset=0&length=4": "abcd",
     "GET /sessions/k/parts?name=old.mp4&offset=0&length=4": status(404, { error: "no route GET /sessions/k/parts" }),
-    "GET /sessions/k/parts?name=gone.mp4&offset=0&length=4": status(404, { error: "没有这个文件" }),
+    "GET /sessions/k/parts?name=gone.mp4&offset=0&length=4": status(404, { error: "文件不存在" }),
     "GET /sessions/k/poster?name=v.mp4": "jpeg",
   });
   const requests = core.inner.stations.requests;

@@ -26,7 +26,7 @@ function helpers() {
   const card = (c, asked = true) => ({
     ...message(c, 'agent', '部署有两种做法：\n\n- 直接替换，几分钟完成，会中断一下\n- 新旧并行再切流量，慢一点但不中断\n\n你选哪个？', Date.now()),
     options: [{ label: '直接替换', detail: '几分钟完成，会中断一下' }, { label: '并行切换', detail: '慢一点，不中断', recommended: true }, { label: '先不部署', detail: '等下周再说' }],
-    card: { type: 'options', assigneeText: '需要你决策' }, decision: { resolved: false }, ...(asked ? { asked: true } : {}),
+    card: { type: 'options', assigneeText: '待你决策' }, decision: { resolved: false }, ...(asked ? { asked: true } : {}),
   });
   const pane = () => {
     let e = document.querySelector('[data-vk^="m:"]');

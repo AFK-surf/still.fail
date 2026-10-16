@@ -686,7 +686,7 @@ class BarTest {
         h.settle()
         assertEquals(listOf("profiles", "chats", "stations", "files"), h.app.bars.sets[0])
         // A new bar: empty until a place is picked for it, then kept.
-        rule.onNodeWithText("新建一栏").performScrollTo().performClick()
+        rule.onNodeWithText("新建栏").performScrollTo().performClick()
         h.settle()
         rule.onAllNodesWithText("用量").filter(hasClickAction()).onFirst().performClick()
         h.settle()

@@ -173,9 +173,9 @@ test("a_share_that_fails_is_shown_as_it_was_and_says_why", async () => {
   call(core, ui, 3, "chat.xshare", { station: "ws/st", session: "k1", thread: 7, to: ["wa"], write: false });
   await host.settle();
   const answered = answerOf(host, values, 3);
-  assert.equal(answered.error.message, "这台 station 还没更新");
+  assert.equal(answered.error.message, "此 station 需要更新");
   assert.equal(v(values, 1).xshare.text, "未分享");
-  assert.deepEqual(v(values, 2).doing.map((d: J) => [d.call, d.stage, d.error]), [["chat.xshare", "failed", "这台 station 还没更新"]]);
+  assert.deepEqual(v(values, 2).doing.map((d: J) => [d.call, d.stage, d.error]), [["chat.xshare", "failed", "此 station 需要更新"]]);
   assert.deepEqual(wire.asked, [], "nobody is told of a share its station does not have");
   core.close();
 });

@@ -48,7 +48,7 @@ test("users_are_found_filtered_and_sorted", () => {
   assert.deepEqual(ids(all), ["a", "b", "c"]);
   assert.deepEqual([count(all, "stuck"), count(all, "blocked"), count(all, "dormant"), count(all, "new")], [1, 1, 2, 1]);
   assert.equal(all.rows[1].title, "bob@y.io");
-  assert.deepEqual(all.rows[1].marks.map((m: J) => m.label), ["已封禁", "还没进来", "测试版"]);
+  assert.deepEqual(all.rows[1].marks.map((m: J) => m.label), ["已封禁", "尚未加入", "测试版"]);
   assert.equal(all.rows[0].line, "ann@x.io · 产品");
   const found = list("users", users(), "X.IO 产品", "all", "name", null, NOW);
   assert.deepEqual([ids(found), count(found, "stuck")], [["a", "c"], 0]);
@@ -64,7 +64,7 @@ test("emails_given_rights_before_a_sign_in_are_listed_with_the_users_and_have_a_
   assert.deepEqual(ids(all), ["a", "b", "email:dan@z.io", "email:eve@z.io", "c"]);
   const dan = all.rows[2];
   assert.deepEqual([dan.title, dan.line, dan.marks.map((m: J) => m.label), dan.last_seen], ["dan@z.io", "首次登录后开通：测试版、标准版", ["未登录", "测试版"], null]);
-  assert.equal(all.rows[3].line, "首次登录后开通：还没开通任何资格");
+  assert.equal(all.rows[3].line, "首次登录后开通：尚未开通任何资格");
   // Nothing an account did is said of them; what they were given is.
   assert.deepEqual([count(all, "stuck"), count(all, "dormant"), count(all, "new"), count(all, "active")], [1, 2, 1, 1]);
   assert.deepEqual([count(all, "pending"), count(all, "beta"), count(all, "creators")], [2, 2, 2]);
@@ -89,7 +89,7 @@ test("workspaces_say_what_is_off", () => {
   assert.deepEqual(ids(all), ["w1", "w2"]);
   assert.deepEqual([count(all, "bare"), count(all, "outdated"), count(all, "full"), count(all, "invited")], [1, 1, 1, 1]);
   assert.equal(all.rows[0].state, "online");
-  assert.equal(all.rows[1].line, "已不在的人 创建 · 0 人 · 0 台 station");
+  assert.equal(all.rows[1].line, "前成员 创建 · 0 人 · 0 台 station");
   assert.deepEqual(ids(list("workspaces", workspaces(), "nas", null, null, null, NOW)), ["w1"]);
 });
 
@@ -98,7 +98,7 @@ test("a_users_page_counts_their_workspaces", () => {
   assert.equal(page.workspaces[0].line, "Owner · 2 人 · 2 台 station");
   assert.deepEqual([page.mayCreate, page.mayCreateFixed], [true, true]);
   page = user("b", users(), workspaces(), null, NOW);
-  assert.deepEqual([page.admission, page.mayCreateFixed, page.blocked], ["还没进来", false, true]);
+  assert.deepEqual([page.admission, page.mayCreateFixed, page.blocked], ["尚未加入", false, true]);
   assert.throws(() => user("z", users(), workspaces(), null, NOW));
 });
 

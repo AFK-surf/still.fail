@@ -349,7 +349,7 @@ describe("slack", { concurrency: true }, () => {
       assert.deepEqual(identity, { team: "Acme", teamId: "T1", url: "https://acme.slack.com/", botUserId: "UBOT", botName: "helper", botImage: "https://avatars.slack-edge.com/ember_72.png", botId: "BBOT" });
       const [none, wrong] = await verifySlackTokens(client, "xoxb-2", "xapp-2", "zh");
       assert.equal(none, null);
-      assert.deepEqual(wrong, ["Bot Token 应该以 xoxb- 开头", "App-Level Token 应该以 xapp- 开头"]);
+      assert.deepEqual(wrong, ["Bot Token 应以 xoxb- 开头", "App-Level Token 应以 xapp- 开头"]);
       fake.answer("auth.test", { ok: false, error: "invalid_auth" });
       fake.answer("apps.connections.open", { ok: false, error: "not_allowed_token_type" });
       const [, refused] = await verifySlackTokens(client, "xapp-1", "xoxb-1", "en");
@@ -481,7 +481,7 @@ describe("slack", { concurrency: true }, () => {
 
   test("tool calls in words, by either runtime's names", () => {
     const words = ["Read", "Bash", "exec_command", "apply_patch", "WebSearch", "mcp__ember__chat_post", "something"].map(toolStatus);
-    assert.deepEqual(words, ["正在查看文件…", "正在运行命令…", "正在运行命令…", "正在修改文件…", "正在搜索网页…", "正在看 Slack…", "正在处理…"]);
+    assert.deepEqual(words, ["正在查看文件…", "正在运行命令…", "正在运行命令…", "正在修改文件…", "正在搜索网页…", "正在读取 Slack…", "正在处理…"]);
   });
 
   test("a surface's status line goes to Slack as the bot", async () => {

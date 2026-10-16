@@ -129,8 +129,8 @@ function pickView(of: string): unknown {
   return {
     options, runtimeFixed: !!chat, value, valueOption: m, draft: value, option: m?.model, runtimes: [], efforts: m?.efforts[runtime] ?? [],
     accounts: m?.accounts[runtime] ?? [], ...(on ? { account: { text: `自动 · ${on.name}`, auto: true, profile: on } } : {}),
-    who: "账号", autoNote: on ? `现在是 ${on.name}` : "额度用完或登录失效时换一个", changed: false, was: [], becomes: [],
-    modelText: m?.name ?? "", accountText: "自动分配", accountNote: "额度用完或登录失效时换一个", accountWarn: false, saveText: "不变",
+    who: "账号", autoNote: on ? `现在是 ${on.name}` : "额度用完或登录失效时自动切换", changed: false, was: [], becomes: [],
+    modelText: m?.name ?? "", accountText: "自动分配", accountNote: "额度用完或登录失效时自动切换", accountWarn: false, saveText: "无变更",
   };
 }
 

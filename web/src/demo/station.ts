@@ -25,7 +25,7 @@ export const BAN_DETAIL = "Anthropic 拒绝了这个账号（403）This organiza
 function subscription(base: Record<string, unknown>) {
   return {
     ...base, machine: false, name: "lin@acme.dev", loginCommand: "",
-    quota: { state: "blocked", windows: [], detail: BAN_DETAIL, checkedAt: Date.now() }, checkText: "被停用", checkTone: "red",
+    quota: { state: "blocked", windows: [], detail: BAN_DETAIL, checkedAt: Date.now() }, checkText: "已停用", checkTone: "red",
   };
 }
 
@@ -170,7 +170,7 @@ export function archive(q = "", limit = 0): ArchiveView {
     const last = kept.at(-1);
     if (last?.label === label) last.items.push(item); else kept.push({ label, items: [item] });
   }
-  return { days: kept, errors: [], loading: false, total: found.length, more: shown.length < found.length, ...(found.length === 0 ? { note: needle ? "没有匹配的归档对话" : "没有归档的对话。" } : {}) };
+  return { days: kept, errors: [], loading: false, total: found.length, more: shown.length < found.length, ...(found.length === 0 ? { note: needle ? "没有匹配的归档对话" : "暂无已归档的对话" } : {}) };
 }
 
 /** The workspace's profiles (the core's `profiles`, client/core-ts/src/views/profiles.ts): the station's one account. */

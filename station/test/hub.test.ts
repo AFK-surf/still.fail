@@ -955,7 +955,7 @@ test("a person's message in a chat with several agents reaches each of them once
   const one = newSession(r.hub, chat("claude"));
   const two = newSession(r.hub, chat("codex"));
   addToThread(r.hub, one[1].id, two[0]);
-  const quote = { author: "Claude", role: "agent", ts: "1.000001", text: "上一条", comment: "这里" };
+  const quote = { author: "Claude", role: "agent", ts: "1.000001", text: "上一条", comment: "当前" };
   sayIn(r.hub, one[1].id, "a@example.com", "你们俩分一下工", [], [quote]);
   await settle();
   for (const driver of [r.claude, r.codex]) {
@@ -966,7 +966,7 @@ test("a person's message in a chat with several agents reaches each of them once
   assert.equal(r.store.pendingMessages(one[0]).length + r.store.pendingMessages(two[0]).length, 0);
   const said = r.said(one[1].id);
   assert.equal(said[0]!.text, "你们俩分一下工", "the words are stored as typed; the quote is a column");
-  assert.equal(said[0]!.quotes[0]!.comment, "这里");
+  assert.equal(said[0]!.quotes[0]!.comment, "当前");
   await r.close();
 });
 

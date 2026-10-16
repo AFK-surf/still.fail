@@ -540,7 +540,7 @@ sim("a_try_not_answered_makes_the_next_go_on_an_endpoint_bound_anew", async (s) 
     () => null,
     (e) => e as CoreError,
   );
-  assert.equal(error?.message, "连不上这台 station：没有回应");
+  assert.equal(error?.message, "无法连接此 station：无响应");
   const link = await s.run(mesh.link(station.id(), grants("ok", { n: 0 })));
   assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
   // Another endpoint (other sockets), the same device.

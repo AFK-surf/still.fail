@@ -64,7 +64,7 @@ class AgentSheetTest {
     private fun agent(running: Boolean, left: Long = 72, notes: List<AgentCardNote> = emptyList()) = ChatAgent(
         session = Session(
             key = key, runtime = "claude", process = if (running) "running" else "warm", pending = 0,
-            statusText = if (running) "进行中" else "做完了", tone = if (running) "accent" else "green", mark = if (running) "run" else null,
+            statusText = if (running) "进行中" else "已完成", tone = if (running) "accent" else "green", mark = if (running) "run" else null,
             titleText = "修一下登录", agentText = name, model = "opus", modelName = "Opus 5.5", effort = "high", maker = Fixtures.anthropic, runtimeText = "Claude Code",
             processText = if (running) "运行中" else "保温中", efforts = listOf("high"),
             time = mapOf("lastActiveAt" to Stamp(Fixtures.NOW.toDouble(), "12 分钟前", "9月30日 10:00", "", true)),
@@ -102,7 +102,7 @@ class AgentSheetTest {
         )
         h.fake.put(topic, Fixtures.chat(talk, thread = thread).copy(agents = listOf(agent(running, left, notes)), people = people, pinned = pinned, xshare = xshare))
         h.fake.put(Topics.history(Fixtures.STATION, key), HistoryView(
-            items = emptyList(), live = emptyList(), edge = "已到 Session 开始处", empty = false, loaded = true,
+            items = emptyList(), live = emptyList(), edge = "已到会话开头", empty = false, loaded = true,
             usage = listOf(UsageLine("模型调用", "142 次"), UsageLine("输入", "1.2M"), UsageLine("其中缓存", "1.1M"), UsageLine("输出", "34K"), UsageLine("缓存命中率", "92%"), UsageLine("上下文", "122K / 200K（61%）"), UsageLine("费用估算", "$4.20")),
         ))
         h.launch(stack, dark = dark)
@@ -163,7 +163,7 @@ class AgentSheetTest {
         rule.onNodeWithContentDescription("对话信息").performClick()
         h.settle()
         rule.onNodeWithContentDescription("重命名").assertIsDisplayed()
-        rule.onNodeWithText("Alice 3 小时前开的 · 2 人").assertIsDisplayed()
+        rule.onNodeWithText("Alice 3 小时前开始 · 2 人").assertIsDisplayed()
         rule.onNodeWithText("做完了 · 12 分钟前").assertIsDisplayed()
         rule.onNodeWithText("固定到列表顶部").assertIsDisplayed()
         rule.onNodeWithText("归档对话").assertIsDisplayed()
@@ -197,9 +197,9 @@ class AgentSheetTest {
         picture(h, if (dark) "chat-info-share-dark" else "chat-info-share")
         rule.onNodeWithText("分享给其他 workspace").performClick()
         h.settle()
-        rule.onNodeWithText("勾选的 workspace 里的 agent 能读这个对话").assertIsDisplayed()
+        rule.onNodeWithText("所选 workspace 中的 agent 可读取此对话").assertIsDisplayed()
         rule.onNodeWithText("个人").performClick()
-        rule.onNodeWithText("可以发消息").performClick()
+        rule.onNodeWithText("可发送消息").performClick()
         h.settle()
         picture(h, if (dark) "share-sheet-dark" else "share-sheet")
         rule.onNodeWithText("完成").performClick()
@@ -221,7 +221,7 @@ class AgentSheetTest {
         rule.onNodeWithText("设计组、Acme 海外 · 只读").assertIsDisplayed()
         rule.onNodeWithText("分享给其他 workspace").performClick()
         h.settle()
-        rule.onNodeWithText("勾选的 workspace 里的 agent 能读这个对话").assertDoesNotExist()
+        rule.onNodeWithText("所选 workspace 中的 agent 可读取此对话").assertDoesNotExist()
         assertTrue(h.fake.calls.none { it.first == "chat.xshare" })
     }
 

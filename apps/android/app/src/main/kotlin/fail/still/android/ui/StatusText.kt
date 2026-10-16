@@ -17,10 +17,10 @@ import androidx.compose.ui.unit.sp
 import fail.still.android.data.t
 
 /** The core's done lead in either language (client/core-ts present.ts: 做完了, 做完了：<why>; Done, Done: <why>). */
-val doneLead = Regex("^(?:做完了(?:：|$)|Done(?:: |$))")
+val doneLead = Regex("^(?:(?:做完了|已完成)(?:：|$)|Done(?:: |$))")
 
 /** The core's waiting lead in either language (present.ts: 等待中, 在等：<what>; Waiting, Waiting: <what>). */
-val waitLead = Regex("^(?:在等：|等待中$|Waiting(?:: |$))")
+val waitLead = Regex("^(?:在等：|等待：|等待中$|Waiting(?:: |$))")
 
 /** Same compact completed/waiting label as web StatusText (a check, an open arc and dots); the explanation and accessible name stay intact. */
 @Composable

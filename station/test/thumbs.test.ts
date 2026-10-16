@@ -227,7 +227,7 @@ test("the files route and a message give what the Rust station gives", async () 
       const want = golden[name]!.thumbnail;
       const original = readFileSync(join(uploads, name));
       // Made on first asking (an image kept before thumbnails were made), then as kept.
-      for (const time of ["made", "kept"]) {
+      for (const time of ["made", "Not suggested"]) {
         const [type, body] = await fileOf(name, true);
         if (want === null) assert.deepEqual([type, sha256(body)], [kinds[name.split(".").at(-1)!], sha256(original)], `${name} (${time}): the image itself`);
         else assert.deepEqual([type, sha256(body), body.length, sizeOf(body)], [want.type, want.sha256, want.bytes, [want.width, want.height]], `${name} (${time})`);

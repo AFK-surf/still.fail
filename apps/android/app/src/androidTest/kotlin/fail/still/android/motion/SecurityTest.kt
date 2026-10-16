@@ -84,7 +84,7 @@ class SecurityTest {
         val h = Harness(rule)
         h.fake.put(Topics.lockDraft(ws), draft())
         h.launch(listOf(Screen.Home, Screen.Settings, Screen.Security, Screen.SecurityOpen))
-        rule.onNodeWithText("版本太旧，不受保护 · 升级后在这里加入").assertIsDisplayed()
+        rule.onNodeWithText("版本过旧，不受保护 · 更新后可在此加入").assertIsDisplayed()
         picture(h, "security-draft")
         rule.onNodeWithText("李二 · still.fail 网页版 · Firefox · Windows").performClick()
         h.settle()
@@ -131,7 +131,7 @@ class SecurityTest {
         val h = Harness(rule)
         h.fake.put(Topics.lock(ws), off().copy(locked = true, me = me.copy(confirmed = false, waiting = true)))
         h.launch(listOf(Screen.Home))
-        rule.onNodeWithText("等待确认这台设备").assertIsDisplayed()
+        rule.onNodeWithText("等待确认此设备").assertIsDisplayed()
         rule.onNodeWithText("SZN-LYA").assertIsDisplayed()
         picture(h, "security-waiting")
     }

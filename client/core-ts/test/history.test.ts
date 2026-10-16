@@ -110,7 +110,7 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
   assert.equal(g.rows[2].content.meta, "进行中");
   assert.deepEqual(items[1].entries, [1, 6]);
   assert.deepEqual([items[2].body.content.block, items[2].body.content.place.name, items[2].body.content.ends], [true, "#ops", "human"]);
-  assert.deepEqual([items[3].body.content.text, items[3].body.content.ends], ["标记为做完了", "done"]);
+  assert.deepEqual([items[3].body.content.text, items[3].body.content.ends], ["标记为已完成", "done"]);
   assert.deepEqual(items[0].turn, { text: "3 步 · 发出 1 条" });
   const waits = (a: string, next: string | null) => {
     const timeline: J[] = [{ kind: "tool_call", tool: "mcp__ember__chat_state", text: a, at: "2026-09-27T00:00:00.000Z" }];
@@ -130,7 +130,7 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
   assert.equal(h.phase.text, "正在启动 Codex");
   assert.equal(h.usage[4].value, "50%");
   assert.equal(h.usageLine, "调用 3 次 · 输入 2K（缓存 50%） · 输出 50");
-  assert.equal(h.edge, "已到 Session 开始处");
+  assert.equal(h.edge, "已到会话开头");
   // A station since tells the context and the cost too.
   const more = (usage: J) => presentHistory({ ...live, usage: { ...live.usage, ...usage } }, cx(threads, members, slack));
   const now2 = more({ contextTokens: 86_000, cost: 3.214, unpricedCalls: 0 });
@@ -138,14 +138,14 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
   assert.equal(now2.usageLine, "调用 3 次 · 输入 2K（缓存 50%） · 输出 50 · 上下文 86K · 约 $3.21");
   assert.equal(more({ contextTokens: 86_000, contextWindow: 258_000, cost: 1, unpricedCalls: 1 }).usage[5].value, "86K / 258K（33%）");
   assert.equal(more({ contextTokens: 1, cost: 1, unpricedCalls: 1 }).usage[6].value, "≥$1.00");
-  assert.equal(more({ contextTokens: 1, cost: 0, unpricedCalls: 3 }).usage[6].value, "模型没有价目");
+  assert.equal(more({ contextTokens: 1, cost: 0, unpricedCalls: 3 }).usage[6].value, "该模型无价目");
 });
 
 test("an_empty_history_says_why", () => {
   const edge = (live: J, started: boolean) => presentHistory(live, { ...cx([], [], []), started }).edge;
   assert.equal(edge({ loaded: false }, true), "正在读取执行历史…");
-  assert.equal(edge({ loaded: true }, false), "运行时还没开始这个会话。");
-  assert.equal(edge({ loaded: true, offline: true }, true), "station 离线，这台设备上还没有这个会话的执行历史。");
+  assert.equal(edge({ loaded: true }, false), "运行时尚未开始此会话");
+  assert.equal(edge({ loaded: true, offline: true }, true), "station 离线，此设备上暂无该会话的执行历史");
 });
 
 test("a_timeline_loaded_from_further_on_counts_entries_from_the_transcripts_start", () => {
@@ -207,7 +207,7 @@ test("each_prompt_that_woke_the_agent_begins_a_turn_saying_when_and_what_it_did"
   const items = presentHistory({ loaded: true, timeline }, { ...cx([], [], []), now: at("2026-09-28T04:00:00.000Z") }).items;
   assert.deepEqual(items.map((i: J) => i.body.kind), ["group", "received", "group", "received", "group", "post", "received", "mark", "text"]);
   // A page that begins mid-turn has no turn for what came before its first prompt; a sub-agent's prompt begins none.
-  assert.deepEqual(items.map((i: J) => i.turn === undefined ? null : i.turn.text), [null, "2 步 · 发出 1 条", null, null, null, null, "没发消息", null, null]);
+  assert.deepEqual(items.map((i: J) => i.turn === undefined ? null : i.turn.text), [null, "2 步 · 发出 1 条", null, null, null, null, "未发消息", null, null]);
   // Said in the viewer's time (UTC+8 here): today's by its clock alone, an earlier day's with its date.
   assert.deepEqual([items[1].turn.at, items[1].turn.time], [at("2026-09-27T01:02:00.000Z"), "9/27 09:02"]);
   assert.equal(items[6].turn.time, "11:00");
@@ -215,7 +215,7 @@ test("each_prompt_that_woke_the_agent_begins_a_turn_saying_when_and_what_it_did"
   assert.equal(items[5].body.content.ends, "done");
   assert.equal(items[7].body.content.ends, "waiting");
   const state = (kind: string) => presentHistory({ loaded: true, timeline: [{ kind: "tool_call", tool: "mcp__stillfail__chat_state", text: `{"kind":"${kind}"}` }] }, cx([], [], [])).items[0].body.content;
-  assert.deepEqual([state("all_done").ends, state("need_human").ends, state("need_human").text, state("odd").ends], ["done", "human", "停下来等人处理", undefined]);
+  assert.deepEqual([state("all_done").ends, state("need_human").ends, state("need_human").text, state("odd").ends], ["done", "human", "已暂停，等待人工处理", undefined]);
   const post = presentHistory({ loaded: true, timeline: [{ kind: "tool_call", tool: "mcp__stillfail__chat_post", text: '{"to":"x","text":"t"}' }] }, cx([], [], [])).items[0].body.content;
   assert.equal(post.ends, undefined);
 });

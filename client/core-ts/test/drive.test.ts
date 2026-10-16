@@ -61,7 +61,7 @@ test("a folder the station refuses says why, though one was held", async () => {
   const { host, core } = await started();
   let gone = false;
   stationReplies(host, (req) =>
-    req.url.includes("/admin/api/drive/list?") ? (gone ? status(404, { error: "没有这个文件或文件夹", code: "not_found" }) : folder([["a.txt", false, 1]], 1)) : undefined,
+    req.url.includes("/admin/api/drive/list?") ? (gone ? status(404, { error: "文件或文件夹不存在", code: "not_found" }) : folder([["a.txt", false, 1]], 1)) : undefined,
   );
   const ui = core.connect();
   subscribe(core, ui, 1, { topic: "drive", station: ST, root: ROOT, path: "Season 1" });
@@ -72,7 +72,7 @@ test("a folder the station refuses says why, though one was held", async () => {
   const emitted = host.takeEmitted();
   assert.ok(answers(emitted, 2)?.ok !== undefined);
   const error = emitted.map(([, m]) => m as any).filter((m) => m.id === 1 && "error" in m).at(-1);
-  assert.equal(error?.error.message, "没有这个文件或文件夹");
+  assert.equal(error?.error.message, "文件或文件夹不存在");
   core.close();
 });
 
@@ -111,7 +111,7 @@ test("an upload's parts go with where they start; a gap answers with what the st
     if (req.method !== "PUT" || !req.url.includes("/admin/api/drive/upload?")) return undefined;
     const q = new URL(req.url).searchParams;
     const offset = Number(q.get("offset"));
-    if (offset > have) return status(409, { error: "上传断了，要从头传", code: "upload_lost", have });
+    if (offset > have) return status(409, { error: "上传中断，需重新上传", code: "upload_lost", have });
     have = offset + (req.body?.length ?? 0);
     return have === Number(q.get("total")) ? { have, entry: { name: "new.mp4", dir: false, size: have, mtime: 1, type: "video/mp4" } } : { have, entry: null };
   });

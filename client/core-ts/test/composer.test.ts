@@ -601,7 +601,7 @@ test("a_station_file_is_copied_among_its_uploads_not_sent_up_and_goes_with_the_m
   (t.core.inner.stations.requests as J).uploadPart = () => { parts++; return Effect.fail(new CoreError("upload", "not this way")); };
   (t.core.inner.stations.requests as J).driveStage = (_addr: unknown, root: string, path: string) => {
     asked.push([root, path]);
-    return path === "gone.txt" ? Effect.fail(new CoreError("http_404", "没有这个文件或文件夹", 404)) : Effect.succeed({ name: "cut.mp4", path: "/data/uploads/2026-cut.mp4", size: 3 });
+    return path === "gone.txt" ? Effect.fail(new CoreError("http_404", "文件或文件夹不存在", 404)) : Effect.succeed({ name: "cut.mp4", path: "/data/uploads/2026-cut.mp4", size: 3 });
   };
   await t.watch(1, "ws/st:k");
   await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [{ id: "d1", name: "cut.mp4", size: 3, drive: { root: "/Users/me", path: "Movies/cut.mp4" } }] });
@@ -612,7 +612,7 @@ test("a_station_file_is_copied_among_its_uploads_not_sent_up_and_goes_with_the_m
   assert.equal((await Effect.runPromise(t.core.inner.composers.uploaded("ws/st", [{ id: "d1", name: "cut.mp4" }])))[0].path, "/data/uploads/2026-cut.mp4");
   // One the station cannot copy says why, in its place.
   await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [{ id: "d2", name: "gone.txt", size: 1, drive: { root: "/Users/me", path: "gone.txt" } }] });
-  assert.equal(v(t.values, 1).files[1].error, "没有这个文件或文件夹");
+  assert.equal(v(t.values, 1).files[1].error, "文件或文件夹不存在");
   t.core.close();
 });
 
