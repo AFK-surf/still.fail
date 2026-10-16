@@ -2,7 +2,8 @@
 // runtime and its loop (tasks posted to it, timers due, microtasks drained after each); the core's script
 // (client/core-ts hosts/hermes.ts, as bytecode) gets `__native`, whose calls go to the Rust shell (client/shell: HTTP,
 // still.fail cloud's socket, files and core.db, TCP, iroh) and whose answers come back as tasks; what the core says to
-// the app goes to Kotlin (HermesEngine.kt) through JNI. A JS error that escapes, or a bug the core reports, ends the
+// the app goes to Kotlin (HermesEngine.kt) through JNI. The calls for what is kept sealed (`secure.*`: the Keystore, and
+// the prompt for the person) go to Kotlin instead of the shell (SecureStore.kt), answered through `complete`. A JS error that escapes, or a bug the core reports, ends the
 // core as a panic ended the Rust one: `{"fatal": …}`, and the app starts another.
 #include <jni.h>
 #include <android/log.h>
@@ -192,6 +193,32 @@ class Engine {
     if (e->ExceptionCheck()) e->ExceptionClear();
   }
 
+  /// A `secure.*` call, to Kotlin (Engine.kt `onSecure`): it answers on its own threads, through HermesNative.complete.
+  void secure(uint64_t id, const std::string& op, const std::string& json, const uint8_t* data, size_t size, bool hasBytes) {
+    JNIEnv* e = env();
+    if (!onSecure_) {
+      jclass cls = e->GetObjectClass(listener_);
+      onSecure_ = e->GetMethodID(cls, "onSecure", "(JLjava/lang/String;[B[B)V");
+      e->DeleteLocalRef(cls);
+    }
+    jstring name = e->NewStringUTF(op.c_str());
+    jbyteArray head = e->NewByteArray(jsize(json.size()));
+    e->SetByteArrayRegion(head, 0, jsize(json.size()), reinterpret_cast<const jbyte*>(json.data()));
+    jbyteArray bytes = nullptr;
+    if (hasBytes) {
+      bytes = e->NewByteArray(jsize(size));
+      if (size > 0) e->SetByteArrayRegion(bytes, 0, jsize(size), reinterpret_cast<const jbyte*>(data));
+    }
+    e->CallVoidMethod(listener_, onSecure_, jlong(id), name, head, bytes);
+    e->DeleteLocalRef(name);
+    e->DeleteLocalRef(head);
+    if (bytes) e->DeleteLocalRef(bytes);
+    if (e->ExceptionCheck()) {
+      e->ExceptionClear();
+      completed(id, "", "the app did not take " + op, "", false);
+    }
+  }
+
   /// What the core says to the app with bytes beside it (a screen view's frame: client/core-ts hosts/bridge.ts
   /// emitBytes): the JSON without them, and the bytes copied once, straight from the JS heap into a Java array.
   void sayBytes(const std::string& json, const uint8_t* data, size_t size) {
@@ -227,7 +254,17 @@ class Engine {
       uint64_t id = uint64_t(a[0].asNumber());
       std::string op = a[1].asString(rt).utf8(rt);
       std::string json = a[2].asString(rt).utf8(rt);
-      if (n > 3 && a[3].isObject() && a[3].asObject(rt).isArrayBuffer(rt)) {
+      bool hasBytes = n > 3 && a[3].isObject() && a[3].asObject(rt).isArrayBuffer(rt);
+      if (op.rfind("secure.", 0) == 0) {
+        if (hasBytes) {
+          jsi::ArrayBuffer b = a[3].asObject(rt).getArrayBuffer(rt);
+          secure(id, op, json, b.data(rt), b.size(rt), true);
+        } else {
+          secure(id, op, json, nullptr, 0, false);
+        }
+        return jsi::Value::undefined();
+      }
+      if (hasBytes) {
         jsi::ArrayBuffer b = a[3].asObject(rt).getArrayBuffer(rt);
         sf_shell_call(shell_, id, op.c_str(), reinterpret_cast<const uint8_t*>(json.data()), json.size(), b.data(rt), b.size(rt), 1);
       } else {
@@ -377,6 +414,7 @@ class Engine {
   jobject listener_;
   jmethodID onBytes_ = nullptr;
   jmethodID onFrame_ = nullptr;
+  jmethodID onSecure_ = nullptr;
   std::string script_, url_, dataDir_, cloudOrigin_;
   bool beta_;
   void* shell_ = nullptr;
@@ -426,6 +464,17 @@ extern "C" JNIEXPORT jlong JNICALL Java_fail_still_core_HermesNative_connect(JNI
 
 extern "C" JNIEXPORT void JNICALL Java_fail_still_core_HermesNative_receive(JNIEnv* env, jobject, jlong handle, jlong client, jstring json) {
   reinterpret_cast<Engine*>(handle)->receive(client, utf8(env, json));
+}
+
+/// Kotlin's answer to a `secure.*` call (Engine.kt): `error` null when it succeeded. Never after `close`.
+extern "C" JNIEXPORT void JNICALL Java_fail_still_core_HermesNative_complete(JNIEnv* env, jobject, jlong handle, jlong id, jstring json, jstring error, jbyteArray bytes) {
+  std::string data;
+  if (bytes) {
+    jsize n = env->GetArrayLength(bytes);
+    data.resize(size_t(n));
+    env->GetByteArrayRegion(bytes, 0, n, reinterpret_cast<jbyte*>(data.data()));
+  }
+  reinterpret_cast<Engine*>(handle)->completed(uint64_t(id), json ? utf8(env, json) : std::string(), error ? utf8(env, error) : std::string(), std::move(data), bytes != nullptr);
 }
 
 extern "C" JNIEXPORT void JNICALL Java_fail_still_core_HermesNative_close(JNIEnv*, jobject, jlong handle) {

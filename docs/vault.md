@@ -233,9 +233,23 @@ agent → station（MCP 工具，在 `stillfail` 服务器里）：
 
 ### 设备上的钥匙
 
-- Host 加 `secureGet/secureSet/secureDelete(key, {user: boolean})`：安卓用 Keystore 包一层（`user: true` 时要求生物识别或屏幕锁，`setUserAuthenticationRequired`），macOS 钥匙串，Windows/Linux 用 Electron `safeStorage`。网页 host 没有这三个方法。
-- 存的东西：`vault-box`（X25519 私钥，`user: true`）、`lock-signer`（从现在的普通文件挪进来，`user: false`，老文件读到后迁移并删除）。
+- Host 加 `secureGet(key, {user, reason?})`、`secureSet(key, value, {user})`、`secureDelete(key)`（`client/core-ts/src/host.ts`）。只有 app 的 host 有：安卓（`BridgeHost` 的 `secure.*`，由 Kotlin 答）和桌面（`NodeHost` 带 `sealer`，问 Electron 主进程）；网页 host 没有这三个方法。
+- `user: true`：读的时候要人在（生物识别或屏幕锁；Mac 上有 Touch ID 就用 Touch ID），`reason` 显示在提示里；`user: false`：系统加密保存，读时不问人。值按存的时候的 `user` 读：用另一种 `user` 读一律失败，所以要人在的值不会被不问人读出来。
+- 失败时 HostError 的 message 就是代码：`user_cancelled`（人取消了）、`no_device_lock`（手机没设屏幕锁，存不了也读不了 `user: true` 的值）、`not_in_front`（app 没有界面在前台，没处弹提示）、`key_invalidated`（安卓：屏幕锁被关掉过，`user: true` 的钥匙作废，存的值再也读不出）。
+- 存的东西：`vault-box`（X25519 私钥，`user: true`）、`lock-signer`（`user: false`）。`lock-signer` 已经挪进来（`lock.ts` 的 `Signer`）：host 有 `secureSet` 时先读密封的；没有而普通文件里有，就封进去、读回来核对一样后删掉文件；新建的直接封。没有 `secure*` 的 host 照旧用普通文件。
 - 批准一次申请、打开一个条目都要过一次 `user: true` 的读；解开的库钥匙在内存里缓存 5 分钟。
+
+**安卓**（`apps/android/core/.../SecureStore.kt`）：`secure.*` 不经 Rust shell，`engine.cpp` 把它们交给 Kotlin（`HermesListener.onSecure`），Kotlin 在自己的线程做完后用 `HermesNative.complete` 回答。每个值一个文件，在 app 私有目录 `files/stillfail-sealed/<key>`（不进备份）。Keystore 里两把钥匙，有 StrongBox 就放 StrongBox：
+
+- `user: false`：AES-256-GCM，不要求认证。
+- `user: true`：RSA-2048（OAEP，SHA-256），私钥每次使用都要认证（Android 11 起 `setUserAuthenticationParameters(0, BIOMETRIC_STRONG | DEVICE_CREDENTIAL)`，用 `BiometricPrompt` 的 CryptoObject 解锁这一次解密；Android 10 不支持按次的屏幕锁认证，改成先弹提示、再在 10 秒内用钥匙）。值用一把新的 AES 钥匙加密，AES 钥匙用公钥包起来，所以**存的时候不用问人**，只有读的时候问。新录指纹不作废这把钥匙（能解锁手机的人本来就能录指纹）；关掉屏幕锁会作废它。
+- 提示用系统的 `android.hardware.biometrics.BiometricPrompt`（minSdk 29 就有），不用 androidx.biometric：后者要 `FragmentActivity`，而 app 的界面都是 `ComponentActivity`。提示弹在前台的那个 activity 上（`Foreground` 从 `StillFailCore.start` 起记着），标题是 app 名，`reason` 是说明。
+- 文件格式：版本字节 `1`、`user` 字节，`user: false` 接 IV(12)‖GCM 输出；`user: true` 接包好的钥匙长度(2，大端)‖包好的钥匙‖IV(12)‖GCM 输出。附加数据 `"stillfail-sealed/1\0<key>\0<0|1>"`，文件挪到别的 key 名下、或改了 `user` 字节都打不开。
+
+**桌面**（`apps/desktop/src/secure.ts`）：core 在 utility process 里跑，拿不到 `safeStorage`，所以 `core.ts` 经 `process.parentPort` 问主进程（`{sealed: {id, op, key, user, reason, value}}`，字节用 base64）。主进程用 `safeStorage` 加密，每个值一个文件 `userData/sealed/<key>`（0600）：`"SFS1"`、`user` 字节、`safeStorage.encryptString("<0|1>:<值的 base64url>")`；`user` 在密文里也有一份，改外面那个字节跳过提示会打不开。`safeStorage` 的钥匙在 macOS 钥匙串里、Windows 用 DPAPI；Linux 上只有明文兜底（`basic_text`）时当作没有，core 照旧用普通文件。
+
+- macOS 上 `user: true` 的值读之前先 `systemPreferences.promptTouchID(reason)`（`canPromptTouchID()` 为真时；系统显示为「“still.fail”想要<reason>」，所以 `reason` 写成动词短语），取消或失败回 `user_cancelled`；一次只弹一个。
+- Windows、Linux、没有 Touch ID 的 Mac 没处弹提示，`user: true` 只等于「登录了这台电脑的系统账号」，不多防什么。Mac 上的 Touch ID 也只是 app 自己的检查，不是钥匙串强制的：同一系统用户下能冒充 app 签名去读钥匙串的程序可以绕过它（要钥匙串强制，得用带 `kSecAccessControlBiometryAny` 的原生钥匙串项，需要 keychain-access-groups 授权，这一期不做）。
 
 ## 分期
 

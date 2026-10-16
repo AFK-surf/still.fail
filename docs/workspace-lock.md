@@ -75,7 +75,7 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 
 - station：`<data>/mesh/lock.json`（`{entries}`），`<data>/mesh/lock-pending.json`（登记时给的哈希）。cloud.json 不变。lock.json 坏了不回退到信任 cloud，而是谁都不让进，直到 `lock reset`。
 - cloud：`lock_entries`、`devices`、`lock_requests` 三张新表（`CREATE TABLE IF NOT EXISTS`）。
-- core：`lock-signer`（app 的签名钥匙，32 字节 Ed25519 种子；只有 app 的 host 有 `appKeys`）。
+- core：`lock-signer`（app 的签名钥匙，32 字节 Ed25519 种子；只有 app 的 host 有 `appKeys`）。host 能密封（`secureSet`）时存在系统钥匙串里（安卓 Keystore、桌面 `safeStorage`，`user: false`，见 `docs/vault.md`「设备上的钥匙」），老版本留下的普通文件第一次读到时封进去并删掉；不能密封的 host 照旧是 app 数据目录里的文件。
 
 ## 兼容
 
@@ -99,4 +99,4 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 
 ## 还没做
 
-签名钥匙放进系统钥匙串（现在是 app 数据目录里的文件）；passkey 的注册和签名；新设备加入、快到期时用系统通知推送到这个人的其他设备（现在是 app 开着时弹窗，快到期只在页面里显示）。web 发版签名和多地比对哈希另开。
+passkey 的注册和签名；新设备加入、快到期时用系统通知推送到这个人的其他设备（现在是 app 开着时弹窗，快到期只在页面里显示）。web 发版签名和多地比对哈希另开。

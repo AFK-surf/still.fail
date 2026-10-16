@@ -68,7 +68,14 @@ class StillFailCore internal constructor(
          * One per process. `cloudOrigin` e.g. "https://app.still.fail" (the emulator reaches a dev cloud at
          * http://10.0.2.2:8787); `beta`: the beta app's core (client/core-ts Host.beta).
          */
-        suspend fun start(context: Context, cloudOrigin: String, beta: Boolean = false): StillFailCore = started.withLock {
+        suspend fun start(context: Context, cloudOrigin: String, beta: Boolean = false): StillFailCore {
+            // Before anything waits: the activity that starts the core is still being made, and its prompts
+            // (SecureStore) go over it once it is on screen.
+            Foreground.watch(context)
+            return startOnce(context, cloudOrigin, beta)
+        }
+
+        private suspend fun startOnce(context: Context, cloudOrigin: String, beta: Boolean): StillFailCore = started.withLock {
             instance?.let { core ->
                 require(core.cloudOrigin == cloudOrigin) { "the core already runs against ${core.cloudOrigin}" }
                 return core

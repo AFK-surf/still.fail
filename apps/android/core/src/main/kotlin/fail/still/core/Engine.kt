@@ -2,6 +2,14 @@ package fail.still.core
 
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+
+/** Where `secure.*` calls are done: off the engine's thread (the Keystore is slow; a prompt waits on the person). */
+private val sealedScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 /** One running core as [StillFailCore] sees it: a client id, JSON messages each way. Tests put a fake in its place. */
 internal interface Engine {
@@ -23,6 +31,11 @@ internal interface HermesListener {
     fun onBytes(json: ByteArray)
     /** A message with bytes beside it (`__native.emitBytes`): its JSON without them, and the bytes as they are. */
     fun onFrame(json: ByteArray, bytes: ByteArray)
+    /**
+     * A `secure.*` call (client/core-ts hosts/bridge.ts): its JSON as UTF-8, and the bytes it carries (null: none).
+     * Answered later, on another thread, through [HermesNative.complete].
+     */
+    fun onSecure(id: Long, op: String, json: ByteArray, bytes: ByteArray?)
 }
 
 /** The engine's JNI (cpp/engine.cpp): Hermes running the core in TypeScript, its IO in the Rust shell (client/shell). */
@@ -35,6 +48,8 @@ internal object HermesNative {
     external fun connect(handle: Long): Long
     external fun receive(handle: Long, client: Long, json: String)
     external fun close(handle: Long)
+    /** The answer to a call the engine handed to Kotlin ([HermesListener.onSecure]): `error` null when it succeeded. */
+    external fun complete(handle: Long, id: Long, json: String?, error: String?, bytes: ByteArray?)
 }
 
 /** The core's script as the app carries it (apps/android/build.py: client/core-ts as Hermes bytecode). */
@@ -50,14 +65,38 @@ internal fun hermesEngines(
     scriptOf: () -> ByteArray = { context.assets.open(CORE_SCRIPT).use { it.readBytes() } },
 ): EngineFactory {
     val script by lazy(scriptOf)
+    val sealed by lazy { SecureStore.of(context) }
     return { deliver ->
         object : Engine {
+            /** Answers to `secure.*` go only to an engine not closed yet: [close] takes this before it ends the engine. */
+            private val answering = Any()
+            private var closed = false
+            private val started = CompletableDeferred<Long>()
+
             // A message the app fails on is said in the log and dropped: an exception thrown back into the engine's
             // thread through JNI aborts the whole app.
             private val handle: Long = HermesNative.start(script, CORE_SCRIPT, dataDir, cloudOrigin, beta, object : HermesListener {
                 override fun onBytes(json: ByteArray) = said(json, null)
                 override fun onFrame(json: ByteArray, bytes: ByteArray) = said(json, bytes)
-            })
+                override fun onSecure(id: Long, op: String, json: ByteArray, bytes: ByteArray?) {
+                    sealedScope.launch {
+                        val answer = try {
+                            Result.success(sealed.answer(op, String(json, Charsets.UTF_8), bytes))
+                        } catch (e: Throwable) {
+                            Result.failure(e)
+                        }
+                        // The call may come before `start` returned the engine's handle.
+                        val at = started.await()
+                        synchronized(answering) {
+                            if (closed) return@launch
+                            answer.fold(
+                                { (head, body) -> HermesNative.complete(at, id, head, null, body) },
+                                { e -> HermesNative.complete(at, id, null, SecureStore.errorText(e), null) },
+                            )
+                        }
+                    }
+                }
+            }).also { started.complete(it) }
 
             private fun said(json: ByteArray, bytes: ByteArray?) {
                 try {
@@ -68,7 +107,10 @@ internal fun hermesEngines(
             }
             override fun connect() = HermesNative.connect(handle)
             override fun receive(client: Long, json: String) = HermesNative.receive(handle, client, json)
-            override fun close() = HermesNative.close(handle)
+            override fun close() {
+                synchronized(answering) { closed = true }
+                HermesNative.close(handle)
+            }
         }
     }
 }
