@@ -35,8 +35,10 @@ function Run-Node([string] $name, [string] $js, [string[]] $more) {
   if ($p.ExitCode -ne 0) { throw "$name exited $($p.ExitCode)" }
 }
 
-# The addon: napi-rs finds Node-API in the executable (scripts/native.ts noLibnode).
+# The addon: napi-rs finds Node-API in the executable (scripts/native.ts noLibnode). Carried once, in the station
+# (apps/desktop/build.sh); beside it only in an app built without one.
 $mesh = Join-Path $resources "mesh.node"
+if (-not (Test-Path $mesh)) { $mesh = Join-Path $resources "station\station\mesh.node" }
 Run-Node "mesh" "const m = require(process.argv[2]); console.log('mesh.node:', Object.keys(m).sort().join(' '));" @($mesh)
 $controls = Join-Path $resources "window-controls.node"
 Run-Node "window-controls" "const m = require(process.argv[2]); const assert = require('node:assert/strict'); assert.equal(typeof m.setBounds, 'function'); assert.equal(typeof m.detach, 'function'); assert.throws(() => m.setBounds(Buffer.alloc(8), 0, 0, 32, 32)); console.log('window-controls.node: loaded, rejects foreign/invalid HWND');" @($controls)

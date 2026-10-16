@@ -5,7 +5,8 @@
 # .dat, the web app's assets, which the app's own signature seals anyway); signing each, with Apple's timestamp, made a
 # release take some fifty minutes.
 # Into out/mac-arm64/still.fail.app: the core (client/core-ts, bundled as build/app/core-ts.js) with its iroh
-# (station/native/mesh's addon) as build/mesh.node, whether the system lets the app notify (notify-permission's addon)
+# (station/native/mesh's addon: the station's own, build/station/stillfail/station/mesh.node; build/mesh.node only
+# without a station, SKIP_STATION), whether the system lets the app notify (notify-permission's addon)
 # as build/notify-permission.node, the web app (`pnpm run build:cloud`, dist/cloud-web) as build/web, a station (the
 # station in TypeScript with its Node and native parts: scripts/station-bundle.sh) as build/station, the app's own code
 # as build/app, then electron-builder puts them together.
@@ -63,7 +64,8 @@ if [ -z "${SKIP_STATION:-}" ]; then
   if [ -f "$posthog" ]; then STILLFAIL_POSTHOG="$posthog" sh "$root/scripts/station-bundle.sh" "$here/build/station" "$target"
   else sh "$root/scripts/station-bundle.sh" "$here/build/station" "$target"; fi
 fi
-cp "$mesh" "$here/build/mesh.node"
+# The core's iroh is the station's addon, the same file (~15 MB on the Mac, 25 on Windows): carried once.
+[ -z "${SKIP_STATION:-}" ] || cp "$mesh" "$here/build/mesh.node"
 [ -z "$win" ] || cp "$controls" "$here/build/window-controls.node"
 cp "$notify" "$here/build/notify-permission.node"
 mkdir -p "$here/build/dock" && [ -n "$win" ] || cp "$dock" "$here/build/dock/StillfailDock"

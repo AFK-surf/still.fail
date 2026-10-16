@@ -159,10 +159,19 @@ async function migrateOrigin(): Promise<void> {
 
 let core: UtilityProcess | null = null;
 
+/**
+ * The core's iroh: the station's addon, carried once in the station the app carries (build.sh); an app without a
+ * station (SKIP_STATION) carries it beside it.
+ */
+const meshAddon = () => {
+  const alone = join(resources, "mesh.node");
+  return existsSync(alone) ? alone : join(resources, app.isPackaged ? "station" : "station/stillfail", "station", "mesh.node");
+};
+
 /** The core's process, started when a page first asks for it and again after it exited. */
 function coreProcess(): UtilityProcess {
   if (core) return core;
-  const child = utilityProcess.fork(join(__dirname, "core.js"), [join(app.getPath("userData"), "core"), CLOUD_ORIGIN, join(resources, "mesh.node"), BETA ? "beta" : ""], { serviceName: `${NAME} core` });
+  const child = utilityProcess.fork(join(__dirname, "core.js"), [join(app.getPath("userData"), "core"), CLOUD_ORIGIN, meshAddon(), BETA ? "beta" : ""], { serviceName: `${NAME} core` });
   child.on("exit", (code) => {
     if (core === child) core = null;
     dropOwnLink(t("desktop.core.exited"));
