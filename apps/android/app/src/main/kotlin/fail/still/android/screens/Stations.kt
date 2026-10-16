@@ -56,6 +56,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.sp
 import fail.still.android.LocalApp
 import fail.still.android.R
@@ -357,12 +360,40 @@ internal fun ChatStationChip(address: String) {
     val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(address.substringBefore('/')))
     val list = stations.value ?: return
     val s = list.firstOrNull { it.station == address } ?: return
-    StationTag(s.name, s.emoji, s.icon, Modifier.clickable { openStationPeek(app, address) })
+    StationTag(s.name, s.emoji, s.icon, Modifier.clickable { openStationPeek(app, address) }, via = stationVia(s))
+}
+
+/**
+ * How this device reaches a station, as a dot where a chat names it (web StationLink.tsx): straight there (green),
+ * through a relay (amber), away (red), else coming back or a way still being chosen (a grey ring); null before it is known.
+ */
+internal fun stationVia(s: StationView): String? = when {
+    !s.online -> "offline"
+    s.reconnecting == true -> "waiting"
+    else -> when (s.net?.via) { "direct" -> "direct"; "relay" -> "relay"; "choosing" -> "waiting"; else -> null }
+}
+
+/** The dot of [stationVia], `size` across with a ring of the ground round it when [ring] is given (on a tile's corner). */
+@Composable
+internal fun StationViaDot(via: String, size: Dp, ring: Dp = 0.dp, modifier: Modifier = Modifier) {
+    val c = C
+    Canvas(modifier.size(size)) {
+        val r = this.size.minDimension / 2
+        if (ring > 0.dp) drawCircle(c.bg, r)
+        val inner = r - ring.toPx()
+        when (via) {
+            "direct" -> drawCircle(c.green, inner)
+            "relay" -> drawCircle(c.warn, inner)
+            "offline" -> drawCircle(c.red, inner)
+            else -> { val w = 1.5.dp.toPx(); drawCircle(c.muted, inner - w / 2, style = Stroke(w)) }
+        }
+    }
 }
 
 /**
  * A chat's first agent in its bar with the station it runs on, one tile (web ui.tsx AgentMark with children, as the phone
- * web's bar): the maker's square, then the station's icon, or its name where it has none. One tap for all of it (halves
+ * web's bar): the maker's square, then the station's icon, or its name where it has none; the agent's state on the
+ * maker's corner, how the station is reached on the tile's (StationViaDot). One tap for all of it (halves
  * this small are not told apart under a finger): the agent's card, which leads on to the station's. Until the station
  * is known, the agent's mark alone.
  */
@@ -388,20 +419,22 @@ internal fun AgentStationMark(address: String, who: String, maker: Maker?, runti
                 else Text(s.name, fontSize = 12.sp, lineHeight = 14.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        // Further out on the corner than on a mark alone, clear of the station's part.
-        if (state != null) AgentStateMark(state, C.bg, Modifier.align(Alignment.BottomEnd).offset(7.dp, 3.dp))
+        // The agent's state on the maker's corner; the station's on the tile's, how it is reached.
+        if (state != null) AgentStateMark(state, C.bg, Modifier.align(Alignment.BottomStart).offset(13.dp, 3.dp))
+        stationVia(s)?.let { StationViaDot(it, 10.dp, 2.dp, Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp)) }
     }
 }
 
-/** A station named in a small outlined tag, its icon before its name: in a chat's bar (ChatStationChip) and on a chat's row in the lists. */
+/** A station named in a small outlined tag, its icon before its name (in a chat's bar, how it is reached as a dot before both): in a chat's bar (ChatStationChip) and on a chat's row in the lists. */
 @Composable
-internal fun StationTag(name: String, emoji: String?, icon: String?, modifier: Modifier = Modifier) {
+internal fun StationTag(name: String, emoji: String?, icon: String?, modifier: Modifier = Modifier, via: String? = null) {
     val shape = RoundedCornerShape(50)
     Row(
         Modifier.widthIn(max = 104.dp).clip(shape).border(1.dp, C.line, shape).then(modifier)
             .padding(horizontal = 8.dp, vertical = 2.dp).semantics { contentDescription = name },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        if (via != null) StationViaDot(via, 7.dp)
         if (hasStationMark(emoji, icon)) StationMark(emoji, icon, 12.dp, C.muted)
         Text(name, fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }

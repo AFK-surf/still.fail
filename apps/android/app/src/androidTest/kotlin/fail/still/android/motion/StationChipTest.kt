@@ -34,7 +34,8 @@ import java.io.FileOutputStream
 /**
  * A chat's bar names the station it runs on: on its first agent's tile (the station's icon, or its name where it has
  * none), one tap opening the agent's card whose station row opens the station's; or as a tag of its own while the chat
- * has no agent, a tap opening the station's card. `shots` pictures them (light and dark) into files/shots.
+ * has no agent, a tap opening the station's card; how it is reached a dot on the tile's corner. `shots` pictures them
+ * (light and dark, directly, through a relay, away) into files/shots.
  */
 class StationChipTest {
     @get:Rule val rule: MotionRule = createAndroidComposeRule<ComponentActivity>()
@@ -46,7 +47,7 @@ class StationChipTest {
         meters = listOf(Meter(label = "CPU", short = "CPU", percent = 19, left = 81, level = "ok", value = "19%", remaining = "空闲 81%", big = "81", unit = "%", title = "CPU 空闲", total = "负载 3.0"), Meter(label = "内存", short = "内存", percent = 69, left = 31, level = "ok", value = "69%", remaining = "剩 44.0 G", big = "20", unit = "GB", title = "内存剩", total = "共 64 GB"), Meter(label = "磁盘", short = "磁盘", percent = 85, left = 15, level = "amber", value = "85%", remaining = "剩 300.0 G", big = "300", unit = "GB", title = "磁盘剩", total = "共 2000 GB")),
         identity = "Apple M4 Max · 64 GB · macOS 26.6", details = listOf(HostDetail("主机名", "studio"), HostDetail("芯片", "Apple M4 Max · 16 核 · arm64"), HostDetail("已运行", "1 天 3 小时"), HostDetail("still.fail", "进程占 38 MB")),
     )
-    private val net = StationNet(path = "直连", rtt = NetFigure("12 ms", "ok"), rttHistory = emptyList(), down = "1.2 MB/s", up = "30 KB/s", total = "", downTotal = "212 MB", upTotal = "9.6 MB")
+    private val net = StationNet(path = "直连", via = "direct", rtt = NetFigure("12 ms", "ok"), rttHistory = emptyList(), down = "1.2 MB/s", up = "30 KB/s", total = "", downTotal = "212 MB", upTotal = "9.6 MB")
     private val studio = Fixtures.station.copy(name = "Studio", emoji = "🍎", summary = "1 个 agent 在跑 · Apple M4 Max · 64 GB · macOS 26.6", host = host, net = net)
     private val mini = Fixtures.station.copy(station = "${Fixtures.WS}/mini", id = "mini", name = "Mac mini", emoji = "🐧")
 
@@ -112,6 +113,15 @@ class StationChipTest {
         val h = open(listOf(studio, mini), dark)
         val tag = if (dark) "dark" else "light"
         shot("station-tile-$tag")
+        // How it is reached, a dot on the tile's corner: through a relay, away.
+        rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), listOf(studio.copy(net = net.copy(path = "北京中继", via = "relay")), mini)) }
+        h.settle()
+        shot("station-tile-relay-$tag")
+        rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), listOf(studio.copy(online = false), mini)) }
+        h.settle()
+        shot("station-tile-offline-$tag")
+        rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), listOf(studio, mini)) }
+        h.settle()
         rule.onNodeWithContentDescription(tile).performClick()
         h.settle()
         shot("agent-card-$tag")
