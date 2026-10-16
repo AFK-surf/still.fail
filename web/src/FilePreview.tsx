@@ -94,6 +94,48 @@ const storedName = (a: Attachment) => a.path.split("/").at(-1)!;
 const blobs = new Map<string, Promise<Blob>>();
 const KEEP_BLOBS = 100;
 
+/**
+ * Each file's blob once here, and the one URL every look at it draws from (`users` of it now): one drawn again (its
+ * row made anew as a chat is opened again or scrolled back to) is the same picture, already decoded, from its first
+ * frame, not a placeholder until a new URL loads. Kept as many as the blobs; one in use is not let go.
+ */
+const urls = new Map<string, { blob: Blob; url: string; users: number; unstand: (() => void) | null }>();
+
+/** The URL of `id`'s blob (made the first time), taken by one more user; `whole`: the image a thumbnail stands in for. */
+function takeUrl(id: string, blob: Blob, whole: (() => Promise<Blob>) | null): string {
+  let kept = urls.get(id);
+  if (kept?.blob !== blob) {
+    if (kept) letGo(id, kept);
+    const url = URL.createObjectURL(blob);
+    kept = { blob, url, users: 0, unstand: whole ? standIn(url, whole) : null };
+  }
+  urls.delete(id);
+  urls.set(id, kept);
+  kept.users++;
+  for (const [other, k] of urls) {
+    if (urls.size <= KEEP_BLOBS) break;
+    if (k.users === 0) letGo(other, k);
+  }
+  return kept.url;
+}
+
+function letGo(id: string, kept: { url: string; unstand: (() => void) | null }) {
+  urls.delete(id);
+  kept.unstand?.();
+  URL.revokeObjectURL(kept.url);
+}
+
+/** One user of `url` gone: it stays for the next look (as long as it is among the kept). */
+function dropUrl(id: string, url: string) {
+  const kept = urls.get(id);
+  if (kept?.url === url) kept.users--;
+}
+
+/** Whether `file` is here already, to be drawn at once (as its thumbnail, `thumb`). */
+export function fileHere(station: string, sessionKey: string, file: Attachment, thumb: boolean): boolean {
+  return urls.has(fileId(station, sessionKey, file, thumb));
+}
+
 // How far each whole file on its way has come, and who is watching it.
 const coming = new Map<string, { got: FileProgress | null; watchers: Set<(got: FileProgress) => void> }>();
 
@@ -136,39 +178,48 @@ function fetchFile(api: Api, station: string, sessionKey: string, file: Attachme
 
 type Loaded = { state: "loading"; got?: FileProgress | null } | { state: "error"; message: string } | { state: "ready"; blob: Blob; url: string };
 
-/** A file as a blob and its URL, fetched from the station once and kept while shown; `again`: asked again after it failed. */
+/** A file as a blob and its URL, fetched from the station once and kept; `again`: asked again after it failed. */
 function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb = false, again = 0): Loaded {
   const api = useApi();
   const station = useStation();
   const source = useContext(FileSource);
-  const [loaded, setLoaded] = useState<Loaded>({ state: "loading" });
+  // Here already: ready from the first frame.
+  const [loaded, setLoaded] = useState<Loaded>(() => {
+    const kept = enabled ? urls.get(fileId(station.address, sessionKey, file, thumb)) : undefined;
+    return kept ? { state: "ready", blob: kept.blob, url: kept.url } : { state: "loading" };
+  });
   useEffect(() => {
     if (!enabled) return;
+    const id = fileId(station.address, sessionKey, file, thumb);
     let u: string | null = null;
-    let unstand: (() => void) | null = null;
     let current = true;
+    // A thumbnail stands in for the image: copied in the desktop app, the image itself is (wholeImages.ts).
+    const whole = thumb ? () => fetchFile(api, station.address, sessionKey, file, false, source) : null;
+    const take = (blob: Blob) => {
+      u = takeUrl(id, blob, whole);
+      const url = u;
+      setLoaded((l) => (l.state === "ready" && l.url === url ? l : { state: "ready", blob, url }));
+    };
+    const kept = urls.get(id);
+    if (kept) {
+      take(kept.blob);
+      return () => { if (u) dropUrl(id, u); };
+    }
     setLoaded({ state: "loading" });
     const promise = fetchFile(api, station.address, sessionKey, file, thumb, source);
-    const on = coming.get(fileId(station.address, sessionKey, file, thumb));
+    const on = coming.get(id);
     const watch = (got: FileProgress) => { if (current) setLoaded((l) => (l.state === "loading" ? { state: "loading", got } : l)); };
     if (on) {
       on.watchers.add(watch);
       if (on.got) watch(on.got);
     }
-    promise.then((blob) => {
-      if (!current) return;
-      u = URL.createObjectURL(blob);
-      // A thumbnail stands in for the image: copied in the desktop app, the image itself is (wholeImages.ts).
-      if (thumb) unstand = standIn(u, () => fetchFile(api, station.address, sessionKey, file, false, source));
-      setLoaded({ state: "ready", blob, url: u });
-    }, (error: unknown) => {
+    promise.then((blob) => { if (current) take(blob); }, (error: unknown) => {
       if (current) setLoaded({ state: "error", message: error instanceof Error ? error.message : String(error) });
     });
     return () => {
       current = false;
       on?.watchers.delete(watch);
-      unstand?.();
-      if (u) URL.revokeObjectURL(u);
+      if (u) dropUrl(id, u);
     };
   }, [api, station.address, sessionKey, file.path, enabled, thumb, source, again]);
   return loaded;

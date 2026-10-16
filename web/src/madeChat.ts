@@ -30,8 +30,16 @@ function textAt(el: Element): Typed {
 /** How what arrives slows into place. */
 const EASE = "cubic-bezier(.2, .8, .2, 1)";
 
+/**
+ * An image on its way, drawn as the message draws it (its picture covering its box, object-fit: cover, so cropped by
+ * the same rule at every size), its box going from its thumbnail's to the message's: `rect` and `radius`, the
+ * thumbnail's; `ground`, what the message's box is filled with behind it (seen through a picture's clear parts).
+ */
+interface Picture {
+  key: string; rect: DOMRect; radius: number; stand: HTMLElement; ratio: number;
+  ground?: string;
+}
 /** A first message on its way: the words sent, where they were, until the chat's page takes them. */
-interface Picture { key: string; rect: DOMRect; stand: HTMLElement; img: HTMLImageElement; ratio: number }
 interface Sending { field: HTMLElement; from: Typed; top: number; stand: HTMLElement | null; pictures: Picture[]; release?: (() => void) | undefined }
 let sending: Sending | null = null;
 
@@ -55,19 +63,13 @@ export function sendingFirst(field: HTMLElement, text: string, layer: HTMLElemen
 }
 
 /**
- * How big `ratio`'s picture is drawn in a `width`×`height` box: filling it (cropped), or, `whole`, fitted inside it (a
- * letterboxed image's, Chat.css.ts's `data-letterbox`).
+ * Where an image lands in `to` (its box in a message, at `end`): the whole box; or a letterboxed one's picture, its own
+ * proportions fitted inside it (Chat.css.ts's `data-letterbox`, object-fit: contain).
  */
-function fill(width: number, height: number, ratio: number, whole = false): { width: number; height: number } {
-  const h = (whole ? Math.min : Math.max)(height, width / ratio);
-  return { width: h * ratio, height: h };
-}
-
-/** How `picture` is drawn in its box on its way, `p` (0..1) from its thumbnail's to `to`'s: cropped as there, then as it lands. */
-function fillAt(picture: Picture, to: HTMLElement, end: { width: number; height: number }, p: number): { width: string; height: string } {
-  const a = fill(picture.rect.width, picture.rect.height, picture.ratio);
-  const b = fill(end.width, end.height, picture.ratio, to.dataset.letterbox !== undefined);
-  return { width: `${a.width + (b.width - a.width) * p}px`, height: `${a.height + (b.height - a.height) * p}px` };
+function landsAt(to: HTMLElement, end: DOMRect, ratio: number): { left: number; top: number; width: number; height: number } {
+  if (to.dataset.letterbox === undefined) return { left: end.left, top: end.top, width: end.width, height: end.height };
+  const height = Math.min(end.height, end.width / ratio), width = height * ratio;
+  return { left: end.left + (end.width - width) / 2, top: end.top + (end.height - height) / 2, width, height };
 }
 
 /** `to` given the shape of `from`'s corners (their radius is copied apart): without it a squircle's radius is drawn
@@ -92,18 +94,15 @@ function picturesIn(composer: Element, layer: HTMLElement, z: string): Picture[]
       borderRadius: getComputedStyle(source).borderRadius, zIndex: z, pointerEvents: "none",
     });
     corners(picture, source);
-    // Sized and centred by hand rather than by object-fit: on the way its box changes shape, and where it lands it may
-    // be letterboxed rather than cropped.
     const ratio = img.naturalWidth / img.naturalHeight;
-    const copy = img.cloneNode(true) as HTMLImageElement;
-    const at = fill(rect.width, rect.height, ratio);
-    Object.assign(copy.style, {
-      position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", width: `${at.width}px`,
-      height: `${at.height}px`, maxWidth: "none", maxHeight: "none", display: "block",
-    });
+    // As the thumbnail and the message draw it: covering its box, whatever shape the box has on the way.
+    const copy = document.createElement("img");
+    copy.src = img.currentSrc || img.src;
+    copy.alt = "";
+    Object.assign(copy.style, { width: "100%", height: "100%", objectFit: "cover", display: "block", maxWidth: "none", maxHeight: "none" });
     picture.append(copy);
     layer.append(picture);
-    pictures.push({ key: source.dataset.sendImage!, rect, stand: picture, img: copy, ratio });
+    pictures.push({ key: source.dataset.sendImage!, rect, radius: parseFloat(getComputedStyle(source).borderTopLeftRadius) || 0, stand: picture, ratio });
   }
   return pictures;
 }
@@ -180,6 +179,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
   const moves: Promise<unknown>[] = [transitionLive(go, () => findList()?.querySelector(`.${msgCss.msgMine}`) != null, 480 + wait)];
   let ghost: HTMLElement | null = null;
   let list: HTMLElement | null = null;
+  let following: MutationObserver | null = null;
   // The departing scene responds now, while the first row becomes ready behind it.
   for (const { el, up } of leaving) moves.push(el.animate([
     { opacity: 1, transform: "none" },
@@ -201,7 +201,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
     const frame = into.getBoundingClientRect();
     // Capture image destinations before translating the list itself.
     const destinations = new Map([...first.querySelectorAll<HTMLElement>("[data-send-image]")].map((el) =>
-      [el.dataset.sendImage!, { el, rect: el.getBoundingClientRect(), radius: getComputedStyle(el).borderRadius, corner: getComputedStyle(el).getPropertyValue("corner-shape") }]));
+      [el.dataset.sendImage!, { el, rect: el.getBoundingClientRect(), radius: getComputedStyle(el).borderRadius, corner: getComputedStyle(el).getPropertyValue("corner-shape"), ground: getComputedStyle(el).backgroundColor }]));
     const { from, top } = now;
     const timing = { duration: 480, delay: wait, easing: EASE, fill: "backwards" } as const;
     // The rest of the list comes up with it, out of the composer's top edge: cut there, wherever it has got to.
@@ -237,7 +237,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
       const target = destinations.get(picture.key);
       const covered = [...copy.querySelectorAll<HTMLElement>("[data-send-image]")].find((el) => el.dataset.sendImage === picture.key);
       if (!target || !covered) continue;
-      const end = target.rect;
+      const end = landsAt(target.el, target.rect, picture.ratio);
       covered.style.visibility = "hidden";
       ghost.append(picture.stand);
       Object.assign(picture.stand.style, {
@@ -246,26 +246,48 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
         borderRadius: target.radius,
       });
       picture.stand.style.setProperty("corner-shape", target.corner);
+      // Its box's ground comes in on the way (the thumbnail has none): landed, a picture with clear parts is on it.
+      picture.stand.style.backgroundColor = target.ground;
+      // Its corners from the thumbnail's to the message's, as its box grows.
       moves.push(picture.stand.animate([
-        { transform: `translate(${picture.rect.left - end.left}px, ${picture.rect.top - end.top}px)`, width: `${picture.rect.width}px`, height: `${picture.rect.height}px` },
-        { transform: "none", width: `${end.width}px`, height: `${end.height}px` },
+        { transform: `translate(${picture.rect.left - end.left}px, ${picture.rect.top - end.top}px)`, width: `${picture.rect.width}px`, height: `${picture.rect.height}px`, borderRadius: `${picture.radius}px`, backgroundColor: "transparent" },
+        { transform: "none", width: `${end.width}px`, height: `${end.height}px`, borderRadius: target.radius, backgroundColor: target.ground },
       ], timing).finished);
-      const landed = fillAt(picture, target.el, end, 1);
-      Object.assign(picture.img.style, landed);
-      moves.push(picture.img.animate([fillAt(picture, target.el, end, 0), landed], timing).finished);
     }
-    moves.push(copy.animate([
+    const clock = copy.animate([
       { transform: `translate(${from.x - to.x}px, ${rise}px) scale(${from.size / to.size})` },
       { transform: "none" },
-    ], timing).finished);
+    ], timing);
+    moves.push(clock.finished);
     const bubble = copy.querySelector<HTMLElement>(`.${conversationCss.msgBubble}`);
     if (bubble) moves.push(bubble.animate([{ backgroundColor: "transparent" }, { backgroundColor: getComputedStyle(bubble).backgroundColor }], timing).finished);
-    for (const el of copy.querySelectorAll<HTMLElement>(`.${conversationCss.msgTime}`)) {
+    const lines = (row: Element) => [...row.querySelectorAll<HTMLElement>(`.${conversationCss.msgTime}`)];
+    const comeIn = (el: HTMLElement) => {
       // "sending" shows when the row's does (its row, the copy gone, shows it then).
       if (el.dataset.showsAt) showAt(el);
       else el.style.animation = "none";
-      moves.push(el.animate([{ opacity: 0 }, { opacity: 1 }], timing).finished);
-    }
+      const a = el.animate([{ opacity: 0 }, { opacity: 1 }], timing);
+      a.currentTime = clock.currentTime;
+      moves.push(a.finished);
+    };
+    for (const el of lines(copy)) comeIn(el);
+    // The station's message taking the outbox row's place on the way: its line under it ("刚刚" for "sending") in the
+    // copy from then on, as far in as the rest, rather than appearing as the copy goes.
+    let shown: Element = first;
+    following = new MutationObserver(() => {
+      const row = list?.querySelector<HTMLElement>(`.${msgCss.msgMine}`);
+      if (!row || row === shown) return;
+      shown = row;
+      const was = lines(copy);
+      for (const [i, line] of lines(row).entries()) {
+        const next = line.cloneNode(true) as HTMLElement;
+        const old = was[i];
+        if (old) old.replaceWith(next); else copy.append(next);
+        comeIn(next);
+      }
+      for (const old of was.slice(lines(row).length)) old.remove();
+    });
+    following.observe(list, { childList: true, subtree: true });
     // The composer's hint comes in once the words are out of it (above its top edge), not while they pass over it.
     const out = () => {
       if (!copy.isConnected || copy.getBoundingClientRect().bottom <= top) { if (now) delete now.field.dataset.madeHint; }
@@ -277,6 +299,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
     // The page's own moves, begun as the new page settled (within the transition), are over too.
     await Promise.allSettled(moves);
     for (const { el, original, visibility } of leaving) { el.remove(); original.style.visibility = visibility; }
+    following?.disconnect();
     ghost?.remove();
     now?.release?.();
     now?.stand?.remove();
@@ -462,18 +485,23 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     for (const picture of pictures) {
       const target = row.querySelector<HTMLElement>(`[data-send-image="${picture.key}"]`);
       if (!target) continue;
-      const end = target.getBoundingClientRect();
+      const end = landsAt(target, target.getBoundingClientRect(), picture.ratio);
       const a = picture.rect;
       if (!picture.stand.dataset.flying) {
         picture.stand.dataset.flying = "";
-        picture.stand.style.borderRadius = getComputedStyle(target).borderRadius;
         corners(picture.stand, target);
       }
+      // Its corners from the thumbnail's to the message's, and its box's ground coming in (the thumbnail has none):
+      // landed, it is as the message draws it, a picture with clear parts on that ground.
+      const style = getComputedStyle(target);
+      picture.ground ??= style.backgroundColor;
+      const radius = parseFloat(style.borderTopLeftRadius) || 0;
       Object.assign(picture.stand.style, {
         left: `${a.left + (end.left - a.left) * across - box.left}px`, top: `${a.top + (end.top - a.top) * up - box.top}px`,
         width: `${a.width + (end.width - a.width) * up}px`, height: `${a.height + (end.height - a.height) * up}px`,
+        borderRadius: `${picture.radius + (radius - picture.radius) * up}px`,
+        backgroundColor: `color-mix(in srgb, ${picture.ground} ${up * 100}%, transparent)`,
       });
-      Object.assign(picture.img.style, fillAt(picture, target, end, up));
     }
     const bubble = copy.querySelector<HTMLElement>(`.${conversationCss.msgBubble}`);
     if (bubble && ground) bubble.style.backgroundColor = `color-mix(in srgb, ${ground} ${e * 100}%, transparent)`;

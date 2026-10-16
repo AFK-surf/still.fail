@@ -19,7 +19,7 @@ import { chatPage } from "./chatPage.ts";
 import { Prose, withBareLinks } from "./Prose.tsx";
 import { placeFiles } from "../../client/core-ts/src/placed.ts";
 import { shortcutOf, useKeymap, usePageKeysAvailable, useShortcut } from "./keymap.ts";
-import { FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
+import { FileLink, FilePreview, fileHere, fileSize, Gallery, isImage, kindOf, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
 import { imageBox } from "./imageBox.ts";
 import { thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
@@ -1344,7 +1344,9 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   const [videoFailed, setVideoFailed] = useState(false);
   const box = useRef<HTMLButtonElement>(null);
   const near = useNear(box, image || video);
-  const fetched = useFileShown(sessionKey ?? "", file, image && sessionKey !== null && near, true);
+  // One here already is drawn at once, near the screen or not yet known to be (its row just made again).
+  const [here] = useState(() => image && sessionKey !== null && fileHere(station.address, sessionKey, file, true));
+  const fetched = useFileShown(sessionKey ?? "", file, image && sessionKey !== null && (near || here), true);
   const still = useVideoStill(sessionKey ?? "", file, video && sessionKey !== null && near);
   const [local] = useState(() => image ? sentImage(station.address, sentFileKey(file)) : undefined);
   const url = local ?? fetched.url;
@@ -1352,12 +1354,18 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   const [open, setOpen] = useState(false);
   // An image seen before, or that comes at once, just shows; one that takes a while is brushed in from the top.
   const born = useRef(performance.now());
-  const [loaded, setLoaded] = useState<"instant" | "reveal" | null>(local ? "instant" : null);
+  const key = `${sessionKey}\n${file.path}`;
+  const [loaded, setLoaded] = useState<"instant" | "reveal" | null>(local || (url && revealed.has(key)) ? "instant" : null);
   const shown = () => {
-    const key = `${sessionKey}\n${file.path}`;
     setLoaded(local || revealed.has(key) || performance.now() - born.current < 150 ? "instant" : "reveal");
     revealed.add(key);
   };
+  // Its picture already decoded (the same URL drawn before): shown before this frame is painted, not after its load
+  // event, a frame or more later, the placeholder showing meanwhile.
+  const img = useRef<HTMLImageElement>(null);
+  useLayoutEffect(() => {
+    if (loaded === null && img.current?.complete && img.current.naturalWidth > 0) shown();
+  }, [url]); // eslint-disable-line react-hooks/exhaustive-deps
   const preview = sessionKey !== null && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />;
   const { letterbox, ...size } = look.box(file, video ? 96 : undefined);
   if (video && sessionKey !== null) {
@@ -1385,7 +1393,7 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
           data-loaded={loaded ?? undefined} data-failed={failed || undefined} data-near={near || undefined}>
           {loaded !== "instant" && <Waiting hash={file.thumbhash} fit={letterbox} />}
           {failed && <span className={css.msgImageUnavailable} aria-hidden="true"><Read size={20} /><span>{t("web-main.file.noPreview")}</span></span>}
-          {url && <img src={url} alt={file.name} onLoad={shown} />}
+          {url && <img ref={img} src={url} alt={file.name} onLoad={() => { if (loaded === null) shown(); }} />}
         </button>
         {preview}
       </>
