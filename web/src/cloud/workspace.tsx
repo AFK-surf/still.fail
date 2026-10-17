@@ -43,7 +43,7 @@ import { HAS_LOCAL_STATION, LocalStationPage } from "../pages/LocalStation.tsx";
 import { ChangelogNews, ChangelogPage } from "../pages/Changelog.tsx";
 import { AddProfile } from "../pages/AddProfile.tsx";
 import { ProfilesNav } from "../ProfilesNav.tsx";
-import { NavAction, NavList, NavItem, NavTop } from "../SidebarList.tsx";
+import { NavAction, NavList, NavItem, NavSection, NavTop } from "../SidebarList.tsx";
 import { SecurityOpen, SecurityPrompt, SecuritySettings, SecurityWaiting, useLock } from "./Security.tsx";
 import { VaultSettings } from "./Vault.tsx";
 import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, JoinExistingLink, MemoryDocSettings, MemorySettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
@@ -406,36 +406,33 @@ function StationsIndex({ entry }: { entry: WorkspaceEntry }) {
   return useStationsSide() ? <StationsFirst entry={entry} /> : <StationsSettings entry={entry} />;
 }
 
-/** Every folder the stations lend (docs/drive.md), one list, each with whose it is at its end (quiet; its dot grey while the
- * station is away). */
+/** Every folder the stations lend (docs/drive.md), under a heading for each station (its name; 离线 beside it while away,
+ * its rows faint). */
 function FilesNav({ scope, top }: { scope: string; top?: ReactNode }) {
   const stations = useStations(scope).value ?? [];
   const where = useLocation();
   const root = new URLSearchParams(where.search).get("root");
-  const folders = stations.flatMap((s) => (s.overview?.drive?.roots ?? []).map((r) => ({ s, r })));
-  // Each station whose every folder the viewer browses: its home first (the way to all the rest).
-  const homes = stations.flatMap((s) => (s.overview?.drive?.anywhere && s.overview.drive.home ? [{ s, home: s.overview.drive.home }] : []));
   const add = useAddFolder(scope);
+  const lending = stations.filter((s) => (s.overview?.drive?.roots ?? []).length > 0 || (s.overview?.drive?.anywhere && s.overview.drive.home));
   return (
     <>
       <NavTop top={top} action={add.can && <NavAction icon={<Plus {...ICON} />} label={t("web-pages.drive.addRoot")} onClick={add.start} />} />
       <NavList>
-        {folders.length === 0 && homes.length === 0 && <p className={nav.navEmpty}>{t("web-main.rail.filesNone")}</p>}
-        {homes.map(({ s, home }) => {
+        {lending.length === 0 && <p className={nav.navEmpty}>{t("web-main.rail.filesNone")}</p>}
+        {lending.map((s) => {
           const base = stationBase(s.station);
-          const here = where.pathname.startsWith(`${base}/files`) && (root === home || (!root && (s.overview?.drive?.roots ?? []).length !== 1));
+          const drive = s.overview?.drive;
+          const roots = drive?.roots ?? [];
+          // A station whose every folder the viewer browses: its home first (the way to all the rest).
+          const home = drive?.anywhere && drive.home ? drive.home : null;
+          const lit = (path: string) => where.pathname.startsWith(`${base}/files`) && (root === path || (!root && (path === home ? roots.length !== 1 : roots.length === 1)));
           return (
-            <NavItem key={`${s.station} home`} to={drivePath(base, home)} current={here} tip={home} mark={<Server {...ICON} />} title={t("web-pages.drive.home")}
-              end={<><span className={railCss.dot} data-online={s.online || undefined} />{s.name}</>} />
-          );
-        })}
-        {folders.map(({ s, r }) => {
-          const base = stationBase(s.station);
-          const roots = s.overview?.drive?.roots ?? [];
-          const here = where.pathname.startsWith(`${base}/files`) && (root === r.path || (!root && roots.length === 1));
-          return (
-            <NavItem key={`${s.station} ${r.path}`} to={drivePath(base, r.path)} current={here} tip={r.path} mark={<Folder {...ICON} />} title={r.name}
-              end={<><span className={railCss.dot} data-online={s.online || undefined} />{s.name}</>} />
+            <NavSection key={s.station} title={s.online ? s.name : t("web-pages.drive.stationAway", { name: s.name })}>
+              {home && <NavItem to={drivePath(base, home)} current={lit(home)} tip={home} mark={<Server {...ICON} />} title={t("web-pages.drive.home")} away={!s.online} />}
+              {roots.map((r) => (
+                <NavItem key={r.path} to={drivePath(base, r.path)} current={lit(r.path)} tip={r.path} mark={<Folder {...ICON} />} title={r.name} away={!s.online} />
+              ))}
+            </NavSection>
           );
         })}
         {add.dialogs}

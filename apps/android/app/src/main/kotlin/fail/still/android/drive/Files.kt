@@ -1,6 +1,6 @@
-// 文件 as a place of the bottom bar (Places.kt): every station's lent folders in one flat list (docs/drive.md), each
-// opening its folder's page (DriveScreen.kt); a "+" (in the bar's notch) lends another, on a station the viewer may name
-// folders on.
+// 文件 as a place of the bottom bar (Places.kt): every station's lent folders (docs/drive.md), under a heading for each
+// station, each opening its folder's page (DriveScreen.kt); a "+" (in the bar's notch) lends another, on a station the
+// viewer may name folders on.
 package fail.still.android.drive
 
 import androidx.compose.foundation.background
@@ -18,11 +18,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import fail.still.android.screens.OnlineDot
 import fail.still.android.screens.PlaceRow
+import fail.still.android.ui.SectionHeader
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,7 +30,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fail.still.android.AppState
@@ -56,8 +54,8 @@ import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
 
-/** A folder lent, and the station it is on. */
-private class Lent(val s: StationView, val root: DriveRoot)
+/** A folder lent, and the station it is on; `home` the station's home (every folder of it). */
+private class Lent(val s: StationView, val root: DriveRoot, val home: Boolean = false)
 
 @Composable
 fun FilesScreen(current: WorkspaceEntry) {
@@ -70,7 +68,7 @@ fun FilesScreen(current: WorkspaceEntry) {
     val lent = list.orEmpty().flatMap { s ->
         val drive = s.overview?.drive
         val home = drive?.home?.takeIf { drive.anywhere == true }
-        listOfNotNull(home?.let { Lent(s, DriveRoot(it, t("web-pages.drive.home"), "ok")) }) + drive?.roots.orEmpty().map { Lent(s, it) }
+        listOfNotNull(home?.let { Lent(s, DriveRoot(it, t("web-pages.drive.home"), "ok"), home = true) }) + drive?.roots.orEmpty().map { Lent(s, it) }
     }
     // Where another folder can be lent: a station online that has a drive (a station from before it has none), by
     // whoever may name its folders (the workspace's owners and admins).
@@ -90,22 +88,23 @@ fun FilesScreen(current: WorkspaceEntry) {
                 Text(if (lenders.isNotEmpty()) t("android-misc.files.none.manager") else t("android-misc.files.none.member"), fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
             }
             else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = top, bottom = foot)) {
-                items(lent, key = { l -> "${l.s.station}|${l.root.path}" }) { l -> FolderRow(app, l) }
+                // A heading for each station (its name; 离线 beside it while away), its folders under it.
+                lent.groupBy { it.s.station }.forEach { (station, rows) ->
+                    val s = rows.first().s
+                    item(key = "station|$station") { SectionHeader(if (s.online) s.name else t("web-pages.drive.stationAway", "name" to s.name)) }
+                    items(rows, key = { l -> "${l.s.station}|${l.root.path}" }) { l -> FolderRow(app, l) }
+                }
             }
         }
     }
 }
 
-/** A folder, as the desktop sidebar's: its mark, its name, the station it is on at its end with its dot (grey, and the folder faint, while away). */
+/** A folder, as the desktop sidebar's: its mark (a station's home the station's), its name (faint while the station is away). */
 @Composable
 private fun FolderRow(app: AppState, l: Lent) {
     PlaceRow(
         l.root.name, onClick = { app.push(Screen.Drive(l.s.station, l.root.path, "")) }, away = !l.s.online,
-        mark = { IconIn(Icons.Folder, 16.dp, C.muted) },
-        end = {
-            Text(l.s.name, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 140.dp))
-            OnlineDot(l.s.online)
-        },
+        mark = { IconIn(if (l.home) Icons.Server else Icons.Folder, 16.dp, C.muted) },
     )
 }
 

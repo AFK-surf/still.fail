@@ -1087,6 +1087,7 @@
   "web-pages.dock.failed": "Couldn't change the setting: {error}",
   "web-pages.drive.title": "Files",
   "web-pages.drive.home": "Home",
+  "web-pages.drive.stationAway": "{name} · Offline",
   "web-pages.drive.top": "This computer",
   "web-pages.drive.pin": "Pin to sidebar",
   "web-pages.drive.unpin": "Unpin from sidebar",

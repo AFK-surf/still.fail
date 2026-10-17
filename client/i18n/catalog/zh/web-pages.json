@@ -1015,6 +1015,7 @@
   "web-pages.dock.failed": "无法更改设置：{error}",
   "web-pages.drive.title": "文件",
   "web-pages.drive.home": "主目录",
+  "web-pages.drive.stationAway": "{name} · 离线",
   "web-pages.drive.top": "整台机器",
   "web-pages.drive.pin": "Pin 到侧栏",
   "web-pages.drive.unpin": "从侧栏取消 pin",
