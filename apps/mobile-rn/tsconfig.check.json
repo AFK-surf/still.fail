@@ -14,5 +14,7 @@
         "./node_modules/@types/react/*"
       ]
     }
-  }
+  },
+  // The dev environment's scripts run in node against the station's sources: not the app.
+  "exclude": ["node_modules", "scripts/devenv"]
 }

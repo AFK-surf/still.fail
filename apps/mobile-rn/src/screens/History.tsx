@@ -640,7 +640,7 @@ function Details({ station, of, agent, history, host }: { station: string; of: C
   return (
     <ScrollView style={{ alignSelf: "stretch" }} contentContainerStyle={{ paddingLeft: 18, paddingRight: 18, paddingBottom: 30 }}>
       {/* Where it stands and the figures that say most, as its card has them (AgentSheet.tsx). */}
-      <AgentStatus agent={agent} modifier={{ paddingTop: 2 }} />
+      <AgentStatus agent={agent} style={{ paddingTop: 2 }} />
       <AgentTiles card={card.value ?? null} />
       <AgentNotes card={card.value ?? null} />
       <View style={{ height: 6 }} />

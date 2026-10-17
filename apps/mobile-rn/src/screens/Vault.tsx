@@ -358,7 +358,8 @@ function VaultOptions({ ws, request, modifier, enabled = true }: { ws: string; r
  * cannot be (another's to decide, `mine` false: the card says whose; a web page's, said to be the app's); once decided
  * (no longer among the requests), nothing to tap, until its station takes the card back.
  */
-export function VaultApproval({ workspace, request, mine, modifier }: { workspace: string; request: string; mine: boolean; modifier?: StyleProp<ViewStyle> }) {
+export function VaultApproval({ workspace, request, mine, modifier: modifier_, style }: { workspace: string; request: string; mine: boolean; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle> }) {
+  const modifier = modifier_ ?? style;
   const app = theApp;
   const C = useC();
   useApp((s) => s.doing);

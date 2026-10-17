@@ -82,7 +82,7 @@ const barHeights = new Map<string, number>();
  * what the back of a pushed page says when the page under it is neither the chats nor settings. `content` gets the room
  * to keep at its top: what scrolls starts there, under the frosted bar.
  */
-export function PlacePage({ current, place, primary, known = true, title, back, actions, content }: {
+export function PlacePage({ current, place, primary, known = true, title, back, actions, content: content_, children }: {
   current: WorkspaceEntry;
   place: string;
   primary: BarAction | null;
@@ -90,8 +90,11 @@ export function PlacePage({ current, place, primary, known = true, title, back, 
   title?: string;
   back?: string;
   actions?: Slot | null;
-  content: (top: number) => ReactNode;
+  /** What the page holds below its bar (`top`: the bar's height); as `content` or as the children. */
+  content?: (top: number) => ReactNode;
+  children?: (top: number) => ReactNode;
 }) {
+  const content = content_ ?? children ?? (() => null);
   const app = useContext(LocalApp);
   const root = useContext(LocalPlaceRoot);
   const insets = useSafeAreaInsets();

@@ -184,7 +184,7 @@ const LONG = 6;
  * The figures that say most, each large over its name, side by side: what it cost, the cache's hit rate, how full its
  * context is. In the ink, but a context worth a look in its level's colour.
  */
-export function AgentTiles({ card, style = { paddingTop: 14 } }: { card: AgentCardView | undefined; style?: StyleProp<ViewStyle> }) {
+export function AgentTiles({ card, style = { paddingTop: 14 } }: { card: AgentCardView | null | undefined; style?: StyleProp<ViewStyle> }) {
   const C = useC();
   const context = card?.context;
   if (card?.cost == null && card?.cache == null && context == null) return null;
@@ -215,7 +215,7 @@ export function AgentTiles({ card, style = { paddingTop: 14 } }: { card: AgentCa
 }
 
 /** What is wrong (an account that cannot run, the disk filling up), a line each in its level's colour. */
-export function AgentNotes({ card, style = { paddingTop: 10 } }: { card: AgentCardView | undefined; style?: StyleProp<ViewStyle> }) {
+export function AgentNotes({ card, style = { paddingTop: 10 } }: { card: AgentCardView | null | undefined; style?: StyleProp<ViewStyle> }) {
   const C = useC();
   const notes = card?.attention ?? [];
   if (notes.length === 0) return null;
