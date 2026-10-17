@@ -33,6 +33,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -99,7 +106,8 @@ private fun Note(text: String) = Text(text, fontSize = 12.sp, lineHeight = 18.sp
 internal fun WideButton(label: String, primary: Boolean, modifier: Modifier = Modifier, busy: Boolean = false, enabled: Boolean = true, danger: Boolean = false, onClick: () -> Unit) {
     val on = enabled && !busy
     // `danger`: red, and faded red (not grey) until it can be pressed, so it reads as the same button.
-    val ground = if (!primary) C.chip else if (danger) (if (enabled) C.red else C.red.copy(alpha = 0.4f)) else if (!enabled) C.line else C.ink
+    // The secondary one a shade of ink, not the chip colour: on a sheet's frosted paper the chip all but disappears.
+    val ground = if (!primary) C.ink.copy(alpha = 0.08f) else if (danger) (if (enabled) C.red else C.red.copy(alpha = 0.4f)) else if (!enabled) C.line else C.ink
     Row(
         modifier.height(46.dp).clip(Smooth(23.dp)).background(ground).clickable(enabled = on, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
@@ -269,7 +277,7 @@ private fun turnOffSheet(app: AppState, ws: String, name: String) {
                 }
             }
             Text(t("web-pages.security.turnOffType", "name" to name), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 6.dp))
-            Field(typed, { typed = it }, "")
+            NameField(typed) { typed = it }
         }
         Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             WideButton(t("common.cancel"), primary = false, modifier = Modifier.weight(1f)) { app.sheet = null }
@@ -279,6 +287,19 @@ private fun turnOffSheet(app: AppState, ws: String, name: String) {
             }
         }
     }
+}
+
+/** A line to type in on a sheet (docs/ui-panels.md 浮起面板里的输入框): no ground of its own, a stronger line round it. */
+@Composable
+private fun NameField(value: String, onChange: (String) -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    BasicTextField(
+        value, onChange, singleLine = true, cursorBrush = SolidColor(C.accent),
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
+        textStyle = TextStyle(color = C.ink, fontSize = 15.sp),
+        modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }
+            .border(1.dp, C.ink.copy(alpha = if (focused) 0.32f else 0.18f), Smooth(12.dp)).padding(horizontal = 12.dp, vertical = 11.dp),
+    )
 }
 
 /** A station of the workspace not in the lock, taken in once its owner says it is theirs. */
