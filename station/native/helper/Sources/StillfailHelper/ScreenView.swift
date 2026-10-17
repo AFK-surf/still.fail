@@ -1,7 +1,8 @@
 // A view of the display (`screen.view`, docs/remote-screens.md): ScreenCaptureKit captures it scaled into the view's
 // bounds; VideoToolbox encodes H.264 on the hardware encoder (or, `codec: "jpeg"`, Core Image each picture as a JPEG
 // of quality 0.8), a picture only once one is asked for and only a new one (the screen changed) unless a key frame is
-// asked for; CGEvent posts the input.
+// asked for; CGEvent posts the input. While a view is open the display is kept on: opening one wakes a display gone to
+// sleep (whose capture is black but for the cursor), and it does not go to sleep again until the view ends.
 //
 // After the request line the connection carries messages (Channel.swift) both ways:
 //   in   1 next      (empty)  the next new picture, encoded
@@ -27,6 +28,7 @@ import CoreMedia
 import ImageIO
 import CoreVideo
 import Foundation
+import IOKit.pwr_mgt
 @preconcurrency import ScreenCaptureKit
 import VideoToolbox
 
@@ -62,6 +64,8 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   var lastConfig = Data()
   var tick = 0
   var ended = false
+  /// Keeps the display on while the view is open (0: none held).
+  var awake: IOPMAssertionID = 0
 
   init(channel: Channel, options: [String: Any]) {
     self.channel = channel
@@ -111,6 +115,7 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
       startSynthetic(width, height, moving: mode != "still")
       return
     }
+    wake()
     let started = DispatchSemaphore(value: 0)
     Task {
       defer { started.signal() }
@@ -170,6 +175,19 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
       stream.stopCapture { _ in done.signal() }
       _ = done.wait(timeout: .now() + 2)
     }
+    if awake != 0 {
+      IOPMAssertionRelease(awake)
+      awake = 0
+    }
+  }
+
+  /// The display woken (as a person touching the Mac does) and kept on until the view ends: a display asleep is
+  /// captured black.
+  func wake() {
+    let reason = "A still.fail view of this screen is open" as CFString
+    var activity: IOPMAssertionID = 0
+    IOPMAssertionDeclareUserActivity(reason, kIOPMUserActiveLocal, &activity)
+    IOPMAssertionCreateWithName(kIOPMAssertPreventUserIdleDisplaySleep as CFString, IOPMAssertionLevel(kIOPMAssertionLevelOn), reason, &awake)
   }
 
   func stream(_ stream: SCStream, didOutputSampleBuffer sample: CMSampleBuffer, of type: SCStreamOutputType) {

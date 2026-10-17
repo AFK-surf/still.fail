@@ -87,7 +87,9 @@ macOS only (elsewhere it is listed with `access` saying it is not supported, and
 on the hardware encoder with low-latency rate control (constrained baseline, no reordering, AVCC with the avcC as
 `description`), a picture only when one is asked for and the screen changed (a still screen sends nothing), a key frame
 on request; CGEvent posts the input (mouse with click counts, wheel in pixels, keys by their `code` as the Mac's virtual
-keys, text as Unicode). A view is a connection to the helper's socket.
+keys, text as Unicode). A view is a connection to the helper's socket. A display asleep is captured black but for the
+cursor: opening a view wakes it (as a person touching the Mac does) and keeps it on until the view ends (an IOKit
+assertion), after which it sleeps as the Mac's settings say.
 
 Screen Recording and Accessibility are granted to the helper app, not to the station: LaunchServices starts it as its
 own process, and a grant, which takes effect only once the process holding it starts again, restarts the helper alone
