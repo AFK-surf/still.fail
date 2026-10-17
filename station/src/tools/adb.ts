@@ -20,7 +20,7 @@ export const ADB_DEVICES = {
 export function listed(phones: Json[], page: string | null): string {
   const ask =
     page !== null
-      ? `To ask a person for their phone (or to pair it), send them this link in the conversation: ${page} — it opens this station's 共享调试 page in their still.fail Android app, where they tap 开始共享.`
+      ? `To ask a person for their phone (or to pair it), send them this link in the conversation, bare on a line of its own (it shows as a card saying how their phone's sharing stands): ${page} — it opens this station's 共享调试 page in their still.fail Android app, where they tap 开始共享.`
       : "A person shares their phone from the still.fail Android app: this station's page, 共享调试.";
   if (phones.length === 0) return `No phone is shared with this station now. ${ask}`;
   let text = `${JSON.stringify(phones, null, 2)}\n\n`;

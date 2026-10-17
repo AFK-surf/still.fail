@@ -127,6 +127,8 @@ export type Topic =
   // A station's screens a person can see and drive (docs/remote-screens.md): a core from before it answers an error.
   | { topic: "screens"; station: string }
   | { topic: "screenCard"; station: string; screen: string }
+  // A link to a station's 共享调试 as a message shows it (AdbLink.tsx).
+  | { topic: "adbCard"; station: string }
   // The vault (docs/vault.md, client/core-ts/src/views/vault.ts): the viewer's vaults in a workspace and what waits on
   // them; a vault's items. A core from before has neither.
   | { topic: "vaults"; workspace: string }

@@ -80,6 +80,8 @@ export class Router implements Source {
         return { ok: core.composers.value(String(topic.key)) };
       case "adbShare":
         return { ok: core.adb.value() };
+      case "adbCard":
+        return { ok: core.adb.card(String(topic.station)) };
       case "previewLoad":
         return { ok: core.workspaces.ofStation(topic.station as string).part("previewLoad", () => new Loads()).value(topic) };
       case "prefs":

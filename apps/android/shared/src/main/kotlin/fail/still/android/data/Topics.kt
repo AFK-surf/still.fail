@@ -301,6 +301,8 @@ object Topics {
     val doing = buildJsonObject { put("topic", "doing") }
     /** This phone's adb as lent to a station's agents (client/core-ts/src/adb.ts; AdbShare.kt). */
     val adbShare = buildJsonObject { put("topic", "adbShare") }
+    /** A link to a station's 共享调试 as a message shows it (its card). */
+    fun adbCard(station: String) = buildJsonObject { put("topic", "adbCard"); put("station", station) }
     /** The decisions waiting for the viewer in a workspace's chats, one at a time on its page (client/core-ts/src/decisions.ts; Decisions.kt). */
     fun decisions(workspace: String) = buildJsonObject { put("topic", "decisions"); put("workspace", workspace) }
     /** What changed in still.fail, as this app shows it, and what an update brought until `changelog.seen` (Changelog.kt). */

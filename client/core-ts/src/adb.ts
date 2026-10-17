@@ -124,8 +124,33 @@ export class Adb {
     };
   }
 
+  /// A link to a station's 共享调试 as a message shows it (the `adbCard` topic): what it is, and in a line how this
+  /// phone's adb stands with that station (its minutes left, sent again each minute as every shown time is).
+  card(station: string): J {
+    const title = t("core-views.adb.card.title");
+    const sharing = this.#offer !== null && this.#offer.station === station;
+    if (!this.#env.host.tcp) return { title, line: t("core-misc.adb.unsupported"), sharing: false, lendable: false };
+    if (this.#offer === null) return { title, line: t("core-views.adb.card.off"), sharing, lendable: true };
+    if (!sharing) return { title, line: t("core-views.adb.card.elsewhere"), sharing, lendable: true };
+    const view = this.value();
+    const minutes = Math.max(0, Math.floor((this.#until - this.#env.host.nowMs()) / 60_000));
+    const line = view.phase !== "offered"
+      ? (view.message ?? t("core-views.adb.card.connecting"))
+      : view.adb === "connected"
+        ? t("core-views.adb.card.connected", { n: minutes })
+        : view.adb === "unpaired"
+          ? t("core-views.adb.card.unpaired")
+          : view.adb === "off"
+            ? t("core-views.adb.card.wireless_off")
+            : view.adb === "missing"
+              ? t("core-views.adb.card.missing")
+              : (view.message ?? (view.adb === "connecting" || view.adb === null ? t("core-views.adb.card.attaching") : t("core-views.adb.card.failed")));
+    return { title, line, sharing, lendable: true };
+  }
+
   #shown(): void {
     this.#env.store.invalidate({ topic: "adbShare" });
+    this.#env.store.invalidateAll((topic) => topic.topic === "adbCard");
   }
 
   #tellChanged(): void {

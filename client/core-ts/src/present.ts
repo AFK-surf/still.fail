@@ -183,6 +183,7 @@ const SHAPED: Record<string, Ty> = {
   memberships: "MembershipsView",
   screens: "ScreensView",
   screenCard: "ScreenCard",
+  adbCard: "AdbCard",
 };
 
 /// A topic's value through the shape the clients are generated from: what it does not declare is dropped, and a value

@@ -1292,6 +1292,7 @@
   "web-pages.security.joinBody": "保护后，它只接受受信任设备批准的成员、设备和 station。请确认这是你自己的机器。",
   "web-pages.settings.nav.permissions": "权限",
   "web-pages.screen.title": "屏幕",
+  "web-pages.adb.title": "共享调试",
   "web-pages.screen.section": "屏幕",
   "web-pages.screen.mode": "查看或控制",
   "web-pages.screen.look": "只看",

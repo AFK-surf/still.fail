@@ -26,3 +26,6 @@ export const peekPicture = style({
 /** Its mark in the middle until a picture comes. */
 export const peekMark = style({ position: "absolute", inset: "0", display: "grid", placeItems: "center" });
 export const peekText = style({ display: "flex", minWidth: "0", padding: `${FILE_CARD_PAD.y}px 10px ${FILE_CARD_PAD.y}px ${FILE_CARD_PAD.x + 3}px` });
+
+/** A station's 共享调试 card (AdbLink.tsx) while this phone is lent there: its phone in the accent. */
+export const adbTile = style({ selectors: { "&[data-sharing]": { stroke: vars.accent } } });

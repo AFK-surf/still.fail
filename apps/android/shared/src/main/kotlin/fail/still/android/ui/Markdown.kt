@@ -6,7 +6,7 @@
 // rules. A link to another chat is a reference to it (chatRefs.ts), `@its title` in the accent; a web address written
 // bare, or alone in inline code, is a link too (Links.kt), and a link held is its menu (open, copy); a ```mermaid block
 // is drawn as its chart (Viz.kt). With `placing`, the message's files its text names are drawn where it names them;
-// with `screens`, its links to a station's screens are those screens' cards.
+// with `screens`, its links to a station's screens (and 共享调试) are their cards.
 //
 // Spacing is the web's: each block keeps the margins the browser gives it, and two blocks next to each other are as
 // far apart as the larger of the two margins between them (CSS margins collapse, through a list item or a quote too).
@@ -216,7 +216,7 @@ fun withRefs(text: String): AnnotatedString {
     }
 }
 
-// ── links to a station's screens (docs/remote-screens.md) ───────────────
+// ── links to a station's screens (docs/remote-screens.md) and 共享调试 (docs/adb-share.md) ──
 
 /** A screen's page, as its agents link to it: `/w/<workspace>/s/<station>/screen/<id>`, after a host or alone (as the web's). */
 private val SCREEN_LINK = Regex("^(https?://[^/]+)?/w/([^/?#]+)/s/([^/?#]+)/screen/([^/?#]+)/?$")
@@ -228,11 +228,24 @@ fun screenOfLink(href: String): Pair<String, String>? {
     return "$ws/$st" to id
 }
 
+/** A station's 共享调试 page, as its agents link to it: `/w/<workspace>/s/<station>/adb`, after a host or alone. */
+private val ADB_LINK = Regex("^(https?://[^/]+)?/w/([^/?#]+)/s/([^/?#]+)/adb/?$")
+
+/** The station (`<workspace>/<station>`) a link to its 共享调试 names; null for any other link. */
+fun adbOfLink(href: String): String? {
+    val m = ADB_LINK.find(href) ?: return null
+    val (ws, st) = (2..3).map { decoded(m.groupValues[it]) ?: return null }
+    return "$ws/$st"
+}
+
+/** A link drawn as a card alone in a paragraph, and as its title bare in a sentence: a screen's, or a station's 共享调试. */
+fun isCardLink(href: String): Boolean = screenOfLink(href) != null || adbOfLink(href) != null
+
 /** A link written bare: its words its address (as written, or decoded), as the web's RefChip has it. */
 fun isBareLink(words: String, href: String): Boolean = words.trim().let { it == href || it == decoded(href) }
 
 /**
- * Links to a station's screens, as a chat draws them: `card` one alone in a paragraph (its own words, or null when it
+ * Links to a station's screens and 共享调试 (isCardLink), as a chat draws them: `card` one alone in a paragraph (its own words, or null when it
  * is bare); `title` the words a bare one within a sentence reads as.
  */
 class Screens(
@@ -240,20 +253,20 @@ class Screens(
     val title: @Composable (href: String) -> String,
 )
 
-/** A paragraph of only a link to a screen: its address, and its words unless it is bare. */
+/** A paragraph of only a link with a card (isCardLink): its address, and its words unless it is bare. */
 private fun screenAlone(node: Paragraph): Pair<String, String?>? =
     when (val only = node.children().filter { !(it is TextNode && it.literal.isBlank()) && it !is SoftLineBreak }.singleOrNull()) {
-        is Link -> only.destination.takeIf { screenOfLink(it) != null }?.let { href -> href to inlineText(only).takeUnless { isBareLink(it, href) } }
-        is TextNode -> only.literal.trim().takeIf { t -> bareLinks(t).singleOrNull() == t.indices && screenOfLink(t) != null }?.let { it to null }
+        is Link -> only.destination.takeIf { isCardLink(it) }?.let { href -> href to inlineText(only).takeUnless { isBareLink(it, href) } }
+        is TextNode -> only.literal.trim().takeIf { t -> bareLinks(t).singleOrNull() == t.indices && isCardLink(t) }?.let { it to null }
         else -> null
     }
 
-/** The links to screens written bare among these words, which read as the screens' titles. */
+/** The links with cards (isCardLink) written bare among these words, which read as their titles. */
 private fun bareScreens(nodes: List<Node>): Set<String> = buildSet {
     fun walk(n: Node) {
         when (n) {
-            is TextNode -> bareLinks(n.literal).forEach { r -> n.literal.substring(r).takeIf { screenOfLink(it) != null }?.let(::add) }
-            is Link -> if (screenOfLink(n.destination) != null && isBareLink(inlineText(n), n.destination)) add(n.destination)
+            is TextNode -> bareLinks(n.literal).forEach { r -> n.literal.substring(r).takeIf { isCardLink(it) }?.let(::add) }
+            is Link -> if (isCardLink(n.destination) && isBareLink(inlineText(n), n.destination)) add(n.destination)
             is Image -> Unit
             else -> n.children().forEach(::walk)
         }

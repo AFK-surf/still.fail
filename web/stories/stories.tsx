@@ -32,7 +32,7 @@ import type { DemoExtension } from "../src/demo/mount.tsx";
 import type { ShareInView } from "../src/core/shapes.ts";
 import type { Shared } from "../src/shareIn.ts";
 import { ScreenViewer } from "../src/screen/ScreenViewer.tsx";
-import { OUTDATED, SCREENS_LACKING, screenLinksDemo, screensDemo, type ViewStory } from "./screens.ts";
+import { OUTDATED, SCREENS_LACKING, adbLinksDemo, screenLinksDemo, screensDemo, type ViewStory } from "./screens.ts";
 import { libraryDemo, vaultDemo } from "./vault.ts";
 import { permissionsDemo } from "./permissions.ts";
 import { lockDemo } from "./lock.ts";
@@ -713,6 +713,8 @@ export const stories: Story[] = [
   { id: "app-screen", group: "屏幕", title: "station · 打开屏幕", app: true, demo: screensDemo(), steps: [{ click: '[aria-label^="Station"]' }, { click: 'a[href$="/screen/desktop"]' }, ...toTheBar] },
   { id: "app-chat-screen-links", group: "屏幕", title: "对话里的屏幕链接", app: true, demo: screenLinksDemo },
   { id: "phone-chat-screen-links", group: "屏幕", title: "手机 · 对话里的屏幕链接", app: true, phone: true, demo: screenLinksDemo },
+  { id: "app-chat-adb-link", group: "屏幕", title: "对话里的共享调试链接", app: true, demo: adbLinksDemo(false) },
+  { id: "phone-chat-adb-link", group: "屏幕", title: "手机 · 对话里的共享调试链接（已共享）", app: true, phone: true, demo: adbLinksDemo(true) },
   { id: "phone-station-screens", group: "屏幕", title: "手机 · station 的屏幕", app: true, phone: true, demo: screensDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }] },
   // ── a Mac station's grants to still.fail Helper (docs/remote-screens.md "Grants") ──
   { id: "app-station-permissions", group: "权限", title: "station · 权限 · 都已允许", app: true, demo: permissionsDemo("granted"), steps: [{ click: '[aria-label^="Station"]' }] },

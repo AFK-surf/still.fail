@@ -3,7 +3,7 @@
 // live ones drawing real frames made here (a desktop with a browser asking to sign in: JPEG, or H.264 where the browser
 // encodes it), so the canvas is drawn as a station's would be. 只看/控制 switches as the core would, at once.
 import type { DemoExtension } from "../src/demo/mount.tsx";
-import type { ScreenCard, ScreensView, ScreenViewState } from "../src/core/shapes.ts";
+import type { AdbCard, ScreenCard, ScreensView, ScreenViewState } from "../src/core/shapes.ts";
 
 const LINK = "/w/demo/s/local/screen";
 
@@ -47,6 +47,27 @@ export const screenLinksDemo: DemoExtension = {
     return { ...chat, messages: chat.messages.map((m, i) => (i === first ? { ...m, text: SAID } : m)) };
   },
 };
+
+/** A link to the demo station's 共享调试 as an agent posts it (src/AdbLink.tsx), on the web (which cannot lend its adb) or as a phone lent there says it. */
+export function adbLinksDemo(lent: boolean): DemoExtension {
+  const card: AdbCard = lent
+    ? { title: "共享调试", line: "共享中 · 剩余 42 分钟", sharing: true, lendable: true }
+    : { title: "共享调试", line: "仅安卓 app 支持共享调试", sharing: false, lendable: false };
+  const said = [
+    "手机还没共享过来，麻烦在 App 里点一下「开始共享」：",
+    "https://app.still.fail/w/demo/s/local/adb",
+    "共享后我直接装上，装好跟你说。",
+  ].join("\n\n");
+  return {
+    topic: (t) => (t.topic === "adbCard" ? card : undefined),
+    then: (t, value) => {
+      if (t.topic !== "chat" || !value) return undefined;
+      const chat = value as { messages: { authorKind: string; text: string }[] };
+      const first = chat.messages.findIndex((m) => m.authorKind === "agent");
+      return { ...chat, messages: chat.messages.map((m, i) => (i === first ? { ...m, text: said } : m)) };
+    },
+  };
+}
 
 /** How a story's view goes: live (driving, or a read-only member's), or the phase it ends up in. */
 export type ViewStory = "connecting" | "live" | "readOnly" | "undrivable" | "agent" | "reconnecting" | "ended" | "outdated" | "gone" | "denied" | "failed"

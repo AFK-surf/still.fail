@@ -25,6 +25,16 @@ class ScreenLinkTest {
         assertNull(screenOfLink("https://app.still.fail/w/$ws/s/$st/screen/%E0%A4"))
     }
 
+    @Test fun aStationsDebugSharingPageNamesItsStation() {
+        assertEquals("$ws/$st", adbOfLink("https://app.still.fail/w/$ws/s/$st/adb"))
+        assertEquals("$ws/$st", adbOfLink("/w/$ws/s/$st/adb/"))
+        assertNull(adbOfLink("https://app.still.fail/w/$ws/s/$st/adb/more"))
+        assertNull(adbOfLink("https://app.still.fail/w/$ws/s/$st/adb?x=1"))
+        assertNull(adbOfLink("https://example.com/docs/w/$ws/s/$st/adb"))
+        assertTrue(isCardLink("https://app.still.fail/w/$ws/s/$st/adb"))
+        assertFalse(isCardLink("https://app.still.fail/w/$ws/s/$st"))
+    }
+
     @Test fun aLinkIsBareWhenItsWordsAreItsAddress() {
         val href = "https://app.still.fail/w/$ws/s/$st/screen/browser%3AD4"
         assertTrue(isBareLink(href, href))

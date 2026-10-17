@@ -1364,6 +1364,7 @@
   "web-pages.security.joinBody": "Once protected, it accepts only members, devices and stations approved by a trusted device. Make sure it's your own machine.",
   "web-pages.settings.nav.permissions": "Permissions",
   "web-pages.screen.title": "Screen",
+  "web-pages.adb.title": "Debug sharing",
   "web-pages.screen.section": "Screens",
   "web-pages.screen.mode": "Watch or control",
   "web-pages.screen.look": "Watch",

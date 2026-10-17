@@ -1287,6 +1287,12 @@ export const SHAPES: Record<string, Shape> = {
     ["connectPort", opt("u32")],
     ["pairPort", opt("u32")],
   ], { doc: "This phone's adb as lent to a station's agents (the `adbShare` topic; client/core-ts/src/adb.ts, docs/adb-share.md).\n`phase`: `off`, `connecting` (the link opening, or opening again after it went: `message` says why) or `offered`;\n`adb`, as the station's adb holds the phone once offered: `connecting`, `connected`, `unpaired`, `unauthorized`,\n`off` (Wireless debugging is), `missing` (no adb there) or `failed`, `message` saying more. Stopped by itself (its hour up, a station too old), it\nis off with why in `message`. `serial`: what the agents reach it at on the station; `until`: when it stops." }),
+  AdbCard: struct([
+    ["title", "String", { doc: "What the link opens: the station's 共享调试." }],
+    ["line", "String", { doc: "Under it: how this phone's adb stands with that station (not shared, shared with another, connecting, the agents able to use it and the minutes left, what is missing); on a core that cannot lend it (the web), that only the Android app can." }],
+    ["sharing", "bool", { doc: "This phone's adb is lent to that station now." }],
+    ["lendable", "bool", { doc: "This app can lend its adb (a native core, the Android app's); not the web's, where the link opens nothing." }],
+  ], { doc: "A link to a station's 共享调试 as a message shows it (the `adbCard` topic; client/core-ts/src/adb.ts `card`)." }),
   ScreenItem: struct([
     ["id", "String", { doc: "The station's: `desktop`, `browser:<targetId>`." }],
     ["kind", "String", { doc: "`desktop` (the station machine's display) or `browser` (a tab of the station's browser)." }],

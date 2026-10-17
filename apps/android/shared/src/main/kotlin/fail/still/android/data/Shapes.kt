@@ -43,6 +43,19 @@ data class Activity (
 	val now: ActivityNow
 )
 
+/// A link to a station's 共享调试 as a message shows it (the `adbCard` topic; client/core-ts/src/adb.ts `card`).
+@Serializable
+data class AdbCard (
+	/// What the link opens: the station's 共享调试.
+	val title: String,
+	/// Under it: how this phone's adb stands with that station (not shared, shared with another, connecting, the agents able to use it and the minutes left, what is missing); on a core that cannot lend it (the web), that only the Android app can.
+	val line: String,
+	/// This phone's adb is lent to that station now.
+	val sharing: Boolean,
+	/// This app can lend its adb (a native core, the Android app's); not the web's, where the link opens nothing.
+	val lendable: Boolean
+)
+
 /// This phone's adb as lent to a station's agents (the `adbShare` topic; client/core-ts/src/adb.ts, docs/adb-share.md).
 /// `phase`: `off`, `connecting` (the link opening, or opening again after it went: `message` says why) or `offered`;
 /// `adb`, as the station's adb holds the phone once offered: `connecting`, `connected`, `unpaired`, `unauthorized`,

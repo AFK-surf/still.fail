@@ -73,12 +73,16 @@ import fail.still.android.ui.C
 import fail.still.android.ui.Screens
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.chatInk
+import fail.still.android.ui.adbOfLink
 import fail.still.android.ui.screenOfLink
 
-/** The links to screens in a message's words (Markdown.kt): their cards, and a bare one's title (屏幕 until it is known). */
+/**
+ * The links to screens in a message's words (Markdown.kt): their cards, and a bare one's title (屏幕 until it is known);
+ * a station's 共享调试 as its own (AdbLinks.kt).
+ */
 internal val ScreenLinks = Screens(
-    card = { href, words -> ScreenLinkCard(href, words) },
-    title = { href -> screenCardOf(href)?.title ?: t("android-misc.screen.title") },
+    card = { href, words -> if (adbOfLink(href) != null) AdbLinkCard(href, words) else ScreenLinkCard(href, words) },
+    title = { href -> if (adbOfLink(href) != null) adbTitle(href) else screenCardOf(href)?.title ?: t("android-misc.screen.title") },
 )
 
 @Composable
@@ -190,7 +194,7 @@ private fun Peek(station: String, screen: String, card: ScreenCard) {
 }
 
 /** A screen's mark, 30 by 36 as the web's: drawn in strokes, 1.5 wide, tinted. */
-private fun tile(name: String, vararg paths: String) = ImageVector.Builder(name, 30.dp, 36.dp, 30f, 36f).apply {
+internal fun tile(name: String, vararg paths: String) = ImageVector.Builder(name, 30.dp, 36.dp, 30f, 36f).apply {
     for (d in paths) addPath(addPathNodes(d), fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.5f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round)
 }.build()
 

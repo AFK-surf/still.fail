@@ -1005,11 +1005,16 @@ sim("offers_the_phone_and_tunnels_what_the_station_opens_to_its_adbd", async (s)
   assert.equal(seen.echoed, "hello");
   const value = adb.value();
   assert.deepEqual([value.sharing, value.station, value.phase, value.serial], [true, station, "offered", "127.0.0.1:37001"]);
+  // A link to the station's 共享调试 says so, with the minutes left; one to another station's, that it is lent elsewhere.
+  const card = adb.card(station);
+  assert.deepEqual({ ...card, line: card.line.replace(/\d+/, "N") }, { title: "共享调试", line: "共享中 · 剩余 N 分钟", sharing: true, lendable: true });
+  assert.deepEqual(adb.card("ws/other"), { title: "共享调试", line: "正在共享给另一台 station", sharing: false, lendable: true });
   await s.run(adb.run({ kind: "stop" }));
   await s.until(() => seen.stopped === true);
   assert.ok(seen.stopped, "the station sees the offer stop");
   const after = adb.value();
   assert.deepEqual([after.sharing, after.phase], [false, "off"]);
+  assert.deepEqual(adb.card(station), { title: "共享调试", line: "未共享", sharing: false, lendable: true });
   await s.run(mesh.close());
   await s.settle(endpoint.close());
 });
