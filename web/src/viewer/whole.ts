@@ -1,6 +1,6 @@
 // The app's reader and player (@stillfail/ui viewer/): what they ask of the page told them (setViewerHost: a phone's
 // sheets, the theme, a chat's Markdown, the reader's layout in the prefs), and they told to the file preview
-// (FilePreview.tsx setWholeViewers), so a text and a video a chat has open in them as a station's file does. Imported
+// (FilePreview.tsx setWholeViewers), so a text and a sound a chat has open in them as a station's file does. Imported
 // by what starts the app (main.tsx, the site's demo, the stories), never by a page with no core (a published chat's).
 import { createElement, Fragment } from "react";
 import { setViewerHost } from "@stillfail/ui/viewer/host.ts";

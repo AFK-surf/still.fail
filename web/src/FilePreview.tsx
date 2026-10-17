@@ -351,7 +351,7 @@ export type GalleryOf = { chat: { thread: number } | { session: string } } | { l
 export const Gallery = createContext<GalleryOf | null>(null);
 
 /**
- * The reader and the player a text and a video open in (@stillfail/ui viewer/Reader.tsx, viewer/Player.tsx), as the
+ * The reader and the player a text and a sound open in (@stillfail/ui viewer/Reader.tsx, viewer/Player.tsx), as the
  * app has them: told here by the app as it starts (viewer/whole.ts, with what they ask of the page), not imported, so
  * a page that tells none (a published chat's, share/) keeps its own plain viewers.
  */
@@ -616,8 +616,9 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
         : <a className={controlsCss.btn} href={url} download={file.name}><Download size={16} />{t("web-main.preview.download")}</a>}</div>;
     }
   }
-  // A text and a video open in the reader and the player, as a station's file does (drive/Reader.tsx, drive/Player.tsx):
-  // one viewer of each kind wherever a file is opened, each with the same bar; here they read what this has fetched.
+  // A text and a sound open in the reader and the player, as a station's file does (viewer/Reader.tsx, viewer/Player.tsx),
+  // each with the same bar; here they read what this has fetched. A video stays in VideoViewer: a chat's video is looked
+  // at closely (frame by frame, zoomed, a pixel's colour, a frame saved), which the player made to watch a film has not.
   const saveShown = useRef<(() => void) | undefined>(undefined);
   saveShown.current = loaded.state === "ready" ? () => save(loaded) : undefined;
   const shownFile = useMemo(() => blob && blobFile(blob, { name: file.name, size: file.size, type: blob.type, kind: kind ?? "" }, () => saveShown.current?.()), [blob, file.name, file.size, kind]);
@@ -625,7 +626,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
   const viewer = loaded.state !== "ready" || !shownFile ? null
     : (kind === "markdown" || kind === "text") && Reader
       ? <Reader key={file.path} file={shownFile} markdown={kind === "markdown"} backLabel={backLabel} onBack={onClose} />
-      : (kind === "video" || kind === "audio") && Player
+      : kind === "audio" && Player
         ? <Player key={file.path} file={shownFile} backLabel={backLabel} onBack={onClose} />
         : null;
   if (viewer) {
