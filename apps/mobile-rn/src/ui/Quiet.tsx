@@ -2,7 +2,8 @@
 // view turned, scaled or faded each frame is told on Android to every accessibility client as a change in the window,
 // so it is never idle (UI Automator waits for idle, TalkBack hears a flood); Compose draws such motion in its draw
 // phase, telling nobody. Round what turns or breathes for ever (a spinner, a pulse), only where what it says does not
-// change. Layout only in its style: it is a plain box, not one that clips or rounds.
+// change: what it holds is hidden from accessibility, and what moves is to be one of its own children (one further in
+// is heard past it). Layout only in its style: it is a plain box, not one that clips or rounds.
 import { requireNativeView } from "expo";
 import type { ReactNode } from "react";
 import { Platform, View, type StyleProp, type ViewProps, type ViewStyle } from "react-native";
