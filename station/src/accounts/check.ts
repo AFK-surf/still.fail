@@ -77,8 +77,8 @@ export function checkConfig(raw: any, _data: string): void {
     if (p.env !== undefined && p.env !== null && (!isObject(p.env) || Object.values(p.env).some((v) => typeof v !== "string"))) {
       throw new Error("invalid type: expected a map of strings");
     }
-    // The joined workspaces it serves too (docs/multi-workspace.md).
-    if (p.workspaces !== undefined && p.workspaces !== null && (!Array.isArray(p.workspaces) || p.workspaces.some((w: unknown) => typeof w !== "string"))) {
+    // The joined workspaces kept from it (docs/multi-workspace.md).
+    if (p.withheld !== undefined && p.withheld !== null && (!Array.isArray(p.withheld) || p.withheld.some((w: unknown) => typeof w !== "string"))) {
       throw new Error("invalid type: expected a sequence of strings");
     }
 

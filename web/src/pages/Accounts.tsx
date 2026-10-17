@@ -249,9 +249,9 @@ function StationsSection({ entry, here }: { entry: WorkspaceProfile; here: strin
 }
 
 /**
- * Which of the workspaces the station joined may run their chats on it too (docs/multi-workspace.md), a switch each:
+ * Which of the workspaces the station joined may run their chats on it (docs/multi-workspace.md), a switch each:
  * for the owners and admins of its home workspace (the core's `memberships`), once the station is in more than one.
- * None is ticked at first: a profile is its home's.
+ * All are ticked at first: a profile serves every workspace the station is in until one is turned off.
  */
 function WorkspacesSection({ profile }: { profile: Profile }) {
   const station = useStation();

@@ -490,6 +490,7 @@ export const AgentsLive = (control: Control) =>
       };
       const accounts: Accounts = makeAccounts({
         data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, following: () => events.inUse(), checkOnStart: true,
+        workspaces: () => hub.workspaces(),
         shared: { status: (p) => sharing!.status(p), view: (p) => sharing?.profileView(p) ?? null, hostName },
       });
       accounts.start();

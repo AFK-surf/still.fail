@@ -1075,7 +1075,7 @@
   "web-pages.profiles.share.users": "In use on {stations}",
   "web-pages.profiles.account.each": "Hosts",
   "web-pages.profiles.workspaces.for": "Also for {name}",
-  "web-pages.profiles.workspaces.lead": "This station is also in other workspaces; by default, a profile is used only in its home workspace",
+  "web-pages.profiles.workspaces.lead": "This station is also in other workspaces; by default, a profile is used in all of them",
   "web-pages.profiles.workspaces.off": "Chats in {name} can't use this account",
   "web-pages.profiles.workspaces.on": "Chats in {name} can run agents on this account",
   "web-pages.profiles.workspaces.title": "Workspaces",

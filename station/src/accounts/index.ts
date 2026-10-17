@@ -107,6 +107,8 @@ export type AccountsDeps = {
   checkOnStart?: boolean;
   /// Its time (a TestClock in tests).
   clock?: Clock.Clock;
+  /// The workspaces the station is in, its home one first (docs/multi-workspace.md); none by default.
+  workspaces?: () => string[];
   /// Profiles other stations share with this one (share/index.ts): how they are doing is their host's to say, and
   /// what the overview says of each profile's sharing.
   shared?: {
@@ -280,8 +282,9 @@ export class Accounts {
   }
 
   /// PUT /profiles/:id: a profile made or edited. Its new state is checked after (in the background). `workspaces`: the
-  /// joined workspaces whose sessions may run on it too (docs/multi-workspace.md; [] or null: the home one's only), set
-  /// by those who manage the station only.
+  /// joined workspaces whose sessions may run on it (docs/multi-workspace.md; [] or null: the home one's only), set by
+  /// those who manage the station only; kept as those of the station's joined workspaces withheld from it, so one it
+  /// joins later runs on it too.
   putProfile(id: string, given: Record<string, unknown>, viewer: Viewer, lang: Lang = stationLang()) {
     this.own(id, lang);
     const givenWorkspaces = given.workspaces;
@@ -294,7 +297,7 @@ export class Accounts {
       const existing: Json | undefined = list.find((p) => p?.id === id);
       const machine = existing?.machine === true;
       // One on the machine's login is the machine's: only which of its models are used, and how it runs, are chosen.
-      const get = (key: string): unknown => (machine && !["model", "models", "backgroundOnMessage", "fast", "workspaces"].includes(key) ? undefined : given[key]);
+      const get = (key: string): unknown => (machine && !["model", "models", "backgroundOnMessage", "fast"].includes(key) ? undefined : given[key]);
       // env: a string sets the value; null removes the key; an omitted key keeps it (so masked secrets survive edits).
       const env: Record<string, string> = isObject(existing?.env) ? { ...existing.env } : {};
       const givenEnv = get("env");
@@ -350,7 +353,8 @@ export class Accounts {
       else fast = typeof existing?.fast === "boolean" ? existing.fast : undefined;
       const givenBackground = get("backgroundOnMessage");
       const background = typeof givenBackground === "boolean" ? givenBackground : typeof existing?.backgroundOnMessage === "boolean" ? existing.backgroundOnMessage : undefined;
-      const workspaces: string[] = Array.isArray(givenWorkspaces) ? [...new Set(givenWorkspaces as string[])] : givenWorkspaces === null ? [] : Array.isArray(existing?.workspaces) ? existing.workspaces : [];
+      const joined = this.joined();
+      const withheld: string[] = Array.isArray(givenWorkspaces) ? joined.filter((w) => !givenWorkspaces.includes(w)) : givenWorkspaces === null ? joined : Array.isArray(existing?.withheld) ? existing.withheld : [];
       const givenHome = get("home");
       const home = typeof givenHome === "string" && givenHome.trim() !== "" ? givenHome.trim() : typeof existing?.home === "string" ? existing.home : `homes/${id}`;
       const api = kind === "api-provider";
@@ -375,7 +379,7 @@ export class Accounts {
       // Only the default's opposite is written.
       if (background === false) next.backgroundOnMessage = false;
       if (fast === true) next.fast = true;
-      if (workspaces.length > 0) next.workspaces = workspaces;
+      if (withheld.length > 0) next.withheld = withheld;
       if (existing) {
         const kept = runtimesFor(next.access, next.runtime);
         for (const r of runtimesFor(existing.access, existing.runtime)) if (!kept.includes(r)) lastOfRuntime(raw, r, id, lang);
@@ -961,7 +965,8 @@ export class Accounts {
     const raw = this.deps.config.raw();
     const config = hubConfig(raw, this.deps.data);
     const joined = viewer !== undefined && viewer.home === false ? viewer.workspace : null;
-    const views = config.profiles.filter((p) => joined === null || (p.workspaces ?? []).includes(joined)).map((p) => {
+    const others = this.joined();
+    const views = config.profiles.filter((p) => joined === null || !(p.withheld ?? []).includes(joined)).map((p) => {
       const kind = accessKind(p);
       const a: Json = isObject(p.access) ? p.access : {};
       const via = profileVia(p);
@@ -997,8 +1002,8 @@ export class Accounts {
         quota: this.quotas.get(p.id) ?? null,
         // Shared with the workspace's other stations, or another station's (absent: neither; old clients ignore it).
         share: this.deps.shared?.view(p) ?? null,
-        // The joined workspaces whose sessions may run on it too.
-        workspaces: p.workspaces ?? [],
+        // The joined workspaces whose sessions may run on it.
+        workspaces: others.filter((w) => !(p.withheld ?? []).includes(w)),
       };
     });
     if (joined === null) return views;
@@ -1014,6 +1019,11 @@ export class Accounts {
       login: undefined,
       workspaces: [joined],
     }));
+  }
+
+  /// The workspaces the station joined, its home one left out.
+  private joined(): string[] {
+    return (this.deps.workspaces?.() ?? []).slice(1);
   }
 
   /// The account a subscription profile is signed in as: a borrowed one's as its host said, one on the machine's login

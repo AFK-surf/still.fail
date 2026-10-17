@@ -526,7 +526,7 @@ function ProfileMenu({ p }: { p: Profile }) {
 }
 
 /**
- * Which of the workspaces the station joined may run their chats on it too (as the desktop's WorkspacesSection), a
+ * Which of the workspaces the station joined may run their chats on it (as the desktop's WorkspacesSection), a
  * switch each: for its home workspace's owners and admins, once the station is in more than one.
  */
 function WorkspaceRows({ p }: { p: Profile }) {

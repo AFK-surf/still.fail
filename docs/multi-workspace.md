@@ -13,7 +13,7 @@
 - **主 workspace**：station 第一个加入的 workspace（`cloud.json` 顶层那个）。之后加入的叫**加入的 workspace**。主 workspace 被移走时，加入最早的那个接任。
 - **station 级的东西只归主 workspace 的 owner/admin 管**：账号（profiles、订阅登录、API key）、更新和通道、`tools.access`、加入和退出 workspace、自动决策、station 分享（share）、继续本机的 Claude Code/Codex 会话。其他 workspace 的 admin 不能改，可以看到自己能用到的部分。
 - **按 workspace 分开的**：chat（会话、thread、奏、归档和归档策略）、Slack connect、agent 的记忆和 skills（`agent/`）、文件根目录（`drive.roots`）、chat 分享（xshare）、station 之间的调用（session_send、chat_list、station_list、任务）都只在同一个 workspace 的 station 之间。
-- **账号可以共用**：每个 profile 默认只给主 workspace 用；主 workspace 的管理员可以给它勾上加入的 workspace（`profiles[].workspaces`）。加入的 workspace 一个能用的 profile 都没有时，那里的 chat 开不了轮次，界面说明原因。
+- **账号共用**：每个 profile 默认给 station 所在的所有 workspace 用（2026-10-18 用户定，之前是默认只给主 workspace）；主 workspace 的管理员可以对某个加入的 workspace 关掉（`profiles[].withheld`）。加入的 workspace 一个能用的 profile 都没有时，那里的 chat 开不了轮次，界面说明原因。
 - **软隔离**：所有 agent 用同一个系统用户跑，A 的 agent 想读 B 的会话目录，物理上拦不住。这里隔离的是数据、列表和 agent 的工具，不是沙盒。界面上加入 workspace 时写明这一点。
 - **workspace 锁（安全模式）**（2026-10-17 用户定）：开了锁的 station 只能加入同样开了锁的 workspace。没锁的 workspace 的成员由 cloud 说了算，这正是主 workspace 的锁要去掉的信任。station 在每个开了锁的 workspace 里各钉一把那个 workspace 的锁：主 workspace 的在 `mesh/lock.json`，加入的在 `mesh/locks/<ws>.json`，各自只认各自锁链里的成员、设备和 station。没开锁的 station 照旧可以加入任何 workspace，加入开了锁的 workspace 时同样要钉住那把锁。
 
@@ -95,7 +95,7 @@
 - Slack connect：config 的 connect 多一个可选的 `workspace`（缺省主 workspace）。在哪个 workspace 里加的就归哪个，列表只给那个 workspace 的人看。
 - 文件：各 workspace pin 自己的文件夹列表：主 workspace 仍是 `drive.roots`，加入的 workspace 是 `drive.workspaces[<ws>]`。能写的成员不论哪个 workspace 都能浏览整台机器（能用 agent 就能让它读，拦文件浏览没有意义，2026-10-17 用户定），只读成员只看自己 workspace pin 的。
 - agent 的记忆和 skills：主 workspace 仍是 `<data>/agent/`，加入的 workspace 用 `<data>/agent/workspaces/<ws>/`（`MEMORY.md`、`skills/`）。会话按自己的 `ws` 拿对应的那份。
-- profile：`profiles[].workspaces?: string[]`，缺省只给主 workspace。选 profile、自动挑 profile 时只看会话所在 workspace 能用的。
+- profile：`profiles[].withheld?: string[]`，不给用的加入的 workspace，缺省都给用（之后新加入的 workspace 也是）。旧版写的 `profiles[].workspaces` 不再读。选 profile、自动挑 profile 时只看会话所在 workspace 能用的。
 - agent 的工具：`chat_list`、`chat_read`、`session_send`、`station_list`、`chat_create`、`station_task` 等都只看会话所在 workspace 的 chat 和 station；chat 链接里的 workspace 不是会话自己的，就按 xshare 的规则走（没被分享就拒绝）。
 - xshare：host 一方按 chat 所在的 workspace 记；借用一方按会话所在的 workspace 记。
 
@@ -109,7 +109,7 @@ workspace 的 admin 在 B 里移除这台 station：cloud 删掉 membership，�
 - `dropLink`、凭证被拒后重连只影响那个地址。
 - `status`、`notices` 这类不分 workspace 的 topic，条目上标出 workspace。
 - station 设置里：主 workspace 的管理员看到「加入另一个 workspace」（流程见上面「加入的入口」）；station 列表里标出它也在哪些 workspace。加入时写明软隔离。
-- 已做的（docs/client-core.md）：`joinable {workspace}` 列出可以加进来的 station（只读已有的 workspace 数据）；`station.join {workspace, station}` 在目标 workspace 建登记 token，再经主 workspace 的连接让 station `POST /workspaces/join`，拒绝原因（旧 station 404、旧 cloud、锁、套餐上限）用中文说；`memberships {station}` 是 station 的 `GET /workspaces`，只给主 workspace 的管理员；`stations` 视图里加入的 station 带 `joined` 和主 workspace 的名字 `home`。界面：「添加 station」里选「已有的 station」（web、手机 web、安卓），station 页的 Workspace 一节，列表里「来自 X」；Profile 页给主 workspace 的管理员每个加入的 workspace 一个「也给 X 用」开关（`profile.put` 的 `input.workspaces`，`Profile.workspaces`）；加入的 station 没有开放给这个 workspace 的 Profile 时，新建对话（core `newChat` 的 `blocked: shared`）说明该找谁打开，不再提示添加 Profile。station 设置里从主 workspace 这边「加入另一个 workspace」还没做。
+- 已做的（docs/client-core.md）：`joinable {workspace}` 列出可以加进来的 station（只读已有的 workspace 数据）；`station.join {workspace, station}` 在目标 workspace 建登记 token，再经主 workspace 的连接让 station `POST /workspaces/join`，拒绝原因（旧 station 404、旧 cloud、锁、套餐上限）用中文说；`memberships {station}` 是 station 的 `GET /workspaces`，只给主 workspace 的管理员；`stations` 视图里加入的 station 带 `joined` 和主 workspace 的名字 `home`。界面：「添加 station」里选「已有的 station」（web、手机 web、安卓），station 页的 Workspace 一节，列表里「来自 X」；Profile 页给主 workspace 的管理员每个加入的 workspace 一个「同时用于 X」开关，默认开着（`profile.put` 的 `input.workspaces` 和 `Profile.workspaces` 是开着的那些，station 存成关掉的 `withheld`）；加入的 station 没有开放给这个 workspace 的 Profile 时，新建对话（core `newChat` 的 `blocked: shared`）说明该找谁打开，不再提示添加 Profile。station 设置里从主 workspace 这边「加入另一个 workspace」还没做。
 
 ## 兼容
 

@@ -26,7 +26,7 @@ const member = viewer("dev@example.com", "member");
 
 type Rig = Awaited<ReturnType<typeof rig>>;
 
-async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; resetQuota?: AccountsDeps["resetQuota"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; clock?: Clock.Clock } = {}) {
+async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; resetQuota?: AccountsDeps["resetQuota"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; clock?: Clock.Clock; workspaces?: string[] } = {}) {
   const data = o.data ?? temp("routes");
   const path = join(data, "config.json");
   if (!existsSync(path)) {
@@ -64,6 +64,7 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
     resetQuota: o.resetQuota ?? null,
     discover: o.discover ?? (async (profile) => ({ state: "unsupported", detail: "", model: null, provider: null, models: [], fingerprint: fingerprint(profile) })),
     clock: o.clock,
+    workspaces: () => o.workspaces ?? [],
   });
   accounts.start();
   const table = routes({
@@ -87,27 +88,33 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
 }
 
 describe("the accounts routes", { concurrency: true }, () => {
-  test("which joined workspaces a profile serves is set by the station's managers; a joined workspace's members see only those, without secrets", async () => {
-    const t = await rig();
+  test("a profile serves every workspace the station joined but those its managers withhold; a joined workspace's members see those it serves, without secrets", async () => {
+    const t = await rig({ workspaces: ["W1", "W2", "W3"] });
     const joined = { ...viewer("guest@example.com", "admin"), workspace: "W2", home: false };
-    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["W2"] }, member))[0], 403);
-    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["W2"] }, joined))[0], 403);
+    // By default, all of them.
+    assert.deepEqual(t.view("cc")?.workspaces, ["W2", "W3"]);
+    assert.deepEqual(t.accounts.profilesView(joined).map((p) => p.id), ["cc", "cx"]);
+    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["W3"] }, member))[0], 403);
+    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["W3"] }, joined))[0], 403);
     assert.equal((await t.call("PUT", "/profiles/cc", { name: "x" }, joined))[0], 403);
     assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["../x"] }))[0], 400);
-    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["W2", "W2"] }))[0], 200);
-    assert.deepEqual(t.profile("cc")?.workspaces, ["W2"]);
-    // Kept through other edits; null takes it back.
+    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["W3", "W3"] }))[0], 200);
+    assert.deepEqual(t.profile("cc")?.withheld, ["W2"]);
+    // Kept through other edits; all given back takes it back.
     assert.equal((await t.call("PUT", "/profiles/cc", { name: "Claude" }, member))[0], 200);
-    assert.deepEqual(JSON.parse(readFileSync(t.path, "utf8")).profiles[0].workspaces, ["W2"]);
-    assert.deepEqual(t.view("cc")?.workspaces, ["W2"]);
+    assert.deepEqual(JSON.parse(readFileSync(t.path, "utf8")).profiles[0].withheld, ["W2"]);
+    assert.deepEqual(t.view("cc")?.workspaces, ["W3"]);
     const seen = t.accounts.profilesView(joined);
-    assert.deepEqual(seen.map((p) => p.id), ["cc"]);
-    assert.deepEqual([seen[0].env, seen[0].access.key, seen[0].home, seen[0].usedBy], [[], "", "", []]);
+    assert.deepEqual(seen.map((p) => p.id), ["cx"]);
+    assert.deepEqual([seen[0].env, seen[0].access.key, seen[0].home, seen[0].usedBy, seen[0].workspaces], [[], "", "", [], ["W2"]]);
     assert.deepEqual(t.accounts.profilesView(owner).map((p) => p.id), ["cc", "cx"]);
     assert.deepEqual(t.accounts.loginsView(joined), []);
+    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["W2", "W3"] }))[0], 200);
+    assert.equal(JSON.parse(readFileSync(t.path, "utf8")).profiles[0].withheld, undefined);
+    assert.deepEqual(t.accounts.profilesView(joined).map((p) => p.id), ["cc", "cx"]);
+    // null: the home workspace's only.
     assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: null }))[0], 200);
-    assert.equal(JSON.parse(readFileSync(t.path, "utf8")).profiles[0].workspaces, undefined);
-    assert.deepEqual(t.accounts.profilesView(joined), []);
+    assert.deepEqual(t.profile("cc")?.withheld, ["W2", "W3"]);
     await t.close();
   });
 

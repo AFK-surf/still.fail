@@ -42,7 +42,6 @@ function cloudOf(dir: string): Cloud {
 /// session of each workspace.
 async function twoWorkspaces() {
   const rig = new Rig({ link: true, place: { workspace: W1, station: "st" }, workspaces: [W1, W2] });
-  rig.edit((raw) => (raw.profiles[0].workspaces = [W2]));
   const cloud = cloudOf(rig.dir);
   const asked: [string, string, any][] = [];
   const transport: PeerCall = async (target, workspace, request) => {
@@ -161,9 +160,9 @@ test("what another station asks reaches the chats of the workspace it asked in; 
   assert.throws(() => createForPeer(rig.hub, "B", { session: "s9", key: "k", runtime: "claude" }, W1), /gone|another workspace/);
 }));
 
-test("a session runs on the profiles allowed in its workspace; picking, pinning and changing respect it", () => withTwo(async (t) => {
+test("a session runs on the profiles allowed in its workspace (all but those withheld from it); picking, pinning and changing respect it", () => withTwo(async (t) => {
   const { rig, one, two } = t;
-  rig.edit((raw) => raw.profiles.push({ id: "cc2", runtime: "claude", home: "homes/cc2" }));
+  rig.edit((raw) => raw.profiles.push({ id: "cc2", runtime: "claude", home: "homes/cc2", withheld: [W2] }));
   assert.equal(rig.session(two).profile, "cc");
   assert.equal(rig.hub.accounts.runOn(two).id, "cc");
   // Pinned or changed to one not for W2: refused.
@@ -174,12 +173,12 @@ test("a session runs on the profiles allowed in its workspace; picking, pinning 
   assert.equal(rig.session(ofOne).profile, "cc2");
   assert.equal(rig.hub.accounts.change(ofOne, { profile: "cc" }, "en").profile, "cc");
   // None left for W2: said so, for new chats and for its sessions.
-  rig.edit((raw) => delete raw.profiles[0].workspaces);
+  rig.edit((raw) => (raw.profiles[0].withheld = [W2]));
   assert.throws(() => newSession(rig.hub, { runtime: "claude", createdBy: "b@x", ws: W2 }, "en"), /No Profile can run Claude Code for this workspace's chats/);
   assert.throws(() => rig.hub.accounts.runOn(two), (e: Error) => e.message === tr(stationLang(), "station.session.noProfileHere", { runtime: "Claude Code" }));
   assert.notEqual(rig.hub.accounts.runOn(one).id, undefined);
   // A connect of W2 runs on those allowed there.
-  rig.edit((raw) => (raw.profiles[1 + 1].workspaces = [W2]));
+  rig.edit((raw) => delete raw.profiles[1 + 1].withheld);
   const connect = { ...rig.config.connects[0]!, workspace: W2 };
   assert.deepEqual(profilesFor(rig.config, connect, W1).map((p) => p.id), ["cc2"]);
   assert.deepEqual(profilesFor(rig.config, rig.config.connects[0]!, W1).map((p) => p.id), ["cc", "cc2"]);

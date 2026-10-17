@@ -1003,7 +1003,7 @@
   "web-pages.profiles.share.users": "使用中：{stations}",
   "web-pages.profiles.account.each": "Hosts",
   "web-pages.profiles.workspaces.for": "同时用于 {name}",
-  "web-pages.profiles.workspaces.lead": "此 station 也属于其他 workspace；Profile 默认仅用于主 workspace",
+  "web-pages.profiles.workspaces.lead": "此 station 也属于其他 workspace；Profile 默认同时用于这些 workspace",
   "web-pages.profiles.workspaces.off": "{name} 中的对话无法使用此账号",
   "web-pages.profiles.workspaces.on": "{name} 中的对话可使用此账号运行 agent",
   "web-pages.profiles.workspaces.title": "Workspace",

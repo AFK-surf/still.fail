@@ -19,8 +19,8 @@ export type Profile = RuntimeProfile & {
   model?: string;
   /// A message that reaches a running Claude Code turn first moves what it waits on to the background (absent: on).
   backgroundOnMessage: boolean;
-  /// The joined workspaces whose sessions may run on it too (docs/multi-workspace.md); absent: the home one's only.
-  workspaces?: string[];
+  /// The joined workspaces kept from it (docs/multi-workspace.md): every workspace the station is in runs on it but these.
+  withheld?: string[];
 };
 
 export type ConnectMode = "multi-session" | "single-session";
@@ -88,7 +88,7 @@ export function hubConfig(raw: any, dataDir: string): HubConfig {
       models,
       model: nonEmpty(p.model),
       backgroundOnMessage: p.backgroundOnMessage !== false,
-      ...(Array.isArray(p.workspaces) ? { workspaces: p.workspaces.filter((w: unknown): w is string => typeof w === "string" && w !== "") } : {}),
+      ...(Array.isArray(p.withheld) ? { withheld: p.withheld.filter((w: unknown): w is string => typeof w === "string" && w !== "") } : {}),
     };
   });
   const connects: Connect[] = (Array.isArray(raw?.connects) ? raw.connects : []).map((c: any): Connect => {
@@ -132,9 +132,9 @@ export const runs = (profile: Profile, model: string): boolean => spelling(profi
 export const sameModel = (a: string, b: string): boolean => a === b || modelKey(a) === modelKey(b);
 
 /// Whether sessions of workspace `ws` may run on a profile (docs/multi-workspace.md): those of the home workspace
-/// (`home`; null outside any, when there is no telling) on every profile, those of a joined one on the profiles that
-/// name it.
-export const allowedIn = (profile: Profile, ws: string | null, home: string | null): boolean => ws === null || home === null || ws === home || (profile.workspaces ?? []).includes(ws);
+/// (`home`; null outside any, when there is no telling) on every profile, those of a joined one on every profile not
+/// withheld from it.
+export const allowedIn = (profile: Profile, ws: string | null, home: string | null): boolean => ws === null || home === null || ws === home || !(profile.withheld ?? []).includes(ws);
 
 /// The profiles a connect's sessions can run on: every profile of its runtime allowed in its workspace.
 export const profilesFor = (config: HubConfig, connect: Connect, home: string | null = null): Profile[] =>
