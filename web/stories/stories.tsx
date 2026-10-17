@@ -380,6 +380,7 @@ export const stories: Story[] = [
   { id: "phone-vault-editor", group: "密钥", title: "手机 · 添加", app: true, phone: true, demo: vaultDemo("on"), steps: [...toPhoneVault, { text: "添加" }] },
   { id: "phone-vault-editor-agent", group: "密钥", title: "手机 · 编辑 · agent 可申请", app: true, phone: true, demo: vaultDemo("on"), steps: [...toPhoneVault, { text: "GitHub token" }, { text: "编辑" }] },
   { id: "phone-vault-card", group: "密钥", title: "手机 · 对话里的申请", app: true, phone: true, demo: vaultDemo("waiting", true) },
+  { id: "phone-vault-card-web", group: "密钥", title: "手机 · 对话里的申请 · 网页", app: true, phone: true, demo: vaultDemo("web", true) },
 
   // ── small panels (docs/ui-panels.md) ──
   { id: "panel-filter", group: "小面板", title: "筛选菜单", app: true, steps: [{ click: '[aria-label^="筛选会话"]' }] },

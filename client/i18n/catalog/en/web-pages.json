@@ -1426,7 +1426,7 @@
     "one": "{n} waiting for you",
     "other": "{n} waiting for you"
   },
-  "web-pages.vault.appOnly": "Open and approve in the app",
+  "web-pages.vault.appOnly": "Open and approve in the client (desktop or Android)",
   "web-pages.vault.appOnlyWhy": "A web page sees only the names: its code comes from the cloud, so it never opens a secret",
   "web-pages.vault.none": "No secrets yet",
   "web-pages.vault.needsLock": "Turn on security mode first",
@@ -1536,8 +1536,9 @@
   "web-pages.vault.approve.hourDetail": "No asking again for an hour",
   "web-pages.vault.approve.deny": "Deny",
   "web-pages.vault.approve.denyDetail": "The agent is told no",
-  "web-pages.vault.approve.inApp": "Approve it in the still.fail app",
   "web-pages.vault.approve.wants": "The agent wants “{name}”",
   "web-pages.vault.approve.what": "approve",
-  "web-pages.vault.approve.denyWhat": "deny"
+  "web-pages.vault.approve.denyWhat": "deny",
+  "web-pages.vault.approve.inClient": "Approve it in the still.fail client",
+  "web-pages.vault.approve.inClientDetail": "A web page holds no keys: open this chat in the desktop or Android client, which asks you to confirm it's you"
 }

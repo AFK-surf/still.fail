@@ -1354,7 +1354,7 @@
     "one": "{n} 个等你批准",
     "other": "{n} 个等你批准"
   },
-  "web-pages.vault.appOnly": "打开和批准要用 app",
+  "web-pages.vault.appOnly": "打开和批准要用客户端（桌面或安卓）",
   "web-pages.vault.appOnlyWhy": "网页版只能看到名字：页面代码由 cloud 发出，不能拿来解开密钥",
   "web-pages.vault.none": "暂无密钥",
   "web-pages.vault.needsLock": "先打开安全模式",
@@ -1464,8 +1464,9 @@
   "web-pages.vault.approve.hourDetail": "一小时里再用不用再问",
   "web-pages.vault.approve.deny": "拒绝",
   "web-pages.vault.approve.denyDetail": "agent 会收到「被拒绝」",
-  "web-pages.vault.approve.inApp": "在 still.fail app 里批准",
   "web-pages.vault.approve.wants": "agent 要用「{name}」",
   "web-pages.vault.approve.what": "批准",
-  "web-pages.vault.approve.denyWhat": "拒绝"
+  "web-pages.vault.approve.denyWhat": "拒绝",
+  "web-pages.vault.approve.inClient": "在客户端里批准",
+  "web-pages.vault.approve.inClientDetail": "网页拿不到密钥：在桌面或安卓客户端里打开这个 chat，批准时要验证本人"
 }

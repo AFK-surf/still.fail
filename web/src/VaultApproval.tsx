@@ -3,7 +3,8 @@
 // drawn (Decisions.css.ts): 批准这一次 (`once`), 这个 chat 一小时内都行 (`hour`), 拒绝; the first recommended. A tap asks the core
 // (`vault.approve`, which has the system ask the person; `vault.deny`); once decided the station takes the card back.
 // Only the request's own (the `vaults` topic's requests: one waiting on the viewer) can be answered, and only in an app
-// that keeps keys: elsewhere the rows are there, not pressed, and a web page says to approve it in the app.
+// that keeps keys: a web page shows no rows, only that it is approved in a client (desktop or Android); elsewhere the
+// rows are there, not pressed.
 import { useState } from "react";
 import { scopeOf } from "./station.tsx";
 import { useDoingList, doingMatches, failed } from "./doing.ts";
@@ -46,25 +47,31 @@ export function VaultChoices({ workspace, id, onDecided }: { workspace: string; 
       if (v !== undefined) onDecided?.();
     });
   };
-  return (
-    <>
-      <div className={css.options} role="group" aria-label={request?.itemName ? t("web-pages.vault.approve.wants", { name: request.itemName }) : t("web-main.decisions.options")}>
-        {choices().map((c, i) => {
-          const Digit = DIGITS[i]!;
-          const now = busy(c);
-          return (
-            <button key={c.label} type="button" className={css.choice} data-recommended={i === 0 || undefined} data-busy={now || undefined}
-              disabled={!able || under} aria-busy={now || undefined} aria-description={i === 0 ? t("common.recommended") : undefined} onClick={() => pick(c)}>
-              <span className={css.choiceNumber} aria-hidden="true"><Digit size={20} /></span>
-              <span className={css.choiceLabel}>{c.label}</span>
-              <span className={css.choiceDetail}>{c.detail}</span>
-              {now && <span className={`${spinnerCss.spinner} ${css.choiceSpinner}`} aria-hidden="true" />}
-            </button>
-          );
-        })}
+  // A web page keeps no keys: no rows to look at, only where to go.
+  if (view && !view.available) {
+    return (
+      <div className={`${css.options} ${own.inClient}`}>
+        <span className={own.inClientTitle}>{t("web-pages.vault.approve.inClient")}</span>
+        <span className={own.inClientDetail}>{t("web-pages.vault.approve.inClientDetail")}</span>
       </div>
-      {view && !view.available && <p className={own.inApp}>{t("web-pages.vault.approve.inApp")}</p>}
-    </>
+    );
+  }
+  return (
+    <div className={css.options} role="group" aria-label={request?.itemName ? t("web-pages.vault.approve.wants", { name: request.itemName }) : t("web-main.decisions.options")}>
+      {choices().map((c, i) => {
+        const Digit = DIGITS[i]!;
+        const now = busy(c);
+        return (
+          <button key={c.label} type="button" className={css.choice} data-recommended={i === 0 || undefined} data-busy={now || undefined}
+            disabled={!able || under} aria-busy={now || undefined} aria-description={i === 0 ? t("common.recommended") : undefined} onClick={() => pick(c)}>
+            <span className={css.choiceNumber} aria-hidden="true"><Digit size={20} /></span>
+            <span className={css.choiceLabel}>{c.label}</span>
+            <span className={css.choiceDetail}>{c.detail}</span>
+            {now && <span className={`${spinnerCss.spinner} ${css.choiceSpinner}`} aria-hidden="true" />}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
