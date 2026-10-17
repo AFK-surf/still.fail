@@ -113,7 +113,7 @@ test("an email and Google with the same address are one account, whichever came 
   }
 });
 
-test("a code takes five wrong tries, holds ten minutes' worth of codes per email, and only from the browser that asked", { timeout: 30000 }, async () => {
+test("five wrong codes end a sign-in, an email gets five codes an hour, and only the browser that asked can use them", { timeout: 30000 }, async () => {
   const h = await harness({ mail: true });
   try {
     const b = await browser(h, "10.3.0.1");

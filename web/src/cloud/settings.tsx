@@ -178,7 +178,7 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
         <Avatar account={account} size={52} />
         <div className={pagesCss.identityText}>
           <h1 className={pagesCss.identityName}>{account.name || account.email}</h1>
-          <p className={pagesCss.identitySub}><span>{account.email}</span><span>{t("web-pages.settings.account.google")}</span></p>
+          <p className={pagesCss.identitySub}><span>{account.email}</span><span>{t(/^(em|pw)-/.test(account.sub) ? "web-pages.settings.account.email" : "web-pages.settings.account.google")}</span></p>
         </div>
       </header>
       <Section title={t("web-pages.settings.account.sessions")} description={t("web-pages.settings.account.sessionsLead", { name: NAME })}>

@@ -3,7 +3,7 @@
   "core-logic.accounts.login.cancelled": "Sign-in cancelled",
   "core-logic.accounts.login.expired": "Sign-in expired. Sign in again",
   "core-logic.accounts.login.wrong_password": "Wrong email or password",
-  "core-logic.accounts.login.failed": "Google sign-in failed",
+  "core-logic.accounts.login.failed": "Sign-in failed",
   "core-logic.accounts.login.password_failed": "Sign-in failed",
   "core-logic.accounts.login.state_mismatch": "Sign-in state mismatch. Sign in again",
   "core-logic.accounts.not_array": "accounts should be an array",

@@ -15,10 +15,6 @@ export const mGoogle = style({
   marginTop: "6px", border: "0", borderRadius: "25px", background: "var(--m-ink)", color: "var(--m-bg) !important",
   fontSize: `${vars.textTitle} !important`, fontWeight: "600", cursor: "pointer",
 });
-export const mGoogleMark = style({
-  display: "inline-flex", alignItems: "center", justifyContent: "center", width: "24px", height: "24px",
-  borderRadius: "50%", background: "#fff",
-});
 globalStyle(`${mSignIn} h1`, { margin: "10px 0 0", fontSize: vars.textDisplay, fontWeight: "600", letterSpacing: "-0.5px" });
 globalStyle(`${mSignIn} p`, { fontSize: vars.textBody, color: "var(--m-muted)" });
 globalStyle(`${mSignIn} small`, { fontSize: vars.textCaption, color: "var(--m-muted)" });

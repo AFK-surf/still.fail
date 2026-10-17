@@ -2,11 +2,9 @@ package fail.still.android.screens
 
 import android.content.Context
 import androidx.browser.customtabs.CustomTabsIntent
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
@@ -27,10 +24,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -93,7 +88,6 @@ fun SignInScreen() {
                 .clickable(enabled = !busy) { asked = true; scope.launch { signIn(app, context); asked = false } },
             horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically,
         ) {
-            GoogleDot()
             Text(if (busy) t("android-settings.signIn.opening") else t("android-settings.signIn.google"), color = C.bg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         }
         Text(t("android-settings.signIn.many"), color = C.muted, fontSize = 12.sp)
@@ -103,14 +97,6 @@ fun SignInScreen() {
                     modifier = Modifier.clickable(enabled = dev == null) { dev = user; scope.launch { try { devSignIn(app, user) } finally { dev = null } } }.padding(8.dp))
             }
         }
-    }
-}
-
-/** Google's "G", on white as Google asks for it on a dark button. */
-@Composable
-private fun GoogleDot() {
-    Box(Modifier.size(24.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
-        Image(painterResource(R.drawable.google_g), contentDescription = null, modifier = Modifier.size(16.dp))
     }
 }
 
