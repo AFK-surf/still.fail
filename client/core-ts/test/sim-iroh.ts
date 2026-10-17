@@ -466,8 +466,9 @@ export class SimConnection {
   stats(): { rxBytes: number; txBytes: number } {
     return { rxBytes: this.counts.rxBytes, txBytes: this.counts.txBytes };
   }
-  paths(): { id: string; selected: boolean; relay: string | null; rttMs: number; txPackets: number; lostPackets: number }[] {
-    return [{ id: "0", selected: true, relay: this.way.relay, rttMs: this.rttMs, txPackets: this.counts.txPackets, lostPackets: this.counts.lostPackets }];
+  paths(): { id: string; selected: boolean; relay: string | null; ip: string | null; rttMs: number; txPackets: number; lostPackets: number }[] {
+    const ip = this.way.relay === null ? (this.peer.endpoint.sockets()[0] ?? null) : null;
+    return [{ id: "0", selected: true, relay: this.way.relay, ip, rttMs: this.rttMs, txPackets: this.counts.txPackets, lostPackets: this.counts.lostPackets }];
   }
 }
 

@@ -852,6 +852,8 @@ sim("a_phone_on_its_stations_lan_goes_direct_within_seconds", async (s) => {
   await reach(s, mesh, id);
   await s.until(() => direct(mesh, id), 60_000);
   assert.ok(s.time.now() - started <= 3 * TICK_MS, `direct ${s.time.now() - started} ms after the first link`);
+  // Its ways as a span says them: the one chosen, at the station's address.
+  assert.match(mesh.current(id)!.paths(), /^\*127\.0\.0\.1:\d+ \d+ms \d+\/\d+$/);
   // Back from sleep: every connection it had is gone at the station.
   station.deadBelow = station.conns.length;
   s.wakes.wake(network(s.host));

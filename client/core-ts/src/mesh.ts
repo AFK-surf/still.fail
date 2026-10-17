@@ -451,6 +451,16 @@ export class Link {
     return this.conn.paths().find((x) => x.selected)?.relay ?? null;
   }
 
+  /// Every way iroh has for it, as a span says them: `*` the one chosen, then where it goes (a relay's host, or a direct
+  /// way's address), its round trip, the packets sent and lost on it. What a phone's direct way was, and how it went,
+  /// as requests moved off it (2026-10-17: gone 20–30 s after it was taken, on a phone alone).
+  paths(): string {
+    return this.conn
+      .paths()
+      .map((p) => `${p.selected ? "*" : ""}${p.relay !== null ? relayHost(p.relay) : (p.ip ?? "direct")} ${Math.round(p.rttMs)}ms ${p.txPackets}/${p.lostPackets}`)
+      .join("; ");
+  }
+
   net(): LinkNet {
     const selected = this.conn.paths().find((p) => p.selected);
     const stats = this.conn.stats();
@@ -1023,9 +1033,12 @@ export class Mesh {
     if (was !== undefined) {
       span.set("stillfail.from", was.key());
       span.set("stillfail.from.score", Math.round(this.#score(addr, was).score));
+      span.set("stillfail.from.missed", was.missed);
+      span.set("stillfail.from.paths", was.link.paths());
     }
     span.set("stillfail.to", way.key());
     span.set("stillfail.to.score", Math.round(this.#score(addr, way).score));
+    span.set("stillfail.to.paths", way.link.paths());
     span.end();
     const done = Deferred.makeUnsafe<Link, CoreError>();
     Deferred.doneUnsafe(done, Effect.succeed(way.link));

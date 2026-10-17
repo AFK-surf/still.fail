@@ -103,7 +103,9 @@ Inside a trace:
   way gone direct answers clearly quicker), with
   `stillfail.from`/`stillfail.to` (the relay, or `direct`) and their scores in
   ms (`.score`: round trip, a typical reply at the speed seen, twice the
-  deviation).
+  deviation); `.paths`: every way iroh has for that connection (`*` the one
+  chosen; a relay's host or a direct way's `ip:port`, round trip, packets
+  sent/lost); `stillfail.from.missed`: its pings missed in a row.
 - **still.fail cloud**: a span of each `/v1/*` call that carries a recorded
   `traceparent`.
 - **ember-mesh**: a span per request stream, from the stream accepted to the

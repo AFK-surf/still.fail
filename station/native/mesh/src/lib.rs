@@ -277,6 +277,8 @@ pub struct PathState {
     pub id: String,
     pub selected: bool,
     pub relay: Option<String>,
+    /// A direct way's address at the other end (`ip:port`).
+    pub ip: Option<String>,
     pub rtt_ms: f64,
     pub tx_packets: f64,
     pub lost_packets: f64,
@@ -383,6 +385,10 @@ impl Connection {
                 selected: p.is_selected(),
                 relay: match p.remote_addr() {
                     iroh::TransportAddr::Relay(url) => Some(url.to_string()),
+                    _ => None,
+                },
+                ip: match p.remote_addr() {
+                    iroh::TransportAddr::Ip(addr) => Some(addr.to_string()),
                     _ => None,
                 },
                 rtt_ms: stats.rtt.as_secs_f64() * 1000.0,
