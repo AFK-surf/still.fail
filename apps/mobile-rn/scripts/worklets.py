@@ -6,8 +6,13 @@ import re,glob,sys
 for f in glob.glob('src/**/*.ts*',recursive=True):
     s=open(f).read()
     decl={}
-    for m in re.finditer(r'^\s*(?:export\s+)?function\s+(\w+)\s*(?:<[^>]*>)?\([^)]*\)[^{]*\{\s*\n?\s*["\']worklet["\'];',s,re.M):
-        decl[m.group(1)]=m.start()
+    # each "worklet" function's name: the nearest `function NAME` or `const NAME =` before its directive
+    for m in re.finditer(r'["\']worklet["\'];',s):
+        head=s[max(0,m.start()-600):m.start()]
+        names=list(re.finditer(r'(?:^|\n)\s*(?:export\s+)?(?:function\s+(\w+)|const\s+(\w+)\s*=)',head))
+        if names:
+            n=names[-1]; name=n.group(1) or n.group(2)
+            decl.setdefault(name, max(0,m.start()-600)+n.start())
     # every worklet-ish body: function declarations with worklet, arrow fns/objects with worklet, useAnimatedStyle/useDerivedValue callbacks
     for m in re.finditer(r'["\']worklet["\'];',s):
         # find enclosing function start: search back for 'function' or '=>' with '{'

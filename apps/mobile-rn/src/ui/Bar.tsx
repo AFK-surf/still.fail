@@ -417,28 +417,6 @@ function whyMoving(m: BarModel): string {
   return out;
 }
 
-function step(m: BarModel, dt: number) {
-  "worklet";
-  const s = m.swap;
-  // The frame a bar is chosen from a panel at rest, the stack is drawn as the rows were: it slides from the next.
-  if (s != null && s.still) s.still = false;
-  else if (springMoving(m.o)) springStep(m.o, dt);
-  if (springMoving(m.k)) springStep(m.k, dt);
-  if (springMoving(m.held)) springStep(m.held, dt);
-  for (const g of [m.vis, m.ballAlpha, m.ballScale, m.iconSwap]) if (glideMoving(g)) glideStep(g, dt);
-  for (const id in m.tints) { const g = m.tints[id]!; if (glideMoving(g)) glideStep(g, dt); }
-  // Riding a bar chosen: the ball goes on its spring after the place it rides, from wherever it was.
-  const b = m.ball;
-  if (b != null && s != null) {
-    const r = ride(m, s);
-    if (r != null) { b.goX = r.x; b.goY = r.y; b.tension = 300; }
-  }
-  if (b != null && !ballResting(b)) ballStep(b, dt);
-  if (m.iconWas && !glideMoving(m.iconSwap)) m.iconWas = false;
-  // A bar chosen: landed, the stack is where the bar is, drawn as the bar will be; it goes in this same frame.
-  if (s != null && !springMoving(m.o) && m.o.value <= 0) { m.swapLast = s; m.swap = null; m.swapId = 0; }
-}
-
 /** How far a bar chosen has come down: 0 as the panel was, 1 landed. */
 function swapT(m: BarModel, s: Swap): number {
   "worklet";
@@ -481,6 +459,28 @@ function ride(m: BarModel, s: Swap): { x: number; y: number } | null {
   const at = swapAt(m, s);
   if (at == null) return null;
   return { x: at.xs[j]!, y: at.y + rowDrop(m, s) };
+}
+
+function step(m: BarModel, dt: number) {
+  "worklet";
+  const s = m.swap;
+  // The frame a bar is chosen from a panel at rest, the stack is drawn as the rows were: it slides from the next.
+  if (s != null && s.still) s.still = false;
+  else if (springMoving(m.o)) springStep(m.o, dt);
+  if (springMoving(m.k)) springStep(m.k, dt);
+  if (springMoving(m.held)) springStep(m.held, dt);
+  for (const g of [m.vis, m.ballAlpha, m.ballScale, m.iconSwap]) if (glideMoving(g)) glideStep(g, dt);
+  for (const id in m.tints) { const g = m.tints[id]!; if (glideMoving(g)) glideStep(g, dt); }
+  // Riding a bar chosen: the ball goes on its spring after the place it rides, from wherever it was.
+  const b = m.ball;
+  if (b != null && s != null) {
+    const r = ride(m, s);
+    if (r != null) { b.goX = r.x; b.goY = r.y; b.tension = 300; }
+  }
+  if (b != null && !ballResting(b)) ballStep(b, dt);
+  if (m.iconWas && !glideMoving(m.iconSwap)) m.iconWas = false;
+  // A bar chosen: landed, the stack is where the bar is, drawn as the bar will be; it goes in this same frame.
+  if (s != null && !springMoving(m.o) && m.o.value <= 0) { m.swapLast = s; m.swap = null; m.swapId = 0; }
 }
 
 function openPanel(m: BarModel, open: boolean) {
