@@ -365,13 +365,20 @@ if [ $full = 1 ]; then
       # STILLFAIL_ANDROID=build (its Kotlin, its instrumented tests' Kotlin too, so a part they use moved or hidden is
       # caught here and not when someone next runs them; unit tests and the debug app) or lint: one share of it (CI's two jobs side
       # by side, lint the longest part); unset, all of it.
+      # Lint only for a change it can find anything in (apps/android/lints.sh): not the core's or the shell's alone.
+      build=":app:compileDebugKotlin :app:compileDebugAndroidTestKotlin :app:testDebugUnitTest :core:testDebugUnitTest :shared:testDebugUnitTest :chat:testDebugUnitTest :drive:testDebugUnitTest ${STILLFAIL_CHECK_APK:+:app:assembleDebug}"
+      lint=""
+      if printf '%s\n' "$changed" | sh apps/android/lints.sh; then lint=":app:lintDebug :core:lintDebug :shared:lintDebug :settings:lintDebug :chat:lintDebug :drive:lintDebug"; fi
       case "${STILLFAIL_ANDROID:-}" in
-        build) what="Android: build and tests${STILLFAIL_CHECK_APK:+, the debug app}"; tasks=":app:compileDebugKotlin :app:compileDebugAndroidTestKotlin :app:testDebugUnitTest :core:testDebugUnitTest :shared:testDebugUnitTest :chat:testDebugUnitTest :drive:testDebugUnitTest ${STILLFAIL_CHECK_APK:+:app:assembleDebug}" ;;
-        lint) what="Android: lint"; tasks=":app:lintDebug :core:lintDebug :shared:lintDebug :settings:lintDebug :chat:lintDebug :drive:lintDebug" ;;
-        *) what="Android${STILLFAIL_CHECK_APK:+ (and the debug app)}"; tasks=":app:compileDebugKotlin :app:compileDebugAndroidTestKotlin :app:testDebugUnitTest :core:testDebugUnitTest :shared:testDebugUnitTest :chat:testDebugUnitTest :drive:testDebugUnitTest :app:lintDebug :core:lintDebug :shared:lintDebug :settings:lintDebug :chat:lintDebug :drive:lintDebug ${STILLFAIL_CHECK_APK:+:app:assembleDebug}" ;;
+        build) what="Android: build and tests${STILLFAIL_CHECK_APK:+, the debug app}"; tasks=$build ;;
+        lint) what="Android: lint"; tasks=$lint ;;
+        *) what="Android${lint:+ (and lint)}${STILLFAIL_CHECK_APK:+ (and the debug app)}"; tasks="$build $lint" ;;
       esac
-      # shellcheck disable=SC2086 # the tasks are words
-      remembered "$what" "apps/android client web/src/viz web/public/avatars scripts/native.ts scripts/icons.py design/icons design/station-icons package.json pnpm-lock.yaml" heavy env ORG_GRADLE_PROJECT_stillfailBuild=1 python3 apps/android/build.py --tasks $tasks
+      if [ -z "$lint" ] && [ "${STILLFAIL_ANDROID:-}" = lint ]; then step "Android: lint (nothing it reads changed)" true
+      else
+        # shellcheck disable=SC2086 # the tasks are words
+        remembered "$what" "apps/android client web/src/viz web/public/avatars scripts/native.ts scripts/icons.py design/icons design/station-icons package.json pnpm-lock.yaml" heavy env ORG_GRADLE_PROJECT_stillfailBuild=1 python3 apps/android/build.py --tasks $tasks
+      fi
     else later "Android"; fi
   fi
 fi

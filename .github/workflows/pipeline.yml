@@ -47,6 +47,7 @@ jobs:
       relay: ${{ steps.plan.outputs.relay }}
       station: ${{ steps.plan.outputs.station }}
       android: ${{ steps.plan.outputs.android }}
+      android_parts: ${{ steps.plan.outputs.android_parts }}
       desktop: ${{ steps.plan.outputs.desktop }}
       desktop_web: ${{ steps.plan.outputs.desktop_web }}
       windows: ${{ steps.plan.outputs.windows }}
@@ -93,6 +94,12 @@ jobs:
           if has '^(station/(src|native)/|station/(package\.json|pnpm-lock\.yaml)$|vendor/|client/i18n/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native|installers|release-sign)\.ts$|cloud/src/(install|install-windows|i18n)\.ts$)'; then station=true; fi
           android=false
           if printf '%s\n' "$changed" | sh apps/android/carries.sh; then android=true; fi
+          # check-android's jobs: its lint only for a change lint can find anything in (apps/android/lints.sh), or a
+          # branch's to .github/ (its check then runs as if all changed).
+          android_parts='["build"]'
+          if printf '%s\n' "$changed" | sh apps/android/lints.sh || { [ "$GITHUB_REF" != refs/heads/main ] && has '^\.github/'; }; then
+            android_parts='["build","lint"]'
+          fi
           # The desktop app carries the core, a station and the web app. A change to the first two (its shell) is a new
           # app; to the web app alone, a web release the beta app takes without one (scripts/desktop-web.ts,
           # docs/desktop-web-updates.md): desktop=… and desktop_web=….
@@ -109,11 +116,12 @@ jobs:
             echo "relay=$relay"
             echo "station=$station"
             echo "android=$android"
+            echo "android_parts=$android_parts"
             echo "desktop=$desktop"
             echo "desktop_web=$desktop_web"
             echo "windows=$windows"
           } >> "$GITHUB_OUTPUT"
-          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station android=$android desktop=$desktop desktop_web=$desktop_web relay=$relay"
+          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station android=$android android_parts=$android_parts desktop=$desktop desktop_web=$desktop_web relay=$relay"
 
   # The native parts for this commit (scripts/native.ts): each one whose key the release native-artifacts lacks is
   # built here (once per key and machine: mini1's cache is shared by its runners and the checks beside this job wait
@@ -263,11 +271,12 @@ jobs:
     if: ${{ !cancelled() && !failure() && needs.plan.outputs.android == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    # Two jobs side by side: its Kotlin, unit tests and debug app; and its lint, the longest part (2026-10-17).
+    # Two jobs side by side: its Kotlin, unit tests and debug app; and its lint, the longest part (2026-10-17), only
+    # for a change lint reads (plan: android_parts).
     strategy:
       fail-fast: false
       matrix:
-        part: [build, lint]
+        part: ${{ fromJSON(needs.plan.outputs.android_parts) }}
     env:
       STILLFAIL_CHECK_PART: android
       STILLFAIL_ANDROID: ${{ matrix.part }}
