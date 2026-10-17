@@ -137,8 +137,16 @@ export const navRow = style({
 });
 globalStyle(`${navRow} svg`, { color: vars.muted, flex: "none" });
 export const navText = style(ellipsis);
+/** The windows whose sidebar's top row is only a margin (Windows, its buttons at the page's right; brand, above). */
+const marginTop = ':root:is([data-desktop="custom"], [data-desktop="overlay"]):not([data-fullscreen]):not([data-sidebar="closed"])';
 /** The action over a list (SidebarList.tsx NavAction): 新建对话, with the filter beside it; 添加 Station, …. */
-export const navNew = style({ display: "flex", alignItems: "center", gap: 4, padding: "6px 8px 2px" });
+export const navNew = style({
+  display: "flex", alignItems: "center", gap: 4, padding: "6px 8px 2px",
+  // There it drags the window too, all but its controls (as the page's bar beside it does): with that margin, all that
+  // is empty above and beside 新建对话. Not in the closed bar, floating over the page.
+  selectors: { [`${marginTop} &`]: { WebkitAppRegion: "drag" } },
+});
+globalStyle(`${marginTop} ${navNew} :is(a, button, input, select, textarea, [role="button"], [tabindex])`, { WebkitAppRegion: "no-drag" });
 globalStyle(`${navNew} > ${navRow}`, { flex: 1, minWidth: 0 });
 /**
  * Folded and shown a while, the bar floats with a corner (shell.css.ts dock: the rail's places' 9 px ground, 6 in): what

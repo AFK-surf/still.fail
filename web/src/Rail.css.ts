@@ -38,6 +38,8 @@ export const top = style({
     // dragging the window), as on the web. Not in the closed bar (below), which starts under the buttons' row: this
     // selector outweighs that one, so it says so itself.
     '[data-desktop="inset"]:not([data-fullscreen]):not([data-sidebar="closed"]) &': { height: 41, WebkitAppRegion: "drag" },
+    // On Windows only its margin, but that drags the window too, level with the sidebar's (Sidebar.css.ts navNew).
+    ':is([data-desktop="custom"], [data-desktop="overlay"]):not([data-fullscreen]):not([data-sidebar="closed"]) &': { WebkitAppRegion: "drag" },
     // In the closed bar nothing: its places stand as far from its top as from its sides (rail's padding).
     '[data-sidebar="closed"] &': { height: 0, ...outsetBottom(6) },
   },
