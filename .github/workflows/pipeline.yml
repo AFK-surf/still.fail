@@ -386,11 +386,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: "windows-smoke-${{ github.sha }}", path: "${{ runner.temp }}/smoke", if-no-files-found: ignore, retention-days: 7 }
 
+  # The API and the web wait for the checks of what they are made of, not the Android app's (2026-10-17, as asked: its
+  # lint on GitHub's runners held a release's web back for minutes); the apps' releases (put) wait for all.
   api:
-    needs: [plan, check, check-linux, check-browser, check-android]
+    needs: [plan, check, check-linux, check-browser]
     # Not on the implicit success(): a skipped job before it (natives, when nothing native changed; check-android) would
     # skip it too (2026-10-04 to 05: the API was not deployed for a day). The checks it needs passed or were not needed.
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' }}
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 10
@@ -411,9 +413,9 @@ jobs:
         run: sh .github/deploy.sh api
 
   static:
-    needs: [plan, natives, check, check-linux, check-browser, check-android, api]
+    needs: [plan, natives, check, check-linux, check-browser, api]
     # After the API (a page may need what it adds), or without it when it did not change.
-    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
     runs-on: [self-hosted, mini1]
     environment: production
     timeout-minutes: 10
