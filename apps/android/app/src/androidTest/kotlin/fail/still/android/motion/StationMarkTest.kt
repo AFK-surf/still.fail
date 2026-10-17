@@ -1,8 +1,12 @@
 package fail.still.android.motion
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -100,9 +104,10 @@ class StationMarkTest {
         h.record("mark-chats-$theme").end()
 
         // Its icon, named for the station; never the station's name written out in a tag.
-        rule.onNodeWithContentDescription("Studio").assertExists()
-        rule.onNodeWithText("Studio").assertDoesNotExist()
-        rule.onNodeWithContentDescription("test").assertDoesNotExist()
+        // (Pages kept beside the list's have its rows too.)
+        rule.onAllNodesWithContentDescription("Studio").onFirst().assertExists()
+        rule.onAllNodesWithText("Studio").assertCountEquals(0)
+        rule.onAllNodesWithContentDescription("test").assertCountEquals(0)
     }
 
     /** The icon last sent to the cloud. */
