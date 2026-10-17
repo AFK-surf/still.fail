@@ -77,14 +77,36 @@ export function splitShared(source: string, title: string | null): { link: Compo
   const m = LINK.exec(source);
   const tt = title?.trim() ?? "";
   if (m === null) return { link: null, words: messageOf(source, title, null) };
-  const url = m[0];
-  const rest = (source.slice(0, m.index) + source.slice(m.index + url.length)).replace(/[ \t]+\n/g, "\n").trim();
+  const url = withoutTracking(m[0]);
+  const rest = (source.slice(0, m.index) + source.slice(m.index + m[0].length)).replace(/[ \t]+\n/g, "\n").trim();
   const site = siteOf(url);
   // Words that only name it (an app's "<title> <link>", or the subject itself): its title, not words of the message.
   const naming = rest !== "" && !rest.includes("\n") && Array.from(rest).length <= TITLE_MAX && (tt === "" || rest === tt);
   const linkTitle = tt !== "" ? tt : naming ? rest : "";
   const words = naming || rest === tt ? "" : rest;
   return { link: { url, ...(linkTitle ? { title: linkTitle } : {}), ...(site ? { site } : {}) }, words };
+}
+
+/// What apps add to a link to know who shared it (YouTube's `si`, Bilibili's `share_*`, `utm_*` …): left out, so a link
+/// shared twice is the same link (and says nothing of who shared it).
+const TRACKING = /^(si|feature|pp|utm_.*|spm_id_from|from_spmid|vd_source|share_(source|medium|plat|session_id|tag|from|id)|unique_k|igsh|igshid|fbclid|gclid|mc_cid|mc_eid)$/i;
+
+export function withoutTracking(link: string): string {
+  // By hand: Android's engine (Hermes) has no URLSearchParams to go through.
+  const hash = link.indexOf("#");
+  const [head, frag] = hash < 0 ? [link, ""] : [link.slice(0, hash), link.slice(hash)];
+  const q = head.indexOf("?");
+  if (q < 0) return link;
+  const name = (p: string) => {
+    const k = p.split("=")[0]!;
+    try {
+      return decodeURIComponent(k);
+    } catch {
+      return k;
+    }
+  };
+  const kept = head.slice(q + 1).split("&").filter((p) => p !== "" && !TRACKING.test(name(p)));
+  return head.slice(0, q) + (kept.length ? `?${kept.join("&")}` : "") + frag;
 }
 
 /// The longest words before a link taken as its title.

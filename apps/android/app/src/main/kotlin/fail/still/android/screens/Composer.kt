@@ -97,6 +97,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.unit.DpSize
@@ -152,6 +153,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
+import fail.still.android.data.ComposerLink
 import fail.still.android.data.DraftView
 import fail.still.android.data.decode
 import fail.still.core.StillFailCore
@@ -166,13 +168,13 @@ import kotlinx.serialization.builtins.serializer
  * whole), what the viewer shows it from before it is sent (no session keeps it yet), with its size. `pasted`: the text
  * it was made of, pasted (PastedText.kt).
  */
-class Pending(val id: Long, val name: String, val size: Long, val preview: ImageBitmap?, val local: ByteArray? = null, val width: Int? = null, val height: Int? = null, val pasted: PastedText? = null, val ref: RefFile? = null) {
+class Pending(val id: Long, val name: String, val size: Long, val preview: ImageBitmap?, val local: ByteArray? = null, val width: Int? = null, val height: Int? = null, val pasted: PastedText? = null, val ref: RefFile? = null, val link: ComposerLink? = null) {
     var done by mutableStateOf<Attachment?>(null)
     /** How much of it the station has, as it goes up in parts. */
     var sent by mutableStateOf<Long?>(null)
     var error by mutableStateOf<String?>(null)
-    /** A file of a station's named by its path (StationFiles.kt): it goes as words, nothing goes up. */
-    val named get() = ref?.mode == "path"
+    /** A file of a station's named by its path (StationFiles.kt), or a link shared in (share/): it goes as words, nothing goes up. */
+    val named get() = ref?.mode == "path" || link != null
 }
 
 /** A passage quoted in the message being written, with what is said about it. */
@@ -228,6 +230,18 @@ class Draft {
         text = kept.text
         kept.quotes.forEach { q -> quotes += DraftQuote(System.nanoTime(), q.author, q.text, q.ts, q.role ?: "person", q.file).also { it.comment = q.comment } }
         kept.files.forEach { a -> files += Pending(System.nanoTime(), a.name, a.size, null, width = a.width?.toInt(), height = a.height?.toInt()).also { it.done = a } }
+        kept.links.orEmpty().forEach { files += linkPending(it) }
+    }
+
+    /**
+     * What the core holds of it now, in place of what was kept (something shared into it while it was open: the core
+     * put it there, share/ShareActivity.kt); files still going up stay.
+     */
+    internal fun replace(kept: DraftView) {
+        val going = files.filter { it.done == null && it.error == null && !it.named }
+        quotes.clear(); files.clear()
+        fill(kept)
+        files.addAll(going)
     }
     internal val empty get() = text.isEmpty() && quotes.isEmpty() && files.isEmpty()
 
@@ -241,7 +255,9 @@ class Draft {
      *  named by its path is (StationFiles.kt), the files up, the quotes. */
     fun take(): Taken {
         val named = files.filter { it.named }
-        val words = (listOf(text.trim()) + named.map { pathWords(it.ref!!) }).filter { it.isNotEmpty() }.joinToString("\n")
+        // After the text: each link (its title on a line, then it), then where each file named by its path is (as the core's composer.take).
+        val links = named.mapNotNull { it.link }.map { l -> listOfNotNull(l.title?.takeIf { it.isNotEmpty() }, l.url).joinToString("\n") }
+        val words = (listOf(text.trim()) + links + named.mapNotNull { f -> f.ref?.let { pathWords(it) } }).filter { it.isNotEmpty() }.joinToString("\n")
         val taken = Taken(words, files.filter { !it.named }, quotes.toList(), text, named)
         text = ""; files.clear(); quotes.clear(); error = null; refClosed = null
         save()
@@ -303,9 +319,20 @@ object Drafts {
         }
     }
 
+    /** Something was put in `key`'s draft by the core (shared into it, share/): an open one takes what the core has now. */
+    fun refresh(key: String) {
+        val d = open[key] ?: return
+        val core = core ?: return
+        scope.launch {
+            val kept = try { core.call("draft.get", buildJsonObject { put("key", key) }) } catch (_: CoreException) { null }
+                ?.takeIf { it !is JsonNull }?.let { runCatching { decode(DraftView.serializer(), it) }.getOrNull() } ?: return@launch
+            d.replace(kept)
+        }
+    }
+
     internal fun save(key: String, d: Draft) {
         val core = core ?: return
-        val view = DraftView(d.text, d.quotes.map { it.sent().copy(comment = it.comment) }, d.files.mapNotNull { it.done })
+        val view = DraftView(d.text, d.quotes.map { it.sent().copy(comment = it.comment) }, d.files.mapNotNull { it.done }, d.files.mapNotNull { it.link })
         val params = buildJsonObject {
             put("key", key)
             StillFailJson.encodeToJsonElement(DraftView.serializer(), view).jsonObject.forEach { (k, v) -> put(k, v) }
@@ -745,11 +772,35 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
                 PastedCard(f, pasted, onRemove = remove,
                     onRetry = if (f.error != null && station != null) ({ draft.files.remove(f); pasteAsFile(app, draft, station, pasted.text) }) else null,
                     onRestore = if (pasted.restorable && !draft.starting) ({ draft.files.remove(f); draft.text = if (draft.text.isEmpty()) pasted.text else "${draft.text}\n${pasted.text}"; draft.focus++ }) else null)
+            } else if (f.link != null) Box(Modifier.sendTile(host, f.id)) {
+                LinkCard(f.link, onRemove = remove)
             } else if (f.ref != null && station != null) Box(Modifier.sendTile(host, f.id)) {
                 RefCard(f, onRemove = remove, shape = InComposerFiles) { openRefSheet(app, draft, f, station) }
             } else Box(Modifier.sendTile(host, f.id)) {
                 FileCard(f.done?.name ?: f.name, f.done?.size ?: f.size, f.error ?: if (f.done == null) uploadingText(f) else null, busy = f.done == null && f.error == null, onRemove = remove, shape = InComposerFiles)
             }
+        }
+    }
+}
+
+/** A link shared in (share/), as a file of the draft: nothing goes up, it is sent as words after the text. */
+internal fun linkPending(link: ComposerLink) = Pending(System.nanoTime(), link.title ?: link.url, 0, null, link = link)
+
+/** A link in the composer, as a file's card: the web's mark, its title, its site; tapped, it opens. */
+@Composable
+private fun LinkCard(link: ComposerLink, onRemove: () -> Unit) {
+    val open = LocalUriHandler.current
+    Row(
+        Modifier.width(236.dp).clip(InComposerFiles).background(chatInk().neutral).clickable { runCatching { open.openUri(link.url) } }.padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        IconIn(Icons.Web, 16.dp, C.muted)
+        Column(Modifier.weight(1f)) {
+            Text(link.title ?: link.url, fontSize = 15.sp, lineHeight = 20.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(link.site ?: link.url, fontSize = 11.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Box(Modifier.size(22.dp).clip(CircleShape).background(C.ink.copy(alpha = 0.06f)).clickable(onClick = onRemove), contentAlignment = Alignment.Center) {
+            IconIn(Icons.Close, 12.dp, C.muted)
         }
     }
 }

@@ -136,6 +136,9 @@ test("a_shared_things_link_goes_as_an_attachment_and_the_words_around_it_as_word
   // A selection with the page's link: the words stay words.
   assert.deepEqual(splitShared("第一行\n第二行\nhttps://a.com/p", "页面"), { link: { url: "https://a.com/p", title: "页面", site: "a.com" }, words: "第一行\n第二行" });
   assert.deepEqual(splitShared("一段笔记", "标题"), { link: null, words: "标题\n一段笔记" });
+  // Who shared it, left out: the same video shared twice is one link.
+  assert.equal(splitShared("https://youtube.com/watch?v=aqz-KE-bpKQ&si=Eq6lNagYjz_4el6I", null).link?.url, "https://youtube.com/watch?v=aqz-KE-bpKQ");
+  assert.equal(splitShared("https://www.bilibili.com/video/BV1x?spm_id_from=333.1&vd_source=ab&t=30", null).link?.url, "https://www.bilibili.com/video/BV1x?t=30");
 });
 
 test("a_shared_things_site_and_message", () => {

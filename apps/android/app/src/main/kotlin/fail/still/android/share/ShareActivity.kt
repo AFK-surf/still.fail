@@ -74,6 +74,8 @@ class ShareActivity : ComponentActivity() {
     private fun openApp(to: Opened?) {
         val open = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (to != null) {
+            // The app may have that chat's composer open already (its process kept): it takes what the core put in it.
+            to.key?.let { fail.still.android.screens.Drafts.refresh(it) }
             open.putExtra(MainActivity.OPEN_STATION, to.station)
             to.session?.let { open.putExtra(MainActivity.OPEN_SESSION, it) }
         }

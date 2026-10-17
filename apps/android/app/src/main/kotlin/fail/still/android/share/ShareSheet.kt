@@ -58,7 +58,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
 /** Where the app opens once what is shared is in a composer: a chat (its session) of a station, or a new chat on one. */
-class Opened(val station: String, val session: String?)
+class Opened(val station: String, val session: String?, val key: String?)
 
 /** How long the sheet takes to go (SheetHost's spring), closed by hand. */
 private const val SHEET_GONE_MS = 320L
@@ -114,7 +114,7 @@ private fun ColumnScope.ShareSheetContent(shared: Shared, target: ShareTarget?, 
                         id?.let { put("id", it) }
                         shared.title?.let { put("title", it) }
                     }).jsonObject
-                    onOpen(Opened(station, r["session"]?.jsonPrimitive?.content))
+                    onOpen(Opened(station, r["session"]?.jsonPrimitive?.content, r["key"]?.jsonPrimitive?.content))
                 } catch (e: CoreException) {
                     error = t("android-misc.shareIn.failed", "error" to (e.message ?: ""))
                     opening = null
