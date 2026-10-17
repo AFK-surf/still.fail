@@ -1132,9 +1132,10 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
     if (ctx.mine(m)) {
         // A finger held on the words picks a passage of them, here (MessagePick.kt).
         val (hold, words) = messagePick(m.ts, t("android-chat.annotate.you"), "person", m.text)
-        Column(Modifier.fillMaxWidth().flashed(motion, m.ts, flash), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Flashing, your words' bubble takes the accent's ground (it is the message); with no words, the row does.
+        Column(Modifier.fillMaxWidth().flashed(motion, m.ts.takeIf { m.text.isEmpty() }, flash), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             QuoteCards(m.quotes, jump, Alignment.End)
-            if (m.text.isNotEmpty()) CompositionLocalProvider(fail.still.android.ui.LocalPickedWords provides words) { Bubble(m.text, hold) }
+            if (m.text.isNotEmpty()) CompositionLocalProvider(fail.still.android.ui.LocalPickedWords provides words) { Bubble(m.text, hold, m.ts) }
             Files(ctx, m.attachments, mine = true)
             // Not taken by its agents yet: after a second it says it waits.
             if (waitingNow) Waiting(t("android-chat.chat.waitingAgent"))
@@ -1292,8 +1293,10 @@ private fun Waiting(text: String) {
 
 /** Your words, in their bubble on the right, a reference to another chat as its chip (ui/Markdown.kt → withRefs). */
 @Composable
-private fun Bubble(text: String, hold: Modifier) {
+private fun Bubble(text: String, hold: Modifier, ts: String? = null) {
     val ink = chatInk()
+    val motion = LocalChatMotion.current
+    val flash = ink.accent.copy(alpha = 0.2f).compositeOver(ink.neutral)
     // Words flying here from the composer (ChatHost.kt): their bubble forms round them as they come.
     val flight = LocalFlight.current
     val host = LocalFlightHost.current
@@ -1319,7 +1322,8 @@ private fun Bubble(text: String, hold: Modifier) {
                 .clip(Smooth(18.dp)).drawBehind {
                     // Flown in piece by piece, its ground is the host's (round the words on their way); else it comes in with them.
                     val alpha = when { flight == null -> 1f; !flight.carried && host?.flight === flight && flight.pieces() != null -> 0f; else -> flight.e() }
-                    drawRect(ink.neutral, alpha = alpha)
+                    val lit = if (motion != null && motion.flashing(ts)) motion.flash.value else 0f
+                    drawRect(androidx.compose.ui.graphics.lerp(ink.neutral, flash, lit), alpha = alpha)
                 }.padding(horizontal = 14.dp, vertical = 8.dp).then(mark).then(links).then(pick)
                 // On their way, its words are drawn piece by piece over the composer (ChatHost.kt FlightLayer), not here.
                 .drawWithContent { if (flight == null || host?.flight !== flight || flight.pieces() == null) drawContent() },

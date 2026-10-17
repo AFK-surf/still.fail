@@ -1,6 +1,6 @@
 // A passage marked in a message's words, as the web marks where a quote leads (Chat.tsx → findText, flashRange; the
 // ::highlight(quote-flash) in styles/global.css.ts): whatever text shows it (a paragraph of Markdown, a person's words,
-// your bubble) finds it in its own words, whitespace taken as one space, and draws a ground behind just that range.
+// your bubble) finds it in its own words, whitespace taken as one space, and draws a rounded ground behind just that range.
 package fail.still.android.ui
 
 import androidx.compose.runtime.Composable
@@ -118,7 +118,27 @@ fun passageMark(text: String): Pair<Modifier, (TextLayoutResult) -> Unit> {
                         drawPath(part, mark.color, style = Stroke(width, cap = StrokeCap.Round))
                     }
                 }
-            } else if (mark.level > 0f) for (r in ranges) if (r.last < l.layoutInput.text.length) drawPath(l.getPathForRange(r.first, r.last + 1), mark.color.copy(alpha = mark.level))
+            } else if (mark.level > 0f) {
+                // A rounded ground on each of its lines, as tall as the words (not the line: lines apart stay apart),
+                // a little past their ends.
+                val size = l.layoutInput.style.fontSize
+                val pad = 3.dp.toPx()
+                for (r in ranges) {
+                    if (r.last >= l.layoutInput.text.length) continue
+                    for (line in l.getLineForOffset(r.first)..l.getLineForOffset(r.last)) {
+                        val from = maxOf(r.first, l.getLineStart(line))
+                        val to = minOf(r.last + 1, l.getLineEnd(line, visibleEnd = true))
+                        if (to <= from) continue
+                        val em = if (size.isSp) size.toPx() else (l.getLineBottom(line) - l.getLineTop(line)) / 1.6f
+                        val mid = l.getLineBaseline(line) - em * 0.36f
+                        val box = Rect(
+                            l.getBoundingBox(from).left - pad, maxOf(l.getLineTop(line), mid - em * 0.72f),
+                            l.getBoundingBox(to - 1).right + pad, minOf(l.getLineBottom(line), mid + em * 0.72f),
+                        )
+                        drawSmooth(mark.color, 5.dp.toPx(), box, alpha = mark.level)
+                    }
+                }
+            }
         }
     return modifier to { layout[0] = it }
 }

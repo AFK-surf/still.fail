@@ -259,10 +259,10 @@ internal class ChatMotion(private val reduced: Boolean) {
     private var flashes = 0
 
     /**
-     * The message a quote last led to, by ts. As the web in Chrome, the quoted passage is marked in its words (`mark`:
-     * the accent at 28% for 1600ms, then 12% until 2600ms, then gone; ::highlight(quote-flash) and flashRange); a
-     * message whose words do not hold it (the mark never `found`) flashes whole instead (`flash`: web msgFlash, the
-     * accent's ground held to 60% of 1400ms, then --ease-out to none).
+     * The message a jump last led to, by ts. A quote's passage is marked in its words (`mark`: rounded grounds on its
+     * lines, the accent at [MARK_LEVEL]); a message whose words do not hold it (the mark never `found`), or a jump to a
+     * whole message, flashes it instead (`flash`: the accent's ground round the message, your bubble tinted). Either
+     * comes in over [FLASH_IN_MS], holds, then fades out: a highlight that steps or snaps reads as a flicker.
      */
     var flashed by mutableStateOf<String?>(null)
         private set
@@ -297,7 +297,7 @@ internal class ChatMotion(private val reduced: Boolean) {
     fun lead(ts: String, passage: String, accent: Color) {
         flashes++
         flashed = ts
-        mark = fail.still.android.ui.TextMark(passage, accent).also { it.level = 0.28f }
+        mark = fail.still.android.ui.TextMark(passage, accent)
     }
 
     suspend fun flash() {
@@ -306,15 +306,13 @@ internal class ChatMotion(private val reduced: Boolean) {
         try {
             kotlinx.coroutines.coroutineScope {
                 launch {
-                    flash.snapTo(1f)
-                    // CSS keyframes ease each stretch on its own: 0-60% holds (its curve changes nothing), then --ease-out.
-                    flash.animateTo(0f, keyframes { durationMillis = 1400; 1f at 0; 1f at 840 using Ease.Out; 0f at 1400 })
+                    flash.snapTo(0f)
+                    flash.animateTo(0f, keyframes { durationMillis = 1700; 0f at 0 using Ease.Out; 1f at FLASH_IN_MS; 1f at 900 using Ease.Standard; 0f at 1700 })
                 }
                 launch {
-                    // Two steps, no easing (a highlight does not transition): 28% until 1600ms, 12% until 2600ms.
-                    marking.snapTo(0.28f)
-                    marking.animateTo(0f, keyframes { durationMillis = 2600; 0.28f at 0; 0.28f at 1599; 0.12f at 1600; 0.12f at 2599; 0f at 2600 }) {
-                        m?.level = if (value >= 0.2f) 0.28f else if (value >= 0.1f) 0.12f else 0f
+                    marking.snapTo(0f)
+                    marking.animateTo(0f, keyframes { durationMillis = 2400; 0f at 0 using Ease.Out; MARK_LEVEL at FLASH_IN_MS; MARK_LEVEL at 1400 using Ease.Standard; 0f at 2400 }) {
+                        m?.level = value
                     }
                 }
             }
@@ -328,12 +326,27 @@ internal class ChatMotion(private val reduced: Boolean) {
 @Composable
 internal fun accentBg() = if (fail.still.android.ui.C.dark) Color(0xFF43251A) else Color(0xFFFFEFE6)
 
-/** A quoted message flashing, its whole box on the accent's ground, rounded 12dp as the web's. */
+/** How long a jump's highlight takes to come in, and how strong a quote's passage is marked. */
+private const val FLASH_IN_MS = 160
+private const val MARK_LEVEL = 0.24f
+
+/** Whether the message `ts` flashes whole now (a jump led to it, and no passage of it is marked). */
+internal fun ChatMotion.flashing(ts: String?) = ts != null && flashed == ts && mark?.found != true
+
+/**
+ * A message a jump led to flashing: the accent's ground round it, reaching [FLASH_BLEED] past its words on each side
+ * (into the list's padding and the gap between messages) so they sit inside it rather than against its edge.
+ */
 internal fun Modifier.flashed(motion: ChatMotion?, ts: String?, color: Color): Modifier =
     if (motion == null || ts == null) this else drawBehind {
-        if (motion.flashed != ts || motion.mark?.found == true) return@drawBehind
-        drawSmooth(color.copy(alpha = color.alpha * motion.flash.value), 12.dp.toPx())
+        if (!motion.flashing(ts)) return@drawBehind
+        val x = FLASH_BLEED.width.toPx()
+        val y = FLASH_BLEED.height.toPx()
+        drawSmooth(color.copy(alpha = color.alpha * motion.flash.value), 14.dp.toPx(), Rect(-x, -y, size.width + x, size.height + y))
     }
+
+/** How far a flashing message's ground reaches past it: within the list's 14dp padding, and half the 20dp gap. */
+private val FLASH_BLEED = androidx.compose.ui.unit.DpSize(10.dp, 8.dp)
 
 private fun lerp(a: Offset, b: Offset, t: Float) = Offset(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
 
