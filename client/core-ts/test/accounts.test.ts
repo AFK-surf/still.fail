@@ -137,7 +137,7 @@ test("sign_in_failures", async () => {
   assert.equal((await fails(run(accounts.completeSignIn("error=login_cancelled")))).message, "登录已取消");
   assert.equal(host.stored(LOGIN_KEY), undefined, "a failed login is not retried");
   await begin();
-  assert.equal((await fails(run(accounts.completeSignIn("error=access_denied")))).message, "Google 登录失败");
+  assert.equal((await fails(run(accounts.completeSignIn("error=access_denied")))).message, "登录失败");
   await begin();
   assert.equal((await fails(run(accounts.completeSignIn("code=c&state=wrong")))).message, "登录状态不匹配，请重新登录");
   assert.equal((await fails(run(accounts.completeSignIn("code=c&state=wrong")))).message, "登录状态不匹配，请重新登录");
