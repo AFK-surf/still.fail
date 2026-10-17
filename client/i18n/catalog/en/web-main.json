@@ -765,12 +765,8 @@
   "web-main.shareIn.to": "Send to",
   "web-main.shareIn.newChat": "New chat",
   "web-main.shareIn.startOn": "Start the new chat on",
-  "web-main.shareIn.note": "Add a note (optional)",
-  "web-main.shareIn.send": "Send",
-  "web-main.shareIn.sent": "Sent to “{title}”",
-  "web-main.shareIn.open": "Open",
-  "web-main.shareIn.sending": "send it",
   "web-main.shareIn.signIn": "Sign in to send it to {name}",
   "web-main.shareIn.search": "Search",
-  "web-main.shareIn.find": "Find a chat"
+  "web-main.shareIn.find": "Find a chat",
+  "web-main.shareIn.opening": "open the chat"
 }

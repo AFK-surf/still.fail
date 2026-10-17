@@ -3846,13 +3846,6 @@ data class ShareInKept (
 )
 
 @Serializable
-data class ShareInPick (
-	val station: String,
-	/// The chat's row `id`; absent: a new chat on the station.
-	val id: String? = null
-)
-
-@Serializable
 data class ShareInStation (
 	/// Its address.
 	val station: String,
@@ -3869,11 +3862,10 @@ data class ShareInView (
 	val items: List<ChatItem>,
 	/// The chat what came from the same site went to last time, in `items`. Absent when none (or it is gone).
 	val kept: ShareInKept? = null,
-	/// Where it goes: what was picked (`shareIn.pick`), else the one `kept`, else the latest chat, else a new chat on
-	/// the station new chats last started on. Absent when it can go nowhere.
-	val picked: ShareInPick? = null,
 	/// The workspace's stations up now: where a new chat can start.
 	val stations: List<ShareInStation>,
+	/// Where a new chat starts unless another is picked (its address): where the workspace's new chats last started.
+	val newOn: String? = null,
 	/// The chats are not known yet.
 	val loading: Boolean,
 	/// Why it can go nowhere (no chat, no station up), in words.

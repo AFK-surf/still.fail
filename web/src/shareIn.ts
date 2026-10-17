@@ -1,21 +1,23 @@
 // What another app shares into still.fail (docs/share-in.md): a link from a browser or a video app, some text. The page's
 // /share (the installed page's share target, and what the browser extension opens: cloud/CloudApp.tsx ShareLanding)
 // takes what it was given and goes to the workspace's page, where the sheet (phone: mobile/ShareIn.tsx) or the panel
-// (wide: ShareIn.tsx) shows where it goes: the core's `shareIn` view, picked with `shareIn.pick`, sent with `shareIn.send`.
-// Here is only what is being shared while it waits to be sent, and the calls; where it goes is the core's.
+// (wide: ShareIn.tsx) lists where it can go: the core's `shareIn` view. A tap has the core put it in that chat's
+// composer (`shareIn.open`) and opens the chat, where the person adds to it and sends it: the sheet has no field of its
+// own (one composer, not two). Here is only what is shared while the sheet is up, and the call.
 import { useRef, useSyncExternalStore } from "react";
 import { core, useTopic } from "./core/react.ts";
-import type { ShareInPick, ShareInView } from "./core/shapes.ts";
+import type { ShareInView } from "./core/shapes.ts";
 import { stationBase } from "./station.tsx";
 
 /**
  * What is being shared: `source` what the core is given as shared (the link, or the text, or the text with the link
  * after it when they are apart), `title` what the app gave as its subject. `popup`: in a window of its own that the
- * extension opened, which closes once it is sent. `note`: what was added to it before (a send that failed comes back).
+ * extension opened, which closes once a chat is picked; `ext`, that extension's id, to ask it to open the chat in the
+ * browser's still.fail tab.
  */
-export interface Shared { source: string; title: string | null; popup: boolean; note?: string }
+export interface Shared { source: string; title: string | null; popup: boolean; ext?: string | undefined }
 
-/** What /share was given (`?url=&title=&text=&popup=1`): null when nothing. */
+/** What /share was given (`?url=&title=&text=&popup=1&ext=`): null when nothing. */
 export function sharedOf(search: string): Shared | null {
   const q = new URLSearchParams(search);
   const field = (name: string) => q.get(name)?.trim() || null;
@@ -23,24 +25,25 @@ export function sharedOf(search: string): Shared | null {
   // A selection, or what an app says with its link (Android's text often has the link in it already): the link after it.
   const source = url ? (text && !text.includes(url) ? `${text}\n${url}` : text ?? url) : text;
   if (!source) return null;
-  return { source, title: title && title !== source ? title : null, popup: q.get("popup") === "1" };
+  const ext = field("ext");
+  return { source, title: title && title !== source ? title : null, popup: q.get("popup") === "1", ...(ext ? { ext } : {}) };
 }
 
 let shared: Shared | null = null;
 const heard = new Set<() => void>();
 
-/** What is shared now waits to be sent: the workspace's page shows where it goes. Null: nothing waits (it was sent, or let go). */
+/** What is shared now waits for a chat to go to: the workspace's page shows the sheet. Null: nothing waits. */
 export function offerShare(next: Shared | null): void {
   shared = next;
   for (const h of heard) h();
 }
 
-/** What waits to be sent, as it changes. */
+/** What waits for a chat to go to, as it changes. */
 export function useShared(): Shared | null {
   return useSyncExternalStore((h) => { heard.add(h); return () => { heard.delete(h); }; }, () => shared, () => null);
 }
 
-/** Let go of without sending: a window the extension opened goes with it. */
+/** Let go of without opening a chat: a window the extension opened goes with it. */
 export function dismissShare(s: Shared): void {
   if (shared === s) offerShare(null);
   if (s.popup) window.close();
@@ -61,36 +64,40 @@ export function useShareIn(scope: string, s: Shared, query = ""): ShareInView | 
 /** From how many chats the sheet offers to search them (as the Android app's does). */
 export const SEARCH_FROM = 6;
 
-/** Whether `picked` is the row (`id` on `station`), or with no `id` a new chat on `station`. */
-export function isPicked(picked: ShareInPick | undefined, station: string, id?: string): boolean {
-  return !!picked && picked.station === station && picked.id === id;
+/** The chat it is put in, as the core answers: by the session its page goes by; none, a new chat on `station`. */
+interface Opened { station: string; key: string; session?: string; thread?: number; title?: string }
+
+/**
+ * Puts it in the composer of the chat by its row's `id`, or with no `id` of a new chat on `station` (`shareIn.open`):
+ * answers the page to open, the chat's at the session its composer is kept by, or the workspace's new chat. `newKey`:
+ * the key the new chat's composer is kept by on the page that opens it, when not the core's `new:<station>` (the
+ * phone's, before its chat is made: draft.ts NO_KEY).
+ */
+export async function openShare(scope: string, s: Shared, station: string, id?: string, newKey?: string): Promise<string> {
+  const opened = await core().call("shareIn.open", { scope, source: s.source, station, ...(id ? { id } : {}), ...(s.title ? { title: s.title } : {}), ...(!id && newKey ? { key: newKey } : {}) }) as Opened;
+  return opened.session ? `${stationBase(opened.station)}/chats/${encodeURIComponent(opened.session)}` : `/w/${scope}/new`;
 }
 
-/** Picks where it goes: a chat by its row's `id`, or a new chat on `station`. */
-export function pickShare(scope: string, s: Shared, station: string, id?: string): Promise<unknown> {
-  return core().call("shareIn.pick", { scope, source: s.source, station, ...(id ? { id } : {}) });
-}
+/** How long a window the extension opened stays after the chat's tab is asked for, what it put in the chat kept on the device by then. */
+const POPUP_STAYS_MS = 1500;
 
-/** Where it went, as the core answers once it is in that chat's outbox. */
-export interface ShareSent { station: string; session: string; thread?: number; title: string }
+type ExtensionRuntime = { sendMessage(id: string, message: unknown, answer: (reply: unknown) => void): void; lastError?: unknown };
 
-/** Sends it, with what was added (`note`), to where it was picked to go. */
-export function sendShare(scope: string, s: Shared, note: string): Promise<ShareSent> {
-  const text = note.trim();
-  return core().call("shareIn.send", { scope, source: s.source, ...(s.title ? { title: s.title } : {}), ...(text ? { text } : {}) }) as Promise<ShareSent>;
-}
-
-/** The chat it went to: by the row picked (its `id`), or the new chat by the key it was made under. */
-export function sentPath(sent: ShareSent, picked: ShareInPick | undefined): string {
-  const id = picked?.station === sent.station && picked.id ? picked.id : sent.session;
-  return `${stationBase(sent.station)}/chats/${encodeURIComponent(id)}`;
-}
-
-/** How long a window the extension opened stays once sent, its note seen (and 打开 there to tap) before it closes. */
-export const POPUP_STAYS_MS = 1800;
-
-/** The chat it went to, from a window the extension opened: in a tab of the browser, the window closing. */
-export function openFromPopup(path: string): void {
-  window.open(new URL(path, location.origin).href, "_blank");
-  window.close();
+/**
+ * From a window the extension opened: the chat in the browser's still.fail tab, which the extension finds (or opens)
+ * and goes to, closing this window (apps/extension/background.js). With no extension to ask (or one that cannot), in a
+ * new tab, this window closing after.
+ */
+export function openFromPopup(s: Shared, path: string): void {
+  const url = new URL(path, location.origin).href;
+  const alone = () => { window.open(url, "_blank"); setTimeout(() => window.close(), POPUP_STAYS_MS); };
+  const runtime = (globalThis as { chrome?: { runtime?: ExtensionRuntime } }).chrome?.runtime;
+  if (!s.ext || !runtime?.sendMessage) return alone();
+  try {
+    runtime.sendMessage(s.ext, { open: url }, (reply) => {
+      if (runtime.lastError || (reply as { ok?: boolean } | undefined)?.ok !== true) alone();
+    });
+  } catch {
+    alone();
+  }
 }

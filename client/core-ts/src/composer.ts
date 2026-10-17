@@ -270,6 +270,13 @@ export class Composers {
     return this.#changed(key, s);
   }
 
+  /// Words put after what is written, as `append`, unless it has them already (shared into the chat once more).
+  offer(key: string, words: string): number {
+    const s = this.#state(key);
+    if (s.text.includes(words.trim())) return s.version;
+    return this.append(key, words);
+  }
+
   quote(key: string, quote: ComposerQuote, focus: boolean): number {
     const s = this.#state(key);
     s.quotes = [...s.quotes, quote];

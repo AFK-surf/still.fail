@@ -10,16 +10,21 @@ chrome.storage.sync.get({ origin: ORIGIN }).then(({ origin }) => { field.value =
 document.getElementById("form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const typed = field.value.trim() || ORIGIN;
-  let origin;
+  let origin, pattern;
   try {
     const url = new URL(typed);
     if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("not a web address");
     origin = url.origin;
+    pattern = `${url.protocol}//${url.hostname}/*`;
   } catch {
     said.dataset.error = "";
     said.textContent = chrome.i18n.getMessage("optionsInvalid");
     return;
   }
+  // Another still.fail: leave asked for to reach its tabs (to open a chat picked there in place), while the click is
+  // still one (before anything is waited on). Not given, a chat picked opens in a new tab instead.
+  const allowed = origin === ORIGIN ? Promise.resolve(true) : chrome.permissions.request({ origins: [pattern] }).catch(() => false);
+  await allowed;
   await chrome.storage.sync.set({ origin });
   field.value = origin;
   delete said.dataset.error;

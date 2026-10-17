@@ -10,7 +10,7 @@
 // bottom left, level with the composer (which starts beside it), opens the latest chats over the page: another chat
 // from there takes the place of the one open.
 import { transitionTo } from "../ui.tsx";
-import { said, ToastTo, type ToastAction } from "@stillfail/ui/toast.tsx";
+import { said, ToastTo } from "@stillfail/ui/toast.tsx";
 import { afterBack, useBackClose } from "@stillfail/ui/backClose.ts";
 import { backPage } from "../backPage.ts";
 import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -57,8 +57,7 @@ export interface MobileApp {
   under: () => BarPlace | null;
   sheet: (spec: SheetSpec | null) => void;
   menu: (spec: MenuSpec | null) => void;
-  /** A short note at the foot; `action`: something to do about it, at its end (打开). */
-  toast: (text: string, action?: ToastAction) => void;
+  toast: (text: string) => void;
   reader: (spec: ReaderSpec | null) => void;
 }
 
@@ -208,8 +207,8 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
 
   const [sheet, setSheet] = useState<SheetSpec | null>(null);
   const [menu, setMenu] = useState<MenuSpec | null>(null);
-  const [toast, setToast] = useState<Toast | null>(null);
-  const showToast = useCallback((text: string, action?: ToastAction) => setToast({ text: said(text), n: Date.now(), action }), []);
+  const [toast, setToast] = useState<{ text: string; n: number } | null>(null);
+  const showToast = useCallback((text: string) => setToast({ text: said(text), n: Date.now() }), []);
   const [reader, setReader] = useState<ReaderSpec | null>(null);
   const wide = useWide();
   // The latest chats over the page (WIDE).
@@ -638,24 +637,15 @@ function MenuHost({ spec, close }: { spec: MenuSpec | null; close: () => void })
   );
 }
 
-/** A note shown at the foot, and what it offers to do about what it says. */
-interface Toast { text: string; n: number; action?: ToastAction | undefined }
-
-function ToastHost({ toast }: { toast: Toast | null }) {
-  const [shown, setShown] = useState<Toast | null>(null);
+function ToastHost({ toast }: { toast: { text: string; n: number } | null }) {
+  const [shown, setShown] = useState<{ text: string; n: number } | null>(null);
   useEffect(() => {
     if (!toast) return;
     setShown(toast);
     const timer = setTimeout(() => setShown((t) => (t?.n === toast.n ? null : t)), 2600);
     return () => clearTimeout(timer);
   }, [toast]);
-  const action = shown?.action;
-  return (
-    <div className={css.mToast} data-open={shown ? true : undefined} data-action={action ? true : undefined} role="status">
-      {action ? <span className={css.mToastText}>{shown?.text}</span> : shown?.text}
-      {action && <button type="button" className={css.mToastAction} onClick={() => { setShown(null); action.run(); }}><span>{action.label}</span></button>}
-    </div>
-  );
+  return <div className={css.mToast} data-open={shown ? true : undefined} role="status">{shown?.text}</div>;
 }
 
 /** The reader comes in from the side over everything; ‹ returns to where it was opened. */

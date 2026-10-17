@@ -16,7 +16,7 @@ import { MobileWorkspace } from "../mobile/index.tsx";
 import { WorkspaceShell, type WorkspaceEntry } from "../cloud/workspace.tsx";
 import { CoreClient, type Topic } from "../core/client.ts";
 import type { ModelOption } from "../api.ts";
-import type { ChatItem, ChatMessage, ShareInPick, ShareInView } from "../core/shapes.ts";
+import type { ChatItem, ChatMessage, ShareInView } from "../core/shapes.ts";
 import { setCore, setTopicSource } from "../core/react.ts";
 import { addItem, agentCardView, chatView, newChat, received, VISITOR, chatsView, historyView, liveView, marked, message, outgoing, SAFARI_KEY, STATION } from "./fixtures.ts";
 import { makeStory, openingChats } from "./story.ts";
@@ -72,8 +72,8 @@ function demoValueOf(topic: Topic): unknown {
     // What the visitor chose (prefs.set, below): the defaults till then (the core's shape leaves them out).
     case "prefs": return prefs;
     case "doing": return { doing: [] };
-    // What is written stays the page's here (draft.ts shows what it did): no core keeps it.
-    case "composer": return null;
+    // What is written stays the page's here (draft.ts shows what it did), but for what was shared into a chat.
+    case "composer": return composerView(String(topic.key ?? ""));
     case "chats": return chatsView(chats);
     case "chat": return chat ? chatView(chat, station.runs()) : null;
     case "slackApp": return station.slackApp();
@@ -137,10 +137,9 @@ function pickView(of: string): unknown {
 
 /**
  * What another app shares (client/core-ts/src/share-in.ts), as the core puts it together of the demo's chats: those on
- * the page newest first (not a Slack chat), the one the same site's things went to last first, what `shareIn.pick`
- * picked else that one else the latest; the one station for a new chat.
+ * the page newest first (not a Slack chat), those whose title has what is typed, the one the same site's things went
+ * to last first; the one station for a new chat. `shareIn.open` puts it in that chat's composer (below).
  */
-const sharePicked = new Map<string, ShareInPick>();
 const shareKept = new Map<string, string>();
 /** The site of the first link in what is shared (`youtube.com`), as the core reads it (short hosts aside). */
 const siteOf = (source: string): string | null => {
@@ -156,25 +155,32 @@ function shareInView(source: string, query = ""): ShareInView {
   // What is typed finds them by title, as the core's search does first.
   const rows = shareRows().filter((r) => !q || r.title.toLowerCase().includes(q));
   const kept = rows.find((r) => r.id === shareKept.get(site ?? ""));
-  const latest = kept ?? rows[0];
-  const picked = sharePicked.get(source) ?? (latest ? { station: latest.station, id: latest.id } : { station: STATION });
   return {
     ...(site ? { site } : {}), items: (kept ? [kept, ...rows.filter((r) => r !== kept)] : rows).slice(0, 30),
     ...(kept ? { kept: { station: kept.station, id: kept.id, text: site ? `${site} 的链接上次发到这里` : "上次分享的文字发到这里" } } : {}),
-    picked, stations: [{ station: STATION, name: "Studio" }], loading: false,
+    stations: [{ station: STATION, name: "Studio" }], newOn: STATION, loading: false,
   };
 }
-/** `shareIn.send`: as the core sends it (what was added, the title when the link does not hold it, what is shared), to the chat picked or a new one. */
-function shareSend(source: string, title: string | undefined, note: string | undefined): unknown {
-  // Where the page shows it going (what a page adds to the demo's core too: the stories' states).
-  const picked = (valueOf({ topic: "shareIn", scope: station.WORKSPACE, source }) as ShareInView).picked ?? shareInView(source).picked!;
-  const text = [note?.trim(), title && !source.includes(title) ? `${title}\n${source}` : source].filter(Boolean).join("\n\n");
-  const key = picked.id ?? (answer("newChat.create", {}) as { key: string }).key;
-  const chat = chats.find((c) => c.key === key)!;
-  answer("chat.send", { thread: chat.thread, text });
-  shareKept.set(siteOf(source) ?? "", key);
-  sharePicked.delete(source);
-  return { station: STATION, session: key, thread: chat.thread, title: picked.id ? chat.title : "新 chat" };
+
+/**
+ * What is written in a chat, where the core put words of its own (what is shared, `shareIn.open`): the rest of the
+ * demo's composers are the page's alone (`composer` answers null for them).
+ */
+const composers = new Map<string, { text: string; rev: number; version: number }>();
+function composerView(key: string): unknown {
+  const c = composers.get(key);
+  return c ? { text: c.text, rev: c.rev, version: c.version, quotes: [], files: [], uploading: false, ready: c.text.trim() !== "", starting: false } : null;
+}
+/** `shareIn.open`: the title (when the link does not hold it) and what is shared, after what the composer holds, once. */
+function shareOpen(source: string, station: string, id: string | undefined, title: string | undefined): unknown {
+  const words = title && !source.includes(title) ? `${title}\n${source}` : source;
+  const row = id === undefined ? undefined : shareRows().find((r) => r.station === station && r.id === id);
+  const key = row ? `${station}:${row.session}` : `new:${station}`;
+  const c = composers.get(key) ?? { text: "", rev: 0, version: 0 };
+  if (!c.text.includes(words)) composers.set(key, { text: c.text.trim() ? `${c.text.trimEnd()}\n${words}` : words, rev: c.rev + 1, version: c.version + 1 });
+  if (row) shareKept.set(siteOf(source) ?? "", row.id);
+  setTimeout(publish, 0);
+  return row ? { station, key, session: row.session, thread: row.thread, title: row.title } : { station, key };
 }
 
 // Every topic starts at its value: the first render shows the demo at once (and so does the site built to HTML).
@@ -207,14 +213,18 @@ function answer(name: string, params: Record<string, unknown>, emit: (value: unk
     setTimeout(publish, 0);
     return null;
   }
-  if (name === "shareIn.pick" && typeof params.source === "string") {
-    sharePicked.set(params.source, { station: String(params.station), ...(typeof params.id === "string" ? { id: params.id } : {}) });
-    setTimeout(publish, 0);
-    return null;
+  if (name === "shareIn.open" && typeof params.source === "string") {
+    return shareOpen(params.source, String(params.station), params.id as string | undefined, params.title as string | undefined);
   }
-  if (name === "shareIn.send" && typeof params.source === "string") {
-    return shareSend(params.source, params.title as string | undefined, params.text as string | undefined);
+  // Words typed into a composer the core has words in (what was shared): kept with them.
+  const written = name === "composer.text" ? composers.get(String(params.key)) : undefined;
+  if (written && typeof params.text === "string") {
+    written.text = params.text;
+    written.version++;
+    return { version: written.version };
   }
+  // Taken to send: the page's own again.
+  if (name === "composer.take") composers.delete(String(params.key));
   if (name === "chat.create" || name === "newChat.create") {
     // 新建对话: made at once, under the key answered; what is sent to it follows.
     const made = newChat(Math.max(...chats.map((c) => c.thread)) + 1, typeof params.model === "string" ? params.model : undefined);

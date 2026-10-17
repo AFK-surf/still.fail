@@ -3860,12 +3860,6 @@ export interface ShareInKept {
 	text: string;
 }
 
-export interface ShareInPick {
-	station: string;
-	/** The chat's row `id`; absent: a new chat on the station. */
-	id?: string;
-}
-
 export interface ShareInStation {
 	/** Its address. */
 	station: string;
@@ -3883,13 +3877,10 @@ export interface ShareInView {
 	items: ChatItem[];
 	/** The chat what came from the same site went to last time, in `items`. Absent when none (or it is gone). */
 	kept?: ShareInKept;
-	/**
-	 * Where it goes: what was picked (`shareIn.pick`), else the one `kept`, else the latest chat, else a new chat on
-	 * the station new chats last started on. Absent when it can go nowhere.
-	 */
-	picked?: ShareInPick;
 	/** The workspace's stations up now: where a new chat can start. */
 	stations: ShareInStation[];
+	/** Where a new chat starts unless another is picked (its address): where the workspace's new chats last started. */
+	newOn?: string;
 	/** The chats are not known yet. */
 	loading: boolean;
 	/** Why it can go nowhere (no chat, no station up), in words. */

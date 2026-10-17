@@ -1,11 +1,10 @@
-// What another app shares into still.fail (share-in.ts): where it can go, where it goes by default (the chat a thing
-// from the same site went to last), and sending it there, into a chat or a new one.
+// What another app shares into still.fail (share-in.ts): where it can go, the chat a thing from the same site went to
+// last first, and into the composer of the one picked (a chat's, or a new chat's).
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Core } from "../src/core.ts";
 import { messageOf, siteOf } from "../src/share-in.ts";
 import type { FakeHost } from "../src/testing.ts";
-import { PENDING_PREFIX } from "../src/views/local.ts";
 import { apply, call, subscribe, v } from "./helpers.ts";
 import { base, overview, started, threadView } from "./station-fixture.ts";
 
@@ -58,7 +57,7 @@ function answers(): J {
   };
 }
 
-test("a_link_shared_goes_where_one_from_its_site_went_last_and_a_new_chat_is_one_of_the_places", async () => {
+test("a_link_shared_goes_into_the_composer_of_the_chat_picked_and_that_chat_comes_first_for_its_site", async () => {
   const { host, core } = await started(answers());
   const ui = core.connect();
   const values = new Map();
@@ -67,49 +66,57 @@ test("a_link_shared_goes_where_one_from_its_site_went_last_and_a_new_chat_is_one
   await host.settle();
   apply(host, values);
   let view = v(values, 1);
-  // Only still.fail's chats (a Slack chat takes no message from here), newest first; the latest picked.
+  // Only still.fail's chats (a Slack chat takes no message from here), newest first; a new chat on the station.
   assert.deepEqual(view.items.map((i: J) => i.title), ["读书笔记", "视频管理"]);
   assert.equal(view.site, "youtube.com");
   assert.equal(view.kept ?? null, null);
-  assert.deepEqual(view.picked, { station: "ws/st", id: "k8" });
   assert.deepEqual(view.stations, [{ station: "ws/st", name: "studio" }]);
+  assert.equal(view.newOn, "ws/st");
 
-  // Picked and sent: in that chat at once, what was added first, and the site remembered.
-  await ask(host, core, ui, 2, "shareIn.pick", { scope: "ws", source: yt, station: "ws/st", id: "k7" });
-  apply(host, values);
-  assert.deepEqual(v(values, 1).picked, { station: "ws/st", id: "k7" });
-  const sent = await ask(host, core, ui, 3, "shareIn.send", { scope: "ws", source: yt, text: "下到 station 上" });
-  assert.deepEqual(sent, { station: "ws/st", session: "k7", thread: 7, title: "视频管理" });
+  // Into that chat's composer, after what is written there already; nothing is sent.
+  await ask(host, core, ui, 2, "composer.text", { key: "ws/st:k7", text: "先看这个" });
+  const opened = await ask(host, core, ui, 3, "shareIn.open", { scope: "ws", source: yt, station: "ws/st", id: "k7" });
+  assert.deepEqual(opened, { station: "ws/st", key: "ws/st:k7", session: "k7", thread: 7, title: "视频管理" });
+  subscribe(core, ui, 4, { topic: "composer", key: "ws/st:k7" });
   await host.settle();
-  assert.equal(posted(host, "/threads/7/messages").at(-1)?.text, `下到 station 上\n\n${yt}`);
+  apply(host, values);
+  assert.equal(v(values, 4).text, `先看这个\n${yt}`);
+  // Shared again: in it once.
+  await ask(host, core, ui, 5, "shareIn.open", { scope: "ws", source: yt, station: "ws/st", id: "k7" });
+  apply(host, values);
+  assert.equal(v(values, 4).text, `先看这个\n${yt}`);
+  assert.equal(posted(host, "/threads/7/messages").length, 0);
 
-  // Another link from the site, by its short host: that chat first, saying why, and picked.
+  // Another link from the site, by its short host: that chat first, saying why.
   const short = "看看这个 https://youtu.be/xyz";
-  subscribe(core, ui, 4, { topic: "shareIn", scope: "ws", source: short });
+  subscribe(core, ui, 6, { topic: "shareIn", scope: "ws", source: short });
   await host.settle();
   apply(host, values);
-  view = v(values, 4);
+  view = v(values, 6);
   assert.deepEqual(view.items.map((i: J) => i.title), ["视频管理", "读书笔记"]);
   assert.deepEqual(view.kept, { station: "ws/st", id: "k7", text: "youtube.com 的链接上次发到这里" });
-  assert.deepEqual(view.picked, { station: "ws/st", id: "k7" });
-  // What is typed narrows the list; the one picked is still where it goes.
-  subscribe(core, ui, 5, { topic: "shareIn", scope: "ws", source: short, query: "读书" });
+  // What is typed narrows the list.
+  subscribe(core, ui, 7, { topic: "shareIn", scope: "ws", source: short, query: "读书" });
   await host.settle();
   apply(host, values);
-  assert.deepEqual(v(values, 5).items.map((i: J) => i.title), ["读书笔记"]);
+  assert.deepEqual(v(values, 7).items.map((i: J) => i.title), ["读书笔记"]);
 
-  // Text from another app (no link) goes to a new chat, made on the station: the message waits in it meanwhile.
-  const text = "一段笔记";
-  subscribe(core, ui, 6, { topic: "shareIn", scope: "ws", source: text });
-  await ask(host, core, ui, 7, "shareIn.pick", { scope: "ws", source: text, station: "ws/st" });
-  apply(host, values);
-  assert.deepEqual(v(values, 6).picked, { station: "ws/st" });
-  const made = await ask(host, core, ui, 8, "shareIn.send", { scope: "ws", source: text, title: "标题" });
-  assert.ok(String(made.session).startsWith(PENDING_PREFIX), JSON.stringify(made));
-  assert.equal(made.title, "新 chat");
+  // Text from another app, into a new chat's composer on the station, with the title the app gave.
+  const made = await ask(host, core, ui, 8, "shareIn.open", { scope: "ws", source: "一段笔记", title: "标题", station: "ws/st" });
+  assert.deepEqual(made, { station: "ws/st", key: "new:ws/st" });
+  subscribe(core, ui, 9, { topic: "composer", key: "new:ws/st" });
+  subscribe(core, ui, 10, { topic: "newChat", scope: "ws" });
   await host.settle();
-  assert.equal(posted(host, "/sessions").length, 1);
-  assert.equal(posted(host, "/threads/10/messages").at(-1)?.text, "标题\n一段笔记");
+  apply(host, values);
+  assert.equal(v(values, 9).text, "标题\n一段笔记");
+  assert.equal(v(values, 10).kept, "st");
+  assert.equal(posted(host, "/sessions").length, 0);
+  // A page that keeps a new chat's words by a key of its own (the phone web's, before its station): there.
+  await ask(host, core, ui, 11, "shareIn.open", { scope: "ws", source: "另一段", station: "ws/st", key: "new:" });
+  subscribe(core, ui, 12, { topic: "composer", key: "new:" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 12).text, "另一段");
   core.close();
 });
 

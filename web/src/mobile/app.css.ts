@@ -141,16 +141,8 @@ export const mToast = style({
   transform: "translateX(-50%)", opacity: "0", transition: "opacity 200ms", pointerEvents: "none",
   selectors: {
     "&[data-open]": { opacity: "1" },
-    // With something to do about it (打开) at its end: on one line, and to be tapped while it shows.
-    "&[data-action]": { display: "flex", alignItems: "baseline", gap: "14px", whiteSpace: "nowrap" },
-    "&[data-open][data-action]": { pointerEvents: "auto" },
   },
 });
-/** A toast's words beside what it offers to do: cut short at their end, what to do kept whole. */
-export const mToastText = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis" });
-/** What a toast offers to do: its words, bolder, in the toast's ink (the phone's buttons take their font and colour from it). */
-export const mToastAction = style({ flex: "none", padding: "0", border: "0", background: "none", cursor: "pointer" });
-globalStyle(`${mToastAction} > span`, { fontWeight: "600" });
 export const mReader = style({
   position: "fixed", inset: "0", zIndex: "60", display: "flex", flexDirection: "column", background: "var(--m-bg)",
   transform: "translateX(100%)", transition: "transform 300ms var(--m-standard)",

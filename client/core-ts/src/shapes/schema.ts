@@ -1400,8 +1400,8 @@ export const SHAPES: Record<string, Shape> = {
     ["site", opt("String"), { doc: "The site of the link shared (`youtube.com`, its www./m. left out); none for text without one." }],
     ["items", vec("ChatItem"), { doc: "The chats it can go to: the workspace's own on still.fail's page, newest first, the one `kept` first; those\nthe query finds when one is given. At most 30." }],
     ["kept", opt("ShareInKept"), { doc: "The chat what came from the same site went to last time, in `items`. Absent when none (or it is gone)." }],
-    ["picked", opt("ShareInPick"), { doc: "Where it goes: what was picked (`shareIn.pick`), else the one `kept`, else the latest chat, else a new chat on\nthe station new chats last started on. Absent when it can go nowhere." }],
     ["stations", vec("ShareInStation"), { doc: "The workspace's stations up now: where a new chat can start." }],
+    ["newOn", opt("String"), { doc: "Where a new chat starts unless another is picked (its address): where the workspace's new chats last started." }],
     ["loading", "bool", { doc: "The chats are not known yet." }],
     ["note", opt("String"), { doc: "Why it can go nowhere (no chat, no station up), in words." }],
   ], { doc: "Where something another app shares into still.fail goes (the `shareIn` topic; docs/share-in.md)." }),
@@ -1409,10 +1409,6 @@ export const SHAPES: Record<string, Shape> = {
     ["station", "String"],
     ["id", "String", { doc: "Its row's `id`." }],
     ["text", "String", { doc: "Why it is first, for its second line: youtube.com 的链接上次发到这里." }],
-  ]),
-  ShareInPick: struct([
-    ["station", "String"],
-    ["id", opt("String"), { doc: "The chat's row `id`; absent: a new chat on the station." }],
   ]),
   ShareInStation: struct([
     ["station", "String", { doc: "Its address." }],

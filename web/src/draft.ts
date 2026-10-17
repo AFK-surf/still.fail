@@ -111,7 +111,7 @@ export function useDraftInbox(key: string | undefined, take: (offer: Offer) => v
 }
 
 /** A new chat's draft before it has a key of its own (the phone's, before its station is known). */
-const NO_KEY = "new:";
+export const NO_KEY = "new:";
 
 /** What the page has of each file besides what the core says: its picture, the file itself (sent again, shown whole). */
 const local = new Map<string, Pick<Pending, "preview" | "image" | "pastedFile">>();

@@ -1,20 +1,18 @@
-// What another app shares into still.fail (a link from a browser or a video app, some text): the chat it goes to, and
-// sending it there (docs/share-in.md). The `shareIn` view lists the chats it can go to (the workspace's own chats on
-// still.fail's page, as the sidebar has them, newest first), the one it went to last time from the same site first,
-// and which is picked; `shareIn.pick` picks one (or a new chat on a station), `shareIn.send` sends it there with what
-// the person added. Sending does not wait on the station: the message is in that chat's outbox at once, and goes on
-// from there as any message written in the chat does (sent again after a restart).
+// What another app shares into still.fail (a link from a browser or a video app, some text): the chat it goes to
+// (docs/share-in.md). The `shareIn` view lists the chats it can go to (the workspace's own chats on still.fail's page,
+// as the sidebar has them, newest first), the one it went to last time from the same site first; `shareIn.open` puts
+// it in the composer of the one picked (or of a new chat on a station), where the person adds to it and sends it as
+// anything written there: the page opens that chat. One composer, not one of the sheet's own beside the chat's.
 import { Effect } from "effect";
-import type { Inner, Progress } from "./core.ts";
+import type { Inner } from "./core.ts";
 import type { Call } from "./core/calls.ts";
 import { handlers } from "./core/execute.ts";
 import type { Owner } from "./core/routing.ts";
-import { CoreError } from "./error.ts";
+import { asCoreError, CoreError } from "./error.ts";
 import { t } from "./i18n.ts";
-import { parseTopic, topicKey, type ClientId, type RequestId, type Topic } from "./protocol.ts";
+import { parseTopic, topicKey, type Topic } from "./protocol.ts";
 import * as refs from "./refs.ts";
 import type { Value, Watch } from "./store.ts";
-import type { SpanContext } from "./trace.ts";
 import { arr as arrU, get as getU, isObject } from "./util.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -25,8 +23,6 @@ const get = (v: unknown, k: string): J => getU(v, k);
 const TABLE = "choice";
 /// At most this many chats are offered (the search finds among all of them).
 export const LISTED = 30;
-/// The picks kept for sheets not sent from (yet).
-const PICKS_KEPT = 16;
 
 /// Where a shared thing goes: a chat (its row's `id`) or, without one, a new chat on `station`.
 export type Target = { station: string; id?: string };
@@ -58,8 +54,8 @@ export function siteOf(source: string): string | null {
   return SHORT[host] ?? host;
 }
 
-/// The message a shared thing goes as: what the person added first, then the title the app gave (when the shared text
-/// does not have it already), then what was shared.
+/// The words a shared thing goes into a composer as: what the person added first (none from a sheet: they add it in the
+/// composer), then the title the app gave (when the shared text does not have it already), then what was shared.
 export function messageOf(source: string, title: string | null, note: string | null): string {
   const parts: string[] = [];
   const n = note?.trim() ?? "";
@@ -87,9 +83,6 @@ function keptRow(rows: J[], k: J): J | undefined {
 export class ShareIn implements Owner {
   readonly #inner: Inner;
   readonly #watches = new Map<string, Watch[]>();
-  /// What is picked, by scope and what is shared (a sheet's topics, whatever is typed in it): dropped once sent; the
-  /// latest few kept, for a sheet opened again on the same thing.
-  readonly #picked = new Map<string, Target>();
 
   constructor(inner: Inner) {
     this.#inner = inner;
@@ -124,19 +117,6 @@ export class ShareIn implements Owner {
     return arr(v.ok).filter((s) => s.online === true).map((s) => ({ station: s.station, name: typeof s.name === "string" && s.name !== "" ? s.name : s.id }));
   }
 
-  /// Where it goes unless the person picks another: what was picked, else the chat a thing from the same site went to
-  /// last, else the latest chat, else a new chat on the station new chats last started on.
-  #target(scope: string, source: string, rows: J[], stations: J[]): Target | null {
-    const picked = this.#picked.get(JSON.stringify([scope, source]));
-    if (picked !== undefined) return picked;
-    const k = keptRow(rows, kept(this.#inner, scope, siteOf(source)));
-    if (k !== undefined) return { station: k.station, id: k.id };
-    if (rows.length > 0) return { station: rows[0].station, id: rows[0].id };
-    const last = this.#inner.choose.keptStation(scope);
-    const on = stations.find((s) => s.station === `${scope}/${last}`) ?? stations[0];
-    return on ? { station: on.station } : null;
-  }
-
   compute(topic: Topic): Value | undefined {
     const scope = topic.scope as string;
     const source = String(topic.source ?? "");
@@ -145,76 +125,49 @@ export class ShareIn implements Owner {
     const stations = this.#stations(scope) ?? [];
     const site = siteOf(source);
     const view: J = { site, items: [], stations, loading: all === null };
+    // Where a new chat starts unless another station is picked: where the scope's new chats last started.
+    const last = this.#inner.choose.keptStation(scope);
+    const on = stations.find((s) => s.station === `${scope}/${last}`) ?? stations[0];
+    if (on !== undefined) view.newOn = on.station;
     if (all === null) return { ok: view };
     const k = keptRow(all, kept(this.#inner, scope, site));
     const found = query.trim() === "" ? all : open(arr(refs.search({ days: [{ items: all }] }, query, null, null, undefined).items));
     const rest = found.filter((r) => r !== k);
     view.items = (k !== undefined && found.includes(k) ? [k, ...rest] : rest).slice(0, LISTED);
     if (k !== undefined) view.kept = { station: k.station, id: k.id, text: site !== null ? t("core-logic.shareIn.kept", { site }) : t("core-logic.shareIn.kept_text") };
-    const target = this.#target(scope, source, all, stations);
-    if (target !== null) view.picked = target.id !== undefined ? { station: target.station, id: target.id } : { station: target.station };
-    // The one picked, when what is typed leaves it out of the list: shown all the same.
-    if (target?.id !== undefined && !view.items.some((r: J) => r.station === target.station && r.id === target.id)) {
-      const row = all.find((r) => r.station === target.station && r.id === target.id);
-      if (row !== undefined && query.trim() === "") view.items = [row, ...view.items].slice(0, LISTED);
-    }
     if (stations.length === 0 && all.length === 0) view.note = t("core-logic.shareIn.none");
     return { ok: view };
   }
 
-  /// `shareIn.pick`: where what is shared goes.
-  pick(scope: string, source: string, target: Target): void {
-    const key = JSON.stringify([scope, source]);
-    this.#picked.delete(key);
-    this.#picked.set(key, target);
-    for (const k of [...this.#picked.keys()].slice(0, Math.max(0, this.#picked.size - PICKS_KEPT))) this.#picked.delete(k);
-    this.#inner.store.invalidateAll((x) => x.topic === "shareIn" && x.scope === scope && x.source === source);
-  }
-
-  /// `shareIn.send`: what is shared, with what the person added, into the chat picked (made first for a new one). The
-  /// answer says where it went (`title` for the page's note) once it is in that chat's outbox.
-  send(scope: string, source: string, title: string | null, note: string | null, client: string | null, progress: Progress, at: [ClientId, RequestId], ctx: SpanContext): Effect.Effect<J, CoreError> {
-    const inner = this.#inner;
-    return Effect.gen({ self: this }, function* () {
-      if (source.trim() === "") return yield* Effect.fail(CoreError.invalid(t("core-logic.shareIn.error.empty")));
-      const rows = this.#rows(scope) ?? [];
-      const target = this.#target(scope, source, rows, this.#stations(scope) ?? []);
-      if (target === null) return yield* Effect.fail(CoreError.invalid(t("core-logic.shareIn.none")));
-      const text = messageOf(source, title, note);
-      const site = siteOf(source);
-      const remember = (k: J) => inner.data.put(TABLE, `ws:${scope}:shareIn:${site ?? ""}`, k, false);
-      if (target.id === undefined) {
-        const made = yield* handlers.choose!(inner, { kind: "choose", name: "newChat.create", params: { station: target.station } }, progress, at, ctx);
-        const key = String(get(made, "key") ?? "");
-        yield* handlers.chatSendTo!(inner, { kind: "chatSendTo", station: target.station, session: key, text, attachments: [], quotes: [], client }, progress, at, ctx);
-        remember({ station: target.station, clientKey: key });
-        this.#picked.delete(JSON.stringify([scope, source]));
-        return { station: target.station, session: key, title: t("core-logic.shareIn.new_chat") };
-      }
-      const row = rows.find((r) => r.station === target.station && r.id === target.id);
-      if (row === undefined) return yield* Effect.fail(CoreError.invalid(t("core-views.error.no_chat")));
-      // In the outbox now; it goes on from there (and after a restart) while this answers.
-      const call: Call = typeof row.thread === "number"
-        ? { kind: "chatSend", station: target.station, thread: row.thread, text, attachments: [], quotes: [], client }
-        : { kind: "chatSendTo", station: target.station, session: row.session, text, attachments: [], quotes: [], client };
-      inner.runner.fork(Effect.ignore(handlers[call.kind]!(inner, call, progress, at, ctx)));
-      remember({ station: target.station, id: row.id });
-      this.#picked.delete(JSON.stringify([scope, source]));
-      return { station: target.station, session: row.session, ...(typeof row.thread === "number" ? { thread: row.thread } : {}), title: row.title };
-    });
+  /// `shareIn.open`: what is shared into the composer of the chat it goes to (a chat by its row's `id`, else a new chat
+  /// on `station`, made the station new chats start on: `new:<station>`, or `newKey`, the key the page that opens it
+  /// keeps a new chat's words by), after what is written there already, once; the page opens that chat and the person
+  /// sends it from its composer. The chat is kept as where that site's things go.
+  open(scope: string, source: string, title: string | null, target: Target, newKey: string | null = null): J {
+    if (source.trim() === "") throw CoreError.invalid(t("core-logic.shareIn.error.empty"));
+    const words = messageOf(source, title, null);
+    if (target.id === undefined) {
+      this.#inner.choose.pickNew(scope, { station: target.station.slice(target.station.lastIndexOf("/") + 1) });
+      const key = newKey ?? `new:${target.station}`;
+      this.#inner.composers.offer(key, words);
+      return { station: target.station, key };
+    }
+    const row = (this.#rows(scope) ?? []).find((r) => r.station === target.station && r.id === target.id);
+    if (row === undefined) throw CoreError.invalid(t("core-views.error.no_chat"));
+    const key = `${target.station}:${row.session}`;
+    this.#inner.composers.offer(key, words);
+    this.#inner.data.put(TABLE, `ws:${scope}:shareIn:${siteOf(source) ?? ""}`, { station: target.station, id: row.id }, false);
+    this.#inner.store.invalidateAll((x) => x.topic === "shareIn" && x.scope === scope);
+    return { station: target.station, key, session: row.session, ...(typeof row.thread === "number" ? { thread: row.thread } : {}), title: row.title };
   }
 }
 
 export function install(inner: Inner): ShareIn {
   const share = new ShareIn(inner);
   inner.router.owners.push(share);
-  handlers.shareIn = (_inner, call, progress, at, ctx) => {
+  handlers.shareIn = (_inner, call) => {
     const c = call as Extract<Call, { kind: "shareIn" }>;
-    if (c.target !== null) {
-      const target = c.target;
-      return Effect.sync(() => (share.pick(c.scope, c.source, target), null));
-    }
-    return share.send(c.scope, c.source, c.title, c.note, c.client, progress, at, ctx);
+    return Effect.try({ try: () => share.open(c.scope, c.source, c.title, c.target, c.key), catch: asCoreError });
   };
   return share;
 }

@@ -116,12 +116,13 @@ const toTheBar: Step[] = [{ move: [640, 20] }];
 let shareRowLike: ShareInView["items"][number] | undefined;
 /** What the share stories share: a video's link, with the title its app gave it. */
 const SHARED: Shared = { source: "https://www.youtube.com/watch?v=8pDqJVdNa44", title: "在家用旧电脑搭一台 NAS：从零到能用", popup: false };
-/**
- * Where it can go, in a state of its own: `kept`, the third chat the one youtube.com's links went to last (first, and
- * picked); `new`, a new chat picked with three stations up; `none`, no chat and no station; `loading`, the chats not known yet.
- */
 /** More chats than the demo has, for a list long enough to search (the sheet offers it from six). */
 const MORE_CHATS = ["NAS 和下载", "NAS 备份到 B2", "周报：十月第三周", "官网首屏改版", "Android 分享进来", "发版 0.1.2500"];
+/**
+ * Where it can go, in a state of its own: `kept`, the third chat the one youtube.com's links went to last (first);
+ * `new`, three stations up for a new chat; `none`, no chat and no station; `loading`, the chats not known yet;
+ * `search`, more chats than the demo has, enough to search.
+ */
 const sharing = (state: "kept" | "new" | "none" | "loading" | "search"): Pick<Story, "demo" | "share"> => ({
   share: SHARED,
   demo: {
@@ -133,7 +134,7 @@ const sharing = (state: "kept" | "new" | "none" | "loading" | "search"): Pick<St
       if (state === "loading") return { ...site, items: [], stations: [], loading: true } satisfies ShareInView;
       if (state === "none") return { ...site, items: [], stations: [], loading: false, note: "还没有能发到的 chat，也没有在线的 station" } satisfies ShareInView;
       if (state === "new") {
-        return { ...v, picked: { station: "demo/local" }, stations: [{ station: "demo/local", name: "Studio" }, { station: "demo/mini1", name: "Mini1" }, { station: "demo/mba", name: "MacBook Air" }] } satisfies ShareInView;
+        return { ...v, newOn: "demo/local", stations: [{ station: "demo/local", name: "Studio" }, { station: "demo/mini1", name: "Mini1" }, { station: "demo/mba", name: "MacBook Air" }] } satisfies ShareInView;
       }
       if (state === "search") {
         // Its own chats, then these: those the words find while searching (the demo's own are found already).
@@ -145,7 +146,7 @@ const sharing = (state: "kept" | "new" | "none" | "loading" | "search"): Pick<St
         return { ...v, items: [...v.items, ...more] } satisfies ShareInView;
       }
       const k = v.items[2] ?? v.items[0]!;
-      return { ...v, items: [k, ...v.items.filter((i) => i !== k)], kept: { station: k.station, id: k.id, text: "youtube.com 的链接上次发到这里" }, picked: { station: k.station, id: k.id } } satisfies ShareInView;
+      return { ...v, items: [k, ...v.items.filter((i) => i !== k)], kept: { station: k.station, id: k.id, text: "youtube.com 的链接上次发到这里" } } satisfies ShareInView;
     },
   },
 });
@@ -236,9 +237,9 @@ function AttachmentDemo({ name, url, type }: { name: string; url: string; type: 
 }
 const NOTE_URL = URL.createObjectURL(new Blob([NOTE], { type: "text/markdown" }));
 
-function ToastDemo({ text, action }: { text: string; action?: string }) {
+function ToastDemo({ text }: { text: string }) {
   const toast = useToast();
-  useEffect(() => { toast(text, action ? { label: action, run: noop } : undefined); }, [toast, text, action]);
+  useEffect(() => { toast(text); }, [toast, text]);
   return null;
 }
 
@@ -325,7 +326,6 @@ export const stories: Story[] = [
   { id: "dialog-confirm", group: "弹窗", title: "确认", render: () => stage(<Confirm open title="删除「设计稿」？" description="文件夹和里面的文件都会删除，不能恢复。" action="删除" onConfirm={noop} onClose={noop} />) },
   { id: "dialog-confirm-error", group: "弹窗", title: "确认 · 失败", render: () => stage(<Confirm open title="归档这个对话？" description="归档后有新消息会自动恢复。" action="归档" onConfirm={noop} onClose={noop} error="station 无响应" />) },
   { id: "toast", group: "弹窗", title: "toast", render: () => stage(<ToastDemo text="已复制链接" />) },
-  { id: "toast-action", group: "弹窗", title: "toast · 带操作", render: () => stage(<ToastDemo text="已发到「NAS 和下载」" action="打开" />) },
   { id: "toast-long", group: "弹窗", title: "toast · 长", render: () => stage(<ToastDemo text="没能上传：http://127.0.0.1:4760/upload 返回 413，文件超过了 station 允许的大小（200 MB）" />) },
 
   // ── the app (the site's demo) ──
@@ -365,7 +365,8 @@ export const stories: Story[] = [
   { id: "app-new-chat-not-shared", group: "应用", title: "新建对话 · 加入的 station 没有开放的 Profile", app: true, demo: notShared, steps: [{ text: "新建对话" }] },
   { id: "app-connects", group: "应用", title: "连接", app: true, steps: [{ click: '[aria-label="连接"]' }] },
   { id: "app-usage", group: "应用", title: "用量", app: true, steps: [{ click: '[aria-label="用量"]' }] },
-  { id: "app-share", group: "应用", title: "分享进来 · 发到上次那个 chat", app: true, ...sharing("kept") },
+  { id: "app-share", group: "应用", title: "分享进来 · 上次那个 chat 在最前", app: true, ...sharing("kept") },
+  { id: "app-share-opened", group: "应用", title: "分享进来 · 点了之后的 chat", app: true, ...sharing("kept"), steps: [{ click: 'button:has-text("youtube.com 的链接上次发到这里")' }] },
   { id: "app-share-new-chat", group: "应用", title: "分享进来 · 新 chat，几台 station", app: true, ...sharing("new") },
   { id: "app-share-none", group: "应用", title: "分享进来 · 没有 chat 也没有 station", app: true, ...sharing("none") },
   { id: "app-share-loading", group: "应用", title: "分享进来 · 加载中", app: true, ...sharing("loading") },
@@ -507,7 +508,8 @@ export const stories: Story[] = [
   { id: "phone-chat-station", group: "手机", title: "对话 · station 卡片", app: true, phone: true, steps: [{ click: '[aria-label$="的名片"]' }, { text: "Station" }] },
   { id: "phone-chat-pick", group: "手机", title: "对话 · 选取一段", app: true, phone: true, steps: [{ hold: '[data-role="agent"][data-ts] li' }] },
   { id: "phone-home", group: "手机", title: "首页", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }] },
-  { id: "phone-share", group: "手机", title: "分享进来 · 发到上次那个 chat", app: true, phone: true, ...sharing("kept") },
+  { id: "phone-share", group: "手机", title: "分享进来 · 上次那个 chat 在最前", app: true, phone: true, ...sharing("kept") },
+  { id: "phone-share-opened", group: "手机", title: "分享进来 · 点了之后的 chat", app: true, phone: true, ...sharing("kept"), steps: [{ click: 'button:has-text("youtube.com 的链接上次发到这里")' }] },
   { id: "phone-share-new-chat", group: "手机", title: "分享进来 · 新 chat，几台 station", app: true, phone: true, ...sharing("new") },
   { id: "phone-share-none", group: "手机", title: "分享进来 · 没有 chat 也没有 station", app: true, phone: true, ...sharing("none") },
   { id: "phone-share-loading", group: "手机", title: "分享进来 · 加载中", app: true, phone: true, ...sharing("loading") },
