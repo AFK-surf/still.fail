@@ -340,6 +340,7 @@ function PredictiveBackHandler({ enabled, begin, progress, done, cancel }: { ena
       }),
     ] : [];
     const press = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (keyboardTakesBack()) return true;
       if (!now.current.enabled) return false;
       now.current.begin();
       now.current.done();
@@ -350,12 +351,23 @@ function PredictiveBackHandler({ enabled, begin, progress, done, cancel }: { ena
   return null;
 }
 
+/**
+ * Back with the keyboard up puts the keyboard away and nothing else, as the system's IME takes it before the app on the
+ * Kotlin app's window; here (predictive back on) the app was told as well, and left the page under the keyboard.
+ */
+function keyboardTakesBack(): boolean {
+  if (!Keyboard.isVisible()) return false;
+  Keyboard.dismiss();
+  return true;
+}
+
 /** androidx.activity's BackHandler: back while `enabled` runs `onBack`. */
 function BackHandlerOf({ enabled, onBack }: { enabled: boolean; onBack: () => void }) {
   const now = useRef({ enabled, onBack });
   now.current = { enabled, onBack };
   useEffect(() => {
     const press = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (keyboardTakesBack()) return true;
       if (!now.current.enabled) return false;
       now.current.onBack();
       return true;
