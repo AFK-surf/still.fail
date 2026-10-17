@@ -637,8 +637,9 @@ const PEEK_GAP = 16;
 const SHOWS = new Set(["IMG", "VIDEO", "CANVAS", "IFRAME", "INPUT", "TEXTAREA", "SELECT"]);
 /**
  * How far the page moves aside for the folded sidebar about to be shown a while (shell.css.ts main, --peek-shift): as
- * far as what it shows now (in view, its bar aside: brand.css.ts) is from clearing the sidebar, as wide as it is. A
- * chat's column centred in a wide window moves little or not at all; a page from its left edge moves all the way.
+ * far as what it shows now (in view, its bar aside: brand.css.ts) is from clearing the sidebar, but no further than the
+ * room on its right, as wide as it is. A chat's column centred in a wide window moves little or not at all; where there
+ * is no room, the sidebar is over what is left under it.
  */
 function peekShift(): number {
   const main = document.querySelector<HTMLElement>(`.${shellCss.shell}[data-rail] > .${shellCss.main}`);
@@ -647,19 +648,22 @@ function peekShift(): number {
   const width = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sidebar-w")) || SIDEBAR.own;
   const reach = dock.getBoundingClientRect().right + width + PEEK_GAP;
   const page = main.getBoundingClientRect();
-  let left = Infinity;
+  let left = Infinity, right = -Infinity;
   // Its innermost parts that show something (text, a picture, a field): the boxes around them, and empty ones (a slot
   // for what comes over the page), may reach past what is drawn.
   for (const el of main.querySelectorAll("*")) {
     if (el.firstElementChild || el.closest(`.${sidebarCss.pageBar}`)) continue;
     if (!(el instanceof SVGElement || SHOWS.has(el.tagName) || el.textContent?.trim())) continue;
     const r = el.getBoundingClientRect();
-    if (r.width === 0 || r.height === 0 || r.left >= left || r.bottom <= page.top || r.top >= page.bottom || r.right <= page.left) continue;
+    if (r.width === 0 || r.height === 0 || (r.left >= left && r.right <= right) || r.bottom <= page.top || r.top >= page.bottom || r.right <= page.left || r.left >= page.right) continue;
     const style = getComputedStyle(el);
     if (style.visibility === "hidden" || style.opacity === "0") continue;
-    left = r.left;
+    left = Math.min(left, r.left);
+    right = Math.max(right, r.right);
   }
-  return left === Infinity ? 0 : Math.round(Math.min(width, Math.max(0, reach - Math.max(left, page.left))));
+  if (left === Infinity) return 0;
+  const room = page.right - PEEK_GAP - Math.min(right, page.right);
+  return Math.round(Math.max(0, Math.min(width, room, reach - Math.max(left, page.left))));
 }
 /** Shown a while, closed or about to be (in the move that closes it). */
 function markPeek(): void {
