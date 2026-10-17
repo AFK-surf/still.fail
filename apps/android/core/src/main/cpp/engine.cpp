@@ -5,10 +5,20 @@
 // the app goes to Kotlin (HermesEngine.kt) through JNI. The calls for what is kept sealed (`secure.*`: the Keystore, and
 // the prompt for the person) go to Kotlin instead of the shell (SecureStore.kt), answered through `complete`. A JS error that escapes, or a bug the core reports, ends the
 // core as a panic ended the Rust one: `{"fatal": …}`, and the app starts another.
+//
+// The same engine runs the core on iOS (the React Native app, apps/mobile-rn/modules/stillfail-core/ios/CoreEngine.mm,
+// which compiles this file into itself): what is the platform's is the clocks, randomness and the log below, and the
+// app's side (`Edge`), JNI here under __ANDROID__ and Objective-C++ there.
+#ifdef __ANDROID__
 #include <jni.h>
 #include <android/log.h>
-#include <pthread.h>
 #include <sys/random.h>
+#else
+#include <mach/mach_time.h>
+#include <os/log.h>
+#include <stdlib.h>
+#endif
+#include <pthread.h>
 #include <time.h>
 
 #include <atomic>
@@ -47,9 +57,51 @@ double clockMs(clockid_t clock) {
   return double(t.tv_sec) * 1000.0 + double(t.tv_nsec) / 1e6;
 }
 
+enum class Level { Debug, Info, Warn, Error };
+
+#ifdef __ANDROID__
 /// Timers run on CLOCK_BOOTTIME, which goes on while the phone sleeps: a 10 s wait begun before a sleep is over after
 /// it (the Rust core's `sleep` did the same with the wall clock).
 double bootMs() { return clockMs(CLOCK_BOOTTIME); }
+
+/// `monotonic`: a clock that stops while the phone sleeps.
+const clockid_t STEADY = CLOCK_MONOTONIC;
+
+void randomBytes(char* out, size_t n) {
+  for (size_t at = 0; at < n;) {
+    ssize_t got = getrandom(out + at, n - at, 0);
+    if (got > 0) at += size_t(got);
+  }
+}
+
+void logText(Level level, const std::string& text) {
+  int priority = level == Level::Error ? ANDROID_LOG_ERROR : level == Level::Warn ? ANDROID_LOG_WARN : level == Level::Info ? ANDROID_LOG_INFO : ANDROID_LOG_DEBUG;
+  __android_log_print(priority, TAG, "%s", text.c_str());
+}
+#else
+/// Timers run on mach_continuous_time, which goes on while the phone sleeps (Android's CLOCK_BOOTTIME).
+double bootMs() {
+  static const double msPerTick = [] {
+    mach_timebase_info_data_t base{};
+    mach_timebase_info(&base);
+    return double(base.numer) / double(base.denom) / 1e6;
+  }();
+  return double(mach_continuous_time()) * msPerTick;
+}
+
+/// `monotonic`: as Android's CLOCK_MONOTONIC, a clock that stops while the phone sleeps (Darwin's CLOCK_MONOTONIC
+/// does not).
+const clockid_t STEADY = CLOCK_UPTIME_RAW;
+
+void randomBytes(char* out, size_t n) { arc4random_buf(out, n); }
+
+/// The unified log, subsystem fail.still.core (`log stream --predicate 'subsystem == "fail.still.core"'`).
+void logText(Level level, const std::string& text) {
+  static os_log_t log = os_log_create("fail.still.core", TAG);
+  os_log_type_t type = level == Level::Error ? OS_LOG_TYPE_ERROR : level == Level::Warn ? OS_LOG_TYPE_DEFAULT : level == Level::Info ? OS_LOG_TYPE_INFO : OS_LOG_TYPE_DEBUG;
+  os_log_with_type(log, type, "%{public}s", text.c_str());
+}
+#endif
 
 /// A JSON string literal of `s` (for `{"fatal": …}`).
 std::string quote(const std::string& s) {
@@ -74,6 +126,21 @@ std::string quote(const std::string& s) {
 
 class Engine;
 
+/// The app's side of the engine: where what the core says goes, and who answers its `secure.*` calls (through
+/// Engine::completed, from any thread). Kotlin through JNI on Android (JniEdge, below).
+class Edge {
+ public:
+  virtual ~Edge() = default;
+  /// On the loop's thread, as it begins and as it ends.
+  virtual void enter() = 0;
+  virtual void leave() = 0;
+  virtual void say(const std::string& json) = 0;
+  /// What the core says with bytes beside it (a screen view's frame: client/core-ts hosts/bridge.ts emitBytes).
+  virtual void sayBytes(const std::string& json, const uint8_t* data, size_t size) = 0;
+  /// False when the app did not take the call.
+  virtual bool secure(uint64_t id, const std::string& op, const std::string& json, const uint8_t* data, size_t size, bool hasBytes) = 0;
+};
+
 /// What the shell answers through. Stopping the shell (sf_shell_stop, tokio's shutdown_background) does not wait for
 /// what it is doing: a task already running, or a disk read on its blocking threads, still answers after the engine is
 /// gone (a crash on a destroyed mutex after a core restart, 2026-10). So the shell holds this rather than the engine:
@@ -97,8 +164,8 @@ class Bytes : public jsi::Buffer {
 
 class Engine {
  public:
-  Engine(JavaVM* vm, jobject listener, std::string script, std::string url, std::string dataDir, std::string cloudOrigin, bool beta)
-      : vm_(vm), listener_(listener), script_(std::move(script)), url_(std::move(url)), dataDir_(std::move(dataDir)), cloudOrigin_(std::move(cloudOrigin)), beta_(beta) {}
+  Engine(std::unique_ptr<Edge> edge, std::string script, std::string url, std::string dataDir, std::string cloudOrigin, bool beta)
+      : edge_(std::move(edge)), script_(std::move(script)), url_(std::move(url)), dataDir_(std::move(dataDir)), cloudOrigin_(std::move(cloudOrigin)), beta_(beta) {}
 
   void start() {
     pthread_attr_t attr;
@@ -138,8 +205,7 @@ class Engine {
       gate_->engine = nullptr;
     }
     if (shell_) sf_shell_stop(shell_);
-    JNIEnv* env = nullptr;
-    if (vm_->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_OK && env) env->DeleteGlobalRef(listener_);
+    edge_.reset();
   }
 
   /// The shell's answer, from one of its threads: a task for the loop.
@@ -171,78 +237,16 @@ class Engine {
     wake_.notify_one();
   }
 
-  JNIEnv* env() {
-    JNIEnv* env = nullptr;
-    if (vm_->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) vm_->AttachCurrentThread(&env, nullptr);
-    return env;
-  }
-
-  /// What the core says to the app.
-  void say(const std::string& json) {
-    JNIEnv* e = env();
-    if (!onBytes_) {
-      jclass cls = e->GetObjectClass(listener_);
-      onBytes_ = e->GetMethodID(cls, "onBytes", "([B)V");
-      e->DeleteLocalRef(cls);
-    }
-    // Modified UTF-8 is not UTF-8 (an emoji would be wrong): the bytes go as they are, made a String in Kotlin.
-    jbyteArray bytes = e->NewByteArray(jsize(json.size()));
-    e->SetByteArrayRegion(bytes, 0, jsize(json.size()), reinterpret_cast<const jbyte*>(json.data()));
-    e->CallVoidMethod(listener_, onBytes_, bytes);
-    e->DeleteLocalRef(bytes);
-    if (e->ExceptionCheck()) e->ExceptionClear();
-  }
-
-  /// A `secure.*` call, to Kotlin (Engine.kt `onSecure`): it answers on its own threads, through HermesNative.complete.
+  /// A `secure.*` call, to the app: it answers on its own threads, through `completed`.
   void secure(uint64_t id, const std::string& op, const std::string& json, const uint8_t* data, size_t size, bool hasBytes) {
-    JNIEnv* e = env();
-    if (!onSecure_) {
-      jclass cls = e->GetObjectClass(listener_);
-      onSecure_ = e->GetMethodID(cls, "onSecure", "(JLjava/lang/String;[B[B)V");
-      e->DeleteLocalRef(cls);
-    }
-    jstring name = e->NewStringUTF(op.c_str());
-    jbyteArray head = e->NewByteArray(jsize(json.size()));
-    e->SetByteArrayRegion(head, 0, jsize(json.size()), reinterpret_cast<const jbyte*>(json.data()));
-    jbyteArray bytes = nullptr;
-    if (hasBytes) {
-      bytes = e->NewByteArray(jsize(size));
-      if (size > 0) e->SetByteArrayRegion(bytes, 0, jsize(size), reinterpret_cast<const jbyte*>(data));
-    }
-    e->CallVoidMethod(listener_, onSecure_, jlong(id), name, head, bytes);
-    e->DeleteLocalRef(name);
-    e->DeleteLocalRef(head);
-    if (bytes) e->DeleteLocalRef(bytes);
-    if (e->ExceptionCheck()) {
-      e->ExceptionClear();
-      completed(id, "", "the app did not take " + op, "", false);
-    }
-  }
-
-  /// What the core says to the app with bytes beside it (a screen view's frame: client/core-ts hosts/bridge.ts
-  /// emitBytes): the JSON without them, and the bytes copied once, straight from the JS heap into a Java array.
-  void sayBytes(const std::string& json, const uint8_t* data, size_t size) {
-    JNIEnv* e = env();
-    if (!onFrame_) {
-      jclass cls = e->GetObjectClass(listener_);
-      onFrame_ = e->GetMethodID(cls, "onFrame", "([B[B)V");
-      e->DeleteLocalRef(cls);
-    }
-    jbyteArray head = e->NewByteArray(jsize(json.size()));
-    e->SetByteArrayRegion(head, 0, jsize(json.size()), reinterpret_cast<const jbyte*>(json.data()));
-    jbyteArray bytes = e->NewByteArray(jsize(size));
-    if (size > 0) e->SetByteArrayRegion(bytes, 0, jsize(size), reinterpret_cast<const jbyte*>(data));
-    e->CallVoidMethod(listener_, onFrame_, head, bytes);
-    e->DeleteLocalRef(head);
-    e->DeleteLocalRef(bytes);
-    if (e->ExceptionCheck()) e->ExceptionClear();
+    if (!edge_->secure(id, op, json, data, size, hasBytes)) completed(id, "", "the app did not take " + op, "", false);
   }
 
   void fatal(const std::string& reason) {
     if (dead_) return;
     dead_ = true;
-    __android_log_print(ANDROID_LOG_ERROR, TAG, "the core failed: %s", reason.c_str());
-    say("{\"fatal\":" + quote(reason) + "}");
+    logText(Level::Error, "the core failed: " + reason);
+    edge_->say("{\"fatal\":" + quote(reason) + "}");
   }
 
   void install(jsi::Runtime& rt) {
@@ -282,16 +286,16 @@ class Engine {
       return s;
     });
     fn("emit", 2, [this](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
-      say(a[1].asString(rt).utf8(rt));
+      edge_->say(a[1].asString(rt).utf8(rt));
       return jsi::Value::undefined();
     });
     fn("emitBytes", 3, [this](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t n) -> jsi::Value {
       std::string json = a[1].asString(rt).utf8(rt);
       if (n > 2 && a[2].isObject() && a[2].asObject(rt).isArrayBuffer(rt)) {
         jsi::ArrayBuffer b = a[2].asObject(rt).getArrayBuffer(rt);
-        sayBytes(json, b.data(rt), b.size(rt));
+        edge_->sayBytes(json, b.data(rt), b.size(rt));
       } else {
-        sayBytes(json, nullptr, 0);
+        edge_->sayBytes(json, nullptr, 0);
       }
       return jsi::Value::undefined();
     });
@@ -300,15 +304,12 @@ class Engine {
       return jsi::Value::undefined();
     });
     fn("now", 0, [](jsi::Runtime&, const jsi::Value&, const jsi::Value*, size_t) -> jsi::Value { return jsi::Value(clockMs(CLOCK_REALTIME)); });
-    fn("monotonic", 0, [](jsi::Runtime&, const jsi::Value&, const jsi::Value*, size_t) -> jsi::Value { return jsi::Value(clockMs(CLOCK_MONOTONIC)); });
+    fn("monotonic", 0, [](jsi::Runtime&, const jsi::Value&, const jsi::Value*, size_t) -> jsi::Value { return jsi::Value(clockMs(STEADY)); });
     fn("utcOffset", 1, [](jsi::Runtime&, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value { return jsi::Value(double(sf_utc_offset_min(a[0].asNumber()))); });
     fn("random", 1, [](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
       size_t n = size_t(a[0].asNumber());
       std::string bytes(n, '\0');
-      for (size_t at = 0; at < n;) {
-        ssize_t got = getrandom(bytes.data() + at, n - at, 0);
-        if (got > 0) at += size_t(got);
-      }
+      randomBytes(bytes.data(), n);
       return arrayBuffer(rt, bytes.data(), n);
     });
     fn("setTimer", 2, [this](jsi::Runtime&, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
@@ -326,8 +327,7 @@ class Engine {
     });
     fn("log", 2, [](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
       int level = int(a[0].asNumber());
-      int priority = level >= 3 ? ANDROID_LOG_ERROR : level == 2 ? ANDROID_LOG_WARN : level == 1 ? ANDROID_LOG_INFO : ANDROID_LOG_DEBUG;
-      __android_log_print(priority, TAG, "%s", a[1].asString(rt).utf8(rt).c_str());
+      logText(level >= 3 ? Level::Error : level == 2 ? Level::Warn : level == 1 ? Level::Info : Level::Debug, a[1].asString(rt).utf8(rt));
       return jsi::Value::undefined();
     });
     rt.global().setProperty(rt, "__native", native);
@@ -343,7 +343,7 @@ class Engine {
   }
 
   void run() {
-    env();
+    edge_->enter();
     shell_ = sf_shell_start(dataDir_.c_str(), &Engine::onComplete, gate_);
     if (!shell_) {
       fatal("the core's files cannot be kept: " + dataDir_);
@@ -407,14 +407,10 @@ class Engine {
       }
     }
     rt.reset();
-    vm_->DetachCurrentThread();
+    edge_->leave();
   }
 
-  JavaVM* vm_;
-  jobject listener_;
-  jmethodID onBytes_ = nullptr;
-  jmethodID onFrame_ = nullptr;
-  jmethodID onSecure_ = nullptr;
+  std::unique_ptr<Edge> edge_;
   std::string script_, url_, dataDir_, cloudOrigin_;
   bool beta_;
   void* shell_ = nullptr;
@@ -428,6 +424,95 @@ class Engine {
   bool stopping_ = false;
   bool dead_ = false;
   std::atomic<int64_t> nextClient_{1};
+};
+
+#ifdef __ANDROID__
+/// The app's side on Android: Kotlin's HermesListener (Engine.kt), called through JNI on the loop's thread.
+class JniEdge : public Edge {
+ public:
+  JniEdge(JavaVM* vm, jobject listener) : vm_(vm), listener_(listener) {}
+
+  ~JniEdge() override {
+    JNIEnv* env = nullptr;
+    if (vm_->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_OK && env) env->DeleteGlobalRef(listener_);
+  }
+
+  void enter() override { env(); }
+  void leave() override { vm_->DetachCurrentThread(); }
+
+  /// What the core says to the app.
+  void say(const std::string& json) override {
+    JNIEnv* e = env();
+    if (!onBytes_) {
+      jclass cls = e->GetObjectClass(listener_);
+      onBytes_ = e->GetMethodID(cls, "onBytes", "([B)V");
+      e->DeleteLocalRef(cls);
+    }
+    // Modified UTF-8 is not UTF-8 (an emoji would be wrong): the bytes go as they are, made a String in Kotlin.
+    jbyteArray bytes = e->NewByteArray(jsize(json.size()));
+    e->SetByteArrayRegion(bytes, 0, jsize(json.size()), reinterpret_cast<const jbyte*>(json.data()));
+    e->CallVoidMethod(listener_, onBytes_, bytes);
+    e->DeleteLocalRef(bytes);
+    if (e->ExceptionCheck()) e->ExceptionClear();
+  }
+
+  /// A `secure.*` call, to Kotlin (Engine.kt `onSecure`): it answers on its own threads, through HermesNative.complete.
+  bool secure(uint64_t id, const std::string& op, const std::string& json, const uint8_t* data, size_t size, bool hasBytes) override {
+    JNIEnv* e = env();
+    if (!onSecure_) {
+      jclass cls = e->GetObjectClass(listener_);
+      onSecure_ = e->GetMethodID(cls, "onSecure", "(JLjava/lang/String;[B[B)V");
+      e->DeleteLocalRef(cls);
+    }
+    jstring name = e->NewStringUTF(op.c_str());
+    jbyteArray head = e->NewByteArray(jsize(json.size()));
+    e->SetByteArrayRegion(head, 0, jsize(json.size()), reinterpret_cast<const jbyte*>(json.data()));
+    jbyteArray bytes = nullptr;
+    if (hasBytes) {
+      bytes = e->NewByteArray(jsize(size));
+      if (size > 0) e->SetByteArrayRegion(bytes, 0, jsize(size), reinterpret_cast<const jbyte*>(data));
+    }
+    e->CallVoidMethod(listener_, onSecure_, jlong(id), name, head, bytes);
+    e->DeleteLocalRef(name);
+    e->DeleteLocalRef(head);
+    if (bytes) e->DeleteLocalRef(bytes);
+    if (e->ExceptionCheck()) {
+      e->ExceptionClear();
+      return false;
+    }
+    return true;
+  }
+
+  /// The JSON without the bytes, and the bytes copied once, straight from the JS heap into a Java array.
+  void sayBytes(const std::string& json, const uint8_t* data, size_t size) override {
+    JNIEnv* e = env();
+    if (!onFrame_) {
+      jclass cls = e->GetObjectClass(listener_);
+      onFrame_ = e->GetMethodID(cls, "onFrame", "([B[B)V");
+      e->DeleteLocalRef(cls);
+    }
+    jbyteArray head = e->NewByteArray(jsize(json.size()));
+    e->SetByteArrayRegion(head, 0, jsize(json.size()), reinterpret_cast<const jbyte*>(json.data()));
+    jbyteArray bytes = e->NewByteArray(jsize(size));
+    if (size > 0) e->SetByteArrayRegion(bytes, 0, jsize(size), reinterpret_cast<const jbyte*>(data));
+    e->CallVoidMethod(listener_, onFrame_, head, bytes);
+    e->DeleteLocalRef(head);
+    e->DeleteLocalRef(bytes);
+    if (e->ExceptionCheck()) e->ExceptionClear();
+  }
+
+ private:
+  JNIEnv* env() {
+    JNIEnv* env = nullptr;
+    if (vm_->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) vm_->AttachCurrentThread(&env, nullptr);
+    return env;
+  }
+
+  JavaVM* vm_;
+  jobject listener_;
+  jmethodID onBytes_ = nullptr;
+  jmethodID onFrame_ = nullptr;
+  jmethodID onSecure_ = nullptr;
 };
 
 std::string utf8(JNIEnv* env, jstring s) {
@@ -445,15 +530,18 @@ std::string utf8(JNIEnv* env, jstring s) {
   return out;
 }
 
+#endif
+
 }  // namespace
 
+#ifdef __ANDROID__
 extern "C" JNIEXPORT jlong JNICALL Java_fail_still_core_HermesNative_start(JNIEnv* env, jobject, jbyteArray script, jstring url, jstring dataDir, jstring cloudOrigin, jboolean beta, jobject listener) {
   JavaVM* vm = nullptr;
   env->GetJavaVM(&vm);
   jsize n = env->GetArrayLength(script);
   std::string bytes(size_t(n), '\0');
   env->GetByteArrayRegion(script, 0, n, reinterpret_cast<jbyte*>(bytes.data()));
-  auto* engine = new Engine(vm, env->NewGlobalRef(listener), std::move(bytes), utf8(env, url), utf8(env, dataDir), utf8(env, cloudOrigin), beta == JNI_TRUE);
+  auto* engine = new Engine(std::make_unique<JniEdge>(vm, env->NewGlobalRef(listener)), std::move(bytes), utf8(env, url), utf8(env, dataDir), utf8(env, cloudOrigin), beta == JNI_TRUE);
   engine->start();
   return reinterpret_cast<jlong>(engine);
 }
@@ -482,3 +570,4 @@ extern "C" JNIEXPORT void JNICALL Java_fail_still_core_HermesNative_close(JNIEnv
   engine->stop();
   delete engine;
 }
+#endif

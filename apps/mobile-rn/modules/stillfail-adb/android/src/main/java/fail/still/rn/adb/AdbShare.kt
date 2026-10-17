@@ -1,0 +1,519 @@
+// This phone's adb, lent to a station's agents (docs/adb-share.md): Wireless debugging's ports found on the phone
+// (DNS-SD) and given to the core (`adb.share`), which offers them to the station and carries what its agents' adb sends
+// (client/core-ts/src/adb.ts). A foreground service holds the app up meanwhile and says so, with 停止. While the pairing
+// dialog is open its code is read off it (AdbCodeReader.kt, where the person turned that on), else a second notification
+// pops up over it with a field for the code: the dialog closes as soon as Settings is paused (left for the app, another
+// app), so the code can only be typed somewhere that leaves Settings in front.
+//
+// apps/android's AdbShare.kt as it is, but for the core: the app's core is its JavaScript's here, so what the service
+// asks of it goes there (Core, below; index.ts `serve` makes the calls) and the words it says are given by the page as
+// it starts the service (`AdbShare.words`, from the same catalog).
+package fail.still.rn.adb
+
+import android.Manifest
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.RemoteInput
+import android.app.Service
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.net.nsd.NsdManager
+import android.net.nsd.NsdServiceInfo
+import android.os.Build
+import android.os.Bundle
+import android.os.Handler
+import android.os.IBinder
+import android.os.Looper
+import android.provider.Settings
+import java.net.InetAddress
+import java.net.NetworkInterface
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import org.json.JSONObject
+
+object AdbShare {
+    const val STATION = "station"
+    const val NAME = "name"
+    internal const val CODE = "code"
+    internal const val START = "fail.still.android.adb.START"
+    internal const val STOP = "fail.still.android.adb.STOP"
+    internal const val PAIR = "fail.still.android.adb.PAIR"
+    internal const val READ = "fail.still.android.adb.READ"
+    internal const val PORT = "port"
+    private const val CHANNEL = "adb"
+    /** The pairing code's: heads-up, so its field shows over Settings without the shade pulled down. */
+    private const val PAIR_CHANNEL = "adb-pair"
+    internal const val ID = 7
+    internal const val PAIR_ID = 8
+    /** `Settings.Global.ADB_WIFI_ENABLED`, which the SDK hides. */
+    private const val WIRELESS = "adb_wifi_enabled"
+
+    /**
+     * The words the notifications say, by the catalog's key, in the app's language (the page gives them as it starts the
+     * service: `start` in index.ts). A key's `#one`: its words for `n` 1.
+     */
+    @Volatile internal var words: Map<String, String> = emptyMap()
+
+    /** Wireless debugging is Android 11's. */
+    val supported get() = Build.VERSION.SDK_INT >= 30
+
+    /** Lends the phone to `station`'s agents (`name`, for the notification); another station's in place of one before. */
+    fun start(context: Context, station: String, name: String) {
+        context.startForegroundService(Intent(context, AdbShareService::class.java).setAction(START).putExtra(STATION, station).putExtra(NAME, name))
+    }
+
+    fun developerOptions(context: Context) = Settings.Global.getInt(context.contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1
+    fun wirelessOn(context: Context) = Settings.Global.getInt(context.contentResolver, WIRELESS, 0) == 1
+    /** Whether the app may turn Wireless debugging on itself: the station's adb granted it (`adb.grant`). */
+    fun canSwitch(context: Context) = context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED
+    fun switchOn(context: Context): Boolean = canSwitch(context) && runCatching { Settings.Global.putInt(context.contentResolver, WIRELESS, 1) }.getOrDefault(false)
+    fun wirelessUri() = Settings.Global.getUriFor(WIRELESS)
+
+    /** Wireless debugging needs Wi-Fi: Android turns it off without. */
+    fun onWifi(context: Context): Boolean {
+        val connectivity = context.getSystemService(ConnectivityManager::class.java) ?: return false
+        return connectivity.getNetworkCapabilities(connectivity.activeNetwork)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+    }
+
+    /**
+     * Developer options, at Wireless debugging (its row lit up), where it is turned on and paired. `beside`: next to the
+     * app when the screen is split (or splits, on large screens), so the app's own field can be used with the dialog open.
+     */
+    fun openWireless(context: Context, beside: Boolean = false) {
+        var flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        if (beside) flags = flags or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT
+        val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).putExtra(":settings:fragment_args_key", "toggle_adb_wireless").addFlags(flags)
+        runCatching { context.startActivity(intent) }.onFailure { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    internal fun notification(context: Context, view: AdbShareView?, name: String, said: String?): Notification {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(NotificationChannel(CHANNEL, t("android-misc.adb.title"), NotificationManager.IMPORTANCE_LOW))
+        // The app as its launcher opens it (the Android app's MainActivity).
+        val launch = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent().setPackage(context.packageName)
+        val open = PendingIntent.getActivity(context, 0, launch, PendingIntent.FLAG_IMMUTABLE)
+        val stop = PendingIntent.getService(context, 1, Intent(context, AdbShareService::class.java).setAction(STOP), PendingIntent.FLAG_IMMUTABLE)
+        val text = said ?: line(context, view)
+        val builder = Notification.Builder(context, CHANNEL)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setColor(0xFFE5704A.toInt())
+            .setContentTitle(t("android-misc.adb.notify.title", "name" to name))
+            .setContentText(text)
+            .setStyle(Notification.BigTextStyle().bigText(text))
+            .setContentIntent(open)
+            .setOngoing(true)
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .addAction(Notification.Action.Builder(null as android.graphics.drawable.Icon?, t("android-misc.adb.stop"), stop).build())
+        return builder.build()
+    }
+
+    /** Whether the pairing dialog is open (its port is announced) and its code still wanted. */
+    fun pairing(view: AdbShareView?) = view?.pairPort != null && view.adb != "connected"
+
+    /** The pairing port announced for this app's share while its code is wanted (AdbShareService says): what AdbCodeReader reads for. */
+    val pairingPort = MutableStateFlow<UInt?>(null)
+
+    /** Whether the person turned on AdbCodeReader (Accessibility), which fills the pairing code in by itself. */
+    fun reads(context: Context): Boolean {
+        val on = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
+        val reader = ComponentName(context, AdbCodeReader::class.java)
+        return on.split(':').any { ComponentName.unflattenFromString(it) == reader }
+    }
+
+    /** Accessibility's settings, at AdbCodeReader's row where Settings lights it up. */
+    fun openReader(context: Context) {
+        val reader = ComponentName(context, AdbCodeReader::class.java).flattenToString()
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra(":settings:fragment_args_key", reader)
+            .putExtra(":settings:show_fragment_args", Bundle().apply { putString(":settings:fragment_args_key", reader) })
+        runCatching { context.startActivity(intent) }.onFailure { context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    /** The code AdbCodeReader read off the dialog at `port`, to pair with (AdbShareService, once per dialog). */
+    internal fun read(context: Context, code: String, port: UInt) {
+        runCatching { context.startService(Intent(context, AdbShareService::class.java).setAction(READ).putExtra(CODE, code).putExtra(PORT, port.toInt())) }
+    }
+
+    /**
+     * The field for the pairing dialog's code, popping up over it (Settings stays in front, so the dialog stays open):
+     * `said` in place of the ask, while a code typed is tried or after it failed.
+     */
+    internal fun pairNotification(context: Context, said: String?): Notification {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(NotificationChannel(PAIR_CHANNEL, t("android-misc.adb.pair.channel"), NotificationManager.IMPORTANCE_HIGH))
+        val pair = PendingIntent.getService(context, 2, Intent(context, AdbShareService::class.java).setAction(PAIR), PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val input = RemoteInput.Builder(CODE).setLabel(t("android-misc.adb.code")).build()
+        return Notification.Builder(context, PAIR_CHANNEL)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setColor(0xFFE5704A.toInt())
+            .setContentTitle(t("android-misc.adb.pair.ask"))
+            .setContentText(said ?: if (reads(context)) t("android-misc.adb.pair.auto") else t("android-misc.adb.typeCode"))
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setCategory(Notification.CATEGORY_MESSAGE)
+            .addAction(Notification.Action.Builder(null as android.graphics.drawable.Icon?, t("android-misc.adb.enterCode"), pair).addRemoteInput(input).build())
+            .build()
+    }
+
+    /** How it stands, in a line. */
+    fun line(context: Context, view: AdbShareView?): String = when {
+        view == null || view.phase == "connecting" -> view?.message ?: t("android-misc.adb.connecting")
+        view.adb == "connected" -> view.until?.let { t("android-misc.adb.connected.left", "n" to minutesLeft(it)) } ?: t("android-misc.adb.connected")
+        view.adb == "unpaired" -> if (view.pairPort == null) t("android-misc.adb.notPaired") else if (reads(context)) t("android-misc.adb.pair.auto") else t("android-misc.adb.pair.popped")
+        view.adb == "off" -> t("android-misc.adb.off")
+        else -> view.message ?: t("android-misc.adb.attaching")
+    }
+
+    fun minutesLeft(until: Long) = ((until - System.currentTimeMillis()) / 60_000).coerceAtLeast(0)
+}
+
+/** The words for `key` (AdbShare.words), with `args` put in for `{name}`; `n` 1 takes the key's `#one`, as the catalog's t does. */
+internal fun t(key: String, vararg args: Pair<String, Any>): String {
+    val one = args.any { (name, value) -> name == "n" && value.toString() == "1" }
+    var text = (if (one) AdbShare.words["$key#one"] else null) ?: AdbShare.words[key] ?: key
+    for ((name, value) in args) text = text.replace("{$name}", value.toString())
+    return text
+}
+
+/** The core's `adbShare` topic (shapes.ts AdbShareView): what the service reads of it. */
+data class AdbShareView(
+    val sharing: Boolean,
+    val station: String?,
+    val phase: String,
+    val serial: String?,
+    val adb: String?,
+    val message: String?,
+    val until: Long?,
+    val pairPort: UInt?,
+) {
+    companion object {
+        fun decode(json: String): AdbShareView {
+            val o = JSONObject(json)
+            fun text(key: String) = if (o.has(key) && !o.isNull(key)) o.getString(key) else null
+            fun number(key: String) = if (o.has(key) && !o.isNull(key)) o.getLong(key) else null
+            return AdbShareView(
+                sharing = o.optBoolean("sharing", false),
+                station = text("station"),
+                phase = text("phase") ?: "off",
+                serial = text("serial"),
+                adb = text("adb"),
+                message = text("message"),
+                until = number("until"),
+                pairPort = number("pairPort")?.toUInt(),
+            )
+        }
+    }
+}
+
+/** A call the core failed, what it said in words (the app's errorText): as StillFailCore's CoreException. */
+class CoreException(message: String) : Exception(message)
+
+/** What a CoreException says, as the Android app's errorText (the JavaScript put it in words already). */
+internal fun errorText(e: CoreException): String = e.message.orEmpty()
+
+/**
+ * The core as the service reaches it: the app's JavaScript, whose core it is (index.ts `serve`). A call goes there as a
+ * `call` event and waits for its `answer`; a topic followed is a `follow` event, its values coming back by `value`
+ * until the flow is let go (`unfollow`). With no JavaScript up (the module gone), a call fails at once; a JavaScript
+ * up again (reloaded) is asked again for the topics followed (`ready`), and calls the one before had fail.
+ */
+internal object Core {
+    @Volatile private var module: StillfailAdbModule? = null
+    private val ids = AtomicInteger()
+    private val calls = ConcurrentHashMap<Int, CompletableDeferred<Unit>>()
+    private val follows = ConcurrentHashMap<Int, Pair<String, (String?) -> Unit>>()
+
+    suspend fun call(name: String, params: Map<String, Any?> = emptyMap()) {
+        val to = module ?: throw CoreException(t("android-misc.failed"))
+        val id = ids.incrementAndGet()
+        val done = CompletableDeferred<Unit>()
+        calls[id] = done
+        try {
+            to.say("call", mapOf("id" to id, "name" to name, "params" to params))
+            done.await()
+        } finally {
+            calls.remove(id)
+        }
+    }
+
+    /** What came of call `id`: `error`, in words, when it failed. */
+    fun answer(id: Int, error: String?) {
+        val done = calls[id] ?: return
+        if (error == null) done.complete(Unit) else done.completeExceptionally(CoreException(error))
+    }
+
+    /** `topic`'s values as the core says them, as JSON (null: none yet). */
+    fun topic(topic: String): Flow<String?> = callbackFlow {
+        val id = ids.incrementAndGet()
+        follows[id] = topic to { json: String? -> trySend(json); Unit }
+        module?.say("follow", mapOf("id" to id, "topic" to topic))
+        awaitClose {
+            follows.remove(id)
+            module?.say("unfollow", mapOf("id" to id))
+        }
+    }
+
+    fun value(id: Int, json: String?) {
+        follows[id]?.let { (_, give) -> give(json) }
+    }
+
+    /** `module`'s JavaScript listens: what is followed, asked of it. */
+    fun ready(module: StillfailAdbModule) {
+        this.module = module
+        for ((id, follow) in follows) module.say("follow", mapOf("id" to id, "topic" to follow.first))
+    }
+
+    fun gone(module: StillfailAdbModule) {
+        if (this.module !== module) return
+        this.module = null
+        for (done in calls.values) done.completeExceptionally(CoreException(t("android-misc.failed")))
+    }
+}
+
+/**
+ * Holds the app up while the phone is lent (a foreground service): finds Wireless debugging's ports and tells the core
+ * each time they change, says in its notification how it stands, takes the pairing code typed there (or read off the
+ * dialog, AdbCodeReader), and ends when the core's `adbShare` says the phone is lent no longer (stopped, its hour up, the
+ * station too old).
+ */
+class AdbShareService : Service() {
+    private val scope = MainScope()
+    private var job: Job? = null
+    private var ports: AdbPorts? = null
+    private var name = ""
+    private var view: AdbShareView? = null
+    /** What the notification says in place of how it stands: why sharing failed. */
+    private var note: String? = null
+    /** What the pairing notification says in place of its ask: a pairing under way, why one failed. */
+    private var pairNote: String? = null
+    /** The pairing port its notification popped up for: a dialog opened again pops it up again. */
+    private var pairShown: UInt? = null
+    /** The pairing port whose code was read off its dialog and tried: not again for that dialog, whatever came of it. */
+    private var read: UInt? = null
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            AdbShare.START -> {
+                val station = intent.getStringExtra(AdbShare.STATION) ?: return START_NOT_STICKY
+                name = intent.getStringExtra(AdbShare.NAME) ?: "station"
+                val shown = AdbShare.notification(this, null, name, null)
+                if (Build.VERSION.SDK_INT >= 34) startForeground(AdbShare.ID, shown, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+                else startForeground(AdbShare.ID, shown)
+                begin(station)
+            }
+            AdbShare.STOP -> scope.launch {
+                try { core().call("adb.stop") } catch (_: CoreException) { stopSelf() }
+            }
+            AdbShare.PAIR -> pair(RemoteInput.getResultsFromIntent(intent)?.getCharSequence(AdbShare.CODE)?.toString().orEmpty())
+            AdbShare.READ -> {
+                // Only for the dialog open now, once.
+                val port = intent.getIntExtra(AdbShare.PORT, -1).takeIf { it >= 0 }?.toUInt()
+                val code = intent.getStringExtra(AdbShare.CODE)
+                if (code != null && port != null && AdbShare.pairing(view) && view?.pairPort == port && read != port) {
+                    read = port
+                    pair(code)
+                }
+            }
+        }
+        return START_NOT_STICKY
+    }
+
+    /** Pairs with the code typed in the notification or read off the dialog, saying how it goes in the notification. */
+    private fun pair(code: String) {
+        // Said back at once: the notification's field waits (spinning) until it is posted again.
+        pairNote = t("android-misc.adb.pairing")
+        say()
+        scope.launch {
+            pairNote = try {
+                core().call("adb.pair", mapOf("code" to code.filter(Char::isDigit)))
+                t("android-misc.adb.paired")
+            } catch (e: CoreException) {
+                t("android-misc.adb.pairFailed", "error" to errorText(e))
+            }
+            say()
+        }
+    }
+
+    private fun core() = Core
+
+    /** The notifications again, as it stands now (or as `note` and `pairNote` say). */
+    private fun say() {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(AdbShare.ID, AdbShare.notification(this, view, name, note))
+        val port = view?.pairPort
+        AdbShare.pairingPort.value = port?.takeIf { AdbShare.pairing(view) }
+        if (AdbShare.pairing(view)) {
+            // Another dialog: popped up afresh (only once per dialog, not as the minutes go).
+            if (pairShown != port) { manager.cancel(AdbShare.PAIR_ID); pairNote = null }
+            pairShown = port
+            manager.notify(AdbShare.PAIR_ID, AdbShare.pairNotification(this, pairNote))
+        } else if (pairShown != null) {
+            manager.cancel(AdbShare.PAIR_ID)
+            pairShown = null
+        }
+    }
+
+    private fun begin(station: String) {
+        job?.cancel()
+        ports?.stop()
+        val found = AdbPorts(this).also { ports = it }
+        job = scope.launch {
+            val core = core()
+            // Granted before (`adb.grant`): on by itself, as Android allows only on Wi-Fi.
+            if (!AdbShare.wirelessOn(this@AdbShareService) && AdbShare.onWifi(this@AdbShareService)) AdbShare.switchOn(this@AdbShareService)
+            found.start()
+            launch {
+                found.ports.collect { (connect, pair) ->
+                    try {
+                        core.call("adb.share", buildMap<String, Any?> {
+                            put("station", station)
+                            connect?.let { put("connect", it) }
+                            pair?.let { put("pair", it) }
+                            put("device", Build.MODEL)
+                            put("android", Build.VERSION.RELEASE)
+                            put("package", packageName)
+                        })
+                    } catch (e: CoreException) {
+                        note = t("android-misc.adb.shareFailed", "error" to errorText(e))
+                        say()
+                        stopSelf()
+                    }
+                }
+            }
+            // 还剩 N 分钟, as the minutes go.
+            launch { while (true) { delay(60_000); say() } }
+            // Until the core says it is lent no longer (it says so first, before the offer above is made).
+            var lent = false
+            core.topic("adbShare").collect { state ->
+                val value = state?.let { runCatching { AdbShareView.decode(it) }.getOrNull() } ?: return@collect
+                view = value
+                if (value.adb == "connected") { note = null; pairNote = null }
+                if (value.sharing && value.station == station) lent = true
+                if (lent && (!value.sharing || value.station != station)) {
+                    AdbShare.pairingPort.value = null
+                    if (value.station == null) stopSelf()
+                    return@collect
+                }
+                say()
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        getSystemService(NotificationManager::class.java).cancel(AdbShare.PAIR_ID)
+        AdbShare.pairingPort.value = null
+        ports?.stop()
+        scope.cancel()
+        // Gone with the service, whatever ended it.
+        MainScope().launch { try { core().call("adb.stop") } catch (_: CoreException) {} }
+        super.onDestroy()
+    }
+}
+
+/**
+ * Wireless debugging's ports on this phone, as it announces them (DNS-SD): adb's (`_adb-tls-connect._tcp`) while it is
+ * on and, while the pairing dialog is open, the pairing one (`_adb-tls-pairing._tcp`). Only this phone's own: others'
+ * on the same Wi-Fi are announced too.
+ */
+class AdbPorts(context: Context) {
+    data class Found(val connect: Int?, val pair: Int?)
+
+    val ports = MutableStateFlow(Found(null, null))
+    private val nsd = context.getSystemService(NsdManager::class.java)
+    private val main = Handler(Looper.getMainLooper())
+    private val listeners = mutableListOf<NsdManager.DiscoveryListener>()
+    /** The older resolver takes one at a time. */
+    private var resolving = false
+    private val queue = ArrayDeque<Pair<NsdServiceInfo, (Int) -> Unit>>()
+
+    fun start() {
+        discover("_adb-tls-connect._tcp") { port -> ports.update { it.copy(connect = port) } }
+        discover("_adb-tls-pairing._tcp") { port -> ports.update { it.copy(pair = port) } }
+    }
+
+    fun stop() {
+        listeners.forEach { runCatching { nsd.stopServiceDiscovery(it) } }
+        listeners.clear()
+    }
+
+    private fun discover(type: String, set: (Int?) -> Unit) {
+        // By the service's name: one goes as Wireless debugging (or the dialog) closes, another comes as it opens again.
+        val found = LinkedHashMap<String, Int>()
+        val listener = object : NsdManager.DiscoveryListener {
+            override fun onServiceFound(info: NsdServiceInfo) {
+                resolve(info) { port -> main.post { found[info.serviceName] = port; set(found.values.lastOrNull()) } }
+            }
+            override fun onServiceLost(info: NsdServiceInfo) {
+                main.post { found.remove(info.serviceName); set(found.values.lastOrNull()) }
+            }
+            override fun onDiscoveryStarted(type: String) {}
+            override fun onDiscoveryStopped(type: String) {}
+            override fun onStartDiscoveryFailed(type: String, code: Int) {}
+            override fun onStopDiscoveryFailed(type: String, code: Int) {}
+        }
+        listeners += listener
+        runCatching { nsd.discoverServices(type, NsdManager.PROTOCOL_DNS_SD, listener) }
+    }
+
+    private fun resolve(info: NsdServiceInfo, done: (Int) -> Unit) {
+        if (Build.VERSION.SDK_INT >= 34) {
+            val callback = object : NsdManager.ServiceInfoCallback {
+                override fun onServiceUpdated(resolved: NsdServiceInfo) {
+                    if (mine(resolved.hostAddresses)) done(resolved.port)
+                    runCatching { nsd.unregisterServiceInfoCallback(this) }
+                }
+                override fun onServiceInfoCallbackRegistrationFailed(code: Int) {}
+                override fun onServiceLost() {}
+                override fun onServiceInfoCallbackUnregistered() {}
+            }
+            runCatching { nsd.registerServiceInfoCallback(info, { main.post(it) }, callback) }
+            return
+        }
+        main.post {
+            queue.addLast(info to done)
+            next()
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun next() {
+        if (resolving) return
+        val (info, done) = queue.removeFirstOrNull() ?: return
+        resolving = true
+        nsd.resolveService(info, object : NsdManager.ResolveListener {
+            override fun onServiceResolved(resolved: NsdServiceInfo) {
+                if (mine(listOfNotNull(resolved.host))) done(resolved.port)
+                main.post { resolving = false; next() }
+            }
+            override fun onResolveFailed(failed: NsdServiceInfo, code: Int) {
+                main.post { resolving = false; next() }
+            }
+        })
+    }
+
+    /** Whether an announced host is this phone. */
+    private fun mine(hosts: List<InetAddress>): Boolean {
+        val own = runCatching { NetworkInterface.getNetworkInterfaces().toList().flatMap { it.inetAddresses.toList() } }.getOrDefault(emptyList())
+        return hosts.any { it in own }
+    }
+}

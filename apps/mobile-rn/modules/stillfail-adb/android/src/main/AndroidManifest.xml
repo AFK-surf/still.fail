@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This phone's adb lent to a station's agents (AdbShare.kt), as apps/android's AndroidManifest.xml has it. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Held up meanwhile, saying so. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Wireless debugging needs Wi-Fi (AdbShare.onWifi). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Turning Wireless debugging on itself, once the station's adb granted it (adb.grant): pm grant takes only what is asked for here. -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
+    <!-- Its notification, and the pairing code's. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application>
+        <service android:name="fail.still.rn.adb.AdbShareService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Lends this phone's own adb (Wireless debugging) to the user's coding agents over the app's connection, while the user shares it." />
+        </service>
+        <!-- Reads the Wireless debugging pairing dialog's code off Settings while 共享调试 pairs (AdbCodeReader.kt), once the
+             person turns it on in Accessibility; only the system binds it. -->
+        <service
+            android:name="fail.still.rn.adb.AdbCodeReader"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/adb_code_reader" />
+        </service>
+    </application>
+</manifest>

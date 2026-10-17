@@ -14,7 +14,15 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "fail.still.rntrial"
+      "bundleIdentifier": "fail.still.rntrial",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Confirm it is you with Face ID",
+        "NSLocalNetworkUsageDescription": "still.fail connects straight to your stations on the local network when it can",
+        "NSBonjourServices": [
+          "_stillfail._udp",
+          "_ember._udp"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -39,7 +47,16 @@
           }
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      "expo-video",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/JetBrainsMono.ttf"
+          ]
+        }
+      ]
     ],
     "scheme": [
       "stillfailrn",

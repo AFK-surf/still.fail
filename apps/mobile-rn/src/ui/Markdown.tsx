@@ -207,7 +207,8 @@ interface Piece { top: number; bottom: number; draw: () => ReactNode }
 
 interface Ctx { size: number; placing: Placing | null | undefined; fillTables: boolean; defs: ReadonlyMap<string, Definition> }
 
-export function Markdown({ text, modifier, size = 15, placing, fillTables = false }: { text: string; modifier?: StyleProp<ViewStyle>; size?: number; placing?: Placing | null; fillTables?: boolean }) {
+export function Markdown({ text, modifier: modifier_, style, size = 15, placing, fillTables = false }: { text: string; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle>; size?: number; placing?: Placing | null; fillTables?: boolean }) {
+  const modifier = modifier_ ?? style;
   const C = useC();
   const cached = useMemo(() => documentOf(text) ?? (text.length <= PARSED_AT_ONCE ? (prepareMarkdown(text), documentOf(text)) : undefined), [text]);
   const [ready, setReady] = useState<[string, MdDocument] | null>(cached ? [text, cached] : null);
@@ -458,7 +459,7 @@ function taskOf(item: ListItem): boolean | null {
  * (there is no hover to bring the corner forward), its language and a copy button; highlighted when its language is
  * named. It scrolls sideways rather than wrapping.
  */
-export function CodeBlock({ code, language, bar = true, modifier }: { code: string; language: string | null | undefined; bar?: boolean; modifier?: StyleProp<ViewStyle> }) {
+export function CodeBlock({ code, language, bar = true, modifier }: { code: string; language: string | null | undefined; bar?: boolean; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle> }) {
   const C = useC();
   const [copied, setCopied] = useState(false);
   useEffect(() => {

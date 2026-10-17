@@ -1,5 +1,5 @@
 // The app's motion (ui/Motion.kt, as the web's motion.ts): one set of curves and springs. CSS cubic-bezier(a, b, c, d)
-// is Easing.bezier(a, b, c, d) exactly.
+// is Easing.bezier(a, b, c, d) exactly: `Ease` for Reanimated's withTiming, `EaseFn` the same as plain functions.
 import { Easing } from "react-native-reanimated";
 
 export const Ease = {
@@ -19,6 +19,21 @@ export const Ease = {
   LeaveFade: Easing.bezier(0.3, 0, 0.5, 1),
   /** CSS's keyword ease (.25, .1, .25, 1). */
   Css: Easing.bezier(0.25, 0.1, 0.25, 1),
+};
+
+/**
+ * The same curves as plain functions of the time's fraction (0..1 → 0..1), for what is computed by hand (a frame
+ * loop, an interpolation): Reanimated's `Easing.bezierFn`, which runs on either thread.
+ */
+export const EaseFn = {
+  Out: Easing.bezierFn(0.2, 0.7, 0.2, 1),
+  Arrive: Easing.bezierFn(0.2, 0.8, 0.2, 1),
+  Flight: Easing.bezierFn(0.6, 0, 0.2, 1),
+  Standard: Easing.bezierFn(0.4, 0, 0.2, 1),
+  CssOut: Easing.bezierFn(0, 0, 0.58, 1),
+  Decel: Easing.bezierFn(0, 0, 0.2, 1),
+  LeaveFade: Easing.bezierFn(0.3, 0, 0.5, 1),
+  Css: Easing.bezierFn(0.25, 0.1, 0.25, 1),
 };
 
 /**

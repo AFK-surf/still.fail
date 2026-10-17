@@ -57,3 +57,7 @@ Android first: this is what is compared against the Android app. Write shared co
 - `npx tsc --noEmit` in `apps/mobile-rn` (on studio, through station_task; this machine does not build).
 - `bash scripts/android.sh` builds the release APK; `bash scripts/emu.sh <apk>` runs it on this trial's emulator;
   `bash scripts/emu.sh shot <png>` takes a screenshot.
+- `bash scripts/ios.sh` builds the release app for the iOS simulator (the core first, `scripts/core-ios.sh`, when
+  it is not built yet); `bash scripts/sim.sh <app>` runs it on this trial's simulator, `bash scripts/sim.sh shot <png>`
+  takes a screenshot. The core's log: `xcrun simctl spawn <udid> log stream --level debug --predicate
+  'subsystem == "fail.still.core"'` (what it says, and its own lines).

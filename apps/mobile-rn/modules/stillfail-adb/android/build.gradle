@@ -1,0 +1,44 @@
+// This phone's adb lent to a station's agents (apps/android's AdbShare.kt and AdbCodeReader.kt, behind
+// StillfailAdbModule): Android's system services, Android only.
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'fail.still.rn'
+version = '0.1.0'
+
+// What Android shows of the app outside it (AdbCodeReader's description in Accessibility's settings) is a resource, not
+// the catalog the app reads its words from: written from the catalog (client/i18n) for each language, English the
+// default as for any locale not Chinese, as apps/android/app/build.gradle.kts's SystemWords does. `words`: a resource's
+// name, the catalog's key. Written as the build is configured (only when it changed), so no task needs wiring in.
+def catalog = file("$projectDir/../../../../../client/i18n/catalog")
+def systemWords = layout.buildDirectory.dir("generated/systemWords").get().asFile
+def words = ["adb_reader_about": "android-misc.adb.reader.about"]
+// As aapt reads a string: XML's escapes, and its own for quotes and backslashes.
+def escape = { String text -> text.replace("\\", "\\\\").replace("&", "&amp;").replace("<", "&lt;").replace("'", "\\'").replace("\"", "\\\"") }
+[["en", "values"], ["zh", "values-zh"]].each { pair ->
+  def (lang, dir) = pair
+  def all = [:]
+  (new File(catalog, lang).listFiles({ f -> f.name.endsWith(".json") } as FileFilter) ?: []).each { all.putAll(new groovy.json.JsonSlurper().parse(it) as Map) }
+  def lines = words.collect { name, key -> "    <string name=\"$name\">${escape(all[key] as String)}</string>" }.join("\n")
+  def text = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources>\n$lines\n</resources>\n"
+  def out = new File(systemWords, "$dir/strings.xml")
+  if (!out.exists() || out.text != text) { out.parentFile.mkdirs(); out.text = text }
+}
+
+android {
+  namespace "fail.still.rn.adb"
+  defaultConfig {
+    versionCode 1
+    versionName '0.1.0'
+  }
+  sourceSets {
+    main.res.srcDirs += systemWords
+  }
+}
+
+dependencies {
+  // AdbShare.pairingPort, the service's scope (expo-modules-core has them too; the newest asked for is taken).
+  implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+}
