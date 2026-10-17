@@ -272,6 +272,7 @@ async function main() {
   check("a new device: refused, asks, confirmed by its code", `${A.name}: before ${waits}; code on the phone ${asked.code}, listed for the owner ${listed?.code}, put up ${prompted ? "once" : "never"}${promptedAgain ? " and again" : ""}; a wrong code ${wrong}; after ${after}`, "-", waits.startsWith("lock_unconfirmed") && asked.code === listed?.code && prompted && !promptedAgain && wrong.startsWith("refused") && after === "admitted");
 
   say("a new station joins with the lock's hash and is confirmed by the code it printed");
+  await nextMinute();
   const made = await owner.call("workspace.enroll", { account: alice.sub, workspace: ws, name: "joined-d" });
   const D = makeStation("joined-d", enrollArgs(made.command));
   run(D);
