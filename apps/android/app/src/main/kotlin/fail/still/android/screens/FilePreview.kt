@@ -6,8 +6,8 @@ package fail.still.android.screens
 
 import fail.still.android.ui.Progress
 import fail.still.android.ui.WaitPill
-import fail.still.android.ui.breathing
-import fail.still.android.ui.rememberBreath
+import fail.still.android.ui.sweeping
+import fail.still.android.ui.rememberSweep
 import fail.still.android.data.t
 import android.annotation.SuppressLint
 import android.graphics.BitmapFactory
@@ -971,8 +971,8 @@ private fun PdfViewer(file: File, onTap: () -> Unit) {
         d.isFailure -> Note { Text(t("android-chat.file.pdf.failed", "error" to (d.exceptionOrNull()?.message ?: "")), fontSize = 15.sp, color = C.muted) }
         else -> {
             val pdf = d.getOrThrow()
-            // A page not drawn yet is its shape, breathing as what is waited on does (ui/Waiting.kt), not a blank sheet.
-            val breath = rememberBreath()
+            // A page not drawn yet is its shape, the light sweeping over it as over everything waited on (ui/Waiting.kt), not a blank sheet.
+            val sweep = rememberSweep()
             LazyColumn(
                 Modifier.fillMaxSize().clickable(interactionSource = null, indication = null, onClick = onTap),
                 contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 60.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding(), bottom = 12.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
@@ -998,7 +998,7 @@ private fun PdfViewer(file: File, onTap: () -> Unit) {
                     }
                     val drawn = Modifier.shadow(2.dp).background(Color.White)
                     Box(Modifier.fillMaxWidth().aspectRatio(size.width.toFloat() / max(1, size.height)).onSizeChanged { width = it.width }
-                        .then(if (page != null) drawn else Modifier.breathing(breath).background(C.bubble))) {
+                        .then(if (page != null) drawn else Modifier.sweeping(sweep).background(C.bubble))) {
                         page?.let { Image(it, t("android-chat.file.pdf.page", "n" to i + 1), Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds) }
                     }
                 }

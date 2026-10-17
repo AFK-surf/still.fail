@@ -1,9 +1,11 @@
 // Waiting, drawn one way everywhere (docs/ui-panels.md「等待」; Android ui/Waiting.kt the same). Three kinds:
-// - a page or list read for the first time: `Waiting`, placeholders shaped as what will come and a pill over them
-//   saying what is waited on (the page's frame, its bar, title and composer, drawn as ever around it);
+// - a page or list read for the first time: `Waiting`, placeholders shaped as what will come with a light sweeping over
+//   them, no words (the page's frame, its bar, title and composer, drawn as ever around it); what could not be read
+//   said over them in red;
 // - a row or button at work: `Spinner` in its place (DoingMark where it is a core call), in one of two sizes;
 // - what has a size on its way (a file, an update): `Progress`.
-// Words come only after a moment (LATER_MS), so what is there at once shows none; what failed says so at once, in red.
+// Words (a pill, a line) come only after a moment (LATER_MS), so what is there at once shows none; what failed says so
+// at once, in red.
 import { forwardRef, type HTMLAttributes, type ReactNode } from "react";
 import { t } from "./i18n.ts";
 import * as css from "./waiting.css.ts";
@@ -44,7 +46,7 @@ export function WaitLine({ text = t("common.reading"), error = false, className 
 
 /** What a page or list waits on, from the core's note (ListNote) or the page's own words. */
 export interface WaitNote {
-  /** Still reading: the placeholders breathe. */
+  /** Still reading: the light sweeps over the placeholders. */
   reading?: boolean | undefined;
   /** What it waits on (正在读取会话, 正在连接 Studio). */
   text?: string | null | undefined;
@@ -96,9 +98,10 @@ export function WaitShapes({ shape = "rows", count, dense = false, still = false
 }
 
 /**
- * A page's or list's content while it is read the first time: its shapes, and over them a pill saying what it waits on
- * (`note`, else `text`, else 正在读取), or in red what could not be read (`error`, `note.failing`), the shapes then still.
- * `fill`: it takes the room left (a page's body); otherwise it is as tall as its shapes (a list in a column).
+ * A page's or list's content while it is read the first time: its shapes with the light sweeping over them, what it
+ * waits on (`note`, else `text`, else 正在读取) said only to a screen reader; over them in red what could not be read
+ * (`error`, `note.failing`), the shapes then still. `fill`: it takes the room left (a page's body); otherwise it is as
+ * tall as its shapes (a list in a column).
  */
 export function Waiting({ shape = "rows", count, dense, text, error, note, fill = false, children }: {
   shape?: WaitShape; count?: number; dense?: boolean; text?: string | undefined; error?: string | null | undefined;
@@ -108,11 +111,10 @@ export function Waiting({ shape = "rows", count, dense, text, error, note, fill 
   const reading = !error && (note ? note.reading !== false : true);
   const said = note?.text ?? text ?? t("common.reading");
   return (
-    <div className={fill ? `${css.wait} ${css.fill}` : css.wait}>
-      <div className={css.pills}>
-        {reading && <WaitPill text={said} />}
+    <div className={fill ? `${css.wait} ${css.fill}` : css.wait} {...(reading ? { role: "status", "aria-label": said } : {})}>
+      {failing.length > 0 && <div className={css.pills}>
         {failing.map((f, i) => <WaitPill key={i} text={f.text} why={f.message} error />)}
-      </div>
+      </div>}
       {children}
       <WaitShapes shape={shape} {...(count !== undefined ? { count } : {})} {...(dense !== undefined ? { dense } : {})} still={!reading} />
     </div>
@@ -121,12 +123,12 @@ export function Waiting({ shape = "rows", count, dense, text, error, note, fill 
 
 /**
  * A list with rows already, still waiting on some of it (a station not read yet, one that could not be): under its
- * rows, a line saying what it waits on, and each failure in red. Nothing once it waits on nothing.
+ * rows, a row's shape for what is still read, and each failure in red. Nothing once it waits on nothing.
  */
-export function WaitMore({ note, className }: { note: WaitNote | null | undefined; className?: string }) {
+export function WaitMore({ note, className, dense }: { note: WaitNote | null | undefined; className?: string; dense?: boolean }) {
   if (!note) return null;
   return <>
-    {note.reading !== false && <WaitLine text={note.text ?? t("common.reading")} {...(className ? { className } : {})} />}
+    {note.reading !== false && <div role="status" aria-label={note.text ?? t("common.reading")}><WaitShapes count={1} {...(dense !== undefined ? { dense } : {})} /></div>}
     {note.failing?.map((f, i) => <WaitLine key={i} text={f.text} error {...(className ? { className } : {})} />)}
   </>;
 }

@@ -54,7 +54,7 @@ export function Hover({ children, content, tile = false, warm }: { children: Rea
   );
 }
 
-/** Bars where a card's lines will be, while it is read, breathing as every wait's shapes (waiting.tsx). */
+/** Bars where a card's lines will be, while it is read, the light sweeping over them as over every wait's shapes (waiting.tsx). */
 export function CardSkeleton() {
   return (
     <div className={`${css.rich} ${waitingCss.shapes}`} aria-busy="true">

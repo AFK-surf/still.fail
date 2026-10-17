@@ -1,14 +1,15 @@
 // Waiting, drawn one way everywhere (docs/ui-panels.md「等待」; web ui/src/waiting.tsx draws the same). Three kinds:
-// - a page or list read for the first time: `Waiting`, placeholders shaped as what will come and a pill over them
-//   saying what is waited on (the page's frame, its bar, title and composer, drawn as ever around it);
+// - a page or list read for the first time: `Waiting`, placeholders shaped as what will come with a light sweeping over
+//   them, no words (the page's frame, its bar, title and composer, drawn as ever around it); what could not be read
+//   said over them in red;
 // - a row or button at work: `Spinner` in its place (DoingMark where it is a core call), in one of two sizes;
 // - what has a size on its way (a file, an update): `Progress`.
-// Words come only after a moment (LATER_MS), so what is there at once shows none; what failed says so at once, in red.
+// Words (a pill, a line) come only after a moment (LATER_MS), so what is there at once shows none; what failed says so
+// at once, in red.
 package fail.still.android.ui
 
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -38,6 +39,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -135,33 +141,43 @@ fun WaitLine(text: String = t("common.reading"), error: Boolean = false, modifie
 /** The shapes of what will come: rows (a list's: a title and a line), messages (a chat's) or cards (a settings page's). */
 enum class WaitShape { Rows, Messages, Cards }
 
-/** How much the shapes show: breathing (1 → 0.5 → 1 in 1.4s) while waited on, still under reduced motion; faded and still with `still`. */
+/**
+ * The light over placeholders (the web's waiting.css.ts shapes): where it is across them, 0 to 1 in 1.6s, left to right,
+ * again and again; null under reduced motion (none). `still`: what is waited on failed, faded (0.6) and no light.
+ */
+class Sweep(val still: Boolean, val at: (() -> Float)?)
+
 @Composable
-private fun breath(still: Boolean): () -> Float {
-    if (still) return { 0.6f }
-    if (reducedMotion()) return { 1f }
-    val pulse = rememberInfiniteTransition(label = "breathe").animateFloat(1f, 0.5f, infiniteRepeatable(tween(700, easing = EaseInOut), RepeatMode.Reverse), label = "alpha")
-    return { pulse.value }
+fun rememberSweep(still: Boolean = false): Sweep {
+    if (still || reducedMotion()) return remember(still) { Sweep(still, null) }
+    val at = rememberInfiniteTransition(label = "light").animateFloat(0f, 1f, infiniteRepeatable(tween(1600, easing = LinearEasing)), label = "at")
+    return remember(at) { Sweep(false, { at.value }) }
 }
 
-/** Something to come drawn as a grey placeholder breathing (a station's figures, a page of a document): as WaitShapes. */
-fun Modifier.breathing(alpha: () -> Float): Modifier = graphicsLayer { this.alpha = alpha() }
-
-/** WaitShapes' breathing, for a placeholder of its own shape (Modifier.breathing). */
-@Composable
-fun rememberBreath(still: Boolean = false): () -> Float = breath(still)
+/**
+ * Something to come drawn as a grey placeholder (a list's rows, a station's figures, a page of a document) with the light
+ * sweeping over it: a band of white at 35% from left of it to right of it, drawn only over what it draws.
+ */
+fun Modifier.sweeping(sweep: Sweep): Modifier =
+    if (sweep.still) graphicsLayer { alpha = 0.6f }
+    else sweep.at?.let { at -> graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
+        drawContent()
+        val w = size.width
+        val peak = -0.5f * w + 2f * w * at()
+        val light = Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.35f), Color.Transparent), startX = peak - 0.3f * w, endX = peak + 0.3f * w)
+        drawRect(light, blendMode = BlendMode.SrcAtop)
+    } } ?: this
 
 @Composable
 private fun Bar(width: Dp, height: Dp, shape: Shape = CircleShape) = Box(Modifier.width(width).height(height).background(C.bubble, shape))
 
 /**
- * The shapes of what will come, breathing: rows as the chats' list's (66 high, a title and a line, a picture at the end),
+ * The shapes of what will come, the light sweeping over them: rows as the chats' list's (66 high, a title and a line, a picture at the end),
  * a chat's messages (theirs with a picture on the left, the viewer's on the right) or a settings page's cards.
  */
 @Composable
 fun WaitShapes(shape: WaitShape = WaitShape.Rows, count: Int? = null, still: Boolean = false, modifier: Modifier = Modifier) {
-    val alpha = breath(still)
-    val m = modifier.fillMaxWidth().breathing(alpha).clearAndSetSemantics {}
+    val m = modifier.fillMaxWidth().sweeping(rememberSweep(still)).clearAndSetSemantics {}
     when (shape) {
         WaitShape.Rows -> Column(m) {
             repeat(count ?: 7) { i ->
@@ -191,18 +207,17 @@ fun WaitShapes(shape: WaitShape = WaitShape.Rows, count: Int? = null, still: Boo
 }
 
 /**
- * A page's or list's content while it is read the first time: its shapes, and over them a pill saying what it waits on
- * (`note`, else `text`, else 正在读取), and in red what could not be read (`error`, `note.failing`), the shapes then still.
- * The page's frame (its bar, title, composer) is drawn around it as ever.
+ * A page's or list's content while it is read the first time: its shapes with the light sweeping over them, what it
+ * waits on (`note`, else `text`, else 正在读取) said only to a screen reader; over them in red what could not be read
+ * (`error`, `note.failing`), the shapes then still. The page's frame (its bar, title, composer) is drawn around it as ever.
  */
 @Composable
 fun Waiting(shape: WaitShape = WaitShape.Rows, count: Int? = null, text: String? = null, error: String? = null, note: ListNote? = null, modifier: Modifier = Modifier) {
     val failing = listOfNotNull(error) + note?.failing.orEmpty().map { it.text }
     val reading = error == null && (note?.reading ?: true)
     val said = note?.text ?: text ?: t("common.reading")
-    Column(modifier.fillMaxWidth()) {
-        Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 4.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (reading) WaitPill(said)
+    Column(modifier.fillMaxWidth().semantics { if (reading) contentDescription = said }) {
+        if (failing.isNotEmpty()) Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 4.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             for (f in failing) WaitPill(f, error = true)
         }
         WaitShapes(shape, count, still = !reading)
