@@ -7,7 +7,7 @@ import type { Tool } from "./mcp.ts";
 export const SCREEN = {
   name: "screen",
   description:
-    "The screens of this station a person can see and drive from their still.fail app (this machine's display; tabs of the station's browser), each with who is viewing or controlling it now and the link that opens it there. When a person has to act on one (log in, solve a captcha, approve a prompt), post its link with chat_post kind=need_human and end your turn; call this again to see whether someone is on it. To see and operate one yourself, use the computer tool with its id.",
+    "The screens of this station a person can see and drive from their still.fail app (this machine's display; tabs of the station's browser), each with who is viewing or controlling it now and the link that opens it there. When a person has to act on one (log in, solve a captcha, approve a prompt), post its link on a line of its own (people see the screen's card) with chat_post kind=need_human and end your turn; call this again to see whether someone is on it. To see and operate one yourself, use the computer tool with its id.",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -33,7 +33,7 @@ export function described(hub: ScreenHub, base: string | null, id?: string): str
   text +=
     base === null
       ? "This station's control plane has no pages, so there is no link to give: a person opens its screens from the still.fail app."
-      : "To have a person act on a screen, post its link in the conversation (chat_post kind=need_human, saying what to do there) and end your turn; it opens the screen in their still.fail app. viewers: who has it open now; controlledBy: those of them driving it.";
+      : "To have a person act on a screen, post its link on a line of its own in the conversation (chat_post kind=need_human, saying what to do there; the link alone shows as the screen's card) and end your turn; it opens the screen in their still.fail app. viewers: who has it open now; controlledBy: those of them driving it.";
   return text;
 }
 

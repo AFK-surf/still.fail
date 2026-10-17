@@ -5,7 +5,8 @@
 // has no hover), scrolling sideways; tables that wrap between words and scroll sideways when they still do not fit;
 // rules. A link to another chat is a reference to it (chatRefs.ts), `@its title` in the accent; a web address written
 // bare, or alone in inline code, is a link too (Links.kt), and a link held is its menu (open, copy); a ```mermaid block
-// is drawn as its chart (Viz.kt). With `placing`, the message's files its text names are drawn where it names them.
+// is drawn as its chart (Viz.kt). With `placing`, the message's files its text names are drawn where it names them;
+// with `screens`, its links to a station's screens are those screens' cards.
 //
 // Spacing is the web's: each block keeps the margins the browser gives it, and two blocks next to each other are as
 // far apart as the larger of the two margins between them (CSS margins collapse, through a list item or a quote too).
@@ -39,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -170,10 +172,13 @@ class Placing(
 
 /** The file a link or image in the text names, by its file name (the last part of its path): `shot.png`, `/w/shot.png`, `ember-file://…/shot.png`. */
 fun fileNameOf(url: String): String {
-    var u = url.trim().replace(Regex("^(ember-)?file://"), "")
-    u = try { java.net.URLDecoder.decode(u.replace("+", "%2B"), "UTF-8") } catch (_: Exception) { u }
-    return u.substringAfterLast('/')
+    val u = url.trim().replace(Regex("^(ember-)?file://"), "")
+    return (decoded(u) ?: u).substringAfterLast('/')
 }
+
+/** As JavaScript's decodeURIComponent (a `+` stays one); null where it throws (a `%` of no character, bytes of no UTF-8). */
+private fun decoded(s: String): String? =
+    try { java.net.URLDecoder.decode(s.replace("+", "%2B"), "UTF-8").takeIf { '\uFFFD' !in it || '\uFFFD' in s } } catch (_: Exception) { null }
 
 // ── references to chats (chatRefs.ts) ─────────────────────────────────
 
@@ -211,6 +216,51 @@ fun withRefs(text: String): AnnotatedString {
     }
 }
 
+// ── links to a station's screens (docs/remote-screens.md) ───────────────
+
+/** A screen's page, as its agents link to it: `/w/<workspace>/s/<station>/screen/<id>`, after a host or alone (as the web's). */
+private val SCREEN_LINK = Regex("^(https?://[^/]+)?/w/([^/?#]+)/s/([^/?#]+)/screen/([^/?#]+)/?$")
+
+/** The screen a link names: its station (`<workspace>/<station>`) and its id; null for any other link. */
+fun screenOfLink(href: String): Pair<String, String>? {
+    val m = SCREEN_LINK.find(href) ?: return null
+    val (ws, st, id) = (2..4).map { decoded(m.groupValues[it]) ?: return null }
+    return "$ws/$st" to id
+}
+
+/** A link written bare: its words its address (as written, or decoded), as the web's RefChip has it. */
+fun isBareLink(words: String, href: String): Boolean = words.trim().let { it == href || it == decoded(href) }
+
+/**
+ * Links to a station's screens, as a chat draws them: `card` one alone in a paragraph (its own words, or null when it
+ * is bare); `title` the words a bare one within a sentence reads as.
+ */
+class Screens(
+    val card: @Composable (href: String, words: String?) -> Unit,
+    val title: @Composable (href: String) -> String,
+)
+
+/** A paragraph of only a link to a screen: its address, and its words unless it is bare. */
+private fun screenAlone(node: Paragraph): Pair<String, String?>? =
+    when (val only = node.children().filter { !(it is TextNode && it.literal.isBlank()) && it !is SoftLineBreak }.singleOrNull()) {
+        is Link -> only.destination.takeIf { screenOfLink(it) != null }?.let { href -> href to inlineText(only).takeUnless { isBareLink(it, href) } }
+        is TextNode -> only.literal.trim().takeIf { t -> bareLinks(t).singleOrNull() == t.indices && screenOfLink(t) != null }?.let { it to null }
+        else -> null
+    }
+
+/** The links to screens written bare among these words, which read as the screens' titles. */
+private fun bareScreens(nodes: List<Node>): Set<String> = buildSet {
+    fun walk(n: Node) {
+        when (n) {
+            is TextNode -> bareLinks(n.literal).forEach { r -> n.literal.substring(r).takeIf { screenOfLink(it) != null }?.let(::add) }
+            is Link -> if (screenOfLink(n.destination) != null && isBareLink(inlineText(n), n.destination)) add(n.destination)
+            is Image -> Unit
+            else -> n.children().forEach(::walk)
+        }
+    }
+    nodes.forEach(::walk)
+}
+
 // ── the web's own tones (styles/global.css.ts), where the message's parts use them ──
 
 /** The web's --muted (a quote's words). */
@@ -230,10 +280,10 @@ private val codeInline @Composable get() = if (C.dark) Color(0xFFC9A2E6) else Co
 /** A block with the margins the web gives it, above and below. */
 private class Piece(val top: Float, val bottom: Float, val draw: @Composable () -> Unit)
 
-private class Ctx(val size: Int, val placing: Placing?, val fillTables: Boolean)
+private class Ctx(val size: Int, val placing: Placing?, val fillTables: Boolean, val screens: Screens?)
 
 @Composable
-fun Markdown(text: String, modifier: Modifier = Modifier, size: Int = 15, placing: Placing? = null, fillTables: Boolean = false) {
+fun Markdown(text: String, modifier: Modifier = Modifier, size: Int = 15, placing: Placing? = null, fillTables: Boolean = false, screens: Screens? = null) {
     val cached = remember(text) { documents.get(text) }
     val ready by androidx.compose.runtime.produceState(cached?.let { text to it }, text) {
         value = cached?.let { text to it }
@@ -244,7 +294,7 @@ fun Markdown(text: String, modifier: Modifier = Modifier, size: Int = 15, placin
         }
     }
     val doc = ready?.takeIf { it.first == text }?.second
-    val blocks = remember(doc, size, placing, fillTables) { doc?.let { pieces(it.children(), Ctx(size, placing, fillTables), tight = false) } }
+    val blocks = remember(doc, size, placing, fillTables, screens) { doc?.let { pieces(it.children(), Ctx(size, placing, fillTables, screens), tight = false) } }
     Box(modifier) {
         if (blocks == null) Text(t("android-misc.markdown.laying"), color = webSubtle, fontSize = size.sp)
         else Stack(blocks)
@@ -314,10 +364,13 @@ private fun lh(size: Float): TextUnit = (size * 1.65f).sp
 val LocalMdInk = androidx.compose.runtime.compositionLocalOf<Color?> { null }
 
 /**
- * A paragraph; with files placed, one that is only a link to one of them is that file shown (a line of its own), and
- * one of only their images is them in a row. An image of theirs among words is shown between the words around it.
+ * A paragraph; one that is only a link to a screen is its card. With files placed, one that is only a link to one of
+ * them is that file shown (a line of its own), and one of only their images is them in a row. An image of theirs
+ * among words is shown between the words around it.
  */
 private fun paragraph(node: Paragraph, ctx: Ctx, margin: Float, task: Boolean?): List<Piece> {
+    val screens = ctx.screens
+    if (screens != null && task == null) screenAlone(node)?.let { (href, words) -> return listOf(Piece(8f, 8f) { screens.card(href, words) }) }
     val placing = ctx.placing
     if (placing != null && placing.files.isNotEmpty()) {
         val parts = node.children().filter { !(it is TextNode && it.literal.isBlank()) && it !is SoftLineBreak && it !is TaskListItemMarker }
@@ -604,12 +657,14 @@ private fun inline(nodes: List<Node>, ctx: Ctx, task: Boolean?): AnnotatedString
     val link = TextLinkStyles(SpanStyle(color = C.blue))
     val accent = C.accent
     val placing = ctx.placing
+    // A bare link to a screen reads as its title.
+    val titles = ctx.screens?.let { s -> bareScreens(nodes).associateWith { key(it) { s.title(it) } } }.orEmpty()
     return buildAnnotatedString {
         if (task != null) appendInlineContent(TASK, if (task) "[x]" else "[ ]")
         // `inLink`: within a link's words, where an address is only words.
         fun walk(n: Node, inLink: Boolean) {
             when (n) {
-                is TextNode -> if (inLink) append(n.literal) else appendLinked(n.literal, link)
+                is TextNode -> if (inLink) append(n.literal) else appendLinked(n.literal, link, titles::get)
                 is Code -> if (!inLink && isWebAddress(n.literal)) withLink(LinkAnnotation.Url(n.literal.trim(), link)) { withStyle(codeLink) { append(n.literal) } }
                     else withStyle(code) { append(n.literal) }
                 is Emphasis -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { n.children().forEach { walk(it, inLink) } }
@@ -617,9 +672,11 @@ private fun inline(nodes: List<Node>, ctx: Ctx, task: Boolean?): AnnotatedString
                 is Strikethrough -> withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) { n.children().forEach { walk(it, inLink) } }
                 is Link -> {
                     val file = placing?.files?.get(fileNameOf(n.destination))
+                    val title = titles[n.destination]?.takeIf { isBareLink(inlineText(n), n.destination) }
                     when {
                         // A link within a sentence to one of the message's files: looks like any link, opens the file.
                         file != null -> withLink(LinkAnnotation.Clickable("file:${file.path}", link) { placing.open(file) }) { n.children().forEach { walk(it, true) } }
+                        title != null -> withLink(LinkAnnotation.Url(n.destination, link)) { append(title) }
                         isChatLink(n.destination) -> appendRef(buildAnnotatedString { n.children().forEach { c -> append(inlineText(c)) } }, n.destination, accent)
                         // Opened through LocalUriHandler: still.fail's own links in the app (App.kt → AppState.openLink), the rest by the system.
                         else -> withLink(LinkAnnotation.Url(n.destination, link)) { n.children().forEach { walk(it, true) } }

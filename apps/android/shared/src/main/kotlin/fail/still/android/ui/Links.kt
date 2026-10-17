@@ -59,12 +59,13 @@ private fun trimmed(address: String): String {
     }
 }
 
-/** `text`, its bare addresses as links drawn in `style`. */
-fun AnnotatedString.Builder.appendLinked(text: String, style: TextLinkStyles) {
+/** `text`, its bare addresses as links drawn in `style`; `words`, what one reads as other than itself (a screen's title). */
+fun AnnotatedString.Builder.appendLinked(text: String, style: TextLinkStyles, words: (String) -> String? = { null }) {
     var at = 0
     for (r in bareLinks(text)) {
         append(text, at, r.first)
-        withLink(LinkAnnotation.Url(text.substring(r), style)) { append(text, r.first, r.last + 1) }
+        val url = text.substring(r)
+        withLink(LinkAnnotation.Url(url, style)) { append(words(url) ?: url) }
         at = r.last + 1
     }
     append(text, at, text.length)

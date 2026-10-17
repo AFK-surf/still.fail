@@ -48,6 +48,7 @@ export const NOTES: [number, string][] = [
   [41, "chat_create's runtime also takes dsh (DeepSeek Harness), where the station has a profile that runs it."],
   [42, "New tool permissions: what macOS lets still.fail Helper do on this Mac (Screen Recording, Accessibility, the protected folders for the drive); with request it puts the helper's window for one grant up on the Mac and says what to post with need_human (the screen's link when the screen can be driven, else to go to the Mac)."],
   [43, "secret_list/secret_use/secret_run also work without security mode: then the secrets are the person's on this station (kept in plain text), and the card is decided by the item's owner in any still.fail client. The same flow otherwise; you still never see the value."],
+  [44, "A screen's link (screen, computer, permissions tools) posted on a line of its own shows as the screen's card in still.fail; within a sentence, as the screen's title. Post it bare on its own line rather than as [words](link)."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

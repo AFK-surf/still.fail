@@ -347,6 +347,7 @@
   "core-views.screen.on": "{names} 正在查看",
   "core-views.screen.outdated": "此 station 需要更新才能远程查看屏幕",
   "core-views.screen.gone": "此屏幕已不存在",
+  "core-views.screen.remote": "远程屏幕",
   "core-views.screen.denied": "暂时无法查看此屏幕",
   "core-views.screen.ended": "已结束",
   "core-views.screen.lost": "无法连接此屏幕",

@@ -1308,6 +1308,13 @@ export const SHAPES: Record<string, Shape> = {
     ["known", "bool", { doc: "The station said which it has (false while it has not been reached since the core started)." }],
     ["note", opt("String"), { doc: "Why there are none to show, when there is a reason (the station needs an update, is offline)." }],
   ], { doc: "A station's screens (the `screens` topic; docs/remote-screens.md, client/core-ts/src/screens.ts)." }),
+  ScreenCard: struct([
+    ["kind", "String", { doc: "`desktop` or `browser`, as the screen is (or, not in its station's list, as its id says)." }],
+    ["title", "String", { doc: "Its title in its station's list; else what kind of screen it is." }],
+    ["line", "String", { doc: "Under the title: what the list's row says of it (core); else that it is gone, or that it is a remote screen." }],
+    ["link", "String", { doc: "Its page in the app (`ScreenItem.link`)." }],
+    ["gone", "bool", { doc: "Its station is reached and no longer has it." }],
+  ], { doc: "A link to one of a station's screens as a message shows it (the `screenCard` topic; client/core-ts/src/screens.ts)." }),
   ScreenAccess: struct([
     ["capture", "bool", { doc: "It can be seen." }],
     ["control", "bool", { doc: "It can be driven." }],

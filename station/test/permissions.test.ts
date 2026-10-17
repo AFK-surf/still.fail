@@ -251,7 +251,7 @@ test("the agents' tool: the grants, and one asked for with what to post (the scr
   // The screen drivable: its link to post.
   const asked = await tool!.run("k", { request: "desktop" });
   assert.match(asked, /window asking for Desktop folder is up on /);
-  assert.ok(asked.includes(`post ${base}/screen/desktop with chat_post kind=need_human`), asked);
+  assert.ok(asked.includes(`post ${base}/screen/desktop on a line of its own (it shows as the screen's card) with chat_post kind=need_human`), asked);
   assert.deepEqual(s.fake.shown[0].grants, ["desktop"]);
   // Asked again a moment after it closed: not shown, said so.
   s.fake.up = null;

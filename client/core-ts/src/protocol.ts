@@ -156,7 +156,7 @@ export function sameTopic(a: Topic, b: Topic): boolean {
   return topicKey(a) === topicKey(b);
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "drive", "screens", "machineLogins", "machineLogin", "machineLoginScreen"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen"]);
 const VIEWS = new Set(["chats", "stations", "profiles", "connects", "chat", "history", "agentCard", "chatSearch", "archive", "chatJobs", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "adminList", "adminItem", "adminOverview"]);
 
 /// The station a station topic belongs to; null for the account topics, the core's own and the views.

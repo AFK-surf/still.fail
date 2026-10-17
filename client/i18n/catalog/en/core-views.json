@@ -419,6 +419,7 @@
   "core-views.screen.on": "{names} viewing",
   "core-views.screen.outdated": "Update this station to see its screens",
   "core-views.screen.gone": "This screen is gone",
+  "core-views.screen.remote": "Remote screen",
   "core-views.screen.denied": "Can't view this screen right now",
   "core-views.screen.ended": "Ended",
   "core-views.screen.lost": "Lost the connection to this screen",
