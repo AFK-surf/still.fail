@@ -137,10 +137,11 @@ function follow(url: string) {
  * The page itself, in a WebView. `fill`: it takes the room it is given (a page of its own) rather than its
  * content's height. `onState` keeps what the widget keeps next; `onError` hears a failure it reports.
  */
-export function VizFrame({ html, state = null, fill = false, modifier, onState, onError }: {
-  html: string; state?: JsonElement | null; fill?: boolean; modifier?: StyleProp<ViewStyle>;
+export function VizFrame({ html, state = null, fill = false, modifier: modifier_, style, onState, onError }: {
+  html: string; state?: JsonElement | null; fill?: boolean; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle>;
   onState?: ((state: JsonElement) => void) | null; onError?: ((message: string) => void) | null;
 }) {
+  const modifier = modifier_ ?? style;
   const C = useC();
   const dark = C.dark;
   const followUp = useContext(LocalFollowUp);

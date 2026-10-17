@@ -57,7 +57,7 @@ function tinted(svg: string, tint: string): string {
 }
 
 /** The mark of the company that made a model (the core says which); for one it does not know, its runtime's maker's (DeepSeek Harness's own). */
-export function MakerIcon({ maker, runtime, size, modifier: style }: { maker: Maker | null | undefined; runtime: string | null | undefined; size: number; modifier?: StyleProp<ViewStyle> }) {
+export function MakerIcon({ maker, runtime, size, modifier: modifier_, style = modifier_ }: { maker: Maker | null | undefined; runtime: string | null | undefined; size: number; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle> }) {
   const C = useC();
   const id = maker?.id && maker.id in MAKER_MARKS ? maker.id : runtime === "codex" ? "openai" : runtime === "dsh" ? "dsh" : "anthropic";
   const d = Drawables[MAKER_MARKS[id]!];
@@ -71,7 +71,7 @@ export function MakerIcon({ maker, runtime, size, modifier: style }: { maker: Ma
 }
 
 /** A state badge: solid orange = block, a still hollow orange ring = at work, red = failed; done has none. Nothing blinks. */
-export function Badge({ state, size, ring, around, modifier: style }: { state: ChatState; size: number; ring: number; around: string; modifier?: StyleProp<ViewStyle> }) {
+export function Badge({ state, size, ring, around, modifier: modifier_, style = modifier_ }: { state: ChatState; size: number; ring: number; around: string; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle> }) {
   const C = useC();
   const r = size / 2;
   const inner = r - ring;
@@ -96,7 +96,7 @@ const AGENT_YELLOW = "#F2B01E";
  * disc of the ground, red in it when it wants someone (blocked, failed), at work a turning yellow 8dp ring with a faint
  * quarter; nothing when done. No halo: the mark is small.
  */
-export function AgentStateMark({ state, around, modifier: style }: { state: ChatState; around: string; modifier?: StyleProp<ViewStyle> }) {
+export function AgentStateMark({ state, around, modifier: modifier_, style = modifier_ }: { state: ChatState; around: string; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle> }) {
   const reduced = reducedMotion();
   const turning = state === ChatState.Running && !reduced;
   const turn = useSharedValue(0);
@@ -180,7 +180,7 @@ export function initial(name: string): string {
   return first ? first.toUpperCase() : "?";
 }
 
-export function Avatar({ id, name, size, modifier: style, picture }: { id: string; name: string; size: number; modifier?: StyleProp<ViewStyle>; picture?: string | null }) {
+export function Avatar({ id, name, size, modifier: modifier_, style = modifier_, picture }: { id: string; name: string; size: number; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle>; picture?: string | null }) {
   // Their picture (a Google account's) once it is here; their initial on their colour until then, or without one.
   const image = rememberPicture(picture);
   return (
@@ -269,7 +269,7 @@ export function QuotaChips({ quota, small = false }: { quota: Quota | null | und
  * ground filled as far as is used (a fuller box, less room). `alerts`: only the ones running low, as the web's station
  * cards do.
  */
-export function MeterChips({ meters, modifier: style, alerts = false }: { meters: Meter[]; modifier?: StyleProp<ViewStyle>; alerts?: boolean }) {
+export function MeterChips({ meters, modifier: modifier_, style = modifier_, alerts = false }: { meters: Meter[]; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle>; alerts?: boolean }) {
   return (
     <View style={[style, { flexDirection: "row", gap: 8, alignItems: "center" }]}>
       {meters.filter((m) => !alerts || m.level !== "ok").map((m, i) => <FillChip key={i} fill={usedOf(m.left)} level={m.level} mark={m.short} text={m.remaining} />)}
@@ -321,7 +321,7 @@ function FillChip({ fill, level, mark, text, small = false }: { fill: number; le
  * A profile's allowance on its own page, as the web's QuotaBars draws it there: each window's number large, ten cells
  * lit as far as is left, its name and when it refills. The number is the ink's colour while there is plenty.
  */
-export function QuotaDials({ quota, modifier: style }: { quota: Quota | null | undefined; modifier?: StyleProp<ViewStyle> }) {
+export function QuotaDials({ quota, modifier: modifier_, style = modifier_ }: { quota: Quota | null | undefined; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle> }) {
   const windows = quota?.state === "ok" ? quota.windows : [];
   if (windows.length === 0) return null;
   return (
@@ -336,7 +336,7 @@ export function QuotaDials({ quota, modifier: style }: { quota: Quota | null | u
  * left large over its cells (lit as far as is used), what it is and what it is out of. As the web's MeterDials (components.tsx); a row of three
  * that share the width, a phone being narrow.
  */
-export function MeterDials({ meters, modifier: style }: { meters: Meter[]; modifier?: StyleProp<ViewStyle> }) {
+export function MeterDials({ meters, modifier: modifier_, style = modifier_ }: { meters: Meter[]; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[style, { alignSelf: "stretch", flexDirection: "row", gap: 16 }]}>
       {meters.map((m, i) => <Dial key={i} number={m.big} unit={m.unit} fill={usedOf(m.left)} level={m.level} label={m.title} note={m.total} style={{ flex: 1, minWidth: 0 }} />)}
@@ -366,7 +366,7 @@ function Dial({ number, unit, fill, level, label, note, style }: { number: strin
 }
 
 /** The rest of a machine, a quiet row each (its hostname, chip, how long it has been up, the process): as the web's HostDetails. */
-export function HostDetails({ details, modifier: style }: { details: HostDetail[]; modifier?: StyleProp<ViewStyle> }) {
+export function HostDetails({ details, modifier: modifier_, style = modifier_ }: { details: HostDetail[]; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle> }) {
   const C = useC();
   return (
     <View style={[style, { gap: 8 }]}>
@@ -411,8 +411,8 @@ export function reducedMotion(): boolean {
  * at 6%), and a light thumb that slides to the chosen option. Without `track`
  * what it sits in (a capsule) is its track.
  */
-export function Seg({ options, selected, onSelect, modifier: style, height = 30, fill = false, radius = 10, inset = 2, track = true }: {
-  options: string[]; selected: number; onSelect: (i: number) => void; modifier?: StyleProp<ViewStyle>; height?: number; fill?: boolean; radius?: number; inset?: number; track?: boolean;
+export function Seg({ options, selected, onSelect, modifier: modifier_, style = modifier_, height = 30, fill = false, radius = 10, inset = 2, track = true }: {
+  options: string[]; selected: number; onSelect: (i: number) => void; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle>; height?: number; fill?: boolean; radius?: number; inset?: number; track?: boolean;
 }) {
   const C = useC();
   // Where each option sits in the track: (x, width).
@@ -473,7 +473,7 @@ export function Seg({ options, selected, onSelect, modifier: style, height = 30,
   );
 }
 
-export function IconIn({ icon, size = 18, tint, modifier: style }: { icon: IconPaths; size?: number; tint?: string; modifier?: StyleProp<ViewStyle> }) {
+export function IconIn({ icon, size = 18, tint, modifier: modifier_, style = modifier_ }: { icon: IconPaths; size?: number; tint?: string; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle> }) {
   const C = useC();
   return (
     <View style={[{ width: size, height: size }, style]}>
@@ -487,7 +487,7 @@ export function IconIn({ icon, size = 18, tint, modifier: style }: { icon: IconP
  * glyph:<name>:<colour> in one of MARK_COLORS, else `tint`) or a picture put up (a data URL); else its emoji; else `none`
  * (nothing when null). A glyph this build does not know shows the emoji kept beside it.
  */
-export function StationMark({ emoji, icon, size, tint, modifier: style, none }: { emoji: string | null | undefined; icon: string | null | undefined; size: number; tint: string; modifier?: StyleProp<ViewStyle>; none?: IconPaths | null }) {
+export function StationMark({ emoji, icon, size, tint, modifier: modifier_, style = modifier_, none }: { emoji: string | null | undefined; icon: string | null | undefined; size: number; tint: string; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle>; none?: IconPaths | null }) {
   const glyph = StationIcons.of(icon);
   const picture = useMemo(() => stationPicture(icon), [icon]);
   const color = markColor(glyphColor(icon));
@@ -621,7 +621,7 @@ export function SectionHeader({ title, trailing, start = 20 }: { title: string; 
   );
 }
 
-export function Card({ modifier: style, onClick, content, children: kids }: { modifier?: StyleProp<ViewStyle>; onClick?: (() => void) | null; content?: () => ReactNode; children?: ReactNode }) {
+export function Card({ modifier: modifier_, style = modifier_, onClick, content, children: kids }: { modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle>; onClick?: (() => void) | null; content?: () => ReactNode; children?: ReactNode }) {
   const C = useC();
   const children = content ? content() : kids;
   const inner: ViewStyle = { paddingHorizontal: 16, paddingVertical: 14 };
@@ -637,7 +637,7 @@ export function Card({ modifier: style, onClick, content, children: kids }: { mo
 }
 
 /** Rows on one rounded card; the card groups them, no lines between. */
-export function ListCard({ modifier: style, content, children: kids }: { modifier?: StyleProp<ViewStyle>; content?: () => ReactNode; children?: ReactNode }) {
+export function ListCard({ modifier: modifier_, style = modifier_, content, children: kids }: { modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle>; content?: () => ReactNode; children?: ReactNode }) {
   const C = useC();
   const children = content ? content() : kids;
   return (

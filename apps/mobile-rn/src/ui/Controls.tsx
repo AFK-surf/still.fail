@@ -95,7 +95,7 @@ export function Button({ label, primary, busy = false, enabled = true, danger = 
 }
 
 /** A line to type in, on a soft frame; `lines` above one: a few lines, of any length (a pasted list). */
-export function Field({ value, onChange, placeholder, mono = false, modifier: style, lines = 1 }: { value: string; onChange: (v: string) => void; placeholder: string; mono?: boolean; modifier?: StyleProp<ViewStyle>; lines?: number }) {
+export function Field({ value, onChange, placeholder, mono = false, modifier: modifier_, style = modifier_, lines = 1 }: { value: string; onChange: (v: string) => void; placeholder: string; mono?: boolean; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle>; lines?: number }) {
   const C = useC();
   const font = mono ? { fontFamily: CODE_FONT } : null;
   return (

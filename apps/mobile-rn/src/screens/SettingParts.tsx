@@ -178,7 +178,7 @@ export function MarkCounts({ mark }: { mark: WorkspaceMarkView }) {
  * the core orders them) is told by its number in the accent alone (said to a screen reader). `busy`: the label of the one being sent
  * (a spinner on it, none pressed meanwhile).
  */
-export function DecisionOptions({ options, modifier: style, enabled = true, busy, onPick }: { options: DecisionOption[]; modifier?: StyleProp<ViewStyle>; enabled?: boolean; busy?: string | null; onPick: (option: DecisionOption) => void }) {
+export function DecisionOptions({ options, modifier: modifier_, style = modifier_, enabled = true, busy, onPick }: { options: DecisionOption[]; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle>; enabled?: boolean; busy?: string | null; onPick: (option: DecisionOption) => void }) {
   const C = useC();
   const hairline = withAlpha(C.ink, 0.07);
   // A card of rows to be pressed (web pages.css.ts listCard, docs/ui-panels.md 页面卡片): each row's ground under the

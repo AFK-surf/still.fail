@@ -21,7 +21,7 @@ import { useC } from "../ui/Theme";
  * Home's top bar (and a place's): frosted over what is behind it, a hairline under it; its row of buttons. `haze`: the
  * Android app's frosting source; here the glass blurs what is behind it as it is (Glass.tsx).
  */
-export function TopGlassBar({ modifier: style, children, onLayout }: { haze?: unknown; modifier?: StyleProp<ViewStyle>; children?: ReactNode; onLayout?: (height: number) => void }) {
+export function TopGlassBar({ modifier: modifier_, style = modifier_, children, onLayout }: { haze?: unknown; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle>; children?: ReactNode; onLayout?: (height: number) => void }) {
   const insets = useSafeAreaInsets();
   return (
     <TopGlass style={[style, { alignSelf: "stretch" }]}>
@@ -46,7 +46,7 @@ export function SettingsGear() {
 }
 
 /** The name in the top bar, as Home's workspace name is set. */
-export function TopBarTitle({ text, modifier: style }: { text: string; modifier?: StyleProp<TextStyle> }) {
+export function TopBarTitle({ text, modifier: modifier_, style = modifier_ }: { text: string; modifier?: StyleProp<TextStyle>; style?: StyleProp<TextStyle> }) {
   const C = useC();
   return <T size={24} weight="700" color={C.ink} style={[{ letterSpacing: -0.4 }, style]} numberOfLines={1} ellipsizeMode="tail">{text}</T>;
 }

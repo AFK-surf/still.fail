@@ -51,7 +51,7 @@ function useTurn(ms: number, on = true): SharedValue<number> {
  * A track of the line colour and an arc of the accent; `color` (a solid button's text colour) is the arc's, its track that
  * at 30%. Where it sits says its colour and place, never its size.
  */
-export function Spinner({ inline = false, color, modifier: style }: { inline?: boolean; color?: string | null; modifier?: StyleProp<ViewStyle> }) {
+export function Spinner({ inline = false, color, modifier: modifier_, style = modifier_ }: { inline?: boolean; color?: string | null; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle> }) {
   const C = useC();
   const arc = color ?? C.accent;
   const track = color ? withAlpha(color, alphaOf(color) * 0.3) : C.lineStrong;
@@ -93,7 +93,7 @@ export function BusyIcon({ busy, solid, icon }: { busy: boolean; solid?: string 
  * What is waited on (a spinner before it), or with `error` what is wrong (in red, at once): a grey capsule. Over a
  * viewer's content (a player buffering, a remote screen connecting) it floats: `ground` clear and a glass in `style`.
  */
-export function WaitPill({ text, error = false, modifier: style, ground, ink }: { text: string; error?: boolean; modifier?: StyleProp<ViewStyle>; ground?: string; ink?: string }) {
+export function WaitPill({ text, error = false, modifier: modifier_, style = modifier_, ground, ink }: { text: string; error?: boolean; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle>; ground?: string; ink?: string }) {
   const C = useC();
   const shown = useLater(error);
   return (
@@ -109,7 +109,7 @@ export function WaitPill({ text, error = false, modifier: style, ground, ink }: 
 }
 
 /** A wait said in a line of its own where a row or a section's content will be (a spinner before it), or in red what is wrong. */
-export function WaitLine({ text, error = false, modifier: style }: { text?: string; error?: boolean; modifier?: StyleProp<ViewStyle> }) {
+export function WaitLine({ text, error = false, modifier: modifier_, style = modifier_ }: { text?: string; error?: boolean; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle> }) {
   const C = useC();
   const shown = useLater(error);
   return (
@@ -157,7 +157,7 @@ function Placeholder({ width, height, radius }: { width?: number; height: number
  * picture at the end), a chat's messages (theirs with a picture on the left, the viewer's on the right) or a settings
  * page's cards.
  */
-export function WaitShapes({ shape = WaitShape.Rows, count, still = false, modifier: style }: { shape?: WaitShape; count?: number | null; still?: boolean; modifier?: StyleProp<ViewStyle> }) {
+export function WaitShapes({ shape = WaitShape.Rows, count, still = false, modifier: modifier_, style = modifier_ }: { shape?: WaitShape; count?: number | null; still?: boolean; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle> }) {
   const breath = breathing(rememberBreath(still));
   const window = useWindowDimensions();
   const [width, setWidth] = useState(window.width);
@@ -208,7 +208,7 @@ export function WaitShapes({ shape = WaitShape.Rows, count, still = false, modif
  * waits on (`note`, else `text`, else 正在读取) said only to a screen reader; over them in red what could not be read
  * (`error`, `note.failing`), the shapes then still. The page's frame (its bar, title, composer) is drawn around it as ever.
  */
-export function Waiting({ shape = WaitShape.Rows, count, text, error, note, modifier: style }: { shape?: WaitShape; count?: number | null; text?: string | null; error?: string | null; note?: ListNote | null; modifier?: StyleProp<ViewStyle> }) {
+export function Waiting({ shape = WaitShape.Rows, count, text, error, note, modifier: modifier_, style = modifier_ }: { shape?: WaitShape; count?: number | null; text?: string | null; error?: string | null; note?: ListNote | null; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle> }) {
   const failing = [...(error != null ? [error] : []), ...(note?.failing ?? []).map((f) => f.text)];
   const reading = error == null && (note?.reading ?? true);
   const said = note?.text ?? text ?? t("common.reading");
@@ -228,7 +228,7 @@ export function Waiting({ shape = WaitShape.Rows, count, text, error, note, modi
  * How much has come of what has a size (0…1), or with `part` null a bar that sweeps while that is not known: a capsule
  * 3 high, its track the accent at 18%, what has come the accent. Under reduced motion an unknown one is a full bar, faint.
  */
-export function Progress({ part, modifier: style, color }: { part: number | null | undefined; modifier?: StyleProp<ViewStyle>; color?: string }) {
+export function Progress({ part, modifier: modifier_, style = modifier_, color }: { part: number | null | undefined; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle>; color?: string }) {
   const C = useC();
   const tone = color ?? C.accent;
   const a = alphaOf(tone);

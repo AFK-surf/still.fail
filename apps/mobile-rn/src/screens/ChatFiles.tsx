@@ -467,7 +467,8 @@ function Wrap({ gap, end, children }: { gap: number; end: boolean; children: Rea
  * An image of the chat on its own (placed in an agent's text, Prose.tsx): in the box `size` gives it (else its own
  * proportions); a tap opens it in the preview, stepping through the images of the chat `gallery` names.
  */
-export function StationImage({ station, sessionKey, file, modifier = null, gallery = null }: { station: string; sessionKey: string; file: Attachment; modifier?: StyleProp<ViewStyle> | null; gallery?: ChatOf | null }) {
+export function StationImage({ station, sessionKey, file, modifier: modifier_ = null, style = null, gallery = null }: { station: string; sessionKey: string; file: Attachment; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle> | null; gallery?: ChatOf | null }) {
+  const modifier = modifier_ ?? style;
   const [open, setOpen] = useState(false);
   return (
     <>
