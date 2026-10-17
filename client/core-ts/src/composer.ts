@@ -399,11 +399,15 @@ export class Composers {
       );
       return;
     }
-    // Its header first (a few bytes, at once); decoded only when that does not say.
-    const decoded = (b: Blob) => typeof createImageBitmap === "function"
-      ? createImageBitmap(b).then((m) => { const s = { width: m.width, height: m.height }; m.close(); return s; })
+    // Its header first (a few bytes, at once); decoded only when that does not say. The desktop's core has the page's
+    // file as a FileSource (file-port.ts), read a part at a time: its header is read the same way, and it is decoded
+    // whole, here, only where this can.
+    const decoded = (b: Blob | FileSource) => typeof createImageBitmap === "function"
+      ? (b instanceof Blob ? Promise.resolve(b) : Promise.all(Array.from({ length: Math.ceil(b.size / PART) }, (_, i) => b.slice(i * PART, (i + 1) * PART).arrayBuffer()))
+        .then((parts) => new Blob(parts, { type: b.type })))
+        .then((whole) => createImageBitmap(whole)).then((m) => { const s = { width: m.width, height: m.height }; m.close(); return s; })
       : null;
-    const sizing: Promise<{ width: number; height: number } | null> = blob instanceof Blob && blob.type.startsWith("image/")
+    const sizing: Promise<{ width: number; height: number } | null> = (blob instanceof Blob || blob instanceof FileSource) && blob.type.startsWith("image/")
       ? blob.slice(0, 64).arrayBuffer().then((head) => headerSize(new Uint8Array(head)) ?? decoded(blob)).then((s) => {
         if (s) {
           if (this.#uploads.get(f.id) === upload) this.#sizes.set(f.id, s);

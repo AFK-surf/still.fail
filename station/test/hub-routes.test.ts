@@ -155,6 +155,13 @@ test("uploads wait in the station's uploads, a message takes them into its chat 
     const [, named] = await r.ask("POST", `/threads/${id}/messages`, { attachments: [{ path: moved, width: 5 }] });
     assert.deepEqual(r.store.messagesBefore(id, null, 10).find((m) => m.n === named.n)!.attachments, [{ name: basename(moved), path: moved, size: 0 }]);
 
+    // A PNG sent without its size (the desktop's page could not read it): its header says it.
+    const head = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0x05, 0xb4, 0, 0, 0, 0x66]);
+    const [, strip] = await r.ask("POST", "/uploads", head, [["name", "strip.png"]]);
+    const [, unsized] = await r.ask("POST", `/threads/${id}/messages`, { attachments: [{ path: strip.path, name: "strip.png", size: head.length }] });
+    const [kept] = r.store.messagesBefore(id, null, 10).find((m) => m.n === unsized.n)!.attachments;
+    assert.deepEqual([kept!.width, kept!.height], [1460, 102]);
+
     const slack = r.store.openThread("slack:T1", "C1", "1.1", null, null);
     assert.deepEqual(await r.ask("POST", `/threads/${slack.id}/messages`, { text: "hi" }), [400, { error: en("station.admin.postOnlyStillfail") }]);
     assert.deepEqual(await r.ask("POST", "/threads/x/messages", { text: "hi" }), [404, { error: "unknown thread x" }]);

@@ -7,6 +7,7 @@ import { Core } from "../src/core.ts";
 import { dbName, SOON_MS } from "../src/data.ts";
 import { apply, call, subscribe, v } from "./helpers.ts";
 import { CoreFiles, PageFiles } from "../src/hosts/file-port.ts";
+import { FileSource } from "../src/file-source.ts";
 import { CoreError } from "../src/error.ts";
 import { stationReplies, started } from "./station-fixture.ts";
 import { HostWire } from "../src/station/wire.ts";
@@ -418,6 +419,18 @@ test("an_image_sent_before_the_page_heard_its_size_goes_with_its_size_all_the_sa
   assert.equal(t.local.outbox("ws/st", 7)[1].uploads[0].width, undefined);
   t.local.uploadChanged("slow", { width: 640, height: 480 });
   assert.deepEqual([t.local.outbox("ws/st", 7)[1].uploads[0].width, t.local.outbox("ws/st", 7)[1].uploads[0].height], [640, 480]);
+  t.core.close();
+});
+
+test("an_image_the_desktop_core_reads_from_its_page_has_its_size_read_too", async () => {
+  const t = await queuedUpload();
+  // The desktop's core has the page's file as a FileSource (file-port.ts), not a Blob.
+  const head = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0x05, 0xb4, 0, 0, 0, 0x66]);
+  const blob = new FileSource(head.length, "image/png", async (start, end) => head.slice(start, end).buffer, () => {});
+  await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [{ id: "strip", name: "strip.png", size: head.length, blob }] });
+  await t.settle();
+  const strip = v(t.values, 1).files.find((f: J) => f.id === "strip");
+  assert.deepEqual([strip.width, strip.height], [1460, 102]);
   t.core.close();
 });
 

@@ -31,6 +31,7 @@ import { shown } from "../../jobs/jobs.ts";
 import { withLock, workspaceFile } from "../../sessions/archive.ts";
 import { roomOf } from "../../sessions/footprint.ts";
 import { dir as thumbsDir, keep } from "../../sessions/thumbs.ts";
+import { imageSize } from "../../sessions/image-size.ts";
 import { wall } from "../../ops/fibers.ts";
 import { sessionSeen } from "../seen.ts";
 
@@ -259,7 +260,10 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
         }
       }
       if (owner === undefined || !exists(path)) throw new Refused(400, tr(r.lang, "station.files.notUploaded"));
-      const [width, height] = [dimension(o.width), dimension(o.height)];
+      // Its size as the sender read it; else, for a PNG, GIF or WebP, as its header says (a sender that could not read
+      // it, as the desktop's could not). Not a JPEG's: its header does not say which way up it is shown.
+      const read = [dimension(o.width), dimension(o.height)];
+      const [width, height] = read[0] !== undefined && read[1] !== undefined ? read : /\.(png|gif|webp)$/i.test(path) ? (imageSize(path) ?? read) : read;
       const name = str(o.name) ?? path.slice(owner.dir.length + 1);
       const size = typeof o.size === "number" && o.size > 0 ? Math.min(Math.trunc(o.size), Number.MAX_SAFE_INTEGER) : 0;
       const attachment: Attachment = { name: chars(name, 200), path, size };
