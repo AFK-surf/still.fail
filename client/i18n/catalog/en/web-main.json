@@ -770,5 +770,7 @@
   "web-main.shareIn.sent": "Sent to “{title}”",
   "web-main.shareIn.open": "Open",
   "web-main.shareIn.sending": "send it",
-  "web-main.shareIn.signIn": "Sign in to send it to {name}"
+  "web-main.shareIn.signIn": "Sign in to send it to {name}",
+  "web-main.shareIn.search": "Search",
+  "web-main.shareIn.find": "Find a chat"
 }

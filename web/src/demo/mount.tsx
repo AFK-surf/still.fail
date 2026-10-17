@@ -94,7 +94,7 @@ function demoValueOf(topic: Topic): unknown {
     // What the core puts together of them (client/core-ts/src/choose.ts), as a new chat and a model control start.
     case "newChat": return newChatView();
     case "pick": return pickView(topic.of);
-    case "shareIn": return shareInView(String(topic.source ?? ""));
+    case "shareIn": return shareInView(String(topic.source ?? ""), String(topic.query ?? ""));
     // still.fail cloud's, for the phone's workspace pages (mobile/).
     case "accounts": return [station.ACCOUNT];
     case "workspaces": return station.workspaces();
@@ -150,9 +150,11 @@ const siteOf = (source: string): string | null => {
 function shareRows(): ChatItem[] {
   return chatsView(chats).days.flatMap((d) => d.items).filter((i) => !i.connect && !i.originText);
 }
-function shareInView(source: string): ShareInView {
+function shareInView(source: string, query = ""): ShareInView {
   const site = siteOf(source);
-  const rows = shareRows();
+  const q = query.trim().toLowerCase();
+  // What is typed finds them by title, as the core's search does first.
+  const rows = shareRows().filter((r) => !q || r.title.toLowerCase().includes(q));
   const kept = rows.find((r) => r.id === shareKept.get(site ?? ""));
   const latest = kept ?? rows[0];
   const picked = sharePicked.get(source) ?? (latest ? { station: latest.station, id: latest.id } : { station: STATION });

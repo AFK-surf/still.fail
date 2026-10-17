@@ -112,13 +112,17 @@ const screenView = (story: ViewStory, phone = false, h264 = false): Pick<Story, 
 });
 /** With a mouse, the pointer brought to the top: the bar there while the view is live. */
 const toTheBar: Step[] = [{ move: [640, 20] }];
+/** A chat row of the demo's, the made-up ones copied from (kept from its first view, whatever is typed later). */
+let shareRowLike: ShareInView["items"][number] | undefined;
 /** What the share stories share: a video's link, with the title its app gave it. */
 const SHARED: Shared = { source: "https://www.youtube.com/watch?v=8pDqJVdNa44", title: "在家用旧电脑搭一台 NAS：从零到能用", popup: false };
 /**
  * Where it can go, in a state of its own: `kept`, the third chat the one youtube.com's links went to last (first, and
  * picked); `new`, a new chat picked with three stations up; `none`, no chat and no station; `loading`, the chats not known yet.
  */
-const sharing = (state: "kept" | "new" | "none" | "loading"): Pick<Story, "demo" | "share"> => ({
+/** More chats than the demo has, for a list long enough to search (the sheet offers it from six). */
+const MORE_CHATS = ["NAS 和下载", "NAS 备份到 B2", "周报：十月第三周", "官网首屏改版", "Android 分享进来", "发版 0.1.2500"];
+const sharing = (state: "kept" | "new" | "none" | "loading" | "search"): Pick<Story, "demo" | "share"> => ({
   share: SHARED,
   demo: {
     then: (t, value) => {
@@ -130,6 +134,15 @@ const sharing = (state: "kept" | "new" | "none" | "loading"): Pick<Story, "demo"
       if (state === "none") return { ...site, items: [], stations: [], loading: false, note: "还没有能发到的 chat，也没有在线的 station" } satisfies ShareInView;
       if (state === "new") {
         return { ...v, picked: { station: "demo/local" }, stations: [{ station: "demo/local", name: "Studio" }, { station: "demo/mini1", name: "Mini1" }, { station: "demo/mba", name: "MacBook Air" }] } satisfies ShareInView;
+      }
+      if (state === "search") {
+        // Its own chats, then these: those the words find while searching (the demo's own are found already).
+        shareRowLike ??= v.items[0];
+        const { last: _, ...like } = shareRowLike ?? { last: undefined };
+        const q = String(t.query ?? "").trim().toLowerCase();
+        const more = shareRowLike ? MORE_CHATS.map((title, i) => ({ ...(like as ShareInView["items"][number]), id: `more-${i}`, session: `more-${i}`, title }))
+          .filter((r) => !q || r.title.toLowerCase().includes(q)) : [];
+        return { ...v, items: [...v.items, ...more] } satisfies ShareInView;
       }
       const k = v.items[2] ?? v.items[0]!;
       return { ...v, items: [k, ...v.items.filter((i) => i !== k)], kept: { station: k.station, id: k.id, text: "youtube.com 的链接上次发到这里" }, picked: { station: k.station, id: k.id } } satisfies ShareInView;
@@ -356,6 +369,7 @@ export const stories: Story[] = [
   { id: "app-share-new-chat", group: "应用", title: "分享进来 · 新 chat，几台 station", app: true, ...sharing("new") },
   { id: "app-share-none", group: "应用", title: "分享进来 · 没有 chat 也没有 station", app: true, ...sharing("none") },
   { id: "app-share-loading", group: "应用", title: "分享进来 · 加载中", app: true, ...sharing("loading") },
+  { id: "app-share-search", group: "应用", title: "分享进来 · 搜索 chat", app: true, ...sharing("search"), steps: [{ text: "搜索" }, { key: "N" }, { key: "A" }, { key: "S" }] },
 
   // ── settings ──
   { id: "settings-appearance", group: "设置", title: "外观", app: true, steps: [{ click: '[aria-label="设置"]' }] },
@@ -497,6 +511,8 @@ export const stories: Story[] = [
   { id: "phone-share-new-chat", group: "手机", title: "分享进来 · 新 chat，几台 station", app: true, phone: true, ...sharing("new") },
   { id: "phone-share-none", group: "手机", title: "分享进来 · 没有 chat 也没有 station", app: true, phone: true, ...sharing("none") },
   { id: "phone-share-loading", group: "手机", title: "分享进来 · 加载中", app: true, phone: true, ...sharing("loading") },
+  { id: "phone-share-search", group: "手机", title: "分享进来 · 搜索 chat", app: true, phone: true, ...sharing("search"), steps: [{ text: "搜索" }, { key: "N" }, { key: "A" }, { key: "S" }] },
+  { id: "phone-share-search-none", group: "手机", title: "分享进来 · 搜索没找到", app: true, phone: true, ...sharing("search"), steps: [{ text: "搜索" }, { key: "z" }, { key: "z" }] },
   { id: "phone-agent", group: "手机", title: "agent 名片", app: true, phone: true, steps: [{ click: '[aria-label$="的名片"]' }] },
   { id: "phone-chat-info", group: "手机", title: "对话信息", app: true, phone: true, steps: [{ click: '[aria-label="对话信息"]' }] },
   { id: "phone-files", group: "手机", title: "文件", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="文件"]' }] },

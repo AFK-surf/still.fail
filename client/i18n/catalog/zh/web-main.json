@@ -695,5 +695,7 @@
   "web-main.shareIn.sent": "已发到「{title}」",
   "web-main.shareIn.open": "打开",
   "web-main.shareIn.sending": "发送",
-  "web-main.shareIn.signIn": "登录后发到 {name}"
+  "web-main.shareIn.signIn": "登录后发到 {name}",
+  "web-main.shareIn.search": "搜索",
+  "web-main.shareIn.find": "找 chat"
 }

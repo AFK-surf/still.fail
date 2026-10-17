@@ -36,6 +36,13 @@ export const whatSource = style({
 /** A few words over a part of the list (发到, 新 chat 开在), on the rows' line. */
 export const section = style({ margin: `10px ${ROW_IN}px 4px`, fontSize: vars.textMeta, color: vars.muted });
 
+/** 发到, and at its end 搜索 (取消 while searching): quiet words to press. */
+export const labelRow = style({ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 });
+export const search = style({
+  flex: "none", padding: 0, border: 0, background: "none", color: vars.muted, font: "inherit", cursor: "pointer",
+  selectors: { "&:hover": { color: vars.text } },
+});
+
 /** The chats and the rest: reaching out to the panel's edge, as ⌘K's do, its scrollbar beside the rows. */
 export const list = style({ flex: 1, minHeight: 0, overflowY: "auto", ...outset(EDGE), padding: `0 ${EDGE}px 4px` });
 export const none = style({ margin: `8px ${ROW_IN}px`, fontSize: vars.textUi, color: vars.muted });

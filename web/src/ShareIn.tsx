@@ -10,7 +10,7 @@ import { ArrowUp, Check, Compose, Server, Text, Web } from "@stillfail/ui/icons.
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import type { ChatItem, ShareInView } from "./core/shapes.ts";
 import { useGo } from "./go.ts";
-import { dismissShare, isPicked, offerShare, pickShare, sendShare, sentPath, useShared, useShareIn, type Shared } from "./shareIn.ts";
+import { dismissShare, isPicked, offerShare, pickShare, SEARCH_FROM, sendShare, sentPath, useShared, useShareIn, type Shared } from "./shareIn.ts";
 import { Mark } from "./brand.tsx";
 import { ModelLogo, SkeletonRows, Time } from "./ui.tsx";
 import * as switcherCss from "./Switcher.css.ts";
@@ -38,7 +38,9 @@ export function ShareInPanel({ scope }: { scope: string }) {
 }
 
 function Body({ scope, shared, field }: { scope: string; shared: Shared; field: React.RefObject<HTMLInputElement | null> }) {
-  const view = useShareIn(scope, shared).value;
+  // Searching (⌘K's field open under 发到) and what is typed there: the chats the core finds for it.
+  const [query, setQuery] = useState<string | null>(null);
+  const view = useShareIn(scope, shared, query ?? "");
   const toast = useToast();
   const go = useGo();
   const [note, setNote] = useState(shared.note ?? "");
@@ -62,8 +64,21 @@ function Body({ scope, shared, field }: { scope: string; shared: Shared; field: 
   return (
     <>
       <What shared={shared} site={view?.site} />
-      <div className={css.section}>{t("web-main.shareIn.to")}</div>
-      <div className={css.list}>{view && !view.loading ? <Places view={view} onPick={pick} /> : <SkeletonRows count={3} />}</div>
+      <div className={`${css.section} ${css.labelRow}`}>
+        <span>{t("web-main.shareIn.to")}</span>
+        {(query !== null || (view && !view.loading && view.items.length >= SEARCH_FROM)) && (
+          <button type="button" className={css.search} onClick={() => setQuery(query === null ? "" : null)}>
+            {query === null ? t("web-main.shareIn.search") : t("common.cancel")}
+          </button>
+        )}
+      </div>
+      {query !== null && (
+        <input className={switcherCss.search} autoFocus placeholder={t("web-main.shareIn.find")} aria-label={t("web-main.shareIn.find")} value={query} spellCheck={false}
+          onChange={(e) => setQuery(e.target.value)}
+          // Esc lets go of the search first, then (pressed again) the panel.
+          onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setQuery(null); field.current?.focus(); } }} />
+      )}
+      <div className={css.list}>{view && !view.loading ? <Places view={view} searching={!!query?.trim()} onPick={pick} /> : <SkeletonRows count={3} />}</div>
       <form className={css.composer} onSubmit={(e) => { e.preventDefault(); if (ready) send(); }}>
         <input ref={field} className={css.field} value={note} placeholder={t("web-main.shareIn.note")} aria-label={t("web-main.shareIn.note")}
           spellCheck={false} onChange={(e) => setNote(e.target.value)} />
@@ -87,8 +102,11 @@ function What({ shared, site }: { shared: Shared; site: string | undefined }) {
   );
 }
 
-/** The chats it can go to, 新 chat, and the stations a new chat can start on. */
-function Places({ view, onPick }: { view: ShareInView; onPick: (station: string, id?: string) => void }) {
+/**
+ * The chats it can go to, 新 chat, and the stations a new chat can start on; `searching`, only the chats found (or that
+ * none is).
+ */
+function Places({ view, searching, onPick }: { view: ShareInView; searching: boolean; onPick: (station: string, id?: string) => void }) {
   const fresh = !!view.picked && view.picked.id === undefined;
   // 新 chat starts where the chat picked is, or on the first station up.
   const first = view.stations.find((s) => s.station === view.picked?.station)?.station ?? view.stations[0]?.station;
@@ -103,10 +121,11 @@ function Places({ view, onPick }: { view: ShareInView; onPick: (station: string,
     <>
       {view.note && <p className={css.none}>{view.note}</p>}
       {view.items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} view={view} onPick={onPick} />)}
-      {first && (
+      {searching && view.items.length === 0 && <p className={css.none}>{t("web-main.chatRef.noMatch")}</p>}
+      {first && !searching && (
         <Row picture={<Compose size={16} />} title={t("web-main.shareIn.newChat")} picked={fresh} onClick={() => onPick(first)} />
       )}
-      {fresh && view.stations.length > 1 && <>
+      {fresh && !searching && view.stations.length > 1 && <>
         <div ref={startOn} className={css.section}>{t("web-main.shareIn.startOn")}</div>
         {view.stations.map((s) => (
           <Row key={s.station} picture={<Server size={16} />} title={s.name} picked={isPicked(view.picked, s.station)} onClick={() => onPick(s.station)} />

@@ -4,6 +4,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { surfaceCorner } from "@stillfail/ui/styles/align.ts";
+import { mSheetLabel } from "./Workspaces.css.ts";
 
 /** What is shared, at the top: a mark of what it is (a link, some text), then its title over it. */
 export const mShareWhat = style({ display: "flex", alignItems: "flex-start", gap: "12px", flex: "none", padding: "2px 20px 10px" });
@@ -20,6 +21,12 @@ globalStyle(`${mShareText} small`, {
   display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: "2", overflow: "hidden",
 });
 globalStyle(`${mShareText} small[data-alone]`, { fontSize: vars.textUi, lineHeight: "20px", color: "var(--m-ink)", WebkitLineClamp: "3", paddingTop: "7px" });
+
+/** 发到, and at its end 搜索 (取消 while searching): words to tap, in the label's own ink and size. */
+export const mShareLabel = style([mSheetLabel, { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "12px" }]);
+export const mShareSearch = style({ flex: "none", padding: "0", border: "0", background: "none", cursor: "pointer" });
+/** 找 chat: on the rows' line, under 发到. */
+export const mShareFind = style({ padding: "6px 20px 4px" });
 
 /** The chats: each its title over one line (the last thing said, or why it is first), cut short. */
 export const mShareList = style({});

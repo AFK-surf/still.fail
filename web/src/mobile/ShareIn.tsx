@@ -8,9 +8,9 @@ import { ArrowUp, Compose, Server, Text, Web } from "@stillfail/ui/icons.tsx";
 import { failure, type ToastAction } from "@stillfail/ui/toast.tsx";
 import type { ChatItem, ChatsView, ShareInView } from "../core/shapes.ts";
 import { topicNow } from "../core/react.ts";
-import { dismissShare, isPicked, offerShare, openFromPopup, pickShare, POPUP_STAYS_MS, sendShare, sentPath, useShared, useShareIn, type Shared } from "../shareIn.ts";
+import { dismissShare, isPicked, offerShare, openFromPopup, pickShare, POPUP_STAYS_MS, SEARCH_FROM, sendShare, sentPath, useShared, useShareIn, type Shared } from "../shareIn.ts";
 import { SheetGrab, useApp } from "./app.tsx";
-import { ModelMark, PickRow } from "./parts.tsx";
+import { Field, ModelMark, PickRow } from "./parts.tsx";
 import { PlaceholderRows } from "./Loading.tsx";
 import * as sheetsCss from "./styles/sheets.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -43,7 +43,9 @@ function sheetHeight(scope: string): number {
 function Sheet({ shared }: { shared: Shared }) {
   const app = useApp();
   const scope = app.entry.id;
-  const view = useShareIn(scope, shared).value;
+  // Searching (the field open under 发到) and what is typed there: the chats the core finds for it.
+  const [query, setQuery] = useState<string | null>(null);
+  const view = useShareIn(scope, shared, query ?? "");
   const [note, setNote] = useState(shared.note ?? "");
   const pick = (station: string, id?: string) => { pickShare(scope, shared, station, id).catch((e: unknown) => app.toast(t("web-main.pick.failed", { error: failure(e) }))); };
   const send = () => {
@@ -68,8 +70,16 @@ function Sheet({ shared }: { shared: Shared }) {
       <SheetGrab />
       <What shared={shared} site={view?.site} />
       <div className={`${sheetsCss.mSheetScroll} ${css.mShareList}`}>
-        <div className={workspacesCss.mSheetLabel}>{t("web-main.shareIn.to")}</div>
-        {view ? <Places view={view} onPick={pick} /> : <PlaceholderRows count={3} />}
+        <div className={css.mShareLabel}>
+          <span>{t("web-main.shareIn.to")}</span>
+          {(query !== null || (view && !view.loading && view.items.length >= SEARCH_FROM)) && (
+            <button type="button" className={css.mShareSearch} onClick={() => setQuery(query === null ? "" : null)}>
+              {query === null ? t("web-main.shareIn.search") : t("common.cancel")}
+            </button>
+          )}
+        </div>
+        {query !== null && <SearchField query={query} onQuery={setQuery} />}
+        {view ? <Places view={view} searching={!!query?.trim()} onPick={pick} /> : <PlaceholderRows count={3} />}
       </div>
       <Composer note={note} onNote={setNote} ready={!!view?.picked} onSend={send} />
     </>
@@ -90,9 +100,18 @@ function What({ shared, site }: { shared: Shared; site: string | undefined }) {
   );
 }
 
-/** The chats it can go to, 新 chat, and the stations a new chat can start on. */
-function Places({ view, onPick }: { view: ShareInView; onPick: (station: string, id?: string) => void }) {
-  if (view.loading) return <PlaceholderRows count={3} />;
+/** 找 chat: under 发到 once 搜索 is tapped, the keyboard up for it. */
+function SearchField({ query, onQuery }: { query: string; onQuery: (query: string) => void }) {
+  const at = useRef<HTMLDivElement>(null);
+  useEffect(() => { at.current?.querySelector("input")?.focus(); }, []);
+  return <div ref={at} className={css.mShareFind}><Field value={query} onChange={onQuery} placeholder={t("web-main.shareIn.find")} /></div>;
+}
+
+/**
+ * The chats it can go to, 新 chat, and the stations a new chat can start on; `searching`, only the chats found (or that
+ * none is).
+ */
+function Places({ view, searching, onPick }: { view: ShareInView; searching: boolean; onPick: (station: string, id?: string) => void }) {
   const fresh = !!view.picked && view.picked.id === undefined;
   // 新 chat starts where the chat picked is, or on the first station up.
   const first = view.stations.find((s) => s.station === view.picked?.station)?.station ?? view.stations[0]?.station;
@@ -103,15 +122,17 @@ function Places({ view, onPick }: { view: ShareInView; onPick: (station: string,
     if (fresh && !was.current) startOn.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     was.current = fresh;
   }, [fresh]);
+  if (view.loading) return <PlaceholderRows count={3} />;
   return (
     <>
       {view.note && <p className={workspacesCss.mSheetNone}>{view.note}</p>}
       {view.items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} view={view} onPick={onPick} />)}
-      {first && (
+      {searching && view.items.length === 0 && <p className={workspacesCss.mSheetNone}>{t("web-main.chatRef.noMatch")}</p>}
+      {first && !searching && (
         <PickRow label={t("web-main.shareIn.newChat")} leading={<span className={css.mShareLead}><Compose size={20} /></span>} checked={fresh}
           onClick={() => onPick(first)} />
       )}
-      {fresh && view.stations.length > 1 && <>
+      {fresh && !searching && view.stations.length > 1 && <>
         <div ref={startOn} className={workspacesCss.mSheetLabel}>{t("web-main.shareIn.startOn")}</div>
         {view.stations.map((s) => (
           <PickRow key={s.station} label={s.name} leading={<span className={css.mShareLead}><Server size={20} /></span>}

@@ -3,10 +3,9 @@
 // takes what it was given and goes to the workspace's page, where the sheet (phone: mobile/ShareIn.tsx) or the panel
 // (wide: ShareIn.tsx) shows where it goes: the core's `shareIn` view, picked with `shareIn.pick`, sent with `shareIn.send`.
 // Here is only what is being shared while it waits to be sent, and the calls; where it goes is the core's.
-import { useSyncExternalStore } from "react";
+import { useRef, useSyncExternalStore } from "react";
 import { core, useTopic } from "./core/react.ts";
 import type { ShareInPick, ShareInView } from "./core/shapes.ts";
-import type { TopicState } from "./api.ts";
 import { stationBase } from "./station.tsx";
 
 /**
@@ -47,10 +46,20 @@ export function dismissShare(s: Shared): void {
   if (s.popup) window.close();
 }
 
-/** Where it can go, the core's (`shareIn`). */
-export function useShareIn(scope: string, s: Shared): TopicState<ShareInView> {
-  return useTopic<ShareInView>({ topic: "shareIn", scope, source: s.source });
+/**
+ * Where it can go, the core's (`shareIn`): the chats `query` finds when one is typed. While the view for what was just
+ * typed is on its way, the one before stays (the list does not blank between letters).
+ */
+export function useShareIn(scope: string, s: Shared, query = ""): ShareInView | undefined {
+  const q = query.trim();
+  const value = useTopic<ShareInView>({ topic: "shareIn", scope, source: s.source, ...(q ? { query: q } : {}) }).value;
+  const last = useRef(value);
+  if (value !== undefined) last.current = value;
+  return value ?? last.current;
 }
+
+/** From how many chats the sheet offers to search them (as the Android app's does). */
+export const SEARCH_FROM = 6;
 
 /** Whether `picked` is the row (`id` on `station`), or with no `id` a new chat on `station`. */
 export function isPicked(picked: ShareInPick | undefined, station: string, id?: string): boolean {
