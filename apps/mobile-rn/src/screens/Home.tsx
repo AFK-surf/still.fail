@@ -286,11 +286,12 @@ function ChatPane({ current, chats, filter, padding, onSearch, searching, index,
   // iOS's), so it is scrolled there once it has rows.
   const list = useRef<FlatList<PaneItem>>(null);
   const placed = useRef(false);
+  // Asked again as its rows come (the first ones may not fill the screen, the offset then cut short), until it is there
+  // or a finger has moved it.
   const place = () => {
-    if (placed.current || view == null || items.length === 0) return;
-    placed.current = true;
+    if (placed.current || view == null || items.length === 0 || view.note?.empty === true) return;
     // The frame after: the list takes no offset before its rows are laid out.
-    if (view.note?.empty !== true) requestAnimationFrame(() => list.current?.scrollToOffset({ offset: SEARCH_HEIGHT, animated: false }));
+    requestAnimationFrame(() => list.current?.scrollToOffset({ offset: SEARCH_HEIGHT, animated: false }));
   };
 
   return (
@@ -315,8 +316,8 @@ function ChatPane({ current, chats, filter, padding, onSearch, searching, index,
           CellRendererComponent={Cell}
           scrollEventThrottle={16}
           onLayout={(e) => { viewport.current = e.nativeEvent.layout.height; }}
-          onScroll={(e) => { motion.offset = e.nativeEvent.contentOffset.y; }}
-          onScrollBeginDrag={() => { if (settle.current) clearTimeout(settle.current); setScrolling(true); }}
+          onScroll={(e) => { motion.offset = e.nativeEvent.contentOffset.y; if (motion.offset >= SEARCH_HEIGHT - 1) placed.current = true; }}
+          onScrollBeginDrag={() => { placed.current = true; if (settle.current) clearTimeout(settle.current); setScrolling(true); }}
           onScrollEndDrag={() => {
             // A fling goes on by itself (its momentum begins at once); let go still, the scroll is over.
             if (settle.current) clearTimeout(settle.current);
