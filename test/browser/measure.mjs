@@ -40,6 +40,8 @@ export function corners(mark = false) {
     if (/^(IMG|SVG|VIDEO|CANVAS)$/i.test(el.tagName)) continue;
     // A slider's knob goes where the value is: not set in a corner.
     if (el.closest('[role=slider]')) continue;
+    // What turns for ever (a spinner) is measured at whatever angle it is caught, its box as large as that turn makes it.
+    if (el.getAnimations().some((a) => a.effect?.getTiming().iterations === Infinity)) continue;
     const pressed = el.matches('button, a[href], [role=button], [role=menuitem], [role=menuitemradio], [role=menuitemcheckbox], [role=option], [role=tab], input, textarea, select, summary');
     if (!drawn(cs) && !pressed) continue;
     const b = el.getBoundingClientRect();
@@ -61,11 +63,15 @@ export function corners(mark = false) {
     if (Math.min(gl, gr, gt, gb) < -0.5) continue; // reaching out of it (a badge on its edge): not in its corner
     // In a corner: within the box's curve of both edges that meet there.
     const corners = [['top left', gl, gt, 'borderTopLeftRadius'], ['top right', gr, gt, 'borderTopRightRadius'], ['bottom left', gl, gb, 'borderBottomLeftRadius'], ['bottom right', gr, gb, 'borderBottomRightRadius']];
+    // A button (its ground shows under the pointer; not a switch, a row's) set as far from both edges of a corner, further
+    // in than that, is still set in it (in where words stand, docs/ui-panels.md): its ground must follow the corner too.
+    const button = el.matches('button, [role=button], a[href]') && !el.matches('[role=switch]');
     for (const [where, g1, g2, prop] of corners) {
       // Its corner as drawn (no more than half its side), and what stands in it: within a little over half of that from
-      // both edges (further in, it is beside the corner, not in it).
+      // both edges (further in, it is beside the corner, not in it); a button set evenly in it, within all of it.
       const rbc = Math.min(px(bs[prop]), c.width / 2, c.height / 2);
-      if (rbc < 0.5 || g1 > rbc * 0.6 || g2 > rbc * 0.6) continue;
+      const reach = button && Math.abs(g1 - g2) <= 1 ? rbc : rbc * 0.6;
+      if (rbc < 0.5 || g1 > reach || g2 > reach) continue;
       measured++;
       const who = `${name(box)} › ${name(el)} (${where})`;
       if (Math.abs(g1 - g2) > 1) { say(el, `${who}: ${g1.toFixed(1)} from the side, ${g2.toFixed(1)} from the ${where.split(' ')[0]}`); continue; }
