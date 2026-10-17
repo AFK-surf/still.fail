@@ -145,7 +145,7 @@
   "core-logic.footprint.rebuild.text": "将删除 {n} 个 chat 工作区中的 node_modules、Rust 的 target、Gradle 的 build 等，共 {size}。代码和提交不受影响，agent 下次需要时会重新安装或编译。正在运行的 chat 不受影响。",
   "core-logic.footprint.rebuild.title": "可重建的文件 {size}",
   "core-logic.footprint.unseen": "另有 {n} 个你无权查看的 chat · {size}",
-  "core-logic.footprint.untitled": "未命名的 chat",
+  "core-logic.footprint.untitled": "新对话",
   "core-logic.footprint.used": "{when}使用过",
   "core-logic.footprint.working": "运行中",
   "core-logic.format.ago.hours": "{n} 小时前",

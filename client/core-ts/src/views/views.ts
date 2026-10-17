@@ -131,7 +131,7 @@ export function chatTitle(thread: J): string {
   if (channel !== null) return `#${channel}`;
   const surface = get(thread, "surface");
   if (!(surface === "ember" || surface === "stillfail") && text("channel")?.startsWith("D")) return t("core-views.direct_message");
-  return t("core-views.no_messages");
+  return t("core-views.new_chat");
 }
 
 /// What a message another chat's agent sent (session_send, or the first of a chat it opened with chat_create) is headed
@@ -1473,7 +1473,7 @@ export class Views implements Owner {
         me: this.me(ofAddress(station)),
         thread: null,
         ...(noChat ? { noChat: true } : {}),
-        title: row !== undefined && row.title !== undefined ? row.title : t("core-views.no_messages"),
+        title: row !== undefined && row.title !== undefined ? row.title : t("core-views.new_chat"),
         people: [],
         archived,
         agents: [agent],

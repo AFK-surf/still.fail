@@ -204,7 +204,6 @@
   "core-views.memberships.home": "Home workspace",
   "core-views.named_error": "{name}: {error}",
   "core-views.new_chat": "New chat",
-  "core-views.no_messages": "(No messages yet)",
   "core-views.pinned": "Pinned",
   "core-views.xshare.none": "Not shared",
   "core-views.xshare.read": "read only",

@@ -131,7 +131,7 @@ test("the_page_says_what_takes_the_disk_and_what_can_be_cleaned", () => {
   assert.deepEqual(archived.map((x: J) => x.keys), [["b", "d"], ["b"]]);
   assert.equal(archived[0].confirms.length, 2);
   assert.deepEqual(v.actions[2].choices[0].keys, ["a"]);
-  assert.equal(v.chats[1].title, "未命名的 chat");
+  assert.equal(v.chats[1].title, "新对话");
   assert.deepEqual(v.chats[2].choices, []);
   assert.equal(v.chats[1].choices[1].confirms.length, 2);
   assert.equal(v.memory[2].label, "在跑");

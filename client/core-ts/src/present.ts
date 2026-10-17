@@ -534,7 +534,7 @@ export function session(s: J): J {
   const runtime = strOf("runtime") ?? "claude";
   const m = strOf("model");
   const first = strOf("firstText");
-  const title = strOf("title") || (first !== null ? format.cleanText(first) : "") || t("core-views.no_messages");
+  const title = strOf("title") || (first !== null ? format.cleanText(first) : "") || t("core-views.new_chat");
   const b = markOf(s);
   const effort = strOf("effort");
   const process = strOf("process");

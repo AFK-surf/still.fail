@@ -141,7 +141,7 @@
     "other": "{n} items to do, click to view"
   },
   "web-main.attention.settings": "Notification settings",
-  "web-main.attention.untitled": "(No title yet)",
+  "web-main.attention.untitled": "New chat",
   "web-main.attention.waitOne": "Needs you",
   "web-main.chat.agentCard.cache": "Cache hits",
   "web-main.chat.agentCard.context": "Context",

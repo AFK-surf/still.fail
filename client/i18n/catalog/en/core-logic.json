@@ -178,7 +178,7 @@
     "one": "1 more chat you can't see · {size}",
     "other": "{n} more chats you can't see · {size}"
   },
-  "core-logic.footprint.untitled": "Untitled chat",
+  "core-logic.footprint.untitled": "New chat",
   "core-logic.footprint.used": "Used {when}",
   "core-logic.footprint.working": "Working",
   "core-logic.format.ago.hours": {

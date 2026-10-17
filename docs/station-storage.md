@@ -278,9 +278,9 @@ in; a chat's is that of the first of its sessions that has one.
 
 - **title**: the chat's title, else the first line of the first thing a person
   said in it (Slack mentions left out, spaces collapsed); with neither, its
-  Slack thread's (the same, then `#channel`, `私信`); else `（还没有消息）`.
+  Slack thread's (the same, then `#channel`, `私信`); else `新对话`.
   Without a chat: the session's title, else its Slack thread's, else
-  `（还没有消息）`.
+  `新对话`.
 - **mine**: a chat the viewer started, wrote in, or is among the people of;
   without a chat, the viewer started the session or is among the people of
   its Slack thread. A person is the viewer by id (an email, or `local`), by

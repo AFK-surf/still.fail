@@ -393,7 +393,7 @@ station, applies `mine`, and groups them by day.
 The `chat` view's `title` is the thread's title; else the first line of the
 first thing a person said in it (`firstText`, Slack mentions left out, spaces
 collapsed); else its Slack channel (`#name`), `私信` for a direct message, or
-`（还没有消息）`.
+`新对话`.
 
 ```jsonc
 // stations
