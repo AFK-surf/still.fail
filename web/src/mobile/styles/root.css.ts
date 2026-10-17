@@ -2,7 +2,6 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { mRiseKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import * as waitCss from "@stillfail/ui/waiting.css.ts";
-import { STILL } from "@stillfail/ui/styles/still.ts";
 
 /** The narrow screen's colours in the dark (root.css.ts m, mDark). */
 const darkVars = {
@@ -123,7 +122,6 @@ globalStyle(`${m} button:not(${wide} *)`, { font: "inherit", color: "inherit" })
 globalStyle(`${m} button`, { WebkitTapHighlightColor: "transparent" });
 globalStyle(`${m} p:not(${wide} *)`, { margin: "0" });
 globalStyle(`${m} [data-enter]:not(${wide} *)`, { animation: `${mRiseKeyframes} 320ms var(--m-standard) both` });
-globalStyle(`${STILL} ${m} [data-enter]`, { animation: "none !important", transition: "none !important" });
 
 // Waiting (@stillfail/ui waiting.tsx) on the phone: its placeholders and pill in the phone's grey (as its message bubbles,
 // its placeholders always were), not the wide screen's; a settings page's cards inset as its cards are (parts.css.ts mListCard).

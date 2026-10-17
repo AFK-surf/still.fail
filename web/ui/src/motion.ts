@@ -2,7 +2,7 @@
 // wherever it is when where it goes changes: it starts from the value and the speed it has, instead of a CSS
 // transition's fixed run from a fixed start, which lags a goal that moves and jumps when cut off. CSS transitions stay
 // for a thing's own look (hover, colour, opacity, a bar's fill).
-import { animate, frame, motionValue, type AnimationPlaybackControls, type MotionValue } from "motion";
+import { animate, frame, MotionGlobalConfig, motionValue, type AnimationPlaybackControls, type MotionValue } from "motion";
 
 export { animate, type AnimationPlaybackControls };
 
@@ -42,8 +42,27 @@ export const GLIDE_EASE = `linear(${Array.from({ length: 31 }, (_, i) => ((1 - M
  */
 export const LOCAL_MS = 100;
 
-/** Whether motion is reduced on the page now: its root says so (followMotion; styles/still.ts STILL for the styles). */
+/**
+ * Whether motion is reduced on the page now: its root says so (followMotion; styles/still.ts STILL for the styles).
+ * Motion reduced is one clock, not a way of its own: everything moves as it does, every motion taking no time (Motion's
+ * `instantAnimations`, `play`, `motionMs`, `glideShare`; for the styles, styles/global.css.ts), so what it ends at and
+ * what is done once it is over are the same. Only what loops (restingLoop; styles/still.ts stillLoop) and what shows
+ * for a while and goes (styles/still.ts stillFlash) ask; check.sh keeps it out of the rest.
+ */
 export const reducedMotion = (): boolean => document.documentElement.hasAttribute("data-reduced-motion");
+
+/** `el.animate`, on the page's clock: with motion reduced, over at once (no delay either), its end and `finished` as ever. */
+export function play(el: Element, frames: Keyframe[] | PropertyIndexedKeyframes, timing: KeyframeAnimationOptions): Animation;
+export function play(el: Element | null | undefined, frames: Keyframe[] | PropertyIndexedKeyframes, timing: KeyframeAnimationOptions): Animation | undefined;
+export function play(el: Element | null | undefined, frames: Keyframe[] | PropertyIndexedKeyframes, timing: KeyframeAnimationOptions): Animation | undefined {
+  return el?.animate(frames, reducedMotion() ? { ...timing, duration: 0, delay: 0, endDelay: 0 } : timing);
+}
+
+/** A wait that a motion takes (a timer waiting it out, a stand-in held while it plays): none with motion reduced. */
+export const motionMs = (ms: number): number => (reducedMotion() ? 0 : ms);
+
+/** The share of what is left that a glide by the message list's law (GLIDE_TAU) goes in `dt` ms: all of it, with motion reduced. */
+export const glideShare = (dt: number): number => (reducedMotion() ? 1 : 1 - Math.exp(-dt / GLIDE_TAU));
 
 /**
  * The page's motion reduced, or not, as `choice` says (a device's setting: `reduce`, `full`, or none to follow the
@@ -54,7 +73,10 @@ export function followMotion(choice: () => string | undefined = () => undefined)
   const system = matchMedia("(prefers-reduced-motion: reduce)");
   const apply = () => {
     const chosen = choice();
-    document.documentElement.toggleAttribute("data-reduced-motion", chosen === "reduce" || (chosen !== "full" && system.matches));
+    const reduced = chosen === "reduce" || (chosen !== "full" && system.matches);
+    document.documentElement.toggleAttribute("data-reduced-motion", reduced);
+    // Every motion Motion plays (`animate`, springs, a value's) there at once, its delay none, its end and finish as ever.
+    MotionGlobalConfig.instantAnimations = reduced;
   };
   apply();
   system.addEventListener("change", apply);
@@ -102,7 +124,6 @@ export function follower(start: number, draw: (value: number) => void): Follower
     to(next, transition = MOVE) {
       if (next === goal && (run || value.get() === next)) return;
       goal = next;
-      if (reducedMotion()) return this.jump(next);
       run = animate(value, next, transition);
       void run.finished.then(() => { if (goal === next) run = null; }, () => {});
     },
@@ -132,7 +153,7 @@ export function glideValue(from: number, to: number, set: (value: number) => voi
     const dt = Math.max(0, Math.min(64, now - last));
     last = now;
     const left = to - value;
-    value = Math.abs(left) < 0.25 ? to : value + left * (1 - Math.exp(-dt / GLIDE_TAU));
+    value = Math.abs(left) < 0.25 ? to : value + left * glideShare(dt);
     set(value);
     if (value === to) { frame = 0; done(); }
     else frame = requestAnimationFrame(step);
@@ -170,7 +191,7 @@ export function glider(start: number, draw: (value: number) => void): Follower {
     const dt = Math.max(0, Math.min(64, now - last));
     last = now;
     const left = goal - value;
-    value = Math.abs(left) < 0.5 ? goal : value + left * (1 - Math.exp(-dt / GLIDE_TAU));
+    value = Math.abs(left) < 0.5 ? goal : value + left * glideShare(dt);
     draw(value);
     frame = value === goal ? 0 : requestAnimationFrame(step);
   };
@@ -179,7 +200,6 @@ export function glider(start: number, draw: (value: number) => void): Follower {
     get moving() { return frame !== 0; },
     to(next) {
       goal = next;
-      if (reducedMotion()) return this.jump(next);
       if (frame || value === next) return;
       // On the pane's clock: its next step and this one are taken together.
       last = glideClock();
@@ -248,10 +268,6 @@ export function moveState(moves: [HTMLElement, string[]][], change: () => void, 
     for (const p of props) el.style.removeProperty(p);
   }
   change();
-  if (reducedMotion()) {
-    for (const [el, props] of moves) letGo(el, props);
-    return Promise.resolve();
-  }
   const runs: Promise<unknown>[] = [];
   moves.forEach(([el, props], i) => {
     const style = getComputedStyle(el);
@@ -278,7 +294,6 @@ export function moveState(moves: [HTMLElement, string[]][], change: () => void, 
  * its place from the first frame); a moveState on the same element later goes on from wherever this had got to.
  */
 export function arrive(moves: [HTMLElement, Record<string, string>][], transition: object = { duration: 0.38, ease: EASE_OUT }): void {
-  if (reducedMotion()) return;
   for (const [el, from] of moves) {
     changing.get(el)?.stop();
     const style = getComputedStyle(el);

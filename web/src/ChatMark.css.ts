@@ -2,7 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { busyRing } from "@stillfail/ui/styles/busyRing.ts";
 import { leadBeatKeyframes, leadBreatheKeyframes, leadLitKeyframes, spinKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
-import { STILL } from "@stillfail/ui/styles/still.ts";
+import { STILL, stillLoop } from "@stillfail/ui/styles/still.ts";
 
 /**
  * A chat's state on its row's picture (ChatMark.tsx), at the corner, over the picture: a gap of the row's ground
@@ -36,7 +36,7 @@ export const chatMark = style({
       content: "\"\"", position: "absolute", inset: 0, background: `${busyRing(10)} center / 100% no-repeat`,
       animation: `${spinKeyframes} 1.2s linear infinite`,
     },
-    [`${STILL} &[data-tone="busy"]::after`]: { animation: "none" },
+    [`${STILL} &[data-tone="busy"]::after`]: stillLoop(),
   },
 });
 
@@ -56,7 +56,7 @@ export const chatMarkInline = style({
       width: 10, height: 10, background: `${busyRing(10)} center / 100% no-repeat`,
       animation: `${spinKeyframes} 1.2s linear infinite`,
     },
-    [`${STILL} &[data-tone="busy"]`]: { animation: "none" },
+    [`${STILL} &[data-tone="busy"]`]: stillLoop(),
   },
 });
 
@@ -95,5 +95,6 @@ globalStyle(`${leadSlot}[data-motion="wait"] > [data-part="4"]`, { animationDela
 globalStyle(`${leadSlot}[data-motion="watch"] > [data-part="1"]`, { animation: `${leadBeatKeyframes} 3.1s ease-out infinite` });
 globalStyle(`${leadSlot}[data-motion="watch"] > :is([data-part="2"], [data-part="3"])`, { opacity: .3, animation: `${leadLitKeyframes} 3.1s ease-out .18s infinite` });
 globalStyle(`${leadSlot}[data-motion="watch"] > [data-part="3"]`, { animationDelay: ".42s" });
-globalStyle(`${STILL} ${leadSlot}[data-motion] > [data-part]`, { animation: "none", opacity: 1 });
+// Still, as between beats: the dots and arcs dim.
+globalStyle(`${STILL} ${leadSlot}[data-motion] > [data-part]`, stillLoop());
 export const leadRest = style({ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });

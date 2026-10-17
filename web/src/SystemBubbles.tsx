@@ -9,7 +9,7 @@ import { useAppUpdate } from "./brand.tsx";
 import { useChangelog, useChangelogSeen } from "./changelog.ts";
 import { Close, Download, Refresh, Sparks } from "@stillfail/ui/icons.tsx";
 import { NAME } from "./channel.ts";
-import { reducedMotion } from "@stillfail/ui/motion.ts";
+import { play } from "@stillfail/ui/motion.ts";
 import * as css from "./SystemBubbles.css.ts";
 import { t } from "./i18n.ts";
 
@@ -37,16 +37,16 @@ function Bubble({ icon, children, action, onClose, closeLabel }: {
   const [leaving, setLeaving] = useState(false);
   useLayoutEffect(() => {
     const el = slot.current;
-    if (!el || reducedMotion()) return;
-    el.animate([{ height: "0px", marginTop: "-8px" }, { height: `${el.offsetHeight}px`, marginTop: "0px" }], { duration: 260, easing: EASE });
-    el.firstElementChild?.animate([{ opacity: 0, transform: "translateY(10px) scale(.96)" }, { opacity: 1, transform: "none" }], { duration: 320, easing: EASE });
+    if (!el) return;
+    play(el, [{ height: "0px", marginTop: "-8px" }, { height: `${el.offsetHeight}px`, marginTop: "0px" }], { duration: 260, easing: EASE });
+    play(el.firstElementChild, [{ opacity: 0, transform: "translateY(10px) scale(.96)" }, { opacity: 1, transform: "none" }], { duration: 320, easing: EASE });
   }, []);
   const away = (then: () => void) => {
     const el = slot.current;
-    if (!el || leaving || reducedMotion()) { then(); return; }
+    if (!el || leaving) { then(); return; }
     setLeaving(true);
-    el.firstElementChild?.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateX(-16px) scale(.96)" }], { duration: 180, easing: EASE, fill: "forwards" });
-    void el.animate([{ height: `${el.offsetHeight}px`, marginTop: "0px" }, { height: "0px", marginTop: "-8px" }], { duration: 220, delay: 120, easing: EASE, fill: "forwards" })
+    play(el.firstElementChild, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateX(-16px) scale(.96)" }], { duration: 180, easing: EASE, fill: "forwards" });
+    void play(el, [{ height: `${el.offsetHeight}px`, marginTop: "0px" }, { height: "0px", marginTop: "-8px" }], { duration: 220, delay: 120, easing: EASE, fill: "forwards" })
       .finished.then(then, then);
   };
   return (

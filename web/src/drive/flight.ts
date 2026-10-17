@@ -3,7 +3,7 @@
 // and its mark is moved back to where the dropped one was shown (in the same frame that one goes), then let go to its
 // own place, which does not move meanwhile. The frost over the chat fades first; the marks go once it is half gone.
 import { useLayoutEffect, type RefObject } from "react";
-import { reducedMotion } from "@stillfail/ui/motion.ts";
+import { play } from "@stillfail/ui/motion.ts";
 
 /** Where a dropped file was shown over the chat: its box untilted, and its tilt. */
 type From = { box: DOMRect; tilt: number };
@@ -24,7 +24,7 @@ const CARD_IN_MS = 160;
 
 /** The files shown over the chat are let go: where each one's mark is now. */
 export function takeOff(marks: Element[]): void {
-  waiting = reducedMotion() ? [] : marks.map((node) => {
+  waiting = marks.map((node) => {
     const box = node.getBoundingClientRect();
     const style = getComputedStyle(node);
     const tilt = parseFloat(style.rotate) || 0;
@@ -51,8 +51,8 @@ export function useLanding(mark: RefObject<Element | null>): void {
     // (A picture is its own card: it comes whole.)
     if (card && card !== el) {
       const timing = { duration: CARD_IN_MS, delay: CARD_AT_MS, easing: "ease-out", fill: "backwards" } as const;
-      shows.push(card.animate([{ backgroundColor: "transparent", boxShadow: "none", borderColor: "transparent" }, {}], timing));
-      for (const part of card.children) if (!part.contains(el) && part !== el) shows.push(part.animate([{ opacity: 0 }, { opacity: 1 }], timing));
+      shows.push(play(card, [{ backgroundColor: "transparent", boxShadow: "none", borderColor: "transparent" }, {}], timing));
+      for (const part of card.children) if (!part.contains(el) && part !== el) shows.push(play(part, [{ opacity: 0 }, { opacity: 1 }], timing));
     }
     // The composer's list of files scrolls (when there are many): it lets the mark in meanwhile.
     const box = el.closest<HTMLElement>("form");
@@ -68,7 +68,7 @@ export function useLanding(mark: RefObject<Element | null>): void {
     const dy = from.box.top + from.box.height / 2 - (to.top + to.height / 2);
     el.style.position = "relative";
     el.style.zIndex = "5";
-    const run = el.animate([
+    const run = play(el, [
       { transform: `translate(${dx}px, ${dy}px) rotate(${from.tilt}deg) scale(${from.box.width / to.width}, ${from.box.height / to.height})` },
       { transform: "none" },
     ], { duration: FLIGHT_MS, delay: SET_OFF_MS, easing: FLY, fill: "backwards" });

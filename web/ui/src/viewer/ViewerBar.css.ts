@@ -1,6 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
-import { STILL } from "../styles/still.ts";
 
 /** How tall the bar is: as a page's bar (styles/sidebar.css.ts), a 32px button in it level with the desktop window's
  * buttons. What is under it starts below it, and goes under it as it is scrolled or as the bar goes. */
@@ -25,7 +24,6 @@ export const bar = style({
     "[data-desktop] &": { WebkitAppRegion: "drag" },
     ':root[data-desktop="inset"]:not([data-fullscreen]) &': { paddingLeft: "84px" },
     ':is([data-desktop="overlay"], [data-desktop="custom"]) &': { paddingRight: "calc(var(--window-buttons, 0px) + 12px)" },
-    [`${STILL} &`]: { transition: "opacity 160ms linear" },
   },
 });
 globalStyle(`[data-desktop] ${bar} :is(a, button, input, select, [role="button"], [tabindex])`, { WebkitAppRegion: "no-drag" });

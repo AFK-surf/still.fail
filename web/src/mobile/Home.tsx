@@ -4,7 +4,7 @@
 import { StationMark } from "../StationMark.tsx";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motionValue } from "motion";
-import { animate, MOVE, reducedMotion, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
+import { animate, MOVE, play, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
 import { stationApi, useChats, useChatSearch, useStationCall, useStations, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
 import type { FoundMessage } from "../core/shapes.ts";
 import { jumpTo } from "../jumpTo.ts";
@@ -145,18 +145,16 @@ function SearchPage({ from, onLeave, onClose }: { from: DOMRect; onLeave: () => 
     ];
   };
   useLayoutEffect(() => {
-    if (reducedMotion()) return;
     const timing = { duration: 280, easing: "cubic-bezier(.2, .8, .2, 1)" };
-    field.current?.animate(frames(), timing);
-    cancel.current?.animate([{ opacity: 0 }, { opacity: 1 }], timing);
+    play(field.current, frames(), timing);
+    play(cancel.current, [{ opacity: 0 }, { opacity: 1 }], timing);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const close = () => {
     if (leaving.current) return;
     leaving.current = true;
     onLeave();
-    if (reducedMotion()) return onClose();
     page.current?.setAttribute("data-leaving", "");
-    field.current?.animate(frames().reverse(), { duration: 240, easing: "cubic-bezier(.4, 0, .2, 1)", fill: "forwards" }).finished.then(onClose, onClose);
+    play(field.current, frames().reverse(), { duration: 240, easing: "cubic-bezier(.4, 0, .2, 1)", fill: "forwards" })?.finished.then(onClose, onClose);
   };
   return (
     <div ref={page} className={css.mSearchPage}>
@@ -418,18 +416,18 @@ function SwipeArchive({ item, busy, onDrag, children }: { item: ChatItem; busy: 
   }), [x]);
   const back = () => {
     run.current?.stop();
-    run.current = reducedMotion() ? (x.jump(0), null) : animate(x, 0, { ...MOVE, velocity: x.getVelocity() });
+    run.current = animate(x, 0, { ...MOVE, velocity: x.getVelocity() });
   };
   /** Off to the left, then the row closes up; archived once it is gone (the core takes it out of the list then). */
   const leave = async () => {
     const el = frame.current;
-    if (!el || reducedMotion()) return;
+    if (!el) return;
     run.current?.stop();
     const off = animate(x, -el.offsetWidth, { type: "spring", visualDuration: 0.2, bounce: 0, velocity: Math.min(x.getVelocity(), 0) });
     run.current = off;
     await off.finished;
     el.dataset.leaving = "";
-    await el.animate([{ height: `${el.offsetHeight}px` }, { height: "0px" }], { duration: 200, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)", fill: "forwards" }).finished;
+    await play(el, [{ height: `${el.offsetHeight}px` }, { height: "0px" }], { duration: 200, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)", fill: "forwards" }).finished;
   };
   /** Not archived after all (asked first and kept, or it failed): back where it rests. */
   const stay = () => {

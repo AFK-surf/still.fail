@@ -25,7 +25,7 @@ import { thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
 import { useVirtualList, useVirtualModel, type VirtualList } from "./virtual/list.tsx";
 import type { Align, Item } from "./virtual/model.ts";
-import { animate, arrive, EASE_OUT, follower, glider, moveState, reducedMotion, type AnimationPlaybackControls, type Follower } from "@stillfail/ui/motion.ts";
+import { animate, arrive, EASE_OUT, follower, glider, motionMs, moveState, type AnimationPlaybackControls, type Follower } from "@stillfail/ui/motion.ts";
 import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
 import { DraftKey, offerToDraft, pathWords, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
@@ -2120,7 +2120,7 @@ export function useLinger(atWork: AgentAtWork[], keep: ReadonlySet<string>): { a
     if (atWork.some((a) => a.key === key) || keep.has(key)) s.stopped = null;
     else if (s.stopped === null) s.stopped = now;
     if (s.stopped === null) continue;
-    const at = now - s.stopped < HOLD_MS ? s.stopped + HOLD_MS : s.stopped + HOLD_MS + FADE_MS;
+    const at = now - s.stopped < HOLD_MS ? s.stopped + HOLD_MS : s.stopped + HOLD_MS + motionMs(FADE_MS);
     if (at <= now) shown.current.delete(key);
     else next = Math.min(next ?? at, at);
   }
@@ -2377,7 +2377,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>, following: 
       step();
     };
     // Folding since it began waiting: on once folded.
-    if (pose === "fold") timer = setTimeout(() => go("float"), Math.max(0, FOLD_MS - (performance.now() - current.at)));
+    if (pose === "fold") timer = setTimeout(() => go("float"), Math.max(0, motionMs(FOLD_MS) - (performance.now() - current.at)));
     let hop: AnimationPlaybackControls | undefined;
     if (pose === "float") {
       const f = (flight.current ??= launch(pane, avatar));
@@ -2422,7 +2422,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>, following: 
         queue.current.shift();
         done.current.add(seq);
         setCurrent({ ...next, pose: "float", chain: true });
-      }, SPIT_MS);
+      }, motionMs(SPIT_MS));
     }
     if (pose === "return") {
       if (!flight.current) { finish(seq, agent, false); return; }
@@ -2440,7 +2440,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>, following: 
       for (const m of messages) {
         if (decided.current.has(m.seq)) continue;
         const agent = m.authorKind === "agent" ? m.by.agent : undefined;
-        const emits = !reducedMotion() && watched() && saidHere(m.seq) && agent !== undefined && showing.has(agent);
+        const emits = watched() && saidHere(m.seq) && agent !== undefined && showing.has(agent);
         decided.current.set(m.seq, emits);
         if (emits) queue.current.push({ seq: m.seq, agent: agent!, at: performance.now() });
       }
@@ -2573,7 +2573,7 @@ export function useSteady(now: { key: string; text: string }) {
   }, [now.key, now.text, state.current.key, state.current.text]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!state.previous) return;
-    const timer = setTimeout(() => setState((s) => ({ ...s, previous: null })), CROSS_MS);
+    const timer = setTimeout(() => setState((s) => ({ ...s, previous: null })), motionMs(CROSS_MS));
     return () => clearTimeout(timer);
   }, [state.previous]);
   return state;

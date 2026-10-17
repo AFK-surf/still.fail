@@ -2,7 +2,7 @@ import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { page as settingsPage, pageHead, pageNarrow } from "../styles/pages.css.ts";
 import { neg, outset } from "@stillfail/ui/styles/align.ts";
-import { STILL } from "@stillfail/ui/styles/still.ts";
+import { STILL, stillLoop } from "@stillfail/ui/styles/still.ts";
 
 /** Not a settings page: its head up by the window's top, its name level with the sidebar's first row, the files close under it. */
 export const page = style({ position: "relative", selectors: { [`${settingsPage}&`]: { paddingTop: "12px" } } });
@@ -33,7 +33,7 @@ globalStyle(`${pin}[data-on] button`, { color: vars.accent });
 export const spin = style({ display: "contents" });
 globalStyle(`${spin}[data-on] svg`, { animation: `${turn} 900ms linear infinite` });
 // With motion reduced, slower, as a spinner (@stillfail/ui spinner.css.ts).
-globalStyle(`${STILL} ${spin}[data-on] svg`, { animationDuration: "2.4s !important" });
+globalStyle(`${STILL} ${spin}[data-on] svg`, stillLoop("turn"));
 
 /** The entries: rows on the page, a row's ground on hover; files dropped on it go into the folder. */
 export const list = style({ position: "relative", display: "grid", gap: "2px", minHeight: "200px", borderRadius: vars.rCard, cornerShape: vars.cornerShape, outline: "none" });

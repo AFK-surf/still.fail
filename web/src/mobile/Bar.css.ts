@@ -1,7 +1,6 @@
 // The bottom bar (Bar.tsx): one frosted glass for the bar and the panel it grows into, the ball over the place in
 // view, 令 in a notch cut into the bar's top. The places' icons are drawn over the ball (frosted, it would blur them).
 import { globalStyle, keyframes, style, type StyleRule } from "@vanilla-extract/css";
-import { STILL } from "@stillfail/ui/styles/still.ts";
 
 /** Rules for the dark theme: chosen, or the device's while none is chosen (as styles/root.css.ts goes). */
 const dark = (rules: StyleRule): StyleRule => ({
@@ -19,7 +18,6 @@ export const mBarHost = style({
   selectors: {
     // Over a page pushed over a place: gone down and out of the way, back as that page goes.
     "&[data-away]": { transform: "translateY(120px)", opacity: 0, pointerEvents: "none" },
-    [`${STILL} &`]: { transition: "none" },
   },
   "@media": {
     // Wider (an opened foldable, a phone on its side): as wide as a phone's, in the middle.

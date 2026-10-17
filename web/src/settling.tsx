@@ -8,14 +8,14 @@
 // row is going as it starts (rowHeights.ts), and its pane goes there along with it, by the same law (motion.ts GLIDE_*)
 // from the same frame: what is above and what is below move one way each, never there and back.
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { ENTER, ENTER_FROM, GLIDE_EASE, GLIDE_MS, glideValue, LEAVE, LEAVE_TO, reducedMotion } from "@stillfail/ui/motion.ts";
+import { ENTER, ENTER_FROM, GLIDE_EASE, GLIDE_MS, glideValue, LEAVE, LEAVE_TO, play } from "@stillfail/ui/motion.ts";
 import * as css from "./Chat.css.ts";
 import { closing as rowClosing } from "./rowHeights.ts";
 
 /** Its room opening, by the list's law (motion.ts GLIDE_*), as its pane goes along with it. */
 const CLOSE = { duration: GLIDE_MS, easing: GLIDE_EASE };
 
-const moving = () => !reducedMotion() && document.visibilityState === "visible";
+const moving = () => document.visibilityState === "visible";
 
 /** The gap its parent's grid or flex puts before it: what a box closing to nothing takes away too. */
 const gapBefore = (el: HTMLElement) => {
@@ -38,7 +38,7 @@ const giveGap = (el: HTMLElement) => {
   const gap = gapBefore(el);
   const before = el.previousElementSibling;
   if (!gap || !(before instanceof HTMLElement)) return null;
-  return before.animate([{ marginBottom: `${-gap}px` }, { marginBottom: "0px" }], CLOSE);
+  return play(before, [{ marginBottom: `${-gap}px` }, { marginBottom: "0px" }], CLOSE);
 };
 
 /**
@@ -106,11 +106,11 @@ export function useSettling(box: RefObject<HTMLElement | null>, open: boolean, d
     copy.inert = true;
     Object.assign(copy.style, { position: "absolute", left: "0", top: `${was.at.top - now.top}px`, width: `${was.at.width}px`, pointerEvents: "none", transformOrigin: "50% 0" });
     el.append(copy);
-    void copy.animate([{ opacity: 1, transform: "none" }, LEAVE_TO], { ...LEAVE, fill: "forwards" })
+    void play(copy, [{ opacity: 1, transform: "none" }, LEAVE_TO], { ...LEAVE, fill: "forwards" })
       .finished.then(() => copy.remove(), () => copy.remove());
     // What takes its place comes as what was there has nearly gone, rather than over it.
-    if (arriving) el.querySelector<HTMLElement>(`:scope > ${arriving}`)
-      ?.animate([ENTER_FROM, { opacity: 1, transform: "none" }], { ...ENTER, delay: 120, fill: "backwards" });
+    if (arriving) play(el.querySelector<HTMLElement>(`:scope > ${arriving}`),
+      [ENTER_FROM, { opacity: 1, transform: "none" }], { ...ENTER, delay: 120, fill: "backwards" });
   }, [box, drawnOpen, arriving, gone]);
   // Gone (or back): the gap given back to the item before, in the commit that took the box away.
   useLayoutEffect(() => {
@@ -145,11 +145,11 @@ export function Settles({ shown, children }: { shown: boolean; children: ReactNo
     for (const a of el.getAnimations()) a.cancel();
     if (!shown || was || !moving()) return;
     const height = el.getBoundingClientRect().height;
-    el.animate([{ height: "0px", overflow: "clip" }, { height: `${height}px`, overflow: "clip" }], CLOSE);
+    play(el, [{ height: "0px", overflow: "clip" }, { height: `${height}px`, overflow: "clip" }], CLOSE);
     // The gap before it opens with it, given up by the item before until then.
     given.current = giveGap(el);
     for (const child of el.children) {
-      (child as HTMLElement).animate([ENTER_FROM, { opacity: 1, transform: "none" }], { ...ENTER, fill: "backwards" });
+      play(child, [ENTER_FROM, { opacity: 1, transform: "none" }], { ...ENTER, fill: "backwards" });
     }
   }, [shown]);
   if (!kept) return null;

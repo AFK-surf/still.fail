@@ -10,7 +10,7 @@ import { Agent, Bell, CheckCircle, ChevronDown, ChevronRight, Command, Copy, Fil
 import { DropdownMenu } from "radix-ui";
 import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { flushSync } from "react-dom";
-import { animate, EASE_OUT, reducedMotion, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
+import { animate, EASE_OUT, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
 import { useApi, useHistory, useHistoryDetail, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryMark, type HistoryMessage, type HistoryStep, type HistoryTask, type HistoryTurn, type HistoryView, type Place } from "./api.ts";
 import { ICON, IconButton, Pill, SlackLogo, Tip, Waiting, WaitLine } from "./ui.tsx";
 import { useCopyChatLink } from "./ChatRef.tsx";
@@ -390,7 +390,7 @@ function WaitBar({ since, seconds }: { since: number; seconds: number }) {
   const [gone] = useState(() => Math.max(0, (Date.now() - since) / 1000));
   return (
     <span className={css.hWaitBar} aria-hidden="true">
-      <i style={{ animationDuration: `${seconds}s`, animationDelay: `-${Math.min(gone, seconds)}s` }} />
+      <i style={{ animationDuration: `${seconds}s`, "--wait-time": `${seconds}s`, animationDelay: `-${Math.min(gone, seconds)}s` } as CSSProperties} />
     </span>
   );
 }
@@ -621,7 +621,7 @@ function Fold({ children, of, lines = 5, head = null, className }: { children: R
     Object.assign(el.style, { height: "", maxHeight: "", overflow: "" });
     flushSync(() => { setOpen(!open); setWhole(true); });
     const to = el.getBoundingClientRect().height;
-    if (reducedMotion() || Math.abs(to - from) < 1) return void (open && setWhole(false));
+    if (Math.abs(to - from) < 1) return void (open && setWhole(false));
     // Its fold's height limit held off while it moves, what is past its height hidden.
     // Held at where it was until the motion takes it (from the next frame): the new height is never seen at once.
     Object.assign(el.style, { maxHeight: "none", overflow: "hidden", height: `${from}px` });

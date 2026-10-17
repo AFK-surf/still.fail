@@ -96,4 +96,9 @@ globalStyle(list, { listStyle: "none", marginBlock: "0", ...outset(12), padding:
  * out past it by their padding. Its own margin above would take the column's centring away (it comes later). */
 globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "none", marginLeft: `max(${neg(12)}, calc(50% - 392px))`, marginRight: `max(${neg(12)}, calc(50% - 392px))` });
 globalStyle(`${sidebarBuddy}[data-pose="hop"] img`, { animation: `${buddyHopKeyframes} 380ms ${vars.easeOut}` });
-globalStyle(`${STILL} ${sidebarBuddy}[data-pose="hop"] img`, { animation: "none" });
+/** The buddy unmoving (rest and push breathe and strain in their SVG, which goes by the system's setting): shown in its
+ *  place with motion reduced. */
+export const buddyStill = style({});
+globalStyle(`${sidebarBuddy} ${buddyStill}`, { display: "none" });
+globalStyle(`${STILL} ${sidebarBuddy} img:not(${buddyStill})`, { display: "none" });
+globalStyle(`${STILL} ${sidebarBuddy} ${buddyStill}`, { display: "block" });

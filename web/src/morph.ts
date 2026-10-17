@@ -6,7 +6,7 @@
 // (`useMorph`).
 
 import { useLayoutEffect, useRef, type RefObject } from "react";
-import { reducedMotion } from "@stillfail/ui/motion.ts";
+import { play } from "@stillfail/ui/motion.ts";
 
 /** What moves with the box: its text and its buttons (not the text's unseen measure, Chat.tsx). */
 const PARTS = "textarea:not([aria-hidden]), button";
@@ -45,7 +45,7 @@ export function morph(box: HTMLElement, by: string, from: Shape, frames: [Keyfra
   const style = getComputedStyle(box);
   const height = box.getBoundingClientRect().height;
   const radius = Math.min(parseFloat(style.borderTopLeftRadius), height / 2);
-  const all = [box.animate([
+  const all = [play(box, [
     { ...frames[0], borderRadius: `${from.radius}px`, cornerShape: from.corner, overflow: "clip" },
     { ...frames[1], borderRadius: `${radius}px`, cornerShape: style.getPropertyValue("corner-shape"), overflow: "clip" },
   ], timing)];
@@ -56,7 +56,7 @@ export function morph(box: HTMLElement, by: string, from: Shape, frames: [Keyfra
     const now = part.getBoundingClientRect();
     const x = was.left - now.left, y = was.top - now.top;
     if (Math.abs(x) < 0.5 && Math.abs(y) < 0.5) continue;
-    all.push(part.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: "none" }], timing));
+    all.push(play(part, [{ transform: `translate(${x}px, ${y}px)` }, { transform: "none" }], timing));
   }
   running.set(box, { by, all });
   void all[0]!.finished.then(() => { if (running.get(box)?.all === all) running.delete(box); }, () => {});
@@ -90,7 +90,7 @@ export function grow(box: HTMLElement, by: string, from: Shape, timing: Keyframe
   box.prepend(ground);
   const was = from.rect;
   const inset = `${was.top - now.top}px ${now.right - was.right}px ${now.bottom - was.bottom}px ${was.left - now.left}px`;
-  const all = [ground.animate([
+  const all = [play(ground, [
     { inset, borderRadius: `${from.radius}px` },
     { inset: "0px", borderRadius: `${radius}px` },
   ], timing)];
@@ -100,7 +100,7 @@ export function grow(box: HTMLElement, by: string, from: Shape, timing: Keyframe
     const to = part.getBoundingClientRect();
     const x = at.left - to.left, y = at.top - to.top;
     if (Math.abs(x) < 0.5 && Math.abs(y) < 0.5) continue;
-    all.push(part.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: "none" }], timing));
+    all.push(play(part, [{ transform: `translate(${x}px, ${y}px)` }, { transform: "none" }], timing));
   }
   // Its ground back on the box, the layer gone: when it is there, or at once when it is stopped (a new shape read from
   // the box as it is drawn, not from the box the layer draws for).
@@ -154,7 +154,7 @@ export function useMorph(box: RefObject<HTMLElement | null>, laidOut: string, pa
     const paged = shown.current.page !== page;
     from.current = null;
     shown.current = { laidOut, page };
-    if (!el || !was || el.hasAttribute("data-send-held") || paged || movingBy(el) === "page" || reducedMotion()) return;
+    if (!el || !was || el.hasAttribute("data-send-held") || paged || movingBy(el) === "page") return;
     stop(el);
     const height = el.getBoundingClientRect().height;
     // Its size unchanged (a letter more on the same line), nothing moves.

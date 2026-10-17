@@ -35,15 +35,17 @@ export const emitOutKeyframes = keyframes({ "from": { opacity: "0", transform: "
  *  its words and its avatar out in the margin (`--flash-reach` before it), comes in over 160ms, holds until 900ms, then
  *  fades out until 1700ms. */
 const flashGround = (c: string) => `0 0 0 8px ${c}, calc(-1 * var(--flash-reach, 0px)) 0 0 8px ${c}`;
+const msgFlashPeak = { background: vars.accentBg, boxShadow: flashGround(vars.accentBg) };
 export const msgFlashKeyframes = keyframes({
   "0%": { background: "transparent", boxShadow: flashGround("transparent"), animationTimingFunction: "cubic-bezier(.2, .7, .2, 1)" },
-  "9.4%, 53%": { background: vars.accentBg, boxShadow: flashGround(vars.accentBg), animationTimingFunction: "cubic-bezier(.4, 0, .2, 1)" },
+  "9.4%, 53%": { ...msgFlashPeak, animationTimingFunction: "cubic-bezier(.4, 0, .2, 1)" },
   "100%": { background: "transparent", boxShadow: flashGround("transparent") },
 });
 /** Your words a jump led to: their bubble takes the accent's tint instead, in the same time. */
+const bubbleFlashPeak = { background: `color-mix(in srgb, ${vars.accent} 20%, ${vars.neutralBg})` };
 export const bubbleFlashKeyframes = keyframes({
   "0%": { animationTimingFunction: "cubic-bezier(.2, .7, .2, 1)" },
-  "9.4%, 53%": { background: `color-mix(in srgb, ${vars.accent} 20%, ${vars.neutralBg})`, animationTimingFunction: "cubic-bezier(.4, 0, .2, 1)" },
+  "9.4%, 53%": { ...bubbleFlashPeak, animationTimingFunction: "cubic-bezier(.4, 0, .2, 1)" },
 });
 /** A quote's passage marked where it was said (global.css.ts [data-passage-marks]): in over 160ms, held until 1400ms,
  *  faded out until 2400ms. */
@@ -52,6 +54,10 @@ export const passageFlashKeyframes = keyframes({
   "6.7%, 58%": { opacity: "1", animationTimingFunction: "cubic-bezier(.4, 0, .2, 1)" },
   "100%": { opacity: "0" },
 });
+/** The flashes above with motion reduced (still.ts stillFlash): their peak alone, held for their time, then gone. */
+export const msgFlashHeldKeyframes = keyframes({ "0%, 100%": msgFlashPeak });
+export const bubbleFlashHeldKeyframes = keyframes({ "0%, 100%": bubbleFlashPeak });
+export const passageFlashHeldKeyframes = keyframes({ "0%, 100%": { opacity: "1" } });
 /** A search's stroke under a word it found, drawn in left to right (global.css.ts [data-search-marks]). */
 export const searchStrokeKeyframes = keyframes({ to: { strokeDashoffset: "0" } });
 export const buddyHopKeyframes = keyframes({ "50%": { transform: "translateY(-9px)" } });

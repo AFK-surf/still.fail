@@ -198,3 +198,46 @@ export function panels(mark = false) {
     }
     return { surfaces, corners, wrong };
 }
+
+/**
+ * How the page is drawn, element by element, as far as it shows (on the screen, not cut away by what it is in, not
+ * hidden, not faded to nothing): where, how big, how faint, its transform, its colours and outline. What a story is in
+ * with motion and with motion reduced, to be the same (motion reduced is the same page, its motion taking no time:
+ * web/ui/src/motion.ts). What loops (an infinite animation on it or its pseudo-elements) is left out, here or as
+ * `loops` says (the paths the other's page had): it rests still with motion reduced, as it should.
+ */
+export function drawn(loops = []) {
+  const path = (el) => {
+    const parts = [];
+    for (let n = el; n && n !== document.body; n = n.parentElement) parts.unshift(`${n.tagName.toLowerCase()}${[...n.parentElement.children].indexOf(n)}`);
+    return parts.join('>');
+  };
+  const looping = new Set(loops);
+  for (const a of document.getAnimations()) {
+    const target = a.effect?.target;
+    if (target && a.effect.getTiming().iterations === Infinity) looping.add(path(target));
+  }
+  // A scale's or a colour's share to a hundredth, a length to a pixel.
+  const round = (v) => v.replace(/-?\d+\.\d+/g, (n) => String(Math.abs(Number(n)) < 2 ? Math.round(Number(n) * 100) / 100 : Math.round(Number(n))));
+  const lines = [];
+  // `clip`: what shows of the page through what it is in; `faint`: how faint what it is in has made it.
+  const walk = (el, clip, faint) => {
+    const s = getComputedStyle(el);
+    if (s.display === 'none') return;
+    const opacity = faint * Number(s.opacity);
+    if (opacity < 0.01) return;
+    const r = el.getBoundingClientRect();
+    const shown = { left: Math.max(clip.left, r.left), top: Math.max(clip.top, r.top), right: Math.min(clip.right, r.right), bottom: Math.min(clip.bottom, r.bottom) };
+    const at = path(el);
+    if (!looping.has(at) && s.visibility === 'visible' && shown.right - shown.left >= 1 && shown.bottom - shown.top >= 1) {
+      lines.push(`${at} ${Math.round(shown.left)},${Math.round(shown.top)} ${Math.round(shown.right - shown.left)}x${Math.round(shown.bottom - shown.top)} opacity ${opacity.toFixed(2)} ` +
+        `transform ${round(s.transform)} ground ${s.backgroundColor} text ${s.color} outline ${s.outlineStyle}`);
+    }
+    const inner = s.overflowX === 'visible' && s.overflowY === 'visible' && s.clipPath === 'none' ? clip
+      : { left: Math.max(clip.left, r.left), top: Math.max(clip.top, r.top), right: Math.min(clip.right, r.right), bottom: Math.min(clip.bottom, r.bottom) };
+    for (const child of el.children) walk(child, inner, opacity);
+  };
+  const screen = { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
+  for (const child of document.body.children) walk(child, screen, 1);
+  return { lines, loops: [...looping] };
+}

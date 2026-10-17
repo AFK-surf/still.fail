@@ -10,7 +10,7 @@ import { LIMIT, PRESETS, presetOf, setViewport, type Viewport } from "./viewport
 import { dims, useTouch, ViewportSheet, type Zoom } from "./ViewportSize.tsx";
 import * as css from "./PreviewStage.css.ts";
 import { t } from "./i18n.ts";
-import { reducedMotion } from "@stillfail/ui/motion.ts";
+import { play } from "@stillfail/ui/motion.ts";
 
 /** The page's box in the stage: its top-left, how much it is drawn at, and the size it is laid out at. */
 export interface Placed { x: number; y: number; scale: number; width: number; height: number }
@@ -271,7 +271,6 @@ export function PreviewStage({ stage, link, over, children, after }:
     const was = stage.turned.current;
     if (!was || !placed) return;
     stage.turned.current = null;
-    if (reducedMotion()) return;
     const w = placed.width * placed.scale, h = placed.height * placed.scale;
     const k0 = (was.height / w + was.width / h) / 2;
     const frames = (steps: number) => Array.from({ length: steps + 1 }, (_, i) => {
@@ -283,8 +282,8 @@ export function PreviewStage({ stage, link, over, children, after }:
       return { offset: t, translate: `${w / 2 - rx}px ${h / 2 - ry}px`, rotate: `${a}rad`, scale: String(k) };
     });
     const timing = { duration: 420, easing: "linear" };
-    device.current?.animate(frames(12), timing);
-    shade.current?.animate(frames(12), timing);
+    play(device.current, frames(12), timing);
+    play(shade.current, frames(12), timing);
   }, [placed, stage.turned]);
 
   const box = placed && { left: placed.x, top: placed.y, width: placed.width * placed.scale, height: placed.height * placed.scale };

@@ -3,7 +3,6 @@ import { composerWrap } from "./styles/cloud.css.ts";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { glass } from "@stillfail/ui/styles/glass.ts";
 import { CARD_PAD, LIST_PAD, ROW_CORNER, listCardLook } from "./styles/pages.css.ts";
-import { STILL } from "@stillfail/ui/styles/still.ts";
 
 // A decision's options (Decisions.tsx): under the message that asks it in a chat, and at the foot of the decisions
 // page. One card, a row each, numbered in a circle; the recommended one last, told by its number in the accent
@@ -194,7 +193,6 @@ const rise = keyframes({ from: { transform: "translateY(12px) scale(.98)", opaci
 /** The next decision, as the one before goes. */
 export const arriving = style({
   animation: `${rise} 240ms ${vars.easeOut} both`,
-  selectors: { [`${STILL} &`]: { animation: "none" } },
 });
 
 // ── entries ───────────────────────────────────────────────────────────

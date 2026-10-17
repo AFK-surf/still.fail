@@ -3,6 +3,7 @@ import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { fadeInKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { previewBar, previewFrame } from "./Preview.css.ts";
 import * as stageCss from "./PreviewStage.css.ts";
+import { STILL, stillAtOnce } from "@stillfail/ui/styles/still.ts";
 
 /** A web service's place in its chat's side panel: the frame is drawn over it (Previews.tsx). */
 export const slot = style({ flex: "1", minHeight: "0" });
@@ -53,6 +54,8 @@ export const card = style({
     "&[data-mode=hidden]": { visibility: "hidden", pointerEvents: "none" },
     /** Its page comes down into it: it shows as that ends. */
     "&[data-mode=small]": { animation: `${fadeInKeyframes} 120ms ${vars.easeOut} 180ms both` },
+    // Its page's coming down is 1ms then.
+    [`${STILL} &[data-mode=small]`]: stillAtOnce,
     "&:focus-visible": { boxShadow: `0 0 0 2px ${vars.fieldFocus}` },
   },
 });

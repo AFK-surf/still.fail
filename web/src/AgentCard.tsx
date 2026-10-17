@@ -10,7 +10,7 @@ import { Hover } from "./Peeks.tsx";
 import { AgentMark, Tip } from "./ui.tsx";
 import { Stop } from "@stillfail/ui/icons.tsx";
 import { useAct } from "@stillfail/ui/toast.tsx";
-import { reducedMotion } from "@stillfail/ui/motion.ts";
+import { play } from "@stillfail/ui/motion.ts";
 import { QuotaChip } from "./components.tsx";
 import { t } from "./i18n.ts";
 import { Elapsed, Waited } from "./Chat.tsx";
@@ -72,7 +72,6 @@ function useLinesMotion(list: RefObject<HTMLElement | null>): void {
       line.run?.cancel();
       return { y: (line.y ?? 0) * (1 - done), faint: 1 - (1 - (line.faint ?? 1)) * (1 - done) };
     };
-    if (reducedMotion()) return void before.forEach(cut);
     const timing = { duration: LINES_MS, easing: LINES_EASE };
     // How far the lines ran on (the first that stays tells): what comes and what goes moves as far.
     const stays = [...lines.keys()].find((key) => before.has(key));
@@ -83,7 +82,7 @@ function useLinesMotion(list: RefObject<HTMLElement | null>): void {
       // From where it was drawn (its place then, and how far it still was from it), as faint as it was.
       const y = old ? old.top + at.y - line.top : shift;
       if (Math.abs(y) < 0.5 && at.faint === 1) continue;
-      const run = line.el.animate([{ transform: `translateY(${y}px)`, opacity: at.faint }, { transform: "translateY(0)", opacity: 1 }], timing);
+      const run = play(line.el, [{ transform: `translateY(${y}px)`, opacity: at.faint }, { transform: "translateY(0)", opacity: 1 }], timing);
       Object.assign(line, { run, y, faint: at.faint });
       void run.finished.then(() => { if (line.run === run) delete line.run; }, () => {});
     }
@@ -96,7 +95,7 @@ function useLinesMotion(list: RefObject<HTMLElement | null>): void {
       ghost.setAttribute("aria-hidden", "true");
       Object.assign(ghost.style, { position: "absolute", top: `${old.top}px`, left: `${old.left}px`, right: "0", pointerEvents: "none" });
       box.appendChild(ghost);
-      const run = ghost.animate([{ transform: `translateY(${at.y}px)`, opacity: at.faint }, { transform: `translateY(${at.y - shift}px)`, opacity: 0 }], { ...timing, fill: "forwards" });
+      const run = play(ghost, [{ transform: `translateY(${at.y}px)`, opacity: at.faint }, { transform: `translateY(${at.y - shift}px)`, opacity: 0 }], { ...timing, fill: "forwards" });
       void run.finished.then(() => ghost.remove(), () => ghost.remove());
     }
   });

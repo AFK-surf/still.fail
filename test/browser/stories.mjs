@@ -1,16 +1,17 @@
 // Every story (web/stories/stories.tsx) opened, taken to its state by its steps, and measured (measure.mjs: every
-// corner, every small panel; docs/ui-panels.md). A new part of the app with a story is measured with no more written
-// here. Builds the stories once (as a page, not module by module: the dev server's per-module transforms were most of
+// corner, every small panel; docs/ui-panels.md); then opened again with motion reduced, taken there the same way, and
+// drawn the same (measure.mjs drawn: motion reduced only takes the time out of motion). A new part of the app with a
+// story is measured with no more written here. Builds the stories once (as a page, not module by module: the dev server's per-module transforms were most of
 // the time on CI's four cores) and serves the build. PLAYWRIGHT_MODULE selects Playwright (PLAYWRIGHT_CHANNEL a Chrome the
 // machine has, as CI's); SHOTS keeps a picture of each story; ONLY=<id,…> opens only those; REPORT=1 lists what is off
 // instead of failing; PAGES how many are opened at once (6); SHARD=<i>/<n> only the i-th of every n (CI's jobs side by side).
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build, preview } from 'vite';
-import { corners, panels } from './measure.mjs';
+import { corners, drawn, panels } from './measure.mjs';
 const playwright = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const out = process.env.SHOTS;
 const only = process.env.ONLY?.split(',');
@@ -38,9 +39,21 @@ try {
     new Promise((ok) => setTimeout(ok, 3000)),
   ])));
 
+  // Still: drawn the same twice a little apart (what moves by script, its springs, is not among the page's animations).
+  const steady = async (page) => {
+    let was = null;
+    for (let i = 0; i < 20; i++) {
+      const now = JSON.stringify((await page.evaluate(drawn)).lines);
+      if (now === was) return;
+      was = now;
+      await page.waitForTimeout(150);
+    }
+  };
+
   const wrong = [];
-  const take = async (story) => {
-    const page = await browser.newPage({ viewport: story.phone ? { width: 390, height: 844 } : { width: 1280, height: 800 }, deviceScaleFactor: 1, locale: 'zh-CN' });
+  /** A page with the story in it, taken to its state by its steps; whether it got there. */
+  const open = async (story, reducedMotion) => {
+    const page = await browser.newPage({ viewport: story.phone ? { width: 390, height: 844 } : { width: 1280, height: 800 }, deviceScaleFactor: 1, locale: 'zh-CN', reducedMotion });
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(`${base}?story=${story.id}&theme=light`);
@@ -67,14 +80,37 @@ try {
         await settle(page, 450);
       } catch (e) {
         reached = false;
-        wrong.push(`${story.id}: could not take step ${JSON.stringify(step)} (${e.message.split('\n')[0]})`);
+        wrong.push(`${story.id}${reducedMotion === 'reduce' ? ' (motion reduced)' : ''}: could not take step ${JSON.stringify(step)} (${e.message.split('\n')[0]})`);
         break;
       }
     }
+    return { page, errors, reached };
+  };
+  const take = async (story) => {
+    const { page, errors, reached } = await open(story, 'no-preference');
     if (reached) {
       const c = await page.evaluate(corners);
       const p = await page.evaluate(panels);
       for (const w of [...c.wrong, ...p.wrong]) wrong.push(`${story.id}: ${w}`);
+      // With motion reduced, drawn as it is with motion (what loops in either left out).
+      await steady(page);
+      const moving = await page.evaluate(drawn);
+      const still = await open(story, 'reduce');
+      if (still.reached) {
+        await steady(still.page);
+        const resting = await still.page.evaluate(drawn, moving.loops);
+        const looping = new Set(resting.loops);
+        const a = moving.lines.filter((l) => !looping.has(l.split(' ')[0])), b = new Set(resting.lines);
+        const only = (x, y) => x.filter((l) => !y.has(l));
+        const differs = [...only(a, b).map((l) => `with motion ${l}`), ...only(resting.lines, new Set(a)).map((l) => `motion reduced ${l}`)];
+        if (differs.length) wrong.push(`${story.id}: drawn otherwise with motion reduced (${differs.length} line(s)): ${differs.slice(0, 6).join('; ')}`);
+        if (out && differs.length) {
+          await still.page.screenshot({ path: `${out}/${story.id}-reduced.png` });
+          await writeFile(`${out}/${story.id}-reduced.txt`, differs.join('\n'));
+        }
+      }
+      for (const e of still.errors) console.log(`${story.id}: page error (motion reduced) ${e}`);
+      await still.page.close();
       if (out) await page.screenshot({ path: `${out}/${story.id}.png` });
       // Then each list scrolled to its end, and measured again: what is at a list's foot (⌘K's last row) shows only so.
       const scrolled = await page.evaluate(() => {

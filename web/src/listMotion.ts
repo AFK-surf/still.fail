@@ -4,7 +4,7 @@
 // chat with a new message) passes over them on a ground of its own.
 import { useLayoutEffect, useRef, useState, type PointerEvent, type RefObject } from "react";
 import { animate, motionValue, type AnimationPlaybackControls, type MotionValue } from "motion";
-import { LEAVE, LEAVE_TO, MOVE, reducedMotion } from "@stillfail/ui/motion.ts";
+import { LEAVE, LEAVE_TO, MOVE, play } from "@stillfail/ui/motion.ts";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 interface Placed { el: HTMLElement; top: number; left: number; width: number; y: MotionValue<number>; run?: AnimationPlaybackControls | undefined }
@@ -31,8 +31,8 @@ export function useListMotion(list: RefObject<HTMLElement | null>): void {
     }
     const now = new Map<string, Placed>();
     const els = [...box.querySelectorAll<HTMLElement>(":scope [data-flip]:not([data-leaving])")];
-    // Nothing to move from (the list's first rows), or no motion wanted: only where they are is kept.
-    const still = was.size === 0 || reducedMotion();
+    // Nothing to move from (the list's first rows): only where they are is kept.
+    const still = was.size === 0;
     const gone = [...was.keys()].filter((key) => !els.some((el) => el.dataset.flip === key));
     // Which of the rows there before and now went ahead of others: they pass over the rest.
     const kept = els.map((el) => el.dataset.flip!).filter((key) => was.has(key));
@@ -50,7 +50,7 @@ export function useListMotion(list: RefObject<HTMLElement | null>): void {
         y.on("change", (v) => { entry.el.style.transform = v ? `translateY(${v}px)` : ""; });
         now.set(key, entry);
         if (!still) {
-          el.animate([{ opacity: 0, transform: "scale(0.9)" }, { opacity: 1, transform: "none" }],
+          play(el, [{ opacity: 0, transform: "scale(0.9)" }, { opacity: 1, transform: "none" }],
             { duration: 240, delay: 100, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)", fill: "backwards" });
         }
         continue;
@@ -95,7 +95,7 @@ export function useListMotion(list: RefObject<HTMLElement | null>): void {
 function lift(el: HTMLElement) {
   const ground = `color-mix(in srgb, ${vars.text} 6%, ${vars.sidebar})`;
   el.style.zIndex = "1";
-  const run = el.animate(
+  const run = play(el, 
     [{ backgroundColor: ground }, { backgroundColor: ground, offset: 0.6 }, { backgroundColor: "transparent" }],
     { duration: 480, easing: "linear" },
   );
@@ -113,7 +113,7 @@ function leave(box: HTMLElement, p: Placed) {
     transform: "", zIndex: "-1", pointerEvents: "none",
   });
   box.appendChild(ghost);
-  const run = ghost.animate([{ opacity: 1, transform: "none" }, LEAVE_TO], { ...LEAVE, fill: "forwards" });
+  const run = play(ghost, [{ opacity: 1, transform: "none" }, LEAVE_TO], { ...LEAVE, fill: "forwards" });
   void run.finished.then(() => ghost.remove(), () => ghost.remove());
 }
 

@@ -21,7 +21,7 @@ import { Chats } from "@stillfail/ui/icons.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as rootCss from "./styles/root.css.ts";
 import * as css from "./app.css.ts";
-import { follower, reducedMotion, type Follower } from "@stillfail/ui/motion.ts";
+import { follower, motionMs, type Follower } from "@stillfail/ui/motion.ts";
 import { useInWorkspace } from "../notify.ts";
 import { BottomBar, PLACE_PATHS, placeOfPath, useBars, type BarPlace } from "./Bar.tsx";
 import { t } from "../i18n.ts";
@@ -153,7 +153,7 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
   const placesKept = useRef(new Map<BarPlace, Page>());
   // A place's page coming in (switched to on the bar): which, from how far across; gone once it is in.
   const [placeIn, setPlaceIn] = useState<{ key: string; from: number; n: number } | null>(null);
-  useEffect(() => { if (!placeIn) return; const timer = setTimeout(() => setPlaceIn(null), 260); return () => clearTimeout(timer); }, [placeIn]);
+  useEffect(() => { if (!placeIn) return; const timer = setTimeout(() => setPlaceIn(null), motionMs(260)); return () => clearTimeout(timer); }, [placeIn]);
   const bars = useBars();
   const barsNow = useRef(bars);
   barsNow.current = bars;
@@ -191,7 +191,7 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
     setPages(next);
     const drawn = type === "POP" && drawnByBrowser;
     drawnByBrowser = false;
-    const moves = type !== "REPLACE" && !drawn && !reducedMotion();
+    const moves = type !== "REPLACE" && !drawn;
     // Back, the page as it is in the list (its key the one it was first opened with, kept as it became another in place:
     // a chat opened by a link becoming the list), or it would not be the one coming in, and stay hidden as it comes.
     if (moves) setMoving({ from: top, to: type === "POP" && at >= 0 ? pages[at]! : page, forward });
@@ -201,7 +201,7 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
   }, [location]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!moving) { from.current = 0; return; }
-    const timer = setTimeout(() => setMoving(null), 400);
+    const timer = setTimeout(() => setMoving(null), motionMs(400));
     return () => clearTimeout(timer);
   }, [moving]);
 
@@ -489,7 +489,7 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
       return;
     }
     setOpen(false);
-    const timer = setTimeout(() => setShown(null), 300);
+    const timer = setTimeout(() => setShown(null), motionMs(300));
     return () => clearTimeout(timer);
   }, [spec]);
   // Drawn as it is when it (re)appears.
@@ -615,7 +615,7 @@ function MenuHost({ spec, close }: { spec: MenuSpec | null; close: () => void })
   useEffect(() => {
     if (spec) { setShown(spec); requestAnimationFrame(() => requestAnimationFrame(() => setOpen(true))); return; }
     setOpen(false);
-    const timer = setTimeout(() => setShown(null), 200);
+    const timer = setTimeout(() => setShown(null), motionMs(200));
     return () => clearTimeout(timer);
   }, [spec]);
   if (!shown) return null;
@@ -656,7 +656,7 @@ function ReaderHost({ spec, close }: { spec: ReaderSpec | null; close: () => voi
   useEffect(() => {
     if (spec) { setShown(spec); requestAnimationFrame(() => requestAnimationFrame(() => setOpen(true))); return; }
     setOpen(false);
-    const timer = setTimeout(() => setShown(null), 320);
+    const timer = setTimeout(() => setShown(null), motionMs(320));
     return () => clearTimeout(timer);
   }, [spec]);
   if (!shown) return null;

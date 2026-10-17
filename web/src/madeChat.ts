@@ -9,7 +9,7 @@
 // while the chat mounts. The message flies as a copy because its row can be replaced by the station receipt.
 import { pageChanging, transitionLive } from "./ui.tsx";
 import { cubicBezier } from "motion";
-import { reducedMotion } from "@stillfail/ui/motion.ts";
+import { motionMs, play } from "@stillfail/ui/motion.ts";
 import * as msgCss from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 
@@ -156,7 +156,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
   // while the chat mounts, and turns its layout work into a visible pause before any of the flight can move.
   const leaving: { el: HTMLElement; original: HTMLElement; visibility: string; up: boolean }[] = [];
   const scene = layer();
-  if (scene && !reducedMotion()) {
+  if (scene) {
     const base = scene.getBoundingClientRect();
     for (const el of scope.querySelectorAll<HTMLElement>("[data-made-leave]")) {
       const at = el.getBoundingClientRect();
@@ -181,7 +181,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
   let list: HTMLElement | null = null;
   let following: MutationObserver | null = null;
   // The departing scene responds now, while the first row becomes ready behind it.
-  for (const { el, up } of leaving) moves.push(el.animate([
+  for (const { el, up } of leaving) moves.push(play(el, [
     { opacity: 1, transform: "none" },
     { opacity: 0, transform: up ? "translateY(-32px) scale(.96)" : "none" },
   ], { duration: up ? 140 : 80, easing: EASE, fill: "forwards" }).finished);
@@ -208,7 +208,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
     const rise = from.y - to.y;
     const clip = Math.max(0, box.bottom - top);
     list.dataset.madeList = "";
-    moves.push(list.animate([
+    moves.push(play(list, [
       { transform: `translateY(${rise}px)`, clipPath: `inset(0 0 ${clip + rise}px 0)` },
       { transform: "none", clipPath: `inset(0 0 ${clip}px 0)` },
     ], timing).finished);
@@ -249,24 +249,24 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
       // Its box's ground, if it has one, comes in on the way (the thumbnail has none): landed, it is on what the message's is.
       picture.stand.style.backgroundColor = target.ground;
       // Its corners from the thumbnail's to the message's, as its box grows.
-      moves.push(picture.stand.animate([
+      moves.push(play(picture.stand, [
         { transform: `translate(${picture.rect.left - end.left}px, ${picture.rect.top - end.top}px)`, width: `${picture.rect.width}px`, height: `${picture.rect.height}px`, borderRadius: `${picture.radius}px`, backgroundColor: "transparent" },
         { transform: "none", width: `${end.width}px`, height: `${end.height}px`, borderRadius: target.radius, backgroundColor: target.ground },
       ], timing).finished);
     }
-    const clock = copy.animate([
+    const clock = play(copy, [
       { transform: `translate(${from.x - to.x}px, ${rise}px) scale(${from.size / to.size})` },
       { transform: "none" },
     ], timing);
     moves.push(clock.finished);
     const bubble = copy.querySelector<HTMLElement>(`.${conversationCss.msgBubble}`);
-    if (bubble) moves.push(bubble.animate([{ backgroundColor: "transparent" }, { backgroundColor: getComputedStyle(bubble).backgroundColor }], timing).finished);
+    if (bubble) moves.push(play(bubble, [{ backgroundColor: "transparent" }, { backgroundColor: getComputedStyle(bubble).backgroundColor }], timing).finished);
     const lines = (row: Element) => [...row.querySelectorAll<HTMLElement>(`.${conversationCss.msgTime}`)];
     const comeIn = (el: HTMLElement) => {
       // "sending" shows when the row's does (its row, the copy gone, shows it then).
       if (el.dataset.showsAt) showAt(el);
       else el.style.animation = "none";
-      const a = el.animate([{ opacity: 0 }, { opacity: 1 }], timing);
+      const a = play(el, [{ opacity: 0 }, { opacity: 1 }], timing);
       a.currentTime = clock.currentTime;
       moves.push(a.finished);
     };
@@ -378,7 +378,6 @@ export function whenRowIn(then: () => void): () => void {
  */
 export function sendingHere(field: HTMLElement, text: string, { layer, z, list }: { layer: HTMLElement; z: string; list: HTMLElement }): void {
   flying?.done();
-  if (reducedMotion()) return;
   const composer = field.closest("[data-made-composer]") ?? field;
   const stand = standIn(field, text, layer, z);
   const pictures = picturesIn(composer, layer, z);
@@ -449,7 +448,7 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
       if (flying) return;
       delete field.dataset.madeField;
       delete field.dataset.sent;
-    }, 200);
+    }, motionMs(200));
   };
   // Where the row is now, its copy drawn so far on its way from the composer.
   const place = () => {
@@ -544,7 +543,7 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     // Under the row's copy: where they cross the words on the way, the words stay readable.
     for (const picture of pictures) ghost.append(picture.stand);
     // The one timeline all of it follows (what it moves is read anew each frame): paused and stepped, so is it.
-    clock = ghost.animate([{ opacity: 1 }, { opacity: 1 }], { duration: ARRIVE, easing: "linear" });
+    clock = play(ghost, [{ opacity: 1 }, { opacity: 1 }], { duration: ARRIVE, easing: "linear" });
     place();
     frame = requestAnimationFrame(tick);
     void clock.finished.then(done, () => {});

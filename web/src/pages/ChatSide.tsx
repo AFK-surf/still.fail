@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Tabs } from "radix-ui";
 import { Close, Folder } from "@stillfail/ui/icons.tsx";
-import { animate, EASE_OUT, reducedMotion, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
+import { animate, EASE_OUT, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
 import { scopeOf } from "../station.tsx";
 import { useTopicSelect } from "../core/react.ts";
 import type { StationView } from "../core/shapes.ts";
@@ -56,10 +56,10 @@ export function useSidePanel(open: string[], shown: string | null) {
   const changing = (next: string[]) => {
     if (next.length) {
       setLeaving(null);
-      if (open.length === 0 && !reducedMotion()) setOpening(true);
+      if (open.length === 0) setOpening(true);
     } else {
       setOpening(false);
-      if (open.length && shown && panelRef.current && !reducedMotion()) setLeaving({ tabs: open, shown, width: panelRef.current.getBoundingClientRect().width });
+      if (open.length && shown && panelRef.current) setLeaving({ tabs: open, shown, width: panelRef.current.getBoundingClientRect().width });
     }
   };
   const sliding = leaving && !(open.length && shown) ? "out" : opening ? "in" : null;

@@ -4,12 +4,13 @@ import { glass } from "@stillfail/ui/styles/glass.ts";
 import { enterUpKeyframes, jobBreatheKeyframes, popKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { msg } from "./styles/conversation.css.ts";
 import { enrollWait } from "./cloud/settings.css.ts";
-import { sidePanel } from "./pages/ChatPage.css.ts";
-import { composerQuote, msgUnsent } from "./Chat.css.ts";
-import { hPhaseText } from "./History.css.ts";
+// These two before this file in the CSS, as when it named their classes: its rules come after theirs.
+import "./pages/ChatPage.css.ts";
+import { msgUnsent } from "./Chat.css.ts";
+import "./History.css.ts";
 import { panelCard, popover } from "@stillfail/ui/styles/controls.css.ts";
 import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
-import { STILL } from "@stillfail/ui/styles/still.ts";
+import { STILL, stillLoop } from "@stillfail/ui/styles/still.ts";
 
 /** A web service on the station's machine, in the side panel: where it is, then the page. */
 export const preview = style({ flex: "1", minHeight: "0", display: "flex", flexDirection: "column" });
@@ -41,7 +42,7 @@ export const previewRestart = style({
 export const previewRestartDot = style({
   width: "8px", height: "8px", borderRadius: "50%", background: vars.amber,
   animation: `${jobBreatheKeyframes} 1.4s ease-in-out infinite`,
-  selectors: { [`${STILL} &`]: { animation: "none !important" } },
+  selectors: { [`${STILL} &`]: stillLoop() },
 });
 export const previewPath = style({
   flex: "1", minWidth: "0", padding: "0", border: "0", background: "none", color: vars.muted, font: "inherit",
@@ -63,8 +64,6 @@ globalStyle(`${previewRestart} > span:last-child span`, { fontSize: vars.textMet
 globalStyle(`${msg}[data-unsent] > :not(${msgUnsent})`, { opacity: "0.55" });
 /** Here rather than with its class: it comes after .preview-restart-dot, and wins over it. */
 globalStyle("[data-enter]", { animation: `${enterUpKeyframes} 220ms ${vars.easeOut} both` });
-/** Here rather than with its class: it comes after .preview-restart, and wins over it. */
-globalStyle(`${STILL} [data-enter], ${STILL} ${hPhaseText}, ${STILL} ${composerQuote}, ${STILL} ${sidePanel}`, { animation: "none" });
 /** Here rather than with its class: it comes after .preview-restart > span:last-child, and wins over it. */
 globalStyle(`${enrollWait} > span:last-child`, { display: "grid", gap: "2px", fontSize: vars.textUi });
 

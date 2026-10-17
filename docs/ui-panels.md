@@ -46,6 +46,17 @@
 - 播放器缓冲、远程屏幕连接中：浮在画面上的磨砂胶囊（`WaitPill over`），不用大号转圈。
 - 文案：「正在读取 X」/「Loading X」，不带省略号；通用词用 `common.*`（reading、readingStations、connecting、reconnecting、opening、saving、uploading、downloading）。
 
+## 减少动效
+
+减少动效只是同一个时钟走得快：页面走同一条路，每个动效的时长都是 0，结束时的样子和结束后要做的事（移除、回调、焦点）跟不减少时完全一样。不给某一处另写一份「减少版」。
+
+- web：样式由 `styles/global.css.ts` 把所有动画和过渡压到 1ms、只播一遍；`motion` 库由 `MotionGlobalConfig.instantAnimations`（`followMotion` 设）；`el.animate` 一律走 `play`，等动效的计时走 `motionMs`，跟着列表滑的走 `glideShare`（都在 `web/ui/src/motion.ts`）。`check.sh` 的「reduced motion as one clock」拦脚本里直接读 `reducedMotion()` 或调 `.animate(`。
+- 安卓：Compose 的 `MotionDurationScale` 跟这台设备的设置（外观 › 动画）走，各处不判断。
+- 只有两种东西要自己的静止样子，各用一个共用写法：
+  - 一直循环的（转圈、呼吸）：给一个静止的样子（转圈慢到 2.4s，呼吸停在平静时，不知道总量的进度条整条 35% 透明）；
+  - 亮一下就消失的（跳到某条消息、引用段落的高亮）：不渐变地亮同样久再消失，不能因为时长是 0 就看不见。
+- `test/browser/stories.mjs` 每个 story 再在减少动效下走一遍，跟不减少时逐个元素比位置、大小、透明度、颜色，不一样就挂（循环的除外）。
+
 ## 组件画廊（stories）
 
 `web/stories`：app 的每个部分、每种状态各是一个 story（`web/stories/stories.tsx`），用的是官网 demo 的假 core，再加上 `web/stories/data.ts` 里补的数据（小说、Markdown、视频、图片、更新说明），不进任何发布的包。

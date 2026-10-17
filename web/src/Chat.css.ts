@@ -10,14 +10,13 @@ import { onboardingCard } from "./cloud/settings.css.ts";
 import { glass } from "@stillfail/ui/styles/glass.ts";
 import { columns, outsetStart } from "@stillfail/ui/styles/align.ts";
 import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
-import { STILL } from "@stillfail/ui/styles/still.ts";
+import { STILL, stillAtOnce, stillLoop } from "@stillfail/ui/styles/still.ts";
 
 export const msgName = style({ fontWeight: "600" });
 /** A chat's list of messages, on either screen (the wide screen's pane, the phone's page): what quotes jump within. */
 export const chatMessages = style({});
 // Historical loading changes opacity only, all rows in a commit together: no queue, motion or repeated layout.
 globalStyle(`${chatMessages} > ${msg}[data-history-fade]`, { animation: `${fadeKeyframes} 180ms ${vars.easeOut}` });
-globalStyle(`${STILL} ${chatMessages} > ${msg}[data-history-fade]`, { animation: "none" });
 export const chatToBottom = style({
   position: "absolute", right: "24px", bottom: "12px", zIndex: "5", display: "grid", placeItems: "center",
   width: "34px", height: "34px", borderRadius: "50%", border: `1px solid ${vars.line}`, background: vars.canvas,
@@ -223,7 +222,6 @@ export const msgAvatarSlack = style({
 export const fileCard = style({
   selectors: {
     [`${composerFiles} &`]: { animation: `${enterUpKeyframes} 180ms ${vars.easeOut} both` },
-    [`${STILL} ${composerFiles} &`]: { animation: "none" },
   },
 });
 // Digits all one width: a percentage counting up does not shake.
@@ -293,6 +291,8 @@ export const msgImageWait = style({
   transition: `opacity 300ms ${vars.easeOut} 800ms`,
   selectors: {
     [`${msgImage}[data-loaded] &`]: { opacity: "0" },
+    // Its wait was for the image's coming in, 1ms then.
+    [`${STILL} &`]: stillAtOnce,
   },
 });
 const blotDrift = [
@@ -324,7 +324,7 @@ blots.forEach((b, i) => {
   globalStyle(`${msgImageWait} i:nth-child(${i + 1})`, {
     ...b.place, background: b.color, animation: `${blotDrift[i]} ${b.time} ease-in-out infinite alternate`,
   });
-  globalStyle(`${STILL} ${msgImageWait} i:nth-child(${i + 1})`, { animation: "none" });
+  globalStyle(`${STILL} ${msgImageWait} i:nth-child(${i + 1})`, stillLoop());
 });
 const msgImageRevealKeyframes = keyframes({
   from: { maskPosition: "0 100%", filter: "blur(14px)", transform: "scale(1.04)" },
@@ -345,7 +345,6 @@ export const quotePop = style({
   boxShadow: `0 6px 16px ${vars.shadow}`, cursor: "pointer", animation: `${popInKeyframes} 120ms ${vars.easeOut}`,
   selectors: {
     "&:hover": { background: vars.primaryHover },
-    [`${STILL} &`]: { animation: "none" },
   },
 });
 export const activityLine = style({
@@ -399,7 +398,7 @@ export const activityRing = style({
   selectors: {
     [`${agentActivity}[data-waiting] &`]: { animation: "none" },
     [`${agentActivity}[data-leaving] &`]: { opacity: "0", transition: "opacity 160ms" },
-    [`${STILL} &`]: { animation: "none" },
+    [`${STILL} &`]: stillLoop(),
   },
 });
 globalStyle(`${activityRing} circle`, {
@@ -409,7 +408,7 @@ globalStyle(`${activityRing} circle`, {
 });
 // Waiting on work it started: a still, quiet ring.
 globalStyle(`${agentActivity}[data-waiting] ${activityRing} circle`, { stroke: vars.line, strokeDasharray: "none", animation: "none" });
-globalStyle(`${STILL} ${activityRing} circle`, { animation: "none" });
+globalStyle(`${STILL} ${activityRing} circle`, stillLoop());
 export const activityTail = style({
   display: "flex", alignItems: "center", gap: "8px", minWidth: "0", maxWidth: "100%",
   selectors: {
@@ -424,8 +423,6 @@ export const activityNowText = style({
   selectors: {
     "&[data-in]": { animation: `${nowInKeyframes} 240ms ${vars.easeOut} both` },
     "&[data-out]": { animation: `${nowOutKeyframes} 240ms ${vars.easeOut} both`, pointerEvents: "none" },
-    [`${STILL} &[data-in]`]: { animation: "none" },
-    [`${STILL} &[data-out]`]: { animation: "none" },
   },
 });
 export const activityElapsed = style({ flex: "none", color: vars.subtle, fontVariantNumeric: "tabular-nums" });

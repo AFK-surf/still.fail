@@ -9,7 +9,7 @@ import * as sidebarCss from "./styles/sidebar.css.ts";
 import * as railCss from "./Rail.css.ts";
 import * as listCss from "./Sidebar.css.ts";
 import * as bubblesCss from "./SystemBubbles.css.ts";
-import { moveState } from "@stillfail/ui/motion.ts";
+import { motionMs, moveState } from "@stillfail/ui/motion.ts";
 import { Tip } from "./ui.tsx";
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
@@ -185,13 +185,15 @@ function SidebarBuddy() {
   const { closed, toggle, label } = useSidebarToggle((next) => {
     setPose("hop");
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => setPose(next ? "rest" : "push"), 380);
+    timer.current = setTimeout(() => setPose(next ? "rest" : "push"), motionMs(380));
   });
   // On the page itself, not in the sidebar: a closed sidebar clips what is in it, and the desktop app's window would
   // then take a click on the buddy for a drag of the window.
   const buddy = (
     <Tip label={label}><button type="button" className={css.sidebarBuddy} data-pose={pose} onClick={toggle} aria-label={closed ? t("web-main.sidebar.open") : t("web-main.sidebar.close")}>
       <Themed name={`buddy/${pose}`} width={28} height={28} />
+      {/* Its drawing unmoving, shown instead with motion reduced (brand.css.ts buddyStill): an <img>'s SVG goes by the system's setting, not the app's. */}
+      <Themed name={pose === "hop" ? "buddy/hop" : `buddy/${pose}-still`} width={28} height={28} className={css.buddyStill} />
     </button></Tip>
   );
   return onPage(buddy);

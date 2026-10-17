@@ -1,6 +1,6 @@
 import { keyframes, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { STILL } from "@stillfail/ui/styles/still.ts";
+import { STILL, stillLoop } from "@stillfail/ui/styles/still.ts";
 
 // Ink is the colour it is drawn in (currentColor); only a failing station's dot has its own, red.
 export const stationGlyph = style({ display: "block", flex: "none", overflow: "visible" });
@@ -11,7 +11,7 @@ export const glyphPart = style({ transition: "stroke-opacity 240ms var(--m-stand
 const breathe = keyframes({ "0%, 100%": { strokeOpacity: 0.18 }, "50%": { strokeOpacity: 0.85 } });
 export const glyphPulse = style({
   strokeOpacity: 0.5, animation: `${breathe} 1.4s ease-in-out infinite`,
-  selectors: { [`${STILL} &`]: { animation: "none" } },
+  selectors: { [`${STILL} &`]: stillLoop() },
 });
 // The eye shuts round its middle (its blink: StationGlyph.tsx).
 export const glyphEye = style({ transformBox: "fill-box", transformOrigin: "center" });

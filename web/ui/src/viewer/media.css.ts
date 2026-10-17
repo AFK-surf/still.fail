@@ -4,7 +4,6 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { pictureGlass as glass } from "../styles/glass.ts";
 import { iconBtn } from "../styles/page.css.ts";
-import { STILL } from "../styles/still.ts";
 
 /** The picture, its controls floating over it. */
 export const vv = style({ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: vars.canvas, color: vars.text });
@@ -24,7 +23,6 @@ export const vvBar = style({
   cornerShape: vars.cornerShape, opacity: "0", pointerEvents: "none", transition: `opacity 320ms ${vars.easeOut}`,
   selectors: {
     "&[data-awake]": { opacity: "1", pointerEvents: "auto", transitionDuration: "120ms" },
-    [`${STILL} &`]: { transition: "none" },
   },
   "@media": {
     "(max-width: 640px)": { width: "calc(100% - 16px)", bottom: "max(8px, var(--safe-bottom))", padding: "2px 4px 4px" },

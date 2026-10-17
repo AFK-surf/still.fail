@@ -245,6 +245,10 @@ if part ts; then
     # the 外观 page's setting decides when it says so; a media query of its own would not hear the setting. The official
     # site's own motion, before its script runs, goes by the query.
     step "reduced motion from the root" sh -c '! git grep -n "prefers-reduced-motion" -- "web/src/*.ts" "web/src/*.tsx" "web/ui/*.ts" "web/ui/*.tsx" ":!web/ui/src/motion.ts" ":!web/ui/src/styles/still.ts" ":!web/src/site/"'
+    # Motion reduced is one clock, not a way of its own (motion.ts reducedMotion): a script plays through it (Motion's
+    # animate, play, motionMs, glideShare) and does what it does as ever, its motion only taking no time. What loops
+    # (motion.ts restingLoop), the phone's bar on its own springs and the official site's pointer play are all that ask.
+    step "reduced motion as one clock" sh -c '! git grep -nE "reducedMotion\(\)|\.animate\(" -- "web/src/*.ts" "web/src/*.tsx" "web/ui/*.ts" "web/ui/*.tsx" ":!web/ui/src/motion.ts" ":!web/src/mobile/Bar.tsx" ":!web/src/site/motion.ts"'
     # No corner of its own in what a change adds: a corner is a token (vars.r*) or follows what it sits in (align.ts
     # surface/inner, docs/ui-panels.md); circles, capsules and marks of 4 or less may say theirs, as may a line that says
     # why with "own corner:".

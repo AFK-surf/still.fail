@@ -6,7 +6,6 @@ import { panel } from "./styles/glass.ts";
 import { dialogInKeyframes, fadeKeyframes } from "./styles/keyframes.css.ts";
 import { iconBtn } from "./styles/page.css.ts";
 import { PANEL_PILL, TEXT_IN } from "./styles/align.ts";
-import { STILL } from "./styles/still.ts";
 
 /** What a choice or a switch's row says under its title: quieter. */
 export const note = style({ color: vars.muted });
@@ -63,7 +62,6 @@ export const segmentedThumb = style({
   width: "calc((100% - 2 * var(--pad) - (var(--n) - 1) * var(--gap)) / var(--n))", borderRadius: "999px",
   background: vars.canvas, boxShadow: `0 0 2px ${vars.shadow}, 0 0 0 .5px ${vars.line}`,
   transform: "translateX(calc(var(--i) * (100% + var(--gap))))", transition: `transform 240ms ${vars.easeOut}`,
-  selectors: { [`${STILL} &`]: { transition: "none" } },
 });
 export const segmentedOption = style({
   display: "grid", placeItems: "center",

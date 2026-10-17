@@ -18,7 +18,7 @@ import { createContext, createElement, useContext, useEffect, useLayoutEffect, u
 import { flushSync } from "react-dom";
 import { sizesOf, Virtual, type Align, type Item, type Layout, type Row } from "./model.ts";
 import * as css from "./list.css.ts";
-import { GLIDE_TAU, glideClock, glided } from "@stillfail/ui/motion.ts";
+import { glideClock, glided, glideShare } from "@stillfail/ui/motion.ts";
 
 export type VirtualList = {
   model: Virtual;
@@ -168,7 +168,7 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
         const dt = Math.max(0, Math.min(64, now - made.last));
         glided(now);
         made.last = now;
-        model.place(Math.abs(left) < 1 ? model.target() : model.where + left * (1 - Math.exp(-dt / GLIDE_TAU)));
+        model.place(Math.abs(left) < 1 ? model.target() : model.where + left * glideShare(dt));
         made.stepping = true;
         if (signature(model.layout()) !== made.drawn) flushSync(redraw);
         else put(el);
@@ -324,7 +324,7 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       const now = (document.timeline.currentTime as number | null) ?? performance.now();
       if (made.frame && now > made.last && model.mode.kind === "follow") {
         const left = model.target() - model.where;
-        model.place(model.where + left * (1 - Math.exp(-Math.min(64, now - made.last) / GLIDE_TAU)));
+        model.place(model.where + left * glideShare(Math.min(64, now - made.last)));
         glided(now);
         made.last = now;
       }

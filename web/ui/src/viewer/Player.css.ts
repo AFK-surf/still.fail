@@ -3,7 +3,6 @@ import { vars } from "../styles/tokens.css.ts";
 import { VIEWER_BAR } from "./ViewerBar.css.ts";
 import { pictureGlass as glass } from "../styles/glass.ts";
 import { vvBar } from "./media.css.ts";
-import { STILL } from "../styles/still.ts";
 
 /** The player fills its page (the phone's, or the desktop's main pane), in the theme's colours as the chat's video viewer. */
 export const player = style({ position: "absolute", inset: "0", userSelect: "none", WebkitUserSelect: "none" });
@@ -27,7 +26,7 @@ export const head = style({
   display: "flex", alignItems: "center", gap: "8px", width: "max-content", maxWidth: "min(100% - 24px, 1080px)", height: "44px", boxSizing: "border-box",
   padding: "0 16px 0 6px", borderRadius: `calc(14px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, color: vars.text,
   opacity: "0", pointerEvents: "none", transition: `opacity 320ms ${vars.easeOut}`,
-  selectors: { "&[data-awake]": { opacity: "1", pointerEvents: "auto", transitionDuration: "120ms" }, [`${STILL} &`]: { transition: "none" } },
+  selectors: { "&[data-awake]": { opacity: "1", pointerEvents: "auto", transitionDuration: "120ms" } },
 });
 export const name = style({ display: "flex", alignItems: "baseline", gap: "10px", minWidth: "0" });
 globalStyle(`${name} b`, { minWidth: "0", fontSize: vars.textBody, fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
@@ -48,7 +47,7 @@ export const buffered = style({ position: "absolute", top: "0", bottom: "0", bac
 export const cue = style({
   position: "absolute", zIndex: "2", left: "50%", transform: "translateX(-50%)", bottom: "calc(var(--m-foot, 0px) + 28px)",
   width: "min(100% - 32px, 900px)", textAlign: "center", pointerEvents: "none", transition: `bottom 240ms ${vars.easeOut}`,
-  selectors: { "&[data-awake]": { bottom: "calc(var(--m-foot, 0px) + 112px)" }, [`${STILL} &`]: { transition: "none" } },
+  selectors: { "&[data-awake]": { bottom: "calc(var(--m-foot, 0px) + 112px)" } },
 });
 globalStyle(`${cue} span`, {
   display: "inline", padding: "2px 8px", borderRadius: "6px", background: "rgba(0, 0, 0, .6)", color: "#fff",

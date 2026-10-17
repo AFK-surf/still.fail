@@ -1,6 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { emitOutKeyframes, enterUpKeyframes, jobBreatheKeyframes, jobLiveKeyframes, msgFlashKeyframes, msgWaitingInKeyframes, bubbleFlashKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { emitOutKeyframes, enterUpKeyframes, jobBreatheKeyframes, jobLiveKeyframes, msgFlashHeldKeyframes, msgFlashKeyframes, msgWaitingInKeyframes, bubbleFlashHeldKeyframes, bubbleFlashKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { msg, msgBubble } from "./styles/conversation.css.ts";
 import { msgMine } from "./styles/chat.css.ts";
 import { detailsList, jobsPanel } from "./pages/ChatPage.css.ts";
@@ -8,7 +8,7 @@ import { activityLine, agentActivity, chatMessages, composerThumb, msgFlash, msg
 import { tokenGuide } from "./pages/SlackApp.css.ts";
 import { TEXT_IN, outsetStart } from "@stillfail/ui/styles/align.ts";
 import { segmented, segmentedOption } from "@stillfail/ui/parts.css.ts";
-import { STILL } from "@stillfail/ui/styles/still.ts";
+import { STILL, stillFlash, stillLoop } from "@stillfail/ui/styles/still.ts";
 
 export const jobDot = style({
   position: "relative", flex: "none", width: "8px", height: "8px", borderRadius: "50%", background: vars.lineStrong,
@@ -22,8 +22,9 @@ export const jobDot = style({
       content: "\"\"", position: "absolute", inset: "-4px", borderRadius: "50%", background: vars.online,
       animation: `${jobLiveKeyframes} 2.4s ease-in-out infinite`,
     },
-    [`${STILL} &`]: { animation: "none !important" },
-    [`${STILL} &::after`]: { animation: "none !important" },
+    [`${STILL} &`]: stillLoop(),
+    // Its breath out: small and faint (unanimated, a disc as big as its ring, solid).
+    [`${STILL} &[data-tone="live"]::after`]: stillLoop({ opacity: ".35", transform: "scale(.6)" }),
   },
 });
 export const jobRow = style({
@@ -191,8 +192,6 @@ globalStyle(`${msg}[data-emitting] > *`, {
   transformOrigin: "12px 12px", willChange: "transform, clip-path",
   animation: `${emitOutKeyframes} 380ms ${vars.easeOut} both`,
 });
-/** Here rather than with its class: it comes after .agent-activity, and wins over it. */
-globalStyle(`${STILL} ${msg}[data-emitting] > *`, { animation: "none" });
 /** Here rather than with its class: it comes after [data-enter], and wins over it; over a row that faded in with
  *  the history (Chat.css.ts [data-history-fade], which stays on it) too, or a jump to it would not show. */
 const flashing = `${msgFlash}, ${chatMessages} > ${msg}${msgFlash}[data-history-fade]`;
@@ -205,8 +204,10 @@ globalStyle(flashing, {
 globalStyle(`${msgMine}${msgFlash}:has(${msgBubble}), ${chatMessages} > ${msgMine}${msgFlash}[data-history-fade]:has(${msgBubble})`, { animation: "none" });
 globalStyle(`${msgMine}${msgFlash} ${msgBubble}`, { animation: `${bubbleFlashKeyframes} 1700ms` });
 /** Here rather than with its class: it comes after .msg-flash, and wins over it. */
-globalStyle(`${STILL} ${msgFlash}, ${STILL} ${chatMessages} > ${msg}${msgFlash}[data-history-fade]`, { animation: "none", outline: `2px solid ${vars.accent}` });
-globalStyle(`${STILL} ${msgMine}${msgFlash} ${msgBubble}`, { animation: "none" });
+globalStyle(`${STILL} ${msgFlash}, ${STILL} ${chatMessages} > ${msg}${msgFlash}[data-history-fade]`, stillFlash(msgFlashHeldKeyframes, "1700ms"));
+// Your words: still their bubble, not the row (the held tint above is over every rule without it).
+globalStyle(`${STILL} ${msgMine}${msgFlash}:has(${msgBubble}), ${STILL} ${chatMessages} > ${msgMine}${msgFlash}[data-history-fade]:has(${msgBubble})`, { animation: "none !important" });
+globalStyle(`${STILL} ${msgMine}${msgFlash} ${msgBubble}`, stillFlash(bubbleFlashHeldKeyframes, "1700ms"));
 /** Here rather than with its class: it comes after [data-enter], and wins over it. */
 globalStyle(composerThumb, {
   position: "relative", display: "block", width: "64px", height: "64px",

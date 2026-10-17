@@ -21,7 +21,7 @@ import { useBackClose } from "@stillfail/ui/backClose.ts";
 import { thumbId, viewerFlight } from "./viewerFlight.ts";
 import { asPng, standIn } from "./wholeImages.ts";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
-import { animate, reducedMotion, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
+import { animate, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import * as css2 from "./FilePreview.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
@@ -440,7 +440,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
   const back = useCallback((v = 0) => {
     const from = settle();
     const el = slide.current;
-    if (el && from && !reducedMotion()) run(from, 0, v, (x) => { el.style.transform = `translateX(${x}px)`; });
+    if (el && from) run(from, 0, v, (x) => { el.style.transform = `translateX(${x}px)`; });
     else if (el) el.style.transform = "";
   }, [settle, run]);
   /** To the one before (-1) or after (1), going on from where a swipe left it (at `v` px/ms). */
@@ -449,7 +449,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
     if (!to) return back(v);
     const from = settle();
     const el = slide.current;
-    if (el && !reducedMotion()) {
+    if (el) {
       const copy = el.cloneNode(true) as HTMLElement;
       // Only drawn: what finds the picture and the bars finds the real ones.
       for (const n of copy.querySelectorAll("[data-peek]")) n.remove();

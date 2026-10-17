@@ -16,7 +16,7 @@ import { DecisionsIdle } from "./DecisionsIdle.tsx";
 import { StationContext, stationBase } from "./station.tsx";
 import { useShortcut } from "./keymap.ts";
 import { useListMotion } from "./listMotion.ts";
-import { LOCAL_MS, MOVE, reducedMotion } from "@stillfail/ui/motion.ts";
+import { LOCAL_MS, MOVE } from "@stillfail/ui/motion.ts";
 import { Time, Waiting } from "./ui.tsx";
 import { StationMark } from "./StationMark.tsx";
 import * as markCss from "./StationMark.css.ts";
@@ -228,7 +228,7 @@ function useOpening(list: React.RefObject<HTMLDivElement | null>, active: boolea
     if (!rows.length && performance.now() - from.at <= LOCAL_MS) return;
     const recent = openedRecently();
     openedFrom = null;
-    if (!rows.length || !recent || reducedMotion()) return;
+    if (!rows.length || !recent) return;
     rows.forEach((row, i) => {
       const dy = from.top - row.getBoundingClientRect().top;
       row.style.transform = `translateY(${dy}px)`;

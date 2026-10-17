@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { spinKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
-import { STILL } from "@stillfail/ui/styles/still.ts";
+import { STILL, stillLoop } from "@stillfail/ui/styles/still.ts";
 
 export const mDot = style({
   width: "7px", height: "7px", borderRadius: "50%", background: "var(--m-accent)", flex: "none",
@@ -20,7 +20,6 @@ export const mHomePane = style({
     [`${mHomePanes}[data-filter=watching] &:nth-child(1)`]: { transform: "translateX(-200%)" },
     [`${mHomePanes}[data-filter=watching] &:nth-child(2)`]: { transform: "translateX(-100%)" },
     [`${mHomePanes}[data-filter=watching] &:nth-child(3)`]: { transform: "none" },
-    [`${STILL} &`]: { animation: "none !important", transition: "none !important" },
   },
 });
 /**
@@ -42,7 +41,7 @@ export const mPull = style({
 globalStyle(`${mPull} > svg`, { transform: "rotate(calc(var(--pull) * 270deg))" });
 globalStyle(`${mPull}[data-reloading] > svg`, { animation: `${spinKeyframes} 700ms linear infinite` });
 // With motion reduced, slower, as a spinner (@stillfail/ui spinner.css.ts).
-globalStyle(`${STILL} ${mPull}[data-reloading] > svg`, { animationDuration: "2.4s !important" });
+globalStyle(`${STILL} ${mPull}[data-reloading] > svg`, stillLoop("turn"));
 export const mHomeBar = style({
   position: "absolute", top: "0", left: "0", right: "0", zIndex: "3", display: "flex", alignItems: "center",
   gap: "10px", padding: "calc(var(--m-top) + 8px) 16px 8px",

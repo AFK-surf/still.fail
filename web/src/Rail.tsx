@@ -32,7 +32,7 @@ import { openedAt } from "./DecisionDesk.tsx";
 import { moveSidebar, onSidebarChosen, showSidebar, useSidebarToggle } from "./brand.tsx";
 import * as shellCss from "./styles/shell.css.ts";
 import * as sidebarCss from "./styles/sidebar.css.ts";
-import { reducedMotion } from "@stillfail/ui/motion.ts";
+import { play } from "@stillfail/ui/motion.ts";
 import * as css from "./Rail.css.ts";
 import { androidQr, download, downloadsOffered } from "./downloads.ts";
 import { t } from "./i18n.ts";
@@ -196,8 +196,8 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
       if (item === dragged?.item) continue;
       const from = was.get(item);
       // Only while they are moved about (or changed): the rail's own changes of length move them too.
-      if ((changing || dragged) && from !== undefined && from !== el.offsetTop && !reducedMotion()) {
-        el.animate([{ transform: `translateY(${from - el.offsetTop}px)` }, { transform: "none" }], { duration: 220, easing: "cubic-bezier(.2, .7, .2, 1)" });
+      if ((changing || dragged) && from !== undefined && from !== el.offsetTop) {
+        play(el, [{ transform: `translateY(${from - el.offsetTop}px)` }, { transform: "none" }], { duration: 220, easing: "cubic-bezier(.2, .7, .2, 1)" });
       }
     }
     drawnAt.current = now;
@@ -248,7 +248,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
       if (held) {
         const from = held.style.transform;
         held.style.transform = "";
-        if (from && !reducedMotion()) held.animate([{ transform: from }, { transform: "none" }], { duration: 200, easing: "cubic-bezier(.2, .7, .2, 1)" });
+        if (from) play(held, [{ transform: from }, { transform: "none" }], { duration: 200, easing: "cubic-bezier(.2, .7, .2, 1)" });
       }
       if (order.join() !== items.join()) { setDragged({ item: null, order }); keep(order); } else setDragged(null);
     };

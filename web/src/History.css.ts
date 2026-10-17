@@ -9,6 +9,7 @@ import { accountMenu } from "./cloud/workspace.css.ts";
 import { detailRow, details, sideContent } from "./pages/ChatPage.css.ts";
 import { msgRoute } from "./Chat.css.ts";
 import { bleedStart, bleedX, columns } from "@stillfail/ui/styles/align.ts";
+import { STILL } from "@stillfail/ui/styles/still.ts";
 
 export const history = style({
   minWidth: "0", minHeight: "0", display: "flex", flexDirection: "column", borderLeft: `1px solid ${vars.line}`,
@@ -238,6 +239,9 @@ globalStyle(`${hWaitBar} > i`, {
   display: "block", height: "100%", background: "currentColor", transformOrigin: "left", transform: "scaleX(0)",
   animationName: waitFillKeyframes, animationTimingFunction: "linear", animationFillMode: "forwards",
 });
+// A clock, not a motion: with motion reduced it keeps its time, over the 1ms of every motion (`--wait-time`, its
+// seconds, from History.tsx WaitBar).
+globalStyle(`${STILL} ${hWaitBar} > i`, { animationDuration: "var(--wait-time) !important" });
 /** An event in a line (the agent's own words, still.fail's reminders, what a sub-agent answered): its lead, then its
  * words cut short; a button that opens them whole when there is more. */
 export const hOne = style({

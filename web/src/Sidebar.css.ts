@@ -8,7 +8,7 @@ import { kindIcon, kindMark } from "./ui.css.ts";
 import { outsetEnd, outsetStart, oversize } from "@stillfail/ui/styles/align.ts";
 import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
 import { resizeHandle } from "@stillfail/ui/parts.css.ts";
-import { STILL } from "@stillfail/ui/styles/still.ts";
+import { STILL, stillAtOnce } from "@stillfail/ui/styles/still.ts";
 
 const wide = "(min-width: 701px)";
 const narrow = "(max-width: 700px)";
@@ -97,7 +97,6 @@ export const navTrack = style({
     "&[data-filter=archive]": { transform: "translateX(-80%)" },
     // To 奏 from its row in the sidebar's foot: its rows come out of that row instead (DecisionDesk.tsx).
     "&[data-instant]": { transition: "none" },
-    [`${STILL} &`]: { transition: "none" },
   },
 });
 // Each pane sized by the track alone: otherwise the track's height is its tallest pane's content, and any change in a
@@ -108,6 +107,7 @@ globalStyle(`${navTrack} > ${navScroll}`, { flex: "none", width: "20%", contain:
 // (data-sliding, Sidebar.tsx), the panes it passes are drawn from its start, and the one it leaves stays a slide's time
 // before it goes (it gets inert before the slide starts); the one it goes to shows at once (that has no transition).
 globalStyle(`${navTrack}:not([data-sliding]) > ${navScroll}[inert]`, { contentVisibility: "hidden", transition: "content-visibility 0s 240ms allow-discrete" });
+globalStyle(`${STILL} ${navTrack}:not([data-sliding]) > ${navScroll}[inert]`, stillAtOnce);
 
 export const navFoot = style({ ...band, marginTop: "auto", padding: 8 });
 export const navFootRow = style({ display: "flex", alignItems: "center", gap: 4 });

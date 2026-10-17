@@ -7,7 +7,7 @@ import type { Badge, Maker, RuntimeKind, Stamp } from "./api.ts";
 import { RUNTIME_LABEL } from "./format.ts";
 import { Chat, Check, ChevronLeft, Wait, Plug, Refresh, Sliders } from "@stillfail/ui/icons.tsx";
 import { setShortcuts } from "@stillfail/ui/shortcuts.ts";
-import { reducedMotion } from "@stillfail/ui/motion.ts";
+import { motionMs } from "@stillfail/ui/motion.ts";
 import { ICON, Tip } from "@stillfail/ui/parts.tsx";
 import { flushSync } from "react-dom";
 import { Link, useNavigate } from "react-router";
@@ -219,11 +219,12 @@ export function pageChanging(): { settle: (() => void)[]; moving: Promise<void>;
 /**
  * One page becoming another in a view transition (what both have and name moves between them; the rest crossfades):
  * `go` navigates, rendered at once; with `ready`, the new page is waited for (a little) until it shows what the
- * transition lands on. `patience`: how long (ms) the new page is waited for at most. Plainly without the API or motion.
+ * transition lands on. `patience`: how long (ms) the new page is waited for at most. Plainly without the API; with
+ * motion reduced, the same, over at once (styles/global.css.ts).
  * Resolves when it is over.
  */
 export function transitionTo(go: () => void, ready?: () => boolean, patience = 800): Promise<void> {
-  if (!document.startViewTransition || reducedMotion()) { go(); return Promise.resolve(); }
+  if (!document.startViewTransition) { go(); return Promise.resolve(); }
   // What is named for it only while it runs (its styles): a named element blurs nothing behind it (the composer's glass).
   document.documentElement.dataset.transitioning = "";
   const transition = document.startViewTransition(async () => {
@@ -239,7 +240,6 @@ export function transitionTo(go: () => void, ready?: () => boolean, patience = 8
 
 /** A page change whose leaving elements are kept by its caller: no document snapshot or rendering freeze. */
 export function transitionLive(go: () => void, ready: () => boolean, duration: number): Promise<void> {
-  if (reducedMotion()) { go(); return Promise.resolve(); }
   let begin!: () => void;
   const moving = new Promise<void>((resolve) => { begin = resolve; });
   const now = { settle: [] as (() => void)[], moving, done: Promise.resolve() };
@@ -252,7 +252,7 @@ export function transitionLive(go: () => void, ready: () => boolean, duration: n
     while (!ready() && performance.now() < until) await new Promise((resolve) => setTimeout(resolve, 16));
     for (const settle of now.settle.splice(0)) settle();
     begin();
-    await new Promise((resolve) => setTimeout(resolve, duration));
+    await new Promise((resolve) => setTimeout(resolve, motionMs(duration)));
   }).finally(() => {
     begin();
     if (changing === now) changing = null;

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
 import type { ChatItem } from "./api.ts";
 import type { WorkspaceMark } from "./core/shapes.ts";
-import { reducedMotion } from "@stillfail/ui/motion.ts";
+import { play } from "@stillfail/ui/motion.ts";
 import { StatusText, Tip } from "./ui.tsx";
 import { jumpTo } from "./jumpTo.ts";
 import * as css from "./ChatMark.css.ts";
@@ -44,8 +44,8 @@ export function ChatMark({ item, inline }: { item: ChatItem; inline?: boolean })
     let had = shown.get(key);
     if (!had) shown.set(key, had = { tone, since: -Infinity });
     else if (had.tone !== tone) shown.set(key, had = { tone, since: performance.now() });
-    if (!tone || performance.now() - had.since > 300 || !mark.current || reducedMotion()) return;
-    mark.current.animate([{ transform: "scale(0)" }, { transform: "scale(1.3)", offset: 0.6 }, { transform: "scale(1)" }], { duration: 320, easing: "ease-out" });
+    if (!tone || performance.now() - had.since > 300 || !mark.current) return;
+    play(mark.current, [{ transform: "scale(0)" }, { transform: "scale(1.3)", offset: 0.6 }, { transform: "scale(1)" }], { duration: 320, easing: "ease-out" });
   }, [key, tone]);
   return tone ? <span ref={mark} className={inline ? css.chatMarkInline : css.chatMark} data-tone={tone} role="img" aria-label={t(`web-main.chatMark.${tone}`)} /> : null;
 }

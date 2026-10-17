@@ -1,7 +1,7 @@
 import { globalStyle } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { passageFlashKeyframes, searchStrokeKeyframes, splashFloatKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
-import { STILL } from "@stillfail/ui/styles/still.ts";
+import { passageFlashHeldKeyframes, passageFlashKeyframes, searchStrokeKeyframes, splashFloatKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { STILL, stillAtOnce, stillFlash, stillLoop } from "@stillfail/ui/styles/still.ts";
 
 /**
  * Corners, after Codex: plain rounding by default; where the browser draws superellipses, rounded rectangles get a
@@ -221,14 +221,20 @@ globalStyle('input[type="checkbox"]:disabled', { opacity: ".45", cursor: "defaul
 globalStyle('input[type="checkbox"]:focus-visible', { outline: `2px solid ${vars.fieldFocus}`, outlineOffset: "2px" });
 globalStyle("code, pre", { fontFamily: vars.fontMono });
 globalStyle("[hidden]", { display: "none !important" });
-globalStyle(`${STILL} *, ${STILL} *::before, ${STILL} *::after`, { animationDuration: "1ms !important", transitionDuration: "1ms !important" });
+/**
+ * Motion reduced (styles/still.ts): every animation and transition in 1ms, once; the same path to the same end, its end
+ * events as ever. A loop says where it rests (stillLoop): once in 1ms it stands as it is without it.
+ */
+globalStyle(`${STILL} *, ${STILL} *::before, ${STILL} *::after`, {
+  animationDuration: "1ms !important", animationIterationCount: "1 !important", transitionDuration: "1ms !important",
+});
 /** The app starting: the buddy floats; what it waits for comes up only if it takes a while. */
 globalStyle(".splash", {
   position: "fixed", inset: "0", display: "grid", placeContent: "center", justifyItems: "center", gap: "16px",
   padding: "24px", background: vars.canvas, textAlign: "center",
 });
 globalStyle(".splash-mark", { display: "block", animation: `${splashFloatKeyframes} 1.8s ease-in-out infinite` });
-globalStyle(`${STILL} .splash-mark`, { animation: "none" });
+globalStyle(`${STILL} .splash-mark`, stillLoop());
 globalStyle("body[data-resizing]", { cursor: "col-resize", userSelect: "none" });
 /** The page itself never scrolls or bounces; only the panes inside do. */
 globalStyle("html, body", { height: "100%", overflow: "hidden", overscrollBehavior: "none" });
@@ -251,7 +257,8 @@ globalStyle("::view-transition-old(root), ::view-transition-new(root)", { animat
  */
 globalStyle("::view-transition-group(dock), ::view-transition-new(dock)", { animation: "none" });
 globalStyle("::view-transition-old(dock)", { display: "none" });
-globalStyle(`${STILL}::view-transition-group(*), ${STILL}::view-transition-old(*), ${STILL}::view-transition-new(*)`, { animation: "none" });
+// The 1ms of every motion, which `*` does not reach.
+globalStyle(`${STILL}::view-transition-group(*), ${STILL}::view-transition-old(*), ${STILL}::view-transition-new(*)`, { animationDuration: "1ms !important" });
 /** The words a search found, marked in the message it opened, until the chat is left. */
 globalStyle("::highlight(search-hit)", {
   // Bold without laying the words out anew (a highlight cannot change the font): the glyphs drawn a little wider.
@@ -265,7 +272,7 @@ globalStyle("[data-search-marks] path", {
   strokeDasharray: "1", strokeDashoffset: "1", animation: `${searchStrokeKeyframes} 520ms cubic-bezier(.4, 0, .2, 1) forwards`,
 });
 globalStyle("[data-search-marks][data-settled] path", { animation: "none", strokeDashoffset: "0" });
-globalStyle(`${STILL} [data-search-marks] path`, { animation: "none", strokeDashoffset: "0" });
+globalStyle(`${STILL} [data-search-marks] path`, stillAtOnce);
 /** The quoted passage, marked for a moment where it was said after following a quote (Chat.tsx flashRange): a rounded
  *  ground behind each of its lines, under the words (the layer is below the text of the block it is in). */
 globalStyle("[data-passage-host]", { position: "relative", isolation: "isolate" });
@@ -274,4 +281,4 @@ globalStyle("[data-passage-marks] > span", {
   position: "absolute", borderRadius: `calc(4px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: `color-mix(in srgb, ${vars.accent} 24%, transparent)`, animation: `${passageFlashKeyframes} 2400ms both`,
 });
-globalStyle(`${STILL} [data-passage-marks] > span`, { animation: "none" });
+globalStyle(`${STILL} [data-passage-marks] > span`, stillFlash(passageFlashHeldKeyframes, "2400ms"));
