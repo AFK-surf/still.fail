@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -34,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -96,14 +96,16 @@ private fun Note(text: String) = Text(text, fontSize = 12.sp, lineHeight = 18.sp
 
 /** A main action as wide as where it is (the screen's foot, a sheet's half). */
 @Composable
-internal fun WideButton(label: String, primary: Boolean, modifier: Modifier = Modifier, busy: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun WideButton(label: String, primary: Boolean, modifier: Modifier = Modifier, busy: Boolean = false, enabled: Boolean = true, danger: Boolean = false, onClick: () -> Unit) {
     val on = enabled && !busy
+    // `danger`: red, and faded red (not grey) until it can be pressed, so it reads as the same button.
+    val ground = if (!primary) C.chip else if (danger) (if (enabled) C.red else C.red.copy(alpha = 0.4f)) else if (!enabled) C.line else C.ink
     Row(
-        modifier.height(46.dp).clip(Smooth(23.dp)).background(if (primary) (if (!enabled) C.line else C.ink) else C.chip).clickable(enabled = on, onClick = onClick),
+        modifier.height(46.dp).clip(Smooth(23.dp)).background(ground).clickable(enabled = on, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
     ) {
         if (busy) { Spinner(14.dp); Spacer(Modifier.width(8.dp)) }
-        Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (primary) C.bg else C.ink)
+        Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (primary && danger) Color.White else if (primary) C.bg else C.ink)
     }
 }
 
@@ -248,34 +250,32 @@ private fun DeviceRow(ws: String, d: LockDevice, canRenew: Boolean) {
  * screen lock) before it signs; their no says nothing.
  */
 private fun turnOffSheet(app: AppState, ws: String, name: String) {
-    app.sheet = SheetSpec(0.66f) {
+    // As tall as what it shows (grab, head, the words, the field, the buttons); the sheet rises over the keyboard itself.
+    app.sheet = SheetSpec(0.7f, fit = 470.dp) {
         var typed by remember { mutableStateOf("") }
         val named = typed.trim() == name.trim()
         SheetGrab()
         SheetHead(t("web-pages.security.turnOffTitle"))
-        // The buttons stay over the keyboard while the name is typed; what it gives up scrolls above them.
-        Column(Modifier.weight(1f).imePadding()) {
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(t("web-pages.security.turnOffBody"), fontSize = 14.sp, color = C.muted)
-                listOf(
-                    Icons.Server to t("web-pages.security.nowRisk"),
-                    Icons.Devices to t("web-pages.security.turnOffApproval"),
-                    Icons.Key to t("web-pages.security.turnOffVault"),
-                ).forEach { (icon, said) ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        IconIn(icon, 18.dp, C.muted, Modifier.padding(top = 2.dp))
-                        Text(said, fontSize = 15.sp, lineHeight = 22.sp, color = C.ink)
-                    }
+        Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(t("web-pages.security.turnOffBody"), fontSize = 14.sp, color = C.muted)
+            listOf(
+                Icons.Server to t("web-pages.security.nowRisk"),
+                Icons.Devices to t("web-pages.security.turnOffApproval"),
+                Icons.Key to t("web-pages.security.turnOffVault"),
+            ).forEach { (icon, said) ->
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    IconIn(icon, 18.dp, C.muted, Modifier.padding(top = 2.dp))
+                    Text(said, fontSize = 15.sp, lineHeight = 22.sp, color = C.ink)
                 }
-                Text(t("web-pages.security.turnOffType", "name" to name), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 6.dp))
-                Field(typed, { typed = it }, "")
             }
-            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                Button(t("common.cancel"), primary = false) { app.sheet = null }
-                Button(t("web-pages.security.turnOff"), primary = true, danger = true, enabled = named) {
-                    app.sheet = null
-                    app.vaultAct(t("web-pages.security.turnOff")) { app.core.call("lock.disable", buildJsonObject { put("workspace", ws) }) }
-                }
+            Text(t("web-pages.security.turnOffType", "name" to name), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 6.dp))
+            Field(typed, { typed = it }, "")
+        }
+        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            WideButton(t("common.cancel"), primary = false, modifier = Modifier.weight(1f)) { app.sheet = null }
+            WideButton(t("web-pages.security.turnOff"), primary = true, danger = true, enabled = named, modifier = Modifier.weight(1f)) {
+                app.sheet = null
+                app.vaultAct(t("web-pages.security.turnOff")) { app.core.call("lock.disable", buildJsonObject { put("workspace", ws) }) }
             }
         }
     }

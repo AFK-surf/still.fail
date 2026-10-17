@@ -187,10 +187,17 @@ fun SheetHost(spec: SheetSpec?, haze: HazeState, close: () -> Unit) {
             Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.28f * scrim))
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { close() },
         )
+        val typing = WindowInsets.keyboard
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                // Its height read as it is laid out: a drag moves it without making its content again.
-                .layout { m, c -> val h = height.value.roundToInt().coerceIn(c.minHeight, c.maxHeight); val p = m.measure(c.copy(minHeight = h, maxHeight = h)); layout(p.width, h) { p.place(0, 0) } }
+                // Its height read as it is laid out: a drag moves it without making its content again. The keyboard up
+                // (a field of its own), it grows by what the keyboard takes over the navigation bar, so what it shows
+                // stays as tall over the keyboard and not squeezed under it.
+                .layout { m, c ->
+                    val over = (typing.getBottom(this) - foot).coerceAtLeast(0)
+                    val h = (height.value.roundToInt() + over).coerceIn(c.minHeight, c.maxHeight)
+                    val p = m.measure(c.copy(minHeight = h, maxHeight = h)); layout(p.width, h) { p.place(0, 0) }
+                }
                 .offset { IntOffset(0, offset.value.toInt()) }
                 .shadow(24.dp, Smooth(topStart = 26.dp, topEnd = 26.dp))
                 .clip(Smooth(topStart = 26.dp, topEnd = 26.dp))
