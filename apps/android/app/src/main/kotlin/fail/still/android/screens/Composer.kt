@@ -9,6 +9,8 @@ import fail.still.android.BuildConfig
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import fail.still.android.ui.InComposer
+import fail.still.android.ui.InComposerFiles
+import fail.still.android.ui.ComposerFilesIn
 import fail.still.android.ui.ComposerInset
 import fail.still.android.ui.ComposerCorner
 import android.content.Context
@@ -225,7 +227,7 @@ class Draft {
     internal fun fill(kept: DraftView) {
         text = kept.text
         kept.quotes.forEach { q -> quotes += DraftQuote(System.nanoTime(), q.author, q.text, q.ts, q.role ?: "person", q.file).also { it.comment = q.comment } }
-        kept.files.forEach { a -> files += Pending(System.nanoTime(), a.name, a.size, null).also { it.done = a } }
+        kept.files.forEach { a -> files += Pending(System.nanoTime(), a.name, a.size, null, width = a.width?.toInt(), height = a.height?.toInt()).also { it.done = a } }
     }
     internal val empty get() = text.isEmpty() && quotes.isEmpty() && files.isEmpty()
 
@@ -691,7 +693,7 @@ fun openAttach(app: AppState, launchers: Triple<() -> Unit, () -> Unit, () -> Un
  * for `host`'s flight to take it from where it is, ChatHost.kt).
  */
 @Composable
-fun DraftExtras(draft: Draft, host: Host? = null) {
+fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?.station, session: String? = host?.spec?.here) {
     val app = LocalApp.current
     if (draft.quotes.isNotEmpty()) Column(Modifier.fillMaxWidth().heightIn(max = 176.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         draft.quotes.forEach { q ->
@@ -719,19 +721,22 @@ fun DraftExtras(draft: Draft, host: Host? = null) {
             }
         }
     }
-    val station = host?.spec?.station
-    if (draft.files.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    // As far from the capsule's edge as from its top (ComposerFilesIn), past its own room (ComposerInset).
+    val beyond = ComposerFilesIn - ComposerInset
+    if (draft.files.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = beyond, end = beyond, top = beyond), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         draft.files.forEach { f ->
             val remove = { draft.files.remove(f); Unit }
-            if (f.preview != null) Box(Modifier.draftPicture(f, station).sendTile(host, f.id).size(56.dp).clip(InComposer).background(C.chip)) {
-                Image(f.preview, f.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            val picture = draftPictureOf(f, station, session)
+            if (picture != null) Box(Modifier.draftPicture(f, station).sendTile(host, f.id).size(56.dp).clip(InComposerFiles).background(C.chip)) {
+                Image(picture, f.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 if (f.done == null) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (f.error != null) 0.5f else 0.25f)), contentAlignment = Alignment.Center) {
                     if (f.error != null) Text(t("android-chat.file.failed"), color = Color.White, fontSize = 11.sp) else CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 1.5.dp)
                 }
                 // Only where it is drawn: Compose would take a touch target this small out to 48dp, most of the tile,
                 // and a tap meant to open the picture removed it.
                 CompositionLocalProvider(LocalViewConfiguration provides LocalViewConfiguration.current.exact()) {
-                    Box(Modifier.align(Alignment.TopEnd).padding(3.dp).size(20.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).clickable(onClick = remove), contentAlignment = Alignment.Center) {
+                    // In the picture's corner, concentric with it: its corner (16) less its own half (10) in.
+                    Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(20.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).clickable(onClick = remove), contentAlignment = Alignment.Center) {
                         IconIn(Icons.Close, 12.dp, Color.White)
                     }
                 }
@@ -741,9 +746,9 @@ fun DraftExtras(draft: Draft, host: Host? = null) {
                     onRetry = if (f.error != null && station != null) ({ draft.files.remove(f); pasteAsFile(app, draft, station, pasted.text) }) else null,
                     onRestore = if (pasted.restorable && !draft.starting) ({ draft.files.remove(f); draft.text = if (draft.text.isEmpty()) pasted.text else "${draft.text}\n${pasted.text}"; draft.focus++ }) else null)
             } else if (f.ref != null && station != null) Box(Modifier.sendTile(host, f.id)) {
-                RefCard(f, onRemove = remove, shape = InComposer) { openRefSheet(app, draft, f, station) }
+                RefCard(f, onRemove = remove, shape = InComposerFiles) { openRefSheet(app, draft, f, station) }
             } else Box(Modifier.sendTile(host, f.id)) {
-                FileCard(f.done?.name ?: f.name, f.done?.size ?: f.size, f.error ?: if (f.done == null) uploadingText(f) else null, busy = f.done == null && f.error == null, onRemove = remove, shape = InComposer)
+                FileCard(f.done?.name ?: f.name, f.done?.size ?: f.size, f.error ?: if (f.done == null) uploadingText(f) else null, busy = f.done == null && f.error == null, onRemove = remove, shape = InComposerFiles)
             }
         }
     }
@@ -757,7 +762,7 @@ fun DraftExtras(draft: Draft, host: Host? = null) {
 private fun PastedCard(f: Pending, pasted: PastedText, onRemove: () -> Unit, onRetry: (() -> Unit)?, onRestore: (() -> Unit)?) {
     val busy = f.done == null && f.error == null
     Row(
-        Modifier.width(260.dp).clip(InComposer).background(chatInk().neutral).padding(start = 10.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        Modifier.width(260.dp).clip(InComposerFiles).background(chatInk().neutral).padding(start = 10.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (busy) Spinner(14.dp) else IconIn(Icons.Read, 16.dp, C.muted)
@@ -790,6 +795,27 @@ private fun ViewConfiguration.exact(): ViewConfiguration = object : ViewConfigur
 }
 
 /**
+ * What a draft's picture shows: the one picked, or (a draft kept and opened again, which keeps no picture, only the
+ * file it went up as) the one it was sent with this run, else the station's, fetched for its chat's session (`key`).
+ * Null for a file that is no picture: it shows as a card.
+ */
+@Composable
+private fun draftPictureOf(f: Pending, station: String?, key: String?): ImageBitmap? {
+    if (f.preview != null) return f.preview
+    val a = f.done
+    if (a == null || station == null || !isImage(a.name)) return null
+    val app = LocalApp.current
+    val longest = with(LocalDensity.current) { 56.dp.roundToPx() * 2 }
+    val id = FileData.id(station, key ?: "", a, thumb = true)
+    var picture by remember(f.id) { mutableStateOf(FileData.sentPicture(station, a.path) ?: FileData.keptPicture(id, longest)) }
+    LaunchedEffect(f.id, key) {
+        if (picture != null || key == null) return@LaunchedEffect
+        try { picture = FileData.picture(id, FileData.fetch(app, station, key, a, thumb = true).await(), longest) } catch (_: CoreException) {}
+    }
+    return picture
+}
+
+/**
  * A picture waiting in the composer: tapped, shown whole in the viewer (growing out of its tile), from the bytes picked
  * (web Chat.tsx PendingFile: `draft:<id>`, no session's). Nothing to mark it into: it is already in the draft.
  */
@@ -802,7 +828,7 @@ private fun Modifier.draftPicture(f: Pending, station: String?): Modifier {
     val id = FileViewers.id(station, "", file.path)
     ForgetThumb(id)
     if (open) FilePreview(station, "", file, canDraft = false) { open = false }
-    return viewerThumb(id, with(LocalDensity.current) { (ComposerCorner - ComposerInset).toPx() }, smooth = false) { f.preview }
+    return viewerThumb(id, with(LocalDensity.current) { (ComposerCorner - ComposerFilesIn).toPx() }, smooth = false) { f.preview }
         .clickable {
             FileData.keep(FileData.id(station, "", file, thumb = false), bytes)
             open = true

@@ -67,6 +67,10 @@ val GlassBlur = cssBlur(20f)
 val ComposerCorner = 26.dp
 val ComposerInset = 8.dp
 val InComposer = RoundedCornerShape(ComposerCorner - ComposerInset)
+/** The files in it: as far from its edge as from its top (its room and 2 more, as the web phone's: ChatHost.css.ts), and
+ *  rounded as its corner less that. */
+val ComposerFilesIn = 10.dp
+val InComposerFiles = RoundedCornerShape(ComposerCorner - ComposerFilesIn)
 
 /**
  * A capsule floating over the list that `state` is the source of: raised and frosted as the web phone's (pages.css.ts
