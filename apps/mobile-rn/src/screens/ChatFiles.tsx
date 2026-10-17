@@ -137,19 +137,9 @@ function hashOf(text: string): string {
 }
 
 
-/** A store of values the screen draws from (Compose's snapshot state): read with `use`, changed with `set`. */
-class Watched<T> {
-  #value: T;
-  readonly #listeners = new Set<() => void>();
-  constructor(value: T) { this.#value = value; }
-  get value() { return this.#value; }
-  set value(v: T) { if (v === this.#value) return; this.#value = v; for (const l of this.#listeners) l(); }
-  subscribe = (l: () => void) => { this.#listeners.add(l); return () => { this.#listeners.delete(l); }; };
-}
-export function useWatched<T>(w: Watched<T>): T {
-  return useSyncExternalStore(w.subscribe, () => w.value);
-}
-export { Watched };
+// A leaf module of its own: pages in an import cycle with this one make theirs as they load (Preview.tsx).
+export { Watched, useWatched } from "../ui/Watched";
+import { Watched, useWatched } from "../ui/Watched";
 
 /** A file on the phone's disk as the station's calls write it (Calls.ts DiskFile): appended to, a part at a time. */
 export function diskFileOf(file: File): DiskFile {

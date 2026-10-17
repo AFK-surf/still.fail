@@ -37,7 +37,8 @@ import { ImageMarks, MarksActions, MarksFoot, PictureButton, drawMarks } from ".
 import type { Picked } from "./Composer";
 import { DraftOffers, MarkOffer, type OfferQuote } from "./Preview";
 import { AudioViewer, VideoViewer } from "./VideoViewer";
-import { BIG_FILE, FileData, PreviewKind, Shown, Watched, chatLongest, download, kindOf, useWatched, type Got, type Picture } from "./ChatFiles";
+import { BIG_FILE, FileData, PreviewKind, Shown, chatLongest, download, kindOf, type Got, type Picture } from "./ChatFiles";
+import { Watched, useWatched } from "../ui/Watched";
 
 /** The bars fade after this long left alone; after a tap that brought them back, a while longer. */
 const REST_MS = 2000;

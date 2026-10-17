@@ -18,10 +18,13 @@ export interface UiHost {
   menu: MenuSpec | null;
 }
 
-/** The app is the host (AppState is a UiHost, as AppState.kt is), unless something provides another. */
-export const LocalUi = createContext<UiHost>(app);
+/**
+ * The app is the host (AppState is a UiHost, as AppState.kt is), unless something provides another. Null by default,
+ * the app read when asked: this module loads inside AppState's own imports, before `app` is made.
+ */
+export const LocalUi = createContext<UiHost | null>(null);
 
 /** LocalUi.current. */
 export function useUi(): UiHost {
-  return useContext(LocalUi);
+  return useContext(LocalUi) ?? app;
 }

@@ -185,8 +185,10 @@ export function lineRects(l: TextLayoutResult, start: number, end: number): Rect
 /** A text hook's answer, as the Android app's are (Annotated.tsx): what to put on the text, and what to give its onTextLayout. */
 export type TextHook = [TextModifier, (e: TextLayout) => void];
 
-const NONE: TextHook = [NoTextModifier, () => {}];
-export const noHook = (): TextHook => NONE;
+// Made when first asked: Annotated.tsx, in an import cycle with this module, may not have loaded yet when it does.
+let none: TextHook | null = null;
+const NONE_HOOK = (): TextHook => (none ??= [NoTextModifier, () => {}]);
+export const noHook = (): TextHook => NONE_HOOK();
 
 /**
  * The size of a text's words from its lines (a hook does not see the text's style): its capitals' height over the
@@ -420,7 +422,7 @@ export function pickable(text: string): TextHook {
     if (was?.size.width !== layout.size.width || was?.size.height !== layout.size.height || was?.text !== layout.text) words.laidOut++;
     words.measure(piece);
   }, [words, piece, layout]);
-  if (!words) return NONE;
+  if (!words) return NONE_HOOK();
   return [
     {
       behind: (
