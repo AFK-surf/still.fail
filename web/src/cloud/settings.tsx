@@ -10,6 +10,7 @@ import { HAS_VERSION } from "../pages/AppVersion.tsx";
 import { HAS_LOCAL_STATION } from "../pages/LocalStation.tsx";
 import { ArrowLeft, Bell, Brain, Key, Chart, Check, ChevronRight, Edit, Folder, Im, Info, LogOut, Monitor, Plus, Quota, Refresh, Server, Settings, ShieldCheck, Sliders, Sparks, Command, Trash, User, UserPlus, Users, type IconProps } from "@stillfail/ui/icons.tsx";
 import { SecurityNotice } from "./Security.tsx";
+import { VaultWaiting } from "./Vault.tsx";
 import { useCommands } from "../commands.ts";
 import { Fragment, useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import { Link, Navigate, NavLink, useNavigate, useParams, useSearchParams } from "react-router";
@@ -96,6 +97,7 @@ function settingsPages(entry: WorkspaceEntry, some: boolean): SettingsPage[] {
     ...page("station", "usage", t("web-pages.settings.nav.usage"), Chart, "usage", some),
     ...page("cloud", "workspace", `Workspace · ${entry.name}`, Users, "workspace members"),
     ...page("cloud", "security", t("web-pages.security.title"), ShieldCheck, "security lock devices"),
+    ...page("cloud", "vault", t("web-pages.vault.title"), Key, "vault secrets keys tokens"),
     ...page("cloud", "account", entry.account.email, User, "account sign out"),
   ];
 }
@@ -139,6 +141,7 @@ export function SettingsNav({ entry }: { entry: WorkspaceEntry }) {
             <NavLink key={p.path} className={railed.includes(p.path as RailItem) ? `${nav.navRow} ${railCss.narrowOnly}` : nav.navRow} to={`${base}/${p.path}`}>
               {p.path === "account" ? <Avatar account={entry.account} size={18} /> : <p.icon {...ICON} />}
               {group === "cloud" ? <span className={nav.navText}>{p.label}</span> : p.label}
+              {p.path === "vault" && <VaultWaiting workspace={entry.id} />}
             </NavLink>
           ))}
         </Fragment>

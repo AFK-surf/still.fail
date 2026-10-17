@@ -28,6 +28,7 @@ import { AT, apk, clips, folder, HISTORY, JOIN_REFUSED, JOINABLE, MEMBERSHIPS, n
 import type { DemoExtension } from "../src/demo/mount.tsx";
 import { ScreenViewer } from "../src/screen/ScreenViewer.tsx";
 import { OUTDATED, SCREENS_LACKING, screensDemo, type ViewStory } from "./screens.ts";
+import { vaultDemo } from "./vault.ts";
 import CLIP_URL from "./assets/story-clip.mp4?url";
 import PICTURE_URL from "./assets/story-picture.png?url";
 
@@ -58,6 +59,9 @@ export interface Story {
 }
 
 const at = (name: string) => ({ ...AT, path: name });
+/** To 设置 › 密钥: the wide screen's settings, the phone's (from its chat, back to the list). */
+const toVault: Step[] = [{ click: '[aria-label="设置"]' }, { text: "密钥" }];
+const toPhoneVault: Step[] = [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "密钥" }];
 
 /** The demo with stations of other workspaces to add (`list`), or one that refuses to join (none to add: no choice). */
 const joining = (kind: "list" | "error"): DemoExtension => ({
@@ -348,6 +352,34 @@ export const stories: Story[] = [
   { id: "settings-memory-global", group: "设置", title: "记忆 · 全局", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "合并" }] },
   { id: "settings-workspace", group: "设置", title: "Workspace", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "Workspace · Acme" }] },
   { id: "settings-security", group: "设置", title: "安全", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }] },
+
+  // ── the vault (docs/vault.md) ──
+  { id: "vault-web", group: "密钥", title: "网页只看名字", app: true, demo: vaultDemo("web"), steps: toVault },
+  { id: "vault-no-lock", group: "密钥", title: "先打开安全模式", app: true, demo: vaultDemo("noLock"), steps: toVault },
+  { id: "vault-unconfirmed", group: "密钥", title: "此设备尚未确认", app: true, demo: vaultDemo("unconfirmed"), steps: toVault },
+  { id: "vault-off", group: "密钥", title: "尚未开启", app: true, demo: vaultDemo("off"), steps: toVault },
+  { id: "vault-words", group: "密钥", title: "恢复码", app: true, demo: vaultDemo("off"), steps: [...toVault, { text: "开启密钥库" }] },
+  { id: "vault-on", group: "密钥", title: "条目和等你批准的", app: true, demo: vaultDemo("waiting"), steps: toVault },
+  { id: "vault-locked", group: "密钥", title: "锁着 · 新设备尚无钥匙", app: true, demo: vaultDemo("locked"), steps: toVault },
+  { id: "vault-not-keyed", group: "密钥", title: "此设备尚无钥匙", app: true, demo: vaultDemo("notKeyed"), steps: toVault },
+  { id: "vault-recover", group: "密钥", title: "用恢复码找回", app: true, demo: vaultDemo("notKeyed"), steps: [...toVault, { text: "用恢复码找回" }] },
+  { id: "vault-item", group: "密钥", title: "打开一条", app: true, demo: vaultDemo("on"), steps: [...toVault, { text: "GitHub token" }] },
+  { id: "vault-editor", group: "密钥", title: "添加", app: true, demo: vaultDemo("on"), steps: [...toVault, { text: "添加" }] },
+  { id: "vault-editor-agent", group: "密钥", title: "编辑 · agent 可申请", app: true, demo: vaultDemo("on"), steps: [...toVault, { text: "GitHub token" }, { text: "编辑" }] },
+  { id: "vault-card", group: "密钥", title: "对话里的申请", app: true, demo: vaultDemo("waiting", true) },
+  { id: "vault-card-web", group: "密钥", title: "对话里的申请 · 网页", app: true, demo: vaultDemo("web", true) },
+  { id: "phone-vault-web", group: "密钥", title: "手机 · 网页只看名字", app: true, phone: true, demo: vaultDemo("web"), steps: toPhoneVault },
+  { id: "phone-vault-no-lock", group: "密钥", title: "手机 · 先打开安全模式", app: true, phone: true, demo: vaultDemo("noLock"), steps: toPhoneVault },
+  { id: "phone-vault-off", group: "密钥", title: "手机 · 尚未开启", app: true, phone: true, demo: vaultDemo("off"), steps: toPhoneVault },
+  { id: "phone-vault-words", group: "密钥", title: "手机 · 恢复码", app: true, phone: true, demo: vaultDemo("off"), steps: [...toPhoneVault, { text: "开启密钥库" }] },
+  { id: "phone-vault-on", group: "密钥", title: "手机 · 条目和等你批准的", app: true, phone: true, demo: vaultDemo("waiting"), steps: toPhoneVault },
+  { id: "phone-vault-locked", group: "密钥", title: "手机 · 锁着", app: true, phone: true, demo: vaultDemo("locked"), steps: toPhoneVault },
+  { id: "phone-vault-not-keyed", group: "密钥", title: "手机 · 此设备尚无钥匙", app: true, phone: true, demo: vaultDemo("notKeyed"), steps: toPhoneVault },
+  { id: "phone-vault-recover", group: "密钥", title: "手机 · 用恢复码找回", app: true, phone: true, demo: vaultDemo("notKeyed"), steps: [...toPhoneVault, { text: "用恢复码找回" }] },
+  { id: "phone-vault-item", group: "密钥", title: "手机 · 打开一条", app: true, phone: true, demo: vaultDemo("on"), steps: [...toPhoneVault, { text: "GitHub token" }] },
+  { id: "phone-vault-editor", group: "密钥", title: "手机 · 添加", app: true, phone: true, demo: vaultDemo("on"), steps: [...toPhoneVault, { text: "添加" }] },
+  { id: "phone-vault-editor-agent", group: "密钥", title: "手机 · 编辑 · agent 可申请", app: true, phone: true, demo: vaultDemo("on"), steps: [...toPhoneVault, { text: "GitHub token" }, { text: "编辑" }] },
+  { id: "phone-vault-card", group: "密钥", title: "手机 · 对话里的申请", app: true, phone: true, demo: vaultDemo("waiting", true) },
 
   // ── small panels (docs/ui-panels.md) ──
   { id: "panel-filter", group: "小面板", title: "筛选菜单", app: true, steps: [{ click: '[aria-label^="筛选会话"]' }] },

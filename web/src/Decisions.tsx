@@ -22,6 +22,7 @@ import { reducedMotion } from "@stillfail/ui/motion.ts";
 import { useSettling } from "./settling.tsx";
 import { ComposerView, StaticMessage } from "./Chat.tsx";
 import { DecisionsIdle } from "./DecisionsIdle.tsx";
+import { VaultCard } from "./VaultApproval.tsx";
 import { useDraft, type Draft } from "./draft.ts";
 import { MobileComposer, type HostComposer } from "./mobile/ChatHost.tsx";
 import * as css from "./Decisions.css.ts";
@@ -146,7 +147,9 @@ export function MessageDecision({ message: m, thread }: { message: ChatMessage; 
     <div ref={box} className={css.decision}>
       {shown ? <>
         {m.card?.assigneeText && <p className={css.settledLine}>{m.card.assigneeText}</p>}
-        {thread !== null && cardType(m.card, m.options) === "options" && !!m.options?.length &&
+        {/* An agent's request for a vault item: approved here (VaultApproval.tsx), not answered in words. */}
+        {m.card?.vault ? <VaultCard address={station} id={m.card.vault} />
+          : thread !== null && cardType(m.card, m.options) === "options" && !!m.options?.length &&
           <DecisionOptions station={station} thread={thread} seq={m.seq} options={m.options} />}
       </> : d?.text ? <p className={css.settledLine}>{d.text}</p> : null}
     </div>
@@ -365,6 +368,7 @@ export function DecisionMessages({ d, inline }: { d: DecisionItem; inline: boole
  * `onAnswered` once one is picked.
  */
 export function DecisionPicks({ d, onAnswered, onOpen }: { d: DecisionItem; onAnswered: () => void; onOpen: () => void }) {
+  if (d.card?.vault) return <VaultCard address={d.station} id={d.card.vault} onDecided={onAnswered} />;
   const type = cardType(d.card, d.options);
   if (type === "options") return <DecisionOptions station={d.station} thread={d.thread} seq={d.seq} options={d.card?.options ?? d.options} onPick={onAnswered} />;
   if (type === "text") return null;
@@ -379,7 +383,8 @@ export function DecisionAnswer({ d, mobile, onAnswered, onReplying }: {
   d: DecisionItem; mobile: boolean; onAnswered: () => void; onReplying: (sending: boolean) => void;
 }) {
   const type = cardType(d.card, d.options);
-  if (type !== "options" && type !== "text") return null;
+  // A vault request is approved, not replied to.
+  if ((type !== "options" && type !== "text") || d.card?.vault) return null;
   return <DecisionReply key={keyOf(d)} session={d.session} mobile={mobile} station={d.station} thread={d.thread} seq={d.seq}
     placeholder={type === "text" ? d.card?.placeholder : undefined} onSent={onAnswered} onSending={onReplying} />;
 }
