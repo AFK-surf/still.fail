@@ -16,7 +16,7 @@ import { MobileWorkspace } from "../mobile/index.tsx";
 import { WorkspaceShell, type WorkspaceEntry } from "../cloud/workspace.tsx";
 import { CoreClient, type Topic } from "../core/client.ts";
 import type { ModelOption } from "../api.ts";
-import type { ChatItem, ChatMessage, ShareInView } from "../core/shapes.ts";
+import type { ChatItem, ChatMessage, ComposerLink, ShareInView } from "../core/shapes.ts";
 import { setCore, setTopicSource } from "../core/react.ts";
 import { addItem, agentCardView, chatView, newChat, received, VISITOR, chatsView, historyView, liveView, marked, message, outgoing, SAFARI_KEY, STATION } from "./fixtures.ts";
 import { makeStory, openingChats } from "./story.ts";
@@ -166,18 +166,30 @@ function shareInView(source: string, query = ""): ShareInView {
  * What is written in a chat, where the core put words of its own (what is shared, `shareIn.open`): the rest of the
  * demo's composers are the page's alone (`composer` answers null for them).
  */
-const composers = new Map<string, { text: string; rev: number; version: number }>();
+const composers = new Map<string, { text: string; rev: number; version: number; links: ComposerLink[] }>();
 function composerView(key: string): unknown {
   const c = composers.get(key);
-  return c ? { text: c.text, rev: c.rev, version: c.version, quotes: [], files: [], uploading: false, ready: c.text.trim() !== "", starting: false } : null;
+  if (!c) return null;
+  const files = c.links.map((link, i) => ({ id: `link-${i}`, name: link.title || link.url, size: 0, done: null, error: null, link }));
+  return { text: c.text, rev: c.rev, version: c.version, quotes: [], files, uploading: false, ready: c.text.trim() !== "" || files.length > 0, starting: false };
 }
-/** `shareIn.open`: the title (when the link does not hold it) and what is shared, after what the composer holds, once. */
+/**
+ * `shareIn.open`, as the core splits what is shared (share-in.ts splitShared): its first link an attachment (the app's
+ * title its title, else the short words before it), the words around it after what the composer holds; each once.
+ */
 function shareOpen(source: string, station: string, id: string | undefined, title: string | undefined, newKey?: string): unknown {
-  const words = title && !source.includes(title) ? `${title}\n${source}` : source;
+  const m = /https?:\/\/[^\s<>"'）)】」]+/i.exec(source);
+  const tt = title?.trim() ?? "";
+  const rest = m ? (source.slice(0, m.index) + source.slice(m.index + m[0].length)).trim() : source;
+  const naming = !!m && rest !== "" && !rest.includes("\n") && rest.length <= 120 && (tt === "" || rest === tt);
+  const link: ComposerLink | null = m ? { url: m[0], ...(tt || naming ? { title: tt || rest } : {}), ...(siteOf(m[0]) ? { site: siteOf(m[0])! } : {}) } : null;
+  const words = m ? (naming || rest === tt ? "" : rest) : tt && !source.includes(tt) ? `${tt}\n${source}` : source;
   const row = id === undefined ? undefined : shareRows().find((r) => r.station === station && r.id === id);
   const key = row ? `${station}:${row.session}` : newKey ?? `new:${station}`;
-  const c = composers.get(key) ?? { text: "", rev: 0, version: 0 };
-  if (!c.text.includes(words)) composers.set(key, { text: c.text.trim() ? `${c.text.trimEnd()}\n${words}` : words, rev: c.rev + 1, version: c.version + 1 });
+  const c = composers.get(key) ?? { text: "", rev: 0, version: 0, links: [] };
+  const text = words && !c.text.includes(words) ? (c.text.trim() ? `${c.text.trimEnd()}\n${words}` : words) : c.text;
+  const links = link && !c.links.some((l) => l.url === link.url) ? [...c.links, link] : c.links;
+  composers.set(key, { text, rev: text === c.text ? c.rev : c.rev + 1, version: c.version + 1, links });
   if (row) shareKept.set(siteOf(source) ?? "", row.id);
   setTimeout(publish, 0);
   return row ? { station, key, session: row.session, thread: row.thread, title: row.title } : { station, key };
@@ -225,6 +237,14 @@ function answer(name: string, params: Record<string, unknown>, emit: (value: unk
   }
   // Taken to send: the page's own again.
   if (name === "composer.take") composers.delete(String(params.key));
+  // A link taken out: the rest as it is.
+  const holding = name === "composer.remove" ? composers.get(String(params.key)) : undefined;
+  if (holding && typeof params.id === "string" && params.id.startsWith("link-")) {
+    holding.links = holding.links.filter((_, i) => `link-${i}` !== params.id);
+    holding.version++;
+    setTimeout(publish, 0);
+    return { version: holding.version };
+  }
   if (name === "chat.create" || name === "newChat.create") {
     // 新建对话: made at once, under the key answered; what is sent to it follows.
     const made = newChat(Math.max(...chats.map((c) => c.thread)) + 1, typeof params.model === "string" ? params.model : undefined);

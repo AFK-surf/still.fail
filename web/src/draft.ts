@@ -8,7 +8,7 @@ import { type PastedInfo } from "./pastedText.ts";
 import { createContext, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
 import { CoreError, useChatSend, type Attachment, type ChatTo, type Quote } from "./api.ts";
 import { core, useTopicSelect } from "./core/react.ts";
-import type { ComposerFile, ComposerRef, ComposerView } from "./core/shapes.ts";
+import type { ComposerFile, ComposerLink, ComposerRef, ComposerView } from "./core/shapes.ts";
 import { track } from "./telemetry.ts";
 import { useStation } from "./station.tsx";
 import { keepSentImage, uploadImageKey } from "./sentImages.ts";
@@ -20,7 +20,7 @@ export const MAX_FILE = 1024 * 1024 * 1024;
 
 /** A file on its way to the station: uploading (`sent`: how much of it the station has), uploaded, or failed.
  * `preview`: an image's local picture, until it leaves the draft. */
-export interface Pending { id: string; name: string; size: number; sent?: number; width?: number; height?: number; done: Attachment | null; error: string | null; preview?: string; image?: Blob; pasted?: PastedInfo; pastedFile?: File; ref?: ComposerRef }
+export interface Pending { id: string; name: string; size: number; sent?: number; width?: number; height?: number; done: Attachment | null; error: string | null; preview?: string; image?: Blob; pasted?: PastedInfo; pastedFile?: File; ref?: ComposerRef; link?: ComposerLink }
 
 /** A file or folder dragged in from where it is: which station has it and where (`ref`), and how to send it should it be
  * switched to a file: where it is in that station's drive, or the file itself (one from Finder). */
@@ -28,8 +28,10 @@ export interface Dropped { name: string; size: number; ref: Omit<ComposerRef, "m
 
 /** Where a file named by its path is, as the message says it (the core's words for it, composer.ts `pathWords`). */
 export const pathWords = (ref: ComposerRef) => t(ref.dir ? "common.folderOn" : "common.pathOn", { station: ref.stationName, path: ref.path });
-/** Whether a file of the draft goes as words (named by its path), not as a file. */
-const named = (f: { ref?: ComposerRef | undefined }) => f.ref?.mode === "path";
+/** What a link of the draft goes as (the core's words for it, composer.ts `linkWords`): its title on a line, then where it goes. */
+export const linkWords = (link: ComposerLink) => (link.title ? `${link.title}\n${link.url}` : link.url);
+/** Whether a file of the draft goes as words (named by its path, or a link shared in), not as a file. */
+const named = (f: { ref?: ComposerRef | undefined; link?: ComposerLink | undefined }) => f.ref?.mode === "path" || f.link !== undefined;
 
 /** A passage quoted in the message being written, with what is said about it. */
 export interface DraftQuote extends Quote { id: string }
@@ -302,8 +304,10 @@ export function useDraft({ key: given, station, carry }: {
       else keepSentImage(station ?? contextStation, uploadImageKey(f.id), f.image, 10 * 60_000);
     }
     const { text: written, files: all, quotes: sentQuotes } = take();
-    // Those named by their path go as words after what is written; the rest as files.
-    const value = [written, ...all.filter(named).map((f) => pathWords(f.ref!))].filter((w) => w !== "").join("\n");
+    // Links and those named by their path go as words after what is written (each link, then where each file is), as
+    // the core takes them; the rest as files.
+    const value = [written, ...all.flatMap((f) => (f.link ? [linkWords(f.link)] : [])), ...all.filter((f) => f.ref?.mode === "path").map((f) => pathWords(f.ref!))]
+      .filter((w) => w !== "").join("\n");
     const sentFiles = all.filter((f) => !named(f));
     const attachments = sentFiles.flatMap((f) => (f.done ? [f.done] : []));
     const sent = sentQuotes.map(({ author, text: q, comment: c, ts, role, file }) => ({ author, text: q, comment: c.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}), ...(file ? { file } : {}) }));

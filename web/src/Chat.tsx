@@ -1956,7 +1956,7 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone, onRef }: 
       )}
       {rest.length > 0 && (
         <div className={css.composerFiles}>
-          {rest.map((f) => f.ref ? <RefCard key={f.id} file={f} draft={draft} onRemove={() => draft.remove(f.id)} onTap={onRef && (() => onRef(f))} /> : <PendingFile key={f.id} file={f} onRemove={() => draft.remove(f.id)}
+          {rest.map((f) => f.link ? <LinkCard key={f.id} file={f} onRemove={() => draft.remove(f.id)} /> : f.ref ? <RefCard key={f.id} file={f} draft={draft} onRemove={() => draft.remove(f.id)} onTap={onRef && (() => onRef(f))} /> : <PendingFile key={f.id} file={f} onRemove={() => draft.remove(f.id)}
             onRetry={f.pastedFile && f.error ? () => { draft.remove(f.id); draft.add([f.pastedFile!], f.pasted); } : undefined}
             onRestore={f.pasted?.text === undefined || draft.starting ? undefined : () => {
               draft.setText(draft.text ? `${draft.text}\n${f.pasted!.text}` : f.pasted!.text!);
@@ -2019,6 +2019,41 @@ function RefCard({ file: f, draft, onRemove, onTap }: { file: Pending; draft: Dr
   );
   // Where nothing hovers, a tap says all of it (`onTap`); else hovered.
   return onTap ? card : <Hover tile content={info}>{card}</Hover>;
+}
+
+/**
+ * A link shared in (docs/share-in.md), waiting to go with the message as words: a card as a file's, a globe where a
+ * file's sheet is, its title (cut short) over its site. Nothing goes up: it is never under way, and it does not hold
+ * the message back.
+ */
+function LinkCard({ file: f, onRemove }: { file: Pending; onRemove: () => void }) {
+  const link = f.link!;
+  const title = link.title || link.url;
+  return (
+    <Tip label={link.url}><span className={css.fileCard} data-card="" data-link="">
+      <LinkTile />
+      <span className={css.fileCardText}>
+        <span className={css.fileCardName}><span className={css.fileCardStem}>{title}</span></span>
+        <span className={css.fileCardMeta}>{link.site ?? hostOf(link.url)}</span>
+      </span>
+      <button type="button" className={css.fileCardRemove} aria-label={t("web-main.file.remove", { name: title })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>
+    </span></Tip>
+  );
+}
+
+/** A link's host (`www.youtube.com`), or the link itself where it has none. */
+function hostOf(url: string): string {
+  try { return new URL(url).host || url; } catch { return url; }
+}
+
+/** What a link is, where a file's sheet stands (FileTile's box and lines): a globe. */
+function LinkTile() {
+  return (
+    <svg className={css.fileTile} width="30" height="36" viewBox="0 0 30 36" aria-hidden="true">
+      <circle cx="15" cy="18" r="11.25" />
+      <path d="M3.75 18H26.25M15 6.75C11.75 10 10.25 14 10.25 18S11.75 26 15 29.25M15 6.75C18.25 10 19.75 14 19.75 18S18.25 26 15 29.25" />
+    </svg>
+  );
 }
 
 /** A file waiting to go with the message: an image as its picture (clicked, shown whole), anything else a card. */
