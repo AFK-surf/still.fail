@@ -12,6 +12,7 @@ import fail.still.android.shared.BuildConfig
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import fail.still.android.ui.InComposer
+import fail.still.android.ui.Raised
 import fail.still.android.ui.InComposerFiles
 import fail.still.android.ui.concentric
 import fail.still.android.ui.ComposerFilesIn
@@ -52,6 +53,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -718,23 +720,27 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
     }
     // As far from the capsule's edge as from its top (ComposerFilesIn), past its own room (ComposerInset).
     val beyond = ComposerFilesIn - ComposerInset
-    if (draft.files.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = beyond, end = beyond, top = beyond), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    // A picture's remove button sits over its corner (PictureRemoveOut beyond it): the gap after it room for that too.
+    if (draft.files.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = beyond, end = beyond + PictureRemoveOut, top = beyond), horizontalArrangement = Arrangement.spacedBy(6.dp + PictureRemoveOut)) {
         draft.files.forEach { f ->
             val remove = { draft.files.remove(f); Unit }
             val picture = draftPictureOf(f, station, session)
-            if (picture != null) Box(Modifier.draftPicture(f, station).sendTile(host, f.id).size(56.dp).clip(InComposerFiles).background(C.chip)) {
-                Image(picture, f.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                if (f.done == null) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (f.error != null) 0.5f else 0.25f)), contentAlignment = Alignment.Center) {
-                    if (f.error != null) Text(t("android-chat.file.failed"), color = Color.White, fontSize = 11.sp) else Spinner(color = Color.White)
+            if (picture != null) Box {
+                Box(Modifier.draftPicture(f, station).sendTile(host, f.id).size(56.dp).clip(InComposerFiles).background(C.chip)) {
+                    Image(picture, f.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    if (f.done == null) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (f.error != null) 0.5f else 0.25f)), contentAlignment = Alignment.Center) {
+                        if (f.error != null) Text(t("android-chat.file.failed"), color = Color.White, fontSize = 11.sp) else Spinner(color = Color.White)
+                    }
                 }
                 // Only where it is drawn: Compose would take a touch target this small out to 48dp, most of the tile,
                 // and a tap meant to open the picture removed it.
                 CompositionLocalProvider(LocalViewConfiguration provides LocalViewConfiguration.current.exact()) {
-                    // In the picture's corner, 4 in as the web's (composerThumbRemove): concentric with a corner this large
-                    // on a tile this small (8 in) it sat a third of the way across, nearer the middle than the corner.
-                    Box(Modifier.align(Alignment.TopEnd).padding(4.dp).size(20.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).clickable(onClick = remove), contentAlignment = Alignment.Center) {
-                        IconIn(Icons.Close, 12.dp, Color.White)
-                    }
+                    // Over the picture's corner, partly beyond it (not held inside its curve): solid, as half of it is on
+                    // the composer's ground.
+                    Box(
+                        Modifier.align(Alignment.TopEnd).offset(x = PictureRemoveOut, y = -PictureRemoveOut).size(20.dp).clip(CircleShape).background(C.ink).clickable(onClick = remove),
+                        contentAlignment = Alignment.Center,
+                    ) { IconIn(Icons.Close, 12.dp, Raised) }
                 }
             } else if (f.pasted != null) Box(Modifier.sendTile(host, f.id)) {
                 val pasted = f.pasted
@@ -751,6 +757,9 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
         }
     }
 }
+
+/** How far a composer picture's remove button reaches beyond its corner. */
+private val PictureRemoveOut = 6.dp
 
 /** A link shared in (share/), as a file of the draft: nothing goes up, it is sent as words after the text. */
 internal fun linkPending(link: ComposerLink) = Pending(System.nanoTime(), link.title ?: link.url, 0, null, link = link)
