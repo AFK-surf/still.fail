@@ -433,6 +433,14 @@ export const unix: Platform = {
       return MACOS ? null : procListening(pids, port);
     }
   },
+  async commands(pids) {
+    if (pids.length === 0) return [];
+    try {
+      return (await run("ps", ["-o", "comm=", "-p", pids.join(",")])).stdout.split("\n").map((l) => l.trim()).filter((l) => l !== "");
+    } catch {
+      return [];
+    }
+  },
   async echoes(pid) {
     try {
       const tty = (await run("ps", ["-o", "tty=", "-p", String(pid)])).stdout.trim();

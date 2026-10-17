@@ -7,15 +7,15 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { Logins, type Login, Refused } from "../src/logins/index.ts";
 import type { Callback } from "../src/logins/relay.ts";
-import { asksEnter, commandWords, deviceCodeIn, deviceUrls, loopbackOf, plainText, prompts, urlsIn } from "../src/logins/parse.ts";
-import { QUIET_MS, TIMEOUT_MS } from "../src/logins/run.ts";
+import { asksEnter, commandWords, deviceCodeIn, deviceUrls, loopbackOf, plainText, prompts, saysDone, storesSecret, urlsIn } from "../src/logins/parse.ts";
+import { QUIET_MS, STALL_MS, TIMEOUT_MS } from "../src/logins/run.ts";
 import { routes } from "../src/api/routes/logins.ts";
-import { loginTools, screenFor } from "../src/tools/login.ts";
+import { endedNotice, loginTools, screenFor } from "../src/tools/login.ts";
 import { WINDOWS, platform } from "../src/platform/index.ts";
 import { approval, script, temp, upon } from "./accounts-fakes.ts";
 import { settle, testClock } from "./hub-fakes.ts";
@@ -55,6 +55,11 @@ test("pages, loopback callbacks and device codes are read as the CLIs say them",
   assert.ok(asksEnter("Press ENTER to open your browser or submit your device code here: https://login.docker.com/activate"));
   assert.ok(!asksEnter("? Authenticate Git with your GitHub credentials? (Y/n) "));
   assert.ok(!asksEnter("Press Enter to continue"));
+  // What says the person's step is over, and what keeps a secret where the OS may ask.
+  for (const done of ["✓ Authentication complete.", "Logged in as octocat", "You are now logged in as a@x.com.", "Successfully authenticated", "Authenticated as octocat"]) assert.ok(saysDone(done), done);
+  for (const not of ["Opening github.com/login/device in your browser.", "Waiting for the browser", "! First copy your one-time code: 1A2B-C3D4", "✓ Opened"]) assert.ok(!saysDone(not), not);
+  for (const name of ["git-credential-osxkeychain", "/opt/homebrew/libexec/git-core/git-credential-osxkeychain", "pinentry-mac", "ssh-askpass", "secret-tool"]) assert.ok(storesSecret(name), name);
+  for (const name of ["gh", "git", "python3", "sh", "script"]) assert.ok(!storesSecret(name), name);
   assert.ok(prompts("? Authenticate Git with your GitHub credentials? (Y/n) "));
   assert.deepEqual(commandWords(`vercel login --scope "my team" 'a b' c\\ d`), ["vercel", "login", "--scope", "my team", "a b", "c d"]);
   assert.equal(commandWords(`gh "open`), null);
@@ -91,8 +96,14 @@ function machine() {
     logins.follow(id, (s) => (rows = s.rows))();
     return rows.join("\n");
   };
+  /// Waits until its screen shows `text` anywhere; then its output has gone quiet (the clock moved on).
+  const quietShowing = async (id: string, text: string) => {
+    await upon((wake) => logins.follow(id, wake), () => screen(id).includes(text), text);
+    await settle(5);
+    await time.adjust(QUIET_MS);
+  };
   const by = { by: { email: "a@x.com", name: "张三" }, workspace: "w1" };
-  return { home, bin, env, time, logins, until, quietAt, screen, by };
+  return { home, bin, env, time, logins, until, quietAt, quietShowing, screen, by };
 }
 
 const skipped = WINDOWS && "logins run in a pseudo-terminal: script is Unix's";
@@ -361,6 +372,96 @@ test("a callback is refused when the port is not the command's, or the command h
   } finally {
     await m.logins.close();
     await new Promise<void>((resolve) => other.close(() => resolve()));
+  }
+});
+
+test("gh's Enter to open its page, the cursor on the empty line under it: pressed by the station, and the login finishes with nobody typing", { skip: skipped }, async () => {
+  const m = machine();
+  // As gh prints it: the code, then its Enter line ended by a newline, so the cursor waits on the line under it.
+  script(join(m.bin, "fakegh"), `#!/bin/sh
+echo "! First copy your one-time code: 1A2B-C3D4"
+echo "Press Enter to open https://github.com/login/device in your browser... "
+read go
+"$BROWSER" https://github.com/login/device
+echo "✓ Authentication complete."
+`);
+  try {
+    const started = await m.logins.start("fakegh auth login", m.by);
+    await m.until(started.id, (l) => l.step === "device" && l.code === "1A2B-C3D4", "device");
+    await m.quietShowing(started.id, "Press Enter to open");
+    const done = await m.until(started.id, (l) => l.state === "done", "done");
+    assert.equal(done.url, "https://github.com/login/device");
+  } finally {
+    await m.logins.close();
+  }
+});
+
+test("a login silent once nothing is left for anyone (it said it is logged in) ends after a while, saying so with its last screen; silent while the person signs in, it goes on", { skip: skipped }, async () => {
+  const m = machine();
+  const approved = approval(m.home);
+  const stuck = approval(m.home);
+  script(join(m.bin, "fakestuck"), `#!/bin/sh
+echo "! First copy your one-time code: 1A2B-C3D4"
+printf "Press Enter to open https://github.com/login/device in your browser... "
+read go
+"$BROWSER" https://github.com/login/device
+echo "Waiting for the browser"
+read ok < '${approved.path}'
+echo "✓ Authentication complete."
+echo "- gh config set -h github.com git_protocol https"
+read never < '${stuck.path}'
+`);
+  try {
+    const started = await m.logins.start(["fakestuck"], m.by);
+    await m.quietShowing(started.id, "Press Enter to open");
+    await m.quietShowing(started.id, "Waiting for the browser");
+    // The person takes their time: silence then is theirs, not the command's.
+    await m.time.adjust(STALL_MS);
+    await settle(20);
+    assert.equal(m.logins.get(started.id)!.state, "code");
+    await approved.approve();
+    await m.quietShowing(started.id, "git_protocol");
+    await m.time.adjust(STALL_MS);
+    const ended = await m.until(started.id, (l) => l.state === "failed", "stalled");
+    assert.equal(ended.timedOut, true);
+    assert.match(ended.error!, /^登录命令在不需要人的时候 3 分钟没有动静/);
+    assert.match(ended.error!, /✓ Authentication complete\.\n- gh config set -h github\.com git_protocol https$/);
+    // Its agent is told why, with the screen, the page and code hidden.
+    const told = endedNotice(ended, null);
+    assert.match(told, /failed: 登录命令在不需要人的时候 3 分钟没有动静.* \/ ✓ Authentication complete\. \/ - gh config set/);
+    assert.ok(!told.includes("1A2B-C3D4") && !told.includes("https://"), told);
+  } finally {
+    await m.logins.close();
+  }
+});
+
+test("git's credential helpers are kept out of a login's command (no keychain to wait on), ~/.gitconfig left as it was but for what the command writes", { skip: skipped }, async () => {
+  const m = machine();
+  const ran = join(m.home, "helper-ran");
+  script(join(m.bin, "keychain-helper"), `#!/bin/sh
+echo "$@" >> '${ran}'
+cat > /dev/null
+`);
+  const gitconfig = join(m.home, ".gitconfig");
+  writeFileSync(gitconfig, `[user]\n\tname = Someone\n[credential]\n\thelper = ${join(m.bin, "keychain-helper")}\n`);
+  // As gh does when told to authenticate git: asks git for its helper, has git store the token through it, and (none
+  // set) adds its own for github.com.
+  script(join(m.bin, "fakegit"), `#!/bin/sh
+echo "helper [$(git config --get credential.helper)]"
+printf 'protocol=https\nhost=github.com\nusername=octocat\npassword=t0ken\n\n' | git credential approve
+git config --global --add credential.https://github.com.helper '!fakegh auth git-credential'
+echo "Logged in as octocat"
+`);
+  try {
+    const started = await m.logins.start(["fakegit"], m.by);
+    await m.until(started.id, (l) => l.state === "done", "done");
+    assert.ok(m.screen(started.id).includes("helper []"), m.screen(started.id));
+    assert.equal(existsSync(ran), false, "the file's helper was not run");
+    const after = readFileSync(gitconfig, "utf8");
+    assert.ok(after.startsWith(`[user]\n\tname = Someone\n[credential]\n\thelper = ${join(m.bin, "keychain-helper")}\n`), after);
+    assert.match(after, /helper = !fakegh auth git-credential/);
+  } finally {
+    await m.logins.close();
   }
 });
 

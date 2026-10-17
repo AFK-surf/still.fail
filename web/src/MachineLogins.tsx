@@ -74,7 +74,7 @@ function useRelay(station: string, login: MachineLoginShown): { open(): void; bu
 /**
  * A login, as a card (in a chat under the agent's message, on 奏, on the station page while under way): its title, then
  * what the person does now (a code with 复制并打开; 在浏览器里登录; a step this client cannot do, said), or how it stands
- * (its agent answering the command, done, failed, cancelled), and 取消 while it is under way. Pressing it elsewhere does
+ * (its agent answering the command), and 取消. Ended, it is a line saying how (done, failed and why, cancelled and by whom). Pressing it elsewhere does
  * nothing. A login the core does not know (ended long ago) draws nothing: the message's words say it. `marked`: the one
  * a link pointed to, brought into view.
  */
@@ -85,11 +85,20 @@ export function LoginCard({ station, id, marked = false }: { station: string; id
   useEffect(() => { if (marked && login) box.current?.scrollIntoView({ block: "center" }); }, [marked, login === undefined]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!login) return null;
   const canLogin = logins?.canLogin ?? false;
+  // Ended: one quiet line, as an answered decision's (已在 studio 上登录 gh), failed in red; no card.
+  if (!login.active) {
+    return (
+      <div ref={box} className={login.state === "failed" ? css.endedFailed : css.ended} data-login-card="" data-login-ended={login.state}
+        data-marked={marked || undefined}>
+        {login.endedText ?? `${login.title} · ${login.statusText}`}
+      </div>
+    );
+  }
   return (
     <div ref={box} className={css.card} data-login-card="" data-marked={marked || undefined}>
       <span className={css.cardTitle}>{login.title}</span>
-      {login.active && canLogin ? <ActiveCard station={station} login={login} canRelay={logins?.canRelay ?? false} />
-        : <span className={login.state === "failed" ? css.cardFailed : login.state === "done" ? css.cardDone : css.cardStatus}>{login.statusText}</span>}
+      {canLogin ? <ActiveCard station={station} login={login} canRelay={logins?.canRelay ?? false} />
+        : <span className={css.cardStatus}>{login.statusText}</span>}
     </div>
   );
 }

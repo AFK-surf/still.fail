@@ -14,7 +14,7 @@ import { type Lang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { endCommand, startCommand } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
-import { type Loopback, asksEnter, deviceCodeIn, deviceUrls, loopbackOf, plainText, prompts, secretAsked, urlsIn } from "./parse.ts";
+import { type Loopback, asksEnter, deviceCodeIn, deviceUrls, loopbackOf, plainText, prompts, saysDone, secretAsked, storesSecret, urlsIn } from "./parse.ts";
 
 export const COLS = 200;
 export const ROWS = 40;
@@ -22,6 +22,9 @@ export const ROWS = 40;
 export const TIMEOUT_MS = 15 * 60_000;
 /// Output quiet this long: the command waits (on a prompt, or for the browser).
 export const QUIET_MS = 500;
+/// Silent this long once it has no more need of anyone (the browser came back, it said it is logged in, or what it
+/// started waits on a keychain or a credential store), not at a prompt: stuck, and ended (the overall time still holds).
+export const STALL_MS = 3 * 60_000;
 /// How much of what it said is kept to read (pages and codes come early).
 const SAID_KEPT = 32_000;
 /// An ended command's group is killed outright this long after it was asked to stop.
@@ -88,6 +91,10 @@ export class LoginRun {
   #watcher: FSWatcher | null = null;
   /// The prompt last answered for the person (its line and place), so it is answered once.
   #answered = "";
+  /// What it has said since its browser step was first asked for (the end kept), and whether that says it is logged in.
+  #afterStep = "";
+  #saidDone = false;
+  #stall: () => void = () => {};
 
   constructor(o: RunOptions) {
     this.#o = o;
@@ -131,6 +138,7 @@ export class LoginRun {
       GH_BROWSER: browser,
       STILLFAIL_LOGIN_OPENED: this.#o.opened,
     });
+    keychainOutOfGit(env);
     const wrapped = platform.terminal(program!, args, COLS, ROWS) ?? [program!, args];
     const r = platform.runnable(wrapped[0], wrapped[1], env);
     let child: ChildProcess;
@@ -153,6 +161,7 @@ export class LoginRun {
     [child.stdout, child.stderr].forEach((stream, i) => stream?.on("data", (chunk: Buffer) => this.#output(decoders[i]!.write(chunk))));
     child.once("close", (code, signal) => void this.#closed(code, signal));
     this.#timeout = this.#o.fibers.after(TIMEOUT_MS, () => this.#fail(tr(this.#o.lang, "station.machineLogin.timedOut"), "timeout"));
+    this.#watchStall();
     // The pages it opens, as its stand-ins write them.
     try {
       const file = basename(this.#o.opened);
@@ -201,8 +210,14 @@ export class LoginRun {
 
   #output(text: string): void {
     if (text === "" || !this.active) return;
-    const said = this.#said + plainText(text);
+    const plain = plainText(text);
+    const said = this.#said + plain;
     this.#said = said.length > SAID_KEPT ? said.slice(said.length - SAID_KEPT) : said;
+    if (this.hadBrowserStep && !this.#saidDone) {
+      this.#afterStep = (this.#afterStep + plain).slice(-4_000);
+      this.#saidDone = saysDone(this.#afterStep);
+    }
+    this.#watchStall();
     this.#term.write(text, () => {
       this.#draw();
       // Saying more, it no longer waits on what it asked (whether it waits now is asked once it is quiet again).
@@ -274,8 +289,12 @@ export class LoginRun {
     this.#quiet = null;
     if (!this.active || this.#exited) return;
     const line = this.#rows[this.#cursor.y] ?? "";
-    const place = `${this.#cursor.y}\0${line}`;
-    if (place !== this.#answered && asksEnter(line)) {
+    // Its "Press Enter to open … in your browser": on the cursor's line, or (gh) the line above it, the cursor on an empty
+    // one under it. Pressed by the station whenever it asks (nothing opens on this machine: the stand-ins take the page).
+    const asked = line.trim() !== "" ? this.#cursor.y : this.#lastSaidAbove(this.#cursor.y);
+    const askLine = asked !== null ? this.#rows[asked] ?? "" : "";
+    const place = `${asked}\0${askLine}`;
+    if (place !== this.#answered && asksEnter(askLine)) {
       this.#answered = place;
       this.#write("\r");
       // Its page comes now: what it waits on is known once it is quiet again.
@@ -305,6 +324,29 @@ export class LoginRun {
     }
     if (changed) this.#o.changed();
     this.#quietNow();
+  }
+
+  /// The nearest line above `y` with something on it (within a few lines: what it asks is just above), if any.
+  #lastSaidAbove(y: number): number | null {
+    for (let i = y - 1; i >= Math.max(0, y - 3); i--) if ((this.#rows[i] ?? "").trim() !== "") return i;
+    return null;
+  }
+
+  /// Watches for it going silent once nothing is left for anyone to do (STALL_MS): restarted by every output.
+  #watchStall(): void {
+    this.#stall();
+    if (!this.active) return;
+    this.#stall = this.#o.fibers.after(STALL_MS, () => void this.#stalled());
+  }
+
+  async #stalled(): Promise<void> {
+    if (!this.active || this.#exited) return;
+    const stuck = !this.waiting && (this.relayed || this.#saidDone || (await platform.commands((await this.pids()).slice(1))).some(storesSecret));
+    if (!this.active) return;
+    if (!stuck) return this.#watchStall();
+    const screen = this.#rows.map((r) => r.trimEnd()).filter((r) => r.trim() !== "").slice(-8).join("\n");
+    log.info("logins", "a login stalled", { id: this.id });
+    this.#fail(`${tr(this.#o.lang, "station.machineLogin.stalled", { minutes: String(STALL_MS / 60_000) })}${screen !== "" ? `\n${screen}` : ""}`, "timeout");
   }
 
   /// Its browser came back and the callback went to it: it finishes by itself now.
@@ -338,6 +380,7 @@ export class LoginRun {
     this.waiting = false;
     this.endedAt = this.#o.fibers.now();
     this.#timeout();
+    this.#stall();
     this.#quiet?.();
     this.#quiet = null;
     this.#watcher?.close();
@@ -361,6 +404,20 @@ export class LoginRun {
     this.cancel();
     this.#term.dispose();
   }
+}
+
+/// Git's credential helpers left out for a login's command and what it starts: a station's command has nobody to answer
+/// the macOS keychain's dialog, so `git credential-osxkeychain` (Homebrew's or Apple's git sets it system-wide) waits on
+/// it forever (gh, told to authenticate git, stores its token through git's helper). An empty `credential.helper` given
+/// on git's command line (GIT_CONFIG_COUNT, read after every file) clears the helpers the files name, for this process
+/// only: no file is written, the person's ~/.gitconfig as it was. gh, finding no helper, sets up its own
+/// (`!gh auth git-credential`, in ~/.gitconfig, as `gh auth setup-git` does).
+export function keychainOutOfGit(env: Record<string, string>): void {
+  const n = Number.parseInt(env.GIT_CONFIG_COUNT ?? "", 10);
+  const at = Number.isInteger(n) && n >= 0 ? n : 0;
+  env[`GIT_CONFIG_KEY_${at}`] = "credential.helper";
+  env[`GIT_CONFIG_VALUE_${at}`] = "";
+  env.GIT_CONFIG_COUNT = String(at + 1);
 }
 
 /// The last few lines of what a command said, for why it failed.

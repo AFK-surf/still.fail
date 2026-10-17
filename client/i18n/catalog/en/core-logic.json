@@ -579,5 +579,11 @@
   "core-logic.machineLogin.gone": "No such login (it may have ended a while ago)",
   "core-logic.machineLogin.noPage": "This login has no page to open now",
   "core-logic.machineLogin.doneBy": "Completed by {name}",
-  "core-logic.machineLogin.cancelledBy": "Cancelled by {name}"
+  "core-logic.machineLogin.cancelledBy": "Cancelled by {name}",
+  "core-logic.machineLogin.endedDone": "Logged in to {name} on {station}",
+  "core-logic.machineLogin.endedCancelled": "Login to {name} on {station} cancelled",
+  "core-logic.machineLogin.endedCancelledBy": "{who} cancelled the login to {name} on {station}",
+  "core-logic.machineLogin.endedTimedOut": "Login to {name} on {station} timed out",
+  "core-logic.machineLogin.endedFailed": "Login to {name} on {station} failed",
+  "core-logic.machineLogin.endedFailedWhy": "Login to {name} on {station} failed: {reason}"
 }

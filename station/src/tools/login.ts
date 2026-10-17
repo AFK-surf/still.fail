@@ -21,7 +21,7 @@ const KEYS: Record<string, "Enter" | "Backspace" | "Up" | "Down" | "Left" | "Rig
 export const LOGIN = {
   name: "login",
   description:
-    "Log this station in to a command-line tool, when a command fails because it is not logged in (not logged in, 401, an expired token) or a person asks for it. command: the tool's own login command (gh auth login, gcloud auth login, npm login, az login --use-device-code, gh auth refresh -s workflow…), with its browser or device-code option where it has one. You drive the command: the answer shows its screen (the page and code hidden) and what it waits for; answer its prompts yourself with id and input (text) or key (enter, up, down, tab, ctrl-c…), taking the tool's defaults or what the task needs; if you truly cannot decide, ask the person in the chat as a normal question. Never type a password or token: a prompt that asks for one is refused; use the tool's browser or device-code login instead, or tell the person it cannot be done this way. Once the answer says the person's browser step is ready (a code or a page), chat_post with card {\"type\": \"login\", \"login\": \"<id>\"}, a sentence saying who should log in to what on this station and why, and the link; end need_human. Nobody is ever asked to run a command. The login is machine-wide: every chat's agent on this station uses it. When it ends you get a station notice and the card closes. id alone: how it stands now; id with cancel: true: end it.",
+    "Log this station in to a command-line tool, when a command fails because it is not logged in (not logged in, 401, an expired token) or a person asks for it. command: the tool's own login command (gh auth login, gcloud auth login, npm login, az login --use-device-code, gh auth refresh -s workflow…), with its browser or device-code option where it has one. You drive the command: the answer shows its screen (the page and code hidden) and what it waits for; answer its prompts yourself with id and input (text) or key (enter, up, down, tab, ctrl-c…), taking the tool's defaults or what the task needs; if you truly cannot decide, ask the person in the chat as a normal question. Never type a password or token: a prompt that asks for one is refused; use the tool's browser or device-code login instead, or tell the person it cannot be done this way. Where it asks whether to also set up git credentials or keep the token in a keychain (or has a flag for it), take the answer that leaves the OS keychain alone (gh: --insecure-storage keeps its token in its own file): nobody here can answer a keychain dialog. Once the answer says the person's browser step is ready (a code or a page), chat_post with card {\"type\": \"login\", \"login\": \"<id>\"}, a sentence saying who should log in to what on this station and why, and the link; end need_human. Nobody is ever asked to run a command. The login is machine-wide: every chat's agent on this station uses it. When it ends you get a station notice and the card closes. id alone: how it stands now; id with cancel: true: end it.",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -63,15 +63,17 @@ export type LoginToolDeps = {
   link: (session: string, id: string) => string | null;
 };
 
+/// A login's text with its page's address and code hidden (the agent has no use for them).
+function hidden(login: Login, text: string): string {
+  const out = text.replace(/https?:\/\/\S+/g, "<link>");
+  return login.code ? out.split(login.code).join("<code>") : out;
+}
+
 /// The screen as its agent reads it: the lines with something on them (the last 30), the page's address and the code
 /// hidden, the line the cursor is on marked.
 export function screenFor(screen: Screen | null, login: Login): string {
   if (screen === null) return "";
-  const hide = (line: string) => {
-    let out = line.replace(/https?:\/\/\S+/g, "<link>");
-    if (login.code) out = out.split(login.code).join("<code>");
-    return out.trimEnd();
-  };
+  const hide = (line: string) => hidden(login, line).trimEnd();
   const lines = screen.rows.map((row, y) => (y === screen.cursor.y && screen.live ? `${hide(row)}▏` : hide(row)));
   let end = lines.length;
   while (end > 0 && lines[end - 1]!.trim() === "") end--;
@@ -92,7 +94,7 @@ function told(logins: Logins, login: Login, link: string | null): string {
   const screen = screenFor(logins.screen(login.id), login);
   const active = login.endedAt === undefined;
   const next = !active
-    ? login.state === "done" ? "It finished (its command exited 0)." : login.state === "cancelled" ? "It was cancelled." : `It failed${login.timedOut ? " (out of time)" : ""}.`
+    ? login.state === "done" ? "It finished (its command exited 0)." : login.state === "cancelled" ? "It was cancelled." : `It failed${login.timedOut ? " (out of time)" : ""}${login.error ? `: ${hidden(login, login.error)}` : "."}`
     : logins.screen(login.id)?.echo === false && login.waiting
       ? "It asks for a secret (read without echo): do not type it, nothing is sent to such a prompt. Cancel it, and use the tool's browser or device-code login, or tell the person it cannot be logged in this way."
       : login.waiting
@@ -142,7 +144,7 @@ export function endedNotice(login: Login, link: string | null): string {
   const how =
     login.state === "done" ? "finished (its command exited 0). Carry on with what needed it, and check it works"
     : login.state === "cancelled" ? "was cancelled. Ask whether it is still wanted before starting another"
-    : `failed${login.error ? `: ${login.error.split("\n").slice(-3).join(" / ").replace(/https?:\/\/\S+/g, "<link>")}` : ""}. Start it again if it is still needed`;
+    : `failed${login.error ? `: ${hidden(login, login.error.split("\n").slice(-9).join(" / "))}` : ""}. Start it again if it is still needed`;
   return `The login on this station you started or posted a card for, ${which}, ${how}.${login.state === "done" ? "" : link ? ` (Its link was ${link}.)` : ""} Its card was closed.`;
 }
 

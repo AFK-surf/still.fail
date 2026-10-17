@@ -3144,6 +3144,11 @@ export interface MachineLoginShown {
 	 * outcome then. Absent when nobody is known, or it failed.
 	 */
 	doneByText?: string;
+	/**
+	 * Ended: how, in a line, as its card shows it then: 已在 studio 上登录 gh, 张三 取消了在 studio 上登录 gh,
+	 * 在 studio 上登录 gh 失败：<why>, …超时了.
+	 */
+	endedText?: string;
 	/** When it started, in words: 14:05 today, 10/16 14:05 before. */
 	whenText: string;
 	startedAt: number;

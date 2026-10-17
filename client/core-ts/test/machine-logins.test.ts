@@ -49,6 +49,9 @@ test("a station's logins: read as its stream opens, in words, told as they chang
   assert.deepEqual([one.chat, one.chatTitle], ["ember:c-1", "部署"]);
   const done = all.logins.find((l: any) => l.id === "l0");
   assert.deepEqual([done.statusText, done.active, done.byText, done.doneByText, done.command], ["登录完成", false, "李四", "王五 完成", "npm login"]);
+  // Ended, its card is a line.
+  assert.equal(done.endedText, "已在 studio 上登录 npm");
+  assert.equal(one.endedText, undefined, "under way: a card, no line");
   assert.equal(v(values, 3), null, "a login the station does not have");
   assert.equal(all.logins.find((l: any) => l.id === "l2").statusText, "等你打开浏览器");
   // Told as it ends: in place.
@@ -57,6 +60,7 @@ test("a station's logins: read as its stream opens, in words, told as they chang
   drain(host, values);
   const failed = v(values, 2);
   assert.deepEqual([failed.statusText, failed.active, failed.error, failed.code, failed.step], ["登录失败", false, "gh: device code expired", undefined, undefined]);
+  assert.equal(failed.endedText, "在 studio 上登录 gh 失败：gh: device code expired");
   // Under way first, then those ended, the newest first.
   assert.deepEqual(v(values, 1).logins.map((l: any) => l.id), ["l2", "l1", "l0"]);
   core.close();
@@ -114,7 +118,7 @@ test("cancelling: the station's answer is in place at once; nothing else a clien
   await host.settle();
   drain(host, values);
   assert.deepEqual(asked, [{ method: "DELETE", path: "/machine-logins/l1" }]);
-  assert.deepEqual([v(values, 1).statusText, v(values, 1).doneByText], ["已取消", "张三 取消"]);
+  assert.deepEqual([v(values, 1).statusText, v(values, 1).doneByText, v(values, 1).endedText], ["已取消", "张三 取消", "张三 取消了在 studio 上登录 gh"]);
   // Starting one, or typing into one, is its agent's (the login tool), not a client's.
   call(core, ui, 3, "machineLogin.start", { station: ST, command: "gh auth login" });
   call(core, ui, 4, "machineLogin.input", { station: ST, id: "l1", key: "Enter" });

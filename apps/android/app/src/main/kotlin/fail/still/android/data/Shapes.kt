@@ -3158,6 +3158,9 @@ data class MachineLoginShown (
 	/// Who ended it and how, in words: 张三 完成 (their browser came back through their client), 张三 取消; it says the
 	/// outcome then. Absent when nobody is known, or it failed.
 	val doneByText: String? = null,
+	/// Ended: how, in a line, as its card shows it then: 已在 studio 上登录 gh, 张三 取消了在 studio 上登录 gh,
+	/// 在 studio 上登录 gh 失败：<why>, …超时了.
+	val endedText: String? = null,
 	/// When it started, in words: 14:05 today, 10/16 14:05 before.
 	val whenText: String,
 	val startedAt: Long,

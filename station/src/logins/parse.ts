@@ -120,6 +120,15 @@ export function deviceUrls(urls: string[], code: string): { url: string | null; 
 /// browser…", "Press ENTER to open in the browser…"): nothing to choose there.
 export const asksEnter = (line: string) => /press\s+(enter|return)\b[^?]*\b(open|browser)/i.test(line) && !/\([yn]\/[yn]\)|\[[yn]\/[yn]\]/i.test(line);
 
+/// Whether what a command said after its browser step says it is logged in (✓ Authentication complete, Logged in as …,
+/// You are now logged in, Successfully authenticated): nothing is left for a person then.
+export const saysDone = (text: string) =>
+  /\b(authentication|authorization|login|sign[- ]?in)\s+(is\s+)?(complete|completed|succeeded|successful)\b|\b(logged|signed)\s+in\b|\bsuccessfully\s+(authenticated|logged|signed|authorized)\b|\bauthenticated\s+(as|to|with)\b/i.test(text);
+
+/// Whether a program (a process's name) keeps credentials in a store that may ask the OS (the keychain, a credential
+/// helper, a passphrase prompt): one of those waiting is waiting on a dialog nobody here sees.
+export const storesSecret = (name: string) => /credential|keychain|keyring|pinentry|askpass|secret-tool|kwallet/i.test(name.split("/").at(-1) ?? name);
+
 /// Whether a line looks like a question waiting for an answer (ends in :, ?, >, a (Y/n), or a choice's arrow).
 export const prompts = (line: string) => /(\?|:|>|\)|\]|＞|：|？)\s*$/.test(line.trim()) || /\([yY]\/[nN]\)|\[[yY]\/[nN]\]/.test(line) || /^\s*[>❯]\s/.test(line);
 

@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { settledLine } from "./Decisions.css.ts";
 import { pillInner, surfaceCorner, TEXT_IN, PANEL_PILL } from "@stillfail/ui/styles/align.ts";
 
 // A station's logins (MachineLogins.tsx, docs/remote-login.md): the login card (a chat's, 奏's, and the station page's
@@ -51,8 +52,9 @@ const cardText = {
 } as const;
 export const cardTitle = style({ ...cardText, fontSize: vars.textUi, lineHeight: "20px", fontWeight: "500" });
 export const cardStatus = style({ ...cardText, display: "inline-flex", alignItems: "center", gap: "6px", fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted });
-export const cardDone = style([cardStatus, { color: vars.text, fontWeight: "500" }]);
-export const cardFailed = style([cardStatus, { color: vars.red, fontWeight: "500" }]);
+/** Ended: a line where the card was, as an answered decision's in its chat (Decisions.css.ts settledLine); failed, red. */
+export const ended = style([settledLine, { overflowWrap: "anywhere" }]);
+export const endedFailed = style([ended, { color: vars.red }]);
 /**
  * A device code, large enough to read and copy by eye (it is copied as its page opens, too), and a button: pressed, it is
  * copied. No ground, at rest or under the pointer (none to round): the pointer's hand says it can be pressed, a toast that

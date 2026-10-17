@@ -1975,6 +1975,7 @@ export const SHAPES: Record<string, Shape> = {
     ["chat", opt("String"), { doc: "The session of the agent that started it (its chat opens by it)." }],
     ["chatTitle", opt("String"), { doc: "That chat's title, when it began." }],
     ["doneByText", opt("String"), { doc: "Who ended it and how, in words: 张三 完成 (their browser came back through their client), 张三 取消; it says the\noutcome then. Absent when nobody is known, or it failed." }],
+    ["endedText", opt("String"), { doc: "Ended: how, in a line, as its card shows it then: 已在 studio 上登录 gh, 张三 取消了在 studio 上登录 gh,\n在 studio 上登录 gh 失败：<why>, …超时了." }],
     ["whenText", "String", { doc: "When it started, in words: 14:05 today, 10/16 14:05 before." }],
     ["startedAt", "i64", { client: "I54" }],
     ["expiresAt", "i64", { client: "I54" }],

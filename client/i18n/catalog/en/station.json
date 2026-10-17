@@ -402,6 +402,7 @@
   "station.drive.no_trash": "No trash here; it can only be deleted permanently",
   "station.machineLogin.cannotRun": "Can't run the login command: {error}",
   "station.machineLogin.timedOut": "Login not finished in 15 min; ended",
+  "station.machineLogin.stalled": "The login command did nothing for {minutes} min with nothing left for anyone to do (stuck on a keychain or credential store?); ended. Its last screen:",
   "station.machineLogin.exited": "The login command exited ({code})",
   "station.machineLogin.badCommand": "Give a login command, the tool's own, e.g. gh auth login",
   "station.machineLogin.unknown": "No such login (it may have ended a while ago)",

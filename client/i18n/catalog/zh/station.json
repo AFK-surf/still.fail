@@ -396,6 +396,7 @@
   "station.drive.no_trash": "此处没有废纸篓，只能永久删除",
   "station.machineLogin.cannotRun": "无法运行登录命令：{error}",
   "station.machineLogin.timedOut": "15 分钟内没有完成登录，已结束",
+  "station.machineLogin.stalled": "登录命令在不需要人的时候 {minutes} 分钟没有动静（可能卡在钥匙串或凭据存储上），已结束。它最后的屏幕：",
   "station.machineLogin.exited": "登录命令退出了（{code}）",
   "station.machineLogin.badCommand": "要一条登录命令，用工具自己的，比如 gh auth login",
   "station.machineLogin.unknown": "没有这个登录（可能已经结束很久了）",

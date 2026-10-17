@@ -488,4 +488,5 @@ export const windows: Platform = {
     }
   },
   echoes: async () => null,
+  commands: async () => [],
 };

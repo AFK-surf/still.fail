@@ -477,5 +477,11 @@
   "core-logic.machineLogin.gone": "没有这个登录（可能已经结束很久了）",
   "core-logic.machineLogin.noPage": "这个登录现在没有要打开的网页",
   "core-logic.machineLogin.doneBy": "{name} 完成",
-  "core-logic.machineLogin.cancelledBy": "{name} 取消"
+  "core-logic.machineLogin.cancelledBy": "{name} 取消",
+  "core-logic.machineLogin.endedDone": "已在 {station} 上登录 {name}",
+  "core-logic.machineLogin.endedCancelled": "已取消在 {station} 上登录 {name}",
+  "core-logic.machineLogin.endedCancelledBy": "{who} 取消了在 {station} 上登录 {name}",
+  "core-logic.machineLogin.endedTimedOut": "在 {station} 上登录 {name} 超时了",
+  "core-logic.machineLogin.endedFailed": "在 {station} 上登录 {name} 失败",
+  "core-logic.machineLogin.endedFailedWhy": "在 {station} 上登录 {name} 失败：{reason}"
 }

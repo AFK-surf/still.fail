@@ -127,7 +127,12 @@ station: PTY 输出 "First copy your one-time code: ABCD-1234 … https://github
 station: 命令轮询到结果，写凭据，退出 0 → done
 ```
 
-有的命令显示设备码后还要按一次回车才去开浏览器（gh 的 `Press Enter to open github.com in your browser...`）。station 不等人按：只要回车去开网页的提示，它直接按；问问题的（Y/n、选项）由 agent 答，不回显的（密码）谁也不答。实现：输出停了 500 ms 才看光标所在行（和人一样等它把话说完），每一处提示只按一次；命令再说话就不算在等了。
+有的命令显示设备码后还要按一次回车才去开浏览器（gh 的 `Press Enter to open github.com in your browser...`）。station 不等人按：只要回车去开网页的提示，它直接按；问问题的（Y/n、选项）由 agent 答，不回显的（密码）谁也不答。实现：输出停了 500 ms 才看光标所在行（和人一样等它把话说完），每一处提示只按一次；命令再说话就不算在等了。光标所在行是空的时候看它上面最近的一行：gh 的这句后面带换行，光标停在下一行（真机上 gh 因此一直停在这句上，授权完了也不退；已修）。
+
+不让命令卡住（真机 gh 登录时遇到的）：
+- **钥匙串不进来**：登录命令和它起的进程里，git 的凭据助手被清空（环境变量 `GIT_CONFIG_COUNT/KEY/VALUE` 给一个空的 `credential.helper`，git 最后读它，前面配置文件里的助手都作废；只对这个进程，不写任何文件，用户的 ~/.gitconfig 不动）。原因：Homebrew 和 Apple 的 git 在系统配置里设了 `osxkeychain`，gh 答了「Authenticate Git」Yes 以后会 `git credential approve` 把令牌存进去；launchd 下的 station 没人能点钥匙串的对话框，`git-credential-osxkeychain store` 就一直等着。清空以后 gh 发现没有助手，就照 `gh auth setup-git` 那样在 ~/.gitconfig 里加它自己的 `!gh auth git-credential`。
+- **兜底**：不需要人了（浏览器回来了；它说了已登录，如「✓ Authentication complete」「Logged in as」；或者它起的进程是钥匙串、凭据助手、pinentry、askpass 这类）却 3 分钟没有任何输出、也不停在提示上，就结束，算超时，错误里写原因和它最后的屏幕，发起的 agent 收到通知。人在浏览器里慢慢登录时的安静不算。15 分钟的总时限照旧。
+- agent 的说明里写：命令问要不要顺便设 git 凭据、要不要存进钥匙串（或有这样的参数）时，选不碰系统钥匙串的（gh 用 `--insecure-storage`）。
 
 能选的时候优先用设备码（人或 agent 给命令时带上设备码选项）（gh 只有设备码，Docker、Vercel 默认就是；`az login --use-device-code`、`aws sso login --use-device-code`、`wrangler login --device`、`codex login --device-auth` 也有）：设备码在网页版、手机、别人的电脑上都一样能完成，不依赖客户端能不能监听端口。只有设备码不可用、或者服务商把设备码关了（有的公司的 Entra ID 策略禁设备码）时才走回环。
 
@@ -267,7 +272,7 @@ chat 里 agent 的消息下面、奏里、station 页「登录」区里进行中
   - 回环（桌面 app）：「登录页在 accounts.google.com」+ [在浏览器里登录]；点了以后「等浏览器回来…」。网页版说一句「这一步要在桌面 app 里完成」，也写出域名。
   - 只要打开网址：「登录页在 www.npmjs.com」+ [在浏览器里登录]。
   - 还没到人的那一步（启动中，或 agent 在答命令的问题）：转圈 +「等 agent 回答命令的问题」，没有这一步的按钮。
-- 结束了：一行结果（登录完成 / 登录失败 / 已取消 / 超时了）。没有「重试」：要再来让 agent 再起一次。
+- 结束了：卡片收成一行（用户定：结束的大灰卡片太丑），和 chat 里答过的决策那行一样（`settledLine`：小字、淡色、没有底色和框）：「已在 studio 上登录 gh」；「张三 取消了在 studio 上登录 gh」（不知道谁就「已取消在 studio 上登录 gh」）；「在 studio 上登录 gh 失败：<错误里说原因的那行>」用红色；「在 studio 上登录 gh 超时了」。没有「重试」：要再来让 agent 再起一次。
 - 进行中时按钮在一排（用户定：不要两排）：先是这一步自己的按钮（[复制并打开] / [在浏览器里登录]），旁边是 [取消]：主按钮是强调色实底的药丸，[取消] 是不带底色的普通面板按钮（指针放上去才有底色）。按钮的底色贴着卡片的内边距（离左边和底边 8，和卡片圆角同心），按钮里的字再进 10，和标题对齐（docs/ui-panels.md 的规则）。还没到人的那一步时这一排只有 [取消]。手机宽度也是一排。
 - 不显示命令输出（agent 用 `login` 工具看）；不显示多台的切换（之后几台一起登录时再加）。
 - 在奏里和别的卡片一样排；登录结束后从奏里消失（station 关掉了它的卡片）。

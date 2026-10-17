@@ -150,11 +150,29 @@ export function loginShown(l: J, station: string, stationName: string, now: numb
     ...(isObject(l.doneBy) && person(l.doneBy) !== "" && (state === "done" || state === "cancelled")
       ? { doneByText: t(state === "done" ? "core-logic.machineLogin.doneBy" : "core-logic.machineLogin.cancelledBy", { name: person(l.doneBy) }) }
       : {}),
+    ...(!active ? { endedText: endedText(state, l, name, stationName) } : {}),
     whenText: typeof l.startedAt === "number" ? when(l.startedAt, now, offsetMin) : "",
     startedAt: typeof l.startedAt === "number" ? l.startedAt : 0,
     expiresAt: typeof l.expiresAt === "number" ? l.expiresAt : 0,
     ...(typeof l.endedAt === "number" ? { endedAt: l.endedAt } : {}),
   };
+}
+
+/// An ended login in a line, as its card shows it then: 已在 studio 上登录 gh; 张三 取消了在 studio 上登录 gh; 在 studio 上登录 gh
+/// 失败：<the line of its error that says why>; …超时了.
+function endedText(state: string, l: J, name: string, station: string): string {
+  const what = { name, station };
+  if (state === "done") return t("core-logic.machineLogin.endedDone", what);
+  if (state === "cancelled") {
+    const who = isObject(l.doneBy) ? person(l.doneBy) : "";
+    return who !== "" ? t("core-logic.machineLogin.endedCancelledBy", { ...what, who }) : t("core-logic.machineLogin.endedCancelled", what);
+  }
+  if (l.timedOut === true) return t("core-logic.machineLogin.endedTimedOut", what);
+  // Why, short: the line of its last words that says an error, else the last of them.
+  const lines = (str(l.error) ?? "").split("\n").map((s) => s.trim()).filter((s) => s !== "");
+  const why = lines.find((s) => /\b(error|failed|failure|denied|expired|invalid|unauthori[sz]ed)\b/i.test(s)) ?? lines.at(-1) ?? "";
+  const reason = why.length > 80 ? `${why.slice(0, 79)}…` : why;
+  return reason !== "" ? t("core-logic.machineLogin.endedFailedWhy", { ...what, reason }) : t("core-logic.machineLogin.endedFailed", what);
 }
 
 // ── the relay ──
