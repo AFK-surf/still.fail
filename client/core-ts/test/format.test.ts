@@ -18,6 +18,12 @@ test("words_as_the_clients_had_them", () => {
   assert.equal(f.compactNumber(70_600), "70.6K");
   assert.equal(f.compactNumber(3_000_000), "3M");
   assert.equal(f.compactNumber(2_413_900_000), "2.4B");
+  assert.equal(f.decimal("62500.0000000000"), "62,500");
+  assert.equal(f.decimal("0.0000000000"), "0");
+  assert.equal(f.decimal("1234567.891"), "1,234,567.89");
+  assert.equal(f.decimal("12.50"), "12.5");
+  assert.equal(f.decimal("-0.001"), "0");
+  assert.equal(f.decimal("lots"), "lots");
   assert.equal(f.duration(850), "850ms");
   assert.equal(f.duration(185_000), "3 分 5 秒");
   const now = 1_790_467_200_000;
