@@ -16,7 +16,7 @@ export const shell = style({
         "&[data-rail]": { gridTemplateColumns: "calc(56px + var(--sidebar-w, 240px)) minmax(0, 1fr)" },
         "[data-sidebar=\"closed\"] &[data-rail]": { gridTemplateColumns: "56px minmax(0, 1fr)" },
       },
-      // The page moved aside for a folded sidebar shown a while (main, below) runs past the window's right edge: cut
+      // The page moved aside for a folded sidebar shown a while (main, below) may run past the window's right edge: cut
       // there, nothing scrolled to it.
       overflowX: "clip",
     },
@@ -104,10 +104,11 @@ export const main = style({
     },
     "(min-width: 701px)": {
       selectors: {
-        // Out of the way of a folded sidebar shown a while (Rail.tsx peekSidebar), as far as when it is open, but as wide
-        // as it was: moved, not laid out anew, so nothing in it wraps differently (moved with the bar, brand.tsx
-        // moveSidebar). Its own place, not a transform: what is fixed in it stays by the window.
-        [`[data-sidebar="closed"][data-sidebar-peek] ${shell}[data-rail] > &`]: { left: "var(--sidebar-w, 240px)" },
+        // Out of the way of a folded sidebar shown a while (Rail.tsx peekSidebar), as far as what it shows needs
+        // (--peek-shift, none where the column has room beside it), as wide as it was: moved, not laid out anew, so
+        // nothing in it wraps differently (moved with the bar, brand.tsx moveSidebar). Its own place, not a transform:
+        // what is fixed in it stays by the window.
+        [`[data-sidebar="closed"][data-sidebar-peek] ${shell}[data-rail] > &`]: { left: "var(--peek-shift, 0px)" },
       },
     },
   },

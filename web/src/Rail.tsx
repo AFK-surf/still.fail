@@ -31,6 +31,7 @@ import { marked, WorkspaceMark } from "./WorkspaceMark.tsx";
 import { openedAt } from "./DecisionDesk.tsx";
 import { moveSidebar, onSidebarChosen, showSidebar, useSidebarToggle } from "./brand.tsx";
 import * as shellCss from "./styles/shell.css.ts";
+import * as sidebarCss from "./styles/sidebar.css.ts";
 import { reducedMotion } from "@stillfail/ui/motion.ts";
 import * as css from "./Rail.css.ts";
 import { androidQr, download, downloadsOffered } from "./downloads.ts";
@@ -630,9 +631,36 @@ export function peekSidebar(): void {
   const root = document.documentElement;
   if (root.dataset.sidebar === "closed" && !("sidebarPeek" in root.dataset)) moveSidebar(markPeek);
 }
+/** How far from its edge, shown a while, what the page shows starts. */
+const PEEK_GAP = 16;
+/**
+ * How far the page moves aside for the folded sidebar about to be shown a while (shell.css.ts main, --peek-shift): as
+ * far as what it shows now (in view, its bar aside: brand.css.ts) is from clearing the sidebar, as wide as it is. A
+ * chat's column centred in a wide window moves little or not at all; a page from its left edge moves all the way.
+ */
+function peekShift(): number {
+  const main = document.querySelector<HTMLElement>(`.${shellCss.shell}[data-rail] > .${shellCss.main}`);
+  const dock = document.querySelector<HTMLElement>(`.${shellCss.dock}`);
+  if (!main || !dock) return 0;
+  const width = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sidebar-w")) || SIDEBAR.own;
+  const reach = dock.getBoundingClientRect().right + width + PEEK_GAP;
+  const page = main.getBoundingClientRect();
+  let left = Infinity;
+  // Its innermost parts (a line of text, a picture, a field): the boxes around them may reach past what is drawn.
+  for (const el of main.querySelectorAll<HTMLElement>("*")) {
+    if (el.firstElementChild || el.closest(`.${sidebarCss.pageBar}`)) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0 || r.left >= left || r.bottom <= page.top || r.top >= page.bottom || r.right <= page.left) continue;
+    const style = getComputedStyle(el);
+    if (style.visibility === "hidden" || style.opacity === "0") continue;
+    left = r.left;
+  }
+  return left === Infinity ? 0 : Math.round(Math.min(width, Math.max(0, reach - Math.max(left, page.left))));
+}
 /** Shown a while, closed or about to be (in the move that closes it). */
 function markPeek(): void {
   const root = document.documentElement;
+  root.style.setProperty("--peek-shift", `${peekShift()}px`);
   root.dataset.sidebarPeek = "";
   pointerOn = true;
   document.addEventListener("pointermove", onPeekMove, { passive: true });

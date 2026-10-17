@@ -109,7 +109,7 @@ export function moveSidebar(change: () => void): void {
   document.documentElement.dataset.sidebarMoving = "";
   void moveState([
     ...moves(`.${shellCss.shell}`, ["grid-template-columns"]),
-    // The page as wide as it was, moved aside for the folded sidebar shown a while (shell.css.ts main).
+    // The page as wide as it was, moved aside for the folded sidebar shown a while (shell.css.ts main, Rail.tsx peekShift).
     ...moves(`.${shellCss.shell} > .${shellCss.main}`, ["left"]),
     ...moves(`.${css.sidebarBuddy}`, ["left"]),
     ...moves(`.${css.sidebarUpdate}`, ["left", "transform"]),
@@ -130,7 +130,7 @@ export function moveSidebar(change: () => void): void {
     // The lists' marks on the rail, and the app's bubbles beside it.
     ...moves(`.${railCss.listMark}`, ["opacity", "transform"]),
     ...moves(`.${bubblesCss.stack}`, ["left", "bottom"]),
-    ...moves(`.${sidebarCss.pageBar}`, ["padding-left"]),
+    ...moves(`.${sidebarCss.pageBar}`, ["padding-left", "margin-left"]),
   ], change).then(() => { if (turn === moving) delete document.documentElement.dataset.sidebarMoving; });
 }
 
