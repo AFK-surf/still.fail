@@ -224,6 +224,11 @@ async function main() {
   const phone = core("phone");
   await phone.call("migrate", { accounts: [alice] });
   await until(async () => (await phone.call("lock.state", { workspace: ws })).me.device, "phone core up");
+  // Not in the lock, it asks by itself as it reads the lock, before any station refuses it.
+  const own = (await phone.call("lock.state", { workspace: ws })).me.device;
+  await until(async () => (await owner.call("lock.state", { workspace: ws })).requests.some((r: any) => r.device === own), "the phone asked by itself");
+  const waitsItself = (await until(async () => ((await phone.call("lock.state", { workspace: ws })).me.waiting ? true : null), "the phone waits")) === true;
+  check("a new device asks by itself, before reaching a station", `phone: listed for the owner, waiting ${waitsItself}`, "-", waitsItself);
   const waits = await phone.call("tools.access", { station: `${ws}/${A.id}` }).then(() => "admitted", (e) => `${e.code}: ${e.message}`);
   const asked = await phone.call("lock.request", { workspace: ws });
   const listed = await until(async () => (await owner.call("lock.state", { workspace: ws })).requests.find((r: any) => r.device === asked.device), "request listed");
