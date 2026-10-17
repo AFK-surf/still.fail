@@ -576,8 +576,6 @@
   "web-main.video.frame": "第 {n} 帧",
   "web-main.video.frames": "{n} 帧",
   "web-main.video.guessed": "无法逐帧解码，按 60 fps 估算",
-  "web-main.video.held": "停留 {ms} ms",
-  "web-main.video.heldTip": "此帧在屏幕上停留的时长",
   "web-main.video.next": "下一帧",
   "web-main.video.nextKey": "下一帧（→ 或 .；Shift 一次 10 帧）",
   "web-main.video.pause": "暂停",

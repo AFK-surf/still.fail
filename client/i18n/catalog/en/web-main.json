@@ -642,8 +642,6 @@
     "other": "{n} frames"
   },
   "web-main.video.guessed": "Couldn't decode frames; assuming 60 fps",
-  "web-main.video.held": "Held {ms} ms",
-  "web-main.video.heldTip": "How long this frame is on screen",
   "web-main.video.next": "Next frame",
   "web-main.video.nextKey": "Next frame (→ or .; Shift ×10)",
   "web-main.video.pause": "Pause",

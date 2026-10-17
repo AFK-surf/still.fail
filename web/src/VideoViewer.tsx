@@ -67,11 +67,6 @@ class Frames {
     return lo;
   }
 
-  /** How long frame `i` stays on screen, in seconds. */
-  held(i: number): number {
-    return i + 1 < this.starts.length ? this.starts[i + 1]! - this.starts[i]! : this.lastDuration;
-  }
-
   /** Frame `i` decoded; null when another was asked for before its turn came (only the latest is decoded). */
   get(i: number): Promise<Canvas | null> {
     this.wanted = i;
@@ -309,7 +304,6 @@ export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name
   const facts = decoded ? [
     { key: "frame", text: <><b className={css.vvNow}>{at + 1}</b><span className={css.vvDim}> / {t("web-main.video.frames", { n: count })}</span></> },
     { key: "time", text: clock(now) },
-    { key: "held", text: <Tip label={t("web-main.video.heldTip")}><span>{t("web-main.video.held", { ms: (decoded.held(at) * 1000).toFixed(1) })}</span></Tip> },
     ...(rateInfo ? [{ key: "fps", text: <span className={css.vvDim}>{rateInfo.steady ? `${Math.round(rateInfo.fps)} fps` : t("web-main.video.variableRate", { fps: Math.round(rateInfo.fps) })}</span> }] : []),
   ] : [
     { key: "time", text: <><b className={css.vvNow}>{clock(time)}</b><span className={css.vvDim}> / {clock(duration)}</span></> },
