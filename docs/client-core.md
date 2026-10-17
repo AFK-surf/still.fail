@@ -604,7 +604,10 @@ pages are built on: the core's data and calls, with the generated `Shapes.kt`,
 `Operations.kt`, and the design system, with the generated `Icons.kt`. It sees
 `:core` but not the app, so the compiler keeps it below the pages: what it must
 tell the app (the bar's timing) goes through a hook the app sets
-(`TopicTiming`). `:app` has the pages and everything else.
+(`TopicTiming`). `:shared` also has the small parts the pages share (`ui/Controls.kt`: buttons,
+fields, rows to pick from) and what the pages and the drive both need of a drive (`data/Drives.kt`, `DriveCache`).
+`:app` has the pages and everything else; in it the drive (`drive/`) is built on the pages (`screens/`), never the
+other way, and the remote screens (`remote/`) on neither (`scripts/check.sh`: phone packages one way).
 
 ## Desktop
 

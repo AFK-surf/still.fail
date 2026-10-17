@@ -57,6 +57,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import fail.still.android.ui.QuotaRings
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.DoingMark
+import fail.still.android.ui.PickRow
+import fail.still.android.ui.Button
+import fail.still.android.ui.Field
 /**
  * The chat itself, from "…": its name (with a way to change it) over who started it, how many take part and when it was
  * last written in, in a line; its agents, each where it stands (a tap opens its card, AgentSheet.kt); then what can be
@@ -254,9 +258,6 @@ internal fun askTitle(app: AppState, station: String, thread: Long?, session: St
         }
     }
 }
-
-@Composable
-fun GroupLabel(text: String) = Text(text, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 14.dp, bottom = 4.dp))
 
 @Composable
 fun InfoList(content: @Composable () -> Unit) {

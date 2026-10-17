@@ -69,6 +69,8 @@ import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.WaitLine
 import fail.still.android.ui.Waiting
+import fail.still.android.ui.DoingMark
+import fail.still.android.ui.GroupLabel
 
 // What a job's dot says, its word, the line under its name and every time in words are the core's (client/core-ts/src/
 // jobs.ts): `tone`, `meta`, `detail`, a notice's `ago` and `clock`; a chat's all together, what matters first, is its

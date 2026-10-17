@@ -47,7 +47,7 @@ import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.SectionHeader
 import fail.still.android.data.t
-import fail.still.android.drive.DriveCache
+import fail.still.android.data.DriveCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -60,6 +60,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import java.io.File
+import fail.still.android.ui.fileSize
 
 /** A file kept on the phone: where it is, its name, how big, when last opened; `partial`, a fetch that stopped;
  * `station` and `session`, where it came from (none for one kept before that was written beside it). */

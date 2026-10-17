@@ -16,6 +16,9 @@ import fail.still.android.Screen
 import fail.still.android.data.*
 import fail.still.android.ui.*
 import kotlinx.serialization.json.*
+import fail.still.android.ui.DoingMark
+import fail.still.android.ui.Button
+import fail.still.android.ui.Field
 
 @Composable
 fun AutomaticDecisionsScreen() {

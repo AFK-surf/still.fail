@@ -54,6 +54,7 @@ import fail.still.android.data.t
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import fail.still.android.ui.DoingMark
 
 /** What the phone has for Wireless debugging, read again as the page comes back and as the setting changes. */
 private data class Phone(val developer: Boolean, val wireless: Boolean, val wifi: Boolean, val canSwitch: Boolean)

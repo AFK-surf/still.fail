@@ -98,6 +98,8 @@ import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import fail.still.android.ui.PickRow
+import fail.still.android.ui.Button
 
 /** Picks for a new chat in a scope (`station`: its id; the core keeps them, client/core-ts/src/choose.ts): each given changes only that. */
 private fun AppState.pickNew(scope: String, fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit) {

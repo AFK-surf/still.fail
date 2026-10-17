@@ -65,6 +65,7 @@ import fail.still.android.ui.Markdown
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.SectionHeader
 import fail.still.core.CoreException
+import fail.still.android.ui.DoingMark
 
 /** The last memory read of each station, so a page opened from the list has it at once (it is read again). */
 private val kept = mutableMapOf<String, StationMemory>()

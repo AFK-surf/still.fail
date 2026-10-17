@@ -312,7 +312,7 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                 // This phone's adb, lent to its agents (AdbShare.kt).
                 GoRow(t("android-misc.adb.title"), if (shared.value?.let { it.sharing && it.station == address } == true) t("android-misc.adb.sharing") else null) { app.push(Screen.AdbShare(address)) }
                 // The folders it lends its members (docs/drive.md); none offered by a station from before the drive.
-                overview?.drive?.let { drive -> GoRow(t("android-misc.drive.title"), fail.still.android.drive.driveValue(drive.roots)) { app.push(Screen.Drive(address, null, "")) } }
+                overview?.drive?.let { drive -> GoRow(t("android-misc.drive.title"), fail.still.android.data.driveValue(drive.roots)) { app.push(Screen.Drive(address, null, "")) } }
             }
             StationScreens(address)
             // What macOS lets a Mac station's helper do (StationPermissions.kt); nothing from another or an older one.
@@ -523,7 +523,7 @@ fun openStationPeek(app: AppState, address: String) {
             }
             ListCard {
                 // Its files (docs/drive.md), where it has a drive: a way there from where it is named, as the wide screen's card has.
-                s?.overview?.drive?.let { drive -> GoRow(t("android-misc.drive.title"), fail.still.android.drive.driveValue(drive.roots)) { app.sheet = null; app.push(Screen.Drive(address, null, "")) } }
+                s?.overview?.drive?.let { drive -> GoRow(t("android-misc.drive.title"), fail.still.android.data.driveValue(drive.roots)) { app.sheet = null; app.push(Screen.Drive(address, null, "")) } }
                 GoRow(t("android-chat.station.details")) { app.sheet = null; app.push(Screen.Station(address)) }
             }
         }

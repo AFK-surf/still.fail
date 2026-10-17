@@ -87,6 +87,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import fail.still.android.ui.activity
 
 private val RATES = listOf(0.1f, 0.25f, 0.5f, 1f)
 /** Without the file's own frames, a step is this long (ms). */
@@ -402,12 +403,3 @@ fun AudioViewer(file: File, name: String) {
     }
 }
 
-/**
- * The activity a context belongs to. The viewers sit in a Dialog, whose context wraps the activity's (a theme wrapper):
- * `context as? Activity` is null there, and the landscape button did nothing.
- */
-internal tailrec fun android.content.Context.activity(): Activity? = when (this) {
-    is Activity -> this
-    is android.content.ContextWrapper -> baseContext.activity()
-    else -> null
-}

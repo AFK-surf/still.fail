@@ -63,6 +63,7 @@ import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import fail.still.android.ui.fileSize
 
 private fun themes() = listOf("system" to t("android-settings.theme.system"), "light" to t("android-settings.theme.light"), "dark" to t("android-settings.theme.dark"))
 

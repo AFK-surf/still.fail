@@ -12,7 +12,7 @@ import kotlinx.serialization.json.JsonObject
 /** How many of a chat's newest messages have their words parsed as they are decoded. */
 private const val PREPARED = 40
 
-internal class ChatDecoder {
+class ChatDecoder {
     private var source: JsonArray? = null
     private var messages = emptyList<ChatMessage>()
     private var decoded = IdentityHashMap<JsonElement, ChatMessage>()

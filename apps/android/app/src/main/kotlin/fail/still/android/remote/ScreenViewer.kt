@@ -95,8 +95,8 @@ import fail.still.android.data.ScreenCursor
 import fail.still.android.data.ScreenDrop
 import fail.still.android.data.errorText
 import fail.still.android.data.t
-import fail.still.android.screens.fileSize
-import fail.still.android.screens.Button
+import fail.still.android.ui.fileSize
+import fail.still.android.ui.Button
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons

@@ -42,7 +42,7 @@ import fail.still.android.data.WorkspaceEntry
 import fail.still.android.data.WorkspaceView
 import fail.still.android.data.rememberTopic
 import fail.still.android.data.t
-import fail.still.android.screens.PickRow
+import fail.still.android.ui.PickRow
 import fail.still.android.screens.PlacePage
 import fail.still.android.ui.BarAction
 import fail.still.android.ui.C

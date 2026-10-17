@@ -64,7 +64,7 @@ fun KeyboardInsets(content: @Composable () -> Unit) {
 }
 
 @Composable
-internal fun rememberKeyboardInsets(raw: WindowInsets, source: WindowInsets, target: WindowInsets, multiWindow: Boolean): WindowInsets {
+fun rememberKeyboardInsets(raw: WindowInsets, source: WindowInsets, target: WindowInsets, multiWindow: Boolean): WindowInsets {
     val density = LocalDensity.current
     val bottom = remember(raw, multiWindow, density) { Animatable(raw.getBottom(density).toFloat()) }
     var followingNative by remember(raw, multiWindow) { mutableStateOf(false) }

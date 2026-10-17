@@ -73,6 +73,7 @@ import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
 import kotlin.math.roundToInt
+import fail.still.android.ui.PickRow
 
 /** What the settings' row says of the bars: how many, or the one bar's places. */
 fun barsValue(app: AppState): String {

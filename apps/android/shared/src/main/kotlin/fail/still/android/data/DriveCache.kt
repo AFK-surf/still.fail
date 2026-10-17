@@ -8,15 +8,13 @@
 // media3's cache classes are marked unstable (UnstableApi): their API may change between releases.
 @file:androidx.annotation.OptIn(markerClass = [androidx.media3.common.util.UnstableApi::class])
 
-package fail.still.android.drive
+package fail.still.android.data
 
 import android.content.Context
 import android.util.Log
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
-import fail.still.android.data.DRIVE_PART
-import fail.still.android.data.StationApi
 import java.io.File
 import java.io.FileOutputStream
 import java.io.RandomAccessFile
@@ -55,7 +53,7 @@ object DriveCache {
         MessageDigest.getInstance("SHA-256").digest("$station\n$root\n$path".toByteArray()).joinToString("") { "%02x".format(it) }.take(32)
 
     private fun home(context: Context, id: String, mtime: Long, size: Long) = File(dir(context), "$id-$mtime-$size")
-    private fun named(home: File, path: String) = File(home, nameOf(path).replace(Regex("[\\u0000-\\u001f]"), "_").trimStart('.').take(120).ifEmpty { "file" })
+    private fun named(home: File, path: String) = File(home, path.substringAfterLast('/').replace(Regex("[\\u0000-\\u001f]"), "_").trimStart('.').take(120).ifEmpty { "file" })
 
     /**
      * The file `path` of `root` (`mtime` and `size` as its folder says) kept on the phone, its first `upto` bytes at least

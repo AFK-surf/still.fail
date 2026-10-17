@@ -160,6 +160,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import fail.still.android.ui.fileSize
+import fail.still.android.ui.activity
 
 /** The bars fade after this long left alone; after a tap that brought them back, a while longer. */
 private const val REST_MS = 2000L

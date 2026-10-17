@@ -4,7 +4,7 @@
 package fail.still.android.screens
 
 import fail.still.android.ui.Spinner
-import fail.still.android.drive.DriveCache
+import fail.still.android.data.DriveCache
 import fail.still.android.data.t
 import android.content.ContentValues
 import android.content.Context
@@ -89,6 +89,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import fail.still.android.ui.fileSize
 
 // ── what a file is (web/src/FilePreview.tsx kindOf) ─────────────────────
 
@@ -314,7 +315,6 @@ internal object DriveKey {
 
 /** A file and the session that keeps it. */
 class Shown(val key: String, val file: Attachment)
-
 
 /** A message's files, side by side and wrapping (6dp apart); `owner` says which session of the chat keeps each. */
 @Composable
@@ -659,9 +659,3 @@ internal fun FileCard(
     }
 }
 
-fun fileSize(bytes: Long): String = when {
-    bytes < 1024 -> "$bytes B"
-    bytes < 1024 * 1024 -> "${Math.round(bytes / 1024.0)} KB"
-    bytes < 1024L * 1024 * 1024 -> String.format(java.util.Locale.ROOT, "%.1f MB", bytes / 1024.0 / 1024.0)
-    else -> String.format(java.util.Locale.ROOT, "%.2f GB", bytes / 1024.0 / 1024.0 / 1024.0)
-}

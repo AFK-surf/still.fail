@@ -79,6 +79,9 @@ import fail.still.android.ui.StationMark
 import fail.still.android.ui.hasStationMark
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
+import fail.still.android.ui.PickRow
+import fail.still.android.ui.Button
+import fail.still.android.ui.Field
 
 /** A write behind a button: whether it runs, and how the last try ended. */
 private class Write(app: AppState) : Action(app) {
@@ -187,35 +190,6 @@ private fun Lead(text: String) = Text(text, fontSize = 14.sp, color = C.muted, t
 
 @Composable
 private fun Error(text: String) = Text(text, fontSize = 13.sp, color = C.red)
-
-@Composable
-internal fun Button(label: String, primary: Boolean, busy: Boolean = false, enabled: Boolean = true, danger: Boolean = false, onClick: () -> Unit) {
-    val on = enabled && !busy
-    val ink = if (primary && danger && enabled) Color.White else if (primary) C.bg else C.ink
-    Row(
-        Modifier.height(38.dp).clip(Smooth(19.dp)).background(if (primary) (if (!enabled) C.line else if (danger) C.red else C.ink) else C.chip)
-            .clickable(enabled = on, onClick = onClick).padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        // A solid one's spinner in its words' colour.
-        BusyIcon(busy, solid = if (primary) ink else null)
-        Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = ink)
-    }
-}
-
-/** A line to type in, on a soft frame; `lines` above one: a few lines, of any length (a pasted list). */
-@Composable
-internal fun Field(value: String, onChange: (String) -> Unit, placeholder: String, mono: Boolean = false, modifier: Modifier = Modifier, lines: Int = 1) {
-    Box(
-        modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.surface).border(1.dp, C.line, Smooth(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp),
-    ) {
-        if (value.isEmpty()) Text(placeholder, color = C.subtle, fontSize = 15.sp, fontFamily = if (mono) CodeFont else null)
-        BasicTextField(
-            value, { onChange(if (lines > 1) it else it.take(if (mono) 32 else 80)) }, singleLine = lines == 1, minLines = lines, cursorBrush = SolidColor(C.accent),
-            textStyle = TextStyle(color = C.ink, fontSize = 15.sp, fontFamily = if (mono) CodeFont else null), modifier = Modifier.fillMaxWidth(),
-        )
-    }
-}
 
 /** Asks for the invite code a new workspace needs; what the last try said stands under it. */
 @Composable

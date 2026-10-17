@@ -4,6 +4,7 @@ import java.nio.charset.Charset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import fail.still.android.data.freeName
 
 class NovelTest {
     /** A novel as such files come: GBK, hard-wrapped at a fixed width, 第X章 headings. */

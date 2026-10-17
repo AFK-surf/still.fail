@@ -58,6 +58,7 @@ import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
 import fail.still.core.CoreException
+import fail.still.android.ui.Button
 
 /** A chat's public links as its sheet shows them: to those who may publish it, or when it has some (a read-only member sees them). */
 internal fun shownPublish(publish: ChatPublish?): ChatPublish? = publish?.takeIf { it.may || it.links.isNotEmpty() }

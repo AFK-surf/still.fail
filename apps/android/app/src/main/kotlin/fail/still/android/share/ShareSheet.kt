@@ -39,9 +39,9 @@ import fail.still.android.data.ShareInView
 import fail.still.android.data.Topics
 import fail.still.android.data.rememberTopic
 import fail.still.android.data.t
-import fail.still.android.screens.Field
-import fail.still.android.screens.GroupLabel
-import fail.still.android.screens.PickRow
+import fail.still.android.ui.Field
+import fail.still.android.ui.GroupLabel
+import fail.still.android.ui.PickRow
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons

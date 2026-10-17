@@ -145,6 +145,7 @@ import fail.still.android.ui.avatarColor
 import kotlinx.coroutines.launch
 import fail.still.android.ui.initial
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.DoingMark
 
 @Composable
 fun HomeScreen(current: WorkspaceEntry) {

@@ -641,7 +641,7 @@ private val Ease = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
 @Composable
 fun StillFailApp(app: AppState) {
     // Where files of a drive are kept once read (the reader, the viewer and the player find it there).
-    fail.still.android.drive.DriveCache.start(LocalContext.current)
+    fail.still.android.data.DriveCache.start(LocalContext.current)
     fail.still.android.ui.KeyboardInsets { AppContent(app) }
 }
 

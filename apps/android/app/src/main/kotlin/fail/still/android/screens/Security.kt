@@ -76,6 +76,7 @@ import fail.still.android.ui.SheetSpec
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import fail.still.android.ui.PickRow
 
 /** A device's name as people know it: its label, or what kind of client it is. */
 private fun deviceName(kind: String, label: String, older: Boolean = false): String = when {

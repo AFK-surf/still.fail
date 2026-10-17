@@ -89,17 +89,17 @@ import fail.still.android.data.WorkspaceEntry
 import fail.still.android.data.WorkspaceView
 import fail.still.android.data.rememberTopic
 import fail.still.android.data.t
-import fail.still.android.screens.Button
-import fail.still.android.screens.DoingMark
+import fail.still.android.ui.Button
+import fail.still.android.ui.DoingMark
 import fail.still.android.screens.DriveKey
 import fail.still.android.screens.FilePreview
 import fail.still.android.screens.Gallery
-import fail.still.android.screens.PickRow
+import fail.still.android.ui.PickRow
 import fail.still.android.screens.Shown
 import fail.still.android.screens.ask
 import fail.still.android.screens.confirm
 import fail.still.android.screens.download
-import fail.still.android.screens.fileSize
+import fail.still.android.ui.fileSize
 import fail.still.android.ui.C
 import fail.still.android.ui.DownloadChip
 import fail.still.android.ui.IconIn
@@ -133,20 +133,13 @@ import androidx.compose.ui.text.input.ImeAction
 import fail.still.android.data.DriveCrumb
 import fail.still.android.data.PickFolder
 import fail.still.android.ui.SectionHeader
+import fail.still.android.ui.kindIcon
+import fail.still.android.data.DriveCache
+import fail.still.android.data.arranged
+import fail.still.android.data.freeName
+import fail.still.android.data.picked
 
 // ── what an entry is ────────────────────────────────────────────────────
-
-/** The line icon an entry of the drive is drawn with, by its kind (the core's `kind`). */
-fun kindIcon(kind: String): ImageVector = when (kind) {
-    "folder" -> Icons.Folder
-    "video" -> Icons.FileVideo
-    "audio" -> Icons.FileAudio
-    "image" -> Icons.Photo
-    "markdown", "text", "subtitle" -> Icons.FileText
-    "code", "csv", "html" -> Icons.FileCode
-    "pdf" -> Icons.FilePdf
-    else -> Icons.File
-}
 
 /** A path under a root, `/` between its components; `dir` empty for the root itself. */
 fun join(dir: String, name: String) = if (dir.isEmpty()) name else "$dir/$name"
@@ -162,37 +155,6 @@ fun rootTrouble(state: String): Pair<String, String>? = when (state) {
     "missing" -> t("android-misc.drive.root.missing") to t("android-misc.drive.root.missingHint")
     "not_a_directory" -> t("android-misc.drive.root.notFolder") to t("android-misc.drive.root.notFolderHint")
     else -> t("android-misc.drive.root.unreadable") to t("android-misc.drive.root.unreadableHint")
-}
-
-/** A name not among `taken`: "name (1).ext", "name (2).ext"… */
-fun freeName(name: String, taken: Set<String>): String {
-    if (name !in taken) return name
-    val dot = name.lastIndexOf('.').takeIf { it > 0 } ?: name.length
-    val stem = name.substring(0, dot)
-    val ext = name.substring(dot)
-    var n = 1
-    while ("$stem ($n)$ext" in taken) n++
-    return "$stem ($n)$ext"
-}
-
-/**
- * A folder's entries as shown, as the web's (web/src/drive/order.ts): hidden ones (a name starting with `.`) left out
- * unless asked, folders first, then by name (the station's order), time or size (the newest and largest first) or kind;
- * `-down` turns it the other way.
- */
-fun arranged(entries: List<DriveEntry>, sort: String, hidden: Boolean): List<DriveEntry> {
-    val by = sort.substringBefore('-')
-    val down = sort.endsWith("-down")
-    val shown = if (hidden) entries else entries.filterNot { it.name.startsWith('.') }
-    val named = entries.withIndex().associate { it.value.name to it.index }
-    val byName = compareBy<DriveEntry> { named[it.name] ?: 0 }
-    val order: Comparator<DriveEntry> = when (by) {
-        "time" -> compareByDescending<DriveEntry> { it.mtime }.then(byName)
-        "size" -> compareByDescending<DriveEntry> { it.size }.then(byName)
-        "kind" -> compareBy<DriveEntry>({ it.kind.toString() }, { it.name.substringAfterLast('.', "").lowercase() }).then(byName)
-        else -> byName
-    }
-    return shown.sortedWith(compareBy<DriveEntry> { !it.dir }.then(if (down) order.reversed() else order))
 }
 
 /** Where a path under a root is on the station. */
@@ -307,19 +269,6 @@ object DriveUploads {
             up.state = "failed"; up.error = e.message ?: ""
         }
     }
-}
-
-/** A picked document's name and size, as its provider says. */
-internal fun picked(resolver: ContentResolver, uri: Uri): Pair<String, Long> {
-    var name = uri.lastPathSegment?.substringAfterLast('/') ?: "file"
-    var size = -1L
-    resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { c ->
-        if (c.moveToFirst()) {
-            c.getString(0)?.let { name = it }
-            if (!c.isNull(1)) size = c.getLong(1)
-        }
-    }
-    return name to size
 }
 
 /** Puts the files picked into a folder of the drive, one after another, each a row in that folder's list while it goes. */
@@ -1008,5 +957,3 @@ private fun PickFolderRow(f: PickFolder, onClick: () -> Unit) {
     PickRow(f.name, sub = if (f.unreadable) t("android-misc.drive.pick.unreadable") else null, leading = { IconIn(if (f.disk) Icons.Disk else Icons.Folder, 20.dp, C.ink) }, onClick = onClick)
 }
 
-/** What the station page's row says of a drive: how many folders it lends, or that it lends none. */
-fun driveValue(roots: List<DriveRoot>): String = if (roots.isEmpty()) t("android-misc.drive.row.none") else t("android-misc.drive.roots.count", "n" to roots.size)

@@ -122,6 +122,9 @@ import androidx.compose.animation.core.tween
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.put
+import fail.still.android.ui.DoingMark
+import fail.still.android.ui.Field
+import fail.still.android.ui.GroupLabel
 
 /** Opens an agent's execution history, over the item's page it belongs to. */
 /** `entry`: the transcript entry to open at (an activity row's), else its newest. */
