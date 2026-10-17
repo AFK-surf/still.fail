@@ -17,6 +17,7 @@ import { Ease } from "./Motion";
 import { Smooth } from "./Smooth";
 import { T } from "./Text";
 import { lerpColor, useC, withAlpha, type StillFailColors } from "./Theme";
+import { Quiet } from "./Quiet";
 
 /**
  * What a part draws in one of its places (Kotlin's `@Composable () -> Unit` slot): what it draws, or a function that
@@ -137,11 +138,13 @@ export function AgentStateMark({ state, around, modifier: modifier_, style = mod
           : <Circle cx={r} cy={r} r={r - ring} fill={AGENT_RED} />}
       </Svg>
       {state === ChatState.Running && (
-        <Animated.View style={[{ position: "absolute", width: size, height: size }, spin]}>
-          <Svg width={size} height={size}>
-            <Path d={`M${at(from)}A${rr} ${rr} 0 1 1 ${at(from + sweep)}`} fill="none" stroke={AGENT_YELLOW} strokeWidth={ring} strokeLinecap="round" />
-          </Svg>
-        </Animated.View>
+        <Quiet style={{ position: "absolute", width: size, height: size }}>
+          <Animated.View style={[{ width: size, height: size }, spin]}>
+            <Svg width={size} height={size}>
+              <Path d={`M${at(from)}A${rr} ${rr} 0 1 1 ${at(from + sweep)}`} fill="none" stroke={AGENT_YELLOW} strokeWidth={ring} strokeLinecap="round" />
+            </Svg>
+          </Animated.View>
+        </Quiet>
       )}
     </View>
   );
@@ -683,7 +686,7 @@ export function Splash({ label, now = false }: { label?: string | null; now?: bo
   const float = useAnimatedStyle(() => ({ transform: [{ translateY: still ? 0 : -lift.value * 5 }] }));
   return (
     <View style={{ flex: 1, alignSelf: "stretch", backgroundColor: C.bg, padding: 24, alignItems: "center", justifyContent: "center", gap: 16 }}>
-      <Animated.View style={float}><Mark size={56} /></Animated.View>
+      <Quiet><Animated.View style={float}><Mark size={56} /></Animated.View></Quiet>
       {label != null && <T color={C.muted} size={13} align="center" style={{ opacity: shown ? 1 : 0 }}>{label}</T>}
     </View>
   );

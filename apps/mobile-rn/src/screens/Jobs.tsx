@@ -18,6 +18,7 @@ import { T } from "../ui/Text";
 import { CODE_FONT, Mono, useC, withAlpha, type StillFailColors } from "../ui/Theme";
 import { WaitLine, Waiting } from "../ui/Waiting";
 import { InfoList, InfoRow } from "./ChatInfo";
+import { Quiet } from "../ui/Quiet";
 
 // What a job's dot says, its word, the line under its name and every time in words are the core's (client/core-ts/src/
 // jobs.ts): `tone`, `meta`, `detail`, a notice's `ago` and `clock`; a chat's all together, what matters first, is its
@@ -79,9 +80,9 @@ export function JobDot({ tone, style }: { tone: Tone; style?: StyleProp<ViewStyl
   }, [tone, breath]);
   const breathing = useAnimatedStyle(() => ({ opacity: breath.value }));
   return (
-    <View style={style}>
+    <Quiet style={style}>
       <Animated.View style={[{ width: 8, height: 8, borderRadius: 4, backgroundColor: toneTint(tone, C) ?? C.subtle }, breathing]} />
-    </View>
+    </Quiet>
   );
 }
 

@@ -33,6 +33,7 @@ import { FirstStation, isManager, managerOf, openAddStation, openStationMenu } f
 import { GoRow } from "./SettingParts";
 import { StationPermissionsSection } from "./StationPermissions";
 import { Versions } from "./Versions";
+import { Quiet } from "../ui/Quiet";
 
 /** The buddy's face for a station: at work, idle, or asleep. */
 export function Buddy({ s, size = 40 }: { s: StationView; size?: number }) {
@@ -262,9 +263,11 @@ function Bar({ width, height = 10, radius = 5 }: { width: number; height?: numbe
   const C = useC();
   const breath = rememberBreath();
   return (
-    <Animated.View style={[{ width, height }, breathing(breath)]}>
-      <Smooth radius={radius} style={{ width, height, backgroundColor: C.bubble }} />
-    </Animated.View>
+    <Quiet style={{ width, height }}>
+      <Animated.View style={[{ width, height }, breathing(breath)]}>
+        <Smooth radius={radius} style={{ width, height, backgroundColor: C.bubble }} />
+      </Animated.View>
+    </Quiet>
   );
 }
 

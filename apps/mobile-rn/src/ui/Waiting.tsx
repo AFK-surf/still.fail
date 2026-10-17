@@ -17,6 +17,7 @@ import { reducedMotion } from "./Parts";
 import { Smooth } from "./Smooth";
 import { T } from "./Text";
 import { useC, withAlpha } from "./Theme";
+import { Quiet } from "./Quiet";
 
 /** Words about a wait come only when it takes a while: what is there in a moment (from the device) shows none. */
 export const LATER_MS = 400;
@@ -65,7 +66,7 @@ export function Spinner({ inline = false, color, modifier: modifier_, style = mo
   // The web's: a border whose top is the arc, a quarter from its top-left to its top-right.
   const d = Math.SQRT1_2 * r;
   return (
-    <View style={[{ width: size, height: size }, style]} accessibilityRole="progressbar">
+    <Quiet style={[{ width: size, height: size }, style]} accessibilityRole="progressbar">
       <Svg width={size} height={size} style={{ position: "absolute" }}>
         <Circle cx={c} cy={c} r={r} stroke={track} strokeWidth={w} fill="none" />
       </Svg>
@@ -74,7 +75,7 @@ export function Spinner({ inline = false, color, modifier: modifier_, style = mo
           <Path d={`M${c - d} ${c - d}A${r} ${r} 0 0 1 ${c + d} ${c - d}`} stroke={arc} strokeWidth={w} fill="none" />
         </Svg>
       </Animated.View>
-    </View>
+    </Quiet>
   );
 }
 
@@ -162,12 +163,12 @@ export function WaitShapes({ shape = WaitShape.Rows, count, still = false, modif
   const breath = breathing(rememberBreath(still));
   const window = useWindowDimensions();
   const [width, setWidth] = useState(window.width);
-  const m = [style, { alignSelf: "stretch" as const }, breath];
   const hidden = { accessibilityElementsHidden: true, importantForAccessibility: "no-hide-descendants" as const };
   switch (shape) {
     case WaitShape.Rows:
       return (
-        <Animated.View style={m} {...hidden}>
+        <Quiet style={[style, { alignSelf: "stretch" }]} {...hidden}>
+        <Animated.View style={breath}>
           {Array.from({ length: count ?? 7 }, (_, i) => (
             <View key={i} style={{ height: 66, paddingLeft: 22, paddingRight: 16, flexDirection: "row", alignItems: "center", gap: 12 }}>
               <View style={{ flex: 1, gap: 10 }}>
@@ -178,11 +179,13 @@ export function WaitShapes({ shape = WaitShape.Rows, count, still = false, modif
             </View>
           ))}
         </Animated.View>
+        </Quiet>
       );
     case WaitShape.Messages: {
       const most = width * 0.7;
       return (
-        <Animated.View style={[m, { paddingTop: 8 }]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)} {...hidden}>
+        <Quiet style={[style, { alignSelf: "stretch" }]} {...hidden}>
+        <Animated.View style={[breath, { paddingTop: 8 }]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
           <View style={{ gap: 14 }}>
             {MESSAGES.slice(0, count ?? MESSAGES.length).map(([mine, w, h], i) => (
               <View key={i} style={{ flexDirection: "row", paddingHorizontal: 16, justifyContent: mine ? "flex-end" : "flex-start" }}>
@@ -192,14 +195,17 @@ export function WaitShapes({ shape = WaitShape.Rows, count, still = false, modif
             ))}
           </View>
         </Animated.View>
+        </Quiet>
       );
     }
     case WaitShape.Cards:
       return (
-        <Animated.View style={[m, { paddingHorizontal: 12, gap: 16 }]} {...hidden}>
+        <Quiet style={[style, { alignSelf: "stretch" }]} {...hidden}>
+        <Animated.View style={[breath, { paddingHorizontal: 12, gap: 16 }]}>
           {/* A page's card's corner (Parts.tsx Card). */}
           {Array.from({ length: count ?? 3 }, (_, i) => <Placeholder key={i} height={CARDS[i % CARDS.length]!} radius={20} />)}
         </Animated.View>
+        </Quiet>
       );
   }
 }
@@ -262,7 +268,9 @@ export function Progress({ part, modifier: modifier_, style = modifier_, color }
       ) : reduced ? (
         <View style={{ height: 3, borderRadius: 1.5, backgroundColor: withAlpha(tone, a * 0.35) }} />
       ) : (
-        <Animated.View onLayout={(e) => setSegment(e.nativeEvent.layout.width)} style={[{ width: "40%", height: 3, borderRadius: 1.5, backgroundColor: tone }, moving]} />
+        <Quiet style={{ alignSelf: "stretch", height: 3 }}>
+          <Animated.View onLayout={(e) => setSegment(e.nativeEvent.layout.width)} style={[{ width: "40%", height: 3, borderRadius: 1.5, backgroundColor: tone }, moving]} />
+        </Quiet>
       )}
     </View>
   );

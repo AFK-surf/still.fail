@@ -13,6 +13,7 @@ import { Smooth } from "../ui/Smooth";
 import { useC, withAlpha } from "../ui/Theme";
 import { VizFrame, VizFull, type JsonElement } from "../ui/Viz";
 import { WaitLine, breathing, rememberBreath } from "../ui/Waiting";
+import { Quiet } from "../ui/Quiet";
 
 /** A visualization's page and what its widget kept (on the station, by the session that sent it and its path), loaded together. */
 export type Loaded = { kind: "Waiting" } | { kind: "Failed" } | { kind: "Ready"; html: string; state: JsonElement | null };
@@ -83,9 +84,11 @@ export function VizFile({ station, sessionKey: session, file, failed }: { statio
   // Its place, breathing as every wait's shapes, till the page comes.
   if (loaded.kind === "Waiting") {
     return (
-      <Animated.View style={[{ alignSelf: "stretch", marginBottom: 8, height: 120 }, breathe]}>
-        <Smooth radius={12} style={{ flex: 1, backgroundColor: C.bubble }} />
-      </Animated.View>
+      <Quiet style={{ alignSelf: "stretch", marginBottom: 8, height: 120 }}>
+        <Animated.View style={[{ flex: 1 }, breathe]}>
+          <Smooth radius={12} style={{ flex: 1, backgroundColor: C.bubble }} />
+        </Animated.View>
+      </Quiet>
     );
   }
   const keep = (s: JsonElement) => { setKept(s); keepViz(station, session, file.path, s); };

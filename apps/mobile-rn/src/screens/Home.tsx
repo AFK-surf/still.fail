@@ -39,6 +39,7 @@ import { SearchField, SearchPage } from "./Search";
 import { MarkBlue, MarkRed, WorkspaceMark } from "./SettingParts";
 import { FirstStation, confirm } from "./Settings";
 import { invitationsWaiting, openWorkspaces } from "./Workspaces";
+import { Quiet } from "../ui/Quiet";
 
 type Filter = "all" | "mine" | "watching";
 
@@ -858,7 +859,8 @@ function ChatMark({ item }: { item: ChatItem }) {
   const cap = ((ring / box) * 180) / Math.PI;
   return (
     <Animated.View accessible accessibilityLabel={label} style={[{ width: MARK, height: MARK }, popped]}>
-      <Animated.View style={[{ position: "absolute", left: -MARK_OUT, top: -MARK_OUT, width: MARK + 2 * MARK_OUT, height: MARK + 2 * MARK_OUT }, tone === RowTone.Busy && turned]}>
+      <Quiet style={{ position: "absolute", left: -MARK_OUT, top: -MARK_OUT, width: MARK + 2 * MARK_OUT, height: MARK + 2 * MARK_OUT }}>
+      <Animated.View style={[{ width: MARK + 2 * MARK_OUT, height: MARK + 2 * MARK_OUT }, tone === RowTone.Busy && turned]}>
         <Svg width={MARK + 2 * MARK_OUT} height={MARK + 2 * MARK_OUT}>
           {tone === RowTone.Alert && <Circle cx={c} cy={c} r={r - 1 + 3} fill={withAlpha(MarkRed, 0.25)} />}
           {tone === RowTone.Done && <Circle cx={c} cy={c} r={r - 1} fill={MarkBlue} />}
@@ -874,6 +876,7 @@ function ChatMark({ item }: { item: ChatItem }) {
           )}
         </Svg>
       </Animated.View>
+      </Quiet>
     </Animated.View>
   );
 }

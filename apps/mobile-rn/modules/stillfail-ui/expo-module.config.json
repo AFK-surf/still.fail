@@ -5,7 +5,8 @@
   ],
   "android": {
     "modules": [
-      "fail.still.rn.ui.StillfailUiModule"
+      "fail.still.rn.ui.StillfailUiModule",
+      "fail.still.rn.ui.StillfailQuietModule"
     ]
   },
   "apple": {
