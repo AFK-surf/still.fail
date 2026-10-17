@@ -1050,6 +1050,50 @@ sim("tunnels_are_answered_on_the_lan_way", async (s) => {
   await close(s, station, mesh);
 });
 
+/// 2026-10-17: the phone offers again as its ports change (twice within 1.5 s); a tunnel the station opened in between
+/// was turned down as 已停止共享. It is served by the offer as it is when its head comes.
+sim("a_tunnel_opened_as_the_phone_offers_again_is_served", async (s) => {
+  const endpoint = s.net.bindStation({ secretKey: s.net.key(), alpns: [ALPN], relayUrls: [], bindAddr: "127.0.0.1:0" });
+  let conn: J = null;
+  void (async () => {
+    conn = (await endpoint.accept())!;
+    const control = (await conn.acceptBi())!;
+    await Station.readLine(control, { bytes: Buffer.alloc(0) });
+    await control.write(Buffer.from(`${JSON.stringify({ ok: true, station: "测试" })}\n`));
+    // Every offer answered, as the station does, each on its own.
+    for (let offer = await conn.acceptBi(); offer !== null; offer = await conn.acceptBi()) {
+      const o = offer;
+      void (async () => {
+        await Station.readLine(o, { bytes: Buffer.alloc(0) });
+        await o.write(Buffer.from(`${JSON.stringify({ status: 200, headers: {} })}\n`));
+        await o.write(Buffer.from(`${JSON.stringify({ serial: "127.0.0.1:37001", adb: "connected", message: "" })}\n`));
+      })().catch(() => {});
+    }
+  })().catch(() => {});
+  s.host.tcpConnect = echoTcp;
+  const mesh = await s.run(Mesh.make(env(s), []));
+  mesh.addAddr({ id: endpoint.id(), ips: endpoint.sockets() });
+  const store = new Store(s.host, s.runner);
+  const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [] });
+  const station = `ws/${endpoint.id()}`;
+  const offer = { station, connect: 5555, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 };
+  await s.run(adb.run({ kind: "share", offer }));
+  await s.until(() => adb.value().adb === "connected");
+  // A tunnel taken by the phone, its head not come yet.
+  const tunnel = await s.settle(conn.openBi() as Promise<J>);
+  await s.settle(tunnel.write(Buffer.from(" ")) as Promise<void>);
+  await s.time.pass(100);
+  // Its pairing port found: offered again, and answered.
+  await s.run(adb.run({ kind: "share", offer: { ...offer, pair: 6666 } }));
+  await s.until(() => adb.value().phase === "offered" && adb.value().pairPort === 6666);
+  await s.settle(tunnel.write(Buffer.from(`${JSON.stringify({ tunnel: "connect" })}\n`)) as Promise<void>);
+  const answer = await s.settle(Station.readLine(tunnel, { bytes: Buffer.alloc(0) }));
+  assert.deepEqual(JSON.parse(answer!.trim()), { ok: true });
+  await s.run(adb.run({ kind: "stop" }));
+  await s.run(mesh.close());
+  await s.settle(endpoint.close());
+});
+
 test("reads_its_calls", () => {
   const share = parseAdb("adb.share", { station: "ws/st", connect: 41234, minutes: 10_000 });
   assert.deepEqual(share, { kind: "share", offer: { station: "ws/st", connect: 41234, pair: null, device: "", android: "", package: "", minutes: MAX_MINUTES } });

@@ -264,8 +264,7 @@ export class Adb {
           for (;;) {
             const stream = yield* link.accept();
             if (stream === null) break;
-            // To the offer as it is now: a later one (its ports changed) takes on the links of those before it.
-            self.#env.runner.fork(Effect.provideService(self.#tunnel(self.#run, stream), Scope.Scope, tunnels));
+            self.#env.runner.fork(Effect.provideService(self.#tunnel(stream), Scope.Scope, tunnels));
           }
         }).pipe(Effect.ensuring(Effect.sync(() => this.#accepting.delete(link))));
         const fiber = this.#env.runner.fork(accepting) as Fiber.Fiber<unknown, unknown>;
@@ -282,15 +281,17 @@ export class Adb {
     });
   }
 
-  /// One tunnel the station opened: to adbd's port it names, then its bytes both ways.
-  #tunnel(run: number, stream: IrohStream): Effect.Effect<void, never, Scope.Scope> {
+  /// One tunnel the station opened: to adbd's port it names, then its bytes both ways. Served by the offer as it is when
+  /// its head comes, not the one it came on: the phone offers again as its ports change (twice within 1.5 s,
+  /// 2026-10-17), and one opened in between was turned down as 已停止共享.
+  #tunnel(stream: IrohStream): Effect.Effect<void, never, Scope.Scope> {
     return Effect.gen({ self: this }, function* () {
       const refuse = (why: string) => Effect.ignore(Effect.andThen(stream.write(utf8(`${JSON.stringify({ error: why })}\n`)), stream.finish()));
       const carry = { bytes: new Uint8Array() };
       const line = yield* Effect.orElseSucceed(readLine(stream, carry), () => null);
       if (line === null) return;
       const kind = (parseJson(utf8(line)) as J)?.tunnel;
-      const offer = this.#current(run);
+      const offer = this.#offer;
       if (offer === null) return yield* refuse("已停止共享");
       const port = kind === "connect" ? offer.connect : kind === "pair" ? offer.pair : null;
       if (port === null) return yield* refuse(kind === "connect" ? "手机未开启无线调试" : kind === "pair" ? "手机未打开配对窗口" : "无法识别的通道");
