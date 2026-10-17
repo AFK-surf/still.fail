@@ -1,7 +1,11 @@
 // Frosted glass (ui/Glass.kt, Haze there): the top bar is the page's paper at 70% over a CSS blur(24px), a hairline
 // along its bottom; what floats at the bottom is `--raised` at 72% over a blur(20px) with a breath of shadow. Here
-// expo-blur's Android blur (BlurView, Dimezis') frosts what is behind; Android 11 and earlier get the tint alone.
+// expo-blur's Android blur (BlurView, Dimezis') frosts what is behind; Android 11 and earlier get the tint alone. On iOS
+// 26 the bottom bar is the system's own Liquid Glass (expo-glass-effect's GlassView, UIGlassEffect; Bar.tsx). A GlassView
+// on a page (in App.tsx's pages) draws nothing there, even made anew once its page is at rest and laid out: the
+// capsules on pages are frosted as on Android.
 import { BlurView } from "expo-blur";
+import { isLiquidGlassAvailable } from "expo-glass-effect";
 import type { ReactNode } from "react";
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { Quiet } from "./Quiet";
@@ -9,11 +13,16 @@ import { concentric, Smooth } from "./Smooth";
 import { raised, useC, withAlpha } from "./Theme";
 
 /**
- * expo-blur takes an intensity it divides by blurReductionFactor into the blur's radius: a CSS blur's px as radius. Its
- * intensity also lays a white of its own over the blur (44% of the intensity, as a share of 100): kept at 1, so the
- * only tint is ours (the glass's 72% or 70%), as the Kotlin's Haze has it.
+ * expo-blur on Android takes an intensity it divides by blurReductionFactor into the blur's radius: a CSS blur's px as
+ * radius. Its intensity also lays a white of its own over the blur (44% of the intensity, as a share of 100): kept at
+ * 1, so the only tint is ours (the glass's 72% or 70%), as the Kotlin's Haze has it. iOS's (UIVisualEffectView) has no
+ * radius: its intensity is how far its material's blur goes in, about 30 pt at 100, so 4 a px.
  */
-const blur = (px: number) => ({ intensity: 1, blurReductionFactor: 1 / px }) as const;
+const blur = (px: number) =>
+  Platform.OS === "ios" ? ({ intensity: Math.min(100, px * 4) }) as const : ({ intensity: 1, blurReductionFactor: 1 / px }) as const;
+
+/** iOS 26's Liquid Glass there (not on earlier iOS, nor on Android). */
+export const LIQUID = Platform.OS === "ios" && isLiquidGlassAvailable();
 
 interface GlassProps { tint: string; alpha: number; px: number; style?: StyleProp<ViewStyle>; children?: ReactNode }
 

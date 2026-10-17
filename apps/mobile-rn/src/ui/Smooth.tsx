@@ -38,11 +38,15 @@ export interface SmoothProps extends ViewProps {
 export function Smooth({ radius, amount = 1, stroke, style, children, ...rest }: SmoothProps) {
   const r = typeof radius === "number" ? [radius, radius, radius, radius] : radius;
   if (NativeSmooth) {
-    return (
-      <NativeSmooth {...rest} radii={r} amount={amount} strokeWidth={stroke?.width ?? 0} strokeColor={stroke?.color} style={style}>
+    // iOS's corners are a mask, which clips the box's own shadow away: a shadow asked for is cast by a view round it,
+    // which takes its place among its neighbours too (its size, where it sits); the box fills it.
+    const shadowed = Platform.OS === "ios" ? splitShadow(style, r) : null;
+    const box = (
+      <NativeSmooth {...rest} radii={r} amount={amount} strokeWidth={stroke?.width ?? 0} strokeColor={stroke?.color} style={shadowed ? shadowed.inner : style}>
         {children}
       </NativeSmooth>
     );
+    return shadowed ? <View style={shadowed.outer} pointerEvents="box-none">{box}</View> : box;
   }
   const corners: ViewStyle = { borderTopLeftRadius: r[0] * SMOOTH_SCALE, borderTopRightRadius: r[1] * SMOOTH_SCALE, borderBottomRightRadius: r[2] * SMOOTH_SCALE, borderBottomLeftRadius: r[3] * SMOOTH_SCALE, borderCurve: "continuous", overflow: "hidden" };
   const line: ViewStyle | undefined = stroke ? { borderWidth: stroke.width, borderColor: stroke.color } : undefined;
@@ -51,6 +55,29 @@ export function Smooth({ radius, amount = 1, stroke, style, children, ...rest }:
       {children}
     </View>
   );
+}
+
+/** What of a style goes on the view casting the shadow: the shadow, and how the box sits among its neighbours. */
+const OUTER = new Set([
+  "shadowColor", "shadowOpacity", "shadowRadius", "shadowOffset", "boxShadow", "elevation",
+  "position", "top", "left", "right", "bottom", "start", "end", "inset", "zIndex",
+  "margin", "marginTop", "marginBottom", "marginLeft", "marginRight", "marginHorizontal", "marginVertical", "marginStart", "marginEnd",
+  "flex", "flexGrow", "flexShrink", "flexBasis", "alignSelf", "width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight",
+  "aspectRatio", "transform", "opacity", "display",
+]);
+
+function splitShadow(style: StyleProp<ViewStyle>, radii: number[]): { outer: ViewStyle; inner: ViewStyle } | null {
+  const flat = StyleSheet.flatten(style) as Record<string, unknown> | undefined;
+  if (flat == null || !((typeof flat.shadowOpacity === "number" && flat.shadowOpacity > 0) || (flat.boxShadow != null && flat.boxShadow !== ""))) return null;
+  const outer: Record<string, unknown> = {};
+  const inner: Record<string, unknown> = { flexGrow: 1 };
+  for (const [k, v] of Object.entries(flat)) (OUTER.has(k) ? outer : inner)[k] = v;
+  if (outer.width != null) inner.width = "100%";
+  if (outer.height != null) inner.height = "100%";
+  // With no background of its own, the outer view's shadow is cast from what it holds (the box); a boxShadow is drawn
+  // round its bounds, rounded as the box's corners (the continuous corner standing in for the smooth one).
+  Object.assign(outer, { borderRadius: Math.max(...radii) * SMOOTH_SCALE, borderCurve: "continuous" });
+  return { outer: outer as ViewStyle, inner: inner as ViewStyle };
 }
 
 export const smoothStyles = StyleSheet.create({ fill: { flex: 1 } });

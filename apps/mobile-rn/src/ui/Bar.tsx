@@ -24,7 +24,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { ClipPath, Defs, Mask, Path, Rect, type PathProps } from "react-native-svg";
-import { Frost } from "./Glass";
+import { GlassView } from "expo-glass-effect";
+import { Frost, LIQUID } from "./Glass";
 import { Icon, Icons } from "./Icon";
 import type { IconPaths } from "./IconSet";
 import { raised as raisedOf, useC, withAlpha } from "./Theme";
@@ -1187,10 +1188,10 @@ export function BottomBar({
           its box), coming in down its rounded ends. (Bar.kt fades it in from nothing at the glass's top; a box shadow
           cannot fade.)
         */}
-        <Animated.View
+        {LIQUID ? null : <Animated.View
           pointerEvents="none"
           style={[{ position: "absolute", left: 0, width: w, borderRadius: RAD, boxShadow: `0px 4px 12px 0px rgba(0,0,0,${dark ? 0.45 : 0.16})` }, glassBox, { borderRadius: RAD }]}
-        />
+        />}
         {/*
           The glass: exactly as tall as what shows of it, the notch cut out of its tint by its outline. The gestures are
           its. NATIVE: a view that clips what it holds (the blur) to an animated path, the outline with its notch (Bar.kt's
@@ -1199,23 +1200,30 @@ export function BottomBar({
           rather than as they are.
         */}
         <GestureDetector gesture={gesture}>
-          <Animated.View testID="bar-glass" style={[{ position: "absolute", left: 0, width: w, overflow: "hidden" }, glassBox]}>
-            <Frost tint={raised} alpha={0} px={20} style={StyleSheet.absoluteFill} />
-            <Svg width="100%" height="100%" style={StyleSheet.absoluteFill} pointerEvents="none">
-              <APath d={glassD} fill={withAlpha(raised, 0.72)} />
-            </Svg>
-            {dark ? <Rim d={glassD} edge={0.14} lit={0.3} back={0.16} /> : <Rim d={glassD} edge={0.35} lit={0.8} back={0.45} />}
-          </Animated.View>
+          {LIQUID ? (
+            // iOS: the system's Liquid Glass (its own light, edge and shadow), the action floating over it with no notch.
+            <Animated.View testID="bar-glass" style={[{ position: "absolute", left: 0, width: w }, glassBox]}>
+              <GlassView glassEffectStyle="regular" colorScheme={dark ? "dark" : "light"} style={[StyleSheet.absoluteFill, { borderRadius: RAD }]} />
+            </Animated.View>
+          ) : (
+            <Animated.View testID="bar-glass" style={[{ position: "absolute", left: 0, width: w, overflow: "hidden" }, glassBox]}>
+              <Frost tint={raised} alpha={0} px={20} style={StyleSheet.absoluteFill} />
+              <Svg width="100%" height="100%" style={StyleSheet.absoluteFill} pointerEvents="none">
+                <APath d={glassD} fill={withAlpha(raised, 0.72)} />
+              </Svg>
+              {dark ? <Rim d={glassD} edge={0.14} lit={0.3} back={0.16} /> : <Rim d={glassD} edge={0.35} lit={0.8} back={0.45} />}
+            </Animated.View>
+          )}
         </GestureDetector>
         {/* The notch's edge, lit as the glass's own rim. */}
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, notchTop]}>
+        {LIQUID ? null : <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, notchTop]}>
           <Svg width={w} height={g.panel} pointerEvents="none">
             <Defs>
               <ClipPath id="notchFoot"><Rect x={0} y={0.25} width={w} height={g.panel} /></ClipPath>
             </Defs>
             <APath d={notchD} fill="none" stroke="#fff" strokeOpacity={dark ? 0.22 : 0.7} strokeWidth={1} clipPath="url(#notchFoot)" />
           </Svg>
-        </Animated.View>
+        </Animated.View>}
         {/*
           The page's primary action (令, a new chat; a "+"): accent glass in the notch; it grows out of the bar as the
           notch opens. Closing, it keeps the last action's icon as it shrinks.
@@ -1248,10 +1256,17 @@ export function BottomBar({
           pointerEvents="none"
           style={[{ position: "absolute", overflow: "hidden", boxShadow: dark ? "0px 1px 8px 0px rgba(0,0,0,0.35)" : "0px 1px 8px 0px rgba(55,53,45,0.2)" }, ballLook]}
         >
-          {/* The glass's frost and tint under its own (as a blur of the glass looked: the two blurs' as one). */}
-          <Frost tint={raised} alpha={0.72} px={24} style={StyleSheet.absoluteFill} />
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: withAlpha("#FFFFFF", dark ? 0.12 : 0.42) }]} />
-          {dark ? <Rim d={ballD} edge={0.22} lit={0.45} back={0.25} /> : <Rim d={ballD} edge={0.5} lit={0.95} back={0.55} />}
+          {LIQUID ? (
+            // iOS: a drop of the system's glass, clearer than the bar's, lit a little more.
+            <GlassView glassEffectStyle="clear" colorScheme={dark ? "dark" : "light"} tintColor={withAlpha("#FFFFFF", dark ? 0.08 : 0.3)} style={StyleSheet.absoluteFill} />
+          ) : (
+            <>
+              {/* The glass's frost and tint under its own (as a blur of the glass looked: the two blurs' as one). */}
+              <Frost tint={raised} alpha={0.72} px={24} style={StyleSheet.absoluteFill} />
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: withAlpha("#FFFFFF", dark ? 0.12 : 0.42) }]} />
+              {dark ? <Rim d={ballD} edge={0.22} lit={0.45} back={0.25} /> : <Rim d={ballD} edge={0.5} lit={0.95} back={0.55} />}
+            </>
+          )}
         </Animated.View>
         {/*
           The other bars, above this one, as the panel opens (each a row, every place as far from its row's edges as the

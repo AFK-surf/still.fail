@@ -1,7 +1,8 @@
 // The app: signed out it is the sign-in page; signed in, the chats of one workspace are home, and everything else is a
 // page pushed over it (no tab bar), or a sheet from the bottom (the Android app's App.kt).
-import { createContext, memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { BackHandler, Keyboard, Linking, StyleSheet, View, useWindowDimensions } from "react-native";
+import { createContext, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { BackHandler, Keyboard, Linking, Platform, StyleSheet, View, useWindowDimensions } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { requireOptionalNativeModule } from "expo-modules-core";
 import Animated, { Easing, cancelAnimation, runOnJS, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -323,7 +324,9 @@ const StillfailBack = requireOptionalNativeModule<BackNative>("StillfailBack");
  * its end to `done` and its calling off to `cancel` (`begin` as it starts). Without the system's steps (a tapped back,
  * or no module for them), only `begin` and `done`. The last added is asked first, as React Native's BackHandler asks.
  */
-function PredictiveBackHandler({ enabled, begin, progress, done, cancel }: { enabled: boolean; begin: () => void; progress: (e: BackEvent) => void; done: () => void; cancel: () => void }) {
+interface BackProps { enabled: boolean; begin: () => void; progress: (e: BackEvent) => void; done: () => void; cancel: () => void }
+
+function PredictiveBackHandler({ enabled, begin, progress, done, cancel }: BackProps) {
   const now = useRef({ enabled, begin, progress, done, cancel });
   now.current = { enabled, begin, progress, done, cancel };
   useEffect(() => { StillfailBack?.setEnabled(enabled); }, [enabled]);
@@ -349,6 +352,40 @@ function PredictiveBackHandler({ enabled, begin, progress, done, cancel }: { ena
     return () => { press.remove(); for (const s of subs) s.remove(); };
   }, []);
   return null;
+}
+
+/**
+ * iOS's back (UINavigationController's interactive pop): a finger drawn in from the screen's left edge brings the page
+ * under along with it, as the predictive back's steps do on Android; let go past a third of the way or moving right
+ * fast, it goes back, else the page comes back to rest. iOS has no back of its own to hear; Android's is the system's.
+ */
+function EdgeBack({ children, ...props }: BackProps & { children: ReactNode }) {
+  const now = useRef(props);
+  now.current = props;
+  const { width } = useWindowDimensions();
+  const going = useRef(false);
+  const gesture = useMemo(() => {
+    const at = (x: number, dx: number): BackEvent => ({ touchX: x, progress: Math.min(1, Math.max(0, dx / width)), swipeEdge: 0 });
+    const stop = (back: boolean) => { if (!going.current) return; going.current = false; if (back) now.current.done(); else now.current.cancel(); };
+    return Gesture.Pan()
+      .runOnJS(true)
+      .enabled(props.enabled)
+      .hitSlop({ left: 0, width: 24 })
+      .activeOffsetX(8)
+      .failOffsetY([-12, 12])
+      .onStart((e) => {
+        going.current = true;
+        now.current.begin();
+        // From where the finger first came down: it is a little way in by the time the pan starts.
+        now.current.progress(at(e.absoluteX - e.translationX, 0));
+        now.current.progress(at(e.absoluteX, e.translationX));
+      })
+      .onUpdate((e) => { if (going.current) now.current.progress(at(e.absoluteX, e.translationX)); })
+      .onEnd((e) => stop(e.translationX > width / 3 || e.velocityX > 600))
+      .onFinalize(() => stop(false));
+  }, [width, props.enabled]);
+  if (Platform.OS !== "ios") return <>{children}</>;
+  return <GestureDetector gesture={gesture}>{children}</GestureDetector>;
 }
 
 /**
@@ -606,74 +643,79 @@ function Pages({ app, current }: { app: AppState; current: WorkspaceEntry }) {
   order.current = [...order.current.filter((k) => mounted.has(k)), ...[...mounted].filter((k) => !order.current.includes(k))];
   for (const k of [...screens.keys()]) if (!mounted.has(k)) screens.delete(k);
 
+  // Back as the page under comes in with it: the system's predictive back on Android, a finger in from the left edge on iOS.
+  const back: BackProps = {
+    enabled: stack.length > 1 && !overlaid,
+    begin: () => { backing.current = { under: app.stack[app.stack.length - 2] ?? null, start: null, following: false }; },
+    progress: (e) => {
+      const b = backing.current;
+      // Only from a page at rest (not while one still moves in); by the finger's own way from where it began.
+      if (b.under == null || (runRef.current != null && !b.following)) return;
+      const x0 = b.start ?? (b.start = e.touchX);
+      const dx = e.swipeEdge === EDGE_RIGHT ? x0 - e.touchX : e.touchX - x0;
+      if (!b.following) { swiped.current = true; b.following = true; }
+      seekTo(Math.min(1, Math.max(0, dx / Math.max(1, width))), b.under);
+    },
+    done: () => {
+      const b = backing.current;
+      // Let go: on from where the finger left it at once, moving as it was (out, easing to rest), and only then off
+      // the stack. Popping first waited for the pages to render again, then started from still: a stop where the
+      // finger let go. Not called off once let go (another swipe meanwhile would run it backwards).
+      if (b.following && b.under != null) {
+        const under = b.under;
+        const from = fraction();
+        seekAlong(from, 1, Math.max(120, 280 * (1 - from)), EASE_OUT, () => {
+          snapTo(under);
+          swiped.current = false;
+          app.pop();
+        });
+        return;
+      }
+      app.pop();
+    },
+    cancel: () => {
+      const b = backing.current;
+      // Called off: back along the same way (the seek run backwards to 0, 200ms), then at rest on the page again.
+      if (b.following && b.under != null) {
+        seekAlong(fraction(), 0, 200, STANDARD, () => {
+          snapTo(app.stack[app.stack.length - 1]!);
+          swiped.current = false;
+        });
+      }
+    },
+  };
+
   return (
     <View style={{ flex: 1 }}>
       {/* Back first, so what is drawn after it (the bar's panel) is asked before it. */}
-      <PredictiveBackHandler
-        enabled={stack.length > 1 && !overlaid}
-        begin={() => { backing.current = { under: app.stack[app.stack.length - 2] ?? null, start: null, following: false }; }}
-        progress={(e) => {
-          const b = backing.current;
-          // Only from a page at rest (not while one still moves in); by the finger's own way from where it began.
-          if (b.under == null || (runRef.current != null && !b.following)) return;
-          const x0 = b.start ?? (b.start = e.touchX);
-          const dx = e.swipeEdge === EDGE_RIGHT ? x0 - e.touchX : e.touchX - x0;
-          if (!b.following) { swiped.current = true; b.following = true; }
-          seekTo(Math.min(1, Math.max(0, dx / Math.max(1, width))), b.under);
-        }}
-        done={() => {
-          const b = backing.current;
-          // Let go: on from where the finger left it at once, moving as it was (out, easing to rest), and only then off
-          // the stack. Popping first waited for the pages to render again, then started from still: a stop where the
-          // finger let go. Not called off once let go (another swipe meanwhile would run it backwards).
-          if (b.following && b.under != null) {
-            const under = b.under;
-            const from = fraction();
-            seekAlong(from, 1, Math.max(120, 280 * (1 - from)), EASE_OUT, () => {
-              snapTo(under);
-              swiped.current = false;
-              app.pop();
-            });
-            return;
-          }
-          app.pop();
-        }}
-        cancel={() => {
-          const b = backing.current;
-          // Called off: back along the same way (the seek run backwards to 0, 200ms), then at rest on the page again.
-          if (b.following && b.under != null) {
-            seekAlong(fraction(), 0, 200, STANDARD, () => {
-              snapTo(app.stack[app.stack.length - 1]!);
-              swiped.current = false;
-            });
-          }
-        }}
-      />
+      <PredictiveBackHandler {...back} />
       {/*
         A place's top page other than the chats, with nothing over it: back goes to the chats (the app's first place), in
         place as the bar switches, rather than out of the app.
       */}
       <BackHandlerOf enabled={root != null && root.kind !== "Home" && placeOf(root) != null && !overlaid} onBack={() => app.place({ kind: "Home" })} />
       {/* A view of its own (not flattened into its parent): the pages' zIndex orders them among themselves, not over the bar. */}
-      <View style={{ flex: 1 }} collapsable={false}>
-        <LocalWide.Provider value={wide}>
-          {order.current.map((key) => {
-            const screen = screens.get(key);
-            if (screen == null) return null;
-            const role: Role = run ? (key === run.to ? "in" : key === run.from ? "out" : "hidden") : key === keyOf(pages.current.currentState) ? "rest" : "hidden";
-            const parts = run == null ? null : role === "in" ? run.spec.enter : role === "out" ? run.spec.exit : null;
-            const z = zOf.current.get(key) ?? 0;
-            return (
-              <PageView
-                key={key} pageKey={key} app={app} current={current} screen={screen} role={role} parts={parts} play={play} width={width}
-                zIndex={role === "hidden" ? 0 : 1 + z * 2 + (role === "in" ? 1 : 0)} wide={wide} topics={topicsOf(key)}
-                inStack={stack.some((s) => sameScreen(s, screen))} isRoot={stack.length > 0 && sameScreen(stack[0], screen)}
-                letGoOf={() => { if (!app.stack.some((s) => keyOf(s) === key)) letGo((k) => k !== key); }}
-              />
-            );
-          })}
-        </LocalWide.Provider>
-      </View>
+      <EdgeBack {...back}>
+        <View style={{ flex: 1 }} collapsable={false}>
+          <LocalWide.Provider value={wide}>
+            {order.current.map((key) => {
+              const screen = screens.get(key);
+              if (screen == null) return null;
+              const role: Role = run ? (key === run.to ? "in" : key === run.from ? "out" : "hidden") : key === keyOf(pages.current.currentState) ? "rest" : "hidden";
+              const parts = run == null ? null : role === "in" ? run.spec.enter : role === "out" ? run.spec.exit : null;
+              const z = zOf.current.get(key) ?? 0;
+              return (
+                <PageView
+                  key={key} pageKey={key} app={app} current={current} screen={screen} role={role} parts={parts} play={play} width={width}
+                  zIndex={role === "hidden" ? 0 : 1 + z * 2 + (role === "in" ? 1 : 0)} wide={wide} topics={topicsOf(key)}
+                  inStack={stack.some((s) => sameScreen(s, screen))} isRoot={stack.length > 0 && sameScreen(stack[0], screen)}
+                  letGoOf={() => { if (!app.stack.some((s) => keyOf(s) === key)) letGo((k) => k !== key); }}
+                />
+              );
+            })}
+          </LocalWide.Provider>
+        </View>
+      </EdgeBack>
       {/* The bottom bar (Places.tsx): a phone's, on a place's top page with nothing over it; the keyboard up (a field on the page): out of its way. */}
       {!wide ? <PlaceBar app={app} current={current} haze={null} shown={root != null && placeOf(root) != null && !keyboardUp && !barAway} /> : null}
       {wide ? <WideCorners current={current} top={top} /> : null}
