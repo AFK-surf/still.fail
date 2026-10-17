@@ -795,8 +795,9 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
     return (
       <>
         <span className={css.mDeviceCode}>{job.userCode}</span>
-        <Button label={copied ? t("web-mobile.profiles.reopen") : t("web-mobile.profiles.copyOpen")} primary
-          onClick={() => { void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => app.toast(t("web-mobile.profiles.copyCodeFailed"))).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
+        {/* OpenCode's page has the code in its address: only compared there, not copied. */}
+        <Button label={provider === "OpenCode" ? t("web-mobile.profiles.openAuth") : copied ? t("web-mobile.profiles.reopen") : t("web-mobile.profiles.copyOpen")} primary
+          onClick={() => { if (provider === "OpenCode") return void window.open(job.url!, "_blank", "noopener"); void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => app.toast(t("web-mobile.profiles.copyCodeFailed"))).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
         <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{provider === "OpenCode" ? t("web-mobile.profiles.opencodeNote") : t("web-mobile.profiles.codexNote", { name: NAME })}</p>
       </>
     );

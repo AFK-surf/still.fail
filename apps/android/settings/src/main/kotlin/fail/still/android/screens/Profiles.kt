@@ -875,9 +875,14 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
         job.state == "needs_approval" && url != null && userCode != null -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(userCode, fontSize = 22.sp, letterSpacing = 2.sp, fontFamily = CodeFont, color = C.ink,
                 modifier = Modifier.clip(Smooth(10.dp)).background(C.chip).padding(horizontal = 14.dp, vertical = 8.dp))
-            Button(if (copied) t("android-settings.login.reopen") else t("android-settings.login.copyOpen"), primary = true) {
-                (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("still.fail", userCode))
-                copied = true; open(url)
+            // OpenCode's page has the code in its address: only compared there, not copied.
+            val filled = provider == "OpenCode"
+            Button(if (filled) t("android-settings.login.openPage") else if (copied) t("android-settings.login.reopen") else t("android-settings.login.copyOpen"), primary = true) {
+                if (!filled) {
+                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("still.fail", userCode))
+                    copied = true
+                }
+                open(url)
             }
             Text(if (provider == "OpenCode") t("android-settings.login.opencodeNote") else t("android-settings.login.codexNote", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted)
         }
