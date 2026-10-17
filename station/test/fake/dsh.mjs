@@ -79,7 +79,7 @@ async function turn(s, text) {
   }
   if (text === "tools") {
     const callId = `call_${++n}`;
-    update(s.id, { sessionUpdate: "tool_call", toolCallId: callId, title: "stillfail__chat_post", kind: "other", status: "in_progress", rawInput: { text: "hi" } });
+    update(s.id, { sessionUpdate: "tool_call", toolCallId: callId, title: "mcp__stillfail__chat_post", kind: "other", status: "in_progress", rawInput: { text: "hi" } });
     update(s.id, { sessionUpdate: "tool_call_update", toolCallId: callId, status: "failed", content: [{ type: "content", content: { type: "text", text: "fetch failed: ECONNREFUSED 127.0.0.1:4750" } }] });
   }
   if (text === "hold") {
