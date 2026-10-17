@@ -29,6 +29,11 @@ import fail.still.android.data.Topics
 import fail.still.android.screens.PhotoAccess
 import fail.still.android.screens.RECENT_TAG
 import fail.still.android.screens.photoAccess
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
+import kotlinx.serialization.json.put
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -67,12 +72,19 @@ class AttachTest {
         screenshots(context)
         grant()
         val h = open(false)
+        h.fake.answer = { name, params ->
+            if (name != "station.upload.part") JsonNull
+            else buildJsonObject {
+                put("file", buildJsonObject { put("name", params["name"]!!.jsonPrimitive.content); put("path", "uploads/" + params["name"]!!.jsonPrimitive.content); put("size", params["size"]!!.jsonPrimitive.long) })
+            }
+        }
         plus(h)
         picture(h, "attach-light-recent")
         // The newest, tapped: the sheet closed, the photo in the composer.
         rule.onAllNodesWithTag(RECENT_TAG).onFirst().performSemanticsAction(SemanticsActions.OnClick)
         Thread.sleep(800); h.settle()
         rule.runOnIdle { assertEquals(null, h.app.sheet) }
+        assertEquals("Screenshot_attach_5.png", h.fake.calls.last { it.first == "station.upload.part" }.second["name"]!!.jsonPrimitive.content)
         picture(h, "attach-light-picked")
     }
 

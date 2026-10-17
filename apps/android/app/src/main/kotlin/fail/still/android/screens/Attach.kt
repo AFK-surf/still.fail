@@ -213,7 +213,7 @@ private suspend fun thumbnail(context: Context, uri: Uri): ImageBitmap? = withCo
 /** The gallery's latest photos, as many as it lets the app read. */
 private suspend fun recentPhotos(context: Context): List<Uri> = withContext(Dispatchers.IO) {
     val args = Bundle().apply {
-        putStringArray(ContentResolver.QUERY_ARG_SORT_COLUMNS, arrayOf(MediaStore.Images.Media.DATE_ADDED))
+        putStringArray(ContentResolver.QUERY_ARG_SORT_COLUMNS, arrayOf(MediaStore.Images.Media.DATE_ADDED, MediaStore.Images.Media._ID))
         putInt(ContentResolver.QUERY_ARG_SORT_DIRECTION, ContentResolver.QUERY_SORT_DIRECTION_DESCENDING)
         putInt(ContentResolver.QUERY_ARG_LIMIT, RECENT)
     }

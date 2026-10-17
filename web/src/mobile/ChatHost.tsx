@@ -159,7 +159,7 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, inli
   }, [root]);
   const { menu, bar, expanded } = useComposerBar({
     draft, draftKey, sessionKey: shown.session ?? null, placeholder: shown.placeholder, locked,
-    onPlus: (anchor) => openAttach(app, anchor, upload, () => openStationFiles(app, shown.station, (items) => now.current.addDropped(items))), onType: () => latest.current?.type?.(), onSend: () => {
+    onPlus: (plus) => openAttach(app, plus, upload, () => openStationFiles(app, shown.station, (items) => now.current.addDropped(items))), onType: () => latest.current?.type?.(), onSend: () => {
       // What it refers to of other workspaces is shared first, when the viewer says (Chat.tsx sendSharing).
       const spec = latest.current;
       if (spec) sendSharing(app, spec.station, now.current.text, () => spec.send(now.current));

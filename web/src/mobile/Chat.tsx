@@ -407,10 +407,10 @@ export type Draft = SharedDraft & { focus: number; bumpFocus(): void };
 
 /**
  * ＋: take a photo, pick photos, pick files; or (`onStation`) a station's files, named by their path (StationFiles.tsx).
- * A menu over ＋ (`anchor`), as a long-pressed message's: the phone app's sheet of recent photos needs the gallery,
- * which a page cannot read.
+ * A menu over the composer's capsule (`plus` its ＋), as a long-pressed message's: the phone app's sheet of recent
+ * photos needs the gallery, which a page cannot read.
  */
-export function openAttach(app: MobileApp, anchor: DOMRect, onPicked: (files: FileList) => void, onStation?: () => void) {
+export function openAttach(app: MobileApp, plus: HTMLElement, onPicked: (files: FileList) => void, onStation?: () => void) {
   const pick = (accept: string, capture: boolean) => {
     const input = document.createElement("input");
     input.type = "file";
@@ -420,12 +420,17 @@ export function openAttach(app: MobileApp, anchor: DOMRect, onPicked: (files: Fi
     input.onchange = () => { if (input.files?.length) onPicked(input.files); };
     input.click();
   };
-  app.menu({ anchor, items: [
-    { label: t("web-mobile.chat.camera"), icon: <Camera size={18} />, action: () => pick("image/*", true) },
-    { label: t("web-mobile.chat.photos"), icon: <Photo size={18} />, action: () => pick("image/*", false) },
-    { label: t("web-mobile.chat.files"), icon: <File size={18} />, action: () => pick("*/*", false) },
-    ...(onStation ? [{ label: t("web-pages.chat.files"), icon: <Server size={18} />, action: onStation }] : []),
-  ] });
+  // From ＋'s left, over all of the capsule (its files and quotes too), as it is once ＋ has taken the focus.
+  requestAnimationFrame(() => {
+    const capsule = (plus.closest("[data-made-composer]") ?? plus.parentElement!).getBoundingClientRect();
+    const anchor = new DOMRect(plus.getBoundingClientRect().left, capsule.top, 0, capsule.height);
+    app.menu({ anchor, items: [
+      { label: t("web-mobile.chat.camera"), icon: <Camera size={18} />, action: () => pick("image/*", true) },
+      { label: t("web-mobile.chat.photos"), icon: <Photo size={18} />, action: () => pick("image/*", false) },
+      { label: t("web-mobile.chat.files"), icon: <File size={18} />, action: () => pick("*/*", false) },
+      ...(onStation ? [{ label: t("web-pages.chat.files"), icon: <Server size={18} />, action: onStation }] : []),
+    ] });
+  });
 }
 
 /**
@@ -436,7 +441,7 @@ export function openAttach(app: MobileApp, anchor: DOMRect, onPicked: (files: Fi
  */
 export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locked = false, onPlus, onType, onSend }: {
   draft: Draft; draftKey: string | undefined; sessionKey: string | null; placeholder: string; locked?: boolean;
-  onPlus: (anchor: DOMRect) => void; onType: () => void; onSend: () => void;
+  onPlus: (plus: HTMLElement) => void; onType: () => void; onSend: () => void;
 }): { menu: ReactNode; bar: ReactNode; expanded: boolean } {
   const input = useRef<HTMLTextAreaElement>(null);
   const [focused, setFocused] = useState(false);
@@ -450,7 +455,7 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
   const bar = (
     <div className={css.mComposerBar} data-expanded={expanded || undefined}
       onFocus={() => setFocused(true)} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false); }}>
-      <button type="button" className={css.mPlus} onClick={(e) => onPlus(e.currentTarget.getBoundingClientRect())} disabled={locked} aria-label={t("web-mobile.chat.addFiles")}><Plus size={18} /></button>
+      <button type="button" className={css.mPlus} onClick={(e) => onPlus(e.currentTarget)} disabled={locked} aria-label={t("web-mobile.chat.addFiles")}><Plus size={18} /></button>
       {field}
       <button type="button" className={css.mSend} data-ready={ready || undefined} disabled={!ready} onClick={onSend} aria-label={t("web-mobile.chat.send")}>
         {draft.starting ? <Spinner size={16} color="var(--m-surface)" /> : <ArrowUp size={18} />}
