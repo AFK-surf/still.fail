@@ -26,7 +26,8 @@ if [ "${1:-}" = stop ]; then
   exit 0
 fi
 
-APK=$ROOT/apps/android/app/build/outputs/apk/debug/app-debug.apk
+# APK, ACTIVITY, OUT: another app's screenshots the same way (the React Native app: BUILD=0, its APK and activity).
+APK=${APK:-$ROOT/apps/android/app/build/outputs/apk/debug/app-debug.apk}
 if [ "${BUILD:-1}" != 0 ]; then
   (cd "$ROOT" && { [ -d .git ] || { git init -q && git add -A && git -c user.email=devenv@local -c user.name=devenv commit -qm mirror --no-verify; }; })
   echo "sdk.dir=$SDK" > "$ROOT/apps/android/local.properties"
@@ -55,4 +56,4 @@ fi
 a install -r -t -d "$APK" > /dev/null
 a reverse tcp:$PORT tcp:$PORT
 a reverse tcp:3340 tcp:3340
-bash "$HERE/shots.sh" fail.still.android.motion/fail.still.android.MainActivity "$HERE/ref"
+bash "$HERE/shots.sh" "${ACTIVITY:-fail.still.android.motion/fail.still.android.MainActivity}" "${OUT:-$HERE/ref}"
