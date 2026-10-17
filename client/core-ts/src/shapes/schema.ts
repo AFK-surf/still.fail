@@ -10,7 +10,7 @@
 import { map, opt, struct, tagged, vec, words, type Shape } from "./dsl.ts";
 
 export const SHAPES: Record<string, Shape> = {
-  RuntimeKind: words(["claude","codex"], { doc: "A runtime." }),
+  RuntimeKind: words(["claude","codex","dsh"], { doc: "A runtime: Claude Code, Codex or DeepSeek Harness." }),
   AccessKind: words(["subscription","opencode-go","anthropic-api","env","api-provider"], { doc: "Whose account a profile runs on." }),
   ConnectMode: words(["multi-session","single-session"], { doc: "How a connect's conversations become sessions." }),
   Tone: words(["accent","green","blue","red","amber","neutral"], { doc: "A colour of meaning." }),
@@ -82,7 +82,7 @@ export const SHAPES: Record<string, Shape> = {
     ["boundTo", opt(vec("String"))],
     ["creator", opt("Creator")],
     ["participants", opt(vec("Creator"))],
-    ["runtime", "RuntimeKind", { doc: "claude | codex" }],
+    ["runtime", "RuntimeKind", { doc: "claude | codex | dsh" }],
     ["profile", opt("String")],
     ["profilePinned", opt("bool")],
     ["model", opt("String")],
@@ -450,8 +450,8 @@ export const SHAPES: Record<string, Shape> = {
     ["series", vec("ModelSeries"), { doc: "Its models and those its check found, by series (Claude's biggest first, the rest by name; 其他 last), newest\nfirst: how the list to enable them from is laid out." }],
     ["modelsText", "String", { doc: "How many of the models it could run are enabled, in words." }],
     ["available", vec("String"), { default: true, doc: "What can be enabled on it: what its provider lists, then whatever is enabled already, each once." }],
-    ["uses", vec("String"), { default: true, doc: "What it can do: `claude`, `codex`, `decision` (the automatic decisions). The core works it out from where its\nprovider speaks and what its check found." }],
-    ["usesText", "String", { default: true, doc: "What it can do, in words (Claude Code · Codex · 自动决策)." }],
+    ["uses", vec("String"), { default: true, doc: "What it can do: `claude`, `codex`, `dsh`, `decision` (the automatic decisions). The core works it out from where its\nprovider speaks and what its check found." }],
+    ["usesText", "String", { default: true, doc: "What it can do, in words (Claude Code · Codex · DeepSeek Harness · 自动决策)." }],
     ["providerName", opt("String"), { doc: "The provider of a key from the list of API providers, and the mark of its maker (none: the generic one)." }],
     ["providerMark", opt("String")],
     ["canAddModel", "bool", { default: true, doc: "A model can be named by hand (a key on a listed provider: not every one lists its models)." }],
@@ -563,7 +563,7 @@ export const SHAPES: Record<string, Shape> = {
     ["offered", "bool", { default: true, doc: "Offered for a profile: signed in, on a plan, and no profile on it yet." }],
   ], { doc: "Who the station machine's own Claude Code or Codex is signed in as (only read: still.fail never takes the login over)." }),
   SoftwareVersion: struct([
-    ["id", "String", { doc: "station | claude | codex" }],
+    ["id", "String", { doc: "station | claude | codex | dsh" }],
     ["name", "String"],
     ["installed", "bool", { doc: "On the machine (a runtime may not be: then `updatable` says it can be installed from here)." }],
     ["version", opt("String"), { doc: "What runs now; none when it is not installed, or not a release (a clone)." }],
@@ -581,7 +581,7 @@ export const SHAPES: Record<string, Shape> = {
     ["done", opt("String"), { doc: "The station's, for a while after an update ended well: how it went (已更新到 0.1.1300，agent 没有中断)." }],
     ["message", opt("String"), { doc: "What the last update that failed said." }],
     ["checkedAt", opt("i64"), { client: opt("I54"), doc: "When what is out was last read." }],
-  ], { doc: "A piece of software on a station and whether a newer one is out (the station's updates): the station itself (`station`) or a\nruntime (`claude`, `codex`)." }),
+  ], { doc: "A piece of software on a station and whether a newer one is out (the station's updates): the station itself (`station`) or a\nruntime (`claude`, `codex`, `dsh`)." }),
   ApiProvider: struct([
     ["id", "String"],
     ["name", "String"],
@@ -590,12 +590,12 @@ export const SHAPES: Record<string, Shape> = {
     ["kind", "String", { default: true, doc: "How a profile on it is made: api-provider | opencode-go | anthropic-api | env (variables by hand)." }],
     ["hasKey", "bool", { default: true, doc: "It has a key to add, and/or a subscription to sign in (OpenAI: ChatGPT; Anthropic: Claude)." }],
     ["hasPlan", "bool", { default: true }],
-    ["runtime", opt("String"), { doc: "Of its subscription, or of the variables: the runtime (claude | codex)." }],
+    ["runtime", opt("String"), { doc: "Of its subscription, or of the variables: the runtime (claude | codex | dsh)." }],
     ["endpointRequired", "bool", { default: true, doc: "Its address is the person's own: asked for with the key." }],
     ["endpointExample", opt("String"), { doc: "An example of such an address." }],
     ["protocols", vec("String"), { default: true, doc: "At such an address, the protocols it can speak there (more than one: asked which)." }],
     ["keyOptional", "bool", { default: true, doc: "Works without a key." }],
-    ["uses", vec("String"), { default: true, doc: "What a profile on it can do: `claude`, `codex`, `decision`." }],
+    ["uses", vec("String"), { default: true, doc: "What a profile on it can do: `claude`, `codex`, `dsh`, `decision`." }],
     ["usesText", "String", { default: true, doc: "What the core says of it: what it can do, in words." }],
   ], { doc: "A provider a key can be added for (shapes/providers.ts); a station lists its ids (`id`, `name`, `group`), the core fills the\nrest in as the picker's tiles." }),
   ProviderGroup: struct([

@@ -329,7 +329,7 @@ export const stories: Story[] = [
     render: () => sheet([
       ["标签", <><Pill>普通</Pill><Pill tone="green">在线</Pill><Pill tone="blue">进行中</Pill><Pill tone="amber">等待</Pill><Pill tone="red">失败</Pill><Pill tone="accent">强调</Pill></>],
       ["状态", <><StatusDot state="online" label="在线" /><StatusDot state="busy" label="忙" /><StatusDot state="error" label="出错" /><StatusDot state="offline" label="离线" /><StatusText text="已连接 · 3 分钟前" /></>],
-      ["模型和运行时", <><ModelLogo maker={ANTHROPIC} runtime="claude" size={20} /><ModelLogo maker={OPENAI} runtime="codex" size={20} /><AgentMark maker={ANTHROPIC} runtime="claude" badge={undefined} size={28} /><RuntimeTags runtimes={["claude", "codex"]} /></>],
+      ["模型和运行时", <><ModelLogo maker={ANTHROPIC} runtime="claude" size={20} /><ModelLogo maker={OPENAI} runtime="codex" size={20} /><ModelLogo maker={null} runtime="dsh" size={20} /><AgentMark maker={ANTHROPIC} runtime="claude" badge={undefined} size={28} /><RuntimeTags runtimes={["claude", "codex", "dsh"]} /></>],
     ]),
   },
   {

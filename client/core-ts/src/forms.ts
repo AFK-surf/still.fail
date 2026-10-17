@@ -5,6 +5,7 @@
 import * as brand from "./brand.ts";
 import { conform } from "./conform.ts";
 import { CoreError } from "./error.ts";
+import * as format from "./format.ts";
 import { t } from "./i18n.ts";
 import * as present from "./present.ts";
 import type { ClientId, Topic } from "./protocol.ts";
@@ -612,21 +613,28 @@ export class ConnectFlows {
 
 // ── the add-profile pages (profile_flow.rs) ──
 
-const usesNames = (u: providers.Uses) => ([[u.claude, "claude"], [u.codex, "codex"], [u.decision, "decision"]] as [boolean, string][]).filter(([on]) => on).map(([, id]) => id);
-const usesTextOf = (ids: string[]) => ids.map((u) => (u === "claude" ? t("core-views.present.uses.claude") : u === "codex" ? t("core-views.present.uses.codex") : t("core-views.present.uses.decision"))).join(" · ");
-const runtimeName = (r: string) => (r === "claude" ? "Claude Code" : "Codex");
+const usesNames = (u: providers.Uses) => ([[u.claude, "claude"], [u.codex, "codex"], [u.dsh, "dsh"], [u.decision, "decision"]] as [boolean, string][]).filter(([on]) => on).map(([, id]) => id);
+const usesTextOf = present.usesText;
+const runtimeName = format.runtimeLabel;
 
-function usesOf(source: providers.Source, endpoint: string | null, protocol: string | null): string[] {
+/// The runtimes a station can run: Claude Code and Codex on any; DeepSeek Harness on one that lists its version (a station
+/// from before it does not, and is not offered it).
+export function stationRuntimes(overview: J): string[] {
+  const known = arr(get(overview, "updates")).some((u) => get(u, "id") === "dsh");
+  return format.RUNTIMES.filter((r) => r !== "dsh" || known);
+}
+
+function usesOf(source: providers.Source, endpoint: string | null, protocol: string | null, runtimes: string[]): string[] {
   const own = source.endpointRequired ? (endpoint ?? providers.example(source.id)) : null;
   const p = protocol ?? source.protocols?.[0] ?? null;
   const at = providers.endpoints(source, own, source.endpointRequired ? p : null);
-  return at !== null ? usesNames(providers.uses(at)) : [];
+  return at !== null ? usesNames(providers.uses(at)).filter((u) => u === "decision" || runtimes.includes(u)) : [];
 }
 
-function tileOf(source: providers.Source, hasKey: boolean, hasPlan: boolean): J {
+function tileOf(source: providers.Source, hasKey: boolean, hasPlan: boolean, runtimes: string[]): J {
   const kind = source.legacy === "opencode-go" ? "opencode-go" : source.legacy === "anthropic-api" ? "anthropic-api" : "api-provider";
   const runtime = source.id === "openai" ? "codex" : source.id === "anthropic" ? "claude" : null;
-  const uses = usesOf(source, null, null);
+  const uses = usesOf(source, null, null, runtimes);
   const cn = providers.chinaOf(source.id);
   return {
     id: source.id,
@@ -647,18 +655,19 @@ function tileOf(source: providers.Source, hasKey: boolean, hasPlan: boolean): J 
   };
 }
 
-/// The picker's groups: every provider the station can take a key for, those with a plan, the variables by hand.
-export function groups(supported: string[] | null): J[] {
+/// The picker's groups: every provider the station can take a key for, those with a plan, the variables by hand (for
+/// each runtime it can run, `runtimes`).
+export function groups(supported: string[] | null, runtimes: string[] = format.RUNTIMES): J[] {
   const listed = (id: string) => supported !== null && supported.includes(id);
   const out: J[] = [];
   for (const group of providers.GROUPS) {
     const tiles = providers.SOURCES.filter((s) => s.group === group && !providers.isChinaVariant(s.id)).flatMap((s) => {
       const hasKey = s.legacy !== undefined || listed(s.id);
       const hasPlan = s.id === "openai" || s.id === "anthropic";
-      return hasKey || hasPlan ? [tileOf(s, hasKey, hasPlan)] : [];
+      return hasKey || hasPlan ? [tileOf(s, hasKey, hasPlan, runtimes)] : [];
     });
     if (group === "local") {
-      for (const runtime of ["claude", "codex"]) {
+      for (const runtime of runtimes) {
         const uses = [runtime];
         tiles.push({ id: `env-${runtime}`, name: t("core-views.flow.env", { runtime: runtimeName(runtime) }), group: "local", kind: "env", hasKey: false, hasPlan: false, runtime, endpointRequired: false, protocols: [], keyOptional: true, uses, usesText: usesTextOf(uses) });
       }
@@ -677,7 +686,8 @@ const findTile = (gs: J[], id: string): J => gs.flatMap((g) => arr(g.providers))
 const blank = () => ({ provider: "", method: "", endpoint: "", protocol: "", region: "", key: "", error: null, pending: false });
 
 function profileView(station: string, draft: J, overview: J): J {
-  const gs = groups(supportedOf(overview));
+  const runtimes = stationRuntimes(overview);
+  const gs = groups(supportedOf(overview), runtimes);
   const tile = typeof draft.provider === "string" ? findTile(gs, draft.provider) : undefined;
   const method = typeof draft.method === "string" && draft.method !== "" ? draft.method : null;
   const out: J = {
@@ -736,7 +746,7 @@ function profileView(station: string, draft: J, overview: J): J {
   const source = providers.find(sourceId);
   const untried = source !== null && !!source.decision && !source.chat && !source.responses && !source.anthropic;
   out.submitLabel = untried ? t("core-views.flow.add") : t("core-views.flow.verify_add");
-  const uses = source !== null ? usesOf(source, endpoint !== "" ? endpoint : null, protocol) : [];
+  const uses = source !== null ? usesOf(source, endpoint !== "" ? endpoint : null, protocol, runtimes) : [];
   out.usesLine = uses.length === 0 ? t("core-views.flow.uses_none") : t("core-views.flow.uses", { uses: usesTextOf(uses) });
   return out;
 }
@@ -785,7 +795,8 @@ export class ProfileFlows {
     }
     if (action === "edit") {
       if (d.pending) throw CoreError.invalid(t("core-views.flow.wait"));
-      const gs = groups(supportedOf(overviewOf(this.#store, station)));
+      const o = overviewOf(this.#store, station);
+      const gs = groups(supportedOf(o), stationRuntimes(o));
       if (!isObject(patch)) return null;
       if (typeof patch.provider === "string") {
         if (patch.provider === "") d.value = blank();

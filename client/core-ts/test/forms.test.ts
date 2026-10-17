@@ -209,6 +209,30 @@ test("a_vendor_with_a_plan_and_a_key_asks_which_and_one_with_a_key_goes_straight
   assert.equal(flows.value(topic).error, null);
 });
 
+test("deepseek_harness_is_offered_where_the_station_runs_it_on_any_endpoint", () => {
+  const { s, flows, topic } = flow();
+  flows.change(topic, 1, "open", {});
+  s.set(overview, { ok: { apiProviders: [{ id: "deepseek" }], updates: [{ id: "station" }, { id: "dsh" }] } });
+  let view = flows.value(topic);
+  assert.ok("ok" in conform("ProfileFlowView", view), JSON.stringify(conform("ProfileFlowView", view)));
+  const tiles = view.groups.flatMap((g: J) => g.providers);
+  assert.deepEqual(view.groups.find((g: J) => g.id === "local").providers.map((p: J) => p.id), ["env-claude", "env-codex", "env-dsh"]);
+  assert.equal(tiles.find((p: J) => p.id === "anthropic").usesText, "Claude Code · DeepSeek Harness");
+  assert.equal(tiles.find((p: J) => p.id === "opencode-go").usesText, "Claude Code · Codex · DeepSeek Harness · 自动决策");
+  flows.change(topic, 1, "edit", { provider: "deepseek", key: "k" });
+  assert.equal(flows.value(topic).usesLine, "添加后可用于：DeepSeek Harness · 自动决策");
+  flows.change(topic, 1, "edit", { provider: "env-dsh" });
+  view = flows.value(topic);
+  assert.deepEqual([view.title, view.usesLine], ["连接 环境变量（DeepSeek Harness）", "添加后可用于：DeepSeek Harness"]);
+  assert.deepEqual(flows.begin(topic, 1), { runtime: "dsh", access: { kind: "env" } });
+  flows.finish(topic, 1, null);
+  // A station from before it: not offered, and a key is said to be for what that station runs.
+  s.set(overview, { ok: { apiProviders: [{ id: "deepseek" }], updates: [{ id: "station" }] } });
+  assert.throws(() => flows.change(topic, 1, "edit", { provider: "env-dsh" }));
+  flows.change(topic, 1, "edit", { provider: "deepseek", key: "k" });
+  assert.equal(flows.value(topic).usesLine, "添加后可用于：自动决策");
+});
+
 test("jev_is_added_for_the_decisions_alone_and_its_key_is_not_tried_on_adding", () => {
   const { s, flows, topic } = flow();
   flows.change(topic, 1, "open", {});

@@ -43,12 +43,27 @@ test("frequent_combos_deduplicate_aliases_and_limit_visible_and_stored_history",
 });
 
 test("speed_choices_preserve_false_and_follow_the_runtime", () => {
-  const options = [{ model: "gpt-6-astra", runtimes: ["codex", "claude"], efforts: {}, accounts: {} }];
+  const options = [{ model: "gpt-6-astra", runtimes: ["codex", "claude", "dsh"], efforts: {}, accounts: {} }];
   for (const fast of [true, false, null]) {
     const r = resolve(options, { runtime: "codex", model: "gpt-6-astra", fast });
     assert.equal(r.fast, fast);
   }
   assert.equal(resolve(options, { runtime: "claude", fast: true }).fast, null);
+  assert.deepEqual([resolve(options, { runtime: "dsh", fast: true }).runtime, resolve(options, { runtime: "dsh", fast: true }).fast], ["dsh", null]);
+});
+
+test("the_runtimes_a_chat_starts_on_are_offered_claude_codex_then_deepseek_harness", () => {
+  const overview = {
+    profiles: [
+      { id: "ds", runtimes: ["dsh"], models: ["deepseek-v4"] },
+      { id: "oc", runtimes: ["dsh", "codex", "claude"], models: ["glm-5"] },
+    ],
+  };
+  const list = models(overview, 0);
+  assert.deepEqual(list.find((m: J) => m.model === "glm-5").runtimes, ["claude", "codex", "dsh"]);
+  const ds = list.find((m: J) => m.model === "deepseek-v4");
+  assert.deepEqual([ds.runtimes, ds.efforts.dsh], [["dsh"], ["low", "medium", "high", "max"]]);
+  assert.equal(machineMeta({ runtime: "dsh", cwd: "/tmp/x" }, 0).meta, "DeepSeek Harness · /tmp/x");
 });
 
 test("model_efforts_follow_the_account_and_survive_resolving_saved_choices", () => {

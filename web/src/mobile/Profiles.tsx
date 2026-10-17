@@ -7,7 +7,7 @@ import { useParams, useSearchParams } from "react-router";
 import { stationApi, useAction, useMemberships, useOverview, useProfiles, useStationCall, useStations, type LoginJob, type Profile, type Quota, type StationView, type Tone } from "../api.ts";
 import type { MachineLogin, ProfileFlowView, WorkspaceProfile } from "../core/shapes.ts";
 import { hosts, profileGroups } from "../cloud/settings.tsx";
-import { ACCESS, KEYED } from "../format.ts";
+import { ACCESS, KEYED, RUNTIME_LABEL } from "../format.ts";
 import { Check, ChevronRight, More } from "@stillfail/ui/icons.tsx";
 import type { Choice } from "../pages/Accounts.tsx";
 import { useProfileFlow } from "../profileFlow.ts";
@@ -963,7 +963,6 @@ function machineOffers(logins: MachineLogin[] | undefined): MachineLogin[] {
   return (logins ?? []).filter((l) => l.offered);
 }
 
-const MACHINE_RUNTIME: Record<MachineLogin["runtime"], string> = { claude: "Claude Code", codex: "Codex" };
 
 /**
  * The accounts the station machine's own Claude Code and Codex are signed in with, not used by a profile yet (as the
@@ -998,7 +997,7 @@ export function MachineLoginOffers({ logins, onSignIn, inForm = false }: { login
             <ListRow key={l.runtime}>
               <ProviderMark runtime={l.runtime} kind="subscription" size={18} />
               <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-                <span className={listsCss.mRowTitle}><Presence state={blocked ? "error" : "online"} /> {MACHINE_RUNTIME[l.runtime]}{plan && <span className={settingsCss.mRowAside}> · {plan}</span>}</span>
+                <span className={listsCss.mRowTitle}><Presence state={blocked ? "error" : "online"} /> {RUNTIME_LABEL[l.runtime]}{plan && <span className={settingsCss.mRowAside}> · {plan}</span>}</span>
                 <span className={listsCss.mRowNote}>{blocked ? t("web-mobile.history.blocked") : t("web-mobile.profiles.machineSignedIn")}{l.email ? ` · ${l.email}` : ""}</span>
                 {trouble && <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{trouble}</span>}
               </span>

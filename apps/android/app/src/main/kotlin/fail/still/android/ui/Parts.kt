@@ -106,15 +106,16 @@ private val MAKER_MARKS = mapOf(
     "huggingface" to R.drawable.maker_huggingface,
     "nvidia" to R.drawable.maker_nvidia,
     "baseten" to R.drawable.maker_baseten,
+    "dsh" to R.drawable.maker_dsh,
 )
 
 /** Marks of one colour, drawn in the page's ink. */
-private val MONO = setOf("anthropic", "openai", "kimi", "xai", "mistral", "xiaomi", "ant-ling", "openrouter", "vercel", "cloudflare", "azure", "groq", "together", "fireworks", "cerebras", "huggingface", "nvidia", "baseten")
+private val MONO = setOf("anthropic", "openai", "kimi", "xai", "mistral", "xiaomi", "ant-ling", "openrouter", "vercel", "cloudflare", "azure", "groq", "together", "fireworks", "cerebras", "huggingface", "nvidia", "baseten", "dsh")
 
-/** The mark of the company that made a model (the core says which); for one it does not know, its runtime's maker's. */
+/** The mark of the company that made a model (the core says which); for one it does not know, its runtime's maker's (DeepSeek Harness's own). */
 @Composable
 fun MakerIcon(maker: Maker?, runtime: String?, size: Dp, modifier: Modifier = Modifier) {
-    val id = maker?.id?.takeIf { it in MAKER_MARKS } ?: if (runtime == "codex") "openai" else "anthropic"
+    val id = maker?.id?.takeIf { it in MAKER_MARKS } ?: when (runtime) { "codex" -> "openai"; "dsh" -> "dsh"; else -> "anthropic" }
     Image(painterResource(MAKER_MARKS.getValue(id)), maker?.name, modifier.size(size), colorFilter = if (id in MONO) ColorFilter.tint(C.ink) else null)
 }
 

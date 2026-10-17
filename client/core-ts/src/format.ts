@@ -362,8 +362,14 @@ export function efforts(runtime: string): string[] {
   return reasoning.fallback(runtime);
 }
 
+/// The runtimes a chat can run on, in the order they are offered.
+export const RUNTIMES = ["claude", "codex", "dsh"];
+
+/// The runtimes by name, the same in every language.
+const RUNTIME_NAMES: Record<string, string> = { claude: "Claude Code", codex: "Codex", dsh: "DeepSeek Harness" };
+
 export function runtimeLabel(runtime: string): string {
-  return runtime === "codex" ? "Codex" : "Claude Code";
+  return RUNTIME_NAMES[runtime] ?? "Claude Code";
 }
 
 /// A connect's link to Slack in words, and its dot.

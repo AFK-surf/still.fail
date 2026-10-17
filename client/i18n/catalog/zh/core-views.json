@@ -261,8 +261,6 @@
   "core-views.present.trouble.unavailable": "额度查询失败",
   "core-views.present.trouble.unavailable_detail": "暂时无法获取额度",
   "core-views.present.trouble.unavailable_next": "无法获取额度不代表账号不可用。请先重新查询；仍失败时按返回原因检查登录或网络。",
-  "core-views.present.uses.claude": "Claude Code",
-  "core-views.present.uses.codex": "Codex",
   "core-views.present.uses.decision": "自动决策",
   "core-views.present.waiting": "等待中",
   "core-views.present.waiting_for": "等待：{what}",

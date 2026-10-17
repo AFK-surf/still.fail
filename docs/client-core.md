@@ -403,7 +403,7 @@ collapsed); else its Slack channel (`#name`), `私信` for a direct message, or
   "link": { "state": "online", "message": null },
   "overview": { … } | null,                                      // null while offline or not yet read
   "host": { … } | null,
-  "runtimes": [{ "runtime": "claude", "models": ["…"] }]         // claude, codex if a profile has models enabled; those models, distinct and sorted
+  "runtimes": [{ "runtime": "claude", "models": ["…"] }]         // claude, codex, dsh if a profile has models enabled; those models, distinct and sorted
 }]
 
 // chat

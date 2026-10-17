@@ -3,8 +3,8 @@ import { profilesPage, stationBase, useStation, useLink } from "../station.tsx";
 import { Chart, ChevronRight, Edit, External, LogIn, Plus, Refresh, Trash } from "@stillfail/ui/icons.tsx";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useAction, useApi, useMemberships, useOverview, useProfiles, type AccessKind, type LoginJob, type Overview, type ProfileInput, type Profile, type RuntimeKind } from "../api.ts";
-import { ACCESS, KEYED } from "../format.ts";
+import { useAction, useApi, useMemberships, useOverview, useProfiles, type AccessKind, type LoginJob, type Overview, type ProfileInput, type Profile } from "../api.ts";
+import { ACCESS, KEYED, RUNTIME_LABEL } from "../format.ts";
 import { useUsage, usageCss } from "../Usage.tsx";
 import { useProfilesSidebar } from "../ProfilesNav.tsx";
 import { hosts } from "../cloud/settings.tsx";
@@ -94,7 +94,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
   const remove = useAction(() => api.deleteProfile(profile.id), () => toast(profile.machine ? t("web-pages.profiles.disabled") : t("web-pages.profiles.deleted")));
   // One on the machine's login is stopped rather than deleted: the login stays the machine's, to be used again.
   const removal = profile.machine
-    ? { item: t("web-pages.profiles.disable"), title: t("web-pages.profiles.disableConfirm", { name: profile.name }), action: t("web-pages.profiles.disable"), description: t("web-pages.profiles.disableBody", { name: NAME, runtime: MACHINE_RUNTIME[profile.runtime] }) }
+    ? { item: t("web-pages.profiles.disable"), title: t("web-pages.profiles.disableConfirm", { name: profile.name }), action: t("web-pages.profiles.disable"), description: t("web-pages.profiles.disableBody", { name: NAME, runtime: RUNTIME_LABEL[profile.runtime] }) }
     : { item: t("web-pages.profiles.delete"), title: t("web-pages.archive.deleteConfirm", { title: profile.name }), action: t("web-pages.profiles.delete"), description: t("web-pages.profiles.deleteBody", { name: NAME }) };
   const check = useAction(() => api.checkProfile(profile.id));
   const saveThen = (input: ProfileInput, done: () => void) => void save.run(input).then((ok) => { if (ok) done(); });
@@ -200,7 +200,6 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
   );
 }
 
-const MACHINE_RUNTIME: Record<RuntimeKind, string> = { claude: "Claude Code", codex: "Codex" };
 
 /**
  * What it spent in the last 7 days (the core's `usage`, its row by account): on this station, and on the others that
@@ -388,7 +387,7 @@ export function PickStations({ stations, self, allowed, onClose, onSave }: {
 /** A profile on the machine's own login: whose it is, and that it is changed on the machine. */
 function MachineAccount({ profile }: { profile: Profile }) {
   const station = useStation();
-  const runtime = MACHINE_RUNTIME[profile.runtime];
+  const runtime = RUNTIME_LABEL[profile.runtime];
   return (
     <Section title={t("web-pages.profiles.account")}>
       <p>{station.name ? t("web-pages.profiles.machineLoginOn", { station: station.name, runtime }) : t("web-pages.profiles.machineLoginHere", { runtime })}<About>{t("web-pages.profiles.machineLoginAbout", { runtime })}</About></p>

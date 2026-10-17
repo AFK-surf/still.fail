@@ -108,7 +108,7 @@ data class AgentCardView (
 	val attention: List<AgentCardNote>
 )
 
-/// A runtime.
+/// A runtime: Claude Code, Codex or DeepSeek Harness.
 typealias RuntimeKind = String
 
 @Serializable
@@ -145,7 +145,7 @@ data class ApiProvider (
 	/// It has a key to add, and/or a subscription to sign in (OpenAI: ChatGPT; Anthropic: Claude).
 	val hasKey: Boolean? = null,
 	val hasPlan: Boolean? = null,
-	/// Of its subscription, or of the variables: the runtime (claude | codex).
+	/// Of its subscription, or of the variables: the runtime (claude | codex | dsh).
 	val runtime: String? = null,
 	/// Its address is the person's own: asked for with the key.
 	val endpointRequired: Boolean? = null,
@@ -155,7 +155,7 @@ data class ApiProvider (
 	val protocols: List<String>? = null,
 	/// Works without a key.
 	val keyOptional: Boolean? = null,
-	/// What a profile on it can do: `claude`, `codex`, `decision`.
+	/// What a profile on it can do: `claude`, `codex`, `dsh`, `decision`.
 	val uses: List<String>? = null,
 	/// What the core says of it: what it can do, in words.
 	val usesText: String? = null
@@ -758,7 +758,7 @@ data class Session (
 	val boundTo: List<String>? = null,
 	val creator: Creator? = null,
 	val participants: List<Creator>? = null,
-	/// claude | codex
+	/// claude | codex | dsh
 	val runtime: RuntimeKind,
 	val profile: String? = null,
 	val profilePinned: Boolean? = null,
@@ -1003,10 +1003,10 @@ data class Profile (
 	val modelsText: String,
 	/// What can be enabled on it: what its provider lists, then whatever is enabled already, each once.
 	val available: List<String>? = null,
-	/// What it can do: `claude`, `codex`, `decision` (the automatic decisions). The core works it out from where its
+	/// What it can do: `claude`, `codex`, `dsh`, `decision` (the automatic decisions). The core works it out from where its
 	/// provider speaks and what its check found.
 	val uses: List<String>? = null,
-	/// What it can do, in words (Claude Code · Codex · 自动决策).
+	/// What it can do, in words (Claude Code · Codex · DeepSeek Harness · 自动决策).
 	val usesText: String? = null,
 	/// The provider of a key from the list of API providers, and the mark of its maker (none: the generic one).
 	val providerName: String? = null,
@@ -3322,10 +3322,10 @@ data class PendingLogin (
 )
 
 /// A piece of software on a station and whether a newer one is out (the station's updates): the station itself (`station`) or a
-/// runtime (`claude`, `codex`).
+/// runtime (`claude`, `codex`, `dsh`).
 @Serializable
 data class SoftwareVersion (
-	/// station | claude | codex
+	/// station | claude | codex | dsh
 	val id: String,
 	val name: String,
 	/// On the machine (a runtime may not be: then `updatable` says it can be installed from here).

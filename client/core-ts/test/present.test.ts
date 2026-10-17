@@ -97,6 +97,10 @@ test("a_profile_says_what_it_can_do_from_where_its_provider_speaks", () => {
   assert.equal(text({ runtimes: ["codex"], access: { kind: "api-provider", provider: "azure-openai", endpoint: "https://x.openai.azure.com/openai/v1" } })[1], "Codex");
   assert.equal(text({ runtimes: ["claude", "codex"], access: { kind: "opencode-go" } })[1], "Claude Code · Codex · 自动决策");
   assert.equal(text({ runtimes: ["claude"], access: { kind: "anthropic-api" } })[1], "Claude Code");
+  assert.equal(text({ runtimes: ["claude", "dsh"], access: { kind: "anthropic-api" } })[1], "Claude Code · DeepSeek Harness");
+  assert.equal(text({ runtimes: ["dsh", "codex", "claude"], access: { kind: "opencode-go" } })[1], "Claude Code · Codex · DeepSeek Harness · 自动决策");
+  assert.deepEqual(text({ runtimes: ["dsh"], access: { kind: "api-provider", provider: "deepseek" } }), ["api-provider", "DeepSeek Harness · 自动决策"]);
+  assert.deepEqual(text({ runtimes: ["dsh"], access: { kind: "env" } }), ["env", ""]);
   assert.deepEqual(text({ runtimes: ["codex"], access: { kind: "env" } }), ["env", ""]);
   assert.equal(text({ runtimes: ["codex"], access: { kind: "env" }, check: { decision: { state: "ready" } } })[1], "Codex · 自动决策");
   const canName = (provider: string) => {

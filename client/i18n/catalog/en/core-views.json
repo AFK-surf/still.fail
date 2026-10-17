@@ -315,8 +315,6 @@
   "core-views.present.trouble.unavailable": "Quota check failed",
   "core-views.present.trouble.unavailable_detail": "Quota unavailable for now",
   "core-views.present.trouble.unavailable_next": "Being unable to get the quota doesn't mean the account can't be used. Recheck first; if it still fails, check sign-in or network based on the returned reason.",
-  "core-views.present.uses.claude": "Claude Code",
-  "core-views.present.uses.codex": "Codex",
   "core-views.present.uses.decision": "Automatic decisions",
   "core-views.present.waiting": "Waiting",
   "core-views.present.waiting_for": "Waiting: {what}",

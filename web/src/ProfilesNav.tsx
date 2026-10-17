@@ -22,6 +22,7 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as accountsCss from "./pages/Accounts.css.ts";
 import { useRailItems } from "./Rail.tsx";
 import { NAME } from "./channel.ts";
+import { RUNTIME_LABEL } from "./format.ts";
 import { t } from "./i18n.ts";
 
 const WIDE = "(min-width: 701px)";
@@ -119,7 +120,6 @@ function Windows({ quota }: { quota: Quota | null | undefined }) {
   );
 }
 
-const RUNTIME: Record<MachineLogin["runtime"], string> = { claude: "Claude Code", codex: "Codex" };
 
 /** A station's own logins not made profiles yet (as the list page offers them, pages/Accounts.tsx MachineLoginOffers):
  * used as they are, or signed in again for still.fail where the station cannot read them. */
@@ -148,7 +148,7 @@ function MachineLoginRow({ login, scope, station }: { login: MachineLogin; scope
   return (
     <Tip label={login.usable ? t("web-pages.profiles.useMachineTip") : t("web-pages.profiles.keychainTip", { name: NAME })} side="right">
       <NavItem disabled={use.busy} onClick={() => (login.usable ? void use.run() : signIn())}
-        mark={<ProviderLogo runtime={login.runtime} kind="subscription" size={16} />} title={RUNTIME[login.runtime]}>
+        mark={<ProviderLogo runtime={login.runtime} kind="subscription" size={16} />} title={RUNTIME_LABEL[login.runtime]}>
         <NavLine>
           <span className={navFill}>{login.email ?? t("web-main.profile.signedIn")}</span>
           <Windows quota={login.quota} />

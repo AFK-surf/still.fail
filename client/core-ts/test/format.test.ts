@@ -4,6 +4,7 @@ import { test } from "node:test";
 import * as f from "../src/format.ts";
 import { fromLocale, holdLanguage, tr } from "../src/i18n.ts";
 import { compareOrder, family, key, name, same } from "../src/shapes/model.ts";
+import * as providers from "../src/shapes/providers.ts";
 import { available, common, fallback } from "../src/shapes/reasoning.ts";
 
 holdLanguage();
@@ -126,6 +127,23 @@ test("reported_levels_aliases_empty_and_legacy", () => {
   assert.deepEqual(available("claude", "gpt-6-astra", catalog), fallback("claude"));
   const limited = available("codex", "gpt-6-luna", catalog);
   assert.ok(!common([astra, limited], "codex").includes("ultra"));
+});
+
+test("deepseek_harness_is_named_thinks_at_its_own_levels_and_runs_on_any_endpoint", () => {
+  assert.deepEqual(["claude", "codex", "dsh"].map(f.runtimeLabel), ["Claude Code", "Codex", "DeepSeek Harness"]);
+  assert.deepEqual(f.RUNTIMES, ["claude", "codex", "dsh"]);
+  assert.deepEqual(fallback("dsh"), ["low", "medium", "high", "max"]);
+  assert.deepEqual(available("dsh", "deepseek-v4", { codex: { "deepseek-v4": ["low"] } }), fallback("dsh"));
+  const runs = (id: string, endpoint: string | null = null, protocol: string | null = null) => {
+    const at = providers.endpoints(providers.find(id)!, endpoint, protocol);
+    return at === null ? null : providers.runtimes(providers.uses(at));
+  };
+  assert.deepEqual(runs("opencode-go"), ["claude", "codex", "dsh"]);
+  assert.deepEqual(runs("anthropic"), ["claude", "dsh"]);
+  assert.deepEqual(runs("openai"), ["codex", "dsh"]);
+  assert.deepEqual(runs("deepseek"), ["dsh"]);
+  assert.deepEqual(runs("jev"), []);
+  assert.deepEqual(runs("cloudflare-ai-gateway", "https://gateway.ai.cloudflare.com/v1/a/b/compat", "chat_completions"), ["dsh"]);
 });
 
 test("fills_and_counts", () => {

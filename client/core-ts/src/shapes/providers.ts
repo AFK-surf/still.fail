@@ -393,12 +393,14 @@ export function endpoints(source: Source, endpoint: string | null | undefined, p
   return at;
 }
 
-export type Uses = { claude: boolean; codex: boolean; decision: boolean };
+export type Uses = { claude: boolean; codex: boolean; dsh: boolean; decision: boolean };
 
+/// Claude Code speaks Anthropic's protocol, Codex the Responses API; DeepSeek Harness speaks all three, chat completions too.
 export function uses(e: Endpoints): Uses {
-  return { claude: e.anthropic !== null, codex: e.responses !== null, decision: e.chat !== null || e.decision !== null };
+  const dsh = e.chat !== null || e.responses !== null || e.anthropic !== null;
+  return { claude: e.anthropic !== null, codex: e.responses !== null, dsh, decision: e.chat !== null || e.decision !== null };
 }
 
 export function runtimes(u: Uses): string[] {
-  return [u.claude ? "claude" : null, u.codex ? "codex" : null].filter((r): r is string => r !== null);
+  return [u.claude ? "claude" : null, u.codex ? "codex" : null, u.dsh ? "dsh" : null].filter((r): r is string => r !== null);
 }

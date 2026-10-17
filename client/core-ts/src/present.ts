@@ -660,13 +660,14 @@ function uses(p: J): [string[], [string, string | null] | null] {
     at = source ? providers.endpoints(source, null, null) : null;
   }
   const decision = (at !== null && at.chat !== null) || get(get(p.check, "decision"), "state") === "ready";
-  const list = ([[runs("claude"), "claude"], [runs("codex"), "codex"], [decision, "decision"]] as [boolean, string][]).filter(([on]) => on).map(([, id]) => id);
+  const list = [...format.RUNTIMES.filter(runs), ...(decision ? ["decision"] : [])];
   const provider: [string, string | null] | null = source && kind === "api-provider" ? [source.name, source.mark ?? null] : null;
   return [list, provider];
 }
 
-function usesText(list: string[]): string {
-  return list.map((u) => (u === "claude" ? t("core-views.present.uses.claude") : u === "codex" ? t("core-views.present.uses.codex") : t("core-views.present.uses.decision"))).join(" · ");
+/// What a profile can do (`claude`, `codex`, `dsh`, `decision`), in words: Claude Code · DeepSeek Harness · 自动决策.
+export function usesText(list: string[]): string {
+  return list.map((u) => (u === "decision" ? t("core-views.present.uses.decision") : format.runtimeLabel(u))).join(" · ");
 }
 
 /// Provider/check states to a safe next step.

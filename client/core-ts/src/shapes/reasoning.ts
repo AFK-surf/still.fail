@@ -5,7 +5,9 @@ import { same } from "./model.ts";
 export type Catalog = Record<string, Record<string, string[]>>;
 
 export function fallback(runtime: string): string[] {
-  return runtime === "codex" ? ["minimal", "low", "medium", "high", "xhigh"] : ["low", "medium", "high", "xhigh", "max"];
+  if (runtime === "codex") return ["minimal", "low", "medium", "high", "xhigh"];
+  if (runtime === "dsh") return ["low", "medium", "high", "max"];
+  return ["low", "medium", "high", "xhigh", "max"];
 }
 
 export function available(runtime: string, model: string | null | undefined, catalog: Catalog | null | undefined): string[] {

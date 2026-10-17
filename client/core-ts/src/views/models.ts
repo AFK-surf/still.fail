@@ -16,7 +16,7 @@ const get = (v: unknown, k: string): J => getU(v, k);
 const str = (v: J): string | null => (typeof v === "string" ? v : null);
 
 /// The runtimes a chat can run on, in the order they are offered.
-export const RUNTIMES = ["claude", "codex"];
+export const RUNTIMES = format.RUNTIMES;
 
 const profilesOf = (overview: J): J[] => arr(get(overview, "profiles"));
 const runs = (p: J, runtime: string) => arr(get(p, "runtimes")).some((r) => r === runtime);

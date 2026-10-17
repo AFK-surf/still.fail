@@ -7,7 +7,7 @@ import { useDoing } from "./doing.ts";
 import { DoingMark } from "./DoingMark.tsx";
 import { ProgressChip } from "./components.tsx";
 import { Button, Switch, Tip } from "./ui.tsx";
-import { ProviderLogo } from "./ui.tsx";
+import { ProviderLogo, RuntimeLogo } from "./ui.tsx";
 import { Mark } from "./brand.tsx";
 import { Server } from "@stillfail/ui/icons.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -150,6 +150,7 @@ export function DownloadChip({ percent }: { percent: number }) {
 function SoftwareMark({ id }: { id: string }) {
   if (id === "station") return <Mark size={18} />;
   if (id === "claude" || id === "codex") return <ProviderLogo runtime={id} kind="subscription" size={18} />;
+  if (id === "dsh") return <RuntimeLogo runtime="dsh" size={18} />;
   return <Server size={18} strokeWidth={1.7} />;
 }
 

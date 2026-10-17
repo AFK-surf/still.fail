@@ -61,6 +61,7 @@ import fail.still.android.data.KEYED
 import fail.still.android.data.LoginJob
 import fail.still.android.data.MachineLogin
 import fail.still.android.data.Overview
+import fail.still.android.data.RUNTIME_LABEL
 import fail.still.android.data.ProfileFlowView
 import fail.still.android.data.Profile
 import fail.still.android.data.ProfilesView
@@ -115,7 +116,7 @@ internal fun StateDot(color: Color, size: androidx.compose.ui.unit.Dp = 7.dp) = 
 internal fun quotaTrouble(quota: Quota?): String? = quota?.takeIf { it.state == "blocked" || it.state == "unavailable" }?.detail?.ifBlank { null }
 
 /** The runtime a machine login is of, by name. */
-private val MACHINE_RUNTIME = mapOf("claude" to "Claude Code", "codex" to "Codex")
+private val MACHINE_RUNTIME = RUNTIME_LABEL
 
 /**
  * Every station's profiles on one page, from settings (SettingsHome.kt), as the narrow web's ProfilesScreen: each station

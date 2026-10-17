@@ -8,7 +8,7 @@ export const MODE: Record<ConnectMode, { label: string; description: string }> =
   "single-session": { get label() { return t("web-main.mode.single.label"); }, get description() { return t("web-main.mode.single.description"); } },
 };
 
-export const RUNTIME_LABEL: Record<RuntimeKind, string> = { claude: "Claude Code", codex: "Codex" };
+export const RUNTIME_LABEL: Record<RuntimeKind, string> = { claude: "Claude Code", codex: "Codex", dsh: "DeepSeek Harness" };
 
 export const ACCESS: Record<AccessKind, { label: string; description: string }> = {
   "subscription": { get label() { return t("web-main.access.subscription.label"); }, get description() { return t("web-main.access.subscription.description"); } },

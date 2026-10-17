@@ -7,7 +7,7 @@ import { Link } from "react-router";
 import type { MachineLogin } from "./core/shapes.ts";
 import type { Profile } from "./api.ts";
 import { QuotaBars } from "./components.tsx";
-import { ACCESS } from "./format.ts";
+import { ACCESS, RUNTIME_LABEL } from "./format.ts";
 import { ChevronRight } from "@stillfail/ui/icons.tsx";
 import { ICON, Pill, ProviderLogo, RuntimeTags, Tip } from "./ui.tsx";
 import * as css from "./ProfileCard.css.ts";
@@ -38,7 +38,6 @@ export function ProfileCard({ profile, uses, to, action, framed, state }: { prof
   return to ? <Link className={`${css.profileCard} ${css.profileCardLink}`} data-framed={frame} to={to}>{body}</Link> : <div className={css.profileCard} data-framed={frame}>{body}</div>;
 }
 
-const RUNTIME: Record<MachineLogin["runtime"], string> = { claude: "Claude Code", codex: "Codex" };
 
 /** The machine's own login, as an account a profile could be made with (`action`: making it), with its allowance. */
 export function MachineLoginCard({ login, action, framed = true }: { login: MachineLogin; action?: ReactNode; framed?: boolean }) {
@@ -51,7 +50,7 @@ export function MachineLoginCard({ login, action, framed = true }: { login: Mach
       <Card
         mark={<ProviderLogo runtime={login.runtime} kind="subscription" size={18} />}
         title={<>
-          {RUNTIME[login.runtime]}
+          {RUNTIME_LABEL[login.runtime]}
           {plan && <span className={waitingCss.runtimeTags}><span className={waitingCss.runtimeTag}>{plan}</span></span>}
           <State pill={<Pill tone={blocked ? "red" : "green"}>{blocked ? t("web-main.profile.blocked") : t("web-main.profile.machineSignedIn")}</Pill>} why={trouble} />
         </>}

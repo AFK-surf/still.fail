@@ -98,8 +98,8 @@ export interface AgentCardView {
 	attention: AgentCardNote[];
 }
 
-/** A runtime. */
-export type RuntimeKind = "claude" | "codex";
+/** A runtime: Claude Code, Codex or DeepSeek Harness. */
+export type RuntimeKind = "claude" | "codex" | "dsh";
 
 export interface AgentProcess {
 	pgid: number;
@@ -136,7 +136,7 @@ export interface ApiProvider {
 	/** It has a key to add, and/or a subscription to sign in (OpenAI: ChatGPT; Anthropic: Claude). */
 	hasKey?: boolean;
 	hasPlan?: boolean;
-	/** Of its subscription, or of the variables: the runtime (claude | codex). */
+	/** Of its subscription, or of the variables: the runtime (claude | codex | dsh). */
 	runtime?: string;
 	/** Its address is the person's own: asked for with the key. */
 	endpointRequired?: boolean;
@@ -146,7 +146,7 @@ export interface ApiProvider {
 	protocols?: string[];
 	/** Works without a key. */
 	keyOptional?: boolean;
-	/** What a profile on it can do: `claude`, `codex`, `decision`. */
+	/** What a profile on it can do: `claude`, `codex`, `dsh`, `decision`. */
 	uses?: string[];
 	/** What the core says of it: what it can do, in words. */
 	usesText?: string;
@@ -749,7 +749,7 @@ export interface Session {
 	boundTo?: string[];
 	creator?: Creator;
 	participants?: Creator[];
-	/** claude | codex */
+	/** claude | codex | dsh */
 	runtime: RuntimeKind;
 	profile?: string;
 	profilePinned?: boolean;
@@ -992,11 +992,11 @@ export interface Profile {
 	/** What can be enabled on it: what its provider lists, then whatever is enabled already, each once. */
 	available?: string[];
 	/**
-	 * What it can do: `claude`, `codex`, `decision` (the automatic decisions). The core works it out from where its
+	 * What it can do: `claude`, `codex`, `dsh`, `decision` (the automatic decisions). The core works it out from where its
 	 * provider speaks and what its check found.
 	 */
 	uses?: string[];
-	/** What it can do, in words (Claude Code · Codex · 自动决策). */
+	/** What it can do, in words (Claude Code · Codex · DeepSeek Harness · 自动决策). */
 	usesText?: string;
 	/** The provider of a key from the list of API providers, and the mark of its maker (none: the generic one). */
 	providerName?: string;
@@ -3300,10 +3300,10 @@ export interface PendingLogin {
 
 /**
  * A piece of software on a station and whether a newer one is out (the station's updates): the station itself (`station`) or a
- * runtime (`claude`, `codex`).
+ * runtime (`claude`, `codex`, `dsh`).
  */
 export interface SoftwareVersion {
-	/** station | claude | codex */
+	/** station | claude | codex | dsh */
 	id: string;
 	name: string;
 	/** On the machine (a runtime may not be: then `updatable` says it can be installed from here). */

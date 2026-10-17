@@ -142,7 +142,7 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
 
 /** A provider's mark: its maker's, or the generic plug (the variables by hand have their own). */
 function Mark({ p }: { p: ApiProvider }) {
-  return <ProviderLogo runtime={p.runtime === "codex" ? "codex" : "claude"} kind={p.kind === "env" ? "env" : p.kind || "api-provider"} mark={p.mark} size={16} />;
+  return <ProviderLogo runtime={p.runtime === "codex" || p.runtime === "dsh" ? p.runtime : "claude"} kind={p.kind === "env" ? "env" : p.kind || "api-provider"} mark={p.mark} size={16} />;
 }
 
 /** The form of a key: what is typed is kept here as it is typed (the core has it as it is named, and judges it). */
