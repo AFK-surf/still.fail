@@ -730,9 +730,9 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
                 // Only where it is drawn: Compose would take a touch target this small out to 48dp, most of the tile,
                 // and a tap meant to open the picture removed it.
                 CompositionLocalProvider(LocalViewConfiguration provides LocalViewConfiguration.current.exact()) {
-                    // In the picture's corner, concentric with it: its corner (round 18, ComposerCorner less ComposerFilesIn as
-                    // Smooth draws it) less its own half (10) in.
-                    Box(Modifier.align(Alignment.TopEnd).padding(8.dp).size(20.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).clickable(onClick = remove), contentAlignment = Alignment.Center) {
+                    // In the picture's corner, 4 in as the web's (composerThumbRemove): concentric with a corner this large
+                    // on a tile this small (8 in) it sat a third of the way across, nearer the middle than the corner.
+                    Box(Modifier.align(Alignment.TopEnd).padding(4.dp).size(20.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).clickable(onClick = remove), contentAlignment = Alignment.Center) {
                         IconIn(Icons.Close, 12.dp, Color.White)
                     }
                 }
