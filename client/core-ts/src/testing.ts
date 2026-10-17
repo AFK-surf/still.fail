@@ -292,6 +292,12 @@ export class FakeHost implements Host {
   secureSet?: (key: string, value: Uint8Array, opts: { user: boolean }) => Effect.Effect<void, HostError> = (key, value, opts) =>
     Effect.sync(() => void this.secure.set(key, { value: value.slice(), user: opts.user }));
   secureDelete?: (key: string) => Effect.Effect<void, HostError> = (key) => Effect.sync(() => void this.secure.delete(key));
+  /// Asking the person by itself (host.ts `secureAsk`): noted in `secureAsked` without a key; `secureRefused`, they say no.
+  secureAsk?: (reason: string) => Effect.Effect<void, HostError> = (reason) =>
+    Effect.suspend(() => {
+      this.secureAsked.push({ key: "", reason });
+      return this.secureRefused ? Effect.fail(new HostError("user_cancelled")) : Effect.void;
+    });
 
   legacyRead(range: DbRange): Effect.Effect<[string, Uint8Array][], HostError> {
     return Effect.sync(() => {

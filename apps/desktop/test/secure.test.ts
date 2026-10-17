@@ -71,10 +71,17 @@ test("kept, read back, asked for only when kept with user, and gone", async () =
   await files.delete("vault-box");
   await files.delete("vault-box");
   assert.equal(await files.get("vault-box", true, "x"), null);
+
+  // Asked by itself, with no value (turning the workspace lock off).
+  await files.ask("turn off security mode");
+  assert.deepEqual(asked.at(-1), "turn off security mode");
+  say = "no";
+  await assert.rejects(files.ask("turn off security mode"), /^Error: user_cancelled$/);
 });
 
 test("where nothing can ask, a value kept with user is read as the login allows", async () => {
   const files = new SealedFiles(join(dir, "b"), seal, null);
   await files.set("vault-box", new Uint8Array([1]), true);
   assert.deepEqual(await files.get("vault-box", true, "x"), new Uint8Array([1]));
+  await files.ask("x");
 });

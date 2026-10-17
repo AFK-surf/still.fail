@@ -16,7 +16,7 @@
 //   joinStation {station}   a station of the workspace from before (offline or too old then, updated since) taken in
 //   renew {device}          a web page's device for 30 days more
 //   removeDevice {device}   a device taken out of the lock
-//   disable                 the owner turns it off
+//   disable                 the owner turns it off, once the system has asked them (Touch ID, the screen lock)
 //   state                   the `lock` topic's value, as a call (tests, scripts)
 //
 // A station that refuses this device for the lock (`lock_unconfirmed`) is not asked again until the lock moves on
@@ -279,6 +279,15 @@ function owner(inner: Inner): Owner {
   };
 }
 
+/// The person asked by the system before what they should mean (host.ts `secureAsk`): fails with the host's code
+/// (`user_cancelled`, …) as the call's; a phone with no screen lock has nothing to ask with, and goes on.
+function askPerson(inner: Inner, reason: string): Effect.Effect<void, CoreError> {
+  const ask = inner.host.secureAsk;
+  if (!ask) return Effect.void;
+  return Effect.catch(ask.call(inner.host, reason), (e) =>
+    e.message === "no_device_lock" ? Effect.void : Effect.fail(new CoreError(/^[a-z][a-z_]*$/.test(e.message) ? e.message : "lock_refused", e.message)));
+}
+
 /// The `lock` topic.
 export function lockView(inner: Inner, ws: string): J {
   const p = part(inner, ws);
@@ -469,6 +478,7 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
         result = yield* lock.append("device.remove", { id: param("device") });
         break;
       case "disable":
+        yield* askPerson(inner, t("core-misc.lock.reason.disable"));
         result = yield* lock.append("disable", {});
         break;
       default:

@@ -11,8 +11,9 @@
 //   stream.open {url, method, headers} + body → {status, headers, id}; stream.read {id} → bytes, or {end}; stream.close {id}
 //   ws.open {url, protocols} → {id}; ws.next {id} → {text} or {end}; ws.send {id, text}; ws.close {id}
 //   storage.get {key} → bytes or {none}; storage.set {key} + value; storage.delete {key}
-//   secure.get {key, user, reason?} → bytes or {none}; secure.set {key, user} + value; secure.delete {key} — answered
-//     by the app (Kotlin: the Keystore, and the prompt when `user`), not the shell (docs/vault.md, "设备上的钥匙")
+//   secure.get {key, user, reason?} → bytes or {none}; secure.set {key, user} + value; secure.delete {key};
+//     secure.ask {reason} — answered by the app (Kotlin: the Keystore, and the prompt when `user` or asked), not the
+//     shell (docs/vault.md, "设备上的钥匙")
 //   db.read {table, from, to} → {keys, sizes} + the values one after another (the former records store, read once)
 //   tcp.open {port} → {id}; tcp.read {id} → bytes or {end}; tcp.write {id} + bytes; tcp.end {id}; tcp.close {id}
 //   reset {} — the connections kept for requests are taken for gone
@@ -198,6 +199,9 @@ export class BridgeHost implements Host {
   }
   secureDelete(key: string): Effect.Effect<void, HostError> {
     return Effect.asVoid(this.#bridge.call("secure.delete", { key }));
+  }
+  secureAsk(reason: string): Effect.Effect<void, HostError> {
+    return Effect.asVoid(this.#bridge.call("secure.ask", { reason }));
   }
 
   legacyRead(range: DbRange): Effect.Effect<[string, Uint8Array][], HostError> {

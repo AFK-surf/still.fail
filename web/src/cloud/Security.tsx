@@ -7,8 +7,9 @@ import { Close, Devices, Key, Monitor, Server, ShieldCheck, Web } from "@stillfa
 import { useCall, useTopic } from "../core/react.ts";
 import { stamp } from "../api.ts";
 import { useDoing } from "../doing.ts";
-import { useAct } from "@stillfail/ui/toast.tsx";
-import { Button, Dialog, IconButton, Loading, MobileBack, Section, Time } from "../ui.tsx";
+import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
+import { Button, Dialog, Field, IconButton, Loading, MobileBack, Section, Time } from "../ui.tsx";
 import { t } from "../i18n.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
@@ -134,11 +135,40 @@ function On({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
         <span />
       </Dialog>
       <ConfirmDevice entry={entry} request={checking} onClose={() => setChecking(null)} />
-      <Dialog open={off} onClose={() => setOff(false)} title={t("web-pages.security.turnOffTitle")} description={t("web-pages.security.turnOffBody")}
-        footer={<><Button variant="ghost" onClick={() => setOff(false)}>{t("common.cancel")}</Button><Button variant="danger" onClick={() => { setOff(false); act(call("lock.disable", { workspace: entry.id }), t("web-pages.security.turnOff")); }}>{t("web-pages.security.turnOff")}</Button></>}>
-        <span />
-      </Dialog>
+      {off && <TurnOff entry={entry} onClose={() => setOff(false)} />}
     </>
+  );
+}
+
+/**
+ * 关闭安全模式？: what turning it off gives up, a line each, and the workspace's name typed before it can go. The core
+ * then has the system ask the person (Touch ID, the phone's screen lock) before it signs; their no says nothing.
+ */
+function TurnOff({ entry, onClose }: { entry: WorkspaceEntry; onClose(): void }) {
+  const call = useCall();
+  const toast = useToast();
+  const [typed, setTyped] = useState("");
+  const named = typed.trim() === entry.name.trim();
+  const go = () => {
+    if (!named) return;
+    onClose();
+    call("lock.disable", { workspace: entry.id }).catch((e: unknown) => {
+      if ((e as { code?: unknown } | null)?.code !== "user_cancelled") toast(t("web-main.act.failed", { what: t("web-pages.security.turnOff"), error: failure(e) }));
+    });
+  };
+  return (
+    <Dialog open onClose={onClose} title={t("web-pages.security.turnOffTitle")} description={t("web-pages.security.turnOffBody")}
+      footer={<><Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button><Button variant="danger-solid" disabled={!named} onClick={go}>{t("web-pages.security.turnOff")}</Button></>}>
+      <div className={css.points}>
+        <div className={css.point}><Server size={18} strokeWidth={1.6} className={css.pointIcon} /><span>{t("web-pages.security.nowRisk")}</span></div>
+        <div className={css.point}><Devices size={18} strokeWidth={1.6} className={css.pointIcon} /><span>{t("web-pages.security.turnOffApproval")}</span></div>
+        <div className={css.point}><Key size={18} strokeWidth={1.6} className={css.pointIcon} /><span>{t("web-pages.security.turnOffVault")}</span></div>
+      </div>
+      <Field label={t("web-pages.security.turnOffType", { name: entry.name })} htmlFor="lock-off-name">
+        <input id="lock-off-name" className={controlsCss.input} value={typed} autoFocus autoComplete="off" spellCheck={false} onChange={(e) => setTyped(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) go(); }} />
+      </Field>
+    </Dialog>
   );
 }
 

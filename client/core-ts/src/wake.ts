@@ -157,6 +157,7 @@ export class WakingHost implements Host {
   readonly secureGet?: Host["secureGet"];
   readonly secureSet?: Host["secureSet"];
   readonly secureDelete?: Host["secureDelete"];
+  readonly secureAsk?: Host["secureAsk"];
 
   constructor(inner: Host, wakes: Wakes) {
     this.inner = inner;
@@ -172,6 +173,7 @@ export class WakingHost implements Host {
     if (inner.secureGet) this.secureGet = (key, opts) => inner.secureGet!(key, opts);
     if (inner.secureSet) this.secureSet = (key, value, opts) => inner.secureSet!(key, value, opts);
     if (inner.secureDelete) this.secureDelete = (key) => inner.secureDelete!(key);
+    if (inner.secureAsk) this.secureAsk = (reason) => inner.secureAsk!(reason);
   }
 
   /// A loopback listener (a login's callback): the device's, nothing of a UI's to wait on.

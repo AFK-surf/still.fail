@@ -186,6 +186,7 @@
   "core-misc.composer.upload_failed": "Upload failed",
   "core-misc.lock.stationOld": "{name} is too old; update it before protecting it",
   "core-misc.lock.stationOffline": "Can't reach {name}; protect it once it's online",
+  "core-misc.lock.reason.disable": "Turn off security mode",
   "core-misc.screen.opening": "Opening a screen",
   "core-misc.screen.noWire": "Station screens can't be viewed here",
   "core-misc.screen.timeout": "The screen didn't open: the station isn't responding",

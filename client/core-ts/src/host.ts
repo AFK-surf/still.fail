@@ -107,6 +107,10 @@ export interface Host {
   secureGet?(key: string, opts: { user: boolean; reason?: string }): Effect.Effect<Uint8Array | null, HostError>;
   secureSet?(key: string, value: Uint8Array, opts: { user: boolean }): Effect.Effect<void, HostError>;
   secureDelete?(key: string): Effect.Effect<void, HostError>;
+  /// The person asked to say yes, as reading a `user: true` value asks them, `reason` in the prompt: before what they
+  /// should mean (turning the workspace lock off). Succeeds at once where nothing can ask (Windows, Linux, a Mac
+  /// without Touch ID); fails as `secureGet` does (`user_cancelled`, `no_device_lock`, `not_in_front`).
+  secureAsk?(reason: string): Effect.Effect<void, HostError>;
 
   /// An account's SQLite database by name (`account-<sub>`), made empty if it is not there: one file per signed-in
   /// account (docs/core-db.md). Fails when it cannot be opened, or another process holds it (`SqlError` "busy").

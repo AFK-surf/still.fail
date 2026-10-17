@@ -19,6 +19,7 @@ interface Sealer {
   get(key: string, user: boolean, reason: string): Promise<Uint8Array | null>;
   set(key: string, value: Uint8Array, user: boolean): Promise<void>;
   delete(key: string): Promise<void>;
+  ask(reason: string): Promise<void>;
 }
 /** `channel`: "beta" for the beta app's core (main.ts BETA). */
 /** `bytes`: beside the JSON of a message that carries some (a screen view's frame). */
@@ -32,7 +33,7 @@ const { start, CoreFiles } = require(join(__dirname, "core-ts.js")) as { start: 
 /** Asks of what is sealed, waiting for the main process's answer by id; the bytes go as base64. */
 const sealedWaiting = new Map<number, { resolve: (value: string | null | undefined) => void; reject: (error: Error) => void }>();
 let sealedNext = 1;
-function askSealed(ask: { op: "get" | "set" | "delete"; key: string; user?: boolean; reason?: string; value?: string }): Promise<string | null | undefined> {
+function askSealed(ask: { op: "get" | "set" | "delete" | "ask"; key: string; user?: boolean; reason?: string; value?: string }): Promise<string | null | undefined> {
   return new Promise((resolve, reject) => {
     const id = sealedNext++;
     sealedWaiting.set(id, { resolve, reject });
@@ -47,6 +48,7 @@ const sealer: Sealer | undefined = sealing === "sealed"
       },
       set: async (key, value, user) => void (await askSealed({ op: "set", key, user, value: Buffer.from(value).toString("base64") })),
       delete: async (key) => void (await askSealed({ op: "delete", key })),
+      ask: async (reason) => void (await askSealed({ op: "ask", key: "", reason })),
     }
   : undefined;
 

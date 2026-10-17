@@ -51,7 +51,7 @@ internal class SecureException(val code: String) : Exception(code)
 /**
  * What the core keeps sealed (client/core-ts host.ts `secureGet`; docs/vault.md, "设备上的钥匙"): each value a file of
  * its own in `dir` (the app's files, never backed up), sealed by a key in the Android Keystore (StrongBox where the
- * phone has it). Two keys:
+ * phone has it); `secure.ask`, the same prompt asked by itself. Two keys:
  *  - `user: false`: AES-256-GCM in the Keystore, used without asking (the lock's signing key).
  *  - `user: true`: an RSA-2048 pair whose private half takes the person each time (biometrics or the screen lock,
  *    BiometricPrompt over the activity in front, the core's `reason` in it); a value is sealed with a fresh AES key
@@ -103,11 +103,18 @@ internal class SecureStore(private val context: Context, private val dir: File) 
     /** A `secure.*` call: the answer's JSON and bytes. */
     suspend fun answer(op: String, json: String, bytes: ByteArray?): Pair<String, ByteArray?> {
         val a = Json.parseToJsonElement(json).jsonObject
+        val reason = a["reason"]?.jsonPrimitive?.contentOrNull ?: ""
+        // Asked by itself, before what the person should mean (turning the workspace lock off): no value, no key.
+        if (op == "secure.ask") return busy.withLock {
+            if (!locked()) throw SecureException("no_device_lock")
+            ask(reason, null)
+            "{}" to null
+        }
         val key = a["key"]?.jsonPrimitive?.contentOrNull ?: throw IllegalArgumentException("no key")
         val user = a["user"]?.jsonPrimitive?.booleanOrNull ?: false
         return busy.withLock {
             when (op) {
-                "secure.get" -> get(key, user, a["reason"]?.jsonPrimitive?.contentOrNull ?: "")?.let { "{}" to it } ?: ("{\"none\":true}" to null)
+                "secure.get" -> get(key, user, reason)?.let { "{}" to it } ?: ("{\"none\":true}" to null)
                 "secure.set" -> withContext(Dispatchers.IO) { set(key, bytes ?: ByteArray(0), user) }.let { "{}" to null }
                 "secure.delete" -> withContext(Dispatchers.IO) { File(dir, fileName(key)).delete() }.let { "{}" to null }
                 else -> throw IllegalArgumentException("no such call: $op")

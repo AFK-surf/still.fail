@@ -1,6 +1,7 @@
 // The vault on the device (src/vault/, src/views/vault.ts): the formats on the values the stations are tested on
 // (station/test/fixtures/vault-vectors.json), the lock checked entry by entry before a key is sealed to anyone, and the
-// calls against a station that keeps what it is given, on the testing host's secure storage. Its time is the test clock.
+// calls against a station that keeps what it is given, on the testing host's secure storage; and turning the lock off,
+// on the same rig, asking the person first. Its time is the test clock.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -222,6 +223,28 @@ const fails = async (p: Promise<unknown>, code: string) => {
     return true;
   });
 };
+
+test("turning the lock off asks the person first; their no signs and sends nothing", async () => {
+  const r = await rig();
+  r.putLock();
+  // The cloud keeps the chain: given as it is, what is posted taken.
+  const posted: Entry[] = [];
+  stationReplies(r.host, (req) => {
+    if (!req.url.endsWith("/v1/workspaces/ws/lock")) return r.st.reply(req);
+    if (req.method === "GET") return r.lock;
+    posted.push(...JSON.parse(new TextDecoder().decode(req.body!)).entries);
+    return { ok: true };
+  });
+  const sent = () => posted.map((e) => e.kind);
+  r.host.secureRefused = true;
+  await fails(r.ask("lock.disable", {}), "user_cancelled");
+  assert.equal(r.host.secureAsked.at(-1)?.key, "", "asked by itself, no value read");
+  assert.ok(r.host.secureAsked.at(-1)?.reason, "the prompt says why");
+  assert.deepEqual(sent(), []);
+  r.host.secureRefused = false;
+  await r.ask("lock.disable", {});
+  assert.deepEqual(sent(), ["disable"], "said yes: the entry is signed and sent");
+});
 
 test("vault calls: set up, a vault of one's own, an item written, opened, unlocked a while", async () => {
   const r = await rig();

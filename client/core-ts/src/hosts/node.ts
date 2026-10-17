@@ -50,6 +50,8 @@ export interface Sealer {
   get(key: string, user: boolean, reason: string): Promise<Uint8Array | null>;
   set(key: string, value: Uint8Array, user: boolean): Promise<void>;
   delete(key: string): Promise<void>;
+  /// The person asked to say yes (host.ts `secureAsk`).
+  ask?(reason: string): Promise<void>;
 }
 
 const sealError = (e: unknown) => new HostError(e instanceof Error ? e.message : String(e));
@@ -65,6 +67,7 @@ export class NodeHost implements Host {
   readonly secureGet?: Host["secureGet"];
   readonly secureSet?: Host["secureSet"];
   readonly secureDelete?: Host["secureDelete"];
+  readonly secureAsk?: Host["secureAsk"];
 
   /// `sealer`: what seals values, where the app has one; without, the host has no `secure*` (tests, the side runs).
   constructor(dataDir: string, cloudOrigin: string, beta: boolean, listener: Listener, sealer?: Sealer) {
@@ -77,6 +80,8 @@ export class NodeHost implements Host {
       this.secureGet = (key, opts) => Effect.tryPromise({ try: () => sealer.get(key, opts.user, opts.reason ?? ""), catch: sealError });
       this.secureSet = (key, value, opts) => Effect.tryPromise({ try: () => sealer.set(key, value, opts.user), catch: sealError });
       this.secureDelete = (key) => Effect.tryPromise({ try: () => sealer.delete(key), catch: sealError });
+      const ask = sealer.ask?.bind(sealer);
+      if (ask) this.secureAsk = (reason) => Effect.tryPromise({ try: () => ask(reason), catch: sealError });
     }
   }
 

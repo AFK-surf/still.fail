@@ -76,13 +76,17 @@ export class SealedFiles {
     const kept = blobUser(blob);
     if (kept === null) throw new Error(`${key}: not a sealed value`);
     if (kept !== user) throw new Error(`${key}: kept with user: ${kept}, asked with user: ${user}`);
-    const ask = this.#ask;
-    if (kept && ask) {
-      const turn = this.#asking.then(() => ask(reason));
-      this.#asking = turn.catch(() => {});
-      await turn;
-    }
+    if (kept) await this.ask(reason);
     return openBlob(this.#seal, blob).value;
+  }
+
+  /// The person asked to say yes (Touch ID), one prompt at a time; at once where nothing can ask.
+  async ask(reason: string): Promise<void> {
+    const ask = this.#ask;
+    if (!ask) return;
+    const turn = this.#asking.then(() => ask(reason));
+    this.#asking = turn.catch(() => {});
+    await turn;
   }
 
   /// Kept sealed: written aside and renamed over, so a crash leaves the old value or the new one.

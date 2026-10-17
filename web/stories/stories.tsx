@@ -470,6 +470,8 @@ export const stories: Story[] = [
   { id: "settings-workspace", group: "设置", title: "Workspace", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "Workspace · Acme" }] },
   { id: "settings-security", group: "设置", title: "安全", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }] },
   { id: "settings-security-on", group: "设置", title: "安全 · 已开启", app: true, demo: lockDemo("on"), steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }] },
+  { id: "settings-security-turn-off", group: "设置", title: "安全 · 关闭安全模式", app: true, demo: lockDemo("on"), steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }, { click: 'button:has-text("关闭安全模式")' }] },
+  { id: "settings-security-turn-off-typed", group: "设置", title: "安全 · 关闭安全模式 · 已输入名称", app: true, demo: lockDemo("on"), steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }, { click: 'button:has-text("关闭安全模式")' }, { key: "A" }, { key: "c" }, { key: "m" }, { key: "e" }] },
   { id: "settings-security-no-stations", group: "设置", title: "安全 · 暂无 station", app: true, demo: lockDemo("noStations"), steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }] },
   { id: "security-waiting", group: "设置", title: "安全 · 等待批准此设备", app: true, demo: lockDemo("waiting") },
   { id: "security-waiting-denied", group: "设置", title: "安全 · 请求被拒绝后", app: true, demo: lockDemo("denied") },

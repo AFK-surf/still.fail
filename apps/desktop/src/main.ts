@@ -190,13 +190,14 @@ function sealedFiles(): SealedFiles | null {
 }
 
 /** The core's ask of what is sealed (core.ts `sealer`), answered on its process. */
-type SealedAsk = { id: number; op: "get" | "set" | "delete"; key: string; user?: boolean; reason?: string; value?: string };
+type SealedAsk = { id: number; op: "get" | "set" | "delete" | "ask"; key: string; user?: boolean; reason?: string; value?: string };
 async function answerSealed(files: SealedFiles, ask: SealedAsk): Promise<{ value?: string | null }> {
   if (ask.op === "get") {
     const value = await files.get(ask.key, ask.user === true, ask.reason ?? "");
     return { value: value === null ? null : Buffer.from(value).toString("base64") };
   }
-  if (ask.op === "set") await files.set(ask.key, Buffer.from(ask.value ?? "", "base64"), ask.user === true);
+  if (ask.op === "ask") await files.ask(ask.reason ?? "");
+  else if (ask.op === "set") await files.set(ask.key, Buffer.from(ask.value ?? "", "base64"), ask.user === true);
   else await files.delete(ask.key);
   return {};
 }
