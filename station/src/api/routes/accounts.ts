@@ -147,7 +147,8 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
         return ok(await view(r));
       }),
     ),
-    route("POST", /^\/*profiles\/+([^/]+)\/+check(?:\/.*)?$/, (r, [id]) => answer(async (a) => ok(await a.check(segment(id!), r.lang)))),
+    // Checked again and its allowance read again by whoever may use it, a joined workspace's members too.
+    route("POST", /^\/*profiles\/+([^/]+)\/+check(?:\/.*)?$/, (r, [id]) => answer(async (a) => ok(await a.check(usable(a, r, segment(id!)), r.lang))), true),
     route("POST", /^\/*profiles\/+([^/]+)\/+reset-quota(?:\/.*)?$/, (r, [id]) =>
       answer(async (a) => {
         const key = idempotencyKey(r);
@@ -155,7 +156,7 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
         return ok(await a.resetQuota(segment(id!), key, r.lang));
       }),
     ),
-    route("POST", /^\/*profiles\/+([^/]+)\/+quota(?:\/.*)?$/, (r, [id]) => answer(async (a) => ok(await a.refreshQuota(segment(id!))))),
+    route("POST", /^\/*profiles\/+([^/]+)\/+quota(?:\/.*)?$/, (r, [id]) => answer(async (a) => ok(await a.refreshQuota(usable(a, r, segment(id!))))), true),
     route("GET", /^\/*profiles\/+([^/]+)\/+login(?:\/.*)?$/, (r, [id]) =>
       answer((a) => {
         const profile = known(a, segment(id!));
@@ -249,6 +250,14 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
     ),
   ];
 };
+
+/// The profile's id, when the viewer may use it: any for the home workspace's members, those serving their workspace for
+/// a joined one's (docs/multi-workspace.md); 404 for the rest, as they are not shown there.
+function usable(a: Accounts, r: Request, id: string): string {
+  if (r.viewer.home !== false) return id;
+  if (!a.profilesView(r.viewer).some((p) => p.id === id)) throw new Refusal(404, `unknown profile ${id}`);
+  return id;
+}
 
 /// The profile's id, when there is such a profile (404 when not).
 function known(a: Accounts, id: string): string {

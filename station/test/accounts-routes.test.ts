@@ -109,6 +109,12 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.deepEqual([seen[0].env, seen[0].access.key, seen[0].home, seen[0].usedBy, seen[0].workspaces], [[], "", "", [], ["W2"]]);
     assert.deepEqual(t.accounts.profilesView(owner).map((p) => p.id), ["cc", "cx"]);
     assert.deepEqual(t.accounts.loginsView(joined), []);
+    // Checked again and its allowance read again by a joined workspace's members, those it serves there only.
+    assert.equal((await t.call("POST", "/profiles/cx/check", {}, joined))[0], 200);
+    assert.equal((await t.call("POST", "/profiles/cx/quota", {}, joined))[0], 200);
+    assert.equal((await t.call("POST", "/profiles/cc/check", {}, joined))[0], 404);
+    assert.equal((await t.call("POST", "/profiles/cc/quota", {}, joined))[0], 404);
+    assert.equal((await t.call("POST", "/profiles/cc/check"))[0], 200);
     assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["W2", "W3"] }))[0], 200);
     assert.equal(JSON.parse(readFileSync(t.path, "utf8")).profiles[0].withheld, undefined);
     assert.deepEqual(t.accounts.profilesView(joined).map((p) => p.id), ["cc", "cx"]);
