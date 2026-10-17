@@ -215,7 +215,7 @@ async function main() {
   console.log(`  opened: entry ${opened.head.seq}, ${opened.members} members, ${opened.devices} devices, stations ${opened.stations.map((x: any) => x.name).join(", ")}`);
   for (const s of [A, C]) await until(async () => JSON.parse(readFileSync(join(s.data, "mesh/lock.json"), "utf8")).entries.length > 0, `${s.name} pinned`);
   const lockLine = (st: Station) => status(st).split("\n").find((l) => /锁：|lock:/.test(l)) ?? "(no lock line)";
-  check("lock pinned on the stations it names", `${A.name}: ${lockLine(A)}; ${C.name}: ${lockLine(C)}`, `${B.name}: ${lockLine(B)}`, /已钉住|pinned/.test(lockLine(A)) && /已钉住|pinned/.test(lockLine(C)) && !/已钉住|pinned/.test(lockLine(B)));
+  check("lock pinned on the stations it names", `${A.name}: ${lockLine(A)}; ${C.name}: ${lockLine(C)}`, `${B.name}: ${lockLine(B)}`, /已固定|pinned/.test(lockLine(A)) && /已固定|pinned/.test(lockLine(C)) && !/已固定|pinned/.test(lockLine(B)));
   // The owner's own device still gets in (its claim is in its hello).
   const ownerIn = await owner.call("tools.access", { station: `${ws}/${A.id}` }).then(() => "admitted", (e) => `refused: ${e.message}`);
   check("the owner's own device", `${A.name}: ${ownerIn}`, "-", ownerIn === "admitted");
@@ -247,7 +247,7 @@ async function main() {
   run(D);
   await until(async () => online(D), "joined-d online");
   await until(async () => JSON.parse(readFileSync(join(D.data, "mesh/lock.json"), "utf8")).entries.length > 0, "joined-d pinned");
-  const printed = /(?:短码是|code is) ([A-Z0-9]{3}-[A-Z0-9]{3})/.exec(D.enrolled)?.[1] ?? "";
+  const printed = /(?:短码为|安全码为|with code) ([A-Z0-9]{3}-[A-Z0-9]{3})/.exec(D.enrolled)?.[1] ?? "";
   await owner.call("lock.addStation", { workspace: ws, station: D.id, code: printed });
   await until(async () => stationState(A).peers.some((p: any) => p.id === D.id) && stationState(D).peers.some((p: any) => p.id === A.id), "joined-d in the rosters");
   check("a station enrolled with the lock, confirmed by its code", `command ends ${made.command.split(" ").slice(-2).join(" ").slice(0, 24)}…; printed ${printed}; ${D.name}: ${lockLine(D)}; in ${A.name}'s roster`, "-", made.command.includes("--lock") && printed !== "");
@@ -308,8 +308,8 @@ async function main() {
   execFileSync(native("launcher"), ["enroll", ...back, "--app", join(B.data, "../app"), "--data", B.data], { env: env() });
   await until(async () => stationState(B).workspace === ws && online(B), "unlocked-b back in Dev");
   const joined = await owner.call("lock.joinStation", { workspace: ws, station: B.id }).then(() => "joined", (e: Error) => `refused: ${e.message}`);
-  await until(async () => /已钉住|pinned/.test(lockLine(B)), "unlocked-b pinned", 60).catch(() => null);
-  check("an existing station taken in later", `${B.name}: ${joined}; ${lockLine(B)}`, "-", joined === "joined" && /已钉住|pinned/.test(lockLine(B)));
+  await until(async () => /已固定|pinned/.test(lockLine(B)), "unlocked-b pinned", 60).catch(() => null);
+  check("an existing station taken in later", `${B.name}: ${joined}; ${lockLine(B)}`, "-", joined === "joined" && /已固定|pinned/.test(lockLine(B)));
 
   say("summary");
   console.table(results.map((r) => ({ check: r.check, ok: r.ok ? "PASS" : "FAIL" })));
