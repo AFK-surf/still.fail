@@ -701,6 +701,7 @@
   "web-pages.settings.stations.joinAction": "添加到此 workspace",
   "web-pages.settings.stations.joined": "「{name}」已加入，现在可以打开",
   "web-pages.settings.stations.joinedHere": "「{name}」已加入此 workspace",
+  "web-pages.settings.stations.joinedRow": "已加入此 workspace",
   "web-pages.settings.stations.kind": "添加类型",
   "web-pages.settings.stations.kindExisting": "已有的 station",
   "web-pages.settings.stations.kindNew": "新机器",

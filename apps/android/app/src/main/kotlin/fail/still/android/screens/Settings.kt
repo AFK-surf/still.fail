@@ -65,6 +65,7 @@ import fail.still.android.LocalApp
 import fail.still.android.R
 import fail.still.android.data.Cloud
 import fail.still.android.data.Enrollment
+import fail.still.android.data.JoinableStation
 import fail.still.android.data.JoinableView
 import fail.still.android.data.LoginSession
 import fail.still.android.data.errorText
@@ -516,24 +517,24 @@ fun openAddStation(app: AppState, current: WorkspaceEntry, known: List<String>, 
         var existing by remember { mutableStateOf(existingFirst) }
         // A new machine's command made: that is the way now, the choice gone.
         var made by remember { mutableStateOf(false) }
-        // A station of another workspace that joined (its name): the choice gone with the list, as once a command is made.
-        var took by remember { mutableStateOf<String?>(null) }
+        // The stations of other workspaces joined from this sheet: kept in the list where they were, said to have joined,
+        // so the next is a tap away (the core's `joinable` has them no more).
+        var took by remember { mutableStateOf<List<JoinableStation>>(emptyList()) }
+        val order = remember { mutableMapOf<String, Int>() }
+        joinable.value?.items?.forEach { if (it.station !in order) order[it.station] = order.size }
+        val rows = ((joinable.value?.items ?: emptyList()).filter { s -> took.none { it.station == s.station } } + took).sortedBy { order[it.station] ?: 0 }
         // A station of another workspace to add: offered only while there is one.
-        val offered = joinable.value?.let { it.offered && it.items.isNotEmpty() } == true
+        val offered = joinable.value?.offered == true && rows.isNotEmpty()
         SheetGrab()
         SheetHead(t("android-settings.station.add"))
         // The choice stays at the top; only what is under it scrolls.
-        if (offered && !made && took == null) {
+        if (offered && !made) {
             val kind = t("web-pages.settings.stations.kind")
             Seg(listOf(t("web-pages.settings.stations.kindNew"), t("web-pages.settings.stations.kindExisting")), if (existing) 1 else 0, { existing = it == 1 },
                 Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp).fillMaxWidth().semantics { contentDescription = kind }, height = 34.dp, fill = true, radius = 17.dp)
         }
         val view = joinable.value
-        val name = took
-        if (name != null) Column(Modifier.weight(1f).padding(start = 20.dp, end = 20.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Joined(t("web-pages.settings.stations.joinedHere", "name" to name)) { app.sheet = null }
-        }
-        else if (view != null && offered && existing && !made) JoinStation(current, view, onClose = { app.sheet = null }, onJoined = { took = it }, modifier = Modifier.weight(1f))
+        if (view != null && offered && existing && !made) JoinStation(current, rows, view.loading, took, onClose = { app.sheet = null }, onJoined = { took = took + it }, modifier = Modifier.weight(1f))
         else Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(t("android-settings.station.addNote", "app" to BuildConfig.APP_NAME), fontSize = 14.sp, color = C.muted)
             AddStationSteps(current, known, onCancel = { app.sheet = null }, onMade = { made = true }) { app.sheet = null }
@@ -553,19 +554,21 @@ private fun Joined(text: String, onDone: () -> Unit) {
 }
 
 /**
- * A station of another workspace the viewer manages, picked from `view` (the first at first) and added to this one as
- * it is (`station.join`): what that shares of the machine said under the list, why it was refused in red. `onJoined`
- * with its name once it has joined.
+ * A station of another workspace the viewer manages, picked from `rows` (the core's `joinable`, with those `took` here
+ * already; the first open one at first) and added to this one as it is (`station.join`): what that shares of the
+ * machine said under the list, why it was refused in red. `onJoined` with it once it has joined: it stays in its place,
+ * said so, and the next one open is picked, so several are added one after another.
  */
 @Composable
-private fun JoinStation(current: WorkspaceEntry, view: JoinableView, onClose: () -> Unit, onJoined: (String) -> Unit, modifier: Modifier = Modifier) {
+private fun JoinStation(current: WorkspaceEntry, rows: List<JoinableStation>, loading: Boolean, took: List<JoinableStation>, onClose: () -> Unit, onJoined: (JoinableStation) -> Unit, modifier: Modifier = Modifier) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val ws = current.workspace.id
     var picked by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val joined = { s: JoinableStation -> took.any { it.station == s.station } }
     // One whose home's security mode keeps it out is shown, not picked.
-    val open = view.items.filter { it.needsLock != true }
+    val open = rows.filter { it.needsLock != true && !joined(it) }
     val chosen = open.firstOrNull { it.station == picked } ?: open.firstOrNull()
     val busy = chosen != null && app.isDoing("station.join", "workspace" to ws, "station" to chosen.station)
     // The words 20 in from the sheet's edges; the picking rows edge to edge, their own room making it 20 for theirs.
@@ -574,12 +577,13 @@ private fun JoinStation(current: WorkspaceEntry, view: JoinableView, onClose: ()
         // The stations scroll; the actions stay under them.
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(t("web-pages.settings.stations.existingLead"), side, fontSize = 14.sp, color = C.muted)
-            if (view.items.isEmpty()) Text(t(if (view.loading) "android-settings.reading" else "web-pages.settings.stations.existingNone"), side, fontSize = 14.sp, color = C.muted)
+            if (rows.isEmpty()) Text(t(if (loading) "android-settings.reading" else "web-pages.settings.stations.existingNone"), side, fontSize = 14.sp, color = C.muted)
             else Column {
-                view.items.forEach { s ->
+                rows.forEach { s ->
                     // Its mark before its name, as a station's own sheet has it: every name starts in one line.
-                    PickRow(s.name, s.line, checked = s.station == chosen?.station, enabled = !busy && s.needsLock != true,
-                        mark = if (hasStationMark(s.emoji, s.icon)) ({ StationMark(s.emoji, s.icon, 15.dp, C.ink) }) else null) {
+                    val mark: (@Composable () -> Unit)? = if (hasStationMark(s.emoji, s.icon)) ({ StationMark(s.emoji, s.icon, 15.dp, C.ink) }) else null
+                    if (joined(s)) PickRow(s.name, t("web-pages.settings.stations.joinedRow"), done = true, mark = mark) {}
+                    else PickRow(s.name, s.line, checked = s.station == chosen?.station, enabled = !busy && s.needsLock != true, mark = mark) {
                         picked = s.station; error = null
                     }
                 }
@@ -588,12 +592,12 @@ private fun JoinStation(current: WorkspaceEntry, view: JoinableView, onClose: ()
         error?.let { Text(it, side, fontSize = 13.sp, color = C.red) }
         }
         Row(side.fillMaxWidth().padding(top = 10.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            Button(t("common.cancel"), primary = false) { onClose() }
+            Button(t(if (took.isEmpty()) "common.cancel" else "common.done"), primary = false) { onClose() }
             Button(t("web-pages.settings.stations.joinAction"), primary = true, busy = busy, enabled = chosen != null) {
                 val s = chosen ?: return@Button
                 error = null
                 scope.launch {
-                    try { onJoined(app.api(s.station).joinWorkspace(ws) ?: s.name) } catch (e: CoreException) { error = errorText(e) }
+                    try { onJoined(s.copy(name = app.api(s.station).joinWorkspace(ws) ?: s.name)) } catch (e: CoreException) { error = errorText(e) }
                 }
             }
         }

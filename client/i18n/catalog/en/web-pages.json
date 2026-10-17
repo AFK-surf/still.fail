@@ -758,6 +758,7 @@
   "web-pages.settings.stations.joinAction": "Add to this workspace",
   "web-pages.settings.stations.joined": "“{name}” has joined. You can open it now.",
   "web-pages.settings.stations.joinedHere": "“{name}” joined this workspace",
+  "web-pages.settings.stations.joinedRow": "Joined this workspace",
   "web-pages.settings.stations.kind": "What to add",
   "web-pages.settings.stations.kindExisting": "Existing station",
   "web-pages.settings.stations.kindNew": "New machine",

@@ -142,10 +142,15 @@ export const mPickRow = style({
     "&:disabled": { color: "var(--m-subtle)" },
     // Under way, not out of reach: it keeps its ink.
     "&[data-busy]:disabled": { color: "var(--m-ink)", cursor: "default" },
+    // Done (a station joined): its ink kept, what it says under it in green.
+    "&[data-done]:disabled": { color: "var(--m-ink)", cursor: "default" },
     "&[data-accent]": { color: "var(--m-accent) !important" },
     [`${mForm} &`]: { width: "100%", margin: "0" },
   },
 });
+/** A done row's check, and what it says under its name. */
+export const mPickDone = style({ color: "var(--m-green)", flex: "none" });
+globalStyle(`${mPickRow}[data-done] small`, { color: "var(--m-green)" });
 export const mPickText = style({ flex: "1", minWidth: "0", display: "flex", flexDirection: "column" });
 /** A row with notes at its end: its lines and the notes in two columns, each note on the baseline of its line. */
 export const mPickGrid = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", columnGap: "12px", alignItems: "baseline" });

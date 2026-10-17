@@ -309,12 +309,13 @@ export function ListRow({ onClick, children }: { onClick?: (() => void) | undefi
 /** A row of a picking sheet: what, a line under it, two short notes at its end (each by one of those lines), and a check on the chosen one. */
 /** `mark`: a small mark after the label (what a workspace has waiting); `busy`: what it asked is under way (a spinner at its end, not pressed again);
  *  `failed`: why what it asked failed a moment ago (the failure mark at its end). */
-export function PickRow({ label, sub, aside, checked = false, enabled = true, busy = false, failed, accent = false, leading, mark, onClick }: {
-  label: string; sub?: string | undefined; aside?: [string, string]; checked?: boolean; enabled?: boolean; busy?: boolean; failed?: string | undefined; accent?: boolean; leading?: ReactNode; mark?: ReactNode; onClick: () => void;
+/// `done`: what it stands for is done (a station joined): not picked again, its ink kept, a green check at its end.
+export function PickRow({ label, sub, aside, checked = false, enabled = true, busy = false, done = false, failed, accent = false, leading, mark, onClick }: {
+  label: string; sub?: string | undefined; aside?: [string, string]; checked?: boolean; enabled?: boolean; busy?: boolean; done?: boolean; failed?: string | undefined; accent?: boolean; leading?: ReactNode; mark?: ReactNode; onClick: () => void;
 }) {
   const title = mark ? <span className={css.mPickLabel}><span className={css.mPickLabelText}>{label}</span>{mark}</span> : <span>{label}</span>;
   return (
-    <button type="button" className={css.mPickRow} disabled={!enabled || busy} data-accent={accent || undefined} data-busy={busy || undefined} aria-busy={busy || undefined} onClick={onClick}>
+    <button type="button" className={css.mPickRow} disabled={!enabled || busy || done} data-accent={accent || undefined} data-busy={busy || undefined} data-done={done || undefined} aria-busy={busy || undefined} onClick={onClick}>
       {leading}
       {aside === undefined
         ? <span className={css.mPickText}>{title}{sub !== undefined && <small>{sub}</small>}</span>
@@ -324,7 +325,7 @@ export function PickRow({ label, sub, aside, checked = false, enabled = true, bu
             {sub !== undefined ? <small>{sub}</small> : <span />}<small className={css.mPickAside}>{aside[1]}</small>
           </span>
         )}
-      {busy ? <Spinner size={14} /> : failed !== undefined ? <FailedMark error={failed} /> : checked && <Check size={14} className={partsCss.mAccent} />}
+      {busy ? <Spinner size={14} /> : failed !== undefined ? <FailedMark error={failed} /> : done ? <Check size={14} className={css.mPickDone} /> : checked && <Check size={14} className={partsCss.mAccent} />}
     </button>
   );
 }

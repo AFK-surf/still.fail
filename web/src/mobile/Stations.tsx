@@ -10,7 +10,7 @@ import { useParams } from "react-router";
 import { LoginCard, useMachineLogins } from "../MachineLogins.tsx";
 import * as loginsCss from "../MachineLogins.css.ts";
 import { useJoinable, useMemberships, useStations, type StationView } from "../api.ts";
-import type { Host, JoinableView, StationNet } from "../core/shapes.ts";
+import type { Host, JoinableStation, StationNet } from "../core/shapes.ts";
 import { illustrationUrl } from "../brand.tsx";
 import { Check, ChevronRight, Close, ImageUpload, More } from "@stillfail/ui/icons.tsx";
 import { cloud, useWorkspace } from "../cloud/api.ts";
@@ -171,9 +171,14 @@ export function AddStationSheet({ known, existing: first = false }: { known: str
   // A station the viewer manages in another workspace, offered beside a new machine (docs/multi-workspace.md).
   const joinable = useJoinable(app.entry.id).value;
   const [existing, setExisting] = useState(first);
-  // A station of another workspace that joined (its name): the choice above is gone with the form, as one by command.
-  const [took, setTook] = useState<string | null>(null);
-  const offered = joinable?.offered && joinable.items.length > 0 && !made && took === null;
+  // The stations of other workspaces joined from this sheet: kept in the list where they were, said to have joined, so
+  // the next is a tap away (the core's `joinable` has them no more).
+  const [took, setTook] = useState<JoinableStation[]>([]);
+  const order = useRef(new Map<string, number>());
+  for (const s of joinable?.items ?? []) if (!order.current.has(s.station)) order.current.set(s.station, order.current.size);
+  const rows = [...(joinable?.items ?? []).filter((s) => !took.some((x) => x.station === s.station)), ...took]
+    .sort((a, b) => (order.current.get(a.station) ?? 0) - (order.current.get(b.station) ?? 0));
+  const offered = joinable?.offered && rows.length > 0 && !made;
   return (
     <>
       <SheetGrab />
@@ -185,8 +190,7 @@ export function AddStationSheet({ known, existing: first = false }: { known: str
             onSelect={(i) => setExisting(i === 1)} fill height={34} radius={17} />
         </div>
       )}
-      {took !== null ? <Joined text={t("web-pages.settings.stations.joinedHere", { name: took })} />
-        : offered && existing ? <JoinStation joinable={joinable} onJoined={setTook} /> : (
+      {offered && existing ? <JoinStation rows={rows} loading={joinable.loading} took={took} onJoined={(s) => setTook((was) => [...was, s])} /> : (
         <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
           {!made ? (
             <>
@@ -221,19 +225,17 @@ function JoinedBody({ text }: { text: string }) {
   );
 }
 
-function Joined({ text }: { text: string }) {
-  return <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}><JoinedBody text={text} /></div>;
-}
-
 /**
- * 添加 station with a station the viewer manages in another workspace: picked from those not here yet (the core's
- * `joinable`), then added as it is (`station.join`); `onJoined` with its name. What that shares of the machine is said
- * under the list.
+ * 添加 station with a station the viewer manages in another workspace: picked from `rows` (the core's `joinable`, with
+ * those `took` here already), then added as it is (`station.join`); `onJoined` with it. One that joined stays in its
+ * place, said so, and the next one open is picked: several are added one after another. What that shares of the
+ * machine is said under the list.
  */
-function JoinStation({ joinable, onJoined }: { joinable: JoinableView; onJoined(name: string): void }) {
+function JoinStation({ rows, loading, took, onJoined }: { rows: JoinableStation[]; loading: boolean; took: JoinableStation[]; onJoined(s: JoinableStation): void }) {
   const app = useApp();
+  const joined = (s: JoinableStation) => took.some((x) => x.station === s.station);
   // One whose home's security mode keeps it out is shown, not picked.
-  const open = joinable.items.filter((s) => !s.needsLock);
+  const open = rows.filter((s) => !s.needsLock && !joined(s));
   const [picked, setPicked] = useState<string>(open[0]?.station ?? "");
   const chosen = open.find((s) => s.station === picked) ?? open[0];
   const busy = useDoing("station.join", { workspace: app.entry.id, station: chosen?.station ?? "" });
@@ -243,23 +245,26 @@ function JoinStation({ joinable, onJoined }: { joinable: JoinableView; onJoined(
     <>
       <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
         <p className={partsCss.mMuted}>{t("web-pages.settings.stations.existingLead")}</p>
-        {joinable.items.length > 0 ? (
+        {rows.length > 0 ? (
           <div>
-            {joinable.items.map((s) => (
-              <PickRow key={s.station} label={s.name} sub={s.line} checked={s.station === chosen?.station} enabled={!s.needsLock}
+            {rows.map((s) => joined(s) ? (
+              <PickRow key={s.station} label={s.name} sub={t("web-pages.settings.stations.joinedRow")} done
+                leading={<MarkOrLetter emoji={s.emoji} icon={s.icon} name={s.name} />} onClick={() => undefined} />
+            ) : (
+              <PickRow key={s.station} label={s.name} sub={s.line} checked={s.station === chosen?.station} enabled={!s.needsLock && !busy}
                 leading={<MarkOrLetter emoji={s.emoji} icon={s.icon} name={s.name} />} onClick={() => setPicked(s.station)} />
             ))}
           </div>
-        ) : <p className={partsCss.mMuted}>{joinable.loading ? t("web-mobile.reading") : t("web-pages.settings.stations.existingNone")}</p>}
+        ) : <p className={partsCss.mMuted}>{loading ? t("web-mobile.reading") : t("web-pages.settings.stations.existingNone")}</p>}
         <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-pages.settings.stations.softIsolation")}</p>
         {error && <p className={partsCss.mError}>{error}</p>}
       </div>
       <div className={sheetsCss.mSheetFoot}>
-        <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
+        <Button label={t(took.length > 0 ? "common.done" : "common.cancel")} primary={false} onClick={() => app.sheet(null)} />
         <Button label={t("web-pages.settings.stations.joinAction")} primary busy={busy} enabled={!!chosen} onClick={() => {
           if (!chosen) return;
           setError(null);
-          cloud.joinStation(app.entry.id, chosen.station).then(() => onJoined(chosen.name), (e: Error) => setError(e.message));
+          cloud.joinStation(app.entry.id, chosen.station).then(() => onJoined(chosen), (e: Error) => setError(e.message));
         }} />
       </div>
     </>

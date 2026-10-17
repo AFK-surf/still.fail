@@ -129,15 +129,25 @@ class StationJoinTest {
         assertEquals("ws-acme/box", params["station"]!!.jsonPrimitive.content)
         picture(h, "join-sheet-error-$tone")
 
-        // Joined: said with the name it has here, and Done; the choice of a new machine or one of these is gone.
-        h.fake.answer = { name, _ ->
-            if (name == "station.join") buildJsonObject { putJsonObject("joined") { put("workspace", ws); put("workspaceName", "Dev"); put("name", "box") } } else JsonNull
+        // Joined: it stays in the list where it was, said so in green, though the core lists it no more; the next one open
+        // is picked, so another is a tap away, and the way out is Done.
+        h.fake.answer = { name, params ->
+            val station = params["station"]!!.jsonPrimitive.content.substringAfter('/')
+            if (name == "station.join") buildJsonObject { putJsonObject("joined") { put("workspace", ws); put("workspaceName", "Dev"); put("name", station) } } else JsonNull
         }
         join().performClick()
+        rule.runOnUiThread { h.fake.put(Topics.joinable(ws), JoinableView(offered = true, loading = false, items = candidates.filter { it.id != "box" })) }
         h.settle()
-        rule.onNodeWithText("「box」已加入此 workspace").assertIsDisplayed()
-        assertEquals(0, rule.onAllNodesWithText("已有的 station").fetchSemanticsNodes().size)
+        rule.onNodeWithText("box").assertIsDisplayed()
+        rule.onNodeWithText("已加入此 workspace").assertIsDisplayed()
+        rule.onNodeWithText("已有的 station").assertIsDisplayed()
+        rule.onNodeWithText("完成").assertIsDisplayed()
         picture(h, "join-sheet-joined-$tone")
+        join().performClick()
+        h.settle()
+        assertEquals("ws-acme/air", h.fake.calls.last { it.first == "station.join" }.second["station"]!!.jsonPrimitive.content)
+        assertEquals(2, rule.onAllNodesWithText("已加入此 workspace").fetchSemanticsNodes().size)
+        picture(h, "join-sheet-joined-two-$tone")
         rule.runOnUiThread { h.app.sheet = null }
         h.settle()
 

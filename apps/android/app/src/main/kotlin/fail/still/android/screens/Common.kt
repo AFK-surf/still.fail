@@ -39,14 +39,15 @@ fun DoingMark(running: Boolean, failed: String?, size: Dp = 14.dp) {
 
 /**
  * A row of a picking sheet: what, a line under it, and a check on the chosen one; `busy`: what it set going is under way
- * (a spinner, not tapped again); `failed`: it failed a moment ago (DoingMark); `mark`: drawn before what (a station's icon);
+ * (a spinner, not tapped again); `done`: what it stands for is done (a station joined: not tapped again, the line under it
+ * and a check in green); `failed`: it failed a moment ago (DoingMark); `mark`: drawn before what (a station's icon);
  * `subLines`: at most that many lines of the line under it (a chat's last message: one).
  */
 @Composable
-fun PickRow(label: String, sub: String? = null, checked: Boolean = false, enabled: Boolean = true, busy: Boolean = false, failed: String? = null, color: Color = C.ink, leading: (@Composable () -> Unit)? = null, mark: (@Composable () -> Unit)? = null, subLines: Int = Int.MAX_VALUE, onClick: () -> Unit) {
+fun PickRow(label: String, sub: String? = null, checked: Boolean = false, enabled: Boolean = true, busy: Boolean = false, done: Boolean = false, failed: String? = null, color: Color = C.ink, leading: (@Composable () -> Unit)? = null, mark: (@Composable () -> Unit)? = null, subLines: Int = Int.MAX_VALUE, onClick: () -> Unit) {
     Column(Modifier.padding(horizontal = 12.dp)) {
         Row(
-            Modifier.fillMaxWidth().clickable(enabled = enabled && !busy, onClick = onClick).padding(horizontal = 8.dp, vertical = 12.dp),
+            Modifier.fillMaxWidth().clickable(enabled = enabled && !busy && !done, onClick = onClick).padding(horizontal = 8.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             leading?.invoke()
@@ -56,9 +57,10 @@ fun PickRow(label: String, sub: String? = null, checked: Boolean = false, enable
                     mark()
                     Text(label, fontSize = 15.sp, color = if (enabled) color else C.subtle)
                 }
-                if (sub != null) Text(sub, fontSize = 12.sp, color = C.muted, maxLines = subLines, overflow = TextOverflow.Ellipsis)
+                if (sub != null) Text(sub, fontSize = 12.sp, color = if (done) C.green else C.muted, maxLines = subLines, overflow = TextOverflow.Ellipsis)
             }
             if (busy || failed != null) DoingMark(busy, failed)
+            else if (done) IconIn(Icons.Check, 14.dp, C.green)
             else if (checked) IconIn(Icons.Check, 14.dp, C.accent)
         }
     }
