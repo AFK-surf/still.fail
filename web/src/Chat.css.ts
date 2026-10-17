@@ -1,6 +1,6 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { enterUpKeyframes, fadeKeyframes, nowInKeyframes, nowOutKeyframes, popInKeyframes, spinKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { enterUpKeyframes, fadeKeyframes, nowInKeyframes, nowOutKeyframes, popInKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { markdown, msg, msgHead, msgTime } from "./styles/conversation.css.ts";
 import { chat, chatList } from "./styles/session.css.ts";
 import { COMPOSER_INNER, composerBox } from "./styles/composer.css.ts";
@@ -371,6 +371,12 @@ export const composerQuote = style({
   animation: `${enterUpKeyframes} 180ms ${vars.easeOut} both`, padding: "0", border: "0",
 });
 export const fileCardOpen = style({});
+const ringTurnKeyframes = keyframes({ to: { transform: "rotate(360deg)" } });
+const ringStretchKeyframes = keyframes({
+  "0%": { strokeDasharray: "5 360", transform: "rotate(0deg)" },
+  "50%": { strokeDasharray: "235 360", transform: "rotate(60deg)" },
+  "100%": { strokeDasharray: "5 360", transform: "rotate(360deg)" },
+});
 export const agentActivity = style({
   selectors: {
     "&[data-leaving]": { gridTemplateRows: "0fr", opacity: "0" },
@@ -379,17 +385,31 @@ export const agentActivity = style({
 export const activityAvatar = style({
   position: "relative", display: "grid", flex: "none",
   selectors: {
-    "&::after": {
-      content: "\"\"", position: "absolute", inset: "-3px", borderRadius: "50%", border: "1.5px solid transparent",
-      borderTopColor: vars.accent, borderRightColor: vars.accent, animation: `${spinKeyframes} 1.1s linear infinite`,
-    },
-    // Waiting on work it started: a still, quiet ring.
-    [`${agentActivity}[data-waiting] &::after`]: { borderColor: vars.line, animation: "none" },
-    [`${agentActivity}[data-leaving] &::after`]: { opacity: "0", transition: "opacity 160ms" },
     [`${agentActivity}[data-away] &`]: { visibility: "hidden" },
-    [`${STILL} &::after`]: { animation: "none" },
   },
 });
+/**
+ * The ring round an agent at work, 3px round its avatar: an arc in the accent that stretches and shrinks as it turns
+ * (Android's Chat.kt WorkRing draws the same). Its length is in degrees (the circle's pathLength is 360): each 1.5s it
+ * grows from 5° to 235° and back while its tail runs a full round, ahead of a steady turn every 2s.
+ */
+export const activityRing = style({
+  position: "absolute", inset: "-3px", width: "calc(100% + 6px)", height: "calc(100% + 6px)", overflow: "visible", pointerEvents: "none",
+  animation: `${ringTurnKeyframes} 2s linear infinite`,
+  selectors: {
+    [`${agentActivity}[data-waiting] &`]: { animation: "none" },
+    [`${agentActivity}[data-leaving] &`]: { opacity: "0", transition: "opacity 160ms" },
+    [`${STILL} &`]: { animation: "none" },
+  },
+});
+globalStyle(`${activityRing} circle`, {
+  fill: "none", stroke: vars.accent, strokeWidth: "1.5px", strokeLinecap: "round", vectorEffect: "non-scaling-stroke",
+  strokeDasharray: "180 360", transform: "rotate(-135deg)", transformOrigin: "center",
+  animation: `${ringStretchKeyframes} 1.5s ease-in-out infinite`,
+});
+// Waiting on work it started: a still, quiet ring.
+globalStyle(`${agentActivity}[data-waiting] ${activityRing} circle`, { stroke: vars.line, strokeDasharray: "none", animation: "none" });
+globalStyle(`${STILL} ${activityRing} circle`, { animation: "none" });
 export const activityTail = style({
   display: "flex", alignItems: "center", gap: "8px", minWidth: "0", maxWidth: "100%",
   selectors: {

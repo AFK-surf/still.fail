@@ -428,8 +428,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     // Agents' messages coming out of their activity's avatar (ChatMotion.kt), and a quoted message flashing.
     val reduced = fail.still.android.ui.reducedMotion()
     val motion = remember { ChatMotion(reduced) }
-    motion.ring = androidx.compose.animation.core.rememberInfiniteTransition(label = "ring")
-        .animateFloat(0f, 360f, androidx.compose.animation.core.infiniteRepeatable(tween(1100, easing = androidx.compose.animation.core.LinearEasing)), label = "angle")
+    motion.ring = ringClock()
     // Each agent at work, and each that stopped a moment ago, on its own (web useLinger): one whose turn ends stays
     // 600ms (a turn ending and the next starting leave a moment between), then fades 220ms and goes, whatever the others
     // do. Only an agent that has taken a message and runs is at work (not one with messages waiting for it): until then
@@ -1526,26 +1525,42 @@ private fun Activity(ctx: Here, agent: AgentAtWork, leaving: Boolean, opening: B
     }
 }
 
-/** The ring round an agent at work: half of it in the accent, turning; waiting on work it started, a still, quiet one. */
+/**
+ * The ring round an agent at work (as the web's activityRing): an arc in the accent that stretches and shrinks as it
+ * turns, each 1.5s from 5° to 235° and back while its tail runs a full round, ahead of a steady turn every 2s. Waiting on
+ * work it started, a still, quiet one.
+ */
 @Composable
 private fun WorkRing(waiting: Boolean, leaving: Boolean, shared: androidx.compose.runtime.State<Float>? = null) {
     val accent = chatInk().accent
     val line = C.line
-    // The chat's own turning (ChatMotion.ring), when there is one: the flying avatar's ring and its activity's turn as one,
+    // The chat's own clock (ChatMotion.ring), when there is one: the flying avatar's ring and its activity's as one,
     // and do not jump as the one hands over to the other.
-    val turning = androidx.compose.animation.core.rememberInfiniteTransition(label = "ring")
-    val own = turning.animateFloat(0f, 360f, androidx.compose.animation.core.infiniteRepeatable(tween(1100, easing = androidx.compose.animation.core.LinearEasing)), label = "angle")
-    val angle by shared ?: own
+    val own = ringClock()
+    val clock = shared ?: own
     val shown by animateFloatAsState(if (leaving) 0f else 1f, tween(160), label = "ring-out")
     androidx.compose.foundation.Canvas(Modifier.size(24.dp).alpha(shown)) {
         val w = 1.5.dp.toPx()
         val inset = w / 2
         val box = androidx.compose.ui.geometry.Size(size.width - w, size.height - w)
         val at = androidx.compose.ui.geometry.Offset(inset, inset)
-        if (waiting) drawArc(line, 0f, 360f, false, at, box, style = androidx.compose.ui.graphics.drawscope.Stroke(w))
-        else drawArc(accent, -135f + angle, 180f, false, at, box, style = androidx.compose.ui.graphics.drawscope.Stroke(w))
+        if (waiting) { drawArc(line, 0f, 360f, false, at, box, style = androidx.compose.ui.graphics.drawscope.Stroke(w)); return@Canvas }
+        val t = clock.value
+        // Each half of its 1.5s eased in and out (the web's ease-in-out keyframes): growing, its tail 0 → 60°; shrinking, 60 → 360°.
+        val p = t % 1500f / 1500f
+        val k = RingEase.transform(if (p < 0.5f) p * 2 else p * 2 - 1)
+        val tail = if (p < 0.5f) 60f * k else 60f + 300f * k
+        val sweep = if (p < 0.5f) 5f + 230f * k else 235f - 230f * k
+        drawArc(accent, t / 2000f * 360f + tail, sweep, false, at, box, style = androidx.compose.ui.graphics.drawscope.Stroke(w, cap = androidx.compose.ui.graphics.StrokeCap.Round))
     }
 }
+
+private val RingEase = androidx.compose.animation.core.CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
+
+/** The work ring's clock: ms into its 6s loop, which its turn (2s) and its stretch (1.5s) both come round in. */
+@Composable
+private fun ringClock(): androidx.compose.runtime.State<Float> = androidx.compose.animation.core.rememberInfiniteTransition(label = "ring")
+    .animateFloat(0f, 6000f, androidx.compose.animation.core.infiniteRepeatable(tween(6000, easing = androidx.compose.animation.core.LinearEasing)), label = "ring-ms")
 
 /** What an activity shows, steadied: another thing replaces the shown one after it has stayed 700 ms. */
 @Composable

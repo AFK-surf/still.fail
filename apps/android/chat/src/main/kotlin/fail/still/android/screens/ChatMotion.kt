@@ -67,7 +67,7 @@ internal class ChatMotion(private val reduced: Boolean) {
     private val queue = ArrayDeque<Triple<Long, String, Long>>()
     /** Whose avatar the flying copy shows as, while it shows (Chat.kt Flyer): that activity's own is hidden. */
     var copied by mutableStateOf<String?>(null)
-    /** The rings round the agents' avatars turning, one for the chat (Chat.kt WorkRing). */
+    /** The clock of the rings round the agents' avatars, one for the chat (Chat.kt WorkRing). */
     var ring: androidx.compose.runtime.State<Float>? = null
     /** Where the flying avatar was last sent, for which message. */
     private var aimed: Offset? = null
