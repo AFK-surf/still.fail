@@ -14,7 +14,7 @@ import { run } from "./run.ts";
 import { base, entries, entry, overview, session, started, status, stationReplies, threadView } from "./station-fixture.ts";
 import { merge } from "../src/entries.ts";
 import { apply, call, readsOf, subscribe, v } from "./helpers.ts";
-import { EVICT_AFTER_MS } from "../src/store.ts";
+import { COALESCE_MS, EVICT_AFTER_MS } from "../src/store.ts";
 import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, LONG_MISSES, OFFLINE_RETRY_MS, READ_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS } from "../src/station/sync.ts";
 import { digest } from "../src/digest.ts";
 import { Priority } from "../src/sync/scheduler.ts";
@@ -318,7 +318,7 @@ test("a_station_down_shows_it_is_tried_again_as_soon_as_a_person_asks", async ()
   // shows of it does not change to come back as the try fails).
   gate.stream = "hang";
   call(core, ui, 2, "client.wake", { away: 0, network: true });
-  await host.settle();
+  await host.time.pass(COALESCE_MS * 4, 10);
   apply(host, values);
   assert.equal(linkOf(values, 1), "connecting");
   assert.equal((values.get(1) as J).retrying, true);
