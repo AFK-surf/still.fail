@@ -344,7 +344,8 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
           const kind = runtime(r, i);
           const id = text(i.id);
           const roots = machineRoots();
-          const found = findMachineSession(roots, kind, id);
+          // Only Claude Code's and Codex's terminal sessions are read (read/machine.ts).
+          const found = kind === "dsh" ? null : findMachineSession(roots, kind, id);
           if (found === null) throw new Refused(404, tr(r.lang, "station.admin.noLocalSession", { id }));
           const [key, chat] = await as(400, () => continueMachineSession(a.hub, roots, found, r.viewer.email, r.lang));
           log.info("admin", "machine session continued from the admin page", { session: key, from: id, by: r.viewer.email });

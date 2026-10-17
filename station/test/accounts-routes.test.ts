@@ -156,17 +156,18 @@ describe("the accounts routes", { concurrency: true }, () => {
 
   test("a key on a listed provider makes a profile that runs what its endpoints speak", async () => {
     const t = await rig();
-    // Chat completions only: no runtime, but a profile all the same (it serves the automatic decisions).
+    // Chat completions only: DeepSeek Harness alone runs it.
     const [status, body] = await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "groq", key: "gsk-123456" } });
     assert.equal(status, 200, JSON.stringify(body));
     assert.equal(body.id, "groq");
     const groq = t.profile("groq")!;
-    assert.deepEqual([(groq.access as any).kind, (groq.access as any).provider, groq.runtimes, groq.name], ["api-provider", "groq", [], "Groq"]);
+    assert.deepEqual([(groq.access as any).kind, (groq.access as any).provider, groq.runtimes, groq.name], ["api-provider", "groq", ["dsh"], "Groq"]);
+    assert.equal(profileEnv(groq, "dsh").STILLFAIL_DSH_KEY, "gsk-123456");
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "jev", key: "jev-key-1" } }))[0], 200);
     assert.deepEqual(t.profile("jev")!.runtimes, []);
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "opencode", key: "oc-key-1" } }))[0], 200);
     const zen = t.profile("opencode")!;
-    assert.deepEqual(zen.runtimes, ["claude", "codex"]);
+    assert.deepEqual(zen.runtimes, ["claude", "codex", "dsh"]);
     assert.equal(profileEnv(zen, "claude").ANTHROPIC_BASE_URL, "https://opencode.ai/zen");
     assert.equal(profileEnv(zen, "claude").ANTHROPIC_CUSTOM_HEADERS, "x-opencode-session: {route}");
     assert.equal(profileEnv(zen, "codex").EMBER_API_KEY, "oc-key-1");
@@ -177,7 +178,7 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "azure-openai", key: "k" } }))[0], 400);
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "custom", endpoint: "http://127.0.0.1:4000/v1", protocol: "anthropic" } }))[0], 200);
     const custom = t.profile("custom")!;
-    assert.deepEqual([(custom.access as any).key, (custom.access as any).endpoint, custom.runtimes], [undefined, "http://127.0.0.1:4000/v1", ["claude"]]);
+    assert.deepEqual([(custom.access as any).key, (custom.access as any).endpoint, custom.runtimes], [undefined, "http://127.0.0.1:4000/v1", ["claude", "dsh"]]);
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "groq" } }))[0], 400, "a key is needed");
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "nope", key: "k" } }))[0], 400);
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "anthropic", key: "k" } }))[0], 400, "Anthropic is its own kind");
@@ -188,7 +189,7 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.deepEqual([view.access.kind, view.access.provider, view.access.key.includes("123456")], ["env", "groq", false]);
     const listed = t.accounts.apiProviders().map((p) => p.id);
     assert.ok(listed.includes("deepseek") && listed.includes("opencode") && !listed.includes("anthropic") && !listed.includes("opencode-go"));
-    // Its address can be changed, its key kept; it can be deleted although it runs no runtime.
+    // Its address can be changed, its key kept; it can be deleted.
     assert.equal((await t.call("PUT", "/profiles/custom", { access: { kind: "api-provider", endpoint: "http://127.0.0.1:5000/v1" } }))[0], 200);
     assert.equal((t.profile("custom")!.access as any).endpoint, "http://127.0.0.1:5000/v1");
     assert.equal((await t.call("DELETE", "/profiles/groq"))[0], 200);
