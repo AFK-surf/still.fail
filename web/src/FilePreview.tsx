@@ -611,7 +611,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
       case "audio": body = <div className={css2.fpAudio}><span className={css2.fpAudioName}>{file.name}</span><audio src={url} controls autoPlay /></div>; break;
       case "pdf": body = <PdfViewer blob={blob} />; break;
       case "markdown": case "csv": case "html": case "code": case "text":
-        body = <TextViewer blob={blob} kind={kind} language={known.language} name={file.name} setControls={setControls} onMove={wake} />; break;
+        body = <TextViewer blob={blob} kind={kind} language={known.language} name={file.name} setControls={setControls} onMove={wake} onEscape={onClose} />; break;
       default: body = <div className={css2.fpNote}>{t("web-main.preview.unsupported")}{source?.save
         ? <button type="button" className={controlsCss.btn} onClick={() => source.save?.(file, blob)}><Download size={16} />{t("web-main.preview.download")}</button>
         : <a className={controlsCss.btn} href={url} download={file.name}><Download size={16} />{t("web-main.preview.download")}</a>}</div>;
@@ -1119,24 +1119,31 @@ function PdfPage({ doc, number, width }: { doc: PDFDocumentProxy; number: number
 
 // ── text ───────────────────────────────────────────────────────────────
 
-/** Put at the end of a previewed HTML file: its frame tells the preview when a mouse moves over it (at most a few times a second). */
-const TELL_MOVES = `<script>{let t=0;addEventListener("pointermove",(e)=>{if(e.pointerType!=="mouse"||e.timeStamp-t<200)return;t=e.timeStamp;parent.postMessage({stillfailPreview:"move"},"*")},{capture:true,passive:true})}</script>`;
+/**
+ * Put at the end of a previewed HTML file: its frame tells the preview when a mouse moves over it (at most a few times a
+ * second), and Esc pressed in it that the page itself did nothing with (the keys go to the frame once it is clicked in,
+ * not to the preview, which would not close).
+ */
+const TELL = `<script>{let t=0;addEventListener("pointermove",(e)=>{if(e.pointerType!=="mouse"||e.timeStamp-t<200)return;t=e.timeStamp;parent.postMessage({stillfailPreview:"move"},"*")},{capture:true,passive:true});addEventListener("keydown",(e)=>{if(e.key==="Escape"&&!e.defaultPrevented&&!e.isComposing)parent.postMessage({stillfailPreview:"escape"},"*")})}</script>`;
 
 /** Above this a file shows as plain text, unhighlighted; above the next, only its start. */
 const HIGHLIGHT_LIMIT = 256 * 1024;
 const SHOW_LIMIT = 2 * 1024 * 1024;
 const TABLE_ROWS = 2000;
 
-function TextViewer({ blob, kind, language, name, setControls, onMove }: {
-  blob: Blob; kind: PreviewKind; language: string | undefined; name: string; setControls(c: ReactNode): void; onMove(): void;
+function TextViewer({ blob, kind, language, name, setControls, onMove, onEscape }: {
+  blob: Blob; kind: PreviewKind; language: string | undefined; name: string; setControls(c: ReactNode): void; onMove(): void; onEscape(): void;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const host = useContext(FrameHost);
-  const moved = useRef(onMove);
-  moved.current = onMove;
+  const told = useRef({ move: onMove, escape: onEscape });
+  told.current = { move: onMove, escape: onEscape };
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
-      if (e.source === frame.current?.contentWindow && (e.data as { stillfailPreview?: string } | null)?.stillfailPreview === "move") moved.current();
+      if (e.source !== frame.current?.contentWindow) return;
+      const what = (e.data as { stillfailPreview?: string } | null)?.stillfailPreview;
+      if (what === "move") told.current.move();
+      else if (what === "escape") told.current.escape();
     };
     addEventListener("message", onMessage);
     return () => removeEventListener("message", onMessage);
@@ -1165,7 +1172,7 @@ function TextViewer({ blob, kind, language, name, setControls, onMove }: {
     // A fragment an agent wrote to be drawn in a message (Viz.tsx) is shown the same way, in still.fail's stylesheet.
     // A mouse moving over it is the frame's, not the preview's: the frame tells, so the bars wake as they do over an image.
     // On a page whose CSP its frames would inherit, from the page's frame host, sandboxed the same (Viz.tsx FrameHost).
-    const doc = (isFragment(text) ? vizDocument(text) : text) + TELL_MOVES;
+    const doc = (isFragment(text) ? vizDocument(text) : text) + TELL;
     const from = host === null ? { srcDoc: doc } : { src: host, onLoad: () => frame.current?.contentWindow?.postMessage({ stillfailVizDocument: doc }, "*") };
     content = <iframe ref={frame} className={`${css2.fpFrame} fp-html`} sandbox="allow-scripts" {...from} title={name} />;
     return <div className={`${css2.fpPage} ${css2.fpPageFrame}`}>{content}</div>;
