@@ -1014,6 +1014,42 @@ sim("offers_the_phone_and_tunnels_what_the_station_opens_to_its_adbd", async (s)
   await s.settle(endpoint.close());
 });
 
+/// The station's tunnel on `conn` (station/src/mesh/adb.ts `tunnel`): what the phone answered to `{"tunnel": "connect"}`
+/// within the station's 10 s, or null.
+async function tunnelOn(s: Sim, conn: J): Promise<J> {
+  const opened = (async () => {
+    const tunnel = await conn.openBi();
+    await tunnel.write(Buffer.from(`${JSON.stringify({ tunnel: "connect" })}\n`));
+    const line = await Station.readLine(tunnel, { bytes: Buffer.alloc(0) });
+    tunnel.reset?.(0);
+    return line === null ? null : JSON.parse(line);
+  })();
+  return s.settle(opened, 10_000).catch(() => null);
+}
+
+/// 2026-10-17, a phone on ccvm's LAN: every tunnel the station opened went unanswered ("the phone did not answer"), adb
+/// connect and pair alike, while the phone's requests went on its LAN way. The phone answers each tunnel on the link its
+/// latest offer went on, whichever way that is, for as long as it is offered.
+sim("tunnels_are_answered_on_the_lan_way", async (s) => {
+  const { station, mesh, id } = await onLan(s, 5_000);
+  station.lan = station.addr().ips;
+  s.host.tcpConnect = echoTcp;
+  const store = new Store(s.host, s.runner);
+  const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => grants("ok", { n: 0 }), relays: () => [] });
+  const addr = `ws/${id}`;
+  await s.run(adb.run({ kind: "share", offer: { station: addr, connect: 5555, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 } }));
+  await s.until(() => mesh.current(addr)?.pinned === LAN && station.offers.length > 0, 5 * 60_000);
+  const answers: string[] = [];
+  for (let i = 0; i < 12; i++) {
+    const answer = await tunnelOn(s, station.offers.at(-1)!.conn);
+    answers.push(answer?.ok === true ? "ok" : JSON.stringify(answer));
+    await s.time.pass(10_000);
+  }
+  assert.deepEqual(answers, Array(12).fill("ok"), `offers: ${station.offers.length}`);
+  await s.run(adb.run({ kind: "stop" }));
+  await close(s, station, mesh);
+});
+
 test("reads_its_calls", () => {
   const share = parseAdb("adb.share", { station: "ws/st", connect: 41234, minutes: 10_000 });
   assert.deepEqual(share, { kind: "share", offer: { station: "ws/st", connect: 41234, pair: null, device: "", android: "", package: "", minutes: MAX_MINUTES } });

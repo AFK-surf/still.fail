@@ -75,6 +75,8 @@ export class Adb {
   /// The offer's keeper, and its tunnels' scope: closed as the offer stops or moves to another station.
   #keeper: Fiber.Fiber<unknown, unknown> | null = null;
   #tunnelScope: Scope.Closeable | null = null;
+  /// The links tunnels are taken on now (each in the tunnels' scope, until it closes).
+  readonly #accepting = new Set<Link>();
   #changed: Deferred.Deferred<void> = Deferred.makeUnsafe<void>();
 
   constructor(env: AdbEnv) {
@@ -253,19 +255,28 @@ export class Adb {
         }
         return { lost: t("core-misc.adb.station_ended"), pause: true } as Ended;
       });
-      const accepting = Effect.gen(function* () {
-        for (;;) {
-          const stream = yield* link.accept();
-          if (stream === null) break;
-          self.#env.runner.fork(Effect.provideService(self.#tunnel(run, stream), Scope.Scope, tunnels));
-        }
-        return { lost: link.closed() ?? t("core-misc.adb.link_lost"), pause: true } as Ended;
-      });
+      // The station opens its tunnels on the link its latest offer came on, and it hears of an offer on another link only
+      // once that one is made: tunnels are taken on every link an offer went on for as long as it lasts (or the offer
+      // stops), not only while it is the one offered on (2026-10-17: one opened as the link was replaced went unanswered).
+      if (!this.#accepting.has(link)) {
+        this.#accepting.add(link);
+        const accepting = Effect.gen(function* () {
+          for (;;) {
+            const stream = yield* link.accept();
+            if (stream === null) break;
+            // To the offer as it is now: a later one (its ports changed) takes on the links of those before it.
+            self.#env.runner.fork(Effect.provideService(self.#tunnel(self.#run, stream), Scope.Scope, tunnels));
+          }
+        }).pipe(Effect.ensuring(Effect.sync(() => this.#accepting.delete(link))));
+        const fiber = this.#env.runner.fork(accepting) as Fiber.Fiber<unknown, unknown>;
+        yield* Scope.addFinalizer(tunnels, Fiber.interrupt(fiber));
+      }
+      const gone = Effect.map(link.conn.closed(), () => ({ lost: link.closed() ?? t("core-misc.adb.link_lost"), pause: true }) as Ended);
       const replaced = Effect.as(mesh.replaced(StationAddr.parse(offer.station).toString(), link), { lost: null, pause: false } as Ended);
       const stopped = Effect.as(Deferred.await(changed), { changed: true } as Ended);
       const left = Math.max(this.#until - this.#env.host.nowMs(), 0);
       const expired = Effect.as(Effect.sleep(left), { expired: true } as Ended);
-      const ended = yield* Effect.raceAllFirst([hears, accepting, replaced, stopped, expired]);
+      const ended = yield* Effect.raceAllFirst([hears, gone, replaced, stopped, expired]);
       if (!("changed" in ended) && this.#env.host.nowMs() >= this.#until) return { expired: true } as Ended;
       return ended;
     });

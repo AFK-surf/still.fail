@@ -16,6 +16,8 @@ export type Connection = {
   remoteId(): string;
   alpn(): Buffer;
   via(): string | null;
+  /// Every way it can go now (the native connection's; a test's may have none).
+  paths?(): { selected: boolean; relay?: string | null; ip?: string | null; rttMs: number; txPackets: number; lostPackets: number }[];
   acceptBi(): Promise<Stream | null>;
   openBi(): Promise<Stream>;
   close(code: number, reason: string): void;

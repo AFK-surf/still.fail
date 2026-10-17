@@ -66,7 +66,10 @@ Over the member link (ALPN `stillfail/admin/1`; station/src/mesh/serve.ts):
 3. **Tunnels**, streams the station opens on the offer's connection, one per TCP
    connection to its port: the head line `{"tunnel":"connect"}` (or `"pair"`, for
    `adb pair`); the phone answers `{"ok":true}` once it reached adbd (or
-   `{"error":"…"}`), then bytes both ways until either side finishes.
+   `{"error":"…"}`), then bytes both ways until either side finishes. The phone
+   takes tunnels on every link an offer of it went on until that link closes:
+   the station hears of the offer on a new link only once it comes, and opens
+   its tunnels on the old one meanwhile.
 
 ## On the station
 

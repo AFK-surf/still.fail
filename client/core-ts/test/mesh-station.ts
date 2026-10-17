@@ -32,6 +32,9 @@ export class Station {
   world: World = REAL;
   /// Its LAN addresses, said with the answer to a credential (station/src/mesh/lan.ts).
   lan: string[] = [];
+  /// The phone's adb offers (station/src/mesh/adb.ts), each on the connection it came on, answered 200 and held open:
+  /// the latest one's connection is where the station opens its tunnels.
+  offers: { conn: J; head: J }[] = [];
 
   static async start(alpns: Uint8Array[] = [ALPN, FORMER_ALPN], world: World = REAL): Promise<Station> {
     return Station.bound({ alpns: alpns.map((a) => Buffer.from(a)), relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" }, world);
@@ -133,6 +136,12 @@ export class Station {
         const c = { bytes: Buffer.alloc(0) };
         const head = await Station.readLine(stream, c);
         if (head !== null && JSON.parse(head).screen !== undefined) return this.#view(stream, JSON.parse(head), c.bytes);
+        if (head !== null && JSON.parse(head).adb?.op === "share") {
+          this.offers.push({ conn, head: JSON.parse(head) });
+          await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers: { "content-type": "application/x-ndjson" } })}\n`));
+          await stream.write(Buffer.from(`${JSON.stringify({ serial: "127.0.0.1:37001", adb: "connected", message: "" })}\n`));
+          return;
+        }
         let body = c.bytes;
         for (;;) {
           const chunk = await stream.read();

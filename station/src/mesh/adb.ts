@@ -244,6 +244,7 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
     }
   }
   await writeLine(stream, { status: 200, headers: { "content-type": "application/x-ndjson" } });
+  log.info("adb", "adb offer", { offer: number, ...about(conn), main: conn.remoteId() === ask.phone });
   void connect(shares, share).catch(() => {});
 
   let unlisten = () => {};
@@ -298,11 +299,18 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
 /// Each TCP connection to the phone's port, a tunnel on its offer's connection.
 function listen(share: Share) {
   share.server.on("connection", (socket) => {
-    tunnel(share.conn, "connect", socket).catch((error) => {
-      log.info("adb", "adb tunnel ended", { error: (error as Error).message });
+    const conn = share.conn;
+    tunnel(conn, "connect", socket).catch((error) => {
+      log.info("adb", "adb tunnel ended", { error: (error as Error).message, offer: share.offer, ...about(conn) });
       share.refused = (error as Error).message;
     });
   });
+}
+
+/// Which of the phone's connections it is and the ways it has, for the log: a tunnel goes on its offer's.
+function about(conn: Connection): Record<string, string> {
+  const ways = (conn.paths?.() ?? []).map((p) => `${p.selected ? "*" : ""}${p.relay ?? p.ip ?? "?"} ${Math.round(p.rttMs)}ms ${p.txPackets}/${p.lostPackets}`);
+  return { device: conn.remoteId().slice(0, 12), via: conn.via() ?? "none", ways: ways.join("; ") };
 }
 
 /// A port of the phone's own: its usual one if free, else any.
@@ -450,7 +458,7 @@ async function pair(shares: Shares, share: Share, typed: string, lang: Lang): Pr
   server.once("connection", (socket) => {
     timer();
     server.close();
-    tunnel(conn, "pair", socket, done.signal).catch((error) => log.info("adb", "adb pairing tunnel ended", { error: (error as Error).message }));
+    tunnel(conn, "pair", socket, done.signal).catch((error) => log.info("adb", "adb pairing tunnel ended", { error: (error as Error).message, ...about(conn) }));
   });
   let said: string;
   try {
