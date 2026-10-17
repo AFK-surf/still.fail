@@ -784,7 +784,7 @@
   "web-pages.signIn.google": "登录或注册",
   "web-pages.signIn.lead": "用 Google 账号或邮箱登录，管理你的 workspace 及其中的 station",
   "web-pages.signIn.or": "或",
-  "web-pages.signIn.password": "使用邮箱和密码登录",
+  "web-pages.signIn.password": "使用密码登录",
   "web-pages.signIn.email": "邮箱",
   "web-pages.signIn.passwordField": "密码",
   "web-pages.signIn.passwordSubmit": "登录",

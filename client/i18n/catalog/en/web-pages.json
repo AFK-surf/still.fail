@@ -847,7 +847,7 @@
   "web-pages.signIn.google": "Sign in or sign up",
   "web-pages.signIn.lead": "Sign in with Google or your email to manage your workspaces and stations",
   "web-pages.signIn.or": "or",
-  "web-pages.signIn.password": "Sign in with email and password",
+  "web-pages.signIn.password": "Sign in with a password",
   "web-pages.signIn.email": "Email",
   "web-pages.signIn.passwordField": "Password",
   "web-pages.signIn.passwordSubmit": "Sign in",
