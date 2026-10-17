@@ -1,10 +1,16 @@
 {
   "platforms": [
+    "apple",
     "android"
   ],
   "android": {
     "modules": [
       "fail.still.rn.ui.StillfailUiModule"
+    ]
+  },
+  "apple": {
+    "modules": [
+      "StillfailUiModule"
     ]
   }
 }

@@ -47,8 +47,12 @@ yarn-error.*
 
 # the core as an AAR (scripts/core-android.sh)
 /modules/stillfail-core/android/repo
+# the core's shell and bytecode for iOS (scripts/core-ios.sh)
+/modules/stillfail-core/ios/prebuilt
 
 /build.log
+/pod.log
+/xcodebuild.log
 /gradle.log
 /export.log
 /shots
