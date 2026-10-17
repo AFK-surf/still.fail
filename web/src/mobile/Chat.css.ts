@@ -132,7 +132,6 @@ export const mSend = style({
     [`${mComposerBar}[data-expanded] &`]: { gridRow: "2", gridColumn: "3" },
   },
 });
-export const mAttach = style({ display: "flex", gap: "10px", padding: "4px 18px 24px" });
 export const mJob = style({
   selectors: {
     "&[data-off]": { opacity: ".55" },
@@ -183,11 +182,6 @@ export const mJobsAll = style({
 export const mJobsAllLine = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
 // Not the small note under it (./Connects.css.ts): the button's own words.
 globalStyle(`${mJobsAll} ${mJobsAllLine}`, { fontSize: "inherit", color: "inherit" });
-globalStyle(`${mAttach} button`, {
-  flex: "1", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", padding: "16px 0 12px",
-  border: "0", borderRadius: `calc(18px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "var(--m-chip)",
-  cursor: "pointer",
-});
 // The dot on the name's 21px line, half a pixel up for CJK ink (rounded to a whole pixel).
 globalStyle(`${mJob} > ${jobDot}`, { marginTop: "6px" });
 globalStyle(`${mJobHead} span > span`, {

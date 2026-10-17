@@ -17,7 +17,6 @@
   "web-mobile.changelog.updatedTo": "已更新到 {build}",
   "web-mobile.chat.addFiles": "添加文件",
   "web-mobile.chat.archive": "归档对话",
-  "web-mobile.chat.attach": "添加到消息",
   "web-mobile.chat.backgroundJobs": "后台任务",
   "web-mobile.chat.camera": "拍照",
   "web-mobile.chat.failed": "无法读取此对话：{error}",

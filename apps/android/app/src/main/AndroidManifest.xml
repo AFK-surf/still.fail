@@ -14,6 +14,10 @@
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <!-- Notices of the chats one takes part in (Notices.kt). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- ＋'s recent photos (screens/Attach.kt): the gallery, or on Android 14 and later the photos chosen for the app. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
     <application
         android:label="@string/app_name"

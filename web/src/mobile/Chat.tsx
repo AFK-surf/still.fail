@@ -405,8 +405,12 @@ function useLinkHold(list: RefObject<HTMLElement | null>) {
 /** What is being written (../draft.ts), and asking for the field's focus (a quote's comment done, a tap on the capsule). */
 export type Draft = SharedDraft & { focus: number; bumpFocus(): void };
 
-/** ＋: take a photo, pick photos, pick files; or (`onStation`) a station's files, named by their path (StationFiles.tsx). */
-export function openAttach(app: MobileApp, onPicked: (files: FileList) => void, onStation?: () => void) {
+/**
+ * ＋: take a photo, pick photos, pick files; or (`onStation`) a station's files, named by their path (StationFiles.tsx).
+ * A menu over ＋ (`anchor`), as a long-pressed message's: the phone app's sheet of recent photos needs the gallery,
+ * which a page cannot read.
+ */
+export function openAttach(app: MobileApp, anchor: DOMRect, onPicked: (files: FileList) => void, onStation?: () => void) {
   const pick = (accept: string, capture: boolean) => {
     const input = document.createElement("input");
     input.type = "file";
@@ -416,21 +420,12 @@ export function openAttach(app: MobileApp, onPicked: (files: FileList) => void, 
     input.onchange = () => { if (input.files?.length) onPicked(input.files); };
     input.click();
   };
-  app.sheet({
-    height: 0.32,
-    content: () => (
-      <>
-        <SheetGrab />
-        <SheetHead title={t("web-mobile.chat.attach")} />
-        <div className={css.mAttach}>
-          {([[t("web-mobile.chat.camera"), <Camera key="c" size={24} />, () => pick("image/*", true)], [t("web-mobile.chat.photos"), <Photo key="p" size={24} />, () => pick("image/*", false)], [t("web-mobile.chat.files"), <File key="f" size={24} />, () => pick("*/*", false)],
-            ...(onStation ? [[t("web-pages.chat.files"), <Server key="s" size={24} />, onStation] as const] : [])] as const).map(([label, icon, go]) => (
-            <button key={label} type="button" onClick={() => { app.sheet(null); go(); }}>{icon}<span>{label}</span></button>
-          ))}
-        </div>
-      </>
-    ),
-  });
+  app.menu({ anchor, items: [
+    { label: t("web-mobile.chat.camera"), icon: <Camera size={18} />, action: () => pick("image/*", true) },
+    { label: t("web-mobile.chat.photos"), icon: <Photo size={18} />, action: () => pick("image/*", false) },
+    { label: t("web-mobile.chat.files"), icon: <File size={18} />, action: () => pick("*/*", false) },
+    ...(onStation ? [{ label: t("web-pages.chat.files"), icon: <Server size={18} />, action: onStation }] : []),
+  ] });
 }
 
 /**
@@ -441,7 +436,7 @@ export function openAttach(app: MobileApp, onPicked: (files: FileList) => void, 
  */
 export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locked = false, onPlus, onType, onSend }: {
   draft: Draft; draftKey: string | undefined; sessionKey: string | null; placeholder: string; locked?: boolean;
-  onPlus: () => void; onType: () => void; onSend: () => void;
+  onPlus: (anchor: DOMRect) => void; onType: () => void; onSend: () => void;
 }): { menu: ReactNode; bar: ReactNode; expanded: boolean } {
   const input = useRef<HTMLTextAreaElement>(null);
   const [focused, setFocused] = useState(false);
@@ -455,7 +450,7 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
   const bar = (
     <div className={css.mComposerBar} data-expanded={expanded || undefined}
       onFocus={() => setFocused(true)} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false); }}>
-      <button type="button" className={css.mPlus} onClick={onPlus} disabled={locked} aria-label={t("web-mobile.chat.addFiles")}><Plus size={18} /></button>
+      <button type="button" className={css.mPlus} onClick={(e) => onPlus(e.currentTarget.getBoundingClientRect())} disabled={locked} aria-label={t("web-mobile.chat.addFiles")}><Plus size={18} /></button>
       {field}
       <button type="button" className={css.mSend} data-ready={ready || undefined} disabled={!ready} onClick={onSend} aria-label={t("web-mobile.chat.send")}>
         {draft.starting ? <Spinner size={16} color="var(--m-surface)" /> : <ArrowUp size={18} />}

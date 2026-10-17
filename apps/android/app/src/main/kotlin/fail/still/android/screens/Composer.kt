@@ -674,44 +674,6 @@ internal fun uploadingText(f: Pending): String {
     else t("android-chat.file.uploading.part", "percent" to (sent * 100 / f.size).toInt(), "size" to fileSize(f.size))
 }
 
-@Composable
-fun AttachLaunchers(onPicked: (Picked) -> Unit): Triple<() -> Unit, () -> Unit, () -> Unit> {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap -> bitmap?.let { onPicked(photoPicked(it)) } }
-    val photos = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
-        scope.launch { uris.forEach { u -> readPicked(context, u)?.let(onPicked) } }
-    }
-    val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        scope.launch { uris.forEach { u -> readPicked(context, u)?.let(onPicked) } }
-    }
-    return Triple(
-        { camera.launch(null) },
-        { photos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-        { files.launch(arrayOf("*/*")) },
-    )
-}
-
-/** ＋: take a photo, pick photos, pick files; or (`station`) a station's files, named by their path (StationFiles.kt). */
-fun openAttach(app: AppState, launchers: Triple<() -> Unit, () -> Unit, () -> Unit>, station: (() -> Unit)? = null) {
-    app.sheet = SheetSpec(0.32f) {
-        SheetGrab()
-        SheetHead(t("android-chat.attach.title"))
-        Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            (listOf(Triple(t("android-chat.attach.camera"), Icons.Camera, launchers.first), Triple(t("android-chat.attach.photos"), Icons.Photo, launchers.second), Triple(t("android-chat.attach.files"), Icons.File, launchers.third))
-                + listOfNotNull(station?.let { Triple(t("web-pages.chat.files"), Icons.Server, it) })).forEach { (label, icon, go) ->
-                Column(
-                    Modifier.weight(1f).clip(Smooth(18.dp)).background(C.chip).clickable { app.sheet = null; go() }.padding(top = 16.dp, bottom = 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    IconIn(icon, 24.dp)
-                    Text(label, fontSize = 13.sp, color = C.ink)
-                }
-            }
-        }
-    }
-}
-
 // ── the composer ───────────────────────────────────────────────────────
 
 /**

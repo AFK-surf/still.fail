@@ -17,7 +17,6 @@
   "web-mobile.changelog.updatedTo": "Updated to {build}",
   "web-mobile.chat.addFiles": "Add files",
   "web-mobile.chat.archive": "Archive chat",
-  "web-mobile.chat.attach": "Attach",
   "web-mobile.chat.backgroundJobs": "Jobs",
   "web-mobile.chat.camera": "Camera",
   "web-mobile.chat.failed": "Couldn't load this chat: {error}",

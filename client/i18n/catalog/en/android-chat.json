@@ -17,6 +17,8 @@
   "android-chat.attach.camera": "Camera",
   "android-chat.attach.files": "Files",
   "android-chat.attach.photos": "Photos",
+  "android-chat.attach.recent.allow": "Show recent photos",
+  "android-chat.attach.recent.more": "Select more photos",
   "android-chat.attach.title": "Attach",
   "android-chat.chat.archiveThis": "Archive this chat",
   "android-chat.chat.delete.verb": "delete",

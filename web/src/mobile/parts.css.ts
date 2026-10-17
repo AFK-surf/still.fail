@@ -5,7 +5,7 @@ import { mForm } from "./styles/sheets.css.ts";
 import { mMessages } from "./styles/chat.css.ts";
 import { mRunLabel } from "./styles/history.css.ts";
 import { mReaderBar, mSheetHead } from "./app.css.ts";
-import { mAttach, mChatBar, mChatBarTitle, mInfoAgent, mInfoStatus, mJobHead } from "./Chat.css.ts";
+import { mChatBar, mChatBarTitle, mInfoAgent, mInfoStatus, mJobHead } from "./Chat.css.ts";
 import { mSteps } from "./styles/settings.css.ts";
 import { mHomeBar, mHomeWorkspace } from "./Home.css.ts";
 import { outsetTop } from "@stillfail/ui/styles/align.ts";
@@ -211,8 +211,6 @@ globalStyle(`${mChatBarTitle} b`, {
 });
 /** Here rather than with its class: it comes after .m-loading, and wins over it. */
 globalStyle(`${mMessages} > *`, { flex: "none" });
-/** Here rather than with its class: it comes after .m-pick-text > span, and wins over it. */
-globalStyle(`${mAttach} span`, { fontSize: vars.textMeta });
 globalStyle(`:root[data-desktop] :is(${mHomeBar}, ${mPlaceHead}, ${mChatBar}, ${mNavbar}, ${mTopBack}, ${mReaderBar})`, { WebkitAppRegion: "drag" });
 globalStyle(`:root[data-desktop] :is(${mHomeBar}, ${mPlaceHead}, ${mChatBar}, ${mNavbar}, ${mTopBack}, ${mReaderBar}) :is(button, a)`, { WebkitAppRegion: "no-drag" });
 globalStyle(`${mListRow} ${mRunLabel}`, { width: "32px", flex: "none", fontSize: vars.textMeta, color: "var(--m-muted)" });
