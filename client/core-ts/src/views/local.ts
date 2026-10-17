@@ -259,9 +259,8 @@ export class Local {
     const titled = new Map<string, J>();
     for (const [key, chat] of this.#pending) {
       if (chat.station !== station) continue;
-      const first = chat.queue[0] ?? (chat.made ? this.outbox(station, chat.made[1])[0] : undefined);
-      const text = String(get(first, "text") ?? "").trim();
-      const title = text.split("\n").map((l) => l.trim()).find((l) => l !== "") ?? null;
+      const first = this.#firstOf(chat);
+      const title = firstLine(first);
       const theirs: J = chat.made ? this.#data.chat(station, chat.made[0]) : this.#data.chatOfClientKey(station, key);
       if (theirs !== undefined) {
         if (chat.made && !chat.listed) {
@@ -293,6 +292,21 @@ export class Local {
       out.push(row);
     }
     return { rows: out, titled };
+  }
+
+  /// What a chat asked for here is titled while its station has no message in it yet (as its row is: pendingRows):
+  /// the first line of its first message here, by its key or, once made, its thread or its agent's key.
+  firstTitle(station: string, at: { key?: string; thread?: number; session?: string }): string | null {
+    for (const [key, chat] of this.#pending) {
+      if (chat.station !== station) continue;
+      if (key !== at.key && (chat.made === null || (chat.made[1] !== at.thread && chat.made[0] !== at.session))) continue;
+      return firstLine(this.#firstOf(chat));
+    }
+    return null;
+  }
+
+  #firstOf(chat: Pending): J {
+    return chat.queue[0] ?? (chat.made ? this.outbox(chat.station, chat.made[1])[0] : undefined);
   }
 
   // ── an agent's first messages ──
@@ -642,4 +656,10 @@ export function sentAs(entry: J): J {
   const message: J = { text: entry.text ?? null, attachments: entry.attachments ?? null, quotes: entry.quotes ?? null };
   if (typeof entry.client === "string") message.client = entry.client;
   return message;
+}
+
+/// A message's first line with words, as a chat made by it is titled until its station has it.
+function firstLine(message: J): string | null {
+  const text = String(get(message, "text") ?? "").trim();
+  return text.split("\n").map((l) => l.trim()).find((l) => l !== "") ?? null;
 }

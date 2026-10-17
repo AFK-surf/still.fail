@@ -765,12 +765,22 @@ export class Views implements Owner {
       case "chat": {
         const station = view.station as string;
         const draw = <V extends Value | undefined>(out: V) => drawn(out, (path) => this.local.uploadOf(station, path));
-        if (typeof view.thread === "number") return draw(this.#chat(station, view.thread));
+        // A chat asked for here is titled by its first message until its station has a message in it, as its row is
+        // (Local.pendingRows): not by what the station calls a chat with nothing said in it yet, between the two.
+        const titled = <V extends Value | undefined>(out: V, at: { key?: string; thread?: number; session?: string }): V => {
+          if (out === undefined || !("ok" in out)) return out;
+          const v = out.ok as J;
+          if (arr(v.messages).length > 0) return out;
+          const title = this.local.firstTitle(station, at);
+          if (title !== null && title !== v.title) return { ok: { ...v, title } } as V;
+          return out;
+        };
+        if (typeof view.thread === "number") return draw(titled(this.#chat(station, view.thread), { thread: view.thread }));
         const session = typeof view.session === "string" ? view.session : null;
         if (session === null) return { err: CoreError.invalid(t("core-views.error.chat_needs_thread")) };
-        if (session.startsWith(PENDING_PREFIX)) return draw(this.#pendingChat(station, session) ?? { err: new CoreError("http_404", t("core-views.error.no_chat"), 404) });
+        if (session.startsWith(PENDING_PREFIX)) return draw(titled(this.#pendingChat(station, session) ?? { err: new CoreError("http_404", t("core-views.error.no_chat"), 404) }, { key: session }));
         const bound = this.boundThread(station, session);
-        const out = bound !== null ? this.#chat(station, bound) : this.#unchatted(station, session);
+        const out = titled(bound !== null ? this.#chat(station, bound) : this.#unchatted(station, session), { session });
         const waiting = this.local.firstOutbox(station, session);
         if (waiting.length === 0 || out === undefined || !("ok" in out)) return draw(out);
         const v = out.ok as J;
