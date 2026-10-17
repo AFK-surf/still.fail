@@ -1,12 +1,23 @@
 // The core for this app's UI: the web's client (web/src/core/client.ts) and its React hooks (react.ts) over a channel
 // to the core's engine in native code (modules/stillfail-core) instead of a worker. Started once, before anything
 // renders (app/_layout.tsx imports this first).
+import * as ExpoCrypto from "expo-crypto";
 import * as Device from "expo-device";
 import { StillfailCore } from "../../modules/stillfail-core";
 import { CoreClient, type Channel, type Opener } from "../../../../web/src/core/client.ts";
 import { setCore } from "../../../../web/src/core/react.ts";
 import { BETA, CLOUD_ORIGIN } from "../build";
 import { deviceLocale } from "../i18n";
+
+// Hermes has no Web Crypto: the pages' ids (crypto.randomUUID) and the web modules' random bytes from expo-crypto.
+const g = globalThis as { crypto?: Partial<Crypto> };
+if (g.crypto?.randomUUID == null || g.crypto?.getRandomValues == null) {
+  g.crypto = {
+    ...(g.crypto ?? {}),
+    randomUUID: () => ExpoCrypto.randomUUID() as `${string}-${string}-${string}-${string}-${string}`,
+    getRandomValues: <T extends ArrayBufferView | null>(array: T): T => ExpoCrypto.getRandomValues(array as unknown as Uint8Array) as unknown as T,
+  };
+}
 
 function base64(text: string): Uint8Array {
   const bin = globalThis.atob(text);

@@ -744,7 +744,7 @@ function PageContent({ screen, current }: { screen: Screen; current: WorkspaceEn
     case "Changelog": return <ChangelogScreen />;
     case "Connects": return <ConnectsScreen current={current} station={screen.station ?? null} />;
     case "Profiles": return <ProfilesScreen current={current} station={screen.station ?? null} />;
-    case "ProfileAccount": return <ProfileAccountScreen current={current} profileKey={screen.key} />;
+    case "ProfileAccount": return <ProfileAccountScreen current={current} accountKey={screen.key} />;
     case "AutomaticDecisions": return <AutomaticDecisionsScreen />;
     case "AutomaticDecisionCompletion": return <AutomaticDecisionCompletionScreen current={current} />;
     case "AutomaticDecisionPolicy": return <AutomaticDecisionPolicyScreen current={current} station={screen.station} />;
