@@ -186,11 +186,13 @@ export function Main() {
  * reads against the bundle's map, and the components it was in) and on the screen, not a blank app. Not the Kotlin's:
  * a Compose app that throws ends.
  */
-class Failing extends Component<{ children: ReactNode }, { error: Error | null }> {
-  state = { error: null as Error | null };
+class Failing extends Component<{ children: ReactNode }, { error: Error | null; where: string }> {
+  state = { error: null as Error | null, where: "" };
   static getDerivedStateFromError(error: Error) { return { error }; }
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("stillfail: a page failed:", error?.stack ?? String(error), info.componentStack);
+    const where = `${error?.stack ?? String(error)}\n${info.componentStack ?? ""}`;
+    console.log(`stillfail: a page failed: ${where}`);
+    this.setState({ where });
   }
   render() {
     const e = this.state.error;
@@ -198,6 +200,7 @@ class Failing extends Component<{ children: ReactNode }, { error: Error | null }
     return (
       <View style={{ flex: 1, padding: 24, paddingTop: 80 }}>
         <Text selectable style={{ fontSize: 13, color: "#A12F35" }}>{String(e?.message ?? e)}</Text>
+        <Text selectable style={{ fontSize: 10, color: "#666", marginTop: 12 }}>{this.state.where}</Text>
       </View>
     );
   }
