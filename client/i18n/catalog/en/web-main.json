@@ -427,6 +427,7 @@
   "web-main.model.none": "No models available",
   "web-main.model.otherSeries": "Other",
   "web-main.model.pick": "Choose model",
+  "web-main.model.borrowed": "Borrowed; usable here once it reaches this station",
   "web-main.model.runtime": "Runtime",
   "web-main.model.search": "Search models",
   "web-main.model.speed": "Speed",

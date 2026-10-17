@@ -11,7 +11,7 @@ import { modelPoolItem } from "./styles/chat.css.ts";
 import { onboardingRow } from "./cloud/settings.css.ts";
 import { sessionHead } from "./pages/ChatPage.css.ts";
 import { composerChoices } from "./Chat.css.ts";
-import { PANEL_PAD, TEXT_IN, columns, outsetStart, outsetTop } from "@stillfail/ui/styles/align.ts";
+import { IN, PANEL_PAD, PANEL_PILL, TEXT_IN, columns, outsetStart, outsetTop, pillInner } from "@stillfail/ui/styles/align.ts";
 
 /** A series of models in the control's list: its models one under another, each as wide as the list. */
 export const series = style({ display: "flex", flexDirection: "column", gap: 1 });
@@ -25,7 +25,8 @@ export const runOptionText = style({ display: "grid", gap: "1px", flex: "1", min
 /** The panel's lines: a tint of the text, seen in either theme (the page's line is lost on dark). */
 const rule = `1px solid color-mix(in srgb, ${vars.text} 10%, transparent)`;
 /** The panel: the filter across its top, the columns side by side under it with a line between, the foot under a line. */
-export const runPickerPanel = style({ padding: "0", overflow: "hidden" });
+/** Its corner from the foot's pills (align.ts pillInner): a menu's would leave a crescent by the one in its corner. */
+export const runPickerPanel = style({ vars: { [IN]: pillInner(PANEL_PAD, PANEL_PILL, vars.cornerScale) }, padding: "0", overflow: "hidden" });
 /** What sits by a panel's corner (6px in from it) takes the corner's own shape, less that: squarer, it looks cut in; a pill leaves a crescent. */
 const inner = `calc(${vars.rMenu} - 6px)`;
 export const runPickerAccountsPanel = style({ padding: "6px" });
@@ -163,6 +164,14 @@ export const runPickerSpent = style({ fontSize: vars.textMeta, color: vars.amber
 export const runPickerModels = style({ minWidth: "200px", maxWidth: "300px", flex: "1 1 auto", overflowY: "auto" });
 /** A model's name too long for the column is cut short. */
 export const runOptionName = style({ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+/** Where another station's model comes from, under its name. */
+export const runOptionFrom = style({ fontSize: vars.textMeta, fontWeight: 400, color: vars.muted });
+/** One not usable here till borrowed: faint, until it is the one picked. */
+globalStyle(`${runPickerOption}[data-availability="borrowable"]:not([aria-pressed="true"]) ${runOptionName}`, { color: vars.muted });
+/** Over the foot: the model picked is not usable here yet. */
+export const runPickerBorrow = style({ margin: `0 ${TEXT_IN}px 6px`, fontSize: vars.textMeta, color: vars.muted });
+/** The borrowing dialog's paragraphs. */
+export const borrowLine = style({ margin: "0 0 8px" });
 export const runPickerGroup = style({});
 export const runPickerEmpty = style({ margin: "4px 8px", fontSize: vars.textMeta });
 globalStyle(`${runOptionText} ${muted}`, { fontSize: vars.textMeta, whiteSpace: "normal", maxWidth: "260px" });

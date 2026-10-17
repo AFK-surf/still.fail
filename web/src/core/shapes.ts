@@ -458,6 +458,22 @@ export interface RunnableProfile {
 	quotaLine?: QuotaLine;
 }
 
+/** Where a model this station cannot run yet would be borrowed from (`pick.borrow`). */
+export interface ModelBorrow {
+	/** The station that has it (address). */
+	station: string;
+	stationName: string;
+	/** Its profile there. */
+	profile: string;
+	profileName: string;
+	/** A subscription: borrowed for each agent started, so not while that station is off. */
+	subscription: boolean;
+	/** Shared with every station already: its copy is on its way here, nothing to ask. */
+	pending: boolean;
+	/** The stations it is shared with now (this one is added). */
+	allow: string[];
+}
+
 /** A model a station can run: its maker, the runtimes it runs on, and for each how hard it can think and who runs it. */
 export interface ModelOption {
 	/** The spelling a client sends: the one that is its key when a profile has that, else the first. */
@@ -473,6 +489,15 @@ export interface ModelOption {
 	efforts: Record<string, string[]>;
 	accounts: Record<string, RunnableProfile[]>;
 	spent?: Spent;
+	/**
+	 * In a model control (`pick`): here (a profile of this station's own runs it), borrowed (only copies another
+	 * station shares with this one), borrowable (only another station of the workspace has it: `borrow`).
+	 */
+	availability?: string;
+	/** Where it comes from, in words beside its name (借自 Studio, 在 Studio 上); none for one of this station's own. */
+	fromText?: string;
+	/** A borrowable one: the profile that would be shared with this station. */
+	borrow?: ModelBorrow;
 }
 
 /**
@@ -493,6 +518,20 @@ export interface PickAccount {
 	auto: boolean;
 	level?: Level;
 	profile?: RunnableProfile;
+}
+
+/** A model control's picked model that another station has: borrowing it, confirmed first. */
+export interface PickBorrow {
+	/** In a line: this station cannot use it yet. */
+	note: string;
+	title: string;
+	/** What borrowing does, its account's kind, and that the stations' environments differ: the confirmation's text. */
+	lines: string[];
+	action: string;
+	/** The viewer may borrow it now (a manager, and not on its way already). */
+	allowed: boolean;
+	/** Why not, where not allowed. */
+	why?: string;
 }
 
 /**
@@ -539,6 +578,8 @@ export interface PickView {
 	accountNote: string;
 	accountWarn: boolean;
 	saveText: string;
+	/** The picked model is another station's: borrowed first (`pick.borrow`), confirmed; saving waits for it. */
+	borrow?: PickBorrow;
 }
 
 export interface AutomaticDecisionDraft {

@@ -36,6 +36,9 @@ import { OUTDATED, SCREENS_LACKING, screensDemo, type ViewStory } from "./screen
 import { libraryDemo, vaultDemo } from "./vault.ts";
 import { permissionsDemo } from "./permissions.ts";
 import { lockDemo } from "./lock.ts";
+import { ModelTriple } from "../src/ModelTriple.tsx";
+import type { Picking } from "../src/pick.ts";
+import type { ModelOption, PickView } from "../src/core/shapes.ts";
 import CLIP_URL from "./assets/story-clip.mp4?url";
 import TALL_CLIP_URL from "./assets/story-clip-tall.mp4?url";
 import PICTURE_URL from "./assets/story-picture.png?url";
@@ -232,6 +235,35 @@ const usageWaiting: DemoExtension = {
 
 /** A part drawn alone on the app's ground, the whole window its room. */
 const stage = (node: ReactNode) => <div style={{ position: "relative", width: "100%", height: "100vh", overflow: "hidden", background: vars.canvas, color: vars.text }}>{node}</div>;
+/** A model control on ccvm with the workspace's models (docs/station-share.md 借用): its own, one borrowed from Studio,
+ *  two only Studio has; `picked` one of those, so the panel's foot borrows it (`borrowing`: its dialog up). */
+function borrowPick(picked: boolean): Picking {
+  const option = (model: string, name: string, family: string, runtime: "claude" | "codex" | "dsh", more: Partial<ModelOption> = {}): ModelOption =>
+    ({ model, name, family, ids: [model], runtimes: [runtime], efforts: { [runtime]: ["low", "medium", "high"] }, accounts: { [runtime]: [] }, ...more }) as ModelOption;
+  const options: ModelOption[] = [
+    option("claude-opus-5-5", "Opus 5.5", "Opus", "claude", { availability: "here" }),
+    option("kimi-k3", "Kimi K3", "Kimi", "dsh", { availability: "borrowed", fromText: "借自 Studio" }),
+    option("gpt-6-astra", "GPT-6 Astra", "GPT", "codex", { availability: "borrowable", fromText: "在 Studio 上" }),
+    option("deepseek-v4-pro", "DeepSeek V4 Pro", "DeepSeek", "dsh", { availability: "borrowable", fromText: "在 Studio 上" }),
+  ];
+  const value = { model: "claude-opus-5-5", runtime: "claude" as const };
+  const draft = picked ? { model: "deepseek-v4-pro", runtime: "dsh" as const } : value;
+  const view = {
+    options, runtimeFixed: false, value, valueOption: options[0], draft, option: draft.model, runtimes: [], efforts: ["low", "medium", "high"], accounts: [],
+    who: "账号", autoNote: "额度用完或登录失效时自动切换", changed: picked, was: [], becomes: [], modelText: "", accountText: "自动分配", accountNote: "", accountWarn: false, saveText: "",
+    ...(picked ? { borrow: {
+      note: "此 station 还不能用 DeepSeek V4 Pro", title: "向 Studio 借用 zuozijian1994@gmail.com", action: "借用账号", allowed: true,
+      lines: [
+        "此 station 尚无可运行 DeepSeek V4 Pro 的账号。借用后，Studio 会把 Profile「zuozijian1994@gmail.com」分享给此 station，此 station 上的对话可以用它运行。",
+        "此 station 会保存一份副本，Studio 离线时仍可使用。",
+        "不同 station 的环境可能不同（已安装的运行时和工具、网络、文件），借用前请确认此 station 能正常使用这个账号。",
+      ],
+    } } : {}),
+  } as unknown as PickView;
+  return { view, set: noop, save: () => Promise.resolve({ saved: false }), borrow: () => new Promise(() => {}) };
+}
+const borrowStory = (picked: boolean) => stage(<div style={{ padding: 32 }}><ModelTriple pick={borrowPick(picked)} onConfirm={noop} /></div>);
+
 /** Parts side by side on a page of the app: sections of them, each named. */
 const sheet = (sections: [string, ReactNode][]) => stage(
   <div style={{ display: "grid", alignContent: "start", gap: 20, padding: 32, maxWidth: 880, overflowY: "auto", height: "100%", boxSizing: "border-box" }}>
@@ -452,6 +484,9 @@ export const stories: Story[] = [
   { id: "app-profile-add-model", group: "应用", title: "Profile · 按名称添加模型", app: true, demo: addModel, steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-opencode", group: "应用", title: "Profile · OpenCode Go 账号登录", app: true, demo: openCode(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-opencode-signing-in", group: "应用", title: "Profile · OpenCode Go 重新登录（设备码）", app: true, demo: openCode(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "pick-workspace-models", group: "选模型", title: "模型 · 本机、借用的、可借用的", render: () => borrowStory(false), steps: [{ click: "text=Opus 5.5" }] },
+  { id: "pick-borrow", group: "选模型", title: "模型 · 选了别的 station 的，借用", render: () => borrowStory(true), steps: [{ click: "text=Opus 5.5" }] },
+  { id: "pick-borrow-confirm", group: "选模型", title: "模型 · 借用前再次确认", render: () => borrowStory(true), steps: [{ click: "text=Opus 5.5" }, { click: "text=借用账号" }] },
   { id: "app-new-chat-not-shared", group: "应用", title: "新建对话 · 加入的 station 没有开放的 Profile", app: true, demo: notShared, steps: [{ text: "新建对话" }] },
   { id: "app-connects", group: "应用", title: "连接", app: true, steps: [{ click: '[aria-label="连接"]' }] },
   { id: "app-usage", group: "应用", title: "用量", app: true, steps: [{ click: '[aria-label="用量"]' }] },

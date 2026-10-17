@@ -14,7 +14,7 @@ import { topicKey, type Topic } from "./protocol.ts";
 import * as model from "./shapes/model.ts";
 import type { Store, Value, Watch } from "./store.ts";
 import { arr as arrU, equal, get as getU, isObject } from "./util.ts";
-import { models, quotaLine, servingIn } from "./views/models.ts";
+import { borrowable, models, quotaLine, servingIn, sourced } from "./views/models.ts";
 import { ofAddress } from "./workspace.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -153,10 +153,12 @@ export class Choose implements Owner {
       } catch {
         o = null;
       }
+      // The workspace's stations too: what the others have that this one could borrow.
+      const stations: Topic = { topic: "stations", scope: ofAddress(station) };
       sources =
         o?.kind === "session"
-          ? [{ topic: "session", station, key: o.key }, { topic: "sessions", station }, { topic: "chatRows", station }, overview]
-          : [overview];
+          ? [{ topic: "session", station, key: o.key }, { topic: "sessions", station }, { topic: "chatRows", station }, overview, stations]
+          : [overview, stations];
     }
     const store = this.#env.store;
     const watches = sources.map((s) => store.watch(s, () => store.invalidate(topic)));
@@ -395,11 +397,46 @@ export class Choose implements Owner {
     }
   }
 
+  /// What a station's own options are, said where their accounts are, and the models the workspace's other stations
+  /// could lend it after them (of `runtime` alone where it cannot change).
+  #withWorkspace(station: string, own: J[], runtime: string | null): J[] {
+    const stations = this.#env.store.get({ topic: "stations", scope: ofAddress(station) });
+    const overview = this.#env.store.get({ topic: "overview", station });
+    return [...sourced(own, overview, stations), ...borrowable(stations, station, own, runtime, this.#env.now())];
+  }
+
+  /// Whether the viewer may have another station share a profile with this one (docs/station-share.md: managers).
+  #manages(station: string): boolean {
+    const role = get(this.#env.data.shared({ topic: "workspace", workspace: ofAddress(station) }), "role");
+    return role === "owner" || role === "admin";
+  }
+
+  /// What borrowing a model's account says before it is done (the second confirmation, PickBorrow).
+  #borrowView(station: string, option: J): J {
+    const b = option.borrow;
+    const name = typeof option.name === "string" ? option.name : String(option.model);
+    const vars = { station: b.stationName, account: b.profileName, model: name };
+    const allowed = this.#manages(station);
+    return {
+      note: t("core-logic.choose.borrow.note", vars),
+      title: t("core-logic.choose.borrow.title", vars),
+      lines: [
+        t("core-logic.choose.borrow.body", vars),
+        t(b.subscription ? "core-logic.choose.borrow.subscription" : "core-logic.choose.borrow.key", vars),
+        t("core-logic.choose.borrow.environment"),
+      ],
+      action: t("core-logic.choose.borrow.action"),
+      allowed: allowed && b.pending !== true,
+      why: b.pending === true ? t("core-logic.choose.borrow.pending", vars) : allowed ? null : t("core-logic.choose.borrow.managers"),
+    };
+  }
+
   #pick(topic: Topic, station: string, oName: string): Value | undefined {
     const o = of(oName);
     const now = this.#now(station, o);
     if (now === undefined) return undefined;
-    const [options, value, current, fixed, quiet] = now;
+    const [own, value, current, fixed, quiet] = now;
+    const options = this.#withWorkspace(station, own, fixed && typeof value.runtime === "string" ? value.runtime : null);
     const draft = this.#drafts.get(topicKey(topic)) ?? {};
     const pickedOf = (field: string) => text(field in draft ? draft[field] : get(value, field));
     const m = pickedOf("model");
@@ -502,6 +539,7 @@ export class Choose implements Owner {
       : movesOff
         ? t("core-logic.choose.force.moves_off", { account: currentName, model: modelName ?? "" })
         : null;
+    const borrow = option !== undefined && option.availability === "borrowable" ? this.#borrowView(station, option) : null;
     let saveText = changed ? t("core-logic.choose.save", { model: modelName ?? t("core-logic.format.default_model"), effort: effortText, account: chosenText }) : t("core-logic.choose.save.unchanged");
     if (changed && fastAvailable) saveText = `${saveText} · ${speedText(fast)}`;
     return {
@@ -533,6 +571,7 @@ export class Choose implements Owner {
         accountWarn: dropped || movesOff,
         saveText,
         next,
+        borrow,
       },
     };
   }
@@ -561,6 +600,8 @@ export class Choose implements Owner {
     if ("err" in view) throw view.err;
     const v = view.ok as J;
     const next = v.next;
+    // Not run here till its account is borrowed (`pick.borrow`).
+    if (v.borrow !== null && v.borrow !== undefined) throw CoreError.invalid(t("core-logic.choose.borrow.first"));
     if (v.changed !== true || v.option === null) {
       this.#drafts.delete(topicKey(topic));
       this.#env.store.invalidate(topic);
@@ -595,6 +636,23 @@ export class Choose implements Owner {
     this.#drafts.delete(topicKey(topic));
     this.#changed();
     return saved;
+  }
+
+  /// `pick.borrow`: the station that has the picked model's account shares its profile with this one (its allow list
+  /// with this station added), asked of that station; the copy comes here as any share does, and the model with it.
+  borrow(station: string, oName: string): ops.Request {
+    const view = this.#pick({ topic: "pick", station, of: oName }, station, oName);
+    if (view === undefined) throw CoreError.invalid(t("core-logic.choose.error.no_options_yet"));
+    if ("err" in view) throw view.err;
+    const v = view.ok as J;
+    const option = optionOf(arr(v.options), text(v.option));
+    const b = get(option, "borrow");
+    if (!isObject(b) || v.borrow === null) throw CoreError.invalid(t("core-logic.choose.borrow.nothing"));
+    if (v.borrow.allowed !== true) throw CoreError.invalid(v.borrow.why ?? t("core-logic.choose.borrow.managers"));
+    const allow = [...new Set([...arr(b.allow), stationId(station)])];
+    const op = ops.request("profile.share", { station: b.station, id: b.profile, on: true, allow });
+    if (op === null) throw CoreError.invalid("profile.share");
+    return op;
   }
 
   /// What a connect being added will run on (connect_flow.rs).

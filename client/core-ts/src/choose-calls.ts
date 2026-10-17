@@ -54,6 +54,12 @@ export function installChoose(inner: Inner): Choose {
           });
         case "pick.set":
           return Effect.as(attempt(() => choose.set(field("station"), field("of"), params)), null);
+        case "pick.borrow":
+          return Effect.gen(function* () {
+            const op = yield* attempt(() => choose.borrow(field("station"), field("of")));
+            yield* handlers.op!(inner, { kind: "op", op }, progress, at, ctx);
+            return { borrowed: true };
+          });
         default:
           return Effect.gen(function* () {
             const saved = yield* attempt(() => choose.save(field("station"), field("of")));

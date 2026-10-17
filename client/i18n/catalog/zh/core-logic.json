@@ -498,5 +498,16 @@
   "core-logic.machineLogin.endedCancelledBy": "{who} 取消了在 {station} 上登录 {name}",
   "core-logic.machineLogin.endedTimedOut": "在 {station} 上登录 {name} 超时了",
   "core-logic.machineLogin.endedFailed": "在 {station} 上登录 {name} 失败",
-  "core-logic.machineLogin.endedFailedWhy": "在 {station} 上登录 {name} 失败：{reason}"
+  "core-logic.machineLogin.endedFailedWhy": "在 {station} 上登录 {name} 失败：{reason}",
+  "core-logic.choose.borrow.note": "此 station 还不能用 {model}",
+  "core-logic.choose.borrow.title": "向 {station} 借用 {account}",
+  "core-logic.choose.borrow.body": "此 station 尚无可运行 {model} 的账号。借用后，{station} 会把 Profile「{account}」分享给此 station，此 station 上的对话可以用它运行。",
+  "core-logic.choose.borrow.subscription": "这是订阅账号：此 station 每次启动 agent 都要向 {station} 借用登录，{station} 离线时无法使用。",
+  "core-logic.choose.borrow.key": "此 station 会保存一份副本，{station} 离线时仍可使用。",
+  "core-logic.choose.borrow.environment": "不同 station 的环境可能不同（已安装的运行时和工具、网络、文件），借用前请确认此 station 能正常使用这个账号。",
+  "core-logic.choose.borrow.action": "借用账号",
+  "core-logic.choose.borrow.managers": "只有 owner 或 admin 可以借用",
+  "core-logic.choose.borrow.pending": "{station} 已分享给所有 station，正在同步到此 station",
+  "core-logic.choose.borrow.first": "请先借用此模型的账号",
+  "core-logic.choose.borrow.nothing": "所选模型无需借用"
 }

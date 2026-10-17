@@ -381,5 +381,7 @@
   "core-views.permissions.network.feature": "访问网络磁盘",
   "core-views.permissions.unavailable": "当前不可用：{features}",
   "core-views.permissions.askingHere": "授权窗口已在该 Mac 上打开，可在远程屏幕中点击「允许」",
-  "core-views.permissions.askingThere": "授权窗口已在该 Mac 上打开，请在该 Mac 上点击「允许」"
+  "core-views.permissions.askingThere": "授权窗口已在该 Mac 上打开，请在该 Mac 上点击「允许」",
+  "core-views.models.borrowed_from": "借自 {station}",
+  "core-views.models.on_station": "在 {station} 上"
 }

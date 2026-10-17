@@ -474,6 +474,23 @@ data class RunnableProfile (
 	val quotaLine: QuotaLine? = null
 )
 
+/// Where a model this station cannot run yet would be borrowed from (`pick.borrow`).
+@Serializable
+data class ModelBorrow (
+	/// The station that has it (address).
+	val station: String,
+	val stationName: String,
+	/// Its profile there.
+	val profile: String,
+	val profileName: String,
+	/// A subscription: borrowed for each agent started, so not while that station is off.
+	val subscription: Boolean,
+	/// Shared with every station already: its copy is on its way here, nothing to ask.
+	val pending: Boolean,
+	/// The stations it is shared with now (this one is added).
+	val allow: List<String>
+)
+
 /// A model a station can run: its maker, the runtimes it runs on, and for each how hard it can think and who runs it.
 @Serializable
 data class ModelOption (
@@ -489,7 +506,14 @@ data class ModelOption (
 	val runtimes: List<RuntimeKind>,
 	val efforts: Map<String, List<String>>,
 	val accounts: Map<String, List<RunnableProfile>>,
-	val spent: Spent? = null
+	val spent: Spent? = null,
+	/// In a model control (`pick`): here (a profile of this station's own runs it), borrowed (only copies another
+	/// station shares with this one), borrowable (only another station of the workspace has it: `borrow`).
+	val availability: String? = null,
+	/// Where it comes from, in words beside its name (借自 Studio, 在 Studio 上); none for one of this station's own.
+	val fromText: String? = null,
+	/// A borrowable one: the profile that would be shared with this station.
+	val borrow: ModelBorrow? = null
 )
 
 /// What a chat runs on: `model` none when none is chosen; `effort` none the default depth; `profile` none the
@@ -510,6 +534,21 @@ data class PickAccount (
 	val auto: Boolean,
 	val level: Level? = null,
 	val profile: RunnableProfile? = null
+)
+
+/// A model control's picked model that another station has: borrowing it, confirmed first.
+@Serializable
+data class PickBorrow (
+	/// In a line: this station cannot use it yet.
+	val note: String,
+	val title: String,
+	/// What borrowing does, its account's kind, and that the stations' environments differ: the confirmation's text.
+	val lines: List<String>,
+	val action: String,
+	/// The viewer may borrow it now (a manager, and not on its way already).
+	val allowed: Boolean,
+	/// Why not, where not allowed.
+	val why: String? = null
 )
 
 /// A model control (the `pick` topic): what runs it now (`value`), what is picked in its panel so far (`draft`,
@@ -550,7 +589,9 @@ data class PickView (
 	val accountText: String,
 	val accountNote: String,
 	val accountWarn: Boolean,
-	val saveText: String
+	val saveText: String,
+	/// The picked model is another station's: borrowed first (`pick.borrow`), confirmed; saving waits for it.
+	val borrow: PickBorrow? = null
 )
 
 @Serializable

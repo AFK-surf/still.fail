@@ -8,7 +8,8 @@ import type { ModelOption } from "./api.ts";
 import type { Picking } from "./pick.ts";
 import { QuotaBars } from "./components.tsx";
 import { RUNTIME_LABEL } from "./format.ts";
-import { ModelLogo, ProviderLogo, RuntimeLogo, Tip } from "./ui.tsx";
+import { Button, Dialog, ModelLogo, ProviderLogo, RuntimeLogo, Tip } from "./ui.tsx";
+import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import * as css from "./ModelTriple.css.ts";
 import * as css2 from "./ModelTriple.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
@@ -43,6 +44,10 @@ export function modelName(options: { model: string; name?: string; ids?: string[
  */
 export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = false }: { pick: Picking; onConfirm(): void; side?: "top" | "bottom"; modelOnly?: boolean }) {
   const [open, setOpen] = useState(false);
+  // Borrowing the picked model's account from another station: asked again in a dialog of its own (the stations differ).
+  const [asking, setAsking] = useState(false);
+  const [borrowError, setBorrowError] = useState<string | null>(null);
+  const toast = useToast();
   const v = pick.view;
   const options = v?.options ?? [];
   const value = v?.value;
@@ -131,9 +136,11 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
                 <div key={who} className={`${css2.runPickerGroup} ${css.series}`}>
                   {groups.length > 1 && <h5>{who}</h5>}
                   {list.map((o) => (
-                    <Tip key={o.model} label={o.ids.join("\n")}><button type="button" className={css2.runPickerOption} aria-pressed={v.option === o.model} onClick={() => pick.set({ model: o.model })}>
+                    <Tip key={o.model} label={o.ids.join("\n")}><button type="button" className={css2.runPickerOption} aria-pressed={v.option === o.model} data-availability={o.availability} onClick={() => pick.set({ model: o.model })}>
                       <ModelLogo maker={o.maker} runtime={o.runtimes[0] ?? value.runtime} size={14} />
-                      <span className={css2.runOptionText}><span className={css2.runOptionName}>{o.name}</span>{o.spent && <span className={css2.runPickerSpent}>{o.spent.text}</span>}</span>
+                      <span className={css2.runOptionText}><span className={css2.runOptionName}>{o.name}</span>{o.spent && <span className={css2.runPickerSpent}>{o.spent.text}</span>}
+                        {/* Another station's: where it comes from (borrowed), or where it is (not usable here till borrowed). */}
+                        {o.fromText && <span className={css2.runOptionFrom}>{o.fromText}</span>}</span>
                       <Check size={14} className={css2.runCheck} />
                     </button></Tip>
                   ))}
@@ -164,6 +171,8 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
               </>}
             </div>}
           </div>
+          {/* The model picked is another station's: said so over the foot, which borrows it rather than confirming. */}
+          {v.borrow && <p className={css2.runPickerBorrow}>{v.borrow.allowed ? v.borrow.note : v.borrow.why ?? v.borrow.note}</p>}
           <div className={css2.runPickerFoot}>
               {/* In the room the columns leave: a long name is cut short rather than widening the panel. */}
               {!modelOnly && <span className={css2.runPickerWhoRoom}><Popover.Trigger className={css2.runPickerWho} data-level={v.whoLevel}>
@@ -176,8 +185,11 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
             {/* Not a Popover.Close: within the accounts' Root, that would close theirs. */}
             <button type="button" className={`${controlsCss.btn} ${css2.btnSm}`} onClick={() => setOpen(false)}>{t("common.cancel")}</button>
             {/* Nothing changed: there is nothing to confirm (取消, or a click outside, closes). */}
-            <button type="button" className={`${controlsCss.btn} ${controlsCss.btnPrimary} ${css2.btnSm}`} disabled={!v.option || !v.changed}
-              onClick={() => { setOpen(false); onConfirm(); }}>{t("common.confirm")}</button>
+            {v.borrow
+              ? <button type="button" className={`${controlsCss.btn} ${controlsCss.btnPrimary} ${css2.btnSm}`} disabled={!v.borrow.allowed || !pick.borrow}
+                onClick={() => { setOpen(false); setBorrowError(null); setAsking(true); }}>{v.borrow.action}</button>
+              : <button type="button" className={`${controlsCss.btn} ${controlsCss.btnPrimary} ${css2.btnSm}`} disabled={!v.option || !v.changed}
+                onClick={() => { setOpen(false); onConfirm(); }}>{t("common.confirm")}</button>}
           </div>
           </div></Popover.Anchor>
               <Popover.Portal>
@@ -201,6 +213,17 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
           </Popover.Root>
         </Popover.Content>
       </Popover.Portal>
+      {v.borrow && (
+        <Dialog open={asking} onClose={() => setAsking(false)} title={v.borrow.title}
+          footer={<>
+            <Button variant="ghost" onClick={() => setAsking(false)}>{t("common.cancel")}</Button>
+            <Button variant="primary" busy={!!pick.borrowing} disabled={!v.borrow.allowed}
+              onClick={() => { void pick.borrow?.().then(() => { setAsking(false); toast(t("web-main.model.borrowed")); }, (e: unknown) => setBorrowError(failure(e))); }}>{v.borrow.action}</Button>
+          </>}>
+          {v.borrow.lines.map((line, i) => <p key={i} className={css2.borrowLine}>{line}</p>)}
+          {borrowError && <p className={controlsCss.fieldError} role="alert">{borrowError}</p>}
+        </Dialog>
+      )}
     </Popover.Root>
   );
 }

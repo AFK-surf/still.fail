@@ -265,3 +265,86 @@ export function machineMeta(session: J, now: number): J {
   }
   return { ...session, meta: [runtime, short, ago].filter((x) => x !== null).join(" · ") };
 }
+
+// ── the workspace's models on a station (docs/station-share.md 借用) ──
+
+/// A station of the workspace as `stations` lists it: its address, id, name, whether it is up, and its overview.
+type StationOf = { station: string; id: string; name: string; online: boolean; joined: boolean; overview: J };
+
+const stationsOf = (stations: J): StationOf[] =>
+  arr(stations).flatMap((s) =>
+    typeof get(s, "station") === "string" && typeof get(s, "id") === "string"
+      ? [{ station: s.station, id: s.id, name: str(get(s, "name")) ?? s.id.slice(0, 8), online: get(s, "online") === true, joined: get(s, "joined") === true, overview: get(s, "overview") }]
+      : [],
+  );
+
+/// Each option said where its accounts are: `here` when one of them is the station's own, else `borrowed` from the
+/// station that shares them with it (`from`: its name, as `stations` names it).
+export function sourced(options: J[], overview: J, stations: J): J[] {
+  const names = new Map(stationsOf(stations).map((s) => [s.id, s.name]));
+  const byId = new Map(profilesOf(overview).map((p) => [str(get(p, "id")) ?? "", p]));
+  return options.map((o) => {
+    const ids = Object.values(get(o, "accounts") ?? {}).flatMap((list) => arr(list).map((a) => str(get(a, "id")) ?? ""));
+    const hosts = ids.map((id) => {
+      const share = get(byId.get(id), "share");
+      return get(share, "role") === "user" ? (str(get(share, "host")) ?? "") : null;
+    });
+    if (hosts.length === 0 || hosts.some((h) => h === null)) return { ...o, availability: "here" };
+    const host = hosts[0] as string;
+    const from = names.get(host) ?? host.slice(0, 8);
+    return { ...o, availability: "borrowed", from, fromText: t("core-views.models.borrowed_from", { station: from }) };
+  });
+}
+
+/// The models the workspace's other stations up now offer that `here` does not, each with the profile it would borrow
+/// (`borrow`): one of their own (not a copy they borrow themselves), of `runtime` where only it can run. Stations of
+/// other workspaces this one joined lend nothing, and one joined lends to none (sharing is within a workspace).
+export function borrowable(stations: J, here: string, have: J[], runtime: string | null, now: number): J[] {
+  const all = stationsOf(stations);
+  const self = all.find((s) => s.station === here);
+  if (self === undefined || self.joined) return [];
+  const taken = new Set(have.map((o) => model.key(str(get(o, "model")) ?? "")));
+  const ownHere = new Set(profilesOf(self.overview).flatMap((p) => (typeof get(get(p, "share"), "id") === "string" ? [p.share.id] : [])));
+  const out: J[] = [];
+  for (const s of all) {
+    if (s.station === here || !s.online || s.joined || get(s.overview, "sharing") !== true) continue;
+    for (const p of profilesOf(s.overview)) {
+      const share = get(p, "share");
+      if (get(share, "role") === "user") continue;
+      // Shared with this station already: its copy is on its way (or here, and its models with it).
+      if (typeof get(share, "id") === "string" && ownHere.has(share.id)) continue;
+      const lone = { ...s.overview, profiles: [p] };
+      for (const o of models(lone, now)) {
+        if (runtime !== null && !arr(o.runtimes).includes(runtime)) continue;
+        const key = model.key(o.model);
+        if (taken.has(key)) continue;
+        taken.add(key);
+        const allow = get(share, "allow");
+        const shared = isShared(share);
+        const rts: string[] = runtime !== null ? [runtime] : o.runtimes;
+        out.push({
+          ...o,
+          runtimes: rts,
+          // Not run here till borrowed: no account of this station's to keep to.
+          accounts: Object.fromEntries(rts.map((r) => [r, []])),
+          availability: "borrowable",
+          from: s.name,
+          fromText: t("core-views.models.on_station", { station: s.name }),
+          borrow: {
+            station: s.station,
+            stationName: s.name,
+            profile: str(get(p, "id")) ?? "",
+            profileName: str(get(p, "name")) ?? "",
+            subscription: get(get(p, "access"), "kind") === "subscription",
+            // Every station may use it already (its copy not here yet): nothing to ask.
+            pending: shared && allow === null,
+            allow: shared && Array.isArray(allow) ? allow.filter((x: unknown) => typeof x === "string") : [],
+          },
+        });
+      }
+    }
+  }
+  return out.sort((a, b) => model.compareOrder(model.key(a.model), model.key(b.model)));
+}
+
+const isShared = (share: J) => typeof get(share, "id") === "string" && get(share, "role") === "host";

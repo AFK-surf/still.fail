@@ -453,5 +453,7 @@
   "core-views.permissions.network.feature": "Network volumes",
   "core-views.permissions.unavailable": "Unavailable now: {features}",
   "core-views.permissions.askingHere": "The permission window is open on that Mac; click Allow in it from the remote screen",
-  "core-views.permissions.askingThere": "The permission window is open on that Mac; click Allow there"
+  "core-views.permissions.askingThere": "The permission window is open on that Mac; click Allow there",
+  "core-views.models.borrowed_from": "Borrowed from {station}",
+  "core-views.models.on_station": "On {station}"
 }

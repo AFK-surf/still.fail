@@ -603,5 +603,16 @@
   "core-logic.machineLogin.endedCancelledBy": "{who} cancelled the login to {name} on {station}",
   "core-logic.machineLogin.endedTimedOut": "Login to {name} on {station} timed out",
   "core-logic.machineLogin.endedFailed": "Login to {name} on {station} failed",
-  "core-logic.machineLogin.endedFailedWhy": "Login to {name} on {station} failed: {reason}"
+  "core-logic.machineLogin.endedFailedWhy": "Login to {name} on {station} failed: {reason}",
+  "core-logic.choose.borrow.note": "This station can't use {model} yet",
+  "core-logic.choose.borrow.title": "Borrow {account} from {station}",
+  "core-logic.choose.borrow.body": "This station has no account that runs {model}. Borrowing makes {station} share the profile “{account}” with this station, so its chats can run on it.",
+  "core-logic.choose.borrow.subscription": "This is a subscription: each agent this station starts borrows its sign-in from {station}, so it can't run while {station} is offline.",
+  "core-logic.choose.borrow.key": "This station keeps a copy, so it keeps working while {station} is offline.",
+  "core-logic.choose.borrow.environment": "Stations can differ (installed runtimes and tools, network, files): make sure this station can use this account before borrowing it.",
+  "core-logic.choose.borrow.action": "Borrow account",
+  "core-logic.choose.borrow.managers": "Only an owner or admin can borrow",
+  "core-logic.choose.borrow.pending": "{station} shares it with every station; it is on its way to this one",
+  "core-logic.choose.borrow.first": "Borrow an account for this model first",
+  "core-logic.choose.borrow.nothing": "The model picked needs no borrowing"
 }

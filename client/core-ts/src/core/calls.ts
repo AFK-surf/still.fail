@@ -180,7 +180,7 @@ export function counts(call: Call, name: string): boolean {
     case "wake":
       return call.retry;
     case "choose":
-      return call.name === "pick.save";
+      return call.name === "pick.save" || call.name === "pick.borrow";
     case "attend":
       return name === "notify.set";
     case "ask":
@@ -498,9 +498,10 @@ export function parseCall(name: string, params: unknown): Call {
     case "newChat.create":
     case "newChat.migrate":
     case "pick.set":
-    case "pick.save": {
+    case "pick.save":
+    case "pick.borrow": {
       const p = orEmpty(params);
-      const needs = name === "newChat.pick" ? ["scope"] : name === "newChat.create" ? ["station"] : name === "pick.set" || name === "pick.save" ? ["station", "of"] : [];
+      const needs = name === "newChat.pick" ? ["scope"] : name === "newChat.create" ? ["station"] : name === "pick.set" || name === "pick.save" || name === "pick.borrow" ? ["station", "of"] : [];
       const missing = needs.find((f) => {
         const v = get(p, f);
         return typeof v !== "string" || v === "";
