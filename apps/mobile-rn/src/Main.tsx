@@ -7,8 +7,8 @@ import * as NavigationBar from "expo-navigation-bar";
 import * as Network from "expo-network";
 import { StatusBar } from "expo-status-bar";
 import * as SystemUI from "expo-system-ui";
-import { useEffect, useRef, useState } from "react";
-import { AppState as SystemAppState, Platform, View } from "react-native";
+import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from "react";
+import { AppState as SystemAppState, Platform, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useTopic } from "../../../web/src/core/react.ts";
@@ -174,9 +174,31 @@ export function Main() {
         {/* Every touch of the app: the last finger lifted is where a switch from the bar begins (BarTiming). */}
         <View style={{ flex: 1 }} onTouchEndCapture={() => BarTiming.touched()}>
           {/* The app's state made in a moment: the same buddy as the app starting (App.tsx), so startup is one picture. */}
-          {!ready ? <Splash /> : <LocalApp.Provider value={app}><StillFailApp app={app} /></LocalApp.Provider>}
+          {!ready ? <Splash /> : <Failing><LocalApp.Provider value={app}><StillFailApp app={app} /></LocalApp.Provider></Failing>}
         </View>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
+}
+
+/**
+ * What a page throwing as it draws leaves: its error and where, to the log (its stack, which `npx metro-symbolicate`
+ * reads against the bundle's map, and the components it was in) and on the screen, not a blank app. Not the Kotlin's:
+ * a Compose app that throws ends.
+ */
+class Failing extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("stillfail: a page failed:", error?.stack ?? String(error), info.componentStack);
+  }
+  render() {
+    const e = this.state.error;
+    if (e == null) return this.props.children;
+    return (
+      <View style={{ flex: 1, padding: 24, paddingTop: 80 }}>
+        <Text selectable style={{ fontSize: 13, color: "#A12F35" }}>{String(e?.message ?? e)}</Text>
+      </View>
+    );
+  }
 }
