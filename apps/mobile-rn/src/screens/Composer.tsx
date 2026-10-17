@@ -21,7 +21,6 @@ import { t } from "../i18n";
 import { Button, fileSize } from "../ui/Controls";
 import { chatInk } from "../ui/ChatInk";
 import { ComposerCorner, ComposerFilesIn, ComposerInset, Floating, InComposer, InComposerFiles } from "../ui/Glass";
-import { AnnotatedText } from "../ui/Annotated";
 import { Icon, Icons } from "../ui/Icon";
 import { Ease } from "../ui/Motion";
 import { MakerIcon } from "../ui/Parts";
@@ -31,10 +30,10 @@ import { T } from "../ui/Text";
 import { lerpColor, raised, useC, withAlpha } from "../ui/Theme";
 import { BusyIcon, Spinner, WaitLine } from "../ui/Waiting";
 import { openAttach, AttachLaunchers } from "./Attach";
-import { quoteLine, quoteMark, type AgentHere } from "./Chat";
-import { FileData, FileCard, isImage } from "./ChatFiles";
+import { quoteLine, type AgentHere } from "./Chat";
+import { FileData, FileCard, isImage, type Picture } from "./ChatFiles";
 import { SendTile, type ComposerSpec, type Host } from "./ChatHost";
-import { encodeComponent, insertedRange, linkedRefs, type LinkedChat } from "./ChatLink";
+import { encodeComponent, insertedRange, linkedRefs, type LinkedChat, type RefMatch } from "./ChatLink";
 import { FilePreview, FileViewers, ForgetThumb, ViewerThumb } from "./FilePreview";
 import { PASTE_THRESHOLD, PastedText, pastedPicked } from "./PastedText";
 import { SendTextStyle } from "./SendText";
@@ -387,19 +386,19 @@ function refMarks(text: string, accent: string): ReactNode[] {
  * `@` (a link to its agent's execution history kept as that link); one the core cannot make a mark of stays as it is.
  * Written on meanwhile: each link where it is now, if it still is.
  */
-async function markPasted(draft: Draft, pasted: string, refs: [RegExpExecArray, LinkedChat][]) {
+async function markPasted(draft: Draft, pasted: string, refs: [RefMatch, LinkedChat][]) {
   const made = await Promise.all(refs.map(async ([m, chat]) => {
     try {
-      const told = await core().call("chat.ref", { station: chat.station, id: chat.id, title: m[1], base: theApp.cloudOrigin }) as { mark?: string } | null;
-      const mark = told?.mark ?? m[0];
-      if (chat.history !== "" && mark !== m[0]) {
+      const told = await core().call("chat.ref", { station: chat.station, id: chat.id, title: m.groupValues[1], base: theApp.cloudOrigin }) as { mark?: string } | null;
+      const mark = told?.mark ?? m.value;
+      if (chat.history !== "" && mark !== m.value) {
         const at = chat.station.indexOf("/");
         const page = `${theApp.cloudOrigin.replace(/\/+$/, "")}/w/${chat.station.substring(0, at)}/s/${chat.station.substring(at + 1)}/chats/${encodeComponent(chat.id)}${chat.history}`;
         await core().call("chat.refs", { links: [[mark.substring(2, mark.length - 1), page]] });
       }
       return mark;
     } catch {
-      return m[0];
+      return m.value;
     }
   }));
   const now = draft.input;
@@ -408,10 +407,10 @@ async function markPasted(draft: Draft, pasted: string, refs: [RegExpExecArray, 
   // Last first, so the places of those before stay as they are.
   for (let i = refs.length - 1; i >= 0; i--) {
     const m = refs[i]![0];
-    const at = now.text === pasted ? m.index : text.indexOf(m[0]);
+    const at = now.text === pasted ? m.range.first : text.indexOf(m.value);
     if (at < 0) continue;
-    text = text.substring(0, at) + made[i] + text.substring(at + m[0].length);
-    if (caret >= at + m[0].length) caret += made[i]!.length - m[0].length;
+    text = text.substring(0, at) + made[i] + text.substring(at + m.value.length);
+    if (caret >= at + m.value.length) caret += made[i]!.length - m.value.length;
   }
   if (text !== now.text) { const c = Math.min(Math.max(caret, 0), text.length); draft.input = { text, selection: { start: c, end: c } }; }
 }
@@ -731,7 +730,7 @@ export function upload(app: AppState, draft: Draft, station: string, picked: Pic
     try {
       p.done = await app.api(station).upload(picked.name, picked.size, picked.source(), picked.width, picked.height, (s) => { p.sent = s; });
       const a = p.done;
-      if (a && picked.preview) FileData.keepSent(station, a.path, picked.preview);
+      if (a && picked.preview) FileData.keepSent(station, a.path, { uri: picked.preview, width: picked.width ?? 0, height: picked.height ?? 0 });
       draft.save();
     } catch (e) {
       p.error = e instanceof CoreError ? e.message : t("android-chat.file.uploadFailed");
@@ -791,10 +790,10 @@ function DraftQuoteCard({ draft, q }: { draft: Draft; q: DraftQuote }) {
   return (
     <Smooth radius={InComposer} style={{ width: "100%", backgroundColor: ink.card }}>
       <View style={{ width: "100%" }}>
-        <AnnotatedText
-          text={quoteLine(q.author, q.text)} inlineContent={quoteMark()} numberOfLines={2} ellipsizeMode="tail"
-          style={{ fontSize: 13, lineHeight: 19.5, color: ink.muted, paddingLeft: 16, paddingRight: 34, paddingTop: 9, includeFontPadding: false }}
-        />
+        <Text
+          numberOfLines={2} ellipsizeMode="tail"
+          style={{ fontSize: 13, lineHeight: 19.5, color: ink.muted, paddingLeft: 16, paddingRight: 34, paddingTop: 9, includeFontPadding: false, letterSpacing: 0 }}
+        >{quoteLine(q.author, q.text)}</Text>
         <View style={{ width: "100%", paddingLeft: 16, paddingRight: 16, paddingTop: 3, paddingBottom: 10 }}>
           {q.comment === "" && <T size={15} line={22} color={ink.subtle} style={{ position: "absolute", left: 16, top: 3 }}>{t("android-chat.quote.comment")}</T>}
           <TextInput
@@ -944,18 +943,18 @@ function useDraftPictureOf(f: Pending, station: string | null, key: string | nul
   const wanted = f.preview == null && a != null && station != null && isImage(a.name);
   const longest = PixelRatio.getPixelSizeForLayoutSize(56) * 2;
   const id = wanted ? FileData.id(station!, key ?? "", a!, true) : null;
-  const [picture, setPicture] = useState<string | null>(() => (wanted ? (FileData.sentPicture(station!, a!.path) ?? FileData.keptPicture(id!, longest) ?? null) : null));
+  const [picture, setPicture] = useState<Picture | null>(() => (wanted ? (FileData.sentPicture(station!, a!.path) ?? FileData.keptPicture(id!, longest) ?? null) : null));
   useEffect(() => {
     if (!wanted || picture != null || key == null) return;
     let live = true;
-    FileData.fetch(theApp, station!, key, a!, true).then(
-      (bytes: Uint8Array) => { if (live) setPicture(FileData.picture(id!, bytes, longest)); },
+    FileData.fetch(theApp, station!, key, a!, true).await().then((bytes) => FileData.picture(id!, bytes, longest)).then(
+      (p) => { if (live) setPicture(p); },
       () => undefined,
     );
     return () => { live = false; };
   }, [f.id, key]); // eslint-disable-line react-hooks/exhaustive-deps
   if (f.preview != null) return f.preview;
-  return wanted ? picture : null;
+  return wanted ? picture?.uri ?? null : null;
 }
 
 /**
@@ -971,8 +970,8 @@ function DraftPicture({ f, station, children }: { f: Pending; station: string | 
   return (
     <>
       <ForgetThumb id={id} />
-      {open && <FilePreview station={station} session="" file={file} canDraft={false} onClose={() => setOpen(false)} />}
-      <ViewerThumb id={id} radius={PixelRatio.getPixelSizeForLayoutSize(InComposerFiles)} picture={() => f.preview}>
+      {open && <FilePreview station={station} sessionKey="" file={file} canDraft={false} onClose={() => setOpen(false)} />}
+      <ViewerThumb id={id} radius={PixelRatio.getPixelSizeForLayoutSize(InComposerFiles)} picture={() => (f.preview != null ? { uri: f.preview, width: f.width ?? 0, height: f.height ?? 0 } : null)}>
         <Pressable onPress={() => { FileData.keep(FileData.id(station, "", file, false), bytes); setOpen(true); }}>
           {children}
         </Pressable>
@@ -1043,7 +1042,7 @@ export function ComposerBar({
     onType();
     // A chat's link pasted (`[its title](its link)`, as copied) goes in as a reference, as on the web.
     if (station != null && put != null && put.last > put.first) {
-      const refs = linkedRefs(now, station).filter(([m]: [RegExpExecArray, LinkedChat]) => m.index <= put.last && m.index + m[0].length - 1 >= put.first);
+      const refs = linkedRefs(now, station).filter(([m]) => m.range.first <= put.last && m.range.last >= put.first);
       if (refs.length > 0) void markPasted(draft, now, refs);
     }
   };

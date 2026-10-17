@@ -4,6 +4,7 @@
 // back to the page under it, its name in the middle, its actions with its "+" at the right. No large title, no note
 // under it either way.
 import { useContext, useState, type ReactNode } from "react";
+import { slot, type Slot } from "../ui/Parts";
 import { View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LocalApp, useApp } from "../AppState";
@@ -88,7 +89,7 @@ export function PlacePage({ current, place, primary, known = true, title, back, 
   known?: boolean;
   title?: string;
   back?: string;
-  actions?: (() => ReactNode) | null;
+  actions?: Slot | null;
   content: (top: number) => ReactNode;
 }) {
   const app = useContext(LocalApp);
@@ -108,7 +109,7 @@ export function PlacePage({ current, place, primary, known = true, title, back, 
         <TopGlassBar modifier={{ position: "absolute", left: 0, right: 0, top: 0 }} onLayout={(h) => { barHeights.set(key, h); setBar(h); }}>
           <SettingsGear />
           <TopBarTitle text={name} modifier={{ flex: 1, minWidth: 0 }} />
-          {actions?.()}
+          {slot(actions)}
         </TopGlassBar>
       </View>
     );
@@ -124,7 +125,7 @@ export function PlacePage({ current, place, primary, known = true, title, back, 
         title={name}
         trailing={actions == null && primary == null ? null : () => (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            {actions?.()}
+            {slot(actions)}
             {primary != null && <PlusButton action={primary} />}
           </View>
         )}

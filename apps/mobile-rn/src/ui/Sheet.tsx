@@ -2,6 +2,7 @@
 // its grabber between half and full height, or down to close), a message's
 // long-press menu, and a short note.
 import { BlurView } from "expo-blur";
+import { slot, type Slot } from "./Parts";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { BackHandler, Keyboard, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -197,13 +198,13 @@ export function SheetGrab() {
   );
 }
 
-export function SheetHead({ title, trailing, lead }: { title: string; trailing?: (() => ReactNode) | null; lead?: (() => ReactNode) | null }) {
+export function SheetHead({ title, trailing, lead }: { title: string; trailing?: Slot | null; lead?: Slot | null }) {
   const C = useC();
   return (
     <View style={{ alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 18, paddingRight: 18, paddingTop: 4, paddingBottom: 10 }}>
-      {lead?.()}
+      {slot(lead)}
       <T size={17} weight="700" color={C.ink} style={{ flex: 1 }}>{title}</T>
-      {trailing?.()}
+      {slot(trailing)}
     </View>
   );
 }

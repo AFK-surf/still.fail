@@ -1,6 +1,7 @@
 // The settings' parts other pages use too: rows that go on, notes under a list, the pickers of a run (model, account,
 // effort), a workspace's mark, a decision's options.
 import { useState, type ReactNode } from "react";
+import { slot, type Slot } from "../ui/Parts";
 import { Linking, Pressable, ScrollView, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
@@ -19,11 +20,11 @@ import { useC, withAlpha } from "../ui/Theme";
 import { PresenceDot } from "./Connects";
 
 /** A row that opens a page: its name, how things stand (`bad` in red; `dot`, a red dot before it), a chevron. */
-export function GoRow({ title, value, bad = false, dot = false, lead, onClick }: { title: string; value?: string | null; bad?: boolean; dot?: boolean; lead?: (() => ReactNode) | null; onClick: () => void }) {
+export function GoRow({ title, value, bad = false, dot = false, lead, onClick }: { title: string; value?: string | null; bad?: boolean; dot?: boolean; lead?: Slot | null; onClick: () => void }) {
   const C = useC();
   return (
     <ListRow onClick={onClick}>
-      {lead?.()}
+      {slot(lead)}
       <T size={15} color={C.ink} numberOfLines={1} ellipsizeMode="tail" style={{ flex: 1, minWidth: 0 }}>{title}</T>
       {value != null && (
         <View style={{ maxWidth: 220, flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -43,13 +44,13 @@ export function PageNote({ text }: { text: string }) {
 }
 
 /** A line that leads to a list: what is chosen, and an arrow. */
-export function SettingRow({ onClick, leading, content, children }: { onClick: () => void; leading?: () => ReactNode; content?: () => ReactNode; children?: ReactNode }) {
+export function SettingRow({ onClick, leading, content, children }: { onClick: () => void; leading?: Slot; content?: Slot; children?: ReactNode }) {
   const C = useC();
   return (
     <Smooth radius={12} style={{ alignSelf: "stretch", backgroundColor: C.chip }}>
       <Pressable onPress={onClick} android_ripple={ripple(C.ink)} style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 12 }}>
-        {leading?.()}
-        <View style={{ flex: 1, minWidth: 0 }}>{content ? content() : children}</View>
+        {slot(leading)}
+        <View style={{ flex: 1, minWidth: 0 }}>{content != null ? slot(content) : children}</View>
         <IconIn icon={Icons.ChevronRight} size={16} tint={C.muted} />
       </Pressable>
     </Smooth>
@@ -227,17 +228,17 @@ export function optionOf(models: ModelOption[], model: string | null | undefined
 }
 
 /** A choice in a list: what it is, a note under it, and a check when it is the one chosen. */
-export function PickLine({ label, sub, checked, onClick, leading, trailing }: { label: string; sub?: string | null; checked: boolean; onClick: () => void; leading?: (() => ReactNode) | null; trailing?: (() => ReactNode) | null }) {
+export function PickLine({ label, sub, checked, onClick, leading, trailing }: { label: string; sub?: string | null; checked: boolean; onClick: () => void; leading?: Slot | null; trailing?: Slot | null }) {
   const C = useC();
   return (
     <Smooth radius={10} style={{ alignSelf: "stretch" }}>
       <Pressable onPress={onClick} android_ripple={ripple(C.ink)} style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 4, paddingVertical: 11 }}>
-        {leading?.()}
+        {slot(leading)}
         <View style={{ flex: 1, minWidth: 0 }}>
           <T size={15} color={C.ink} numberOfLines={1} ellipsizeMode="tail">{label}</T>
           {sub != null && <T size={12} color={C.muted}>{sub}</T>}
         </View>
-        {trailing?.()}
+        {slot(trailing)}
         <View style={{ width: 18, alignItems: "center" }}>{checked && <IconIn icon={Icons.Check} size={16} tint={C.accent} />}</View>
       </Pressable>
     </Smooth>

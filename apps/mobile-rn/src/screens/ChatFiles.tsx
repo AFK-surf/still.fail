@@ -857,7 +857,7 @@ export function FileCard({ name, size, note = null, busy = false, onRemove = nul
   shape?: number | [number, number, number, number]; onClick?: (() => void) | null;
 }) {
   const C = useC();
-  const ink = chatInk();
+  const ink = chatInk(useC());
   return (
     // The wide screen's neutral ground (web toast.css.ts → fileCard: --neutral-bg), a cool grey, not the page's warm chip.
     <Smooth radius={shape} style={{ width: 236, backgroundColor: ink.neutral }}>

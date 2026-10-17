@@ -2,6 +2,7 @@
 // rows to pick from, the mark of what was set going. Moved here from screens/ so that what is not a chat's page does not
 // depend on the pages (2026-10-17).
 import type { ReactNode } from "react";
+import { slot, type Slot } from "./Parts";
 import { Pressable, TextInput, View, type StyleProp, type ViewStyle } from "react-native";
 import { Icons } from "./Icon";
 import type { IconPaths } from "./IconSet";
@@ -39,7 +40,7 @@ export function DoingMark({ running, failed, inline = false }: { running: boolea
  */
 export function PickRow({ label, sub, checked = false, enabled = true, busy = false, done = false, failed, color, leading, mark, subLines, onClick }: {
   label: string; sub?: string | null; checked?: boolean; enabled?: boolean; busy?: boolean; done?: boolean; failed?: string | null; color?: string;
-  leading?: (() => ReactNode) | null; mark?: (() => ReactNode) | null; subLines?: number; onClick: () => void;
+  leading?: Slot | null; mark?: Slot | null; subLines?: number; onClick: () => void;
 }) {
   const C = useC();
   const ink = enabled ? (color ?? C.ink) : C.subtle;
@@ -51,13 +52,13 @@ export function PickRow({ label, sub, checked = false, enabled = true, busy = fa
         android_ripple={ripple(C.ink)}
         style={{ alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 8, paddingVertical: 12 }}
       >
-        {leading?.()}
+        {slot(leading)}
         <View style={{ flex: 1, minWidth: 0 }}>
           {mark == null ? (
             <T size={15} color={ink}>{label}</T>
           ) : (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              {mark()}
+              {slot(mark)}
               <T size={15} color={ink}>{label}</T>
             </View>
           )}

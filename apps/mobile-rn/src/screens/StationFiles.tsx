@@ -233,7 +233,7 @@ function addRefs(app: AppState, draft: Draft, station: string, all: Ticked[]) {
   for (const x of all) {
     const ref = new RefFile(x.station, x.stationName, x.path, x.dir, x.root, x.at, asFiles && !x.dir ? "file" : "path");
     const f = new Pending(nanoTime(), x.name, x.size, null, null, null, null, null, ref);
-    draft.files = [...draft.files, f];
+    draft.files.push(f);
     if (ref.mode === "file") sendUp(app, draft, station, f);
   }
 }
@@ -271,7 +271,7 @@ function sendUp(app: AppState, draft: Draft, station: string, f: Pending) {
  */
 export function RefCard({ f, onRemove, shape, onClick }: { f: Pending; onRemove: () => void; shape: number; onClick: () => void }) {
   const C = useC();
-  const ink = chatInk();
+  const ink = chatInk(useC());
   const ref = f.ref!;
   const named = f.named;
   const busy = !named && f.done == null && f.error == null;

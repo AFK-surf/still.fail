@@ -18,6 +18,13 @@ import { Smooth } from "./Smooth";
 import { T } from "./Text";
 import { lerpColor, useC, withAlpha, type StillFailColors } from "./Theme";
 
+/**
+ * What a part draws in one of its places (Kotlin's `@Composable () -> Unit` slot): what it draws, or a function that
+ * draws it; pages pass either.
+ */
+export type Slot = ReactNode | (() => ReactNode);
+export const slot = (s: Slot | null | undefined): ReactNode => (typeof s === "function" ? s() : s);
+
 export { Illustration } from "./Drawing";
 
 /** Compose's ripple in `color` (its pressed alpha, 10%), bounded by what it is on: `android_ripple` for a Pressable. */
@@ -572,7 +579,7 @@ export function NavButton({ icon, onClick, iconSize = 18 }: { icon: IconPaths; o
 }
 
 /** A page's compact bar: back, a centered title, and one action. No line under it: the page's paper runs on. */
-export function NavBar({ back, onBack, title, sub, trailing }: { back: string; onBack: () => void; title: string; sub?: (() => ReactNode) | null; trailing?: (() => ReactNode) | null }) {
+export function NavBar({ back, onBack, title, sub, trailing }: { back: string; onBack: () => void; title: string; sub?: Slot | null; trailing?: Slot | null }) {
   const C = useC();
   const insets = useSafeAreaInsets();
   return (
@@ -585,25 +592,25 @@ export function NavBar({ back, onBack, title, sub, trailing }: { back: string; o
             <T size={16} weight="600" color={C.ink} numberOfLines={1} ellipsizeMode="tail" align="center">{title}</T>
           </View>
           <View style={{ height: 2 }} />
-          {sub != null && <View style={{ transform: [{ translateY: -4 }], flexDirection: "row", alignItems: "center", gap: 5 }}>{sub()}</View>}
+          {sub != null && <View style={{ transform: [{ translateY: -4 }], flexDirection: "row", alignItems: "center", gap: 5 }}>{slot(sub)}</View>}
         </View>
         <View style={{ position: "absolute", left: 10, top: 6, height: 32, justifyContent: "center" }}>
           <NavBack label={back} onClick={onBack} />
         </View>
-        {trailing != null && <View style={{ position: "absolute", right: 16, top: 6, height: 32, justifyContent: "center", alignItems: "flex-end" }}>{trailing()}</View>}
+        {trailing != null && <View style={{ position: "absolute", right: 16, top: 6, height: 32, justifyContent: "center", alignItems: "flex-end" }}>{slot(trailing)}</View>}
       </View>
     </View>
   );
 }
 
 /** A page's large title (stations, settings): a small line over a big word; none when `small` is empty. `lead` goes before the word (a workspace's mark). */
-export function LargeTitle({ small, big, lead }: { small: string; big: string; lead?: (() => ReactNode) | null }) {
+export function LargeTitle({ small, big, lead }: { small: string; big: string; lead?: Slot | null }) {
   const C = useC();
   const word = <T size={32} weight="700" color={C.ink} style={{ letterSpacing: -0.6 }}>{big}</T>;
   return (
     <View style={{ paddingLeft: 16, paddingRight: 16, paddingBottom: 6 }}>
       {small.length > 0 && <T size={13} color={C.muted}>{small}</T>}
-      {lead == null ? word : <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>{lead()}{word}</View>}
+      {lead == null ? word : <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>{slot(lead)}{word}</View>}
     </View>
   );
 }
@@ -621,9 +628,9 @@ export function SectionHeader({ title, trailing, start = 20 }: { title: string; 
   );
 }
 
-export function Card({ modifier: modifier_, style = modifier_, onClick, content, children: kids }: { modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle>; onClick?: (() => void) | null; content?: () => ReactNode; children?: ReactNode }) {
+export function Card({ modifier: modifier_, style = modifier_, onClick, content, children: kids }: { modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle>; onClick?: (() => void) | null; content?: Slot; children?: ReactNode }) {
   const C = useC();
-  const children = content ? content() : kids;
+  const children = content != null ? slot(content) : kids;
   const inner: ViewStyle = { paddingHorizontal: 16, paddingVertical: 14 };
   return (
     <View style={[style, { paddingHorizontal: 12, paddingBottom: 10, alignSelf: "stretch" }]}>
@@ -637,9 +644,9 @@ export function Card({ modifier: modifier_, style = modifier_, onClick, content,
 }
 
 /** Rows on one rounded card; the card groups them, no lines between. */
-export function ListCard({ modifier: modifier_, style = modifier_, content, children: kids }: { modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle>; content?: () => ReactNode; children?: ReactNode }) {
+export function ListCard({ modifier: modifier_, style = modifier_, content, children: kids }: { modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle>; content?: Slot; children?: ReactNode }) {
   const C = useC();
-  const children = content ? content() : kids;
+  const children = content != null ? slot(content) : kids;
   return (
     <View style={[style, { paddingHorizontal: 12, paddingBottom: 10, alignSelf: "stretch" }]}>
       <Smooth radius={16} style={{ backgroundColor: C.surface }}>{children}</Smooth>
@@ -647,9 +654,9 @@ export function ListCard({ modifier: modifier_, style = modifier_, content, chil
   );
 }
 
-export function ListRow({ onClick, content, children: kids }: { onClick?: (() => void) | null; content?: () => ReactNode; children?: ReactNode }) {
+export function ListRow({ onClick, content, children: kids }: { onClick?: (() => void) | null; content?: Slot; children?: ReactNode }) {
   const C = useC();
-  const children = content ? content() : kids;
+  const children = content != null ? slot(content) : kids;
   const row: ViewStyle = { alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12 };
   if (onClick == null) return <View style={row}>{children}</View>;
   return <Pressable onPress={onClick} android_ripple={ripple(C.ink)} style={row}>{children}</Pressable>;

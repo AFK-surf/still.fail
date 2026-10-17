@@ -627,7 +627,7 @@ function FolderPage({ station, s, roots, root, path, top, can }: { station: stri
       />
       {opened !== null ? (
         <FilePreview
-          station={station} fileKey={opened.key} file={opened.file} canDraft={false}
+          station={station} sessionKey={opened.key} file={opened.file} canDraft={false}
           gallery={{ kind: "Folder", images: () => latest.current.filter((it) => it.kind === "image").map(shownOf) }}
           onClose={() => setPreviewing(null)}
         />

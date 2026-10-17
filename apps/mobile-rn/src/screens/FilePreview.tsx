@@ -4,6 +4,7 @@
 // download. One bar floats at the top with its name and tools, frosted, and fades when left alone; a tap brings it back.
 import { requireOptionalNativeModule } from "expo";
 import Constants from "expo-constants";
+import { Canvas, createPicture, Picture as SkiaPicture } from "@shopify/react-native-skia";
 import type { File } from "expo-file-system";
 import * as NavigationBar from "expo-navigation-bar";
 import { setStatusBarStyle } from "expo-status-bar";
@@ -11,7 +12,6 @@ import { useEffect, useMemo, useReducer, useRef, useState, type ComponentType, t
 import { BackHandler, Dimensions, FlatList, Image, Keyboard, PixelRatio, Platform, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { makeMutable, runOnJS, useAnimatedStyle, useDerivedValue, useSharedValue, withSpring, withTiming, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { G } from "react-native-svg";
 import { WebView } from "react-native-webview";
 import type { Attachment, ImageNear } from "../../../../web/src/core/shapes.ts";
 import { useTopic } from "../../../../web/src/core/react.ts";
@@ -32,6 +32,7 @@ import { Markdown } from "../ui/Markdown";
 import { Seg } from "../ui/Parts";
 import { Progress, WaitPill, breathing, rememberBreath } from "../ui/Waiting";
 import { MAX_SCALE, Zoomable, ZoomState, type Swipe } from "../ui/Zoom";
+import { AnnotatedText } from "../ui/Annotated";
 import { ImageMarks, MarksActions, MarksFoot, PictureButton, drawMarks } from "./ImageMarks";
 import type { Picked } from "./Composer";
 import { DraftOffers, MarkOffer, type OfferQuote } from "./Preview";
@@ -205,6 +206,12 @@ export function useViewerThumb(id: string, radius: number, letterbox = false, sm
 }
 /** The Kotlin's name for it. */
 export const viewerThumb = useViewerThumb;
+
+/** useViewerThumb as a view around what it holds. */
+export function ViewerThumb({ id, radius, letterbox = false, smooth = true, picture, children }: { id: string; radius: number; letterbox?: boolean; smooth?: boolean; picture: () => Picture | null; children?: ReactNode }) {
+  const thumb = useViewerThumb(id, radius, letterbox, smooth, picture);
+  return <View ref={thumb.ref} onLayout={thumb.onLayout} style={thumb.style} collapsable={false}>{children}</View>;
+}
 
 export function ForgetThumb({ id }: { id: string }) {
   useEffect(() => () => { FileViewers.thumbs.delete(id); }, [id]);
@@ -448,7 +455,7 @@ function Viewer({ station, opened, gallery, onClose, flight, closing, canDraft, 
   station: string; opened: Shown; gallery: Gallery | null; onClose: () => void; flight: ViewerFlight; closing: boolean; canDraft: boolean; onShown: (s: Shown) => void;
 }) {
   const C = useC();
-  const ink = chatInk();
+  const ink = chatInk(useC());
   const insets = useSafeAreaInsets();
   const [shown, setShown] = useState(opened);
   const file = shown.file;
@@ -829,7 +836,7 @@ export type StageWrapStyled = ComponentType<{ style?: StyleProp<ViewStyle>; chil
 function PageGlass({ radius, style, children }: { radius: number; style?: StyleProp<ViewStyle>; children?: ReactNode }) {
   const C = useC();
   // Over the viewer's canvas (web FilePreview.css.ts: --canvas), white in the light.
-  const bg = chatInk().canvas;
+  const bg = chatInk(useC()).canvas;
   const tint = C.dark ? C.surface2 : C.surface;
   return (
     <View style={[{ borderRadius: radius * SMOOTH_SCALE, elevation: 6, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } }, style]}>
@@ -1108,12 +1115,14 @@ function ImageStage({ station, sessionKey: key, file, bytes, zoom, marks, stage:
                 image view always filters. */}
             {r && picture ? <Image source={{ uri: picture.uri }} resizeMode="stretch" style={{ position: "absolute", left: r.left, top: r.top, width: r.width, height: r.height }} /> : null}
             {marks.on && r ? (
-              <Svg style={StyleSheet.absoluteFill}>
-                <G transform={`translate(${r.left} ${r.top}) scale(${zoom.k})`}>
-                  {drawMarks(marks.drawn())}
-                  {marks.drawPicked(zoom.k)}
-                </G>
-              </Svg>
+              <Canvas style={StyleSheet.absoluteFill}>
+                <SkiaPicture picture={createPicture((canvas) => {
+                  canvas.translate(r.left, r.top);
+                  canvas.scale(zoom.k, zoom.k);
+                  drawMarks(canvas, marks.drawn());
+                  marks.drawPicked(canvas, zoom.k);
+                })} />
+              </Canvas>
             ) : null}
           </Animated.View>
           {marks.on ? <>{marks.Pins()}{marks.WritingField()}</> : null}
@@ -1239,7 +1248,7 @@ function TextViewer({ bytes, kind, language, name, source, onTap }: { bytes: Uin
   else if (colored !== null) content = (
     <ScrollView horizontal>
       <View style={{ paddingLeft: 32, paddingRight: 32, paddingTop: 80 + top, paddingBottom: 64 + bottom }}>
-        <Text style={{ fontFamily: CODE_FONT, fontSize: 12.5, lineHeight: 20, color: C.ink }}>{colored}</Text>
+        <AnnotatedText text={colored} style={{ fontFamily: CODE_FONT, fontSize: 12.5, lineHeight: 20, color: C.ink }} />
       </View>
     </ScrollView>
   );
@@ -1303,7 +1312,7 @@ export function parseCsv(text: string, separator: string, limit = Number.MAX_SAF
 /** A table: a row number, then its columns, each as wide as what it holds (up to a limit); the head stays on top. */
 function CsvTable({ text, tab, cut, top, bottom, onTap }: { text: string; tab: boolean; cut: boolean; top: number; bottom: number; onTap: () => void }) {
   const C = useC();
-  const ink = chatInk();
+  const ink = chatInk(useC());
   const rows = useMemo(() => parseCsv(text, tab ? "\t" : ",", TABLE_ROWS + 1), [text]);
   const head = rows[0];
   const body = useMemo(() => rows.slice(1, 1 + TABLE_ROWS), [rows]);

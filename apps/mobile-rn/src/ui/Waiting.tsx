@@ -6,6 +6,7 @@
 // Words (a pill, a line) come only after a moment (LATER_MS), so what is there at once shows none; what failed says so
 // at once, in red.
 import { useEffect, useState, type ReactNode } from "react";
+import { slot, type Slot } from "./Parts";
 import { View, useWindowDimensions, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { Easing, ReduceMotion, useAnimatedStyle, useDerivedValue, useSharedValue, withRepeat, withTiming, cancelAnimation, type SharedValue } from "react-native-reanimated";
 import Svg, { Circle, Path } from "react-native-svg";
@@ -84,9 +85,9 @@ function alphaOf(color: string): number {
 
 /** A button at work (one behaviour for all): the spinner (14) in its icon's place, or before its label; `solid`: the
  *  button's text colour on a solid button. The button itself is not tapped again while `busy` (`disabled={busy}`). */
-export function BusyIcon({ busy, solid, icon }: { busy: boolean; solid?: string | null; icon?: (() => ReactNode) | null }) {
+export function BusyIcon({ busy, solid, icon }: { busy: boolean; solid?: string | null; icon?: Slot | null }) {
   if (busy) return <Spinner color={solid} />;
-  return <>{icon?.()}</>;
+  return <>{slot(icon)}</>;
 }
 
 /**

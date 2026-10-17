@@ -756,7 +756,7 @@ function PageContent({ screen, current }: { screen: Screen; current: WorkspaceEn
     case "SecurityOpen": return <SecurityOpenScreen current={current} />;
     case "Vault": return <VaultScreen current={current} />;
     case "VaultItem": return <VaultItemScreen current={current} vault={screen.vault} item={screen.item} />;
-    case "Preview": return <PreviewScreen station={screen.station} job={screen.job} />;
+    case "Preview": return <PreviewScreen station={screen.station} service={screen.job} />;
     case "PreviewFile": return <PreviewFileScreen station={screen.station} session={screen.session} path={screen.path} name={screen.name} />;
     case "Connect": return <ConnectScreen station={screen.station} connect={screen.connect} />;
     case "ConnectRun": return <ConnectRunScreen station={screen.station} connect={screen.connect} />;

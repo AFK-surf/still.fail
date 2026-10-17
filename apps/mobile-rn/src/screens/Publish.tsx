@@ -227,7 +227,7 @@ function FileToggle({ station, f, on, toggle }: { station: string; f: PublishFil
   return (
     <View style={{ opacity: on ? 1 : 0.45 }}>
       {owner != null && kindOf(f.name).kind === PreviewKind.Image
-        ? <View style={{ width: 160, aspectRatio: box.width / box.height }}><StationImage station={station} session={owner} file={f.file} /></View>
+        ? <View style={{ width: 160, aspectRatio: box.width / box.height }}><StationImage station={station} sessionKey={owner} file={f.file} /></View>
         : <FileCard name={f.name} size={f.size} onClick={null} />}
       {/* Over it all: a tap ticks, rather than opening the file. */}
       <Pressable onPress={toggle} style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0 }} />

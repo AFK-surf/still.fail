@@ -29,10 +29,10 @@ import { rememberStationName } from "../ui/ChatInk";
 import { NavBar } from "../ui/Parts";
 import { SheetGrab, SheetHead } from "../ui/Sheet";
 import { WaitLine } from "../ui/Waiting";
-import { VizKeeper, vizServed } from "../ui/Viz";
+import { VizKeeper, vizServed, type JsonElement } from "../ui/Viz";
 import { DraftQuote, upload, type Draft, type Picked } from "./Composer";
 import { JobDot, Tone } from "./Jobs";
-import { Loaded, keepViz, rememberViz } from "./VizFiles";
+import { keepViz, rememberViz } from "./VizFiles";
 import { Watched, useWatched, type Picture } from "./ChatFiles";
 import { PreviewLoad } from "./PreviewLoad";
 import { PAGE_SCRIPT } from "./PreviewPage";
@@ -101,14 +101,14 @@ export function PreviewFileScreen({ station, session, path, name }: { station: s
   const stationName = rememberStationName(station);
   const kept = useRef<{ of: unknown; state: unknown }>({ of: null, state: null });
   let body: ReactNode;
-  if (loaded === Loaded.Failed) body = <PreviewNote text={t("android-chat.preview.unreadable", { name })} />;
-  else if (loaded === Loaded.Waiting || !("html" in loaded)) body = <PreviewWait text={t("common.opening")} />;
+  if (loaded.kind === "Failed") body = <PreviewNote text={t("android-chat.preview.unreadable", { name })} />;
+  else if (loaded.kind === "Waiting") body = <PreviewWait text={t("common.opening")} />;
   else {
-    const l = loaded as { html: string; state: unknown };
+    const l = loaded;
     if (kept.current.of !== l) kept.current = { of: l, state: l.state };
     const page = new FilePage(l.html, () => kept.current.state, (s) => {
       kept.current.state = s;
-      keepViz(app, app.scope, station, session, path, s);
+      keepViz(station, session, path, s as JsonElement);
     });
     body = <ServicePage station={station} service={`file:${session}\n${path}`} port={0} name={name} restarting={false} restarts={0} session={session} file={page} />;
   }
@@ -1101,7 +1101,7 @@ export function TakeDraftOffers({ station, sessions, draft }: { station: string;
       for (const q of offer.quotes) {
         const quote = new DraftQuote(nanoTime(), q.author, q.text, null, q.role, q.file);
         quote.comment = q.comment;
-        draft.quotes = [...draft.quotes, quote];
+        draft.quotes.push(quote);
       }
     }
   }, [waiting.length, sessions.join("\n")]);

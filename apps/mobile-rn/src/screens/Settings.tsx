@@ -42,13 +42,19 @@ const useDoing = () => useApp((s) => s.doing);
  * told by a toast; without it the sheet stays, with what went wrong, until it is done. Kotlin's named arguments in
  * their order; `run` last, alone after `action` when none is given.
  */
+/** Kotlin's named arguments by name, for a caller that gives only some of them. */
+export interface ConfirmNamed { danger?: boolean; what?: string | null; then?: (() => void) | null }
+export interface AskNamed { secret?: boolean; hint?: string | null; what?: string | null; empty?: boolean }
+
 export function confirm(app: AppState, title: string, text: string, action: string, run: () => Promise<void>): void;
 export function confirm(app: AppState, title: string, text: string, action: string, danger: boolean, what: string | null | undefined, then: (() => void) | null | undefined, run: () => Promise<void>): void;
-export function confirm(app: AppState, title: string, text: string, action: string, danger: boolean | (() => Promise<void>), what?: string | null, then?: (() => void) | null, run?: () => Promise<void>) {
+export function confirm(app: AppState, title: string, text: string, action: string, named: ConfirmNamed, run: () => Promise<void>): void;
+export function confirm(app: AppState, title: string, text: string, action: string, danger: boolean | ConfirmNamed | (() => Promise<void>), what?: string | null | (() => Promise<void>), then?: (() => void) | null, run?: () => Promise<void>) {
+  if (typeof danger === "object") return confirm(app, title, text, action, danger.danger ?? false, danger.what, danger.then, what as () => Promise<void>);
   const work = typeof danger === "function" ? danger : run!;
   const red = typeof danger === "function" ? false : danger;
   const after = then ?? (() => {});
-  app.sheet = new SheetSpec(0.36, false, null, null, false, () => <ConfirmSheet app={app} title={title} text={text} action={action} danger={red} what={what ?? null} then={after} run={work} />);
+  app.sheet = new SheetSpec(0.36, false, null, null, false, () => <ConfirmSheet app={app} title={title} text={text} action={action} danger={red} what={(what as string | null | undefined) ?? null} then={after} run={work} />);
 }
 
 function ConfirmSheet({ app, title, text, action, danger, what, then, run }: { app: AppState; title: string; text: string; action: string; danger: boolean; what: string | null; then: () => void; run: () => Promise<void> }) {
@@ -81,10 +87,12 @@ function ConfirmSheet({ app, title, text, action, danger, what, then, run }: { a
  */
 export function ask(app: AppState, title: string, value: string, placeholder: string, action: string, run: (line: string) => Promise<void>): void;
 export function ask(app: AppState, title: string, value: string, placeholder: string, action: string, secret: boolean, hint: string | null | undefined, what: string | null | undefined, empty: boolean, run: (line: string) => Promise<void>): void;
-export function ask(app: AppState, title: string, value: string, placeholder: string, action: string, secret: boolean | ((line: string) => Promise<void>), hint?: string | null, what?: string | null, empty?: boolean, run?: (line: string) => Promise<void>) {
+export function ask(app: AppState, title: string, value: string, placeholder: string, action: string, named: AskNamed, run: (line: string) => Promise<void>): void;
+export function ask(app: AppState, title: string, value: string, placeholder: string, action: string, secret: boolean | AskNamed | ((line: string) => Promise<void>), hint?: string | null | ((line: string) => Promise<void>), what?: string | null, empty?: boolean, run?: (line: string) => Promise<void>) {
+  if (typeof secret === "object") return ask(app, title, value, placeholder, action, secret.secret ?? false, secret.hint, secret.what, secret.empty ?? false, hint as (line: string) => Promise<void>);
   const work = typeof secret === "function" ? secret : run!;
   const hidden = typeof secret === "function" ? false : secret;
-  app.sheet = new SheetSpec(0.42, false, null, null, false, () => <AskSheet app={app} title={title} value={value} placeholder={placeholder} action={action} secret={hidden} hint={hint ?? null} what={what ?? null} empty={empty ?? false} run={work} />);
+  app.sheet = new SheetSpec(0.42, false, null, null, false, () => <AskSheet app={app} title={title} value={value} placeholder={placeholder} action={action} secret={hidden} hint={(hint as string | null | undefined) ?? null} what={what ?? null} empty={empty ?? false} run={work} />);
 }
 
 function AskSheet({ app, title, value, placeholder, action, secret, hint, what, empty, run }: { app: AppState; title: string; value: string; placeholder: string; action: string; secret: boolean; hint: string | null; what: string | null; empty: boolean; run: (line: string) => Promise<void> }) {
