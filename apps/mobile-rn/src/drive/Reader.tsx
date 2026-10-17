@@ -363,7 +363,24 @@ function Block({ raw, markdown, typography, colors, style, marks, now, mark, mar
 }) {
   const drawn = useMemo(() => drawnChunk(raw, markdown, typography, colors), [raw, typography.indent, typography.fontSp, colors]);
   const text = useMemo(() => drawn.marked(marks, now, mark, markNow), [drawn, marks, now, mark, markNow]);
-  return <StyledText styled={text} style={[style, { paddingTop: drawn.leadingDp }]} />;
+  const trim = useMemo(() => trimOf(typography), [typography.fontSp, typography.lineSpacing, typography.family]);
+  return <StyledText styled={text} style={[style, { paddingTop: drawn.leadingDp }, trim]} />;
+}
+
+/**
+ * Kotlin's block is a Text with a TextStyle of its own (not Material's), whose line height comes with Compose's
+ * LineHeightStyle.Default: the room the line height adds is trimmed above the first line and below the last (the
+ * first line's words at the block's top); React Native keeps it, half above and half below every line. Taken back
+ * here, the lines land where Kotlin's do (the face's ascent and descent as the platform rounds them: Roboto's, Noto
+ * Serif's for serif).
+ */
+function trimOf(t: ReaderTypography): { marginTop: number; marginBottom: number } {
+  const k = PixelRatio.getFontScale() * PixelRatio.get();
+  const px = Math.floor(t.fontSp * k + 0.001);
+  const [ascent, descent] = t.family === ReaderFamily.Serif ? [1.069, 0.293] : [0.928, 0.244];
+  const extra = Math.ceil(t.fontSp * t.lineSpacing * k - 0.001) - (Math.ceil(px * ascent) + Math.ceil(px * descent));
+  if (extra <= 0) return { marginTop: 0, marginBottom: 0 };
+  return { marginTop: -Math.ceil(extra / 2) / k, marginBottom: -Math.floor(extra / 2) / k };
 }
 
 /** A styled text drawn: its pieces as Text inside one Text, each with the styles over it. */

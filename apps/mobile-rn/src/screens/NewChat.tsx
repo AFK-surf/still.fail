@@ -24,7 +24,7 @@ import { MakerIcon, NavBar, ProviderMark, StationMark } from "../ui/Parts";
 import { SheetGrab, SheetHead } from "../ui/Sheet";
 import { Smooth } from "../ui/Smooth";
 import { T } from "../ui/Text";
-import { lerpColor, useC, withAlpha } from "../ui/Theme";
+import { dp, lerpColor, useC, withAlpha } from "../ui/Theme";
 import { BusyIcon, WaitLine, WaitShape, Waiting } from "../ui/Waiting";
 import { AttachLaunchers, openAttach } from "./Attach";
 import { SCENE_LEAVE_MS, type Host } from "./ChatHost";
@@ -219,10 +219,10 @@ function NewChatOn({ workspace, choice, view, stations, onStation, host, leaving
             </View>
           )}
           {/* The choices, over the composer (the host's, a floating capsule as in a chat), with room for it below. */}
-          <View style={{ alignSelf: "stretch", paddingLeft: 10, paddingRight: 10, paddingTop: 8 }}>
+          <View style={{ alignSelf: "stretch", paddingLeft: dp(10), paddingRight: dp(10), paddingTop: dp(8) }}>
             {/* One line that fits the width, no scrolling: where it runs, and what it runs on as one control (web/src/ModelTriple.tsx),
                 cut short rather than pushed off the edge. Room above and below for the chips' shadows. */}
-            <View style={{ alignSelf: "stretch", flexDirection: "row", paddingHorizontal: 2, paddingVertical: 6, gap: 6 }}>
+            <View style={{ alignSelf: "stretch", flexDirection: "row", paddingHorizontal: dp(2), paddingVertical: dp(6), gap: dp(6) }}>
               <Chooser leading={<StationMark emoji={view.emoji} icon={view.icon} size={14} tint={C.ink} none={Icons.Server} />} label={view.name} style={{ maxWidth: 128 }} onClick={() => pickStation(app, stations, view.station, onStation)} />
               {runtime == null || model == null || p == null || p.options.length === 0 ? (
                 // Nothing to choose from: the chooser leads to where models are enabled.
@@ -243,8 +243,8 @@ function Chooser({ leading, label, style, chevron = false, onClick }: { leading:
   const C = useC();
   // The same glass as the composer's capsule under it, over the scene running on under both.
   return (
-    <Floating radius={15} style={[{ height: 30 }, style]}>
-      <Pressable onPress={onClick} android_ripple={{ color: withAlpha(C.ink, 0.1) }} style={{ flex: 1, flexDirection: "row", paddingHorizontal: 11, alignItems: "center", gap: 6 }}>
+    <Floating radius={15} style={[{ height: dp(30) }, style]}>
+      <Pressable onPress={onClick} android_ripple={{ color: withAlpha(C.ink, 0.1) }} style={{ flex: 1, flexDirection: "row", paddingHorizontal: dp(11), alignItems: "center", gap: dp(6) }}>
         {leading}
         <T size={13} numberOfLines={1} style={{ flexShrink: 1, minWidth: 0 }}>{label}</T>
         {chevron && <Icon icon={Icons.ChevronDown} size={12} color={C.muted} />}
