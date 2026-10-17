@@ -330,7 +330,10 @@ if [ $full = 1 ]; then
   fi
   # Its shell and engine prebuilt (apps/android/build.py): only a JDK and the SDK needed.
   # What it is built from, and so what runs it: apps/android/carries.sh. STILLFAIL_CHECK_APK=1 (a branch's CI)
-  # makes the debug app in the same Gradle run, as evidence it builds: one build, not a second job doing it again.
+  # makes the debug app in the same Gradle run, as evidence it builds: one build, not a second job doing it again;
+  # only for a change to how it is put together (its Gradle files, manifests, resources, prebuilt parts), as code that
+  # compiles packs the same way: dexing its libraries anew took ~2 of a check's 5 minutes on CI's four cores (2026-10-17).
+  if [ -n "${STILLFAIL_CHECK_APK:-}" ] && ! touches '^apps/android/(.*\.gradle\.kts|gradle/|gradle\.properties|.*/AndroidManifest\.xml|.*/res/|.*/jniLibs/)|^client/(shell|engine)/|^scripts/native\.ts$'; then STILLFAIL_CHECK_APK=; fi
   if part android && printf '%s\n' "$changed" | sh apps/android/carries.sh; then
     sdk=${ANDROID_HOME:-$HOME/Library/Android/sdk}
     if [ -d "$sdk/platforms" ]; then

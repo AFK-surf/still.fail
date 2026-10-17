@@ -12,6 +12,7 @@ android {
     namespace = "fail.still.core"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
+    lint { ignoreTestSources = true }
     defaultConfig {
         minSdk = 29
         ndk { abiFilters += "arm64-v8a" }

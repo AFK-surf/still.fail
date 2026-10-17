@@ -31,7 +31,11 @@ android {
     compileSdk = 36
     // Lint runs in the check, on every branch that changes the app (scripts/check.sh: lintDebug, errors fail it), not
     // in a release build, where it took ~18 s of each (2026-10-04).
-    lint { checkReleaseBuilds = false }
+    // Not its tests' sources: on CI's four cores their analysis took ~95 s of each check (2026-10-17).
+    lint {
+        checkReleaseBuilds = false
+        ignoreTestSources = true
+    }
 
     defaultConfig {
         applicationId = if (beta) "fail.still.android.beta" else "fail.still.android"
