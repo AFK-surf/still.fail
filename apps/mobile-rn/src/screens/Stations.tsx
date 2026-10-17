@@ -78,8 +78,8 @@ export function StationsScreen({ current }: { current: WorkspaceEntry }) {
     ? new BarAction("add-station", t("android-misc.bar.action.stations"), Icons.Plus, () => openAddStation(app, current, list.map((s) => s.id)))
     : null;
   return (
-    <PlacePage current={current} place="stations" primary={add} known={(list != null || stations.error != null) && manager != null}>
-      {(top: number) => (
+    <PlacePage current={current} place="stations" primary={add} known={(list != null || stations.error != null) && manager != null}
+      content={(top: number) => (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: top, paddingBottom: insets.bottom }}>
           {list != null && list.length === 0 ? (
             // No station yet: adding the first one is the page.
@@ -113,7 +113,7 @@ export function StationsScreen({ current }: { current: WorkspaceEntry }) {
           )}
         </ScrollView>
       )}
-    </PlacePage>
+    />
   );
 }
 

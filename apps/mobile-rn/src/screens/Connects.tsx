@@ -141,8 +141,7 @@ export function ConnectsScreen({ current, only = null }: { current: WorkspaceEnt
       known={topic.value != null || topic.error != null}
       back={one?.name ?? t("android-settings.title")}
       actions={<BandFilter label={t("android-settings.connects.title")} options={filters} selected={mine ? 1 : 0} onSelect={(it: number) => setMine(it === 1)} />}
-    >
-      {(top: number) => (
+      content={(top: number) => (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom, paddingTop: top }}>
           {stations == null || view == null ? (
             <Waiting shape={WaitShape.Rows} count={3} text={t("android-settings.connects.reading")} error={connects.error?.message ?? topic.error?.message} />
@@ -176,7 +175,7 @@ export function ConnectsScreen({ current, only = null }: { current: WorkspaceEnt
           <BarRoom />
         </ScrollView>
       )}
-    </PlacePage>
+    />
   );
 }
 

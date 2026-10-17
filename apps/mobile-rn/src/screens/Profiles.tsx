@@ -116,8 +116,8 @@ export function ProfilesScreen({ current, only = null }: { current: WorkspaceEnt
     : null;
   // A station's own (from its page): back to it.
   return (
-    <PlacePage current={current} place="profiles" primary={add} known={topic.value != null || topic.error != null} back={one?.name ?? t("android-settings.title")}>
-      {(top: number) => (
+    <PlacePage current={current} place="profiles" primary={add} known={topic.value != null || topic.error != null} back={one?.name ?? t("android-settings.title")}
+      content={(top: number) => (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom, paddingTop: top }}>
           {/* The workspace's: one list, each shared profile once (the core's `profiles`), waiting on its own; a station's
               own: as before, its first read the page's. */}
@@ -157,7 +157,7 @@ export function ProfilesScreen({ current, only = null }: { current: WorkspaceEnt
           <BarRoom />
         </ScrollView>
       )}
-    </PlacePage>
+    />
   );
 }
 
@@ -688,7 +688,7 @@ export function ProfileScreen({ current, address, id }: { current: WorkspaceEntr
                     <ListCard>
                       <ListRow
                         onClick={() => {
-                          ask(app, kind === "opencode-go" ? t("android-settings.profile.newGoKey") : t("android-settings.profile.newApiKey"), "", t("android-settings.profile.pasteKey"), t("common.save"), true, t("android-settings.profile.keyHint"), t("android-settings.profile.keyWhat"), undefined, async (key: string) => {
+                          ask(app, kind === "opencode-go" ? t("android-settings.profile.newGoKey") : t("android-settings.profile.newApiKey"), "", t("android-settings.profile.pasteKey"), t("common.save"), { secret: true, hint: t("android-settings.profile.keyHint"), what: t("android-settings.profile.keyWhat") }, async (key: string) => {
                             await api.putProfile(p.id, { access: { kind, key } }); app.toast = t("android-settings.profile.savedChecking");
                           });
                         }}
@@ -705,7 +705,7 @@ export function ProfileScreen({ current, address, id }: { current: WorkspaceEntr
                       {endpoint != null && (
                         <ListRow
                           onClick={() => {
-                            ask(app, t("common.provider.endpoint"), endpoint, "https://", t("common.save"), undefined, undefined, undefined, undefined, async (value: string) => {
+                            ask(app, t("common.provider.endpoint"), endpoint, "https://", t("common.save"), async (value: string) => {
                               await api.putProfile(p.id, { access: { kind, endpoint: value.trim() } }); app.toast = t("android-settings.profile.savedChecking");
                             });
                           }}
@@ -777,7 +777,7 @@ function ProfileRecovery({ station, p }: { station: StationView; p: Profile }) {
                 onClick={() => {
                   switch (issue.action) {
                     case "key":
-                      ask(app, t("android-settings.profile.newKey"), "", t("android-settings.profile.pasteKey"), t("common.save"), true, t("android-settings.profile.keyHintShort"), t("android-settings.profile.keyWhat"), undefined, async (key: string) => {
+                      ask(app, t("android-settings.profile.newKey"), "", t("android-settings.profile.pasteKey"), t("common.save"), { secret: true, hint: t("android-settings.profile.keyHintShort"), what: t("android-settings.profile.keyWhat") }, async (key: string) => {
                         await api.putProfile(p.id, { access: { kind: p.access.kind, key } });
                       });
                       break;
@@ -835,7 +835,7 @@ function ProfileMenuSheet({ station, p }: { station: string; p: Profile }) {
           <PickRow
             label={t("android-settings.station.rename")}
             onClick={() => {
-              ask(app, t("android-settings.profile.nameTitle"), p.name, t("android-settings.station.name"), t("common.save"), undefined, undefined, t("android-settings.profile.renameWhat"), undefined, async (name: string) => {
+              ask(app, t("android-settings.profile.nameTitle"), p.name, t("android-settings.station.name"), t("common.save"), { what: t("android-settings.profile.renameWhat") }, async (name: string) => {
                 await api.putProfile(p.id, { name }); app.toast = t("android-settings.renamed");
               });
             }}
@@ -944,7 +944,7 @@ function QuotaSection({ station, p }: { station: string; p: Profile }) {
           <ListRow
             onClick={count <= 0 || resetting ? undefined : () => {
               // Kotlin puts a missing resetText in as "null"; here as nothing.
-              confirm(app, t("android-settings.quota.resetTitle"), t("android-settings.quota.resetText", { name: p.name, text: quota.resetText ?? "" }), t("android-settings.quota.resetUse"), undefined, t("android-settings.quota.resetWhat"), undefined, async () => {
+              confirm(app, t("android-settings.quota.resetTitle"), t("android-settings.quota.resetText", { name: p.name, text: quota.resetText ?? "" }), t("android-settings.quota.resetUse"), { what: t("android-settings.quota.resetWhat") }, async () => {
                 await app.api(station).resetQuota(p.id); app.toast = t("android-settings.quota.resetDone");
               });
             }}
