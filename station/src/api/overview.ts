@@ -33,6 +33,9 @@ export type OverviewDeps = {
   accounts?: Accounts;
   updates?: Updates;
   slack?: SlackView;
+  /// What macOS lets still.fail Helper do here, as the viewer is told it (routes/permissions.ts); none where there is no
+  /// helper (not a Mac), or before the first look.
+  permissions?: (viewer: Viewer) => unknown;
 };
 
 /// This station's link to still.fail cloud, as the pages show it (server.rs MeshFile::status): in the viewer's workspace
@@ -127,7 +130,14 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     // browses every folder from the home (`anywhere`).
     // Those of a joined workspace browse only its pinned folders, never the whole machine.
     drive: { roots: rootsOf(raw, viewer.home === false ? viewer.workspace : null).map(rootView), ...(readOnly(viewer) ? {} : { anywhere: true, home: homedir() }) },
+    // macOS's grants to still.fail Helper (a Mac's station only; a station from before them says none: not shown).
+    ...withPermissions(d, viewer),
   };
+}
+
+function withPermissions(d: OverviewDeps, viewer: Viewer): { permissions?: unknown } {
+  const permissions = d.permissions?.(viewer);
+  return permissions === null || permissions === undefined ? {} : { permissions };
 }
 
 /// The automatic decisions as the viewer sees them: the checks of their workspace's chats only, and the archive policy of

@@ -100,6 +100,29 @@ own prompt is not used (it would fight the window).
 The same app opens the drive's folders macOS protects (`files.*`, docs/drive.md): its window then shows only the rows
 asked for (`permissions.show {grants}`), a folder's row asking macOS's own prompt (the only way a folder is granted).
 
+### Grants (station/src/helper/grants.ts, api/routes/permissions.ts)
+
+What macOS lets the helper do is one look the station keeps (the helper's `status`), shared by the desktop's screen, the
+drive, the station's page and the agents: fresh where it matters (a view opened, a grant asked for), looked at again
+when the helper says a grant changed (its window sees each change while it is up) or comes back, and in the background
+once a page reads it 30 s after the last look. The window too is one: it is put up for a grant once, not again (nor
+brought forward) while it is up asking for it, nor for 3 minutes after it was shown for it, whoever asks.
+
+- The overview (`GET /overview`) carries `permissions` on a Mac's station: `{grants: [{grant, state}], asking, screen,
+  request}`, the grants in order (`capture`, `control`, `documents`, `desktop`, `downloads`, `removable`, `network`;
+  state `granted`, `denied` (a folder refused before), `unknown` (not granted)), those the window asks for now,
+  whether the screen can be seen and driven (Screen Recording and Accessibility both), and whether the viewer may ask
+  (not a read-only member). It is told again (`overview`) as they change. Elsewhere, and on a station from before them,
+  there is none: clients show nothing.
+- `POST /permissions/request {grant}` puts the window up for that grant on the Mac (a folder's Allow then asks macOS's
+  own prompt; a disk's needs one of its kind mounted, which macOS asks about) and answers `{window: "up"|"granted",
+  screen}`; refused in the asker's words: 409 shown a moment ago (or no disk of its kind), 503 not shown, 400 no such
+  grant; a read-only member's 403. With `screen`, the client opens the desktop (`screen/desktop`, the viewer as a link
+  opens it: driving it unless someone else does), so the person clicks in the window and System Settings from wherever
+  they are; without, it says to go to that Mac and click Allow there, the grants on the page changing as they do.
+- The agents' `permissions` tool lists them and, with `request`, puts the window up for one and says what to post with
+  need_human: the desktop's link when the screen can be driven, else to go to the Mac.
+
 ### Clipboard and files
 
 While a person drives a screen, its clipboard goes both ways. The desktop: the helper sets NSPasteboard (text, or PNG

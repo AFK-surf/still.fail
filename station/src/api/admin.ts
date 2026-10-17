@@ -28,6 +28,8 @@ import { routes as machineLogins } from "./routes/logins.ts";
 import { Drive } from "../drive/drive.ts";
 import { HelperFiles } from "../helper/files.ts";
 import type { HelperApp } from "../helper/app.ts";
+import type { HelperGrants } from "../helper/grants.ts";
+import { routes as permissions } from "./routes/permissions.ts";
 import { platform } from "../platform/index.ts";
 import { ownPaths } from "../ops/own.ts";
 import type { AgentsParts } from "../sessions/agents.ts";
@@ -81,6 +83,8 @@ export type AdminDeps = {
   events?: Events; store?: Store; host?: Host; agents?: AgentsParts; clock?: Clock.Clock; screens?: ScreenHub;
   /// still.fail Helper (macOS): the drive's protected folders go through it.
   helper?: HelperApp | null;
+  /// What macOS lets it do: one look at its grants and its window asking for them (the drive's, the page's).
+  grants?: HelperGrants | null;
 };
 
 /// The header a write's key comes in, and how long an answer is kept (once.rs).
@@ -150,7 +154,7 @@ export class Admin {
               config: () => deps.agents!.config.raw(),
               protect: () => ownPaths(deps.agents!.config.data, deps.agents!.config.path, deps.agents!.hub.config().profiles.map((p) => p.home)),
               // The folders macOS keeps from the station, through still.fail Helper; their roots told again as its grants change.
-              files: deps.helper && platform.hasFolderPermissions ? new HelperFiles({ helper: deps.helper, changed: () => deps.events?.overviewChanged() }) : null,
+              files: deps.helper && platform.hasFolderPermissions ? new HelperFiles({ helper: deps.helper, ...(deps.grants ? { grants: deps.grants } : {}), changed: () => deps.events?.overviewChanged() }) : null,
             }),
             changed: () => deps.events?.overviewChanged(),
             // Beside the files uploaded for a message (routes/hub.ts), swept as they are.
@@ -168,6 +172,8 @@ export class Admin {
             ...(deps.store ? { policies: { store: deps.store, review: () => void reviewUndecided(deps.agents!.hub).catch(() => {}) } } : {}),
           })
         : []),
+      // What macOS lets still.fail Helper do here, a grant asked for from a member's app (docs/remote-screens.md "Grants").
+      ...(deps.grants ? permissions({ grants: deps.grants }) : []),
       // The screens members see and drive (docs/remote-screens.md); a view of one is a stream of its own (mesh/screens.ts).
       ...(deps.screens
         ? [{ method: "GET", pattern: /^\/screens$/, handle: async (r: Request) => (await deps.screens!.refresh(), json(200, JSON.stringify(deps.screens!.listed(r.lang)))) }]

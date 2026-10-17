@@ -18,13 +18,15 @@ import { ConfigFile } from "../ops/config.ts";
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
 import { mcpPortFile, ownData, portsToTry, rememberedMcpPort } from "../ops/files.ts";
-import { AdbShares, AdminHost, ControlPlane, Events, Key, Paths, Readers, ScreenRegistry, Store } from "../services.ts";
+import { AdbShares, AdminHost, ControlPlane, Events, Grants, Key, Paths, Readers, ScreenRegistry, Store } from "../services.ts";
+import { permissionsView } from "../api/routes/permissions.ts";
 import { Gpus } from "../jobs/gpu.ts";
 import { Net, measure } from "../jobs/load.ts";
 import { Notifier } from "../cloud/notify.ts";
 import type { Cloud as CloudState } from "../cloud/state.ts";
 import { adbTools } from "../tools/adb.ts";
 import { screenTools } from "../tools/screen.ts";
+import { permissionTools } from "../tools/permissions.ts";
 import { Browser } from "../browser/service.ts";
 import { browserTools } from "../tools/browser.ts";
 import { Computer, computerTools } from "../tools/computer.ts";
@@ -151,6 +153,7 @@ export const AgentsLive = (control: Control) =>
       const key = yield* Key;
       const shares = yield* AdbShares;
       const screens = yield* ScreenRegistry;
+      const grants = yield* Grants;
       const browser = yield* Browser;
       const host = yield* AdminHost;
       const run = join(data, "run");
@@ -374,6 +377,11 @@ export const AgentsLive = (control: Control) =>
           const s = place();
           return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
         }),
+        // What macOS lets still.fail Helper do here, and a grant asked of a person (docs/remote-screens.md "Grants").
+        ...permissionTools(grants, () => {
+          const s = place();
+          return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
+        }),
         ...browserTools(browser),
         ...computerTools(computer),
         ...forwardTools(forwards),
@@ -503,7 +511,7 @@ export const AgentsLive = (control: Control) =>
         teams: (viewer: Viewer) => slack.overview(viewer.email).slackTeams,
         apps: (viewer: Viewer) => slack.overview(viewer.email).slackApps,
       };
-      const view = (viewer: Viewer, lang: Lang) => overview({ store, hub, cloud, config: () => config.raw(), accounts, updates, slack: slackView }, viewer, lang);
+      const view = (viewer: Viewer, lang: Lang) => overview({ store, hub, cloud, config: () => config.raw(), accounts, updates, slack: slackView, ...(grants ? { permissions: (v: Viewer) => permissionsView(grants, v) } : {}) }, viewer, lang);
 
       // The readers say what runs, and which chats clients made: the hub's.
       readers.processes = () => hub.processes();
@@ -530,6 +538,8 @@ export const AgentsLive = (control: Control) =>
         // The sidebar names connects and their Slack workspaces.
         slack.onChange(() => (events.overviewChanged(), events.rowsChanged(null))),
         updates.changes(() => events.overviewChanged()),
+        // macOS's grants to still.fail Helper (the station's page shows them as they change).
+        grants?.onChange(() => events.overviewChanged()) ?? (() => {}),
         config.listen(() => (events.overviewChanged(), events.rowsChanged(null))),
         cloud.listen(() => events.overviewChanged()),
       ];

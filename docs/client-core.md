@@ -521,7 +521,7 @@ thread, else its session), `chats.archived`,
 `profile.check`, `profile.login`, `profile.cancelLogin`, `profile.loginCode`,
 `login.new`, `login.code`, `login.drop`, `job.get`, `job.log`, `job.stop`,
 `memory.get`, `software.update`, `software.check`, `software.channel`, `drive.setRoots` (a station in several workspaces keeps a
-list for each: the asker's). still.fail cloud's take
+list for each: the asker's), `permissions.request` (`grant`: still.fail Helper's window for it up on that Mac, docs/remote-screens.md "Grants"; the overview read again). still.fail cloud's take
 `account`: `workspace.create`, `workspace.rename`, `workspace.setRelays`, `workspace.delete`,
 `workspace.invite`, `workspace.addMembers`, `workspace.removeAdded`,
 `workspace.revokeInvitation`, `workspace.setRole`, `workspace.removeMember`,

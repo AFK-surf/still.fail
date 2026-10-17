@@ -24,6 +24,7 @@ import { ScreenHub } from "./screens/hub.ts";
 import { Desktop } from "./screens/desktop.ts";
 import { dropFolder } from "./drive/drive.ts";
 import { HelperApp, helperApp } from "./helper/app.ts";
+import { HelperGrants } from "./helper/grants.ts";
 
 /// Where the station keeps its data, and the release it runs from.
 export class Paths extends Context.Service<Paths, { readonly data: string; readonly app: string }>()("stillfail/Paths") {}
@@ -115,6 +116,18 @@ export class Helper extends Context.Service<Helper, HelperApp | null>()("stillfa
   );
 }
 
+/// What macOS lets still.fail Helper do here (helper/grants.ts): one look at its grants and one window asking for them,
+/// for the desktop's screen, the drive, the station's page and the agents; null where there is no helper.
+export class Grants extends Context.Service<Grants, HelperGrants | null>()("stillfail/Grants") {
+  static readonly layer = Layer.effect(
+    Grants,
+    Effect.gen(function* () {
+      const helper = yield* Helper;
+      return helper === null ? null : new HelperGrants({ helper, folders: platform.hasFolderPermissions });
+    }),
+  );
+}
+
 /// The screens members see and drive (docs/remote-screens.md): the registry the station's parts add their sources to
 /// (`add`), with this machine's display among them from the start; views of them end as the station stops.
 export class ScreenRegistry extends Context.Service<ScreenRegistry, ScreenHub>()("stillfail/Screens") {
@@ -123,7 +136,7 @@ export class ScreenRegistry extends Context.Service<ScreenRegistry, ScreenHub>()
     Effect.gen(function* () {
       const hub = yield* Effect.acquireRelease(Effect.sync(() => new ScreenHub({ drop: () => dropFolder(homedir()) })), (hub) => Effect.sync(() => hub.close()));
       const helper = yield* Helper;
-      const desktop: Desktop = new Desktop({ supported: platform.hasDesktopScreen, helper, changed: () => hub.changed() });
+      const desktop: Desktop = new Desktop({ supported: platform.hasDesktopScreen, helper, grants: yield* Grants, changed: () => hub.changed() });
       // Back after it ended by itself: the desktop asks again for a grant still missing.
       helper?.onBack(() => void desktop.helperBack());
       yield* Effect.acquireRelease(
@@ -187,7 +200,7 @@ export class AdminApi extends Context.Service<AdminApi, Admin>()("stillfail/Admi
   static readonly layer = Layer.effect(
     AdminApi,
     Effect.gen(function* () {
-      return new Admin(yield* Readers, { store: yield* Store, events: yield* Events, host: yield* AdminHost, agents: yield* Agents, screens: yield* ScreenRegistry, helper: yield* Helper });
+      return new Admin(yield* Readers, { store: yield* Store, events: yield* Events, host: yield* AdminHost, agents: yield* Agents, screens: yield* ScreenRegistry, helper: yield* Helper, grants: yield* Grants });
     }),
   );
 }

@@ -60,7 +60,8 @@ about and which holds the grants, so they open without the station restarting:
   that folder, once: not again (nor brought forward) while it is up, nor for
   three minutes after it was shown, so a page read again, a client retrying or
   a refresh never puts it up again; the refusal says the window was just closed
-  then. Its Allow has the
+  then. It is the station's one window for grants (helper/grants.ts): one asked
+  for from the station's page or by an agent counts the same. Its Allow has the
   helper open the folder, and macOS asks. One refused before opens System
   Settings › Files and Folders instead, where the helper has a switch for it.
   The window tells the station when a grant changes, and the roots are told

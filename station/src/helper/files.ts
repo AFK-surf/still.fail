@@ -6,7 +6,8 @@
 // the bytes; a write is answered once the file is open, then the station sends the bytes, then it answers again.
 //
 // Without the grant the helper refuses (`grant`) and touches nothing (macOS would put up its prompt and hold the call
-// until a person answers): the drive puts the helper's window up on this Mac for it (`ask`), once in AGAIN_MS. What is
+// until a person answers): the drive puts the helper's window up on this Mac for it (`ask`), once in AGAIN_MS (the
+// station's one window for grants, helper/grants.ts, whoever asks: the station's page and the agents too). What is
 // known of each folder's grant is kept (`known`), looked at in the background where it is not (`check`), and looked at
 // again when the helper says a grant changed or comes back; the drive's roots are told again (`changed`) when it is
 // not what it was.
@@ -14,21 +15,19 @@ import { open, unlink } from "node:fs/promises";
 import type net from "node:net";
 import { join } from "node:path";
 import type { Access, Fs, Grant, Listed, Stat, Write, Written } from "../drive/fs.ts";
-import { wall } from "../ops/fibers.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
+import { windowWords } from "../screens/desktop.ts";
 import type { HelperApp } from "./app.ts";
+import { HelperGrants, type WindowState } from "./grants.ts";
+
+// The window shown for a grant is not shown (nor brought forward) again for that grant this soon after (AGAIN_MS): a
+// page read again, a client retrying, a person refreshing are never what puts it up; a person opening the folder once
+// it has been closed this long is.
+export { AGAIN_MS, type WindowState } from "./grants.ts";
 
 /// What a write sends at a time (the socket takes it as it can).
 const CHUNK = 256 * 1024;
-/// The window shown for a grant is not shown (nor brought forward) again for that grant this soon after: a page read
-/// again, a client retrying, a person refreshing are never what puts it up; a person opening the folder once it has
-/// been closed this long is.
-export const AGAIN_MS = 3 * 60_000;
-
-/// What became of the helper's window for a grant missing: `up` (shown now, or already up asking for it), `closed`
-/// (shown a moment ago and closed since: not shown again yet), `none` (it could not be shown).
-export type WindowState = "up" | "closed" | "none";
 
 /// The helper's window's words for the drive's folders, in `lang` (Permissions.swift).
 export function filesWords(lang: Lang): Record<string, string> {
@@ -52,6 +51,12 @@ export function filesWords(lang: Lang): Record<string, string> {
   };
 }
 
+/// The helper's window's words when a person or an agent asks for a grant (the station's page, the `permissions`
+/// tool): any of its rows, the screen's and the folders', under words that say it was asked for.
+export function askWords(lang: Lang): Record<string, unknown> {
+  return { ...windowWords(lang), ...filesWords(lang), title: tr(lang, "station.helper.window.askTitle"), subtitle: tr(lang, "station.helper.window.askSubtitle") };
+}
+
 type Refusal = Error & { code?: string; grant?: Grant; state?: Access["state"]; top?: string; pid?: number };
 
 export class HelperFiles {
@@ -62,14 +67,14 @@ export class HelperFiles {
   readonly #grantOf = new Map<string, Grant>();
   readonly #states = new Map<Grant, Access["state"]>();
   readonly #checking = new Set<string>();
-  readonly #asked = new Map<Grant, number>();
-  readonly #now: () => number;
+  readonly #grants: HelperGrants;
 
-  constructor(options: { helper: HelperApp; changed: () => void; lang?: () => Lang; now?: () => number }) {
+  /// `grants`: the station's one look at the grants and its window for them (default: its own).
+  constructor(options: { helper: HelperApp; changed: () => void; lang?: () => Lang; now?: () => number; grants?: HelperGrants }) {
     this.#helper = options.helper;
     this.#changed = options.changed;
     this.#lang = options.lang ?? stationLang;
-    this.#now = options.now ?? (() => wall.now());
+    this.#grants = options.grants ?? new HelperGrants({ helper: options.helper, now: options.now });
     // A grant changed (its window saw it), or the helper came back: what is known is looked at again.
     options.helper.listen((event) => {
       if (event.event === "grants") this.#again();
@@ -128,22 +133,9 @@ export class HelperFiles {
     if (this.#grantOf.size > 0) void this.#look([...this.#grantOf.keys()]);
   }
 
-  async ask(grant: Grant, top: string): Promise<WindowState> {
+  ask(grant: Grant, top: string): Promise<WindowState> {
     this.#grantOf.set(top, grant);
-    const status = await this.#helper.request({ op: "status" }).catch(() => null);
-    // Up already asking for it: left as it is, not brought forward.
-    if (status?.asking === true && Array.isArray(status.asked) && status.asked.includes(grant)) return "up";
-    // Shown for it a moment ago: not again (whatever reads the folder again), until AGAIN_MS have gone by.
-    const last = this.#asked.get(grant);
-    if (last !== undefined && this.#now() - last < AGAIN_MS) return status === null ? "up" : "closed";
-    this.#asked.set(grant, this.#now());
-    try {
-      await this.#helper.request({ op: "permissions.show", words: filesWords(this.#lang()), grants: [grant], paths: { [grant]: top } });
-      return "up";
-    } catch (error) {
-      log.warn("drive", "still.fail Helper's window did not show", { error: (error as Error).message });
-      return "none";
-    }
+    return this.#grants.show(grant, filesWords(this.#lang()), { [grant]: top });
   }
 
   fs(scope: { roots: string[]; protect: string[] }): Fs {

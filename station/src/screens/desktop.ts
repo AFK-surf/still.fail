@@ -13,36 +13,22 @@
 import type net from "node:net";
 import { hostname } from "node:os";
 import type { HelperApp } from "../helper/app.ts";
+import { HelperGrants } from "../helper/grants.ts";
 import { wall } from "../ops/fibers.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { ScreenRefused } from "./hub.ts";
 import { MacInput } from "./mac-input.ts";
+export type { HelperStatus } from "../helper/grants.ts";
 import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type ScreenAccess, type ScreenInput, type ScreenSource, type ScreenView, type ViewOptions, clipFits } from "./source.ts";
-
-/// What the helper's `status` says.
-export type HelperStatus = {
-  capture: boolean;
-  control: boolean;
-  responsible?: { pid: number; path: string; name: string };
-  display?: { id: number; width: number; height: number };
-  /// What its running process may do (a grant is had once it starts again).
-  live?: { capture: boolean; control: boolean };
-  /// Whether its window asking for the grants is up, and what it asks for.
-  asking?: boolean;
-  asked?: string[];
-  /// The drive's folder grants (helper/files.ts).
-  files?: Record<string, string>;
-};
-
-/// A look at the grants is this fresh at most (a list asked for twice at once looks once).
-const FRESH_MS = 2_000;
 
 export type DesktopOptions = {
   /// Whether this machine's display can be seen at all (platform.hasDesktopScreen).
   supported: boolean;
   /// still.fail Helper, null when the release has none.
   helper: HelperApp | null;
+  /// What is known of its grants, shared with the station's other parts (default: its own).
+  grants?: HelperGrants | null;
   /// Told when its size or access changed.
   changed: () => void;
   /// Its title (default: the machine's name).
@@ -84,15 +70,20 @@ export class Desktop implements ScreenSource {
   readonly kind = "desktop" as const;
   readonly reveal = true;
   readonly #o: DesktopOptions;
-  #status: HelperStatus | null = null;
-  #checked = -Infinity;
-  #checking: Promise<void> | null = null;
+  readonly #grants: HelperGrants | null;
   readonly #views = new Set<HelperView>();
   /// Its window was put up for grants not all taken yet: up again when the helper comes back still lacking one.
   #wanted = false;
 
   constructor(options: DesktopOptions) {
     this.#o = options;
+    this.#grants = options.helper === null ? null : (options.grants ?? new HelperGrants({ helper: options.helper }));
+    // Its grants or display changed: told with the screens.
+    this.#grants?.onChange(() => this.#o.changed());
+  }
+
+  get #status() {
+    return this.#grants?.status() ?? null;
   }
 
   title(): string {
@@ -118,24 +109,10 @@ export class Desktop implements ScreenSource {
     return { capture: s.capture, control: s.control, ...who, ...(s.asking ? { asking: true } : {}) };
   }
 
-  /// The grants and the display as macOS has them now (at most FRESH_MS old, unless `force`); the helper started for it.
+  /// The grants and the display as macOS has them now (at most a moment old, unless `force`); the helper started for it.
   refresh(force = false): Promise<void> {
-    const helper = this.#o.helper;
-    if (!this.#o.supported || helper === null) return Promise.resolve();
-    if (!force && wall.now() - this.#checked < FRESH_MS) return Promise.resolve();
-    this.#checking ??= helper
-      .request({ op: "status" })
-      .then(
-        (status: HelperStatus) => {
-          this.#checked = wall.now();
-          const before = JSON.stringify(this.#status);
-          this.#status = status;
-          if (JSON.stringify(status) !== before) this.#o.changed();
-        },
-        (error) => log.warn("screens", "still.fail Helper did not answer", { error: (error as Error).message }),
-      )
-      .finally(() => (this.#checking = null));
-    return this.#checking;
+    if (!this.#o.supported || this.#grants === null) return Promise.resolve();
+    return this.#grants.refresh(force);
   }
 
   async open(options: ViewOptions): Promise<ScreenView> {
