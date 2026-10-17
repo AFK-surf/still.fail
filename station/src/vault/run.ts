@@ -1,11 +1,11 @@
 // A command run with a grant (secret_run, docs/vault.md 三种用法): through the proxy, with the grant's SSH key in an
 // agent, or with the secret in its environment. The station runs it, in the session's workspace, and gives back what it
 // said with the secret hidden (scrub.ts) and cut to a size an agent reads, and how it ended.
-import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { wall } from "../ops/fibers.ts";
+import { endCommand, startCommand } from "../ops/processes.ts";
 import { type Held, valueOf } from "./keeper.ts";
 import { type Proxy, placeholder } from "./proxy.ts";
 import { Scrubber } from "./scrub.ts";
@@ -86,21 +86,17 @@ export async function runWith(held: Held, ask: RunAsk, proxy: Proxy, env: Record
 
 function spawned(ask: RunAsk, env: Record<string, string>, hidden: string[]): Promise<Ran> {
   return new Promise((resolve) => {
-    const child = spawn("sh", ["-c", ask.command], { cwd: ask.cwd, env, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+    const child = startCommand("sh", ["-c", ask.command], { cwd: ask.cwd, env, stdio: ["ignore", "pipe", "pipe"] });
     const kept = new Kept();
     const out = new Scrubber(hidden);
     const err = new Scrubber(hidden);
-    child.stdout.on("data", (b: Buffer) => kept.add(out.push(b)));
-    child.stderr.on("data", (b: Buffer) => kept.add(err.push(b)));
+    child.stdout!.on("data", (b: Buffer) => kept.add(out.push(b)));
+    child.stderr!.on("data", (b: Buffer) => kept.add(err.push(b)));
     let timedOut = false;
     // The command's time, the machine's: a run left going is stopped, its whole process group.
     const stop = wall.after(ask.timeoutMs, () => {
       timedOut = true;
-      try {
-        process.kill(-child.pid!, "SIGKILL");
-      } catch {
-        child.kill("SIGKILL");
-      }
+      endCommand(child, "SIGKILL");
     });
     child.on("error", (e) => {
       stop();
