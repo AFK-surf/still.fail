@@ -13,7 +13,7 @@
     "build:cloud": "node scripts/native.ts iroh-pkg && (cd client/core-ts && pnpm install --frozen-lockfile) && vp build --config web/vite.config.ts --mode cloud && vp build --config web/vite.config.ts --mode cloud-admin && vp build --config web/vite.share.config.ts && node cloud/build-static.ts",
     "build:share": "node scripts/native.ts iroh-pkg && vp build --config web/vite.share.config.ts && node cloud/build-static.ts",
     "dev:web": "vp dev --config web/vite.config.ts --mode cloud",
-    "build:site": "vp build --config web/vite.demo.config.ts && vp build --config web/vite.demo.config.ts --ssr ../web/src/site/prerender.tsx --outDir ../dist/site-ssr && node web/site-prerender.mjs",
+    "build:site": "(cd client/core-ts && pnpm install --frozen-lockfile) && vp build --config web/vite.demo.config.ts && vp build --config web/vite.demo.config.ts --ssr ../web/src/site/prerender.tsx --outDir ../dist/site-ssr && node web/site-prerender.mjs",
     "build:site-beta": "STILLFAIL_SITE=beta pnpm run build:site",
     "dev:site": "vp dev --config web/vite.demo.config.ts",
     "typecheck": "node client/core-ts/scripts/shapes.ts --check && node client/core-ts/scripts/operations.ts --check && python3 scripts/icons.py --check && tsgo -p tsconfig.json && tsgo -p web/tsconfig.json",
