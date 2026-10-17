@@ -286,9 +286,9 @@ function ChatPane({ current, chats, filter, padding, onSearch, searching, index,
   const list = useRef<FlatList<PaneItem>>(null);
   const placed = useRef(false);
   const place = () => {
-    if (placed.current || items.length === 0) return;
+    if (placed.current || view == null || items.length === 0) return;
     placed.current = true;
-    list.current?.scrollToOffset({ offset: top, animated: false });
+    if (view.note?.empty !== true) list.current?.scrollToOffset({ offset: SEARCH_HEIGHT, animated: false });
   };
 
   return (
