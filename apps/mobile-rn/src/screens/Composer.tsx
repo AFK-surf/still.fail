@@ -1170,7 +1170,9 @@ export class Morph {
     this.toH.value = h;
     this.progress.value = 0;
     const run = ++this.run;
-    this.progress.value = withTiming(1, { duration: 260, easing: Ease.Out }, (finished) => { if (finished) runOnJS(this.#played)(run); });
+    // The callback runs on the UI thread: the JS function it calls taken out first (`this` is not there).
+    const played = this.#played;
+    this.progress.value = withTiming(1, { duration: 260, easing: Ease.Out }, (finished) => { if (finished) runOnJS(played)(run); });
   }
 
   #played = (run: number) => {
