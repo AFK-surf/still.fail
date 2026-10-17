@@ -93,14 +93,30 @@ export function peerCall(endpoint: Endpoint, cloud: Cloud, addr: (id: string) =>
 /// A station of another workspace is heard too while chats are shared across workspaces (`remote.hearsOutside`): each
 /// of its requests must name this workspace, and only what is shared with its own is answered (xshare/index.ts). One
 /// that shares a workspace with this station but asks in another of this station's is heard as such a station there.
+/// Which of the two it is, is looked at for each request, as the roster is then: a connection made while the roster
+/// was not current yet (this station just started) was taken for an outsider's for its whole life, every request of
+/// the workspace's own stations refused as sharing no chat until it idled out (2026-10-17). While the roster is not
+/// current a request is refused as that, and the caller asks again.
 export async function servePeer(conn: Connection, cloud: Cloud, remote: Remote) {
   const peer = conn.remoteId();
-  let inside = true;
+  const outsider = (error: unknown) =>
+    cloud.peersCurrent && remote.hearsOutside?.() === true && cloud.state !== null && cloud.home() !== null && peer !== cloud.state.station ? false : error;
+  /// Whether it is one of this station's workspaces' stations now; throws why not when it may not be heard at all.
+  const inside = () => {
+    try {
+      member(cloud, peer, null);
+      return true;
+    } catch (error) {
+      const why = outsider(error);
+      if (why !== false) throw why;
+      return false;
+    }
+  };
+  // Not to be heard at all: the connection ends. A roster not current yet ends nothing: its requests are refused meanwhile.
   try {
-    member(cloud, peer, null);
+    inside();
   } catch (error) {
-    if (!remote.hearsOutside?.() || !cloud.state || cloud.home() === null || peer === cloud.state.station) throw error;
-    inside = false;
+    if (cloud.peersCurrent) throw error;
   }
   for (;;) {
     const stream = await within(60_000, conn.acceptBi(), "peer idle");
@@ -109,8 +125,9 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Remote) 
     try {
       const envelope = JSON.parse((await within(15_000, readAll(stream, MAX_MESSAGE), "peer request timed out")).toString("utf8"));
       if (typeof envelope?.workspace !== "string") throw new Error("workspace missing");
-      const there = inside && cloud.membership(envelope.workspace)?.peers.some((p) => p?.id === peer) === true;
-      if (there || (inside && !remote.hearsOutside?.())) {
+      const ours = inside();
+      const there = ours && cloud.membership(envelope.workspace)?.peers.some((p) => p?.id === peer) === true;
+      if (there || (ours && !remote.hearsOutside?.())) {
         member(cloud, peer, envelope.workspace);
         const method = envelope.request?.method;
         answer = { result: typeof method === "string" && method.startsWith("lock.") ? answerLock(cloud, envelope.request, envelope.workspace) : await remote.handle(envelope.workspace, peer, envelope.request ?? null) };

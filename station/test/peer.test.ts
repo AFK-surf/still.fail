@@ -150,3 +150,38 @@ test("a station in two workspaces asks and hears each one's stations in that wor
     await Promise.all([both.close(), homeMate.close(), joinedMate.close()]);
   }
 });
+
+test("a connection made before the roster is current is heard as the workspace's once it is", async () => {
+  // A station just started (an update) with chats shared across workspaces: its roster comes a little after the first
+  // connection. That connection was taken for an outsider's for its whole life (2026-10-17: station_task refused as
+  // sharing no chat until it idled out).
+  const mesh = memoryMesh();
+  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+  const [source, target] = await Promise.all([bind(), bind()]);
+  const sourceCloud = cloudOf(source.id(), [target.id()]);
+  const targetCloud = cloudOf(target.id(), [source.id()]);
+  targetCloud.peersCurrent = false;
+  const remote: any = {
+    handle: async (workspace: string) => ({ inside: workspace }),
+    hearsOutside: () => true,
+    handleOutside: async () => {
+      throw new Error("this station shares no chat with your workspace");
+    },
+  };
+  void (async () => {
+    for (;;) {
+      const conn = await target.accept();
+      if (!conn) return;
+      void servePeer(conn, targetCloud, remote).catch(() => conn.close(0, "refused"));
+    }
+  })();
+  const port = target.sockets()[0]!.split(":").at(-1);
+  const call = peerCall(source, sourceCloud, (id) => ({ id, ips: [`127.0.0.1:${port}`] }));
+  try {
+    await assert.rejects(call(target.id(), "ws", { method: "describe" }), (e) => e instanceof Refused && /not current/.test(e.message));
+    targetCloud.peersCurrent = true;
+    assert.deepEqual(await call(target.id(), "ws", { method: "describe" }), { inside: "ws" });
+  } finally {
+    await Promise.all([source.close(), target.close()]);
+  }
+});
