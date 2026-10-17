@@ -30,6 +30,8 @@ export class Station {
   views: { head: J; got: J[]; mostUnacked: number }[] = [];
   screenFrames: { key: boolean; ts: number; data: Uint8Array }[] = [];
   world: World = REAL;
+  /// Its LAN addresses, said with the answer to a credential (station/src/mesh/lan.ts).
+  lan: string[] = [];
 
   static async start(alpns: Uint8Array[] = [ALPN, FORMER_ALPN], world: World = REAL): Promise<Station> {
     return Station.bound({ alpns: alpns.map((a) => Buffer.from(a)), relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" }, world);
@@ -97,7 +99,7 @@ export class Station {
   #answer(line: string): J {
     const grant = JSON.parse(line).credential as string;
     this.grants.push(grant);
-    return grant.startsWith("ok") ? { ok: true, station: "测试" } : { error: "grant signature invalid" };
+    return grant.startsWith("ok") ? { ok: true, station: "测试", ...(this.lan.length > 0 ? { lan: this.lan } : {}) } : { error: "grant signature invalid" };
   }
 
   async #serve(conn: J, dead: () => boolean): Promise<void> {

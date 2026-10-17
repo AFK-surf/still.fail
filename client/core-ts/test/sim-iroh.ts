@@ -42,6 +42,8 @@ const href = (url: string) => new URL(url).href;
 export const START = Date.UTC(2026, 9, 6, 9, 0, 0);
 /// QUIC's idle timeout, as iroh has it.
 export const IDLE_MS = 30_000;
+/// How long iroh hears nothing on a path before it lets it go (iroh socket.rs PATH_MAX_IDLE_TIMEOUT).
+export const PATH_IDLE_MS = 15_000;
 
 /// Time for a simulated run: nothing passes but what it is moved on by, and moving on goes from one timer to the next,
 /// each run in order (by when it is due, then by when it was set), what it wakes run before the next. A test's clock
@@ -169,9 +171,12 @@ class Way {
   pto(): number {
     return 4 * this.oneWay() + 25;
   }
-  /// Until when it is down (its relay's), or 0.
+  /// Until when nothing gets through it any more, a hole punched for it gone quiet (`SimNet.lan`).
+  silentUntil = 0;
+  /// Until when it is down (its relay's, or it gone quiet), or 0.
   downUntil(): number {
-    return this.relay === null ? 0 : this.net.downUntil(this.relay);
+    const silent = this.silentUntil > this.net.now() ? this.silentUntil : 0;
+    return Math.max(silent, this.relay === null ? 0 : this.net.downUntil(this.relay));
   }
 }
 
@@ -537,9 +542,12 @@ export class SimEndpoint {
     const known = this.#known.get(addr.id);
     const spoken = [alpn, ...additional].find((a) => there.alpns.some((b) => Buffer.from(a).equals(Buffer.from(b))));
     if (!spoken) throw new Error("no ALPN in common");
+    this.net.tries.push({ to: addr.id, ips: (addr.ips?.length ?? 0) > 0 });
     const started = this.net.now();
     let relay: string | null = null;
-    if (this.relayOnly || !there.direct || (known?.ips?.length ?? 0) === 0) {
+    // Addresses it is dialled at: none reached from off the station's LAN (`SimNet.away`).
+    const ips = [...(addr.ips ?? []), ...(known?.ips ?? [])];
+    if (this.relayOnly || !there.direct || ips.length === 0 || (this.net.away && (addr.ips?.length ?? 0) > 0)) {
       const told = [...(addr.relays ?? []), ...(known?.relays ?? []), ...this.relays].map(href);
       relay = told.find((r) => there.reachableOn(r)) ?? null;
       if (relay === null) return NEVER;
@@ -571,12 +579,25 @@ export class SimEndpoint {
     // Through a relay to a station on the device's LAN, from an endpoint not on relays alone: iroh punches a hole and
     // the connection goes direct.
     const lan = this.net.lan;
-    if (relay !== null && lan !== null && !this.relayOnly && there.direct)
+    if (relay !== null && lan !== null && !this.net.away && !this.relayOnly && there.direct) {
+      const through = relay;
       void this.net.sleep(lan.punchMs).then(() => {
         if (mine.reason !== null) return;
         mine.way.relay = theirs.way.relay = null;
         this.net.note(`${this.id().slice(0, 8)} to ${there.id().slice(0, 8)} direct`);
+        if (lan.quietAfterMs === undefined) return;
+        // The punched path goes quiet; iroh hears nothing on it for its idle time, then goes back to the relay.
+        void this.net.sleep(lan.quietAfterMs).then(() => {
+          if (mine.reason !== null) return;
+          mine.way.silentUntil = theirs.way.silentUntil = this.net.now() + PATH_IDLE_MS;
+          this.net.note(`${this.id().slice(0, 8)} to ${there.id().slice(0, 8)} direct gone quiet`);
+          void this.net.sleep(PATH_IDLE_MS).then(() => {
+            mine.way.relay = theirs.way.relay = through;
+            this.net.note(`${this.id().slice(0, 8)} to ${there.id().slice(0, 8)} back through ${through}`);
+          });
+        });
       });
+    }
     return mine;
   }
 
@@ -641,8 +662,13 @@ export class SimNet {
   /// A direct way between two endpoints on this machine.
   direct: Leg = { ms: 1 };
   /// The device on the LAN of the stations bound at an address: a connection to one through a relay goes direct
-  /// `punchMs` after it opens. Null: none does.
-  lan: { punchMs: number } | null = null;
+  /// `punchMs` after it opens, and (`quietAfterMs`) goes quiet that long after, back through the relay iroh's idle
+  /// time later (studio and a phone, 2026-10-17). Null: none does.
+  lan: { punchMs: number; quietAfterMs?: number } | null = null;
+  /// The device is off the stations' LAN: their LAN addresses lead nowhere, no hole is punched.
+  away = false;
+  /// Every dial, in order: whom to, and whether at addresses it was given.
+  readonly tries: { to: string; ips: boolean }[] = [];
   readonly #relays = new Map<string, { device: Leg; station: Leg }>();
   /// Entries (cloud relays.ts RELAY_ENTRIES): a URL on one relay's machine taking what comes to it on to another relay.
   readonly #entries = new Map<string, string>();

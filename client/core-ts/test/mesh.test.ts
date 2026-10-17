@@ -14,7 +14,7 @@ import { CoreError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Iroh } from "../src/iroh.ts";
-import { ALPN, clearlyBetter, cost, DEVICE_KEY, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, Mesh, MeshWire, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_MIN_BYTES, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
+import { ALPN, clearlyBetter, cost, DEVICE_KEY, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_MIN_BYTES, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -828,9 +828,9 @@ sim("a_way_just_dialled_and_clearly_quicker_is_taken_when_asked", async (s) => {
 
 /// A station on the phone's LAN, at home on a (the device's own relay, far) and held on b (near): the phone's link to it
 /// on b's own endpoint comes through first, the main endpoint's through a after it and direct once iroh punches a hole.
-async function onLan(s: Sim) {
+async function onLan(s: Sim, quietAfterMs?: number) {
   s.net.direct = { ms: 3 };
-  s.net.lan = { punchMs: 500 };
+  s.net.lan = { punchMs: 500, quietAfterMs };
   const a = s.relay("https://a.relay.test/", { device: { ms: 40 }, station: { ms: 40 } });
   const b = s.relay("https://b.relay.test/", { device: { ms: 10 }, station: { ms: 10 } });
   const station = await s.stationBound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [a], discovery: false, bindAddr: "127.0.0.1:0" });
@@ -881,6 +881,43 @@ sim("a_direct_link_lost_is_dialled_again_soon", async (s) => {
   await s.until(() => !direct(mesh, id), 60_000);
   await s.until(() => direct(mesh, id), EXPLORE_MS);
   assert.ok(s.time.now() - lost <= REDIAL_MAIN_MS + 3 * TICK_MS, `direct again ${s.time.now() - lost} ms after it was lost`);
+  await close(s, station, mesh);
+});
+
+/// 2026-10-17, studio and a phone on its LAN: the path iroh punched went quiet seconds after it opened, and the requests
+/// on it waited out iroh's 15 s each time before going back through a relay. The station says its LAN addresses with its
+/// answer to the credential; the device dials them on an endpoint of its own, by address alone, and the requests go
+/// there and stay.
+sim("a_station_on_the_lan_is_dialled_at_its_lan_addresses_and_the_requests_stay_there", async (s) => {
+  const { station, mesh, id } = await onLan(s, 5_000);
+  station.lan = station.addr().ips;
+  await reach(s, mesh, id);
+  await s.until(() => mesh.current(id)?.pinned === LAN, 60_000);
+  assert.ok(direct(mesh, id));
+  const moves = mesh.moves(id);
+  await s.time.pass(10 * 60_000);
+  assert.equal(mesh.current(id)?.pinned, LAN, JSON.stringify(mesh.measured(id)));
+  assert.ok(mesh.moves(id) - moves <= 1, `moved ${mesh.moves(id) - moves} times in ten minutes`);
+  assert.equal((await request(s, mesh.current(id)!, head("/admin/api/overview"))).status, 200);
+  await close(s, station, mesh);
+});
+
+/// Off the station's LAN, its LAN addresses lead nowhere: tried once, not again every while; tried again once the
+/// network changes.
+sim("off_the_stations_lan_its_lan_addresses_are_tried_once_and_again_as_the_network_changes", async (s) => {
+  const { station, mesh, id } = await onLan(s);
+  s.net.away = true;
+  station.lan = station.addr().ips;
+  await reach(s, mesh, id);
+  await s.time.pass(60_000);
+  const lanTries = () => s.net.tries.filter((t) => t.ips && t.to === id).length;
+  assert.equal(lanTries(), 1);
+  await s.time.pass(10 * 60_000);
+  assert.equal(lanTries(), 1);
+  assert.notEqual(mesh.current(id)?.pinned, LAN);
+  s.wakes.wake(network(s.host));
+  await s.time.pass(60_000);
+  assert.equal(lanTries(), 2);
   await close(s, station, mesh);
 });
 

@@ -166,6 +166,8 @@ export type Members = {
   traces?: Traces;
   /// Which member credentials the control plane signs (still.fail cloud's when not said).
   accepted?: () => Accepted;
+  /// Where a device on the station's LAN dials it straight (lan.ts): told with the first credential's answer.
+  lan?: () => string[];
 };
 
 /// One member's connection: the credential first, nothing served before it checks out; then a request a stream.
@@ -204,7 +206,8 @@ export async function serve(m: Members, conn: Connection) {
   }
   // How far its lock goes, when it has one (a device that has more brings it, docs/workspace-lock.md).
   const head = lockHead(m.cloud, joinedOf(m.cloud, current.viewer.workspace));
-  await writeLine(first, { ok: true, station: m.cloud.membership(current.viewer.workspace)?.name ?? state().name, expires_at: current.exp, ...(head ? { lock: head } : {}) });
+  const lan = m.lan?.() ?? [];
+  await writeLine(first, { ok: true, station: m.cloud.membership(current.viewer.workspace)?.name ?? state().name, expires_at: current.exp, ...(head ? { lock: head } : {}), ...(lan.length > 0 ? { lan } : {}) });
   log.info("mesh", "client connected", { email: current.viewer.email, device: device.slice(0, 12) });
 
   // The connection ends when its credential runs out or is revoked, or the station leaves its workspace: checked on

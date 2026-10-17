@@ -63,6 +63,11 @@ const DEAD_PINGS = 3;
 /// EXPLORE_MS kept a phone on the station's LAN on a relay for minutes after a link of it went quiet (2026-10-17).
 export const REDIAL_MAIN_MS = 30_000;
 export const DIRECT_RECALL_MS = 10 * 60_000;
+/// The `pinned` of a link on the endpoint that dials a station by its LAN addresses alone (docs/mesh-lan.md): no relay,
+/// no hole punching. A path iroh punched through to a station on the LAN stopped answering seconds after it opened, and
+/// requests on it waited out iroh's 15 s before going back to a relay (studio and a phone, 2026-10-17); a connection
+/// dialled by address kept working.
+export const LAN = "lan";
 /// The least a read waits for its answer on its way before it is asked on the next best way as well.
 export const HEDGE_FLOOR_MS = 1_000;
 /// How often a read gone slow looks again for another way to be asked on, while there is none.
@@ -324,9 +329,13 @@ export class Link {
   refused: CoreError | null = null;
   credential: string;
   readonly credentials: CredentialSource;
-  /// The relay whose own endpoint it is on; null on the main one.
+  /// The relay whose own endpoint it is on (LAN: the one dialling stations by their LAN addresses); null on the main one.
   readonly pinned: string | null;
   counted: [number, number] = [0, 0];
+  /// Where the station said a device on its LAN dials it (`ip:port`), in its answer to the first credential.
+  lan: string[] = [];
+  /// Done once the station answered the first credential (refused or not).
+  readonly answered = Deferred.makeUnsafe<void>();
 
   constructor(conn: IrohConnection, control: Control, credential: string, credentials: CredentialSource, pinned: string | null) {
     this.conn = conn;
@@ -538,6 +547,11 @@ export class Mesh {
   /// By address: when a way to it was last seen going direct, and when the main endpoint last dialled it again.
   readonly #directAt = new Map<string, number>();
   readonly #mainDialledAt = new Map<string, number>();
+  /// By address: the station's LAN addresses as it last said them; those last dialled on the LAN endpoint, and when.
+  readonly #lan = new Map<string, string[]>();
+  readonly #lanTried = new Map<string, string>();
+  readonly #lanDialledAt = new Map<string, number>();
+  readonly #lanDialling = new Set<string>();
   /// Dials under way on pinned endpoints (their endpoints are not let go meanwhile).
   #dialing = 0;
   /// By address: the relay requests last moved to (its host), and how many times they moved.
@@ -1006,6 +1020,47 @@ export class Mesh {
     });
   }
 
+  /// The station said where it is on its LAN (`link.lan`, its answer to a link's credential): dialled there if new.
+  #heard(addr: string, link: Link): void {
+    if (link.lan.length === 0) return;
+    const before = this.#lan.get(addr)?.join(" ");
+    this.#lan.set(addr, link.lan);
+    if (before !== link.lan.join(" ")) this.#lanTried.delete(addr);
+    this.#dialLanIf(addr, link.credentials);
+  }
+
+  /// Dials the station at its LAN addresses on the LAN endpoint (`LAN`), unless a way to it is on that endpoint already:
+  /// once for each set of addresses it says (a device off its LAN tries them once, then not again until
+  /// they change or the network does), and again every REDIAL_MAIN_MS while it was reached direct within
+  /// DIRECT_RECALL_MS.
+  #dialLanIf(addr: string, credentials: CredentialSource): void {
+    const lan = this.#lan.get(addr);
+    if (this.#closed || !this.#links.has(addr) || lan === undefined || lan.length === 0 || this.#lanDialling.has(addr)) return;
+    const live = this.#live(addr);
+    if (live.some((w) => w.link.pinned === LAN)) return;
+    const now = this.now();
+    if (this.#lanTried.get(addr) === lan.join(" ")) {
+      const recent = now - (this.#directAt.get(addr) ?? -Infinity) < DIRECT_RECALL_MS;
+      if (!recent || now - (this.#lanDialledAt.get(addr) ?? -Infinity) < REDIAL_MAIN_MS) return;
+    }
+    this.#lanTried.set(addr, lan.join(" "));
+    this.#lanDialledAt.set(addr, now);
+    this.#lanDialling.add(addr);
+    this.#dialing++;
+    this.#env.runner.fork(
+      Effect.flatMap(this.#pinnedEndpoint(LAN), (endpoint) =>
+        endpoint === null ? Effect.void : Effect.map(Effect.result(open(this.#env, endpoint, [], stationId(addr), credentials, false, LAN, undefined, lan)), (r) => (r._tag === "Success" ? this.#adopt(addr, r.success) : undefined)),
+      ).pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            this.#dialing--;
+            this.#lanDialling.delete(addr);
+          }),
+        ),
+      ),
+    );
+  }
+
   /// `link` is a way to the station as well, if it is still wanted; pinged from now on.
   #adopt(addr: string, link: Link): void {
     if (this.#closed || !this.#links.has(addr)) {
@@ -1015,6 +1070,7 @@ export class Mesh {
     const ways = this.#live(addr);
     if (ways.some((w) => w.link === link)) return;
     this.#ways.set(addr, [...ways, new Way(link)]);
+    if (link.pinned !== LAN) this.#env.runner.fork(Effect.andThen(Deferred.await(link.answered), Effect.sync(() => this.#heard(addr, link))));
     // One way there is all it has (no relays, or one): nothing to choose between.
     if (!this.#steering.has(addr) && this.#waysFor(addr).length >= 2) {
       this.#steering.add(addr);
@@ -1119,8 +1175,15 @@ export class Mesh {
     // to it), where a relay only adds its round trip. A phone that came back to the app on its station's LAN went on
     // through a relay as that link came through first, and stayed there for minutes (BETTER_TICKS, MIN_STAY_MS) while
     // the direct way waited its turn (2026-10-17).
-    if (mine.samples > 0 && mine.key() !== "direct") {
-      const direct = this.#best(addr, up.filter((w) => w.link !== cur && w.samples > 0 && w.missed === 0 && w.key() === "direct"));
+    if (mine.samples > 0 && mine.link.pinned !== LAN) {
+      // One on the LAN endpoint is taken over the main endpoint's punched path as well: that one stopped answering seconds
+      // after it opened (docs/mesh-lan.md).
+      const lan = up.find((w) => w.link !== cur && w.link.pinned === LAN && w.samples > 0 && w.missed === 0);
+      if (lan !== undefined && (mine.key() === "direct" || clearlyBetter(this.#score(addr, mine), this.#score(addr, lan)))) {
+        this.#promote(addr, lan, "lan");
+        return;
+      }
+      const direct = mine.key() === "direct" ? null : this.#best(addr, up.filter((w) => w.link !== cur && w.samples > 0 && w.missed === 0 && w.key() === "direct"));
       if (direct !== null && clearlyBetter(this.#score(addr, mine), this.#score(addr, direct))) {
         this.#promote(addr, direct, "direct");
         return;
@@ -1225,6 +1288,7 @@ export class Mesh {
         if (live.some((w) => w.key() === "direct")) this.#directAt.set(addr, this.now());
         const credentials = (this.current(addr) ?? live[0]?.link)?.credentials;
         if (credentials === undefined) continue;
+        this.#dialLanIf(addr, credentials);
         if (this.now() - (this.#exploredAt.get(addr) ?? 0) >= EXPLORE_MS) this.#env.runner.fork(this.#explore(addr, credentials));
         else if (
           !live.some((w) => w.link.pinned === null) &&
@@ -1301,7 +1365,8 @@ export class Mesh {
       if (existing) return yield* Deferred.await(existing);
       const d = Deferred.makeUnsafe<IrohEndpoint | null>();
       this.#pinned.set(relay, d);
-      const bound = yield* Effect.result(Mesh.#bind(this.#env.iroh, pinnedKey(this.#secret, relay), [relay], true));
+      // The LAN endpoint: on no relay, so it looks nothing up and punches no hole; it dials addresses alone.
+      const bound = yield* Effect.result(relay === LAN ? Mesh.#bind(this.#env.iroh, pinnedKey(this.#secret, LAN), []) : Mesh.#bind(this.#env.iroh, pinnedKey(this.#secret, relay), [relay], true));
       const endpoint = bound._tag === "Success" ? bound.success : null;
       Deferred.doneUnsafe(d, Effect.succeed(endpoint));
       if (endpoint === null) this.#pinned.delete(relay);
@@ -1334,6 +1399,8 @@ export class Mesh {
         const wake = yield* this.#env.wakes.next;
         if (!wake.suspectsConnections()) continue;
         this.#env.runner.fork(this.#endpoint.networkChange());
+        // On another network now, perhaps the station's: its LAN addresses are worth a try again.
+        this.#lanTried.clear();
         for (const [addr, link] of this.#openLinks()) {
           if (this.#racing.has(addr)) continue;
           this.#racing.add(addr);
@@ -1447,6 +1514,7 @@ function open(
   fresh: boolean,
   pinned: string | null,
   _ctx: unknown,
+  ips: string[] = [],
 ): Effect.Effect<Link, CoreError> {
   return Effect.gen(function* () {
     if (!/^[0-9a-f]{64}$/.test(stationId)) return yield* Effect.fail(CoreError.invalid(t("core-logic.mesh.bad_station_id", { id: stationId })));
@@ -1456,7 +1524,7 @@ function open(
     let late = false;
     env.runner.fork(
       Effect.gen(function* () {
-        const r = yield* Effect.result(endpoint.connect({ id: stationId, relays }, ALPN, [FORMER_ALPN]));
+        const r = yield* Effect.result(endpoint.connect(ips.length > 0 ? { id: stationId, relays, ips } : { id: stationId, relays }, ALPN, [FORMER_ALPN]));
         if (r._tag === "Success" && late) r.success.close(0, "too late");
         else Deferred.doneUnsafe(dialled, r._tag === "Success" ? Effect.succeed(r.success) : Effect.fail(meshError(t("core-logic.mesh.unreachable", { error: r.failure.message }))));
       }),
@@ -1488,7 +1556,11 @@ function open(
           link.renewalFailed = true;
           link.refused = answer.failure;
           conn.close(0, "credential refused");
+        } else {
+          const lan = (answer.success as J)?.lan;
+          if (Array.isArray(lan)) link.lan = lan.filter((a): a is string => typeof a === "string" && /^\d{1,3}(\.\d{1,3}){3}:\d{1,5}$/.test(a)).slice(0, 8);
         }
+        Deferred.doneUnsafe(link.answered, Effect.void);
       }),
     );
     env.runner.fork(renew(link, credentials, device));

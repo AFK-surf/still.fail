@@ -17,6 +17,7 @@ import { keepRelays } from "./relays.ts";
 import { ALPN, FORMER_ALPN, serve } from "./serve.ts";
 import { GUEST_ALPN, Guests } from "../publish/guest.ts";
 import { bindStation } from "./native.ts";
+import { lanAddrs } from "./lan.ts";
 
 export const MeshLive = Layer.effectDiscard(
   Effect.gen(function* () {
@@ -88,7 +89,7 @@ export const MeshLive = Layer.effectDiscard(
         (traces) => Effect.promise(() => traces.close()),
       );
       if (traces.enabled) traces.exportTo((spans) => Effect.runPromise(plane.traces(spans)));
-      const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), shares, screens, traces, accepted: plane.credential };
+      const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), shares, screens, traces, accepted: plane.credential, lan: () => lanAddrs(endpoint.sockets()) };
       // The control plane's gateways: the device tools, as far as the station's own setting lets them.
       const device = yield* Effect.acquireRelease(
         Effect.sync(() =>
