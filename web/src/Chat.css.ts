@@ -695,35 +695,29 @@ export const activityStop = style({
   },
 });
 
-/** Pasted text uses the regular attachment upload, with a local restore action while composing. */
-export const pasteSnippet = style({ display: "flex", alignItems: "flex-start", width: "236px", maxWidth: "100%", minWidth: 0, flexShrink: 0, borderRadius: MESSAGE_FILE_CORNER, background: vars.neutralBg, color: vars.text, cornerShape: vars.cornerShape });
-export const pasteSnippetBody = style({ display: "flex", flexDirection: "column", gap: "4px", padding: "10px 12px", flex: 1, minWidth: 0 });
-export const pasteSnippetOpen = style({ textAlign: "left", padding: 0, border: 0, background: "transparent", color: vars.muted, textDecoration: "underline", cursor: "pointer" });
-export const pasteSnippetTitle = style({ padding: 0, border: 0, background: "transparent", textAlign: "left", cursor: "pointer", width: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 });
-export const pasteSnippetHint = style({ color: vars.muted, fontSize: vars.textMeta });
-/** With a file's remove button (fileCardRemove): here only its place. */
-export const pasteSnippetRemove = style({ margin: "10px" });
+/**
+ * Pasted text waiting in the composer (Chat.tsx PendingFile): a file's card, its first line where a name is (clicked,
+ * shown whole), how many characters under it; its buttons together at its end: put back in the text (sent again, if it
+ * failed) and removed.
+ */
+export const pasteCardTitle = style({
+  minWidth: "0", padding: "0", border: "0", background: "none", color: "inherit", font: "inherit", fontSize: vars.textUi,
+  lineHeight: "20px", textAlign: "left", cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+});
+export const pasteCardMeta = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const pasteCardActions = style({ display: "flex", gap: "2px", flex: "none" });
 /**
  * Inside the composer, files follow its curve as its quotes do: inner radius = the frame's radius less its padding.
  * Cards are as tall as an image's thumbnail beside them.
  */
-globalStyle(`${composerFiles} :is(${composerThumb}, ${fileCard}, ${pasteSnippet})`, {
+globalStyle(`${composerFiles} :is(${composerThumb}, ${fileCard})`, {
   borderRadius: COMPOSER_INNER, cornerShape: vars.cornerShape,
 });
-globalStyle(`${composerFiles} :is(${fileCard}, ${pasteSnippet})`, { boxSizing: "border-box", height: "64px", alignItems: "center" });
-globalStyle(`${composerFiles} ${fileCard}`, { padding: "0 14px" });
+globalStyle(`${composerFiles} ${fileCard}`, { boxSizing: "border-box", height: "64px", alignItems: "center", padding: "0 14px" });
 // Off the composer's frosted ground: a file to send stands on the page's own (a step up in the dark); one named by its
 // path, which stays where it is, is only outlined, dashed.
 // A quote (a mark, a note) waiting there stands on the same ground.
-globalStyle(`:is(${composerFiles} :is(${fileCard}, ${pasteSnippet}), ${composerQuote} ${quoteCard})`, {
+globalStyle(`:is(${composerFiles} ${fileCard}, ${composerQuote} ${quoteCard})`, {
   background: `light-dark(${vars.canvas}, color-mix(in srgb, ${vars.text} 9%, ${vars.raised}))`, boxShadow: "0 1px 2px rgb(0 0 0 / .05)",
 });
 globalStyle(`${composerFiles} ${fileCard}[data-named]`, { background: "none", boxShadow: "none", border: `1px dashed ${vars.lineStrong}` });
-/** Its name on one line, what it is and its buttons on the next: two lines, as a file's card has. */
-globalStyle(`${composerFiles} ${pasteSnippetBody}`, {
-  flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", columnGap: "8px", rowGap: "0", padding: "0 0 0 10px",
-});
-globalStyle(`${composerFiles} ${pasteSnippet} > ${fileTile}`, { marginLeft: "14px" });
-globalStyle(`${composerFiles} ${pasteSnippetTitle}`, { flexBasis: "100%", fontSize: vars.textUi, lineHeight: "20px" });
-globalStyle(`${composerFiles} :is(${pasteSnippetHint}, ${pasteSnippetOpen})`, { fontSize: vars.textCaption, lineHeight: "16px" });
-globalStyle(`${composerFiles} ${pasteSnippetRemove}`, { margin: "0 14px 0 0" });
