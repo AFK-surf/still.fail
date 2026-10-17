@@ -18,6 +18,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.database.ContentObserver
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.nsd.NsdManager
@@ -42,7 +43,10 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
@@ -270,8 +274,16 @@ class AdbShareService : Service() {
             // Granted before (`adb.grant`): on by itself, as Android allows only on Wi-Fi.
             if (!AdbShare.wirelessOn(this@AdbShareService) && AdbShare.onWifi(this@AdbShareService)) AdbShare.switchOn(this@AdbShareService)
             found.start()
+            // Ports as DNS-SD last said them, but none while Wireless debugging is off: its announcement can outlive it
+            // (2026-10-17, an OPPO: off in Settings, its port still offered, the station's adb dialling a refused port).
+            val wireless = MutableStateFlow(AdbShare.wirelessOn(this@AdbShareService))
+            val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) { wireless.value = AdbShare.wirelessOn(this@AdbShareService) }
+            }
+            contentResolver.registerContentObserver(AdbShare.wirelessUri(), false, observer)
+            coroutineContext.job.invokeOnCompletion { contentResolver.unregisterContentObserver(observer) }
             launch {
-                found.ports.collect { (connect, pair) ->
+                combine(found.ports, wireless) { ports, on -> if (on) ports else AdbPorts.Found(null, null) }.distinctUntilChanged().collect { (connect, pair) ->
                     try {
                         core.call("adb.share", buildJsonObject {
                             put("station", station)

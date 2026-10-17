@@ -175,18 +175,16 @@ test("without adb the offer says missing; a phone the station cannot reach says 
   const shares = new Shares({ adb: () => adb.path, limits: UNLIMITED, clock: time.clock });
   const failing = new Memory();
   const offer = answerAdb(shares, nowhere, viewer, asking({ op: "share", phone: PHONE }), failing as unknown as Stream);
-  // Not in yet after `connect`: its state looked at again after 500 ms, and once SETTLE is over taken as it is.
-  await time.asleep(500);
-  assert.equal(failing.lines().find((l) => l.adb === "failed"), undefined);
-  await time.adjust(SETTLE);
+  // The tunnel turned down: no use waiting SETTLE out, and adb is let go of (it would go on dialling).
   const failed = await until(() => failing.lines().find((l) => l.adb === "failed"));
   assert.equal(failed.message, "no streams here");
   assert.ok(adb.calls().some((c) => c[0] === "connect" && c[1] === failed.serial));
+  assert.deepEqual(adb.calls().at(-1), ["disconnect", failed.serial]);
   await failing.reset();
   await time.asleep(GRACE);
   await time.adjust(GRACE);
   await offer;
-  await until(() => adb.calls().filter((c) => c[0] === "disconnect").length === 2);
+  await until(() => adb.calls().filter((c) => c[0] === "disconnect").length === 3);
   await time.close();
 });
 
@@ -240,6 +238,41 @@ test("a newer offer of the same phone takes the older's place, its port and all"
   await time.close();
 });
 
+test("offers again as the phone's link moves: adb is asked again only when Wireless debugging changes", async () => {
+  const adb = fakeAdb();
+  const time = testClock();
+  const shares = new Shares({ adb: () => adb.path, limits: UNLIMITED, clock: time.clock });
+  const mesh = await link(shares);
+  const connects = () => adb.calls().filter((c) => c[0] === "connect").length;
+  const reaches = async (reader: { line(): Promise<any> }, adbState: string) => {
+    let state;
+    do state = await reader.line();
+    while (state.adb !== adbState);
+  };
+  try {
+    const first = await mesh.ask({ op: "share", phone: PHONE });
+    await reaches(first.reader, "connected");
+    assert.equal(connects(), 1);
+    // Another link, the pairing port opened: adb has the phone already, and reaches it through the new link by itself.
+    const again = await mesh.ask({ op: "share", phone: PHONE });
+    await reaches(again.reader, "connected");
+    const pairing = await mesh.ask({ op: "share", phone: PHONE, pair: true });
+    await reaches(pairing.reader, "connected");
+    assert.equal(connects(), 1);
+    // Wireless debugging turned off, then on again: each said to adb.
+    const off = await mesh.ask({ op: "share", phone: PHONE, adbd: false });
+    await reaches(off.reader, "off");
+    const on = await mesh.ask({ op: "share", phone: PHONE });
+    await reaches(on.reader, "connected");
+    assert.equal(connects(), 2);
+    for (const o of [first, again, pairing, off, on]) await o.stream.reset(0);
+  } finally {
+    await shares.close();
+    await mesh.close();
+    await time.close();
+  }
+});
+
 test("the station removed from its workspace ends offers at once", async () => {
   const adb = fakeAdb();
   let removed = false;
@@ -248,8 +281,6 @@ test("the station removed from its workspace ends offers at once", async () => {
   const shares = new Shares({ adb: () => adb.path, limits: UNLIMITED, clock: time.clock, cloud: { removed: () => removed, listen: (f) => (listeners.add(f), () => listeners.delete(f)) } });
   const stream = new Memory();
   const offer = answerAdb(shares, nowhere, viewer, asking({ op: "share", phone: PHONE }), stream as unknown as Stream);
-  await time.asleep(500);
-  await time.adjust(SETTLE);
   await until(() => stream.lines().find((l) => l.adb === "failed"));
   removed = true;
   for (const f of listeners) f();
@@ -508,8 +539,6 @@ test("over the mesh: a phone adb is not paired with, or whose adbd turned the tu
     await until(() => shares.list().length === 0);
     mesh.phoneSide.refuse = "connection refused";
     const again = await mesh.ask({ op: "share", phone: PHONE });
-    await time.asleep(500);
-    await time.adjust(SETTLE);
     await again.reader.line();
     do state = await again.reader.line();
     while (state.adb === "connecting");
