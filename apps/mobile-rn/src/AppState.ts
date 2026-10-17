@@ -189,7 +189,19 @@ export interface Rect { left: number; top: number; right: number; bottom: number
  * `fit` the height of its content when it is that (dp, null: `height`), what runs when it closes, `solid` (not
  * frosted), and what it shows.
  */
-export class SheetSpec {
+// The specs of what is over the pages (ui/Sheet.kt's classes), each a type and a constructor of the same name: built
+// with `new SheetSpec(height, …)` in Kotlin's order, or written as an object with Kotlin's named arguments
+// (`{ height: 0.6, draggable: true, content }`), the fields Kotlin defaults left out. What reads them takes the
+// defaults for what is not there (`spec.draggable ?? false`).
+export interface SheetSpec {
+  readonly height: number;
+  readonly draggable?: boolean;
+  readonly fit?: number | null;
+  readonly onClose?: (() => void) | null;
+  readonly solid?: boolean;
+  readonly content: () => ReactNode;
+}
+export const SheetSpec = class implements SheetSpec {
   constructor(
     readonly height: number,
     readonly draggable: boolean = false,
@@ -198,22 +210,25 @@ export class SheetSpec {
     readonly solid: boolean = false,
     readonly content: () => ReactNode = () => null,
   ) {}
-}
+};
 
 /** One row of a menu (ui/Sheet.kt MenuItem): its words, its icon (null: none), what it does. */
-export class MenuItem {
+export interface MenuItem { readonly label: string; readonly icon: IconPaths | null; readonly action: () => void }
+export const MenuItem = class implements MenuItem {
   constructor(readonly label: string, readonly icon: IconPaths | null, readonly action: () => void) {}
-}
+};
 
 /** A menu by what opened it (ui/Sheet.kt MenuSpec): `anchor` the opener's box in the window, its items, what runs when it is dismissed. */
-export class MenuSpec {
+export interface MenuSpec { readonly anchor: Rect; readonly items: MenuItem[]; readonly onDismiss?: () => void }
+export const MenuSpec = class implements MenuSpec {
   constructor(readonly anchor: Rect, readonly items: MenuItem[], readonly onDismiss: () => void = () => undefined) {}
-}
+};
 
 /** One entry of an execution history in full, over everything (ui/Sheet.kt ReaderSpec): its label's row, its content. */
-export class ReaderSpec {
+export interface ReaderSpec { readonly label: () => ReactNode; readonly content: () => ReactNode }
+export const ReaderSpec = class implements ReaderSpec {
   constructor(readonly label: () => ReactNode, readonly content: () => ReactNode) {}
-}
+};
 
 /** Where each chat was left: the message at the top of the list and how far below the top it sat; and, if it was left
  *  at its end, the newest message then (`bottom`). */
