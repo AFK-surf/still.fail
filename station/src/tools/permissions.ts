@@ -73,7 +73,7 @@ export function permissionTools(grants: HelperGrants | null, base: () => string 
         const link = base();
         const folder = asked !== "capture" && asked !== "control" ? ", then Allow in the prompt macOS shows (a folder refused before opens System Settings › Files and Folders instead, to switch it on there)" : ", then drag still.fail Helper into the list System Settings shows";
         const how = answer.screen && link !== null
-          ? `The screen can be seen and driven, so a person can grant it from wherever they are: post ${link}/screen/desktop with chat_post kind=need_human, asking them to open it and click Allow in the still.fail Helper window${folder}.`
+          ? `The screen can be seen and driven, so a person can grant it from wherever they are: post ${link}/screen/desktop on a line of its own (it shows as the screen's card) with chat_post kind=need_human, asking them to open it and click Allow in the still.fail Helper window${folder}.`
           : `The screen cannot be seen and driven${answer.screen ? " from a link here (this control plane has no pages)" : ""}, so a person has to do it at the Mac itself: post chat_post kind=need_human asking them to go to ${machine()} and click Allow in the still.fail Helper window there${folder}. Their app's station page shows the grants as they change.`;
         return `still.fail Helper's window asking for ${name} is up on ${machine()}. ${how} End your turn; call permissions again to see whether it was granted.`;
       },

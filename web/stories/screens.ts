@@ -3,7 +3,7 @@
 // live ones drawing real frames made here (a desktop with a browser asking to sign in: JPEG, or H.264 where the browser
 // encodes it), so the canvas is drawn as a station's would be. 只看/控制 switches as the core would, at once.
 import type { DemoExtension } from "../src/demo/mount.tsx";
-import type { ScreensView, ScreenViewState } from "../src/core/shapes.ts";
+import type { ScreenCard, ScreensView, ScreenViewState } from "../src/core/shapes.ts";
 
 const LINK = "/w/demo/s/local/screen";
 
@@ -22,6 +22,30 @@ const NO_CAPTURE = { capture: false, control: false, message: "在 屏幕录制 
 export const SCREENS_LACKING: ScreensView = { ...SCREENS, screens: SCREENS.screens.map((s) => (s.id === "desktop" ? { ...s, access: NO_CONTROL, line: NO_CONTROL.message } : s)) };
 /** A station from before screens. */
 export const OUTDATED: ScreensView = { screens: [], outdated: true, control: true, known: true, note: "此 station 需要更新才能远程查看屏幕" };
+
+/** The demo station's screens as links in a message show them (the core's `screenCard`), and one its browser closed. */
+const CARDS: Record<string, ScreenCard> = Object.fromEntries([
+  ...SCREENS.screens.map((s) => [s.id, { kind: s.kind, title: s.title, line: s.line, link: s.link, gone: false }] as const),
+  ["browser:0FF1CE", { kind: "browser", title: "浏览器标签页", line: "此屏幕已不存在", link: `${LINK}/browser%3A0FF1CE`, gone: true }],
+]);
+const SAID = [
+  "浏览器开好了，登录页在这里，密码在那个页面里输入：",
+  `https://app.still.fail${LINK}/browser%3A7F3A9C`,
+  `上次那个 https://app.still.fail${LINK}/browser%3A0FF1CE 已经关了：`,
+  `https://app.still.fail${LINK}/browser%3A0FF1CE`,
+  "要在 Mac 上点允许的话用这个：",
+  `https://app.still.fail${LINK}/desktop`,
+].join("\n\n");
+/** The chat's first agent message linking the demo station's screens (src/screen/ScreenLink.tsx): alone on their lines, one gone, one within a sentence. */
+export const screenLinksDemo: DemoExtension = {
+  topic: (t) => (t.topic === "screenCard" ? CARDS[String(t.screen)] ?? null : undefined),
+  then: (t, value) => {
+    if (t.topic !== "chat" || !value) return undefined;
+    const chat = value as { messages: { authorKind: string; text: string }[] };
+    const first = chat.messages.findIndex((m) => m.authorKind === "agent");
+    return { ...chat, messages: chat.messages.map((m, i) => (i === first ? { ...m, text: SAID } : m)) };
+  },
+};
 
 /** How a story's view goes: live (driving, or a read-only member's), or the phase it ends up in. */
 export type ViewStory = "connecting" | "live" | "readOnly" | "undrivable" | "agent" | "reconnecting" | "ended" | "outdated" | "gone" | "denied" | "failed"

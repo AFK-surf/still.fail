@@ -4007,6 +4007,20 @@ export interface ScreenAccess {
 	path?: string;
 }
 
+/** A link to one of a station's screens as a message shows it (the `screenCard` topic; client/core-ts/src/screens.ts). */
+export interface ScreenCard {
+	/** `desktop` or `browser`, as the screen is (or, not in its station's list, as its id says). */
+	kind: string;
+	/** Its title in its station's list; else what kind of screen it is. */
+	title: string;
+	/** Under the title: what the list's row says of it (core); else that it is gone, or that it is a remote screen. */
+	line: string;
+	/** Its page in the app (`ScreenItem.link`). */
+	link: string;
+	/** Its station is reached and no longer has it. */
+	gone: boolean;
+}
+
 /** Where a screen's pointer is, as its station says. */
 export interface ScreenCursor {
 	/** 0..1 of the frame's width. */

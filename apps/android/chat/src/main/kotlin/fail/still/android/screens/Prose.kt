@@ -1,6 +1,6 @@
 // An agent's words with its files (web/src/Chat.tsx → ProseWithFiles, PlacedFile, FileLink): those its text names
 // are drawn where it names them (an HTML one as its visualization, an image whole, several images of one paragraph
-// side by side), the rest below it, as they always were.
+// side by side), the rest below it, as they always were; its links to a station's screens as their cards (ScreenLinks.kt).
 package fail.still.android.screens
 
 import androidx.compose.foundation.background
@@ -54,7 +54,7 @@ fun AgentWords(ctx: Here, text: String, files: List<Attachment>, names: List<Str
     )
     val followUp: ((String) -> Boolean)? = draft?.let { d -> { words -> d.text = if (d.text.isBlank()) words else "${d.text.trimEnd()}\n$words"; d.focus++; true } }
     Column {
-        CompositionLocalProvider(LocalFollowUp provides followUp) { Markdown(text, placing = placing) }
+        CompositionLocalProvider(LocalFollowUp provides followUp) { Markdown(text, placing = placing, screens = ScreenLinks) }
         if (rest.isNotEmpty()) Box(Modifier.padding(top = 4.dp)) { Files(ctx, rest) }
     }
     opened?.let { f -> OpenedFile(ctx, f) { opened = null } }

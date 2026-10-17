@@ -75,3 +75,17 @@ export function stationOfLink(href: string): string | null {
   const m = /\/o\/([^/?#\s]+)\/([^/?#\s]+)\/[^/?#\s]+/.exec(href) ?? /\/w\/([^/?#\s]+)\/s\/([^/?#\s]+)\/chats\//.exec(href);
   return m ? `${m[1]}/${m[2]}` : null;
 }
+
+/**
+ * The screen a link names, when it is one of a station's screens (`…/w/<workspace>/s/<station>/screen/<id>`, as its
+ * agents' `screen` tool links it): its station (`<workspace>/<station>`) and its id. Null otherwise.
+ */
+export function screenOfLink(href: string): { station: string; screen: string } | null {
+  const m = /^(?:https?:\/\/[^/]+)?\/w\/([^/?#\s]+)\/s\/([^/?#\s]+)\/screen\/([^/?#\s]+)\/?$/.exec(href);
+  if (!m) return null;
+  try {
+    return { station: `${decodeURIComponent(m[1]!)}/${decodeURIComponent(m[2]!)}`, screen: decodeURIComponent(m[3]!) };
+  } catch {
+    return null;
+  }
+}

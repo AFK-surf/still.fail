@@ -228,6 +228,32 @@ each("a_stations_screens_are_listed_and_kept_as_its_events_say", async (seed) =>
   core.close();
 });
 
+each("a_link_to_a_screen_shows_it_as_its_list_has_it_and_as_gone_once_the_list_has_it_no_more", async (seed) => {
+  const { host, core, ui, push } = await viewing(seed);
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "screenCard", station: "ws/st", screen: "browser:T1" });
+  subscribe(core, ui, 2, { topic: "screenCard", station: "ws/st", screen: "browser:CLOSED" });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(values.get(1), { kind: "browser", title: "登录 - GitHub", line: "浏览器标签页 · 1280×800 · Bob 正在查看", link: "/w/ws/s/st/screen/browser%3AT1", gone: false });
+  assert.deepEqual(values.get(2), { kind: "browser", title: "浏览器标签页", line: "此屏幕已不存在", link: "/w/ws/s/st/screen/browser%3ACLOSED", gone: true });
+  push("screens", { screens: [SCREENS.screens[0]] });
+  await host.settle();
+  apply(host, values);
+  assert.equal((values.get(1) as J).gone, true);
+  core.close();
+});
+
+test("a_link_to_a_screen_of_a_station_not_reached_says_what_its_id_does", async () => {
+  const { host, core, ui } = await viewing(1);
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "screenCard", station: "ws/elsewhere", screen: "desktop" });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(values.get(1), { kind: "desktop", title: "桌面", line: "远程屏幕", link: "/w/ws/s/elsewhere/screen/desktop", gone: false });
+  core.close();
+});
+
 test("a_station_from_before_screens_has_none_and_needs_an_update", async () => {
   const answers = base();
   const { host, core, ui, views } = await viewing(1, answers);
