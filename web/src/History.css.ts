@@ -71,6 +71,8 @@ export const hPlace = style({
 });
 /** A person's words to the agent: plain text in the panel's size, folded to a few lines. */
 export const hWords = style({ fontSize: vars.textUi, color: vars.text, whiteSpace: "pre-wrap", overflowWrap: "anywhere" });
+/** What a job told its agent: program output, its columns kept. */
+export const hOutput = style({ fontFamily: vars.fontMono, fontSize: vars.textMeta, lineHeight: vars.leadingMeta, color: vars.text, whiteSpace: "pre-wrap", overflowWrap: "anywhere" });
 /** A message the agent sent: what people were sent leads the history, on a card in the size it was read in. */
 export const hCard = style({
   marginTop: "4px", padding: "8px 12px", border: `1px solid ${vars.line}`, borderRadius: vars.rField,

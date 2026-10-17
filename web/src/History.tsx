@@ -11,7 +11,7 @@ import { DropdownMenu } from "radix-ui";
 import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { animate, EASE_OUT, reducedMotion, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
-import { useApi, useHistory, useHistoryDetail, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryMark, type HistoryStep, type HistoryTask, type HistoryTurn, type HistoryView, type Place } from "./api.ts";
+import { useApi, useHistory, useHistoryDetail, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryMark, type HistoryMessage, type HistoryStep, type HistoryTask, type HistoryTurn, type HistoryView, type Place } from "./api.ts";
 import { ICON, IconButton, Pill, SlackLogo, Tip } from "./ui.tsx";
 import { useCopyChatLink } from "./ChatRef.tsx";
 import { useLink, useStation } from "./station.tsx";
@@ -287,8 +287,8 @@ const HistoryItemView = memo(function HistoryItemView({ item }: { item: HistoryI
           {body.content.note && <Reminder text={body.content.note} />}
           {body.content.tasks.map((task, i) => <Task key={i} task={task} />)}
           {body.content.messages.map((m) => (
-            <Received key={m.key} text={m.text} place={m.place ? <Where place={m.place} /> : null}
-              from={m.from.slackUser ? <SlackName user={m.from.slackUser} name={m.from.name} bound={m.from.bound} /> : m.from.name} />
+            <Received key={m.key} message={m} place={m.place ? <Where place={m.place} /> : null}
+              from={m.from.slackUser ? <SlackName user={m.from.slackUser} name={m.from.name} bound={m.from.bound} /> : m.notice === "stillfail" ? NAME : m.from.name} />
           ))}
         </>
       );
@@ -414,12 +414,18 @@ function SlackName({ user, name, bound }: { user: string; name: string; bound: b
   );
 }
 
-/** A person's message: who and where in a line, their words under it. */
-function Received({ from, text, place }: { from: ReactNode; text: string; place?: ReactNode }) {
+/**
+ * A message: who and where in a line, their words under it. The station's notices: a job's words as it wrote them, in
+ * a monospaced font; still.fail's own, as Markdown.
+ */
+function Received({ from, message, place }: { from: ReactNode; message: HistoryMessage; place?: ReactNode }) {
+  const { text, notice } = message;
   return (
     <Ev icon={<ReceivedIcon {...ICON} size={14} />}>
-      <div className={css.hLabel}>{t("web-main.history.message.before")}<strong>{from}</strong>{t("web-main.history.message.after")}{place && <> · {place}</>}</div>
-      <Fold className={css.hWords} of={text} lines={WORDS_LINES} head={textHead(text, HEAD_LINES)}>{text}</Fold>
+      <div className={css.hLabel}>{t(notice === "job" ? "web-main.history.jobMessage.before" : "web-main.history.message.before")}<strong>{from}</strong>{t(notice === "job" ? "web-main.history.jobMessage.after" : "web-main.history.message.after")}{place && <> · {place}</>}</div>
+      {notice === "stillfail" && message.md != null
+        ? <Fold className={conversationCss.markdown} of={message.md as Md} lines={WORDS_LINES} head={headOf(message.md as Md)}><MdView md={message.md as Md} /></Fold>
+        : <Fold className={notice === "job" ? css.hOutput : css.hWords} of={text} lines={WORDS_LINES} head={textHead(text, HEAD_LINES)}>{text}</Fold>}
     </Ev>
   );
 }

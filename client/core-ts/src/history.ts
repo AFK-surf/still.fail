@@ -3,6 +3,7 @@
 // calls and thinking between two boundaries fold into one group, named by its latest call (shapes: HistoryView).
 import { args, doing, epochMs, kindOf, toolName } from "./activity.ts";
 import * as format from "./format.ts";
+import * as brand from "./brand.ts";
 import { t } from "./i18n.ts";
 import { markdown } from "./markdown.ts";
 import * as present from "./present.ts";
@@ -60,8 +61,14 @@ function fileOf(text: string): string | null {
   return null;
 }
 
-/// A message a prompt carried.
-export type Sourced = { user: string; name: string | null; ts: string; text: string; thread: string | null; slack: boolean };
+/// A message a prompt carried; `station`: a notice of the station's own (via="ember"), not a person's.
+export type Sourced = { user: string; name: string | null; ts: string; text: string; thread: string | null; slack: boolean; station: boolean };
+
+/// A station notice a job gave (`stillfail-job notify`, jobs.ts `named`): the job's name and what it said, as written.
+export function jobSaid(text: string): { name: string; said: string } | null {
+  const m = /^(?:Job|Service) "(.+?)" \([^()\s,]+(?:, port \d+)?\) says: ([\s\S]*)$/.exec(text);
+  return m ? { name: m[1], said: m[2] } : null;
+}
 
 function attr(attrs: string, name: string): string | null {
   const key = `${name}="`;
@@ -128,6 +135,7 @@ export function parsePrompt(text: string): [Sourced[], string] {
       text: b[0],
       thread: attr(attrs, "thread"),
       slack: attr(attrs, "via") === "slack",
+      station: ["ember", "stillfail"].includes(attr(attrs, "via") ?? ""),
     });
     rest += text.slice(at, open);
     at = b[1];
@@ -144,7 +152,7 @@ export function parsePrompt(text: string): [Sourced[], string] {
     const b = body(second, headEnd + 1, "</slack>");
     if (!b) break;
     const attrs = second.slice(open + 7, headEnd);
-    messages.push({ user: attr(attrs, "user") ?? "", name: null, ts: attr(attrs, "ts") ?? "", text: b[0], thread: null, slack: true });
+    messages.push({ user: attr(attrs, "user") ?? "", name: null, ts: attr(attrs, "ts") ?? "", text: b[0], thread: null, slack: true, station: false });
     rest += second.slice(at, open);
     at = b[1];
   }
@@ -295,6 +303,12 @@ export function presentHistory(live: J, cx: Context): J {
             md: task.result !== null ? markdown(task.result) : null,
           })),
           messages: messages.map((m) => {
+            // The station's own notice: a job's words as it wrote them (program output), else still.fail's, in Markdown.
+            if (m.station) {
+              const job = jobSaid(m.text);
+              if (job) return { key: m.ts, from: { name: job.name, slackUser: null, bound: false }, text: job.said, place: null, notice: "job" };
+              return { key: m.ts, from: { name: brand.name(), slackUser: null, bound: false }, text: m.text, place: null, notice: "stillfail", md: markdown(m.text) };
+            }
             let from: J;
             if (m.slack) {
               const bound = cx.slackUsers.includes(m.user);

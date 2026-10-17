@@ -315,5 +315,6 @@
   "android-chat.pick.quote": "引用",
   "android-chat.file.install": "安装",
   "android-chat.file.installFailed": "无法安装：{error}",
-  "android-chat.file.allowInstall": "允许 {app} 安装应用后，再次点击安装"
+  "android-chat.file.allowInstall": "允许 {app} 安装应用后，再次点击安装",
+  "android-chat.history.received.jobMessage": "收到来自任务 {name} 的消息"
 }

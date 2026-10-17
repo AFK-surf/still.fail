@@ -644,5 +644,6 @@
   "web-mobile.files.places": "所有位置",
   "web-mobile.files.wholeFolder": "整个文件夹",
   "web-mobile.files.add": "添加",
-  "web-mobile.files.addCount": "添加 {n} 个"
+  "web-mobile.files.addCount": "添加 {n} 个",
+  "web-mobile.history.jobMessage": "收到来自任务 {name} 的消息"
 }

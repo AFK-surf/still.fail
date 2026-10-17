@@ -333,5 +333,6 @@
   "android-chat.pick.quote": "Quote",
   "android-chat.file.install": "Install",
   "android-chat.file.installFailed": "Couldn't install: {error}",
-  "android-chat.file.allowInstall": "Allow {app} to install apps, then tap Install again"
+  "android-chat.file.allowInstall": "Allow {app} to install apps, then tap Install again",
+  "android-chat.history.received.jobMessage": "Message from job {name}"
 }

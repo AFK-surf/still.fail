@@ -693,5 +693,7 @@
   "web-main.shareIn.signIn": "登录后发到 {name}",
   "web-main.shareIn.search": "搜索",
   "web-main.shareIn.find": "找 chat",
-  "web-main.shareIn.opening": "打开这个 chat"
+  "web-main.shareIn.opening": "打开这个 chat",
+  "web-main.history.jobMessage.before": "收到来自任务 ",
+  "web-main.history.jobMessage.after": " 的消息"
 }

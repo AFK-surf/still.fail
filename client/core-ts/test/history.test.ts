@@ -43,10 +43,22 @@ test("a_prompt_is_the_messages_it_carried_and_embers_words_around_them", () => {
   assert.deepEqual([said.length, said[0].user, said[0].ts, said[0].text], [1, "U1", "1.2", "hi"]);
   const [messages, note] = parsePrompt('Heads up.\n<message via="slack" from="Ada &amp; Co (U1)" ts="1.2" thread="C1/1.0">\nhi <@UBOT>\n</message>\n(Thread C1/1.0 had messages before you were brought in; read them.)');
   assert.equal(note, "Heads up.");
-  assert.deepEqual(messages, [{ user: "U1", name: "Ada & Co", ts: "1.2", text: "hi <@UBOT>", thread: "C1/1.0", slack: true }]);
+  assert.deepEqual(messages, [{ user: "U1", name: "Ada & Co", ts: "1.2", text: "hi <@UBOT>", thread: "C1/1.0", slack: true, station: false }]);
   const [old] = parsePrompt('<slack user="U2" bot ts="3.4">\nyo\n</slack>');
   assert.equal(old[0].user, "U2");
   assert.equal(old[0].text, "yo");
+});
+
+test("a_station_notice_is_drawn_as_still_fails_or_as_the_job_that_spoke", () => {
+  const said = "OVER BUDGET: run 1 took 301 s\n\njobs:\n  +   0 s    13 s  plan";
+  const notices = [`Job "ci-time-watch" (job_2b767635) says: ${said}`, 'Service "web" (job_1, port 5173) says: up', "Job \"x\" (job_2) ended with exit code 1.\nIts last lines:\n```\nboom\n```"];
+  const text = notices.map((n) => `<message via="ember" from="ember" ts="9.1">\n${n}\n</message>`).join("\n");
+  assert.equal(parsePrompt(text)[0][0].station, true);
+  const h = presentHistory({ loaded: true, timeline: [{ kind: "user", text }] }, cx([], [], []));
+  const [job, service, ended] = h.items[0].body.content.messages;
+  assert.deepEqual([job.notice, job.from.name, job.text], ["job", "ci-time-watch", said]);
+  assert.deepEqual([service.notice, service.from.name, service.text], ["job", "web", "up"]);
+  assert.deepEqual([ended.notice, ended.from.name, ended.md !== undefined], ["stillfail", "still.fail", true]);
 });
 
 test("a_task_notification_is_read_into_how_the_work_ended", () => {

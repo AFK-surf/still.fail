@@ -768,5 +768,7 @@
   "web-main.shareIn.signIn": "Sign in to send it to {name}",
   "web-main.shareIn.search": "Search",
   "web-main.shareIn.find": "Find a chat",
-  "web-main.shareIn.opening": "open the chat"
+  "web-main.shareIn.opening": "open the chat",
+  "web-main.history.jobMessage.before": "Message from job ",
+  "web-main.history.jobMessage.after": ""
 }

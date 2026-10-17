@@ -310,13 +310,20 @@ private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgen
             }
             body.content.messages.forEach { m ->
                 Message(Icons.Received, {
-                    val (before, after) = around("android-chat.history.received.message")
+                    val (before, after) = around(if (m.notice == "job") "android-chat.history.received.jobMessage" else "android-chat.history.received.message")
                     Text(before, fontSize = 13.sp, color = C.muted)
                     val user = m.from.slackUser
-                    if (user != null) SlackName(station, user, m.from.name, m.from.bound) else Strong(m.from.name)
+                    if (user != null) SlackName(station, user, m.from.name, m.from.bound) else Strong(if (m.notice == "stillfail") BuildConfig.APP_NAME else m.from.name)
                     Text(after, fontSize = 13.sp, color = C.muted)
                     m.place?.let { Text(" · ", fontSize = 13.sp, color = C.muted); Box(Modifier.weight(1f, fill = false)) { Place(station, of, it) } }
-                }, m.text) { Text(m.text, fontSize = 15.sp, lineHeight = 23.sp, color = C.ink) }
+                }, m.text) {
+                    // The station's notices: a job's words as it wrote them (program output); still.fail's own, Markdown.
+                    when (m.notice) {
+                        "job" -> Text(m.text, style = Mono, color = C.ink)
+                        "stillfail" -> Markdown(m.text, size = 15)
+                        else -> Text(m.text, fontSize = 15.sp, lineHeight = 23.sp, color = C.ink)
+                    }
+                }
             }
         }
         is HistoryBody.Post -> {
