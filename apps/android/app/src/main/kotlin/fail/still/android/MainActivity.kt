@@ -251,9 +251,10 @@ private val AUTH_SCHEMES = setOf("stillfail", "ember", "stillfail-beta")
 
 /**
  * Since when the app has been off screen (elapsedRealtime: it counts deep sleep too); null while on it. The process's,
- * not an activity's: one closed with back and made again later is the same app coming back to the same core.
+ * not an activity's: one closed with back and made again later is the same app coming back to the same core. A push
+ * that came meanwhile wakes the core by it too (Push.kt).
  */
-private var hidden: Long? = null
+internal var hidden: Long? = null
 
 /**
  * The default network, followed: `changed` when it becomes another one than before (Wi-Fi to mobile data, back

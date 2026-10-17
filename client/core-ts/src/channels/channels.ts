@@ -230,6 +230,20 @@ export class Channels {
     });
   }
 
+  /// A push says the channel goes to `n` (its station's notice, through still.fail cloud, while the station's stream may
+  /// be away): unless `n` is held, what came after what is held is read now, and waited on. With no `n` (an older
+  /// station's notice), what came after what is held is asked, as after a stream that was away.
+  pushed(c: Channel, n: number | null, priority: number): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      if (n !== null) {
+        this.#held.raise(c, n);
+        if (this.#held.count(c, n, n) > 0) return Effect.void;
+      } else if (c.kind.whole && this.#held.span(c) !== null) this.#unsure.add(keyOf(c));
+      const asked = this.bring(c, priority, "latest");
+      return asked === null ? Effect.void : Effect.ignore(Deferred.await(asked));
+    });
+  }
+
   /// One read of a channel, now, for someone who waits on it (it fails as the read does): what came of it that the
   /// read asked for is put, in place of what is held of it. How many items.
   read(c: Channel, read: fill.Read, options: { quiet: boolean; ctx?: SpanContext | null }): Effect.Effect<number, CoreError> {

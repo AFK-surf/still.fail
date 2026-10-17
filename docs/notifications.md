@@ -87,6 +87,7 @@ Calls:
 | `client.focus` | `visible?`, `focused?`, `chat?` (`{ station, thread?, session?, end? }` or null), `left?` (a chat), `workspace?` | — ; where this UI's attention is (each field given changes; `left`: that chat is not shown any more, if it is the one; `workspace`: the one it is in, else its chat's) |
 | `notice.claim` | `id` | `{ show }`: true for the first page that takes a notice of `notify.show` |
 | `notice.pushed` | `workspace?`, `kind?` | `{ show }`: whether a push that came is shown (on, its kind on, no page in view, and of the workspace the viewer is in) |
+| `notice.bring` | `station`, `session`, `seq?` | — once what a shown push is about is on the device: the chat's messages after what is held (none when `seq` is held already), its chat found in the station's chats if the device holds none; nothing for a station it does not reach |
 
 `notify` (no params, attend.ts) is what the clients show from: `{ on, asked, push, kinds, preview, permission, show }`; every client's notifications page shows `permission` the same way (a refused one on the banner tile, with the way to the system's settings where the app can open them). `on` and `asked` (the
 system asked to allow them, once) are kept on the device, on by default. `push`: this device should hold a push
@@ -159,8 +160,11 @@ cloud sends nothing. An older cloud answers 404, and nothing more comes of it.
   none themselves. The setting is the same page.
 - Android: `POST_NOTIFICATIONS` is asked for; one channel (消息); local notices
   while the app is in front (not for the open chat; the core's `notify`), FCM
-  pushes while it is not (`notice.pushed`). The token is registered with
-  `push.register`. Tapping either kind opens its chat at the message it is
+  pushes while it is not (`notice.pushed`). A push shown also brings its
+  chat's new messages onto the phone while FCM lets the app run
+  (`notice.bring`, after `client.wake` for how long the app was away), so
+  tapping it opens on them instead of waiting for the station to be reached
+  again. The token is registered with `push.register`. Tapping either kind opens its chat at the message it is
   about (`seq`: the card for `wait`, else the message noticed), with Back
   returning to its chat list; without a `seq` (an older station or cloud) the
   chat opens where it would. 我 → 通知 turns them off, kept by the core.

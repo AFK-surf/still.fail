@@ -220,6 +220,46 @@ test("a_station_that_was_up_is_tried_again_at_once_though_the_cloud_says_it_is_n
   core.close();
 });
 
+test("a_push_brings_its_chat_onto_the_device_whether_the_stream_told_it_or_not", async () => {
+  const answers: J = { ...base() };
+  const { host, core } = await started(answers);
+  const ui = core.connect();
+  const held = (thread: number) => [...core.inner.data.logRange("entry", ST, String(thread), 1, 100).keys()];
+  assert.deepEqual(held(7), [1, 2, 3]);
+  const answered = (id: number) => host.takeEmitted().map(([, m]) => m as J).find((m) => m.id === id && ("ok" in m || "error" in m));
+  // Said while the phone slept: its stream did not tell it, its push did.
+  answers["GET /threads/7/entries?after=3"] = { last: 4, entries: [entry(4, "做完了")] };
+  call(core, ui, 1, "notice.bring", { station: ST, session: "k1", seq: 4 });
+  await host.settle();
+  assert.deepEqual(answered(1)?.ok, null);
+  assert.deepEqual(held(7), [1, 2, 3, 4]);
+  // Held already (the stream told it first): nothing is asked.
+  let from = host.requests.length;
+  call(core, ui, 2, "notice.bring", { station: ST, session: "k1", seq: 4 });
+  await host.settle();
+  assert.deepEqual(answered(2)?.ok, null);
+  assert.equal(host.requests.slice(from).filter((r) => r.url.includes("/entries")).length, 0);
+  // An older station's push says no message: asked what came after what is held.
+  answers["GET /threads/7/entries?after=4"] = { last: 5, entries: [entry(5, "又一条")] };
+  call(core, ui, 3, "notice.bring", { station: ST, session: "k1" });
+  await host.settle();
+  assert.deepEqual(held(7), [1, 2, 3, 4, 5]);
+  // A chat the device has not heard of: the station's chats say which it is, and its latest is read.
+  answers["GET /chats"] = [...answers["GET /chats"], { id: "8", thread: 8, session: "k2", title: "新的", agents: [], lastActiveAt: 2 }];
+  answers["GET /threads/8/entries?limit=50"] = { last: 1, entries: [{ ...entry(1, "你好"), thread: 8 }] };
+  call(core, ui, 4, "notice.bring", { station: ST, session: "k2", seq: 1 });
+  await host.settle();
+  assert.deepEqual(answered(4)?.ok, null);
+  assert.deepEqual(held(8), [1]);
+  // Of a station the device does not reach: nothing is read.
+  from = host.requests.length;
+  call(core, ui, 5, "notice.bring", { station: "ws/other", session: "k1", seq: 1 });
+  await host.settle();
+  assert.deepEqual(answered(5)?.ok, null);
+  assert.equal(host.requests.slice(from).filter((r) => r.url.includes("/admin/api/")).length, 0);
+  core.close();
+});
+
 test("a_station_that_answers_a_request_has_its_stream_tried_now_not_when_its_wait_ends", async () => {
   // Not reached while the cloud says it is not online: tried again in OFFLINE_RETRY_MS.
   const answers = { ...base(), "POST /threads/7/messages": { n: 4 }, "GET /threads/7/entries?limit=50": { last: 4, entries: entries(1, 4) } };

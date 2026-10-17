@@ -4,6 +4,7 @@
 package fail.still.android
 
 import android.content.Context
+import android.os.SystemClock
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.messaging.FirebaseMessaging
@@ -73,7 +74,16 @@ object Push {
     }
 }
 
-/** FCM's side: a new token is registered; a notice is shown while the app is not in front (in front, local ones are). */
+/** How long a push keeps the app running to bring what it is about (FCM gives a high-priority message some 10 s). */
+private const val BRING_MS = 8_000L
+
+/** When a push last woke the core while the app was off screen (elapsedRealtime). */
+private var woke: Long? = null
+
+/**
+ * FCM's side: a new token is registered; a notice is shown while the app is not in front (in front, local ones are),
+ * and what it is about brought onto the device.
+ */
 class PushService : FirebaseMessagingService() {
     override fun onCreate() {
         Crashes.install(applicationContext)
@@ -101,7 +111,35 @@ class PushService : FirebaseMessagingService() {
         if (data["type"] != "notice" || !shown(data["workspace"], data["kind"])) return
         val tag = data["tag"] ?: return
         val url = data["url"] ?: return
-        Notifier.show(this, tag, data["title"].orEmpty(), data["body"].orEmpty(), url, data["seq"]?.toLongOrNull())
+        val seq = data["seq"]?.toLongOrNull()
+        Notifier.show(this, tag, data["title"].orEmpty(), data["body"].orEmpty(), url, seq)
+        bring(data["workspace"], data["station"], data["session"], seq)
+    }
+
+    /**
+     * What the push is about, onto the device while FCM lets the app run (`notice.bring`): tapped, its chat opens on it
+     * instead of waiting for the station to be reached again. The app off screen was likely frozen, its connections gone
+     * with nothing said: the core is told how long it was away first, as when it comes back to the front (MainActivity's
+     * `wake`), since it went or since the push before woke it. Back on screen, it is still as long away as it was.
+     */
+    private fun bring(workspace: String?, station: String?, session: String?, seq: Long?) {
+        if (workspace == null || station == null || session == null) return
+        runBlocking {
+            withTimeoutOrNull(BRING_MS) {
+                try {
+                    val core = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN, BuildConfig.BETA)
+                    val now = SystemClock.elapsedRealtime()
+                    val since = hidden?.let { maxOf(it, woke ?: it) }
+                    if (since != null) {
+                        woke = now
+                        core.call("client.wake", buildJsonObject { put("away", (now - since).coerceAtLeast(0)) })
+                    }
+                    core.call("notice.bring", buildJsonObject { put("station", "$workspace/$station"); put("session", session); seq?.let { put("seq", it) } })
+                } catch (_: CoreException) {
+                    // Not read now (the station not reached): the chat is read as it opens.
+                }
+            }
+        }
     }
 
     /**

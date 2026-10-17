@@ -206,6 +206,25 @@ export class StationsSync {
     this.#core.runner.fork(Effect.ensuring(Effect.ignore(Effect.all(done.map((d) => Deferred.await(d)), { mode: "result" })), Effect.sync(() => span.end())));
   }
 
+  /// A push came of a chat (`notice.bring`, `seq` the message it is about): what it says is brought onto the device now,
+  /// whether the station's stream is there or not, so its notification opens on what is held. A chat the device does
+  /// not hold yet is found in the station's chats; of a station not linked, nothing is read. Done once it is held, or
+  /// could not be read.
+  bringPushed(address: string, session: string, seq: number | null): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const bound = () => {
+        const thread = get(this.#core.data.chatOfSession(address, session), "thread");
+        return typeof thread === "number" ? thread : this.#core.data.threadOf(address, session);
+      };
+      let thread = bound();
+      if (thread === null) {
+        yield* this.ask(address, "chats", this.#read(address, { topic: "chatRows", station: address }, "/chats"));
+        thread = bound();
+      }
+      if (thread !== null) yield* this.channels.pushed(entriesOf(address, thread), seq, Priority.focused);
+    });
+  }
+
   /// The station's stream was away: the threads a UI shows are asked what was said in them after what is held.
   #catchUpShown(address: string): void {
     for (const topic of this.#core.store.liveTopics()) {

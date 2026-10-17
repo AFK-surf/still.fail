@@ -1,5 +1,5 @@
 // The attention calls by name (attend.rs `parse`): `client.focus`, `notify.set`, `notify.permission`, `notice.claim`,
-// `notice.pushed`.
+// `notice.pushed`, `notice.bring`.
 import { read } from "./core/params.ts";
 import { CoreError } from "./error.ts";
 import { t } from "./i18n.ts";
@@ -16,7 +16,8 @@ export type AttendCall =
   | { kind: "set"; on: boolean | null; asked: boolean | null; kinds: unknown; preview: boolean | null }
   | { kind: "permission"; state: Permission }
   | { kind: "claim"; id: string }
-  | { kind: "pushed"; workspace: string | null; notice: string | null };
+  | { kind: "pushed"; workspace: string | null; notice: string | null }
+  | { kind: "bring"; station: string; session: string; seq: number | null };
 
 /// Whether the system lets this device show notifications, as its app finds: allowed, refused, not asked yet, or not
 /// known (no way to tell here).
@@ -69,6 +70,10 @@ export function parseAttend(name: string, params: unknown): AttendCall | null {
     case "notice.pushed": {
       const f = read(p, [["workspace", "string", "opt"], ["kind", "string", "opt"]]);
       return { kind: "pushed", workspace: f.workspace as string | null, notice: f.kind as string | null };
+    }
+    case "notice.bring": {
+      const f = read(p, [["station", "string", "req"], ["session", "string", "req"], ["seq", "u64", "opt"]]);
+      return { kind: "bring", station: f.station as string, session: f.session as string, seq: f.seq as number | null };
     }
     default:
       return null;
