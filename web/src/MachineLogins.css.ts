@@ -58,8 +58,15 @@ export const cardCode = style({
   ...cardText, paddingBlock: "4px", fontFamily: vars.fontMono, fontSize: vars.textHeading, fontWeight: "600", letterSpacing: "0.08em",
   lineHeight: "1.3", userSelect: "all",
 });
-/** One row of buttons at its foot: what is to be done first, then 取消 (they fit a phone's width side by side). */
-export const cardActions = style({ display: "flex", flexWrap: "nowrap", alignItems: "center", gap: "4px", marginTop: "6px" });
+/**
+ * One row of buttons at its foot: what is to be done first, then 取消 (they fit a phone's width side by side). In by its
+ * words' padding, so that the first pill's ground starts where the title does, and as far from the foot as the title
+ * is from the top.
+ */
+export const cardActions = style({
+  display: "flex", flexWrap: "nowrap", alignItems: "center", gap: "4px", marginTop: "6px", paddingInline: TEXT_IN,
+  selectors: { "&:last-child": { paddingBottom: TEXT_IN } },
+});
 /** 取消: a pill as the main one is, quieter: the page's ground on the card's grey, the text's colour. */
 export const cardCancel = style({
   background: vars.canvas, color: vars.text,
