@@ -1,0 +1,14 @@
+{
+  "name": { "message": "still.fail" },
+  "description": { "message": "把页面、链接、视频或选中的文字发到你的一个 still.fail chat" },
+  "action": { "message": "发到 still.fail" },
+  "menuPage": { "message": "把这个页面发到 still.fail" },
+  "menuLink": { "message": "把这个链接发到 still.fail" },
+  "menuMedia": { "message": "把这个视频发到 still.fail" },
+  "menuSelection": { "message": "把「%s」发到 still.fail" },
+  "optionsOrigin": { "message": "still.fail 的地址" },
+  "optionsSave": { "message": "保存" },
+  "optionsHint": { "message": "默认 https://app.still.fail，自己的 dev cloud 填它的地址" },
+  "optionsSaved": { "message": "已保存" },
+  "optionsInvalid": { "message": "不是网址（https://…）" }
+}

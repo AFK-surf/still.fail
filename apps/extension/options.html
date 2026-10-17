@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>still.fail</title>
+  <style>
+    :root { color-scheme: light dark; font: 13px/1.5 system-ui, -apple-system, "PingFang SC", sans-serif; }
+    body { margin: 0; padding: 16px 20px 20px; min-width: 360px; }
+    label { display: block; margin-bottom: 6px; font-weight: 600; }
+    .row { display: flex; gap: 8px; }
+    input { flex: 1; min-width: 0; height: 32px; box-sizing: border-box; padding: 0 12px; border: 1px solid color-mix(in srgb, currentColor 22%, transparent); border-radius: 16px; background: transparent; color: inherit; font: inherit; }
+    input:focus { outline: none; border-color: color-mix(in srgb, currentColor 45%, transparent); }
+    button { height: 32px; padding: 0 14px; border: 0; border-radius: 16px; background: #24272B; color: #F5F3EF; font: inherit; font-weight: 600; cursor: pointer; }
+    @media (prefers-color-scheme: dark) { button { background: #F5F3EF; color: #24272B; } }
+    p { margin: 8px 0 0; color: color-mix(in srgb, currentColor 60%, transparent); }
+    #said[data-error] { color: #D9534F; }
+  </style>
+</head>
+<body>
+  <form id="form">
+    <label for="origin" data-i18n="optionsOrigin"></label>
+    <div class="row">
+      <input id="origin" type="url" spellcheck="false" autocomplete="off" placeholder="https://app.still.fail">
+      <button type="submit" data-i18n="optionsSave"></button>
+    </div>
+    <p id="said" data-i18n="optionsHint" role="status"></p>
+  </form>
+  <script src="options.js"></script>
+</body>
+</html>
