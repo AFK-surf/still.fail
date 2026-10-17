@@ -52,3 +52,6 @@ yarn-error.*
 /gradle.log
 /export.log
 /shots
+
+# The app's data layer (src/data, the Android app's data/), not the repository-wide data/ of local state
+!src/data/
