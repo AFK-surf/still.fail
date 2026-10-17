@@ -44,7 +44,7 @@ test("the words for other parts do not make a commit reach Android", () => {
 test("tests, the clients' types and what Android does not carry reach no app by themselves", () => {
   const notCarried = /^client\/iroh-wasm\/|^client\/core-ts\/(test|bench|harness|side)\/|^client\/core-ts\/src\/hosts\/(web|node|node-iroh|node-sql)\.ts$/;
   // A web fix whose schema change regenerated Android's types (31f155ec).
-  const shapes = ["client/core-ts/src/shapes/schema.ts", "apps/android/app/src/main/kotlin/fail/still/android/data/Shapes.kt", "web/src/core/shapes.ts"];
+  const shapes = ["client/core-ts/src/shapes/schema.ts", "apps/android/shared/src/main/kotlin/fail/still/android/data/Shapes.kt", "web/src/core/shapes.ts"];
   assert.deepEqual(partsOf([...shapes, "web/src/cloud/CloudApp.tsx"], notCarried), ["web"]);
   assert.deepEqual(partsOf(["apps/android/app/src/androidTest/kotlin/A.kt", "station/src/x.ts"], notCarried), ["station"]);
   assert.deepEqual(partsOf(["client/core-ts/src/hosts/web.ts"], notCarried), ["web"]);

@@ -93,7 +93,7 @@ fun ChangelogScreen() {
         if (tab != null) Seg(tabs.map { it.label }, at, { part = tabs[it].part }, Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 2.dp).fillMaxWidth(), height = 34.dp, fill = true)
         when {
             view == null || view.loading == true -> Waiting(WaitShape.Cards, text = t("common.reading"), error = topic.error?.message)
-            view.error != null -> Text(view.error, fontSize = 14.sp, color = C.red, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+            view.error != null -> Text(view.error.orEmpty(), fontSize = 14.sp, color = C.red, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
             tab == null || tab.days.isEmpty() -> Text(t("android-settings.changelog.empty"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
             else -> tab.days.forEach { day ->
                 SectionHeader(day.label, start = 24.dp)

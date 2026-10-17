@@ -599,6 +599,12 @@ The `:core` module is `fail.still.core.StillFailCore` (behind its `Engine`
 interface): `call(name, params)` and `topic(topic)` as a `Flow<TopicState>` —
 shared by everyone who collects the same topic, deltas applied as on the web
 (keyed ones too: `Delta.kt`), unsubscribed 2 s after the last collector leaves.
+`:shared` (`fail.still.android.data` and `fail.still.android.ui`) is what the
+pages are built on: the core's data and calls, with the generated `Shapes.kt`,
+`Operations.kt`, and the design system, with the generated `Icons.kt`. It sees
+`:core` but not the app, so the compiler keeps it below the pages: what it must
+tell the app (the bar's timing) goes through a hook the app sets
+(`TopicTiming`). `:app` has the pages and everything else.
 
 ## Desktop
 

@@ -105,7 +105,7 @@ function kotlin(): string {
 
 const made: [string, string][] = [
   [repo("web/src/core/operations.ts"), typescript()],
-  [repo("apps/android/app/src/main/kotlin/fail/still/android/data/Operations.kt"), kotlin()],
+  [repo("apps/android/shared/src/main/kotlin/fail/still/android/data/Operations.kt"), kotlin()],
 ];
 if (process.argv.includes("--check")) {
   const stale = made.filter(([path, text]) => readFileSync(path, "utf8") !== text);

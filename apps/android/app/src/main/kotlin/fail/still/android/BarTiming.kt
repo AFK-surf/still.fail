@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import fail.still.android.data.TopicTiming
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -74,7 +75,12 @@ object BarTiming {
         }
     }
 
-    fun start(context: Context) { this.context = context.applicationContext }
+    fun start(context: Context) {
+        this.context = context.applicationContext
+        TopicTiming.followed = ::followed
+        TopicTiming.decoded = ::decoded
+        TopicTiming.shown = ::shown
+    }
 
     /** Every touch of the activity: the last finger lifted is where a switch from the bar begins. */
     fun touched(e: MotionEvent) { if (e.actionMasked == MotionEvent.ACTION_UP) lastUp = e.eventTime * 1_000_000 }

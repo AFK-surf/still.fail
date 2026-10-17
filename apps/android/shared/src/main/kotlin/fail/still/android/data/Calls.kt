@@ -4,7 +4,7 @@
 package fail.still.android.data
 
 import android.util.Base64
-import fail.still.android.BuildConfig
+import fail.still.android.shared.BuildConfig
 import fail.still.core.CoreException
 import fail.still.core.StillFailCore
 import kotlinx.serialization.builtins.ListSerializer

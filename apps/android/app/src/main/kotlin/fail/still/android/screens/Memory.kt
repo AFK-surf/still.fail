@@ -142,7 +142,7 @@ fun MemoryScreen(current: WorkspaceEntry, address: String) {
 
 /** Whose a skill is, after its name: another station's, or shared from here. */
 private fun tagOf(skill: SkillFile, names: Map<String, String>): String? = when (skill.share?.role) {
-    "user" -> t("web-main.memory.share.from", "station" to (names[skill.share.host] ?: skill.share.host.take(8)))
+    "user" -> t("web-main.memory.share.from", "station" to skill.share?.host.orEmpty().let { names[it] ?: it.take(8) })
     "host" -> t("web-main.memory.share.shared")
     else -> null
 }

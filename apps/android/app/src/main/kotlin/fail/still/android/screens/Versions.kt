@@ -139,6 +139,7 @@ private fun VersionRow(v: SoftwareVersion, manager: Boolean, busy: Boolean, onUp
                     }
                 }
                 Row(Modifier.alignByBaseline().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    val latest = v.latest
                     when {
                         v.state == "updating" -> {
                             val percent = v.percent
@@ -153,12 +154,12 @@ private fun VersionRow(v: SoftwareVersion, manager: Boolean, busy: Boolean, onUp
                             action(t("common.retry"))
                         }
                         !v.installed -> action(t("android-misc.versions.install"))
-                        v.newer && v.latest != null -> {
-                            Latest(v.latest)
+                        v.newer && latest != null -> {
+                            Latest(latest)
                             action(t("android-misc.versions.update"))
                         }
-                        v.downgrade == true && v.latest != null -> {
-                            Latest(v.latest)
+                        v.downgrade == true && latest != null -> {
+                            Latest(latest)
                             action(t("android-misc.versions.backToStable"))
                         }
                     }

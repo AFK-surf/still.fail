@@ -18,7 +18,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
-import fail.still.android.R
+import fail.still.android.shared.R
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 

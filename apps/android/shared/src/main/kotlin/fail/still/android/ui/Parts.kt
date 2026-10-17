@@ -82,7 +82,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import fail.still.android.R
+import fail.still.android.shared.R
 import fail.still.android.data.ChatState
 import fail.still.android.data.Person
 import fail.still.android.data.Maker
@@ -122,7 +122,7 @@ fun MakerIcon(maker: Maker?, runtime: String?, size: Dp, modifier: Modifier = Mo
 
 /** A state badge: solid orange = block, a still hollow orange ring = at work, red = failed; done has none. Nothing blinks. */
 @Composable
-internal fun Badge(state: ChatState, size: Dp, ring: Dp, around: Color, modifier: Modifier = Modifier) {
+fun Badge(state: ChatState, size: Dp, ring: Dp, around: Color, modifier: Modifier = Modifier) {
     val c = C
     Canvas(modifier.size(size)) {
         val r = this.size.minDimension / 2
@@ -146,7 +146,7 @@ internal fun Badge(state: ChatState, size: Dp, ring: Dp, around: Color, modifier
  * quarter; nothing when done. No halo: the mark is small.
  */
 @Composable
-internal fun AgentStateMark(state: ChatState, around: Color, modifier: Modifier = Modifier) {
+fun AgentStateMark(state: ChatState, around: Color, modifier: Modifier = Modifier) {
     if (state == ChatState.Done) return
     val turn = if (state == ChatState.Running && !reducedMotion()) rememberInfiniteTransition(label = "agent-mark")
         .animateFloat(0f, 360f, infiniteRepeatable(tween(1200, easing = androidx.compose.animation.core.LinearEasing)), label = "turn").value else 0f

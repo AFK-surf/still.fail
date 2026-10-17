@@ -433,8 +433,9 @@ internal fun ProfileRow(station: String, p: Profile) {
             }
             Text(listOfNotNull(p.checkText, if (p.machine == true) t("android-settings.profile.machine") else p.usesText?.ifEmpty { null } ?: ACCESS_LABEL[p.access.kind] ?: p.access.kind, p.modelsText).joinToString(" · "),
                 fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (p.trouble != null) {
-                Text("${p.trouble.title} · ${p.trouble.detail}", fontSize = 13.sp, color = C.muted)
+            val problem = p.trouble
+            if (problem != null) {
+                Text("${problem.title} · ${problem.detail}", fontSize = 13.sp, color = C.muted)
                 Text(t("android-settings.profile.seeFix"), fontSize = 13.sp, color = C.accent)
             } else trouble?.let { Text(it, fontSize = 13.sp, color = C.muted) }
         }
@@ -493,17 +494,18 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
             if (p.trouble?.action != "quota") QuotaSection(address, p)
             if (s.overview?.sharing == true) ShareSection(current, s, p)
             if (!copy) WorkspacesSection(address, p)
-            if (!copy && p.fast != null) {
+            val fast = p.fast
+            if (!copy && fast != null) {
                 val busy = app.isDoing("profile.put", "station" to address, "id" to p.id)
                 SectionHeader(t("android-settings.profile.run"), start = 24.dp)
                 ListCard {
-                    ListRow(onClick = if (busy) null else ({ app.act(t("android-settings.profile.saveFast"), if (p.fast) t("android-settings.profile.fastOff") else t("android-settings.profile.fastOn")) { api.putProfile(p.id, buildJsonObject { put("fast", !p.fast) }) } })) {
+                    ListRow(onClick = if (busy) null else ({ app.act(t("android-settings.profile.saveFast"), if (fast) t("android-settings.profile.fastOff") else t("android-settings.profile.fastOn")) { api.putProfile(p.id, buildJsonObject { put("fast", !fast) }) } })) {
                         Column(Modifier.weight(1f)) {
                             Text(t("android-settings.profile.fast"), fontSize = 15.sp, color = C.ink)
                             Text(t("android-settings.profile.fastNote"), fontSize = 13.sp, color = C.muted)
                         }
                         DoingMark(busy, app.failedOf("profile.put", "station" to address, "id" to p.id))
-                        Switch(p.fast)
+                        Switch(fast)
                     }
                 }
             }
@@ -714,18 +716,18 @@ private fun QuotaSection(station: String, p: Profile) {
             Text(t("android-settings.quota.credits"), fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
             Text(text, fontSize = 13.sp, color = C.muted)
         } }
-        p.quota?.resetCount?.let { count -> ListRow(onClick = if (count <= 0 || resetting) null else ({
-            confirm(app, t("android-settings.quota.resetTitle"), t("android-settings.quota.resetText", "name" to p.name, "text" to p.quota.resetText), t("android-settings.quota.resetUse"), what = t("android-settings.quota.resetWhat")) {
+        p.quota?.let { quota -> quota.resetCount?.let { count -> ListRow(onClick = if (count <= 0 || resetting) null else ({
+            confirm(app, t("android-settings.quota.resetTitle"), t("android-settings.quota.resetText", "name" to p.name, "text" to quota.resetText), t("android-settings.quota.resetUse"), what = t("android-settings.quota.resetWhat")) {
                 app.api(station).resetQuota(p.id); app.toast = t("android-settings.quota.resetDone")
             }
         })) {
             Column(Modifier.weight(1f)) {
                 Text(t("android-settings.quota.resets"), fontSize = 15.sp, color = C.ink)
-                Text(p.quota.resetText ?: "", fontSize = 13.sp, color = C.muted)
+                Text(quota.resetText ?: "", fontSize = 13.sp, color = C.muted)
             }
             DoingMark(resetting, app.failedOf("profile.resetQuota", "station" to station, "id" to p.id))
             Text(t("android-settings.quota.reset"), fontSize = 14.sp, color = if (count > 0) C.accent else C.muted)
-        } }
+        } } }
     }
 }
 
@@ -860,23 +862,25 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
     var copied by remember { mutableStateOf(false) }
     val open = { url: String -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
     val waiting = @Composable { text: String -> WaitLine(text) }
+    val url = job?.url
+    val userCode = job?.userCode
     when {
         job == null || job.state == "starting" -> waiting(t("android-settings.login.making", "provider" to provider))
         job.state == "verifying" -> waiting(t("android-settings.login.finishing"))
         job.state == "done" -> waiting(t("android-settings.login.adding"))
-        job.state == "needs_approval" && job.url != null && job.userCode != null -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(job.userCode, fontSize = 22.sp, letterSpacing = 2.sp, fontFamily = CodeFont, color = C.ink,
+        job.state == "needs_approval" && url != null && userCode != null -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(userCode, fontSize = 22.sp, letterSpacing = 2.sp, fontFamily = CodeFont, color = C.ink,
                 modifier = Modifier.clip(Smooth(10.dp)).background(C.chip).padding(horizontal = 14.dp, vertical = 8.dp))
             Button(if (copied) t("android-settings.login.reopen") else t("android-settings.login.copyOpen"), primary = true) {
-                (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("still.fail", job.userCode))
-                copied = true; open(job.url)
+                (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("still.fail", userCode))
+                copied = true; open(url)
             }
             Text(t("android-settings.login.codexNote", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted)
         }
-        job.state == "needs_code" && job.url != null -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        job.state == "needs_code" && url != null -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row {
                 Text("1. ", fontSize = 13.sp, color = C.ink)
-                Text(t("android-settings.login.openPage"), fontSize = 13.sp, color = C.accent, modifier = Modifier.clickable { open(job.url) })
+                Text(t("android-settings.login.openPage"), fontSize = 13.sp, color = C.accent, modifier = Modifier.clickable { open(url) })
                 Text(t("android-settings.login.openPageRest", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.ink)
             }
             Text(t("android-settings.login.step2"), fontSize = 13.sp, color = C.ink)

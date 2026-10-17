@@ -546,7 +546,7 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
     val still = if (known.kind == PreviewKind.Video) remember(file.path) { FileViewers.thumbs[FileViewers.id(station, key, file.path)]?.picture?.invoke() ?: FileData.keptPicture("$fullId#still", 0) } else null
     val videoZoom = remember(file.path) { ZoomState(density) }
     LaunchedEffect(videoZoom, still) {
-        val sent = if (file.width != null && file.height != null && file.width > 0 && file.height > 0) IntSize(file.width.toInt(), file.height.toInt()) else null
+        val sent = sentSize(file)
         if (videoZoom.natural == null) (still?.let { IntSize(it.width, it.height) } ?: sent)?.let { videoZoom.fitNatural(it) }
     }
     flight.target = when (known.kind) {
@@ -889,7 +889,7 @@ private fun ImageStage(station: String, key: String, file: Attachment, bytes: By
         if (value == null) failed = true
     }
     LaunchedEffect(fullId, bytes, thumb) {
-        val sent = if (file.width != null && file.height != null && file.width > 0 && file.height > 0) IntSize(file.width.toInt(), file.height.toInt()) else null
+        val sent = sentSize(file)
         val read = bytes?.let { withContext(Dispatchers.Default) {
             val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeByteArray(it, 0, it.size, o)
@@ -1139,4 +1139,11 @@ private fun Modifier.drawBehindLine(color: Color) = drawBehind { drawLine(color,
 @Composable
 private fun Cell(text: String, width: Dp, weight: FontWeight?, color: Color) {
     Text(text, fontSize = 15.sp, fontWeight = weight, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(width).padding(horizontal = 16.dp, vertical = 8.dp))
+}
+
+/** The size the sender recorded, when it did. */
+private fun sentSize(file: Attachment): IntSize? {
+    val width = file.width ?: return null
+    val height = file.height ?: return null
+    return if (width > 0 && height > 0) IntSize(width.toInt(), height.toInt()) else null
 }

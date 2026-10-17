@@ -358,7 +358,7 @@ private fun Modifier.passVerticalDrags(dispatcher: NestedScrollDispatcher): Modi
 
 /** A visualization over the whole screen: the page as tall as the screen, its name and a close over it. */
 @Composable
-internal fun VizFull(name: String, html: String, state: JsonElement?, keep: (JsonElement) -> Unit, onClose: () -> Unit) {
+fun VizFull(name: String, html: String, state: JsonElement?, keep: (JsonElement) -> Unit, onClose: () -> Unit) {
     Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Box(Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.systemBars)) {
             Column(Modifier.fillMaxSize()) {
@@ -420,7 +420,7 @@ fun Mermaid(code: String) {
  * the stylesheet with what its widget kept (a whole page as written), and `script` (the preview's own page script)
  * inline ahead of the rest, as the page's CSP lets no script of the page's host in.
  */
-internal fun vizServed(context: Context, html: String, state: JsonElement?, dark: Boolean, script: String): String {
+fun vizServed(context: Context, html: String, state: JsonElement?, dark: Boolean, script: String): String {
     val doc = if (isFragment(html)) documentOf(context, html, state, dark) else pageDocument(context, html)
     val tag = "<script>" + script.replace("</script", "<\\/script") + "</script>"
     val at = Regex("<head[^>]*>", RegexOption.IGNORE_CASE).find(doc) ?: Regex("<html[^>]*>", RegexOption.IGNORE_CASE).find(doc)
@@ -428,7 +428,7 @@ internal fun vizServed(context: Context, html: String, state: JsonElement?, dark
 }
 
 /** What a visualization's page says to the app (its bridge's relay, StillFailViz): here only what its widget keeps. */
-internal class VizKeeper(private val keep: (JsonElement) -> Unit) {
+class VizKeeper(private val keep: (JsonElement) -> Unit) {
     @JavascriptInterface
     fun post(json: String) {
         val m = try { StillFailJson.parseToJsonElement(json).jsonObject } catch (_: Exception) { return }

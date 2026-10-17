@@ -396,8 +396,10 @@ private fun FileItem(station: String, key: String?, file: Attachment, onOpen: ()
  */
 fun imageBox(file: Attachment, least: Float = 16f): MediaSize {
     val ratio = ThumbHash.ratio(file.thumbhash)
+    val width = file.width
+    val height = file.height
     val (w, h) = when {
-        file.width != null && file.height != null && file.width > 0 && file.height > 0 -> file.width.toFloat() to file.height.toFloat()
+        width != null && height != null && width > 0 && height > 0 -> width.toFloat() to height.toFloat()
         ratio != null -> Math.round(160 * ratio).toFloat() to 160f
         else -> return MediaSize(240f, 160f)
     }

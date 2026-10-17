@@ -5,7 +5,7 @@ package fail.still.android.data
 
 import android.content.SharedPreferences
 import android.os.Build
-import fail.still.android.BuildConfig
+import fail.still.android.shared.BuildConfig
 import fail.still.core.CoreException
 import fail.still.core.StillFailCore
 import kotlinx.coroutines.flow.first

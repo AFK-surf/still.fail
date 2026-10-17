@@ -83,8 +83,9 @@ fun StationUpdateControl(station: String, notice: StationUpdateNotice?) {
                 }.padding(12.dp).width(width).shadow(12.dp, shape, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.08f)).clip(shape).background(Raised).padding(start = 14.dp, end = 10.dp, top = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            if (notice.station != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(notice.station, Modifier.weight(1f, fill = false), fontSize = 13.sp, lineHeight = 19.sp, fontWeight = FontWeight.Medium, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            val name = notice.station
+                            if (name != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(name, Modifier.weight(1f, fill = false), fontSize = 13.sp, lineHeight = 19.sp, fontWeight = FontWeight.Medium, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 notice.label?.let { Text(it, fontSize = 12.sp, lineHeight = 19.sp, color = accent, maxLines = 1) }
                             } else Text(notice.text, fontSize = 13.sp, lineHeight = 19.sp, fontWeight = FontWeight.Medium, color = C.ink)
                             notice.detail?.let { Text(it, fontSize = 12.sp, lineHeight = 17.sp, color = C.muted) }

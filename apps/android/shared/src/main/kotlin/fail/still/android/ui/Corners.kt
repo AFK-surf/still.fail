@@ -29,7 +29,7 @@ import kotlin.math.pow
 import kotlin.math.sin
 
 /** How much longer the smooth corner's radius is, and its exponent (CSS superellipse(1.5) is 2^1.5). */
-internal const val SMOOTH_SCALE = 1.25f
+const val SMOOTH_SCALE = 1.25f
 internal const val SMOOTH_EXPONENT = 2.8284271f
 
 /** The cubic pieces a corner is drawn in: at 12, nowhere a hundredth of a pixel off the curve over a radius of 200 pixels. */

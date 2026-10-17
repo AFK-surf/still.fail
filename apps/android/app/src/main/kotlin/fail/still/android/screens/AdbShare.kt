@@ -115,11 +115,12 @@ fun AdbShareScreen(current: WorkspaceEntry, address: String) {
                 ListRow(onClick = { if (here) app.act(t("android-misc.adb.stopWhat")) { app.core.call("adb.stop") } else start() }) {
                     Column(Modifier.weight(1f)) {
                         Text(t("android-misc.adb.title"), fontSize = 15.sp, color = C.ink)
+                        val stopped = view?.message?.takeIf { view.sharing == false }
                         val sub = when {
                             here -> state(view!!, now)
                             elsewhere -> t("android-misc.adb.elsewhere")
                             // Why it stopped by itself (its hour up, the station too old).
-                            view?.sharing == false && view.message != null -> view.message
+                            stopped != null -> stopped
                             else -> t("android-misc.adb.hour")
                         }
                         Text(sub, fontSize = 13.sp, color = if (here && view!!.adb in setOf("missing", "failed")) C.red else C.muted)

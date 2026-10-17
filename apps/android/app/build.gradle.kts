@@ -125,6 +125,7 @@ androidComponents { onVariants { it.sources.res?.addGeneratedSourceDirectory(sys
 dependencies {
     testImplementation(libs.junit)
     implementation(project(":core"))
+    implementation(project(":shared"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.ui)

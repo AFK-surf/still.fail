@@ -216,7 +216,7 @@ fun withRefs(text: String): AnnotatedString {
 /** The web's --muted (a quote's words). */
 internal val webMuted @Composable get() = if (C.dark) Color(0xFFA3A5A9) else Color(0xFF646970)
 /** The web's --subtle. */
-internal val webSubtle @Composable get() = if (C.dark) Color(0xFF8C8F94) else Color(0xFF73787D)
+val webSubtle @Composable get() = if (C.dark) Color(0xFF8C8F94) else Color(0xFF73787D)
 /** The web's --line (a table's rules). */
 internal val webLine @Composable get() = if (C.dark) Color(0xFF2D2E32) else Color(0xFFE3E1DE)
 /** A table's ground: the text at 2% in the canvas. */
@@ -311,7 +311,7 @@ private fun piecesOf(node: Node, ctx: Ctx, tight: Boolean, task: Boolean?): List
 private fun lh(size: Float): TextUnit = (size * 1.65f).sp
 
 /** The ink of the words here: a quote's words are the web's muted. */
-internal val LocalMdInk = androidx.compose.runtime.compositionLocalOf<Color?> { null }
+val LocalMdInk = androidx.compose.runtime.compositionLocalOf<Color?> { null }
 
 /**
  * A paragraph; with files placed, one that is only a link to one of them is that file shown (a line of its own), and

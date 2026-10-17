@@ -71,11 +71,11 @@ private fun <T> follow(core: StillFailCore, topic: JsonObject, serializer: KSeri
         try {
             @Suppress("UNCHECKED_CAST")
             Topic(state.value?.takeIf { it !is JsonNull }?.let { if (chat != null) chat.read(it) as T else if (chats != null) chats.read(it) as T else decode(serializer, it) }, state.error, state.loading)
-                .also { fail.still.android.BarTiming.decoded(topic, arrived, state.value, state.error != null) }
+                .also { TopicTiming.decoded(topic, arrived, state.value, state.error != null) }
         } catch (e: CoreException) {
             // What this app cannot read is its bug or the core's: recorded with the rest of the trace, not only shown.
             core.reportError("android.decode", "${topic["topic"]}: ${e.message}")
-            fail.still.android.BarTiming.decoded(topic, arrived, state.value, true)
+            TopicTiming.decoded(topic, arrived, state.value, true)
             Topic(null, e, false)
         }
     }
@@ -156,14 +156,14 @@ class PageTopics {
         if (f != null) {
             // Paused (its page switched away from): followed again from what it last showed.
             if (!f.job.isActive) {
-                fail.still.android.BarTiming.followed(topic, f.state.value.value != null)
-                f.job = scope.launch { followShown(core, topic, serializer, f.state.value as Topic<T>) { f.state.value = it; fail.still.android.BarTiming.shown(topic, it.value, it.error != null) } }
+                TopicTiming.followed(topic, f.state.value.value != null)
+                f.job = scope.launch { followShown(core, topic, serializer, f.state.value as Topic<T>) { f.state.value = it; TopicTiming.shown(topic, it.value, it.error != null) } }
             }
             return f.state as State<Topic<T>>
         }
         val state = mutableStateOf(latestOf(topic, serializer))
-        fail.still.android.BarTiming.followed(topic, state.value.value != null)
-        val job = scope.launch { followShown(core, topic, serializer, state.value) { state.value = it; fail.still.android.BarTiming.shown(topic, it.value, it.error != null) } }
+        TopicTiming.followed(topic, state.value.value != null)
+        val job = scope.launch { followShown(core, topic, serializer, state.value) { state.value = it; TopicTiming.shown(topic, it.value, it.error != null) } }
         followed[key] = Followed(state as MutableState<Topic<*>>, job)
         return state as State<Topic<T>>
     }

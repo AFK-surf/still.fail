@@ -62,7 +62,7 @@ class Follow(val list: LazyListState, private val margin: Int) {
     /** Someone else moved the list since it was last at rest. */
     internal var touched = false
     /** How many of its own scrolls are going (snapshot state: read with the list's scrolling). */
-    internal var own by mutableStateOf(0)
+    var own by mutableStateOf(0)
 
     private suspend fun <T> mine(block: suspend () -> T): T {
         own++

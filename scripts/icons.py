@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "design/icons"
 STATION = ROOT / "design/station-icons"
 WEB = ROOT / "web/ui/src/icons.tsx"
-ANDROID = ROOT / "apps/android/app/src/main/kotlin/fail/still/android/ui/Icons.kt"
+ANDROID = ROOT / "apps/android/shared/src/main/kotlin/fail/still/android/ui/Icons.kt"
 NS = "{http://www.w3.org/2000/svg}"
 
 
