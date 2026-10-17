@@ -165,6 +165,8 @@ sealed interface Screen {
     /** The workspace's security mode (its lock), and turning it on. */
     data object Security : Screen { override val id = "security" }
     data object SecurityOpen : Screen { override val id = "security/open" }
+    /** The workspace's vault: its items, the agents' requests waiting, turning it on (screens/Vault.kt). */
+    data object Vault : Screen { override val id = "vault" }
     /** A connect of a station; how it runs; a new one on a station. */
     data class Connect(val station: String, val connect: String) : Screen { override val id = "connect/$station/$connect" }
     data class ConnectRun(val station: String, val connect: String) : Screen { override val id = "connect-run/$station/$connect" }
@@ -929,6 +931,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     Screen.Workspace -> fail.still.android.screens.WorkspaceScreen(current)
                     Screen.Security -> fail.still.android.screens.SecurityScreen(current)
                     Screen.SecurityOpen -> fail.still.android.screens.SecurityOpenScreen(current)
+                    Screen.Vault -> fail.still.android.screens.VaultScreen(current)
                     is Screen.Preview -> fail.still.android.screens.PreviewScreen(screen.station, screen.job)
                     is Screen.PreviewFile -> fail.still.android.screens.PreviewFileScreen(screen.station, screen.session, screen.path, screen.name)
                     is Screen.Connect -> fail.still.android.screens.ConnectScreen(screen.station, screen.connect)

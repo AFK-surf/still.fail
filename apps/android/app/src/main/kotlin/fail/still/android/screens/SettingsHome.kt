@@ -122,6 +122,7 @@ fun SettingsScreen(current: WorkspaceEntry) {
             lock.value?.takeIf { it.available }?.let { l ->
                 GoRow(t("web-pages.security.title"), if (!l.locked) t("web-mobile.settings.securityOff") else if (l.attention > 0u) t("web-mobile.settings.securityWaiting", "n" to l.attention.toInt()) else t("web-mobile.settings.securityOn"), bad = l.attention > 0u) { app.push(Screen.Security) }
             }
+            VaultSettingsRow(current.workspace.id)
             GoRow("Station", stations?.let { t("android-settings.home.online", "online" to online, "total" to it.size) }, dot = troubled) { app.push(Screen.Stations) }
             GoRow(t("android-settings.connects.title"), connects?.let { if (failing > 0) t("android-settings.home.failing", "n" to failing) else t("android-settings.count", "n" to it.items.size) }, bad = failing > 0) { app.push(Screen.Connects()) }
             GoRow("Profile", stations?.let { if (short > 0) t("android-settings.home.short", "n" to short) else t("android-settings.count", "n" to profiles.size) }, bad = short > 0) { app.push(Screen.Profiles()) }

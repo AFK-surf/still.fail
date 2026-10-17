@@ -237,7 +237,13 @@ internal fun DecisionUnder(ctx: Here, m: ChatMessage) {
         ) {
             Column {
                 card?.assigneeText?.let { Text(it, fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle(), modifier = Modifier.padding(top = 2.dp)) }
-            DecisionOptions(
+            // An agent's request for a vault item: approved here (Vault.kt), not answered in the chat.
+            val vault = card?.vault
+            if (vault != null) {
+                val me = ctx.view.me.email
+                val who = card?.assignee
+                VaultApproval(station.substringBefore('/'), vault, mine = who == null || me == null || who.equals(me, ignoreCase = true), Modifier.padding(top = 6.dp))
+            } else DecisionOptions(
                 options, Modifier.padding(top = 6.dp),
                 enabled = !ctx.view.offline && ctx.view.archived != true, busy = busy,
             ) { o -> if (!resolved) app.act(t("android-misc.decisions.answerWhat")) { app.api(station).answerDecision(m.thread, m.seq, o.label) } }
@@ -637,7 +643,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
             }
             // Under the post, as in its chat: its options, or (a card this app does not know) the way to answer it there.
             when (type) {
-                "options" -> DecisionOptions(card?.options ?: item.options, onPick = onPick)
+                // An agent's request for a vault item: approved here (Vault.kt); the 奏 page's are the viewer's.
+                "options" -> card?.vault?.let { VaultApproval(item.station.substringBefore('/'), it, mine = true) } ?: DecisionOptions(card?.options ?: item.options, onPick = onPick)
                 "text" -> {}
                 else -> Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(t("android-misc.decisions.replyInChat"), fontSize = 13.sp, color = C.muted)

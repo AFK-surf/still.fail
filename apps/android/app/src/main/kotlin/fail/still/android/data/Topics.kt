@@ -311,6 +311,10 @@ object Topics {
     /** The workspace's security mode (its lock), and what turning it on would sign (client/core-ts/src/views/lock.ts). */
     fun lock(workspace: String) = buildJsonObject { put("topic", "lock"); put("workspace", workspace) }
     fun lockDraft(workspace: String) = buildJsonObject { put("topic", "lockDraft"); put("workspace", workspace) }
+    /** The workspace's vaults as the viewer sees them, and the agents' requests waiting on them (client/core-ts/src/views/vault.ts). */
+    fun vaults(workspace: String) = buildJsonObject { put("topic", "vaults"); put("workspace", workspace) }
+    /** A vault's items: their names once it is unlocked on this device, else the listed ones' (Vault.kt). */
+    fun vaultItems(workspace: String, vault: String) = buildJsonObject { put("topic", "vaultItems"); put("workspace", workspace); put("vault", vault) }
     /** What is written to a chat on this device until sent (`chat`: its key, `thread:<id>`, or `new`; Drafts). */
     fun draft(station: String, chat: String) = buildJsonObject { put("topic", "draft"); put("station", station); put("chat", chat) }
     /**

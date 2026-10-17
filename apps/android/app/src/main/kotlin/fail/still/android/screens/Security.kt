@@ -74,15 +74,15 @@ private fun AppState.lockCall(workspace: String, name: String, what: String, don
     act(what, done) { core.call("lock.$name", buildJsonObject { put("workspace", workspace); params.forEach { (k, v) -> put(k, v) } }) }
 
 @Composable
-private fun Dot(on: Boolean, warn: Boolean = false) =
+internal fun Dot(on: Boolean, warn: Boolean = false) =
     Box(Modifier.size(7.dp).background(if (on) C.green else if (warn) C.warn else C.line, CircleShape))
 
 @Composable
-private fun Body(content: @Composable () -> Unit) =
+internal fun Body(content: @Composable () -> Unit) =
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { content() }
 
 @Composable
-private fun Para(main: String, sub: String? = null) = Column {
+internal fun Para(main: String, sub: String? = null) = Column {
     Text(main, fontSize = 15.sp, lineHeight = 22.sp, color = C.ink)
     if (sub != null) Text(sub, fontSize = 15.sp, lineHeight = 22.sp, color = C.subtle)
 }
@@ -92,7 +92,7 @@ private fun Note(text: String) = Text(text, fontSize = 12.sp, lineHeight = 18.sp
 
 /** A main action as wide as where it is (the screen's foot, a sheet's half). */
 @Composable
-private fun WideButton(label: String, primary: Boolean, modifier: Modifier = Modifier, busy: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun WideButton(label: String, primary: Boolean, modifier: Modifier = Modifier, busy: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
     val on = enabled && !busy
     Row(
         modifier.height(46.dp).clip(RoundedCornerShape(23.dp)).background(if (primary) (if (!enabled) C.line else C.ink) else C.chip).clickable(enabled = on, onClick = onClick),
@@ -105,7 +105,7 @@ private fun WideButton(label: String, primary: Boolean, modifier: Modifier = Mod
 
 /** The page's main action along the bottom of the screen, as wide as it; the page scrolls above it. */
 @Composable
-private fun Foot(note: String? = null, content: @Composable () -> Unit) = Column(
+internal fun Foot(note: String? = null, content: @Composable () -> Unit) = Column(
     Modifier.fillMaxWidth().background(C.bg).windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 16.dp, vertical = 10.dp),
     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
 ) {
