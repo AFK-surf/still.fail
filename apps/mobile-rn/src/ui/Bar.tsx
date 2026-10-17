@@ -531,30 +531,40 @@ function move(m: BarModel, p: { x: number; y: number }): boolean {
   return true;
 }
 
-function up(m: BarModel, p: { x: number; y: number }) {
+/** How far the rows are from where they rest as the panel opens: a little low, then up with its overshoot. */
+function rowsShift(m: BarModel, g: Geo): number {
   "worklet";
+  const v = m.o.value;
+  return (1 - Math.min(1, v)) * 14 - Math.max(0, v - 1) * g.reach;
+}
+
+/** How the rows show as the panel opens: they come in over 0.35 to 1. */
+function rowsAlpha(m: BarModel): number {
+  "worklet";
+  return clamp((m.o.value - 0.35) / 0.65, 0, 1);
+}
+
+/**
+ * Another bar chosen (and a place in it, when one was tapped): it is the bar, and the place opens, now; the panel
+ * closes like a window over a stack of bars, the chosen one sliding down into the bar's place, as the panel's openness
+ * goes to 0 from where it is. The stack starts as the rows and the bar were drawn (their fade, offset and how lit each
+ * place was), and comes to the bar's look as it lands.
+ */
+function pick(m: BarModel, i: number, key: string | null) {
+  "worklet";
+  if (m.swap != null) return;
   const g = m.geo;
-  if (g == null) { lost(m); return; }
-  // Lifted as a bar chosen was landing (or before the finger was its own): nothing.
-  if (m.waits) { m.waits = false; return; }
-  const had = m.holds;
-  m.holds = false;
-  if (!m.dragging) {
-    // A tap; the panel's and nothing tapped there: it goes on as it was going.
-    if (!tap(m, p) && had) m.mode = m.o.target > 0.5;
-    return;
-  }
-  m.dragging = false;
-  m.drag = null;
-  m.dragY = null;
-  if (had) {
-    letGo(m, g, p);
-    return;
-  }
-  if (g.items.length === 0) return;
-  const j = Math.min(g.items.length - 1, nearest(finalOf(g, m.mode), 4, p.x));
-  if (m.mode) openPanel(m, false);
-  if (g.items[j] !== g.active) m.out.push({ tab: g.items[j]! });
+  if (g == null) return;
+  const n = g.others.indexOf(i);
+  if (n < 0) return;
+  const lit: Record<string, number> = {};
+  for (const id in m.tints) lit[id] = m.tints[id]!.value;
+  m.swap = { i, n, from: Math.max(0.2, m.o.value), key, laid: geoOf(g.w, g.sets, g.cur, null, false), alpha: rowsAlpha(m), drop: rowsShift(m, g), lit, still: !springMoving(m.o) };
+  m.swapSeq += 1;
+  m.swapId = m.swapSeq;
+  m.mode = false;
+  springTo(m.o, 0, 200, 28);
+  m.out.push({ switch: i, key });
 }
 
 /**
@@ -613,40 +623,30 @@ function tap(m: BarModel, p: { x: number; y: number }): boolean {
   return true;
 }
 
-/** How far the rows are from where they rest as the panel opens: a little low, then up with its overshoot. */
-function rowsShift(m: BarModel, g: Geo): number {
+function up(m: BarModel, p: { x: number; y: number }) {
   "worklet";
-  const v = m.o.value;
-  return (1 - Math.min(1, v)) * 14 - Math.max(0, v - 1) * g.reach;
-}
-
-/** How the rows show as the panel opens: they come in over 0.35 to 1. */
-function rowsAlpha(m: BarModel): number {
-  "worklet";
-  return clamp((m.o.value - 0.35) / 0.65, 0, 1);
-}
-
-/**
- * Another bar chosen (and a place in it, when one was tapped): it is the bar, and the place opens, now; the panel
- * closes like a window over a stack of bars, the chosen one sliding down into the bar's place, as the panel's openness
- * goes to 0 from where it is. The stack starts as the rows and the bar were drawn (their fade, offset and how lit each
- * place was), and comes to the bar's look as it lands.
- */
-function pick(m: BarModel, i: number, key: string | null) {
-  "worklet";
-  if (m.swap != null) return;
   const g = m.geo;
-  if (g == null) return;
-  const n = g.others.indexOf(i);
-  if (n < 0) return;
-  const lit: Record<string, number> = {};
-  for (const id in m.tints) lit[id] = m.tints[id]!.value;
-  m.swap = { i, n, from: Math.max(0.2, m.o.value), key, laid: geoOf(g.w, g.sets, g.cur, null, false), alpha: rowsAlpha(m), drop: rowsShift(m, g), lit, still: !springMoving(m.o) };
-  m.swapSeq += 1;
-  m.swapId = m.swapSeq;
-  m.mode = false;
-  springTo(m.o, 0, 200, 28);
-  m.out.push({ switch: i, key });
+  if (g == null) { lost(m); return; }
+  // Lifted as a bar chosen was landing (or before the finger was its own): nothing.
+  if (m.waits) { m.waits = false; return; }
+  const had = m.holds;
+  m.holds = false;
+  if (!m.dragging) {
+    // A tap; the panel's and nothing tapped there: it goes on as it was going.
+    if (!tap(m, p) && had) m.mode = m.o.target > 0.5;
+    return;
+  }
+  m.dragging = false;
+  m.drag = null;
+  m.dragY = null;
+  if (had) {
+    letGo(m, g, p);
+    return;
+  }
+  if (g.items.length === 0) return;
+  const j = Math.min(g.items.length - 1, nearest(finalOf(g, m.mode), 4, p.x));
+  if (m.mode) openPanel(m, false);
+  if (g.items[j] !== g.active) m.out.push({ tab: g.items[j]! });
 }
 
 /**
@@ -761,24 +761,6 @@ function arcTo(p: P, l: number, t: number, r: number, b: number, start: number, 
   }
 }
 
-/** The rounded bar (or panel) `w`×`h` with the notch cut into its top edge: a circle of radius `r` about (cx, cy). */
-function outline(w: number, h: number, cx: number, cy: number, r: number): string {
-  "worklet";
-  const p: P = { d: "", empty: true };
-  const rad = Math.min(RAD, h / 2);
-  moveTo(p, 0, rad);
-  arcTo(p, 0, 0, 2 * rad, 2 * rad, 180, 90);
-  notch(p, cx, cy, r, FILLET, false);
-  lineTo(p, w - rad, 0);
-  arcTo(p, w - 2 * rad, 0, w, 2 * rad, 270, 90);
-  lineTo(p, w, h - rad);
-  arcTo(p, w - 2 * rad, h - 2 * rad, w, h, 0, 90);
-  lineTo(p, rad, h);
-  arcTo(p, 0, h - 2 * rad, 2 * rad, h, 90, 90);
-  p.d += "Z";
-  return p.d;
-}
-
 /**
  * The cut a notch makes in a top edge at y 0: a circle of radius `r` about (cx, c0), met by the edge through two fillets
  * of radius `f` (each touching the edge and the circle). Adds it to `p` from the edge's left meeting to its right
@@ -810,6 +792,24 @@ function notch(p: P, cx: number, c0: number, r: number, f: number, alone: boolea
   while (sweep > 360) sweep -= 360;
   arcTo(p, rr - f, 0, rr + f, 2 * f, a2, sweep);
   return true;
+}
+
+/** The rounded bar (or panel) `w`×`h` with the notch cut into its top edge: a circle of radius `r` about (cx, cy). */
+function outline(w: number, h: number, cx: number, cy: number, r: number): string {
+  "worklet";
+  const p: P = { d: "", empty: true };
+  const rad = Math.min(RAD, h / 2);
+  moveTo(p, 0, rad);
+  arcTo(p, 0, 0, 2 * rad, 2 * rad, 180, 90);
+  notch(p, cx, cy, r, FILLET, false);
+  lineTo(p, w - rad, 0);
+  arcTo(p, w - 2 * rad, 0, w, 2 * rad, 270, 90);
+  lineTo(p, w, h - rad);
+  arcTo(p, w - 2 * rad, h - 2 * rad, w, h, 0, 90);
+  lineTo(p, rad, h);
+  arcTo(p, 0, h - 2 * rad, 2 * rad, h, 90, 90);
+  p.d += "Z";
+  return p.d;
 }
 
 /** A rounded rectangle `w`×`h` of corner `r` (the ball's stadium, the action's circle). */
