@@ -1,0 +1,16 @@
+// Views the app draws natively: Smooth, a box with still.fail's corners (ui/Corners.kt), clipping what it holds.
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'fail.still.rn'
+version = '0.1.0'
+
+android {
+  namespace "fail.still.rn.ui"
+  defaultConfig {
+    versionCode 1
+    versionName '0.1.0'
+  }
+}

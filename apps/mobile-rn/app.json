@@ -34,12 +34,17 @@
         "expo-build-properties",
         {
           "android": {
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "minSdkVersion": 30
           }
         }
-      ]
+      ],
+      "expo-localization"
     ],
-    "scheme": "stillfailrn",
+    "scheme": [
+      "stillfailrn",
+      "ember"
+    ],
     "runtimeVersion": "1",
     "updates": {
       "url": "http://10.0.2.2:8090/manifest",

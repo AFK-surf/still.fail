@@ -1,0 +1,31 @@
+// The core for the React Native app: apps/android/core as an AAR (scripts/core-android.sh puts it in repo/, a Maven
+// layout, with its dependencies in its POM), behind StillfailCoreModule.
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'fail.still.rn'
+version = '0.1.0'
+
+// The app resolves it with the rest of its dependencies, from the repositories of every project.
+def coreRepo = "$projectDir/repo"
+rootProject.allprojects { repositories { maven { url = uri(coreRepo) } } }
+
+android {
+  namespace "fail.still.rn.core"
+  defaultConfig {
+    versionCode 1
+    versionName '0.1.0'
+  }
+  // fbjni (Hermes's) brings its own copy of the C++ runtime, and the core's engine its jsi beside React Native's.
+  packagingOptions {
+    pickFirst '**/libc++_shared.so'
+    pickFirst '**/libjsi.so'
+    pickFirst '**/libhermes.so'
+  }
+}
+
+dependencies {
+  implementation 'fail.still:core:0.1.0'
+}

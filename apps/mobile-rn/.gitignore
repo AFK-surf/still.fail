@@ -44,3 +44,11 @@ yarn-error.*
 /ios
 /android
 /dist
+
+# the core as an AAR (scripts/core-android.sh)
+/modules/stillfail-core/android/repo
+
+/build.log
+/gradle.log
+/export.log
+/shots

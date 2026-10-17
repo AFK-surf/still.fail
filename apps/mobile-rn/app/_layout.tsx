@@ -1,3 +1,4 @@
+import "../src/core";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { checkOta } from "../src/ota";
