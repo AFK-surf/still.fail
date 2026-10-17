@@ -43,7 +43,8 @@ try {
   const steady = async (page) => {
     let was = null;
     for (let i = 0; i < 20; i++) {
-      const now = JSON.stringify((await page.evaluate(drawn)).lines);
+      const { lines, loops } = await page.evaluate(drawn);
+      const now = JSON.stringify(lines.filter((l) => { const at = l.split(' ')[0]; return !loops.some((x) => at === x || at.startsWith(`${x}>`)); }));
       if (now === was) return;
       was = now;
       await page.waitForTimeout(150);
@@ -87,22 +88,32 @@ try {
     return { page, errors, reached };
   };
   const take = async (story) => {
-    const { page, errors, reached } = await open(story, 'no-preference');
+    // With motion and with motion reduced side by side, from the same moment (the demo's chats go on as time does).
+    const [{ page, errors, reached }, still] = await Promise.all([open(story, 'no-preference'), open(story, 'reduce')]);
     if (reached) {
       const c = await page.evaluate(corners);
       const p = await page.evaluate(panels);
       for (const w of [...c.wrong, ...p.wrong]) wrong.push(`${story.id}: ${w}`);
-      // With motion reduced, drawn as it is with motion (what loops in either left out).
-      await steady(page);
-      const moving = await page.evaluate(drawn);
-      const still = await open(story, 'reduce');
+      // With motion reduced, drawn as it is with motion: both still, then read in the same moment; what loops in either
+      // (and what is in it) left out.
       if (still.reached) {
-        await steady(still.page);
-        const resting = await still.page.evaluate(drawn, moving.loops);
-        const looping = new Set(resting.loops);
-        const a = moving.lines.filter((l) => !looping.has(l.split(' ')[0])), b = new Set(resting.lines);
-        const only = (x, y) => x.filter((l) => !y.has(l));
-        const differs = [...only(a, b).map((l) => `with motion ${l}`), ...only(resting.lines, new Set(a)).map((l) => `motion reduced ${l}`)];
+        const compare = async () => {
+          await Promise.all([steady(page), steady(still.page)]);
+          const [moving, resting] = await Promise.all([page.evaluate(drawn), still.page.evaluate(drawn)]);
+          const loops = [...moving.loops, ...resting.loops];
+          const shown = (lines) => lines.filter((l) => { const at = l.split(' ')[0]; return !loops.some((x) => at === x || at.startsWith(`${x}>`)); });
+          const a = shown(moving.lines), b = shown(resting.lines);
+          const only = (x, y) => { const has = new Set(y); return x.filter((l) => !has.has(l)); };
+          return [...only(a, b).map((l) => `with motion ${l}`), ...only(b, a).map((l) => `motion reduced ${l}`)];
+        };
+        // What differs only for a while (the demo's chats go on; what follows a motion comes sooner without it) is not
+        // a difference: only what still does a moment later.
+        let differs = await compare();
+        if (differs.length) {
+          await page.waitForTimeout(1500);
+          const again = new Set(await compare());
+          differs = differs.filter((l) => again.has(l));
+        }
         if (differs.length) wrong.push(`${story.id}: drawn otherwise with motion reduced (${differs.length} line(s)): ${differs.slice(0, 6).join('; ')}`);
         if (out && differs.length) {
           await still.page.screenshot({ path: `${out}/${story.id}-reduced.png` });
@@ -133,6 +144,7 @@ try {
     }
     for (const e of errors) console.log(`${story.id}: page error ${e}`);
     await page.close();
+    if (!still.page.isClosed()) await still.page.close();
   };
   // Several at once, each in a page of its own.
   const queue = [...stories];

@@ -114,7 +114,7 @@
   "web-pages.appearance.theme.title": "主题",
   "web-pages.appearance.title": "外观",
   "web-pages.appearance.motion.title": "动画",
-  "web-pages.appearance.motion.description": "减少后，页面切换、消息出现、面板展开等都直接到位，不再滑动或缩放，转圈也会慢下来。跟随系统时按系统的「减弱动态效果」设置。只对这台设备生效。",
+  "web-pages.appearance.motion.description": "减少后，页面切换、消息出现、面板展开等都直接到位，不再滑动或缩放，转圈也会慢下来。跟随系统时按系统的动画设置。只对这台设备生效。",
   "web-pages.appearance.motion.system": "跟随系统",
   "web-pages.appearance.motion.reduce": "减少",
   "web-pages.appearance.motion.full": "不减少",

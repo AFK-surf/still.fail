@@ -50,7 +50,7 @@
 
 减少动效只是同一个时钟走得快：页面走同一条路，每个动效的时长都是 0，结束时的样子和结束后要做的事（移除、回调、焦点）跟不减少时完全一样。不给某一处另写一份「减少版」。
 
-- web：样式由 `styles/global.css.ts` 把所有动画和过渡压到 1ms、只播一遍；`motion` 库由 `MotionGlobalConfig.instantAnimations`（`followMotion` 设）；`el.animate` 一律走 `play`，等动效的计时走 `motionMs`，跟着列表滑的走 `glideShare`（都在 `web/ui/src/motion.ts`）。`check.sh` 的「reduced motion as one clock」拦脚本里直接读 `reducedMotion()` 或调 `.animate(`。
+- web：样式由 `styles/global.css.ts` 把所有动画压到 1ms、只播一遍，过渡直接到位（不是 1ms：每个元素的 `transition-property` 默认是 `all`，1ms 会让所有属性都过渡一帧，重新显示的东西会空一帧）；`motion` 库由 `MotionGlobalConfig.instantAnimations`（`followMotion` 设）；`el.animate` 一律走 `play`，等动效的计时走 `motionMs`，跟着列表滑的走 `glideShare`（都在 `web/ui/src/motion.ts`）。`check.sh` 的「reduced motion as one clock」拦脚本里直接读 `reducedMotion()` 或调 `.animate(`。
 - 安卓：`ui/Motion.kt` 的 `Motion` 把这台设备的设置（prefs `motion`，没设就跟系统的动画时长缩放，变了就跟着变）做成整个 app 的 `MotionDurationScale`，减少时为 0；底栏自己的逐帧弹簧读同一个时钟，减少时直接到目标。页面里不写「减少时」分支。
 - 只有两种东西要自己的静止样子，各用一个共用写法：
   - 一直循环的（转圈、呼吸）：给一个静止的样子（转圈慢到 2.4s，呼吸停在平静时，不知道总量的进度条整条 35% 透明）。web 是 `styles/still.ts` 的 `stillLoop`，安卓是 `rememberLoop`；

@@ -83,7 +83,7 @@ Object.assign(window, { sendFlight(replace: boolean, older: boolean) {
     } else assert.equal(flying.length, 0);
     const after = samples.filter(s => s.shown && s.t > (flying.at(-1)?.t ?? 0));
     assert(after.length > 0);
-    assert(after.every(s => s.visibility === 'visible' && s.opacity === 1), 'no blank frame or second fade at handoff');
+    assert(after.every(s => s.visibility === 'visible' && s.opacity === 1), `no blank frame or second fade at handoff (${reducedMotion}: ${JSON.stringify(samples)})`);
     console.log('PASS', reducedMotion, replace ? 'receipt replaces row' : 'receipt keeps row', older ? 'older row made first' : '');
     await page.close();
   }

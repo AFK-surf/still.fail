@@ -222,11 +222,13 @@ globalStyle('input[type="checkbox"]:focus-visible', { outline: `2px solid ${vars
 globalStyle("code, pre", { fontFamily: vars.fontMono });
 globalStyle("[hidden]", { display: "none !important" });
 /**
- * Motion reduced (styles/still.ts): every animation and transition in 1ms, once; the same path to the same end, its end
- * events as ever. A loop says where it rests (stillLoop): once in 1ms it stands as it is without it.
+ * Motion reduced (styles/still.ts): every animation in 1ms, once, its end and its end events as ever; every transition
+ * none, its change there at once (after its delay, if it has one). Not 1ms for transitions: with every element's
+ * `transition-property: all`, everything would go over 1ms, and a thing shown again (visibility) stayed hidden for
+ * the frame the change was in. A loop says where it rests (stillLoop): once in 1ms it stands as it is without it.
  */
 globalStyle(`${STILL} *, ${STILL} *::before, ${STILL} *::after`, {
-  animationDuration: "1ms !important", animationIterationCount: "1 !important", transitionDuration: "1ms !important",
+  animationDuration: "1ms !important", animationIterationCount: "1 !important", transitionDuration: "0s !important",
 });
 /** The app starting: the buddy floats; what it waits for comes up only if it takes a while. */
 globalStyle(".splash", {

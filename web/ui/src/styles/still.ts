@@ -2,10 +2,11 @@
 // as the system asks. A rule for it is a selector under STILL (`${STILL} &`), not `@media (prefers-reduced-motion)`,
 // which the setting could not change.
 //
-// It changes how things move, never where they end: every animation and transition takes 1ms, once (global.css.ts),
-// the same path to the same end, its end events as they were. A rule here says only what that cannot: a loop's rest
-// (`stillLoop`), a flash's time (`stillFlash`), a choreography's waits (`stillAtOnce`). Not `animation: none` or
-// `transition: none` for what comes, goes or slides: the 1ms does it, and lands where the full one does.
+// It changes how things move, never where they end: every animation takes 1ms, once, and every transition none
+// (global.css.ts): the same path to the same end, an animation's end events as they were. A rule here says only what
+// that cannot: a loop's rest (`stillLoop`), a flash's time (`stillFlash`), a choreography's waits (`stillAtOnce`). Not
+// `animation: none` or `transition: none` for what comes, goes or slides: the page's does it, and lands where the full
+// one does.
 export const STILL = ":root[data-reduced-motion]";
 
 /**

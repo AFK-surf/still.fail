@@ -123,7 +123,7 @@
   "web-pages.appearance.theme.title": "Theme",
   "web-pages.appearance.title": "Appearance",
   "web-pages.appearance.motion.title": "Motion",
-  "web-pages.appearance.motion.description": "Reduced: pages, new messages and panels appear in place instead of sliding or scaling, and spinners slow down. System follows your system's Reduce motion setting. This device only.",
+  "web-pages.appearance.motion.description": "Reduced: pages, new messages and panels appear in place instead of sliding or scaling, and spinners slow down. System follows your system's animation setting. This device only.",
   "web-pages.appearance.motion.system": "System",
   "web-pages.appearance.motion.reduce": "Reduced",
   "web-pages.appearance.motion.full": "Full",
