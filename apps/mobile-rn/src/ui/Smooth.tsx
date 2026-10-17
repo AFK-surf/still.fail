@@ -24,7 +24,7 @@ export const smoothMiddle = (radius: number) => radius * SMOOTH_SCALE * (1 - Mat
 type Radii = number | [topLeft: number, topRight: number, bottomRight: number, bottomLeft: number];
 
 interface NativeProps extends ViewProps { radii: number[]; amount: number; strokeWidth: number; strokeColor?: string }
-const NativeSmooth = Platform.OS === "android" ? requireNativeView<NativeProps>("StillfailUi") : null;
+const NativeSmooth = Platform.OS === "android" || Platform.OS === "ios" ? requireNativeView<NativeProps>("StillfailUi") : null;
 
 export interface SmoothProps extends ViewProps {
   radius: Radii;
