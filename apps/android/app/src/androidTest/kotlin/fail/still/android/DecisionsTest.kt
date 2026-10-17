@@ -113,7 +113,7 @@ class DecisionsTest {
     private fun page(dark: Boolean = false): Harness {
         val h = Harness(rule)
         freshDrafts(h)
-        h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(listOf(first, second), 2u, loading = false, wait = Fixtures.NO_WAIT))
+        h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(listOf(first, second), 2u, wait = Fixtures.NO_WAIT))
         h.launch(listOf(Screen.Home, Screen.Decisions), dark)
         return h
     }
@@ -189,7 +189,7 @@ class DecisionsTest {
     // With none left the page stays, for the next to come.
     @Test fun emptyQueueStays() {
         val h = page()
-        h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, loading = false, wait = Fixtures.NO_WAIT))
+        h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, wait = Fixtures.NO_WAIT))
         h.settle()
         rule.runOnIdle { assertEquals(listOf(Screen.Home, Screen.Decisions), h.app.stack) }
         rule.onNodeWithText("奏折已全部批完").assertExists()
@@ -199,7 +199,7 @@ class DecisionsTest {
     @Test fun emptyQueueSaysTheDay() {
         val h = page()
         val view = DecisionsView(
-            emptyList(), 0u, loading = false, wait = Fixtures.NO_WAIT,
+            emptyList(), 0u, wait = Fixtures.NO_WAIT,
             answered = listOf(DecisionAnswered("ws/st", "studio", null, null, "k1", 7, "安卓发版", 3, "先发测试版吗？", "选择了「先发测试版」", "10:42")),
             working = listOf(DecisionWorking("ws/st", "studio", null, null, "k2", 8, "官网首屏", "在做 · 截三种首屏")),
             today = DecisionsToday(1u, "6 分钟", 1u),
@@ -218,7 +218,7 @@ class DecisionsTest {
         val h = page()
         rule.runOnUiThread { h.app.push(Screen.Appearance) }
         h.settle()
-        h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, loading = false, wait = Fixtures.NO_WAIT))
+        h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, wait = Fixtures.NO_WAIT))
         h.settle()
         rule.runOnIdle { assertEquals(Screen.Appearance, h.app.stack.last()) }
         rule.runOnUiThread { h.app.pop() }
@@ -302,7 +302,7 @@ class DecisionsTest {
 
     @Test fun initiallyEmptyPageStays() {
         val h = Harness(rule)
-        h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, loading = false, wait = Fixtures.NO_WAIT))
+        h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, wait = Fixtures.NO_WAIT))
         h.launch(listOf(Screen.Home, Screen.Decisions))
         h.settle()
         rule.runOnIdle { assertEquals(listOf(Screen.Home, Screen.Decisions), h.app.stack) }
@@ -315,7 +315,7 @@ class DecisionsTest {
         val h = Harness(rule)
         freshDrafts(h)
         val it = keyItem.copy(card = card, message = keyPost.copy(card = card))
-        h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(listOf(it, first), 2u, loading = false, wait = Fixtures.NO_WAIT))
+        h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(listOf(it, first), 2u, wait = Fixtures.NO_WAIT))
         h.launch(listOf(Screen.Home, Screen.Decisions), dark)
         rule.runOnUiThread {
             @Suppress("DEPRECATION") rule.activity.window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)

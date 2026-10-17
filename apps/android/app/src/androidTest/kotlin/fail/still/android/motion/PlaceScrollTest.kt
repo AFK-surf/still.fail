@@ -88,12 +88,12 @@ class PlaceScrollTest {
         // Two connects on each station: the list is a row each (stations with none are left out of it).
         h.fake.put(Topics.connects(Fixtures.WS, false), ConnectsView(Me("alice", "alice@example.com"), stations.flatMap { st ->
             (0 until 2).map { j -> ConnectItem(st.station, st.name, connect("${st.id}-$j", "conn-${st.id}-$j"), emptyList(), null, emptyList(), 0) }
-        }, loading = false, wait = Fixtures.NO_WAIT))
-        h.fake.put(Topics.usage(Fixtures.WS, 7), UsageView(7u, false, Fixtures.NO_WAIT, true, emptyList(), emptyList(), emptyList(), 0.0, emptyList(), (0 until 60).map { "note-$it" }, "basis"))
+        }, wait = Fixtures.NO_WAIT))
+        h.fake.put(Topics.usage(Fixtures.WS, 7), UsageView(7u, Fixtures.NO_WAIT, true, emptyList(), emptyList(), emptyList(), 0.0, emptyList(), (0 until 60).map { "note-$it" }, "basis"))
         h.fake.put(Topics.archive(Fixtures.WS), ArchiveView(listOf(ArchiveDay("今天", (0 until 30).map {
             ArchiveItem(Fixtures.STATION, "a-$it", "ember:a-$it", 300L + it, "archived-$it", "说过的话", Fixtures.NOW.toDouble(), "10:00", "手动归档", true)
-        })), emptyList(), loading = false, wait = Fixtures.NO_WAIT))
-        h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, loading = false, wait = Fixtures.NO_WAIT, working = (0 until 30).map {
+        })), emptyList(), wait = Fixtures.NO_WAIT))
+        h.fake.put(Topics.decisions(Fixtures.WS), DecisionsView(emptyList(), 0u, wait = Fixtures.NO_WAIT, working = (0 until 30).map {
             DecisionWorking(Fixtures.STATION, "st", null, null, "ember:w-$it", 400L + it, "work-$it", "在做")
         }))
         h.launch(listOf(Screen.Home))
