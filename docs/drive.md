@@ -137,8 +137,9 @@ part that leaves a gap is refused `upload_lost` with `have`, where to go on from
 
 On a wide screen the rail's 文件 (web/src/Rail.tsx) goes to `/w/<ws>/files`,
 which opens the first folder pinned (else the first station's home); the
-sidebar beside the drive's pages lists each station's home and the folders
-pinned, the station's name at the end of each. A folder's page has the way up
+sidebar beside the drive's pages lists, under a heading for each station
+(离线 beside its name while it is away), its home and the folders pinned; the
+phone's 文件 (the bottom bar's place) lists them the same way. A folder's page has the way up
 to the home (or the disk's top), a pin, and each row's path to copy; a row
 dragged out carries the file and its path. A chat's 文件 tab
 (web/src/pages/DriveTab.tsx) browses every station's files beside the chat, to
