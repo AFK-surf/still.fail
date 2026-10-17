@@ -172,12 +172,11 @@ const logins = ({ canLogin = true, canRelay = true, old = false, card, listed }:
     return { ...chat, messages: chat.messages.map((m, i) => (i === first ? { ...m, card: { type: "login", login: card } } : m)) };
   },
 });
-/** A login's panel over the page, on the demo's station. */
 /** One login's card, as an agent's message has it. */
 const loginCard = (id: string) => loginCards([id]);
 /** A chat's login cards, one for each login, as an agent's message has them. */
-const loginCards = (ids: string[]) => () => stage(
-  <div style={{ display: "grid", alignContent: "start", gap: 4, padding: 40, maxWidth: 720 }}>{ids.map((id) => <LoginCard key={id} station="demo/local" id={id} />)}</div>,
+const loginCards = (ids: string[], padding = 40) => () => stage(
+  <div style={{ display: "grid", alignContent: "start", gap: 4, padding, maxWidth: 720 }}>{ids.map((id) => <LoginCard key={id} station="demo/local" id={id} />)}</div>,
 );
 /** The station page's 登录, as the page lays it out. */
 const loginsSection = () => stage(<div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><LoginsSection station="demo/local" /></div>);
@@ -426,6 +425,7 @@ export const stories: Story[] = [
   { id: "login-card-timeout", group: "登录", title: "卡片 · 超时", render: loginCard("timeout"), demo: logins() },
   { id: "login-card-readonly", group: "登录", title: "卡片 · 只读成员", render: loginCard("device"), demo: logins({ canLogin: false }) },
   { id: "login-cards", group: "登录", title: "对话里的卡片", render: loginCards(["question", "device", "loopback", "open", "done", "failed", "cancelled"]), demo: logins() },
+  { id: "login-cards-phone", group: "登录", title: "对话里的卡片 · 手机宽度（按钮仍一排）", phone: true, render: loginCards(["device", "loopback", "open", "listening"], 12), demo: logins() },
   { id: "login-cards-web", group: "登录", title: "对话里的卡片 · 网页", render: loginCards(["loopback", "device"]), demo: logins({ canRelay: false }) },
   { id: "app-chat-login-card", group: "登录", title: "对话 · 登录卡片", app: true, demo: logins({ card: "device" }) },
   { id: "phone-chat-login-card", group: "登录", title: "手机 · 对话里的卡片", app: true, phone: true, demo: logins({ card: "device" }) },

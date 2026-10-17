@@ -8,7 +8,7 @@
 // open goes straight to the browser (in the press, so a web page's browser lets it open); a loopback login's needs this
 // device to take the browser's callback back to the station, which only the desktop app can (`canRelay`): the core
 // listens, then answers what to open. A step this client cannot do is said in the card.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { MachineLoginShown, MachineLoginsView } from "./core/shapes.ts";
 import { useCall, useTopic } from "./core/react.ts";
 import { Link } from "react-router";
@@ -88,42 +88,52 @@ export function LoginCard({ station, id, marked = false }: { station: string; id
   return (
     <div ref={box} className={css.card} data-login-card="" data-marked={marked || undefined}>
       <span className={css.cardTitle}>{login.title}</span>
-      {login.active && canLogin ? <CardStep station={station} login={login} canRelay={logins?.canRelay ?? false} />
+      {login.active && canLogin ? <ActiveCard station={station} login={login} canRelay={logins?.canRelay ?? false} />
         : <span className={login.state === "failed" ? css.cardFailed : login.state === "done" ? css.cardDone : css.cardStatus}>{login.statusText}</span>}
-      {login.active && canLogin && <CardCancel station={station} login={login} />}
     </div>
   );
 }
 
-/** What the person does now, by its step; or, while its agent answers the command (or it is starting), how it stands. */
-function CardStep({ station, login, canRelay }: { station: string; login: MachineLoginShown; canRelay: boolean }) {
+/**
+ * A login under way, for one who may finish it: what the person does now, by its step (or, while its agent answers the
+ * command or it is starting, how it stands), then one row of buttons: the step's own first, 取消 beside it.
+ */
+function ActiveCard({ station, login, canRelay }: { station: string; login: MachineLoginShown; canRelay: boolean }) {
   const relay = useRelay(station, login);
+  const call = useCall();
+  const act = useAct();
+  const cancelling = useDoing("machineLogin.cancel", { station, id: login.id });
   const step = login.waiting ? undefined : login.step;
   const waiting = (words: string) => <span className={css.cardStatus}><span className={spinnerCss.spinner} aria-hidden="true" />{words}</span>;
   const domain = login.domain ? <span className={css.cardStatus}>{t("web-main.logins.domain", { domain: login.domain })}</span> : null;
+  let said: ReactNode = waiting(login.statusText);
+  let main: ReactNode = null;
   if (step === "device" && login.code) {
-    return (
-      <>
-        <span className={css.cardStatus}>{t("web-main.logins.device", { domain: login.domain ?? "" })}</span>
-        <span className={css.cardCode}>{login.code}</span>
-        <span className={css.cardActions}><CardButton label={t("web-main.logins.copyOpen")} onClick={() => copyAndOpen(login)} /></span>
-      </>
-    );
-  }
-  if (step === "loopback") {
+    said = <><span className={css.cardStatus}>{t("web-main.logins.device", { domain: login.domain ?? "" })}</span><span className={css.cardCode}>{login.code}</span></>;
+    main = <CardButton label={t("web-main.logins.copyOpen")} onClick={() => copyAndOpen(login)} />;
+  } else if (step === "loopback") {
     // A web page cannot take the browser's callback: said here, the page's host all the same.
-    if (!canRelay) return <><span className={css.cardStatus}>{t("web-main.logins.needsDesktop")}</span>{domain}</>;
-    return (
-      <>
-        {relay.opened ? waiting(t("web-main.logins.waitingBrowser")) : domain}
-        <span className={css.cardActions}><CardButton label={relay.opened ? t("web-main.logins.openAgain") : t("web-main.logins.signIn")} busy={relay.busy} onClick={relay.open} /></span>
-      </>
-    );
+    if (!canRelay) said = <><span className={css.cardStatus}>{t("web-main.logins.needsDesktop")}</span>{domain}</>;
+    else {
+      said = relay.opened ? waiting(t("web-main.logins.waitingBrowser")) : domain;
+      main = <CardButton label={relay.opened ? t("web-main.logins.openAgain") : t("web-main.logins.signIn")} busy={relay.busy} onClick={relay.open} />;
+    }
+  } else if (step === "open" && login.url) {
+    said = domain;
+    main = <CardButton label={t("web-main.logins.signIn")} onClick={() => openPage(login.url)} />;
   }
-  if (step === "open" && login.url) {
-    return <>{domain}<span className={css.cardActions}><CardButton label={t("web-main.logins.signIn")} onClick={() => openPage(login.url)} /></span></>;
-  }
-  return waiting(login.statusText);
+  return (
+    <>
+      {said}
+      <span className={css.cardActions}>
+        {main}
+        <PanelButton className={css.cardCancel} disabled={cancelling} aria-busy={cancelling || undefined}
+          onClick={() => act(call("machineLogin.cancel", { station, id: login.id }), t("web-main.logins.cancelWhat"))}>
+          <span className={css.cardButtonText}>{t("common.cancel")}</span>
+        </PanelButton>
+      </span>
+    </>
+  );
 }
 
 function CardButton({ label, busy = false, onClick }: { label: string; busy?: boolean; onClick(): void }) {
@@ -131,20 +141,6 @@ function CardButton({ label, busy = false, onClick }: { label: string; busy?: bo
     <PanelButton tone="filled" disabled={busy} aria-busy={busy || undefined} onClick={onClick}>
       <span className={css.cardButtonText}>{label}</span>
     </PanelButton>
-  );
-}
-
-/** 取消, small, at the card's foot (starting one again is its agent's). */
-function CardCancel({ station, login }: { station: string; login: MachineLoginShown }) {
-  const call = useCall();
-  const act = useAct();
-  const busy = useDoing("machineLogin.cancel", { station, id: login.id });
-  return (
-    <span className={css.cardFoot}>
-      <PanelButton disabled={busy} aria-busy={busy || undefined} onClick={() => act(call("machineLogin.cancel", { station, id: login.id }), t("web-main.logins.cancelWhat"))}>
-        <span className={css.cardButtonText}>{t("common.cancel")}</span>
-      </PanelButton>
-    </span>
   );
 }
 
