@@ -46,6 +46,7 @@ const ANDROID_API = 29;
 const ZIG = "0.16.0";
 const REPO = process.env.STILLFAIL_NATIVE_REPO ?? "AFK-surf/still.fail";
 const RELEASE = process.env.STILLFAIL_NATIVE_RELEASE ?? "native-artifacts";
+const HELPER_ICON = "apps/desktop/icon.png";
 const VENDORED = ["vendor/iroh", "vendor/iroh-mdns-address-lookup", "vendor/noq-udp", "vendor/swarm-discovery"];
 
 type Target = "darwin-arm64" | "linux-x64" | "linux-arm64" | "win32-x64" | "wasm32" | "android-arm64";
@@ -231,12 +232,13 @@ const PARTS: Record<string, Part> = {
   },
   // still.fail Helper (station/native/helper, docs/station-ts-native.md §4): the station's macOS app for what macOS
   // grants an app (the screen, docs/remote-screens.md), Swift built with the Mac's Xcode, put in its bundle with its
-  // Info.plist and signed ad hoc (a release signs it again, scripts/station-bundle.sh).
+  // Info.plist and the desktop app's icon (its permission window and System Settings show it) and signed ad hoc (a
+  // release signs it again, scripts/station-bundle.sh).
   helper: {
     files: () => [HELPER_APP],
     targets: ["darwin-arm64"],
     env: "STILLFAIL_HELPER",
-    inputs: ["station/native/helper", "vendor/PermissionFlow"],
+    inputs: ["station/native/helper", "vendor/PermissionFlow", HELPER_ICON],
     recipe: () => ({ swift: DOCK_BUILD, app: HELPER_APP }),
     build(_t, out) {
       const dir = join(ROOT, "station/native/helper");
@@ -246,6 +248,17 @@ const PARTS: Record<string, Part> = {
       mkdirSync(join(app, "Contents/MacOS"), { recursive: true });
       copyFileSync(join(scratch, "arm64-apple-macosx/release/stillfail-helper"), join(app, "Contents/MacOS/stillfail-helper"));
       copyFileSync(join(dir, "Info.plist"), join(app, "Contents/Info.plist"));
+      const iconset = join(out, "AppIcon.iconset");
+      mkdirSync(iconset);
+      for (const size of [16, 32, 128, 256, 512]) {
+        for (const scale of [1, 2]) {
+          const name = `icon_${size}x${size}${scale === 2 ? "@2x" : ""}.png`;
+          run("sips", ["-z", String(size * scale), String(size * scale), join(ROOT, HELPER_ICON), "--out", join(iconset, name)], { stdio: ["ignore", "ignore", process.stderr] });
+        }
+      }
+      mkdirSync(join(app, "Contents/Resources"), { recursive: true });
+      run("iconutil", ["-c", "icns", iconset, "-o", join(app, "Contents/Resources/AppIcon.icns")]);
+      rmSync(iconset, { recursive: true });
       writeFileSync(join(app, "Contents/PkgInfo"), "APPL????");
       run("codesign", ["--force", "--sign", "-", "--identifier", "fail.still.helper", app]);
     },
