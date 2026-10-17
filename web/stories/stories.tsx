@@ -242,9 +242,9 @@ function borrowPick(picked: boolean): Picking {
     ({ model, name, family, ids: [model], runtimes: [runtime], efforts: { [runtime]: ["low", "medium", "high"] }, accounts: { [runtime]: [] }, ...more }) as ModelOption;
   const options: ModelOption[] = [
     option("claude-opus-5-5", "Opus 5.5", "Opus", "claude", { availability: "here" }),
-    option("kimi-k3", "Kimi K3", "Kimi", "dsh", { availability: "borrowed", fromText: "借自 Studio" }),
-    option("gpt-6-astra", "GPT-6 Astra", "GPT", "codex", { availability: "borrowable", fromText: "在 Studio 上" }),
-    option("deepseek-v4-pro", "DeepSeek V4 Pro", "DeepSeek", "dsh", { availability: "borrowable", fromText: "在 Studio 上" }),
+    option("kimi-k3", "Kimi K3", "Kimi", "dsh", { availability: "borrowed", fromText: "借自 Studio", fromStation: { name: "Studio", emoji: "🖥️" } }),
+    option("gpt-6-astra", "GPT-6 Astra", "GPT", "codex", { availability: "borrowable", fromText: "在 Mini1 上", fromStation: { name: "Mini1" } }),
+    option("deepseek-v4-pro", "DeepSeek V4 Pro", "DeepSeek", "dsh", { availability: "borrowable", fromText: "在 Studio 上", fromStation: { name: "Studio", emoji: "🖥️" } }),
   ];
   const value = { model: "claude-opus-5-5", runtime: "claude" as const };
   const draft = picked ? { model: "deepseek-v4-pro", runtime: "dsh" as const } : value;

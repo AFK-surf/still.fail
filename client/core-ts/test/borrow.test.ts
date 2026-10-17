@@ -29,7 +29,7 @@ function workspace(): J[] {
       profile("go", ["kimi-k3"], { runtimes: ["claude", "codex", "dsh"], access: { kind: "opencode-go", key: "st_1…" }, share: { id: "sh-go", role: "host", host: STUDIO, allow: [HERE] } }),
       profile("cx", ["gpt-6-astra"], { runtime: "codex", runtimes: ["codex"] }),
       profile("ds", ["deepseek-v4-pro", "claude-opus-5-5"], { runtimes: ["dsh"], access: { kind: "api-provider", key: "sk…" }, share: { id: "sh-ds", role: "host", host: STUDIO, allow: [MINI] } }),
-    ]),
+    ], { emoji: "🖥️" }),
     // Down: what it has is not known.
     station(MINI, "Mini1", [profile("m", ["glm-5.2"])], { online: false }),
   ];
@@ -39,11 +39,12 @@ test("a_station_offers_its_own_models_says_which_are_borrowed_and_lists_what_oth
   const ws = workspace();
   const here = ws[0].overview;
   const own = sourced(models(here, 0), here, ws);
-  assert.deepEqual(own.map((o: J) => [o.model, o.availability, o.fromText ?? null]), [["claude-opus-5-5", "here", null], ["kimi-k3", "borrowed", "借自 Studio"]]);
+  assert.deepEqual(own.map((o: J) => [o.model, o.availability, o.fromText ?? null, o.fromStation ?? null]), [["claude-opus-5-5", "here", null, null], ["kimi-k3", "borrowed", "借自 Studio", { name: "Studio", emoji: "🖥️" }]]);
   const lend = borrowable(ws, `ws/${HERE}`, own, null, 0);
   // Opus is here already; Kimi is borrowed; Mini1 is down.
   assert.deepEqual(lend.map((o: J) => [o.model, o.availability, o.fromText, o.runtimes]), [["gpt-6-astra", "borrowable", "在 Studio 上", ["codex"]], ["deepseek-v4-pro", "borrowable", "在 Studio 上", ["dsh"]]]);
   const ds = lend.find((o: J) => o.model === "deepseek-v4-pro");
+  assert.deepEqual(ds.fromStation, { name: "Studio", emoji: "🖥️" });
   assert.deepEqual(ds.borrow, { station: `ws/${STUDIO}`, stationName: "Studio", profile: "ds", profileName: "ds@x.com", subscription: false, pending: false, allow: [MINI] });
   assert.deepEqual(ds.accounts, { dsh: [] }, "not run here till borrowed");
   assert.equal(lend.find((o: J) => o.model === "gpt-6-astra").borrow.subscription, true);

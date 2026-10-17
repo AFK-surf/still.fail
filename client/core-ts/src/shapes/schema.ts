@@ -2178,9 +2178,15 @@ export const SHAPES: Record<string, Shape> = {
     ["accounts", map(vec("RunnableProfile"))],
     ["spent", opt("Spent")],
     ["availability", opt("String"), { doc: "In a model control (`pick`): here (a profile of this station's own runs it), borrowed (only copies another\nstation shares with this one), borrowable (only another station of the workspace has it: `borrow`)." }],
-    ["fromText", opt("String"), { doc: "Where it comes from, in words beside its name (借自 Studio, 在 Studio 上); none for one of this station's own." }],
+    ["fromText", opt("String"), { doc: "Where it comes from, in words (借自 Studio, 在 Studio 上: what its mark is said as); none for one of this\nstation's own." }],
+    ["fromStation", opt("ModelStation"), { doc: "The station it comes from, after its name: its mark where it has one, else its name." }],
     ["borrow", opt("ModelBorrow"), { doc: "A borrowable one: the profile that would be shared with this station." }],
   ], { doc: "A model a station can run: its maker, the runtimes it runs on, and for each how hard it can think and who runs it." }),
+  ModelStation: struct([
+    ["name", "String"],
+    ["emoji", opt("String")],
+    ["icon", opt("String"), { doc: "As StationView's." }],
+  ], { doc: "A station as a model option names it." }),
   ModelBorrow: struct([
     ["station", "String", { doc: "The station that has it (address)." }],
     ["stationName", "String"],

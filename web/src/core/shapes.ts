@@ -458,6 +458,14 @@ export interface RunnableProfile {
 	quotaLine?: QuotaLine;
 }
 
+/** A station as a model option names it. */
+export interface ModelStation {
+	name: string;
+	emoji?: string;
+	/** As StationView's. */
+	icon?: string;
+}
+
 /** Where a model this station cannot run yet would be borrowed from (`pick.borrow`). */
 export interface ModelBorrow {
 	/** The station that has it (address). */
@@ -494,8 +502,13 @@ export interface ModelOption {
 	 * station shares with this one), borrowable (only another station of the workspace has it: `borrow`).
 	 */
 	availability?: string;
-	/** Where it comes from, in words beside its name (借自 Studio, 在 Studio 上); none for one of this station's own. */
+	/**
+	 * Where it comes from, in words (借自 Studio, 在 Studio 上: what its mark is said as); none for one of this
+	 * station's own.
+	 */
 	fromText?: string;
+	/** The station it comes from, after its name: its mark where it has one, else its name. */
+	fromStation?: ModelStation;
 	/** A borrowable one: the profile that would be shared with this station. */
 	borrow?: ModelBorrow;
 }

@@ -269,19 +269,22 @@ export function machineMeta(session: J, now: number): J {
 // ── the workspace's models on a station (docs/station-share.md 借用) ──
 
 /// A station of the workspace as `stations` lists it: its address, id, name, whether it is up, and its overview.
-type StationOf = { station: string; id: string; name: string; online: boolean; joined: boolean; overview: J };
+type StationOf = { station: string; id: string; name: string; online: boolean; joined: boolean; overview: J; emoji: string | null; icon: string | null };
+
+/// A station as an option names it: its name, and its mark where the workspace gave it one.
+const markOf = (s: StationOf | undefined, name: string): J => ({ name: s?.name ?? name, ...(s?.emoji ? { emoji: s.emoji } : {}), ...(s?.icon ? { icon: s.icon } : {}) });
 
 const stationsOf = (stations: J): StationOf[] =>
   arr(stations).flatMap((s) =>
     typeof get(s, "station") === "string" && typeof get(s, "id") === "string"
-      ? [{ station: s.station, id: s.id, name: str(get(s, "name")) ?? s.id.slice(0, 8), online: get(s, "online") === true, joined: get(s, "joined") === true, overview: get(s, "overview") }]
+      ? [{ station: s.station, id: s.id, name: str(get(s, "name")) ?? s.id.slice(0, 8), online: get(s, "online") === true, joined: get(s, "joined") === true, overview: get(s, "overview"), emoji: str(get(s, "emoji")), icon: str(get(s, "icon")) }]
       : [],
   );
 
 /// Each option said where its accounts are: `here` when one of them is the station's own, else `borrowed` from the
 /// station that shares them with it (`from`: its name, as `stations` names it).
 export function sourced(options: J[], overview: J, stations: J): J[] {
-  const names = new Map(stationsOf(stations).map((s) => [s.id, s.name]));
+  const byStation = new Map(stationsOf(stations).map((s) => [s.id, s]));
   const byId = new Map(profilesOf(overview).map((p) => [str(get(p, "id")) ?? "", p]));
   return options.map((o) => {
     const ids = Object.values(get(o, "accounts") ?? {}).flatMap((list) => arr(list).map((a) => str(get(a, "id")) ?? ""));
@@ -291,8 +294,8 @@ export function sourced(options: J[], overview: J, stations: J): J[] {
     });
     if (hosts.length === 0 || hosts.some((h) => h === null)) return { ...o, availability: "here" };
     const host = hosts[0] as string;
-    const from = names.get(host) ?? host.slice(0, 8);
-    return { ...o, availability: "borrowed", from, fromText: t("core-views.models.borrowed_from", { station: from }) };
+    const station = markOf(byStation.get(host), host.slice(0, 8));
+    return { ...o, availability: "borrowed", from: station.name, fromStation: station, fromText: t("core-views.models.borrowed_from", { station: station.name }) };
   });
 }
 
@@ -329,6 +332,7 @@ export function borrowable(stations: J, here: string, have: J[], runtime: string
           accounts: Object.fromEntries(rts.map((r) => [r, []])),
           availability: "borrowable",
           from: s.name,
+          fromStation: markOf(s, s.name),
           fromText: t("core-views.models.on_station", { station: s.name }),
           borrow: {
             station: s.station,

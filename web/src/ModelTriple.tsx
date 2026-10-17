@@ -15,6 +15,7 @@ import * as css2 from "./ModelTriple.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import { DoingShown } from "./DoingMark.tsx";
+import { StationMark } from "./StationMark.tsx";
 import { t } from "./i18n.ts";
 
 /** What the control leaves out, in turn, as its room narrows: the account first (its name, then all of it), the runtime, the effort. Never the model. */
@@ -140,7 +141,8 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
                       <ModelLogo maker={o.maker} runtime={o.runtimes[0] ?? value.runtime} size={14} />
                       <span className={css2.runOptionText}><span className={css2.runOptionName}>{o.name}</span>{o.spent && <span className={css2.runPickerSpent}>{o.spent.text}</span>}</span>
                       {/* Another station's, on the same line: where it comes from (borrowed), or where it is (not usable here till borrowed). */}
-                      {o.fromText && <span className={css2.runOptionFrom}>{o.fromText}</span>}
+                      {o.fromStation && <span className={css2.runOptionFrom} title={o.fromText} aria-label={o.fromText}>
+                        {o.fromStation.icon || o.fromStation.emoji ? <StationMark emoji={o.fromStation.emoji} icon={o.fromStation.icon} size={14} /> : o.fromStation.name}</span>}
                       <Check size={14} className={css2.runCheck} />
                     </button></Tip>
                   ))}

@@ -474,6 +474,15 @@ data class RunnableProfile (
 	val quotaLine: QuotaLine? = null
 )
 
+/// A station as a model option names it.
+@Serializable
+data class ModelStation (
+	val name: String,
+	val emoji: String? = null,
+	/// As StationView's.
+	val icon: String? = null
+)
+
 /// Where a model this station cannot run yet would be borrowed from (`pick.borrow`).
 @Serializable
 data class ModelBorrow (
@@ -510,8 +519,11 @@ data class ModelOption (
 	/// In a model control (`pick`): here (a profile of this station's own runs it), borrowed (only copies another
 	/// station shares with this one), borrowable (only another station of the workspace has it: `borrow`).
 	val availability: String? = null,
-	/// Where it comes from, in words beside its name (借自 Studio, 在 Studio 上); none for one of this station's own.
+	/// Where it comes from, in words (借自 Studio, 在 Studio 上: what its mark is said as); none for one of this
+	/// station's own.
 	val fromText: String? = null,
+	/// The station it comes from, after its name: its mark where it has one, else its name.
+	val fromStation: ModelStation? = null,
 	/// A borrowable one: the profile that would be shared with this station.
 	val borrow: ModelBorrow? = null
 )
