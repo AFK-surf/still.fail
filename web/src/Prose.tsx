@@ -12,7 +12,8 @@ import type { Md, MdNode } from "./core/md.ts";
 import { inlineFile, inlineFiles } from "./Prose.css.ts";
 import * as css from "./Prose.css.ts";
 import { RefChip } from "./ChatRef.tsx";
-import { isChatLink } from "./chatRefs.ts";
+import { isChatLink, screenOfLink } from "./chatRefs.ts";
+import { ScreenCard, ScreenName } from "./screen/ScreenLink.tsx";
 import { bareLinks } from "./bareLinks.ts";
 import { nameOf, placeFiles } from "../../client/core-ts/src/placed.ts";
 import { FileRef, LinkHover, pathIn } from "./Peeks.tsx";
@@ -122,7 +123,24 @@ export function Code({ text, language }: { text: string; language?: string | und
   );
 }
 
+/** A link's words are the link itself (a bare link, not `[its words](link)`). */
+const bare = (href: string, words: string) => [href, safeDecode(href)].includes(words.trim());
+
+type Hast = { type: string; value?: string; tagName?: string; properties?: Record<string, unknown>; children?: Hast[] };
+const hastText = (n: Hast): string => n.value ?? (n.children ?? []).map(hastText).join("");
+
+/** A paragraph that is a link to a station's screen and nothing else: the screen's card (screen/ScreenLink.tsx); else null. */
+function screenParagraph(node: Hast | undefined): ReactNode {
+  const parts = node?.children?.filter((c) => c.type !== "text" || c.value?.trim()) ?? [];
+  const only = parts.length === 1 && parts[0]!.type === "element" && parts[0]!.tagName === "a" ? parts[0]! : null;
+  const href = only && typeof only.properties?.href === "string" ? only.properties.href : null;
+  if (!href || !screenOfLink(href)) return null;
+  const words = hastText(only!);
+  return <div className={inlineFile}><ScreenCard href={href} words={bare(href, words) ? null : words.trim()} /></div>;
+}
+
 const components: Components = {
+  p: ({ node, children, ...props }) => screenParagraph(node as Hast | undefined) ?? <p {...props}>{children}</p>,
   pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
   // A table wider than the message scrolls sideways within it, its cells keeping their words whole.
   table: ({ node: _, ...props }) => <div className={css.tableScroll}><table {...props} /></div>,
@@ -149,8 +167,9 @@ function inlineCode(words: string, code: ReactNode, children: ReactNode): ReactN
  * a tab of its own, not in place of the app (the desktop app's opens in the browser, as before). */
 function link(props: ComponentProps<"a">) {
   const href = props.href ?? "";
-  // A bare link (its words the link itself): the chip says the chat's title, not the link.
-  if (isChatLink(href)) return <RefChip title={[href, safeDecode(href)].includes(textOf(props.children).trim()) ? null : props.children} href={href} />;
+  // A bare link (its words the link itself): the chip says the chat's title, not the link; a screen's, its title.
+  if (isChatLink(href)) return <RefChip title={bare(href, textOf(props.children)) ? null : props.children} href={href} />;
+  if (screenOfLink(href) && bare(href, textOf(props.children))) return <ScreenName href={href} />;
   if (/^https?:\/\//i.test(href)) return <LinkHover href={href} label={textOf(props.children)}><a {...props} title={undefined} target="_blank" rel="noopener noreferrer" /></LinkHover>;
   const file = /^[a-z][\w+.-]*:/i.test(href) ? null : pathIn(safeDecode(href));
   if (file) return <FileRef path={file.path} line={file.line} words={props.children}>{props.children}</FileRef>;
@@ -200,6 +219,8 @@ export const Prose = memo(function Prose({ children, files, file }: { children: 
         const parts = node?.children.filter((c) => c.type !== "text" || c.value.trim()) ?? [];
         const only = parts.length === 1 && parts[0]!.type === "element" && parts[0]!.tagName === "a" ? at(parts[0]!.properties.href) : undefined;
         if (only) return <div className={inlineFile}>{draw(only, "shown")}</div>;
+        const screen = screenParagraph(node as Hast | undefined);
+        if (screen) return screen;
         // A paragraph of the message's images and nothing else: side by side, wrapping when they don't fit.
         const images = parts.map((c) => (c.type === "element" && c.tagName === "img" ? at(c.properties.src) : undefined));
         if (images.length > 1 && images.every(Boolean)) return <div className={inlineFiles}>{images.map((f, i) => <span key={i} className={css.inlineFilesItem} style={rowItem(f!)}>{draw(f!, "shown")}</span>)}</div>;
@@ -232,13 +253,25 @@ const kidsOf = (node: Exclude<MdNode, string>): MdNode[] => (Array.isArray(node[
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
 const ALIGN = new Set(["left", "right", "center"]);
 
+const mdText = (node: MdNode): string => (typeof node === "string" ? node : kidsOf(node).map(mdText).join(""));
+
 function drawMd(node: MdNode, key: number): ReactNode {
   if (typeof node === "string") return node;
   const kind = node[0];
   const a = attrsOf(node);
   const kids = () => kidsOf(node).map(drawMd);
   switch (kind) {
-    case "p": return <p key={key}>{kids()}</p>;
+    case "p": {
+      // A link to a station's screen alone: its card.
+      const parts = kidsOf(node).filter((c) => typeof c !== "string" || c.trim());
+      const only = parts.length === 1 && typeof parts[0] !== "string" && parts[0]![0] === "a" ? parts[0]! : null;
+      const href = only ? defaultUrlTransform(str(attrsOf(only).href) ?? "") : "";
+      if (only && screenOfLink(href)) {
+        const words = kidsOf(only).map(mdText).join("");
+        return <div key={key} className={inlineFile}><ScreenCard href={href} words={bare(href, words) ? null : words.trim()} /></div>;
+      }
+      return <p key={key}>{kids()}</p>;
+    }
     case "h": {
       const H = `h${Math.min(6, Math.max(1, Number(a.depth) || 1))}` as "h1";
       return <H key={key}>{kids()}</H>;

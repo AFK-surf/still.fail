@@ -3972,6 +3972,21 @@ data class ScreenAccess (
 	val path: String? = null
 )
 
+/// A link to one of a station's screens as a message shows it (the `screenCard` topic; client/core-ts/src/screens.ts).
+@Serializable
+data class ScreenCard (
+	/// `desktop` or `browser`, as the screen is (or, not in its station's list, as its id says).
+	val kind: String,
+	/// Its title in its station's list; else what kind of screen it is.
+	val title: String,
+	/// Under the title: what the list's row says of it (core); else that it is gone, or that it is a remote screen.
+	val line: String,
+	/// Its page in the app (`ScreenItem.link`).
+	val link: String,
+	/// Its station is reached and no longer has it.
+	val gone: Boolean
+)
+
 /// Where a screen's pointer is, as its station says.
 @Serializable
 data class ScreenCursor (

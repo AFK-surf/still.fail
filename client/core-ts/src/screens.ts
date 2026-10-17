@@ -236,6 +236,17 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
   return { screens, outdated: false, control, known: true };
 }
 
+/// What a link to one of a station's screens shows in a message (the `screenCard` topic): the screen as its station's
+/// list has it; one the list no longer has, as gone; one of a station not reached, as what its id says it is.
+export function screenCard(inner: Inner, station: string, id: string, held: Held | undefined, online: boolean): J {
+  const listed = screensView(inner, station, held, online).screens.find((s: J) => s.id === id);
+  if (listed) return { kind: listed.kind, title: listed.title, line: listed.line, link: listed.link, gone: false };
+  const kind = id.startsWith("browser:") ? "browser" : "desktop";
+  const gone = held !== undefined && !held.outdated && online;
+  const line = gone ? t("core-views.screen.gone") : held?.outdated ? t("core-views.screen.outdated") : t("core-views.screen.remote");
+  return { kind, title: kind === "browser" ? t("core-views.screen.kind.browser") : t("core-views.screen.kind.desktop"), line, link: screenPath(station, id), gone };
+}
+
 /// The clipboard types a station says a screen carries (`clipboard`): ours only.
 export function clipTypesOf(v: unknown): ClipType[] {
   return Array.isArray(v) ? (["text", "png"] as const).filter((c) => v.includes(c)) : [];

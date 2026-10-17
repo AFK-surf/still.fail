@@ -322,7 +322,7 @@ export class Computer {
   #handOver(id: string): string {
     const base = this.#p.base();
     if (base === null) return "A person can open this screen from the still.fail app (this station's control plane has no pages to link to); ask in the chat with chat_post kind=need_human.";
-    return `A person can do it on this screen from their still.fail app: ${base}/screen/${encodeURIComponent(id)} — post that link with chat_post kind=need_human, saying what to do there, and end your turn.`;
+    return `A person can do it on this screen from their still.fail app: ${base}/screen/${encodeURIComponent(id)} — post that link on a line of its own (it shows as the screen's card) with chat_post kind=need_human, saying what to do there, and end your turn.`;
   }
 
   /// The people driving `id` now, other than the agents' own views.
