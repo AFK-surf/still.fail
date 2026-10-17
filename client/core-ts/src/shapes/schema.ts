@@ -950,6 +950,7 @@ export const SHAPES: Record<string, Shape> = {
     ["text", "String"],
     ["quotes", vec("Quote")],
     ["files", vec("Attachment")],
+    ["links", vec("ComposerLink"), { default: true, doc: "Links shared into it (docs/share-in.md): drawn as files are, sent as words after the text." }],
   ], { doc: "What is being written to a chat on this device (the `draft` topic, `draft.put`): its text as typed, the passages\nit quotes with what is said about them, and the files already up (the station keeps them in no chat until a\nmessage takes them). Files still going up are the page's own.", keepNone: true }),
   PastedInfo: struct([
     ["preview", "String"],

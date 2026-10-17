@@ -269,7 +269,7 @@ test("a_pending_and_made_composer_share_live_edits_upload_completion_and_a_draft
 test("draft_subscriptions_follow_both_chat_keys_when_joined_edited_and_taken", async () => {
   const t = await setup();
   const pending = t.core.inner.views.local.pendingNew("ws/st", { runtime: "claude" });
-  const draft = { text: "还没发", quotes: [{ author: "agent", text: "那段", comment: "为什么", role: "agent" }], files: [{ name: "a.png", path: "/u/a.png", size: 3 }] };
+  const draft = { text: "还没发", quotes: [{ author: "agent", text: "那段", comment: "为什么", role: "agent" }], files: [{ name: "a.png", path: "/u/a.png", size: 3 }], links: [] };
   try {
     subscribe(t.core, t.ui, 1, { topic: "draft", station: "ws/st", chat: pending });
     subscribe(t.core, t.ui, 2, { topic: "draft", station: "ws/st", chat: "ember:made" });
@@ -277,7 +277,7 @@ test("draft_subscriptions_follow_both_chat_keys_when_joined_edited_and_taken", a
     call(t.core, t.ui, 901, "draft.put", { key: `ws/st:${pending}`, ...draft });
     await t.settle();
     assert.deepEqual(v(t.values, 1), draft);
-    assert.deepEqual(v(t.values, 2), { text: "", quotes: [], files: [] });
+    assert.deepEqual(v(t.values, 2), { text: "", quotes: [], files: [], links: [] });
 
     t.core.inner.views.local.pendingMade(pending, "ember:made", 9);
     await t.settle();
@@ -288,7 +288,7 @@ test("draft_subscriptions_follow_both_chat_keys_when_joined_edited_and_taken", a
     for (const sub of [1, 2]) assert.deepEqual(v(t.values, sub), edited);
 
     await t.ask("take", { key: "ws/st:ember:made" });
-    for (const sub of [1, 2]) assert.deepEqual(v(t.values, sub), { text: "", quotes: [], files: [] });
+    for (const sub of [1, 2]) assert.deepEqual(v(t.values, sub), { text: "", quotes: [], files: [], links: [] });
   } finally { t.core.close(); }
 });
 

@@ -2282,6 +2282,8 @@ export interface DraftView {
 	text: string;
 	quotes: Quote[];
 	files: Attachment[];
+	/** Links shared into it (docs/share-in.md): drawn as files are, sent as words after the text. */
+	links?: ComposerLink[];
 }
 
 /** What opens an entry of the drive. */

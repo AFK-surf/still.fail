@@ -201,7 +201,6 @@ export class Composers {
   }
 
   #draft(s: State) {
-    // Links kept with it too: read back here (`#from`), not a field of the `draft` topic's (the pages draw the composer's).
     const links = s.files.flatMap((f) => (f.link ? [f.link] : []));
     return { text: s.text, quotes: s.quotes.map(({ id: _, ...q }) => q), files: s.files.flatMap((f) => f.done ? [f.done] : []), ...(links.length ? { links } : {}) };
   }

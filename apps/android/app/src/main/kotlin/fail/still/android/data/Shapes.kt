@@ -2248,7 +2248,9 @@ data class DoingView (
 data class DraftView (
 	val text: String,
 	val quotes: List<Quote>,
-	val files: List<Attachment>
+	val files: List<Attachment>,
+	/// Links shared into it (docs/share-in.md): drawn as files are, sent as words after the text.
+	val links: List<ComposerLink>? = null
 )
 
 /// What opens an entry of the drive.
