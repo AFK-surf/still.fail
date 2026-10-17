@@ -1,5 +1,6 @@
 // The mobile concept's look (ui/Theme.kt): warm paper, ink, and one still.fail orange that means "this needs you".
 // The palette in use comes from the prefs' appearance (system, light, dark), as the Android app picks it.
+import { createContext, createElement, useContext, type ReactNode } from "react";
 import { useColorScheme } from "react-native";
 import { usePrefs } from "../../../../web/src/prefs.ts";
 
@@ -34,12 +35,21 @@ export const Dark: StillFailColors = {
   chip: "#313237", bubble: "#313237",
 };
 
+/** A palette set for what is under it (StillFailTheme), over the one the prefs pick. */
+const Forced = createContext<StillFailColors | null>(null);
+
+/** ui/Theme.kt StillFailTheme: what is in it drawn in the dark or the light palette, whatever the prefs say. */
+export function StillFailTheme({ dark, children }: { dark: boolean; children?: ReactNode }) {
+  return createElement(Forced.Provider, { value: dark ? Dark : Light }, children);
+}
+
 /** The palette in use (C in the Android app). */
 export function useC(): StillFailColors {
+  const forced = useContext(Forced);
   const system = useColorScheme();
   const appearance = usePrefs((p) => p.appearance);
   const dark = appearance === "dark" || (appearance !== "light" && system === "dark");
-  return dark ? Dark : Light;
+  return forced ?? (dark ? Dark : Light);
 }
 
 /** Raised (ui/Glass.kt): what floats over the page, white in light and a step up in dark. */

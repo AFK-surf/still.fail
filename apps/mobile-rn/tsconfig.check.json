@@ -1,0 +1,18 @@
+// The type check's own: the web modules outside the app find React's types in the app (Metro, which reads
+// tsconfig.json's paths, must not: it would bundle the types package for React).
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@stillfail/ui/*": [
+        "../../web/ui/src/*"
+      ],
+      "react": [
+        "./node_modules/@types/react"
+      ],
+      "react/*": [
+        "./node_modules/@types/react/*"
+      ]
+    }
+  }
+}
