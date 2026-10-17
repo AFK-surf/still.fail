@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { signIn } from "../cloud/accounts.ts";
 import { Illustration } from "./parts.tsx";
+import { Spinner } from "@stillfail/ui/waiting.tsx";
+import * as partsCss from "./styles/parts.css.ts";
 import * as rootCss from "./styles/root.css.ts";
 import * as css from "./SignIn.css.ts";
 import { t } from "../i18n.ts";
@@ -37,7 +39,7 @@ export function MobileSignIn() {
       <h1>{t("web-mobile.signIn.title")}</h1>
       <p>{t("web-mobile.signIn.text")}</p>
       <button type="button" className={css.mGoogle} disabled={busy} onClick={go}>
-        {busy ? t("web-mobile.signIn.opening") : t("web-mobile.signIn.google")}
+        {busy && <Spinner className={partsCss.mSpinOnColor} />}{busy ? t("common.opening") : t("web-mobile.signIn.google")}
       </button>
       {error && <p className={css.mSignInError} role="alert">{error}</p>}
       <small>{t("web-mobile.signIn.many")}</small>

@@ -69,7 +69,7 @@
   "desktop.preview.tooManyRedirects": "重定向次数过多",
   "desktop.station.enrolled": "此 Mac 已加入一个 workspace",
   "desktop.station.enrolledPc": "此电脑已加入一个 workspace",
-  "desktop.station.joining": "正在加入…",
+  "desktop.station.joining": "正在加入",
   "desktop.station.notCarried": "此版本的 app 不包含 station",
   "desktop.local.busy": "上一个操作尚未完成",
   "desktop.local.noService": "本机没有单独安装的 station",
@@ -88,7 +88,7 @@
   "desktop.window.maximize": "最大化",
   "desktop.window.restore": "还原",
   "desktop.startUpdate.title": "正在更新 {app}",
-  "desktop.startUpdate.checking": "正在检查新版本…",
+  "desktop.startUpdate.checking": "正在检查新版本",
   "desktop.startUpdate.downloading": "正在下载 {version}：{got} / {size} MB",
   "desktop.startUpdate.skip": "跳过"
 }

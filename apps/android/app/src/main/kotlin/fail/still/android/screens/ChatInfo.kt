@@ -1,6 +1,7 @@
 // A chat's own sheet, from its bar's "…" (split from Chat.kt).
 package fail.still.android.screens
 
+import fail.still.android.ui.Spinner
 import fail.still.android.data.t
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -130,7 +131,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread,
                     })) {
                         IconIn(Icons.Pin, 16.dp, C.ink)
                         Text(if (pinned) t("android-chat.unpin") else t("android-chat.info.pinTop"), fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
-                        if (pinning) Spinner(14.dp)
+                        if (pinning) Spinner(inline = true)
                     }
                 }
                 link?.let {

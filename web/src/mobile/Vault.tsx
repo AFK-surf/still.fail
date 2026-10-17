@@ -20,7 +20,8 @@ import {
 import { t } from "../i18n.ts";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { confirm } from "./sheets.tsx";
-import { Button, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, ProviderMark, SectionHeader, Seg, Spinner, TopBack } from "./parts.tsx";
+import { Button, LargeTitle, LinkButton, ListCard, ListRow, NavBar, NavButton, ProviderMark, SectionHeader, Seg, TopBack } from "./parts.tsx";
+import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
@@ -59,7 +60,7 @@ export function VaultScreen() {
         <TopBack label={t("web-mobile.settings.title")} onBack={app.pop}
           trailing={ready ? <NavButton icon={Plus} label={t("web-pages.vault.add")} onClick={() => openAdd(app)} /> : undefined} />
         <LargeTitle small="" big={t("web-pages.vault.title")} />
-        {!view ? <Loading text={t("web-pages.settings.reading")} />
+        {!view ? <Waiting shape="cards" count={2} />
           : words ? <Words words={words} />
           : view.plain === true ? <Vaults view={view} />
           : !view.available ? <ReadOnly view={view} />
@@ -193,14 +194,14 @@ function VaultItems({ v, readOnly = false }: { v: VaultRow; readOnly?: boolean }
   return <>
     {header}
     <ListCard>
-      {!items ? <ListRow><span className={partsCss.mSubtle}>{t("web-pages.settings.reading")}</span></ListRow> : <>
+      {!items ? <ListRow><WaitLine /></ListRow> : <>
         {items.items.length === 0 && <ListRow><span className={partsCss.mSubtle}>{t("web-pages.vault.empty")}</span></ListRow>}
         {named.map((row) => <ItemRow key={row.id} row={row} onOpen={readOnly ? undefined : () => open(row)} />)}
         {hidden > 0 && (
           <ListRow onClick={readOnly ? undefined : unlock}>
             <span className={css.mIcon} />
             <span className={`${partsCss.mGrow} ${partsCss.mSubtle}`}>{t("web-pages.vault.hidden", { n: hidden })}</span>
-            {!readOnly && (unlocking ? <Spinner size={14} /> : <span className={partsCss.mAccent}>{t("web-pages.vault.unlock")}</span>)}
+            {!readOnly && (unlocking ? <Spinner inline /> : <span className={partsCss.mAccent}>{t("web-pages.vault.unlock")}</span>)}
           </ListRow>
         )}
         {!readOnly && <ListRow onClick={() => openEditor(app, v.id, blankForm(), null)}><span className={css.mIcon}><Plus size={16} className={partsCss.mAccent} /></span><span className={partsCss.mLink}>{t("web-pages.vault.add")}</span></ListRow>}
@@ -220,7 +221,7 @@ function ItemRow({ row, onOpen }: { row: VaultItemRow; onOpen: (() => void) | un
         <span className={listsCss.mRowTitle}>{row.name}</span>
         <span className={listsCss.mRowNote}>{itemLine(row)}</span>
       </span>
-      {opening ? <Spinner size={14} /> : onOpen && <ChevronRight size={14} className={partsCss.mSubtle} />}
+      {opening ? <Spinner inline /> : onOpen && <ChevronRight size={14} className={partsCss.mSubtle} />}
     </ListRow>
   );
 }
@@ -237,7 +238,7 @@ function Devices({ v, many }: { v: VaultRow; many: boolean }) {
         <span className={listsCss.mRowTitle}>{many ? `${v.name} · ` : ""}{t("web-pages.vault.devicesHold", { n: v.devices })}</span>
         {v.missing > 0 && <span className={securityCss.mWarn}>{t("web-pages.vault.missing", { n: v.missing })}</span>}
       </span>
-      {adding ? <Spinner size={14} /> : can && <span className={partsCss.mAccent}>{t("web-pages.vault.addDevice")}</span>}
+      {adding ? <Spinner inline /> : can && <span className={partsCss.mAccent}>{t("web-pages.vault.addDevice")}</span>}
     </ListRow>
   );
 }
@@ -535,7 +536,7 @@ export function VaultItemScreen() {
   const v = view?.vaults.find((x) => x.id === vault);
   const row = items?.items.find((i) => i.id === item);
   const back = t("web-pages.vault.title");
-  if (!view || !items || !v || !row) return <div className={pagesCss.mScreen}><NavBar back={back} onBack={app.pop} title={back} /><Loading text={t("web-pages.settings.reading")} /></div>;
+  if (!view || !items || !v || !row) return <div className={pagesCss.mScreen}><NavBar back={back} onBack={app.pop} title={back} /><Waiting shape="cards" count={2} /></div>;
   const plain = view.plain === true;
   const open = (then?: (o: Opened) => void) => void run<Opened>("vault.open", { workspace: ws, item }, t("web-pages.vault.openWhat")).then((o) => { if (o) { setOpened(o); then?.(o); } });
   const edit = () => (opened ? openEditor(app, vault, formOf(opened, row), opened.id, plain) : open((o) => openEditor(app, vault, formOf(o, row), o.id, plain)));

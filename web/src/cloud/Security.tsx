@@ -9,15 +9,13 @@ import { stamp } from "../api.ts";
 import { useDoing } from "../doing.ts";
 import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
-import { Button, Dialog, Field, IconButton, Loading, MobileBack, Section, Time } from "../ui.tsx";
-import { t } from "../i18n.ts";
+import { Button, Dialog, Field, IconButton, MobileBack, Section, Time, Spinner, Waiting } from "../ui.tsx";import { t } from "../i18n.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./Security.css.ts";
 
 export type { LockDevice, LockRequest, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
 import type { LockDevice, LockRequest, LockStation, LockView, LockDraftView as LockDraft } from "../core/shapes.ts";
-import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 
 // A function, not a table made as the module loads: words are the page's language when shown (and the site's
 // prerender loads this module before any language is set).
@@ -46,7 +44,7 @@ export function SecuritySettings({ entry }: { entry: WorkspaceEntry }) {
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={back} label={t("web-pages.settings.title")} />
       <header className={pagesCss.pageHead}><div><h1>{t("web-pages.security.title")}</h1><p className={css.sub}>{t("web-pages.security.lead")}</p></div></header>
-      {!lock ? <Loading label={t("web-pages.settings.reading")} /> : !lock.available ? <div className={pagesCss.card}><p className={css.sub}>{t("web-pages.security.unavailable")}</p></div>
+      {!lock ? <Waiting shape="cards" count={2} /> : !lock.available ? <div className={pagesCss.card}><p className={css.sub}>{t("web-pages.security.unavailable")}</p></div>
         : lock.locked ? <On entry={entry} lock={lock} /> : <Off entry={entry} lock={lock} />}
     </div>
   );
@@ -243,7 +241,11 @@ export function SecurityOpen({ entry }: { entry: WorkspaceEntry }) {
   const opening = useDoing("lock.open", { workspace: entry.id });
   const back = `/w/${entry.id}/settings/security`;
   const toggle = (id: string) => void call("lock.toggle", { workspace: entry.id, id });
-  if (!draft || draft.loading) return <Loading label={t("web-pages.settings.reading")} />;
+  const head = <>
+    <MobileBack to={back} label={t("web-pages.security.title")} />
+    <header className={pagesCss.pageHead}><div><h1>{t("web-pages.security.openTitle")}</h1><p className={css.sub}>{t("web-pages.security.openLead")}</p></div></header>
+  </>;
+  if (!draft || draft.loading) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>{head}<Waiting shape="cards" /></div>;
   const open = () => {
     const doing = call("lock.open", { workspace: entry.id });
     act(doing, t("web-pages.security.turnOn"), t("web-pages.security.turnedOn"));
@@ -251,8 +253,7 @@ export function SecurityOpen({ entry }: { entry: WorkspaceEntry }) {
   };
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
-      <MobileBack to={back} label={t("web-pages.security.title")} />
-      <header className={pagesCss.pageHead}><div><h1>{t("web-pages.security.openTitle")}</h1><p className={css.sub}>{t("web-pages.security.openLead")}</p></div></header>
+      {head}
       <Section title={t("web-pages.security.members")} actions={<span className={css.rowMeta}>{t("web-pages.security.peopleCount", { n: draft.members.length })}</span>}>
         <div className={pagesCss.card}><div className={css.rows}>
           {draft.members.map((m) => <div key={m.sub} className={css.row}><div className={css.rowText}><span className={css.rowName}>{m.name || m.email}</span><span className={css.rowMeta}>{m.email}</span></div><span className={css.rowMeta}>{roleName(m.role)}</span></div>)}
@@ -320,7 +321,7 @@ export function SecurityWaiting({ entry, lock }: { entry: WorkspaceEntry; lock: 
       {lock.me?.asked === false && !asking
         ? <><div className={css.waitingNote}>{t("web-pages.security.notAsked")}</div>
           <Button variant="primary" onClick={() => act(call("lock.request", { workspace: entry.id }), t("web-pages.security.request"))}>{t("web-pages.security.request")}</Button></>
-        : <div className={css.waitingNote}><span className={spinnerCss.spinner} aria-hidden="true" />{t("web-pages.security.waitingNote")}</div>}
+        : <div className={css.waitingNote}><Spinner inline />{t("web-pages.security.waitingNote")}</div>}
     </div>
   );
 }

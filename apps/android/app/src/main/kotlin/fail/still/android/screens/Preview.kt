@@ -111,6 +111,7 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.WaitLine
 import fail.still.core.CoreException
 import java.io.ByteArrayOutputStream
 import kotlin.coroutines.resume
@@ -148,7 +149,7 @@ fun PreviewScreen(station: String, service: String) {
         NavBar(t("android-chat.preview.back"), app::pop, job?.name ?: t("android-chat.preview.service"), sub = { Text(rememberStationName(station), fontSize = 11.sp, color = C.muted, maxLines = 1) })
         when {
             error != null && job == null -> PreviewNote(t("android-chat.preview.notFound", "error" to error))
-            job == null -> Unit
+            job == null -> PreviewWait(t("common.reading"))
             !up -> PreviewNote(t("android-chat.preview.stopped", "name" to job.name))
             else -> ServicePage(station, service, port!!.toInt(), job.name, restarting = job.state == "exited", restarts = job.restarts ?: 0, session = session)
         }
@@ -169,7 +170,7 @@ fun PreviewFileScreen(station: String, session: String, path: String, name: Stri
         NavBar(t("android-chat.preview.back"), app::pop, name, sub = { Text(rememberStationName(station), fontSize = 11.sp, color = C.muted, maxLines = 1) })
         when (val l = loaded) {
             Loaded.Failed -> PreviewNote(t("android-chat.preview.unreadable", "name" to name))
-            Loaded.Waiting -> Unit
+            Loaded.Waiting -> PreviewWait(t("common.opening"))
             is Loaded.Ready -> {
                 val kept = remember(l) { arrayOf(l.state) }
                 val page = FilePage(l.html, { kept[0] }) { s ->
@@ -188,6 +189,11 @@ private class FilePage(val html: String, val state: () -> JsonElement?, val keep
 @Composable
 private fun PreviewNote(text: String) =
     Text(text, fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp))
+
+/** What the page waits on, where its note would be (not a blank page). */
+@Composable
+private fun PreviewWait(text: String) =
+    Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), contentAlignment = Alignment.Center) { WaitLine(text) }
 
 // ── the page's size (web/src/viewport.ts) ──────────────────────────────
 

@@ -14,7 +14,8 @@ import { absoluteOf, folderName, rootTrouble } from "../drive/useDrive.ts";
 import { ChevronRight, Folder, Server } from "@stillfail/ui/icons.tsx";
 import { fileSize } from "@stillfail/ui/fileSize.ts";
 import { SheetGrab, SheetHead, type MobileApp } from "./app.tsx";
-import { Button, Loading, PickRow, SectionHeader, Seg } from "./parts.tsx";
+import { Button, PickRow, SectionHeader, Seg } from "./parts.tsx";
+import { Waiting } from "@stillfail/ui/waiting.tsx";
 import * as css from "./Drive.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as sheetsCss from "./styles/sheets.css.ts";
@@ -78,7 +79,9 @@ function Picker({ scope, onAdd, onCancel }: { scope: string; onAdd: (items: Drop
 function Places({ scope, onGo }: { scope: string; onGo: (place: Place) => void }) {
   const stations = useStations(scope);
   const list = (stations.value ?? []).filter((s) => s.overview?.drive);
-  if (stations.loading && !stations.value) return <Loading text={t("web-mobile.reading")} />;
+  if (!stations.value) return <Waiting count={4} text={t("common.readingStations")} error={stations.error?.message} />;
+  // Their folders are in each station's overview: none yet while one online is not read.
+  if (!list.length && stations.value.some((s) => s.online && !s.overview)) return <Waiting count={4} />;
   if (!list.length) return <p className={`${partsCss.mMuted} ${css.mSheetNote}`}>{t("web-main.rail.filesNone")}</p>;
   return <>{list.map((s) => <StationPlaces key={s.station} s={s} onGo={onGo} />)}</>;
 }
@@ -116,7 +119,7 @@ function FolderRows({ place, ticked, onToggle, onEnter }: {
       <PickRow label={t("web-mobile.files.wholeFolder")} sub={here.ref.path} leading={<Folder size={20} />} checked={ticked(here)} onClick={() => onToggle(here)} />
       <div className={own.rule} />
       {folder.error ? <p className={`${partsCss.mRed} ${css.mSheetNote}`}>{folder.error.message}</p>
-        : !folder.value ? <Loading text={t("web-mobile.reading")} />
+        : !folder.value ? <Waiting count={5} />
         : entries.length === 0 ? <p className={`${partsCss.mMuted} ${css.mSheetNote}`}>{t("web-pages.drive.emptyFolder")}</p>
         : entries.map((e) => e.dir
           ? <PickRow key={e.name} label={e.name} sub={e.timeText} leading={<KindIcon kind={e.kind} size={20} />} onClick={() => onEnter(e.name)} />

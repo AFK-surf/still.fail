@@ -12,7 +12,7 @@ import type { ChatItem, ShareInView } from "./core/shapes.ts";
 import { useGo } from "./go.ts";
 import { dismissShare, offerShare, openFromPopup, openShare, SEARCH_FROM, useShared, useShareIn, type Shared } from "./shareIn.ts";
 import { Mark } from "./brand.tsx";
-import { ModelLogo, SkeletonRows, Time } from "./ui.tsx";
+import { ModelLogo, Time, Waiting } from "./ui.tsx";
 import * as switcherCss from "./Switcher.css.ts";
 import * as css from "./ShareIn.css.ts";
 import { NAME } from "./channel.ts";
@@ -69,7 +69,7 @@ function Body({ scope, shared }: { scope: string; shared: Shared }) {
           // Esc lets go of the search first, then (pressed again) the panel.
           onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); setQuery(null); } }} />
       )}
-      <div className={css.list}>{view && !view.loading ? <Places view={view} searching={!!query?.trim()} onOpen={open} /> : <div className={css.loading}><SkeletonRows count={3} /></div>}</div>
+      <div className={css.list}>{view && !view.loading ? <Places view={view} searching={!!query?.trim()} onOpen={open} /> : <Waiting shape="rows" dense count={3} />}</div>
     </>
   );
 }

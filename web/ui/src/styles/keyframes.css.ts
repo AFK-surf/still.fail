@@ -20,7 +20,6 @@ export const leadLitKeyframes = keyframes({ "0%": { opacity: ".3" }, "10%": { op
  * half of the loop, then still until the next, so it rests between breaths rather than going on and on.
  */
 export const leadBreatheKeyframes = keyframes({ "0%, 52%, 100%": { opacity: ".35" }, "23%": { opacity: "1" } });
-export const pulseKeyframes = keyframes({ "50%": { opacity: ".45" } });
 export const jobBreatheKeyframes = keyframes({ "50%": { opacity: ".35" } });
 export const jobLiveKeyframes = keyframes({ "0%, 100%": { transform: "scale(.6)", opacity: ".35" }, "50%": { transform: "scale(1.15)", opacity: "0" } });
 export const msgSendingShowKeyframes = keyframes({ "from": { visibility: "hidden" }, "to": { visibility: "visible" } });

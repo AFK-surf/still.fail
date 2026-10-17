@@ -3,7 +3,6 @@ import { vars } from "../styles/tokens.css.ts";
 import { VIEWER_BAR } from "./ViewerBar.css.ts";
 import { pictureGlass as glass } from "../styles/glass.ts";
 import { vvBar } from "./media.css.ts";
-import { spinner as turning } from "../styles/spinner.css.ts";
 
 /** The player fills its page (the phone's, or the desktop's main pane), in the theme's colours as the chat's video viewer. */
 export const player = style({ position: "absolute", inset: "0", userSelect: "none", WebkitUserSelect: "none" });
@@ -41,7 +40,8 @@ export const noteButton = style({
   display: "inline-flex", alignItems: "center", gap: "6px", height: "36px", padding: "0 16px", border: "0", borderRadius: "999px",
   background: `color-mix(in srgb, ${vars.text} 12%, transparent)`, color: vars.text, fontSize: vars.textUi, cursor: "pointer",
 });
-export const spinner = style([turning, { position: "absolute", width: "28px", height: "28px", pointerEvents: "none" }]);
+/** What of it has come while it opens, under the words saying how much (waiting.tsx Progress). */
+export const noteBar = style({ width: "220px", maxWidth: "100%" });
 /** What of it has come: a lighter band under the played part. */
 export const buffered = style({ position: "absolute", top: "0", bottom: "0", background: `color-mix(in srgb, ${vars.text} 22%, transparent)` });
 /** A subtitle's lines over the picture: above the controls while they show, lower once they fade. */

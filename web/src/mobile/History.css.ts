@@ -31,6 +31,8 @@ export const mHSteps = style({
   vars: { "--list-gap": "10px" },
 });
 export const mHEdge = style({ padding: "10px 0", fontSize: vars.textCaption, color: "var(--m-subtle)", textAlign: "center" });
+/** Its earlier pages being read: the shared wait's line (@stillfail/ui waiting.tsx WaitLine) centred in the edge's. */
+export const mHEdgeWait = style({ justifyContent: "center" });
 export const mHItem = style({
   borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, transition: "background 900ms",
   selectors: {

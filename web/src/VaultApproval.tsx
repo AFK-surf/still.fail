@@ -12,7 +12,7 @@ import { useVaultCall, useVaultRequest } from "./vault.ts";
 import { Option1, Option2, Option3 } from "@stillfail/ui/icons.tsx";
 import * as css from "./Decisions.css.ts";
 import * as own from "./VaultApproval.css.ts";
-import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
+import { Spinner } from "@stillfail/ui/waiting.tsx";
 import { t } from "./i18n.ts";
 
 type Choice = { scope: "once" | "hour" | null; label: string; detail: string };
@@ -68,7 +68,7 @@ export function VaultChoices({ workspace, id, onDecided }: { workspace: string; 
             <span className={css.choiceNumber} aria-hidden="true"><Digit size={20} /></span>
             <span className={css.choiceLabel}>{c.label}</span>
             <span className={css.choiceDetail}>{c.detail}</span>
-            {now && <span className={`${spinnerCss.spinner} ${css.choiceSpinner}`} aria-hidden="true" />}
+            {now && <Spinner inline className={css.choiceSpinner} />}
           </button>
         );
       })}

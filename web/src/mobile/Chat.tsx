@@ -25,7 +25,7 @@ import { StationCornerDot, StationDot, useStationLink } from "../StationLink.tsx
 import * as linkCss from "../StationLink.css.ts";
 import { StationPeek } from "../cloud/StationCards.tsx";
 import { GoRow } from "./Settings.tsx";
-import { LoadingPill, PlaceholderMessages } from "./Loading.tsx";
+import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import { PENDING } from "../lastChat.ts";
 import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
@@ -33,7 +33,7 @@ import { ask, confirm } from "./sheets.tsx";
 import { openHistory } from "./History.tsx";
 import { AgentSince, openAgent } from "./AgentSheet.tsx";
 import { HOLD, usePick } from "./pick.tsx";
-import { Button, GroupLabel, InfoList, InfoRow, LinkButton, ModelMark, NavButton, PickRow, QuotaRings, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
+import { Button, Gone, GroupLabel, InfoList, InfoRow, LinkButton, ModelMark, NavButton, PickRow, QuotaRings, Seg, SlackMark, stateOf } from "./parts.tsx";
 import { AgentMark } from "../ui.tsx";
 import { OutsideList, outsideOf, shareOutside, type Outside } from "../OutsideShare.tsx";
 import { useAction } from "../action.ts";
@@ -86,14 +86,9 @@ export function ChatScreen() {
   const lives = useLives(station.address, (view?.agents ?? []).map((a) => a.session.key));
   // Until the core has the chat, the page is already a chat's page (its bar, empty): what comes fills it in place.
   if (!view) {
-    return (
-      <div className={chatCss.mChat}>
-        <BarFrame title="" more={false} />
-        {/* Read from its station meanwhile, over the messages to come (./Loading.tsx); what is wrong in red, over faded ones. */}
-        <LoadingPill text={chat.error ? t("web-mobile.chat.failed", { error: chat.error.message }) : station.name ? t("web-mobile.chat.readingFrom", { station: station.name }) : t("web-mobile.chat.reading")} error={!!chat.error} />
-        <PlaceholderMessages still={!!chat.error} />
-      </div>
-    );
+    // Read from its station meanwhile, over the messages to come; what is wrong in red, over faded ones.
+    return <ChatWaiting text={station.name ? t("web-mobile.chat.readingFrom", { station: station.name }) : t("web-mobile.chat.reading")}
+      error={chat.error ? t("web-mobile.chat.failed", { error: chat.error.message }) : undefined} />;
   }
   return <Chat view={view} sessionKey={key} lives={lives} />;
 }
@@ -232,6 +227,19 @@ function StationSheet({ station }: { station: string }) {
         </>} />}
       </div>
     </>
+  );
+}
+
+/**
+ * A chat's page before its chat is there: its bar (empty) and under it the messages to come, with what it waits on
+ * (@stillfail/ui waiting.tsx) or in red what is wrong; `gone`: there is nothing to wait for (no such station), said instead.
+ */
+export function ChatWaiting({ text, error, gone }: { text?: string; error?: string | undefined; gone?: string }) {
+  return (
+    <div className={chatCss.mChat}>
+      <BarFrame title="" more={false} />
+      <div className={css.mChatWaiting}>{gone !== undefined ? <Gone text={gone} /> : <Waiting shape="messages" text={text} error={error} />}</div>
+    </div>
   );
 }
 
@@ -458,7 +466,7 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
       <button type="button" className={css.mPlus} onClick={(e) => onPlus(e.currentTarget)} disabled={locked} aria-label={t("web-mobile.chat.addFiles")}><Plus size={18} /></button>
       {field}
       <button type="button" className={css.mSend} data-ready={ready || undefined} disabled={!ready} onClick={onSend} aria-label={t("web-mobile.chat.send")}>
-        {draft.starting ? <Spinner size={16} color="var(--m-surface)" /> : <ArrowUp size={18} />}
+        {draft.starting ? <Spinner className={partsCss.mSpinOnColor} /> : <ArrowUp size={18} />}
       </button>
     </div>
   );
@@ -556,7 +564,7 @@ function JobsNow({ here }: { here: Here }) {
         )}
         {view.ended > 0 && (
           <button type="button" className={css.mJobsAll} data-busy={clearing || undefined} disabled={clearing} onClick={() => clear(view.clear)}>
-            <span className={css.mJobsAllLine}>{clearing && <Spinner size={13} />}{view.clearText}</span>
+            <span className={css.mJobsAllLine}>{clearing && <Spinner inline />}{view.clearText}</span>
           </button>
         )}
       </div>
@@ -649,7 +657,7 @@ function JobSheet({ station, sessionKey, jobId }: { station: string; sessionKey:
           )
           : <JobOutput station={station} job={job} />}
         {tab === 0 && said && <div className={css.mJobLast}><span>{said}</span>{last?.last && <code>{last.last}</code>}</div>}
-        {running && <button type="button" className={css.mJobStop} disabled={stopping} onClick={() => stop(job)}>{stopping ? <Spinner size={16} color="var(--m-red)" /> : <Stop size={16} />}{stopping ? t("web-mobile.chat.stopping") : t("web-mobile.history.stop")}</button>}
+        {running && <button type="button" className={css.mJobStop} disabled={stopping} onClick={() => stop(job)}>{stopping ? <Spinner className={partsCss.mSpinOnColor} /> : <Stop size={16} />}{stopping ? t("web-mobile.chat.stopping") : t("web-mobile.history.stop")}</button>}
         {running && !stopping && stopFailed !== undefined && <p className={partsCss.mError}>{t("web-mobile.chat.stopFailed", { error: stopFailed })}</p>}
       </div>
     </>
@@ -665,9 +673,10 @@ function JobOutput({ station, job }: { station: string; job: Job }) {
     const el = box.current;
     if (el && atEnd.current) el.scrollTop = el.scrollHeight;
   }, [log?.text]);
+  if (log === null) return <WaitLine />;
   return (
     <pre ref={box} className={css.mJobOutput} onScroll={(e) => { const el = e.currentTarget; atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
-      {log === null ? t("web-mobile.reading") : log.text || t("web-mobile.chat.noOutput")}
+      {log.text || t("web-mobile.chat.noOutput")}
     </pre>
   );
 }
@@ -835,7 +844,7 @@ function PublishSheet({ here, thread }: { here: Here; thread: number }) {
             <Button primary={false} label={t("common.done")} onClick={() => app.sheet(null)} />
           </>
         ) : "reading" in preview ? (
-          <p className={partsCss.mMuted}><Spinner size={14} /> {t("web-pages.chat.publish.reading")}</p>
+          <WaitLine text={t("web-pages.chat.publish.reading")} />
         ) : "error" in preview ? (
           <p className={partsCss.mError}>{preview.error}</p>
         ) : p!.messages.length === 0 ? (

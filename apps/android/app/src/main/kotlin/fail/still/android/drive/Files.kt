@@ -6,7 +6,6 @@ package fail.still.android.drive
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -53,6 +52,7 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.Waiting
 
 /** A folder lent, and the station it is on; `home` the station's home (every folder of it). */
 private class Lent(val s: StationView, val root: DriveRoot, val home: Boolean = false)
@@ -79,7 +79,9 @@ fun FilesScreen(current: WorkspaceEntry) {
     val known = (list != null || stations.error != null) && (workspace.value != null || workspace.error != null)
     PlacePage(current, "files", add, known) { top ->
         when {
-            list == null -> Box(Modifier.padding(top = top)) { Note(stations.error?.message ?: t("android-misc.drive.reading")) }
+            // The stations, or a station up whose folders are not here yet: not "none lent" before it is known.
+            list == null || (lent.isEmpty() && list.any { it.online && it.overview == null }) ->
+                Waiting(text = t("common.reading"), error = stations.error?.message, modifier = Modifier.padding(top = top))
             lent.isEmpty() -> Column(
                 Modifier.fillMaxWidth().padding(top = top).padding(horizontal = 32.dp, vertical = 56.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -106,11 +108,6 @@ private fun FolderRow(app: AppState, l: Lent) {
         l.root.name, onClick = { app.push(Screen.Drive(l.s.station, l.root.path, "")) }, away = !l.s.online,
         mark = { IconIn(if (l.home) Icons.Server else Icons.Folder, 16.dp, C.muted) },
     )
-}
-
-@Composable
-private fun Note(text: String) {
-    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Text(text, color = C.muted, fontSize = 14.sp, textAlign = TextAlign.Center) }
 }
 
 /** Another folder lent: on the one station there is, or the one chosen first. */

@@ -123,7 +123,6 @@ import fail.still.android.data.Topics
 import fail.still.android.data.decode
 import fail.still.android.data.t
 import fail.still.android.screens.PickRow
-import fail.still.android.screens.Spinner
 import fail.still.android.screens.activity
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
@@ -133,6 +132,7 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.WaitPill
 import fail.still.android.ui.C as Palette
 import fail.still.core.CoreException
 import kotlinx.coroutines.Dispatchers
@@ -362,10 +362,11 @@ fun PlayerScreen(station: String, root: String, path: String) {
                 .padding(bottom = if (shown > 0.5f) 132.dp else 28.dp).background(Color.Black.copy(alpha = 0.35f), Smooth(6.dp)).padding(horizontal = 8.dp, vertical = 2.dp),
         )
         when (phase) {
-            Phase.Opening, Phase.Buffering -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Spinner(22.dp)
-                Text(if (phase == Phase.Opening) t("android-misc.drive.player.opening") else t("android-misc.drive.player.buffering"), fontSize = 13.sp, color = Muted)
-            }
+            // A wait's pill floating over the picture, on the controls' glass so it reads over any frame.
+            Phase.Opening, Phase.Buffering -> WaitPill(
+                if (phase == Phase.Opening) t("common.opening") else t("android-misc.drive.player.buffering"),
+                modifier = Modifier.align(Alignment.Center).glass(haze, CircleShape), ground = Color.Transparent, ink = Ink,
+            )
             Phase.Failed -> Column(Modifier.align(Alignment.Center).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(t("android-misc.drive.player.failed"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
                 failure?.let { Text(it, fontSize = 12.sp, color = Muted, textAlign = TextAlign.Center, maxLines = 4, overflow = TextOverflow.Ellipsis) }

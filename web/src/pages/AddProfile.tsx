@@ -9,7 +9,7 @@ import { Plus } from "@stillfail/ui/icons.tsx";
 import { StationContext, stationBase } from "../station.tsx";
 import { useProfileFlow } from "../profileFlow.ts";
 import { useToast } from "@stillfail/ui/toast.tsx";
-import { BackLink, Button, Field, Loading, ProviderLogo, Segmented, Select } from "../ui.tsx";
+import { BackLink, Button, Field, ProviderLogo, Segmented, Select, Waiting } from "../ui.tsx";
 import type { ApiProvider, ProfileFlowView } from "../core/shapes.ts";
 import { MachineLoginOffers, LoginSteps } from "./Accounts.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
@@ -28,7 +28,7 @@ export function AddProfile({ workspace }: { workspace: string }) {
   const stations = useStations(workspace).value;
   const [params, setParams] = useSearchParams();
   const online = (stations ?? []).filter((s) => s.online);
-  if (!stations) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Loading label={t("web-pages.settings.reading")} /></div>;
+  if (!stations) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting shape="cards" text={t("common.readingStations")} /></div>;
   const chosen = online.find((s) => s.station === params.get("station")) ?? online[0];
   if (!chosen) return <Navigate to={`/w/${workspace}/settings/profiles`} replace />;
   const station = { id: chosen.id, name: chosen.name, online: chosen.online, address: chosen.station, base: stationBase(chosen.station), settings: `/w/${workspace}/settings` };
@@ -84,7 +84,7 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
 
   const added = () => { toast(t("web-pages.profiles.verifiedAdded")); navigate(list); };
 
-  if (!d) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Loading label={t("web-pages.settings.reading")} /></div>;
+  if (!d) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting shape="cards" /></div>;
   const picking = d.step === "pick";
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>

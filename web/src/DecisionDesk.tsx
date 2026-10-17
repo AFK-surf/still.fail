@@ -17,7 +17,7 @@ import { StationContext, stationBase } from "./station.tsx";
 import { useShortcut } from "./keymap.ts";
 import { useListMotion } from "./listMotion.ts";
 import { LOCAL_MS, MOVE, reducedMotion } from "@stillfail/ui/motion.ts";
-import { Time } from "./ui.tsx";
+import { Time, Waiting } from "./ui.tsx";
 import { StationMark } from "./StationMark.tsx";
 import * as markCss from "./StationMark.css.ts";
 import * as css from "./DecisionDesk.css.ts";
@@ -151,7 +151,8 @@ export function DecisionRows({ active, page }: { active: boolean; page: string }
           </button>
         </div>
       ))}
-      {view.value && items.length === 0 && <div className={css.emptyList}>{t("web-main.decisions.empty")}</div>}
+      {queue.waiting ? <Waiting dense note={queue.waiting} />
+        : view.value && items.length === 0 && <div className={css.emptyList}>{t("web-main.decisions.empty")}</div>}
     </div>
   );
 }
@@ -203,7 +204,8 @@ export function DecisionPage({ onOpen }: { onOpen: (path: string) => void }) {
               </DecisionFoot>
             </div>
           </StationContext.Provider>
-        ) : view.value ? <DecisionsIdle view={view.value} onOpen={onOpen} />
+        ) : queue.waiting ? <Waiting shape="cards" count={2} note={queue.waiting} />
+          : view.value ? <DecisionsIdle view={view.value} onOpen={onOpen} />
           : empty && <p className={deckCss.empty}>{empty}</p>}
       </div>
     </div>

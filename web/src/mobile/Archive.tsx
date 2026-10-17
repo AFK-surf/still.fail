@@ -12,7 +12,9 @@ import type { ArchiveItem } from "../core/shapes.ts";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { ABOUT, ARCHIVE_PAGE, DELETE_TEXT, itemKey, useArchive } from "../pages/Archive.tsx";
 import { useApp } from "./app.tsx";
-import { FailedMark, PlaceHead, PlaceNote, SectionHeader, Spinner } from "./parts.tsx";
+import { FailedMark, PlaceHead, PlaceNote, SectionHeader } from "./parts.tsx";
+import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
+import { useArchiveView } from "../api.ts";
 import { confirm } from "./sheets.tsx";
 import * as css from "./Archive.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -25,7 +27,11 @@ export function ArchiveScreen() {
   useReady({ topic: "archive", scope: app.entry.id }, LOCAL_MS);
   const [q, setQ] = useState("");
   const [limit, setLimit] = useState(ARCHIVE_PAGE);
-  const { days, errors, note, more, restore, remove } = useArchive(app.entry.id, app.toast, q, limit);
+  const { days, errors, note, read, more, restore, remove } = useArchive(app.entry.id, app.toast, q, limit);
+  // What it still waits on (the core's `wait`, the topic useArchive reads): with no rows, the rows to come under it.
+  const archive = useArchiveView(app.entry.id, q, limit);
+  const wait = archive.value?.wait;
+  const waiting = days.length === 0 && (!read || !!wait?.reading || !!wait?.failing.length);
   // Near the list's end (a screen or so before it), the next rows.
   const page = useRef<HTMLDivElement | null>(null);
   const end = useRef<HTMLDivElement | null>(null);
@@ -45,8 +51,11 @@ export function ArchiveScreen() {
             onChange={(e) => { setQ(e.target.value); setLimit(ARCHIVE_PAGE); }} />
         </label>
       </div>
-      {errors.map((e) => <p key={e.station} className={css.mArchiveNote} data-error>{e.text}</p>)}
-      {note && <p className={css.mArchiveNote}>{note}</p>}
+      {!read ? <Waiting text={t("common.reading")} error={archive.error?.message} />
+        : waiting ? <Waiting note={wait} />
+        : wait?.reading && <WaitLine className={css.mArchiveNote} text={wait.text ?? t("common.reading")} />}
+      {!waiting && errors.map((e) => <p key={e.station} className={css.mArchiveNote} data-error>{e.text}</p>)}
+      {note && !waiting && !wait?.reading && <p className={css.mArchiveNote}>{note}</p>}
       {days.map((day) => (
         <section key={day.label} aria-label={day.label}>
           <SectionHeader title={day.label} />
@@ -54,7 +63,7 @@ export function ArchiveScreen() {
         </section>
       ))}
       {/* Nothing archived: what the archive is, said then (the page says it nowhere else). */}
-      {days.length === 0 && !q && <PlaceNote>{ABOUT}</PlaceNote>}
+      {wait?.empty && !q && <PlaceNote>{ABOUT}</PlaceNote>}
       {more && <div ref={end} style={{ height: 1 }} />}
       <div style={{ height: 24 }} />
     </div>
@@ -82,12 +91,12 @@ function Row({ item, restore, remove }: { item: ArchiveItem; restore: (item: Arc
           {!busy && failed !== undefined && <FailedMark error={failed} />}
           {/* restore says how it went itself (../pages/Archive.tsx useArchive) */}
           <button type="button" className={css.mArchiveAction} aria-label={t("web-mobile.archive.restore", { title: item.title })} disabled={busy} aria-busy={restoring || undefined} onClick={() => void restore(item)}>
-            {restoring ? <Spinner size={16} /> : <Retry size={16} />}
+            {restoring ? <Spinner /> : <Retry size={16} />}
           </button>
           {item.deletable && (
             <button type="button" className={css.mArchiveAction} aria-label={t("web-mobile.archive.delete", { title: item.title })} disabled={busy} aria-busy={deleting || undefined}
               onClick={() => confirm(app, { title: t("web-mobile.archive.deleteAsk", { title: item.title }), text: DELETE_TEXT, action: t("common.delete"), danger: true, atOnce: "web-main.chat.deleteFailed", run: () => remove(item) })}>
-              {deleting ? <Spinner size={16} /> : <Trash size={16} />}
+              {deleting ? <Spinner /> : <Trash size={16} />}
             </button>
           )}
         </span>

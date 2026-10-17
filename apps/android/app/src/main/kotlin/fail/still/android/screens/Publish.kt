@@ -2,6 +2,7 @@
 // the sheet that publishes it (web mobile/Chat.tsx PublishList / PublishSheet).
 package fail.still.android.screens
 
+import fail.still.android.ui.WaitLine
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -147,10 +148,7 @@ internal fun openPublish(app: AppState, station: String, thread: Long) {
                         Button(t("common.link.copy"), primary = true) { copyLink(app, context, done.link) }
                     }
                 }
-                now is Previewed.Reading -> Row(inset, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Spinner(14.dp)
-                    Text(t("web-pages.chat.publish.reading"), fontSize = 14.sp, color = C.muted)
-                }
+                now is Previewed.Reading -> WaitLine(t("web-pages.chat.publish.reading"), modifier = inset)
                 now is Previewed.Failed -> Text(now.error, fontSize = 13.sp, color = C.red, modifier = inset)
                 now is Previewed.Ok && now.preview.messages.isEmpty() -> Text(t("web-pages.chat.publish.empty"), fontSize = 14.sp, color = C.muted, modifier = inset)
                 now is Previewed.Ok -> {

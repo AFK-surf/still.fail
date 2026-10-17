@@ -1,6 +1,6 @@
 {
   "web-share.title": "Shared on still.fail",
-  "web-share.connecting": "Connecting to the station…",
+  "web-share.connecting": "Connecting to the station",
   "web-share.malformed": "This link is incomplete and can't be opened",
   "web-share.cloud": "Couldn't connect to still.fail. Try again later.",
   "web-share.offline": "Couldn't connect to this station. It may be offline.",

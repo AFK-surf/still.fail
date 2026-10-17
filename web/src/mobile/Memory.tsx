@@ -9,7 +9,8 @@ import { useStation } from "../station.tsx";
 import { useApp } from "./app.tsx";
 import { useStations } from "../api.ts";
 import { ChevronDown, ChevronRight } from "@stillfail/ui/icons.tsx";
-import { Card, LargeTitle, ListCard, ListRow, Loading, NavBar, SectionHeader, TopBack } from "./parts.tsx";
+import { Card, Gone, LargeTitle, ListCard, ListRow, NavBar, SectionHeader, TopBack } from "./parts.tsx";
+import { Waiting } from "@stillfail/ui/waiting.tsx";
 import { GoRow } from "./Settings.tsx";
 import * as settingsCss from "./styles/settings.css.ts";
 import * as settingsRowCss from "./Settings.css.ts";
@@ -51,7 +52,7 @@ export function MemoryScreen() {
   return (
     <div className={pagesCss.mScreen}>
       <NavBar back={station.name} onBack={app.pop} title={t("web-mobile.settings.memory")} sub={<span className={barsCss.mNavbarNote}>{t("web-mobile.memory.sub")}</span>} />
-      {!memory || !parts ? <Loading text={error ? MEMORY_TEXT.failed(error) : t("web-mobile.reading")} /> : (
+      {!memory || !parts ? <Waiting fill shape="cards" error={error ? MEMORY_TEXT.failed(error) : undefined} /> : (
         <div className={pagesCss.mScroll} style={{ paddingTop: 4 }}>
           <SectionHeader title={t("web-mobile.memory.global")} trailing={[t("web-main.memory.global.when"), memory.global.size].filter(Boolean).join(" · ")} start={24} />
           {parts.sections.length === 0 ? <p className={css.mMemoryNote}>{t("web-mobile.memory.empty")}</p>
@@ -89,7 +90,7 @@ export function MemoryDocScreen() {
   const doc = (text: string) => <Card><div className={`${rootCss.wide} ${conversationCss.markdown} ${css.mMemoryDoc}`}><Prose>{text}</Prose></div></Card>;
   const sub = name === undefined ? t("web-main.memory.global.when") : skill ? skillKind(skill) : undefined;
   let body: React.ReactNode;
-  if (!memory) body = <Loading text={error ? MEMORY_TEXT.failed(error) : t("web-mobile.reading")} />;
+  if (!memory) body = <Waiting fill shape="cards" count={1} error={error ? MEMORY_TEXT.failed(error) : undefined} />;
   else if (name === undefined) {
     const { sections } = memoryParts(memory);
     const i = Math.min(Math.max(0, at), Math.max(0, sections.length - 1));
@@ -99,7 +100,7 @@ export function MemoryDocScreen() {
         {doc(sections[i]?.text || t("web-mobile.memory.empty"))}
       </>
     );
-  } else if (!skill) body = <Loading text={t("web-main.memory.gone")} />;
+  } else if (!skill) body = <Gone text={t("web-main.memory.gone")} />;
   else {
     const pages = skillPages(skill);
     const i = Math.min(at, pages.length - 1);
@@ -134,7 +135,7 @@ export function MemoriesScreen() {
       <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} />
       <LargeTitle small="" big={t("web-mobile.settings.memory")} />
       <p className={settingsCss.mPageNote}>{t("web-mobile.memory.note")}</p>
-      {!stations ? <Loading text={t("web-mobile.memory.readingStations")} /> : (
+      {!stations ? <Waiting shape="cards" count={1} text={t("common.readingStations")} /> : (
         <ListCard>
           {stations.map((s) => s.online
             ? <GoRow key={s.id} title={s.name} value={t("web-mobile.memory.both")} onClick={() => app.push(app.at(`/s/${s.id}/memory`))} />

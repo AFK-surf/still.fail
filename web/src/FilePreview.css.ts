@@ -1,11 +1,10 @@
-import { globalStyle, keyframes, style } from "@vanilla-extract/css";
+import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { fadeInKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { btn } from "@stillfail/ui/styles/controls.css.ts";
 import { enrollWait } from "./cloud/settings.css.ts";
 import { avatarTile, tokenGuide } from "./pages/SlackApp.css.ts";
 import { codeBar, codeBlock, codeShiki } from "./Prose.css.ts";
-import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
 import { segmented, segmentedOption } from "@stillfail/ui/parts.css.ts";
 import { pictureGlass } from "@stillfail/ui/styles/glass.ts";
@@ -152,18 +151,8 @@ export const fpProgress = style({
 });
 export const fpProgressText = style({});
 globalStyle(`${fpProgressText} b`, { color: vars.text, fontWeight: "600" });
-export const fpProgressTrack = style({
-  position: "relative", flex: "none", height: "4px", borderRadius: "999px", overflow: "hidden",
-  background: `color-mix(in srgb, ${vars.text} 12%, transparent)`,
-});
-const sweepKeyframes = keyframes({ from: { transform: "translateX(-100%)" }, to: { transform: "translateX(250%)" } });
-export const fpProgressBar = style({
-  position: "absolute", left: "0", top: "0", bottom: "0", width: "0", borderRadius: "999px", background: vars.accent,
-  transition: `width 200ms ${vars.easeOut}`,
-  selectors: {
-    "&[data-unknown]": { width: "40%", animation: `${sweepKeyframes} 1.2s ease-in-out infinite` },
-  },
-});
+/** Its bar (waiting.tsx Progress), as long as the box in the middle, a set length in the bar. */
+export const fpProgressTrack = style({});
 export const fpAudio = style({ display: "grid", gap: "14px", justifyItems: "center", width: "min(100% - 48px, 480px)" });
 export const fpAudioName = style({
   maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: vars.textUi,
@@ -253,15 +242,12 @@ globalStyle(`${fpTable} tbody tr:hover`, { background: vars.hover });
 globalStyle(`${fpTable} th:first-child`, { width: "1%", paddingLeft: "20px", color: vars.muted, textAlign: "right" });
 globalStyle(`${fpTable} td:last-child, ${fpTable} th:last-child`, { width: "100%" });
 globalStyle(`${fpNote} ${btn}`, { display: "inline-flex", alignItems: "center", gap: "6px" });
-globalStyle(`${fpNote} ${spinner}`, { width: "16px", height: "16px" });
 /** Here rather than with its class: it comes after .fp-table th:first-child, and wins over it. */
 globalStyle(`${tokenGuide} li > ${btn}`, { marginTop: "6px" });
 /** Here rather than with its class: it comes after .fp-table th:first-child, and wins over it. */
 globalStyle(`${tokenGuide} li > ${btn}`, { width: "max-content" });
 /** Here rather than with its class: it comes after .token-guide li > .btn, and wins over it. */
 globalStyle(`${avatarTile} img[data-maker]`, { width: "55%", height: "55%", transform: "none" });
-/** Here rather than with its class: it comes after .fp-note .spinner, and wins over it. */
-globalStyle(`${enrollWait} ${spinner}`, { width: "18px", height: "18px", borderTopColor: vars.accent });
 
 /** Room for the widest it says ("15.0 MB / 15.0 MB"), so the bar does not grow as the numbers do. */
 globalStyle(`${fpHeadProgress} ${fpProgressText}`, { minWidth: "172px", textAlign: "right" });

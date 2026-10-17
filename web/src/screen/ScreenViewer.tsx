@@ -18,7 +18,7 @@ import { useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { ViewerBar, ViewerTool, VIEWER_BAR_REACH } from "@stillfail/ui/viewer/ViewerBar.tsx";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
 import { REST_MS } from "@stillfail/ui/viewer/rest.ts";
-import { Button, PanelButton, Segmented, Tip } from "../ui.tsx";
+import { Button, PanelButton, Segmented, Tip, WaitPill } from "../ui.tsx";
 import { t } from "../i18n.ts";
 import { ScreenFrames, decodable, viewSize, type FrameConfig, type FrameHead } from "./frames.ts";
 import { hearInput, type ScreenInput } from "./input.ts";
@@ -313,12 +313,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
           onClose={() => { sends.clear(); if (!sends.going.some((u) => u.state === "sending")) setSendsOpen(false); }} />
       )}
       <input ref={files} type="file" multiple hidden onChange={(e) => { const list = [...(e.target.files ?? [])]; e.target.value = ""; sendFiles(list); }} />
-      {waiting && (
-        <div className={css.waiting} role="status">
-          <span className={css.spinnerBox} aria-hidden="true"><span className={css.spinner} /></span>
-          <span className={css.waitingText}>{phase === "reconnecting" ? t("web-pages.screen.reconnecting") : t("web-pages.screen.connecting")}</span>
-        </div>
-      )}
+      {waiting && <WaitPill over text={phase === "reconnecting" ? t("common.reconnecting") : t("common.connecting")} />}
       {over && (
         <div className={css.note} role="alert">
           <div className={css.noteWords}>

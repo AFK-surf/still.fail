@@ -10,7 +10,7 @@ import { CAN_NOTIFY, requestPermission, setNotify, useNotifyState, type NotifySt
 import { useWorkspaceMarks } from "../lastChat.ts";
 import { setPrefs } from "../prefs.ts";
 import { ChevronRight } from "@stillfail/ui/icons.tsx";
-import { MobileBack, Section, Segmented, Switch, SwitchRow } from "../ui.tsx";
+import { MobileBack, Section, Segmented, Switch, SwitchRow, Waiting } from "../ui.tsx";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./Notifications.css.ts";
@@ -35,6 +35,8 @@ export function NotificationsPage({ back, workspace }: { back: string; workspace
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={back} label={t("web-pages.settings.title")} />
       <header className={pagesCss.pageHead}><div><h1>{t("web-pages.settings.nav.notifications")}</h1></div></header>
+      {/* Not the device's settings yet (the core's): their cards' shapes, not the defaults as if they were its. */}
+      {!s.read ? <Waiting shape="cards" /> : <>
       <Preview s={s} kind={open ?? KINDS_SHOWN.find((k) => s.banner(k)) ?? "wait"} />
       <Section title={t("web-pages.notifications.ways.title")} description={s.note}>
         <div className={css.tiles}>
@@ -61,6 +63,7 @@ export function NotificationsPage({ back, workspace }: { back: string; workspace
           {!window.stillfailDesktop && <p className={css.sound}>{t("web-pages.notifications.browserNote")}</p>}
         </div>
       </Section>
+      </>}
     </div>
   );
 }
@@ -93,6 +96,8 @@ function useSettings(workspace: string) {
 
   return {
     state: state as NotifyState, busy, note,
+    /** The core's settings have come (until then, what is shown would be the defaults). */
+    read: notify !== undefined,
     notices, preview: preview ?? notify?.preview ?? true,
     count: marks?.badge ?? 0,
     permission: notify?.permission ?? "unknown",

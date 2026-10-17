@@ -296,6 +296,24 @@ data class ArchivePolicyView (
 	val changeText: String? = null
 )
 
+@Serializable
+data class StationFailing (
+	val station: String,
+	val text: String,
+	val message: String? = null
+)
+
+/// What a list with no rows to show says in their place: it is still reading, the stations it cannot reach (`text`
+/// says so, `message` why), or there is nothing (`empty`). All false and none with rows to show.
+@Serializable
+data class ListNote (
+	val reading: Boolean,
+	/// While reading, what it waits on (正在连接 Studio, 正在读取会话); absent from a core before it.
+	val text: String? = null,
+	val failing: List<StationFailing>,
+	val empty: Boolean
+)
+
 /// The archive of a scope's stations online (the `archive` topic): chats archived by hand or by their station once
 /// idle, newest first by the day they were archived; what could not be read of it; and what the page says in place
 /// of rows (reading, none), if anything. Restored (`chat.archive` with `archived` false) or deleted (`session.delete`),
@@ -305,7 +323,8 @@ data class ArchiveView (
 	val days: List<ArchiveDay>,
 	/// A station's archive that could not be read, in a line (named where there are several).
 	val errors: List<ArchiveError>,
-	val loading: Boolean,
+	/// What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be.
+	val wait: ListNote,
 	val note: String? = null,
 	/// How many archived chats there are (with `q`, that have it), shown or not.
 	val total: UInt? = null,
@@ -1905,24 +1924,6 @@ data class StationsGlyph (
 )
 
 @Serializable
-data class StationFailing (
-	val station: String,
-	val text: String,
-	val message: String? = null
-)
-
-/// What a list with no rows to show says in their place: it is still reading, the stations it cannot reach (`text`
-/// says so, `message` why), or there is nothing (`empty`). All false and none with rows to show.
-@Serializable
-data class ListNote (
-	val reading: Boolean,
-	/// While reading, what it waits on (正在连接 Studio, 正在读取会话); absent from a core before it.
-	val text: String? = null,
-	val failing: List<StationFailing>,
-	val empty: Boolean
-)
-
-@Serializable
 data class ChatsView (
 	val me: Me,
 	val stations: List<StationState>,
@@ -2095,7 +2096,8 @@ data class ConnectionView (
 data class ConnectsView (
 	val me: Me,
 	val items: List<ConnectItem>,
-	val loading: Boolean
+	/// What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be.
+	val wait: ListNote
 )
 
 @Serializable
@@ -2188,8 +2190,8 @@ data class DecisionsToday (
 data class DecisionsView (
 	val items: List<DecisionItem>,
 	val count: UInt,
-	/// Some station's chats are still being read: more may come.
-	val loading: Boolean,
+	/// What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be.
+	val wait: ListNote,
 	/// The cards the viewer answered today, newest first. A core before them says none.
 	val answered: List<DecisionAnswered>? = null,
 	/// The viewer's chats where an agent is at work or waiting (正在办), newest first: where the next may come from.
@@ -3816,8 +3818,8 @@ data class WorkspaceProfile (
 @Serializable
 data class ProfilesView (
 	val items: List<WorkspaceProfile>,
-	/// A station that is up is not read yet: its profiles come later.
-	val loading: Boolean
+	/// What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be.
+	val wait: ListNote
 )
 
 /// An attachment a snapshot may take.
@@ -4202,7 +4204,8 @@ data class UsageTile (
 @Serializable
 data class UsageView (
 	val days: UInt,
-	val loading: Boolean,
+	/// What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be.
+	val wait: ListNote,
 	val empty: Boolean,
 	val tiles: List<UsageTile>,
 	val series: List<UsageSeries>,

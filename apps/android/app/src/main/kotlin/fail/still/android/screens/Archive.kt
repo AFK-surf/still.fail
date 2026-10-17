@@ -5,6 +5,8 @@
 // last message the whole line under it. No lines between.
 package fail.still.android.screens
 
+import fail.still.android.ui.Spinner
+import fail.still.android.ui.Waiting
 import fail.still.android.data.t
 import fail.still.android.ui.Smooth
 import androidx.compose.foundation.background
@@ -89,21 +91,26 @@ fun ArchiveScreen(current: WorkspaceEntry) {
     PlacePage(current, "archive", null, back = fail.still.android.placeLabel("chats")) { top ->
     LazyColumn(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.navigationBars), state = list, contentPadding = PaddingValues(top = top, bottom = 24.dp)) {
         item(key = "search") { ArchiveSearch(q) { q = it; limit = Topics.ARCHIVE_PAGE } }
-        val note = if (view != null) view.note else archive.error?.message ?: t("android-misc.stations.loading")
-        view?.errors?.forEach { e -> item(key = "error/${e.station}") { Text(e.text, fontSize = 13.sp, color = C.red, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) } }
-        if (note != null) item(key = "note") { Text(note, fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) }
-        // What lands here, said only while nothing has.
-        if (view != null && view.days.isEmpty() && q.isBlank()) item(key = "empty") { PlaceEmpty(t("android-misc.archive.note")) }
-        view?.days?.forEach { day ->
-            item(key = "day/${day.label}") { SectionHeader(day.label) }
-            items(day.items, key = { "${it.station}/${it.thread ?: it.session}" }) { item ->
-                // Restoring or deleting it under way: a spinner in place of its actions; failed: a red mark beside them a moment.
-                val busy = app.isDoing("chat.archive", "station" to item.station, "session" to item.session) ||
-                    app.isDoing("session.delete", "station" to item.station, "key" to item.session)
-                val failed = app.failedOf("chat.archive", "station" to item.station, "session" to item.session)
-                    ?: app.failedOf("session.delete", "station" to item.station, "key" to item.session)
-                // Tapped, its chat: read there, and restored from its composer.
-                ArchiveRow(item, busy, failed, { app.push(Screen.Chat(item.station, ChatOf.Session(item.session))) }, { restore(item) }, { delete(item) })
+        // Nothing to show yet and still read (or some stations' could not be): the first read's shapes, what is waited on and
+        // the stations that failed as its pills (so not their red lines too).
+        if (view == null || view.days.isEmpty() && (view.wait.reading || view.wait.failing.isNotEmpty())) item(key = "wait") {
+            Waiting(note = view?.wait, text = t("common.readingStations"), error = if (view == null) archive.error?.message else null)
+        } else {
+            view.errors.forEach { e -> item(key = "error/${e.station}") { Text(e.text, fontSize = 13.sp, color = C.red, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) } }
+            view.note?.let { note -> item(key = "note") { Text(note, fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) } }
+            // What lands here, said only while nothing has.
+            if (view.days.isEmpty() && q.isBlank()) item(key = "empty") { PlaceEmpty(t("android-misc.archive.note")) }
+            view.days.forEach { day ->
+                item(key = "day/${day.label}") { SectionHeader(day.label) }
+                items(day.items, key = { "${it.station}/${it.thread ?: it.session}" }) { item ->
+                    // Restoring or deleting it under way: a spinner in place of its actions; failed: a red mark beside them a moment.
+                    val busy = app.isDoing("chat.archive", "station" to item.station, "session" to item.session) ||
+                        app.isDoing("session.delete", "station" to item.station, "key" to item.session)
+                    val failed = app.failedOf("chat.archive", "station" to item.station, "session" to item.session)
+                        ?: app.failedOf("session.delete", "station" to item.station, "key" to item.session)
+                    // Tapped, its chat: read there, and restored from its composer.
+                    ArchiveRow(item, busy, failed, { app.push(Screen.Chat(item.station, ChatOf.Session(item.session))) }, { restore(item) }, { delete(item) })
+                }
             }
         }
         item(key = "room") { BarRoom() }
@@ -143,7 +150,7 @@ private fun ArchiveRow(item: ArchiveItem, busy: Boolean, failed: String?, onOpen
                 fontSize = 12.sp, color = C.subtle, maxLines = 1,
                 modifier = Modifier.semantics { contentDescription = item.how },
             )
-            if (busy) Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) { Spinner(14.dp) }
+            if (busy) Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) { Spinner() }
             else Row(verticalAlignment = Alignment.CenterVertically) {
                 if (failed != null) Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) { DoingMark(false, failed) }
                 Action(Icons.Retry, t("android-misc.archive.restoreNamed", "title" to item.title), onRestore)

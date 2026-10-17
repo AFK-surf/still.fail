@@ -6,7 +6,8 @@ import { useEffect, useState } from "react";
 import { useChangelog, useChangelogSeen } from "../changelog.ts";
 import { Close, Sparks } from "@stillfail/ui/icons.tsx";
 import { useApp } from "./app.tsx";
-import { LargeTitle, ListCard, SectionHeader, Seg, Spinner, TopBack } from "./parts.tsx";
+import { LargeTitle, ListCard, SectionHeader, Seg, TopBack } from "./parts.tsx";
+import { Waiting } from "@stillfail/ui/waiting.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./Changelog.css.ts";
 import { t } from "../i18n.ts";
@@ -28,7 +29,7 @@ export function ChangelogScreen() {
       <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} />
       <LargeTitle small={view?.build != null ? t("web-mobile.changelog.build", { version: `0.1.${view.build}` }) : ""} big={t("web-mobile.settings.changelog")} />
       {tab && <div className={css.mTabs}><Seg options={tabs.map((x) => x.label)} selected={at} onSelect={(i) => setPart(tabs[i]!.part)} height={34} fill /></div>}
-      {!view || view.loading ? <p className={css.mNote}><Spinner size={13} />{t("web-mobile.reading")}</p>
+      {!view || view.loading ? <Waiting shape="cards" count={3} />
         : view.error ? <p className={css.mNote} data-error>{view.error}</p>
         : !tab || tab.days.length === 0 ? <p className={css.mNote}>{t("web-mobile.changelog.empty")}</p>
         : tab.days.map((day) => (

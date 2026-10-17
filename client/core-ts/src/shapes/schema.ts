@@ -233,7 +233,7 @@ export const SHAPES: Record<string, Shape> = {
   DecisionsView: struct([
     ["items", vec("DecisionItem")],
     ["count", "u32"],
-    ["loading", "bool", { doc: "Some station's chats are still being read: more may come." }],
+    ["wait", "ListNote", { doc: "What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be." }],
     ["answered", opt(vec("DecisionAnswered")), { doc: "The cards the viewer answered today, newest first. A core before them says none." }],
     ["working", opt(vec("DecisionWorking")), { doc: "The viewer's chats where an agent is at work or waiting (正在办), newest first: where the next may come from." }],
     ["today", opt("DecisionsToday"), { doc: "The day in numbers." }],
@@ -1549,7 +1549,7 @@ export const SHAPES: Record<string, Shape> = {
   ArchiveView: struct([
     ["days", vec("ArchiveDay")],
     ["errors", vec("ArchiveError"), { doc: "A station's archive that could not be read, in a line (named where there are several)." }],
-    ["loading", "bool"],
+    ["wait", "ListNote", { doc: "What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be." }],
     ["note", opt("String")],
     ["total", opt("u32"), { doc: "How many archived chats there are (with `q`, that have it), shown or not." }],
     ["more", opt("bool"), { doc: "Older ones past the topic's `limit` are left out." }],
@@ -1848,7 +1848,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "A chat's services and background jobs as its pages show them (the `chatJobs` view): every one, those that matter\nnow first (died, restarting, up and alive, over; newest first within each); what the button's dot says; each\ngroup's head's note; how many matter now, how many are over and whose they are (clearing them is per session)." }),
   ProfilesView: struct([
     ["items", vec("WorkspaceProfile")],
-    ["loading", "bool", { doc: "A station that is up is not read yet: its profiles come later." }],
+    ["wait", "ListNote", { doc: "What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be." }],
   ], { doc: "The workspace's profiles in one list (the `profiles` view): one shared between stations once, the others each with\nthe station they are on; by kind of account (`group`, in its order), usable ones first in each.", keepNone: true }),
   WorkspaceProfile: struct([
     ["key", "String", { doc: "The share's id, or station/profile for one on a station only." }],
@@ -1900,7 +1900,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { keepNone: true }),
   UsageView: struct([
     ["days", "u32"],
-    ["loading", "bool"],
+    ["wait", "ListNote", { doc: "What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be." }],
     ["empty", "bool"],
     ["tiles", vec("UsageTile")],
     ["series", vec("UsageSeries")],
@@ -2261,7 +2261,7 @@ export const SHAPES: Record<string, Shape> = {
   ConnectsView: struct([
     ["me", "Me"],
     ["items", vec("ConnectItem")],
-    ["loading", "bool"],
+    ["wait", "ListNote", { doc: "What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be." }],
   ], { keepNone: true }),
   Place: struct([
     ["name", "String", { doc: "A still.fail chat's title, or a Slack thread's workspace and channel (`Cue#ops`)." }],

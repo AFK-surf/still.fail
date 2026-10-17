@@ -30,7 +30,13 @@ import fail.still.android.data.decode
 import fail.still.android.data.t
 import fail.still.android.ui.Dark
 import fail.still.android.ui.Light
-import fail.still.android.ui.Loading
+import fail.still.android.ui.WaitPill
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.background
+import androidx.compose.ui.Alignment
+import fail.still.android.ui.C
 import fail.still.android.ui.StillFailTheme
 import fail.still.core.StillFailCore
 import kotlinx.coroutines.launch
@@ -98,7 +104,8 @@ class ScreenActivity : ComponentActivity() {
             }
             StillFailTheme(dark) {
                 val current = session
-                if (current == null) Loading(t("android-misc.screen.connecting"))
+                // The session made in a moment: the stage's pill, as the viewer says it is connecting (ScreenViewer.kt Over).
+                if (current == null) Box(Modifier.fillMaxSize().background(C.bg), contentAlignment = Alignment.Center) { WaitPill(t("common.connecting")) }
                 else ScreenViewer(current, title, ::finish)
             }
         }

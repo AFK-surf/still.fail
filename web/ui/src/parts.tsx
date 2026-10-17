@@ -15,7 +15,7 @@ import { shortcutKeys, useShortcuts, type Shortcut } from "./shortcuts.ts";
 import { failure, useToast } from "./toast.tsx";
 import * as controlsCss from "./styles/controls.css.ts";
 import * as pageCss from "./styles/page.css.ts";
-import * as spinnerCss from "./styles/spinner.css.ts";
+import { Spinner } from "./waiting.tsx";
 import * as partsCss from "./parts.css.ts";
 
 export const ICON = { size: 16, strokeWidth: 1.7 } as const;
@@ -29,7 +29,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
     return (
       <button ref={ref} type="button" {...rest} aria-busy={busy || undefined} disabled={rest.disabled || busy}
         className={`${controlsCss.btn} ${VARIANT[variant]}${className ? ` ${className}` : ""}`}>
-        {busy ? <span className={spinnerCss.spinner} aria-hidden="true" /> : Icon && <Icon {...ICON} />}
+        {busy ? <Spinner /> : Icon && <Icon {...ICON} />}
         {children}
       </button>
     );
@@ -47,7 +47,7 @@ export const IconButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTM
       <Tip label={!busy && failed !== undefined ? failed : label} {...(shortcut ? { shortcut } : {})}>
         <button ref={ref} type="button" aria-label={label} {...rest} aria-busy={busy || undefined} disabled={rest.disabled || busy}
           className={`${pageCss.iconBtn}${className ? ` ${className}` : ""}`}>
-          {busy ? <span className={`${spinnerCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" />
+          {busy ? <Spinner />
             : failed !== undefined ? <span className={partsCss.failedMark} style={{ width: 14, height: 14, fontSize: 10 }} role="img" aria-label={t("web-main.doing.failedWhy", { error: failed })}>!</span>
             : <Icon {...ICON} />}
         </button>
@@ -159,7 +159,7 @@ export function Choices<T extends string>({ options, value, onChange, label }:
 export function Switch({ checked, onChange, label, disabled, id, small = false, busy }: { checked: boolean; onChange(checked: boolean): void; label?: string; disabled?: boolean | undefined; id?: string; small?: boolean; busy?: boolean | undefined }) {
   return (
     <>
-      {busy && <span className={`${spinnerCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label={t("web-main.saving")} />}
+      {busy && <Spinner inline={small} label={t("common.saving")} />}
       <RSwitch.Root id={id} className={small ? `${partsCss.switch_} ${partsCss.switchSmall}` : partsCss.switch_} checked={checked} onCheckedChange={onChange} disabled={(disabled || busy) ?? false} aria-busy={busy || undefined} aria-label={label}>
         <RSwitch.Thumb className={small ? `${partsCss.switchThumb} ${partsCss.switchThumbSmall}` : partsCss.switchThumb} />
       </RSwitch.Root>
@@ -442,24 +442,6 @@ export function Section({ title, actions, children, description }: { title: Reac
       {children}
     </section>
   );
-}
-
-/**
- * Waiting on something, said in words. Appears after a short delay, so fast
- * answers do not flash it; `fill` centres it in the page.
- */
-export function Loading({ label = t("common.loading"), fill = true, detail }: { label?: string; fill?: boolean; detail?: ReactNode }) {
-  return (
-    <div className={fill ? `${partsCss.loading} ${partsCss.loadingFill}` : partsCss.loading} role="status" aria-live="polite">
-      <span className={spinnerCss.spinner} aria-hidden="true" />
-      <span>{label}{detail}</span>
-    </div>
-  );
-}
-
-/** Placeholder rows for a list that is still arriving. */
-export function SkeletonRows({ count = 4 }: { count?: number }) {
-  return <>{Array.from({ length: count }, (_, i) => <div key={i} className={partsCss.skeletonRow} aria-hidden="true"><span /><span /></div>)}</>;
 }
 
 /**

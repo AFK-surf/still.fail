@@ -145,7 +145,7 @@ describe("updates", { concurrency: true }, () => {
       if (s) steps.push(say(s, "zh"));
     });
     assert.equal(ok, false);
-    assert.deepEqual(steps, ["正在下载…", say(INSTALLING, "zh")]);
+    assert.deepEqual(steps, ["正在下载", say(INSTALLING, "zh")]);
     // Both streams kept (their order between them is not known).
     assert.ok(said.includes("==> Pouring codex") && said.includes("Warning: x"));
     assert.deepEqual(stepOf("Setting up Claude Code..."), INSTALLING);
@@ -217,10 +217,10 @@ describe("updates", { concurrency: true }, () => {
     t.after(() => updates.close());
     updates.countRunning(() => 2);
     updates.followStarted();
-    assert.deepEqual([station(updates).state, station(updates).progress], ["updating", "正在交接给新版本（agent 不中断）…"]);
+    assert.deepEqual([station(updates).state, station(updates).progress], ["updating", "正在交接给新版本（agent 不中断）"]);
     // Had it had to restart: what the drain waits on.
     writeFileSync(join(runDir, "update.step"), "drain\n");
-    await until("draining", () => station(updates).progress === "等待 2 个 agent 完成本轮后重启（新消息将排队）…");
+    await until("draining", () => station(updates).progress === "等待 2 个 agent 完成本轮后重启（新消息将排队）");
     writeFileSync(join(runDir, "update.step"), "handoff\n");
     writeFileSync(join(runDir, "update.exit"), "0\n");
     await until("done", () => station(updates).state === "idle");
@@ -275,7 +275,7 @@ describe("updates", { concurrency: true }, () => {
     assert.ok(told >= 2);
     writeFileSync(join(runDir, "update.step"), "handoff\n");
     await until("handoff", () => station(updates).percent === undefined);
-    assert.equal(station(updates).progress, "正在交接给新版本（agent 不中断）…");
+    assert.equal(station(updates).progress, "正在交接给新版本（agent 不中断）");
     writeFileSync(join(runDir, "update.exit"), "0\n");
     await until("ended", () => station(updates).state === "idle");
     assert.equal(station(updates).percent, undefined);

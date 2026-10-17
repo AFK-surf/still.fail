@@ -1,10 +1,9 @@
 import { useStatus, type StatusView } from "./api.ts";
 import { core } from "./core/react.ts";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
-import { StatusDot, Tip } from "./ui.tsx";
+import { Spinner, StatusDot, Tip } from "./ui.tsx";
 import * as nav from "./Sidebar.css.ts";
 import { t } from "./i18n.ts";
-import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 
 /** What the core is waiting on (see StationTrouble); down, it offers to try again at once (client/core-ts/src/wake.ts). */
 export function Waiting({ status }: { status: StatusView }) {
@@ -12,7 +11,7 @@ export function Waiting({ status }: { status: StatusView }) {
     <Tip label={<WaitingItems status={status} />} side="top">
       <div className={`${nav.navRow} ${nav.stationTrouble}`} data-state={status.state} role="status" tabIndex={0}>
         <span className={nav.stationTroubleMark}>
-          {status.state === "trouble" ? <StatusDot state="offline" /> : <span className={`${spinnerCss.spinner} ${nav.rowSpinner}`} aria-hidden="true" />}
+          {status.state === "trouble" ? <StatusDot state="offline" /> : <Spinner inline />}
         </span>
         <span className={nav.stationTroubleText}>{status.text}</span>
         {status.state === "trouble" && <Retry inTip />}
@@ -44,7 +43,7 @@ export function Retry({ inTip = false }: { inTip?: boolean }) {
   const trying = state.running;
   return (
     <button type="button" className={nav.waitingRetry} disabled={trying} aria-busy={trying || undefined} onClick={() => core().retry()}>
-      {trying ? <><DoingShown state={state} className={nav.rowSpinner} />{t("web-main.retrying")}</> : <><DoingShown state={state} size={12} bare={inTip} />{t("common.retry")}</>}
+      {trying ? <><DoingShown state={state} inline />{t("web-main.retrying")}</> : <><DoingShown state={state} inline bare={inTip} />{t("common.retry")}</>}
     </button>
   );
 }

@@ -5,6 +5,7 @@ import { stationApi, useStationCall } from "./api.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { useDoing } from "./doing.ts";
 import { DoingMark } from "./DoingMark.tsx";
+import { Progress } from "@stillfail/ui/waiting.tsx";
 import { Close, Download } from "@stillfail/ui/icons.tsx";
 import { useCommands } from "./commands.ts";
 import { t } from "./i18n.ts";
@@ -35,13 +36,11 @@ export function StationUpdate({ station, notice }: { station: string; notice?: S
           </div>
           <button className={css.dismiss} aria-label={notice.dismissible ? t("web-main.stationUpdate.dismiss") : t("web-main.stationUpdate.collapse")} title={notice.dismissible ? t("web-main.stationUpdate.dismiss") : t("web-main.stationUpdate.collapse")} onClick={() => control(notice.dismissible ? "dismiss" : "close")}><Close size={14} /></button>
         </div>
-        {notice.tone === "busy" && notice.station && <div className={`${css.bar} ${controlsCss.panelEdge}`}>
-          {notice.percent != null ? <span className={css.fill} style={{ width: `${notice.percent}%` }} /> : <span className={`${css.fill} ${css.sweeping}`} />}
-        </div>}
+        {notice.tone === "busy" && notice.station && <Progress part={notice.percent != null ? notice.percent / 100 : null} className={`${css.bar} ${controlsCss.panelEdge}`} />}
         {(notice.from || notice.to || notice.canUpdate) && <div className={`${css.foot} ${controlsCss.panelEdge}`}>
           {(notice.from || notice.to) && <span className={css.versions}>{[notice.from, notice.to].filter(Boolean).join(" → ")}</span>}
           {notice.canUpdate && <button className={css.update} data-tone="filled" disabled={busy} onClick={update}>
-            <DoingMark calls="software.update" on={{ station, id: "station" }} size={12} />{busy ? t("web-main.stationUpdate.updating") : notice.tone === "trouble" ? t("common.retry") : t("web-main.stationUpdate.updateNow")}
+            <DoingMark calls="software.update" on={{ station, id: "station" }} inline />{busy ? t("web-main.stationUpdate.updating") : notice.tone === "trouble" ? t("common.retry") : t("web-main.stationUpdate.updateNow")}
           </button>}
         </div>}
       </Popover.Content>

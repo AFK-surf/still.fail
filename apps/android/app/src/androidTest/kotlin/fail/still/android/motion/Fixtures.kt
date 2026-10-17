@@ -2,6 +2,7 @@
 // a workspace with one station online and one model, and chats built message by message.
 package fail.still.android.motion
 
+import fail.still.android.data.ListNote
 import fail.still.android.data.Account
 import fail.still.android.data.AccountWorkspaces
 import fail.still.android.data.ChatMessage
@@ -18,6 +19,8 @@ import fail.still.android.data.StationView
 import fail.still.android.data.WorkspaceSummary
 
 object Fixtures {
+    /** A list read: nothing waited on (the views' `wait`). */
+    val NO_WAIT = ListNote(false, null, emptyList(), false)
     const val WS = "ws-motion"
     const val STATION = "$WS/st"
     const val THREAD = 7L

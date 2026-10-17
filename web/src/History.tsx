@@ -12,7 +12,7 @@ import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffec
 import { flushSync } from "react-dom";
 import { animate, EASE_OUT, reducedMotion, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
 import { useApi, useHistory, useHistoryDetail, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryMark, type HistoryMessage, type HistoryStep, type HistoryTask, type HistoryTurn, type HistoryView, type Place } from "./api.ts";
-import { ICON, IconButton, Pill, SlackLogo, Tip } from "./ui.tsx";
+import { ICON, IconButton, Pill, SlackLogo, Tip, Waiting, WaitLine } from "./ui.tsx";
 import { useCopyChatLink } from "./ChatRef.tsx";
 import { useLink, useStation } from "./station.tsx";
 import { Link } from "react-router";
@@ -132,7 +132,10 @@ export function History({ station, sessionKey, head, summary, details, focusEntr
   // What each item is: only those the list makes are drawn.
   const drawn = new Map<string, () => ReactNode>();
   if (history && !history.empty) {
-    drawn.set("edge", () => <p key="edge" data-vk="edge" className={css.historyEdge}>{history.edge}</p>);
+    // Its top: the pages before it on their way as it nears (the core's words, a spinner before them), or where it begins.
+    drawn.set("edge", () => history.more
+      ? <div key="edge" data-vk="edge"><WaitLine text={history.edge} className={css.historyEdgeWait} /></div>
+      : <p key="edge" data-vk="edge" className={css.historyEdge}>{history.edge}</p>);
     // The turn's rail runs on from an item to the next unless the next begins a turn of its own; from the last, to what
     // is in flight.
     const going = live.length > 0 || history.phase != null;
@@ -179,7 +182,8 @@ export function History({ station, sessionKey, head, summary, details, focusEntr
         <dl className={css.usage}>{usage.map((u) => <div key={u.label}><dt>{u.label}</dt><dd>{u.value}</dd></div>)}</dl>
       )}
       <div className={css.historyBody} ref={body}>
-        {!history ? <p className={css.historyEdge}>{t("web-main.history.reading")}</p> : history.empty ? <p className={css.historyEdge}>{history.edge}</p> : (
+        {!history || (history.empty && !history.loaded) ? <Waiting count={6} text={history?.edge ?? t("web-main.history.reading")} />
+          : history.empty ? <p className={css.historyEdge}>{history.edge}</p> : (
           <>
             {virtual.layout.rows.flatMap((row, i) => [virtual.above(row, i === 0), drawn.get(row.key)?.()])}
             {virtual.after()}
@@ -404,7 +408,7 @@ function SlackName({ user, name, bound }: { user: string; name: string; bound: b
   return (
     <DropdownMenu.Root modal={false}>
       <DropdownMenu.Trigger className={css.hPerson} disabled={saying} aria-busy={saying || undefined}>
-        {name}<DoingShown state={state} className={css.hPersonSpinner} size={11} />
+        {name}<DoingShown state={state} inline />
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList}`} align="start" sideOffset={4} collisionPadding={8}>
@@ -529,7 +533,8 @@ function Opened({ className, failed, brief, entries, summary, children }: {
 function Whole({ brief, entries, children }: { brief: boolean; entries: number[]; children: ReactNode }) {
   const reading = useWhole(brief, entries);
   if (reading === null) return <>{children}</>;
-  return <div className={`${css.hStepBody} ${shellCss.muted}`}>{reading.error === null ? t("web-main.history.stepReading") : t("web-main.history.stepUnread", { error: reading.error })}</div>;
+  return reading.error === null ? <WaitLine className={css.hStepBody} />
+    : <div className={`${css.hStepBody} ${shellCss.muted}`}>{t("web-main.history.stepUnread", { error: reading.error })}</div>;
 }
 
 /** Each fold measured by the one observer: how it says it turned out long, and how many lines it shows folded. */

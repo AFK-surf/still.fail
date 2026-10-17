@@ -66,7 +66,7 @@ private fun PreviewLoadDetails(station: String, port: Int) {
                 Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(r.path, color = color, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        Text(if (r.ended == null) t("android-chat.load.loading") else if (r.error != null) t("android-chat.load.failed") else "${r.status}", color = color, fontSize = 12.sp)
+                        Text(if (r.ended == null) t("common.reading") else if (r.error != null) t("android-chat.load.failed") else "${r.status}", color = color, fontSize = 12.sp)
                         if (r.ended != null) Text("${(r.ended - r.since).toLong().coerceAtLeast(0)} ms", color = color, fontSize = 12.sp)
                     }
                     r.error?.let { Text(it, color = color, fontSize = 12.sp) }

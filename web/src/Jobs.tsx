@@ -8,7 +8,7 @@ import type { ChatJobsView, Job, JobLogView } from "./core/shapes.ts";
 import { stationApi, useStationCall } from "./api.ts";
 import { useTopic } from "./core/react.ts";
 import { ArrowRight, ChevronDown, ChevronRight, PanelOpen, Stop } from "@stillfail/ui/icons.tsx";
-import { Empty, Segmented, Tip } from "./ui.tsx";
+import { Empty, Segmented, Tip, WaitLine } from "./ui.tsx";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import * as css from "./Jobs.css.ts";
@@ -82,7 +82,7 @@ export function JobStop({ station, job, stop, className, label, size = 14, child
   const stopping = state.running;
   return (
     <button type="button" className={className} aria-label={label} disabled={stopping} aria-busy={stopping || undefined} onClick={() => stop(job)}>
-      <DoingShown state={state} className={css.jobSpinner} size={size} idle={<Stop size={size} />} />{children}
+      <DoingShown state={state} inline={children !== undefined} idle={<Stop size={size} />} />{children}
     </button>
   );
 }
@@ -93,7 +93,7 @@ function ClearEnded({ station, view, clear }: { station: string; view: ChatJobsV
   const clearing = state.running;
   return (
     <button type="button" className={css.jobsClear} disabled={clearing} aria-busy={clearing || undefined} onClick={() => clear(view.clear)}>
-      <DoingShown state={state} className={css.jobSpinner} />{view.clearText}
+      <DoingShown state={state} inline />{view.clearText}
     </button>
   );
 }
@@ -250,9 +250,10 @@ function Output({ station, job }: { station: string; job: Job }) {
     const el = box.current;
     if (el && atEnd.current) el.scrollTop = el.scrollHeight;
   }, [log?.text]);
+  if (log === null) return <div className={css.jobOutput}><WaitLine /></div>;
   return (
     <pre ref={box} className={css.jobOutput} onScroll={(e) => { const el = e.currentTarget; atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
-      {log === null ? t("web-main.reading") : log.text || t("web-main.jobs.noOutput")}
+      {log.text || t("web-main.jobs.noOutput")}
     </pre>
   );
 }

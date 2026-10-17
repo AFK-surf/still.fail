@@ -12,7 +12,6 @@ import { onboardingRow } from "./cloud/settings.css.ts";
 import { sessionHead } from "./pages/ChatPage.css.ts";
 import { composerChoices } from "./Chat.css.ts";
 import { PANEL_PAD, TEXT_IN, columns, outsetStart, outsetTop } from "@stillfail/ui/styles/align.ts";
-import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 
 /** A series of models in the control's list: its models one under another, each as wide as the list. */
 export const series = style({ display: "flex", flexDirection: "column", gap: 1 });
@@ -180,7 +179,3 @@ globalStyle(`${runPickerGroup} h5`, { margin: `8px ${TEXT_IN}px 2px`, fontSize: 
 globalStyle(`${runCardRow} > ${modelTripleFit}`, { flex: "1 1 auto", ...outsetTop(5) });
 /** Here rather than with its class: it comes after .composer-choices > :not(.model-triple-fit), and wins over it. */
 globalStyle(`${onboardingRow} ${input}`, { flex: "1", minWidth: "0" });
-
-/** A pick on its way (pick.save): a small ring where the chevron goes. */
-export const tripleSpinner = style({});
-globalStyle(`${tripleSpinner}${spinner}`, { width: "12px", height: "12px", borderWidth: "1.5px" });

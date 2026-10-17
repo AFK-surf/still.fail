@@ -12,7 +12,7 @@ import { useNewChat, usePick } from "./pick.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { ComposerSlot, useCarryDraft } from "./dock.tsx";
 import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
-import { Button, Chooser, ChooserItem as Item, FirstOne } from "./ui.tsx";
+import { Button, Chooser, ChooserItem as Item, FirstOne, WaitLine } from "./ui.tsx";
 import { MachineLoginOffers, PROFILE_LEAD } from "./pages/Accounts.tsx";
 import { addProfilePath } from "./pages/AddProfile.tsx";
 import { ModelTriple } from "./ModelTriple.tsx";
@@ -56,7 +56,8 @@ export function NewChat({ scope, onCreated }: { scope: string; onCreated(station
         {/* The composer itself (dock.tsx), locked until there is a station to write to: it goes on from the page before
             without leaving the screen for as long as the stations take to come (the first time the page is opened). */}
         <ComposerSlot variant="new" station={held} draftKey={`new:${held.address}`} thread={null} sessionKey={null} placeholder={t("web-main.newChat.placeholder")} locked roomy />
-        <p className={`${css.newChatStatus}${error ? ` ${controlsCss.fieldError}` : ""}`}>{error ?? t("web-main.newChat.readingStation")}</p>
+        {error ? <p className={`${css.newChatStatus} ${controlsCss.fieldError}`}>{error}</p>
+          : <WaitLine text={t("common.readingStations")} className={css.newChatStatus} />}
       </div></div>
     );
   }

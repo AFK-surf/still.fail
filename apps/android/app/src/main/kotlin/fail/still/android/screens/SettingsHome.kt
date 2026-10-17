@@ -4,6 +4,7 @@
 // before anything is opened. And how this device shows still.fail (外观).
 package fail.still.android.screens
 
+import fail.still.android.ui.Spinner
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -171,7 +172,7 @@ private fun Notify() {
             Text(t("android-settings.notify.title"), fontSize = 15.sp, color = C.ink)
             Text(if (app.notify) t("android-settings.notify.on") else t("android-settings.notify.off"), fontSize = 13.sp, color = C.muted)
         }
-        if (pending) Spinner(14.dp)
+        if (pending) Spinner()
         Switch(app.notify)
     }
 }

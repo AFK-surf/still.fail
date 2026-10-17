@@ -7,14 +7,13 @@ import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRe
 import { useParams } from "react-router";
 import { StationContext, type Station } from "../station.tsx";
 import { useApp } from "./app.tsx";
-import { ChatScreen, openAttach, openedAs, sendSharing, useComposerBar, type Draft } from "./Chat.tsx";
+import { ChatScreen, ChatWaiting, openAttach, openedAs, sendSharing, useComposerBar, type Draft } from "./Chat.tsx";
 import { ComposerExtras } from "../Chat.tsx";
 import { openRefSheet, openStationFiles } from "./StationFiles.tsx";
 import { useDraft } from "../draft.ts";
 import { settling, useMorph } from "../morph.ts";
 import { useStationCall, type Attachment } from "../api.ts";
 import { NewChatScreen } from "./NewChat.tsx";
-import { Loading } from "./parts.tsx";
 import * as css from "./ChatHost.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -96,8 +95,8 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   const host = useMemo<Host>(() => ({ now, use }), [use]);
   // The same element while the page is the same, so typing (this drawing again) leaves it as it is.
   const body = useMemo(() => id === undefined ? <NewChatScreen />
-    : !stations ? <Loading text={t("web-mobile.reading")} />
-    : !station ? <Loading text={t("web-mobile.noStation")} />
+    : !stations ? <ChatWaiting text={t("common.readingStations")} />
+    : !station ? <ChatWaiting gone={t("web-mobile.noStation")} />
     : <StationContext.Provider value={station}><ChatScreen /></StationContext.Provider>, [id, stations, station]);
   const composer = shown && <MobileComposer shown={shown} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} />;
   return (

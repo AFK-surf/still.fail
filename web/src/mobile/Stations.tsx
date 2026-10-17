@@ -27,7 +27,9 @@ import { emojiMark, firstEmoji, glyphMark, kindOf, NO_MARK, pictureMark, picture
 import * as markCss from "../StationMark.css.ts";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
-import { Button, Card, Field, Illustration, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, PlaceHead, SectionHeader, Seg, Spinner } from "./parts.tsx";
+import { Button, Card, Field, Illustration, LinkButton, ListCard, ListRow, NavBar, NavButton, PickRow, PlaceHead, SectionHeader, Seg } from "./parts.tsx";
+import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
+import * as waitCss from "@stillfail/ui/waiting.css.ts";
 import { usePlaceActions } from "./placeActions.tsx";
 import { ScreensCard } from "./Screen.tsx";
 import { PermissionsCard } from "./StationPermissions.tsx";
@@ -39,7 +41,6 @@ import * as barsCss from "./styles/bars.css.ts";
 import * as settingsCss from "./styles/settings.css.ts";
 import * as settingsPageCss from "./Settings.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
-import * as chatCss from "./styles/chat.css.ts";
 import * as newChatCss from "./styles/new-chat.css.ts";
 
 import { NAME } from "../channel.ts";
@@ -70,7 +71,7 @@ export function StationsScreen() {
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       <PlaceHead title="Station" back={t("web-mobile.settings.title")} onBack={app.pop} primary={actions.stations} />
-      {!list ? <p className={`${partsCss.mMuted} ${css.mPad20}`}>{stations.error?.message ?? t("web-mobile.memory.readingStations")}</p> : list.map((s) => (
+      {!list ? <Waiting shape="cards" count={2} text={t("common.readingStations")} error={stations.error?.message} /> : list.map((s) => (
         <Card key={s.station} onClick={() => app.push(app.at(`/s/${s.id}/overview`))}>
           <span className={css.mStationHead}>
             <Buddy s={s} />
@@ -102,7 +103,7 @@ function StationFigures({ s }: { s: StationView }) {
         // Not read yet: laid out unseen as when it is, grey bars over it, so nothing below moves as it comes.
         <span className={css.mUnread}>
           <span className={css.mUnreadLaid}><MachineDetails s={{ ...s, host: unreadHost, online: true }} phone /></span>
-          <span className={css.mUnreadBars} aria-hidden><i style={{ width: "80%", height: 76 }} /><i style={{ width: 132 }} /><i style={{ width: 180 }} /><i style={{ width: 180 }} /><i style={{ width: 120 }} /></span>
+          <span className={`${css.mUnreadBars} ${waitCss.shapes}`} aria-hidden><i style={{ width: "80%", height: 76 }} /><i style={{ width: 132 }} /><i style={{ width: 180 }} /><i style={{ width: 180 }} /><i style={{ width: 120 }} /></span>
         </span>
       )}
       <Known text={processes} bar={120} />
@@ -118,14 +119,15 @@ const unreadHost: Host = {
   details: ["主机名", "芯片", "已运行", "进程"].map((label) => ({ label, value: "直连" })),
 };
 
-/** A grey line of text, one line however long; a grey bar `bar` wide in its room while it is not known. */
+/** A grey line of text, one line however long; a grey bar `bar` wide in its room while it is not known, breathing as
+ *  every wait's shapes (@stillfail/ui waiting.tsx), the line as tall either way. */
 function Known({ text, bar }: { text: string | null; bar: number }) {
-  return <span className={css.mStationLine} data-unknown={text === null || undefined}>{text ?? <i style={{ width: bar }} />}</span>;
+  return <span className={css.mStationLine} data-unknown={text === null || undefined}>{text ?? <i className={waitCss.shapes} style={{ width: bar }} />}</span>;
 }
 
 /** The station is up but not reached just now: what shows of it is from before. */
 function Reconnecting() {
-  return <span className={css.mReconnecting}><Spinner size={11} />{t("web-mobile.stations.reconnecting")}</span>;
+  return <span className={css.mReconnecting}><Spinner inline />{t("common.reconnecting")}</span>;
 }
 
 /**
@@ -145,7 +147,7 @@ function StationBody({ s }: { s: StationView }) {
       {!s.online ? (
         <span className={css.mStationNap}><img src={illustrationUrl("station-offline")} alt="" decoding="sync" /><span>{t("web-mobile.stations.longGone", { name: NAME })}</span></span>
       ) : (
-        <span className={css.mStationBars} aria-hidden>
+        <span className={`${css.mStationBars} ${waitCss.shapes}`} aria-hidden>
           <span className={css.mBarChips}>{!host && [46, 52, 50].map((w) => <i key={w} style={{ width: w }} />)}</span>
           {!net && <span className={css.mBarNet}><span><i style={{ width: 34 }} /><i style={{ width: 96 }} /></span><span><i style={{ width: 132 }} /><i style={{ width: 132 }} /></span></span>}
         </span>
@@ -255,7 +257,7 @@ function JoinStation({ rows, loading, took, onJoined }: { rows: JoinableStation[
                 leading={<MarkOrLetter emoji={s.emoji} icon={s.icon} name={s.name} />} onClick={() => setPicked(s.station)} />
             ))}
           </div>
-        ) : <p className={partsCss.mMuted}>{loading ? t("web-mobile.reading") : t("web-pages.settings.stations.existingNone")}</p>}
+        ) : loading ? <WaitLine /> : <p className={partsCss.mMuted}>{t("web-pages.settings.stations.existingNone")}</p>}
         <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-pages.settings.stations.softIsolation")}</p>
         {error && <p className={partsCss.mError}>{error}</p>}
       </div>
@@ -285,7 +287,7 @@ export function StationScreen() {
     <div className={pagesCss.mScreen}>
       <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s?.reconnecting ? <Reconnecting /> : s ? <span className={barsCss.mNavbarNote}>{[joinedText(s), s.host?.identity || (s.online ? t("web-mobile.stations.online") : t("web-mobile.stations.offline"))].filter(Boolean).join(" · ")}</span> : undefined}
         trailing={s && manager ? <NavButton icon={More} label={t("common.more")} onClick={() => app.sheet({ height: 0.34, content: () => <StationMenu s={s} /> })} /> : undefined} />
-      {!s ? <Loading text={stations.error?.message ?? t("web-mobile.reading")} /> : (
+      {!s ? <Waiting fill shape="cards" count={3} error={stations.error?.message} /> : (
         <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
           {/* Every part keeps its room as what it shows comes and goes (not read yet: grey bars); only being online or
               offline changes what the page is. */}
@@ -369,7 +371,7 @@ function EnrollSteps({ install }: { install: string }) {
       <p>{t("web-mobile.stations.runThis")}</p>
       <CommandBox text={install} />
       <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.stations.runNote", { name: NAME })}</p>
-      <p className={`${partsCss.mMuted} ${partsCss.mSmall} ${chatCss.mWaiting}`}><Spinner size={10} />{t("web-mobile.stations.waiting")}</p>
+      <WaitLine text={t("web-mobile.stations.waiting")} />
     </>
   );
 }
@@ -398,7 +400,7 @@ export function FirstStation() {
       <b>{t("web-mobile.stations.first")}</b>
       <p>{t("web-mobile.stations.firstNote")}</p>
       <div className={`${sheetsCss.mForm} ${settingsCss.mSteps}`} style={{ alignSelf: "stretch", padding: 0, textAlign: "left" }}>
-        {!view ? <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />{t("web-mobile.workspace.reading")}</p>
+        {!view ? <WaitLine text={t("web-mobile.workspace.reading")} />
           : !manager ? <p className={settingsCss.mCallout}>{t("web-mobile.stations.waitAdmin")}</p>
           : made ? <EnrollSteps install={made.install} />
           : (

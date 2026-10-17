@@ -20,7 +20,7 @@ import { ownOrigin } from "../stillfailLink.ts";
 import { keepTabs } from "../chatTabs.ts";
 import { usePrefs } from "../prefs.ts";
 import type { ChatJobsView, ChatPublish, ChatShare, Host, StationView } from "../core/shapes.ts";
-import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useStationCall, useStationLook, useAgentCard, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
+import { stationApi, useAction, useApi, useStatus, useChat, useChatJobs, useChats, useHistory, useHost, useStationCall, useStationLook, useAgentCard, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { StationCornerDot, StationDot, useStationLink } from "../StationLink.tsx";
@@ -42,8 +42,7 @@ import { chatPage, useChatPageActions } from "../chatPage.ts";
 import { useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
-import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, Empty, ICON, IconButton, keptWidth, Loading, MobileBack, ModelLogo, PanelRow, ResizeHandle, SlackLogo, SwitchRow, Time, Tip } from "../ui.tsx";
-import { StatusLine } from "../Status.tsx";
+import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, Empty, ICON, IconButton, keptWidth, MobileBack, ModelLogo, PanelRow, ResizeHandle, SlackLogo, SwitchRow, Time, Tip, Waiting } from "../ui.tsx";
 import { useRenaming } from "../Rename.tsx";
 import * as sessionCss from "../styles/session.css.ts";
 import * as jobsCss from "../styles/jobs.css.ts";
@@ -377,7 +376,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
       <div className={sessionCss.sessionPage} data-panel={open.length > 0}>
         <div className={jobsCss.sessionMain}>
           <section className={sessionCss.chat} aria-label={t("web-pages.decisions.back")} data-under-composer="" data-avoid-previews="">
-            <Loading label={station.name ? t("web-pages.chat.loadingFrom", { name: station.name }) : t("web-pages.chat.loading")} detail={<StatusLine workspace={scopeOf(station.address)} />} />
+            <ChatWaiting />
             <ComposerSlot variant="chat" station={station} draftKey={chatKey} thread={null} sessionKey={null} locked />
           </section>
         </div>
@@ -574,6 +573,17 @@ const AgentButton = memo(function AgentButton({ station: address, chat, session:
   if (!agent) return null;
   return <AgentTile agent={agent} chat={chat} marked={marked} station={first} />;
 });
+
+/**
+ * A chat not read yet: its messages' shapes, and over them what it waits on: what the core says is slow (正在连接 Studio),
+ * else where it reads from; a connection down, in red.
+ */
+function ChatWaiting() {
+  const station = useStation();
+  const status = useStatus(scopeOf(station.address));
+  const text = status?.text ?? (station.name ? t("web-pages.chat.loadingFrom", { name: station.name }) : t("web-pages.chat.loading"));
+  return <Waiting shape="messages" fill text={text} error={status?.state === "trouble" ? text : null} />;
+}
 
 function AgentTile({ agent, chat, marked, station }: { agent: ChatAgent; chat: string; marked: boolean; station: boolean }) {
   const { session } = agent;
@@ -835,7 +845,7 @@ function ShareRow({ share, onOpen }: { share: ChatShare; onOpen(): void }) {
   const end = (
     <>
       <span className={css.shareText}>{share.text}</span>
-      <DoingShown state={state} className={controlsCss.iconSpinner} size={12} label={t("web-pages.chat.xshare.saving")} />
+      <DoingShown state={state} inline label={t("web-pages.chat.xshare.saving")} />
     </>
   );
   return <PanelRow icon={<Users size={14} />} label={t("web-pages.chat.xshare")} end={end} onClick={share.may ? onOpen : undefined} />;
@@ -984,7 +994,7 @@ function Evict({ session }: { session: string }) {
   const failed = useDoingFailed("session.evict", { station, key: session });
   return (
     <button type="button" className={`${css.detailLink} ${css.evict}`} disabled={evicting} onClick={() => act(api.evict(session), t("web-pages.chat.evict"), t("web-pages.chat.evicted"))}>
-      {t("web-pages.chat.evict")}<DoingShown state={{ running: evicting, error: failed }} className={controlsCss.iconSpinner} size={12} />
+      {t("web-pages.chat.evict")}<DoingShown state={{ running: evicting, error: failed }} inline />
     </button>
   );
 }
@@ -1054,7 +1064,7 @@ function ChatTitle({ station, session, title }: { station: string; session: stri
   return (
     <>
       <h1>{renamingTo ?? title}</h1>
-      <DoingShown state={{ running: renamingTo !== undefined, error: session === null ? undefined : renameFailed }} className={controlsCss.iconSpinner} size={14} label={t("web-pages.settings.stations.renaming")} />
+      <DoingShown state={{ running: renamingTo !== undefined, error: session === null ? undefined : renameFailed }} label={t("web-pages.settings.stations.renaming")} />
     </>
   );
 }

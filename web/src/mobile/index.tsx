@@ -5,7 +5,7 @@ import { useCallback, useEffect } from "react";
 import { Navigate, Route, Routes, useParams, type Location } from "react-router";
 import { useStations } from "../api.ts";
 import { StationContext, useStationList, type Station } from "../station.tsx";
-import { MobileShell, type Entry } from "./app.tsx";
+import { MobileShell, useApp, type Entry } from "./app.tsx";
 import { ArchiveScreen } from "./Archive.tsx";
 import { DecisionsScreen } from "./Decisions.tsx";
 import { ChatHost } from "./ChatHost.tsx";
@@ -20,7 +20,9 @@ import { BarSettingsScreen } from "./BarSettings.tsx";
 import { UsageScreen, UsagePricesScreen } from "./Usage.tsx";
 import { PreviewScreen } from "./Preview.tsx";
 import { ScreenScreen } from "./Screen.tsx";
-import { Loading } from "./parts.tsx";
+import { Gone, NavBar } from "./parts.tsx";
+import { Waiting } from "@stillfail/ui/waiting.tsx";
+import * as pagesCss from "./styles/pages.css.ts";
 import { StationScreen, StationsScreen } from "./Stations.tsx";
 import { NewProfileScreen, ProfileAccountScreen, ProfileScreen, ProfilesScreen } from "./Profiles.tsx";
 import { AppearanceScreen, LanguageScreen, SettingsScreen } from "./Settings.tsx";
@@ -114,8 +116,11 @@ function LockGate({ workspace, path, children }: { workspace: string; path: stri
 /** A station's page: its station in context, once the workspace's stations are known. */
 function InStation({ stations, children }: { stations: Station[] | undefined; children: React.ReactNode }) {
   const { station: id } = useParams();
-  if (!stations) return <Loading text={t("web-mobile.reading")} />;
+  const app = useApp();
+  // Which page it is is not known before its station is: a bare bar, back, over what it waits on.
+  const bare = (body: React.ReactNode) => <div className={pagesCss.mScreen}><NavBar back={t("common.back")} onBack={app.pop} title="" />{body}</div>;
+  if (!stations) return bare(<Waiting fill text={t("common.readingStations")} />);
   const station = stations.find((s) => s.id === id);
-  if (!station) return <Loading text={t("web-mobile.noStation")} />;
+  if (!station) return bare(<Gone text={t("web-mobile.noStation")} />);
   return <StationContext.Provider value={station}>{children}</StationContext.Provider>;
 }

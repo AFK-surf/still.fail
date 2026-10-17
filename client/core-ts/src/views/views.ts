@@ -1132,14 +1132,18 @@ export class Views implements Owner {
     const me = this.me(scope);
     const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
     const items: J[] = [];
-    let loading = false;
+    const waiting: string[] = [];
+    const failing: { station: string; name: string; message: string }[] = [];
     for (const s of stations.filter((s) => s.online)) {
       const v = this.value({ topic: "overview", station: s.address });
       if (v === undefined) {
-        loading = true;
+        waiting.push(s.name);
         continue;
       }
-      if ("err" in v) continue;
+      if ("err" in v) {
+        failing.push({ station: s.address, name: s.name, message: v.err.message });
+        continue;
+      }
       const sessions = arr(this.ok({ topic: "sessions", station: s.address }));
       const threads = arr(this.ok({ topic: "threads", station: s.address }));
       const connects = arr(get(v.ok, "connects"));
@@ -1152,7 +1156,7 @@ export class Views implements Owner {
         items.push({ station: s.address, stationName: s.name, connect: shown, ...connectSessions(connect, connects, sessions, threads, this.#clock()) });
       }
     }
-    return { ok: { me, items, loading } };
+    return { ok: { me, items, wait: looks.waitNote(waiting, failing, items.length === 0) } };
   }
 
   // ── a chat ──
@@ -1530,7 +1534,8 @@ export class Views implements Owner {
     const me = this.me(scope);
     const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
     const prefs = this.ok({ topic: "prefs" }) ?? null;
-    let loading = false;
+    const waiting: string[] = [];
+    const failing: { station: string; name: string; message: string }[] = [];
     const items: [J, number, number | null][] = [];
     const answered: J[] = [];
     const working: J[] = [];
@@ -1541,7 +1546,9 @@ export class Views implements Owner {
     for (const s of stations) {
       if (!data.listed(s.address, "chats")) {
         const v = this.value({ topic: "chatRows", station: s.address });
-        if (v === undefined) loading ||= s.online;
+        if (v === undefined && s.online) {
+          waiting.push(s.name);
+        } else if (v !== undefined && "err" in v) failing.push({ station: s.address, name: s.name, message: v.err.message });
         continue;
       }
       this.local.settle(s.address, data.rowsRev(s.address));
@@ -1606,7 +1613,7 @@ export class Views implements Owner {
     const at = (v: J, k: string) => (typeof v[k] === "number" ? v[k] : 0);
     answered.sort((a, b) => at(b, "answeredAt") - at(a, "answeredAt"));
     working.sort((a, b) => at(b, "lastActiveAt") - at(a, "lastActiveAt"));
-    return { ok: { items: ordered.map((i) => i[0]), count: ordered.length, loading, answered, working } };
+    return { ok: { items: ordered.map((i) => i[0]), count: ordered.length, wait: looks.waitNote(waiting, failing, ordered.length === 0), answered, working } };
   }
 
   // ── workspace marks ──

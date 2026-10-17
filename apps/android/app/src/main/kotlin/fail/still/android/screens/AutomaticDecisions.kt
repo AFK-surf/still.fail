@@ -35,6 +35,9 @@ fun AutomaticDecisionsScreen() {
     }
 }
 
+/** Where a wait says itself in a line on these pages: a PageNote's place. */
+private val NoteRoom = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 10.dp)
+
 @Composable
 fun AutomaticDecisionCompletionScreen(current: WorkspaceEntry) {
     val app = LocalApp.current
@@ -48,13 +51,10 @@ fun AutomaticDecisionCompletionScreen(current: WorkspaceEntry) {
                 AutomaticDecisionPanel(station.station, station.name, view)
             } else {
                 SectionHeader(station.name, start = 24.dp)
-                PageNote(t(when {
-                    !station.online -> "web-pages.automaticDecisions.offlineNote"
-                    station.overview == null -> "web-pages.automaticDecisions.connecting"
-                    else -> "web-pages.automaticDecisions.upgrade"
-                }))
+                if (station.online && station.overview == null) WaitLine(t("common.connecting"), modifier = NoteRoom)
+                else PageNote(t(if (!station.online) "web-pages.automaticDecisions.offlineNote" else "web-pages.automaticDecisions.upgrade"))
             }
-        } } ?: PageNote(topic.error?.message ?: t("web-pages.automaticDecisions.reading"))
+        } } ?: Waiting(WaitShape.Cards, count = 2, text = t("common.readingStations"), error = topic.error?.message)
         if (topic.value?.isEmpty() == true) PageNote(t("web-pages.automaticDecisions.addStation"))
         Spacer(Modifier.height(30.dp))
     }
@@ -75,14 +75,15 @@ private fun AutomaticDecisionPanel(station: String, name: String, view: Automati
     LaunchedEffect(station, form) { act("open") }
     DisposableEffect(station, form) { onDispose { act("drop") } }
     val d = topic.value
-    if (d == null) { PageNote(topic.error?.message ?: t("web-pages.automaticDecisions.readingConfig")); return }
+    if (d == null) { WaitLine(topic.error?.message ?: t("web-pages.automaticDecisions.readingConfig"), error = topic.error != null, modifier = NoteRoom); return }
     val saving = app.isDoing("automaticDecisions.form.save", "station" to station, "form" to form)
     val refreshing = app.isDoing("automaticDecisions.refresh", "station" to station)
     val busy = d.pending || saving
     val model = view.models.find { it.id == d.model }
     Row(Modifier.fillMaxWidth().padding(end = 20.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f)) { SectionHeader(name, start = 24.dp) }
-        if (refreshing) Spinner(16.dp) else NavButton(Icons.Refresh, onClick = {
+        // In the button's place, as big as it, so the head does not move.
+        if (refreshing) Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) { Spinner() } else NavButton(Icons.Refresh, onClick = {
             app.act(t("web-pages.automaticDecisions.refreshAction"), t("web-pages.automaticDecisions.refreshed")) { app.core.call("automaticDecisions.refresh", buildJsonObject { put("station", station) }) }
         })
     }
@@ -108,7 +109,7 @@ private fun AutomaticDecisionPanel(station: String, name: String, view: Automati
                 app.act(t("web-pages.automaticDecisions.reviewAction"), t("web-pages.automaticDecisions.reviewStarted")) { app.core.call("automaticDecisions.review", buildJsonObject { put("station", station) }) }
             })) {
                 Text(t("web-pages.automaticDecisions.review"), color = C.ink, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                DoingMark(reviewing, app.failedOf("automaticDecisions.review", "station" to station))
+                DoingMark(reviewing, app.failedOf("automaticDecisions.review", "station" to station), inline = true)
             }
         }
         view.policy?.let { policy ->
@@ -141,10 +142,10 @@ fun AutomaticDecisionPolicyScreen(current: WorkspaceEntry, station: String) {
         LargeTitle(s?.name ?: "", t("web-pages.archivePolicy.title"))
         val policy = view?.policy
         if (policy != null && view.canEdit) ArchivePolicySection(station, policy)
+        else if (topic.value == null) Waiting(WaitShape.Cards, count = 2, text = t("common.readingStations"), error = topic.error?.message)
+        else if (s?.online == true && s.overview == null) WaitLine(t("common.connecting"), modifier = NoteRoom)
         else PageNote(topic.error?.message ?: t(when {
-            topic.value == null -> "web-pages.automaticDecisions.reading"
             s?.online != true -> "web-pages.automaticDecisions.offlineNote"
-            s.overview == null -> "web-pages.automaticDecisions.connecting"
             view != null && !view.canEdit -> "web-pages.automaticDecisions.adminOnly"
             else -> "web-pages.automaticDecisions.upgrade"
         }))
@@ -218,7 +219,7 @@ private fun ArchivePolicySection(station: String, policy: ArchivePolicyView) {
     fun group(archive: Boolean) = t(if (archive) "web-pages.archivePolicy.archive" else "web-pages.archivePolicy.keep")
     Row(Modifier.fillMaxWidth().padding(end = 20.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f)) { PageNote(t("web-pages.archivePolicy.textLead")) }
-        DoingMark(saving, app.failedOf("automaticDecisions.policy.save", "station" to station, "form" to form))
+        DoingMark(saving, app.failedOf("automaticDecisions.policy.save", "station" to station, "form" to form), inline = true)
     }
     ListCard {
         ListRow(onClick = if (busy) null else ({ open(null, null) })) {

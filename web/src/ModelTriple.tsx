@@ -107,7 +107,7 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
             </>
           )}
           {/* What was picked on its way: a ring in place of the chevron, not opened again meanwhile; failed, a red mark there a few seconds. */}
-          <DoingShown state={{ running: !!pick.saving, error: pick.saveFailed }} className={css2.tripleSpinner} label={t("web-main.saving")} side="top"
+          <DoingShown state={{ running: !!pick.saving, error: pick.saveFailed }} inline label={t("common.saving")} side="top"
             idle={<ChevronDown size={12} className={controlsCss.chooserChevron} />} />
         </Popover.Trigger>
       </span>

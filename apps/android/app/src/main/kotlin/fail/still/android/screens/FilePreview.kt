@@ -4,6 +4,10 @@
 // One bar floats at the top with its name and tools, frosted, and fades when left alone; a tap brings it back.
 package fail.still.android.screens
 
+import fail.still.android.ui.Progress
+import fail.still.android.ui.WaitPill
+import fail.still.android.ui.breathing
+import fail.still.android.ui.rememberBreath
 import fail.still.android.data.t
 import android.annotation.SuppressLint
 import android.graphics.BitmapFactory
@@ -571,7 +575,7 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
                     Facts(file, kind, cantShow = if (kind == null) t("android-chat.file.cantPreview") else t("android-chat.file.tooBigToShow"))
                     when {
                         // On its way, asked for: how far it has come.
-                        asked && shownLoaded is FileLoad.Loading -> if (progress != null) Progress(progress, file.size, dark = false) else Waiting()
+                        asked && shownLoaded is FileLoad.Loading -> if (progress != null) FileProgress(progress, file.size, dark = false) else Waiting()
                         else -> Column(Modifier.width(220.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (shownLoaded is FileLoad.Failed) Text(t("android-chat.file.loadFailed", "error" to shownLoaded.message), Modifier.fillMaxWidth(), fontSize = 14.sp, color = C.red, textAlign = TextAlign.Center)
                             val apk = file.name.lowercase().endsWith(".apk")
@@ -580,7 +584,7 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
                         }
                     }
                 }
-                !sure || shownLoaded is FileLoad.Loading -> Note { if (progress != null) Progress(progress, file.size, dark = false) else Waiting() }
+                !sure || shownLoaded is FileLoad.Loading -> Note { if (progress != null) FileProgress(progress, file.size, dark = false) else Waiting() }
                 shownLoaded is FileLoad.Failed -> Note { Text(t("android-chat.file.loadFailed", "error" to shownLoaded.message), fontSize = 15.sp, color = C.muted, textAlign = TextAlign.Center) }
                 disk != null -> when (kind) {
                     PreviewKind.Video -> VideoViewer(disk, file.name, awake, { wake(TAP_REST_MS) }, ::toggle, darkGlass(haze, Smooth(16.dp)), videoZoom, Modifier.viewerFlying(flight), still, chrome = { flight.chrome },
@@ -627,7 +631,7 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
             ) {
                 Text(file.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (dark) DarkText else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f).padding(end = 12.dp))
-                if (coming && progress != null) Progress(progress, file.size, dark = true, inBar = true)
+                if (coming && progress != null) FileProgress(progress, file.size, dark = true, inBar = true)
                 when {
                     marks.on -> MarksActions(marks, canDraft = canDraft,
                         onDownload = { if (bytes != null) scope.launch { finish(marks, bytes, zoom, file) { p, _ -> app.toast = if (marks.save(context, p.name)) t("android-chat.file.saved") else t("android-chat.file.saveFailed") } } },
@@ -711,10 +715,9 @@ private fun Note(content: @Composable () -> Unit) {
     Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically)) { content() }
 }
 
+/** A file not here yet, its size not known: what a viewer's page waits on, as every wait is said (ui/Waiting.kt). */
 @Composable
-private fun Waiting() {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Spinner(16.dp); Text(t("android-chat.file.loading"), fontSize = 15.sp, color = C.muted) }
-}
+private fun Waiting() = WaitPill(t("common.reading"))
 
 /** How many of a file's first bytes tell whether it is text. */
 private const val SNIFF_BYTES = 8192
@@ -762,7 +765,7 @@ private suspend fun install(app: AppState, context: android.content.Context, id:
 
 /** How much of a file has come, out of its size (the station's, else the one sent with it). */
 @Composable
-private fun Progress(got: Pair<Long, Long?>, sent: Long, dark: Boolean, inBar: Boolean = false) {
+private fun FileProgress(got: Pair<Long, Long?>, sent: Long, dark: Boolean, inBar: Boolean = false) {
     val total = got.second ?: sent.takeIf { it > 0 }
     val part = if (total != null && total > 0) min(1f, got.first.toFloat() / total) else null
     val text = if (dark) DarkText else C.ink
@@ -775,17 +778,10 @@ private fun Progress(got: Pair<Long, Long?>, sent: Long, dark: Boolean, inBar: B
             withStyle(SpanStyle(color = text, fontWeight = FontWeight.SemiBold)) { append(fileSize(got.first)) }
             append(" / ${fileSize(total)}")
             if (!inBar) append(after)
-        } else append(t("android-chat.file.loading"))
+        } else append(t("common.reading"))
     }
-    val trackColor = (if (dark) Color.White else C.ink).copy(alpha = 0.12f)
-    val barColor = if (dark) DarkText else C.accent
-    val track = @Composable { w: Dp? ->
-        Canvas((if (w != null) Modifier.width(w) else Modifier.fillMaxWidth()).height(4.dp)) {
-            val r = androidx.compose.ui.geometry.CornerRadius(size.height / 2)
-            drawRoundRect(trackColor, cornerRadius = r)
-            drawRoundRect(barColor, size = androidx.compose.ui.geometry.Size(size.width * (part ?: 0.4f), size.height), cornerRadius = r)
-        }
-    }
+    // Its size not known: the bar sweeps (ui/Waiting.kt Progress).
+    val track = @Composable { w: Dp? -> Progress(part, if (w != null) Modifier.width(w) else Modifier) }
     if (inBar) Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(words, fontSize = 13.sp, color = muted, maxLines = 1)
         track(48.dp)
@@ -971,10 +967,12 @@ private fun PdfViewer(file: File, onTap: () -> Unit) {
     }
     val d = doc
     when {
-        d == null -> Note { Spinner(16.dp) }
+        d == null -> Note { WaitPill(t("common.opening")) }
         d.isFailure -> Note { Text(t("android-chat.file.pdf.failed", "error" to (d.exceptionOrNull()?.message ?: "")), fontSize = 15.sp, color = C.muted) }
         else -> {
             val pdf = d.getOrThrow()
+            // A page not drawn yet is its shape, breathing as what is waited on does (ui/Waiting.kt), not a blank sheet.
+            val breath = rememberBreath()
             LazyColumn(
                 Modifier.fillMaxSize().clickable(interactionSource = null, indication = null, onClick = onTap),
                 contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 60.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding(), bottom = 12.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
@@ -998,7 +996,9 @@ private fun PdfViewer(file: File, onTap: () -> Unit) {
                             }
                         }
                     }
-                    Box(Modifier.fillMaxWidth().aspectRatio(size.width.toFloat() / max(1, size.height)).shadow(2.dp).background(Color.White).onSizeChanged { width = it.width }) {
+                    val drawn = Modifier.shadow(2.dp).background(Color.White)
+                    Box(Modifier.fillMaxWidth().aspectRatio(size.width.toFloat() / max(1, size.height)).onSizeChanged { width = it.width }
+                        .then(if (page != null) drawn else Modifier.breathing(breath).background(C.bubble))) {
                         page?.let { Image(it, t("android-chat.file.pdf.page", "n" to i + 1), Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds) }
                     }
                 }

@@ -7,7 +7,6 @@ import { detailsList, jobsPanel } from "./pages/ChatPage.css.ts";
 import { activityLine, agentActivity, chatMessages, composerThumb, msgFlash, msgWaitingLate } from "./Chat.css.ts";
 import { tokenGuide } from "./pages/SlackApp.css.ts";
 import { TEXT_IN, outsetStart } from "@stillfail/ui/styles/align.ts";
-import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 import { segmented, segmentedOption } from "@stillfail/ui/parts.css.ts";
 
 export const jobDot = style({
@@ -91,8 +90,6 @@ export const jobAction = style({
     "&:disabled": { cursor: "progress" },
   },
 });
-/** A stop or a clear under way: a small ring in place of its icon. */
-export const jobSpinner = style({});
 export const jobsHead = style({
   display: "flex", alignItems: "baseline", gap: "6px", padding: "8px 12px 4px", fontSize: vars.textMeta,
   fontWeight: "500", color: vars.muted,
@@ -241,7 +238,6 @@ globalStyle(`${tokenGuide} li`, {
 /** A message its agents have not taken yet says so only after a second (most are taken before). */
 /** Here rather than with its class: it comes after [data-enter], and wins over it. */
 globalStyle(msgWaitingLate, { animation: `${msgWaitingInKeyframes} 0s linear 1s both` });
-globalStyle(`${jobSpinner}${spinner}`, { width: "12px", height: "12px", borderWidth: "1.5px" });
 /** In the title bar's popover (a small panel's list, docs/ui-panels.md): its rows' words in by a row's padding, its rows
  * at the panel's, rounded as it less that; "all of them" a row with its words in the jobs' names' column; clearing a
  * small pill. */

@@ -7,7 +7,7 @@ import type { ChatPublished, PublishFile, PublishMessage, PublishPreview } from 
 import { AgentAvatar, FileLook, MessageName, OthersMessage, PersonWords } from "./Chat.tsx";
 import { Prose } from "./Prose.tsx";
 import { Dialog as RDialog } from "radix-ui";
-import { Avatar, Button, Confirm, Dialog, Time, Tip } from "./ui.tsx";
+import { Avatar, Button, Confirm, Dialog, Time, Tip, WaitLine } from "./ui.tsx";
 import { Close, Copy, ShieldCheck } from "@stillfail/ui/icons.tsx";
 import { useBackClose } from "@stillfail/ui/backClose.ts";
 import * as fpCss from "./FilePreview.css.ts";
@@ -18,7 +18,6 @@ import * as chatCss from "./Chat.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import { t } from "./i18n.ts";
-import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
 /** A preview as asked (`chat.publishPreview`): being read, read, or why not. */
@@ -138,7 +137,7 @@ export function PublishDialog({ station, thread, onClose }: { station: string; t
     );
   }
   let body: ReactNode;
-  if ("reading" in preview) body = <div className={fpCss.fpNote}><span className={spinnerCss.spinner} aria-hidden="true" />{t("web-pages.chat.publish.reading")}</div>;
+  if ("reading" in preview) body = <div className={fpCss.fpNote}><WaitLine text={t("web-pages.chat.publish.reading")} /></div>;
   else if ("error" in preview) body = <div className={fpCss.fpNote}><span className={css.problem} role="alert">{preview.error}</span></div>;
   else if (p!.messages.length === 0) body = <div className={fpCss.fpNote}>{t("web-pages.chat.publish.empty")}</div>;
   else {

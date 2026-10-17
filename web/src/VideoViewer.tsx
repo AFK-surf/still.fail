@@ -8,7 +8,7 @@ import { REST_MS, TAP_REST_MS, useZoom } from "./FilePreview.tsx";
 import { Camera, ChevronLeft, ChevronRight, Landscape, Pause, Play } from "@stillfail/ui/icons.tsx";
 import * as css from "@stillfail/ui/viewer/media.css.ts";
 import * as fpCss from "./FilePreview.css.ts";
-import { Tip } from "./ui.tsx";
+import { Tip, Spinner } from "./ui.tsx";
 import { t } from "./i18n.ts";
 import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
@@ -310,7 +310,7 @@ export function VideoViewer({ url, blob, name, onMeta }: { url: string; blob: Bl
     { key: "time", text: clock(now) },
   ] : [
     { key: "time", text: <><b className={css.vvNow}>{clock(time)}</b><span className={css.vvDim}> / {clock(duration)}</span></> },
-    { key: "note", text: <span className={css.vvDim}>{frames === null ? t("web-main.video.readingFrames") : t("web-main.video.guessed")}</span> },
+    { key: "note", text: <span className={css.vvDim}>{frames === null ? <><Spinner inline />{" "}{t("web-main.video.readingFrames")}</> : t("web-main.video.guessed")}</span> },
   ];
   const end = decoded ? decoded.starts.at(-1)! + decoded.lastDuration : duration;
   const meta = natural ? [

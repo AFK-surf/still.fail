@@ -7,7 +7,8 @@ import { drivePath } from "../drive/useDrive.ts";
 import { ChevronRight, Folder, Server } from "@stillfail/ui/icons.tsx";
 import { useApp, useRootPage } from "./app.tsx";
 import { NavItem, NavPhone, NavSection } from "../SidebarList.tsx";
-import { ListCard, ListRow, Loading, PlaceHead } from "./parts.tsx";
+import { ListCard, ListRow, PlaceHead } from "./parts.tsx";
+import { Waiting } from "@stillfail/ui/waiting.tsx";
 import { usePlaceActions } from "./placeActions.tsx";
 import * as listsCss from "./styles/lists.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -30,7 +31,9 @@ export function FilesScreen() {
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       <PlaceHead title={t("web-pages.drive.title")} back={t("web-mobile.settings.title")} onBack={app.pop} primary={usePlaceActions().files} />
-      {!stations ? <Loading text={t("web-mobile.reading")} />
+      {/* Its folders are in each station's overview: none yet while one online is not read. */}
+      {!stations ? <Waiting text={t("common.readingStations")} />
+        : (root ? lending.length : folders.length) === 0 && stations.some((s) => s.online && !s.overview) ? <Waiting />
         : (root ? lending.length : folders.length) === 0 ? <p className={css.mNone}>{t("web-main.rail.filesNone")}</p>
         : root ? (
           <NavPhone>

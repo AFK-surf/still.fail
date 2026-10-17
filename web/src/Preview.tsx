@@ -20,7 +20,7 @@ import { useJob } from "./api.ts";
 import { bridge, type Answer, type Asked } from "./previewBridge.ts";
 import * as css from "./Preview.css.ts";
 import { useMarks } from "./annotate/Marks.tsx";
-import { Tip } from "./ui.tsx";
+import { Tip, WaitLine } from "./ui.tsx";
 import { previewKey, useViewport } from "./viewport.ts";
 import { ViewportButton } from "./ViewportSize.tsx";
 import { PreviewLoad } from "./PreviewLoad.tsx";
@@ -215,7 +215,8 @@ function Framed({ name, external, restarting, draftKey, viewKey, origin, src, no
           folded={stage.folded} unfold={() => stage.fold(false)} />} />
       <PreviewStage stage={stage} link={link} over={marks.over} after={<Restart name={name} restarting={restarting} reload={reload} />}>
         {/* The frame never moves in the document (it would load anew): only its box's size and place change. */}
-        {src && <iframe ref={frame} className={css.previewFrame} title={name} src={src} />}
+        {src ? <iframe ref={frame} className={css.previewFrame} title={name} src={src} />
+          : <div className={css.previewWait}><WaitLine text={t("common.connecting")} /></div>}
       </PreviewStage>
     </div>
   );

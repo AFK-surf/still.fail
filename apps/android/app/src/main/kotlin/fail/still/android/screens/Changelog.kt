@@ -4,6 +4,8 @@
 // the page is opened or it is put away (`changelog.seen`).
 package fail.still.android.screens
 
+import fail.still.android.ui.WaitShape
+import fail.still.android.ui.Waiting
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -90,10 +92,7 @@ fun ChangelogScreen() {
         LargeTitle(view?.build?.let { t("android-settings.changelog.build", "build" to it) } ?: "", t("android-settings.changelog.title"))
         if (tab != null) Seg(tabs.map { it.label }, at, { part = tabs[it].part }, Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 2.dp).fillMaxWidth(), height = 34.dp, fill = true)
         when {
-            view == null || view.loading == true -> Row(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Spinner(13.dp)
-                Text(t("android-settings.reading"), fontSize = 14.sp, color = C.muted)
-            }
+            view == null || view.loading == true -> Waiting(WaitShape.Cards, text = t("common.reading"), error = topic.error?.message)
             view.error != null -> Text(view.error, fontSize = 14.sp, color = C.red, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
             tab == null || tab.days.isEmpty() -> Text(t("android-settings.changelog.empty"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
             else -> tab.days.forEach { day ->

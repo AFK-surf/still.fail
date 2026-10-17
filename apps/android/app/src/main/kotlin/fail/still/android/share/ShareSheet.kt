@@ -49,6 +49,7 @@ import fail.still.android.ui.MakerIcon
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHost
 import fail.still.android.ui.SheetSpec
+import fail.still.android.ui.Waiting
 import fail.still.core.CoreException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -88,7 +89,7 @@ fun ShareScreen(shared: Shared, target: ShareTarget?, onOpen: (Opened) -> Unit, 
 private fun ColumnScope.ShareSheetContent(shared: Shared, target: ShareTarget?, onOpen: (Opened) -> Unit, onOpenApp: () -> Unit) {
     SheetGrab()
     SharedHead(shared)
-    if (target == null) { Wait(t("android-chat.reading")); return }
+    if (target == null) { Waiting(count = 4, text = t("common.reading"), modifier = Modifier.weight(1f)); return }
     val workspace = target.workspace
     if (workspace == null) { SignInFirst(onOpenApp); return }
     val core = target.core
@@ -132,7 +133,8 @@ private fun ColumnScope.ShareSheetContent(shared: Shared, target: ShareTarget?, 
     if (searching) Field(query, { query = it }, t("android-misc.shareIn.find"), modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp))
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
         when {
-            view == null -> Wait(if (state.error != null) t("android-misc.shareIn.update") else t("android-chat.reading"))
+            // The chats to share to, as every list's first read; a core that cannot say them, in red.
+            view == null -> Waiting(count = 4, text = t("common.reading"), error = if (state.error != null) t("android-misc.shareIn.update") else null)
             else -> {
                 view.items.forEach { item ->
                     val kept = view.kept?.takeIf { it.station == item.station && it.id == item.id }
@@ -142,7 +144,7 @@ private fun ColumnScope.ShareSheetContent(shared: Shared, target: ShareTarget?, 
                         leading = { Box(Modifier.width(16.dp), contentAlignment = Alignment.Center) { item.agents.firstOrNull()?.let { MakerIcon(it.maker, it.runtime, 14.dp) } } },
                     ) { open(item.station, item.id) }
                 }
-                if (view.items.isEmpty() && query.isNotBlank()) Wait(t("android-chat.ref.none.match"))
+                if (view.items.isEmpty() && query.isNotBlank()) Note(t("android-chat.ref.none.match"))
                 val on = view.stations.firstOrNull { it.station == view.newOn } ?: view.stations.firstOrNull()
                 if (on != null && query.isBlank()) {
                     val many = view.stations.size > 1
@@ -157,7 +159,7 @@ private fun ColumnScope.ShareSheetContent(shared: Shared, target: ShareTarget?, 
                             leading = { Spacer(Modifier.width(16.dp)) }) { open(s.station, null) }
                     }
                 }
-                view.note?.let { Wait(it) }
+                view.note?.let { Note(it) }
             }
         }
     }
@@ -184,13 +186,14 @@ private fun SharedHead(shared: Shared) {
 /** A row's second line without a last message: when it was last active, and on which station. */
 private fun lineOf(item: ChatItem): String = listOfNotNull(item.time?.get("lastActiveAt")?.ago, item.stationName.takeIf { it.isNotEmpty() }).joinToString(" · ")
 
+/** A line in the rows' place: why there are none, or what to do first. */
 @Composable
-private fun Wait(text: String) = Text(text, fontSize = 15.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
+private fun Note(text: String) = Text(text, fontSize = 15.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
 
 /** Nobody signed in on this phone yet: the app first. */
 @Composable
 private fun SignInFirst(onOpenApp: () -> Unit) {
-    Wait(t("android-misc.shareIn.signIn"))
+    Note(t("android-misc.shareIn.signIn"))
     Text(
         t("android-misc.shareIn.openApp"), fontSize = 15.sp, color = C.accent, fontWeight = FontWeight.SemiBold,
         modifier = Modifier.padding(horizontal = 20.dp).clickable { onOpenApp() }.padding(vertical = 8.dp),

@@ -21,7 +21,9 @@ import { useDriveFile } from "../drive/viewerFile.ts";
 import { childOf, drive, drivePath, filtered, nameProblem, rootTrouble, useDrive, type DriveState, type Folders, type PickFolder } from "../drive/useDrive.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { ask, confirm } from "./sheets.tsx";
-import { Button, ListCard, Loading, NavBar, NavButton, PickRow, SectionHeader, Spinner } from "./parts.tsx";
+import { Button, ListCard, NavBar, NavButton, PickRow, SectionHeader } from "./parts.tsx";
+import { Progress, Spinner, Waiting } from "@stillfail/ui/waiting.tsx";
+import * as barsCss from "./styles/bars.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -55,7 +57,7 @@ function RootsPage({ d }: { d: DriveState }) {
       <NavBar back={station.name} onBack={app.pop} title={t("web-pages.drive.title")}
         trailing={d.manage && d.offered && d.roots.length > 0 ? <NavButton icon={More} label={t("web-pages.drive.manage")} onClick={manage} /> : undefined} />
       <div className={pagesCss.mScroll}>
-        {d.loading ? <Loading text={d.error ?? t("web-mobile.reading")} />
+        {d.loading ? <Waiting count={3} error={d.error} />
           : !d.offered ? <Empty text={t("web-pages.drive.oldStation")} />
           : d.roots.length === 0 ? (
             <Empty text={d.manage ? t("web-pages.drive.noneManage") : t("web-pages.drive.noneMember")}
@@ -155,7 +157,9 @@ function FolderPage({ d, root, path, top }: { d: DriveState; root: string; path:
       <NavBar back={back} onBack={app.pop} title={name}
         trailing={
           <span className={css.mBarButtons}>
-            <span className={css.mSpin} data-on={refreshing || undefined}><NavButton icon={Refresh} label={t("web-pages.drive.refresh")} onClick={reload} /></span>
+            {/* Read again: the shared spinner in its place, the bar's buttons where they were. */}
+            {refreshing ? <span className={barsCss.mNavButton} role="status" aria-label={t("web-pages.drive.refresh")}><Spinner /></span>
+              : <NavButton icon={Refresh} label={t("web-pages.drive.refresh")} onClick={reload} />}
             {d.write ? <NavButton icon={Plus} iconSize={20} label={t("web-pages.drive.add")} onClick={plus} />
               : d.manage && top ? <NavButton icon={More} label={t("web-pages.drive.manage")} onClick={() => app.sheet({ height: 0.7, draggable: true, content: () => <RootsSheet station={station.address} roots={d.roots} /> })} /> : null}
           </span>
@@ -167,7 +171,7 @@ function FolderPage({ d, root, path, top }: { d: DriveState; root: string; path:
             <span className={partsCss.mError}>{folder.error.message}</span>
             <button type="button" className={partsCss.mLink} onClick={reload}>{t("web-pages.drive.retry")}</button>
           </div>
-        ) : !folder.value ? <Loading text={t("web-mobile.reading")} /> : (
+        ) : !folder.value ? <Waiting /> : (
           <>
             <p className={css.mCount}>{folder.value.countText}{folder.value.truncated ? ` · ${t("web-pages.drive.truncated")}` : ""}</p>
             {uploads.length > 0 && <ListCard>{uploads.map((u) => <UploadRow key={u.key} u={u} />)}</ListCard>}
@@ -249,7 +253,7 @@ function EntryRow({ at, entry, write, onOpen }: { at: At; entry: DriveEntry; wri
         <span className={css.mName}>{entry.name}</span>
         <span className={css.mMeta}>{entry.dir ? entry.timeText : [entry.sizeText, entry.timeText].filter(Boolean).join(" · ")}</span>
       </span>
-      {busy ? <Spinner size={14} /> : entry.dir && <ChevronRight size={14} className={partsCss.mSubtle} />}
+      {busy ? <Spinner inline /> : entry.dir && <ChevronRight size={14} className={partsCss.mSubtle} />}
     </button>
   );
 }
@@ -289,7 +293,7 @@ function save(app: MobileApp, act: ReturnType<typeof useAct>, at: At, entry: Dri
 
 /** A file going up: its name, how far it has got; its name taken there (replace it, or keep both), or why it failed. */
 function UploadRow({ u }: { u: Up }) {
-  const share = u.size > 0 ? u.sent / u.size : 0;
+  const share = u.size > 0 ? u.sent / u.size : null;
   return (
     <div className={css.mRow} data-upload>
       <Upload size={22} strokeWidth={1.6} className={css.mIcon} />
@@ -305,7 +309,7 @@ function UploadRow({ u }: { u: Up }) {
           : (
             <>
               <span className={css.mMeta}>{t("web-pages.drive.uploading", { sent: sizeOf(u.sent), size: sizeOf(u.size) })}</span>
-              <span className={css.mProgress}><span style={{ transform: `scaleX(${share})` }} /></span>
+              <Progress part={share} className={css.mProgress} label={u.name} />
             </>
           )}
       </span>
@@ -333,7 +337,7 @@ function RootsSheet({ station, roots }: { station: string; roots: DriveRoot[] })
   return (
     <>
       <SheetGrab />
-      <SheetHead title={t("web-pages.drive.manage")} trailing={busy ? <Spinner size={14} /> : undefined} />
+      <SheetHead title={t("web-pages.drive.manage")} trailing={busy ? <Spinner inline /> : undefined} />
       <div className={sheetsCss.mSheetScroll}>
         <p className={`${partsCss.mMuted} ${css.mSheetNote}`}>{t("web-pages.drive.manageNote")}</p>
         {roots.map((r) => (
@@ -386,7 +390,7 @@ export function PickerSheet({ station, roots }: { station: string; roots: DriveR
             <Folder size={36} strokeWidth={1.3} className={partsCss.mSubtle} />
             <p>{picker.shut.unreadable ? t("web-pages.drive.pickNeedsAccess") : picker.shut.message}</p>
           </div>
-        ) : !v ? <Loading text={t("web-mobile.reading")} /> : (
+        ) : !v ? <Waiting count={6} /> : (
           <>
             {atHome && v.places.length > 1 && <>
               <SectionHeader title={t("web-pages.drive.places")} />
@@ -541,7 +545,7 @@ function Missing({ back, error }: { back: string; error: string | null }) {
   return (
     <>
       <NavBar back={back} onBack={app.pop} title="" />
-      {error ? <div className={css.mProblem}><span className={partsCss.mError}>{error}</span></div> : <Loading text={t("web-mobile.reading")} />}
+      {error ? <div className={css.mProblem}><span className={partsCss.mError}>{error}</span></div> : <Waiting fill shape="cards" count={1} text={t("common.opening")} />}
     </>
   );
 }

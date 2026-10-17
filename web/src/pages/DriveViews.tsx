@@ -12,7 +12,7 @@ import { toggleTree, useKeptScroll, useTree, type Owner } from "../drive/kept.ts
 import type { Dragged } from "../drive/drag.ts";
 import { setPrefs, usePrefs } from "../prefs.ts";
 import { ViewColumns, ViewTree, List } from "@stillfail/ui/icons.tsx";
-import { ICON, Tip, type MenuItem } from "../ui.tsx";
+import { ICON, Tip, type MenuItem, WaitLine } from "../ui.tsx";
 import { DriveRow } from "./Drive.tsx";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./Drive.css.ts";
@@ -108,7 +108,7 @@ function TreeFolder({ at, depth, open, toggle, shown, compact, empty }: {
   const entries = shown.arranged(folder.value?.entries ?? []);
   const note = (words: string, error = false) => <p className={`${css.treeNote} ${error ? css.treeError : shellCss.muted}`} style={{ "--depth": depth } as CSSProperties}>{words}</p>;
   if (folder.error) return note(folder.error.message, true);
-  if (!folder.value) return note(t("web-pages.drive.reading"));
+  if (!folder.value) return <div className={css.treeNote} style={{ "--depth": depth } as CSSProperties}><WaitLine /></div>;
   if (!entries.length) return depth === 0 && empty ? <>{empty}</> : note(t("web-pages.drive.emptyFolder"));
   return (
     <>
@@ -161,7 +161,7 @@ function Column({ owner, at, next, shown, empty }: { owner: Owner; at: At; next:
   return (
     <div ref={scroller} className={css.column} data-drop={zone.over || undefined} {...zone.props} onClick={(e) => { if (e.target === e.currentTarget) shown.clear(); }}>
       {folder.error ? <p className={`${css.treeNote} ${css.treeError}`}>{folder.error.message}</p>
-        : !folder.value ? <p className={`${css.treeNote} ${shellCss.muted}`}>{t("web-pages.drive.reading")}</p>
+        : !folder.value ? <div className={css.treeNote}><WaitLine /></div>
         : !entries.length ? (empty ?? <p className={`${css.treeNote} ${shellCss.muted}`}>{t("web-pages.drive.emptyFolder")}</p>)
         : entries.map((e) => <DriveRow key={e.name} at={at} entry={e} row={shown.rowOf(at, e)} compact column along={e.name === next} />)}
     </div>

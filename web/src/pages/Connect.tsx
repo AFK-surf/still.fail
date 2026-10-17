@@ -17,7 +17,7 @@ import { useContext } from "react";
 import { CreateAppSteps, emptyTokens, TokenFields, useSlackTokens } from "../slack.tsx";
 import { useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
-import { Button, Choices, Confirm, ConnectAvatar, Dialog, Empty, Field, ICON, Loading, Menu, BackLink, Pill, StatusText, Section, Select, SlackLogo, StatusDot, SwitchRow, Time } from "../ui.tsx";
+import { Button, Choices, Confirm, ConnectAvatar, Dialog, Empty, Field, ICON, Menu, BackLink, Pill, StatusText, Section, Select, SlackLogo, StatusDot, SwitchRow, Time, Spinner, Waiting, WaitLine } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./Connect.css.ts";
 import * as cloudCss from "../styles/cloud.css.ts";
@@ -28,16 +28,17 @@ import * as shellCss from "../styles/shell.css.ts";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
-import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 export function ConnectPage() {
   const { id } = useParams();
   const station = useStation();
   const overview = useOverview(station.address);
   const connects = useConnects(scopeOf(station.address));
   const item = connects.value?.items.find((i) => i.station === station.address && i.connect.id === id);
-  if (!overview.value || !connects.value || (connects.value.loading && !item)) {
+  const wait = connects.value?.wait;
+  if (!overview.value || !connects.value || (!item && (wait!.reading || wait!.failing.length > 0))) {
     const error = overview.error ?? connects.error;
-    return error ? <Empty><p>{error.message}</p></Empty> : <Loading label={t("web-pages.connect.loading")} />;
+    return error ? <Empty><p>{error.message}</p></Empty>
+      : <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting shape="cards" text={t("web-pages.connect.loading")} note={overview.value ? wait : undefined} /></div>;
   }
   if (!item) return <Empty><p>{t("web-pages.connect.notFound", { id: id ?? "" })}</p></Empty>;
   return <ConnectDetail key={item.connect.id} item={item} overview={overview.value} />;
@@ -79,7 +80,7 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
   const reconnecting = reconnectState.running;
   const saving = saveState.running;
   const switching = save.busy && save.args?.[0].enabled !== undefined;
-  const doing = reconnecting ? t("web-pages.connect.reconnecting") : switching ? (connect.enabled ? t("web-pages.connect.disabling") : t("web-pages.connect.enabling")) : saving ? t("web-pages.profiles.saving") : null;
+  const doing = reconnecting ? t("common.reconnecting") : switching ? (connect.enabled ? t("web-pages.connect.disabling") : t("web-pages.connect.enabling")) : saving ? t("common.saving") : null;
   const failing = reconnectState.error !== undefined ? { error: reconnectState.error, text: t("web-pages.connect.reconnectFailedShort") }
     : saveState.error !== undefined ? { error: saveState.error, text: t("web-pages.connect.saveFailedShort") } : null;
   const c = connect.connection;
@@ -95,8 +96,8 @@ function ConnectDetail({ item, overview }: { item: ConnectItem; overview: Overvi
           <h1 className={pagesCss.identityName}>{connect.name}</h1>
           <p className={pagesCss.identitySub}>
             <span className={css.connectStatus} role="status">
-              {doing ? <><span className={`${spinnerCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" />{doing}</>
-                : failing ? <><DoingShown state={{ running: false, error: failing.error }} size={14} />{failing.text}</>
+              {doing ? <><Spinner inline />{doing}</>
+                : failing ? <><DoingShown state={{ running: false, error: failing.error }} inline />{failing.text}</>
                 : <><StatusDot state={connect.presence} />{connect.statusText}</>}
             </span>
             <span className={css.kindTag}><SlackLogo size={13} />{connect.team ?? "Slack"}</span>
@@ -237,7 +238,7 @@ function RunSection({ item }: { item: ConnectItem }) {
                 ? <Link className={chatCss.inlineLink} to={link(`/chats/${encodeURIComponent(bound.key)}`)}>{bound.titleText}</Link>
                 : <span className={shellCss.muted}>{t("web-pages.connect.noSession")}</span>}
             </span>
-            <DoingShown state={binding} className={controlsCss.iconSpinner} size={14} label={t("web-pages.profiles.saving")} />
+            <DoingShown state={binding} inline label={t("common.saving")} />
             <button type="button" className={chatCss.textButton} disabled={binding.running} onClick={() => setChoosing(true)}>{t("web-pages.connect.switch")}</button>
           </div>
         )}
@@ -416,7 +417,7 @@ function CoreNewConnectDialog({ open, onClose, resume }: { open: boolean; onClos
   const [echo, setEcho] = useState<SlackAppSettings | null>(null);
   if (flow.unsupported) return <LegacyNewConnectDialog open={open} onClose={onClose} resume={resume} />;
   const view = flow.view;
-  if (!view) return <Dialog open={open} onClose={onClose} title={t("web-pages.connects.add")}>{t("web-pages.settings.reading")}</Dialog>;
+  if (!view) return <Dialog open={open} onClose={onClose} title={t("web-pages.connects.add")}><WaitLine /></Dialog>;
   const { step, teams, chosen, made, madeId, adding, gettingToken } = view;
   const app = echo ?? view.settings as SlackAppSettings;
   const icon = view.icon ?? null;

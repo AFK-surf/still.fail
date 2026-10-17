@@ -5,6 +5,8 @@
 // and a new one.
 package fail.still.android.screens
 
+import fail.still.android.ui.BusyIcon
+import fail.still.android.ui.WaitLine
 import fail.still.android.data.t
 import fail.still.android.BuildConfig
 import androidx.compose.foundation.background
@@ -29,7 +31,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -190,13 +191,15 @@ private fun Error(text: String) = Text(text, fontSize = 13.sp, color = C.red)
 @Composable
 internal fun Button(label: String, primary: Boolean, busy: Boolean = false, enabled: Boolean = true, danger: Boolean = false, onClick: () -> Unit) {
     val on = enabled && !busy
+    val ink = if (primary && danger && enabled) Color.White else if (primary) C.bg else C.ink
     Row(
         Modifier.height(38.dp).clip(Smooth(19.dp)).background(if (primary) (if (!enabled) C.line else if (danger) C.red else C.ink) else C.chip)
             .clickable(enabled = on, onClick = onClick).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (busy) CircularProgressIndicator(Modifier.size(14.dp), color = if (primary) C.bg else C.muted, strokeWidth = 1.5.dp)
-        Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (primary && danger && enabled) Color.White else if (primary) C.bg else C.ink)
+        // A solid one's spinner in its words' colour.
+        BusyIcon(busy, solid = if (primary) ink else null)
+        Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = ink)
     }
 }
 
@@ -451,7 +454,7 @@ private fun ColumnScope.InviteLinkSheet(app: AppState, given: String?) {
                     Button(t("common.close"), primary = true) { app.sheet = null }
                 }
             }
-            p == null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { Spinner(13.dp); Text(t("android-misc.reading"), fontSize = 14.sp, color = C.muted) }
+            p == null -> WaitLine(t("common.reading"))
             else -> {
                 Text(t(if (p.email != null) "android-misc.invite.invitedYouAsOnly" else "android-misc.invite.invitedYouAs", "inviter" to p.inviter.ifEmpty { t("android-misc.invite.someone") }, "role" to (ROLE_LABEL[p.role] ?: p.role), "email" to p.email), fontSize = 14.sp, color = C.muted)
                 if (list.size > 1) {

@@ -15,7 +15,7 @@ import { useToast } from "@stillfail/ui/toast.tsx";
 import { QuotaBars } from "../components.tsx";
 import * as modelCss from "../ModelTriple.css.ts";
 import { MachineLoginCard } from "../ProfileCard.tsx";
-import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, BackLink, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, SwitchRow, Time, Tip } from "../ui.tsx";
+import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, BackLink, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, SwitchRow, Time, Tip, Spinner, Waiting, WaitLine } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as baseCss from "../styles/base.css.ts";
 import * as css from "./Accounts.css.ts";
@@ -29,7 +29,6 @@ import * as chatCss from "../styles/chat.css.ts";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { tx } from "../cloud/words.tsx";
-import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 /** The plans a machine's own login can be signed in again with (the add page: a vendor's subscription). */
 export type Choice = "claude-sub" | "chatgpt-sub";
@@ -77,7 +76,7 @@ export function AccountPage() {
   const { id } = useParams();
   const overview = useOverview(useStation().address);
   const profile = overview.value?.profiles.find((p) => p.id === id);
-  if (!overview.value) return overview.error ? <Empty><p>{overview.error.message}</p></Empty> : <Loading label={t("web-pages.profiles.loading")} />;
+  if (!overview.value) return overview.error ? <Empty><p>{overview.error.message}</p></Empty> : <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting shape="cards" text={t("web-pages.profiles.loading")} /></div>;
   if (!profile) return <Empty><p>{t("web-pages.profiles.notFound", { id: id ?? "" })}</p></Empty>;
   return <AccountView key={profile.id} profile={profile} overview={overview.value} />;
 }
@@ -136,7 +135,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
               onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) rename(); if (e.key === "Escape") { setName(profile.name); setEditingName(false); } }} />
           ) : (
             <h1 className={pagesCss.identityName}>{renamingTo ?? profile.name}
-              {renamingTo && <span className={`${spinnerCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label={t("web-pages.settings.stations.renaming")} />}<RuntimeTags runtimes={profile.runtimes} decision={profile.uses?.includes("decision")} />{!profile.machine && !copy && <IconButton label={t("web-pages.settings.stations.rename")} icon={Edit} onClick={() => setEditingName(true)} />}</h1>
+              {renamingTo && <Spinner label={t("web-pages.settings.stations.renaming")} />}<RuntimeTags runtimes={profile.runtimes} decision={profile.uses?.includes("decision")} />{!profile.machine && !copy && <IconButton label={t("web-pages.settings.stations.rename")} icon={Edit} onClick={() => setEditingName(true)} />}</h1>
           )}
           {facts && <p className={pagesCss.identitySub}>{facts}</p>}
           <p className={`${pagesCss.identitySub} ${css.profileState}`}>
@@ -220,7 +219,7 @@ function UsageSection({ profile, entry, workspace }: { profile: Profile; entry: 
           <div className={usageCss.tile}><span className={usageCss.tileLabel}>{t("web-pages.profiles.usageCalls")}</span><span className={usageCss.tileValue}>{item.callsText}</span><span className={usageCss.tileSub}>{t("web-pages.profiles.usageCallsSub")}</span></div>
           <div className={usageCss.tile}><span className={usageCss.tileLabel}>Tokens</span><span className={usageCss.tileValue}>{item.tokensText}</span><span className={usageCss.tileSub}>{t("web-pages.profiles.usageTokensSub")}</span></div>
         </div>
-      ) : <p className={shellCss.muted}>{usage.loading ? t("web-pages.settings.reading") : t("web-pages.profiles.usageNone")}</p>}
+      ) : usage.wait.reading ? <WaitLine /> : <p className={shellCss.muted}>{t("web-pages.profiles.usageNone")}</p>}
     </Section>
   );
 }
@@ -607,7 +606,7 @@ function FastSection({ profile }: { profile: Profile }) {
   return <Section title={t("web-pages.profiles.run")}><SwitchRow title={t("web-pages.profiles.fast")} checked={!!profile.fast} disabled={busy}
     description={t("web-pages.profiles.fastLead")}
     onChange={(fast) => act(api.putProfile(profile.id, { fast }), t("web-pages.profiles.fastSave"), fast ? t("web-pages.profiles.fastOn") : t("web-pages.profiles.fastOff"))} />
-    {busy && <p className={shellCss.muted}>{t("web-pages.profiles.saving")}</p>}
+    {busy && <WaitLine text={t("common.saving")} />}
     {error && <p className={controlsCss.fieldError}>{error}</p>}
   </Section>;
 }
@@ -724,7 +723,7 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
                         <input type="checkbox" disabled={busy} checked={enabled.has(m)} onChange={() => toggle(m)} />
                         <ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={14} />
                         <span>{name(m)}</span>
-                        {profile.modelsSaving?.includes(m) && <span className={`${spinnerCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label={t("web-pages.profiles.saving")} />}
+                        {profile.modelsSaving?.includes(m) && <Spinner inline label={t("common.saving")} />}
                         {found && !found.includes(m) && <span className={`${shellCss.muted} ${css.modelPoolGone}`}>{t("web-pages.profiles.gone")}</span>}
                       </label></Tip>
                     </li>

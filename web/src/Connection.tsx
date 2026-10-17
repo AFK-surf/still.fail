@@ -10,7 +10,7 @@ export function RetryPill() {
   const trying = state.running;
   return (
     <button type="button" className={css.connectionRetry} disabled={trying} aria-busy={trying || undefined} onClick={() => core().retry()}>
-      <DoingShown state={state} className={css.retrySpinner} size={10} />{t("common.retry")}
+      <DoingShown state={state} inline />{t("common.retry")}
     </button>
   );
 }

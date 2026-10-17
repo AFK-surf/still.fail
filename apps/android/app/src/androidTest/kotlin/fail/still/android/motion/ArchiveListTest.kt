@@ -39,7 +39,7 @@ class ArchiveListTest {
 
     private fun item(i: Int) = ArchiveItem(Fixtures.STATION, "a-$i", "ember:a-$i", 300L + i, "archived-$i", "说过的话", Fixtures.NOW.toDouble(), "10:00", "手动归档", true)
     private fun view(shown: List<Int>, total: Int) =
-        ArchiveView(listOf(ArchiveDay("今天", shown.map(::item))), emptyList(), loading = false, total = total.toUInt(), more = shown.size < total)
+        ArchiveView(listOf(ArchiveDay("今天", shown.map(::item))), emptyList(), loading = false, wait = Fixtures.NO_WAIT, total = total.toUInt(), more = shown.size < total)
 
     @Test fun pagesLooksForAndOpens() {
         val h = Harness(rule)

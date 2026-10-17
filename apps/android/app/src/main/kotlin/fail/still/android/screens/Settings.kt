@@ -4,6 +4,7 @@
 // to go on with what cannot be undone, a name, a command to copy.
 package fail.still.android.screens
 
+import fail.still.android.ui.Spinner
 import fail.still.android.BuildConfig
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -89,7 +90,9 @@ import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.NavButton
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
-import fail.still.android.ui.Loading
+import fail.still.android.ui.WaitLine
+import fail.still.android.ui.WaitShape
+import fail.still.android.ui.Waiting
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
@@ -193,7 +196,7 @@ fun WorkspaceScreen(current: WorkspaceEntry) {
         TopBack(t("android-settings.title"), app::pop, trailing = if (view?.manager == true) ({
             NavButton(Icons.UserPlus, { app.sheet = SheetSpec(0.8f, draggable = true) { AddSheet(current, view, cloud) } }, 20.dp)
         }) else null)
-        if (view == null) return Loading(topic.error?.message ?: t("android-settings.workspace.reading"))
+        if (view == null) return Waiting(WaitShape.Cards, text = t("android-settings.workspace.reading"), error = topic.error?.message)
         val waiting = if (view.manager) view.added.size + view.invitations.size else 0
         // Its name is the title, after its mark (when it has one), renamed by a tap on it (by its owner and admins).
         Box(if (view.manager) Modifier.clickable { ask(app, t("android-settings.workspace.name"), view.name, t("android-settings.workspace.namePlaceholder"), t("common.save"), what = t("android-settings.workspace.renameWhat")) { cloud.renameWorkspace(view.id, it); app.toast = t("android-settings.renamed") } } else Modifier) {
@@ -292,7 +295,7 @@ private fun Relays(view: WorkspaceView, cloud: Cloud) {
             ask(app, t("android-settings.relays.add"), "", "https://relay.example.com", t("android-settings.relays.addAction"), hint = t("android-settings.relays.hint")) {
                 cloud.setRelays(view.id, view.relays + it); app.toast = t("android-settings.relays.added")
             }
-        })) { Text(t(if (busy) "android-settings.relays.saving" else "android-settings.relays.add"), fontSize = 15.sp, color = C.accent) }
+        })) { Text(t(if (busy) "common.saving" else "android-settings.relays.add"), fontSize = 15.sp, color = C.accent) }
     }
     Text(t("android-settings.relays.lead", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp))
 }
@@ -321,7 +324,7 @@ private fun MemberRow(view: WorkspaceView, m: Member, me: String, cloud: Cloud) 
 /** A word at a row's end that does something (移除, 撤回, 退出): a spinner in its place while it is under way; a red mark before it a moment after it failed. */
 @Composable
 private fun RowAction(label: String, color: androidx.compose.ui.graphics.Color, busy: Boolean, failed: String? = null, onClick: () -> Unit) {
-    if (busy) Spinner(14.dp)
+    if (busy) Spinner()
     else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         DoingMark(false, failed)
         Text(label, fontSize = 14.sp, color = color, modifier = Modifier.clickable(onClick = onClick))
@@ -466,7 +469,7 @@ private fun ColumnScope.AddSheet(current: WorkspaceEntry, view: WorkspaceView, c
 fun Devices(current: WorkspaceEntry) {
     val app = LocalApp.current
     val topic by rememberTopic<List<LoginSession>>(app.core, Topics.loginSessions(current.account.sub))
-    val list = topic.value ?: return Text(topic.error?.let { t("android-settings.devices.failed", "error" to it.message) } ?: t("android-settings.reading"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+    val list = topic.value ?: return WaitLine(topic.error?.let { t("android-settings.devices.failed", "error" to it.message) } ?: t("common.reading"), error = topic.error != null, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
     val cloud = Cloud(app.core, current.account.sub)
     ListCard {
         list.forEach { s ->
@@ -479,7 +482,7 @@ fun Devices(current: WorkspaceEntry) {
                     Text(t("android-settings.devices.times", "ago" to (s.time?.get("created_at")?.ago ?: ""), "until" to (s.time?.get("expires_at")?.until ?: "")), fontSize = 13.sp, color = C.muted)
                 }
                 if (!s.current) {
-                    if (app.isDoing("loginSession.revoke", "id" to s.id)) Spinner(14.dp)
+                    if (app.isDoing("loginSession.revoke", "id" to s.id)) Spinner()
                     else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         DoingMark(false, app.failedOf("loginSession.revoke", "id" to s.id))
                         Text(t("android-settings.devices.signOut"), fontSize = 15.sp, color = C.red, modifier = Modifier.clickable {
@@ -577,7 +580,8 @@ private fun JoinStation(current: WorkspaceEntry, rows: List<JoinableStation>, lo
         // The stations scroll; the actions stay under them.
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(t("web-pages.settings.stations.existingLead"), side, fontSize = 14.sp, color = C.muted)
-            if (rows.isEmpty()) Text(t(if (loading) "android-settings.reading" else "web-pages.settings.stations.existingNone"), side, fontSize = 14.sp, color = C.muted)
+            if (rows.isEmpty() && loading) WaitLine(t("common.reading"), modifier = side)
+            else if (rows.isEmpty()) Text(t("web-pages.settings.stations.existingNone"), side, fontSize = 14.sp, color = C.muted)
             else Column {
                 rows.forEach { s ->
                     // Its mark before its name, as a station's own sheet has it: every name starts in one line.
@@ -640,10 +644,7 @@ private fun AddStationSteps(current: WorkspaceEntry, known: List<String>, label:
                 Text(t("android-settings.station.run"), fontSize = 14.sp, color = C.ink)
                 CommandBox(enrollment.install)
                 Text(t("android-settings.station.runNote", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Spinner(10.dp)
-                    Text(t("android-settings.station.waiting"), fontSize = 13.sp, color = C.muted)
-                }
+                WaitLine(t("android-settings.station.waiting"))
             }
         }
     }
@@ -666,9 +667,8 @@ fun FirstStation(current: WorkspaceEntry) {
         Text(t("android-settings.station.firstNote"), fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
         Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             when {
-                view == null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Spinner(13.dp); Text(topic.error?.message ?: t("android-settings.workspace.reading"), fontSize = 14.sp, color = C.muted)
-                }
+                // Not read yet, or could not be: in red then, no longer turning.
+                view == null -> WaitLine(topic.error?.message ?: t("android-settings.workspace.reading"), error = topic.error != null)
                 !view.manager -> Text(t("android-settings.station.wait"), fontSize = 13.sp, lineHeight = 19.5.sp, color = C.ink,
                     modifier = Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.warn.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 10.dp))
                 else -> {

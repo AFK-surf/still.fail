@@ -17,7 +17,8 @@ import { useSlackTokens, type TokenCheck } from "../slack.tsx";
 import { StationContext, stationBase, useOnlyMine, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp, useRootPage, type MobileApp } from "./app.tsx";
 import { AccountList, ModelList, SettingRow } from "./History.tsx";
-import { Button, Field, FilterMenu, GroupLabel, LinkButton, ListCard, ListRow, Loading, MakerIcon, NavBar, NavButton, PickRow, PlaceHead, PlaceNote, SectionHeader, Seg, SlackMark, Spinner, ticked, tNodes } from "./parts.tsx";
+import { Button, Field, FilterMenu, GroupLabel, LinkButton, Gone, ListCard, ListRow, MakerIcon, NavBar, NavButton, PickRow, PlaceHead, PlaceNote, SectionHeader, Seg, SlackMark, ticked, tNodes } from "./parts.tsx";
+import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { PickStation } from "./Profiles.tsx";
 import * as settingsCss from "./styles/settings.css.ts";
@@ -116,7 +117,7 @@ function useItem(): { item: ConnectItem | undefined; loading: boolean; error: Er
   const { id = "" } = useParams();
   const connects = useConnects(station.address.split("/")[0]!);
   const item = connects.value?.items.find((i) => i.station === station.address && i.connect.id === id);
-  return { item, loading: !connects.value || connects.value.loading, error: connects.error };
+  return { item, loading: !connects.value || connects.value.wait.reading, error: connects.error };
 }
 
 /**
@@ -131,11 +132,14 @@ export function ConnectsScreen() {
   // From a station's page (?station=<id>): that station's only, back to it.
   const [params] = useSearchParams();
   const only = params.get("station");
-  const listed = useStations(app.entry.id).value;
+  const listing = useStations(app.entry.id);
+  const listed = listing.value;
   const stations = only ? listed?.filter((s) => s.id === only) : listed;
   const one = only ? stations?.[0] : undefined;
   const online = stations?.filter((s) => s.online) ?? [];
   const items = connects.value?.items ?? [];
+  // What it still waits on (the core's `wait`): a station's connects not read yet, or that could not be.
+  const wait = connects.value?.wait;
   const root = useRootPage();
   const add = () => online.length === 1
     ? app.push(app.at(`/s/${online[0]!.id}/connects/new`))
@@ -152,16 +156,20 @@ export function ConnectsScreen() {
           ]} />
         ) : undefined} />
       {!(root && !one) && <div className={css.mListSeg}><Seg options={[t("web-mobile.home.filterAll"), t("web-mobile.connects.mine")]} selected={mine ? 1 : 0} onSelect={(i) => setMine(i === 1)} height={34} fill /></div>}
-      {!stations || !connects.value ? <Loading text={connects.error?.message ?? t("web-mobile.connects.reading")} /> : stations.map((s) => {
+      {/* The stations known, each under its name at once; what is not there yet said in its card. */}
+      {!stations || (!connects.value && connects.error) ? <Waiting shape="cards" count={2} text={t("common.readingStations")} error={listing.error?.message ?? connects.error?.message} /> : stations.map((s) => {
         const here = items.filter((i) => i.station === s.station);
         const waiting = s.overview?.slackApps ?? [];
+        const failing = wait?.failing.find((f) => f.station === s.station);
         if (s.online && here.length === 0 && waiting.length === 0 && mine && !one) return null;
         return (
           <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
             {!one && <SectionHeader title={s.online ? s.name : t("web-mobile.connects.stationOfflineTitle", { station: s.name })} start={24} />}
             <ListCard>
               {!s.online && here.length === 0 ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.connects.offlineList")}</span></ListRow>
-                : here.length === 0 && waiting.length === 0 ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{s.overview ? t("web-mobile.connects.none") : t("web-mobile.reading")}</span></ListRow>
+                : here.length === 0 && waiting.length === 0 ? <ListRow>{failing ? <WaitLine text={failing.text} error />
+                  : connects.value && s.overview && !wait?.reading ? <span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.connects.none")}</span>
+                  : <WaitLine text={t("web-mobile.connects.reading")} />}</ListRow>
                 : null}
               {here.map((i) => <ConnectRow key={i.connect.id} connect={i.connect} onClick={() => app.push(`${stationBase(i.station)}/connects/${encodeURIComponent(i.connect.id)}`)} />)}
               {/* The Slack apps made here that no connect has taken yet: to be finished any time. */}
@@ -171,7 +179,7 @@ export function ConnectsScreen() {
         );
       })}
       {/* What a connect is, said while there is none (the page says it nowhere else). */}
-      {connects.value && stations && items.length === 0 && stations.every((s) => !s.overview?.slackApps?.length) && <PlaceNote>{t("web-mobile.connects.note", { name: NAME })}</PlaceNote>}
+      {wait?.empty && stations && stations.every((s) => !s.overview?.slackApps?.length) && <PlaceNote>{t("web-mobile.connects.note", { name: NAME })}</PlaceNote>}
       <div style={{ height: 30 }} />
     </div>
   );
@@ -181,7 +189,12 @@ export function ConnectScreen() {
   const app = useApp();
   const { item, loading, error } = useItem();
   if (!item) {
-    return <div className={pagesCss.mScreen}><NavBar back={t("web-mobile.settings.connects")} onBack={app.pop} title={t("web-mobile.settings.connects")} /><Loading text={error?.message ?? (loading ? t("web-mobile.connects.reading") : t("web-mobile.connects.notFound"))} /></div>;
+    return (
+      <div className={pagesCss.mScreen}>
+        <NavBar back={t("web-mobile.settings.connects")} onBack={app.pop} title={t("web-mobile.settings.connects")} />
+        {error || loading ? <Waiting fill shape="cards" count={2} text={t("web-mobile.connects.reading")} error={error?.message} /> : <Gone text={t("web-mobile.connects.notFound")} />}
+      </div>
+    );
   }
   return <ConnectPage item={item} />;
 }
@@ -466,7 +479,7 @@ export function ConnectRunScreen() {
   const busy = pick.saving;
   const title = list === "model" ? t("web-mobile.history.pickModel") : list === "account" ? t("web-mobile.history.pickAccount") : t("web-mobile.history.changeModel");
   const bar = <NavBar back={list ? t("web-mobile.history.changeModel") : t("common.back")} onBack={() => (list ? setList(null) : app.pop())} title={title} />;
-  if (!item || !v) return <div className={pagesCss.mScreen}>{bar}<Loading text={t("web-mobile.connects.reading")} /></div>;
+  if (!item || !v) return <div className={pagesCss.mScreen}>{bar}<Waiting fill shape="cards" count={3} text={t("web-mobile.connects.reading")} /></div>;
   const { connect } = item;
   const runtime = connect.bind.runtime;
   const models = v.options;
@@ -504,7 +517,7 @@ export function ConnectRunScreen() {
           if (!changed) return;
           pick.save().then(() => app.toast(t("web-mobile.connects.runSaved")), (e: Error) => app.toast(e.message));
         }}>
-        {busy && <Spinner size={14} />}{v.saveText}
+        {busy && <Spinner className={partsCss.mSpinOnColor} />}{v.saveText}
       </button>
     </div>
   );
@@ -530,7 +543,7 @@ export function NewConnectScreen() {
   const [settingsEcho, setSettingsEcho] = useState<SlackAppSettings | null>(null);
   const [configEcho, setConfigEcho] = useState("");
   const view = flow.view;
-  if (!view) return <div className={pagesCss.mScreen}><NavBar back={t("common.cancel")} onBack={app.pop} title={t("web-mobile.connects.add")} />{t("web-mobile.reading")}</div>;
+  if (!view) return <div className={pagesCss.mScreen}><NavBar back={t("common.cancel")} onBack={app.pop} title={t("web-mobile.connects.add")} /><Waiting fill shape="cards" count={2} /></div>;
   const { step, teams, chosen, made, noProfile } = view;
   const models = view.pick?.options ?? [];
   const entry = view.pick?.valueOption;
@@ -605,7 +618,7 @@ export function NewConnectScreen() {
               onClick={() => flow.act("make")} />
           </>
         )}
-        {step === "install" && !made && <p className={partsCss.mMuted}>{view ? t("web-mobile.connects.appGone") : t("web-mobile.reading")}</p>}
+        {step === "install" && !made && <p className={partsCss.mMuted}>{t("web-mobile.connects.appGone")}</p>}
         {step === "install" && made && (
           <>
             {iconError && <p className={partsCss.mError}>{t("web-mobile.connects.iconFailed", { error: iconError })}</p>}

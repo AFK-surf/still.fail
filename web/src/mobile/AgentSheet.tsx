@@ -13,7 +13,8 @@ import { StationMark } from "../StationMark.tsx";
 import { useDoing } from "../doing.ts";
 import { t } from "../i18n.ts";
 import { SheetGrab, useApp, type MobileApp } from "./app.tsx";
-import { InfoList, InfoRow, ModelMark, QuotaRings, Spinner, stateOf } from "./parts.tsx";
+import { InfoList, InfoRow, ModelMark, QuotaRings, stateOf } from "./parts.tsx";
+import { Spinner } from "@stillfail/ui/waiting.tsx";
 import * as partsCss from "./styles/parts.css.ts";
 import * as sheetsCss from "./styles/sheets.css.ts";
 import * as css from "./AgentSheet.css.ts";
@@ -65,7 +66,7 @@ function AgentSheet({ at, go }: { at: AgentAt; go: AgentGo }) {
           {working(agent) && (
             <button type="button" className={css.mAgentStop} disabled={stopping}
               onClick={() => { stationApi(call).stop(s.key).then(() => app.toast(t("web-mobile.history.stopAsked")), (error) => app.toast(t("web-mobile.chat.stopFailed", { error: error instanceof Error ? error.message : String(error) }))); }}>
-              {stopping ? <Spinner size={11} color="var(--m-red)" /> : <Stop size={11} fill="currentColor" />}{t("web-mobile.history.stop")}
+              {stopping ? <Spinner inline className={partsCss.mSpinOnColor} /> : <Stop size={11} fill="currentColor" />}{t("web-mobile.history.stop")}
             </button>
           )}
         </div>

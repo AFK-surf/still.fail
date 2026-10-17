@@ -59,7 +59,8 @@ import fail.still.android.ui.Icons
 import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
-import fail.still.android.ui.Loading
+import fail.still.android.ui.WaitShape
+import fail.still.android.ui.Waiting
 import fail.still.android.ui.Markdown
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.SectionHeader
@@ -108,7 +109,7 @@ fun MemoryScreen(current: WorkspaceEntry, address: String) {
     var builtinOpen by rememberSaveable(address) { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         NavBar(s?.name ?: stationName(address), app::pop, t("android-misc.memory.title"), sub = { Text(t("android-misc.memory.sub"), fontSize = 11.sp, color = C.muted, maxLines = 1) })
-        val m = read.memory ?: return Loading(read.error?.let { t("android-misc.memory.loadFailed", "error" to it) } ?: t("android-misc.reading"))
+        val m = read.memory ?: return Waiting(WaitShape.Cards, text = t("common.reading"), error = read.error?.let { t("android-misc.memory.loadFailed", "error" to it) })
         val sections = sectionsOf(m)
         val projects = m.skills.filter { it.project }
         val skills = m.skills.filter { !it.project && !it.builtin }
@@ -180,8 +181,9 @@ fun MemoryDocScreen(current: WorkspaceEntry, address: String, skill: String?, at
     }
     Column(Modifier.fillMaxSize()) {
         NavBar(t("android-misc.memory.title"), app::pop, skill ?: t("android-misc.memory.global"), sub = sub?.let { { Text(it, fontSize = 11.sp, color = C.muted, maxLines = 1) } })
-        if (m == null) return Loading(read.error?.let { t("android-misc.memory.loadFailed", "error" to it) } ?: t("android-misc.reading"))
-        if (skill != null && k == null) return Loading(t("web-main.memory.gone"))
+        if (m == null) return Waiting(WaitShape.Cards, text = t("common.reading"), error = read.error?.let { t("android-misc.memory.loadFailed", "error" to it) })
+        // Read, and the skill is not in it (taken away since): said, not waited on.
+        if (skill != null && k == null) return Text(t("web-main.memory.gone"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(24.dp))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 4.dp)) {
             if (k == null) {
                 val sections = sectionsOf(m)
@@ -218,7 +220,7 @@ private fun ShareRow(skill: SkillFile, station: String, changed: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(t("web-main.memory.share.switch"), fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
-        DoingMark(busy, app.failedOf("skill.share", "station" to station, "name" to skill.name), 14.dp)
+        DoingMark(busy, app.failedOf("skill.share", "station" to station, "name" to skill.name))
         Switch(on)
     }
     val conflicts = skill.share?.conflicts.orEmpty()
@@ -258,7 +260,7 @@ fun MemoriesScreen(current: WorkspaceEntry) {
         TopBack(t("android-misc.settings"), app::pop)
         LargeTitle("", t("android-misc.memory.title"))
         PageNote(t("android-misc.memory.note"))
-        if (stations == null) Text(topic.error?.message ?: t("android-misc.stations.loading"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
+        if (stations == null) Waiting(WaitShape.Rows, count = 3, text = t("common.readingStations"), error = topic.error?.message)
         else ListCard {
             stations.forEach { s ->
                 if (s.online) GoRow(s.name, t("android-misc.memory.row")) { app.push(Screen.Memory(s.station)) }

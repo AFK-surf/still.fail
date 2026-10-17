@@ -15,7 +15,8 @@ import { ask, confirm } from "./sheets.tsx";
 import { useCopyChatLink } from "../ChatRef.tsx";
 import { setSidebarMode, stationBase, useChatFilter, type ChatFilter } from "../station.tsx";
 import { useApp, useOpenPage } from "./app.tsx";
-import { FailedMark, FilterMenu, Illustration, SectionHeader, SlackMark, Spinner, ticked } from "./parts.tsx";
+import { FailedMark, FilterMenu, Illustration, SectionHeader, SlackMark, ticked } from "./parts.tsx";
+import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import { ChatMark, chatTone, jumpFromLine, stateLine, WaitingText } from "../ChatMark.tsx";
 import * as chatMarkCss from "../ChatMark.css.ts";
 import { useWorkspaceMarks } from "../lastChat.ts";
@@ -23,7 +24,6 @@ import { RowAside } from "../RowPicture.tsx";
 import { FirstStation } from "./Stations.tsx";
 import { OpenJobs } from "./OpenJobs.tsx";
 import { ChangelogNews } from "./Changelog.tsx";
-import { LoadingPill, PlaceholderRows } from "./Loading.tsx";
 import * as barsCss from "./styles/bars.css.ts";
 import { openWorkspaces } from "./Workspaces.tsx";
 import { usePullToReload } from "./pull.ts";
@@ -170,6 +170,7 @@ function SearchPage({ from, onLeave, onClose }: { from: DOMRect; onLeave: () => 
       </div>
       <div className={css.mSearchResults}>
         {words && search.error && !view && <Note text={t("web-mobile.home.searchUpdate")} error />}
+        {words && !search.error && !view && <WaitLine className={homeCss.mNote} text={t("web-mobile.home.searching")} />}
         {words && view && !chats.length && !messages.length && <Note text={t("web-mobile.home.searchNone")} />}
         {chats.length > 0 && (
           <section>
@@ -225,9 +226,11 @@ export function Recent() {
         <button type="button" className={css.mNewChat} data-small onClick={() => app.open(app.at("/new"))} aria-label={t("web-mobile.home.newChat")}><Ling size={26} /></button>
       </div>
       <div className={css.mRecentRows}>
-        {!view ? <Note text={chats.error?.message ?? t("web-mobile.home.reading")} error={!!chats.error} />
+        {!view ? <WaitLine className={homeCss.mNote} text={chats.error?.message ?? t("web-mobile.home.reading")} error={!!chats.error} />
           // No rows: what the list says in their place (the core's `note`), as the home list does.
-          : !items.length ? <Note text={view.note?.reading ? view.note.text ?? t("web-mobile.home.loading") : view.note?.failing[0]?.text ?? t("web-mobile.home.none")} error={!view.note?.reading && !!view.note?.failing.length} />
+          : !items.length ? view.note?.reading || view.note?.failing.length
+            ? <WaitLine className={homeCss.mNote} text={view.note.reading ? view.note.text ?? t("web-mobile.home.reading") : view.note.failing[0]!.text} error={!view.note.reading} />
+            : <Note text={t("web-mobile.home.none")} />
           : items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} lead={view.leading ?? "agents"} />)}
       </div>
       <button type="button" className={css.mRecentAll} onClick={app.home}>{t("web-mobile.home.allChats")}<ChevronRight size={16} /></button>
@@ -263,14 +266,12 @@ const ChatPane = memo(function ChatPane({ chats, filter, onSearch }: { chats: To
       {view && !view.note?.empty && <SearchField onOpen={onSearch} />}
       {/* What the last update brought (./Changelog.tsx), until it is seen: even while the list is being read. */}
       <ChangelogNews />
-      {/* Not even the stations known yet: the rows to come, and what is wrong if the list cannot be read (./Loading.tsx). */}
-      {!view ? <><LoadingPill text={chats.error?.message ?? t("web-mobile.home.loading")} error={!!chats.error} /><PlaceholderRows count={7} still={!!chats.error} /></> : (
+      {/* Not even the stations known yet: the rows to come, and what is wrong if the list cannot be read (@stillfail/ui waiting.tsx). */}
+      {!view ? <Waiting text={t("web-mobile.home.reading")} error={chats.error?.message} /> : (
         <>
           {/* A station's link coming back is said on its rows; only with no rows to show does the list say it (the core's
               `note`): what it waits on over the rows to come, or the stations it cannot read over faded ones. */}
-          {view.note?.reading && <LoadingPill text={view.note.text ?? t("web-mobile.home.loading")} />}
-          {view.note?.failing.map((s) => <LoadingPill key={`e/${s.station}`} text={s.text} error />)}
-          {(view.note?.reading || !!view.note?.failing.length) && <PlaceholderRows count={view.note.reading ? 7 : 4} still={!view.note.reading} />}
+          {(view.note?.reading || !!view.note?.failing.length) && <Waiting note={view.note} text={t("web-mobile.home.reading")} count={view.note.reading ? 7 : 4} />}
           {view.note?.empty && <Empty view={view} filter={filter} />}
           {/* What is left up a long while on the stations (./OpenJobs.tsx): nothing while there is none. */}
           <OpenJobs scope={scope} />
@@ -367,7 +368,7 @@ const ChatRow = memo(function ChatRow({ item, lead }: { item: ChatItem; lead: "a
         {/* The station it runs on, by its icon (the core gives one only with several stations). */}
         {(item.stationEmoji || item.stationIcon) && <span className={css.mChatStation} aria-label={item.stationName}><StationMark emoji={item.stationEmoji} icon={item.stationIcon} size={12} /></span>}
         {/* Only an agent that came from elsewhere (Slack, the only kind of connect) says so; an offline station, too. */}
-        {busy ? <span className={css.mChatMark} aria-label={t("web-mobile.home.busy")}><Spinner size={12} /></span>
+        {busy ? <span className={css.mChatMark} aria-label={t("web-mobile.home.busy")}><Spinner inline /></span>
           : failed !== undefined ? <span className={css.mChatMark}><FailedMark error={failed} size={12} /></span>
           // Its station offline, or its link coming back: unplugged (a spinner is only something its person did).
           : item.offline || item.reconnecting ? <Tip label={item.offline ?? item.reconnecting}><span className={css.mChatMark} aria-label={item.offline ?? item.reconnecting}><Unplug size={14} /></span></Tip>

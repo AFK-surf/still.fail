@@ -14,7 +14,7 @@ import { useRailItems } from "../Rail.tsx";
 import { stationBase } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { same } from "../stationPick.ts";
-import { BackLink, Button, ICON, Loading, Menu, MobileBack, Pill, Section, StatusDot, Time } from "../ui.tsx";
+import { BackLink, Button, ICON, Menu, MobileBack, Pill, Section, StatusDot, Time, Waiting } from "../ui.tsx";
 import { SoftwareList } from "../Versions.tsx";
 import { WorkspaceMark } from "../WorkspaceMark.tsx";
 import { HostDetails, joinedText, Net, problems, state, useLong } from "./StationCards.tsx";
@@ -73,7 +73,7 @@ function StationRow({ s, to }: { s: StationView; to: string }) {
     <NavItem to={to} title={s.name}
       mark={s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={16} /> : <WorkspaceMark w={{ name: s.name }} size={16} />}
       end={<><span className={railCss.dot} data-online={s.online || undefined} />{brief(s)}</>}>
-      <NavLine><span className={navFill}>{/* Where it is from first: the machine's line is long, and the narrow row cuts it short at its end. */}{[joinedText(s), s.host?.identity ?? (s.online ? t("web-pages.stations.connecting") : t("web-pages.stations.offline"))].filter(Boolean).join(" · ")}</span></NavLine>
+      <NavLine><span className={navFill}>{/* Where it is from first: the machine's line is long, and the narrow row cuts it short at its end. */}{[joinedText(s), s.host?.identity ?? (s.online ? t("common.connecting") : t("web-pages.stations.offline"))].filter(Boolean).join(" · ")}</span></NavLine>
       {meters.length > 0 && (
         <span className={css.rowMeters}>
           {meters.map((m) => <MeterChip key={m.label} meter={m} brief bare />)}
@@ -102,7 +102,7 @@ function brief(s: StationView): ReactNode {
 /** `settings/stations` with the sidebar of their own: the first of them (there is no page of them all). */
 export function StationsFirst({ entry }: { entry: WorkspaceEntry }) {
   const first = useStations(entry.id).value?.[0];
-  return first ? <Navigate to={stationPage(entry.id, first.id)} replace /> : <Loading label={t("web-pages.settings.workspace.loading")} />;
+  return first ? <Navigate to={stationPage(entry.id, first.id)} replace /> : <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting shape="cards" text={t("common.readingStations")} /></div>;
 }
 
 /** A station's own page. */
@@ -114,7 +114,14 @@ export function StationSettings({ entry }: { entry: WorkspaceEntry }) {
   const edits = useStationEdits(view, entry.account, listed ?? []);
   const found = listed?.find((s) => s.id === id);
   const back = `/w/${entry.id}/settings/stations`;
-  if (!listed) return <Loading label={t("web-pages.settings.workspace.loading")} />;
+  if (!listed) {
+    return (
+      <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
+        {side ? <MobileBack to={back} label="Station" /> : <BackLink to={back} label="Station" />}
+        <Waiting shape="cards" text={t("common.readingStations")} />
+      </div>
+    );
+  }
   // Removed (or a link from before): the list, or the first of them.
   if (!found) return <Navigate to={back} replace />;
   const s = edits.shown(found);

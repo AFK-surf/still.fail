@@ -36,6 +36,9 @@ import fail.still.android.ui.VizFrame
 import fail.still.android.ui.VizFull
 import fail.still.android.ui.webSubtle
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.WaitLine
+import fail.still.android.ui.breathing
+import fail.still.android.ui.rememberBreath
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
@@ -71,7 +74,8 @@ fun VizFile(station: String, key: String, file: Attachment, failed: @Composable 
     var full by remember { mutableStateOf(false) }
     when (val l = loaded) {
         Loaded.Failed -> failed()
-        Loaded.Waiting -> Box(Modifier.fillMaxWidth().padding(bottom = 8.dp).height(120.dp).clip(Smooth(12.dp)).background(if (C.dark) androidx.compose.ui.graphics.Color(0xFF26272B) else androidx.compose.ui.graphics.Color(0xFFF6F2EA)))
+        // Its place, breathing as every wait's shapes do, till the page comes.
+        Loaded.Waiting -> Box(Modifier.fillMaxWidth().padding(bottom = 8.dp).height(120.dp).breathing(rememberBreath()).clip(Smooth(12.dp)).background(C.bubble))
         is Loaded.Ready -> {
             var kept by remember(l) { mutableStateOf(l.state) }
             val keep: (JsonElement) -> Unit = { s -> kept = s; keepViz(app, scope, station, key, file.path, s) }
@@ -120,7 +124,8 @@ fun VizOpen(station: String, key: String, file: Attachment, onClose: () -> Unit)
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     when (val l = rememberViz(station, key, file)) {
-        Loaded.Waiting -> Unit
+        // Under the sentence whose link opened it, till it covers the screen.
+        Loaded.Waiting -> WaitLine(t("common.opening"), modifier = Modifier.padding(vertical = 6.dp))
         Loaded.Failed -> LaunchedEffect(Unit) { app.toast = t("android-misc.viz.cantRead"); onClose() }
         is Loaded.Ready -> {
             var kept by remember(l) { mutableStateOf(l.state) }

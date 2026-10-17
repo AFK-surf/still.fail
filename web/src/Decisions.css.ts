@@ -2,7 +2,6 @@ import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { composerWrap } from "./styles/cloud.css.ts";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { glass } from "@stillfail/ui/styles/glass.ts";
-import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 import { CARD_PAD, LIST_PAD, ROW_CORNER, listCardLook } from "./styles/pages.css.ts";
 
 // A decision's options (Decisions.tsx): under the message that asks it in a chat, and at the foot of the decisions
@@ -63,7 +62,6 @@ export const choiceLabel = style({
 });
 /** Being sent: a small ring at the option's right, level with its label. */
 export const choiceSpinner = style({ position: "absolute", right: `${CARD_PAD - LIST_PAD}px`, top: `${NUMBER_IN + 4}px` });
-globalStyle(`${choiceSpinner}${spinner}`, { width: "12px", height: "12px", borderWidth: "1.5px" });
 export const choiceDetail = style({ gridColumn: "2", fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted, overflowWrap: "anywhere" });
 
 // 留着 and 归档这个 chat under an agent's post that said it is all done (Chat.tsx ArchiveOption): two buttons side by
@@ -90,7 +88,6 @@ export const optionLabel = style({
 });
 /** Being sent: a small ring at the button's right. */
 export const optionSpinner = style({ position: "absolute", right: "14px", top: "12px" });
-globalStyle(`${optionSpinner}${spinner}`, { width: "12px", height: "12px", borderWidth: "1.5px" });
 
 /** Under an agent's post in its chat: its options, or how it was settled; what settles leaves over it (useSettling). */
 export const decision = style({ position: "relative" });

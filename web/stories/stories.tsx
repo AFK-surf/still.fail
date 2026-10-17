@@ -18,9 +18,9 @@ import { ComposerExtras, FileCard, MineBubble, MineMessage } from "../src/Chat.t
 import type { Draft, Pending } from "../src/draft.ts";
 import * as composerCss from "../src/styles/composer.css.ts";
 import {
-  AgentMark, Button, Choices, Confirm, CopyCommand, Dialog, Empty, Field, IconButton, Loading, Menu, ModelLogo, PanelButton, PanelGroup,
-  PanelHead, PanelIconButton, PanelRow, PanelText, Pill, RuntimeTags, Section, Segmented, Select, SkeletonRows, StatusDot, StatusText,
-  Switch, SwitchRow, Tip,
+  AgentMark, Button, Choices, Confirm, CopyCommand, Dialog, Empty, Field, IconButton, Menu, ModelLogo, PanelButton, PanelGroup,
+  PanelHead, PanelIconButton, PanelRow, PanelText, Pill, Progress, RuntimeTags, Section, Segmented, Select, Spinner, StatusDot, StatusText,
+  Switch, SwitchRow, Tip, WaitLine, WaitPill, Waiting,
 } from "../src/ui.tsx";
 import { Archive, Bell, Close, Copy, Download, Edit, Folder, Plus, Refresh, Search, Trash } from "@stillfail/ui/icons.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
@@ -187,6 +187,19 @@ const ANTHROPIC = { id: "anthropic", name: "Anthropic" };
 const OPENAI = { id: "openai", name: "OpenAI" };
 const noop = () => undefined;
 
+/** The sidebar's chats not come yet: still read from Studio (`reading`), or Studio not reachable (`failing`). */
+const chatsWaiting = (state: "reading" | "failing"): DemoExtension => ({
+  then: (t, value) => (t.topic !== "chats" || !value ? undefined : {
+    ...(value as object), days: [],
+    note: state === "reading" ? { reading: true, text: "正在从 Studio 读取对话", failing: [], empty: false }
+      : { reading: false, failing: [{ station: "demo/local", text: "无法连接 Studio", message: "station 离线" }], empty: false },
+  }),
+});
+/** 用量 not come yet: its stations still read. */
+const usageWaiting: DemoExtension = {
+  then: (t, value) => (t.topic !== "usage" || !value ? undefined : { ...(value as object), empty: true, wait: { reading: true, text: "正在从 Studio 读取用量", failing: [], empty: false } }),
+};
+
 /** A part drawn alone on the app's ground, the whole window its room. */
 const stage = (node: ReactNode) => <div style={{ position: "relative", width: "100%", height: "100vh", overflow: "hidden", background: vars.canvas, color: vars.text }}>{node}</div>;
 /** Parts side by side on a page of the app: sections of them, each named. */
@@ -336,10 +349,13 @@ export const stories: Story[] = [
     ]),
   },
   {
-    id: "control-states", group: "基础控件", title: "加载、空和命令",
+    id: "control-states", group: "基础控件", title: "等待、空和命令",
     render: () => sheet([
-      ["加载", <div style={{ width: 360, height: 120, position: "relative" }}><Loading fill={false} /></div>],
-      ["骨架", <div style={{ width: 420 }}><SkeletonRows count={3} /></div>],
+      ["列表第一次读取", <div style={{ width: 420 }}><Waiting count={3} text="正在读取会话" /></div>],
+      ["设置页第一次读取", <div style={{ width: 420 }}><Waiting shape="cards" count={2} /></div>],
+      ["一节内容", <WaitLine text="正在读取配置" />],
+      ["胶囊", <><WaitPill text="正在连接 Studio" /><WaitPill text="无法连接 MBA" error /></>],
+      ["进度", <div style={{ display: "grid", gap: 12, width: 240 }}><Progress part={0.4} /><Progress part={null} /></div>],
       ["空", <div style={{ width: 420 }}><Empty>还没有对话</Empty></div>],
       ["命令", <div style={{ width: 520 }}><CopyCommand text="curl -fsSL https://still.fail/install.sh | sh" /></div>],
     ]),
@@ -403,11 +419,24 @@ export const stories: Story[] = [
   { id: "app-new-chat-not-shared", group: "应用", title: "新建对话 · 加入的 station 没有开放的 Profile", app: true, demo: notShared, steps: [{ text: "新建对话" }] },
   { id: "app-connects", group: "应用", title: "连接", app: true, steps: [{ click: '[aria-label="连接"]' }] },
   { id: "app-usage", group: "应用", title: "用量", app: true, steps: [{ click: '[aria-label="用量"]' }] },
+
+  // ── waiting (docs/ui-panels.md「等待」): a list or page read the first time, a row or button at work ──
+  { id: "app-waiting-chats", group: "等待", title: "侧栏 · 正在读取对话", app: true, demo: chatsWaiting("reading") },
+  { id: "app-waiting-failing", group: "等待", title: "侧栏 · station 无法连接", app: true, demo: chatsWaiting("failing") },
+  { id: "app-waiting-usage", group: "等待", title: "设置页 · 正在读取用量", app: true, demo: usageWaiting, steps: [{ click: '[aria-label="用量"]' }] },
+  {
+    id: "control-busy", group: "等待", title: "做事中的按钮和行",
+    render: () => sheet([
+      ["按钮", <><Button variant="primary" busy>保存</Button><Button busy>重新连接</Button><Button variant="danger-solid" busy>删除</Button><IconButton label="刷新" icon={Refresh} busy /></>],
+      ["开关", <><SwitchDemo start busy /><Switch checked onChange={noop} small busy label="小开关" /></>],
+      ["行尾", <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: vars.muted }}>正在保存<Spinner inline /></div>],
+    ]),
+  },
   { id: "app-share", group: "应用", title: "分享进来 · 上次那个 chat 在最前", app: true, ...sharing("kept") },
   { id: "app-share-opened", group: "应用", title: "分享进来 · 点了之后的 chat", app: true, ...sharing("kept"), steps: [{ click: 'button:has-text("youtube.com 的链接上次发到这里")' }] },
   { id: "app-share-new-chat", group: "应用", title: "分享进来 · 新 chat，几台 station", app: true, ...sharing("new") },
   { id: "app-share-none", group: "应用", title: "分享进来 · 没有 chat 也没有 station", app: true, ...sharing("none") },
-  { id: "app-share-loading", group: "应用", title: "分享进来 · 加载中", app: true, ...sharing("loading") },
+  { id: "app-share-loading", group: "应用", title: "分享进来 · 正在读取", app: true, ...sharing("loading") },
   { id: "app-share-search", group: "应用", title: "分享进来 · 搜索 chat", app: true, ...sharing("search"), steps: [{ text: "搜索" }, { key: "N" }, { key: "A" }, { key: "S" }] },
 
   // ── a station's logins (docs/remote-login.md) ──
@@ -633,7 +662,7 @@ export const stories: Story[] = [
   { id: "phone-share-opened", group: "手机", title: "分享进来 · 点了之后的 chat", app: true, phone: true, ...sharing("kept"), steps: [{ click: 'button:has-text("youtube.com 的链接上次发到这里")' }] },
   { id: "phone-share-new-chat", group: "手机", title: "分享进来 · 新 chat，几台 station", app: true, phone: true, ...sharing("new") },
   { id: "phone-share-none", group: "手机", title: "分享进来 · 没有 chat 也没有 station", app: true, phone: true, ...sharing("none") },
-  { id: "phone-share-loading", group: "手机", title: "分享进来 · 加载中", app: true, phone: true, ...sharing("loading") },
+  { id: "phone-share-loading", group: "手机", title: "分享进来 · 正在读取", app: true, phone: true, ...sharing("loading") },
   { id: "phone-share-search", group: "手机", title: "分享进来 · 搜索 chat", app: true, phone: true, ...sharing("search"), steps: [{ text: "搜索" }, { key: "N" }, { key: "A" }, { key: "S" }] },
   { id: "phone-share-search-none", group: "手机", title: "分享进来 · 搜索没找到", app: true, phone: true, ...sharing("search"), steps: [{ text: "搜索" }, { key: "z" }, { key: "z" }] },
   { id: "phone-agent", group: "手机", title: "agent 名片", app: true, phone: true, steps: [{ click: '[aria-label$="的名片"]' }] },

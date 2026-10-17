@@ -281,6 +281,24 @@ export interface ArchivePolicyView {
 	changeText?: string;
 }
 
+export interface StationFailing {
+	station: string;
+	text: string;
+	message?: string;
+}
+
+/**
+ * What a list with no rows to show says in their place: it is still reading, the stations it cannot reach (`text`
+ * says so, `message` why), or there is nothing (`empty`). All false and none with rows to show.
+ */
+export interface ListNote {
+	reading: boolean;
+	/** While reading, what it waits on (正在连接 Studio, 正在读取会话); absent from a core before it. */
+	text?: string;
+	failing: StationFailing[];
+	empty: boolean;
+}
+
 /**
  * The archive of a scope's stations online (the `archive` topic): chats archived by hand or by their station once
  * idle, newest first by the day they were archived; what could not be read of it; and what the page says in place
@@ -291,7 +309,8 @@ export interface ArchiveView {
 	days: ArchiveDay[];
 	/** A station's archive that could not be read, in a line (named where there are several). */
 	errors: ArchiveError[];
-	loading: boolean;
+	/** What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be. */
+	wait: ListNote;
 	note?: string;
 	/** How many archived chats there are (with `q`, that have it), shown or not. */
 	total?: number;
@@ -1938,24 +1957,6 @@ export interface StationsGlyph {
 	label: string;
 }
 
-export interface StationFailing {
-	station: string;
-	text: string;
-	message?: string;
-}
-
-/**
- * What a list with no rows to show says in their place: it is still reading, the stations it cannot reach (`text`
- * says so, `message` why), or there is nothing (`empty`). All false and none with rows to show.
- */
-export interface ListNote {
-	reading: boolean;
-	/** While reading, what it waits on (正在连接 Studio, 正在读取会话); absent from a core before it. */
-	text?: string;
-	failing: StationFailing[];
-	empty: boolean;
-}
-
 export interface ChatsView {
 	me: Me;
 	stations: StationState[];
@@ -2122,7 +2123,8 @@ export interface ConnectionView {
 export interface ConnectsView {
 	me: Me;
 	items: ConnectItem[];
-	loading: boolean;
+	/** What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be. */
+	wait: ListNote;
 }
 
 export interface Counts {
@@ -2221,8 +2223,8 @@ export interface DecisionsToday {
 export interface DecisionsView {
 	items: DecisionItem[];
 	count: number;
-	/** Some station's chats are still being read: more may come. */
-	loading: boolean;
+	/** What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be. */
+	wait: ListNote;
 	/** The cards the viewer answered today, newest first. A core before them says none. */
 	answered?: DecisionAnswered[];
 	/** The viewer's chats where an agent is at work or waiting (正在办), newest first: where the next may come from. */
@@ -3845,8 +3847,8 @@ export interface WorkspaceProfile {
  */
 export interface ProfilesView {
 	items: WorkspaceProfile[];
-	/** A station that is up is not read yet: its profiles come later. */
-	loading: boolean;
+	/** What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be. */
+	wait: ListNote;
 }
 
 /** An attachment a snapshot may take. */
@@ -4221,7 +4223,8 @@ export interface UsageTile {
  */
 export interface UsageView {
 	days: number;
-	loading: boolean;
+	/** What it still waits on, as every list's first read is drawn (looks.ts waitNote): the stations not read yet, those that could not be. */
+	wait: ListNote;
 	empty: boolean;
 	tiles: UsageTile[];
 	series: UsageSeries[];

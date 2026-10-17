@@ -9,7 +9,6 @@ import { accountMenu } from "./cloud/workspace.css.ts";
 import { detailRow, details, sideContent } from "./pages/ChatPage.css.ts";
 import { msgRoute } from "./Chat.css.ts";
 import { bleedStart, bleedX, columns } from "@stillfail/ui/styles/align.ts";
-import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 
 export const history = style({
   minWidth: "0", minHeight: "0", display: "flex", flexDirection: "column", borderLeft: `1px solid ${vars.line}`,
@@ -43,6 +42,8 @@ export const hSteps = style({
   gridColumn: "2", minWidth: "0", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "2px", marginTop: "2px",
 });
 export const historyEdge = style({ margin: "4px 0", textAlign: "center", fontSize: vars.textMeta, color: vars.muted });
+/** The same while the pages before are on their way: a spinner before the words (waiting.tsx WaitLine). */
+export const historyEdgeWait = style({ justifyContent: "center", margin: "4px 0" });
 /** An event's line, as tall as its mark in the gutter: what does not fit goes to the next line, and a long place is cut
  * short, rather than squeezing the words. */
 /** Who and where, in one line: a long name or place is cut short, never put on a line of its own. */
@@ -60,9 +61,6 @@ export const hPerson = style({
     "&:disabled": { cursor: "progress" },
   },
 });
-/** "这是我" / "不是我" on its way: a small ring after the name. */
-export const hPersonSpinner = style({});
-globalStyle(`${hPersonSpinner}${spinner}`, { width: "10px", height: "10px", borderWidth: "1.5px" });
 export const hPlace = style({
   selectors: {
     "a&": { cursor: "pointer" },

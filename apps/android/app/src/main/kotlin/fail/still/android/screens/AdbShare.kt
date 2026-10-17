@@ -165,7 +165,7 @@ fun AdbShareScreen(current: WorkspaceEntry, address: String) {
                             Text(t("android-misc.adb.grant.title"), fontSize = 15.sp, color = C.ink)
                             Text(t("android-misc.adb.grant.note"), fontSize = 13.sp, color = C.muted)
                         }
-                        DoingMark(busy, app.failedOf("adb.grant"), 14.dp)
+                        DoingMark(busy, app.failedOf("adb.grant"))
                         Switch(false)
                     }
                 }
@@ -230,7 +230,7 @@ private fun Pairing(view: AdbShareView) {
                 Text(t("android-misc.adb.pair.here"), fontSize = 15.sp, color = if (view.pairPort == null) C.subtle else C.ink)
                 Text(if (view.pairPort == null) t("android-misc.adb.pair.here.wait") else t("android-misc.adb.pair.here.split"), fontSize = 13.sp, color = C.muted)
             }
-            DoingMark(busy, app.failedOf("adb.pair"), 14.dp)
+            DoingMark(busy, app.failedOf("adb.pair"))
         }
     }
 }

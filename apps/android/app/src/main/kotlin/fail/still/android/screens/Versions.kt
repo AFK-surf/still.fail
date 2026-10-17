@@ -3,6 +3,7 @@
 // workspace's owner or admin). Grey but for what wants doing: a newer version out, an update going on, one that failed.
 package fail.still.android.screens
 
+import fail.still.android.ui.Spinner
 import fail.still.android.data.I18n
 import fail.still.android.data.t
 import androidx.compose.foundation.background
@@ -101,7 +102,7 @@ fun Versions(station: String, updates: List<SoftwareVersion>?, manager: Boolean,
             scope.launch { try { api.checkSoftware() } catch (e: CoreException) { failed = e.message } finally { checking = false } }
         })) {
             Text(if (checked == null) t("android-misc.versions.checkingVersions") else if (checking) t("android-misc.versions.checking") else t("android-misc.versions.check"), fontSize = 15.sp, color = C.muted, modifier = Modifier.weight(1f))
-            if (checking || checked == null) Spinner(13.dp)
+            if (checking || checked == null) Spinner()
         }
     }
     failed?.let { Text(it, fontSize = 13.sp, color = C.red, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 10.dp)) }
@@ -121,7 +122,7 @@ private fun VersionRow(v: SoftwareVersion, manager: Boolean, busy: Boolean, onUp
     ).filter { it.isNotBlank() }.joinToString(t("android-misc.versions.sep"))
     val action = @Composable { label: String ->
         if (manager && v.updatable) {
-            if (busy) Spinner(13.dp)
+            if (busy) Spinner(inline = true)
             else Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.accent, modifier = Modifier.clickable(onClick = onUpdate))
         }
     }
@@ -142,7 +143,7 @@ private fun VersionRow(v: SoftwareVersion, manager: Boolean, busy: Boolean, onUp
                         v.state == "updating" -> {
                             val percent = v.percent
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                if (percent != null) DownloadChip(percent) else Spinner(12.dp)
+                                if (percent != null) DownloadChip(percent) else Spinner(inline = true)
                                 // Where it is, as the station says (one older than that: nothing more than 正在更新).
                                 Text(v.progress ?: if (v.installed) t("android-misc.versions.updating") else t("android-misc.versions.installing"), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
                             }

@@ -21,6 +21,7 @@ import fail.still.android.LocalApp
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
+import fail.still.android.ui.Spinner
 
 
 /**
@@ -28,12 +29,12 @@ import fail.still.android.ui.Icons
  * red mark the few seconds after it failed (a tap says why), nothing otherwise. The menu or sheet that asked may be gone.
  */
 @Composable
-fun DoingMark(running: Boolean, failed: String?, size: Dp = 14.dp) {
-    if (running) Spinner(size)
+fun DoingMark(running: Boolean, failed: String?, inline: Boolean = false) {
+    if (running) Spinner(inline)
     // The app only for what failed: a spinner shows where there is none (the share sheet over another app).
     else if (failed != null) {
         val app = LocalApp.current
-        IconIn(Icons.Info, size, C.red, Modifier.semantics { contentDescription = failed }.clickable { app.toast = failed })
+        IconIn(Icons.Info, if (inline) 12.dp else 14.dp, C.red, Modifier.semantics { contentDescription = failed }.clickable { app.toast = failed })
     }
 }
 

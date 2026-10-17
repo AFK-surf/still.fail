@@ -3,6 +3,7 @@
 // preview (FilePreview.kt).
 package fail.still.android.screens
 
+import fail.still.android.ui.Spinner
 import fail.still.android.drive.DriveCache
 import fail.still.android.data.t
 import android.content.ContentValues
@@ -644,7 +645,7 @@ internal fun FileCard(
         Modifier.width(236.dp).clip(shape).background(chatInk().neutral).let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        if (busy) Spinner(14.dp) else IconIn(Icons.Read, 16.dp, C.muted)
+        if (busy) Spinner() else IconIn(Icons.Read, 16.dp, C.muted)
         Column(Modifier.weight(1f)) {
             Text(name, fontSize = 15.sp, lineHeight = 20.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             // Digits all one width: a percentage counting up keeps its place (uploadingText).

@@ -80,7 +80,10 @@ import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
-import fail.still.android.ui.Loading
+import fail.still.android.ui.BusyIcon
+import fail.still.android.ui.WaitLine
+import fail.still.android.ui.WaitShape
+import fail.still.android.ui.Waiting
 import fail.still.android.ui.MakerIcon
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.NavButton
@@ -137,14 +140,25 @@ fun ConnectRow(station: String, c: Connect) {
     }
 }
 
-/** A connect by its station and id, as the workspace's connects view has it. */
+/**
+ * A connect by its station and id, as the workspace's connects view has it; and what its page shows while it is not
+ * there: the view's first read waited on (what could not be read in red), or, read, that there is none.
+ */
 @Composable
-private fun rememberConnect(station: String, id: String): Pair<ConnectItem?, String?> {
+private fun rememberConnect(station: String, id: String): Pair<ConnectItem?, @Composable () -> Unit> {
     val app = LocalApp.current
     val connects by rememberTopic<ConnectsView>(app.core, Topics.connects(station.substringBefore('/'), false))
-    val item = connects.value?.items?.firstOrNull { it.station == station && it.connect.id == id }
-    val note = if (item != null) null else connects.error?.message ?: if (connects.value == null || connects.value!!.loading) t("android-settings.connects.reading") else t("android-settings.connects.none")
-    return item to note
+    val view = connects.value
+    val item = view?.items?.firstOrNull { it.station == station && it.connect.id == id }
+    val error = connects.error?.message
+    val missing: @Composable () -> Unit = {
+        when {
+            view == null || error != null -> Waiting(WaitShape.Cards, text = t("android-settings.connects.reading"), error = error)
+            view.wait.reading || view.wait.failing.isNotEmpty() -> Waiting(WaitShape.Cards, note = view.wait)
+            else -> PlaceEmpty(t("android-settings.connects.none"))
+        }
+    }
+    return item to missing
 }
 
 /**
@@ -174,7 +188,11 @@ fun ConnectsScreen(current: WorkspaceEntry, only: String? = null) {
     PlacePage(current, "connects", add, known = topic.value != null || topic.error != null, back = one?.name ?: t("android-settings.title"),
         actions = { BandFilter(t("android-settings.connects.title"), filters, if (mine) 1 else 0) { mine = it == 1 } }) { top ->
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = top)) {
-        if (stations == null || view == null) Text(connects.error?.message ?: t("android-settings.connects.reading"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
+        // None to show yet (no connect, no app made): the stations not read yet, or those that could not be.
+        val none = view != null && view.items.isEmpty() && stations.orEmpty().all { it.overview?.slackApps.isNullOrEmpty() }
+        val waits = view != null && (view.wait.reading || view.wait.failing.isNotEmpty())
+        if (stations == null || view == null) Waiting(WaitShape.Rows, count = 3, text = t("android-settings.connects.reading"), error = connects.error?.message ?: topic.error?.message)
+        else if (one == null && none && waits) Waiting(WaitShape.Rows, count = 3, note = view.wait)
         else stations.forEach { s ->
             val here = view.items.filter { it.station == s.station }
             val waiting = s.overview?.slackApps.orEmpty()
@@ -182,14 +200,14 @@ fun ConnectsScreen(current: WorkspaceEntry, only: String? = null) {
             if (one == null) SectionHeader(if (s.online) s.name else t("android-settings.connects.offline", "name" to s.name), start = 24.dp)
             ListCard {
                 if (!s.online && here.isEmpty()) ListRow { Text(t("android-settings.connects.stationOffline"), fontSize = 15.sp, color = C.muted) }
-                else if (here.isEmpty() && waiting.isEmpty()) ListRow { Text(if (s.overview != null) t("android-settings.connects.empty") else t("android-settings.reading"), fontSize = 15.sp, color = C.muted) }
+                else if (here.isEmpty() && waiting.isEmpty()) ListRow { if (s.overview != null) Text(t("android-settings.connects.empty"), fontSize = 15.sp, color = C.muted) else WaitLine(t("common.reading")) }
                 here.forEach { ConnectRow(it.station, it.connect) }
                 // The Slack apps made here that no connect has taken yet: to be finished any time.
                 waiting.forEach { a -> WaitingApp(app, s.station, a, s.online) }
             }
         }
         // What a connect is, said while there is none (the page has no note at its top).
-        if (one == null && view != null && view.items.isEmpty() && !view.loading && stations.orEmpty().all { it.overview?.slackApps.isNullOrEmpty() })
+        if (one == null && none && !waits)
             PlaceEmpty(t("android-settings.connects.note", "app" to BuildConfig.APP_NAME))
         Spacer(Modifier.height(30.dp))
         BarRoom()
@@ -200,8 +218,8 @@ fun ConnectsScreen(current: WorkspaceEntry, only: String? = null) {
 @Composable
 fun ConnectScreen(station: String, id: String) {
     val app = LocalApp.current
-    val (item, note) = rememberConnect(station, id)
-    if (item == null) return Column(Modifier.fillMaxSize()) { NavBar(t("android-settings.connects.title"), app::pop, t("android-settings.connects.title")); Loading(note ?: "") }
+    val (item, missing) = rememberConnect(station, id)
+    if (item == null) return Column(Modifier.fillMaxSize()) { NavBar(t("android-settings.connects.title"), app::pop, t("android-settings.connects.title")); missing() }
     val connect = item.connect
     val c = connect.connection
     Column(Modifier.fillMaxSize()) {
@@ -552,7 +570,7 @@ private fun TokenFields(tokens: Tokens, masked: Pair<String, String>? = null, in
 fun ConnectRunScreen(station: String, id: String) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
-    val (item, note) = rememberConnect(station, id)
+    val (item, missing) = rememberConnect(station, id)
     val pickOf = "connect:$id"
     val picking by rememberTopic<PickView>(app.core, Topics.pick(station, pickOf))
     val v = picking.value
@@ -562,7 +580,8 @@ fun ConnectRunScreen(station: String, id: String) {
     androidx.activity.compose.BackHandler(enabled = list != null) { list = null }
     Column(Modifier.fillMaxSize()) {
         NavBar(if (list != null) t("android-settings.run.title") else t("common.back"), { if (list != null) list = null else app.pop() }, when (list) { "model" -> t("android-settings.connect.pickModel"); "account" -> t("android-settings.run.pickAccount"); else -> t("android-settings.run.title") })
-        if (item == null || v == null) return Loading(note ?: t("android-settings.reading"))
+        if (item == null) return missing()
+        if (v == null) return Waiting(WaitShape.Cards, error = picking.error?.message)
         val connect = item.connect
         val runtime = connect.bind.runtime
         val models = v.options
@@ -605,7 +624,8 @@ fun ConnectRunScreen(station: String, id: String) {
             contentAlignment = Alignment.Center,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (busy) androidx.compose.material3.CircularProgressIndicator(Modifier.size(14.dp), color = if (changed) C.bg else C.muted, strokeWidth = 1.5.dp)
+                // Solid while changed: its spinner in its words' colour.
+                BusyIcon(busy, solid = if (changed) C.bg else null)
                 Text(v.saveText, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (changed) C.bg else C.ink)
             }
         }
@@ -697,7 +717,7 @@ fun NewConnectScreen(station: String) {
                         }
                     }
                 }
-                "install" -> if (made == null) Text(t("android-settings.flow.readingApp"), fontSize = 13.sp, color = C.muted) else {
+                "install" -> if (made == null) WaitLine(t("android-settings.flow.readingApp")) else {
                     val m = made
                     val install = m.install
                     iconError?.let { Text(t("android-settings.flow.iconFailed", "error" to it), fontSize = 13.sp, color = C.red) }

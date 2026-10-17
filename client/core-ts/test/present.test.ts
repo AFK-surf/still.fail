@@ -118,7 +118,7 @@ test("a_profile_says_what_it_can_do_from_where_its_provider_speaks", () => {
   assert.equal(found.decisionText, "已识别 2 个决策模型");
   let waiting: J = { runtimes: [], access: { kind: "env", provider: "jev" }, check: { state: "ok" } };
   waiting = p.profile(waiting);
-  assert.deepEqual([waiting.decisionModels, waiting.decisionText], [[], "正在识别决策模型…"]);
+  assert.deepEqual([waiting.decisionModels, waiting.decisionText], [[], "正在识别决策模型"]);
   let x: J = { runtimes: [], access: { kind: "env", provider: "xiaomi" }, check: { state: "failed" } };
   x = p.profile(x);
   assert.deepEqual([x.providerName, x.trouble.action], ["Xiaomi MiMo", "key"]);

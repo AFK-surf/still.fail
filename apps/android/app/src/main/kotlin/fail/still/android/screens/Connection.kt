@@ -1,6 +1,7 @@
 // 重试 for a connection down (the web's Connection.tsx): the connections tried again at once.
 package fail.still.android.screens
 
+import fail.still.android.ui.Spinner
 import fail.still.android.data.t
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,7 +37,7 @@ fun RetryPill(modifier: Modifier = Modifier) {
         }.padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        if (trying) Spinner(10.dp)
+        if (trying) Spinner(inline = true)
         Text(t("common.retry"), color = C.ink, fontSize = 13.sp)
     }
 }

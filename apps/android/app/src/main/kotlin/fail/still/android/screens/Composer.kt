@@ -4,6 +4,9 @@
 // so and restores it (web/src/ArchiveNotice.tsx).
 package fail.still.android.screens
 
+import fail.still.android.ui.Spinner
+import fail.still.android.ui.BusyIcon
+import fail.still.android.ui.WaitLine
 import fail.still.android.data.t
 import fail.still.android.BuildConfig
 import androidx.compose.runtime.getValue
@@ -67,7 +70,6 @@ import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -484,7 +486,8 @@ fun ChatRefMenu(draft: Draft, station: String, here: String?, haze: HazeState, m
             if (query.isNotEmpty()) Text(query, fontSize = 13.sp, color = C.ink)
         }
         when {
-            search.value == null -> Text(if (search.error != null) t("android-chat.ref.update", "app" to BuildConfig.APP_NAME) else t("android-chat.reading"), fontSize = 15.sp, color = C.muted, modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp))
+            search.value == null && search.error != null -> Text(t("android-chat.ref.update", "app" to BuildConfig.APP_NAME), fontSize = 15.sp, color = C.muted, modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp))
+            search.value == null -> WaitLine(t("common.reading"), modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp))
             items.isEmpty() -> Text(if (query.isNotEmpty()) t("android-chat.ref.none.match") else t("android-chat.ref.none"), fontSize = 15.sp, color = C.muted,
                 modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp))
             else -> items.forEach { item ->
@@ -667,7 +670,7 @@ fun AppState.upload(draft: Draft, station: String, picked: Picked, scope: Corout
 /** What a file going up says: how far it has gone, once that is known. */
 internal fun uploadingText(f: Pending): String {
     val sent = f.sent
-    return if (sent == null || f.size <= 0) t("android-chat.file.uploading")
+    return if (sent == null || f.size <= 0) t("common.uploading")
     else t("android-chat.file.uploading.part", "percent" to (sent * 100 / f.size).toInt(), "size" to fileSize(f.size))
 }
 
@@ -716,7 +719,7 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
             if (picture != null) Box(Modifier.draftPicture(f, station).sendTile(host, f.id).size(56.dp).clip(InComposerFiles).background(C.chip)) {
                 Image(picture, f.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 if (f.done == null) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = if (f.error != null) 0.5f else 0.25f)), contentAlignment = Alignment.Center) {
-                    if (f.error != null) Text(t("android-chat.file.failed"), color = Color.White, fontSize = 11.sp) else CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 1.5.dp)
+                    if (f.error != null) Text(t("android-chat.file.failed"), color = Color.White, fontSize = 11.sp) else Spinner(color = Color.White)
                 }
                 // Only where it is drawn: Compose would take a touch target this small out to 48dp, most of the tile,
                 // and a tap meant to open the picture removed it.
@@ -776,7 +779,7 @@ private fun PastedCard(f: Pending, pasted: PastedText, onRemove: () -> Unit, onR
         Modifier.width(260.dp).clip(InComposerFiles).background(chatInk().neutral).padding(start = 10.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        if (busy) Spinner(14.dp) else IconIn(Icons.Read, 16.dp, C.muted)
+        if (busy) Spinner() else IconIn(Icons.Read, 16.dp, C.muted)
         Column(Modifier.weight(1f)) {
             Text(pasted.preview.ifEmpty { t("web-main.composer.pastedText") }, fontSize = 15.sp, lineHeight = 20.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
@@ -940,8 +943,8 @@ fun ComposerBar(
                 .semantics { contentDescription = t("android-chat.composer.send") },
             contentAlignment = Alignment.Center,
         ) {
-            if (draft.starting) CircularProgressIndicator(Modifier.size(16.dp), color = C.surface, strokeWidth = 2.dp)
-            else IconIn(Icons.ArrowUp, 18.dp, if (ready) C.bg else C.surface)
+            val ink = if (ready) C.bg else C.surface
+            BusyIcon(draft.starting, solid = ink) { IconIn(Icons.ArrowUp, 18.dp, ink) }
         }
     }, modifier = Modifier.fillMaxWidth()) { items, constraints ->
         val loose = constraints.copy(minWidth = 0, minHeight = 0)

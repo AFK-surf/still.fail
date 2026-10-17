@@ -4,6 +4,7 @@
 // it when something is wrong; where it is and which connects use it instead when there is no allowance to show). Under
 // them, the machines' own logins not used yet. The page beside is the one picked (pages/Accounts.tsx); come to the
 // profiles, the first is picked (cloud/settings.tsx RuntimeSettings).
+import { Waiting } from "@stillfail/ui/waiting.tsx";
 import { useSyncExternalStore, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { useAction, useApi, useProfiles, useStations, type StationView } from "./api.ts";
@@ -53,7 +54,8 @@ export function ProfilesNav({ scope, top }: { scope: string; top?: ReactNode }) 
     <>
       <NavTop top={top} action={online.length > 0 && <NavAction icon={<Plus {...ICON} />} label={t("web-pages.settings.profiles.add")} onClick={add} />} />
       <NavList>
-        {profiles && items.length === 0 && !profiles.loading && <p className={nav.navEmpty}>{t("web-pages.settings.profiles.none")}</p>}
+        {(!profiles || (items.length === 0 && profiles.wait.reading)) && <Waiting dense count={3} note={profiles?.wait} />}
+        {profiles && items.length === 0 && !profiles.wait.reading && <p className={nav.navEmpty}>{t("web-pages.settings.profiles.none")}</p>}
         {profileGroups(items).map((g) => (
           <NavSection key={g[0]!.group} title={g[0]!.groupTitle}>
             {g.map((e) => <ProfileRow key={e.key} entry={e} scope={scope} />)}

@@ -1064,7 +1064,7 @@ test("the_archive_is_its_stations_archived_chats_newest_first_by_day_and_one_res
   const values = new Map();
   answersOf(host, values);
   const a = v(values, 1);
-  assert.deepEqual([a.loading, a.note, a.errors], [false, undefined, []]);
+  assert.deepEqual([a.wait.reading, a.note, a.errors], [false, undefined, []]);
   assert.equal(a.days.length, 2);
   assert.equal(a.days[0].label, "今天");
   const first = a.days[0].items[0];

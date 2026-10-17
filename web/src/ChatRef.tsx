@@ -9,7 +9,7 @@ import { StationMark } from "./StationMark.tsx";
 import { scopeOf, useStation } from "./station.tsx";
 import type { AccountWorkspaces } from "./cloud/api.ts";
 import { useTopicSelect } from "./core/react.ts";
-import { ModelLogo, Time } from "./ui.tsx";
+import { ModelLogo, Time, WaitLine } from "./ui.tsx";
 import { chatOfLink, copyChatLink, REF_LINK, REF_MARK, shareLink, splitBy, stationOfLink } from "./chatRefs.ts";
 import { failure } from "@stillfail/ui/toast.tsx";
 import * as css from "./ChatRef.css.ts";
@@ -172,7 +172,7 @@ export function ChatRefMenu({ query, here, active, onPick, found }: {
   return (
     <div ref={list} className={css.refMenu} role="listbox" aria-label={t("web-main.chatRef.title")} onMouseDown={(e) => e.preventDefault()}>
       <div className={css.refHead}>{t("web-main.chatRef.title")}{query && <span className={css.refQuery}>{query}</span>}</div>
-      {!items ? <p className={css.refEmpty}>{search.error ? t("web-main.chatRef.update", { app: NAME }) : t("web-main.reading")}</p>
+      {!items ? search.error ? <p className={css.refEmpty}>{t("web-main.chatRef.update", { app: NAME })}</p> : <WaitLine className={css.refEmpty} />
         : items.length === 0 ? <p className={css.refEmpty}>{query ? t("web-main.chatRef.noMatch") : t("web-main.chatRef.none")}</p>
         : items.map((item, i) => {
           const agent = item.agents[0];

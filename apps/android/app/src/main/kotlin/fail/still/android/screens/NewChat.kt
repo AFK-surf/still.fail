@@ -5,6 +5,10 @@ package fail.still.android.screens
 
 import fail.still.android.data.t
 import fail.still.android.BuildConfig
+import fail.still.android.ui.BusyIcon
+import fail.still.android.ui.WaitLine
+import fail.still.android.ui.WaitShape
+import fail.still.android.ui.Waiting
 import fail.still.android.ui.ComposerInset
 import fail.still.android.ui.ComposerCorner
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -83,7 +87,6 @@ import fail.still.android.ui.IconIn
 import fail.still.android.ui.StationMark
 import fail.still.android.ui.Icons
 import fail.still.android.ui.Illustration
-import fail.still.android.ui.Loading
 import fail.still.android.ui.MakerIcon
 import fail.still.android.ui.ModelMark
 import fail.still.android.ui.NavBar
@@ -119,7 +122,8 @@ fun NewChatScreen(current: WorkspaceEntry, host: Host, leaving: Boolean = false)
         val view = choice?.station
         val online = choice?.stations
         when {
-            choice == null || online == null -> Loading(choice?.error ?: chat.error?.message ?: t("android-chat.new.loading"))
+            // Its stations not read yet: under its bar, their first read (why they could not be, in red).
+            choice == null || online == null -> Waiting(WaitShape.Rows, text = t("common.readingStations"), error = choice?.error ?: chat.error?.message)
             !choice.any -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { FirstStation(current) }
             view == null -> Column(Modifier.fillMaxSize().padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)) {
                 Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 240.dp)
@@ -327,7 +331,7 @@ private fun openRunPicker(app: AppState, station: String) {
                 Text(t("android-chat.new.account"), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.ink)
             }
         } else SheetHead(t("android-chat.new.model"))
-        if (v == null) return@SheetSpec Loading(topic.error?.message ?: t("android-chat.reading"))
+        if (v == null) return@SheetSpec Waiting(WaitShape.Rows, text = t("common.reading"), error = topic.error?.message)
         val draft = v.draft
         if (accounts) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp).windowInsetsPadding(WindowInsets.navigationBars)) {
@@ -393,7 +397,7 @@ private fun openRunPicker(app: AppState, station: String) {
                 }.padding(horizontal = 22.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                if (saving) androidx.compose.material3.CircularProgressIndicator(Modifier.size(14.dp), color = C.bg, strokeWidth = 1.5.dp)
+                BusyIcon(saving, solid = if (v.changed) C.bg else null)
                 Text(if (v.changed) t("android-chat.new.confirm") else t("android-chat.new.unchanged"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (v.changed) C.bg else C.ink)
             }
         }
@@ -486,7 +490,7 @@ private fun lookAtMachineSession(app: AppState, view: StationView, sessions: Lis
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             val got = shown
             when {
-                got == null && error == null -> Text(t("android-chat.reading"), fontSize = 13.sp, color = C.muted, modifier = Modifier.fillMaxWidth().padding(top = 40.dp), textAlign = TextAlign.Center)
+                got == null && error == null -> Box(Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) { WaitLine(t("common.reading")) }
                 got != null -> {
                     val left = got.second - got.first.size
                     if (left > 0) Text(t("android-chat.new.machine.more", "n" to left), fontSize = 12.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())

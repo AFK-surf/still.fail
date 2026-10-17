@@ -26,7 +26,6 @@ import fail.still.android.data.Prefs
 import fail.still.android.data.Topics
 import fail.still.android.data.decode
 import fail.still.android.ui.StillFailTheme
-import fail.still.android.ui.Loading
 import fail.still.core.CoreException
 import fail.still.core.StillFailCore
 import kotlinx.coroutines.Job
@@ -188,7 +187,8 @@ class MainActivity : ComponentActivity() {
                 window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable((if (dark) fail.still.android.ui.Dark else fail.still.android.ui.Light).bg.toArgb()))
             }
             StillFailTheme(dark) {
-                if (current == null) Loading(t("android-misc.starting"))
+                // The app's state made in a moment: the same buddy as the app starting (App.kt), so startup is one picture.
+                if (current == null) fail.still.android.ui.Splash()
                 else CompositionLocalProvider(LocalApp provides current, LocalUi provides current) { StillFailApp(current) }
             }
         }

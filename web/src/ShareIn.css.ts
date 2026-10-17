@@ -42,8 +42,6 @@ export const search = style({
 
 /** The chats and the rest: reaching out to the panel's edge, as ⌘K's do, its scrollbar beside the rows. */
 export const list = style({ flex: 1, minHeight: 0, overflowY: "auto", ...outset(EDGE), padding: `0 ${EDGE}px`, scrollPaddingBottom: inner });
-/** The rows to come: their bars on the rows' words' line, clear of the panel's foot (they are no row to round with it). */
-export const loading = style({ padding: `0 ${ROW_IN - 10}px ${ROW_IN}px` });
 export const none = style({ margin: `8px ${ROW_IN}px`, fontSize: vars.textUi, color: vars.muted });
 export const row = style({
   display: "flex", alignItems: "center", gap: 10, width: "100%", minHeight: ROW, padding: `8px ${ROW_IN}px`, border: 0,

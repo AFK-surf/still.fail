@@ -1,16 +1,9 @@
 package fail.still.android.screens
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -20,8 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalConfiguration
@@ -43,8 +34,8 @@ import fail.still.android.ui.CodeFont
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.Raised
-import fail.still.android.ui.reducedMotion
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.Progress
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -100,33 +91,17 @@ fun StationUpdateControl(station: String, notice: StationUpdateNotice?) {
                         }
                         Box(Modifier.size(32.dp).offset(y = (-6).dp).semantics { contentDescription = if (notice.dismissible == true) t("android-misc.stationUpdate.dismiss") else t("android-misc.stationUpdate.collapse") }.clickable(role = Role.Button) { control(if (notice.dismissible == true) "dismiss" else "close") }, contentAlignment = Alignment.Center) { IconIn(Icons.Close, 14.dp, C.muted) }
                     }
-                    if (notice.tone == "busy" && notice.station != null) UpdateBar(notice.percent)
+                    if (notice.tone == "busy" && notice.station != null) Progress(notice.percent?.let { (it / 100).toFloat() }, Modifier.padding(end = 4.dp))
                     val versions = listOfNotNull(notice.from, notice.to).joinToString(" → ")
                     if (versions.isNotEmpty() || notice.canUpdate == true) Row(Modifier.fillMaxWidth().padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(versions, Modifier.weight(1f), fontSize = 11.sp, lineHeight = 16.sp, fontFamily = CodeFont, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (notice.canUpdate == true) Row(Modifier.clip(CircleShape).background(C.accentBg).clickable(enabled = !busy, role = Role.Button) { app.act(t("android-misc.stationUpdate.updateWhat")) { app.api(station).updateSoftware("station") } }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            DoingMark(busy, failed, 12.dp)
+                            DoingMark(busy, failed, inline = true)
                             Text(if (busy) t("android-misc.stationUpdate.updating") else if (notice.tone == "trouble") t("common.retry") else t("android-misc.stationUpdate.updateNow"), fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = C.accentInk)
                         }
                     }
                 }
             }
-        }
-    }
-}
-
-/** A thin bar under the words: how far, when the station says; else a sweep (still when motion is reduced). */
-@Composable
-private fun UpdateBar(percent: Double?) {
-    val still = reducedMotion()
-    val fill = C.accent
-    val sweep = if (percent == null && !still) rememberInfiniteTransition(label = "update-bar")
-        .animateFloat(-0.4f, 1f, infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing)), label = "sweep").value else 0f
-    Canvas(Modifier.fillMaxWidth().padding(end = 4.dp).height(3.dp).clip(RoundedCornerShape(2.dp)).background(fill.copy(alpha = 0.18f))) {
-        when {
-            percent != null -> drawRect(fill, size = Size(size.width * (percent / 100).toFloat(), size.height))
-            still -> drawRect(fill.copy(alpha = 0.35f))
-            else -> drawRect(fill, topLeft = Offset(size.width * sweep, 0f), size = Size(size.width * 0.4f, size.height))
         }
     }
 }

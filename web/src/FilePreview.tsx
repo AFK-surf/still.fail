@@ -14,7 +14,7 @@ import { Prose } from "./Prose.tsx";
 import { FrameHost, isFragment, vizDocument } from "./Viz.tsx";
 import { fileLink } from "./Prose.css.ts";
 import { useStation } from "./station.tsx";
-import { Segmented, Tip } from "./ui.tsx";
+import { Segmented, Tip, Progress, Spinner, WaitLine } from "./ui.tsx";
 import { VideoViewer } from "./VideoViewer.tsx";
 import { useImageMarks } from "./annotate/ImageMarks.tsx";
 import { useBackClose } from "@stillfail/ui/backClose.ts";
@@ -28,7 +28,6 @@ import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import { t } from "./i18n.ts";
 import { fileSize } from "@stillfail/ui/fileSize.ts";
-import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
 export { fileSize };
@@ -591,7 +590,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
       <div>{[fileSize(file.size), ext && ext.length <= 12 ? ext : ""].filter(Boolean).join(" · ")}</div>
       <div>{t("web-main.preview.unsupported")}</div>
       {askedNow && loaded.state === "loading"
-        ? (loaded.got ? <Progress got={loaded.got} size={file.size} /> : <span className={spinnerCss.spinner} aria-hidden="true" />)
+        ? (loaded.got ? <FileComing got={loaded.got} size={file.size} /> : <Spinner />)
         : <>
           {loaded.state === "error" && <div className={css2.fpFactsFailed}>{t("web-main.preview.loadFailed", { error: loaded.message })}</div>}
           <button type="button" className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} onClick={ask}><Download size={16} />{t("web-main.preview.download")}</button>
@@ -601,7 +600,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
     body = <ImageViewer key={file.path} url={loaded.state === "ready" ? loaded.url : thumb!} file={file} setControls={setControls} swipe={swipe}
       waiting={loaded.state === "loading"} onMarking={setMarking} onClose={onClose} />;
   } else if (loaded.state === "loading" || (kind === null && loaded.state === "ready") || (known.kind === null && !local && front === null)) {
-    body = <div className={css2.fpNote}>{loaded.state === "loading" && loaded.got ? <Progress got={loaded.got} size={file.size} /> : <><span className={spinnerCss.spinner} aria-hidden="true" />{t("web-main.preview.loading")}</>}</div>;
+    body = <div className={css2.fpNote}>{loaded.state === "loading" && loaded.got ? <FileComing got={loaded.got} size={file.size} /> : <WaitLine text={t("common.opening")} />}</div>;
   }
   else if (loaded.state === "error") body = <div className={css2.fpNote}>{t("web-main.preview.loadFailed", { error: loaded.message })}</div>;
   else {
@@ -661,7 +660,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
           name={<RDialog.Title asChild><span>{file.name}</span></RDialog.Title>}
           meta={`${count > 1 && at >= 0 ? `${at + 1} / ${count} · ` : ""}${fileSize(file.size)}${kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}${kind === "video" && videoMeta ? ` · ${videoMeta}` : ""}`}
           tools={<>
-            {coming !== undefined && <Progress got={coming} size={file.size} inBar />}
+            {coming !== undefined && <FileComing got={coming} size={file.size} inBar />}
             {controls}
             {kind === "image" && !marking && loaded.state === "ready" && <CopyImage key={file.path} image={loaded.blob} />}
             {/* One told of (not fetched to be shown): fetched as it is asked to be downloaded. */}
@@ -675,7 +674,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
           <Tip label={file.path}><RDialog.Title className={css2.fpName}>{file.name}</RDialog.Title></Tip>
           <span className={css2.fpMeta}>{count > 1 && at >= 0 ? `${at + 1} / ${count} · ` : ""}{fileSize(file.size)}{kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}{kind === "video" && videoMeta ? ` · ${videoMeta}` : ""}</span>
         </div>
-        {coming !== undefined && <Progress got={coming} size={file.size} inBar />}
+        {coming !== undefined && <FileComing got={coming} size={file.size} inBar />}
         {controls}
         {kind === "image" && !marking && (loaded.state === "ready"
           ? <CopyImage key={file.path} image={loaded.blob} />
@@ -810,13 +809,13 @@ function Peek({ shown: { sessionKey, file }, side }: { shown: Shown; side: -1 | 
 const noControls = () => {};
 
 /** How much of a file has come, out of its size (the station's, else the one sent with it); a bar that sweeps when neither is known. */
-function Progress({ got, size, inBar = false }: { got: FileProgress | null | undefined; size: number; inBar?: boolean }) {
+function FileComing({ got, size, inBar = false }: { got: FileProgress | null | undefined; size: number; inBar?: boolean }) {
   const total = got?.total ?? (size > 0 ? size : null);
   const part = got && total ? Math.min(1, got.loaded / total) : null;
   return (
-    <div className={inBar ? css2.fpHeadProgress : css2.fpProgress} role="progressbar" aria-label={t("web-main.preview.loadingLabel")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={part === null ? undefined : Math.round(part * 100)}>
-      <span className={css2.fpProgressText}>{got && total ? <>{t("web-main.preview.loadingLabel")} <b>{fileSize(got.loaded)}</b> / {fileSize(total)}</> : t("web-main.preview.loading")}</span>
-      <span className={css2.fpProgressTrack}><span className={css2.fpProgressBar} style={part === null ? undefined : { width: `${part * 100}%` }} data-unknown={part === null || undefined} /></span>
+    <div className={inBar ? css2.fpHeadProgress : css2.fpProgress}>
+      <span className={css2.fpProgressText}>{got && total ? <>{t("web-main.preview.loadingLabel")} <b>{fileSize(got.loaded)}</b> / {fileSize(total)}</> : t("common.opening")}</span>
+      <Progress part={part} label={t("web-main.preview.loadingLabel")} className={css2.fpProgressTrack} />
     </div>
   );
 }
@@ -1072,7 +1071,7 @@ function PdfViewer({ blob }: { blob: Blob }) {
   return (
     <div ref={page} className={`${css2.fpPage} ${css2.fpPdf}`}>
       {error ? <div className={css2.fpPlain}>{t("web-main.preview.pdfFailed", { error })}</div>
-        : !doc || width <= 0 ? <div className={css2.fpPlain}><span className={spinnerCss.spinner} aria-hidden="true" /></div>
+        : !doc || width <= 0 ? <div className={css2.fpPlain}><Spinner /></div>
         : Array.from({ length: doc.numPages }, (_, i) => <PdfPage key={i} doc={doc} number={i + 1} width={width} />)}
     </div>
   );
@@ -1159,7 +1158,7 @@ function TextViewer({ blob, kind, language, name, setControls, onMove }: {
     );
     return () => setControls(null);
   }, [rendered, source, setControls]);
-  if (text === null) return <div className={css2.fpNote}><span className={spinnerCss.spinner} aria-hidden="true" />{t("web-main.preview.loading")}</div>;
+  if (text === null) return <div className={css2.fpNote}><WaitLine text={t("common.opening")} /></div>;
   let content: ReactNode;
   if (kind === "html" && !source) {
     // Its scripts run, but in an origin of its own: nothing of still.fail's is reachable from it.

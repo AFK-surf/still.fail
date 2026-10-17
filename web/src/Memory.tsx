@@ -9,7 +9,7 @@ import { stationApi, useStationCall, type SkillFile, type StationMemory as Memor
 import type { MemorySection, StationView } from "./core/shapes.ts";
 import { useTopic } from "./core/react.ts";
 import { Prose } from "./Prose.tsx";
-import { Section, SwitchRow } from "./ui.tsx";
+import { Section, SwitchRow, Waiting } from "./ui.tsx";
 import { useDoing } from "./doing.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { ChevronDown, ChevronRight } from "@stillfail/ui/icons.tsx";
@@ -121,7 +121,7 @@ function MemoryRow({ to, title, sub, value, tags }: { to: string; title: string;
 export function MemoryView({ station, to }: { station: string; to: (page: string) => string }) {
   const { memory, error } = useMemory(station);
   const [builtinOpen, setBuiltinOpen] = useState(false);
-  if (!memory) return <p className={shellCss.muted}>{error ? MEMORY_TEXT.failed(error) : t("web-main.reading")}</p>;
+  if (!memory) return <Waiting count={5} error={error ? MEMORY_TEXT.failed(error) : null} />;
   const { sections, projects, skills, builtin } = memoryParts(memory);
   const skillRow = (s: SkillFile) => (
     <MemoryRow key={s.name} to={to(`skill/${encodeURIComponent(s.name)}`)} title={s.name} sub={skillBrief(s) || t("web-main.memory.noWhen")} value={s.size}
@@ -174,7 +174,7 @@ export function DocChips({ items, picked, onPick, className, chip }: { items: { 
  * ./cloud/settings.tsx): a skill with when it is read, its sharing and its files, or the global memory a part at a time. */
 export function MemoryDoc({ station, name, at, file, pick }: { station: string; name: string | null; at: number; file: string; pick: (key: "at" | "file", value: string | number) => void }) {
   const { memory, error, reload } = useMemory(station);
-  if (!memory) return <p className={shellCss.muted}>{error ? MEMORY_TEXT.failed(error) : t("web-main.reading")}</p>;
+  if (!memory) return <Waiting count={4} error={error ? MEMORY_TEXT.failed(error) : null} />;
   const doc = (text: string) => <div className={`${css.memoryDoc} ${conversationCss.markdown}`}><Prose>{text}</Prose></div>;
   if (name === null) {
     const { sections } = memoryParts(memory);

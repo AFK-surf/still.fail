@@ -91,7 +91,7 @@ export function joinedText(s: StationView): string | null {
 /** Whether its agents are at work, or when it was last seen. */
 export function state(s: StationView): ReactNode {
   if (!s.online) return s.lastSeen ? tx("web-pages.stations.lastSeen", { time: <Time stamp={stamp(s, "lastSeen")} /> }) : t("web-pages.stations.neverOnline");
-  if (!s.overview) return t("web-pages.stations.connecting");
+  if (!s.overview) return t("common.connecting");
   const running = s.overview.counts.running;
   return running > 0 ? <span className={css.busy}>{t("web-pages.stations.running", { n: running })}</span> : t("web-pages.stations.idle");
 }

@@ -10,7 +10,8 @@ import { t } from "../i18n.ts";
 import { deviceName, useLock, type LockDraft, type LockRequest, type LockView } from "../cloud/Security.tsx";
 import { ROLE_LABEL } from "../cloud/settings.tsx";
 import { useApp } from "./app.tsx";
-import { Button, LargeTitle, ListCard, ListRow, Loading, PickRow, SectionHeader, Spinner, TopBack } from "./parts.tsx";
+import { Button, LargeTitle, ListCard, ListRow, PickRow, SectionHeader, TopBack } from "./parts.tsx";
+import { Spinner, Waiting } from "@stillfail/ui/waiting.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
@@ -37,7 +38,7 @@ export function SecurityScreen() {
       <div className={pagesCss.mScroll}>
         <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} />
         <LargeTitle small="" big={t("web-pages.security.title")} />
-        {!lock ? <Loading text={t("web-pages.settings.reading")} /> : !lock.available
+        {!lock ? <Waiting shape="cards" count={2} /> : !lock.available
           ? <ListCard><div className={css.mBody}><span className={partsCss.mSubtle}>{t("web-pages.security.unavailable")}</span></div></ListCard>
           : lock.locked ? <On lock={lock} /> : <Off lock={lock} />}
         <div style={{ height: 30 }} />
@@ -141,14 +142,14 @@ function DeviceRow({ d, renew }: { d: LockView["members"][number]["devices"][num
         <span>{deviceName(d)}</span>
         <span className={d.renewSoon ? css.mWarn : listsCss.mRowNote}>{meta}</span>
       </span>
-      {renewing ? <Spinner size={14} /> : d.daysLeft != null && renew && <span className={partsCss.mAccent}>{t("web-pages.security.renew")}</span>}
+      {renewing ? <Spinner inline /> : d.daysLeft != null && renew && <span className={partsCss.mAccent}>{t("web-pages.security.renew")}</span>}
     </ListRow>
   );
 }
 
 function JoinMark({ id }: { id: string }) {
   const app = useApp();
-  return useDoing("lock.joinStation", { workspace: app.entry.id, station: id }) ? <Spinner size={14} /> : <span className={partsCss.mAccent}>{t("web-pages.security.join")}</span>;
+  return useDoing("lock.joinStation", { workspace: app.entry.id, station: id }) ? <Spinner inline /> : <span className={partsCss.mAccent}>{t("web-pages.security.join")}</span>;
 }
 
 /** A station of the workspace not in the lock, taken in once its owner says it is theirs. */
@@ -217,7 +218,7 @@ export function SecurityOpenScreen() {
       <div className={pagesCss.mScroll}>
       <TopBack label={t("web-pages.security.title")} onBack={app.pop} />
       <LargeTitle small="" big={t("web-pages.security.openTitle")} />
-      {!draft || draft.loading ? <Loading text={t("web-pages.settings.reading")} /> : <>
+      {!draft || draft.loading ? <Waiting shape="cards" count={3} /> : <>
         <p className={css.mLead}>{t("web-pages.security.openLead")}</p>
         <SectionHeader title={t("web-pages.security.members")} trailing={t("web-pages.security.peopleCount", { n: draft.members.length })} start={24} />
         <ListCard>{draft.members.map((m) => <ListRow key={m.sub}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{m.name || m.email}</span><span className={listsCss.mRowNote}>{m.email}</span></span><span className={partsCss.mSubtle}>{role(m.role)}</span></ListRow>)}</ListCard>
@@ -260,7 +261,7 @@ export function SecurityWaitingScreen({ lock }: { lock: LockView }) {
       {lock.me?.asked === false && !asking
         ? <><span className={css.mNote}>{t("web-pages.security.notAsked")}</span>
           <Button primary label={t("web-pages.security.request")} onClick={() => void run("lock.request", { workspace: app.entry.id }, t("web-pages.security.request"))} /></>
-        : <span className={css.mNote}><Spinner size={13} /> {t("web-pages.security.waitingNote")}</span>}
+        : <span className={css.mNote}><Spinner inline />{t("web-pages.security.waitingNote")}</span>}
     </div>
   );
 }

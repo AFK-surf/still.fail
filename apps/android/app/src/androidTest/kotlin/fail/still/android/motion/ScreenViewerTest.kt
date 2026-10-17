@@ -186,7 +186,7 @@ class ScreenViewerTest {
         // Not said: the core decides (only looking while someone else drives it).
         assertEquals(null, asked["control"])
         v.shot("screen-connecting")
-        rule.onNodeWithText("正在连接…").assertIsDisplayed()
+        rule.onNodeWithText("正在连接").assertIsDisplayed()
 
         v.state("live")
         v.config()

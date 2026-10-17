@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
@@ -110,6 +111,8 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.Progress
+import fail.still.android.ui.WaitPill
 import fail.still.core.CoreException
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
@@ -192,13 +195,12 @@ fun ReaderScreen(station: String, root: String, path: String) {
             else -> {
                 Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)) {
                     when (o) {
-                        is Opening.Coming -> {
-                            fail.still.android.screens.Spinner(18.dp)
-                            Text(
-                                if (o.of != null && o.of > 0) t("android-misc.drive.reader.loading.size", "got" to fileSize(o.got), "size" to fileSize(o.of)) else t("android-misc.drive.reader.loading"),
-                                fontSize = 14.sp, color = p.muted, textAlign = TextAlign.Center,
-                            )
-                        }
+                        // Its size known: how much has come, a bar under the words; else a wait's pill on the paper (its words in the
+                        // paper's grey), said only once it takes a while.
+                        is Opening.Coming -> if (o.of != null && o.of > 0) {
+                            Text(t("android-misc.drive.reader.loading.size", "got" to fileSize(o.got), "size" to fileSize(o.of)), fontSize = 13.sp, color = p.muted, textAlign = TextAlign.Center)
+                            Progress(o.got.toFloat() / o.of, Modifier.widthIn(max = 220.dp))
+                        } else WaitPill(t("common.opening"), ground = Color.Transparent, ink = p.muted)
                         is Opening.Failed -> Text(t("android-misc.drive.reader.failed", "error" to o.why), fontSize = 14.sp, color = C.red, textAlign = TextAlign.Center)
                         else -> {}
                     }

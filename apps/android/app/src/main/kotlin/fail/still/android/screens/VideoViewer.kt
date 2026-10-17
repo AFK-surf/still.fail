@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -78,6 +79,7 @@ import fail.still.android.ui.Icons
 import fail.still.android.ui.ZoomState
 import fail.still.android.ui.zoomable
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.WaitPill
 import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlin.math.roundToInt
@@ -299,7 +301,9 @@ internal fun VideoViewer(
                         withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = Color(0xFFF4F4F5))) { append("${at + 1}") }
                         withStyle(SpanStyle(color = Color.White.copy(alpha = 0.6f))) { append(after) }
                     }, fontFamily = CodeFont, fontSize = 12.sp, maxLines = 1)
-                    else if (!read) Text(t("android-chat.video.reading"), fontFamily = CodeFont, fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), maxLines = 1)
+                    // A wait's pill with no ground of its own (the bar's glass is its ground), its words in the bar's light grey,
+                    // its start where the frames' count will start.
+                    else if (!read) WaitPill(t("android-chat.video.reading"), modifier = Modifier.offset(x = (-12).dp), ground = Color.Transparent, ink = Color.White.copy(alpha = 0.6f))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     Box(

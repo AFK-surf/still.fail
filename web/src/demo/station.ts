@@ -117,7 +117,7 @@ function slack(): Connect {
 }
 
 export const connects = (): ConnectsView => ({
-  me: { id: "local" }, loading: false,
+  me: { id: "local" }, wait: { reading: false, failing: [], empty: false },
   items: [{ station: STATION, stationName: "Studio", connect: slack(), sessions: [], candidates: [], running: 0 }],
 });
 
@@ -170,7 +170,7 @@ export function archive(q = "", limit = 0): ArchiveView {
     const last = kept.at(-1);
     if (last?.label === label) last.items.push(item); else kept.push({ label, items: [item] });
   }
-  return { days: kept, errors: [], loading: false, total: found.length, more: shown.length < found.length, ...(found.length === 0 ? { note: needle ? "没有匹配的归档对话" : "暂无已归档的对话" } : {}) };
+  return { days: kept, errors: [], wait: { reading: false, failing: [], empty: found.length === 0 }, total: found.length, more: shown.length < found.length, ...(found.length === 0 ? { note: needle ? "没有匹配的归档对话" : "暂无已归档的对话" } : {}) };
 }
 
 /** The workspace's profiles (the core's `profiles`, client/core-ts/src/views/profiles.ts): the station's one account. */
@@ -178,7 +178,7 @@ export function profiles() {
   // The subscription as the station shows it (station.json's, refused by Anthropic: subscription() above).
   const p = overview().profiles[0] as typeof data.overview.profiles[number] & ReturnType<typeof subscription>;
   return {
-    loading: false,
+    loading: false, wait: { reading: false, failing: [], empty: false },
     items: [{
       key: `${STATION}/${p.id}`, group: "claude", groupTitle: "Claude 订阅", station: STATION, stationId: "local", stationName: "Studio",
       profile: p, shared: false, host: "local", hostName: "Studio", hostOnline: true, usable: true, where: "仅在 Studio",
@@ -211,7 +211,7 @@ export function usage(days: number) {
     detail: `${Math.round(total * share * 41).toLocaleString("en-US")} 次 · ${(total * share * 0.52).toFixed(1)}M token`, ...extra,
   });
   return {
-    days, loading: false, empty: false,
+    days, loading: false, empty: false, wait: { reading: false, failing: [], empty: false },
     tiles: [
       { label: "折算费用", value: money(total), sub: "按 API 价算" },
       { label: "token", value: `${(total * 0.52).toFixed(1)}M`, sub: `${Math.round(total * 41).toLocaleString("en-US")} 次调用` },
@@ -243,7 +243,7 @@ export function decisions(chats: { key: string; thread: number; title: string; r
   }));
   const at = (minutes: number) => new Date(Date.now() - minutes * 60_000).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
   return {
-    items: [], count: 0, loading: false, working,
+    items: [], count: 0, loading: false, wait: { reading: false, failing: [], empty: false }, working,
     answered: [
       { ...where, session: "ember:c-demo-csv", thread: 5, title: "订单导出支持 CSV", seq: 3, text: "导出的文件名要带上日期吗？", answer: "选择了「带日期」", clock: at(40) },
       { ...where, session: "ember:c-demo-p99", thread: 4, title: "排查 API p99 变慢", seq: 4, text: "索引迁移现在上线，还是等晚上？", answer: "回复：现在上", clock: at(150) },

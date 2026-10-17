@@ -57,6 +57,22 @@ export function listNote(stations: J[], days: J[], loading: boolean, unread: str
   return { reading: loading || connecting, text, failing, empty };
 }
 
+/// What a view gathered from a workspace's stations still waits on (a ListNote, drawn as every list's first read is:
+/// web/ui waiting.tsx, Android ui/Waiting.kt): the stations up whose part is not read yet (`waiting`, by name), those
+/// whose part could not be read (`failing`, with why), and whether, all read, there is nothing (`empty`). `waiting` null:
+/// the stations themselves are not known yet.
+export function waitNote(waiting: string[] | null, failing: { station: string; name: string; message: string }[] = [], empty = false): J {
+  if (waiting === null) return { reading: true, text: t("core-logic.looks.wait.stations"), failing: [], empty: false };
+  const text =
+    waiting.length === 0 ? null : waiting.length === 1 ? t("core-logic.looks.wait.from", { name: waiting[0] }) : t("core-logic.looks.wait.from_many", { n: waiting.length });
+  return {
+    reading: waiting.length > 0,
+    text,
+    failing: failing.map((f) => ({ station: f.station, text: t("core-logic.looks.wait.failing", { name: f.name }), message: f.message })),
+    empty: waiting.length === 0 && failing.length === 0 && empty,
+  };
+}
+
 export function linkShown(link: J, name: string): J {
   const said = (key: string, named: string) => (name === "" ? t(key) : t(named, { name }));
   const state = get(link, "state");

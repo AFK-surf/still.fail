@@ -9,6 +9,7 @@ package fail.still.android.remote
 
 import android.content.ClipData
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.WaitPill
 import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.SurfaceTexture
@@ -96,7 +97,6 @@ import fail.still.android.data.errorText
 import fail.still.android.data.t
 import fail.still.android.screens.fileSize
 import fail.still.android.screens.Button
-import fail.still.android.screens.Spinner
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
@@ -520,8 +520,8 @@ private fun Over(session: ScreenSession, phase: String, modifier: Modifier, onEx
     val message = session.message
     when (phase) {
         "live" -> if (!session.shownAny) Waiting(t("android-misc.screen.starting"), modifier)
-        "connecting" -> Waiting(message ?: t("android-misc.screen.connecting"), modifier)
-        "reconnecting" -> Waiting(message ?: t("android-misc.screen.reconnecting"), modifier)
+        "connecting" -> Waiting(message ?: t("common.connecting"), modifier)
+        "reconnecting" -> Waiting(message ?: t("common.reconnecting"), modifier)
         else -> Column(
             modifier.padding(24.dp).widthIn(max = 360.dp).floatingStill(Smooth(24.dp)).padding(horizontal = 24.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -541,17 +541,10 @@ private fun Over(session: ScreenSession, phase: String, modifier: Modifier, onEx
     }
 }
 
-/** On its way: a spinner and why, in a capsule over the frame (kept as it was) or the empty stage. */
+/** On its way: why, in the pill every wait is said in (ui/Waiting.kt), floating over the frame (kept as it was) or the empty stage. */
 @Composable
-private fun Waiting(text: String, modifier: Modifier) {
-    Row(
-        modifier.padding(24.dp).floatingStill(Smooth(20.dp)).padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Spinner(14.dp)
-        Text(text, fontSize = 14.sp, lineHeight = 20.sp, color = C.ink, maxLines = 3, overflow = TextOverflow.Ellipsis)
-    }
-}
+private fun Waiting(text: String, modifier: Modifier) =
+    WaitPill(text, modifier = modifier.padding(24.dp).floatingStill(CircleShape), ground = Color.Transparent, ink = C.ink)
 
 private fun centroid(fingers: List<PointerInputChange>): Offset =
     fingers.fold(Offset.Zero) { s, c -> s + c.position } / fingers.size.toFloat()

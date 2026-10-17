@@ -213,8 +213,6 @@ fun withRefs(text: String): AnnotatedString {
 
 // ── the web's own tones (styles/global.css.ts), where the message's parts use them ──
 
-/** The web's --line-strong (a quote's bar). */
-private val lineStrong @Composable get() = if (C.dark) Color(0xFF3D3F44) else Color(0xFFC1C4C9)
 /** The web's --muted (a quote's words). */
 internal val webMuted @Composable get() = if (C.dark) Color(0xFFA3A5A9) else Color(0xFF646970)
 /** The web's --subtle. */
@@ -290,7 +288,7 @@ private fun piecesOf(node: Node, ctx: Ctx, tight: Boolean, task: Boolean?): List
             val inner = pieces(node.children(), ctx, tight = false)
             listOf(Piece(max(0f, inner.firstOrNull()?.top ?: 0f), max(8f, inner.lastOrNull()?.bottom ?: 0f)) {
                 Row(Modifier.height(IntrinsicSize.Min)) {
-                    Box(Modifier.width(2.dp).fillMaxHeight().background(lineStrong))
+                    Box(Modifier.width(2.dp).fillMaxHeight().background(C.lineStrong))
                     Box(Modifier.padding(start = 10.dp)) { androidx.compose.runtime.CompositionLocalProvider(LocalMdInk provides webMuted) { Stack(inner) } }
                 }
             })

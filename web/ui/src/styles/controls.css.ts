@@ -2,7 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./tokens.css.ts";
 import { panel } from "./glass.ts";
 import { popKeyframes } from "./keyframes.css.ts";
-import { command, field, skeletonRow } from "../parts.css.ts";
+import { command, field } from "../parts.css.ts";
 import { spinner } from "./spinner.css.ts";
 import { PANEL_PAD, TEXT_IN, inner, surface } from "./align.ts";
 
@@ -23,14 +23,6 @@ export const btnPrimary = style({
     "&:hover:not(:disabled)": { background: vars.primaryHover, borderColor: vars.primaryHover },
   },
 });
-/** A button's call under way: a small ring where its icon goes, in its text's colour. */
-globalStyle(`${btn} ${spinner}`, {
-  width: "14px", height: "14px", borderWidth: "1.5px", borderColor: "color-mix(in srgb, currentColor 30%, transparent)",
-  borderTopColor: "currentColor",
-});
-/** The same in an icon-only button (ui.tsx IconButton). */
-export const iconSpinner = style({});
-globalStyle(`${iconSpinner}${spinner}`, { width: "14px", height: "14px", borderWidth: "1.5px" });
 export const btnGhost = style({ borderColor: "transparent", background: "transparent" });
 // Here, after btn, as the other variants: in ui.css.ts (which cascades before this file) btn's colour won over them.
 export const btnDanger = style({ color: vars.red });
@@ -39,6 +31,10 @@ export const btnDangerSolid = style({
   selectors: {
     "&:hover:not(:disabled)": { background: `color-mix(in srgb, ${vars.red} 85%, black)` },
   },
+});
+/** A solid button's call under way: the ring where its icon goes (14, as everywhere) in its text's colour. */
+globalStyle(`:is(${btnPrimary}, ${btnDangerSolid}) ${spinner}`, {
+  borderColor: "color-mix(in srgb, currentColor 30%, transparent)", borderTopColor: "currentColor",
 });
 export const textToggle = style({
   display: "inline-flex", alignItems: "center", gap: "2px", border: "0", background: "none", padding: "2px 4px",
@@ -113,10 +109,6 @@ globalStyle(`${steps} li > ${btn}, ${steps} li > ${command}`, { marginTop: "8px"
 globalStyle(`${steps} li > ${btn}`, { display: "flex", width: "max-content" });
 globalStyle(`${steps} li`, { minWidth: "0" });
 globalStyle(`${steps} ${command}`, { width: "100%", minWidth: "0" });
-/** Here rather than with its class: it comes after .steps li > .btn, and wins over it. */
-globalStyle(`${skeletonRow} span:first-child`, { width: "80%" });
-/** Here rather than with its class: it comes after .steps li > .btn, and wins over it. */
-globalStyle(`${skeletonRow} span:last-child`, { width: "45%", height: "8px" });
 
 /** A choice that opens a menu of what it can be (Chooser): quiet words until pointed at or open. */
 export const chooser = style({

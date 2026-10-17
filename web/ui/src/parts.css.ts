@@ -3,7 +3,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { panel } from "./styles/glass.ts";
-import { appearKeyframes, dialogInKeyframes, fadeKeyframes, pulseKeyframes } from "./styles/keyframes.css.ts";
+import { dialogInKeyframes, fadeKeyframes } from "./styles/keyframes.css.ts";
 import { iconBtn } from "./styles/page.css.ts";
 import { PANEL_PILL, TEXT_IN } from "./styles/align.ts";
 
@@ -219,15 +219,6 @@ export const dialogFoot = style({
 export const srOnly = style({
   position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap",
 });
-/** Loading says so only when it takes a while: a page that is there in a moment (from the device) shows nothing before it. */
-export const loading = style({
-  display: "flex", alignItems: "center", gap: "10px", color: vars.muted, fontSize: vars.textUi,
-  animation: `${appearKeyframes} 0s linear 400ms both`,
-});
-export const loadingFill = style({ flex: "1", minHeight: "100%", justifyContent: "center" });
-export const skeletonRow = style({
-  display: "grid", gap: "6px", padding: "9px 10px", animation: `${appearKeyframes} 0s linear 400ms both`,
-});
 export const resizeHandle = style({
   outline: "none", WebkitAppRegion: "no-drag",
   selectors: {
@@ -290,17 +281,6 @@ globalStyle(`${dialogHead} > button`, { borderRadius: "999px", cornerShape: "rou
 globalStyle(`${dialogBody} :is(${choice}, ${command})`, { borderRadius: DIALOG_INNER });
 globalStyle(`${dialogBody} ${command} ${iconBtn}`, { borderRadius: `calc(${DIALOG_INNER} - 6px)` });
 globalStyle(`${dialog} ${command} code`, { minWidth: "0" });
-globalStyle(`${skeletonRow} span`, {
-  display: "block", height: "10px", borderRadius: `calc(6px * ${vars.cornerScale})`, background: vars.hover,
-  animation: `${pulseKeyframes} 1.4s ease-in-out infinite`, cornerShape: vars.cornerShape,
-});
-globalStyle(`${skeletonRow} span`, {
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none",
-    },
-  },
-});
 
 // ── a popped-up panel's parts (parts.tsx Panel*): inside styles/controls.css.ts popover, its rows concentric with it ──
 

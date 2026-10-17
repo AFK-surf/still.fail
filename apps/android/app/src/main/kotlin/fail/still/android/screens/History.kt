@@ -4,6 +4,10 @@
 // (model, allowance, the station it runs on).
 package fail.still.android.screens
 
+import fail.still.android.ui.BusyIcon
+import fail.still.android.ui.WaitLine
+import fail.still.android.ui.WaitShape
+import fail.still.android.ui.Waiting
 import fail.still.android.data.t
 import fail.still.android.BuildConfig
 import androidx.compose.foundation.background
@@ -149,10 +153,7 @@ private fun ColumnScope.HistoryContent(station: String, of: ChatOf, key: String,
     val host by rememberTopic<Host>(app.core, Topics.host(station))
     val agent = chat.value?.agents?.firstOrNull { it.session.key == key }
     var tab by rememberSaveable { mutableStateOf(0) }
-    if (agent == null) {
-        Text(chat.error?.message ?: t("android-chat.reading"), color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(18.dp))
-        return
-    }
+    if (agent == null) return Waiting(WaitShape.Messages, text = t("common.reading"), error = chat.error?.message)
     val s = agent.session
     Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         ModelMark(s.maker, s.runtime, 20.dp, agent.state)
@@ -184,7 +185,7 @@ private fun Actions(station: String, agent: ChatAgent) {
                 }
             },
             contentAlignment = Alignment.Center,
-        ) { if (busy) Spinner(12.dp) else IconIn(icon, 14.dp, C.ink) }
+        ) { BusyIcon(busy) { IconIn(icon, 14.dp, C.ink) } }
     }
     if (st == "running" || st == "queued") act(Icons.Stop, t("android-chat.history.stopped"), "session.stop") { app.api(station).stop(s.key) }
     if (s.process == "warm") act(Icons.Unplug, t("android-chat.history.evicted"), "session.evict") { app.api(station).evict(s.key) }
@@ -217,7 +218,7 @@ private sealed interface Line {
 
 @Composable
 private fun Steps(station: String, of: ChatOf, agent: ChatAgent, history: HistoryView?, entry: Long? = null) {
-    if (history == null) return Edge(t("android-chat.history.loading"))
+    if (history == null) return Waiting(WaitShape.Messages, text = t("android-chat.history.loading"))
     if (history.empty) return Edge(history.edge)
     val items = history.items
     val lines = items.map { Line.Item(it) } + history.live.map { Line.Live(it) } + listOfNotNull(history.phase?.let { Line.Phase(it) })
@@ -228,12 +229,15 @@ private fun Steps(station: String, of: ChatOf, agent: ChatAgent, history: Histor
     val more = history.more == true
     val first = items.firstOrNull()?.key
     val asked = remember { mutableStateOf<String?>(null) }
+    // The page before on its way: said at the top, where it comes in.
+    var older by remember { mutableStateOf(false) }
     LaunchedEffect(more, first, follow.placed) {
         if (!more || !follow.placed) return@LaunchedEffect
         snapshotFlow { list.firstVisibleItemIndex }.collect { index ->
             if (index <= 2 && asked.value != first) {
                 asked.value = first
-                try { api.historyOlder(agent.session.key) } catch (_: CoreException) { asked.value = null }
+                older = true
+                try { api.historyOlder(agent.session.key) } catch (_: CoreException) { asked.value = null } finally { older = false }
             }
         }
     }
@@ -246,7 +250,8 @@ private fun Steps(station: String, of: ChatOf, agent: ChatAgent, history: Histor
     LaunchedEffect(before, first) {
         if (follow.placed) return@LaunchedEffect
         if (before) {
-            try { api.historyOlder(agent.session.key); return@LaunchedEffect } catch (_: CoreException) {}
+            older = true
+            try { api.historyOlder(agent.session.key); return@LaunchedEffect } catch (_: CoreException) {} finally { older = false }
         }
         val at = entry?.let { e -> items.indexOfFirst { it.entries.size == 2 && e in it.entries[0]..it.entries[1] } }?.takeIf { it >= 0 }
         if (at != null) {
@@ -262,7 +267,7 @@ private fun Steps(station: String, of: ChatOf, agent: ChatAgent, history: Histor
     val detail: suspend (List<Long>) -> Unit = { entries -> api.historyDetail(agent.session.key, entries) }
     CompositionLocalProvider(LocalFollow provides follow, LocalDetail provides detail) {
         LazyColumn(Modifier.fillMaxWidth(), state = list, contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item(key = "edge") { Edge(history.edge) }
+            item(key = "edge") { if (older) Box(Modifier.fillMaxWidth().padding(vertical = 10.dp), contentAlignment = Alignment.Center) { WaitLine() } else Edge(history.edge) }
             itemsIndexed(lines, key = { _, l -> when (l) { is Line.Live -> "live/${l.step.id}"; is Line.Phase -> "phase"; is Line.Item -> l.item.key } }) { _, line ->
                 when (line) {
                     is Line.Item -> {
@@ -448,7 +453,7 @@ private fun SlackName(station: String, user: String, name: String, mine: Boolean
                 }))
             },
         )
-        DoingMark(binding, failed, 10.dp)
+        DoingMark(binding, failed, inline = true)
     }
 }
 
@@ -513,7 +518,7 @@ private fun Whole(brief: Boolean, entries: List<Long>, body: @Composable () -> U
         }
     }
     if (settled) body()
-    else Text(error?.let { t("android-chat.history.stepUnread", "error" to it) } ?: t("android-chat.history.stepReading"), fontSize = 13.sp, color = C.muted)
+    else Text(error?.let { t("android-chat.history.stepUnread", "error" to it) } ?: t("common.reading"), fontSize = 13.sp, color = C.muted)
 }
 
 /** A line that opens to what is behind it. */
@@ -622,7 +627,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
     androidx.activity.compose.BackHandler(enabled = list != null) { list = null }
     Column(Modifier.fillMaxSize()) {
         NavBar(if (list != null) t("android-chat.run.title") else t("common.back"), { if (list != null) list = null else app.pop() }, when (list) { "model" -> t("android-chat.pick.model"); "account" -> t("android-chat.run.account.choose"); else -> t("android-chat.run.title") })
-        if (agent == null || v == null) return Text(chat.error?.message ?: t("android-chat.reading"), color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(18.dp))
+        if (agent == null || v == null) return Waiting(WaitShape.Cards, text = t("common.reading"), error = chat.error?.message ?: picking.error?.message)
         val s = agent.session
         val busy = app.isDoing("pick.save", "station" to station, "of" to "session:$key")
         val chosen = v.draft.profile
@@ -687,7 +692,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
             contentAlignment = Alignment.Center,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (busy) androidx.compose.material3.CircularProgressIndicator(Modifier.size(14.dp), color = if (v.changed) C.bg else C.muted, strokeWidth = 1.5.dp)
+                BusyIcon(busy, solid = if (v.changed) C.bg else null)
                 Text(v.saveText, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (v.changed) C.bg else C.ink, maxLines = 2, textAlign = TextAlign.Center)
             }
         }

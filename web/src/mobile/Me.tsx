@@ -4,7 +4,8 @@ import { useState } from "react";
 import { signIn, signOut, useAccounts, type Account } from "../cloud/accounts.ts";
 import { useDoing } from "../doing.ts";
 import { useApp } from "./app.tsx";
-import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, Spinner, TopBack } from "./parts.tsx";
+import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, TopBack } from "./parts.tsx";
+import { Spinner } from "@stillfail/ui/waiting.tsx";
 import { Devices } from "./WorkspacePage.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./Me.css.ts";
@@ -37,7 +38,7 @@ export function MeScreen() {
       <ListCard>
         {accounts.map((a) => <AccountRow key={a.sub} a={a} only={accounts.length === 1} />)}
         <ListRow onClick={signingIn ? undefined : another}>
-          <span className={`${partsCss.mAccent} ${listsCss.mRowTitle} ${partsCss.mGrow}`}>{t("web-mobile.me.addAccount")}</span>{signingIn && <Spinner size={14} />}
+          <span className={`${partsCss.mAccent} ${listsCss.mRowTitle} ${partsCss.mGrow}`}>{t("web-mobile.me.addAccount")}</span>{signingIn && <Spinner inline />}
         </ListRow>
       </ListCard>
       <SectionHeader title={t("web-mobile.me.devices")} start={24} />
@@ -57,7 +58,7 @@ function AccountRow({ a, only }: { a: Account; only: boolean }) {
       <button type="button" className={css.mSignOut} disabled={out} aria-busy={out || undefined} onClick={() => {
         app.home();
         signOut(a.sub).then(() => { if (!only) app.toast(t("web-mobile.me.signedOut", { email: a.email })); }, (e: unknown) => app.toast(t("web-mobile.me.signOutFailed", { error: e instanceof Error ? e.message : String(e) })));
-      }}>{out && <Spinner size={13} />}{only ? t("web-mobile.me.signOut") : t("web-mobile.me.signOutOne")}</button>
+      }}>{out && <Spinner inline />}{only ? t("web-mobile.me.signOut") : t("web-mobile.me.signOutOne")}</button>
     </ListRow>
   );
 }

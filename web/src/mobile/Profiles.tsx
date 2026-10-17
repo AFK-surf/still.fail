@@ -15,7 +15,8 @@ import { QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, useStation } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp, type SheetSpec } from "./app.tsx";
 import { Presence } from "./Connects.tsx";
-import { Button, failedIn, FailedMark, Field, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, PlaceHead, PlaceNote, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, tNodes } from "./parts.tsx";
+import { Button, failedIn, FailedMark, Field, Gone, LinkButton, ListCard, ListRow, NavBar, NavButton, PickRow, PlaceHead, PlaceNote, ProviderMark, QuotaRings, SectionHeader, SlackMark, tNodes } from "./parts.tsx";
+import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
@@ -67,12 +68,14 @@ export function ProfilesScreen() {
         primary={online.length > 0 ? { key: "profile", label: t("web-mobile.newChat.addProfile"), run: add } : null} />
       {/* The workspace's: one list, each shared profile once (the core's `profiles`); a station's own: as before. */}
       {!one && <WorkspaceList scope={app.entry.id} />}
-      {!stations ? <Loading text={t("web-mobile.memory.readingStations")} /> : stations.filter(() => !!one).map((s) => (
+      {/* A station's own (?station=): its stations read first; the workspace's list waits on its own (WorkspaceList). */}
+      {!stations ? (only ? <Waiting shape="cards" count={2} text={t("common.readingStations")} /> : null) : stations.filter(() => !!one).map((s) => (
         <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
           {!one && <SectionHeader title={s.online ? s.name : t("web-mobile.connects.stationOfflineTitle", { station: s.name })} start={24} />}
           {!s.overview || s.overview.profiles.length === 0 ? (
             <ListCard>
-              <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{s.overview ? t("web-mobile.profiles.none") : s.online ? t("web-mobile.reading") : t("web-mobile.profiles.offline")}</span></ListRow>
+              <ListRow>{!s.overview && s.online ? <WaitLine />
+                : <span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{s.overview ? t("web-mobile.profiles.none") : t("web-mobile.profiles.offline")}</span>}</ListRow>
             </ListCard>
           ) : profileGroups(s.overview.profiles).map((g) => (
             // A section each kind of account, as the workspace's list (the core's order).
@@ -99,14 +102,18 @@ export function ProfilesScreen() {
  * subscription's station is away dimmed, said why. */
 function WorkspaceList({ scope }: { scope: string }) {
   const app = useApp();
-  const view = useProfiles(scope).value;
-  if (!view) return <Loading text={t("web-mobile.reading")} />;
+  const profiles = useProfiles(scope);
+  const view = profiles.value;
+  if (!view) return <Waiting shape="cards" count={2} error={profiles.error?.message} />;
+  // What it still waits on (the core's `wait`): with none to show, the cards to come under it; with some, a line after them.
+  const wait = view.wait;
+  if (view.items.length === 0 && (wait.reading || wait.failing.length > 0)) return <Waiting shape="cards" count={2} note={wait} />;
   const groups = profileGroups(view.items);
   return (
     <>
-      {view.items.length === 0 && <ListCard><ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.none")}</span></ListRow></ListCard>}
+      {wait.empty && <ListCard><ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.none")}</span></ListRow></ListCard>}
       {/* What Profile is, said while there is none (the page says it nowhere else). */}
-      {view.items.length === 0 && !view.loading && <PlaceNote>{t("web-mobile.profiles.note")}</PlaceNote>}
+      {wait.empty && <PlaceNote>{t("web-mobile.profiles.note")}</PlaceNote>}
       {/* A section each kind of account (the core's order). */}
       {groups.map((g) => (
         <Fragment key={g[0]!.group}>
@@ -125,7 +132,12 @@ function WorkspaceList({ scope }: { scope: string }) {
           </ListCard>
         </Fragment>
       ))}
-      {view.loading && <ListCard><ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.reading")}</span></ListRow></ListCard>}
+      {(wait.reading || wait.failing.length > 0) && (
+        <ListCard>
+          {wait.reading && <ListRow><WaitLine text={wait.text ?? t("common.reading")} /></ListRow>}
+          {wait.failing.map((f) => <ListRow key={f.station}><WaitLine text={f.text} error /></ListRow>)}
+        </ListCard>
+      )}
     </>
   );
 }
@@ -135,9 +147,17 @@ function WorkspaceList({ scope }: { scope: string }) {
 export function ProfileAccountScreen() {
   const app = useApp();
   const { key = "" } = useParams();
-  const view = useProfiles(app.entry.id).value;
+  const profiles = useProfiles(app.entry.id);
+  const view = profiles.value;
   const e = view?.items.find((x) => x.key === key);
-  if (!e) return <div className={pagesCss.mScreen}><NavBar back="Profile" onBack={app.pop} title="Profile" /><Loading text={view ? t("web-mobile.profiles.notFound") : t("web-mobile.reading")} /></div>;
+  if (!e) {
+    return (
+      <div className={pagesCss.mScreen}>
+        <NavBar back="Profile" onBack={app.pop} title="Profile" />
+        {!view || view.wait.reading ? <Waiting fill shape="cards" error={profiles.error?.message} /> : <Gone text={t("web-mobile.profiles.notFound")} />}
+      </div>
+    );
+  }
   const p = e.profile;
   return (
     <div className={pagesCss.mScreen}>
@@ -230,13 +250,13 @@ function ShareRows({ p }: { p: Profile }) {
             <span className={listsCss.mRowTitle}>{t("web-pages.profiles.share.switch")}</span>
             <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{!shared ? t("web-pages.profiles.share.onlyHere", { station: station.name }) : subscription ? t("web-pages.profiles.share.lent") : t("web-pages.profiles.share.copied")}</span>
           </span>
-          {sharing && <Spinner size={14} />}
+          {sharing && <Spinner inline />}
           <span className={connectsCss.mSwitch} data-on={shared || undefined} />
         </ListRow>
         {shared && subscription && !p.machine && (
           <ListRow onClick={moving || targets.length === 0 ? undefined : move}>
             <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("web-pages.profiles.share.signedIn")}</span>
-            {moving && <Spinner size={14} />}
+            {moving && <Spinner inline />}
             <span className={listsCss.mRowNote}>{station.name}</span>
             <ChevronRight size={14} className={partsCss.mSubtle} />
           </ListRow>
@@ -339,7 +359,14 @@ export function ProfileScreen() {
   const { id = "" } = useParams();
   const overview = useOverview(station.address);
   const p = overview.value?.profiles.find((x) => x.id === id);
-  if (!p) return <div className={pagesCss.mScreen}><NavBar back={station.name || "Station"} onBack={app.pop} title="Profile" /><Loading text={overview.error?.message ?? (overview.value ? t("web-mobile.profiles.notFound") : t("web-mobile.reading"))} /></div>;
+  if (!p) {
+    return (
+      <div className={pagesCss.mScreen}>
+        <NavBar back={station.name || "Station"} onBack={app.pop} title="Profile" />
+        {overview.value ? <Gone text={t("web-mobile.profiles.notFound")} /> : <Waiting fill shape="cards" error={overview.error?.message} />}
+      </div>
+    );
+  }
   return <ProfilePage p={p} />;
 }
 
@@ -369,7 +396,7 @@ function ProfilePage({ p }: { p: Profile }) {
           <span className={partsCss.mGrow}>
             <span className={`${historyCss.mPill} ${css.mCheckPill}`} data-tone={p.checkTone}>{p.checkText}</span>
             <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{p.check ? p.check.detail.replace(/^可用[，,]\s*/, "") : t("web-mobile.profiles.notChecked")}{p.check?.time?.checkedAt ? t("web-mobile.profiles.checkedAgo", { ago: p.check.time.checkedAt.ago }) : ""}</span>
-            {(checking || refreshing) && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting}`}><Spinner size={12} />{checking ? t("web-mobile.versions.checking") : t("web-mobile.profiles.refreshingQuota")}</span>}
+            {(checking || refreshing) && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting}`}><Spinner inline />{checking ? t("web-mobile.versions.checking") : t("web-mobile.profiles.refreshingQuota")}</span>}
             {!checking && checkFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={checkFailed} size={12} />{t("web-mobile.profiles.checkFailed", { error: checkFailed })}</span>}
             {!refreshing && quotaFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={quotaFailed} size={12} />{t("web-mobile.profiles.quotaFailed", { error: quotaFailed })}</span>}
           </span>
@@ -524,7 +551,7 @@ function WorkspaceRows({ p }: { p: Profile }) {
                 <span className={listsCss.mRowTitle}>{t("web-pages.profiles.workspaces.for", { name: w.name })}</span>
                 <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{t(on ? "web-pages.profiles.workspaces.on" : "web-pages.profiles.workspaces.off", { name: w.name })}</span>
               </span>
-              {busy && <Spinner size={14} />}
+              {busy && <Spinner inline />}
               <span className={connectsCss.mSwitch} data-on={on || undefined} />
             </ListRow>
           );
@@ -544,7 +571,7 @@ function FastRow({ p }: { p: Profile }) {
   return <ListRow onClick={busy ? undefined : () => act(api.putProfile(p.id, { fast: !p.fast }), t("web-mobile.profiles.what.fast"), p.fast ? t("web-mobile.profiles.fastOff") : t("web-mobile.profiles.fastOn"))}>
     <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{t("web-mobile.profiles.fast")}</span>
       <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{t("web-mobile.profiles.fastNote")}</span></span>
-    {busy && <Spinner size={14} />}{error && <FailedMark error={error} size={14} />}
+    {busy && <Spinner inline />}{error && <FailedMark error={error} size={14} />}
     <span className={connectsCss.mSwitch} data-on={p.fast || undefined} />
   </ListRow>;
 }
@@ -584,7 +611,7 @@ function Quota({ p }: { p: Profile }) {
           run: () => api.resetQuota(p.id).then(() => app.toast(t("web-mobile.profiles.resetDone"))),
         }) : undefined}>
           <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{t("web-mobile.profiles.resets")}</span><span className={listsCss.mRowNote}>{p.quota.resetText}</span></span>
-          {busy && <Spinner size={14} />}{error && <FailedMark error={error} size={14} />}
+          {busy && <Spinner inline />}{error && <FailedMark error={error} size={14} />}
           <span className={p.quota.resetCount > 0 ? partsCss.mLink : partsCss.mMuted}>{t("web-mobile.profiles.reset")}</span>
         </ListRow>}
       </ListCard>
@@ -636,7 +663,7 @@ function BackgroundRow({ p, put }: { p: Profile; put: (on: boolean) => Promise<u
         <span className={listsCss.mRowTitle}>{t("web-mobile.profiles.background")}</span>
         <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{on ? t("web-mobile.profiles.backgroundOn") : t("web-mobile.profiles.backgroundOff")}</span>
       </span>
-      {busy && <Spinner size={14} />}
+      {busy && <Spinner inline />}
       <span className={connectsCss.mSwitch} data-on={on || undefined} />
     </ListRow>
   );
@@ -677,7 +704,7 @@ function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unk
       <p className={css.mProfileNote}>{all.length === 0 ? t("web-mobile.profiles.modelsEmpty") : t("web-mobile.profiles.modelsNote")}</p>
       <div className={settingsCss.mProfileTools}>
         <button type="button" className={partsCss.mLink} disabled={checking} onClick={() => act(api.checkProfile(p.id), t("web-mobile.profiles.what.refreshModels"), t("web-mobile.profiles.checkDone"))}>
-          {checking ? <Spinner size={12} /> : checkFailed ? <FailedMark error={checkFailed} size={12} /> : null}{checking ? t("web-mobile.profiles.refreshing") : t("web-mobile.profiles.refreshModels")}
+          {checking ? <Spinner inline /> : checkFailed ? <FailedMark error={checkFailed} size={12} /> : null}{checking ? t("web-mobile.profiles.refreshing") : t("web-mobile.profiles.refreshModels")}
         </button>
         <span className={partsCss.mGrow} />
         {all.length > 0 && <>
@@ -686,7 +713,7 @@ function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unk
         </>}
       </div>
       {/* A provider that does not list its models: one is named by hand. */}
-      {p.canAddModel && <div className={settingsCss.mProfileTools}><Field value={typed} onChange={setTyped} placeholder={t("web-mobile.profiles.addModelPlaceholder")} /><button type="button" className={partsCss.mLink} disabled={!typed.trim() || adding} onClick={addTyped}>{adding ? <Spinner size={12} /> : t("web-mobile.profiles.addModel")}</button></div>}
+      {p.canAddModel && <div className={settingsCss.mProfileTools}><Field value={typed} onChange={setTyped} placeholder={t("web-mobile.profiles.addModelPlaceholder")} /><button type="button" className={partsCss.mLink} disabled={!typed.trim() || adding} onClick={addTyped}>{adding ? <Spinner inline /> : t("web-mobile.profiles.addModel")}</button></div>}
       {all.length > 10 && <div className={settingsCss.mProfileTools}><Field value={filter} onChange={setFilter} placeholder={t("web-mobile.profiles.filterModels")} /></div>}
       {/* By series, newest first (the core's). */}
       {p.series.map((s) => {
@@ -703,7 +730,7 @@ function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unk
                 <button key={m} type="button" className={settingsCss.mModelRow} disabled={busy} onClick={() => save(on ? models.filter((x) => x !== m) : [...models, m])}>
                   <span className={settingsCss.mCheck} data-on={on || undefined}>{on && <Check size={14} />}</span>
                   <span className={partsCss.mGrow}>{p.names[m] ?? m}</span>
-                  {saving && <Spinner size={13} />}
+                  {saving && <Spinner inline />}
                 </button>
               );
             })}
@@ -759,9 +786,9 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
   const busy = operation.busy;
   const error = operation.error?.message;
   const [copied, setCopied] = useState(false);
-  if (!job || job.state === "starting") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />{t("web-mobile.profiles.loginLink", { provider })}</p>;
-  if (job.state === "verifying") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />{t("web-mobile.profiles.finishing")}</p>;
-  if (job.state === "done") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />{t("web-mobile.profiles.adding")}</p>;
+  if (!job || job.state === "starting") return <WaitLine text={t("web-mobile.profiles.loginLink", { provider })} />;
+  if (job.state === "verifying") return <WaitLine text={t("web-mobile.profiles.finishing")} />;
+  if (job.state === "done") return <WaitLine text={t("web-mobile.profiles.adding")} />;
   if (job.state === "needs_approval" && job.url && job.userCode) {
     return (
       <>
@@ -874,7 +901,7 @@ export function NewProfileScreen() {
     <div className={pagesCss.mScreen}>
       <NavBar back={d && d.step !== "pick" ? t("common.back") : t("common.cancel")} onBack={leave} title={d?.title ?? t("web-mobile.newChat.addProfile")} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
       <div className={`${pagesCss.mScroll} ${partsCss.mPadX18} ${settingsCss.mSteps}`}>
-        {!d ? <Loading text={t("web-pages.profiles.loading")} /> : d.step === "pick" ? (
+        {!d ? <Waiting shape="cards" count={2} text={t("web-pages.profiles.loading")} /> : d.step === "pick" ? (
           <>
             <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{d.hint}</p>
             {overview && <div><MachineLoginOffers inForm logins={overview.machineLogins} onSignIn={(c) => edit({ provider: c === "claude-sub" ? "anthropic" : "openai", method: "plan" })} /></div>}

@@ -13,6 +13,7 @@ import { lang, t } from "./i18n.ts";
 import { useStation } from "./station.tsx";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import * as css from "./Hover.css.ts";
+import * as waitingCss from "@stillfail/ui/waiting.css.ts";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
 import { PanelButton } from "./ui.tsx";
 import { pathIn } from "./paths.ts";
@@ -53,10 +54,10 @@ export function Hover({ children, content, tile = false, warm }: { children: Rea
   );
 }
 
-/** Bars where a card's lines will be, while it is read. */
+/** Bars where a card's lines will be, while it is read, breathing as every wait's shapes (waiting.tsx). */
 export function CardSkeleton() {
   return (
-    <div className={css.rich} aria-busy="true">
+    <div className={`${css.rich} ${waitingCss.shapes}`} aria-busy="true">
       <span className={css.bar} data-bar="meta" />
       <span className={css.bar} data-bar="title" />
       <span className={css.bar} data-bar="detail" />

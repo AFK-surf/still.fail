@@ -96,7 +96,6 @@ import fail.still.android.screens.FilePreview
 import fail.still.android.screens.Gallery
 import fail.still.android.screens.PickRow
 import fail.still.android.screens.Shown
-import fail.still.android.screens.Spinner
 import fail.still.android.screens.ask
 import fail.still.android.screens.confirm
 import fail.still.android.screens.download
@@ -111,6 +110,10 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.Progress
+import fail.still.android.ui.Spinner
+import fail.still.android.ui.WaitLine
+import fail.still.android.ui.Waiting
 import fail.still.core.CoreException
 import java.io.File
 import kotlinx.coroutines.CompletableDeferred
@@ -414,7 +417,9 @@ private fun RootsPage(app: AppState, station: String, s: StationView?, roots: Li
             NavButton(Icons.More, { openRoots(app, station) })
         }) else null)
         when {
-            roots == null -> Note(error ?: if (s?.overview == null) t("android-misc.drive.reading") else t("android-misc.drive.oldStation"))
+            // The station's folders lent still on their way (or what kept them), as every list's first read.
+            roots == null && (error != null || s?.overview == null) -> Waiting(text = t("common.reading"), error = error)
+            roots == null -> Note(t("android-misc.drive.oldStation"))
             roots.isEmpty() -> Empty(if (can.manage) t("android-misc.drive.none.manager") else t("android-misc.drive.none.member")) {
                 if (can.manage) Button(t("android-misc.drive.choose"), primary = true) { openFolderPicker(app, station, emptyList()) }
             }
@@ -514,7 +519,7 @@ private fun FolderPage(app: AppState, station: String, s: StationView, roots: Li
         }) else NavBar(back, app::pop, name, trailing = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(34.dp).clip(CircleShape).clickable(enabled = !refreshing) { reload() }.semantics { contentDescription = t("android-misc.drive.refresh") }, contentAlignment = Alignment.Center) {
-                    if (refreshing) Spinner(16.dp) else IconIn(Icons.Refresh, 18.dp)
+                    if (refreshing) Spinner() else IconIn(Icons.Refresh, 18.dp)
                 }
                 when {
                     can.write -> Box(Modifier.semantics { contentDescription = t("android-misc.drive.add") }) {
@@ -552,7 +557,7 @@ private fun FolderPage(app: AppState, station: String, s: StationView, roots: Li
                         Text(t("android-misc.drive.retry"), fontSize = 14.sp, color = c.accent, modifier = Modifier.clip(Smooth(6.dp)).clickable { reload() }.padding(4.dp))
                     }
                 }
-                value == null -> item(key = "reading") { Note(t("android-misc.drive.reading")) }
+                value == null -> item(key = "reading") { Waiting(text = t("common.reading")) }
                 else -> {
                     item(key = "count") { Count(value.countText + if (value.truncated == true) " · " + t("android-misc.drive.truncated") else "") }
                     itemsIndexed(uploads, key = { _, u -> "up:" + System.identityHashCode(u) }) { i, u -> UploadRow(app, context, u, i == 0, i == uploads.lastIndex, held) }
@@ -669,7 +674,7 @@ private fun EntryRow(station: String, root: String, path: String, e: DriveEntry,
             if (line.isNotEmpty()) Text(line, fontSize = 12.sp, lineHeight = 16.sp, color = c.muted, maxLines = 1)
         }
         when {
-            busy || failed != null -> DoingMark(busy, failed)
+            busy || failed != null -> DoingMark(busy, failed, inline = true)
             fetching != null -> DownloadChip(fetching)
             e.kind == "text" || e.kind == "markdown" -> ReadShare(station, root, path)
             e.dir -> IconIn(Icons.ChevronRight, 14.dp, c.subtle)
@@ -697,10 +702,8 @@ private fun UploadRow(app: AppState, context: Context, u: DriveUpload, first: Bo
                 "failed" -> Text(t("android-misc.drive.upload.failed", "error" to (u.error ?: "")), fontSize = 12.sp, lineHeight = 16.sp, color = c.red, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 else -> {
                     Text(t("android-misc.drive.upload.going", "sent" to fileSize(u.sent), "size" to fileSize(u.size)), fontSize = 12.sp, lineHeight = 16.sp, color = c.muted, maxLines = 1)
-                    val share = if (u.size > 0) (u.sent.toFloat() / u.size).coerceIn(0f, 1f) else 0f
-                    Box(Modifier.padding(top = 5.dp).fillMaxWidth().height(3.dp).clip(CircleShape).background(c.ink.copy(alpha = 0.08f))) {
-                        Box(Modifier.fillMaxWidth(share).height(3.dp).clip(CircleShape).background(c.accent))
-                    }
+                    // Its size not known: a sweep.
+                    Progress(if (u.size > 0) u.sent.toFloat() / u.size else null, Modifier.padding(top = 5.dp))
                 }
             }
         }
@@ -863,7 +866,7 @@ private fun openRoots(app: AppState, station: String) {
         val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(workspace))
         val roots = stations.value?.firstOrNull { it.station == station }?.overview?.drive?.roots.orEmpty()
         SheetGrab()
-        SheetHead(t("android-misc.drive.roots.manage"), trailing = { if (app.isDoing("drive.setRoots")) Spinner(14.dp) })
+        SheetHead(t("android-misc.drive.roots.manage"), trailing = { if (app.isDoing("drive.setRoots")) Spinner() })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             Text(t("android-misc.drive.roots.note"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 6.dp))
             roots.forEach { r ->
@@ -927,7 +930,8 @@ fun openFolderPicker(app: AppState, station: String, lent: List<String>) {
             when {
                 error != null -> item(key = "error") { Text(error!!, fontSize = 13.sp, color = C.red, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) }
                 denied -> item(key = "denied") { Note(t("android-misc.drive.pick.unreadable")) }
-                here == null -> item(key = "reading") { Note(t("android-misc.drive.reading")) }
+                // Each folder gone into is read anew: a line, said only when it takes a while (no shapes flashing at each step).
+                here == null -> item(key = "reading") { WaitLine(t("common.reading"), modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) }
                 else -> {
                     if (places.isNotEmpty()) {
                         item(key = "places") { SectionHeader(t("android-misc.drive.pick.places")) }

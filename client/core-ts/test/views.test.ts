@@ -299,7 +299,7 @@ test("the_decisions_page_lists_those_waiting_for_the_viewer_set_aside_last", asy
   let v = u.value;
   const order = (x: J) => x.items.map((i: J) => i.session);
   assert.deepEqual(order(v), ["k2", "k1"]);
-  assert.deepEqual([v.count, v.loading], [2, false]);
+  assert.deepEqual([v.count, v.wait.reading], [2, false]);
   const it = v.items[0];
   assert.deepEqual([it.station, it.stationName, it.thread, it.seq, it.title], ["ws/st", "studio", 8, 3, "k2 的标题"]);
   assert.equal(it.text, "奏 · k2 要合吗？");
@@ -578,7 +578,7 @@ test("chats_puts_together_the_online_stations", async () => {
   assert.equal(ids(v).length, 2);
   assert.deepEqual(v.trouble, { text: "2 台 station 异常", state: "offline", retry: false });
   const reconnecting = (x: J) => x.days[0].items.map((i: J) => [i.station, i.reconnecting ?? null]);
-  assert.ok(reconnecting(v).some(([s, r]: J) => s === "ws/a" && r === "正在重连 alpha…"), JSON.stringify(v));
+  assert.ok(reconnecting(v).some(([s, r]: J) => s === "ws/a" && r === "正在重新连接 alpha"), JSON.stringify(v));
   assert.ok(reconnecting(v).every(([s, r]: J) => s === "ws/a" || r === null));
   t.set(link("ws/a"), { state: "error", message: "没有权限" });
   await t.read(u, 1);
@@ -873,7 +873,7 @@ test("connects_lists_every_online_stations_connects", async () => {
   sameTopics(t.started(), [workspace(), ...each("ws/a"), ...each("ws/b"), ...each("ws/c")]);
   t.set(link("ws/c"), { state: "offline" });
   const me = { id: "Me@x.com", email: "Me@x.com" };
-  assert.deepEqual(u.value as J, { me, items: [], loading: true });
+  assert.deepEqual(u.value as J, { me, items: [], wait: { reading: true, text: "正在从 3 台 station 读取", failing: [], empty: false } });
   const c1 = { ...connect("c1", "one"), createdBy: { id: "me@x.com", name: "我" } };
   const c2 = connect("c2", "two");
   t.set(overview("ws/a"), overviewOf([c1, c2], []));
@@ -881,7 +881,8 @@ test("connects_lists_every_online_stations_connects", async () => {
   await t.read(u, 1);
   const v: J = u.value;
   assert.deepEqual(v.items.map((i: J) => [i.station, i.connect.id]), [["ws/a", "c1"], ["ws/a", "c2"]]);
-  assert.deepEqual([v.loading, v.items[0].running, v.items[0].sessions.length], [false, 0, 0]);
+  assert.deepEqual([v.wait.reading, v.items[0].running, v.items[0].sessions.length], [false, 0, 0]);
+  assert.deepEqual([v.wait.reading, v.wait.failing.map((f: J) => [f.station, f.message])], [false, [["ws/b", "连不上"]]]);
   assert.equal(v.items[0].connect.createdBy.shown.display, "你");
   assert.equal(v.items[0].connect.statusText, "未连接 Slack");
   const mine = ui();

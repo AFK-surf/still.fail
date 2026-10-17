@@ -9,6 +9,7 @@ import { mChatBar, mChatBarTitle, mInfoAgent, mInfoStatus, mJobHead } from "./Ch
 import { mSteps } from "./styles/settings.css.ts";
 import { mHomeBar, mHomeWorkspace } from "./Home.css.ts";
 import { outsetTop } from "@stillfail/ui/styles/align.ts";
+import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 
 export const mMaker = style({
   display: "block", flex: "none",
@@ -33,8 +34,6 @@ export const mAvatar = style({
   display: "inline-grid", placeItems: "center", flex: "none", borderRadius: "50%", overflow: "hidden", color: "#fff",
   fontWeight: "600", lineHeight: "1",
 });
-/** Laid out as a box wherever it is put (its look is the wide screen's spinner). */
-export const mSpinner = style({ display: "inline-block", flex: "none", boxSizing: "border-box" });
 /** What was asked failed a moment ago (FailedMark): a small red round "!", tapped to say why. */
 export const mFailed = style({
   display: "inline-grid", placeItems: "center", flex: "none", alignSelf: "center", boxSizing: "border-box", borderRadius: "50%",
@@ -170,11 +169,12 @@ export const mButton = style({
   fontSize: `${vars.textUi} !important`, fontWeight: "600", whiteSpace: "nowrap", cursor: "pointer",
   selectors: {
     "&[data-primary]": { background: "var(--m-ink)", color: "var(--m-bg) !important" },
-    [`&[data-primary]:disabled:not(:has(${mSpinner}))`]: { background: "var(--m-line)" },
+    [`&[data-primary]:disabled:not(:has(${spinner}))`]: { background: "var(--m-line)" },
     [`${mSteps} > &`]: { alignSelf: "flex-end" },
   },
 });
-export const mLoading = style({
+/** What a page says in its body when what it shows is not there (not found, no station): centred, grey. Not a wait. */
+export const mGone = style({
   flex: "1", display: "grid", placeItems: "center", padding: "32px", fontSize: vars.textMeta, color: "var(--m-muted)",
   textAlign: "center",
 });

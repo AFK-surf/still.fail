@@ -173,9 +173,6 @@ export const msgUnsentBtn = style({
     "&[aria-busy=\"true\"]": { cursor: "progress" },
   },
 });
-/** Sending it again or dropping it under way: a ring in place of the button's icon. */
-export const msgUnsentSpinner = style({});
-globalStyle(`${msgUnsentSpinner}${spinner}`, { width: "10px", height: "10px", borderWidth: "1.5px" });
 /**
  * Someone's message has its avatar out in the margin, left of its text (which takes no less room for it), held in view
  * while the message scrolls past: however long a reply, whose it is shows at the top of the pane. An agent at work has
@@ -545,7 +542,7 @@ globalStyle(`${msgSystemBox} ${markdown} > :last-child`, { marginBottom: "0" });
 globalStyle(`${msgSystemBox}:not([data-open]) ${markdown} > *`, { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
 globalStyle(`${msgSystemBox}:not([data-open]) ${markdown} > :not(:first-child)`, { display: "none" });
 globalStyle(`${sendBtn} ${spinner}`, {
-  width: "14px", height: "14px", borderColor: `color-mix(in srgb, ${vars.onPrimary} 35%, transparent)`,
+  borderColor: `color-mix(in srgb, ${vars.onPrimary} 35%, transparent)`,
   borderTopColor: vars.onPrimary,
 });
 globalStyle(`${chatEmpty} p`, { margin: "0" });
@@ -562,7 +559,6 @@ export const msgRoute = style({
 });
 globalStyle(`${msgRoute} > svg`, { flex: "none", color: vars.accent });
 globalStyle(`${msgHead} > ${msgRoute} ~ *`, { flex: "none", whiteSpace: "nowrap" });
-globalStyle(`${fileCard} ${spinner}`, { width: "14px", height: "14px", flex: "none" });
 globalStyle(`${fileCard} svg`, { flex: "none", color: vars.muted });
 globalStyle(`${msgImage} img`, { display: "block", maxWidth: "100%", maxHeight: "300px", width: "auto", height: "auto" });
 globalStyle(`${msgAvatarAgent} img`, { width: "14px", height: "14px" });
@@ -600,8 +596,6 @@ globalStyle(`${inlineHeads} ${msgRow}[data-emitting] > ${msgMain}`, { transformO
 /** No room beside the name there: where it went or came from has the line under it, from the row's start. */
 globalStyle(`${inlineHeads} ${msgHead}:has(> ${msgRoute})`, { flexWrap: "wrap", rowGap: "4px" });
 globalStyle(`${inlineHeads} ${msgHead} > ${msgRoute}`, { order: "1", flex: "none", width: `calc(100% + ${columns.route}px)`, ...outsetStart(columns.route) });
-/** Here rather than with its class: it comes after .send-btn .spinner, and wins over it. */
-globalStyle(`${msgWaiting} ${spinner}`, { width: "10px", height: "10px", borderWidth: "1.5px" });
 globalStyle(`${fileCardOpen} ${fileCard}`, { transition: `background ${vars.dur} ${vars.easeOut}` });
 globalStyle(`${fileCardOpen}:hover ${fileCard}`, { background: vars.hover });
 globalStyle(`button${msgImage} img`, {
@@ -617,7 +611,6 @@ globalStyle(quoteCardComment, {
   overflowWrap: "anywhere",
 });
 globalStyle(`${composerThumb} img`, { width: "100%", height: "100%", objectFit: "cover", display: "block" });
-globalStyle(`${composerThumbBusy} ${spinner}`, { width: "16px", height: "16px" });
 globalStyle(`${quoteCardText} svg`, { display: "inline", verticalAlign: "-1px", marginRight: "4px", color: vars.accent });
 /** Here rather than with its class: it comes after .quote-card-input, and wins over it. */
 globalStyle(quoteCardComment, { padding: "3px 11px 8px", fontSize: vars.textUi, lineHeight: "1.5" });

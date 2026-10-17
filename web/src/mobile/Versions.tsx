@@ -4,7 +4,8 @@
 import type { SoftwareVersion } from "../core/shapes.ts";
 import { autoUpdating, describe, DownloadChip, onBeta, useSoftware } from "../Versions.tsx";
 import { lang, t } from "../i18n.ts";
-import { ListCard, ListRow, SectionHeader, Spinner } from "./parts.tsx";
+import { ListCard, ListRow, SectionHeader } from "./parts.tsx";
+import { Spinner } from "@stillfail/ui/waiting.tsx";
 import * as connectsCss from "./Connects.css.ts";
 import * as css from "./Versions.css.ts";
 
@@ -30,7 +31,7 @@ export function Versions({ station, updates, manager, beta = false }: { station:
               <span className={css.mVersionName}>{t("web-mobile.versions.beta")}</span>
               <span className={css.mVersionNote}>{t("web-mobile.versions.betaNote")}</span>
             </span>
-            {channel.busy && <Spinner size={13} />}
+            {channel.busy && <Spinner inline />}
             <span className={connectsCss.mSwitch} data-on={on || undefined} />
           </ListRow>
         )}
@@ -40,13 +41,13 @@ export function Versions({ station, updates, manager, beta = false }: { station:
               <span className={css.mVersionName}>{t("web-mobile.versions.auto")}</span>
               <span className={css.mVersionNote}>{t("web-mobile.versions.autoNote")}</span>
             </span>
-            {auto.busy && <Spinner size={13} />}
+            {auto.busy && <Spinner inline />}
             <span className={connectsCss.mSwitch} data-on={autoOn || undefined} />
           </ListRow>
         )}
         <ListRow onClick={checked == null || check.busy ? undefined : () => void check.run()}>
           <span className={css.mVersionCheck}>{checked == null ? t("web-mobile.versions.checkingFirst") : check.busy ? t("web-mobile.versions.checking") : t("web-mobile.versions.check")}</span>
-          {(checked == null || check.busy) && <Spinner size={13} />}
+          {(checked == null || check.busy) && <Spinner inline />}
         </ListRow>
       </ListCard>
       {failed && <p className={css.mVersionError}>{failed.message}</p>}
@@ -58,7 +59,7 @@ function Row({ v, manager, busy, onUpdate }: { v: SoftwareVersion; manager: bool
   const { shown, failed, tip, updating, beta } = describe(v);
   const note = [v.state === "idle" ? v.done : null, tip, v.state === "failed" ? v.message : null].filter(Boolean).join(t("web-mobile.versions.noteSeparator"));
   const action = (label: string) => manager && v.updatable && (
-    busy ? <Spinner size={13} /> : <button type="button" className={css.mVersionAction} onClick={onUpdate}>{label}</button>
+    busy ? <Spinner inline /> : <button type="button" className={css.mVersionAction} onClick={onUpdate}>{label}</button>
   );
   return (
     <ListRow>
@@ -67,7 +68,7 @@ function Row({ v, manager, busy, onUpdate }: { v: SoftwareVersion; manager: bool
         {/* Its line kept while there is nothing to say: the rows stay put as checks and updates come and go. */}
         <span className={css.mVersionNote} data-failed={v.state === "failed" || undefined}>{note || "\u00a0"}</span>
       </span>
-      {v.state === "updating" ? <span className={css.mVersionState}>{v.percent != null ? <DownloadChip percent={v.percent} /> : <Spinner size={12} />}{updating}</span>
+      {v.state === "updating" ? <span className={css.mVersionState}>{v.percent != null ? <DownloadChip percent={v.percent} /> : <Spinner inline />}{updating}</span>
         : v.state === "failed" ? <span className={css.mVersionState}><span className={css.mVersionNote} data-failed style={{ fontWeight: 500 }}>{failed}</span>{action(t("common.retry"))}</span>
         : !v.installed ? <span className={css.mVersionState}>{action(t("web-mobile.versions.install"))}</span>
         : v.newer && v.latest ? <span className={css.mVersionState}>→ {v.latest}{action(t("web-mobile.versions.update"))}</span>

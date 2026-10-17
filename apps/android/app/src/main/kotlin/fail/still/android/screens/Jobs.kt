@@ -67,6 +67,8 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.WaitLine
+import fail.still.android.ui.Waiting
 
 // What a job's dot says, its word, the line under its name and every time in words are the core's (client/core-ts/src/
 // jobs.ts): `tone`, `meta`, `detail`, a notice's `ago` and `clock`; a chat's all together, what matters first, is its
@@ -79,9 +81,6 @@ enum class Tone { Up, Live, Restart, Fail, Off }
 fun toneOf(word: String?): Tone = when (word) { "up" -> Tone.Up; "live" -> Tone.Live; "restart" -> Tone.Restart; "fail" -> Tone.Fail; else -> Tone.Off }
 
 val Job.dot: Tone get() = toneOf(tone)
-
-/** A chat's jobs before the core has said: none. */
-val NoJobs = ChatJobsView(jobs = emptyList(), servicesNote = "", jobsNote = "", current = 0, ended = 0, clear = emptyList(), allText = "", clearText = "", hiddenText = "")
 
 /** A tone's colour, for its dot and its word; null: the text's own. */
 @Composable
@@ -181,14 +180,15 @@ fun JobGroups(app: AppState, station: String, of: ChatOf, view: ChatJobsView, jo
 fun openJobs(app: AppState, station: String, of: ChatOf) {
     app.sheet = SheetSpec(0.62f, draggable = true) {
         val topic by rememberTopic<ChatJobsView>(app.core, Topics.chatJobs(station, of))
-        val view = topic.value ?: NoJobs
-        val jobs = view.jobs
         var all by remember { mutableStateOf(false) }
-        val shown = if (all) jobs else jobs.filter { it.current == true }
         SheetGrab()
         SheetHead(t("android-misc.jobs.title"))
+        // Not here yet: its rows to come, not an empty sheet (that says there are none).
+        val view = topic.value ?: return@SheetSpec Waiting(count = 3, error = topic.error?.message, modifier = Modifier.weight(1f))
+        val jobs = view.jobs
+        val shown = if (all) jobs else jobs.filter { it.current == true }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 30.dp)) {
-            if (topic.value != null && jobs.isEmpty()) Column(Modifier.padding(horizontal = 2.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (jobs.isEmpty()) Column(Modifier.padding(horizontal = 2.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(t("android-misc.jobs.none"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
                 Text(t("android-misc.jobs.none.text"), fontSize = 13.sp, color = C.muted)
             }
@@ -204,7 +204,7 @@ fun openJobs(app: AppState, station: String, of: ChatOf) {
             if (view.ended > 0) SheetLink({ app.clearEnded(station, view.clear) }) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(view.clearText, fontSize = 14.sp, color = C.accent)
-                    DoingMark(app.clearing(station), app.clearFailed(station), 12.dp)
+                    DoingMark(app.clearing(station), app.clearFailed(station), inline = true)
                 }
             }
         }
@@ -233,6 +233,7 @@ fun openJob(app: AppState, station: String, of: ChatOf, id: String) {
         if (job == null) {
             SheetHead(t("android-misc.jobs.job"))
             if (topic.value != null) Text(t("android-misc.jobs.gone"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(horizontal = 18.dp))
+            else WaitLine(topic.error?.message ?: t("common.reading"), error = topic.error != null, modifier = Modifier.padding(horizontal = 18.dp))
         } else JobBody(app, station, job, tab, { picked = it }, log, last)
     }
 }
@@ -282,7 +283,8 @@ private fun ColumnScope.JobBody(app: AppState, station: String, job: Job, tab: I
                 Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(min = 120.dp).clip(Smooth(16.dp)).background(C.ink.copy(alpha = 0.05f))
                     .verticalScroll(scroll).padding(horizontal = 14.dp, vertical = 12.dp),
             ) {
-                Text(if (log == null) t("android-misc.reading") else text?.ifEmpty { t("android-misc.jobs.noOutput") } ?: "", style = Mono, fontSize = 11.5.sp, color = C.ink, fontFamily = CodeFont)
+                if (log == null) WaitLine()
+                else Text(text?.ifEmpty { t("android-misc.jobs.noOutput") } ?: "", style = Mono, fontSize = 11.5.sp, color = C.ink, fontFamily = CodeFont)
             }
         }
         if (running) Row(
@@ -290,7 +292,7 @@ private fun ColumnScope.JobBody(app: AppState, station: String, job: Job, tab: I
             horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically,
         ) {
             val stopFailed = app.stopFailed(station, job)
-            if (app.stopping(station, job) || stopFailed != null) DoingMark(app.stopping(station, job), stopFailed, 16.dp) else IconIn(Icons.Stop, 16.dp, C.red)
+            if (app.stopping(station, job) || stopFailed != null) DoingMark(app.stopping(station, job), stopFailed) else IconIn(Icons.Stop, 16.dp, C.red)
             Text(t("android-misc.jobs.stop"), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = C.red)
         }
     }

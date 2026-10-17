@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import fail.still.android.ui.keyboard
+import fail.still.android.ui.Waiting
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -144,17 +145,13 @@ private fun BoxScope.Recent(current: WorkspaceEntry, top: Screen, foot: Modifier
                     contentAlignment = Alignment.Center,
                 ) { IconIn(Icons.Ling, 26.dp, Color.White) }
             }
-            if (view == null) Text(chats.error?.message ?: t("android-misc.wide.loading"), fontSize = 14.sp, color = if (chats.error != null) C.red else C.muted, modifier = Modifier.padding(18.dp))
-            // No rows: what the list says in their place (the core's `note`), as the home list does.
+            if (view == null) Waiting(count = 4, text = t("android-misc.wide.loading"), error = chats.error?.message, modifier = Modifier.padding(bottom = 8.dp))
+            // No rows: what the list says in their place (the core's `note`), as the home list does: its rows to come
+            // while read, or what could not be; else that there are none.
             else if (view.days.isEmpty()) {
                 val note = view.note
-                val failing = note?.failing?.firstOrNull()?.text
-                val said = when {
-                    note?.reading == true -> t("android-misc.wide.loading")
-                    failing != null -> failing
-                    else -> t("android-misc.wide.empty")
-                }
-                Text(said, fontSize = 14.sp, color = if (failing != null && note?.reading != true) C.red else C.muted, modifier = Modifier.padding(18.dp))
+                if (note != null && (note.reading || note.failing.isNotEmpty())) Waiting(count = 4, text = t("android-misc.wide.loading"), note = note, modifier = Modifier.padding(bottom = 8.dp))
+                else Text(t("android-misc.wide.empty"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(18.dp))
             }
             else LazyColumn(Modifier.weight(1f, fill = false).padding(horizontal = 6.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
                 items(view.days.flatMap { it.items }.take(6), key = { "${it.station}/${it.id}" }) { item ->

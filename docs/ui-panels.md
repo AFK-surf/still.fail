@@ -35,6 +35,17 @@
 - **列表卡**（`pagesCss.listCard`，以及决策选项 `Decisions.css.ts`）：每一行都能点，平时没有底色，悬停才有。底色伸到离卡片边 `LIST_PAD`（8），行圆角 `ROW_CORNER`（18），卡片圆角 = 行圆角 + 8，同心；行里的字离卡片边还是 20，和内容卡对齐。决策选项的编号圆圈离行边 8，和行的角同心。
 - 卡片标题前不放圆点：状态由标题的文字说（圆点放在线内会把标题往右推，挂到线外又贴着卡片边，都不对）。
 
+## 等待
+
+只有三种等待，各一个组件，PC web、手机 web、安卓画法一样（`web/ui/src/waiting.tsx`，安卓 `ui/Waiting.kt`）：
+
+- **页面或列表第一次读取**：`Waiting`。只在内容区画将要出现的东西的形状（`rows` 列表行、`messages` 消息、`cards` 设置页卡片），透明度 1→0.5→1 呼吸（1.4s，减少动效时静止），上方居中一个灰胶囊 `WaitPill`（12 的转圈 +「正在读取 X」）。顶栏、标题、返回、tabs、composer 照常画，不再整页灰字或整页转圈。形状立刻出现，胶囊的字 400ms 后才出现；出错时胶囊变红、立刻出现，形状停住并变淡（0.6）。字先用 core 的 note（`ListNote`：reading / text / failing），没有就用页面自己的「正在读取 X」，再没有用 `common.reading`。已有几行、还在等别的 station 时，行下面用 `WaitMore`。
+- **内容区里的一小块**（卡片里的一行、一节还没到）：`WaitLine`，12 的转圈 + 灰字，同样 400ms 后出现，出错红字无转圈。
+- **某一行或某个按钮在做事**：`Spinner`，只有两种尺寸：`inline` 12（行尾、胶囊、小字行里），默认 14（按钮、图标按钮里替换图标）；线宽 2，底圈 lineStrong + 主题色弧，实心按钮里跟按钮文字颜色。core 的调用一律走 `DoingMark` / `DoingShown`（转圈，失败后红「!」）。不手写转圈，各处只改颜色和位置，不改尺寸。
+- **有大小的传输**（上传、下载、更新、读文件）：`Progress`，3 高的胶囊条，底是主题色 18%；不知道总量时 40% 的一段 1.4s 来回扫（减少动效时整条 35% 透明）。
+- 播放器缓冲、远程屏幕连接中：浮在画面上的磨砂胶囊（`WaitPill over`），不用大号转圈。
+- 文案：「正在读取 X」/「Loading X」，不带省略号；通用词用 `common.*`（reading、readingStations、connecting、reconnecting、opening、saving、uploading、downloading）。
+
 ## 组件画廊（stories）
 
 `web/stories`：app 的每个部分、每种状态各是一个 story（`web/stories/stories.tsx`），用的是官网 demo 的假 core，再加上 `web/stories/data.ts` 里补的数据（小说、Markdown、视频、图片、更新说明），不进任何发布的包。

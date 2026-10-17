@@ -13,7 +13,7 @@ import { NO_KEY as NEW_KEY } from "../draft.ts";
 import { dismissShare, offerShare, openFromPopup, openShare, SEARCH_FROM, useShared, useShareIn, type Shared } from "../shareIn.ts";
 import { SheetGrab, useApp } from "./app.tsx";
 import { Field, ModelMark, PickRow } from "./parts.tsx";
-import { PlaceholderRows } from "./Loading.tsx";
+import { Waiting } from "@stillfail/ui/waiting.tsx";
 import * as sheetsCss from "./styles/sheets.css.ts";
 import * as workspacesCss from "./Workspaces.css.ts";
 import * as css from "./ShareIn.css.ts";
@@ -72,7 +72,7 @@ function Sheet({ shared }: { shared: Shared }) {
           )}
         </div>
         {query !== null && <SearchField query={query} onQuery={setQuery} />}
-        {view ? <Places view={view} searching={!!query?.trim()} onOpen={open} /> : <PlaceholderRows count={3} />}
+        {view ? <Places view={view} searching={!!query?.trim()} onOpen={open} /> : <Waiting count={3} />}
       </div>
     </>
   );
@@ -104,7 +104,7 @@ function SearchField({ query, onQuery }: { query: string; onQuery: (query: strin
  * one on; `searching`, only the chats found (or that none is).
  */
 function Places({ view, searching, onOpen }: { view: ShareInView; searching: boolean; onOpen: (station: string, id?: string) => void }) {
-  if (view.loading) return <PlaceholderRows count={3} />;
+  if (view.loading) return <Waiting count={3} />;
   const on = view.newOn ?? view.stations[0]?.station;
   return (
     <>

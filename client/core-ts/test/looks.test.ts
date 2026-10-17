@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
-import { answer, face, glyph, linkShown, listNote, memorySections, stationLine, stationUpdate } from "../src/looks.ts";
+import { answer, face, glyph, linkShown, listNote, memorySections, stationLine, stationUpdate, waitNote } from "../src/looks.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -23,6 +23,17 @@ test("the_glyph_counts_stations_by_their_links_and_says_who_works", () => {
   assert.equal(g.label, "2 台 station，0 台在线，1 台正在连接，1 台离线");
 });
 
+test("a_view_gathered_from_stations_says_whom_it_waits_on_and_who_failed", () => {
+  assert.deepEqual(waitNote(null), { reading: true, text: "正在读取 station", failing: [], empty: false });
+  assert.deepEqual(waitNote([], [], true), { reading: false, text: null, failing: [], empty: true });
+  assert.deepEqual(waitNote([], [], false).empty, false);
+  assert.equal(waitNote(["Studio"]).text, "正在从 Studio 读取");
+  assert.equal(waitNote(["Studio", "MBA"]).text, "正在从 2 台 station 读取");
+  const failed = waitNote(["Studio"], [{ station: "w/b", name: "MBA", message: "timeout" }], true);
+  assert.deepEqual([failed.reading, failed.empty], [true, false]);
+  assert.deepEqual(failed.failing, [{ station: "w/b", text: "无法从「MBA」读取", message: "timeout" }]);
+});
+
 test("a_list_with_no_rows_says_it_reads_fails_or_has_none", () => {
   const days = [{ items: [{}] }];
   assert.deepEqual(listNote([station("w/a", "A", "error")], days, false, []), { reading: false, failing: [], empty: false });
@@ -32,7 +43,7 @@ test("a_list_with_no_rows_says_it_reads_fails_or_has_none", () => {
   assert.equal(listNote([station("w/a", "A", "online")], [], true, []).reading, true);
   assert.equal(listNote([station("w/a", "A", "connecting")], [], false, []).reading, true);
   const failing = listNote([station("w/a", "A", "error"), station("w/b", "B", "online")], [], false, []);
-  assert.equal(failing.failing[0].text, "无法连接「A」，正在重试…");
+  assert.equal(failing.failing[0].text, "无法连接「A」，正在重试");
   assert.equal(failing.empty, false);
   assert.equal(listNote([station("w/b", "B", "online")], [], false, []).empty, true);
   assert.equal(listNote([], [], false, []).empty, true);
@@ -77,7 +88,7 @@ test("a_chat_link_is_said_only_while_down_or_coming_back", () => {
   assert.deepEqual(linkShown({ state: "error", message: "无法连接此 station：超时" }, "Studio"), { tone: "trouble", text: "无法连接「Studio」", detail: "超时" });
   assert.equal(linkShown({ state: "offline", message: "别的：原因" }, "").detail, "别的：原因");
   assert.equal(linkShown({ state: "offline" }, "").text, "无法连接 station");
-  assert.deepEqual(linkShown({ state: "reconnecting" }, "S"), { tone: "busy", text: "正在重连「S」" });
+  assert.deepEqual(linkShown({ state: "reconnecting" }, "S"), { tone: "busy", text: "正在重新连接「S」" });
   assert.equal(linkShown({ state: "online" }, "S"), null);
   assert.equal(face(true, { counts: { running: 2 } }), "working");
   assert.equal(face(false, { counts: { running: 2 } }), "offline");
@@ -85,9 +96,9 @@ test("a_chat_link_is_said_only_while_down_or_coming_back", () => {
 });
 
 test("update_progress_and_pending_messages_survive_disconnect_and_clear_on_new_overview", () => {
-  const overview: J = { updates: [{ id: "station", state: "updating", progress: "正在下载新版本…" }] };
+  const overview: J = { updates: [{ id: "station", state: "updating", progress: "正在下载新版本" }] };
   const chat: J = { link: { state: "online" }, outbox: [] };
-  assert.equal(stationUpdate(overview, chat, null, false, true).detail, "正在下载新版本…");
+  assert.equal(stationUpdate(overview, chat, null, false, true).detail, "正在下载新版本");
   chat.link.state = "reconnecting";
   chat.outbox = [{ id: "one", state: "sending" }];
   const notice = stationUpdate(overview, chat, null, false, true, "Mac Studio");
@@ -119,7 +130,7 @@ test("dismissal_is_version_and_channel_scoped_and_never_hides_progress", () => {
 });
 
 test("update_says_which_station_and_versions", () => {
-  const overview: J = { updates: [{ id: "station", state: "updating", version: "0.1.10", latest: "0.1.12", percent: 140, progress: "正在下载新版本…" }] };
+  const overview: J = { updates: [{ id: "station", state: "updating", version: "0.1.10", latest: "0.1.12", percent: 140, progress: "正在下载新版本" }] };
   const chat: J = { link: { state: "online" }, outbox: [] };
   const notice = stationUpdate(overview, chat, null, false, true, "studio");
   assert.equal(notice.station, "studio");

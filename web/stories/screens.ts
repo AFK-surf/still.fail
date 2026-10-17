@@ -33,7 +33,7 @@ const TRANSFER: ViewStory[] = ["copied", "dragging", "sending", "sent"];
 const DROP = { folder: "/Users/zhangsan/Downloads", reveal: true };
 
 const MESSAGES: Partial<Record<ViewStory, string>> = {
-  reconnecting: "连接已断开，正在重连",
+  reconnecting: "连接已断开，正在重新连接",
   ended: "张三 关掉了这个标签页",
   outdated: "此 station 需要更新才能远程查看屏幕",
   gone: "此屏幕已不存在",

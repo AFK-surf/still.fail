@@ -1,4 +1,4 @@
-import { globalStyle, keyframes, style } from "@vanilla-extract/css";
+import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { m } from "./styles/root.css.ts";
 
@@ -26,10 +26,6 @@ export const mTrouble = style({ marginTop: "3px", fontSize: vars.textMeta, color
 globalStyle(`${mTrouble} b`, { display: "block", color: "var(--m-red)", fontWeight: "500" });
 
 export const mBarButtons = style({ display: "flex", alignItems: "center", gap: "2px" });
-const turn = keyframes({ to: { transform: "rotate(360deg)" } });
-/** Refresh turns while the folder is read again. */
-export const mSpin = style({ display: "contents" });
-globalStyle(`${mSpin}[data-on] svg`, { animation: `${turn} 900ms linear infinite` });
 
 export const mProblem = style({ display: "grid", justifyItems: "center", gap: "10px", padding: "48px 32px", textAlign: "center" });
 
@@ -46,11 +42,8 @@ globalStyle(`${mCrumbs} b`, { padding: "4px 4px", fontWeight: "500", color: "var
 export const mUploadAsk = style({ display: "flex", alignItems: "center", gap: "12px", fontSize: vars.textMeta, color: "var(--m-muted)", flexWrap: "wrap" });
 globalStyle(`${m} ${mUploadAsk} button`, { padding: "2px 0", border: "0", background: "none", color: "var(--m-accent)", fontSize: vars.textMeta, fontWeight: "500", cursor: "pointer" });
 /** How far it has got: a hairline in the accent. */
-export const mProgress = style({
-  position: "relative", display: "block", height: "2px", marginTop: "6px", borderRadius: "1px", overflow: "hidden",
-  background: "color-mix(in srgb, var(--m-ink) 10%, transparent)",
-});
-globalStyle(`${mProgress} > span`, { position: "absolute", inset: "0", background: "var(--m-accent)", transformOrigin: "left", transition: "transform 200ms linear" });
+/** Where the shared bar (@stillfail/ui waiting.tsx Progress) sits under an upload's words. */
+export const mProgress = style({ display: "block", marginTop: "6px" });
 export const mRowButton = style({
   display: "grid", placeItems: "center", flex: "none", width: "32px", height: "32px", padding: "0", border: "0", borderRadius: "50%",
   background: "none", color: "var(--m-muted)", cursor: "pointer",

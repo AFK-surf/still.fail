@@ -1,6 +1,6 @@
 {
   "web-share.title": "still.fail 分享",
-  "web-share.connecting": "正在连接 station…",
+  "web-share.connecting": "正在连接 station",
   "web-share.malformed": "链接不完整，无法打开",
   "web-share.cloud": "无法连接 still.fail，请稍后重试",
   "web-share.offline": "无法连接此 station，它可能已离线",

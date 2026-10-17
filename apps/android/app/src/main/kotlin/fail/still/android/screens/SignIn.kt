@@ -88,7 +88,7 @@ fun SignInScreen() {
                 .clickable(enabled = !busy) { asked = true; scope.launch { signIn(app, context); asked = false } },
             horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(if (busy) t("android-settings.signIn.opening") else t("android-settings.signIn.google"), color = C.bg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(if (busy) t("common.opening") else t("android-settings.signIn.google"), color = C.bg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         }
         Text(t("android-settings.signIn.many"), color = C.muted, fontSize = 12.sp)
         if (BuildConfig.DEBUG && DEV_CLOUD.matches(app.cloudOrigin)) {

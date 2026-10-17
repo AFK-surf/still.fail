@@ -4,6 +4,7 @@
 import * as format from "../format.ts";
 import type { Host } from "../host.ts";
 import { t } from "../i18n.ts";
+import { waitNote } from "../looks.ts";
 import type { Value } from "../store.ts";
 import { arr as arrU, get as getU, isObject } from "../util.ts";
 import type { Local } from "./local.ts";
@@ -16,21 +17,25 @@ const get = (v: unknown, k: string): J => getU(v, k);
 
 export function archive(views: Views, local: Local, scope: string, host: Host, q = "", limit = 0): Value {
   const ws = views.value({ topic: "workspace", workspace: scope });
-  if (ws === undefined) return { ok: { days: [], errors: [], loading: true, note: t("core-views.archive.reading_stations"), total: 0, more: false } };
+  if (ws === undefined) return { ok: { days: [], errors: [], note: t("core-views.archive.reading_stations"), total: 0, more: false, wait: waitNote(null) } };
   if ("err" in ws) return ws;
   const online = (views.stations(scope) ?? []).filter((s) => s.online);
   const named = online.length > 1;
   const items: J[] = [];
   const errors: J[] = [];
   let loading = false;
+  const waiting: string[] = [];
+  const failing: { station: string; name: string; message: string }[] = [];
   for (const s of online) {
     const place = named ? s.name : null;
     const v = views.value({ topic: "archivedRows", station: s.address });
     if (v === undefined) {
       loading = true;
+      waiting.push(s.name);
       continue;
     }
     if ("err" in v) {
+      failing.push({ station: s.address, name: s.name, message: v.err.message });
       errors.push({ station: s.address, text: place !== null ? t("core-views.named_error", { name: place, error: v.err.message }) : v.err.message });
       continue;
     }
@@ -78,7 +83,7 @@ export function archive(views: Views, local: Local, scope: string, host: Host, q
         : days.length === 0 && errors.length === 0
           ? t(needle && items.length > 0 ? "core-views.archive.no_match" : "core-views.archive.empty")
           : null;
-  return { ok: { days: days.map(([label, list]) => ({ label, items: list })), errors, loading, note, total: found.length, more: shown.length < found.length } };
+  return { ok: { days: days.map(([label, list]) => ({ label, items: list })), errors, note, total: found.length, more: shown.length < found.length, wait: waitNote(waiting, failing, items.length === 0) } };
 }
 
 /// The chat list's day headings, with the year before this one's.

@@ -3,6 +3,7 @@
 // accounts and which models spent the most.
 import type { CoreError } from "../error.ts";
 import { current, t, tr, type Lang } from "../i18n.ts";
+import { waitNote } from "../looks.ts";
 import * as present from "../present.ts";
 import * as model from "../shapes/model.ts";
 import type { Value } from "../store.ts";
@@ -201,8 +202,9 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   for (let i = days - 1; i >= 0; i--) dayList.push(localDay(now - i * DAY_MS, offset));
   const first = dayList[0];
   const several = sources.filter((s) => s.online).length > 1;
-  let loading = false;
   let reading = false;
+  const waiting: string[] = [];
+  const failing: { station: string; name: string; message: string }[] = [];
   const notes: string[] = [];
   let since: number | null = null;
   const total = new Sum();
@@ -225,11 +227,12 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
       continue;
     }
     if (s.value === undefined) {
-      loading = true;
+      waiting.push(s.name);
       continue;
     }
     if ("err" in s.value) {
       const e: CoreError = s.value.err;
+      if (e.status !== 404) failing.push({ station: s.address, name: s.name, message: e.message });
       notes.push(e.status === 404 ? t("core-views.usage.note.outdated", { name: s.name }) : t("core-views.named_error", { name: s.name, error: e.message }));
       continue;
     }
@@ -335,7 +338,7 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
     notes.push(t("core-views.usage.note.since", { month, day }));
   }
   if (total.unpriced > 0) notes.push(t("core-views.usage.note.unpriced", { n: count(total.unpriced) }));
-  return { days, prices: priceTables(sources, first, today), loading, empty: total.calls === 0, tiles, series, daily, max, lists, notes, basis: t("core-views.usage.basis") };
+  return { days, prices: priceTables(sources, first, today), wait: waitNote(waiting, failing, total.calls === 0), empty: total.calls === 0, tiles, series, daily, max, lists, notes, basis: t("core-views.usage.basis") };
 }
 
 export { tr };

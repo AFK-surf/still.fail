@@ -21,7 +21,8 @@ import { download, downloadsOffered, onAndroid } from "../downloads.ts";
 import { Presence } from "./Connects.tsx";
 import { railLabel } from "../Rail.tsx";
 import { useBars, type BarPlace } from "./Bar.tsx";
-import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, Seg, Spinner, TopBack } from "./parts.tsx";
+import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, Seg, TopBack } from "./parts.tsx";
+import { Spinner } from "@stillfail/ui/waiting.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
@@ -137,7 +138,7 @@ function Notify() {
         <span className={listsCss.mRowTitle}>{t("web-mobile.settings.notify.title")}</span>
         <span className={listsCss.mRowNote}>{note}</span>
       </span>
-      {busy && <Spinner size={14} />}
+      {busy && <Spinner inline />}
       <span className={connectsCss.mSwitch} data-on={on || undefined} />
     </ListRow>
   );

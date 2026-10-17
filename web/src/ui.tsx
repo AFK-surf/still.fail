@@ -19,6 +19,7 @@ import { t } from "./i18n.ts";
 import { MONO } from "./modelMarks.ts";
 
 export * from "@stillfail/ui/parts.tsx";
+export * from "@stillfail/ui/waiting.tsx";
 
 setShortcuts({ keys: shortcutOf, use: useKeymap });
 

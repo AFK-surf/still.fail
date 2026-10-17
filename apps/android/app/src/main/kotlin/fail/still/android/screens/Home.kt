@@ -38,6 +38,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import fail.still.android.ui.reducedMotion
+import fail.still.android.ui.Waiting
 import fail.still.android.ui.StationGlyph
 import fail.still.android.ui.glyphCounts
 import androidx.compose.foundation.layout.PaddingValues
@@ -288,18 +289,15 @@ private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, filter: S
         // What the last update brought (Changelog.kt), until it is seen: even while the list is being read.
         item(key = "changelog-news") { ChangelogNews() }
         if (view == null) {
-            // Not even the stations known yet: the rows to come, and what is wrong if the list cannot be read (Loading.kt).
-            item(key = "wait") { LoadingPill(chats.error?.message ?: t("android-chat.home.loading"), error = chats.error != null) }
-            item(key = "placeholders") { PlaceholderRows(7, still = chats.error != null) }
+            // Not even the stations known yet: the rows to come, and what is wrong if the list cannot be read (ui/Waiting.kt).
+            item(key = "wait") { Waiting(text = t("android-chat.home.loading"), error = chats.error?.message) }
         } else {
             val stations = view.stations
             // A station's link coming back is said on its rows; only with no rows to show does the list say it (the core's
             // `note`): what it waits on over the rows to come, or the stations it cannot read over faded ones.
             val note = view.note
-            if (note?.reading == true) item(key = "loading") { LoadingPill(note.text ?: t("android-chat.home.loading")) }
-            note?.failing?.forEach { s -> item(key = "e/${s.station}") { LoadingPill(s.text, error = true) } }
             val waiting = note?.reading == true
-            if (waiting || note?.failing?.isNotEmpty() == true) item(key = "placeholders") { PlaceholderRows(if (waiting) 7 else 4, still = !waiting) }
+            if (waiting || note?.failing?.isNotEmpty() == true) item(key = "wait") { Waiting(count = if (waiting) 7 else 4, text = t("android-chat.home.loading"), note = note) }
             if (note?.empty == true) item(key = "empty") { Empty(current, view, filter) }
             // What is left up a long while on the stations (OpenJobs.kt): nothing while there is none.
             item(key = "open-jobs") { OpenJobs(current.workspace.id) }
@@ -585,7 +583,7 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, stationTag
                 // slot only when there is one.
                 val reconnecting = item.reconnecting
                 if (busy || failed != null || offline != null || reconnecting != null || item.connect != null) Box(Modifier.width(14.dp), contentAlignment = Alignment.Center) {
-                    if (busy || failed != null) DoingMark(busy, failed, 11.dp)
+                    if (busy || failed != null) DoingMark(busy, failed, inline = true)
                     // Its station offline, or its link coming back: unplugged (a spinner is only something its person did).
                     else if (offline != null) Box(Modifier.semantics { contentDescription = offline }) { IconIn(Icons.Unplug, 13.dp, C.subtle) }
                     else if (reconnecting != null) Box(Modifier.semantics { contentDescription = reconnecting }) { IconIn(Icons.Unplug, 13.dp, C.subtle) }

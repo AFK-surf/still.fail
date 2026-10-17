@@ -13,7 +13,7 @@ import { Mark } from "./brand.tsx";
 import { scopeOf, stationBase, usePerson, useStation } from "./station.tsx";
 import { chatOfLink } from "./chatRefs.ts";
 import { Hover, PathSession } from "./Peeks.tsx";
-import { Avatar, ICON, ModelLogo, Pill, Segmented, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
+import { Avatar, ICON, ModelLogo, Pill, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { chatPage } from "./chatPage.ts";
 import { Prose, withBareLinks } from "./Prose.tsx";
@@ -61,7 +61,6 @@ import { useChatFind } from "./ChatFind.tsx";
 import { placeStrokes, strokeLayer } from "@stillfail/ui/strokes.ts";
 import { jumped, jumpTo, jumpWords, useJump } from "./jumpTo.ts";
 import { t } from "./i18n.ts";
-import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 
 /** Over the composer (dock.css.ts): where what a new chat's first message is drawn by on its way (madeChat.ts). */
 export const OVER_DOCK = "4";
@@ -252,7 +251,7 @@ export function ChatRows({ chat, rows, to }: { chat: ChatView; rows: ReturnType<
   // What each item is: only those the list makes (virtual/list.tsx) are drawn.
   const drawn = new Map<string, () => ReactNode>();
   const sent = (list: ChatSentElsewhere[] | undefined) => { for (const s of list ?? []) drawn.set(`e:${s.key}`, () => <SentElsewhere key={`e:${s.key}`} sent={s} />); };
-  drawn.set("older", () => <div key="older" data-vk="older" className={css.chatOlder} aria-hidden="true"><span className={spinnerCss.spinner} /></div>);
+  drawn.set("older", () => <div key="older" data-vk="older" className={css.chatOlder} aria-hidden="true"><Spinner /></div>);
   drawn.set("line", () => <div key="line" data-vk="line" className={css.chatUnreadLine} data-unread-line role="separator"><span>{t("web-main.chat.unreadLine")}</span></div>);
   sent(chat.elsewhere);
   for (const m of messages) {
@@ -263,7 +262,7 @@ export function ChatRows({ chat, rows, to }: { chat: ChatView; rows: ReturnType<
     sent(m.elsewhere);
   }
   // The page after the window shown, while it is short of the chat's end (`chat.newer`), loading as the reader nears it.
-  drawn.set("newer", () => <div key="newer" data-vk="newer" className={css.chatNewer} aria-hidden="true"><span className={spinnerCss.spinner} /></div>);
+  drawn.set("newer", () => <div key="newer" data-vk="newer" className={css.chatNewer} aria-hidden="true"><Spinner /></div>);
   for (const o of chat.outbox) drawn.set(`o:${o.id}`, () => <OutboxRow key={`o:${o.id}`} o={o} to={to} locked={locked} />);
   // A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does.
   for (const { agent, leaving } of shown) {
@@ -298,7 +297,7 @@ function ToLatest({ station, thread, waiting, onClick }: { station: string; thre
     <Tip label={state.error ?? t("web-main.chat.toLatest")} shortcut="chat.latest" side="top">
       <button type="button" className={css.chatToBottom} aria-label={t("web-main.chat.toLatest")} data-count={waiting > 0 || undefined}
         disabled={coming} aria-busy={coming || undefined} onClick={onClick}>
-        <DoingShown state={state} className={controlsCss.iconSpinner} size={16} idle={<ArrowDown size={16} strokeWidth={2} />} bare />
+        <DoingShown state={state} idle={<ArrowDown size={16} strokeWidth={2} />} bare />
         {waiting > 0 && <span>{t("web-main.chat.newMessages", { n: waiting })}</span>}
       </button>
     </Tip>
@@ -345,12 +344,12 @@ function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: 
             </Tip>
             <button type="button" className={css.msgUnsentBtn} disabled={locked || busy} aria-busy={retrying || undefined}
               onClick={() => { if (to !== null) sending.retry(to, o.id).catch((e: unknown) => toast(t("web-main.chat.resendFailed", { error: failure(e) }))); }}>
-              <DoingShown state={retry} className={css.msgUnsentSpinner} idle={<Retry size={12} strokeWidth={2} />} />{t("common.retry")}</button>
+              <DoingShown state={retry} inline idle={<Retry size={12} strokeWidth={2} />} />{t("common.retry")}</button>
             <button type="button" className={css.msgUnsentBtn} disabled={busy} aria-busy={dropping || undefined}
               onClick={() => { if (to !== null) sending.discard(to, o.id).catch((e: unknown) => toast(t("web-main.chat.deleteFailed", { error: failure(e) }))); }}>
-              <DoingShown state={drop} className={css.msgUnsentSpinner} idle={<Trash size={12} strokeWidth={2} />} />{t("common.delete")}</button>
+              <DoingShown state={drop} inline idle={<Trash size={12} strokeWidth={2} />} />{t("common.delete")}</button>
           </div>
-        : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><span className={spinnerCss.spinner} aria-hidden="true" />{o.uploads?.length ? t("web-main.file.uploading") : t("web-main.chat.sending")}</span>}
+        : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><Spinner inline />{o.uploads?.length ? t("common.uploading") : t("web-main.chat.sending")}</span>}
     </MineMessage>
   );
 }
@@ -965,7 +964,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
         <MineWords message={m} />
         {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
         {m.waiting
-          ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><span className={spinnerCss.spinner} aria-hidden="true" />{t("web-main.chat.waitingAgent")}</span>
+          ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><Spinner inline />{t("web-main.chat.waitingAgent")}</span>
           : <Time className={conversationCss.msgTime} stamp={m.time?.createdAt} />}
       </MineMessage>
     );
@@ -1049,12 +1048,12 @@ function ArchiveOption({ thread, chat }: { thread: number; chat: string }) {
       <button type="button" className={decisionsCss.option} data-busy={keeping || undefined} disabled={busy || keeping}
         aria-busy={keeping || undefined} onClick={() => act(api.keepChat(thread), t("web-main.chat.keep.what"), t("web-main.chat.keep.done"))}>
         <span className={decisionsCss.optionLabel}>{t("web-main.chat.keep")}</span>
-        <DoingShown state={keepState} className={decisionsCss.optionSpinner} />
+        <DoingShown state={keepState} className={decisionsCss.optionSpinner} inline />
       </button>
       <button type="button" className={decisionsCss.option} data-recommended="" data-busy={busy || undefined} disabled={busy || keeping}
         aria-busy={busy || undefined} onClick={() => chatPage.archive(chat)}>
         <span className={decisionsCss.optionLabel}>{t("web-main.chat.archiveThis")}</span>
-        {busy && <span className={`${spinnerCss.spinner} ${decisionsCss.optionSpinner}`} aria-hidden="true" />}
+        {busy && <Spinner inline className={decisionsCss.optionSpinner} />}
       </button>
     </div>
   );
@@ -1488,7 +1487,7 @@ export function FileCard({ file, onRemove, pending, sent, error }: { file: Pick<
   // How far it has gone, once that is known.
   const going = pending && sent !== undefined && file.size > 0
     ? t("web-main.file.uploadingPart", { percent: Math.floor((sent / file.size) * 100), size: fileSize(file.size) })
-    : t("web-main.file.uploading");
+    : t("common.uploading");
   return (
     <Tip label={file.path ?? file.name} cut={!file.path}><span className={css.fileCard} data-card="" data-error={error ? true : undefined}>
       <FileTile name={file.name} progress={pending ? (sent ?? 0) / Math.max(1, file.size) : undefined} error={!!error} land={!!onRemove} />
@@ -1678,7 +1677,7 @@ const ComposerTools = memo(function ComposerTools({ picker, locked, toolbar, rea
       {toolbar && <div className={css.composerChoices} onClick={(e) => e.stopPropagation()}>{toolbar}</div>}
       <Tip label={t("web-main.composer.send")}>
         <button type="submit" className={css.sendBtn} disabled={!ready} aria-label={t("web-main.composer.send")} aria-busy={starting || undefined}>
-          {starting ? <span className={spinnerCss.spinner} aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
+          {starting ? <Spinner /> : <ArrowUp size={16} strokeWidth={2} />}
         </button>
       </Tip>
     </div>
@@ -1981,7 +1980,7 @@ function RefCard({ file: f, draft, onRemove, onTap }: { file: Pending; draft: Dr
   const pending = asFile && !f.done && !f.error;
   const going = f.sent !== undefined && f.size > 0
     ? t("web-main.file.uploadingPart", { percent: Math.floor((f.sent / f.size) * 100), size: fileSize(f.size) })
-    : t("web-main.file.uploading");
+    : t("common.uploading");
   // A folder goes as a zip only from the chat's own station (zipped there).
   const zips = ref.dir && ref.station === station.address;
   const meta = asFile ? f.error ?? (pending ? going : fileSize(f.done?.size ?? f.size)) : `${ref.stationName} · ${t("web-main.file.modePath")}`;
@@ -2067,7 +2066,7 @@ function PendingFile({ file: f, onRemove, onRestore, onRetry }: { file: Pending;
   const shown: Attachment = { name: f.name, path: `draft:${f.id}`, size: f.size };
   if (f.pasted) {
     // Cut short (a failure said at length), all of it on hover.
-    const meta = f.error ?? (!f.done ? t("web-main.composer.pasteUploading") : t("web-main.composer.pasteAttachment", { count: f.pasted.characters.toLocaleString("en-US") }));
+    const meta = f.error ?? (!f.done ? t("common.uploading") : t("web-main.composer.pasteAttachment", { count: f.pasted.characters.toLocaleString("en-US") }));
     return <><span className={css.fileCard} data-card="" data-error={f.error ? true : undefined}>
       <FileTile name={f.name} progress={!f.done && !f.error ? (f.sent ?? 0) / Math.max(1, f.size) : undefined} error={!!f.error} />
       <span className={css.fileCardText}>
@@ -2088,7 +2087,7 @@ function PendingFile({ file: f, onRemove, onRestore, onRetry }: { file: Pending;
         <img src={f.preview} alt={f.name} />
       </button>
       {f.image && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey="" file={shown} local={{ blob: f.image, url: f.preview }} />}
-      {!f.done && !f.error && <span className={css.composerThumbBusy}><span className={spinnerCss.spinner} aria-hidden="true" /></span>}
+      {!f.done && !f.error && <span className={css.composerThumbBusy}><Spinner /></span>}
       {onRemove && <button type="button" className={css.composerThumbRemove} aria-label={t("web-main.file.remove", { name: f.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
     </span></Tip>
   ) : <FileCard file={f.done ?? f} pending={!f.done && !f.error} sent={f.sent} error={f.error} {...(onRemove ? { onRemove } : {})} />;

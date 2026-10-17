@@ -582,14 +582,6 @@ fun ListRow(onClick: (() -> Unit)? = null, content: @Composable RowScope.() -> U
     )
 }
 
-/** Something is on its way: said in words, centered on the page. */
-@Composable
-fun Loading(text: String) {
-    Box(Modifier.fillMaxSize().background(C.bg).padding(32.dp), contentAlignment = Alignment.Center) {
-        Text(text, color = C.muted, fontSize = 14.sp, textAlign = TextAlign.Center)
-    }
-}
-
 /**
  * The app starting (or waiting for what every page needs): the buddy, floating. What it waits for is said only when
  * it takes a while (after a second), or at once when `now` (a failure).

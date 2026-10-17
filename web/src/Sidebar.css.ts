@@ -183,8 +183,6 @@ export const navSession = style({
 export const rowAside = style({
   selectors: { [`${navSessionWrap}:hover &`]: { display: "none" } },
 });
-/** A station's link coming back: a small turning ring (the global spinner) where the row's mark goes. */
-export const rowSpinner = style({ width: 12, height: 12, borderWidth: 1.5 });
 
 // One column, as wide as the row leaves it: an auto one grows to a long title's whole length, and the row with it.
 export const navSessionText = style({

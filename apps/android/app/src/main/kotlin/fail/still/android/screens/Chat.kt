@@ -5,6 +5,9 @@
 // the time over their words. Long-press quotes or copies a message; ＋ adds files.
 package fail.still.android.screens
 
+import fail.still.android.ui.Spinner
+import fail.still.android.ui.WaitShape
+import fail.still.android.ui.Waiting
 import fail.still.android.data.t
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -70,7 +73,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -268,11 +270,11 @@ fun ChatScreen(station: String, of: ChatOf, host: Host) {
             // A chat just made here from a new chat (its scene leaving, its first words on their way) is the core's own:
             // nothing to read from a station, so no reading over it for the frames until the core's view of it comes.
             val made = host.leaving || host.flight?.carried == true
-            // Read from its station meanwhile, over the messages to come (Loading.kt); what is wrong in red, over faded ones.
-            if (error != null || !made) Column(Modifier.weight(1f).fillMaxWidth()) {
-                LoadingPill(if (error != null) t("android-chat.chat.unreadable", "error" to error.message) else t("android-chat.chat.loadingFrom", "name" to rememberStationName(station)), error = error != null)
-                PlaceholderMessages(still = error != null)
-            }
+            // Read from its station meanwhile, over the messages to come (ui/Waiting.kt); what is wrong in red, over still ones.
+            if (error != null || !made) Waiting(
+                WaitShape.Messages, text = t("android-chat.chat.loadingFrom", "name" to rememberStationName(station)),
+                error = error?.let { t("android-chat.chat.unreadable", "error" to it.message) }, modifier = Modifier.weight(1f),
+            )
         }
         return
     }
@@ -318,7 +320,7 @@ private fun ChatBar(station: String, of: ChatOf, view: ChatView, agents: List<Ag
         ) {
             val archiving = app.isDoing("chat.archive", "station" to station, "session" to session)
             Box(Modifier.semantics { contentDescription = t("android-chat.archive") }) {
-                if (archiving) Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) { Spinner(14.dp) }
+                if (archiving) Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) { Spinner() }
                 else NavButton(Icons.Archive, { if (canArchive && session != null) archiveChat(app, station, view, session) })
             }
         }
@@ -872,8 +874,8 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                     if (before == null && fresh && floor > 0) floor = (floor - size.height - gapPx).coerceAtLeast(0)
                 }) {
                     CompositionLocalProvider(LocalFlight provides f, LocalFlightHost provides host) { when (row) {
-                        Entry.Older -> Box(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), contentAlignment = Alignment.Center) { Spinner(16.dp) }
-                        Entry.Newer -> Box(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp), contentAlignment = Alignment.Center) { Spinner(16.dp) }
+                        Entry.Older -> Box(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp), contentAlignment = Alignment.Center) { Spinner() }
+                        Entry.Newer -> Box(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp), contentAlignment = Alignment.Center) { Spinner() }
                         Entry.Empty -> Text(t("android-chat.chat.empty"), color = chatMuted(), fontSize = 15.sp, lineHeight = 24.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 30.dp, horizontal = 24.dp))
                         Entry.Line -> UnreadLine()
                         is Entry.Said -> Said(ctx, row.m, draft, list, rows, waitingNow = row.m.waiting && now - row.m.createdAt > 1000)
@@ -965,9 +967,9 @@ private fun JumpToLatest(shown: Boolean, count: Long?, haze: HazeState, modifier
         contentAlignment = Alignment.Center,
     ) {
         val n = said.value
-        if (n == null) { if (busy) Spinner(16.dp) else IconIn(Icons.ArrowDown, 18.dp, C.ink) }
+        if (n == null) { if (busy) Spinner() else IconIn(Icons.ArrowDown, 18.dp, C.ink) }
         else Row(Modifier.padding(start = 10.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (busy) Spinner(16.dp) else IconIn(Icons.ArrowDown, 18.dp, C.ink)
+            if (busy) Spinner() else IconIn(Icons.ArrowDown, 18.dp, C.ink)
             Text(t("android-chat.chat.newMessages", "n" to n), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink, maxLines = 1)
         }
     }
@@ -1022,9 +1024,6 @@ private fun UnreadLine() {
         Box(Modifier.weight(1f).height(1.dp).background(accent.copy(alpha = 0.5f)))
     }
 }
-
-@Composable
-fun Spinner(size: androidx.compose.ui.unit.Dp) = CircularProgressIndicator(Modifier.size(size), color = C.subtle, strokeWidth = 1.5.dp)
 
 /** A message's picture (web Chat.tsx → MessageAvatar): an agent's model maker in the agents' ground, still.fail's mark, or a person's face. */
 @Composable
@@ -1138,7 +1137,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             if (m.text.isNotEmpty()) CompositionLocalProvider(fail.still.android.ui.LocalPickedWords provides words) { Bubble(m.text, hold, m.ts) }
             Files(ctx, m.attachments, mine = true)
             // Not taken by its agents yet: after a second it says it waits.
-            if (waitingNow) Waiting(t("android-chat.chat.waitingAgent"))
+            if (waitingNow) UnderWay(t("android-chat.chat.waitingAgent"))
             // Coming in with the words, when they fly here from the composer.
             else LocalFlight.current.let { f -> MessageTime(m.time?.get("createdAt"), if (f == null) Modifier else Modifier.graphicsLayer { alpha = f.e() }) }
         }
@@ -1283,11 +1282,11 @@ private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?, toP
     }
 }
 
-/** A spinner and a word, small, under a message of yours: waiting for its agents, or on its way. */
+/** A spinner and a word, small, under a message of yours: waiting for its agents, or on its way (the chat's own size, not WaitLine's). */
 @Composable
-private fun Waiting(text: String) {
+private fun UnderWay(text: String) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-        Spinner(10.dp); Text(text, fontSize = 10.sp, lineHeight = 16.sp, color = chatMuted())
+        Spinner(inline = true); Text(text, fontSize = 10.sp, lineHeight = 16.sp, color = chatMuted())
     }
 }
 
@@ -1373,7 +1372,7 @@ private fun Out(ctx: Here, o: Outgoing) {
             // Not while its words are on their way here (ChatHost.kt): only once they have landed, if it is still going.
             val flight = LocalFlight.current
             val host = LocalFlightHost.current
-            Box(Modifier.graphicsLayer { alpha = if (flight != null && host?.flight === flight) 0f else 1f }) { Waiting(t("android-chat.chat.sending")) }
+            Box(Modifier.graphicsLayer { alpha = if (flight != null && host?.flight === flight) 0f else 1f }) { UnderWay(t("android-chat.chat.sending")) }
         }
     }
 }
@@ -1385,7 +1384,7 @@ private fun UnsentButton(icon: androidx.compose.ui.graphics.vector.ImageVector, 
         Modifier.alpha(if (enabled) 1f else 0.5f).clip(Smooth(7.dp)).clickable(enabled = enabled && !busy, onClick = onClick).padding(horizontal = 7.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        if (busy || failed != null) DoingMark(busy, failed, 12.dp) else IconIn(icon, 12.dp, muted)
+        if (busy || failed != null) DoingMark(busy, failed, inline = true) else IconIn(icon, 12.dp, muted)
         Text(label, fontSize = 13.sp, color = muted)
     }
 }

@@ -10,7 +10,7 @@ import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, usePa
 import { Lockup } from "../brand.tsx";
 import { stamp, type Stamp } from "../api.ts";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
-import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, Loading, MobileBack, Pill, ResizeHandle, Select, StatusDot, Switch, SwitchRow, Time, ICON, type Presence, type Tone } from "../ui.tsx";
+import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, MobileBack, Pill, ResizeHandle, Select, StatusDot, Switch, SwitchRow, Time, ICON, type Presence, type Tone, Waiting } from "../ui.tsx";
 import { useAccounts, useSignOut, type Account } from "../cloud/accounts.ts";
 import { admin, useAction, type FeedbackStatus } from "../cloud/api.ts";
 import { Prose } from "../Prose.tsx";
@@ -146,7 +146,7 @@ function OverviewPage({ account }: { account: Account }) {
       <MobileBack to="/" label={t("web-pages.admin.title")} />
       <header className={pagesCss.pageHead}><div><h1>{t("web-pages.admin.overview")}</h1></div></header>
       <Failed error={error} />
-      {!view ? !error && <Loading label={t("web-pages.settings.reading")} fill={false} /> : <>
+      {!view ? !error && <Waiting shape="cards" /> : <>
         <div className={css.stats}>
           {view.stats.map((s) => (
             <Link key={s.label} className={css.stat} to={`${PATH[s.list]}?filter=${s.filter}`}>
@@ -244,7 +244,7 @@ function ListPage({ account, list }: { account: Account; list: List }) {
         )}
         {/* A still.fail cloud from before bug reports has no such list. */}
         {list === "feedback" && error?.status === 404 ? <p className={css.empty}>{t("web-pages.admin.noFeedback")}</p> : <Failed error={error} />}
-        {!view ? !error && <Loading label={t("web-pages.settings.reading")} fill={false} /> : view.rows.length === 0 ? (
+        {!view ? !error && <Waiting /> : view.rows.length === 0 ? (
           <p className={css.empty}>{query ? t("web-pages.admin.notFound") : t("web-pages.admin.empty")}</p>
         ) : (
           <div className={css.list}>
@@ -349,7 +349,7 @@ function UserDetail({ account, id, close, search }: { account: Account; id: stri
   const remove = useAction(() => admin.removePending(account.sub, email ?? ""), () => { toast(t("web-pages.admin.pending.removed")); navigate(close); });
   const [blocking, setBlocking] = useState(false);
   const block = useAction((on: boolean) => admin.block(account.sub, id, on), (_, on) => toast(on ? t("web-pages.admin.user.blocked") : t("web-pages.admin.user.unblocked")));
-  if (!u) return <aside className={css.detail}>{error ? <Failed error={error} /> : <Loading label={t("web-pages.settings.reading")} fill={false} />}</aside>;
+  if (!u) return <aside className={css.detail}>{error ? <Failed error={error} /> : <Waiting shape="cards" count={2} />}</aside>;
   return (
     <Detail close={close} head={<>
       <Avatar account={u.person} size={40} />
@@ -417,7 +417,7 @@ function WorkspaceDetail({ account, id, close }: { account: Account; id: string;
   const { value: w, error } = useKept<WorkspacePage>({ topic: "adminItem", account: account.sub, list: "workspaces", id });
   const [deleting, setDeleting] = useState(false);
   const remove = useAction(() => admin.deleteWorkspace(account.sub, id), () => toast(t("web-pages.settings.workspace.deleted")));
-  if (!w) return <aside className={css.detail}>{error ? <Failed error={error} /> : <Loading label={t("web-pages.settings.reading")} fill={false} />}</aside>;
+  if (!w) return <aside className={css.detail}>{error ? <Failed error={error} /> : <Waiting shape="cards" count={2} />}</aside>;
   return (
     <Detail close={close} head={<>
       <span className={`${css.wsMark} ${css.wsMarkLarge}`}>{[...w.title][0]}</span>
@@ -471,7 +471,7 @@ function FeedbackDetail({ account, id, close }: { account: Account; id: string; 
   const { value: f, error } = useKept<FeedbackPage>({ topic: "adminItem", account: account.sub, list: "feedback", id });
   const status = useAction((to: FeedbackStatus) => admin.feedbackStatus(account.sub, id, to), (_, to) => toast(t("web-pages.admin.fb.marked", { status: f?.statuses.find((s) => s.id === to)?.label ?? to })));
   const copy = () => void navigator.clipboard.writeText(f?.text ?? "").then(() => toast(t("web-pages.admin.fb.copied")), () => toast(t("web-pages.admin.fb.copyFailed")));
-  if (!f) return <aside className={css.detail}>{error ? <Failed error={error} /> : <Loading label={t("web-pages.settings.reading")} fill={false} />}</aside>;
+  if (!f) return <aside className={css.detail}>{error ? <Failed error={error} /> : <Waiting shape="cards" count={2} />}</aside>;
   return (
     <Detail close={close} head={
       <span className={css.detailTitle}><b>{f.title}</b><span className={shellCss.mono}>{f.number}</span></span>

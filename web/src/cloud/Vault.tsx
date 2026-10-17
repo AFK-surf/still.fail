@@ -8,7 +8,7 @@ import { Link, useNavigate } from "react-router";
 import { Copy, Devices, Eye, Key, Plus, Server, ShieldCheck, User } from "@stillfail/ui/icons.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing } from "../doing.ts";
-import { Button, Confirm, Dialog, Field, IconButton, Loading, MobileBack, ProviderLogo, Section, Segmented, SwitchRow } from "../ui.tsx";
+import { Button, Confirm, Dialog, Field, IconButton, MobileBack, ProviderLogo, Section, Segmented, SwitchRow, Spinner, Waiting } from "../ui.tsx";
 import { useProfiles, useStations } from "../api.ts";
 import { profilePath } from "../ProfilesNav.tsx";
 import { profileGroups } from "./settings.tsx";
@@ -24,7 +24,6 @@ import { t } from "../i18n.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
-import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 import * as css from "./Vault.css.ts";
 
 const KIND_ICON = { token: Key, ssh_key: Server, login: User } as const;
@@ -55,7 +54,7 @@ export function VaultSettings({ entry }: { entry: WorkspaceEntry }) {
         <div><h1>{t("web-pages.vault.title")}</h1><p className={css.sub}>{t("web-pages.vault.lead")}</p></div>
         {library && <Button variant="ghost" icon={Plus} onClick={() => setAdding(true)}>{t("web-pages.vault.add")}</Button>}
       </header>
-      {!view ? <Loading label={t("web-pages.settings.reading")} />
+      {!view ? <Waiting shape="cards" count={2} />
         : words ? <Words entry={entry} view={view} words={words} onDone={() => setWords(null)} />
         : view.plain === true ? <Library entry={entry} view={view} adding={adding} onAdded={() => setAdding(false)} />
         : !view.available ? <ReadOnly entry={entry} view={view} />
@@ -257,7 +256,7 @@ function LibraryVault({ entry, v, plain, many }: { entry: WorkspaceEntry; v: Vau
       </Section>
     );
   }
-  if (!items) return <Loading label={t("web-pages.settings.reading")} fill={false} />;
+  if (!items) return <Waiting count={3} dense />;
   const hidden = items.items.filter((i) => !i.name);
   const unlock = () => { if (hidden[0]) void run("vault.open", { workspace: entry.id, item: hidden[0].id }, t("web-pages.vault.unlockWhat")); };
   return (
@@ -350,7 +349,7 @@ function VaultSection({ entry, v, readOnly = false }: { entry: WorkspaceEntry; v
           <p className={css.sub}>{t("web-pages.vault.notKeyedWhy")}</p>
           {v.recoverable && v.mine && <div className={css.actions}><Button variant="primary" onClick={() => setRecovering(true)}>{t("web-pages.vault.recover")}</Button></div>}
         </div>
-      ) : !items ? <Loading label={t("web-pages.settings.reading")} fill={false} />
+      ) : !items ? <Waiting count={4} />
         : items.items.length === 0 ? <p className={css.note}>{t("web-pages.vault.empty")}</p>
         : (
           <ul className={pagesCss.list}>
@@ -382,7 +381,7 @@ function ItemRow({ entry, row, readOnly, onOpen }: { entry: WorkspaceEntry; row:
       <span className={pagesCss.listRowTitle}>{row.name}</span>
       <span className={css.rowMeta}>{itemLine(row)}</span>
     </span>
-    {opening && <span className={spinnerCss.spinner} aria-hidden="true" />}
+    {opening && <Spinner inline />}
   </>;
   return <li>{readOnly ? <div className={pagesCss.listRow}>{body}</div>
     : <button type="button" className={`${pagesCss.listRow} ${css.rowButton}`} disabled={opening} onClick={onOpen}>{body}</button>}</li>;

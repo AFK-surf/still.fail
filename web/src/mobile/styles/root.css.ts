@@ -1,6 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { mRiseKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import * as waitCss from "@stillfail/ui/waiting.css.ts";
 
 /** The narrow screen's colours in the dark (root.css.ts m, mDark). */
 const darkVars = {
@@ -128,3 +129,8 @@ globalStyle(`${m} [data-enter]`, {
     },
   },
 });
+
+// Waiting (@stillfail/ui waiting.tsx) on the phone: its placeholders and pill in the phone's grey (as its message bubbles,
+// its placeholders always were), not the wide screen's; a settings page's cards inset as its cards are (parts.css.ts mListCard).
+globalStyle(`${m} ${waitCss.wait}, ${m} ${waitCss.shapes}, ${m} ${waitCss.pill}`, { vars: { [vars.neutralBg]: "var(--m-bubble)" } });
+globalStyle(`${m} ${waitCss.cards}`, { gap: "10px", padding: "0 12px" });

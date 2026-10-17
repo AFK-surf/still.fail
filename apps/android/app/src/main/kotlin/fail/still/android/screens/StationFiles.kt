@@ -7,6 +7,8 @@
 // and sent up.
 package fail.still.android.screens
 
+import fail.still.android.ui.Spinner
+import fail.still.android.ui.Waiting
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -155,7 +157,7 @@ private fun Places(scope: String, onGo: (Place) -> Unit) {
     val list = stations.value.orEmpty().filter { it.overview?.drive != null }
     LazyColumn(contentPadding = PaddingValues(bottom = 8.dp)) {
         when {
-            stations.value == null -> item { Note(stations.error?.message ?: t("android-misc.drive.reading")) }
+            stations.value == null -> item { Waiting(text = t("common.reading"), error = stations.error?.message) }
             list.isEmpty() -> item { Note(t("web-main.rail.filesNone")) }
             else -> list.forEach { s ->
                 val drive = s.overview!!.drive!!
@@ -189,8 +191,7 @@ private fun FolderRows(app: AppState, p: Place, scrolls: MutableMap<String, Pair
         }
         val shown = folder.value
         when {
-            folder.error != null && shown == null -> item { Text(folder.error!!.message ?: "", fontSize = 13.sp, color = C.red, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) }
-            shown == null -> item { Note(t("android-misc.drive.reading")) }
+            shown == null -> item { Waiting(text = t("common.reading"), error = folder.error?.let { it.message ?: t("android-misc.failed") }) }
             fail.still.android.drive.arranged(shown.entries, app.driveSort, app.driveHidden).isEmpty() -> item { Note(t("web-pages.drive.emptyFolder")) }
             else -> items(fail.still.android.drive.arranged(shown.entries, app.driveSort, app.driveHidden), key = { it.name }) { e ->
                 val icon: @Composable () -> Unit = { IconIn(kindIcon(e.kind), 20.dp, C.ink) }
@@ -264,7 +265,7 @@ internal fun RefCard(f: Pending, onRemove: () -> Unit, shape: Shape, onClick: ()
             .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        if (busy) Spinner(14.dp) else IconIn(if (ref.dir && named) Icons.Folder else Icons.Read, 16.dp, C.muted)
+        if (busy) Spinner() else IconIn(if (ref.dir && named) Icons.Folder else Icons.Read, 16.dp, C.muted)
         Column(Modifier.weight(1f)) {
             Text(name, fontSize = 15.sp, lineHeight = 20.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(note, fontSize = 11.sp, lineHeight = 16.sp, color = if (f.error != null && !named) C.red else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)

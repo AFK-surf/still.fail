@@ -4,6 +4,7 @@
 // variables; renaming, checking and deleting under "…"), and a new one.
 package fail.still.android.screens
 
+import fail.still.android.ui.Spinner
 import fail.still.android.BuildConfig
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -80,7 +81,9 @@ import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
-import fail.still.android.ui.Loading
+import fail.still.android.ui.WaitLine
+import fail.still.android.ui.WaitShape
+import fail.still.android.ui.Waiting
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.NavButton
 import fail.still.android.ui.ProviderMark
@@ -138,16 +141,18 @@ fun ProfilesScreen(current: WorkspaceEntry, only: String? = null) {
     // A station's own (from its page): back to it.
     PlacePage(current, "profiles", add, known = topic.value != null || topic.error != null, back = one?.name ?: t("android-settings.title")) { top ->
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = top)) {
-        // The workspace's: one list, each shared profile once (the core's `profiles`); a station's own: as before.
-        if (one == null) WorkspaceList(current.workspace.id)
-        if (stations == null) Text(topic.error?.message ?: t("android-settings.stations.reading"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
+        // The workspace's: one list, each shared profile once (the core's `profiles`), waiting on its own; a station's
+        // own: as before, its first read the page's.
+        if (only != null && stations == null) Waiting(WaitShape.Rows, count = 3, text = t("common.readingStations"), error = topic.error?.message)
+        else if (one == null) WorkspaceList(current.workspace.id)
+        if (stations == null) { if (only == null) topic.error?.let { WaitLine(it.message, error = true, modifier = Modifier.padding(20.dp)) } }
         else if (one == null) online.forEach { s -> s.overview?.let { MachineLoginOffers(s.station, it) } }
         else stations.forEach { s ->
             if (one == null) SectionHeader(if (s.online) s.name else t("android-settings.connects.offline", "name" to s.name), start = 24.dp)
             val overview = s.overview
             if (overview == null || overview.profiles.isEmpty()) {
                 ListCard {
-                    if (overview == null) ListRow { Text(if (s.online) t("android-settings.reading") else t("android-settings.profiles.stationOffline"), fontSize = 15.sp, color = C.muted) }
+                    if (overview == null) ListRow { if (s.online) WaitLine(t("common.reading")) else Text(t("android-settings.profiles.stationOffline"), fontSize = 15.sp, color = C.muted) }
                     else ListRow { Text(t("android-settings.profiles.empty"), fontSize = 15.sp, color = C.muted) }
                 }
             } else {
@@ -172,10 +177,14 @@ fun ProfilesScreen(current: WorkspaceEntry, only: String? = null) {
 private fun WorkspaceList(scope: String) {
     val app = LocalApp.current
     val topic by rememberTopic<ProfilesView>(app.core, Topics.profiles(scope))
-    val view = topic.value ?: return Text(topic.error?.message ?: t("android-settings.reading"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(20.dp))
-    if (view.items.isEmpty()) ListCard { ListRow { Text(t("android-settings.profiles.empty"), fontSize = 15.sp, color = C.muted) } }
-    // What a profile is, said while there is none (the page has no note at its top).
-    if (view.items.isEmpty() && !view.loading) PlaceEmpty(t("android-settings.profiles.note"))
+    val view = topic.value ?: return Waiting(WaitShape.Rows, count = 3, text = t("common.reading"), error = topic.error?.message)
+    // None to show yet: the stations not read yet, or those that could not be.
+    if (view.items.isEmpty() && (view.wait.reading || view.wait.failing.isNotEmpty())) return Waiting(WaitShape.Rows, count = 3, note = view.wait)
+    if (view.items.isEmpty()) {
+        ListCard { ListRow { Text(t("android-settings.profiles.empty"), fontSize = 15.sp, color = C.muted) } }
+        // What a profile is, said while there is none (the page has no note at its top).
+        PlaceEmpty(t("android-settings.profiles.note"))
+    }
     // A section each kind of account (the core lists them by kind, in order).
     view.items.groupBy { it.group }.forEach { (_, g) ->
         SectionHeader(g.first().groupTitle, start = 24.dp)
@@ -200,7 +209,8 @@ private fun WorkspaceList(scope: String) {
             }
         }
     }
-    if (view.loading) ListCard { ListRow { Text(t("android-settings.reading"), fontSize = 15.sp, color = C.muted) } }
+    // Some shown, a station's still to come.
+    if (view.wait.reading) ListCard { ListRow { WaitLine(view.wait.text ?: t("common.reading")) } }
 }
 
 /** An account on several stations (as the narrow web's ProfileAccountScreen): what they have in common, then each
@@ -212,7 +222,9 @@ fun ProfileAccountScreen(current: WorkspaceEntry, key: String) {
     val e = topic.value?.items?.firstOrNull { it.key == key }
     if (e == null) return Column(Modifier.fillMaxSize()) {
         NavBar("Profile", app::pop, "Profile")
-        Loading(if (topic.value != null) t("android-settings.profile.none") else t("android-settings.reading"))
+        // Read, and not among them (gone since): said, not waited on.
+        if (topic.value != null) PlaceEmpty(t("android-settings.profile.none"))
+        else Waiting(WaitShape.Cards, text = t("common.reading"), error = topic.error?.message)
     }
     val p = e.profile
     Column(Modifier.fillMaxSize()) {
@@ -280,7 +292,7 @@ private fun WorkspacesSection(address: String, p: Profile) {
                     Text(t("web-pages.profiles.workspaces.for", "name" to w.name), fontSize = 15.sp, color = C.ink)
                     Text(t(if (on) "web-pages.profiles.workspaces.on" else "web-pages.profiles.workspaces.off", "name" to w.name), fontSize = 13.sp, color = C.muted)
                 }
-                DoingMark(busy, app.failedOf("profile.put", "station" to address, "id" to p.id), 14.dp)
+                DoingMark(busy, app.failedOf("profile.put", "station" to address, "id" to p.id))
                 Switch(on)
             }
         }
@@ -331,13 +343,13 @@ private fun ShareSection(current: WorkspaceEntry, s: StationView, p: Profile) {
                 Text(t("web-pages.profiles.share.switch"), fontSize = 15.sp, color = C.ink)
                 Text(if (!shared) t("web-pages.profiles.share.onlyHere", "station" to s.name) else if (subscription) t("web-pages.profiles.share.lent") else t("web-pages.profiles.share.copied"), fontSize = 13.sp, color = C.muted)
             }
-            DoingMark(sharing, app.failedOf("profile.share", "station" to s.station, "id" to p.id), 14.dp)
+            DoingMark(sharing, app.failedOf("profile.share", "station" to s.station, "id" to p.id))
             Switch(shared)
         }
         if (shared && subscription && p.machine != true) {
             ListRow(onClick = if (moving || targets.isEmpty()) null else ({ openMove(app, s, p, targets) })) {
                 Text(t("web-pages.profiles.share.signedIn"), fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
-                DoingMark(moving, app.failedOf("profile.move", "station" to s.station, "id" to p.id), 14.dp)
+                DoingMark(moving, app.failedOf("profile.move", "station" to s.station, "id" to p.id))
                 Text(s.name, fontSize = 13.sp, color = C.muted)
                 IconIn(Icons.ChevronRight, 14.dp, C.subtle)
             }
@@ -441,7 +453,9 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
     val p = s?.overview?.profiles?.firstOrNull { it.id == id }
     if (s == null || p == null) return Column(Modifier.fillMaxSize()) {
         NavBar(s?.name ?: "Station", app::pop, "Profile")
-        Loading(stations.error?.message ?: if (s?.overview != null) t("android-settings.profile.none") else t("android-settings.reading"))
+        // The station read, and the profile not on it (gone since): said, not waited on.
+        if (s?.overview != null && stations.error == null) PlaceEmpty(t("android-settings.profile.none"))
+        else Waiting(WaitShape.Cards, text = t("common.reading"), error = stations.error?.message)
     }
     val api = app.api(address)
     val setModels = { models: List<String> ->
@@ -464,8 +478,8 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             TonePill(p.checkText, p.checkTone)
                             // Its check or allowance refresh (asked from its menu, gone) failed a moment ago: a red mark, a tap says why.
-                            if (app.isDoing("profile.check", "station" to address, "id" to p.id)) { Spinner(12.dp); Text(t("android-settings.version.checking"), fontSize = 12.sp, color = C.muted) }
-                            else DoingMark(false, app.failedOf(setOf("profile.check", "profile.quota"), "station" to address, "id" to p.id), 12.dp)
+                            if (app.isDoing("profile.check", "station" to address, "id" to p.id)) WaitLine(t("android-settings.version.checking"))
+                            else DoingMark(false, app.failedOf(setOf("profile.check", "profile.quota"), "station" to address, "id" to p.id), inline = true)
                         }
                         Text(
                             (p.check?.detail?.replace(Regex("^(可用[，,]|Works,)\\s*"), "") ?: t("android-settings.profile.notChecked")) + (p.check?.time?.get("checkedAt")?.let { t("android-settings.profile.checkedAt", "ago" to it.ago) } ?: ""),
@@ -488,7 +502,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                             Text(t("android-settings.profile.fast"), fontSize = 15.sp, color = C.ink)
                             Text(t("android-settings.profile.fastNote"), fontSize = 13.sp, color = C.muted)
                         }
-                        DoingMark(busy, app.failedOf("profile.put", "station" to address, "id" to p.id), 14.dp)
+                        DoingMark(busy, app.failedOf("profile.put", "station" to address, "id" to p.id))
                         Switch(p.fast)
                     }
                 }
@@ -511,7 +525,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                             Text(t("android-settings.profile.background"), fontSize = 15.sp, color = C.ink)
                             Text(if (background) t("android-settings.profile.backgroundOn") else t("android-settings.profile.backgroundOff"), fontSize = 13.sp, color = C.muted)
                         }
-                        if (flipping != null) Spinner(14.dp)
+                        if (flipping != null) Spinner()
                         Switch(background)
                     }
                 }
@@ -669,7 +683,7 @@ private fun QuotaSection(station: String, p: Profile) {
         Row(Modifier.clickable(enabled = !refreshing) {
             app.act(t("android-settings.quota.checkWhat"), t("android-settings.quota.updated")) { app.api(station).refreshQuota(p.id) }
         }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            DoingMark(refreshing, failed, 12.dp)
+            DoingMark(refreshing, failed, inline = true)
             Text(if (refreshing) t("android-settings.quota.checking") else t("android-settings.quota.check"), fontSize = 14.sp, color = if (refreshing) C.muted else C.accent)
         }
     }
@@ -709,7 +723,7 @@ private fun QuotaSection(station: String, p: Profile) {
                 Text(t("android-settings.quota.resets"), fontSize = 15.sp, color = C.ink)
                 Text(p.quota.resetText ?: "", fontSize = 13.sp, color = C.muted)
             }
-            DoingMark(resetting, app.failedOf("profile.resetQuota", "station" to station, "id" to p.id), 14.dp)
+            DoingMark(resetting, app.failedOf("profile.resetQuota", "station" to station, "id" to p.id))
             Text(t("android-settings.quota.reset"), fontSize = 14.sp, color = if (count > 0) C.accent else C.muted)
         } }
     }
@@ -749,7 +763,7 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
     Row(Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.clickable(enabled = !checking) { app.act(t("android-settings.models.refreshWhat"), t("android-settings.models.refreshed")) { app.api(station).checkProfile(p.id) } },
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            DoingMark(checking, checkFailed, 12.dp)
+            DoingMark(checking, checkFailed, inline = true)
             Text(if (checking) t("android-settings.refreshing") else t("android-settings.models.refresh"), fontSize = 14.sp, color = if (checking) C.muted else C.accent)
         }
         Spacer(Modifier.weight(1f))
@@ -764,7 +778,7 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
         val adding = app.isDoing("profile.addModel", "station" to station, "id" to p.id)
         Row(Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Field(typed, { typed = it }, t("web-mobile.profiles.addModelPlaceholder"), mono = true, modifier = Modifier.weight(1f))
-            if (adding) Spinner(14.dp)
+            if (adding) Spinner()
             else Text(t("web-mobile.profiles.addModel"), fontSize = 14.sp, color = if (typed.isBlank()) C.muted else C.accent, modifier = Modifier.clickable(enabled = typed.isNotBlank()) {
                 val model = typed.trim(); typed = ""
                 app.act(t("android-settings.models.refreshWhat")) { app.api(station).addModel(p.id, model) }
@@ -787,7 +801,7 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
                 }
                 Text(p.names[m] ?: m, fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 // Ticked here, not the station's yet.
-                if (m in p.modelsSaving.orEmpty()) Spinner(12.dp)
+                if (m in p.modelsSaving.orEmpty()) Spinner(inline = true)
             }
         }
     }
@@ -845,9 +859,7 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
     val error = operation.error?.message
     var copied by remember { mutableStateOf(false) }
     val open = { url: String -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-    val waiting = @Composable { text: String ->
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Spinner(12.dp); Text(text, fontSize = 13.sp, color = C.muted) }
-    }
+    val waiting = @Composable { text: String -> WaitLine(text) }
     when {
         job == null || job.state == "starting" -> waiting(t("android-settings.login.making", "provider" to provider))
         job.state == "verifying" -> waiting(t("android-settings.login.finishing"))
@@ -978,7 +990,7 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
     Column(Modifier.fillMaxSize()) {
         NavBar(if (d != null && d.step != "pick") t("web-mobile.profiles.pick") else t("common.cancel"), leave, d?.title ?: t("android-settings.profile.add"), sub = { Text(s?.name ?: "", fontSize = 11.sp, color = C.muted) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp).padding(top = 8.dp, bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (d == null) { Text(topic.error?.message ?: t("android-settings.reading"), fontSize = 14.sp, color = C.muted); return@Column }
+            if (d == null) { Waiting(WaitShape.Cards, text = t("common.reading"), error = topic.error?.message); return@Column }
             when {
                 d.step == "pick" -> {
                     Text(d.hint, fontSize = 13.sp, color = C.muted)
@@ -1112,7 +1124,7 @@ private fun MachineLoginRow(l: MachineLogin, busy: Boolean, onUse: () -> Unit) {
         QuotaRings(l.quota)
         // A refused account is said so, with nothing to do with it here.
         if (!blocked) {
-            if (busy) Spinner(14.dp)
+            if (busy) Spinner()
             else Text(if (l.usable == true) t("android-settings.machine.use") else t("android-settings.login.signIn"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable(onClick = onUse))
         }
     }

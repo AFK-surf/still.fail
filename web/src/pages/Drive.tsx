@@ -19,7 +19,7 @@ import { useAct } from "@stillfail/ui/toast.tsx";
 import type { DriveEntry, DriveRoot, StationView } from "../core/shapes.ts";
 import { useTopicSelect } from "../core/react.ts";
 import { CoreError } from "../core/client.ts";
-import { Button, Confirm, Dialog, ICON, IconButton, Menu, Tip, type MenuItem } from "../ui.tsx";
+import { Button, Confirm, Dialog, ICON, IconButton, Menu, Tip, type MenuItem, Spinner, Waiting, WaitLine } from "../ui.tsx";
 import { Check, ChevronLeft, ChevronRight, Close, Copy, Disk, Server, Download, Edit, Folder, FolderPlus, Pin, Plus, Refresh, Retry, Trash, Upload } from "@stillfail/ui/icons.tsx";
 import { KindIcon } from "../drive/KindIcon.tsx";
 import { Reader } from "@stillfail/ui/viewer/Reader.tsx";
@@ -39,7 +39,6 @@ import * as shellCss from "../styles/shell.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as css from "./Drive.css.ts";
 import { t } from "../i18n.ts";
-import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 
 export function DrivePage() {
   const station = useStation();
@@ -68,7 +67,7 @@ export function DriveHome({ scope }: { scope: string }) {
   return (
     <div className={`${pagesCss.page} ${css.page}`}>
       <header className={pagesCss.pageHead}><div className={css.headText}><h1>{t("web-pages.drive.title")}</h1></div></header>
-      {!stations ? <p className={shellCss.muted}>{t("web-pages.drive.reading")}</p>
+      {!stations ? <Waiting count={4} text={t("common.readingStations")} />
         : <Empty text={t("web-main.rail.filesNone")} action={add.can ? <Button variant="primary" icon={Folder} onClick={add.start}>{t("web-pages.drive.pick")}</Button> : undefined} />}
       {add.dialogs}
     </div>
@@ -135,7 +134,7 @@ function Roots({ d }: { d: DriveState }) {
         </div>
         {(d.manage || d.anywhere) && d.offered && d.roots.length > 0 && <div className={css.actions}><Menu items={[{ label: t("web-pages.drive.manage"), icon: Folder, onSelect: manage.open }]} /></div>}
       </header>
-      {d.loading ? <p className={shellCss.muted}>{d.error ?? t("web-pages.drive.reading")}</p>
+      {d.loading ? <Waiting count={6} error={d.error} />
         : !d.offered ? <Empty text={t("web-pages.drive.oldStation")} />
         : d.roots.length === 0 ? (
           <Empty text={d.manage || d.anywhere ? t("web-pages.drive.noneManage") : t("web-pages.drive.noneMember")}
@@ -372,7 +371,7 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
           </>
         ) : folder.error ? (
           <div className={css.problem}><p className={controlsCss.fieldError}>{folder.error.message}</p><Button variant="ghost" icon={Retry} onClick={reload}>{t("web-pages.drive.retry")}</Button></div>
-        ) : !folder.value ? <p className={shellCss.muted}>{t("web-pages.drive.reading")}</p> : (
+        ) : !folder.value ? <Waiting count={8} /> : (
           <>
             {uploads.map((u) => <UploadRow key={u.key} u={u} />)}
             {view === "list" && shownEntries.length > 0 && <ListHead arrangement={browse.arrangement} onSort={(by) => browse.arrangeAs(by === browse.arrangement.by ? { down: !browse.arrangement.down } : { by, down: false })} />}
@@ -453,7 +452,7 @@ export function DriveRow({ at, entry, row, compact = false, depth, expanded, onT
           {parts}
         </button>
       )}
-      <span className={css.more}>{busy ? <span className={`${spinnerCss.spinner} ${controlsCss.iconSpinner}`} aria-hidden="true" /> : <Menu items={row.items} />}</span>
+      <span className={css.more}>{busy ? <Spinner /> : <Menu items={row.items} />}</span>
     </div>
   );
   return (
@@ -645,7 +644,7 @@ function PickerDialog({ station, roots, onClose }: { station: string; roots: Dri
               <Folder size={32} strokeWidth={1.3} />
               <p>{picker.shut.unreadable ? t("web-pages.drive.pickNeedsAccess") : picker.shut.message}</p>
             </div>
-          ) : !v ? <p className={`${shellCss.muted} ${css.pickerHead}`}>{t("web-pages.drive.reading")}</p>
+          ) : !v ? <WaitLine className={css.pickerHead} />
             : shown.length === 0 ? <p className={`${shellCss.muted} ${css.pickerHead}`}>{picker.filter.trim() ? t("web-pages.drive.pickNoMatch") : t("web-pages.drive.noSubfolders")}</p>
             : (
               <>
@@ -691,7 +690,8 @@ export function DriveReadPage() {
   return (
     <div className={css.opened}>
       {o.file && o.entry ? <Reader key={o.path} file={o.file} markdown={o.entry.kind === "markdown"} backLabel={o.back} onBack={back} />
-        : <p className={`${css.openedNote} ${o.folder.error || o.folder.value ? controlsCss.fieldError : shellCss.muted}`}>{o.folder.error?.message ?? (o.folder.value ? t("web-pages.drive.gone") : t("web-pages.drive.reading"))}</p>}
+        : o.folder.error || o.folder.value ? <p className={`${css.openedNote} ${controlsCss.fieldError}`}>{o.folder.error?.message ?? t("web-pages.drive.gone")}</p>
+        : <WaitLine className={css.openedNote} />}
     </div>
   );
 }
@@ -704,7 +704,8 @@ export function DrivePlayPage() {
     <div className={`${css.opened} ${css.dark}`}>
       {o.file ? <Player key={o.path} file={o.file} siblings={o.folder.value?.entries ?? []} backLabel={o.back} onBack={back}
         onGo={(name) => go(drivePath(o.station.base, o.root, joinPath(o.folderPath, name), "play"), { replace: true })} />
-        : <p className={`${css.openedNote} ${o.folder.error || o.folder.value ? controlsCss.fieldError : shellCss.muted}`}>{o.folder.error?.message ?? (o.folder.value ? t("web-pages.drive.gone") : t("web-pages.drive.reading"))}</p>}
+        : o.folder.error || o.folder.value ? <p className={`${css.openedNote} ${controlsCss.fieldError}`}>{o.folder.error?.message ?? t("web-pages.drive.gone")}</p>
+        : <WaitLine className={css.openedNote} />}
     </div>
   );
 }

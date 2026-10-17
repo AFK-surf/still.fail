@@ -47,7 +47,7 @@ test("a shared subscription whose host is away comes from a copy, unusable, firs
     station(B, "mini", true, [profile("sh-1", { share: { ...share, role: "user", reachable: false } })]),
   ]);
   assert.equal(late.items[0].usable, false);
-  assert.equal(late.loading, true, "studio is up and not read yet");
+  assert.equal(late.wait.reading, true, "studio is up and not read yet");
 });
 
 test("the same account signed in on two stations each is one row, each station a member", () => {

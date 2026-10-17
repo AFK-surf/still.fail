@@ -173,7 +173,7 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
 
 test("an_empty_history_says_why", () => {
   const edge = (live: J, started: boolean) => presentHistory(live, { ...cx([], [], []), started }).edge;
-  assert.equal(edge({ loaded: false }, true), "正在读取执行历史…");
+  assert.equal(edge({ loaded: false }, true), "正在读取执行历史");
   assert.equal(edge({ loaded: true }, false), "运行时尚未开始此会话");
   assert.equal(edge({ loaded: true, offline: true }, true), "station 离线，此设备上暂无该会话的执行历史");
 });
@@ -190,7 +190,7 @@ test("a_timeline_loaded_from_further_on_counts_entries_from_the_transcripts_star
   };
   const h = presentHistory(live, cx([], [], []));
   assert.deepEqual([h.items[0].key, h.items[1].entries], ["e400", [401, 402]]);
-  assert.deepEqual([h.more, h.edge, h.empty], [true, "正在读取更早的执行历史…", false]);
+  assert.deepEqual([h.more, h.edge, h.empty], [true, "正在读取更早的执行历史", false]);
   assert.equal(presentHistory({ loaded: true, first: 400, timeline: [] }, cx([], [], [])).more, true);
 });
 

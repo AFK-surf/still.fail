@@ -68,7 +68,7 @@ export function UpdateSummary({ station, updates, manager }: { station: string; 
       {update.error && <span className={css.failed} role="alert">{update.error.message}</span>}
     </span>
     {manager && <span className={css.summaryAction}>
-      <DoingMark calls={["software.updateAll", "software.update"]} on={{ station }} size={14} />
+      <DoingMark calls={["software.updateAll", "software.update"]} on={{ station }} inline />
       <button type="button" className={css.action} disabled={busy || updating || !visible.some((v) => v.updatable)} onClick={() => void update.run()}>{busy || updating ? t("web-main.versions.updating") : failed ? t("common.retry") : t("web-main.versions.update")}</button>
     </span>}
   </div>;

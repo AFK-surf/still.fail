@@ -67,11 +67,8 @@ export const note = style({
   display: "grid", justifyItems: "center", gap: "12px", padding: "30vh 24px 0", color: "var(--r-muted)", fontSize: vars.textMeta,
   fontFamily: vars.fontBody, textAlign: "center",
 });
-export const loadTrack = style({
-  position: "relative", display: "block", width: "180px", height: "2px", borderRadius: "1px", overflow: "hidden",
-  background: "color-mix(in srgb, var(--r-ink) 14%, transparent)",
-});
-globalStyle(`${loadTrack} > span`, { position: "absolute", inset: "0", background: "var(--r-accent)", transformOrigin: "left", transition: "transform 160ms linear" });
+/** How much has come while it opens (waiting.tsx Progress). */
+export const loadTrack = style({ width: "180px" });
 export const cut = style({ margin: "2em 0 0", color: "var(--r-muted)", fontSize: vars.textMeta, fontFamily: vars.fontBody, textIndent: "0" });
 
 /** With the bars away, how far through it is: a hairline along the bottom, in the accent. */

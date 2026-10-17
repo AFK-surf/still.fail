@@ -31,7 +31,7 @@ import * as css from "./Decisions.css.ts";
 import * as chatCss from "./Chat.css.ts";
 import { t } from "./i18n.ts";
 import { Option1, Option2, Option3, Option4, Option5, Option6 } from "@stillfail/ui/icons.tsx";
-import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
+import { Spinner, Waiting, type WaitNote } from "@stillfail/ui/waiting.tsx";
 
 /** How far (of its width) the decision is swiped before letting go takes it, and how fast a fling has to be (px/ms). */
 const TAKES = 0.35;
@@ -67,7 +67,7 @@ export function DecisionOptions({ station, thread, seq, options, onPick, classNa
             <span className={css.choiceNumber} aria-hidden="true">{Digit ? <Digit size={20} /> : i + 1}</span>
             <span className={css.choiceLabel}>{o.label}</span>
             {o.detail && <span className={css.choiceDetail}>{o.detail}</span>}
-            {busy && <span className={`${spinnerCss.spinner} ${css.choiceSpinner}`} aria-hidden="true" />}
+            {busy && <Spinner inline className={css.choiceSpinner} />}
           </button>
         );
       })}
@@ -225,8 +225,13 @@ export function useDecisionQueue(workspace: string) {
       return kept;
     };
   }, [stations, workspace]);
+  // None to show while some of it is still read, or could not be: what it waits on (the core's), drawn in their place.
+  const wait = view.value?.wait;
+  const waiting: WaitNote | null = items.length > 0 ? null
+    : wait ? (wait.reading || wait.failing.length > 0 ? wait : null)
+    : view.error ? null : { reading: true };
   return {
-    view, items, replying, setReplying,
+    view, items, replying, setReplying, waiting,
     /** Whether it was set aside (待定), here or by the core. */
     isAside: (d: DecisionItem) => aside.includes(keyOf(d)) || !!d.deferred,
     defer(d: DecisionItem) {
@@ -326,8 +331,9 @@ export function DecisionDeck({ workspace, inline, onOpen, className }: {
 
   let body: ReactNode;
   if (!front) {
-    // What has come so far, at once: stations still being read add theirs as they come.
-    body = view.value ? <DecisionsIdle view={view.value} onOpen={onOpen} />
+    // None while stations are still read: their shapes; read and none: what was done today.
+    body = queue.waiting ? <Waiting shape="cards" count={2} note={queue.waiting} />
+      : view.value ? <DecisionsIdle view={view.value} onOpen={onOpen} />
       : view.error ? <p className={css.empty}>{view.error.message}</p> : null;
   } else {
     const d = front;

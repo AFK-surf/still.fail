@@ -60,7 +60,6 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -96,7 +95,6 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -123,6 +121,10 @@ import fail.still.android.ui.MoveSpring
 import fail.still.android.ui.reducedMotion
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.SMOOTH_SCALE
+import fail.still.android.ui.BusyIcon
+import fail.still.android.ui.WaitPill
+import fail.still.android.ui.WaitShape
+import fail.still.android.ui.Waiting
 import fail.still.core.CoreException
 import kotlin.math.abs
 import kotlinx.coroutines.launch
@@ -169,7 +171,7 @@ internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier =
                     Text(o.label, fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = C.ink)
                     o.detail?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted) }
                 }
-                if (busy == o.label) DoingMark(true, null, 14.dp)
+                if (busy == o.label) DoingMark(true, null, inline = true)
             }
         }
     }
@@ -207,7 +209,8 @@ internal fun OptionButton(label: String, modifier: Modifier = Modifier, strong: 
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(label, Modifier.weight(1f), fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = ink)
-        if (busy || failed != null) DoingMark(busy, failed, 14.dp)
+        // On the solid one the spinner turns in its words' white (BusyIcon's rule); what failed, the core's red mark.
+        if (busy) BusyIcon(true, solid = if (strong) ink else null) else if (failed != null) DoingMark(false, failed)
     }
 }
 
@@ -322,16 +325,14 @@ fun DecisionsScreen(current: WorkspaceEntry) {
     PlacePage(current, "decisions", null, back = fail.still.android.placeLabel("chats")) { top ->
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars.add(WindowInsets(bottom = room))))) {
         if (shown.isEmpty()) {
-            // What has come so far, at once: stations still being read add theirs as they come. It scrolls under the top bar.
-            if (view != null) {
+            // None yet while stations are still read is not none: their cards to come, and what each still waits on.
+            // All read, the day so far (a station that could not be read said in red over it). It scrolls under the top bar.
+            if (view != null && !view.wait.reading) {
                 Idle(view, top, Modifier.weight(1f))
                 return@Column
             }
             Spacer(Modifier.height(top))
-            val note = topic.error?.message ?: t("android-misc.reading")
-            Box(Modifier.weight(1f).fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                Text(note, fontSize = 15.sp, color = if (topic.error != null) C.red else C.muted, textAlign = TextAlign.Center)
-            }
+            Waiting(WaitShape.Cards, count = 2, error = topic.error?.message, note = view?.wait, modifier = Modifier.weight(1f))
             return@Column
         }
         Spacer(Modifier.height(top))
@@ -353,6 +354,7 @@ private fun Idle(view: DecisionsView, top: androidx.compose.ui.unit.Dp, modifier
     val answered = view.answered.orEmpty()
     Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = top + 16.dp, bottom = 24.dp)) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            view.wait.failing.forEach { WaitPill(it.text, error = true, modifier = Modifier.padding(bottom = 8.dp)) }
             Image(painterResource(if (C.dark) R.drawable.buddy_idle_dark else R.drawable.buddy_idle), null, Modifier.size(72.dp))
             Text(t("android-misc.decisions.idle.title"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink, modifier = Modifier.padding(top = 8.dp))
             Text(t("android-misc.decisions.idle.note"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp))
@@ -401,7 +403,7 @@ private fun IdleRow(main: String, meta: String, at: String, busy: Boolean, onOpe
     ) {
         Box(Modifier.padding(top = 4.dp).size(12.dp), contentAlignment = Alignment.Center) {
             if (busy) AgentStateMark(ChatState.Running, C.bg)
-            else Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(C.subtle))
+            else Box(Modifier.size(6.dp).clip(CircleShape).background(C.subtle))
         }
         Column(Modifier.weight(1f)) {
             Text(main, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -35,7 +35,7 @@ import { addProfilePath } from "../pages/AddProfile.tsx";
 import { profilePath, useProfilesSidebar } from "../ProfilesNav.tsx";
 import { useCall, useTopic } from "../core/react.ts";
 import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
-import { About, BackLink, Button, Choices, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Loading, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Segmented, Select, StatusDot, Time } from "../ui.tsx";
+import { About, BackLink, Button, Choices, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Segmented, Select, StatusDot, Time, Spinner, Waiting, WaitLine, WaitMore } from "../ui.tsx";
 import { useSignOut, type Account } from "./accounts.ts";
 import { useLastChat } from "../lastChat.ts";
 import { parseEmails, useSlackPeople } from "./adding.ts";
@@ -60,7 +60,6 @@ import * as accountsCss from "../pages/Accounts.css.ts";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { tx } from "./words.tsx";
-import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 // Getters: read in the language at the time.
 export const ROLE_LABEL: Record<Role, string> = {
@@ -182,7 +181,7 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
         </div>
       </header>
       <Section title={t("web-pages.settings.account.sessions")} description={t("web-pages.settings.account.sessionsLead", { name: NAME })}>
-        {!devices.value ? devices.error ? <p className={controlsCss.fieldError}>{t("web-pages.settings.account.sessionsFailed", { error: devices.error.message })}</p> : <Loading label={t("web-pages.settings.reading")} fill={false} /> : (
+        {!devices.value ? devices.error ? <p className={controlsCss.fieldError}>{t("web-pages.settings.account.sessionsFailed", { error: devices.error.message })}</p> : <Waiting count={3} /> : (
           <ul className={pagesCss.list}>
             {devices.value.map((s) => (
               <li key={s.id} className={pagesCss.listRow}>
@@ -249,7 +248,14 @@ export function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
   const [deleting, setDeleting] = useState(false);
   const leave = useAction(() => cloud.removeMember(account.sub, entry.id, account.sub), () => toast(t("web-pages.settings.workspace.left")));
   const remove = useAction(() => cloud.deleteWorkspace(account.sub, entry.id), () => toast(t("web-pages.settings.workspace.deleted")));
-  if (!view) return <Loading label={t("web-pages.settings.workspace.loading")} />;
+  if (!view) {
+    return (
+      <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
+        <MobileBack to={`/w/${entry.id}/settings`} label={t("web-pages.settings.title")} />
+        <Waiting shape="cards" text={t("web-pages.settings.workspace.loading")} />
+      </div>
+    );
+  }
   const keep = () => { const to = name.trim(); if (!to) setName(view.name); else if (to !== view.name && !rename.busy) rename.run(to); };
   const shown = rename.busy ? rename.arg! : view.name;
   const nameField = (
@@ -302,11 +308,11 @@ export function WorkspaceSettings({ entry }: { entry: WorkspaceEntry }) {
 export function StationsSettings({ entry }: { entry: WorkspaceEntry }) {
   const { view, manager } = useWorkspace(entry);
   const stations = useStations(entry.id).value;
-  if (!view || !stations) return <Loading label={t("web-pages.settings.workspace.loading")} />;
   return (
     <Page title="Station" lead={t("web-pages.settings.stations.lead", { name: NAME })} back={`/w/${entry.id}/settings`}>
       {/* None yet: adding the first, as the workspace's page does. */}
-      {stations.length === 0 ? <FirstStation entry={entry} />
+      {!view || !stations ? <Waiting shape="cards" text={t("common.readingStations")} />
+        : stations.length === 0 ? <FirstStation entry={entry} />
         : <Stations view={view} account={entry.account} manager={manager} stations={stations} />}
     </Page>
   );
@@ -337,7 +343,7 @@ export function MemoryDocSettings({ entry }: { entry: WorkspaceEntry }) {
   return (
     <Page title={name ?? t("web-main.memory.global")} back={`/w/${entry.id}/settings/memory`} backLabel={t("web-pages.settings.memory.title")}>
       {view ? <MemoryDoc station={view.station} name={name ?? null} at={Number(params.get("at") ?? 0)} file={params.get("file") ?? ""}
-        pick={(key, value) => setParams({ [key]: String(value) }, { replace: true })} /> : <Loading label={t("web-pages.settings.reading")} fill={false} />}
+        pick={(key, value) => setParams({ [key]: String(value) }, { replace: true })} /> : <Waiting count={4} />}
     </Page>
   );
 }
@@ -352,7 +358,7 @@ export function UsageSettings({ entry }: { entry: WorkspaceEntry }) {
     <Page title={t("web-pages.settings.usage.title")} lead={t("web-pages.settings.usage.lead")} back={`/w/${entry.id}/settings`}
       actions={<Segmented<UsageDays> className={usageCss.pick} label={t("web-pages.settings.usage.days")} value={days} onChange={setDays} options={DAYS} />}>
       {usage.value ? <UsageBody view={usage.value} pricesPath={`/w/${entry.id}/settings/usage/prices?days=${days}`} />
-        : usage.error ? <p className={controlsCss.fieldError}>{t("web-pages.settings.usage.failed", { error: usage.error.message })}</p> : <Loading label={t("web-pages.settings.reading")} fill={false} />}
+        : usage.error ? <p className={controlsCss.fieldError}>{t("web-pages.settings.usage.failed", { error: usage.error.message })}</p> : <Waiting shape="cards" />}
     </Page>
   );
 }
@@ -361,7 +367,7 @@ export function UsagePricesSettings({ entry }: { entry: WorkspaceEntry }) {
   const [params] = useSearchParams();
   const usage = useUsage(entry.id, params.get("days") === "30" ? "30" : "7");
   return <Page title={t("web-pages.settings.prices.title")} lead={t("web-pages.settings.prices.lead")} back={`/w/${entry.id}/settings/usage`}>
-    {usage.value ? <PriceTables view={usage.value} /> : <Loading label={usage.error ? t("web-pages.settings.prices.failed", { error: usage.error.message }) : t("web-pages.settings.reading")} fill={false} />}
+    {usage.value ? <PriceTables view={usage.value} /> : <Waiting shape="cards" count={2} error={usage.error ? t("web-pages.settings.prices.failed", { error: usage.error.message }) : null} />}
   </Page>;
 }
 
@@ -424,6 +430,9 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
           {/* The workspace's profiles, a section each kind of account: one shared between stations once (where it is
               signed in, or which stations may use it, in its line), the others each with the station they are on (the
               core's `profiles`). */}
+          {/* Not one read yet: the shapes of what will come; some read, the rest said under them. */}
+          {!profiles.value?.items.length && (!profiles.value || profiles.value.wait.reading || profiles.value.wait.failing.length > 0)
+            && <Waiting count={3} note={profiles.value?.wait} />}
           {profileGroups(profiles.value?.items ?? []).map((g) => (
             <Section key={g[0]!.group} title={g[0]!.groupTitle}>
               <ul className={pagesCss.list}>
@@ -433,7 +442,7 @@ export function RuntimeSettings({ entry }: { entry: WorkspaceEntry }) {
               </ul>
             </Section>
           ))}
-          {profiles.value?.loading && <Loading label={t("web-pages.settings.reading")} fill={false} />}
+          {!!profiles.value?.items.length && <WaitMore note={profiles.value.wait} />}
           {/* The machines' own logins not used yet, each where it is. */}
           {online.map((station) => (
             <StationContext.Provider key={station.id} value={asStation(station)}>
@@ -482,7 +491,7 @@ export function ProfileAccountSettings({ entry }: { entry: WorkspaceEntry }) {
   const view = useProfiles(entry.id).value;
   const found = view?.items.find((e) => e.key === key);
   const back = `/w/${entry.id}/settings/profiles`;
-  if (!view) return <Page title="Profile" back={back}><Loading label={t("web-pages.settings.reading")} fill={false} /></Page>;
+  if (!view) return <Page title="Profile" back={back}><Waiting shape="cards" /></Page>;
   if (!found) return <Page title="Profile" back={back}><p className={shellCss.muted}>{t("web-pages.profiles.notFound", { id: key })}</p></Page>;
   const p = found.profile;
   const kind = p.machine ? t("web-main.profile.machine") : p.providerName ?? ACCESS[p.access.kind].label;
@@ -528,7 +537,7 @@ function WorkspaceProfileRow({ entry, workspace }: { entry: WorkspaceProfile; wo
     <div className={entry.usable ? undefined : css.profileAway}>
       <ProfileCard profile={entry.profile} to={to} uses={uses}
         state={entry.usable ? undefined : <Pill tone="red">{t("web-pages.settings.profiles.hostAway", { station: entry.hostName })}</Pill>}
-        action={state.running || state.error !== undefined ? <DoingShown state={state} className={controlsCss.iconSpinner} size={14} label={t("web-main.activity.busy")} /> : undefined} />
+        action={state.running || state.error !== undefined ? <DoingShown state={state} label={t("web-main.activity.busy")} /> : undefined} />
     </div>
   );
 }
@@ -558,7 +567,7 @@ export function useStationEdits(view: WorkspaceView | undefined, account: Accoun
   const picking = (s: StationView) => mark.busy && mark.arg?.id === s.id;
   const shown = (s: StationView) => shownAs(renaming(s) ? { ...s, name: rename.arg!.name } : s, picking(s) ? mark.arg!.mark : undefined);
   const busy = (s: StationView) => (
-    <DoingMark calls={["workspace.renameStation", "workspace.removeStation"]} on={{ account: account.sub, workspace, station: s.id }} className={controlsCss.iconSpinner} size={14}
+    <DoingMark calls={["workspace.renameStation", "workspace.removeStation"]} on={{ account: account.sub, workspace, station: s.id }}
       label={renaming(s) ? t("web-pages.settings.stations.renaming") : t("web-main.activity.busy")} />
   );
   /** `drive`: its 文件 among them (the card's ⋯; its page has a button of its own). */
@@ -695,7 +704,7 @@ export function JoinStationDialog({ view, joinable, onKind, onClose }: { view: W
               icon: <MarkOrLetter emoji={s.emoji} icon={s.icon} name={s.name} />,
             }))} />
         </Field>
-      ) : joinable.loading ? <Loading label={t("web-pages.settings.workspace.loading")} fill={false} />
+      ) : joinable.loading ? <WaitLine text={t("common.readingStations")} />
         : <Empty>{t("web-pages.settings.stations.existingNone")}</Empty>}
       {join.error && <p className={controlsCss.fieldError} role="alert">{join.error.message}</p>}
     </Dialog>
@@ -753,7 +762,7 @@ function EnrollSteps({ enrollment }: { enrollment: { install: string; installWin
         <CopyCommand text={windows ? enrollment.installWindows! : enrollment.install} />
       </div>
       <div className={css.enrollWait} role="status">
-        <span className={spinnerCss.spinner} aria-hidden="true" />
+        <Spinner />
         <span><strong>{t("web-pages.settings.enroll.waiting")}</strong><span className={shellCss.muted}>{t("web-pages.settings.enroll.waitingNote")}</span></span>
       </div>
     </div>
@@ -772,7 +781,7 @@ export function FirstStation({ entry }: { entry: WorkspaceEntry }) {
   useEffect(() => { if (enroll.result) shown.current = performance.now(); }, [enroll.result]);
   // Joined: the page is gone (the workspace has a station), so this is said as it goes.
   useEffect(() => () => { if (shown.current) track("station_added", { ms: Math.round(performance.now() - shown.current), first: true }); }, []);
-  if (!view) return <Loading label={t("web-pages.settings.workspace.loading")} fill={false} />;
+  if (!view) return <Waiting shape="cards" count={1} text={t("web-pages.settings.workspace.loading")} />;
   if (!manager) return <div className={additionsCss.callout}>{t("web-pages.settings.stations.noneYet")}</div>;
   if (enroll.result) return <div className={css.onboardingCard}><EnrollSteps enrollment={enroll.result} /></div>;
   return (
@@ -876,7 +885,7 @@ function Members({ view, account, manager }: { view: WorkspaceView; account: Acc
             ) : <Pill>{ROLE_LABEL[m.role]}</Pill>}
             {/* Its role or its removal on the way, wherever asked; failed: a red mark a few seconds, why on hover. */}
             <DoingMark calls={["workspace.setRole", "workspace.removeMember"]} on={{ account: account.sub, workspace: view.id, member: m.sub }}
-              className={controlsCss.iconSpinner} size={14} label={remove.busy && remove.arg === m.sub ? t("web-pages.settings.members.removing") : t("web-pages.settings.members.changingRole")} />
+              label={remove.busy && remove.arg === m.sub ? t("web-pages.settings.members.removing") : t("web-pages.settings.members.changingRole")} />
             {manager && m.sub !== account.sub && (m.role !== "owner" || view.role === "owner") && !(remove.busy && remove.arg === m.sub) && (
               <Menu items={[{ label: t("web-pages.settings.members.remove"), icon: Trash, danger: true, onSelect: () => { if (window.confirm(t("web-pages.settings.members.removeConfirm", { email: m.email, name: view.name }))) remove.run(m.sub); } }]} />
             )}

@@ -50,7 +50,7 @@ import { VaultItemPage } from "./VaultItem.tsx";
 import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, JoinExistingLink, MemoryDocSettings, MemorySettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
 import { PeopleContext, profilesPage, scopeOf, StationContext, stationBase, useSidebarMode, useStationList, type Station } from "../station.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
-import { Button, Dialog, Empty, Field, ICON, Loading, Select, Tip } from "../ui.tsx";
+import { Button, Dialog, Empty, Field, ICON, Select, Tip, Spinner, Waiting } from "../ui.tsx";
 import { toMadeChat } from "../Chat.tsx";
 import { ComposerDock } from "../dock.tsx";
 import { Previews } from "../Previews.tsx";
@@ -70,7 +70,6 @@ import { WebUpdate } from "../WebUpdate.tsx";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { tx } from "./words.tsx";
-import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 /** The workspace in view and the signed-in account that reaches it. */
 export interface WorkspaceEntry { id: string; name: string; account: Account }
@@ -321,9 +320,9 @@ function Onboarding({ entry }: { entry: WorkspaceEntry }) {
 /** `stations` is undefined until the core has listed them. */
 function WorkspaceHome({ id, stations }: { id: string; stations: Station[] | undefined }) {
   const last = useLastChat(id, `/w/${id}/new`);
-  if (!stations) return <Loading label={t("web-pages.settings.workspace.loading")} />;
+  if (!stations) return <Waiting shape="messages" fill text={t("common.readingStations")} />;
   // With stations there is always a chat in view: the one last open (the core keeps it), or a new one.
-  if (stations.length) return last ? <Navigate to={last} replace /> : <Loading label={t("web-pages.settings.workspace.loading")} />;
+  if (stations.length) return last ? <Navigate to={last} replace /> : <Waiting shape="messages" fill />;
   return (
     <Empty>
       <Illustration name="no-station" />
@@ -491,7 +490,7 @@ function WorkspaceSwitcher({ current, adder }: { current: WorkspaceEntry; adder?
         <DropdownMenu.Trigger asChild>
           {adder ? (
             <button type="button" className={railCss.workspaceAdd} aria-label={t("web-main.rail.addWorkspace")} title={t("web-main.rail.addWorkspace")}>
-              {respond.busy || signIn.busy ? <span className={`${spinnerCss.spinner} ${controlsCss.iconSpinner}`} role="status" /> : <Plus size={16} />}
+              {respond.busy || signIn.busy ? <Spinner /> : <Plus size={16} />}
               {pending.length > 0 && <span className={railCss.mark}><span className={css.inviteDot} role="img" aria-label={t("web-pages.workspace.invitationsCount", { n: pending.length })} /></span>}
             </button>
           ) : (
@@ -503,7 +502,7 @@ function WorkspaceSwitcher({ current, adder }: { current: WorkspaceEntry; adder?
               ? <span className={chatMarkCss.chatMarkInline} data-tone={othersTone} role="img" aria-label={marks?.othersLabel ?? ""} title={marks?.othersLabel ?? undefined} />
               : pending.length > 0 && <span className={css.inviteDot} role="img" aria-label={t("web-pages.workspace.invitationsCount", { n: pending.length })} />}
             {respond.busy || signIn.busy
-              ? <span className={`${spinnerCss.spinner} ${controlsCss.iconSpinner} ${css.accountSpinner}`} role="status" aria-label={signIn.busy ? t("web-pages.workspace.openingSignIn") : t("web-pages.workspace.answering")} />
+              ? <Spinner className={css.accountSpinner} label={signIn.busy ? t("web-pages.workspace.openingSignIn") : t("web-pages.workspace.answering")} />
               : <ChevronsUpDown {...ICON} size={14} />}
           </button>
           )}
@@ -538,12 +537,12 @@ function WorkspaceSwitcher({ current, adder }: { current: WorkspaceEntry; adder?
                       <DropdownMenu.Item className={`${controlsCss.btn} ${controlsCss.btnPrimary} ${css.menuInviteBtn}`} disabled={respond.busy}
                         aria-busy={(respond.busy && respond.arg?.invite.id === invite.id && respond.arg.accept) || undefined}
                         onSelect={(e) => { e.preventDefault(); respond.run({ invite, accept: true }); }}>
-                        {respond.busy && respond.arg?.invite.id === invite.id && respond.arg.accept && <span className={spinnerCss.spinner} aria-hidden="true" />}{t("web-pages.cloud.join")}
+                        {respond.busy && respond.arg?.invite.id === invite.id && respond.arg.accept && <Spinner />}{t("web-pages.cloud.join")}
                       </DropdownMenu.Item>
                       <DropdownMenu.Item className={`${controlsCss.btn} ${controlsCss.btnGhost} ${css.menuInviteBtn}`} disabled={respond.busy}
                         aria-busy={(respond.busy && respond.arg?.invite.id === invite.id && !respond.arg.accept) || undefined}
                         onSelect={(e) => { e.preventDefault(); respond.run({ invite, accept: false }); }}>
-                        {respond.busy && respond.arg?.invite.id === invite.id && !respond.arg.accept && <span className={spinnerCss.spinner} aria-hidden="true" />}{t("web-pages.workspace.ignore")}
+                        {respond.busy && respond.arg?.invite.id === invite.id && !respond.arg.accept && <Spinner />}{t("web-pages.workspace.ignore")}
                       </DropdownMenu.Item>
                     </span>
                     {respond.error && respond.arg?.invite.id === invite.id && <p className={`${controlsCss.fieldError} ${css.menuInviteError}`} role="alert">{respond.arg.accept ? t("web-pages.cloud.joinFailed", { error: errorText(respond.error) }) : t("web-pages.workspace.ignoreFailed", { error: errorText(respond.error) })}</p>}

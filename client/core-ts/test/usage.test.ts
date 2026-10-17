@@ -128,7 +128,7 @@ test("stations_that_cannot_say_are_noted_and_one_not_read_yet_is_loading", () =>
     { address: "ws/c", name: "gamma", online: false, value: undefined },
   ];
   const v = usageView(sources, 30, NOW, 0, {}, []);
-  assert.deepEqual([v.loading, v.empty, v.daily.length], [true, true, 30]);
+  assert.deepEqual([v.wait.reading, v.empty, v.daily.length], [true, true, 30]);
   assert.deepEqual(v.notes, ["beta 的 station 尚未更新到支持记录用量的版本", "gamma 离线，其用量未计入"]);
 });
 

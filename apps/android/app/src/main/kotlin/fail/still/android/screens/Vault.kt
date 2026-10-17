@@ -8,6 +8,10 @@
 // host, never from here. What an item holds is shown only on its page, while it is up, never kept.
 package fail.still.android.screens
 
+import fail.still.android.ui.Spinner
+import fail.still.android.ui.WaitLine
+import fail.still.android.ui.WaitShape
+import fail.still.android.ui.Waiting
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -218,7 +222,7 @@ fun VaultScreen(current: WorkspaceEntry) {
             LargeTitle("", t("android-settings.vault.title"))
             when {
                 words != null -> Words(words)
-                view == null -> PageNote(topic.error?.message ?: t("web-pages.settings.reading"))
+                view == null -> Waiting(WaitShape.Cards, text = t("web-pages.settings.reading"), error = topic.error?.message)
                 plain -> Library(ws, view)
                 // A web page's (no keys kept there): what is known of the names, nothing to open.
                 !view.available -> {
@@ -426,7 +430,10 @@ private fun VaultSection(ws: String, v: VaultRow, readOnly: Boolean) {
         if (v.recoverable) GoRow(t("android-settings.vault.recover")) { recoverSheet(app, ws) }
     }
     ListCard {
-        if (items.isEmpty()) Body { Text(if (topic.value == null) t("web-pages.settings.reading") else t("android-settings.vault.empty"), fontSize = 14.sp, color = C.muted) }
+        if (items.isEmpty()) Body {
+            if (topic.value == null) WaitLine(topic.error?.message ?: t("web-pages.settings.reading"), error = topic.error != null)
+            else Text(t("android-settings.vault.empty"), fontSize = 14.sp, color = C.muted)
+        }
         items.forEach { ItemRow(it) }
     }
 }
@@ -622,7 +629,7 @@ private fun Devices(ws: String, view: VaultsView) {
                     if (v.missing > 0u) Text(t("android-settings.vault.missing", "n" to v.missing.toInt()), fontSize = 13.sp, color = C.warn)
                 }
                 when {
-                    giving -> Spinner(14.dp)
+                    giving -> Spinner()
                     give -> Text(t("android-settings.vault.giveKey"), fontSize = 14.sp, color = C.accent)
                 }
             }
@@ -671,7 +678,7 @@ fun VaultItemScreen(current: WorkspaceEntry, vault: String, item: String) {
     Column(Modifier.fillMaxSize()) {
         if (v == null || row == null) {
             NavBar(back, app::pop, back)
-            PageNote(vaults.error?.message ?: items.error?.message ?: t("web-pages.settings.reading"))
+            Waiting(WaitShape.Cards, count = 2, error = vaults.error?.message ?: items.error?.message)
             return@Column
         }
         NavBar(
@@ -696,7 +703,7 @@ fun VaultItemScreen(current: WorkspaceEntry, vault: String, item: String) {
                 if (shown == null) ListRow {
                     // Masked, as long whatever its length (which would say something of it).
                     Text("••••••••••••••••••••", fontSize = 14.sp, fontFamily = CodeFont, color = C.ink, maxLines = 1, overflow = TextOverflow.Clip, modifier = Modifier.weight(1f))
-                    if (opening) Spinner(14.dp) else Link(t("web-pages.vault.show")) { open() }
+                    if (opening) Spinner(inline = true) else Link(t("web-pages.vault.show")) { open() }
                 } else {
                     val fields = FIELDS[shown.kind] ?: shown.fields.keys.toList()
                     fields.forEach { f -> shown.fields[f]?.takeIf { it.isNotEmpty() }?.let { FieldRow(fieldName(f), it, secret = f !in OPEN_FIELDS) } }

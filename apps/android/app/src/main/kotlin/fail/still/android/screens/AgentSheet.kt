@@ -6,6 +6,7 @@
 // details (History.kt).
 package fail.still.android.screens
 
+import fail.still.android.ui.Spinner
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -128,7 +129,7 @@ private fun StopButton(app: AppState, station: String, key: String) {
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (busy) Spinner(11.dp) else IconIn(Icons.Stop, 11.dp, C.red)
+        if (busy) Spinner(inline = true) else IconIn(Icons.Stop, 11.dp, C.red)
         Text(t("android-chat.agent.stop"), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.red)
     }
 }

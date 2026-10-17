@@ -9,6 +9,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Check, ChevronLeft, ChevronRight, Close, List, Search, Text as TextIcon } from "../icons.tsx";
 import { Segmented, Tip } from "../parts.tsx";
+import { Progress } from "../waiting.tsx";
 import { fileSize as sizeOf } from "../fileSize.ts";
 import { placeStrokes, strokeLayer } from "../strokes.ts";
 import { t } from "../i18n.ts";
@@ -423,8 +424,8 @@ export function Reader({ file, markdown, backLabel, onBack }: { file: ViewerFile
   else if (loaded.state === "loading") {
     body = (
       <div className={css.note}>
-        <span>{loaded.got ? t("web-pages.drive.reader.reading", { got: sizeOf(loaded.got.loaded), of: sizeOf(loaded.got.total) }) : t("web-pages.drive.reader.opening")}</span>
-        <span className={css.loadTrack}><span style={{ transform: `scaleX(${loaded.got && loaded.got.total ? loaded.got.loaded / loaded.got.total : 0})` }} /></span>
+        <span>{loaded.got ? t("web-pages.drive.reader.reading", { got: sizeOf(loaded.got.loaded), of: sizeOf(loaded.got.total) }) : t("common.opening")}</span>
+        <Progress part={loaded.got && loaded.got.total ? loaded.got.loaded / loaded.got.total : null} label={t("common.opening")} className={css.loadTrack} />
       </div>
     );
   } else if (!loaded.book.text.trim()) body = <div className={css.note}>{t("web-pages.drive.reader.empty")}</div>;

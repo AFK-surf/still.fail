@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Back15, Captions, Check, ChevronLeft, Close, Download, Expand, FileAudio, Forward15, List, Pause, Play, Shrink, SkipBack, SkipForward, Volume, VolumeX } from "../icons.tsx";
 import { Tip } from "../parts.tsx";
+import { Progress, WaitLine, WaitPill } from "../waiting.tsx";
 import { fileSize as sizeOf } from "../fileSize.ts";
 import { t } from "../i18n.ts";
 import * as pageCss from "../styles/page.css.ts";
@@ -270,7 +271,14 @@ export function Player({ file, siblings = [], backLabel, onBack, onGo = () => {}
       </div>
     );
   } else if (source.state === "opening") {
-    body = <div className={css.note}><span>{source.got ? t("web-pages.drive.reader.reading", { got: sizeOf(source.got.loaded), of: sizeOf(source.got.total) }) : t("web-pages.drive.reader.opening")}</span></div>;
+    body = (
+      <div className={css.note}>
+        {source.got
+          ? <><span>{t("web-pages.drive.reader.reading", { got: sizeOf(source.got.loaded), of: sizeOf(source.got.total) })}</span>
+            <Progress part={source.got.total > 0 ? source.got.loaded / source.got.total : null} label={t("common.reading")} className={css.noteBar} /></>
+          : <WaitLine text={t("common.opening")} />}
+      </div>
+    );
   } else {
     body = (
       <video ref={media} className={css.media} data-audio={audio || undefined} src={source.url} playsInline preload="metadata"
@@ -308,7 +316,7 @@ export function Player({ file, siblings = [], backLabel, onBack, onGo = () => {}
       <div className={css.stage}>
         {audio && source.state === "ready" && <div className={css.cover}><FileAudio size={72} strokeWidth={1.2} /><span>{entry.name}</span></div>}
         {body}
-        {waiting && source.state === "ready" && !failed && <span className={css.spinner} aria-hidden="true" />}
+        {waiting && source.state === "ready" && !failed && <WaitPill over text={t("web-pages.drive.player.buffering")} />}
       </div>
       {captions && cue && <div className={css.cue} data-awake={awake || undefined}><span>{cue.replace(/<[^>]+>/g, "")}</span></div>}
       {desk && !full ? (

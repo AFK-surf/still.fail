@@ -10,9 +10,9 @@ import { stationApi, useStationCall, useStatus, type ChatItem, type ChatsView } 
 import { prime, useTopic, useTopicSelect } from "./core/react.ts";
 import type { Topic } from "./core/client.ts";
 import { RowAside } from "./RowPicture.tsx";
-import { Retry, Waiting, WaitingItems } from "./Status.tsx";
+import { Retry, Waiting as StatusWaiting, WaitingItems } from "./Status.tsx";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
-import { Confirm, ConnectKindIcon, ICON, SkeletonRows, Time, Tip } from "./ui.tsx";
+import { Confirm, ConnectKindIcon, ICON, Time, Tip, Waiting } from "./ui.tsx";
 import { chatClicked } from "./telemetry.ts";
 import { useComposerMove } from "./dock.tsx";
 import { goToNeighbour } from "./Chat.tsx";
@@ -130,7 +130,7 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
   const view = useTopicSelect<ChatsView, ChatsView | undefined>(chatsTopic(scope, "all"), (s) => s.value,
     (a, b) => a?.stations === b?.stations && a?.glyph === b?.glyph && a?.trouble === b?.trouble);
   const status = useStatus(scope);
-  if (!view || view.stations.length === 0) return status?.state ? <Waiting status={status} /> : null;
+  if (!view || view.stations.length === 0) return status?.state ? <StatusWaiting status={status} /> : null;
   const counts = glyphCounts(view, status?.state === "trouble");
   const trouble = view.trouble;
   const waiting = !trouble && status?.state ? status : undefined;
@@ -212,8 +212,7 @@ const ChatPane = memo(function ChatPane({ scope, filter, stationsPage, hidden }:
   return (
     <div ref={ref} className={nav.navScroll} aria-hidden={hidden || undefined} inert={hidden || undefined} {...pointer}>
       {chats.error && !view && <p className={`${nav.navEmpty} ${nav.navError}`}>{chats.error.message}</p>}
-      {days.length === 0 && note.failing.map((s) => <Tip key={s.station} label={s.message ?? undefined}><p className={`${nav.navEmpty} ${nav.navError}`}>{s.text}</p></Tip>)}
-      {days.length === 0 && note.reading && !chats.error && <SkeletonRows />}
+      {days.length === 0 && (note.reading || note.failing.length > 0) && !chats.error && <Waiting shape="rows" dense note={note} />}
       {days.length === 0 && view && note.empty && (
         <p className={nav.navEmpty}>{filter === "mine" ? t("web-main.sidebar.noneMine")
           : filter === "watching" ? t("web-main.sidebar.noneWatching")
@@ -325,7 +324,7 @@ function ChatRowOf({ item, lead }: { item: ChatItem; lead: "agents" | "people" }
             : <span className={nav.navSessionTitle}>{renamingTo ?? item.title}</span>}
           {/* The station it runs on, by its icon (the core gives one only with several stations). */}
           {(item.stationEmoji || item.stationIcon) && !editing && <Tip label={item.stationName}><span className={nav.sessionKind} aria-label={item.stationName}><StationMark emoji={item.stationEmoji} icon={item.stationIcon} size={12} /></span></Tip>}
-          {(saving.running || saving.error !== undefined) && !editing && <span className={nav.sessionKind}><DoingShown state={saving} className={nav.rowSpinner} label={t("web-main.saving")} /></span>}
+          {(saving.running || saving.error !== undefined) && !editing && <span className={nav.sessionKind}><DoingShown state={saving} inline label={t("common.saving")} /></span>}
           {/* Only an agent that came from elsewhere (Slack) says so; one made on ember needs no mark. */}
           {/* Slack is the only kind of connect there is. */}
           {/* Its station offline, or its link coming back: marked unplugged there (the core says which, row by row). A

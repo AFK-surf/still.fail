@@ -7,7 +7,7 @@ import { Link } from "react-router";
 import { useTopic } from "./core/react.ts";
 import type { UsageDay, UsageItem, UsageList, UsageSeries, UsageView } from "./core/shapes.ts";
 import { stationBase } from "./station.tsx";
-import { Avatar, Segmented, Tip } from "./ui.tsx";
+import { Avatar, Segmented, Tip, Waiting } from "./ui.tsx";
 import * as css from "./Usage.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import * as proseCss from "./Prose.css.ts";
@@ -163,7 +163,7 @@ export function UsageBody({ view, pricesPath }: { view: UsageView; pricesPath?: 
   return (
     <div className={css.usage}>
       <Tiles view={view} pricesPath={pricesPath} />
-      {view.empty ? <p className={css.empty}>{view.loading ? t("web-main.reading") : t("web-main.usage.none")}</p> : (
+      {view.empty ? (view.wait.reading || view.wait.failing.length > 0 ? <Waiting shape="cards" count={2} note={view.wait} /> : <p className={css.empty}>{t("web-main.usage.none")}</p>) : (
         <>
           <DaysChart view={view} />
           <Rankings view={view} />

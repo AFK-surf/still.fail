@@ -148,5 +148,5 @@ test("members_look_and_a_first_scan_is_waited_for", () => {
   assert.deepEqual([first.measured, first.totalText], [false, "—"]);
   let b: J = { bytes: null, scanning: true };
   b = fp.brief(b);
-  assert.equal(b.text, "正在统计…");
+  assert.equal(b.text, "正在统计");
 });

@@ -13,7 +13,7 @@ import { prime, useCall } from "../core/react.ts";
 import type { ArchiveItem, ArchiveView } from "../core/shapes.ts";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
-import { Confirm, Empty, SkeletonRows, Tip } from "../ui.tsx";
+import { Confirm, Empty, Tip, Waiting } from "../ui.tsx";
 import { Retry, Search, Trash } from "@stillfail/ui/icons.tsx";
 import { StationMark } from "../StationMark.tsx";
 import { NavSection } from "../SidebarList.tsx";
@@ -21,7 +21,6 @@ import { useListMotion } from "../listMotion.ts";
 import { useGo, useHere } from "../go.ts";
 import { stationBase } from "../station.tsx";
 import * as nav from "../Sidebar.css.ts";
-import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as css from "./Archive.css.ts";
 import { t } from "../i18n.ts";
 import { Words } from "../cloud/words.tsx";
@@ -54,8 +53,9 @@ export function useArchive(scope: string, toast: (text: string) => void, q = "",
     toast(t("web-pages.archive.deleted"));
   };
   // Not there yet: being read; refused (a core from before the archive): why.
-  const note = value ? value.note : view.error ? view.error.message : t("web-pages.archive.loading");
-  return { days: value?.days ?? [], errors: value?.errors ?? [], note, read: value !== undefined, more: value?.more === true, restore, remove };
+  const note = value ? value.note : view.error ? view.error.message : t("common.readingStations");
+  // `wait`: what the list still waits on (undefined: none of it read yet); `failed`: the topic refused.
+  return { days: value?.days ?? [], errors: value?.errors ?? [], note, read: value !== undefined, wait: value?.wait, failed: view.error?.message, more: value?.more === true, restore, remove };
 }
 
 /** A row's key in its list. */
@@ -96,7 +96,9 @@ export const ArchiveRows = memo(function ArchiveRows({ scope, hidden }: { scope:
   const toast = useToast();
   const [q, setQ] = useState("");
   const [limit, setLimit] = useState(PAGE);
-  const { days, errors, note, read, more, restore, remove: removeItem } = useArchive(scope, toast, q, limit);
+  const { days, errors, note, read, wait, failed, more, restore, remove: removeItem } = useArchive(scope, toast, q, limit);
+  // No rows yet: their shapes while they are read, what could not be in red over them.
+  const waiting = days.length === 0 && (!wait || wait.reading || wait.failing.length > 0);
   // Near the list's end (a screen or so before it), the next rows.
   const end = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -127,9 +129,9 @@ export const ArchiveRows = memo(function ArchiveRows({ scope, hidden }: { scope:
         <input type="search" value={q} spellCheck={false} placeholder={t("web-pages.archive.search")} aria-label={t("web-pages.archive.search")}
           onChange={(e) => { setQ(e.target.value); setLimit(PAGE); }} />
       </label>
-      {errors.map((e) => <p key={e.station} className={`${nav.navEmpty} ${nav.navError}`}>{e.text}</p>)}
-      {!read && <SkeletonRows />}
-      {read && note && <p className={nav.navEmpty}>{note}</p>}
+      {!waiting && errors.map((e) => <p key={e.station} className={`${nav.navEmpty} ${nav.navError}`}>{e.text}</p>)}
+      {waiting && <Waiting shape="rows" dense note={wait} error={failed} />}
+      {read && !waiting && note && <p className={nav.navEmpty}>{note}</p>}
       {days.map((day) => (
         <NavSection key={day.label} title={day.label} flip={`archive:${day.label}`}>
           {day.items.map((item) => <ArchiveRow key={itemKey(item)} item={item} restore={restore} ask={setDeleting} />)}
@@ -172,14 +174,14 @@ function ArchiveRow({ item, restore, ask }: { item: ArchiveItem; restore: (item:
         <Tip label={restoring.error ?? t("web-pages.archive.restore")}>
           <button type="button" className={`${pageCss.iconBtn} ${css.action}`} aria-label={t("web-pages.archive.restoreNamed", { title: item.title })}
             disabled={busy} aria-busy={restoring.running || undefined} onMouseDown={(e) => e.preventDefault()} onClick={() => void restore(item)}>
-            <DoingShown state={restoring} className={controlsCss.iconSpinner} size={14} idle={<Retry size={14} />} bare />
+            <DoingShown state={restoring} idle={<Retry size={14} />} bare />
           </button>
         </Tip>
         {item.deletable && (
           <Tip label={deleting.error ?? t("common.delete")}>
             <button type="button" className={`${pageCss.iconBtn} ${css.action} ${css.remove}`} aria-label={t("web-pages.archive.deleteNamed", { title: item.title })}
               disabled={busy} aria-busy={deleting.running || undefined} onMouseDown={(e) => e.preventDefault()} onClick={() => ask(item)}>
-              <DoingShown state={deleting} className={controlsCss.iconSpinner} size={14} idle={<Trash size={14} />} bare />
+              <DoingShown state={deleting} idle={<Trash size={14} />} bare />
             </button>
           </Tip>
         )}

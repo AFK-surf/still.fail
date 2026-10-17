@@ -7,7 +7,6 @@ import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { pictureGlass as glass } from "@stillfail/ui/styles/glass.ts";
 import { IN, PANEL_PAD, PANEL_PILL, centred, centredX, pillInner } from "@stillfail/ui/styles/align.ts";
 import { panelCard, popover } from "@stillfail/ui/styles/controls.css.ts";
-import { spinner as turning } from "@stillfail/ui/styles/spinner.css.ts";
 
 /** The page it is on, over the whole window (as a file opened is: pages/Drive.css.ts opened). */
 export const page = style({
@@ -65,17 +64,6 @@ export const keys = style({
   // A phone zooms into a field with smaller type.
   fontSize: vars.textInput,
 });
-
-/** Connecting, or again: a turning ring and why, over the middle (the last picture stays under it). */
-export const waiting = style({
-  ...glass,
-  position: "absolute", zIndex: "2", ...centred, display: "flex", alignItems: "center", gap: "8px", padding: "8px",
-  borderRadius: "999px", color: vars.text, fontSize: vars.textUi, whiteSpace: "nowrap", pointerEvents: "none",
-});
-export const waitingText = style({ paddingInlineEnd: "6px", lineHeight: "20px" });
-/** The ring's room, as large as it is (16 and its 2px border): it turns in it, the room still (the pill's end round it). */
-export const spinnerBox = style({ display: "grid", flex: "none", width: "20px", height: "20px", overflow: "hidden" });
-export const spinner = style([turning, {}]);
 
 /** Over, or never seen: what happened and what can be done, a small panel in the middle (docs/ui-panels.md). */
 export const note = style([popover, panelCard, {

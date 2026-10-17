@@ -60,6 +60,8 @@ import fail.still.android.ui.Markdown
 import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.Seg
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.WaitShape
+import fail.still.android.ui.Waiting
 
 private val DAYS get() = listOf(7 to t("android-misc.usage.days", "n" to 7), 30 to t("android-misc.usage.days", "n" to 30))
 
@@ -84,14 +86,14 @@ fun UsageScreen(current: WorkspaceEntry) {
     }) { top ->
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = top)) {
         if (view == null) {
-            Text(topic.error?.let { t("android-misc.usage.loadFailed", "error" to it.message) } ?: t("android-misc.reading"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(24.dp))
+            Waiting(WaitShape.Cards, text = t("common.reading"), error = topic.error?.let { t("android-misc.usage.loadFailed", "error" to it.message) })
         } else {
             Tiles(view) { app.push(Screen.UsagePrices(days)) }
-            // None yet: what the page counts, said with it.
-            if (view.empty && !view.loading) PlaceEmpty(t("android-misc.usage.none"), t("android-misc.usage.note"))
-            else if (view.empty) {
-                Text(t("android-misc.reading"), fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(28.dp))
-            } else {
+            // None counted yet: the stations not read yet, or those that could not be; else none at all, what the page
+            // counts said with it.
+            if (view.empty && (view.wait.reading || view.wait.failing.isNotEmpty())) Waiting(WaitShape.Cards, count = 2, note = view.wait)
+            else if (view.empty) PlaceEmpty(t("android-misc.usage.none"), t("android-misc.usage.note"))
+            else {
                 Card { Days(view) }
                 Lists(view) { item ->
                     val chat = item.chat ?: return@Lists
@@ -234,10 +236,12 @@ fun UsagePricesScreen(current: WorkspaceEntry, days: Int) {
         TopBack(t("android-misc.usage.title"), app::pop)
         LargeTitle("", t("android-misc.usage.prices"))
         PageNote(t("android-misc.usage.prices.note"))
-        if (view == null) PageNote(topic.error?.let { t("android-misc.usage.prices.loadFailed", "error" to it.message) } ?: t("android-misc.reading"))
+        if (view == null) Waiting(WaitShape.Cards, text = t("common.reading"), error = topic.error?.let { t("android-misc.usage.prices.loadFailed", "error" to it.message) })
         else {
             val tables = view.prices.orEmpty()
-            if (tables.isEmpty()) PageNote(t("android-misc.usage.prices.none"))
+            // None yet while the stations are still read (or could not be): waited on, not said to be none.
+            if (tables.isEmpty() && (view.wait.reading || view.wait.failing.isNotEmpty())) Waiting(WaitShape.Cards, count = 2, note = view.wait)
+            else if (tables.isEmpty()) PageNote(t("android-misc.usage.prices.none"))
             tables.forEach { table ->
                 Card {
                     Text(table.station, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.ink)

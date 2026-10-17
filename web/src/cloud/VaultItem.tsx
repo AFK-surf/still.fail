@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { Edit, Eye } from "@stillfail/ui/icons.tsx";
 import { useDoing } from "../doing.ts";
-import { BackLink, Button, Loading, Pill, Section, Time } from "../ui.tsx";
+import { BackLink, Button, Pill, Section, Time, Waiting } from "../ui.tsx";
 import { stationBase } from "../station.tsx";
 import { Editor, KindIcon, Secret } from "./Vault.tsx";
 import { fieldsOf, formOf, howLine, kindName, masked, modeName, useVaultCall, useVaultItems, useVaultUses, useVaults, type Kind, type Opened, type VaultUse } from "../vault.ts";
@@ -26,7 +26,7 @@ export function VaultItemPage({ entry }: { entry: WorkspaceEntry }) {
   const v = view?.vaults.find((x) => x.id === vault);
   const row = items?.items.find((i) => i.id === item);
   const back = <BackLink to={`/w/${entry.id}/settings/vault`} label={t("web-pages.vault.title")} />;
-  if (!view || !items) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>{back}<Loading label={t("web-pages.settings.reading")} /></div>;
+  if (!view || !items) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>{back}<Waiting shape="cards" count={2} /></div>;
   if (!v || !row) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>{back}<p className={css.note}>{t("web-pages.vault.empty")}</p></div>;
   const plain = view.plain === true;
   const open = (then?: (o: Opened) => void) => void run<Opened>("vault.open", { workspace: entry.id, item }, t("web-pages.vault.openWhat")).then((o) => {
@@ -80,7 +80,7 @@ export function VaultItemPage({ entry }: { entry: WorkspaceEntry }) {
       </Section>
 
       <Section title={t("web-pages.vault.uses.title")}>
-        {!uses ? <Loading label={t("web-pages.settings.reading")} fill={false} />
+        {!uses ? <Waiting count={2} dense />
           : uses.uses.length === 0 ? <p className={css.note}>{t("web-pages.vault.uses.none")}</p>
           : <div className={css.uses}>{uses.uses.map((u, i) => <UseRow key={i} workspace={entry.id} use={u} />)}</div>}
       </Section>

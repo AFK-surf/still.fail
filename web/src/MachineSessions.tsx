@@ -7,7 +7,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useApi, type MachineSaid, type MachineSession, type RuntimeKind, type Stamp } from "./api.ts";
 import type { ModelOption } from "./core/shapes.ts";
 import { ArrowLeft, Monitor } from "@stillfail/ui/icons.tsx";
-import { Button, Dialog, RuntimeLogo, Time, Tip } from "./ui.tsx";
+import { Button, Dialog, RuntimeLogo, Time, Tip, WaitLine } from "./ui.tsx";
 import { AgentAvatar, AgentWords, MessageName, MineBubble, MineMessage, OthersMessage } from "./Chat.tsx";
 import { modelName, optionOf } from "./ModelTriple.tsx";
 import * as conversationCss from "./styles/conversation.css.ts";
@@ -16,7 +16,6 @@ import * as css from "./MachineSessions.css.ts";
 
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
-import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
 import * as partsCss from "@stillfail/ui/parts.css.ts";
 // Times in words, still worked out here (they were the job lists' until those moved into the core).
 
@@ -69,7 +68,9 @@ export function MachineSessions({ name, models, onContinued }: { name: string; m
     api.machineSessions().then((r) => { if (live) setSessions(r.sessions); }, () => { if (live) setSessions([]); });
     return () => { live = false; };
   }, [api]);
-  if (!sessions?.length) return null;
+  // Still asked: said after a moment (most stations answer before); none: nothing offered.
+  if (sessions === null) return <WaitLine />;
+  if (!sessions.length) return null;
   const close = () => { setOpen(false); setLooking(null); setError(null); };
   const go = async (s: MachineSession) => {
     setError(null);
@@ -136,7 +137,7 @@ function Preview({ runtime, id, models }: { runtime: RuntimeKind; id: string; mo
   }, [api, runtime, id]);
   useLayoutEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [shown]);
   if (error) return <p className={partsCss.dialogError} role="alert">{error}</p>;
-  if (!shown) return <div className={css.previewWait}><span className={spinnerCss.spinner} aria-hidden="true" />{t("web-main.reading")}</div>;
+  if (!shown) return <WaitLine className={css.previewWait} />;
   const left = shown.total - shown.said.length;
   const model = shown.session.model;
   const option = optionOf(models, model);

@@ -54,6 +54,8 @@ export const previewPath = style({
   },
 });
 export const previewFrame = style({ display: "block", width: "100%", height: "100%", border: "0", background: "#fff" });
+/** Its page not reachable yet (the desktop's preview host still coming): said in the middle of where it will be. */
+export const previewWait = style({ display: "grid", placeItems: "center", width: "100%", height: "100%" });
 globalStyle(`${previewBar} ${iconBtn}`, { width: "28px", height: "28px" });
 globalStyle(`${previewBar} ${iconBtn}:disabled`, { opacity: "0.35", cursor: "default", background: "none" });
 globalStyle(`${previewAddress} svg`, { flex: "none" });

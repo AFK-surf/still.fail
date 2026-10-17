@@ -16,7 +16,8 @@ import { notSent, sendingFirst, toMadeChat } from "../madeChat.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import type { Draft } from "./Chat.tsx";
 import { useHost } from "./ChatHost.tsx";
-import { Button, Illustration, Loading, MakerIcon, ModelMark, NavBar, PickRow } from "./parts.tsx";
+import { Button, Illustration, MakerIcon, ModelMark, NavBar, PickRow } from "./parts.tsx";
+import { Waiting } from "@stillfail/ui/waiting.tsx";
 import { MachineLoginOffers } from "./Profiles.tsx";
 import { Buddy, FirstStation } from "./Stations.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -39,7 +40,7 @@ export function NewChatScreen() {
   return (
     <div className={`${pagesCss.mScreen} ${css.mNewchatScreen}`}>
       <NavBar back={t("common.cancel")} onBack={app.pop} title={t("web-mobile.newChat.title")} />
-      {!choice?.stations ? <Loading text={choice?.error ?? chat.error?.message ?? t("web-mobile.memory.readingStations")} />
+      {!choice?.stations ? <Waiting fill shape="cards" count={2} text={t("common.readingStations")} error={choice?.error ?? chat.error?.message} />
         : !view ? (
           !choice.any ? <FirstStation /> : (
             <div className={newChatCss.mNewNone}>

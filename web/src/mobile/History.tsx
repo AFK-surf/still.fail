@@ -5,7 +5,7 @@ import { useAction } from "../action.ts";
 // (how it runs, what it used, the station). Changing how it runs is a page of its own.
 import { useReady } from "../core/react.ts";
 import { LOCAL_MS } from "@stillfail/ui/motion.ts";
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { stationApi, useAgentCard, useChat, useHistory, useHistoryDetail, useHistoryOlder, useHost, useStationCall, useStations, type ChatAgent, type HistoryGroup, type HistoryItem, type HistoryPhase, type HistoryStep, type HistoryView, type ModelOption, type Place, type RunnableProfile } from "../api.ts";
 import { Agent, ArrowRight, Check, ChevronDown, Command, Copy, ChevronRight, Wait, Received, Send, Stop, Unplug } from "@stillfail/ui/icons.tsx";
@@ -18,7 +18,8 @@ import { KeepRow, useKeepRow, useRowKept, useVirtualList, useVirtualModel } from
 import type { Item as ListItem, Virtual } from "../virtual/model.ts";
 import { stationBase, useStation } from "../station.tsx";
 import { useApp, type MobileApp } from "./app.tsx";
-import { GroupLabel, MakerIcon, Mark, ModelMark, NavBar, NavButton, ProviderMark, QuotaRings, Seg, SlackMark, Spinner, stateOf, tNodes, type Icon } from "./parts.tsx";
+import { GroupLabel, MakerIcon, Mark, ModelMark, NavBar, NavButton, ProviderMark, QuotaRings, Seg, SlackMark, stateOf, tNodes, type Icon } from "./parts.tsx";
+import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import * as partsCss from "./styles/parts.css.ts";
 import * as css from "./History.css.ts";
 import { ToolCall, ToolResult } from "../ToolStep.tsx";
@@ -63,7 +64,7 @@ export function HistoryScreen() {
   const history = useHistory(station, agentKey).value;
   const [tab, setTab] = useState(0);
   const agent = view.value?.agents.find((a) => a.session.key === agentKey);
-  if (!agent) return <div className={pagesCss.mScreen}>{bar}<p className={`${partsCss.mMuted} ${partsCss.mPad18}`}>{view.error?.message ?? t("web-mobile.reading")}</p></div>;
+  if (!agent) return <div className={pagesCss.mScreen}>{bar}<Waiting fill dense count={12} error={view.error?.message} /></div>;
   const s = agent.session;
   return (
     <div className={pagesCss.mScreen}>
@@ -98,7 +99,7 @@ function Actions({ station, agent }: { station: string; agent: ChatAgent }) {
 function Act({ icon: I, label, run }: { icon: Icon; label: string; run: () => Promise<unknown> }) {
   const action = useAction(run);
   return <button type="button" className={css.mHAct} disabled={action.busy} aria-label={label} onClick={() => void action.run()}>
-    {action.busy ? <Spinner size={14} /> : <I size={14} />}
+    {action.busy ? <Spinner /> : <I size={14} />}
   </button>;
 }
 
@@ -141,7 +142,13 @@ function Steps({ station, chat, agent, history, entry }: { station: string; chat
   useEffect(() => { was.current = last; });
   const virtual = useVirtualList(list, made, rows, { smooth: true, arrived: came ? `h:${last}` : null });
   // Only its latest entries come first: the pages before them load as the reader nears the top.
-  const older = useHistoryOlder(station, agent.session.key);
+  // Its earlier pages being read: said at the list's top, where they will come (a spinner in the edge's line).
+  const readOlder = useHistoryOlder(station, agent.session.key);
+  const [readingOlder, setReadingOlder] = useState(false);
+  const older = useCallback(() => {
+    setReadingOlder(true);
+    return readOlder().finally(() => setReadingOlder(false));
+  }, [readOlder]);
   useLoadNear(virtual, "top", history?.more ?? false, items[0]?.key, older);
   // The steps' and thoughts' whole words: read only as one is opened (the core has them in brief till then).
   const detail = useHistoryDetail(station, agent.session.key);
@@ -162,12 +169,12 @@ function Steps({ station, chat, agent, history, entry }: { station: string; chat
     const timer = setTimeout(() => setMarked(null), 1600);
     return () => clearTimeout(timer);
   }, [history]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!history) return <Edge text={t("web-mobile.history.reading")} />;
+  if (!history) return <Waiting dense count={12} text={t("web-mobile.history.reading")} />;
   if (history.empty) return <Edge text={history.edge} />;
   // What each row is: only those the list makes are drawn.
   const byKey = new Map(items.map((item) => [`h:${item.key}`, item]));
   const draw = (key: string): ReactNode => {
-    if (key === "edge") return <Edge key="edge" text={history.edge} />;
+    if (key === "edge") return readingOlder ? <div key="edge" data-vk="edge" className={css.mHEdge}><WaitLine className={css.mHEdgeWait} /></div> : <Edge key="edge" text={history.edge} />;
     if (key === "phase") return history.phase ? <div key="phase" data-vk="phase" className="m-h-line"><PhaseLine phase={history.phase} /></div> : null;
     if (key.startsWith("l:")) { const step = history.live.find((s) => `l:${s.id}` === key); return step ? <div key={key} data-vk={key} className={`m-h-line ${css.mHLive}`}>{step.text}</div> : null; }
     const item = byKey.get(key);
@@ -337,7 +344,7 @@ function StepRow({ step }: { step: HistoryStep }) {
 function Whole({ brief, entries, children }: { brief: boolean; entries: number[]; children: ReactNode }) {
   const reading = useWhole(brief, entries);
   if (reading === null) return <>{children}</>;
-  return <p className={css.mHThought}>{reading.error === null ? t("web-mobile.history.stepReading") : t("web-mobile.history.stepUnread", { error: reading.error })}</p>;
+  return reading.error === null ? <WaitLine className={css.mHThought} /> : <WaitLine className={css.mHThought} text={t("web-mobile.history.stepUnread", { error: reading.error })} error />;
 }
 
 /** A line that opens to what is behind it. */
@@ -455,7 +462,7 @@ export function RunSettingsScreen() {
   const busy = pick.saving;
   const title = list === "model" ? t("web-mobile.history.pickModel") : list === "account" ? t("web-mobile.history.pickAccount") : t("web-mobile.history.changeModel");
   const bar = <NavBar back={list ? t("web-mobile.history.changeModel") : t("common.back")} onBack={() => (list ? setList(null) : app.pop())} title={title} />;
-  if (!agent || !v) return <div className={pagesCss.mScreen}>{bar}<p className={`${partsCss.mMuted} ${partsCss.mPad18}`}>{view.error?.message ?? t("web-mobile.reading")}</p></div>;
+  if (!agent || !v) return <div className={pagesCss.mScreen}>{bar}<Waiting fill shape="cards" error={view.error?.message} /></div>;
   const s = agent.session;
   const chosen = v.draft.profile ?? null;
   if (list === "model") return <div className={pagesCss.mScreen}>{bar}<ModelList models={v.options} runtime={s.runtime} picked={v.option ?? null} onPick={(m) => { pick.set({ model: m }); setList(null); }} /></div>;
@@ -511,7 +518,7 @@ export function RunSettingsScreen() {
         <div style={{ height: 16 }} />
       </div>
       <button type="button" className={historyCss.mRunGo} data-changed={v.changed || undefined} disabled={busy} onClick={save}>
-        {busy && <Spinner size={14} />}
+        {busy && <Spinner className={partsCss.mSpinOnColor} />}
         {v.saveText}
       </button>
     </div>

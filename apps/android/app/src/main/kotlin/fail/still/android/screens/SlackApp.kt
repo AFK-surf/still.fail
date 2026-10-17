@@ -71,7 +71,8 @@ import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
-import fail.still.android.ui.Loading
+import fail.still.android.ui.WaitShape
+import fail.still.android.ui.Waiting
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.Smooth
@@ -398,7 +399,7 @@ fun SlackAppScreen(station: String, connect: String) {
     Column(Modifier.fillMaxSize()) {
         NavBar(if (adding) "Slack app" else t("android-settings.connects.title"), { if (adding) adding = false else app.pop() }, if (adding) t("android-settings.slack.addToken") else "Slack app", sub = { Text(t("android-settings.slack.sub"), fontSize = 11.sp, color = C.muted) })
         androidx.activity.compose.BackHandler(enabled = adding) { adding = false }
-        if (view == null) return Loading(topic.error?.message ?: t("android-settings.slack.reading"))
+        if (view == null) return Waiting(WaitShape.Cards, text = t("android-settings.slack.reading"), error = topic.error?.message)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp).padding(top = 8.dp, bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (adding) {
                 ConfigTokenSteps(station) { adding = false }

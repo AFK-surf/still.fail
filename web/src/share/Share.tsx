@@ -39,7 +39,7 @@ import idle from "../../public/idle.svg";
 import idleDark from "../../public/idle-dark.svg";
 import offline from "../../public/offline.svg";
 import offlineDark from "../../public/offline-dark.svg";
-import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
+import { Spinner } from "@stillfail/ui/waiting.tsx";
 
 /** The marks of models' makers (public/models), as the chat draws an agent by its maker's; one the page does not know: none. */
 const MARKS = import.meta.glob<string>("../../public/models/*.svg", { query: "?url", import: "default", eager: true });
@@ -165,7 +165,7 @@ export function Share() {
   useEffect(() => {
     document.title = state.at === "shown" && state.snapshot.title ? `${state.snapshot.title} · still.fail` : t("web-share.title");
   }, [state]);
-  if (state.at === "connecting") return <StateLine picture="idle" line={<><span className={spinnerCss.spinner} aria-hidden="true" />{t("web-share.connecting")}</>} />;
+  if (state.at === "connecting") return <StateLine picture="idle" line={<><Spinner inline />{t("web-share.connecting")}</>} />;
   if (state.at === "failed") {
     const again = state.why === "cloud" || state.why === "offline" || state.why === "busy";
     const line = state.why === "broken" ? t("web-share.broken", { error: state.error ?? "" }) : t(`web-share.${state.why}`);

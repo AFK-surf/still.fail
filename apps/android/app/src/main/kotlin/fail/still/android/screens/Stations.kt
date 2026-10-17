@@ -4,6 +4,7 @@
 // have them, SettingsHome.kt).
 package fail.still.android.screens
 
+import fail.still.android.ui.Spinner
 import androidx.compose.foundation.border
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -86,7 +87,10 @@ import fail.still.android.ui.Icons
 import fail.still.android.ui.Illustration
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
-import fail.still.android.ui.Loading
+import fail.still.android.ui.Waiting
+import fail.still.android.ui.WaitShape
+import fail.still.android.ui.breathing
+import fail.still.android.ui.rememberBreath
 import fail.still.android.ui.NavBack
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.NavButton
@@ -145,7 +149,7 @@ fun StationsScreen(current: WorkspaceEntry) {
         // No station yet: adding the first one is the page.
         if (list != null && list.isEmpty()) { FirstStation(current); BarRoom(); return@Column }
         if (list == null) {
-            Text(stations.error?.message ?: t("android-settings.stations.reading"), color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(20.dp))
+            Waiting(WaitShape.Cards, text = t("common.readingStations"), error = stations.error?.message)
         } else {
             list.forEach { s ->
                 Card(onClick = { app.push(Screen.Station(s.station)) }) {
@@ -265,14 +269,14 @@ private fun Line(text: String?, bar: androidx.compose.ui.unit.Dp, modifier: Modi
 /** The station is up but not reached just now: what shows of it is from before. */
 @Composable
 private fun Reconnecting() = Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-    Spinner(11.dp)
-    Text(t("android-settings.stations.reconnecting"), fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1)
+    Spinner(inline = true)
+    Text(t("common.reconnecting"), fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1)
 }
 
-/** A grey bar where a figure would be, not known now. */
+/** A grey bar where a figure would be, not known now: breathing as every wait's shapes do (Waiting.kt). */
 @Composable
 private fun Bar(width: androidx.compose.ui.unit.Dp, height: androidx.compose.ui.unit.Dp = 10.dp, radius: androidx.compose.ui.unit.Dp = 5.dp) =
-    Box(Modifier.width(width).height(height).clip(Smooth(radius)).background(C.line.copy(alpha = 0.7f)))
+    Box(Modifier.width(width).height(height).breathing(rememberBreath()).clip(Smooth(radius)).background(C.bubble))
 
 @Composable
 fun StationScreen(current: WorkspaceEntry, address: String) {
@@ -286,7 +290,7 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
             // As tall either way: the title does not move as the station comes and goes.
             { Box(Modifier.height(16.dp), contentAlignment = Alignment.CenterStart) { if (st.reconnecting == true) Reconnecting() else Text(listOfNotNull(joinedMark(st), (st.host?.identity ?: st.line)?.takeIf { it.isNotEmpty() }).joinToString(" · "), fontSize = 11.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis) } }
         }, trailing = if (s != null && manager) ({ NavButton(Icons.More, { openStationMenu(app, current, s) }) }) else null)
-        if (s == null) return Loading(stations.error?.message ?: t("android-settings.reading"))
+        if (s == null) return Waiting(WaitShape.Cards, error = stations.error?.message)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
             // Every part keeps its room as what it shows comes and goes (not read yet: grey bars); only being online or
             // offline changes what the page is.

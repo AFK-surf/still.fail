@@ -17,7 +17,7 @@ import * as barsCss from "./styles/bars.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import { t } from "../i18n.ts";
-import * as spinnerCss from "@stillfail/ui/styles/spinner.css.ts";
+import { Spinner } from "@stillfail/ui/waiting.tsx";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -165,11 +165,6 @@ export function Seg({ options, selected, onSelect, height = 30, fill = false, ra
   );
 }
 
-/** The wide screen's spinner (../styles/waiting.css.ts), at a size; `color`, its turning part's (on a dark ground). */
-export function Spinner({ size, color }: { size: number; color?: string }) {
-  return <span className={`${spinnerCss.spinner} ${css.mSpinner}`} style={{ width: size, height: size, borderWidth: size < 14 ? 1.5 : 2, ...(color ? { borderTopColor: color } : {}) }} aria-hidden="true" />;
-}
-
 // ── navigation ─────────────────────────────────────────────────────────
 
 /** Back, in the accent colour, with where it goes back to. */
@@ -191,10 +186,10 @@ export function failedIn(doing: readonly DoingItem[], calls: string | readonly s
 
 /** Where `calls` about what `on` names stand on this device (../doing.ts): a spinner while under way, the failure mark a few
  *  seconds after one failed, nothing otherwise. For a row whose menu or sheet that asked it may be closed by then. */
-export function DoingMark({ calls, on, size = 14, color }: { calls: string | readonly string[]; on?: Parameters<typeof useDoing>[1]; size?: number; color?: string }) {
+export function DoingMark({ calls, on, inline = false, onColor = false }: { calls: string | readonly string[]; on?: Parameters<typeof useDoing>[1]; inline?: boolean; onColor?: boolean }) {
   const running = useDoing(calls, on);
   const error = useDoingFailed(calls, on);
-  return running ? <Spinner size={size} {...(color ? { color } : {})} /> : error !== undefined ? <FailedMark error={error} size={size} /> : null;
+  return running ? <Spinner inline={inline} className={onColor ? partsCss.mSpinOnColor : undefined} /> : error !== undefined ? <FailedMark error={error} size={inline ? 12 : 14} /> : null;
 }
 
 export function NavBack({ label, onClick }: { label: string; onClick: () => void }) {
@@ -325,7 +320,7 @@ export function PickRow({ label, sub, aside, checked = false, enabled = true, bu
             {sub !== undefined ? <small>{sub}</small> : <span />}<small className={css.mPickAside}>{aside[1]}</small>
           </span>
         )}
-      {busy ? <Spinner size={14} /> : failed !== undefined ? <FailedMark error={failed} /> : done ? <Check size={14} className={css.mPickDone} /> : checked && <Check size={14} className={partsCss.mAccent} />}
+      {busy ? <Spinner inline /> : failed !== undefined ? <FailedMark error={failed} /> : done ? <Check size={14} className={css.mPickDone} /> : checked && <Check size={14} className={partsCss.mAccent} />}
     </button>
   );
 }
@@ -343,7 +338,7 @@ export function InfoRow({ onClick, busy = false, failed, children }: { onClick?:
   return onClick
     ? (
       <button type="button" className={listsCss.mInfoRow} disabled={busy} aria-busy={busy || undefined} onClick={onClick}>
-        {children}{busy ? <Spinner size={14} /> : failed !== undefined && <FailedMark error={failed} />}
+        {children}{busy ? <Spinner inline /> : failed !== undefined && <FailedMark error={failed} />}
       </button>
     )
     : <div className={listsCss.mInfoRow}>{children}</div>;
@@ -357,7 +352,7 @@ export function Field({ value, onChange, placeholder, mono = false }: { value: s
 export function Button({ label, primary, busy = false, enabled = true, onClick }: { label: string; primary: boolean; busy?: boolean; enabled?: boolean; onClick: () => void }) {
   return (
     <button type="button" className={css.mButton} data-primary={primary || undefined} disabled={!enabled || busy} onClick={onClick}>
-      {busy && <Spinner size={14} />}{label}
+      {busy && <Spinner className={primary ? partsCss.mSpinOnColor : undefined} />}{label}
     </button>
   );
 }
@@ -369,14 +364,15 @@ export function LinkButton({ label, busy = false, failed, enabled = true, classN
 }) {
   return (
     <button type="button" className={`${partsCss.mLink} ${css.mLinkButton}${className ? ` ${className}` : ""}`} disabled={!enabled || busy} aria-busy={busy || undefined} onClick={onClick}>
-      {busy ? <Spinner size={13} /> : failed !== undefined && <FailedMark error={failed} size={13} />}{label}
+      {busy ? <Spinner inline /> : failed !== undefined && <FailedMark error={failed} size={12} />}{label}
     </button>
   );
 }
 
-/** Something is on its way: said in words, centred on the page. */
-export function Loading({ text }: { text: string }) {
-  return <div className={css.mLoading}>{text}</div>;
+/** What a page says where its body would be when what it shows is not there (not found, no station); a wait is a
+ *  `Waiting` (@stillfail/ui waiting.tsx). */
+export function Gone({ text }: { text: string }) {
+  return <div className={css.mGone}>{text}</div>;
 }
 
 export function Mark({ size = 14 }: { size?: number }) {

@@ -5,8 +5,7 @@ import { busyRing } from "@stillfail/ui/styles/busyRing.ts";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { appearKeyframes, spinKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { outsetStart } from "@stillfail/ui/styles/align.ts";
-import { DIALOG_INNER, DIALOG_PAD, dialogBody, loading } from "@stillfail/ui/parts.css.ts";
-import { gate } from "./styles/shell.css.ts";
+import { DIALOG_INNER, DIALOG_PAD, dialogBody } from "@stillfail/ui/parts.css.ts";
 import { pageBar } from "./styles/sidebar.css.ts";
 import { markdown } from "./styles/conversation.css.ts";
 import { card, listRow } from "./styles/pages.css.ts";
@@ -126,5 +125,3 @@ globalStyle(`${markdown} code`, {
 /** Inline completion mark, aligned with the state explanation's text. */
 export const doneMark = style({ display: "inline-flex", width: 14, height: 14, verticalAlign: "-2px", alignItems: "center", justifyContent: "center" });
 
-/** Loading in a page of its own (signing in, an invitation): in its middle. */
-globalStyle(`${gate} ${loading}`, { justifyContent: "center" });

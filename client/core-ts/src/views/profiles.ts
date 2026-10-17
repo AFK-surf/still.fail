@@ -5,6 +5,7 @@
 // is there (the one that has it and lends it, one borrowing it, one signed in on its own). Made from what the stations'
 // overviews say as they come in: a station not read yet adds its own later.
 import { t } from "../i18n.ts";
+import { waitNote } from "../looks.ts";
 
 type J = any;
 
@@ -43,11 +44,13 @@ export function workspaceProfiles(stations: J[]): J {
   const byId = new Map(stations.map((s) => [String(s.id), s]));
   const name = (id: string) => String(byId.get(id)?.name ?? id.slice(0, 8));
   const groups = new Map<string, [J, J][]>();
-  let loading = false;
+  const waiting: string[] = [];
   for (const s of stations) {
     const overview = s.overview;
     if (!isObject(overview)) {
-      if (s.online) loading = true;
+      if (s.online) {
+        waiting.push(name(String(s.id)));
+      }
       continue;
     }
     for (const p of Array.isArray(overview.profiles) ? overview.profiles : []) {
@@ -105,7 +108,7 @@ export function workspaceProfiles(stations: J[]): J {
   // Not localeCompare: Hermes on Android asks Java for it, which the app does not carry (it aborts the app).
   const byName = (a: J, b: J) => (String(a.profile.name) < String(b.profile.name) ? -1 : String(a.profile.name) > String(b.profile.name) ? 1 : 0);
   items.sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group) || Number(look(b)) - Number(look(a)) || byName(a, b));
-  return { items, loading };
+  return { items, wait: waitNote(waiting, [], items.length === 0) };
 }
 
 /// One station's copy of an account: what it is there and how it is doing.

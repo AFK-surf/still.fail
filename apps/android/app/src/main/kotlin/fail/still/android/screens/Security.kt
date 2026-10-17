@@ -3,6 +3,11 @@
 // shows. All of it is the core's (`lock`, `lockDraft` topics, `lock.*` calls, client/core-ts/src/views/lock.ts).
 package fail.still.android.screens
 
+import fail.still.android.ui.BusyIcon
+import fail.still.android.ui.Spinner
+import fail.still.android.ui.WaitLine
+import fail.still.android.ui.WaitShape
+import fail.still.android.ui.Waiting
 import androidx.compose.foundation.background
 import fail.still.android.ui.Smooth
 import androidx.compose.ui.draw.clip
@@ -112,9 +117,11 @@ internal fun WideButton(label: String, primary: Boolean, modifier: Modifier = Mo
         modifier.height(46.dp).clip(Smooth(23.dp)).background(ground).clickable(enabled = on, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
     ) {
-        if (busy) { Spinner(14.dp); Spacer(Modifier.width(8.dp)) }
-        Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (primary && danger) Color.White else if (primary) C.bg else C.ink)
-    }
+        val ink = if (primary && danger) Color.White else if (primary) C.bg else C.ink
+        // A solid one's spinner in its words' colour.
+        BusyIcon(busy, solid = if (primary) ink else null)
+        if (busy) Spacer(Modifier.width(8.dp))
+        Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = ink)    }
 }
 
 /** The page's main action along the bottom of the screen, as wide as it; the page scrolls above it. */
@@ -137,7 +144,7 @@ fun SecurityScreen(current: WorkspaceEntry) {
             TopBack(t("android-settings.title"), app::pop)
             LargeTitle("", t("web-pages.security.title"))
             when {
-                lock == null -> Note(t("web-pages.settings.reading"))
+                lock == null -> Waiting(WaitShape.Cards, text = t("web-pages.settings.reading"), error = topic.error?.message)
                 !lock.available -> ListCard { Body { Note(t("web-pages.security.unavailable")) } }
                 lock.locked -> On(current, lock)
                 else -> Off(lock)
@@ -210,7 +217,7 @@ private fun On(current: WorkspaceEntry, lock: LockView) {
                 }
                 when {
                     s.protected -> Text(t("web-pages.security.protected"), fontSize = 13.sp, color = C.subtle)
-                    joining -> Spinner(14.dp)
+                    joining -> Spinner()
                     join -> Text(t("web-pages.security.join"), fontSize = 14.sp, color = C.accent)
                     else -> Text(t("web-pages.security.unprotected"), fontSize = 13.sp, color = C.warn)
                 }
@@ -225,7 +232,7 @@ private fun On(current: WorkspaceEntry, lock: LockView) {
         ListCard {
             ListRow(onClick = if (turningOff) null else ({ turnOffSheet(app, ws, current.workspace.name) })) {
                 Text(t("web-pages.security.turnOff"), fontSize = 15.sp, color = C.red, modifier = Modifier.weight(1f))
-                if (turningOff) Spinner(14.dp)
+                if (turningOff) Spinner(inline = true)
             }
         }
     }
@@ -248,7 +255,7 @@ private fun DeviceRow(ws: String, d: LockDevice, canRenew: Boolean) {
             Text(deviceName(d.kind, d.label, d.older), fontSize = 15.sp, color = C.ink)
             Text(meta, fontSize = 13.sp, color = if (d.renewSoon) C.warn else C.muted)
         }
-        if (renewing) Spinner(14.dp) else if (renew) Text(t("web-pages.security.renew"), fontSize = 14.sp, color = C.accent)
+        if (renewing) Spinner() else if (renew) Text(t("web-pages.security.renew"), fontSize = 14.sp, color = C.accent)
     }
 }
 
@@ -352,7 +359,7 @@ fun SecurityOpenScreen(current: WorkspaceEntry) {
       Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
         TopBack(t("web-pages.security.title"), app::pop)
         LargeTitle("", t("web-pages.security.openTitle"))
-        if (draft == null || draft.loading) { Note(t("web-pages.settings.reading")); return@Column }
+        if (draft == null || draft.loading) { Waiting(WaitShape.Cards, text = t("web-pages.settings.reading"), error = topic.error?.message); return@Column }
         PageNote(t("web-pages.security.openLead"))
         SectionHeader(t("web-pages.security.members"), start = 24.dp)
         ListCard {
@@ -410,7 +417,7 @@ fun SecurityWaitingScreen(current: WorkspaceEntry, lock: LockView) {
             Note(t("web-pages.security.notAsked"))
             WideButton(t("web-pages.security.request"), primary = true) { app.lockCall(ws, "request", t("web-pages.security.request")) }
         } else {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { Spinner(13.dp); Note(t("web-pages.security.waitingNote")) }
+            WaitLine(t("web-pages.security.waitingNote"))
         }
     }
 }

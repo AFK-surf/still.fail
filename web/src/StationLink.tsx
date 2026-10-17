@@ -14,7 +14,7 @@ export function useStationLink(address: string): StationLink | null {
     const s = st.value?.find((x) => x.station === address);
     if (!s) return null;
     if (!s.online) return { via: "offline", text: t("web-pages.stations.offline") };
-    if (s.reconnecting) return { via: "waiting", text: t("web-pages.stations.connecting") };
+    if (s.reconnecting) return { via: "waiting", text: t("common.connecting") };
     if (!s.net) return null;
     const via = s.net.via === "direct" ? "direct" : s.net.via === "relay" ? "relay" : s.net.via === "choosing" ? "waiting" : null;
     return via && { via, text: s.net.rtt ? `${s.net.path} · ${s.net.rtt.text}` : s.net.path };

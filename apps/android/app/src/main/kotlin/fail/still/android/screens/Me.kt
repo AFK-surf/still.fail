@@ -2,6 +2,7 @@
 // signed in, the accounts on this device, and where it is signed in.
 package fail.still.android.screens
 
+import fail.still.android.ui.Spinner
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -68,7 +69,7 @@ fun MeScreen(current: WorkspaceEntry) {
                 ListRow {
                     Text(a.email, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     // Signing out: home at once, the sign-out going on by itself (a toast if it could not); not asked twice meanwhile.
-                    if (app.isDoing("auth.signOut", "account" to a.sub)) Spinner(14.dp)
+                    if (app.isDoing("auth.signOut", "account" to a.sub)) Spinner(inline = true)
                     else Text(if (list.size > 1) t("android-settings.me.signOut") else t("android-settings.me.signOutOnly"), fontSize = 15.sp, color = C.red, modifier = Modifier.clickable {
                         app.home()
                         app.act(t("android-settings.me.signOutWhat"), if (list.size > 1) t("android-settings.me.signedOut", "email" to a.email) else null) { Auth.signOut(app.core, a.sub) }
@@ -78,7 +79,7 @@ fun MeScreen(current: WorkspaceEntry) {
             val opening = app.isDoing("auth.begin")
             ListRow(onClick = if (opening) null else ({ scope.launch { signIn(app, context) } })) {
                 Text(t("android-settings.me.addAccount"), fontSize = 15.sp, color = C.accent, modifier = Modifier.weight(1f))
-                if (opening) Spinner(14.dp)
+                if (opening) Spinner(inline = true)
             }
         }
         SectionHeader(t("android-settings.me.devices"), start = 24.dp)

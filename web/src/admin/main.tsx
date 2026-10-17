@@ -16,7 +16,7 @@ import { Illustration } from "../brand.tsx";
 import { useAccounts, useSignIn, useSignOut } from "../cloud/accounts.ts";
 import { Callback, SignInPage } from "../cloud/gate.tsx";
 import { ToastProvider } from "@stillfail/ui/toast.tsx";
-import { Button, Loading } from "../ui.tsx";
+import { Button, WaitLine } from "../ui.tsx";
 import { Console, useAdminAccount } from "./console.tsx";
 import * as shellCss from "../styles/shell.css.ts";
 
@@ -40,7 +40,7 @@ function Home() {
   const list = useAccounts();
   const account = useAdminAccount();
   if (list?.length === 0) return <SignInPage title={t("web-pages.admin.signIn.title", { name: NAME })} lead={t("web-pages.admin.signIn.lead", { name: NAME })} />;
-  if (account === undefined) return <div className={shellCss.gate}><Loading /></div>;
+  if (account === undefined) return <div className={shellCss.gate}><WaitLine /></div>;
   if (account === null) return <NoPermission />;
   return <Console account={account} />;
 }
