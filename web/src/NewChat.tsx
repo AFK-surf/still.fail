@@ -1,10 +1,11 @@
 // A new chat, after Zork's: say what to do, having picked where it runs
 // (station), on what (runtime and model) and how hard it thinks. The first
 // message (or file) makes the chat and its agent's session on that station.
-import { Key, Plus } from "@stillfail/ui/icons.tsx";
+import { Folder, Key, PanelClose, Plus } from "@stillfail/ui/icons.tsx";
 import { StationMark } from "./StationMark.tsx";
 import { Link, useNavigate } from "react-router";
 import { useMemo, useRef, useState } from "react";
+import { Tabs } from "radix-ui";
 import type { RuntimeKind, StationView } from "./api.ts";
 import type { NewChatView } from "./core/shapes.ts";
 import { useReady } from "./core/react.ts";
@@ -12,18 +13,26 @@ import { useNewChat, usePick } from "./pick.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { ComposerSlot, useCarryDraft } from "./dock.tsx";
 import { profilesPage, StationContext, stationBase, type Station } from "./station.tsx";
-import { Button, Chooser, ChooserItem as Item, FirstOne, WaitLine } from "./ui.tsx";
+import { Button, Chooser, ChooserItem as Item, FirstOne, IconButton, ResizeHandle, WaitLine } from "./ui.tsx";
 import { MachineLoginOffers, PROFILE_LEAD } from "./pages/Accounts.tsx";
 import { addProfilePath } from "./pages/AddProfile.tsx";
 import { ModelTriple } from "./ModelTriple.tsx";
 import { Illustration } from "./brand.tsx";
 import { track } from "./telemetry.ts";
 import { keepTabs } from "./chatTabs.ts";
+import { usePrefs } from "./prefs.ts";
+import { useShortcut } from "./keymap.ts";
+import { DriveTab } from "./pages/DriveTab.tsx";
+import { DropHint, FILES, FilesTab, keepFocus, PANEL_MAX, PANEL_MIN, SidePane, useChatDrop, useSidePanel, useStationDrive } from "./pages/ChatSide.tsx";
 import * as css from "./NewChat.css.ts";
 import { FrequentCombos } from "./FrequentCombos.tsx";
 import type { PickPatch } from "./pick.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
+import * as sessionCss from "./styles/session.css.ts";
+import * as jobsCss from "./styles/jobs.css.ts";
+import * as sidebarCss from "./styles/sidebar.css.ts";
+import * as chatCss from "./pages/ChatPage.css.ts";
 import { MachineSessions } from "./MachineSessions.tsx";
 import { composerText } from "./Chat.css.ts";
 import { notSent, sendingFirst } from "./madeChat.ts";
@@ -103,11 +112,28 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
     </>
   ), [stations, station, runtime, model, pick, act]);
 
+  const draftKey = `new:${station.address}`;
+  // The workspace's stations' files beside it, as beside a chat (../pages/DriveTab.tsx): what is added goes into its
+  // message, and dropped anywhere on the page too. Open or not for the workspace's new chat, whichever station it is
+  // on; open as the page becomes the chat, open there.
+  const tabsKey = `new:${workspace}`;
+  const kept = usePrefs((p) => p.chatTabs[tabsKey]);
+  const drive = useStationDrive(station.address);
+  const open = drive && kept?.tabs.includes(FILES) ? [FILES] : [];
+  const side = useSidePanel(open, open[0] ?? null);
+  const setFiles = (on: boolean) => {
+    const next = on ? [FILES] : [];
+    side.changing(next);
+    keepTabs(tabsKey, { tabs: next, active: on ? FILES : null });
+  };
+  useShortcut("panel.close", open.length ? () => setFiles(false) : null);
+  const drop = useChatDrop(draftKey, station.address);
+
   const carry = useCarryDraft();
   // The chat pages' one composer (dock.tsx): here in the page, then, once the first message is sent, in the chat's page,
   // where that message already waits for the chat to be made.
   const composer = (
-    <ComposerSlot variant="new" station={station} draftKey={`new:${station.address}`} thread={null} sessionKey={null} ensureChat={ensureChat}
+    <ComposerSlot variant="new" station={station} draftKey={draftKey} thread={null} sessionKey={null} ensureChat={ensureChat}
       placeholder={t("web-main.newChat.placeholder")} toolbar={toolbar} locked={!runtime || !model} roomy
       // Its words stay where they were until the chat's page takes them (../madeChat.ts), over the composer.
       onSending={(text) => {
@@ -120,8 +146,9 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
         const key = String(to);
         // What is being typed goes on in the chat, in the same composer.
         carry(`${station.address}:${key}`);
-        // Made here, the chat opens without its agent's history beside: it is opened from the agent when wanted.
-        keepTabs(`${station.address}:${key}`, { tabs: [], active: null });
+        // Made here, the chat opens without its agent's history beside: it is opened from the agent when wanted. The
+        // files open here stay open beside it.
+        keepTabs(`${station.address}:${key}`, open.length ? { tabs: [FILES], active: FILES } : { tabs: [], active: null });
         onCreated(station.address, key);
       }} />
   );
@@ -152,26 +179,52 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
     );
   }
   return (
-    <div className={css.newChat}>
-      <div className={css.newChatInner}>
-        {/* What leaves as the chat comes (../madeChat.ts): the scene above the composer out of view, what is by it where it is. */}
-        <Illustration name="new-chat" data-made-leave="up" />
-        <h1 className={css.newChatTitle} data-made-leave="up">{t("web-main.newChat.title")}</h1>
-        <p className={css.newChatSub} data-made-leave="up">{t("web-main.newChat.sub", { name: station.name || t("web-main.newChat.thisMachine") })}</p>
-        {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
-        {choice.spent && <p className={css.spentNotice} role="status" data-made-leave="up">{choice.spent}</p>}
-        {composer}
-        <FrequentCombos items={choice.frequent} onPick={pickCombo} />
-        {/* What it waits for, in a line of its own under the composer, kept whether or not there is anything to say. */}
-        <p className={css.newChatStatus} data-made-leave="fade">{choice.waiting ? choice.problem : ""}</p>
-        {/* Out of the page's flow: it comes once the station has said what there is, and would move the composer. */}
-        <div className={css.newChatOffer} data-made-leave="fade">
-          <MachineSessions name={station.name} models={view.models} onContinued={(key) => {
-            keepTabs(`${station.address}:${key}`, { tabs: [], active: null });
-            onCreated(station.address, key);
-          }} />
+    <div ref={side.pageRef} className={sessionCss.sessionPage} data-panel={open.length > 0 || side.leaving !== null}>
+      <div className={`${jobsCss.sessionMain} ${chatCss.dropZone}`} {...drop.handlers}>
+        <DropHint drop={drop} />
+        {/* The chat's bar's 文件 where the chat's page has it, over the page (what is centred in it stays where it was). */}
+        {drive && (
+          <header className={`${sidebarCss.pageBar} ${css.newChatBar}`}>
+            <div className={chatCss.pageBarActions}>
+              <IconButton label={t("web-pages.chat.files")} icon={Folder} onMouseDown={keepFocus} onClick={() => setFiles(open.length === 0)} />
+            </div>
+          </header>
+        )}
+        <div className={css.newChat}>
+          <div className={css.newChatInner}>
+            {/* What leaves as the chat comes (../madeChat.ts): the scene above the composer out of view, what is by it where it is. */}
+            <Illustration name="new-chat" data-made-leave="up" />
+            <h1 className={css.newChatTitle} data-made-leave="up">{t("web-main.newChat.title")}</h1>
+            <p className={css.newChatSub} data-made-leave="up">{t("web-main.newChat.sub", { name: station.name || t("web-main.newChat.thisMachine") })}</p>
+            {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
+            {choice.spent && <p className={css.spentNotice} role="status" data-made-leave="up">{choice.spent}</p>}
+            {composer}
+            <FrequentCombos items={choice.frequent} onPick={pickCombo} />
+            {/* What it waits for, in a line of its own under the composer, kept whether or not there is anything to say. */}
+            <p className={css.newChatStatus} data-made-leave="fade">{choice.waiting ? choice.problem : ""}</p>
+            {/* Out of the page's flow: it comes once the station has said what there is, and would move the composer. */}
+            <div className={css.newChatOffer} data-made-leave="fade">
+              <MachineSessions name={station.name} models={view.models} onContinued={(key) => {
+                keepTabs(`${station.address}:${key}`, { tabs: [], active: null });
+                onCreated(station.address, key);
+              }} />
+            </div>
+          </div>
         </div>
       </div>
+      {side.side && (
+        <Tabs.Root ref={side.panelRef} className={chatCss.sidePanel} data-over-composer value={side.side.shown} inert={side.side === side.leaving}>
+          <ResizeHandle variable="--panel-w" edge="left" min={PANEL_MIN} max={PANEL_MAX} label={t("web-pages.chat.resizePanel")}
+            press={{ label: t("web-pages.chat.closePanel"), run: () => setFiles(false) }} />
+          <div className={chatCss.sideBar}>
+            <Tabs.List className={chatCss.sideTabList} aria-label={t("web-pages.chat.files")}>
+              <FilesTab onClose={() => setFiles(false)} />
+            </Tabs.List>
+            <IconButton label={t("web-pages.chat.closePanel")} icon={PanelClose} shortcut="panel.close" onMouseDown={keepFocus} onClick={() => setFiles(false)} />
+          </div>
+          <SidePane of={FILES} shown={side.side.shown} kept><DriveTab chat={draftKey} /></SidePane>
+        </Tabs.Root>
+      )}
     </div>
   );
 }

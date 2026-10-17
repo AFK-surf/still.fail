@@ -41,3 +41,6 @@ globalStyle(`${newChatInner} > ${composerWrap}, ${newChatInner} > form`, { justi
 globalStyle(composerBox, {
   border: "0", ...glass, boxShadow: "0 1px 3px rgb(0 0 0 / .04)",
 });
+/** The bar over a new chat (its 文件, where a chat's bar has it): over the page, taking none of its room or its pointer. */
+export const newChatBar = style({ position: "absolute", top: "0", left: "0", right: "0", zIndex: 1, pointerEvents: "none" });
+globalStyle(`${newChatBar} > *`, { pointerEvents: "auto" });

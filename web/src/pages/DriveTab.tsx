@@ -1,5 +1,5 @@
-// A chat's 文件 tab (ChatPage.tsx's side panel): the files of the workspace's stations, beside the chat, to put into what
-// is being written. It starts at the chat's station's home for a member who browses every folder, else at its pinned
+// A chat's 文件 tab (ChatPage.tsx's side panel, and a new chat's: ../NewChat.tsx): the files of the workspace's
+// stations, beside the chat, to put into what is being written. It starts at the chat's station's home for a member who browses every folder, else at its pinned
 // folders; the way up is a trail of folders over the list, the first of them the places (each station's home and the
 // folders pinned on it). A file or folder is added to the message from its … or dragged onto the chat, named by its
 // path on its station until switched to a file there; its path is copied from its … (or a right click), or dragged

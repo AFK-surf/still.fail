@@ -143,7 +143,8 @@ phone's 文件 (the bottom bar's place) lists them the same way. A folder's page
 to the home (or the disk's top), a pin, and each row's path to copy; a row
 dragged out carries the file and its path. A chat's 文件 tab
 (web/src/pages/DriveTab.tsx) browses every station's files beside the chat, to
-drag into the composer or add to the message. On both, a folder is worked
+drag into the composer or add to the message; a new chat has the same tab
+(open there, it stays open in the chat its first message makes). On both, a folder is worked
 as in Finder (web/src/drive/browse.ts): a press chooses a row (⌘ adds or takes one
 away, ⇧ the ones between), a double click or ⌘↓ opens it, ⌘↑ goes up, the arrows
 move (→ and ← into and out of a folder in columns and a tree), typed letters go to
