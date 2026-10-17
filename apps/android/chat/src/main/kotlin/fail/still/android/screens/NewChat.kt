@@ -126,7 +126,7 @@ fun NewChatScreen(current: WorkspaceEntry, host: Host, leaving: Boolean = false)
         when {
             // Its stations not read yet: under its bar, their first read (why they could not be, in red).
             choice == null || online == null -> Waiting(WaitShape.Rows, text = t("common.readingStations"), error = choice?.error ?: chat.error?.message)
-            !choice.any -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { FirstStation(current) }
+            !choice.any -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { Elsewhere.FirstStation(current) }
             view == null -> Column(Modifier.fillMaxSize().padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)) {
                 Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 240.dp)
                 Text(t("android-chat.new.offline.title"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
@@ -199,7 +199,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
                     if (overview != null && choice.blocked == "profile") {
                         Text(t("android-chat.new.profile.text", "station" to view.name), fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
                         Button(t("android-chat.new.profile.add"), primary = true) { app.push(Screen.NewProfile(view.station)) }
-                        Column(Modifier.fillMaxWidth().padding(top = 12.dp)) { MachineLoginOffers(view.station, overview, inset = 0.dp) }
+                        Column(Modifier.fillMaxWidth().padding(top = 12.dp)) { Elsewhere.MachineLoginOffers(view.station, overview, inset = 0.dp) }
                     }
                     // The machine's own Claude Code and Codex sessions, to go on with one (web/src/MachineSessions.tsx).
                     // Not on a station this workspace joined with no profile open to it (the machine's sessions are its home's).

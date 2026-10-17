@@ -203,7 +203,7 @@ internal fun DecisionUnder(ctx: Here, m: ChatMessage) {
             if (vault != null) {
                 val me = ctx.view.me.email
                 val who = card?.assignee
-                VaultApproval(station.substringBefore('/'), vault, mine = who == null || me == null || who.equals(me, ignoreCase = true), Modifier.padding(top = 6.dp))
+                Elsewhere.VaultApproval(station.substringBefore('/'), vault, mine = who == null || me == null || who.equals(me, ignoreCase = true), Modifier.padding(top = 6.dp))
             } else DecisionOptions(
                 options, Modifier.padding(top = 6.dp),
                 enabled = !ctx.view.offline && ctx.view.archived != true, busy = busy,
@@ -604,7 +604,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.Face(
             // Under the post, as in its chat: its options, or (a card this app does not know) the way to answer it there.
             when (type) {
                 // An agent's request for a vault item: approved here (Vault.kt); the 奏 page's are the viewer's.
-                "options" -> card?.vault?.let { VaultApproval(item.station.substringBefore('/'), it, mine = true) } ?: DecisionOptions(card?.options ?: item.options, onPick = onPick)
+                "options" -> card?.vault?.let { Elsewhere.VaultApproval(item.station.substringBefore('/'), it, mine = true) } ?: DecisionOptions(card?.options ?: item.options, onPick = onPick)
                 "text" -> {}
                 else -> Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(t("android-misc.decisions.replyInChat"), fontSize = 13.sp, color = C.muted)

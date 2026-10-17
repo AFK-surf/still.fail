@@ -92,8 +92,6 @@ import fail.still.android.data.t
 import fail.still.android.ui.Button
 import fail.still.android.ui.DoingMark
 import fail.still.android.screens.DriveKey
-import fail.still.android.screens.FilePreview
-import fail.still.android.screens.Gallery
 import fail.still.android.ui.PickRow
 import fail.still.android.screens.Shown
 import fail.still.android.screens.ask
@@ -138,6 +136,7 @@ import fail.still.android.data.DriveCache
 import fail.still.android.data.arranged
 import fail.still.android.data.freeName
 import fail.still.android.data.picked
+import fail.still.android.screens.Elsewhere
 
 // ── what an entry is ────────────────────────────────────────────────────
 
@@ -531,7 +530,7 @@ private fun FolderPage(app: AppState, station: String, s: StationView, roots: Li
     if (shown != null) {
         val shownOf = { e: DriveEntry -> Shown(DriveKey.of(root, e.mtime), Attachment(e.name, join(path, e.name), e.size)) }
         val opened = remember(shown) { shownOf(shown) }
-        FilePreview(station, opened.key, opened.file, gallery = Gallery.Folder { latest.filter { it.kind == "image" }.map(shownOf) }, canDraft = false) { previewing = null }
+        Elsewhere.preview(station, opened, { latest.filter { it.kind == "image" }.map(shownOf) }) { previewing = null }
     }
 }
 

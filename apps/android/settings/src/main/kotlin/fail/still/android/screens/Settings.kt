@@ -109,59 +109,6 @@ import fail.still.android.ui.Field
 
 // ── asking ─────────────────────────────────────────────────────────────
 
-/**
- * Asks before something that cannot be undone. With `what` (a verb phrase, as [AppState.act] takes) the sheet closes at
- * once, `then` runs (a page left, say) and `run` goes on by itself, the thing it is about marked under way, a failure
- * told by a toast; without it the sheet stays, with what went wrong, until it is done.
- */
-fun confirm(app: AppState, title: String, text: String, action: String, danger: Boolean = false, what: String? = null, then: () -> Unit = {}, run: suspend () -> Unit) {
-    app.sheet = SheetSpec(0.36f) {
-        val scope = rememberCoroutineScope()
-        val operation = remember(app) { Action(app) }
-        val busy = operation.busy
-        val error = operation.error?.message
-        SheetGrab()
-        SheetHead(title)
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(text, fontSize = 14.sp, color = C.muted)
-            error?.let { Text(it, fontSize = 13.sp, color = C.red) }
-            Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                Button(t("common.cancel"), primary = false) { app.sheet = null }
-                Button(action, primary = true, busy = busy, danger = danger) {
-                    if (what != null) { app.sheet = null; then(); app.act(what) { run() } }
-                    else operation.run { run(); app.sheet = null }
-                }
-            }
-        }
-    }
-}
-
-/** Asks for a line (a name); `run` gets it trimmed. With `what`, as [confirm]: closes at once and goes on by itself. */
-fun ask(app: AppState, title: String, value: String, placeholder: String, action: String, secret: Boolean = false, hint: String? = null, what: String? = null, empty: Boolean = false, run: suspend (String) -> Unit) {
-    app.sheet = SheetSpec(0.42f) {
-        val scope = rememberCoroutineScope()
-        var text by remember { mutableStateOf(value) }
-        val operation = remember(app) { Action(app) }
-        val busy = operation.busy
-        val error = operation.error?.message
-        SheetGrab()
-        SheetHead(title)
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (secret) SecretField(text, { text = it }, placeholder) else Field(text, { text = it }, placeholder)
-            hint?.let { Text(it, fontSize = 12.sp, color = C.muted) }
-            error?.let { Text(it, fontSize = 13.sp, color = C.red) }
-            Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                Button(t("common.cancel"), primary = false) { app.sheet = null }
-                Button(action, primary = true, busy = busy, enabled = (empty || text.isNotBlank()) && text.trim() != value) {
-                    val line = text.trim()
-                    if (what != null) { app.sheet = null; app.act(what) { run(line) } }
-                    else operation.run { run(line); app.sheet = null }
-                }
-            }
-        }
-    }
-}
-
 /** A command to run elsewhere, with a button that copies it. */
 @Composable
 fun CommandBox(text: String) {

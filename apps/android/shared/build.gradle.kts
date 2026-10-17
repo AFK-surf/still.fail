@@ -51,6 +51,8 @@ dependencies {
     implementation(libs.commonmark.ext.gfm.strikethrough)
     implementation(libs.commonmark.ext.task.list.items)
     implementation(libs.haze)
+    // Signing in in a Custom Tab (screens/SettingParts.kt signIn).
+    implementation(libs.androidx.browser)
     // What was played kept on the phone (data/DriveCache.kt): media3's cache and the index it keeps.
     implementation(libs.androidx.media3.datasource)
     implementation(libs.androidx.media3.database)

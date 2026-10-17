@@ -202,13 +202,13 @@ fun HomeScreen(current: WorkspaceEntry) {
         TopGlassBar(haze, Modifier.align(Alignment.TopCenter).onSizeChanged { topBar = it.height }.graphicsLayer { alpha = 1f - away }) {
             // Settings, at the top left (SettingsHome.kt): the account, the workspace's things, this device's.
             SettingsGear()
-            Row(Modifier.weight(1f).clip(Smooth(8.dp)).clickable { openWorkspaces(app) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.weight(1f).clip(Smooth(8.dp)).clickable { Elsewhere.workspaces(app) }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 TopBarTitle(current.workspace.name, Modifier.weight(1f, fill = false))
                 // The other workspaces have something waiting: its dot by the name, before an invitation's.
                 val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(current.workspace.id))
                 val others = marks.value?.others
                 if (others != null) WorkspaceMark(others, marks.value?.othersLabel.orEmpty())
-                else if (invitationsWaiting(app)) Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent).semantics { contentDescription = t("android-chat.home.invited") })
+                else if (Elsewhere.invitationsWaiting(app)) Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent).semantics { contentDescription = t("android-chat.home.invited") })
                 IconIn(Icons.ChevronDown, 16.dp, C.muted)
             }
             // A newer build of the app that brings something the changelog says (one that does not waits in the settings
@@ -368,7 +368,7 @@ private fun Leaving(g: Ghost, view: ChatsView, motion: ListMotion) {
 private fun Empty(current: WorkspaceEntry, view: ChatsView, filter: String) {
     val app = LocalApp.current
     // No station yet: nothing else works, so adding the first one is the page.
-    if (view.stations.isEmpty() && filter == "all") return FirstStation(current)
+    if (view.stations.isEmpty() && filter == "all") return Elsewhere.FirstStation(current)
     Column(Modifier.fillMaxWidth().padding(horizontal = 30.dp, vertical = 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Illustration(R.drawable.illus_new_chat, R.drawable.illus_new_chat_dark, 240.dp)
         if (filter == "mine") Text(t("android-chat.home.empty.mine"), fontSize = 14.sp, color = C.muted)

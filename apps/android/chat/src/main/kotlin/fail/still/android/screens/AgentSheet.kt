@@ -99,7 +99,7 @@ fun openAgent(app: AppState, station: String, of: ChatOf, agent: ChatAgent) {
             // Each row leaves the sheet for where it leads.
             InfoList {
                 // The station's card in place of this one.
-                if (here != null) InfoRow(onClick = { openStationPeek(app, station) }) {
+                if (here != null) InfoRow(onClick = { Elsewhere.stationPeek(app, station) }) {
                     Text(t("android-chat.agent.station"), fontSize = 14.sp, color = C.muted)
                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         if (hasStationMark(here.emoji, here.icon)) StationMark(here.emoji, here.icon, 15.dp, C.ink)

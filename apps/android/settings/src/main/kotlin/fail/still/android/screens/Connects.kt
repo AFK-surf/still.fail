@@ -111,18 +111,6 @@ import fail.still.android.ui.Button
 import fail.still.android.ui.Field
 import fail.still.android.ui.GroupLabel
 
-/** A connect's presence as a dot: online green, at work orange, failing red, offline hollow. */
-@Composable
-fun PresenceDot(state: String) {
-    val m = Modifier.size(7.dp).clip(CircleShape)
-    Box(when (state) {
-        "online" -> m.background(C.green)
-        "busy" -> m.background(C.accent)
-        "error" -> m.background(C.red)
-        else -> m.border(1.5.dp, C.subtle, CircleShape)
-    })
-}
-
 /** A connect as its people see it in Slack: its bot's picture; Slack's mark until Slack has said what that is. */
 @Composable
 fun ConnectAvatar(c: Connect, size: androidx.compose.ui.unit.Dp) {
@@ -407,13 +395,6 @@ private fun ModeChoices(mode: String, requireMention: Boolean, onChange: (String
     }
 }
 
-@Composable
-fun Switch(on: Boolean) {
-    Box(Modifier.size(44.dp, 26.dp).clip(Smooth(13.dp)).background(if (on) C.green else C.line), contentAlignment = Alignment.CenterStart) {
-        Box(Modifier.offset(x = if (on) 21.dp else 3.dp).size(20.dp).clip(CircleShape).background(androidx.compose.ui.graphics.Color.White))
-    }
-}
-
 /** How its conversations become sessions: picked, with what changing it does said before it is done. */
 @Composable
 private fun ColumnScope.ModeSheet(station: String, item: ConnectItem) {
@@ -536,16 +517,6 @@ private fun openTokens(app: AppState, station: String, connect: Connect) {
                 }
             }
         }
-    }
-}
-
-/** A token's line: shown as dots, pasted into. */
-@Composable
-internal fun SecretField(value: String, onChange: (String) -> Unit, placeholder: String) {
-    Box(Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.surface).border(1.dp, C.line, Smooth(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp)) {
-        if (value.isEmpty()) Text(placeholder, color = C.subtle, fontSize = 15.sp, fontFamily = CodeFont, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        BasicTextField(value, { onChange(it.trim()) }, singleLine = true, cursorBrush = SolidColor(C.accent), visualTransformation = PasswordVisualTransformation(),
-            textStyle = TextStyle(color = C.ink, fontSize = 15.sp, fontFamily = CodeFont), modifier = Modifier.fillMaxWidth())
     }
 }
 

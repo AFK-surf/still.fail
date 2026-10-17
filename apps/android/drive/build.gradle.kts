@@ -1,5 +1,5 @@
-// A station's drive (fail.still.android.drive: its folders, the reader, the player), built on the chats' pages (:chat:
-// a file's preview) and the settings' (:settings) (2026-10-17).
+// A station's drive (fail.still.android.drive: its folders, the reader, the player), on :shared only, beside :settings
+// and :chat (a file opened in the chat's viewer: screens/Elsewhere.kt) (2026-10-18).
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
@@ -22,8 +22,6 @@ dependencies {
     testImplementation(libs.junit)
     implementation(project(":core"))
     implementation(project(":shared"))
-    implementation(project(":settings"))
-    implementation(project(":chat"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.ui)

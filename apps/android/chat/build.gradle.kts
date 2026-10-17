@@ -1,5 +1,5 @@
-// The chats' pages (fail.still.android.screens: home, a chat, its composer, files, previews, history, decisions…),
-// built on the settings' (:settings) and :shared (2026-10-17).
+// The chats' pages (fail.still.android.screens: home, a chat, its composer, files, previews, history, decisions…), on
+// :shared only, beside :settings and :drive (what they show of each other, screens/Elsewhere.kt) (2026-10-18).
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
@@ -22,7 +22,6 @@ dependencies {
     testImplementation(libs.junit)
     implementation(project(":core"))
     implementation(project(":shared"))
-    implementation(project(":settings"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.ui)

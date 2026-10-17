@@ -109,6 +109,15 @@ import fail.still.android.ui.ToastHost
 import fail.still.core.StillFailCore
 import fail.still.android.data.NotifyView
 import kotlinx.coroutines.MainScope
+import fail.still.android.screens.Elsewhere
+import fail.still.android.screens.openStationPeek
+import fail.still.android.screens.openWorkspaces
+import fail.still.android.screens.invitationsWaiting
+import fail.still.android.screens.FirstStation
+import fail.still.android.screens.MachineLoginOffers
+import fail.still.android.screens.VaultApproval
+import fail.still.android.screens.FilePreview
+import fail.still.android.screens.Gallery
 
 
 private val Ease = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
@@ -117,6 +126,14 @@ private val Ease = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
 fun StillFailApp(app: AppState) {
     // An invitation's link opens its sheet, a page of the app's (AppState.openLink).
     AppHooks.invite = ::openInvite
+    // What a page of one module shows or opens of another's (screens/Elsewhere.kt).
+    Elsewhere.stationPeek = ::openStationPeek
+    Elsewhere.workspaces = ::openWorkspaces
+    Elsewhere.invitationsWaiting = { invitationsWaiting(it) }
+    Elsewhere.firstStation = { FirstStation(it) }
+    Elsewhere.machineLoginOffers = { station, overview, inset -> MachineLoginOffers(station, overview, inset) }
+    Elsewhere.vaultApproval = { workspace, request, mine, modifier -> VaultApproval(workspace, request, mine, modifier) }
+    Elsewhere.preview = { station, shown, folder, onClose -> FilePreview(station, shown.key, shown.file, gallery = folder?.let { Gallery.Folder(it) }, canDraft = false, onClose = onClose) }
     // Where files of a drive are kept once read (the reader, the viewer and the player find it there).
     fail.still.android.data.DriveCache.start(LocalContext.current)
     fail.still.android.ui.KeyboardInsets { AppContent(app) }

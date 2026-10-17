@@ -111,10 +111,6 @@ import fail.still.android.ui.Field
 
 private val SIGNING_IN = setOf("starting", "needs_code", "needs_approval", "verifying")
 
-/** A check's tone as a colour (the core's: accent | green | blue | red | neutral). */
-@Composable
-fun toneColor(tone: String): Color = when (tone) { "green" -> C.green; "red" -> C.red; "blue" -> C.blue; "accent" -> C.accent; else -> C.muted }
-
 /** A state as the pages say it: a small dot in its colour, then its words. */
 @Composable
 internal fun StateDot(color: Color, size: androidx.compose.ui.unit.Dp = 7.dp) = Box(Modifier.size(size).clip(CircleShape).background(color))

@@ -1,6 +1,5 @@
-// The settings' pages (fail.still.android.screens: stations, profiles, connects, the vault, the workspace…) and the
-// parts other pages take from them (SettingParts.kt). Below the chats (:chat), which use them; built on :shared
-// (2026-10-17).
+// The settings' pages (fail.still.android.screens: stations, profiles, connects, the vault, the workspace…), beside
+// :chat and :drive, on :shared only (2026-10-18).
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)

@@ -95,10 +95,6 @@ internal fun Dot(on: Boolean, warn: Boolean = false) =
     Box(Modifier.size(7.dp).background(if (on) C.green else if (warn) C.warn else C.line, CircleShape))
 
 @Composable
-internal fun Body(content: @Composable () -> Unit) =
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { content() }
-
-@Composable
 internal fun Para(main: String, sub: String? = null) = Column {
     Text(main, fontSize = 15.sp, lineHeight = 22.sp, color = C.ink)
     if (sub != null) Text(sub, fontSize = 15.sp, lineHeight = 22.sp, color = C.subtle)

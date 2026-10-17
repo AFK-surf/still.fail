@@ -70,11 +70,6 @@ import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 
-/** Says the changelog was seen up to this build: what it brought is not news any more. */
-private suspend fun seen(app: AppState) {
-    try { app.core.call("changelog.seen", buildJsonObject {}) } catch (_: CoreException) {}
-}
-
 @Composable
 fun ChangelogScreen() {
     val app = LocalApp.current
@@ -140,28 +135,3 @@ private fun Line(line: ChangelogLine) {
     Text(text, fontSize = 15.sp, lineHeight = 21.sp, color = C.ink, inlineContent = mapOf("kind" to kind))
 }
 
-/** At the top of the list after an update: the build it is now and what it brought; opens the changelog. */
-@Composable
-fun ChangelogNews() {
-    val app = LocalApp.current
-    val scope = rememberCoroutineScope()
-    val topic by rememberTopic<ChangelogView>(app.core, Topics.changelog)
-    // Let go (知道了): gone at once, before the core has it.
-    var gone by remember { mutableStateOf<Any?>(null) }
-    val news = topic.value?.news ?: return
-    if (gone == news) return
-    val lines = news.entries.flatMap { it.text }
-    Box(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 10.dp).fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
-        Column(Modifier.fillMaxWidth().clickable { app.push(Screen.Changelog) }.padding(start = 16.dp, end = 44.dp, top = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(Modifier.padding(bottom = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                IconIn(Icons.Sparks, 16.dp, C.ink)
-                Text(news.build?.let { t("android-settings.changelog.updatedTo", "build" to it) } ?: t("android-settings.changelog.updated"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-            }
-            lines.take(3).forEach { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-            if (lines.size > 3) Text(t("android-settings.changelog.more", "n" to lines.size - 3), fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
-        }
-        Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(32.dp).clip(CircleShape).clickable { gone = news; app.scope.launch { seen(app) } }.semantics { contentDescription = t("android-settings.changelog.dismiss") }, contentAlignment = Alignment.Center) {
-            IconIn(Icons.Close, 16.dp, C.muted)
-        }
-    }
-}

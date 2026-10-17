@@ -599,20 +599,23 @@ The `:core` module is `fail.still.core.StillFailCore` (behind its `Engine`
 interface): `call(name, params)` and `topic(topic)` as a `Flow<TopicState>` —
 shared by everyone who collects the same topic, deltas applied as on the web
 (keyed ones too: `Delta.kt`), unsubscribed 2 s after the last collector leaves.
-The app is in modules, each seeing only those under it, so the compiler keeps the layering:
+The app is in modules, each seeing only those it is on, so the compiler keeps the layering:
 
 | module | what | on |
 |---|---|---|
-| `:shared` | the core's data and calls (`data/`, with the generated `Shapes.kt`, `Operations.kt`), the design (`ui/`, with the generated `Icons.kt`; `ui/Controls.kt`: buttons, fields, rows to pick from), the app's state and routes (`AppState.kt`: `AppState`, `Screen`, `LocalApp`; `Places.kt`) | `:core` |
-| `:settings` | the settings' pages (`screens/`: stations, profiles, connects, the vault, the workspace…) and what other pages take of them (`SettingParts.kt`) | `:shared` |
-| `:chat` | the chats' pages (`screens/`: home, a chat, its composer, files, previews, history, decisions…) | `:settings` |
-| `:drive` | a station's drive (`drive/`) | `:chat` |
+| `:shared` | the core's data and calls (`data/`, with the generated `Shapes.kt`, `Operations.kt`), the design (`ui/`, with the generated `Icons.kt`; `ui/Controls.kt`: buttons, fields, rows to pick from), the app's state and routes (`AppState.kt`: `AppState`, `Screen`, `LocalApp`; `Places.kt`), and the pages' parts more than one page module shows (`screens/`: `PageParts.kt`, `SettingParts.kt`, `FileKinds.kt`, `Notes.kt`, `PlacePage.kt`…) | `:core` |
+| `:settings` | the settings' pages (`screens/`: stations, profiles, connects, the vault, the workspace…) | `:shared` |
+| `:chat` | the chats' pages (`screens/`: home, a chat, its composer, files, previews, history, decisions…) | `:shared` |
+| `:drive` | a station's drive (`drive/`) | `:shared` |
 | `:app` | the activity, the app's frame (`App.kt`: the pages drawn by `Screen`), notifications, pushes, updates, adb lending, the remote screens (`remote/`), the share sheet (`share/`), sign-in and settings' home | all |
 
-What `:shared` must tell the app goes through hooks the app sets as it starts (`TopicTiming`, `AppHooks`) or an
-interface it fills (`AppUpdates`). The pages keep their package (`fail.still.android.screens`) across `:settings` and
-`:chat`; what one page module takes of another is public. In `:app`, the remote screens and the share sheet take
-nothing of the drive, and the remote screens nothing of the pages (`scripts/check.sh`: phone packages one way).
+The three page modules stand side by side: lint, which analyses a module only after those it is on, analyses them at
+once (in a line, one after another: 52 s for all of it, 2026-10-18). What one shows or opens of another's (a station's
+card, the workspaces' switcher, a file in the chat's viewer…) goes through `screens/Elsewhere.kt`, which the app fills in
+as it starts (`StillFailApp`); what `:shared` must tell the app, through hooks it sets (`TopicTiming`, `AppHooks`) or an
+interface it fills (`AppUpdates`). The pages keep their package (`fail.still.android.screens`) across the modules; what
+one module takes of another is public. In `:app`, the remote screens and the share sheet take nothing of the drive, and
+the remote screens nothing of the pages (`scripts/check.sh`: phone packages one way).
 
 ## Desktop
 
