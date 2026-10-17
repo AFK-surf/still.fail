@@ -4,19 +4,19 @@ A station runs three runtimes: Claude Code, Codex and DeepSeek Harness (`dsh`, [
 
 ## How it is driven
 
-- One `dsh --profile acp --patch <file>` per session, under a runner whose id is the session key's (like Claude Code). It speaks [ACP](https://agentclientprotocol.com) (JSON-RPC over stdio): `initialize`, then `session/new` (dsh names the session) or `session/resume`, `session/prompt` per turn (answered when the turn is over: `stopReason`, or an error whose message says why), `session/cancel`.
-- What the model says comes whole in `session/update` (`agent_message_chunk`, `agent_thought_chunk`), not as it streams; tool calls as `tool_call` then `tool_call_update`. `LiveFromDsh` (agents/live.ts) makes them live steps.
-- ACP takes one prompt at a time: `steer` says no, so a message for a running turn waits for the next. There is no way to move a call to the background.
-- The station's tools are an HTTP MCP server given to `session/new`/`session/resume` with the session's bearer token. A permission dsh asks (it should not: `DSH_PERMISSION_MODE=danger-full-access`) is allowed.
-- Prompt ids are `prompt:<uuid>`: whatever answers one ends the turn, so a station taking a session up after a crash needs no record of which prompt it sent.
+- One `dsh --profile acp --patch <file>` per session, under a runner whose id is the session key's (like Claude Code). The patch turns dsh's ACP server off and loads the station's own driver plugin, `station/src/agents/dsh-bridge.mjs` (a Cordis plugin, by its absolute path; the build copies it beside the bundle). dsh's own ACP and SDK servers do not do: neither takes input for a running turn, and the SDK cannot stop one.
+- The plugin speaks a line of JSON per message (its header): `open` (dsh names the session, or resumes one), `prompt` (`agent.followup`: the next turn), `steer` (`agent.steer`: the running turn, read after the step it is in, so a tool call ends first), `cancel` (`agent.cancel`: the turn ends aborted). It sends the session's `turn/start`, `turn/end`, `tool/call`, `tool/result` events and the model's stream (`agent/assistant-stream`: text, thinking and a call's input as they come). `LiveFromDsh` (agents/live.ts) makes them live steps.
+- The plugin imports nothing of dsh's: loaded from the station's directory, dsh's packages do not resolve there. It is plain JavaScript on dsh's internal agent API (`ctx.agents`, `followup`/`steer`/`cancel`, the `session/event` and `agent/assistant-stream` events), not a stable protocol: a dsh release may need it changed.
+- The station's tools are dsh's own `@deepseek-ai/dsh-mcp-client`, inserted by the patch, the bearer token read from `STILLFAIL_MCP_TOKEN` (a `!!js` value: never in the file). `DSH_PERMISSION_MODE=danger-full-access`: no approvals are asked.
+- A dsh whose plugin failed to load never answers `open`: the driver gives up after two minutes.
 
 ## Configuration
 
 dsh's configuration is a stack of patches over its shipped `acp` profile (`dsh --profile acp --dump-default-config` shows it). The station writes one more per session, in `<profile home>/stillfail/<hash of the session key>.patch.yml` (JSON, which is YAML), from `dshPatch`:
 
 - the profile's provider as a route: DeepSeek's own API on dsh's `deepseek-official` route (`llm-deepseek`, key in `DEEPSEEK_API_KEY`); any other on a pi-ai route named `stillfail` (`llm-pi-ai`) with the protocol the provider speaks, chat completions first, then Anthropic's, then Responses; key in `STILLFAIL_DSH_KEY`. A pi-ai route needs its model named.
-- the model (`acp` and `agent-default-model`), the effort (`low`/`medium`/`high`/`max`; DeepSeek's route takes `low`, `high`, `max`),
-- the station's instructions as the system prompt's `personaSuffix` (`{{` broken with a zero-width space: dsh's prompt variables are strict),
+- the model (`agent-default-model`, and the route the plugin's `open` asks for), the effort (`low`/`medium`/`high`/`max`; DeepSeek's route takes `low`, `high`, `max`),
+- the station's instructions as the system prompt's `personaSuffix`, with no prompt variables (the ACP server's `{{model}}` has no value without it; `{{` in the instructions is broken with a zero-width space: dsh's variables are strict),
 - transcripts uncompressed under `<profile home>/dsh-sessions` (not dsh's own `sessions/`: a profile home's is Codex's too).
 
 A profile of custom variables keeps dsh's own configuration (DeepSeek, `DEEPSEEK_API_KEY` from its variables). `DSH_HOME` is the profile home (its `AGENTS.md` and `skills/` are the station's shared memory and skills, agent-home.ts), `DSH_AGENTS_HOME` a directory in it (not the person's `~/.agents`), `DSH_TELEMETRY_MODE=DISABLED`.

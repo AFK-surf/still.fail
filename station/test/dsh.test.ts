@@ -1,7 +1,8 @@
-// The DeepSeek Harness driver (src/agents/dsh.ts) against a fake dsh (test/fake/dsh: ACP as dsh speaks it) under the
-// real runner: turns and their steps, what it is started with (its patch, environment, the station's tools), failures
-// and how they are told apart, cancel, a permission asked, the process exiting, resuming, the transcript read as a
-// timeline, and a session taken up by a next driver (with a snapshot, and after a crash) with its turn's end told once.
+// The DeepSeek Harness driver (src/agents/dsh.ts) against a fake dsh (test/fake/dsh: what the station's driver plugin in
+// it says) under the real runner: turns and their steps, what it is started with (its patch, environment, the station's
+// tools), failures and how they are told apart, a steer in the running turn, cancel, the process exiting, resuming, the
+// transcript read as a timeline, and a session taken up by a next driver (with a snapshot, and after a crash) with its
+// turn's end told once.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -10,7 +11,7 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { DshDriver, classifyFailure, dshPatch } from "../src/agents/dsh.ts";
+import { BRIDGE, DshDriver, classifyFailure, dshSetup } from "../src/agents/dsh.ts";
 import { dshRoute, profileEnv, profileRuntimes } from "../src/agents/profiles.ts";
 import type { AgentSession, OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
 import { readTimeline, transcriptPath } from "../src/read/transcript.ts";
@@ -94,12 +95,11 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
     assert.equal(session.busy(), false);
     assert.ok(!events.some((e) => e.type === "turnStarted"), "our own prompt's turn is not one started without us");
     assert.deepEqual(live(events).filter((e) => e.kind !== "phase").map((e) => e.kind), ["start", "delta", "end", "start", "delta", "end"]);
+    assert.deepEqual(live(events).filter((e) => e.kind === "start").map((e) => (e as { step: string }).step), ["thinking", "text"]);
     assert.deepEqual(deltas(events), ["thinking it over", "hello"]);
 
     const run = started(o.dump);
-    assert.equal(run.argv[0], "--profile");
-    assert.equal(run.argv[1], "acp");
-    assert.equal(run.argv[2], "--patch");
+    assert.deepEqual(run.argv.slice(0, 3), ["--profile", "acp", "--patch"]);
     const env = run.env;
     assert.equal(env.DSH_HOME, o.profile.home);
     assert.equal(env.DSH_AGENTS_HOME, join(o.profile.home, "agents"));
@@ -109,22 +109,35 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
     assert.equal(env.STILLFAIL_DSH_KEY, "k1");
     // OpenCode Go through dsh's pi-ai routes, its session header the session's route.
     const byId = Object.fromEntries(run.patch.map((p: { id: string }) => [p.id, p]));
+    // dsh's ACP server off, the station's driver in, by its path.
+    assert.deepEqual(byId.acp, { id: "acp", disabled: true });
+    // The station's tools by dsh's own MCP client, the session's token read from the environment (not in the file).
+    assert.deepEqual(run.patch.find((p: { insert?: unknown }) => p.insert).insert, [
+      { id: "stillfail-bridge", name: BRIDGE },
+      {
+        id: "stillfail-tools", name: "@deepseek-ai/dsh-mcp-client",
+        config: { transport: "streamable-http", serverName: "stillfail", url: o.mcpUrl, headers: { Authorization: "!!js 'Bearer ' + process.env.STILLFAIL_MCP_TOKEN" }, failOnStartupError: true },
+      },
+    ]);
+    assert.equal(env.STILLFAIL_MCP_TOKEN, "tok");
+    assert.ok(existsSync(BRIDGE));
     assert.deepEqual(byId["llm-pi-ai"].config.providers.stillfail, {
       displayName: "OpenCode Go", api: "openai-completions", baseURL: "https://opencode.ai/zen/go/v1", apiKeyEnv: "STILLFAIL_DSH_KEY",
       models: [{ id: "m1" }], headers: { "x-opencode-session": `ember-${o.route}` }, reasoning: "max",
     });
-    assert.deepEqual(byId.acp.config, { provider: "stillfail", model: "m1" });
-    assert.match(byId["system-prompt"].config.personaSuffix, /\{\{cwd\}\}\.\n\nbe brief; \{​\{not a variable\}\}$/, "its own variables kept, the instructions' braces broken");
+    assert.deepEqual(byId["agent-default-model"].config, { provider: "stillfail", model: "m1" });
+    assert.deepEqual(byId["system-prompt"].config, { personaPrefix: "", personaSuffix: "be brief; {\u200b{not a variable}}" }, "no prompt variables: the instructions' braces broken");
     assert.deepEqual(byId["session-persistence-jsonl"].config, { root: join(o.profile.home, "dsh-sessions"), compression: "none" });
 
-    // The station's tools, with the session's token.
+    // Opened with the route its agent asks for.
     const sent = stdin(o.dump);
-    assert.deepEqual(sent[1].params.mcpServers, [{ type: "http", name: "stillfail", url: o.mcpUrl, headers: [{ name: "Authorization", value: "Bearer tok" }] }]);
-    assert.equal(sent[1].params.cwd, o.cwd);
-    assert.deepEqual(sent[2].params.prompt, [{ type: "text", text: "say:hello" }]);
+    assert.deepEqual(sent[0], { id: "open", op: "open", cwd: o.cwd, provider: "stillfail", model: "m1" });
+    assert.ok(!readFileSync(run.argv[3], "utf8").includes("tok"));
+    assert.equal(sent[1].op, "prompt");
+    assert.equal(sent[1].text, "say:hello");
     await assert.rejects(session.prompt("x").then(() => session.prompt("y")), /a turn is already running/);
     await until(ended(2));
-    assert.equal(await session.steer("more"), false, "ACP takes one prompt at a time");
+    assert.equal(await session.steer("more"), false, "nothing running to steer");
 
     // What it wrote is read as a timeline: what the station said, the thoughts and replies; not the context dsh adds.
     const path = transcriptPath("dsh", o.profile.home, session.id());
@@ -147,8 +160,12 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
     await session.prompt("cmd");
     await until(ended(1));
     const tool = live(events).find((e) => e.kind === "start" && e.step === "tool");
-    assert.deepEqual(tool, { kind: "start", id: tool && "id" in tool ? tool.id : "", step: "tool", tool: "bash", input: '{\n  "command": "ls"\n}' });
-    assert.ok(live(events).some((e) => e.kind === "delta" && e.field === "output" && e.text === "a\n"));
+    assert.deepEqual(tool, { kind: "start", id: "call_3", step: "tool", tool: "bash", input: "" });
+    // Its input as it streams, its output with its result, and its end only then.
+    const of = live(events).filter((e) => "id" in e && e.id === "call_3").map((e) => (e.kind === "delta" ? `${e.field}:${e.text}` : e.kind));
+    assert.deepEqual(of, ["start", 'input:{"command":"ls"}', "output:a\n", "end"]);
+    const phases = live(events).flatMap((e) => (e.kind === "phase" ? [e.phase] : []));
+    assert.deepEqual(phases.slice(0, 4), ["requesting", "responding", "working", "requesting"]);
     const timeline = readTimeline("dsh", transcriptPath("dsh", o.profile.home, session.id())!);
     const call = timeline.find((e) => e.kind === "tool_call");
     const result = timeline.find((e) => e.kind === "tool_result");
@@ -170,9 +187,14 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
       assert.equal(o.kind, "failed");
       assert.equal((o as { reason: string }).reason, reason);
     }
-    assert.equal(classifyFailure('turn failed: 401: {"message":"Upstream request failed: Invalid credential"}'), "auth");
-    assert.equal(classifyFailure("MISSING_CREDENTIAL: the route's key resolves to nothing"), "auth");
-    assert.equal(classifyFailure("QUOTA: insufficient balance"), "rate_limit");
+    assert.equal(classifyFailure("UNKNOWN", 'turn failed: 401: {"message":"Upstream request failed: Invalid credential"}'), "auth");
+    assert.equal(classifyFailure("MISSING_CREDENTIAL", "the route's key resolves to nothing"), "auth");
+    assert.equal(classifyFailure("QUOTA", "insufficient balance"), "rate_limit");
+    // A prompt dsh refuses starts no turn: it ends at once.
+    await session.prompt("refuse");
+    await until(ended(4));
+    assert.equal(outcome(events, 3).kind, "failed");
+    assert.equal(session.busy(), false);
     await session.dispose();
   });
 
@@ -186,23 +208,27 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
     await session.abort();
     await until(ended(1));
     assert.deepEqual(outcome(events), { kind: "aborted" });
-    assert.ok(stdin(o.dump).some((m) => m.method === "session/cancel"));
+    assert.ok(stdin(o.dump).some((m) => m.op === "cancel"));
     await session.prompt("say:again");
     await until(ended(2));
     assert.deepEqual(outcome(events, 1), { kind: "completed" });
     await session.dispose();
   });
 
-  test("a permission it asks is allowed", async () => {
+  test("a steer goes into the running turn, which reads it and goes on", async () => {
     const d = driver();
     const o = options();
     const { events, push, until } = listen();
     const session = await d.open(o, push);
-    await session.prompt("ask");
+    await session.prompt("hold");
+    await until((e) => deltas(e).includes("holding"));
+    assert.equal(await session.steer("more"), true);
     await until(ended(1));
     assert.deepEqual(outcome(events), { kind: "completed" });
-    const answer = stdin(o.dump).find((m) => m.id === "perm-1");
-    assert.deepEqual(answer.result, { outcome: { outcome: "selected", optionId: "yes" } });
+    assert.ok(deltas(events).includes("steer:more"), "read in the same turn");
+    assert.equal(ends(events).length, 1);
+    assert.ok(!events.some((e) => e.type === "turnStarted"));
+    assert.ok(stdin(o.dump).some((m) => m.op === "steer" && m.text === "more"));
     await session.dispose();
   });
 
@@ -242,9 +268,9 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
     assert.equal(again.id(), id);
     await again.prompt("say:two");
     await b.until(ended(1));
-    const resumed = stdin(o.dump).filter((m) => m.method === "session/resume");
+    const resumed = stdin(o.dump).filter((m) => m.op === "open" && m.resume !== undefined);
     assert.equal(resumed.length, 1);
-    assert.equal(resumed[0].params.sessionId, id);
+    assert.equal(resumed[0].resume, id);
     assert.deepEqual(readTimeline("dsh", transcriptPath("dsh", o.profile.home, id)!).filter((e) => e.kind === "assistant").map((e) => e.text), ["one", "two"]);
     await again.dispose();
     await assert.rejects(d.open({ ...o, resume: "11111111-1111-4111-8111-111111111111" }, () => {}), /no dsh session/);
@@ -277,6 +303,7 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
       assert.deepEqual(outcome(b.events), { kind: "completed" });
       assert.deepEqual(deltas(all), ["first ", "second"], "every delta once, in order");
       const starts = live(all).filter((e) => e.kind === "start").length;
+      assert.equal(starts, 2);
       assert.equal(live(all).filter((e) => e.kind === "end").length, starts, "every step started ends");
       assert.equal(b.events.filter((e) => e.type === "turnStarted").length, crashed ? 1 : 0);
       await taken.prompt("say:after");
@@ -297,10 +324,10 @@ describe("what a profile runs DeepSeek Harness on", () => {
     assert.deepEqual(profileRuntimes(deepseek), ["dsh"], "DeepSeek speaks chat completions only: dsh alone runs it");
     assert.deepEqual(dshRoute(deepseek), { kind: "deepseek" });
     assert.deepEqual(profileEnv(deepseek, "dsh"), { DEEPSEEK_API_KEY: "sk" });
-    const patch = dshPatch(dshRoute(deepseek), "deepseek-v4-pro", "medium", "", "/h", "r");
-    const byId = Object.fromEntries(patch.map((p) => [p.id, p]));
+    const setup = dshSetup(dshRoute(deepseek), "deepseek-v4-pro", "medium", "", "/h", "r", "http://127.0.0.1:1/mcp");
+    const byId = Object.fromEntries(setup.patch.map((p) => [p.id, p]));
     assert.deepEqual(byId["llm-deepseek"].config, { apiKeyEnv: "DEEPSEEK_API_KEY", models: [{ id: "deepseek-v4-pro" }], reasoningEffort: "high" });
-    assert.deepEqual(byId.acp.config, { provider: "deepseek-official", model: "deepseek-v4-pro" });
+    assert.deepEqual([setup.provider, setup.model], ["deepseek-official", "deepseek-v4-pro"]);
 
     assert.deepEqual(dshRoute(profile({ kind: "api-provider", provider: "moonshotai", key: "k" })), { kind: "pi", name: "Kimi", api: "openai-completions", baseURL: "https://api.moonshot.ai/v1" });
     assert.deepEqual(dshRoute(profile({ kind: "api-provider", provider: "minimax", key: "k" })), { kind: "pi", name: "MiniMax", api: "anthropic-messages", baseURL: "https://api.minimax.io/anthropic" });
@@ -312,9 +339,10 @@ describe("what a profile runs DeepSeek Harness on", () => {
   });
 
   test("a model is needed on a provider's route; custom variables keep dsh's own configuration", () => {
-    assert.throws(() => dshPatch(dshRoute(profile({ kind: "opencode-go", key: "k" })), undefined, undefined, "", "/h", "r"), /names no model/);
-    const own = dshPatch(dshRoute(profile({ kind: "env" })), undefined, undefined, "", "/h", "r");
-    assert.deepEqual(own.map((p) => p.id), ["system-prompt", "session-persistence-jsonl"]);
+    assert.throws(() => dshSetup(dshRoute(profile({ kind: "opencode-go", key: "k" })), undefined, undefined, "", "/h", "r", "http://127.0.0.1:1/mcp"), /names no model/);
+    const own = dshSetup(dshRoute(profile({ kind: "env" })), undefined, undefined, "", "/h", "r", "http://127.0.0.1:1/mcp");
+    assert.deepEqual(own.patch.map((p) => p.id ?? "insert"), ["acp", "insert", "system-prompt", "session-persistence-jsonl"]);
+    assert.equal(own.provider, undefined, "dsh's own default route");
     assert.deepEqual(profileRuntimes(profile({ kind: "env" })), ["dsh"]);
     assert.deepEqual(profileRuntimes(profile({ kind: "subscription" })), [], "no subscription to sign in to");
     assert.deepEqual(profileRuntimes(profile({ kind: "opencode-go", key: "k" }, { runtime: "claude" })), ["claude", "codex", "dsh"]);

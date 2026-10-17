@@ -73,6 +73,8 @@ fi
 cp "$root/station/dist/main.js" "$app/station/"
 cp "$root/station/dist/read/worker.js" "$app/station/read/"
 cp -R "$root/station/dist/skills" "$app/station/skills"
+# DeepSeek Harness loads the station's driver from here (agents/dsh.ts).
+cp "$root/station/dist/dsh-bridge.mjs" "$app/station/"
 # The bundle is an ES module: said, so Node neither guesses nor takes the type of a package.json above the release
 # (the desktop app built in apps/desktop has one: every command warned).
 printf '{"type":"module"}\n' > "$app/station/package.json"

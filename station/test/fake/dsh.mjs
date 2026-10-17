@@ -1,15 +1,16 @@
-// A fake `dsh --profile acp --patch <file>`: ACP JSON-RPC lines as DeepSeek Harness speaks them (initialize,
-// session/new, session/resume, session/prompt, session/cancel; session/update notifications; session/request_permission
-// asked of the client), keeping each session's transcript where its patch says, as dsh writes it. A prompt's text says
-// what the turn does:
-//   say:<text>    a reply (and a thought before it)       fail:auth|rate|model   the prompt answered with an error
-//   cmd           a bash call with its output, then a reply                       ask   asks the client's permission first
+// A fake `dsh --profile acp --patch <file>` with the station's driver plugin in it (src/agents/dsh-bridge.mjs): its
+// lines as the plugin writes them (answers; `event` with turn/start, turn/end, tool/call, tool/result; `stream` with the
+// model's frames), keeping the session's transcript where the patch says, as dsh writes it. A prompt's text says what the
+// turn does:
+//   say:<text>    a thought, then a reply                fail:auth|rate|model   the turn ends in dsh's error
+//   cmd           a bash call with its output, then a reply                      refuse  the prompt is refused
 //   tools         a call to the station's tools that fails as unreachable
-//   hold          waits until cancelled                                            exit  exits 4 in the middle of the turn
+//   hold          a reply, then waits: a steer is answered in the same turn (`steer:<text>`, then it ends), a cancel
+//                 ends it aborted                                                exit  exits 4 in the middle of the turn
 //   gate:<name>   a reply's first part; the rest once FAKE_DUMP.<name>.a (a fifo) is written, then FAKE_DUMP.<name>.said
-//                 made; the answer once FAKE_DUMP.<name>.b is (what the test lets happen when, not a time)
-// FAKE_DUMP: its argv, env and patch are appended there as a JSON line, and every line of stdin to FAKE_DUMP.stdin. The
-// version it says it is (`--version`) is FAKE_DUMP.version's when there is one, else 0.2.0.
+//                 made; the end once FAKE_DUMP.<name>.b is (what the test lets happen when, not a time)
+// A steer with no turn running starts one (as dsh does). FAKE_DUMP: its argv, env and patch are appended there as a JSON
+// line (a value dsh evaluates as "!!js <its code>"), and every line of stdin to FAKE_DUMP.stdin. Its version (`--version`) is FAKE_DUMP.version's, else 0.2.0.
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
@@ -20,72 +21,91 @@ if (process.argv[2] === "--version") {
   console.log(version);
   process.exit(0);
 }
-const patchFile = process.argv[process.argv.indexOf("--patch") + 1];
-const patch = JSON.parse(fs.readFileSync(patchFile, "utf8"));
+// JSON but for the one value dsh evaluates (`!!js "…"`): kept as its text.
+const patchText = fs.readFileSync(process.argv[process.argv.indexOf("--patch") + 1], "utf8");
+const patch = JSON.parse(patchText.replace(/!!js ("(?:[^"\\]|\\.)*")/g, (_, js) => JSON.stringify(`!!js ${JSON.parse(js)}`)));
 if (dump) fs.appendFileSync(dump, JSON.stringify({ argv: process.argv.slice(2), env: process.env, patch, cwd: process.cwd(), pid: process.pid }) + "\n");
 const root = patch.find((p) => p.id === "session-persistence-jsonl").config.root;
 
-const say = (msg) => fs.writeSync(1, JSON.stringify({ jsonrpc: "2.0", ...msg }) + "\n");
-const update = (sessionId, u) => say({ method: "session/update", params: { sessionId, update: u } });
+const say = (msg) => fs.writeSync(1, JSON.stringify(msg) + "\n");
+const event = (type, data) => say({ ev: "event", type, data });
 const gate = async (at) => {
   while (process.platform === "win32" && !fs.existsSync(at)) await new Promise((r) => setTimeout(r, 10));
   return fs.promises.readFile(at);
 };
 
 let n = 0;
-/// sessionId → { file, seq, cancel: () => void | null }
-const sessions = new Map();
-const answers = new Map();
-const heard = new Map();
+let s = null;
+/// The running turn: { steers, wake, cancelled }, or null.
+let running = null;
+const record = (type, data) => fs.appendFileSync(s.file, JSON.stringify({ type, seq: s.seq++, time: 1_800_000_000_000 + s.seq, data }) + "\n");
 
 function open(id, cwd) {
   const dir = path.join(root, `--${cwd.replace(/[^A-Za-z0-9]/g, "-")}--`, id);
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, "session.v4.jsonl");
   if (!fs.existsSync(file)) fs.writeFileSync(file, JSON.stringify({ type: "session", version: 4, id, cwd }) + "\n");
-  const s = { file, seq: 0, cancel: null, id };
-  sessions.set(id, s);
-  return s;
+  s = { id, file, seq: 0 };
 }
-const record = (s, type, data) => fs.appendFileSync(s.file, JSON.stringify({ type, seq: s.seq++, time: 1_800_000_000_000 + s.seq, data }) + "\n");
 
-async function turn(s, text) {
-  record(s, "user/message", { content: [{ type: "text", text }], source: { kind: "user" }, role: "user", id: `u${++n}` });
-  record(s, "user/message", { content: [{ type: "text", text: "Current runtime context." }], source: { kind: "runtime-context" }, role: "user", id: `u${++n}` });
-  const reply = (words, thought) => {
-    const id = `m${++n}`;
-    if (thought) update(s.id, { sessionUpdate: "agent_thought_chunk", messageId: id, content: { type: "text", text: thought } });
-    update(s.id, { sessionUpdate: "agent_message_chunk", messageId: id, content: { type: "text", text: words } });
-    const content = [...(thought ? [{ type: "reasoning", text: thought }] : []), { type: "text", text: words }];
-    record(s, "assistant/message", { message: { role: "assistant", content, source: { kind: "model", model: "m1" }, id }, usage: { inputTokens: 10, outputTokens: 2, cacheReadTokens: 5 } });
+/// One attempt of the model: a thought (when given) and a reply, streamed block by block, then committed.
+function reply(words, thought) {
+  const attemptId = `${s.id}:${++n}`;
+  let index = 0;
+  const frame = (f) => say({ ev: "stream", frame: { attemptId, ...f } });
+  frame({ type: "start" });
+  const block = (blockType, text) => {
+    const i = index++;
+    frame({ type: "chunk", index: i, chunk: { type: "block-start", index: i, blockType } });
+    frame({ type: "chunk", index: i, chunk: { type: blockType === "text" ? "text-delta" : "reasoning-delta", index: i, text } });
+    frame({ type: "chunk", index: i, chunk: { type: "block-end", index: i, block: { type: blockType, text } } });
   };
-  if (text === "fail:auth") throw new Error('turn failed: 401: {"message":"Upstream request failed: Invalid credential"}');
-  if (text === "fail:rate") throw new Error("turn failed: 429: rate limit reached");
-  if (text === "fail:model") throw new Error("turn failed: UNKNOWN_MODEL: no such model");
+  if (thought) block("reasoning", thought);
+  block("text", words);
+  frame({ type: "end", outcome: { kind: "committed", eventType: "assistant/message" } });
+  const content = [...(thought ? [{ type: "reasoning", text: thought }] : []), { type: "text", text: words }];
+  record("assistant/message", { message: { role: "assistant", content, source: { kind: "model", model: "m1" }, id: `m${n}` }, usage: { inputTokens: 10, outputTokens: 2, cacheReadTokens: 5 } });
+}
+
+function call(name, args, output, isError) {
+  const attemptId = `${s.id}:${++n}`;
+  const callId = `call_${n}`;
+  say({ ev: "stream", frame: { attemptId, type: "start" } });
+  say({ ev: "stream", frame: { attemptId, type: "chunk", chunk: { type: "block-start", index: 0, blockType: "tool-call" } } });
+  say({ ev: "stream", frame: { attemptId, type: "chunk", chunk: { type: "tool-call-delta", index: 0, id: callId, name, argumentsDelta: args } } });
+  say({ ev: "stream", frame: { attemptId, type: "chunk", chunk: { type: "block-end", index: 0 } } });
+  say({ ev: "stream", frame: { attemptId, type: "end", outcome: { kind: "committed" } } });
+  record("assistant/message", { message: { role: "assistant", content: [{ type: "tool-call", id: callId, name, arguments: args }], id: `m${n}` } });
+  event("tool/call", { callId, name, arguments: args });
+  const result = { message: { role: "tool", toolCallId: callId, content: [{ type: "text", text: output }], isError } };
+  event("tool/result", result);
+  record("tool/result", result);
+}
+
+async function turn(text) {
+  const t = { steers: [], wake: null, cancelled: false };
+  running = t;
+  event("turn/start", { turn: ++n });
+  record("user/message", { content: [{ type: "text", text }], source: { kind: "user" }, role: "user", id: `u${n}` });
+  record("user/message", { content: [{ type: "text", text: "Current runtime context." }], source: { kind: "runtime-context" }, role: "user", id: `u${n}` });
+  const end = (reason) => {
+    running = null;
+    event("turn/end", { turn: n, reason });
+  };
+  const failed = { "fail:auth": ["AUTH", '401: {"message":"Upstream request failed: Invalid credential"}'], "fail:rate": ["RATE_LIMIT", "429: rate limit reached"], "fail:model": ["UNKNOWN_MODEL", "no such model"] }[text];
+  if (failed) return end({ kind: "error", error: { code: failed[0], message: failed[1] } });
   if (text === "exit") {
     reply("partial");
     process.exit(4);
   }
-  if (text === "ask") {
-    say({ id: "perm-1", method: "session/request_permission", params: { sessionId: s.id, toolCall: { toolCallId: "c0" }, options: [{ optionId: "no", kind: "reject_once", name: "No" }, { optionId: "yes", kind: "allow_once", name: "Yes" }] } });
-    if (!answers.has("perm-1")) await new Promise((r) => heard.set("perm-1", r));
-  }
-  if (text === "cmd") {
-    const callId = `call_${++n}`;
-    update(s.id, { sessionUpdate: "tool_call", toolCallId: callId, title: "bash", kind: "other", status: "in_progress", rawInput: { command: "ls" } });
-    record(s, "assistant/message", { message: { role: "assistant", content: [{ type: "tool-call", id: callId, name: "bash", arguments: '{"command":"ls"}' }], id: `m${++n}` } });
-    update(s.id, { sessionUpdate: "tool_call_update", toolCallId: callId, status: "completed", content: [{ type: "content", content: { type: "text", text: "a\n" } }] });
-    record(s, "tool/result", { message: { role: "tool", toolCallId: callId, content: [{ type: "text", text: "a\n" }], isError: false } });
-  }
-  if (text === "tools") {
-    const callId = `call_${++n}`;
-    update(s.id, { sessionUpdate: "tool_call", toolCallId: callId, title: "mcp__stillfail__chat_post", kind: "other", status: "in_progress", rawInput: { text: "hi" } });
-    update(s.id, { sessionUpdate: "tool_call_update", toolCallId: callId, status: "failed", content: [{ type: "content", content: { type: "text", text: "fetch failed: ECONNREFUSED 127.0.0.1:4750" } }] });
-  }
+  if (text === "cmd") call("bash", '{"command":"ls"}', "a\n", false);
+  if (text === "tools") call("mcp__stillfail__chat_post", '{"text":"hi"}', "fetch failed: ECONNREFUSED 127.0.0.1:4750", true);
   if (text === "hold") {
     reply("holding");
-    await new Promise((r) => (s.cancel = r));
-    return "cancelled";
+    while (!t.cancelled && t.steers.length === 0) await new Promise((r) => (t.wake = r));
+    if (t.cancelled) return end({ kind: "aborted", reason: { kind: "user" } });
+    reply(`steer:${t.steers.join(" ")}`);
+    return end({ kind: "completed" });
   }
   if (text.startsWith("gate:")) {
     const at = `${dump}.${text.slice(5)}`;
@@ -94,47 +114,50 @@ async function turn(s, text) {
     reply("second");
     fs.writeFileSync(`${at}.said`, "");
     await gate(`${at}.b`);
-    return "end_turn";
+    return end({ kind: "completed" });
   }
   reply(text.startsWith("say:") ? text.slice(4) : text, "thinking it over");
-  return "end_turn";
+  end({ kind: "completed" });
 }
 
 async function handle(msg) {
-  const { id, method, params } = msg;
-  const reply = (result) => say({ id, result });
-  const fail = (message) => say({ id, error: { code: -32603, message: `Internal error: ${message}` } });
-  if (method === undefined) {
-    answers.set(id, msg);
-    heard.get(id)?.();
-    return;
-  }
-  if (method === "initialize") return reply({ protocolVersion: 1, agentCapabilities: { mcpCapabilities: { http: true }, sessionCapabilities: { resume: {} } } });
-  if (method === "session/new") {
-    const s = open(`00000000-0000-4000-8000-${String(process.pid % 1e6).padStart(6, "0")}${String(++n).padStart(6, "0")}`, params.cwd);
-    return reply({ sessionId: s.id, configOptions: [] });
-  }
-  if (method === "session/resume") {
-    const dir = fs.readdirSync(root).map((d) => path.join(root, d, params.sessionId)).find((d) => fs.existsSync(d));
-    if (!dir) return fail(`unknown session ${params.sessionId}`);
-    open(params.sessionId, params.cwd);
-    return reply({ configOptions: [] });
-  }
-  if (method === "session/prompt") {
-    const s = sessions.get(params.sessionId);
-    try {
-      const stopReason = await turn(s, params.prompt.map((p) => p.text).join(""));
-      return reply({ stopReason });
-    } catch (e) {
-      return fail(e.message);
+  const { id, op } = msg;
+  const answer = (more = {}) => say({ id, ...more });
+  if (op === "open") {
+    if (msg.resume) {
+      const dir = fs.readdirSync(root).map((d) => path.join(root, d, msg.resume)).find((d) => fs.existsSync(d));
+      if (!dir) return answer({ error: `session ${msg.resume} not found` });
+      open(msg.resume, msg.cwd);
+    } else {
+      open(`00000000-0000-4000-8000-${String(process.pid % 1e6).padStart(6, "0")}${String(++n).padStart(6, "0")}`, msg.cwd);
     }
+    return answer({ session: s.id });
   }
-  if (method === "session/cancel") {
-    const s = sessions.get(params.sessionId);
-    s?.cancel?.();
+  if (s === null) return answer({ error: "no session is open" });
+  if (op === "prompt") {
+    if (msg.text === "refuse") return answer({ error: "the prompt is refused" });
+    answer();
+    if (running) running.steers.push(msg.text);
+    else void turn(msg.text);
     return;
   }
-  return say({ id, error: { code: -32601, message: `Method not found: ${method}` } });
+  if (op === "steer") {
+    answer();
+    if (running) {
+      running.steers.push(msg.text);
+      running.wake?.();
+    } else void turn(msg.text);
+    return;
+  }
+  if (op === "cancel") {
+    answer();
+    if (running) {
+      running.cancelled = true;
+      running.wake?.();
+    }
+    return;
+  }
+  answer({ error: `unknown op ${op}` });
 }
 
 const rl = readline.createInterface({ input: process.stdin });
