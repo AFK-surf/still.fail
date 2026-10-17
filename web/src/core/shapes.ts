@@ -2590,6 +2590,13 @@ export interface HistoryMessage {
 	from: HistoryFrom;
 	text: string;
 	place?: Place;
+	/**
+	 * A notice of the station's own, not a person's message: `job` (a job told its agent: `from` is its name,
+	 * `text` what it said, as written: drawn in a monospaced font) or `stillfail` (still.fail's words: drawn from `md`).
+	 */
+	notice?: string;
+	/** A `stillfail` notice's `text` read as Markdown (markdown.ts): what the clients draw. */
+	md?: unknown;
 }
 
 export interface HistoryPhase {
