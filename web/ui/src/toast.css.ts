@@ -16,5 +16,12 @@ export const toast = style({
   animation: `${toastInKeyframes} 200ms ${vars.easeOut}`,
   selectors: {
     "&[data-state=\"closed\"]": { animation: `${fadeKeyframes} 150ms ${vars.easeOut} reverse forwards` },
+    // With something to do about it at its end (打开): the words, then it, on one line.
+    "&[data-action]": { display: "flex", alignItems: "baseline", gap: "14px" },
   },
+});
+/** What a toast offers to do (toast.tsx ToastAction): words to press, in its ink, bolder. */
+export const toastAction = style({
+  flex: "none", padding: "0", border: "0", background: "none", color: "inherit", font: "inherit", fontWeight: 600, cursor: "pointer",
+  selectors: { "&:hover": { textDecoration: "underline" } },
 });

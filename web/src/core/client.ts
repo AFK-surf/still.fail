@@ -69,6 +69,8 @@ export type Topic =
   | { topic: "archive"; scope: string; q?: string; limit?: number }
   // A new chat's page in a scope: its stations, the one it starts on and what it runs there, as last picked here.
   | { topic: "newChat"; scope: string }
+  // Where something another app shares goes (`source` what is shared, `query` narrowing the chats): docs/share-in.md.
+  | { topic: "shareIn"; scope: string; source: string; query?: string }
   // A model control: what it runs on now and what its panel picked (`of`: new, session:<key>, connect:<id>, connect-new).
   | { topic: "pick"; station: string; of: string }
   // A chat's services and background jobs as its pages show them (the same thread or session as its `chat`).

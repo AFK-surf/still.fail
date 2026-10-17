@@ -110,6 +110,7 @@ import "../mobile/StationFiles.css.ts";
 import "../mobile/Bar.css.ts";
 import "../mobile/Files.css.ts";
 import "../mobile/BarSettings.css.ts";
+import "../mobile/ShareIn.css.ts";
 import "../cloud/StationCards.css.ts";
 import "../Versions.css.ts";
 import "../WebUpdate.css.ts";
@@ -118,6 +119,7 @@ import "../Sidebar.css.ts";
 import "../OpenJobs.css.ts";
 import "../ChatMark.css.ts";
 import "../Switcher.css.ts";
+import "../ShareIn.css.ts";
 import "../Shortcuts.css.ts";
 import "../madeChat.css.ts";
 

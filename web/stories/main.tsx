@@ -11,6 +11,7 @@ import { MemoryRouter } from "react-router";
 import { Tooltip } from "radix-ui";
 import { ToastProvider } from "@stillfail/ui/toast.tsx";
 import { extendDemo, mountDemo } from "../src/demo/mount.tsx";
+import { offerShare } from "../src/shareIn.ts";
 import { Button, Segmented, Select } from "../src/ui.tsx";
 import { ArrowUpRight } from "@stillfail/ui/icons.tsx";
 import * as shellCss from "../src/styles/shell.css.ts";
@@ -33,6 +34,10 @@ if (worn) wear(worn);
 
 // A story's own state (stations of other workspaces to add, a station's workspaces), before the rest.
 if (story?.demo) extendDemo(story.demo);
+// Something shared into still.fail, waiting as the app opens: its sheet or panel up. (Offered again by a script, over
+// another page: `stillfailShare`.)
+if (story?.share) offerShare(story.share);
+(window as unknown as { stillfailShare: typeof offerShare }).stillfailShare = offerShare;
 // What the stories show that the site's demo has none of: files to read and play, and (for those that show it) the
 // changelog's news.
 extendDemo({

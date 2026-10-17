@@ -33,6 +33,7 @@ import * as pagesCss from "../styles/pages.css.ts";
 import * as additionsCss from "../styles/additions.css.ts";
 
 import { NAME } from "../channel.ts";
+import { offerShare, sharedOf } from "../shareIn.ts";
 import { t } from "../i18n.ts";
 export function CloudApp() {
   const narrow = useNarrow();
@@ -96,6 +97,8 @@ function Home() {
   if (!list) return <Splash />;
   if (list.length > 0) return <SignedIn />;
   if (narrow) return <MobileSignIn />;
+  // Signed in, it comes back here (accounts.ts signIn): to what was being shared, still in the address.
+  if (location.pathname === "/share") return <SignInPage lead={t("web-main.shareIn.signIn", { name: NAME })} />;
   return <SignInPage lead={inviteCode() ? t("web-pages.cloud.signInWithCode", { name: NAME }) : undefined} />;
 }
 
@@ -108,6 +111,7 @@ function SignedIn() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/o/:ws/:station/:session" element={<OpenItem />} />
+        <Route path="/share" element={<ShareLanding />} />
         <Route path="/w/:ws/s/:station/services/:service" element={<CloudServicePage />} />
         <Route path="/w/:ws/*" element={<WorkspaceRoute />} />
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -218,6 +222,24 @@ function Landing() {
     );
   }
   return <Splash label={failed ? t("web-pages.cloud.workspacesFailed", { error: failed.message }) : t("web-pages.cloud.workspacesLoading")} now={Boolean(failed)}>{!failed && <StatusLine />}</Splash>;
+}
+
+/**
+ * /share?url=&title=&text= (the installed page's share target; the browser extension opens it with `popup=1`, in a
+ * window of its own): what was shared waits to be sent (../shareIn.ts) and the page goes to the workspace last open on
+ * this device (else the first), whose page shows where it goes. With no workspace, the landing says why, as it would.
+ */
+function ShareLanding() {
+  const shared = useMemo(() => sharedOf(location.search), []);
+  const signedIn = useWorkspaces().value;
+  const last = usePrefs((p) => p.workspace);
+  const all = signedIn?.flatMap((a) => a.workspaces) ?? [];
+  const settled = signedIn !== undefined && signedIn.every((a) => a.loaded || a.error);
+  const open = all.find((w) => w.id === last) ?? (settled ? all[0] : undefined);
+  useEffect(() => { if (open && shared) offerShare(shared); }, [open, shared]);
+  if (!shared || (settled && !open)) return <Navigate to="/" replace />;
+  if (open) return <Navigate to={`/w/${open.id}`} replace />;
+  return <Splash label={t("web-pages.cloud.workspacesLoading")}><StatusLine /></Splash>;
 }
 
 /** Asks for the invite code a new workspace needs; what the last try said stands under it. */

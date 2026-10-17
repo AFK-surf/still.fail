@@ -685,5 +685,15 @@
   "web-main.download.windows": "x64",
   "web-main.download.android": "手机扫码下载",
   "web-main.system.label": "系统通知",
-  "web-main.system.changelog": "查看"
+  "web-main.system.changelog": "查看",
+  "web-main.shareIn.title": "发到 {name}",
+  "web-main.shareIn.to": "发到",
+  "web-main.shareIn.newChat": "新 chat",
+  "web-main.shareIn.startOn": "新 chat 开在",
+  "web-main.shareIn.note": "补一句（可选）",
+  "web-main.shareIn.send": "发送",
+  "web-main.shareIn.sent": "已发到「{title}」",
+  "web-main.shareIn.open": "打开",
+  "web-main.shareIn.sending": "发送",
+  "web-main.shareIn.signIn": "登录后发到 {name}"
 }

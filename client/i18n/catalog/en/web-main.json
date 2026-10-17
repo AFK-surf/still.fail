@@ -760,5 +760,15 @@
   "web-main.download.windows": "x64",
   "web-main.download.android": "Scan with your phone",
   "web-main.system.label": "From the app",
-  "web-main.system.changelog": "See what's new"
+  "web-main.system.changelog": "See what's new",
+  "web-main.shareIn.title": "Send to {name}",
+  "web-main.shareIn.to": "Send to",
+  "web-main.shareIn.newChat": "New chat",
+  "web-main.shareIn.startOn": "Start the new chat on",
+  "web-main.shareIn.note": "Add a note (optional)",
+  "web-main.shareIn.send": "Send",
+  "web-main.shareIn.sent": "Sent to “{title}”",
+  "web-main.shareIn.open": "Open",
+  "web-main.shareIn.sending": "send it",
+  "web-main.shareIn.signIn": "Sign in to send it to {name}"
 }

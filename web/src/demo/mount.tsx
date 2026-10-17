@@ -16,9 +16,9 @@ import { MobileWorkspace } from "../mobile/index.tsx";
 import { WorkspaceShell, type WorkspaceEntry } from "../cloud/workspace.tsx";
 import { CoreClient, type Topic } from "../core/client.ts";
 import type { ModelOption } from "../api.ts";
-import type { ChatMessage } from "../core/shapes.ts";
+import type { ChatItem, ChatMessage, ShareInPick, ShareInView } from "../core/shapes.ts";
 import { setCore, setTopicSource } from "../core/react.ts";
-import { addItem, agentCardView, chatView, newChat, received, VISITOR, chatsView, historyView, liveView, marked, message, outgoing, SAFARI_KEY } from "./fixtures.ts";
+import { addItem, agentCardView, chatView, newChat, received, VISITOR, chatsView, historyView, liveView, marked, message, outgoing, SAFARI_KEY, STATION } from "./fixtures.ts";
 import { makeStory, openingChats } from "./story.ts";
 import { RealStillFail, askForReal } from "./real.tsx";
 import * as station from "./station.ts";
@@ -94,6 +94,7 @@ function demoValueOf(topic: Topic): unknown {
     // What the core puts together of them (client/core-ts/src/choose.ts), as a new chat and a model control start.
     case "newChat": return newChatView();
     case "pick": return pickView(topic.of);
+    case "shareIn": return shareInView(String(topic.source ?? ""));
     // still.fail cloud's, for the phone's workspace pages (mobile/).
     case "accounts": return [station.ACCOUNT];
     case "workspaces": return station.workspaces();
@@ -134,6 +135,46 @@ function pickView(of: string): unknown {
   };
 }
 
+/**
+ * What another app shares (client/core-ts/src/share-in.ts), as the core puts it together of the demo's chats: those on
+ * the page newest first (not a Slack chat), the one the same site's things went to last first, what `shareIn.pick`
+ * picked else that one else the latest; the one station for a new chat.
+ */
+const sharePicked = new Map<string, ShareInPick>();
+const shareKept = new Map<string, string>();
+/** The site of the first link in what is shared (`youtube.com`), as the core reads it (short hosts aside). */
+const siteOf = (source: string): string | null => {
+  const link = /https?:\/\/[^\s<>"']+/i.exec(source)?.[0];
+  try { return link ? new URL(link).hostname.toLowerCase().replace(/^(www|m|mobile)\./, "") : null; } catch { return null; }
+};
+function shareRows(): ChatItem[] {
+  return chatsView(chats).days.flatMap((d) => d.items).filter((i) => !i.connect && !i.originText);
+}
+function shareInView(source: string): ShareInView {
+  const site = siteOf(source);
+  const rows = shareRows();
+  const kept = rows.find((r) => r.id === shareKept.get(site ?? ""));
+  const latest = kept ?? rows[0];
+  const picked = sharePicked.get(source) ?? (latest ? { station: latest.station, id: latest.id } : { station: STATION });
+  return {
+    ...(site ? { site } : {}), items: (kept ? [kept, ...rows.filter((r) => r !== kept)] : rows).slice(0, 30),
+    ...(kept ? { kept: { station: kept.station, id: kept.id, text: site ? `${site} 的链接上次发到这里` : "上次分享的文字发到这里" } } : {}),
+    picked, stations: [{ station: STATION, name: "Studio" }], loading: false,
+  };
+}
+/** `shareIn.send`: as the core sends it (what was added, the title when the link does not hold it, what is shared), to the chat picked or a new one. */
+function shareSend(source: string, title: string | undefined, note: string | undefined): unknown {
+  // Where the page shows it going (what a page adds to the demo's core too: the stories' states).
+  const picked = (valueOf({ topic: "shareIn", scope: station.WORKSPACE, source }) as ShareInView).picked ?? shareInView(source).picked!;
+  const text = [note?.trim(), title && !source.includes(title) ? `${title}\n${source}` : source].filter(Boolean).join("\n\n");
+  const key = picked.id ?? (answer("newChat.create", {}) as { key: string }).key;
+  const chat = chats.find((c) => c.key === key)!;
+  answer("chat.send", { thread: chat.thread, text });
+  shareKept.set(siteOf(source) ?? "", key);
+  sharePicked.delete(source);
+  return { station: STATION, session: key, thread: chat.thread, title: picked.id ? chat.title : "新 chat" };
+}
+
 // Every topic starts at its value: the first render shows the demo at once (and so does the site built to HTML).
 setTopicSource(valueOf);
 
@@ -163,6 +204,14 @@ function answer(name: string, params: Record<string, unknown>, emit: (value: unk
     }
     setTimeout(publish, 0);
     return null;
+  }
+  if (name === "shareIn.pick" && typeof params.source === "string") {
+    sharePicked.set(params.source, { station: String(params.station), ...(typeof params.id === "string" ? { id: params.id } : {}) });
+    setTimeout(publish, 0);
+    return null;
+  }
+  if (name === "shareIn.send" && typeof params.source === "string") {
+    return shareSend(params.source, params.title as string | undefined, params.text as string | undefined);
   }
   if (name === "chat.create" || name === "newChat.create") {
     // 新建对话: made at once, under the key answered; what is sent to it follows.

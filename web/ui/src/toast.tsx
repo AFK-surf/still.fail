@@ -3,7 +3,10 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 import * as css from "./toast.css.ts";
 import { t } from "./i18n.ts";
 
-const ToastContext = createContext<(message: string) => void>(() => {});
+/** What a toast offers to do about what it says (打开: the chat something went to), at its end. */
+export interface ToastAction { label: string; run: () => void }
+
+const ToastContext = createContext<(message: string, action?: ToastAction) => void>(() => {});
 
 /**
  * What a toast says. A write its station did not answer may have been done (the core's `unconfirmed`, client/core-ts/src/
@@ -15,15 +18,20 @@ export function said(message: string): string {
 
 /** A short confirmation at the bottom of the screen, named after the action that happened. */
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
-  const show = useCallback((message: string) => setToast({ id: Date.now(), message: said(message) }), []);
+  const [toast, setToast] = useState<{ id: number; message: string; action?: ToastAction | undefined } | null>(null);
+  const show = useCallback((message: string, action?: ToastAction) => setToast({ id: Date.now(), message: said(message), action }), []);
   return (
     <ToastContext.Provider value={show}>
       <Toast.Provider duration={2600} swipeDirection="down">
         {children}
         {toast && (
-          <Toast.Root key={toast.id} className={css.toast} onOpenChange={(open) => { if (!open) setToast(null); }}>
+          <Toast.Root key={toast.id} className={css.toast} data-action={toast.action ? "" : undefined} onOpenChange={(open) => { if (!open) setToast(null); }}>
             <Toast.Title>{toast.message}</Toast.Title>
+            {toast.action && (
+              <Toast.Action altText={toast.action.label} asChild>
+                <button type="button" className={css.toastAction} onClick={toast.action.run}>{toast.action.label}</button>
+              </Toast.Action>
+            )}
           </Toast.Root>
         )}
         <Toast.Viewport className={css.toastViewport} />
@@ -32,12 +40,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useToast(): (message: string) => void {
+export function useToast(): (message: string, action?: ToastAction) => void {
   return useContext(ToastContext);
 }
 
 /** Where `useToast` shows below it: the phone's own toast, in place of this one. */
-export function ToastTo({ show, children }: { show: (message: string) => void; children: ReactNode }) {
+export function ToastTo({ show, children }: { show: (message: string, action?: ToastAction) => void; children: ReactNode }) {
   return <ToastContext.Provider value={show}>{children}</ToastContext.Provider>;
 }
 

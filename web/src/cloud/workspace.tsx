@@ -3,6 +3,7 @@
 // together (docs/client-core.md); a page opened from the sidebar talks to the
 // station the item belongs to (StationContext).
 import { StationSettings, StationsFirst, StationsNav, useStationsSide } from "./StationPage.tsx";
+import { ShareInPanel } from "../ShareIn.tsx";
 import { Check, ChevronsUpDown, Plus, Settings, UserPlus } from "@stillfail/ui/icons.tsx";
 import { NewChat } from "../NewChat.tsx";
 import { lastChatOf, useLastChat, useRememberChat, useWorkspaceMarks } from "../lastChat.ts";
@@ -152,6 +153,8 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
         <SidebarEdge />
         <SystemBubbles scope={entry.id} />
         <SecurityPrompt entry={entry} />
+        {/* What another app shares (shareIn.ts), over whichever page is open. */}
+        <ShareInPanel scope={entry.id} />
         <main className={shellCss.main}>
           <ComposerDock>
           <Routes>
