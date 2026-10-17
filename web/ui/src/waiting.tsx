@@ -64,7 +64,7 @@ const CARDS = [120, 88, 152, 104];
 export function WaitShapes({ shape = "rows", count, dense = false, still = false }: { shape?: WaitShape; count?: number; dense?: boolean; still?: boolean }) {
   if (shape === "messages") {
     return (
-      <div className={`${css.shapes} ${css.messages}`} data-still={still || undefined} aria-hidden="true">
+      <div className={`${css.shapes} ${css.messages}`} data-still={still || undefined} data-placeholder="" aria-hidden="true">
         {MESSAGES.map(([mine, w, h], i) => (
           <div key={i} className={css.message} data-mine={mine || undefined}>
             {!mine && <span className={css.face} />}
@@ -76,13 +76,13 @@ export function WaitShapes({ shape = "rows", count, dense = false, still = false
   }
   if (shape === "cards") {
     return (
-      <div className={`${css.shapes} ${css.cards}`} data-still={still || undefined} aria-hidden="true">
+      <div className={`${css.shapes} ${css.cards}`} data-still={still || undefined} data-placeholder="" aria-hidden="true">
         {Array.from({ length: count ?? 3 }, (_, i) => <span key={i} className={css.card} style={{ height: CARDS[i % CARDS.length] }} />)}
       </div>
     );
   }
   return (
-    <div className={css.shapes} data-still={still || undefined} aria-hidden="true">
+    <div className={css.shapes} data-still={still || undefined} data-placeholder="" aria-hidden="true">
       {Array.from({ length: count ?? 7 }, (_, i) => (
         <div key={i} className={css.row} data-dense={dense || undefined}>
           <div className={css.rowLines}>

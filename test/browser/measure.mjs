@@ -38,6 +38,8 @@ export function corners(mark = false) {
     if (re < 0.5) continue;
     // What shows a ground of its own (now, or while pointed at: what is pressed); not a picture or a mark.
     if (/^(IMG|SVG|VIDEO|CANVAS)$/i.test(el.tagName)) continue;
+    // A placeholder's bars stand for words to come (web/ui waiting.tsx WaitShapes), which have no ground of their own.
+    if (el.closest('[data-placeholder]')) continue;
     // A slider's knob goes where the value is: not set in a corner.
     if (el.closest('[role=slider]')) continue;
     // What turns for ever (a spinner) is measured at whatever angle it is caught, its box as large as that turn makes it.
