@@ -309,8 +309,8 @@ export function StationScreen() {
           {/* What macOS lets its still.fail Helper do (a Mac's station only), each grant asked for from here. */}
           {s.online && s.overview?.permissions && <PermissionsCard station={s.station} permissions={s.overview.permissions} />}
           <Logins station={s.station} marked={login ?? null} />
-          {manager && !s.joined && <Workspaces s={s} />}
-          {s.online && s.overview && <Versions station={s.station} updates={s.overview.updates} manager={manager && !s.joined} beta={s.betaOffered ?? false} />}
+          {manager && <Workspaces s={s} />}
+          {s.online && s.overview && <Versions station={s.station} updates={s.overview.updates} manager={manager} beta={s.betaOffered ?? false} />}
           <div style={{ height: 30 }} />
         </div>
       )}

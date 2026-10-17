@@ -996,7 +996,7 @@
   "web-pages.stations.page.sessions": "Sessions",
   "web-pages.stations.page.footprint": "Data on disk",
   "web-pages.stations.page.newer": "Update available",
-  "web-pages.stations.workspacesLead": "This station belongs to these workspaces; its machine, accounts and updates are managed only in its home workspace",
+  "web-pages.stations.workspacesLead": "This station belongs to these workspaces; the admins of each have the same rights over it",
   "web-pages.version.available": "{version} available",
   "web-pages.version.check": "Check for updates",
   "web-pages.version.checkFailed": "Check failed: {error}",

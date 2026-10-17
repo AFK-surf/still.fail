@@ -959,14 +959,14 @@ export class Accounts {
     if (changed !== null) this.deps.reviewUndecided?.();
   }
 
-  /// The overview's `profiles`. A member of a workspace the station joined (`viewer.home` false) sees those its sessions
-  /// may run on, without their keys, environment or files (docs/multi-workspace.md).
+  /// The overview's `profiles`: all of them, to the members of every workspace the station is in alike
+  /// (docs/multi-workspace.md); `workspaces` says which joined ones' chats run on each.
   profilesView(viewer?: Viewer): Json[] {
     const raw = this.deps.config.raw();
     const config = hubConfig(raw, this.deps.data);
     const joined = viewer !== undefined && viewer.home === false ? viewer.workspace : null;
     const others = this.joined();
-    const views = config.profiles.filter((p) => joined === null || !(p.withheld ?? []).includes(joined)).map((p) => {
+    const views = config.profiles.map((p) => {
       const kind = accessKind(p);
       const a: Json = isObject(p.access) ? p.access : {};
       const via = profileVia(p);
@@ -1007,18 +1007,9 @@ export class Accounts {
       };
     });
     if (joined === null) return views;
-    // Only how it runs there: what its connects of that workspace are, nothing of its secrets or its home.
+    // The connects it runs of the viewer's workspace (those of others are not shown there).
     const connects = new Set(config.connects.filter((c) => c.workspace === joined).map((c) => c.id));
-    return views.map((v) => ({
-      ...v,
-      access: { ...v.access, key: "" },
-      env: [],
-      home: "",
-      loginCommand: "",
-      usedBy: v.usedBy.filter((c: string) => connects.has(c)),
-      login: undefined,
-      workspaces: [joined],
-    }));
+    return views.map((v) => ({ ...v, usedBy: v.usedBy.filter((c: string) => connects.has(c)) }));
   }
 
   /// The workspaces the station joined, its home one left out.
@@ -1035,9 +1026,8 @@ export class Accounts {
     return accountEmail(p.runtime, p.home);
   }
 
-  /// The overview's `logins`: sign-ins for new profiles (none for a member of a workspace the station joined).
-  loginsView(viewer?: Viewer): Json[] {
-    if (viewer !== undefined && viewer.home === false) return [];
+  /// The overview's `logins`: sign-ins for new profiles.
+  loginsView(_viewer?: Viewer): Json[] {
     return [...this.pending.entries()].map(([id, p]) => ({ id, runtime: p.runtime, job: this.logins.get(id), created: p.created, error: p.error }));
   }
 

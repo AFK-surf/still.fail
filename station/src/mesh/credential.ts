@@ -64,8 +64,8 @@ export const READ_ONLY_ROLES = ["viewer"];
 export const readOnly = (viewer: { role: string }) => READ_ONLY_ROLES.includes(viewer.role);
 
 /// Who manages the station itself (its accounts, updates, device tools, what it shares, the workspaces it joins): an
-/// owner or admin of its home workspace (docs/multi-workspace.md).
-export const managesStation = (viewer: { role: string; home?: boolean }) => (viewer.role === "owner" || viewer.role === "admin") && viewer.home !== false;
+/// owner or admin of any workspace it is in, its home one or one it joined alike (docs/multi-workspace.md).
+export const managesStation = (viewer: { role: string; home?: boolean }) => viewer.role === "owner" || viewer.role === "admin";
 
 /// Taken back: its account's (`sub`) or session's (`sid`) credentials issued up to `at`.
 export function revoked(admitted: Admitted, revocations: Revocation[]): boolean {

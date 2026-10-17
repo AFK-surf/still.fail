@@ -75,9 +75,8 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
   const raw = d.config() ?? {};
   // What is of the viewer's workspace (docs/multi-workspace.md): its chats, and the connects added in it.
   const sessions = d.store.listSessions().filter((s) => sees(viewer, s.ws));
-  // The agents' runtime processes; background jobs' groups are recorded too (to be reaped), but they are jobs. The
-  // machine's: for its home workspace's members.
-  const processes = viewer.home === false ? [] : d.store.listProcesses().filter((p) => p.runtime !== "job");
+  // The agents' runtime processes; background jobs' groups are recorded too (to be reaped), but they are jobs.
+  const processes = d.store.listProcesses().filter((p) => p.runtime !== "job");
   const memory = await processMemory(processes.map((p) => p.pgid));
   const connects = (Array.isArray(raw.connects) ? raw.connects : []).filter((c: any) => sees(viewer, typeof c?.workspace === "string" && c.workspace !== "" ? c.workspace : null)).map((c: any) => {
     const mode = c.mode ?? "multi-session";
@@ -142,7 +141,7 @@ function withPermissions(d: OverviewDeps, viewer: Viewer): { permissions?: unkno
 
 /// The automatic decisions as the viewer sees them: the checks of their workspace's chats only, and the archive policy of
 /// their workspace (docs/multi-workspace.md: one each), which its owners and admins edit (`canEditPolicy`). The rest
-/// (the rule, its model) is the station's, its home workspace managers'.
+/// (the rule, its model) is the station's, its workspaces' managers' alike.
 function decisionsView(d: OverviewDeps, viewer: Viewer): unknown {
   const view = d.accounts!.automaticDecisionsView(viewer);
   const mine = (session: unknown) => typeof session === "string" && sees(viewer, d.store.getSession(session)?.ws ?? null);

@@ -930,7 +930,7 @@
   "web-pages.stations.page.sessions": "会话",
   "web-pages.stations.page.footprint": "数据占用",
   "web-pages.stations.page.newer": "有更新",
-  "web-pages.stations.workspacesLead": "此 station 属于以下 workspace；机器、账号和更新仅在主 workspace 中管理",
+  "web-pages.stations.workspacesLead": "此 station 属于以下 workspace；各 workspace 的管理员对它的权限相同",
   "web-pages.version.available": "有新版本 {version}",
   "web-pages.version.check": "检查更新",
   "web-pages.version.checkFailed": "检查失败：{error}",

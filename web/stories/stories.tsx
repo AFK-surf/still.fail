@@ -99,7 +99,7 @@ const profileFor = (on: boolean): DemoExtension => ({
 /** A new chat on a station this workspace joined that has no profile open to it (the core's `blocked: shared`). */
 const notShared: DemoExtension = {
   then: (t, value) => (t.topic === "newChat" && value && typeof value === "object"
-    ? { ...(value as object), blocked: "shared", problem: "Studio 属于 Lab，其 Profile 尚未对此 workspace 开放：请 Lab 的管理员在 Profile 页开启「同时用于 Acme」" }
+    ? { ...(value as object), blocked: "shared", problem: "Studio 属于 Lab，其 Profile 尚未对此 workspace 开放：在 Profile 页开启「同时用于 Acme」" }
     : undefined),
 };
 /** The demo's station in Lab too (the core's `memberships`), and, with `joined`, Lab's Mini1 in this workspace. */

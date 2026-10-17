@@ -88,39 +88,33 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
 }
 
 describe("the accounts routes", { concurrency: true }, () => {
-  test("a profile serves every workspace the station joined but those its managers withhold; a joined workspace's members see those it serves, without secrets", async () => {
+  test("a profile serves every workspace the station joined but those withheld from it; a joined workspace's members do all its own do", async () => {
     const t = await rig({ workspaces: ["W1", "W2", "W3"] });
     const joined = { ...viewer("guest@example.com", "admin"), workspace: "W2", home: false };
     // By default, all of them.
     assert.deepEqual(t.view("cc")?.workspaces, ["W2", "W3"]);
-    assert.deepEqual(t.accounts.profilesView(joined).map((p) => p.id), ["cc", "cx"]);
     assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["W3"] }, member))[0], 403);
-    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["W3"] }, joined))[0], 403);
-    assert.equal((await t.call("PUT", "/profiles/cc", { name: "x" }, joined))[0], 403);
     assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["../x"] }))[0], 400);
-    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["W3", "W3"] }))[0], 200);
+    // A joined workspace's admin sets it as the home one's do.
+    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["W3", "W3"] }, joined))[0], 200);
     assert.deepEqual(t.profile("cc")?.withheld, ["W2"]);
-    // Kept through other edits; all given back takes it back.
-    assert.equal((await t.call("PUT", "/profiles/cc", { name: "Claude" }, member))[0], 200);
+    // Kept through other edits, theirs too; all given back takes it back.
+    assert.equal((await t.call("PUT", "/profiles/cc", { name: "Claude" }, { ...joined, role: "member" }))[0], 200);
     assert.deepEqual(JSON.parse(readFileSync(t.path, "utf8")).profiles[0].withheld, ["W2"]);
     assert.deepEqual(t.view("cc")?.workspaces, ["W3"]);
+    // They see every profile, as the home one's do, with what each serves.
     const seen = t.accounts.profilesView(joined);
-    assert.deepEqual(seen.map((p) => p.id), ["cx"]);
-    assert.deepEqual([seen[0].env, seen[0].access.key, seen[0].home, seen[0].usedBy, seen[0].workspaces], [[], "", "", [], ["W2"]]);
-    assert.deepEqual(t.accounts.profilesView(owner).map((p) => p.id), ["cc", "cx"]);
-    assert.deepEqual(t.accounts.loginsView(joined), []);
-    // Checked again and its allowance read again by a joined workspace's members, those it serves there only.
-    assert.equal((await t.call("POST", "/profiles/cx/check", {}, joined))[0], 200);
+    assert.deepEqual(seen.map((p) => [p.id, p.workspaces]), [["cc", ["W3"]], ["cx", ["W2", "W3"]]]);
+    assert.equal(seen[0].access.key, t.accounts.profilesView(owner)[0].access.key);
+    assert.notEqual(seen[0].home, "");
+    assert.equal((await t.call("POST", "/profiles/cc/check", {}, joined))[0], 200);
     assert.equal((await t.call("POST", "/profiles/cx/quota", {}, joined))[0], 200);
-    assert.equal((await t.call("POST", "/profiles/cc/check", {}, joined))[0], 404);
-    assert.equal((await t.call("POST", "/profiles/cc/quota", {}, joined))[0], 404);
-    assert.equal((await t.call("POST", "/profiles/cc/check"))[0], 200);
     assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["W2", "W3"] }))[0], 200);
     assert.equal(JSON.parse(readFileSync(t.path, "utf8")).profiles[0].withheld, undefined);
-    assert.deepEqual(t.accounts.profilesView(joined).map((p) => p.id), ["cc", "cx"]);
     // null: the home workspace's only.
     assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: null }))[0], 200);
     assert.deepEqual(t.profile("cc")?.withheld, ["W2", "W3"]);
+    assert.equal((await t.call("DELETE", "/profiles/cx", undefined, joined))[0], 200);
     await t.close();
   });
 

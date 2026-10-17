@@ -156,6 +156,14 @@ function profilesRunning(overview: J, runtime: string, m: string | null, current
     });
 }
 
+/// The overview as the chats of `workspace`, one the station joined, run on it (docs/multi-workspace.md): with the
+/// profiles whose `workspaces` name it only.
+export function servingIn(overview: J, workspace: string): J {
+  const profiles = get(overview, "profiles");
+  if (!Array.isArray(profiles)) return overview;
+  return { ...overview, profiles: profiles.filter((p) => arr(get(p, "workspaces")).includes(workspace)) };
+}
+
 /// The models the station can run, each with the runtimes it runs on.
 export function models(overview: J, now: number): J[] {
   const on = new Map<string, { runtimes: Set<string>; backs: (number | null)[]; ids: Set<string> }>();

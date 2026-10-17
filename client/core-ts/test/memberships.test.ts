@@ -96,7 +96,7 @@ function answerOf(host: FakeHost, values: Map<number, unknown>, id: number): J {
 /// The workspaces `wa/a1` is in once it joined W, as its admin API answers.
 const BOTH = [{ workspace: "wa", workspaceName: "甲", name: "A1", home: true }, { workspace: "ws", workspaceName: "W", name: "A1", home: false }];
 
-test("the stations to add are those whose home the viewer manages and that are not in the workspace", async () => {
+test("the stations to add are those of a workspace the viewer manages (their home one or one they joined) not in the workspace", async () => {
   const { host, core } = await setUp();
   const ui = core.connect();
   const values = new Map<number, unknown>();
@@ -104,12 +104,13 @@ test("the stations to add are those whose home the viewer manages and that are n
   subscribe(core, ui, 2, { topic: "stations", scope: "ws" });
   await host.settle();
   apply(host, values);
-  // a2 and st are not 甲's own; x1 is in W already; 丙's the viewer does not manage.
+  // a2 joined 甲 from elsewhere, as listable as 甲's own; st and x1 are in W already; 丙's the viewer does not manage.
   assert.deepEqual(v(values, 1), {
     offered: true,
     loading: false,
     items: [
       { station: "wa/a1", id: "a1", name: "A1", workspace: "wa", workspaceName: "甲", online: true, line: "甲 · 在线", needsLock: false },
+      { station: "wa/a2", id: "a2", name: "A2", workspace: "wa", workspaceName: "甲", online: true, line: "甲 · 在线", needsLock: false },
       { station: "wb/b1", id: "b1", name: "B1", workspace: "wb", workspaceName: "乙", online: false, line: "乙 · 离线", needsLock: false },
     ],
   });
@@ -128,6 +129,7 @@ test("a station whose home is in security mode is listed for a workspace not in 
   apply(host, values);
   assert.deepEqual((v(values, 1) as J).items.map((s: J) => [s.id, s.needsLock, s.line]), [
     ["a1", false, "甲 · 在线"],
+    ["a2", false, "甲 · 在线"],
     ["b1", true, "乙 已开启安全模式，需在此 workspace 也开启安全模式后才能添加"],
   ]);
   core.close();
@@ -191,19 +193,21 @@ test("a_station_that_cannot_join_says_why_in_words", async () => {
   }
 });
 
-test("only_the_managers_of_a_station's_home_see_its_workspaces", async () => {
+test("only_the_managers_of_a_workspace_a_station_is_in_see_its_workspaces", async () => {
   const { host, core, wire } = await setUp();
   wire.table["wc/c1 GET /workspaces"] = { workspaces: [{ workspace: "wc", workspaceName: "丙", name: "C1", home: true }], canJoin: false };
+  wire.table["ws/x1 GET /workspaces"] = { workspaces: [{ workspace: "wa", workspaceName: "甲", name: "X1", home: true }, { workspace: "ws", workspaceName: "W", name: "X1", home: false }], canJoin: true };
   const ui = core.connect();
   const values = new Map<number, unknown>();
-  // A member of 丙; and x1 in W, which W joined (its home is 甲): neither is asked.
+  // A member of 丙: not asked. x1 in W, which W joined (its home is 甲): W's admin manages it as 甲's do.
   subscribe(core, ui, 1, { topic: "memberships", station: "wc/c1" });
   subscribe(core, ui, 2, { topic: "memberships", station: "ws/x1" });
   await host.settle();
   apply(host, values);
   assert.deepEqual(v(values, 1), { manages: false, loading: false, canJoin: false, workspaces: [] });
-  assert.deepEqual(v(values, 2), { manages: false, loading: false, canJoin: false, workspaces: [] });
-  assert.deepEqual(wire.asked.filter((a) => a.path === "/workspaces"), []);
+  assert.equal((v(values, 2) as J).manages, true);
+  assert.equal((v(values, 2) as J).workspaces.length, 2);
+  assert.deepEqual(wire.asked.filter((a) => a.path === "/workspaces").map((a) => a.station), ["ws/x1"]);
   // A station from before several workspaces: in its home one alone, said so.
   wire.table["wa/a1 GET /workspaces"] = [404, { error: "no route GET /workspaces" }];
   subscribe(core, ui, 3, { topic: "memberships", station: "wa/a1" });
@@ -213,9 +217,13 @@ test("only_the_managers_of_a_station's_home_see_its_workspaces", async () => {
   core.close();
 });
 
-test("a_new_chat_on_a_joined_station_none_of_whose_profiles_is_open_here_says_whom_to_ask", async () => {
-  // st's home is 甲; W joined it, and none of its profiles is open to W (its overview to W lists none).
-  const { host, core } = await setUp({ stJoined: true, answers: { ...base(), "GET /overview": { ...overview, profiles: [] } } });
+test("a_new_chat_on_a_joined_station_none_of_whose_profiles_is_open_here_says_where_to_turn_one_on", async () => {
+  // st's home is 甲; W joined it, and none of its profiles is open to W (each serves other workspaces only).
+  const profile = {
+    id: "cc", name: "a@x.com", runtime: "claude", runtimes: ["claude"], access: { kind: "subscription", key: "" }, home: "/h", homeExists: true, model: null,
+    models: ["claude-opus-5-5"], env: [], usedBy: [], loginCommand: "", check: { state: "ok", detail: "", checkedAt: 1 }, quota: null, workspaces: ["wz"],
+  };
+  const { host, core } = await setUp({ stJoined: true, answers: { ...base(), "GET /overview": { ...overview, profiles: [profile] } } });
   const ui = core.connect();
   const values = new Map<number, unknown>();
   subscribe(core, ui, 1, { topic: "newChat", scope: "ws" });
@@ -224,6 +232,6 @@ test("a_new_chat_on_a_joined_station_none_of_whose_profiles_is_open_here_says_wh
   const n = v(values, 1);
   assert.equal(n.station.id, "st");
   assert.equal(n.blocked, "shared");
-  assert.equal(n.problem, "studio 属于 甲，其 Profile 尚未对此 workspace 开放：请 甲 的管理员在 Profile 页开启「同时用于 W」");
+  assert.equal(n.problem, "studio 属于 甲，其 Profile 尚未对此 workspace 开放：在 Profile 页开启「同时用于 W」");
   core.close();
 });

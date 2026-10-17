@@ -31,7 +31,7 @@ import * as marks from "./marks.ts";
 import { usageView } from "./usage.ts";
 import { workspaceProfiles } from "./profiles.ts";
 import { admin, sources as adminSources } from "./admin.ts";
-import { attention, choices, find, models, runnableOn, runtimes } from "./models.ts";
+import { attention, choices, find, models, runnableOn, runtimes, servingIn } from "./models.ts";
 import * as brief from "./brief.ts";
 import * as xshare from "./xshare.ts";
 import * as memberships from "./memberships.ts";
@@ -1124,8 +1124,9 @@ export class Views implements Owner {
         lastSeen: s.lastSeen,
         version: s.version,
         link: this.link(s.address),
-        runtimes: runtimes(overview),
-        models: models(overview, c.now),
+        // What this workspace's chats run on: on a station it joined, the profiles open to it.
+        runtimes: runtimes(s.joined && overview !== undefined ? servingIn(overview, scope) : overview),
+        models: models(s.joined && overview !== undefined ? servingIn(overview, scope) : overview, c.now),
         overview: shown,
         host,
         net: net === undefined ? null : present.net(net, (h) => this.relayName(h)),

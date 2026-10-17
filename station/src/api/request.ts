@@ -62,6 +62,3 @@ const JSON_HEADERS = { "content-type": "application/json", "cache-control": "no-
 
 export const json = (status: number, text: string): Answer => ({ status, headers: { ...JSON_HEADERS }, body: Buffer.from(text) });
 export const error = (status: number, message: string): Answer => json(status, JSON.stringify({ error: message }));
-
-/// What a member of a workspace the station joined is told of what only its home workspace's members may do.
-export const HOME_ONLY = "only members of this station's home workspace can do this";

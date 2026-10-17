@@ -14,7 +14,7 @@ import { topicKey, type Topic } from "./protocol.ts";
 import * as model from "./shapes/model.ts";
 import type { Store, Value, Watch } from "./store.ts";
 import { arr as arrU, equal, get as getU, isObject } from "./util.ts";
-import { models, quotaLine } from "./views/models.ts";
+import { models, quotaLine, servingIn } from "./views/models.ts";
 import { ofAddress } from "./workspace.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -242,12 +242,13 @@ export class Choose implements Owner {
     const r = resolve(options, this.#choice(scope, id));
     view.frequent = frequentCombos(arr(this.#record(`ws:${scope}:frequent`)), options, r);
     const overview = isObject(station.overview) ? station.overview : null;
-    const profiles = overview !== null ? arr(overview.profiles) : [];
-    view.waiting = overview === null;
-    // A station this workspace joined shows only the profiles its home's managers opened to it (docs/multi-workspace.md):
-    // none is not one to add here, but one to ask them for.
+    // A station this workspace joined runs its chats on the profiles open to it (docs/multi-workspace.md): with some, but
+    // none open, one is turned on rather than added.
     const joined = station.joined === true;
-    view.blocked = overview !== null && profiles.length === 0 ? (joined ? "shared" : "profile") : overview !== null && options.length === 0 ? "models" : null;
+    const all = overview !== null ? arr(overview.profiles) : [];
+    const profiles = overview !== null && joined ? arr(servingIn(overview, scope).profiles) : all;
+    view.waiting = overview === null;
+    view.blocked = overview !== null && profiles.length === 0 ? (joined && all.length > 0 ? "shared" : "profile") : overview !== null && options.length === 0 ? "models" : null;
     // This workspace's name: as it is held, else as an account's `/v1/me` lists it.
     const here = get(this.#env.data.shared({ topic: "workspace", workspace: scope }), "name")
       ?? this.#env.data.mes().flatMap(([, me]) => arr(get(me, "workspaces"))).find((w) => get(w, "id") === scope)?.name;

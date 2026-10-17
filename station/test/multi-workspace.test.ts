@@ -110,7 +110,7 @@ test("each workspace's members are admitted with that workspace's revocations, a
   assert.deepEqual(state.state!.revocations.map((r) => r.id), ["s2"]);
 });
 
-test("the workspaces it is in, and joining more, are its home workspace's managers' say", async (t) => {
+test("the workspaces it is in, and joining more, are the say of the managers of any of them", async (t) => {
   const { data, state } = await enrolled(t, true);
   await joinWorkspace(data, "join-w2");
   state.reload();
@@ -121,13 +121,14 @@ test("the workspaces it is in, and joining more, are its home workspace's manage
     const answer = await route!.handle({ method: route!.method, path: "/workspaces", query: [], headers: {}, body: Buffer.from(body), viewer: v, lang: "en" } as any, []);
     return [answer.status, JSON.parse(answer.body.toString())];
   };
-  assert.ok(managesStation(viewer("ws1", "admin")) && !managesStation(viewer("w2", "owner")) && !managesStation(viewer("ws1", "member")));
+  assert.ok(managesStation(viewer("ws1", "admin")) && managesStation(viewer("w2", "owner")) && !managesStation(viewer("ws1", "member")) && !managesStation(viewer("w2", "member")));
   assert.deepEqual(await ask(list, viewer("ws1", "owner")), [200, { workspaces: [{ workspace: "ws1", workspaceName: "Team", name: "studio", home: true }, { workspace: "w2", workspaceName: "Team w2", name: "studio", home: false }], canJoin: true }]);
-  // Others see their own only.
-  assert.deepEqual(await ask(list, viewer("w2", "owner")), [200, { workspaces: [{ workspace: "w2", workspaceName: "Team w2", name: "studio", home: false }], canJoin: false }]);
-  const [status] = await ask(joinRoute, viewer("w2", "owner"), JSON.stringify({ token: "join-w3" }));
+  // A joined workspace's managers alike; members see their own only.
+  assert.deepEqual((await ask(list, viewer("w2", "owner")))[1].workspaces.length, 2);
+  assert.deepEqual(await ask(list, viewer("w2", "member")), [200, { workspaces: [{ workspace: "w2", workspaceName: "Team w2", name: "studio", home: false }], canJoin: false }]);
+  const [status] = await ask(joinRoute, viewer("w2", "member"), JSON.stringify({ token: "join-w3" }));
   assert.equal(status, 403);
-  const [ok, joined] = await ask(joinRoute, viewer("ws1", "admin"), JSON.stringify({ token: "join-w3" }));
+  const [ok, joined] = await ask(joinRoute, viewer("w2", "admin"), JSON.stringify({ token: "join-w3" }));
   assert.equal(ok, 200);
   assert.deepEqual(joined.joined, { workspace: "w3", workspaceName: "Team w3", name: "studio" });
 });

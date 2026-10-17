@@ -260,10 +260,10 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
           </ul>
         </Section>
       )}
-      {manager && !s.joined && <Workspaces s={s} />}
+      {manager && <Workspaces s={s} />}
       {/* Its updates are its home workspace's managers' to make (docs/multi-workspace.md). */}
       <Section title={t("web-pages.stations.software")}>
-        {s.online ? <SoftwareList station={s.station} updates={o?.updates} manager={manager && !s.joined} beta={s.betaOffered ?? false} /> : <p className={css.note}>{t("web-pages.stations.softwareOffline")}</p>}
+        {s.online ? <SoftwareList station={s.station} updates={o?.updates} manager={manager} beta={s.betaOffered ?? false} /> : <p className={css.note}>{t("web-pages.stations.softwareOffline")}</p>}
         {!o?.updates?.length && s.version && <p className={css.note}>Station {s.version}</p>}
       </Section>
       <Section title={t("web-pages.stations.device")}>

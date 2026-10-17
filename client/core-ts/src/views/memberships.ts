@@ -2,14 +2,14 @@
 // other workspaces could be added to this one, the workspaces a station is in, and `station.join`, which adds one.
 //
 // Topics:
-//   joinable {workspace}     the stations to pick in 添加 station: those whose home workspace (not one they joined) the
-//                            viewer is an owner or admin of, not in this workspace already; from what is held of the
-//                            viewer's workspaces only (nothing is asked for it)
-//   memberships {station}    the workspaces the station is in (its `GET /workspaces`), for its home workspace's owners
-//                            and admins: read while a page shows it, kept by its address
+//   joinable {workspace}     the stations to pick in 添加 station: those of a workspace (its home one or one it joined)
+//                            the viewer is an owner or admin of, not in this workspace already; from what is held of
+//                            the viewer's workspaces only (nothing is asked for it)
+//   memberships {station}    the workspaces the station is in (its `GET /workspaces`), for the owners and admins of the
+//                            workspace it is addressed in: read while a page shows it, kept by its address
 // Calls:
-//   station.join {workspace, station, name?}   the station (its address in its home workspace) added to `workspace`:
-//                            an enrollment made there, then the station told to join with it, over its home link
+//   station.join {workspace, station, name?}   the station (its address in one of its workspaces) added to
+//                            `workspace`: an enrollment made there, then the station told to join with it, over that link
 import { Effect } from "effect";
 import type { Inner } from "../core.ts";
 import { handlers } from "../core/execute.ts";
@@ -92,8 +92,7 @@ export function joinable(inner: Inner, workspace: string): J {
     }
     for (const s of stations) {
       const id = str(get(s, "id"));
-      // Joined there: its home is another workspace, whose managers add it elsewhere.
-      if (id === null || get(s, "joined") === true || here.has(id) || seen.has(id)) continue;
+      if (id === null || here.has(id) || seen.has(id)) continue;
       seen.add(id);
       const online = get(s, "online") === true;
       items.push({
@@ -113,15 +112,15 @@ export function joinable(inner: Inner, workspace: string): J {
   return { offered: theirs.length > 0, loading, items };
 }
 
-/// Whether the viewer manages the station at `address`: an owner or admin of the workspace it is addressed in, which is
-/// its home (the cloud does not list it there as joined).
+/// Whether the viewer manages the station at `address`: an owner or admin of the workspace it is addressed in, its home
+/// one or one it joined alike.
 function manages(inner: Inner, address: string, all: Place[] = places(inner)): boolean {
   const at = address.indexOf("/");
   if (at < 0) return false;
   const workspace = address.slice(0, at);
   const id = address.slice(at + 1);
   const s = stationsOf(inner, workspace)?.find((s) => get(s, "id") === id);
-  return s !== undefined && get(s, "joined") !== true && manager(all.find((p) => p.id === workspace)?.role ?? null);
+  return s !== undefined && manager(all.find((p) => p.id === workspace)?.role ?? null);
 }
 
 /// The `memberships` topic.

@@ -1,7 +1,7 @@
 // The accounts' part of the admin API (admin/mod.rs, admin/edits.rs, admin/decision.rs): profiles made, edited,
 // checked, signed in and deleted; allowances read and reset; sign-ins for new profiles; the automatic decisions'
 // settings. Edits answer with the overview, as the Rust station's do.
-import { type Request, type Answer, HOME_ONLY, error, json, percentDecode } from "../request.ts";
+import { type Request, type Answer, error, json, percentDecode } from "../request.ts";
 import type { Route } from "../admin.ts";
 import { type Accounts, Refusal } from "../../accounts/index.ts";
 import type { Sharing } from "../../share/index.ts";
@@ -80,13 +80,9 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
     }
     if (changed !== null) policies.review();
   };
-  // The station's accounts are its home workspace's to change (docs/multi-workspace.md): a member of a workspace it
-  // joined only reads what it may use there, and changes its own workspace's archive policy (`joined`).
-  const route = (method: string, pattern: RegExp, handle: (r: Request, args: string[]) => Promise<Answer>, joined = false): Route => ({
-    method,
-    pattern,
-    handle: (r, args) => (method !== "GET" && r.viewer.home === false && !joined ? Promise.resolve(error(403, HOME_ONLY)) : handle(r, args)),
-  });
+  // The station's accounts are every workspace's it is in alike (docs/multi-workspace.md); the archive policy is each
+  // workspace's own.
+  const route = (method: string, pattern: RegExp, handle: (r: Request, args: string[]) => Promise<Answer>): Route => ({ method, pattern, handle });
 
   return [
     // A profile on the machine's own login.
@@ -117,7 +113,6 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
         else a.putArchivePolicy(input(r), r.viewer, r.lang);
         return ok(await view(r));
       }),
-      true,
     ),
     route("POST", /^\/*automatic-decisions\/+review\/*$/, (r) =>
       answer(async (a) => {
@@ -147,8 +142,7 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
         return ok(await view(r));
       }),
     ),
-    // Checked again and its allowance read again by whoever may use it, a joined workspace's members too.
-    route("POST", /^\/*profiles\/+([^/]+)\/+check(?:\/.*)?$/, (r, [id]) => answer(async (a) => ok(await a.check(usable(a, r, segment(id!)), r.lang))), true),
+    route("POST", /^\/*profiles\/+([^/]+)\/+check(?:\/.*)?$/, (r, [id]) => answer(async (a) => ok(await a.check(segment(id!), r.lang)))),
     route("POST", /^\/*profiles\/+([^/]+)\/+reset-quota(?:\/.*)?$/, (r, [id]) =>
       answer(async (a) => {
         const key = idempotencyKey(r);
@@ -156,7 +150,7 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
         return ok(await a.resetQuota(segment(id!), key, r.lang));
       }),
     ),
-    route("POST", /^\/*profiles\/+([^/]+)\/+quota(?:\/.*)?$/, (r, [id]) => answer(async (a) => ok(await a.refreshQuota(usable(a, r, segment(id!))))), true),
+    route("POST", /^\/*profiles\/+([^/]+)\/+quota(?:\/.*)?$/, (r, [id]) => answer(async (a) => ok(await a.refreshQuota(segment(id!))))),
     route("GET", /^\/*profiles\/+([^/]+)\/+login(?:\/.*)?$/, (r, [id]) =>
       answer((a) => {
         const profile = known(a, segment(id!));
@@ -250,14 +244,6 @@ export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteD
     ),
   ];
 };
-
-/// The profile's id, when the viewer may use it: any for the home workspace's members, those serving their workspace for
-/// a joined one's (docs/multi-workspace.md); 404 for the rest, as they are not shown there.
-function usable(a: Accounts, r: Request, id: string): string {
-  if (r.viewer.home !== false) return id;
-  if (!a.profilesView(r.viewer).some((p) => p.id === id)) throw new Refusal(404, `unknown profile ${id}`);
-  return id;
-}
 
 /// The profile's id, when there is such a profile (404 when not).
 function known(a: Accounts, id: string): string {

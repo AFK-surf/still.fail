@@ -331,8 +331,9 @@ function copyTranscript(roots: Roots, session: MachineSession, shared: string): 
 /// copied into the shared transcripts (the original is left as it was, and can go on in the terminal on its own); the
 /// new session resumes it, running in the directory it ran in. The chat starts with a note of where it came from,
 /// linking to the session's execution history, which shows what was said before (it is not copied into the chat). A
-/// session already going on with it is that one's chat, brought back if archived.
-export function continueMachineSession(hub: Hub, roots: Roots, found: MachineSession, createdBy: string, lang: Lang = stationLang()): [string, ThreadRow] {
+/// session already going on with it is that one's chat, brought back if archived. `ws`: the workspace the new chat is in
+/// (null: the home one's).
+export function continueMachineSession(hub: Hub, roots: Roots, found: MachineSession, createdBy: string, lang: Lang = stationLang(), ws: string | null = null): [string, ThreadRow] {
   const { store } = hub;
   const runtime = found.runtime;
   // One it went on in (a runtime session left for a new one included).
@@ -352,8 +353,8 @@ export function continueMachineSession(hub: Hub, roots: Roots, found: MachineSes
   if (!(statSync(found.cwd, { throwIfNoEntry: false })?.isDirectory() ?? false)) throw new Error(tr(lang, "station.session.cwdGone", { cwd: found.cwd }));
   if (unreadableDir(found.cwd)) throw new Error(unreadableDirMessage(lang, found.cwd));
   const config = hub.config();
-  // The machine's own sessions are its home workspace's: their chats are too, on any profile.
-  const profiles = hub.profilesIn(null).filter((p) => p.runtimes.includes(runtime));
+  // On the profiles the chat's workspace runs on.
+  const profiles = hub.profilesIn(ws).filter((p) => p.runtimes.includes(runtime));
   if (profiles.length === 0) throw new Error(tr(lang, "station.session.noProfile", { runtime: runtimeTitle(runtime) }));
   // The model it ran, where a profile has it enabled; else the one picked runs its own.
   const keptModel = found.model !== null && profiles.some((p) => p.models.includes(found.model!)) ? found.model : null;
@@ -390,6 +391,7 @@ export function continueMachineSession(hub: Hub, roots: Roots, found: MachineSes
     token: newToken(),
     createdAt: now,
     lastActiveAt: now,
+    ...(ws !== null ? { ws } : {}),
   });
   log.info("hub", "session continued from the machine's own", { session: key, runtime, profile: profile.id, from: found.id, cwd: found.cwd });
   const thread = openChat(hub, key, createdBy, title);

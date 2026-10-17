@@ -6,7 +6,7 @@ import { randomBytes } from "node:crypto";
 import { appendFileSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, statfsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { clean, fileName as nameOf, inside } from "../../ops/paths.ts";
-import { type Answer, type Request, HOME_ONLY, error, json, param, percentDecode } from "../request.ts";
+import { type Answer, type Request, error, json, param, percentDecode } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
 import { tr } from "../../ops/i18n.ts";
 import { log } from "../../ops/log.ts";
@@ -339,7 +339,6 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
       pattern: /^\/machine-sessions$/,
       handle: (r) =>
         write(async (_s, a) => {
-          if (r.viewer.home === false) throw new Refused(403, HOME_ONLY);
           const i = input(r);
           const kind = runtime(r, i);
           const id = text(i.id);
@@ -347,7 +346,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
           // Only Claude Code's and Codex's terminal sessions are read (read/machine.ts).
           const found = kind === "dsh" ? null : findMachineSession(roots, kind, id);
           if (found === null) throw new Refused(404, tr(r.lang, "station.admin.noLocalSession", { id }));
-          const [key, chat] = await as(400, () => continueMachineSession(a.hub, roots, found, r.viewer.email, r.lang));
+          const [key, chat] = await as(400, () => continueMachineSession(a.hub, roots, found, r.viewer.email, r.lang, r.viewer.home === false ? r.viewer.workspace : null));
           log.info("admin", "machine session continued from the admin page", { session: key, from: id, by: r.viewer.email });
           return made(r, key, chat.id);
         }),
