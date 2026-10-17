@@ -47,6 +47,10 @@ const until = async <T>(what: () => Promise<T | null | undefined | false>, label
   throw new Error(`gave up waiting: ${label}`);
 };
 
+/// Alice's cores share her account's 120 requests a minute (cloud/src/account.ts LIMITS), and over it a request is
+/// turned away as signed out: a step that asks much starts in a minute of its own.
+const nextMinute = () => new Promise((r) => setTimeout(r, (61 - new Date().getSeconds()) * 1000));
+
 // ── the cloud ──
 
 let cloud: ChildProcess | null = null;
@@ -206,10 +210,12 @@ async function main() {
 
   say("the owner's desktop app turns the lock on, leaving unlocked-b and a laptop of alice's (connected to locked-a) out");
   const owner = core("owner");
-  await owner.call("migrate", { accounts: [alice] });
+  // Each core signed in on its own: a session's refresh token is one device's (one core refreshing it signs out the
+  // others, and this script's own calls).
+  await owner.call("migrate", { accounts: [await account("alice")] });
   await until(async () => (await owner.call("lock.state", { workspace: ws })).me.device, "owner core up");
   const laptop = core("laptop");
-  await laptop.call("migrate", { accounts: [alice] });
+  await laptop.call("migrate", { accounts: [await account("alice")] });
   const laptopId = await until(async () => (await laptop.call("lock.state", { workspace: ws })).me.device, "laptop core up");
   const laptopIn = await laptop.call("tools.access", { station: `${ws}/${A.id}` }).then(() => "admitted", (e) => `refused: ${e.message}`);
   // The draft as the owner's page has it, unlocked-b and the laptop unticked.
@@ -239,8 +245,9 @@ async function main() {
   laptop.close();
 
   say("a new device of alice's: waits, asks, the owner compares its code and confirms it");
+  await nextMinute();
   const phone = core("phone");
-  await phone.call("migrate", { accounts: [alice] });
+  await phone.call("migrate", { accounts: [await account("alice")] });
   await until(async () => (await phone.call("lock.state", { workspace: ws })).me.device, "phone core up");
   const waits = await phone.call("tools.access", { station: `${ws}/${A.id}` }).then(() => "admitted", (e) => `${e.code}: ${e.message}`);
   const asked = await phone.call("lock.request", { workspace: ws });
@@ -305,6 +312,7 @@ async function main() {
   check("moved, then bob (the new workspace's owner) connects", `${A.name}: workspace ${stationState(A).workspace === ws ? "still Dev" : stationState(A).workspace}; ${said(mA)}`, `${B.name}: workspace ${stationState(B).workspace === evilWs ? "now Evil" : "?"}; ${said(mB)}`, stationState(A).workspace === ws && !mA.hello?.ok && mB.hello?.ok === true);
 
   say("4. the cloud swaps its grant key (a restart of the dev cloud makes a new one)");
+  await nextMinute();
   const before = stationState(A).grant_keys.keys[0].x;
   await stopCloud();
   await startCloud();

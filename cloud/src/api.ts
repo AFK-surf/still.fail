@@ -5,7 +5,7 @@
 // admin's console has its own, `adminApi`, which only the console's host
 // routes to (index.ts).
 import { isAdmin } from "./admin";
-import { bearerToken, clock, denied, readJson, reply, verifyToken, type Claims } from "./auth";
+import { bearerToken, clock, denied, limited, readJson, reply, verifyToken, type Claims } from "./auth";
 import { betaOrigin, header, publicOrigins, signedMessages } from "./compat";
 import { EVENTS_PROTOCOLS, ROLES, type Role } from "./directory";
 import type { Env } from "./env";
@@ -43,10 +43,15 @@ async function directory<T>(run: () => Promise<T> | T): Promise<Response> {
   }
 }
 
-async function account(token: string | null, env: Env): Promise<Claims | null> {
+/**
+ * The account a token signs in, or the answer to give: signed out (401), or over its requests a minute (429, tried
+ * again later; it was answered as signed out before, and the apps said 登录已失效 to someone signed in).
+ */
+async function account(token: string | null, env: Env): Promise<Claims | Response> {
   const claims = token ? await verifyToken(env, token, "access") : null;
-  if (!claims) return null;
-  return (await env.ACCOUNTS.getByName(claims.sub).live(claims)) ? claims : null;
+  if (!claims) return denied();
+  const live = await env.ACCOUNTS.getByName(claims.sub).live(claims);
+  return live === true ? claims : live === "limited" ? limited() : denied();
 }
 
 const isUpgrade = (request: Request) => request.headers.get("upgrade")?.toLowerCase() === "websocket";
@@ -120,7 +125,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (path === "/v1/telemetry/traces" && method === "POST") {
     const token = bearerToken(request);
     const claims = token ? await account(token, env) : null;
-    if (token && !claims) return denied();
+    if (claims instanceof Response) return claims;
     return receiveTraces(request, env, claims?.sub ?? null);
   }
 
@@ -128,7 +133,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (path === "/v1/feedback" && method === "POST") {
     const token = bearerToken(request);
     const claims = token ? await account(token, env) : null;
-    if (token && !claims) return denied();
+    if (claims instanceof Response) return claims;
     return receiveFeedback(request, env, claims?.sub ?? null);
   }
 
@@ -145,7 +150,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   // This device's push subscription or token, registered with the signed-in account's session, or taken off it.
   if (path === "/v1/push" && (method === "POST" || method === "DELETE")) {
     const claims = await account(bearerToken(request), env);
-    if (!claims) return denied();
+    if (claims instanceof Response) return claims;
     return registration(request, env, claims.sub, claims.sid);
   }
 
@@ -153,7 +158,8 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
     if (!isUpgrade(request)) return reply({ error: "websocket_required" }, 426);
     const socket = socketToken(request);
     const claims = await account(socket?.token ?? null, env);
-    if (!claims || !socket) return denied();
+    if (claims instanceof Response) return claims;
+    if (!socket) return denied();
     return env.DIRECTORY.getByName("primary").fetch(new Request("https://directory/events", { headers: { upgrade: "websocket", "x-stillfail-sub": claims.sub, "x-stillfail-protocol": socket.protocol } }));
   }
 
@@ -161,7 +167,7 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   const isAccountRoute = path === "/v1/me" || path.startsWith("/v1/workspaces") || path.startsWith("/v1/invitations/");
   if (!isAccountRoute) return null;
   const claims = await account(bearerToken(request), env);
-  if (!claims) return denied();
+  if (claims instanceof Response) return claims;
   let input: Record<string, unknown>;
   try {
     input = await body(request);
@@ -269,7 +275,7 @@ export async function blockAccount(env: Env, sub: string, on: boolean): Promise<
 export async function adminApi(request: Request, env: Env, path: string): Promise<Response> {
   const method = request.method;
   const claims = await account(bearerToken(request), env);
-  if (!claims || !isAdmin(env, claims.email)) return notFound();
+  if (claims instanceof Response || !isAdmin(env, claims.email)) return notFound();
   let input: Record<string, unknown>;
   try {
     input = await body(request);

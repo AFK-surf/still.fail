@@ -75,6 +75,7 @@
   "core-misc.cloud.invalid_relay": "请填写 iroh-relay 的 https 地址，例如 https://relay.example.com",
   "core-misc.cloud.invalid_relays": "最多添加 4 个中继",
   "core-misc.cloud.invalid_session": "登录已失效，请重新登录",
+  "core-misc.cloud.rate_limited": "请求过于频繁，请稍后重试",
   "core-misc.cloud.invitation_for_other_email": "此邀请发送至其他邮箱，请使用对应的账号接受",
   "core-misc.cloud.invitation_not_found": "邀请链接无效或已过期",
   "core-misc.cloud.last_owner": "workspace 至少要保留一个 owner",

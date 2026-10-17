@@ -228,9 +228,11 @@ export class Account extends DurableObject<Env> {
     }
   }
 
-  /** Whether an access token's session is still live (not logged out, blocked or expired). */
-  live(claims: Claims): boolean {
-    return Boolean(this.session(this.data(), claims)) && this.charge();
+  /** Whether an access token's session is still live (not logged out, blocked or expired); `limited` when it is, but
+   * over its requests a minute. */
+  live(claims: Claims): boolean | "limited" {
+    if (!this.session(this.data(), claims)) return false;
+    return this.charge() ? true : "limited";
   }
 
   async fetch(request: Request): Promise<Response> {

@@ -157,6 +157,7 @@ function message(code: string): string | null {
     too_many_members: "core-misc.cloud.too_many_members",
     too_many_stations: "core-misc.cloud.too_many_stations",
     invalid_session: "core-misc.cloud.invalid_session",
+    rate_limited: "core-misc.cloud.rate_limited",
     [NOT_BETA]: "core-misc.cloud.not_beta",
   };
   return Object.prototype.hasOwnProperty.call(known, code) ? known[code] : null;

@@ -75,6 +75,7 @@
   "core-misc.cloud.invalid_relay": "Enter an iroh-relay https address, such as https://relay.example.com",
   "core-misc.cloud.invalid_relays": "A workspace can have at most 4 relays",
   "core-misc.cloud.invalid_session": "Session expired. Sign in again",
+  "core-misc.cloud.rate_limited": "Too many requests. Try again shortly",
   "core-misc.cloud.invitation_for_other_email": "This invite is for another email. Accept it with that account",
   "core-misc.cloud.invitation_not_found": "Invite link invalid or expired",
   "core-misc.cloud.last_owner": "A workspace needs at least one owner",
