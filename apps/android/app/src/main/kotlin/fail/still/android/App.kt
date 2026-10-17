@@ -318,6 +318,16 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
     fun setReader(shown: fail.still.android.data.ReaderPrefs, field: String, value: kotlinx.serialization.json.JsonPrimitive) =
         setPrefs(kept.copy(reader = shown), buildJsonObject { putJsonObject("reader") { put(field, value) } })
 
+    /** How a station's files are listed on this device, as the web's (prefs `driveViews`): their order (`sort`: name, time,
+     *  size or kind, `-down` the other way) and whether hidden ones show (`hidden`: shown). */
+    val driveSort: String get() = kept.driveViews?.get("sort") ?: "name"
+    val driveHidden: Boolean get() = kept.driveViews?.get("hidden") == "shown"
+    /** One of them changed (null: back to how it is when never said). */
+    fun setDriveView(key: String, value: String?) = setPrefs(
+        kept.copy(driveViews = (kept.driveViews ?: emptyMap()).let { if (value == null) it - key else it + (key to value) }),
+        buildJsonObject { putJsonObject("driveViews") { if (value == null) put(key, kotlinx.serialization.json.JsonNull) else put(key, value) } },
+    )
+
     /** Whether files of a station's put into the chat `key` ("<station>:<chat>") go as files, not named by their path: the
      *  chat's own say (`prefs.dropFiles`), else the settings' (`dropAs`). */
     fun dropsAsFiles(key: String): Boolean = kept.dropFiles?.get(key) ?: (kept.dropAs == "file")

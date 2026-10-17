@@ -498,5 +498,14 @@
   "android-misc.screen.outdatedRow": "This station is too old to show its screens; update it first",
   "android-misc.screen.drives": "{who} is in control",
   "android-misc.screen.someoneDrives": "Someone else is in control",
-  "android-misc.screen.takeOver": "Take over"
+  "android-misc.screen.takeOver": "Take over",
+  "android-misc.drive.chosen": {
+    "one": "1 chosen",
+    "other": "{n} chosen"
+  },
+  "android-misc.drive.chooseAll": "Choose all",
+  "android-misc.drive.chooseNone": "Choose none",
+  "android-misc.drive.stale": "Couldn't read it now, showing what was read last: {error}",
+  "android-misc.drive.view": "View",
+  "android-misc.drive.chosenActions": "Actions on what is chosen"
 }
