@@ -64,6 +64,12 @@ class Smooth(topStart: CornerSize, topEnd: CornerSize, bottomEnd: CornerSize, bo
 fun concentric(outer: Dp, inset: Dp): Dp = outer - inset / SMOOTH_SCALE
 
 /**
+ * How far in from each of its edges a Smooth corner of `radius` (room enough to be wholly smooth) passes at its middle,
+ * where it turns 45°: the superellipse's point with x = y, 2^(-1/n) of the longer radius from its centre.
+ */
+fun smoothMiddle(radius: Dp): Dp = radius * SMOOTH_SCALE * (1f - 2f.pow(-1f / SMOOTH_EXPONENT))
+
+/**
  * A box on its way between a round-cornered place and a smooth one (a note flying from a capsule into its card):
  * `amount` of the smoothing, 0 the plain round corner and 1 Smooth's own.
  */

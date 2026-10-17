@@ -15,6 +15,7 @@ import fail.still.android.ui.InComposer
 import fail.still.android.ui.Raised
 import fail.still.android.ui.InComposerFiles
 import fail.still.android.ui.concentric
+import fail.still.android.ui.smoothMiddle
 import fail.still.android.ui.ComposerFilesIn
 import fail.still.android.ui.ComposerInset
 import fail.still.android.ui.ComposerCorner
@@ -735,8 +736,7 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
                 // Only where it is drawn: Compose would take a touch target this small out to 48dp, most of the tile,
                 // and a tap meant to open the picture removed it.
                 CompositionLocalProvider(LocalViewConfiguration provides LocalViewConfiguration.current.exact()) {
-                    // Over the picture's corner, partly beyond it (not held inside its curve): solid, as half of it is on
-                    // the composer's ground.
+                    // Over the picture's corner, its centre on the curve: solid, as part of it is on the composer's ground.
                     Box(
                         Modifier.align(Alignment.TopEnd).offset(x = PictureRemoveOut, y = -PictureRemoveOut).size(20.dp).clip(CircleShape).background(C.ink).clickable(onClick = remove),
                         contentAlignment = Alignment.Center,
@@ -758,8 +758,8 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
     }
 }
 
-/** How far a composer picture's remove button reaches beyond its corner. */
-private val PictureRemoveOut = 4.dp
+/** How far a composer picture's remove button (20 across) reaches beyond its edges: its centre on the corner's curve. */
+private val PictureRemoveOut = 10.dp - smoothMiddle(concentric(ComposerCorner, ComposerFilesIn))
 
 /** A link shared in (share/), as a file of the draft: nothing goes up, it is sent as words after the text. */
 internal fun linkPending(link: ComposerLink) = Pending(System.nanoTime(), link.title ?: link.url, 0, null, link = link)
