@@ -64,13 +64,13 @@ function withCard(chat: ChatView): ChatView {
   if (!last || chat.messages.some((m) => m.card?.vault)) return chat;
   const seq = (chat.messages.at(-1)?.seq ?? 0) + 1;
   const options = [
-    { label: "批准这一次", detail: "只能用一次，用完作废", recommended: true },
-    { label: "这个 chat 一小时内都行", detail: "一小时里再用不用再问" },
-    { label: "拒绝", detail: "agent 会收到「被拒绝」" },
+    { label: "仅本次", detail: "单次有效", recommended: true },
+    { label: "本对话 1 小时内", detail: "期间无需再次批准" },
+    { label: "拒绝", detail: "通知 agent 已拒绝" },
   ];
   const ask: ChatMessage = {
     ...last, seq, ts: `${Number(last.ts) + 30}`, quotes: [], attachments: [],
-    text: "PR 的检查挂在发布那一步，要用 GitHub token 重跑失败的 job。\n\nagent 要用「GitHub token」：重跑 PR #512 失败的 release job\n\n命令：`gh run rerun 1846 --failed`\n\n方式：代理 · 只发往 api.github.com",
+    text: "PR 的检查挂在发布那一步，要用 GitHub token 重跑失败的 job。\n\n申请使用「GitHub token」：重跑 PR #512 失败的 release job\n\n命令：`gh run rerun 1846 --failed`\n\n方式：代理（限 api.github.com）",
     options, card: { type: "options", options, assignee: "you@acme.dev", assigneeText: "待你决策", vault: REQUEST.id }, decision: { resolved: false },
   };
   return { ...chat, messages: [...chat.messages, ask] };

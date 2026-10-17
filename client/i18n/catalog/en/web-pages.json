@@ -1426,8 +1426,8 @@
     "one": "{n} waiting for you",
     "other": "{n} waiting for you"
   },
-  "web-pages.vault.appOnly": "Open and approve in the client (desktop or Android)",
-  "web-pages.vault.appOnlyWhy": "A web page sees only the names: its code comes from the cloud, so it never opens a secret",
+  "web-pages.vault.appOnly": "View and approve in the client",
+  "web-pages.vault.appOnlyWhy": "The web app shows names only and cannot decrypt",
   "web-pages.vault.none": "No secrets yet",
   "web-pages.vault.needsLock": "Turn on security mode first",
   "web-pages.vault.needsLockWhy": "The vault trusts only devices confirmed in security mode",
@@ -1530,15 +1530,15 @@
   "web-pages.vault.copied": "Copied; cleared in 30 seconds",
   "web-pages.vault.forAgents": "For agents",
   "web-pages.vault.notForAgents": "Agents do not see this one",
-  "web-pages.vault.approve.once": "Approve this once",
-  "web-pages.vault.approve.onceDetail": "One use, then it is gone",
-  "web-pages.vault.approve.hour": "This chat, for an hour",
-  "web-pages.vault.approve.hourDetail": "No asking again for an hour",
+  "web-pages.vault.approve.once": "This time only",
+  "web-pages.vault.approve.onceDetail": "Valid for one use",
+  "web-pages.vault.approve.hour": "This chat, for 1 hour",
+  "web-pages.vault.approve.hourDetail": "No further approval needed",
   "web-pages.vault.approve.deny": "Deny",
-  "web-pages.vault.approve.denyDetail": "The agent is told no",
+  "web-pages.vault.approve.denyDetail": "The agent is notified",
   "web-pages.vault.approve.wants": "The agent wants “{name}”",
   "web-pages.vault.approve.what": "approve",
   "web-pages.vault.approve.denyWhat": "deny",
-  "web-pages.vault.approve.inClient": "Approve it in the still.fail client",
-  "web-pages.vault.approve.inClientDetail": "A web page holds no keys: open this chat in the desktop or Android client, which asks you to confirm it's you"
+  "web-pages.vault.approve.inClient": "Approve in the client",
+  "web-pages.vault.approve.inClientDetail": "The web app cannot access keys"
 }

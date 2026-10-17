@@ -30,7 +30,7 @@ export function useVaultItems(workspace: string, vault: string): VaultItemsView 
 export const kindName = (kind: string | undefined): string => (KINDS.includes(kind as Kind) ? t(`web-pages.vault.kind.${kind}`) : "");
 export const modeName = (mode: string): string => (["proxy", "env", "ssh"].includes(mode) ? t(`web-pages.vault.mode.${mode}`) : mode);
 
-/** How an agent gets it, in a line: 代理 · 只发往 api.github.com; ssh-agent; 环境变量. */
+/** How an agent gets it, in a line: 代理 · 限 api.github.com; ssh-agent; 环境变量. */
 export function howLine(mode: string, hosts: readonly string[]): string {
   const name = modeName(mode);
   return mode === "proxy" && hosts.length ? `${name} · ${t("web-pages.vault.onlyTo", { hosts: hosts.join(", ") })}` : name;

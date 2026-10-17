@@ -1,6 +1,6 @@
 // An agent's request to use a vault item (docs/vault.md 申请和授权): under the agent's post in its chat, on the
 // decisions page (奏) and on the vault's page, in place of the card's options. Three rows as a decision's options are
-// drawn (Decisions.css.ts): 批准这一次 (`once`), 这个 chat 一小时内都行 (`hour`), 拒绝; the first recommended. A tap asks the core
+// drawn (Decisions.css.ts): 仅本次 (`once`), 本对话 1 小时内 (`hour`), 拒绝; the first recommended. A tap asks the core
 // (`vault.approve`, which has the system ask the person; `vault.deny`); once decided the station takes the card back.
 // Only the request's own (the `vaults` topic's requests: one waiting on the viewer) can be answered, and only in an app
 // that keeps keys: a web page shows no rows, only that it is approved in a client (desktop or Android); elsewhere the

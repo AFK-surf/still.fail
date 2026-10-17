@@ -69,11 +69,11 @@ class VaultTest {
     /** Locked here: the listed ones' names (their listings'), the other unknown. */
     private val locked = VaultItemsView("v_1", "个人", open = false, items = listOf(deploy, github, openai, aliyun.copy(name = null, kind = null)))
 
-    private val post = "agent 要用「GitHub token」：重跑 PR #512 失败的 release job\n\n命令：`gh run rerun 1846 --failed`\n\n方式：代理 · 只发往 api.github.com\n\n在 still.fail app 里批准，要验证指纹或锁屏密码。"
+    private val post = "申请使用「GitHub token」：重跑 PR #512 失败的 release job\n\n命令：`gh run rerun 1846 --failed`\n\n方式：代理（限 api.github.com）"
     private val stationOptions = listOf(
-        DecisionOption("批准这一次", "只能用一次，用完作废", recommended = true),
-        DecisionOption("这个 chat 一小时内都行", "一小时里再用不用再问"),
-        DecisionOption("拒绝", "agent 会收到「被拒绝」"),
+        DecisionOption("仅本次", "单次有效", recommended = true),
+        DecisionOption("本对话 1 小时内", "期间无需再次批准"),
+        DecisionOption("拒绝", "通知 agent 已拒绝"),
     )
 
     private fun theme(dark: Boolean) = if (dark) "dark" else "light"
@@ -109,7 +109,7 @@ class VaultTest {
     @Test fun needsTheLockFirst() {
         val h = Harness(rule)
         page(h, off.copy(locked = false, canSign = false), null, false)
-        rule.onNodeWithText("先打开安全模式").assertIsDisplayed()
+        rule.onNodeWithText("需先开启安全模式").assertIsDisplayed()
         rule.onNodeWithText("开启密钥库").assertDoesNotExist()
         shot("vault-needs-lock-light")
         rule.onNodeWithText("安全").performClick()
@@ -126,10 +126,10 @@ class VaultTest {
         shot("vault-off-${theme(dark)}")
         rule.onNodeWithText("开启密钥库").performClick()
         h.settle()
-        rule.onNodeWithText("把这 24 个词抄下来").assertIsDisplayed()
+        rule.onNodeWithText("抄写恢复码").assertIsDisplayed()
         rule.onNodeWithText("harbor").assertIsDisplayed()
         shot("vault-words-${theme(dark)}")
-        rule.onNodeWithText("已经抄好").performClick()
+        rule.onNodeWithText("已抄写").performClick()
         h.settle()
         val create = h.fake.calls.first { it.first == "vault.create" }.second
         assertEquals("个人", create["name"]!!.jsonPrimitive.content)
@@ -143,15 +143,15 @@ class VaultTest {
     private fun items(dark: Boolean) {
         val h = Harness(rule)
         page(h, on, unlocked, dark)
-        rule.onNodeWithText("agent 要用「GitHub token」").assertIsDisplayed()
+        rule.onNodeWithText("申请使用「GitHub token」").assertIsDisplayed()
         shot("vault-page-${theme(dark)}")
-        rule.onNodeWithText("把钥匙给新设备").performScrollTo()
+        rule.onNodeWithText("授权新设备").performScrollTo()
         h.settle()
         shot("vault-page-items-${theme(dark)}")
-        rule.onNodeWithText("把钥匙给新设备").performScrollTo().performClick()
+        rule.onNodeWithText("授权新设备").performScrollTo().performClick()
         h.settle()
         assertTrue(h.fake.calls.any { it.first == "vault.addDevice" && it.second["vault"]!!.jsonPrimitive.content == "v_1" })
-        rule.onAllNodesWithText("批准这一次")[0].performScrollTo().performClick()
+        rule.onAllNodesWithText("仅本次")[0].performScrollTo().performClick()
         h.settle()
         val approve = h.fake.calls.first { it.first == "vault.approve" }.second
         assertEquals("r_1", approve["request"]!!.jsonPrimitive.content)
@@ -175,7 +175,7 @@ class VaultTest {
             } else JsonNull
         }
         page(h, on.copy(requests = emptyList(), vaults = listOf(personal.copy(open = false, missing = 0u))), locked, dark)
-        rule.onNodeWithText("锁着的条目").assertIsDisplayed()
+        rule.onNodeWithText("已锁定的条目").assertIsDisplayed()
         shot("vault-locked-${theme(dark)}")
         rule.onNodeWithText("GitHub token").performClick()
         h.settle()
@@ -205,9 +205,9 @@ class VaultTest {
     private fun adding(dark: Boolean) {
         val h = Harness(rule)
         page(h, on.copy(requests = emptyList()), unlocked, dark)
-        rule.onNodeWithContentDescription("加一条").performClick()
+        rule.onNodeWithContentDescription("添加").performClick()
         h.settle()
-        rule.onNodeWithText("SSH 钥匙").performClick()
+        rule.onNodeWithText("SSH 密钥").performClick()
         h.settle()
         shot("vault-new-${theme(dark)}")
     }
@@ -226,16 +226,16 @@ class VaultTest {
         h.fake.put(Topics.chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD)), Fixtures.chat(talk, title = "修登录页的 CI"))
         h.fake.put(Topics.vaults(ws), on)
         h.launch(listOf(Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))), dark)
-        rule.onNodeWithText("这个 chat 一小时内都行").assertIsDisplayed()
+        rule.onNodeWithText("本对话 1 小时内").assertIsDisplayed()
         shot("vault-card-${theme(dark)}")
-        rule.onNodeWithText("这个 chat 一小时内都行").performClick()
+        rule.onNodeWithText("本对话 1 小时内").performClick()
         h.settle()
         val approve = h.fake.calls.first { it.first == "vault.approve" }.second
         assertEquals("hour", approve["scope"]!!.jsonPrimitive.content)
         // Decided (elsewhere, or here): nothing left to tap, until the station takes the card back.
         h.fake.put(Topics.vaults(ws), on.copy(requests = emptyList()))
         h.settle()
-        rule.onNodeWithText("这个申请已经处理过了").assertIsDisplayed()
+        rule.onNodeWithText("此申请已处理").assertIsDisplayed()
     }
 
     @Test fun cardLight() = card(false)
@@ -245,7 +245,7 @@ class VaultTest {
     private fun web(dark: Boolean) {
         val h = Harness(rule)
         page(h, on.copy(available = false, canSign = false, setUp = false, requests = emptyList(), refused = listOf(VaultRefusal("mba", "MBA", "http_404"))), locked, dark)
-        rule.onNodeWithText("网页版只能看到名字，打开和批准要用 app").assertIsDisplayed()
+        rule.onNodeWithText("网页端仅显示名称，请在客户端查看和批准").assertIsDisplayed()
         shot("vault-web-${theme(dark)}")
     }
 

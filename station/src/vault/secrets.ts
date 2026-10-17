@@ -237,19 +237,19 @@ export class Secrets {
 
   /// The card for request `r` in the session's chat: the vault's owner decides it in the app.
   async #post(session: string, thread: SessionThread, r: Request, l: Listing, owner: string | undefined): Promise<string | null> {
-    const how = r.mode === "proxy" ? `代理 · 只发往 ${(r.hosts ?? l.hosts).join(", ")}` : r.mode === "ssh" ? "ssh-agent（钥匙不离开 station）" : "环境变量（命令看得到原值）";
+    const how = r.mode === "proxy" ? `代理（限 ${(r.hosts ?? l.hosts).join(", ")}）` : r.mode === "ssh" ? "ssh-agent（私钥不出 station）" : "环境变量（命令可读取明文）";
     const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
     const stillfail = thread.thread.surface === STILLFAIL_SURFACE;
     // In a still.fail chat the card says where it is approved; Slack has no card, so the words say it.
-    const where = stillfail ? [] : ["在 still.fail app 的「密钥」里批准，要验证指纹或锁屏密码。"];
-    const text = [`agent 要用「${l.name}」：${r.reason}`, ...(r.command ? [`命令：\`${r.command.replace(/`/g, "'")}\``] : []), `方式：${how}`, ...where].join("\n\n");
+    const where = stillfail ? [] : ["请在 still.fail 客户端的「密钥」中批准。"];
+    const text = [`申请使用「${l.name}」：${r.reason}`, ...(r.command ? [`命令：\`${r.command.replace(/`/g, "'")}\``] : []), `方式：${how}`, ...where].join("\n\n");
     const card = stillfail
       ? {
           type: "options",
           options: [
-            { label: "批准这一次", detail: "只能用一次，用完作废", recommended: true },
-            { label: "这个 chat 一小时内都行", detail: "一小时里再用不用再问" },
-            { label: "拒绝", detail: "agent 会收到「被拒绝」" },
+            { label: "仅本次", detail: "单次有效", recommended: true },
+            { label: "本对话 1 小时内", detail: "期间无需再次批准" },
+            { label: "拒绝", detail: "通知 agent 已拒绝" },
           ],
           ...(owner ? { assignee: owner.toLowerCase() } : {}),
           vault: { request: r.id },
