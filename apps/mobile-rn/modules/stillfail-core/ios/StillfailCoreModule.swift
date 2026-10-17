@@ -50,6 +50,11 @@ private final class CoreProcess {
   /// The core's script as the app carries it (scripts/core-ios.sh: client/core-ts as Hermes bytecode).
   private static let script = "core.hbc"
 
+  /// What the UI tells the core and what the core says, at the debug level (kept only while someone streams it:
+  /// `log stream --level debug --predicate 'subsystem == "fail.still.core"'`).
+  private let told = Logger(subsystem: "fail.still.core", category: "told")
+  private let said = Logger(subsystem: "fail.still.core", category: "said")
+
   private let lock = NSLock()
   private var running: SFCoreEngine?
   private weak var listener: StillfailCoreModule?
@@ -70,6 +75,7 @@ private final class CoreProcess {
     let to = client
     lock.unlock()
     guard let engine else { throw CoreNotStarted() }
+    told.debug("\(String(json.prefix(300)), privacy: .public)")
     engine.receive(to, json: json)
   }
 
@@ -87,12 +93,9 @@ private final class CoreProcess {
     lock.unlock()
   }
 
-  /// What the core says, at the debug level (kept only while someone streams it: `log stream --level debug
-  /// --predicate 'subsystem == "fail.still.core"'`).
-  private let log = Logger(subsystem: "fail.still.core", category: "said")
 
   private func heard(_ json: String, _ bytes: Data?) {
-    log.debug("\(String(json.prefix(300)), privacy: .public)")
+    said.debug("\(String(json.prefix(300)), privacy: .public)")
     lock.lock()
     let module = listener
     lock.unlock()

@@ -12,7 +12,8 @@ udid() { xcrun simctl list devices -j | python3 -c "import json,sys; d=[x for r 
 U=$(udid)
 case "${1:-}" in
   stop) [ -n "$U" ] && { xcrun simctl shutdown "$U" 2>/dev/null || true; xcrun simctl delete "$U"; }; exit 0 ;;
-  shot) xcrun simctl io "$U" screenshot "$2" > /dev/null; exit 0 ;;
+  # simctl writes it from its own directory: the path made absolute here.
+  shot) case "$2" in /*) f=$2 ;; *) f=$PWD/$2 ;; esac; xcrun simctl io "$U" screenshot "$f" 2>&1 | grep -v -E "^(Detected|Note:|Wrote)" || true; exit 0 ;;
 esac
 [ -n "$U" ] || U=$(xcrun simctl create "$SIM" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro com.apple.CoreSimulator.SimRuntime.iOS-26-4)
 xcrun simctl bootstatus "$U" -b > /dev/null
