@@ -72,10 +72,16 @@ export function dshSetup(route: DshRoute | null, model: string | undefined, effo
   let chosen: { provider: string; model: string } | undefined;
   if (route?.kind === "pi") {
     if (model === undefined) throw new Error("the profile names no model for DeepSeek Harness");
-    const provider: Json = { displayName: route.name, api: route.api, baseURL: route.baseURL, apiKeyEnv: DSH_KEY, models: [{ id: model }] };
+    const entry: Json = { id: model };
+    const provider: Json = { displayName: route.name, api: route.api, baseURL: route.baseURL, apiKeyEnv: DSH_KEY, models: [entry] };
     if (route.headers) provider.headers = expandRoute(route.headers, sessionRoute);
     const reasoning = piEffort(effort);
-    if (reasoning) provider.reasoning = reasoning;
+    if (reasoning) {
+      provider.reasoning = reasoning;
+      // pi-ai takes a model it has no catalog entry for (deepseek-flash on OpenCode Go) as one without reasoning and
+      // refuses any effort for it: the model is said to take the profile's.
+      entry.reasoningEfforts = { off: null, [reasoning]: reasoning };
+    }
     patch.push({ id: "llm-pi-ai", config: { providers: { [ROUTE]: provider } } });
     chosen = { provider: ROUTE, model };
   } else if (route?.kind === "deepseek") {

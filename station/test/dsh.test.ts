@@ -123,7 +123,7 @@ describe("the DeepSeek Harness driver", { concurrency: true }, () => {
     assert.ok(existsSync(BRIDGE));
     assert.deepEqual(byId["llm-pi-ai"].config.providers.stillfail, {
       displayName: "OpenCode Go", api: "openai-completions", baseURL: "https://opencode.ai/zen/go/v1", apiKeyEnv: "STILLFAIL_DSH_KEY",
-      models: [{ id: "m1" }], headers: { "x-opencode-session": `ember-${o.route}` }, reasoning: "max",
+      models: [{ id: "m1", reasoningEfforts: { off: null, max: "max" } }], headers: { "x-opencode-session": `ember-${o.route}` }, reasoning: "max",
     });
     assert.deepEqual(byId["agent-default-model"].config, { provider: "stillfail", model: "m1" });
     assert.deepEqual(byId["system-prompt"].config, { personaPrefix: "", personaSuffix: "be brief; {\u200b{not a variable}}" }, "no prompt variables: the instructions' braces broken");
