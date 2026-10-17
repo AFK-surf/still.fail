@@ -3355,6 +3355,33 @@ export interface SoftwareVersion {
 	checkedAt?: number;
 }
 
+/** One of a station's grants. */
+export interface StationGrant {
+	/** capture | control | documents | desktop | downloads | removable | network: what `permissions.request` takes. */
+	id: string;
+	name: string;
+	/** What it is for; while its window is up on the Mac, how it is given there. */
+	line: string;
+	granted: boolean;
+	/** Its window is up on the Mac now, asking for it. */
+	asking: boolean;
+}
+
+/** What macOS lets a Mac station's still.fail Helper do (docs/remote-screens.md "Grants"), as its page shows it. */
+export interface StationPermissions {
+	/** Screen Recording, Accessibility, then the folders macOS protects, in that order. */
+	grants: StationGrant[];
+	/** What is unavailable now for want of a grant, in a line; none when every one is granted. */
+	note?: string;
+	/**
+	 * The desktop's page in the app, where a person grants from wherever they are (its screen can be seen and
+	 * driven): opened once a grant is asked for. None: they go to the Mac.
+	 */
+	screen?: string;
+	/** The viewer may ask for a grant (`permissions.request`; not a read-only member). */
+	canRequest: boolean;
+}
+
 /** A station's overview, with what the clients show of its connects and profiles. */
 export interface Overview {
 	automaticDecisions?: AutomaticDecisionView;
@@ -3389,6 +3416,11 @@ export interface Overview {
 	 * than the drive, which then is not offered).
 	 */
 	drive?: DriveRoots;
+	/**
+	 * What macOS lets its still.fail Helper do (a Mac's station only; none from one older than them, which then
+	 * shows nothing).
+	 */
+	permissions?: StationPermissions;
 }
 
 /** How a connection to a station goes: straight there, through a relay, or still being chosen. */

@@ -658,7 +658,21 @@ export const SHAPES: Record<string, Shape> = {
     ["processesText", "String", { doc: "Its agents' processes, in a line." }],
     ["footprint", opt("FootprintBrief"), { doc: "How much of the disk it takes (none from a station older than the footprint page, which then is not offered)." }],
     ["drive", opt("DriveRoots"), { doc: "Its files: the folders pinned, and whether the viewer browses every folder (none from a station older\nthan the drive, which then is not offered)." }],
+    ["permissions", opt("StationPermissions"), { doc: "What macOS lets its still.fail Helper do (a Mac's station only; none from one older than them, which then\nshows nothing)." }],
   ], { doc: "A station's overview, with what the clients show of its connects and profiles." }),
+  StationPermissions: struct([
+    ["grants", vec("StationGrant"), { doc: "Screen Recording, Accessibility, then the folders macOS protects, in that order." }],
+    ["note", opt("String"), { doc: "What is unavailable now for want of a grant, in a line; none when every one is granted." }],
+    ["screen", opt("String"), { doc: "The desktop's page in the app, where a person grants from wherever they are (its screen can be seen and\ndriven): opened once a grant is asked for. None: they go to the Mac." }],
+    ["canRequest", "bool", { doc: "The viewer may ask for a grant (`permissions.request`; not a read-only member)." }],
+  ], { doc: "What macOS lets a Mac station's still.fail Helper do (docs/remote-screens.md \"Grants\"), as its page shows it." }),
+  StationGrant: struct([
+    ["id", "String", { doc: "capture | control | documents | desktop | downloads | removable | network: what `permissions.request` takes." }],
+    ["name", "String"],
+    ["line", "String", { doc: "What it is for; while its window is up on the Mac, how it is given there." }],
+    ["granted", "bool"],
+    ["asking", "bool", { doc: "Its window is up on the Mac now, asking for it." }],
+  ], { doc: "One of a station's grants." }),
   DriveRoots: struct([
     ["roots", vec("DriveRoot"), { doc: "The folders pinned: the list everyone sees first, and all a read-only member reaches." }],
     ["anywhere", opt("bool"), { doc: "The viewer browses every folder of the machine (a member who may write); absent from a station from\nbefore, which lends only the folders pinned." }],

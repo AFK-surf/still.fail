@@ -74,6 +74,7 @@ export interface OperationParams {
   "software.check": {  };
   "software.channel": { channel?: string | null | undefined };
   "drive.setRoots": { roots: string[] };
+  "permissions.request": { grant: string };
   "drive.folders": { path?: string | null | undefined };
   "drive.mkdir": { root: string; path: string };
   "drive.rename": { root: string; from: string; to: string };
@@ -191,6 +192,7 @@ export function bindStationOperations(call: Call) {
     softwareCheck: <T = unknown>(params: OperationParams["software.check"] = {}) => call("software.check", params) as Promise<T>,
     softwareChannel: <T = unknown>(params: OperationParams["software.channel"] = {}) => call("software.channel", params) as Promise<T>,
     driveSetRoots: <T = unknown>(params: OperationParams["drive.setRoots"]) => call("drive.setRoots", params) as Promise<T>,
+    permissionsRequest: <T = unknown>(params: OperationParams["permissions.request"]) => call("permissions.request", params) as Promise<T>,
     driveFolders: <T = unknown>(params: OperationParams["drive.folders"] = {}) => call("drive.folders", params) as Promise<T>,
     driveMkdir: <T = unknown>(params: OperationParams["drive.mkdir"]) => call("drive.mkdir", params) as Promise<T>,
     driveRename: <T = unknown>(params: OperationParams["drive.rename"]) => call("drive.rename", params) as Promise<T>,

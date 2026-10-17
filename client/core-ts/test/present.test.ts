@@ -459,3 +459,44 @@ test("loss_is_counted_on_the_way_in_use_and_not_across_a_change_of_it", () => {
   assert.deepEqual(packetsSince(way("0", 100, 2), way("0", 10, 0)), { sent: 0, lost: 0 });
   assert.deepEqual(packetsSince(null, way("0", 10, 0)), { sent: 0, lost: 0 });
 });
+
+test("a_mac_stations_grants_are_said_in_words_with_what_goes_without_them_and_how_one_is_given", () => {
+  const c = { now: 0, offsetMin: 0 };
+  const topic = { topic: "overview", station: "w/s" };
+  const raw = (screen: boolean, asking: string[], request = true): J => ({
+    permissions: {
+      grants: [
+        { grant: "capture", state: "granted" }, { grant: "control", state: screen ? "granted" : "unknown" }, { grant: "documents", state: "granted" },
+        { grant: "desktop", state: "unknown" }, { grant: "downloads", state: "denied" }, { grant: "camera", state: "unknown" },
+      ],
+      asking, screen, request,
+    },
+  });
+  // The screen drivable: its page to open once one is asked for; what is missing said in a line.
+  let o: J = p.decorate(topic, raw(true, []), c);
+  assert.deepEqual(o.permissions.grants.map((g: J) => [g.id, g.name, g.granted, g.asking]), [
+    ["capture", "屏幕录制", true, false], ["control", "辅助功能", true, false], ["documents", "文稿", true, false],
+    ["desktop", "桌面", false, false], ["downloads", "下载", false, false],
+  ]);
+  assert.equal(o.permissions.grants[0].line, "远程查看此屏幕，agent 截屏");
+  assert.equal(o.permissions.note, "当前不可用：访问桌面、访问下载");
+  assert.equal(o.permissions.screen, "/w/w/s/s/screen/desktop");
+  assert.equal(o.permissions.canRequest, true);
+  // The window up for Desktop: how it is given (through the screen).
+  o = p.decorate(topic, raw(true, ["desktop"]), c);
+  assert.deepEqual([o.permissions.grants[3].asking, o.permissions.grants[3].line], [true, "授权窗口已在该 Mac 上打开，可在远程屏幕中点击「允许」"]);
+  // Not drivable: no page to open, the person goes to the Mac; a read-only member may not ask.
+  o = p.decorate(topic, raw(false, ["control"], false), c);
+  assert.equal(o.permissions.screen, undefined);
+  assert.equal(o.permissions.grants[1].line, "授权窗口已在该 Mac 上打开，请在该 Mac 上点击「允许」");
+  assert.equal(o.permissions.note, "当前不可用：远程控制屏幕、访问桌面、访问下载");
+  assert.equal(o.permissions.canRequest, false);
+  // All granted: nothing unavailable.
+  o = p.decorate(topic, { permissions: { grants: [{ grant: "capture", state: "granted" }], asking: [], screen: true, request: true } }, c);
+  assert.equal(o.permissions.note, undefined);
+  // Not a Mac, or a station from before them: none.
+  assert.equal("permissions" in (p.decorate(topic, { counts: {} }, c) as J), false);
+  assert.equal("permissions" in (p.decorate(topic, { permissions: "?" }, c) as J), false);
+  const shown = p.decorate(topic, raw(true, ["desktop"]), c) as J;
+  assert.ok("ok" in conform("StationPermissions", shown.permissions), JSON.stringify(conform("StationPermissions", shown.permissions)));
+});

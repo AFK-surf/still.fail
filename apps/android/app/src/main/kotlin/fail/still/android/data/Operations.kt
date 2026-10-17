@@ -492,6 +492,11 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         values["roots"] = JsonArray(roots.map(::JsonPrimitive))
         return call("drive.setRoots", JsonObject(values))
     }
+    suspend fun permissionsRequest(grant: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["grant"] = JsonPrimitive(grant)
+        return call("permissions.request", JsonObject(values))
+    }
     class DriveFoldersFields : OperationFields() {
         var path: String? by field<String>("path") { JsonPrimitive(it) }
     }

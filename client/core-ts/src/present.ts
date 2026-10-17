@@ -10,6 +10,7 @@ import * as drive from "./drive.ts";
 import * as prefsMod from "./prefs.ts";
 import * as footprint from "./footprint.ts";
 import * as jobsMod from "./jobs.ts";
+import { permissionsShown } from "./permissions.ts";
 import * as model from "./shapes/model.ts";
 import * as providers from "./shapes/providers.ts";
 import { arr as arrU, equal, get as getU, isObject, shaped, str, u64 } from "./util.ts";
@@ -898,7 +899,7 @@ export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
       if (isObject(v) && v.session !== undefined) value = { ...v, session: session(v.session) };
       break;
     case "overview":
-      if (isObject(v)) value = overview(v as J, c);
+      if (isObject(v)) value = overview(v as J, c, typeof topic.station === "string" ? topic.station : null);
       break;
     case "chat": {
       const agents = arr(get(v, "agents"));
@@ -920,8 +921,12 @@ export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
   return times(value, c);
 }
 
-function overview(value: J, c: Clock): J {
+function overview(value: J, c: Clock, station: string | null): J {
   const v: J = { ...value };
+  // A Mac station's grants to still.fail Helper, in words (permissions.ts); none said, none shown.
+  const permissions = station === null ? undefined : permissionsShown(v.permissions, station);
+  if (permissions === undefined) delete v.permissions;
+  else v.permissions = permissions;
   const decided = v.automaticDecisions;
   if (isObject(decided)) {
     const shown: J = { ...decided };

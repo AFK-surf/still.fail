@@ -129,6 +129,7 @@ export const PARAMS: Record<string, string> = {
   "software.check": "",
   "software.channel": "channel?:string",
   "drive.setRoots": "roots:strings",
+  "permissions.request": "grant:string",
   "drive.folders": "path?:string",
   "drive.mkdir": "root:string path:string",
   "drive.rename": "root:string from:string to:string",
@@ -428,6 +429,9 @@ function stationOp(name: string, params: unknown): Request | null {
     // list for each: the asker's (docs/multi-workspace.md).
     case "drive.setRoots":
       return op("PUT", () => "/drive/roots", p.pick(["roots"]), OVERVIEW);
+    // still.fail Helper's window for a grant up on a Mac station (docs/remote-screens.md "Grants"): `{window, screen}`.
+    case "permissions.request":
+      return op("POST", () => "/permissions/request", { grant: p.str("grant") }, OVERVIEW);
     case "drive.folders":
       return op("GET", () => `/drive/folders?path=${encode(p.word("path") ?? "")}`, null, NONE);
     case "drive.mkdir":

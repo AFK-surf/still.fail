@@ -3367,6 +3367,33 @@ data class SoftwareVersion (
 	val checkedAt: Long? = null
 )
 
+/// One of a station's grants.
+@Serializable
+data class StationGrant (
+	/// capture | control | documents | desktop | downloads | removable | network: what `permissions.request` takes.
+	val id: String,
+	val name: String,
+	/// What it is for; while its window is up on the Mac, how it is given there.
+	val line: String,
+	val granted: Boolean,
+	/// Its window is up on the Mac now, asking for it.
+	val asking: Boolean
+)
+
+/// What macOS lets a Mac station's still.fail Helper do (docs/remote-screens.md "Grants"), as its page shows it.
+@Serializable
+data class StationPermissions (
+	/// Screen Recording, Accessibility, then the folders macOS protects, in that order.
+	val grants: List<StationGrant>,
+	/// What is unavailable now for want of a grant, in a line; none when every one is granted.
+	val note: String? = null,
+	/// The desktop's page in the app, where a person grants from wherever they are (its screen can be seen and
+	/// driven): opened once a grant is asked for. None: they go to the Mac.
+	val screen: String? = null,
+	/// The viewer may ask for a grant (`permissions.request`; not a read-only member).
+	val canRequest: Boolean
+)
+
 /// A station's overview, with what the clients show of its connects and profiles.
 @Serializable
 data class Overview (
@@ -3397,7 +3424,10 @@ data class Overview (
 	val footprint: FootprintBrief? = null,
 	/// Its files: the folders pinned, and whether the viewer browses every folder (none from a station older
 	/// than the drive, which then is not offered).
-	val drive: DriveRoots? = null
+	val drive: DriveRoots? = null,
+	/// What macOS lets its still.fail Helper do (a Mac's station only; none from one older than them, which then
+	/// shows nothing).
+	val permissions: StationPermissions? = null
 )
 
 /// How a connection to a station goes: straight there, through a relay, or still being chosen.
