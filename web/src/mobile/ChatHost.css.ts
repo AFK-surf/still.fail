@@ -1,6 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { composerFiles, composerThumb, fileCard, pasteSnippet } from "../Chat.css.ts";
+import { composerFiles, composerThumb, fileCard } from "../Chat.css.ts";
 
 /** A new chat and a chat: one page, what is above and one composer at the foot (ChatHost.tsx; --m-bottom is its height). */
 export const mChatHost = style({
@@ -52,7 +52,7 @@ export const mComposerCapsule = style({
 });
 /** The files in it as far from its edge as from its top, rounded as its corner less that: one curve. */
 globalStyle(`${mComposerCapsule} ${composerFiles}`, { padding: `${FILES_IN - 8}px ${FILES_IN - 8}px 0` });
-globalStyle(`${mComposerCapsule} ${composerFiles} :is(${composerThumb}, ${fileCard}, ${pasteSnippet})`, { borderRadius: `${CAPSULE - FILES_IN}px` });
+globalStyle(`${mComposerCapsule} ${composerFiles} :is(${composerThumb}, ${fileCard})`, { borderRadius: `${CAPSULE - FILES_IN}px` });
 export const mComposerOffline = style({ margin: "0", padding: "2px 8px", fontSize: vars.textMeta, color: "var(--m-muted)" });
 export const mComposerError = style({ margin: "0", padding: "0 6px", fontSize: vars.textCaption });
 

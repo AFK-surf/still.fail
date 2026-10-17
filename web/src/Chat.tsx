@@ -2030,16 +2030,22 @@ function PendingFile({ file: f, onRemove, onRestore, onRetry }: { file: Pending;
   const [open, setOpen] = useState(false);
   // Not sent yet: no session keeps it, it is shown from this device.
   const shown: Attachment = { name: f.name, path: `draft:${f.id}`, size: f.size };
-  if (f.pasted) return <><div className={css.pasteSnippet}>
-    <FileTile name={f.name} progress={!f.done && !f.error ? (f.sent ?? 0) / Math.max(1, f.size) : undefined} error={!!f.error} />
-    <div className={css.pasteSnippetBody}>
-      <button type="button" className={css.pasteSnippetTitle} onClick={(e) => { e.stopPropagation(); setOpen(true); }}>{f.pasted.preview || t("web-main.composer.pastedText")}</button>
-      <span className={css.pasteSnippetHint}>{f.error ?? (!f.done ? t("web-main.composer.pasteUploading") : t("web-main.composer.pasteAttachment", { count: f.pasted.characters }))}</span>
-      {onRetry && <button type="button" className={css.pasteSnippetOpen} onClick={(e) => { e.stopPropagation(); onRetry(); }}>{t("web-main.composer.retryPaste")}</button>}
-      {onRestore && <button type="button" className={css.pasteSnippetOpen} onClick={(e) => { e.stopPropagation(); onRestore(); }}>{t("web-main.composer.expandPaste")}</button>}
-    </div>
-    {onRemove && <button type="button" className={`${css.fileCardRemove} ${css.pasteSnippetRemove}`} aria-label={t("web-main.composer.removePaste")} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
-  </div>{f.pastedFile && f.preview && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey="" file={shown} local={{ blob: f.pastedFile, url: f.preview }} />}</>;
+  if (f.pasted) {
+    // Cut short (a failure said at length), all of it on hover.
+    const meta = f.error ?? (!f.done ? t("web-main.composer.pasteUploading") : t("web-main.composer.pasteAttachment", { count: f.pasted.characters.toLocaleString("en-US") }));
+    return <><span className={css.fileCard} data-card="" data-error={f.error ? true : undefined}>
+      <FileTile name={f.name} progress={!f.done && !f.error ? (f.sent ?? 0) / Math.max(1, f.size) : undefined} error={!!f.error} />
+      <span className={css.fileCardText}>
+        <button type="button" className={css.pasteCardTitle} onClick={(e) => { e.stopPropagation(); setOpen(true); }}>{f.pasted.preview || t("web-main.composer.pastedText")}</button>
+        <Tip label={meta} cut><span className={`${css.fileCardMeta} ${css.pasteCardMeta}`}>{meta}</span></Tip>
+      </span>
+      <span className={css.pasteCardActions}>
+        {onRetry && <Tip label={t("web-main.composer.retryPaste")}><button type="button" className={css.fileCardRemove} aria-label={t("web-main.composer.retryPaste")} onClick={(e) => { e.stopPropagation(); onRetry(); }}><Retry size={13} /></button></Tip>}
+        {onRestore && <Tip label={t("web-main.composer.expandPaste")}><button type="button" className={css.fileCardRemove} aria-label={t("web-main.composer.expandPaste")} onClick={(e) => { e.stopPropagation(); onRestore(); }}><Edit size={13} /></button></Tip>}
+        {onRemove && <button type="button" className={css.fileCardRemove} aria-label={t("web-main.composer.removePaste")} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
+      </span>
+    </span>{f.pastedFile && f.preview && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey="" file={shown} local={{ blob: f.pastedFile, url: f.preview }} />}</>;
+  }
   return f.preview ? (
     <Tip label={f.error ?? f.name}><span ref={thumb} data-card="" className={css.composerThumb} data-send-image={f.done ? sentImageKey(f.done.path) : f.error ? undefined : uploadImageKey(f.id)} data-error={f.error ? true : undefined}>
       <button type="button" className={css.composerThumbOpen} aria-label={t("web-main.file.view", { name: f.name })} data-viewer-thumb={thumbId(station.address, "", shown.path)}

@@ -147,7 +147,7 @@ function ComposerCards() {
     { id: "3", name: "build.log", size: 4096, done: null, error: "station 无响应" },
     { id: "4", name: "发版录屏 1014.mp4", size: 50_541_773, done: null, error: null, ref: ref("/Users/lin/Downloads/发版录屏 1014.mp4") },
     { id: "5", name: "设计稿", size: 0, done: null, error: null, ref: ref("/Users/lin/Downloads/设计稿", true) },
-    { id: "6", name: "pasted.txt", size: 5120, done: { name: "pasted.txt", path: "/u/p.txt", size: 5120 }, error: null, pasted: { preview: "error: connect ECONNREFUSED 127.0.0.1:5432 at TCPConnectWrap", characters: 5120 } as never },
+    { id: "6", name: "pasted.txt", size: 5120, done: { name: "pasted.txt", path: "/u/p.txt", size: 5120 }, error: null, pasted: { preview: "error: connect ECONNREFUSED 127.0.0.1:5432 at TCPConnectWrap", characters: 5120, text: "error: connect ECONNREFUSED…" } },
     { id: "7", name: "acme", size: 0, sent: 0, done: null, error: null, ref: ref("/Users/lin/code/acme", true, "file") },
   ];
   const quotes = [{ id: "q1", author: "定价页 · 1", role: "page", text: "「专业版 ¥99/月」这一行", comment: "改成按年付的价格，月付放到下面" }];
