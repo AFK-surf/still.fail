@@ -84,7 +84,7 @@ about and which holds the grants, so they open without the station restarting:
 | `POST /drive/mkdir {root, path}` | the new folder's entry |
 | `POST /drive/rename {root, from, to}` | within the root, nothing replaced |
 | `POST /drive/remove {root, path, permanent?}` | to the machine's trash (macOS ~/.Trash, the freedesktop trash; another disk's own), a name there taken given a number; `no_trash` where none takes it (Windows), the asker then saying whether it goes for good (`permanent`: a folder with what it holds); a link as a link |
-| `GET /drive/watch?root=&path=&id=` | `{changed}`: answered once something in the folder changes, else after 25 s; each asker's watch (`id`) kept a minute between its askings, a change meanwhile told at the next |
+| `GET /drive/watch?root=&path=&id=` | `{changed}`: answered once something in the folder changes, else after 25 s; each asker's watch (`id`) kept a minute between its askings, a change meanwhile told at the next; a folder reached through still.fail Helper is not watched (`permission`: the client stops asking, and reads it when asked) |
 | `POST /drive/zip {root, path}` | a folder zipped (as `stage` zips one) in a place of its own among the machine's temporary files, let go after an hour: `{root, path, name, size}`, read as any file of the drive is; members who may write |
 | `POST /drive/stage {root, path}` | a file copied among the uploads (a clone where the disk can), answered as an upload is (`{name, path, size}`), for a message to send; at most 1 GB |
 

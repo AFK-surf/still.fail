@@ -531,7 +531,7 @@ export class Drive {
         if (!(await at.fs.stat(at.found)).dir) throw new DriveError("not_a_directory", "that is a file");
         await mkdir(dir, { recursive: true, mode: 0o700 });
         const protect = await this.protectedNow();
-        const skip = async (p: string, n: string) => PART.test(n) || (await this.isProtected(p, await real(p, at.fs), protect));
+        const skip = async (p: string, n: string) => PART.test(n) || (await this.isProtected(p, await this.#real(p, at.fs), protect));
         const size = await zipFolder(at.found, join(dir, name), most, skip, at.fs);
         return { root: dir, path: name, name, size };
       } catch (e) {

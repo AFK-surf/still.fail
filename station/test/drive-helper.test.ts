@@ -41,6 +41,8 @@ class FakeHelper {
   #where: { path: string; token: string } | null = null;
   #conns = new Set<net.Socket>();
   #watches = new Set<net.Socket>();
+  /// Closed at the end of its test: not started again (the station's watch would, and the test's process would not end).
+  #closed = false;
 
   readonly home: string;
 
@@ -49,6 +51,7 @@ class FakeHelper {
   }
 
   launch = async (_app: string, env: Record<string, string>) => {
+    if (this.#closed) throw new Error("the test is over");
     this.launches++;
     this.#where = { path: env.STILLFAIL_HELPER_SOCKET!, token: env.STILLFAIL_HELPER_TOKEN! };
     await this.#listen();
@@ -67,6 +70,7 @@ class FakeHelper {
     for (const c of this.#conns) c.destroy();
   }
   close() {
+    this.#closed = true;
     this.crash();
   }
   /// Its window saw a grant change: told on the station's watch.
@@ -153,7 +157,7 @@ class FakeHelper {
           conn.end(`${JSON.stringify({ error: "starting again", code: "restart", pid: was })}\n`);
           // Started again a moment later, another process.
           this.crash();
-          setTimeout(() => void this.#listen().then(() => (this.pid = was + 1)), 30);
+          setTimeout(() => void (this.#closed || this.#listen().then(() => (this.pid = was + 1))), 30);
           return;
         }
         switch (ask.op) {
@@ -333,6 +337,12 @@ test("which way: a protected folder through still.fail Helper, by its name; any 
   // Documents from the home's root (its path a part under the home): through the helper, told Documents as its root.
   assert.deepEqual((await drive.list(home, "Documents", true)).entries.map((e) => e.name), ["project"]);
   assert.deepEqual(fake.asked.filter((a) => a.op === "files.list").at(-1).roots, [docs]);
+  // Not watched through the helper (the client stops asking), and no window for it; zipped to download through it.
+  assert.equal(await code(drive.folderToWatch(project, "")), "permission");
+  assert.equal(fake.shown.length, 0);
+  const zipped = await drive.zip(project, "Season 1", 1 << 30);
+  assert.equal(zipped.name, "Season 1.zip");
+  assert.ok(zipped.size > 0 && existsSync(join(zipped.root, zipped.path)));
   // Elsewhere still directly: nothing more asked of the helper.
   const before = fake.asked.length;
   assert.deepEqual((await drive.list(join(home, "Movies"), "", true)).entries.map((e) => e.name), ["film.mp4"]);

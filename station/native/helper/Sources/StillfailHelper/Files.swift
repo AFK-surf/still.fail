@@ -284,18 +284,16 @@ enum Files {
       let most = max(0, request["most"] as? Int ?? 50_000)
       guard let dir = opendir(at.found) else { throw FileRefusal.errno() }
       defer { closedir(dir) }
-      var entries: [[String: Any]] = []
-      var more = false
+      // The first by the order shown (folders first, then by name) when there are more than `most`, not the disk's.
+      var all: [(name: String, dir: Bool)] = []
       while let item = readdir(dir) {
         let name = withUnsafeBytes(of: item.pointee.d_name) { raw in String(cString: raw.bindMemory(to: CChar.self).baseAddress!) }
         if name == "." || name == ".." { continue }
-        if entries.count >= most {
-          more = true
-          break
-        }
-        entries.append(listed(at.found, name, scope))
+        all.append((name, item.pointee.d_type == UInt8(DT_DIR)))
       }
-      channel.line(["entries": entries, "more": more])
+      all.sort { $0.dir != $1.dir ? $0.dir : $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+      let entries = all.prefix(most).map { listed(at.found, $0.name, scope) }
+      channel.line(["entries": entries, "more": all.count > most])
     case "files.names":
       let at = try scope.place(request["path"])
       guard let dir = opendir(at.found) else { throw FileRefusal.errno() }
