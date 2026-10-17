@@ -32,14 +32,16 @@ export const line = style({
   animation: later, selectors: { "&[data-error]": { color: vars.red, animation: "none" } },
 });
 export const shapes = style({ selectors: { "&[data-still]": { opacity: 0.6 } } });
-// Its bars (spans and i's in it, whatever their own shape and ground): the light over their ground.
-globalStyle(`${shapes} span, ${shapes} i`, {
+// Its bars (the empty spans and i's in it, or itself when it is one, whatever their own shape and ground; not what
+// holds a few of them): the light over their ground.
+const bars = `${shapes} :is(span, i):empty, :is(span, i)${shapes}:empty`;
+globalStyle(bars, {
   backgroundImage: `linear-gradient(90deg, transparent 40%, color-mix(in srgb, ${vars.muted} 22%, transparent) 50%, transparent 60%)`,
   backgroundSize: "400% 100%", backgroundRepeat: "no-repeat",
   animation: `${sweepLight} 1.4s linear infinite`,
   "@media": { "(prefers-reduced-motion: reduce)": { animation: "none", backgroundImage: "none" } },
 });
-globalStyle(`${shapes}[data-still] span, ${shapes}[data-still] i`, { animation: "none", backgroundImage: "none" });
+globalStyle(`${shapes}[data-still] :is(span, i):empty`, { animation: "none", backgroundImage: "none" });
 const bar = { display: "block", background: vars.neutralBg, borderRadius: "999px" } as const;
 export const row = style({
   display: "flex", alignItems: "center", gap: "12px", height: "66px", padding: "0 16px 0 22px", boxSizing: "border-box",
