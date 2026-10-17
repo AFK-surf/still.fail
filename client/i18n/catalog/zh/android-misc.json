@@ -477,8 +477,8 @@
     "other": "已选 {n} 项"
   },
   "android-misc.drive.chooseAll": "全选",
-  "android-misc.drive.chooseNone": "全不选",
-  "android-misc.drive.stale": "现在读不到，显示的是上次的内容：{error}",
+  "android-misc.drive.chooseNone": "取消全选",
+  "android-misc.drive.stale": "暂时无法读取，当前显示上次的内容：{error}",
   "android-misc.drive.view": "显示方式",
   "android-misc.drive.chosenActions": "对所选项的操作"
 }
