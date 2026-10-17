@@ -93,9 +93,10 @@ try {
       const c = await page.evaluate(corners);
       const p = await page.evaluate(panels);
       for (const w of [...c.wrong, ...p.wrong]) wrong.push(`${story.id}: ${w}`);
-      // Motion reduced, then not again, on the page held still (the demo's chats ended where they are): drawn as it was
-      // (it only takes the time out of motion). What changed both ways (a time read anew) is not its doing; nor is what
-      // loops, or what is in it.
+      // Motion reduced and not, twice each, on the page held still (the demo's chats ended where they are): drawn the same
+      // (it only takes the time out of motion). A difference follows the setting both times: what changes on a switch
+      // whichever way (a bar woken by the pointer the page's change moves over again) or with time is not its doing; nor
+      // is what loops, or what is in it.
       await page.evaluate(() => window.endDemo?.());
       const at = async (reducedMotion) => {
         await page.emulateMedia({ reducedMotion });
@@ -103,13 +104,14 @@ try {
         return page.evaluate(drawn);
       };
       const look = async () => {
-        const before = await at('no-preference'), still = await at('reduce'), after = await at('no-preference');
-        const loops = [...before.loops, ...still.loops, ...after.loops];
+        const seen = [await at('reduce'), await at('no-preference'), await at('reduce'), await at('no-preference')];
+        const loops = seen.flatMap((s) => s.loops);
         const shown = (lines) => new Set(lines.filter((l) => { const at = l.split(' ')[0]; return !loops.some((x) => at === x || at.startsWith(`${x}>`)); }));
-        const [was, reduced, again] = [shown(before.lines), shown(still.lines), shown(after.lines)];
+        const [reduced, moving, reducedAgain, movingAgain] = seen.map((s) => shown(s.lines));
+        const only = (a, b, not1, not2) => [...a].filter((l) => b.has(l) && !not1.has(l) && !not2.has(l));
         return [
-          ...[...was].filter((l) => again.has(l) && !reduced.has(l)).map((l) => `with motion ${l}`),
-          ...[...reduced].filter((l) => !was.has(l) && !again.has(l)).map((l) => `motion reduced ${l}`),
+          ...only(moving, movingAgain, reduced, reducedAgain).map((l) => `with motion ${l}`),
+          ...only(reduced, reducedAgain, moving, movingAgain).map((l) => `motion reduced ${l}`),
         ];
       };
       const differs = await look();
