@@ -22,6 +22,7 @@ fi
 APK=$APP/android/app/build/outputs/apk/release/app-release.apk
 MAP=$APP/android/app/build/generated/sourcemaps/react/release/index.android.bundle.map
 a install -r "$APK" > /dev/null
+a shell pm grant fail.still.rntrial android.permission.POST_NOTIFICATIONS > /dev/null 2>&1 || true
 a reverse tcp:${PORT:-8930} tcp:${PORT:-8930} > /dev/null
 a reverse tcp:3340 tcp:3340 > /dev/null
 a logcat -c

@@ -54,6 +54,8 @@ if ! ours; then
   sleep 10
 fi
 a install -r -t -d "$APK" > /dev/null
+# Notifications allowed, as on the phones compared: the system's question would sit over the first screens.
+PKG=${ACTIVITY:-fail.still.android.motion/fail.still.android.MainActivity}; a shell pm grant "${PKG%%/*}" android.permission.POST_NOTIFICATIONS > /dev/null 2>&1 || true
 a reverse tcp:$PORT tcp:$PORT
 a reverse tcp:3340 tcp:3340
 bash "$HERE/shots.sh" "${ACTIVITY:-fail.still.android.motion/fail.still.android.MainActivity}" "${OUT:-$HERE/ref}"
