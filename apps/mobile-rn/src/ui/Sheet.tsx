@@ -16,6 +16,7 @@ import { IconIn, NavBack } from "./Parts";
 import { Smooth } from "./Smooth";
 import { T } from "./Text";
 import { useC, withAlpha } from "./Theme";
+import { Quiet } from "./Quiet";
 
 /**
  * A sheet (AppState's SheetSpec, as Sheet.kt has it): how much of the screen it takes at first (`height`), and whether
@@ -166,7 +167,7 @@ function SheetBody({ spec, current, scrim, close, gone }: { spec: SheetSpec | nu
             {(current.solid ?? false) || !canBlur ? (
               <View style={[StyleSheet.absoluteFill, { backgroundColor: paper }]} />
             ) : (
-              <BlurView experimentalBlurMethod="dimezisBlurView" {...blurOf(28)} tint="default" style={StyleSheet.absoluteFill} />
+              <Quiet style={StyleSheet.absoluteFill}><BlurView experimentalBlurMethod="dimezisBlurView" {...blurOf(28)} tint="default" style={StyleSheet.absoluteFill} /></Quiet>
             )}
             {!(current.solid ?? false) && (
               <>
