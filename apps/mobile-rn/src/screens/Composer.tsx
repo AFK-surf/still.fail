@@ -20,7 +20,8 @@ import { Topics } from "../data/Topics";
 import { t } from "../i18n";
 import { Button, fileSize } from "../ui/Controls";
 import { chatInk } from "../ui/ChatInk";
-import { ComposerCorner, ComposerFilesIn, ComposerInset, Floating } from "../ui/Glass";
+import { ComposerCorner, ComposerFilesIn, ComposerInset, Floating, InComposer, InComposerFiles } from "../ui/Glass";
+import { AnnotatedText } from "../ui/Annotated";
 import { Icon, Icons } from "../ui/Icon";
 import { Ease } from "../ui/Motion";
 import { MakerIcon } from "../ui/Parts";
@@ -30,7 +31,7 @@ import { T } from "../ui/Text";
 import { lerpColor, raised, useC, withAlpha } from "../ui/Theme";
 import { BusyIcon, Spinner, WaitLine } from "../ui/Waiting";
 import { openAttach, AttachLaunchers } from "./Attach";
-import { quoteLine, type AgentHere } from "./Chat";
+import { quoteLine, quoteMark, type AgentHere } from "./Chat";
 import { FileData, FileCard, isImage } from "./ChatFiles";
 import { SendTile, type ComposerSpec, type Host } from "./ChatHost";
 import { encodeComponent, insertedRange, linkedRefs, type LinkedChat } from "./ChatLink";
@@ -749,10 +750,6 @@ export function uploadingText(f: Pending): string {
 
 // ── the composer ───────────────────────────────────────────────────────
 
-/** The room in the capsule and what sits in it: corners concentric with it. */
-const InComposer = concentric(ComposerCorner, ComposerInset);
-const InComposerFiles = concentric(ComposerCorner, ComposerFilesIn);
-
 /**
  * What waits to go with the message, as the web's composer shows it (ComposerExtras): the quotes, each a card with a
  * line for a comment (the one just added takes the focus; its Enter goes back to the text), then the files (each kept
@@ -785,7 +782,7 @@ export function DraftExtras({ draft, host = null, station = host?.spec?.station 
 
 function DraftQuoteCard({ draft, q }: { draft: Draft; q: DraftQuote }) {
   const C = useC();
-  const ink = chatInk();
+  const ink = chatInk(C);
   const field = useRef<TextInput>(null);
   useEffect(() => {
     if (draft.focusQuote === q.id) { field.current?.focus(); draft.focusQuote = null; }
@@ -794,9 +791,10 @@ function DraftQuoteCard({ draft, q }: { draft: Draft; q: DraftQuote }) {
   return (
     <Smooth radius={InComposer} style={{ width: "100%", backgroundColor: ink.card }}>
       <View style={{ width: "100%" }}>
-        <T size={13} line={19.5} color={ink.muted} numberOfLines={2} ellipsizeMode="tail" style={{ paddingLeft: 16, paddingRight: 34, paddingTop: 9 }}>
-          {quoteLine(q.author, q.text)}
-        </T>
+        <AnnotatedText
+          text={quoteLine(q.author, q.text)} inlineContent={quoteMark()} numberOfLines={2} ellipsizeMode="tail"
+          style={{ fontSize: 13, lineHeight: 19.5, color: ink.muted, paddingLeft: 16, paddingRight: 34, paddingTop: 9, includeFontPadding: false }}
+        />
         <View style={{ width: "100%", paddingLeft: 16, paddingRight: 16, paddingTop: 3, paddingBottom: 10 }}>
           {q.comment === "" && <T size={15} line={22} color={ink.subtle} style={{ position: "absolute", left: 16, top: 3 }}>{t("android-chat.quote.comment")}</T>}
           <TextInput
@@ -877,7 +875,7 @@ export const linkPending = (link: ComposerLink) => new Pending(nanoTime(), link.
 function LinkCard({ link, onRemove }: { link: ComposerLink; onRemove: () => void }) {
   const C = useC();
   return (
-    <Smooth radius={InComposerFiles} style={{ width: 236, backgroundColor: chatInk().neutral }}>
+    <Smooth radius={InComposerFiles} style={{ width: 236, backgroundColor: chatInk(C).neutral }}>
       <Pressable
         onPress={() => { Linking.openURL(link.url).catch(() => undefined); }} android_ripple={{ color: withAlpha(C.ink, 0.12), borderless: false }}
         style={{ paddingHorizontal: 10, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 10 }}
@@ -914,7 +912,7 @@ function PastedCard({ f, pasted, onRemove, onRetry, onRestore }: { f: Pending; p
   const busy = f.done == null && f.error == null;
   const action: [string, () => void] | null = onRetry != null ? [t("web-main.composer.retryPaste"), onRetry] : onRestore != null ? [t("web-main.composer.expandPaste"), onRestore] : null;
   return (
-    <Smooth radius={InComposerFiles} style={{ width: 260, backgroundColor: chatInk().neutral }}>
+    <Smooth radius={InComposerFiles} style={{ width: 260, backgroundColor: chatInk(C).neutral }}>
       <View style={{ paddingLeft: 10, paddingRight: 8, paddingTop: 8, paddingBottom: 8, flexDirection: "row", alignItems: "center", gap: 10 }}>
         {busy ? <Spinner /> : <Icon icon={Icons.Read} size={16} color={C.muted} />}
         <View style={{ flex: 1, minWidth: 0 }}>

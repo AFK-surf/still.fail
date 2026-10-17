@@ -13,6 +13,7 @@ import { Button } from "../ui/Controls";
 import { Icon, Icons } from "../ui/Icon";
 import { Markdown, withRefs } from "../ui/Markdown";
 import { Avatar } from "../ui/Parts";
+import { AnnotatedText } from "../ui/Annotated";
 import { SheetGrab, SheetHead } from "../ui/Sheet";
 import { Smooth } from "../ui/Smooth";
 import { T } from "../ui/Text";
@@ -185,7 +186,7 @@ function PublishSheet({ app, station, thread }: { app: AppState; station: string
  */
 function PreviewMessage({ station, m, off, toggle }: { station: string; m: PublishMessage; off: ReadonlySet<string>; toggle: (k: string) => void }) {
   const C = useC();
-  const ink = chatInk();
+  const ink = chatInk(C);
   return (
     <View style={{ width: "100%" }}>
       {/* As the chat draws them (Chat.tsx SaidRow): an agent by its maker's mark, a person by their picture. */}
@@ -198,7 +199,7 @@ function PreviewMessage({ station, m, off, toggle }: { station: string; m: Publi
           <T size={15} weight="600" color={ink.name} numberOfLines={1} ellipsizeMode="tail" style={{ maxWidth: 240 }}>{m.author}</T>
           <MessageTime stamp={m.time?.["createdAt"] ?? null} />
         </View>
-        {m.agent ? <Markdown text={m.text} /> : m.text.length > 0 ? <T size={15} line={23} color={ink.text}>{withRefs(m.text)}</T> : null}
+        {m.agent ? <Markdown text={m.text} /> : m.text.length > 0 ? <AnnotatedText text={withRefs(m.text)} style={{ fontSize: 15, lineHeight: 23, color: ink.text, includeFontPadding: false }} /> : null}
         {m.files.length > 0 && (
           <View style={{ marginTop: 2, flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
             {m.files.map((f) => <FileToggle key={f.k} station={station} f={f} on={!off.has(f.k)} toggle={() => toggle(f.k)} />)}
