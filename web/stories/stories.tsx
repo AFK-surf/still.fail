@@ -409,6 +409,9 @@ export const stories: Story[] = [
   { id: "settings-security", group: "设置", title: "安全", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }] },
   { id: "settings-security-on", group: "设置", title: "安全 · 已开启", app: true, demo: lockDemo("on"), steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }] },
   { id: "settings-security-no-stations", group: "设置", title: "安全 · 暂无 station", app: true, demo: lockDemo("noStations"), steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }] },
+  { id: "security-waiting", group: "设置", title: "安全 · 等待批准此设备", app: true, demo: lockDemo("waiting") },
+  { id: "security-waiting-denied", group: "设置", title: "安全 · 请求被拒绝后", app: true, demo: lockDemo("denied") },
+  { id: "phone-security-waiting-denied", group: "设置", title: "手机 · 安全 · 请求被拒绝后", app: true, phone: true, demo: lockDemo("denied") },
   { id: "phone-settings-security-no-stations", group: "设置", title: "手机 · 安全 · 暂无 station", app: true, phone: true, demo: lockDemo("noStations"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "安全" }] },
 
   // ── the vault (docs/vault.md) ──

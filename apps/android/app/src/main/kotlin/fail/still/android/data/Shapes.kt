@@ -2982,7 +2982,9 @@ data class LockMe (
 	val confirmed: Boolean,
 	val daysLeft: UInt? = null,
 	/// Not in the lock, it asked or a station refused it: it waits to be confirmed.
-	val waiting: Boolean
+	val waiting: Boolean,
+	/// Its request to be confirmed waits at the cloud (or is on its way); not when it was turned down.
+	val asked: Boolean? = null
 )
 
 /// A member in the workspace's lock, with their devices.

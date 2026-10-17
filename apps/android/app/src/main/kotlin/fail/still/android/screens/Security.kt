@@ -321,6 +321,9 @@ fun SecurityOpenScreen(current: WorkspaceEntry) {
 /** What a device waiting to be confirmed shows instead of the workspace's pages. */
 @Composable
 fun SecurityWaitingScreen(current: WorkspaceEntry, lock: LockView) {
+    val app = LocalApp.current
+    val ws = current.workspace.id
+    val asking = app.isDoing("lock.request", "workspace" to ws)
     Column(
         Modifier.fillMaxSize().padding(horizontal = 28.dp).windowInsetsPadding(WindowInsets.navigationBars),
         verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically), horizontalAlignment = Alignment.CenterHorizontally,
@@ -329,7 +332,12 @@ fun SecurityWaitingScreen(current: WorkspaceEntry, lock: LockView) {
         Text(t("web-pages.security.waitingTitle"), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, textAlign = TextAlign.Center)
         Text(t("web-pages.security.waitingLead", "name" to current.workspace.name), fontSize = 15.sp, lineHeight = 22.sp, color = C.subtle, textAlign = TextAlign.Center)
         Text(lock.me?.code ?: "", fontFamily = CodeFont, fontWeight = FontWeight.SemiBold, fontSize = 36.sp, letterSpacing = 5.sp, color = C.ink)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { Spinner(13.dp); Note(t("web-pages.security.waitingNote")) }
+        if (lock.me?.asked == false && !asking) {
+            Note(t("web-pages.security.notAsked"))
+            WideButton(t("web-pages.security.request"), primary = true) { app.lockCall(ws, "request", t("web-pages.security.request")) }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { Spinner(13.dp); Note(t("web-pages.security.waitingNote")) }
+        }
     }
 }
 

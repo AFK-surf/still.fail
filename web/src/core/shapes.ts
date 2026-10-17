@@ -2968,6 +2968,8 @@ export interface LockMe {
 	daysLeft?: number;
 	/** Not in the lock, it asked or a station refused it: it waits to be confirmed. */
 	waiting: boolean;
+	/** Its request to be confirmed waits at the cloud (or is on its way); not when it was turned down. */
+	asked?: boolean;
 }
 
 /** A member in the workspace's lock, with their devices. */

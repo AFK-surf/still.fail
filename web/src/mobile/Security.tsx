@@ -249,13 +249,18 @@ export function SecurityOpenScreen() {
 /** What a device waiting to be confirmed shows instead of the workspace. */
 export function SecurityWaitingScreen({ lock }: { lock: LockView }) {
   const app = useApp();
+  const run = useRun();
+  const asking = useDoing("lock.request", { workspace: app.entry.id });
   return (
     <div className={css.mWaiting}>
       <ShieldCheck size={44} strokeWidth={1.4} />
       <b className={css.mWaitingTitle}>{t("web-pages.security.waitingTitle")}</b>
       <span className={partsCss.mSubtle}>{t("web-pages.security.waitingLead", { name: app.entry.name })}</span>
       <div className={css.mBigCode}>{lock.me?.code}</div>
-      <span className={css.mNote}><Spinner size={13} /> {t("web-pages.security.waitingNote")}</span>
+      {lock.me?.asked === false && !asking
+        ? <><span className={css.mNote}>{t("web-pages.security.notAsked")}</span>
+          <Button primary label={t("web-pages.security.request")} onClick={() => void run("lock.request", { workspace: app.entry.id }, t("web-pages.security.request"))} /></>
+        : <span className={css.mNote}><Spinner size={13} /> {t("web-pages.security.waitingNote")}</span>}
     </div>
   );
 }

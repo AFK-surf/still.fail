@@ -204,13 +204,18 @@ async function main() {
   const online = (s: Station) => JSON.parse(readFileSync(join(s.data, "run/presence.json"), "utf8")).online === true;
   for (const s of [A, B, C]) await until(async () => online(s), `${s.name} online`);
 
-  say("the owner's desktop app turns the lock on, leaving unlocked-b out");
+  say("the owner's desktop app turns the lock on, leaving unlocked-b and a laptop of alice's (connected to locked-a) out");
   const owner = core("owner");
   await owner.call("migrate", { accounts: [alice] });
   await until(async () => (await owner.call("lock.state", { workspace: ws })).me.device, "owner core up");
-  // The draft as the owner's page has it, unlocked-b unticked.
+  const laptop = core("laptop");
+  await laptop.call("migrate", { accounts: [alice] });
+  const laptopId = await until(async () => (await laptop.call("lock.state", { workspace: ws })).me.device, "laptop core up");
+  const laptopIn = await laptop.call("tools.access", { station: `${ws}/${A.id}` }).then(() => "admitted", (e) => `refused: ${e.message}`);
+  // The draft as the owner's page has it, unlocked-b and the laptop unticked.
   await until(async () => (await owner.call("lock.state", { workspace: ws })) && true, "state");
   await owner.call("lock.toggle", { workspace: ws, id: B.id });
+  await owner.call("lock.toggle", { workspace: ws, id: laptopId });
   const opened = await until(async () => owner.call("lock.open", { workspace: ws }).catch((e) => (console.log("  open:", e.message), null)), "lock.open", 30);
   console.log(`  opened: entry ${opened.head.seq}, ${opened.members} members, ${opened.devices} devices, stations ${opened.stations.map((x: any) => x.name).join(", ")}`);
   for (const s of [A, C]) await until(async () => JSON.parse(readFileSync(join(s.data, "mesh/lock.json"), "utf8")).entries.length > 0, `${s.name} pinned`);
@@ -219,16 +224,24 @@ async function main() {
   // The owner's own device still gets in (its claim is in its hello).
   const ownerIn = await owner.call("tools.access", { station: `${ws}/${A.id}` }).then(() => "admitted", (e) => `refused: ${e.message}`);
   check("the owner's own device", `${A.name}: ${ownerIn}`, "-", ownerIn === "admitted");
+  // The laptop, left out while connected, asks to be trusted as it reads the lock: nothing it does, no restart.
+  const laptopAsked = await until(async () => (await owner.call("lock.state", { workspace: ws })).requests.some((r: any) => r.device === laptopId), "the laptop asked by itself", 100).then(() => true, () => false);
+  const laptopWaits = (await laptop.call("lock.state", { workspace: ws })).me.waiting === true;
+  check("a device left out while connected asks by itself", `laptop: before ${laptopIn}; listed for the owner ${laptopAsked}, waiting ${laptopWaits}`, "-", laptopIn === "admitted" && laptopAsked && laptopWaits);
+  // Turned down: it says so and asks again by hand. Turned down again, so the phone below is the one put up.
+  if (laptopAsked) await owner.call("lock.deny", { workspace: ws, device: laptopId });
+  const deniedSays = await until(async () => ((await laptop.call("lock.state", { workspace: ws })).me.asked === false ? "not asked" : null), "the laptop sees it turned down", 50).catch(() => "still asked");
+  await laptop.call("lock.request", { workspace: ws });
+  const askedAgain = await until(async () => (await owner.call("lock.state", { workspace: ws })).requests.some((r: any) => r.device === laptopId), "the laptop asked again", 50).then(() => true, () => false);
+  const laptopSays = (await laptop.call("lock.state", { workspace: ws })).me;
+  check("turned down, it asks again by hand", `laptop: after deny ${deniedSays}; asked again ${askedAgain}, asked ${laptopSays.asked}, waiting ${laptopSays.waiting}`, "-", deniedSays === "not asked" && askedAgain && laptopSays.asked === true && laptopSays.waiting === true);
+  await owner.call("lock.deny", { workspace: ws, device: laptopId });
+  laptop.close();
 
   say("a new device of alice's: waits, asks, the owner compares its code and confirms it");
   const phone = core("phone");
   await phone.call("migrate", { accounts: [alice] });
   await until(async () => (await phone.call("lock.state", { workspace: ws })).me.device, "phone core up");
-  // Not in the lock, it asks by itself as it reads the lock, before any station refuses it.
-  const own = (await phone.call("lock.state", { workspace: ws })).me.device;
-  await until(async () => (await owner.call("lock.state", { workspace: ws })).requests.some((r: any) => r.device === own), "the phone asked by itself");
-  const waitsItself = (await until(async () => ((await phone.call("lock.state", { workspace: ws })).me.waiting ? true : null), "the phone waits")) === true;
-  check("a new device asks by itself, before reaching a station", `phone: listed for the owner, waiting ${waitsItself}`, "-", waitsItself);
   const waits = await phone.call("tools.access", { station: `${ws}/${A.id}` }).then(() => "admitted", (e) => `${e.code}: ${e.message}`);
   const asked = await phone.call("lock.request", { workspace: ws });
   const listed = await until(async () => (await owner.call("lock.state", { workspace: ws })).requests.find((r: any) => r.device === asked.device), "request listed");

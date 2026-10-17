@@ -1,9 +1,10 @@
 // The workspace lock for the stories (docs/workspace-lock.md): the demo workspace's `lock` topic as the core puts it
-// together (client/core-ts/src/views/lock.ts) with security mode on, and with no station in the workspace.
+// together (client/core-ts/src/views/lock.ts) with security mode on, with no station in the workspace, and on a device
+// waiting to be approved (its request pending, or turned down).
 import type { DemoExtension } from "../src/demo/mount.tsx";
 import type { LockStation, LockView } from "../src/core/shapes.ts";
 
-export type LockStory = "on" | "noStations";
+export type LockStory = "on" | "noStations" | "waiting" | "denied";
 
 const STATIONS: LockStation[] = [
   { id: "s_studio", name: "Studio", version: "0.1.3217", online: true, protected: true },
@@ -12,9 +13,10 @@ const STATIONS: LockStation[] = [
 
 function view(story: LockStory): LockView {
   const stations = story === "noStations" ? [] : STATIONS;
+  const waits = story === "waiting" || story === "denied";
   return {
-    available: true, locked: true, notice: false, role: "owner", manages: true, owner: true, canSign: true, signs: true,
-    me: { device: "d_demo", code: "482 913", kind: "app", confirmed: true, waiting: false },
+    available: true, locked: true, notice: false, role: "owner", manages: true, owner: true, canSign: true, signs: !waits,
+    me: { device: "d_demo", code: "4BU-L2G", kind: "app", confirmed: !waits, waiting: waits, asked: story !== "denied" },
     signers: 1,
     members: [{
       sub: "demo-you", email: "you@acme.dev", name: "你", role: "owner", you: true,
@@ -26,5 +28,9 @@ function view(story: LockStory): LockView {
 
 /** The demo with security mode on, as `story` has it. */
 export function lockDemo(story: LockStory): DemoExtension {
-  return { topic: (t) => (t.topic === "lock" ? view(story) : undefined) };
+  return {
+    topic: (t) => (t.topic === "lock" ? view(story) : undefined),
+    // What changes something answers at once, the page as it was (the stories show states, not what follows).
+    call: (name) => (name.startsWith("lock.") ? {} : undefined),
+  };
 }

@@ -54,8 +54,9 @@ type Held = { head: Head | null; entries: Entry[]; requests: J[] };
 type Part = {
   /// Stations that refused this device for the lock, and the lock's head then.
   refused: Map<string, string | null>;
-  /// This device asked to be confirmed (at that head).
+  /// This device asked to be confirmed (at that head); its request is on its way to the cloud.
   requested: string | null | undefined;
+  sending: boolean;
   /// Of the draft: what is left out; the devices that asked for credentials; each station's answer to GET /lock.
   excluded: Set<string>;
   devices: J[] | null;
@@ -114,7 +115,7 @@ export function fold(entries: Entry[]): Folded {
 }
 
 const part = (inner: Inner, ws: string): Part =>
-  inner.workspaces.of(ws).part<Part>("lock", () => ({ refused: new Map(), requested: undefined, excluded: new Set(), devices: null, probes: new Map(), base: null, shown: new Set() }));
+  inner.workspaces.of(ws).part<Part>("lock", () => ({ refused: new Map(), requested: undefined, sending: false, excluded: new Set(), devices: null, probes: new Map(), base: null, shown: new Set() }));
 
 const held = (inner: Inner, ws: string): Held | null => {
   const h = inner.data.record("lock", ws);
@@ -219,14 +220,20 @@ function ask(inner: Inner, ws: string): void {
   const p = part(inner, ws);
   const head = held(inner, ws)?.head?.hash ?? null;
   inner.store.invalidateAll((t) => t.topic === "lock" && t.workspace === ws);
-  if (p.requested === head) return;
-  p.requested = head;
   const sub = inner.workspaces.owner(ws);
-  if (sub === null) return;
+  if (p.requested === head || sub === null) return;
+  p.requested = head;
   // Asked again a few times if the cloud did not take it (the page says the others were told); after that, the next
   // refusal asks anew.
   const asking = Effect.retry(new Lock(inner, ws, sub, null).request(), { times: 5, schedule: Schedule.spaced("2 seconds") });
-  inner.scheduler.enqueue("cloud", `lock/${ws}/request`, Priority.background, Effect.asVoid(Effect.tapError(asking, () => Effect.sync(() => (p.requested = undefined)))));
+  // Read again once sent, so the page has it pending with no moment between (`sending` meanwhile).
+  const asked = Effect.tapError(Effect.andThen(asking, Effect.ignore(read(inner, ws))), () => Effect.sync(() => (p.requested = undefined)));
+  const sent = Effect.sync(() => {
+    p.sending = false;
+    inner.store.invalidateAll((t) => t.topic === "lock" && t.workspace === ws);
+  });
+  p.sending = true;
+  inner.scheduler.enqueue("cloud", `lock/${ws}/request`, Priority.background, Effect.ensuring(Effect.asVoid(asked), sent));
 }
 
 /// Why a station is not asked now: it refused this device and the lock has not moved on since.
@@ -324,6 +331,8 @@ export function lockView(inner: Inner, ws: string): J {
       device: p.base, code: p.base ? shortCode(p.base) : null, kind: inner.host.appKeys ? "app" : "web",
       confirmed: mine !== undefined, daysLeft: typeof mine?.exp === "number" ? daysLeft(mine.exp - t) : null,
       // A station refused this device, or it asked, and the lock has not moved on since: it waits to be confirmed.
+      // Its request waits at the cloud, or is on its way there; not when turned down (asked again by hand then).
+      asked: p.sending || (h?.requests ?? []).some((r) => r.base === p.base),
       waiting: locked && p.base !== null && mine === undefined && (p.refused.size > 0 || p.requested === (h?.head?.hash ?? null) || (h?.requests ?? []).some((r) => r.base === p.base)),
     },
     signers: [...f.devices.values()].filter((d) => typeof d.sign_key === "string").length,

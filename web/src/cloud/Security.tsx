@@ -278,13 +278,19 @@ export function SecurityNotice({ entry }: { entry: WorkspaceEntry }) {
 
 /** What a device waiting to be confirmed shows instead of the workspace's pages. */
 export function SecurityWaiting({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
+  const call = useCall();
+  const act = useAct();
+  const asking = useDoing("lock.request", { workspace: entry.id });
   return (
     <div className={css.waiting}>
       <ShieldCheck size={40} strokeWidth={1.4} />
       <h1 className={css.waitingTitle}>{t("web-pages.security.waitingTitle")}</h1>
       <p className={css.waitingLead}>{t("web-pages.security.waitingLead", { name: entry.name })}</p>
       <div className={css.bigCode}>{lock.me?.code}</div>
-      <div className={css.waitingNote}><span className={spinnerCss.spinner} aria-hidden="true" />{t("web-pages.security.waitingNote")}</div>
+      {lock.me?.asked === false && !asking
+        ? <><div className={css.waitingNote}>{t("web-pages.security.notAsked")}</div>
+          <Button variant="primary" onClick={() => act(call("lock.request", { workspace: entry.id }), t("web-pages.security.request"))}>{t("web-pages.security.request")}</Button></>
+        : <div className={css.waitingNote}><span className={spinnerCss.spinner} aria-hidden="true" />{t("web-pages.security.waitingNote")}</div>}
     </div>
   );
 }
