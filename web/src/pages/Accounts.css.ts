@@ -20,6 +20,8 @@ export const deviceCodeValue = style({
   borderRadius: `calc(10px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: vars.hover, userSelect: "all",
 });
+/** The models section's parts (the chips or the list, the field naming one more), spaced as a section's head is from them. */
+export const modelsBody = style({ display: "grid", gap: "10px" });
 export const modelChips = style({});
 export const modelChip = style({
   display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 10px", borderRadius: "999px",

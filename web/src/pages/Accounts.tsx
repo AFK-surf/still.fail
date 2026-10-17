@@ -691,57 +691,59 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
   return (
     <Section title={<>{t("web-pages.profiles.models")}<About>{all.length ? t("web-pages.profiles.modelsAbout") : t("web-pages.profiles.modelsAboutNone")}</About></>}
       actions={all.length > 0 && <Button variant="ghost" onClick={() => setChoosing(!choosing)}>{choosing ? t("web-pages.profiles.collapse") : t("web-pages.profiles.chooseModels", { on: enabled.size, all: all.length })}</Button>}>
-      {/* What it can be used for now, first; the whole list only when choosing. */}
-      {all.length > 0 && !choosing && (
-        on.length === 0 ? <p className={shellCss.muted}>{t("web-pages.profiles.noModels")}</p> : (
-          <ul className={css.modelChips}>
-            {on.map((m) => <Tip key={m} label={m}><li className={css.modelChip}><ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={14} /><span>{name(m)}</span></li></Tip>)}
-          </ul>
-        )
-      )}
-      {all.length > 0 && choosing && (
-        <div className={chatCss.modelPool}>
-          <div className={chatCss.modelPoolTools}>
-            {all.length > 10 && <input className={`${controlsCss.input} ${css.modelPoolFilter}`} placeholder={t("web-pages.profiles.filter")} autoFocus value={filter} onChange={(e) => setFilter(e.target.value)} />}
-            <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled, ...shown]))}>{filter ? t("web-pages.profiles.selectFiltered") : t("web-pages.settings.members.all")}</button>
-            <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled].filter((m) => !shown.includes(m))))}>{filter ? t("web-pages.profiles.unselectFiltered") : t("web-pages.settings.members.none")}</button>
-          </div>
-          {series.map((s) => {
-            const list = s.models.filter((m) => shown.includes(m));
-            if (list.length === 0) return null;
-            const every = list.every((m) => enabled.has(m));
-            return (
-              <div key={s.name} className={modelCss.poolSeries}>
-                <div className={modelCss.poolSeriesHead}>
-                  <h4>{s.name}</h4>
-                  <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(every ? new Set([...enabled].filter((m) => !list.includes(m))) : new Set([...enabled, ...list]))}>{every ? t("web-pages.settings.members.none") : t("web-pages.settings.members.all")}</button>
+      <div className={css.modelsBody}>
+        {/* What it can be used for now, first; the whole list only when choosing. */}
+        {all.length > 0 && !choosing && (
+          on.length === 0 ? <p className={shellCss.muted}>{t("web-pages.profiles.noModels")}</p> : (
+            <ul className={css.modelChips}>
+              {on.map((m) => <Tip key={m} label={m}><li className={css.modelChip}><ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={14} /><span>{name(m)}</span></li></Tip>)}
+            </ul>
+          )
+        )}
+        {all.length > 0 && choosing && (
+          <div className={chatCss.modelPool}>
+            <div className={chatCss.modelPoolTools}>
+              {all.length > 10 && <input className={`${controlsCss.input} ${css.modelPoolFilter}`} placeholder={t("web-pages.profiles.filter")} autoFocus value={filter} onChange={(e) => setFilter(e.target.value)} />}
+              <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled, ...shown]))}>{filter ? t("web-pages.profiles.selectFiltered") : t("web-pages.settings.members.all")}</button>
+              <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled].filter((m) => !shown.includes(m))))}>{filter ? t("web-pages.profiles.unselectFiltered") : t("web-pages.settings.members.none")}</button>
+            </div>
+            {series.map((s) => {
+              const list = s.models.filter((m) => shown.includes(m));
+              if (list.length === 0) return null;
+              const every = list.every((m) => enabled.has(m));
+              return (
+                <div key={s.name} className={modelCss.poolSeries}>
+                  <div className={modelCss.poolSeriesHead}>
+                    <h4>{s.name}</h4>
+                    <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(every ? new Set([...enabled].filter((m) => !list.includes(m))) : new Set([...enabled, ...list]))}>{every ? t("web-pages.settings.members.none") : t("web-pages.settings.members.all")}</button>
+                  </div>
+                  <ul className={chatCss.modelPoolList}>
+                    {list.map((m) => (
+                      <li key={m}>
+                        <Tip label={m}><label className={chatCss.modelPoolItem} data-on={enabled.has(m) || undefined}>
+                          <input type="checkbox" disabled={busy} checked={enabled.has(m)} onChange={() => toggle(m)} />
+                          <ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={14} />
+                          <span>{name(m)}</span>
+                          {profile.modelsSaving?.includes(m) && <Spinner inline label={t("common.saving")} />}
+                          {found && !found.includes(m) && <span className={`${shellCss.muted} ${css.modelPoolGone}`}>{t("web-pages.profiles.gone")}</span>}
+                        </label></Tip>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <ul className={chatCss.modelPoolList}>
-                  {list.map((m) => (
-                    <li key={m}>
-                      <Tip label={m}><label className={chatCss.modelPoolItem} data-on={enabled.has(m) || undefined}>
-                        <input type="checkbox" disabled={busy} checked={enabled.has(m)} onChange={() => toggle(m)} />
-                        <ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={14} />
-                        <span>{name(m)}</span>
-                        {profile.modelsSaving?.includes(m) && <Spinner inline label={t("common.saving")} />}
-                        {found && !found.includes(m) && <span className={`${shellCss.muted} ${css.modelPoolGone}`}>{t("web-pages.profiles.gone")}</span>}
-                      </label></Tip>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {/* A provider that does not list its models: one is named by hand. */}
-      {profile.canAddModel && (
-        <div className={additionsCss.inputRow}>
-          <input className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} autoComplete="off" value={typed} aria-label={t("web-pages.profiles.addModelLabel")} placeholder={t("web-pages.profiles.addModelPlaceholder")}
-            onChange={(e) => setTyped(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && typed.trim() && !adding) { act(api.addModel(profile.id, typed.trim()), t("web-pages.profiles.addModelWhat")); setTyped(""); } }} />
-          <Button disabled={!typed.trim()} busy={adding} onClick={() => { act(api.addModel(profile.id, typed.trim()), t("web-pages.profiles.addModelWhat")); setTyped(""); }}>{t("web-pages.profiles.addModel")}</Button>
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+        {/* A provider that does not list its models: one is named by hand. */}
+        {profile.canAddModel && (
+          <div className={additionsCss.inputRow}>
+            <input className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} autoComplete="off" value={typed} aria-label={t("web-pages.profiles.addModelLabel")} placeholder={t("web-pages.profiles.addModelPlaceholder")}
+              onChange={(e) => setTyped(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && typed.trim() && !adding) { act(api.addModel(profile.id, typed.trim()), t("web-pages.profiles.addModelWhat")); setTyped(""); } }} />
+            <Button disabled={!typed.trim()} busy={adding} onClick={() => { act(api.addModel(profile.id, typed.trim()), t("web-pages.profiles.addModelWhat")); setTyped(""); }}>{t("web-pages.profiles.addModel")}</Button>
+          </div>
+        )}
+      </div>
     </Section>
   );
 }

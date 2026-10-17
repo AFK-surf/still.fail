@@ -96,6 +96,14 @@ const profileFor = (on: boolean): DemoExtension => ({
     return { ...o, profiles: o.profiles.map((p) => ({ ...p, workspaces: on ? ["lab"] : [] })) };
   },
 });
+/** The demo's profile as an API provider's, which does not list its models: one more is named by hand under those enabled. */
+const addModel: DemoExtension = {
+  then: (t, value) => {
+    if (t.topic !== "overview" || !value || typeof value !== "object") return undefined;
+    const o = value as { profiles: Record<string, unknown>[] };
+    return { ...o, profiles: o.profiles.map((p) => ({ ...p, canAddModel: true })) };
+  },
+};
 /** A new chat on a station this workspace joined that has no profile open to it (the core's `blocked: shared`). */
 const notShared: DemoExtension = {
   then: (t, value) => (t.topic === "newChat" && value && typeof value === "object"
@@ -419,6 +427,7 @@ export const stories: Story[] = [
   { id: "app-profile", group: "应用", title: "Profile", app: true, steps: [{ click: '[aria-label="Profile"]' }] },
   { id: "app-profile-workspaces", group: "应用", title: "Profile · 也给加入的 workspace 用", app: true, demo: profileFor(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-workspaces-on", group: "应用", title: "Profile · 已开放给加入的 workspace", app: true, demo: profileFor(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-add-model", group: "应用", title: "Profile · 按名称添加模型", app: true, demo: addModel, steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-new-chat-not-shared", group: "应用", title: "新建对话 · 加入的 station 没有开放的 Profile", app: true, demo: notShared, steps: [{ text: "新建对话" }] },
   { id: "app-connects", group: "应用", title: "连接", app: true, steps: [{ click: '[aria-label="连接"]' }] },
   { id: "app-usage", group: "应用", title: "用量", app: true, steps: [{ click: '[aria-label="用量"]' }] },
