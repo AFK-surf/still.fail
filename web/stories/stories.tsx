@@ -4,6 +4,7 @@
 // A new part of the app gets a story here, and so is measured.
 import { useEffect, useState, type ReactNode } from "react";
 import { SystemBubbles } from "../src/SystemBubbles.tsx";
+import { DecisionOptions } from "../src/Decisions.tsx";
 import { StationUpdate } from "../src/StationUpdate.tsx";
 import { Reader } from "@stillfail/ui/viewer/Reader.tsx";
 import { Tile } from "../src/pages/Notifications.tsx";
@@ -467,6 +468,14 @@ export const stories: Story[] = [
     render: () => stage(<div style={{ padding: 24 }}><StationUpdate station="local" notice={{
       tone: "busy", text: "Studio 正在更新", label: "正在更新", station: "Studio", detail: "下载新版本", percent: 42, from: "0.1.2790", to: "0.1.2925", open: true,
     }} /></div>),
+  },
+  {
+    id: "card-decision", group: "页面卡片", title: "决策选项", render: () => stage(<div style={{ padding: 32, width: 560 }}>
+      <DecisionOptions station="demo/local" thread={1} seq={1} options={[
+        { label: "A. 只改这一张卡片", detail: "其他页面先不动" },
+        { label: "B. 出一份页面卡片的规范", detail: "所有页面里的卡片按它来，测试也按它量", recommended: true },
+      ]} />
+    </div>),
   },
   { id: "panel-bubble", group: "小面板", title: "通知气泡", news: true, render: () => stage(<SystemBubbles scope="demo" />) },
   { id: "panel-bubble-hover", group: "小面板", title: "通知气泡 · 悬停按钮", news: true, render: () => stage(<SystemBubbles scope="demo" />), steps: [{ hover: "text=查看" }] },

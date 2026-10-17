@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { inner as innerCorner } from "@stillfail/ui/styles/align.ts";
-import { segmentedThumb } from "@stillfail/ui/parts.css.ts";
+import { segmentedOption, segmentedThumb } from "@stillfail/ui/parts.css.ts";
 
 // The station's mark before its name: a square the size of a line, dashed while it has none; a picture fills it.
 export const slot = style({
@@ -40,7 +40,8 @@ const inner = innerCorner;
 // Not pills: a pill's round end beside the panel's squarer corner leaves a crescent between them. The switch and the
 // field take the corner's own shape, less the padding; the switch's thumb, less its own.
 export const kinds = style({ alignSelf: "stretch", borderRadius: inner, cornerShape: vars.cornerShape });
-globalStyle(`${kinds} ${segmentedThumb}`, { borderRadius: `calc(${inner} - 3px)`, cornerShape: vars.cornerShape });
+// Its options too, whose thumb it is.
+globalStyle(`${kinds} :is(${segmentedThumb}, ${segmentedOption})`, { borderRadius: `calc(${inner} - 3px)`, cornerShape: vars.cornerShape });
 export const field = style({ width: "100%", height: "32px" });
 // A field's line, on the glass itself: a white field on it stood out in light, and with no line it read as no field. The
 // settings' dark focus line is too heavy here: hover and focus take the hover's.

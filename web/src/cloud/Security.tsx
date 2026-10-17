@@ -56,7 +56,7 @@ function Off({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
   return (
     <>
       <div className={`${pagesCss.card} ${css.lead}`}>
-        <div className={css.state}><span className={css.dot} />{t("web-pages.security.off")}</div>
+        <div className={css.state}>{t("web-pages.security.off")}</div>
         <div className={css.points}>
           <div className={css.point}><Server size={18} strokeWidth={1.6} className={css.pointIcon} /><span>{t("web-pages.security.now")}<span className={css.sub}>{t("web-pages.security.nowRisk")}</span></span></div>
           <div className={css.point}><Key size={18} strokeWidth={1.6} className={css.pointIcon} /><span>{t("web-pages.security.then")}<span className={css.sub}>{t("web-pages.security.thenSafe")}</span></span></div>
@@ -87,7 +87,7 @@ function On({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
   return (
     <>
       <div className={`${pagesCss.card} ${css.lead}`}>
-        <div className={css.state}><span className={css.dot} data-on="true" />{t("web-pages.security.on")}
+        <div className={css.state}>{t("web-pages.security.on")}
           <span className={css.stateMeta}>· {t("web-pages.security.onMeta", { signers: lock.signers, stations: lock.protected })}</span></div>
         <p className={css.sub}>{t("web-pages.security.onLead")}</p>
         {!lock.signs && <p className={css.note}>{lock.canSign ? t("web-pages.security.notSignerApp") : t("web-pages.security.notSignerWeb")}</p>}

@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { btn } from "@stillfail/ui/styles/controls.css.ts";
-import { cardLook } from "../styles/pages.css.ts";
+import { CARD_PAD, cardLook } from "../styles/pages.css.ts";
 import { TEXT_IN, inner, innerShape } from "@stillfail/ui/styles/align.ts";
 
 export const name = style({
@@ -20,7 +20,7 @@ globalStyle(`${menu} ${btn}`, { flex: "none" });
 
 export const cards = style({ display: "grid", gap: "10px" });
 export const card = style({
-  display: "grid", gap: "10px", padding: "14px 16px", ...cardLook,
+  display: "grid", gap: "10px", padding: CARD_PAD, ...cardLook,
 });
 export const cardHead = style({ display: "flex", alignItems: "center", gap: "10px", minWidth: "0" });
 export const cardTitle = style({ flex: "1", display: "flex", alignItems: "baseline", gap: "10px", minWidth: "0" });

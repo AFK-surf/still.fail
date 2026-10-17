@@ -1,17 +1,15 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { cardFoot } from "../styles/pages.css.ts";
 
 // 设置 › 密钥 (Vault.tsx): the settings pages' cards and lists (pages.css.ts), what is the vault's own here.
 export const sub = style({ display: "block", margin: "0", color: vars.muted });
 export const note = style({ margin: "0", fontSize: vars.textMeta, color: vars.muted });
 export const grow = style({ flex: "1" });
-/** The state, first in its card: a dot and words. */
+/** The state, first in its card: its words alone, on the card's line (no dot before them: docs/ui-panels.md 页面卡片). */
 export const state = style({ display: "flex", alignItems: "center", gap: "8px", fontSize: vars.textBody, fontWeight: "500" });
-export const dot = style({
-  width: "7px", height: "7px", borderRadius: "50%", flex: "none", background: vars.lineStrong,
-  selectors: { '&[data-tone="amber"]': { background: vars.amber } },
-});
-export const actions = style({ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" });
+/** A card's buttons at its foot (pages.css.ts cardFoot: the card's corner from them). */
+export const actions = style([cardFoot]);
 /** The first card, as far from what follows as a section is. */
 export const lead = style({ marginBottom: "28px" });
 /** What the vault does, a line each with its icon. */

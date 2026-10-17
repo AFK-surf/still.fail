@@ -59,7 +59,7 @@ export function VaultSettings({ entry }: { entry: WorkspaceEntry }) {
 function Gate({ entry, title, why }: { entry: WorkspaceEntry; title: string; why: string }) {
   return (
     <div className={pagesCss.card}>
-      <div className={css.state}><span className={css.dot} />{title}</div>
+      <div className={css.state}>{title}</div>
       <p className={css.sub}>{why}</p>
       <div className={css.actions}><Link to={`/w/${entry.id}/settings/security`}><Button variant="primary">{t("web-pages.vault.toSecurity")}</Button></Link></div>
     </div>
@@ -79,7 +79,7 @@ function SetUp({ entry, onWords }: { entry: WorkspaceEntry; onWords(words: strin
   });
   return (
     <div className={pagesCss.card}>
-      <div className={css.state}><span className={css.dot} />{t("web-pages.vault.setUpTitle")}</div>
+      <div className={css.state}>{t("web-pages.vault.setUpTitle")}</div>
       <div className={css.points}>
         <Point icon={Devices} title={t("web-pages.vault.point.ask")} how={t("web-pages.vault.point.askHow")} />
         <Point icon={ShieldCheck} title={t("web-pages.vault.point.proxy")} how={t("web-pages.vault.point.proxyHow")} />
@@ -122,7 +122,7 @@ function ReadOnly({ entry, view }: { entry: WorkspaceEntry; view: VaultsView }) 
   return (
     <>
       <div className={`${pagesCss.card} ${css.lead}`}>
-        <div className={css.state}><span className={css.dot} />{t("web-pages.vault.appOnly")}</div>
+        <div className={css.state}>{t("web-pages.vault.appOnly")}</div>
         <p className={css.sub}>{t("web-pages.vault.appOnlyWhy")}</p>
       </div>
       {view.vaults.length === 0 ? <p className={css.note}>{t("web-pages.vault.none")}</p>
@@ -205,7 +205,7 @@ function VaultSection({ entry, v, readOnly = false }: { entry: WorkspaceEntry; v
     <Section title={v.name} description={readOnly ? undefined : v.open ? t("web-pages.vault.opened") : t("web-pages.vault.sealed")} actions={actions}>
       {!readOnly && !v.keyed ? (
         <div className={pagesCss.card}>
-          <div className={css.state}><span className={css.dot} data-tone="amber" />{t("web-pages.vault.notKeyed")}</div>
+          <div className={css.state}>{t("web-pages.vault.notKeyed")}</div>
           <p className={css.sub}>{t("web-pages.vault.notKeyedWhy")}</p>
           {v.recoverable && v.mine && <div className={css.actions}><Button variant="primary" onClick={() => setRecovering(true)}>{t("web-pages.vault.recover")}</Button></div>}
         </div>

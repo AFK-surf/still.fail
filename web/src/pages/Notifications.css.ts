@@ -41,7 +41,7 @@ export const dockBar = style({
   display: "flex", gap: "10px", padding: "7px", borderRadius: surfaceCorner(7, 8), cornerShape: vars.cornerShape,
   background: `color-mix(in oklab, ${vars.raised} 70%, transparent)`,
 });
-export const appIcon = style({ width: "30px", height: "30px", borderRadius: "8px", background: vars.line }); // own corner: an app's icon in the Dock, drawn small
+export const appIcon = style({ width: "30px", height: "30px", borderRadius: "8px", cornerShape: vars.cornerShape, background: vars.line }); // own corner: an app's icon in the Dock, drawn small, its Dock's shape
 export const appIconMine = style({ position: "relative", width: "30px", height: "30px" });
 export const appIconImage = style({ display: "block", width: "100%", height: "100%", borderRadius: "22%" });
 export const badge = style({
@@ -52,7 +52,7 @@ export const badge = style({
 // The ways of telling: tiles side by side, each with its picture.
 export const tiles = style({ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "10px" });
 export const tile = style({
-  ...cardLook, display: "grid", justifyItems: "center", gap: "4px", padding: "14px 10px 12px",
+  ...cardLook, borderRadius: vars.rCard, display: "grid", justifyItems: "center", gap: "4px", padding: "14px 10px 12px",
   border: "2px solid transparent", color: vars.text, font: "inherit", fontSize: vars.textUi, cursor: "pointer",
   transition: `border-color ${vars.dur} ${vars.easeOut}`,
   selectors: {

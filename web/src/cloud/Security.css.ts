@@ -3,12 +3,13 @@ import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { cardGround } from "../styles/pages.css.ts";
 
 /** The lock's state, first in its card: a dot and words. */
-export const state = style({ display: "flex", alignItems: "center", gap: "8px", fontSize: vars.textBody, fontWeight: "500" });
-export const stateMeta = style({ fontWeight: "400", color: vars.muted, fontSize: vars.textUi });
 export const dot = style({
   width: "7px", height: "7px", borderRadius: "50%", flex: "none", background: vars.lineStrong,
   selectors: { '&[data-on="true"]': { background: vars.online }, '&[data-tone="amber"]': { background: vars.amber } },
 });
+/** The state, first in its card: its words alone, on the card's line (no dot before them: docs/ui-panels.md 页面卡片). */
+export const state = style({ display: "flex", alignItems: "center", gap: "8px", fontSize: vars.textBody, fontWeight: "500" });
+export const stateMeta = style({ fontWeight: "400", color: vars.muted, fontSize: vars.textUi });
 /** What it changes, a line each with its icon. */
 export const points = style({ display: "grid", gap: "10px" });
 export const point = style({ display: "grid", gridTemplateColumns: "20px 1fr", gap: "8px", fontSize: vars.textBody, lineHeight: vars.leadingBody, color: vars.text });

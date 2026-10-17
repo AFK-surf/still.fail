@@ -27,6 +27,14 @@
 - 放在容器角落里的东西（容器圆角范围内、离两条边都很近的按钮、行、输入框、带底色的块），离那两条边一样远，自己的圆角 = 容器圆角 − 这段距离（同心）。
 - 容器用 `surface()` / `popover` 声明内边距和内圆角的，角落里的东西直接用 `inner`；容器圆角是别处算出来的（比如侧栏浮起时的 9 + 6），角落里的东西照同一个式子算，不另写一个数。
 
+## 页面卡片
+
+页面里的卡片（设置页、密钥、权限、决策选项这类，`web/src/styles/pages.css.ts`）也按「圆角从里面的东西算」，分两类：
+
+- **内容卡**（`pagesCss.card`：标题、说明、按钮）：四边都是 `CARD_PAD`（20）。文字和**有常驻底色的按钮**（实心按钮）站在同一条线上，对齐的是按钮底色的边，不是按钮里的字，因为底色很显眼，字对字反而看着没对齐。实心按钮在角上时（按钮那排 `pagesCss.cardFoot` 在最下面，或者最后一行以实心按钮结尾），卡片圆角 = 20 + 按钮半高 18 = 38，和按钮同心；角上没有带底色的东西时，圆角照旧 22。卡片里不是实心的按钮是文字按钮，悬停时底色往外伸，和行一样（`pageControls.css.ts`）。
+- **列表卡**（`pagesCss.listCard`，以及决策选项 `Decisions.css.ts`）：每一行都能点，平时没有底色，悬停才有。底色伸到离卡片边 `LIST_PAD`（8），行圆角 `ROW_CORNER`（18），卡片圆角 = 行圆角 + 8，同心；行里的字离卡片边还是 20，和内容卡对齐。决策选项的编号圆圈离行边 8，和行的角同心。
+- 卡片标题前不放圆点：状态由标题的文字说（圆点放在线内会把标题往右推，挂到线外又贴着卡片边，都不对）。
+
 ## 组件画廊（stories）
 
 `web/stories`：app 的每个部分、每种状态各是一个 story（`web/stories/stories.tsx`），用的是官网 demo 的假 core，再加上 `web/stories/data.ts` 里补的数据（小说、Markdown、视频、图片、更新说明），不进任何发布的包。
@@ -46,7 +54,7 @@
   - 「no corner of its own (in what this adds)」：这次改动新增的样式行里不能写死圆角（5px 及以上），用 tokens（`vars.r*`）或 `align.ts` 的 `surface`/`inner` 算出来；圆、胶囊（`999px`）和 4px 以内的小记号除外，确实要自定的在同一行注释 `own corner: <为什么>`。已有的不追究，改到哪行就顺手改掉。
   - 「small panels on one ground」：`surface()` 只允许出现在 popover、通知气泡、⌘K、composer 引用列表四处，其它小面板必须组合 `popover`。
   - 「web: stories measured, the message list's motion watched」（完整检查，CI 的 Linux runner 用自带 Chrome）：`test/browser/stories.mjs` 打开每个 story，走完它的 `steps`，用 `test/browser/measure.mjs` 量两件事，有一处不对就挂：
-    - 所有圆角（`corners`）：每个有底色或能按的圆角元素，落在外面圆角容器的角落里时，离两边一样远，圆角同心，而且它够高、圆得到外圆角要的那么大（胶囊太矮就会在角上空出月牙：这时外圆角从它算，`align.ts` `pillInner`）；
+    - 所有圆角（`corners`）：圆的东西（胶囊）放在 superellipse 的角里时，按圆的等效圆角算（角的半径 ÷ corner-scale）；一个可点的行（比如决策选项）里面的东西，按那一行悬停时的底色算角；每个有底色或能按的圆角元素，落在外面圆角容器的角落里时，离两边一样远，圆角同心，而且它够高、圆得到外圆角要的那么大（胶囊太矮就会在角上空出月牙：这时外圆角从它算，`align.ts` `pillInner`）；
     - 所有小面板（`panels`）：内边距 6，卡片文字四边 16，行的文字缩进 10，角落元素同心。
     - 量完再把每个滚动区滚到底量一遍：列表最后一行（⌘K 的最后一项）只有滚到底才在角落里。
 - 开发版（`pnpm dev:web`、`pnpm stories`）一边用一边量（`web/src/dev/offs.ts`，量法同上）：不对的地方画红框，指上去说哪里不对，控制台打一行 `off (docs/ui-panels.md): …`。写界面时第一眼就看得到，不用等 CI，也不只限于 story 走得到的状态。

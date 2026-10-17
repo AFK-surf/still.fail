@@ -46,11 +46,15 @@ export function corners(mark = false) {
     if (!drawn(cs) && !pressed) continue;
     const b = el.getBoundingClientRect();
     if (b.width < 8 || b.height < 8) continue;
-    // The rounded box drawn round it.
+    // The rounded box drawn round it: one drawn, or one pressed (a row whose ground shows under the pointer: what is
+    // in it stands in that ground's corner then).
+    // A row (wider than tall), not an icon's round button: a mark in the middle of that is its own.
+    const pressedBox = (b) => b.matches('button, a[href], [role=button], [role=menuitem], [role=menuitemradio], [role=menuitemcheckbox], [role=option]')
+      && b.getBoundingClientRect().width > b.getBoundingClientRect().height * 1.5;
     let box = el.parentElement, bs = null;
     while (box && box !== document.body) {
       bs = getComputedStyle(box);
-      if (radius(bs) >= 0.5 && drawn(bs)) break;
+      if (radius(bs) >= 0.5 && (drawn(bs) || pressedBox(box))) break;
       box = box.parentElement;
     }
     if (!box || box === document.body) continue;
@@ -80,7 +84,12 @@ export function corners(mark = false) {
       const scale = /superellipse/.test(bs.cornerShape || '') ? px(bs.getPropertyValue('--corner-scale')) || 1 : 1;
       const asks = rbc / scale - g1, half = Math.min(r.height, r.width) / 2;
       if (asks > half + 1) { say(el, `${who}: too short to follow the corner (it asks ${asks.toFixed(1)}, half its side is ${half.toFixed(1)})`); continue; }
-      const own = Math.min(px(cs[prop]), r.height / 2, r.width / 2), want = Math.min(Math.max(rbc - g1, 0), r.height / 2, r.width / 2);
+      // Rounded as the corner is (both squarer, or both round): the corner less the distance, as set; a round thing (a
+      // pill) in a squarer corner: in round terms, the corner as the round one it matches.
+      const squarer = (st) => /superellipse/.test(st.cornerShape || '');
+      const roundIn = squarer(bs) && !squarer(cs);
+      const own = Math.min(px(cs[prop]), r.height / 2, r.width / 2);
+      const want = Math.min(Math.max((roundIn ? rbc / scale : rbc) - g1, 0), r.height / 2, r.width / 2);
       if (Math.abs(own - want) > 1) say(el, `${who}: rounded ${own.toFixed(1)}, ${g1.toFixed(1)} in from a corner of ${rbc.toFixed(1)} (wants ${want.toFixed(1)})`);
     }
   }

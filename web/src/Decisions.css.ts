@@ -3,6 +3,7 @@ import { composerWrap } from "./styles/cloud.css.ts";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { glass } from "@stillfail/ui/styles/glass.ts";
 import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
+import { CARD_PAD, LIST_PAD, ROW_CORNER, listCardLook } from "./styles/pages.css.ts";
 
 // A decision's options (Decisions.tsx): under the message that asks it in a chat, and at the foot of the decisions
 // page. One card, a row each, numbered in a circle; the recommended one last, told by its number in the accent
@@ -11,26 +12,31 @@ const ground = `var(--m-bg, ${vars.canvas})`;
 const accent = `var(--m-accent, ${vars.accent})`;
 const chip = `var(--m-chip, color-mix(in srgb, ${vars.text} 7%, transparent))`;
 
+/** A card of pressable rows (pages.css.ts listCard, docs/ui-panels.md 页面卡片): each option LIST_PAD from its edge. */
 export const options = style({
-  display: "flex", flexDirection: "column", width: "fit-content", minWidth: "min(100%, 460px)", maxWidth: "100%",
-  boxSizing: "border-box", marginTop: "8px", overflow: "hidden", borderRadius: vars.rCard,
-  cornerShape: vars.cornerShape, background: `var(--m-chip, color-mix(in srgb, ${vars.text} 5%, transparent))`,
+  ...listCardLook, display: "flex", flexDirection: "column", width: "fit-content", minWidth: "min(100%, 460px)", maxWidth: "100%",
+  boxSizing: "border-box", marginTop: "8px", padding: LIST_PAD,
+  background: `var(--m-chip, color-mix(in srgb, ${vars.text} 5%, transparent))`,
 });
 
-/** One option: its number, then its label over its detail. */
+/** Its number in its row's corner, as far from both its edges and concentric with it: the row's corner less its half. */
+const NUMBER = 20;
+const NUMBER_IN = 8;
+/**
+ * One option: its number, then its label over its detail; a row of the card's, its ground under the pointer, rounded as
+ * the card less its padding.
+ */
 export const choice = style({
-  position: "relative", display: "grid", gridTemplateColumns: "20px minmax(0, 1fr)", columnGap: "12px", width: "100%",
-  boxSizing: "border-box", padding: "10px 18px 10px 14px", border: "0", background: "none", color: vars.text,
+  position: "relative", display: "grid", gridTemplateColumns: `${NUMBER}px minmax(0, 1fr)`, columnGap: "12px", width: "100%",
+  boxSizing: "border-box", padding: `${NUMBER_IN}px ${CARD_PAD - LIST_PAD}px ${NUMBER_IN}px ${NUMBER_IN}px`, border: "0",
+  borderRadius: ROW_CORNER, cornerShape: vars.cornerShape, background: "none", color: vars.text,
   fontFamily: "inherit", textAlign: "left", cursor: "pointer", WebkitTapHighlightColor: "transparent",
   transition: `background-color ${vars.dur}, opacity ${vars.dur}`,
   selectors: {
     "&:hover:not(:disabled)": { background: vars.hover },
-    // The card's room above the first and below the last is theirs, so that the hover reaches its edge.
-    "&:first-child": { paddingTop: "14px" },
-    "&:last-child": { paddingBottom: "14px" },
     // A hairline between two, from the labels' edge.
     "& + &::before": {
-      content: '""', position: "absolute", top: "0", left: "46px", right: "18px", height: "1px",
+      content: '""', position: "absolute", top: "0", left: `${NUMBER_IN + NUMBER + 12}px`, right: `${CARD_PAD - LIST_PAD}px`, height: "1px",
       background: `color-mix(in srgb, ${vars.text} 7%, transparent)`,
     },
     // Not over the one under the pointer, nor under it.
@@ -56,10 +62,7 @@ export const choiceLabel = style({
   selectors: { [`${choice}[data-busy] &`]: { paddingRight: "22px" } },
 });
 /** Being sent: a small ring at the option's right, level with its label. */
-export const choiceSpinner = style({
-  position: "absolute", right: "18px", top: "14px",
-  selectors: { [`${choice}:first-child > &`]: { top: "18px" } },
-});
+export const choiceSpinner = style({ position: "absolute", right: `${CARD_PAD - LIST_PAD}px`, top: `${NUMBER_IN + 4}px` });
 globalStyle(`${choiceSpinner}${spinner}`, { width: "12px", height: "12px", borderWidth: "1.5px" });
 export const choiceDetail = style({ gridColumn: "2", fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted, overflowWrap: "anywhere" });
 

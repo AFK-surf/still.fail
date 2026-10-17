@@ -1,12 +1,12 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { cardLook } from "./styles/pages.css.ts";
+import { CARD_PAD, cardLook } from "./styles/pages.css.ts";
 import { fpHead } from "./FilePreview.css.ts";
 import { DIALOG_INNER } from "@stillfail/ui/parts.css.ts";
 
 /** What a public snapshot would hold, as the chat draws it (its messages' heads in line, the phone's way), on a card. */
 export const preview = style({
-  ...cardLook, display: "grid", gap: "16px", padding: "16px 18px", maxHeight: "340px", overflowY: "auto", minHeight: "0",
+  ...cardLook, display: "grid", gap: "16px", padding: CARD_PAD, maxHeight: "340px", overflowY: "auto", minHeight: "0",
   selectors: {
     // In the dialog its corners follow the dialog's (ui.css.ts DIALOG_INNER); on the phone's sheet, the cards' own.
     "&:not([data-whole])": { borderRadius: DIALOG_INNER },

@@ -5,8 +5,9 @@ import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 export const lead = style({ margin: "6px 0 0", color: vars.muted, fontSize: vars.textUi });
 export const muted = style({ color: vars.muted });
 export const permission = style({});
+/** Its round mark, as tall as a button, at the card's top left: as far from both edges, concentric with the corner (pages.css.ts). */
 export const icon = style({
-  flex: "none", display: "grid", placeItems: "center", width: "36px", height: "36px", borderRadius: "50%",
+  flex: "none", alignSelf: "flex-start", display: "grid", placeItems: "center", width: "36px", height: "36px", borderRadius: "50%",
   background: vars.canvas, color: vars.text,
 });
 // Given in green, refused in red (what is wrong is), not asked yet as plain words.

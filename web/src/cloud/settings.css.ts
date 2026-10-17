@@ -4,7 +4,7 @@ import { muted } from "../styles/shell.css.ts";
 import { runtimeLogo } from "../ui.css.ts";
 import { machineLogins } from "../pages/Accounts.css.ts";
 import { btn } from "@stillfail/ui/styles/controls.css.ts";
-import { cardLook } from "../styles/pages.css.ts";
+import { BUTTON_CARD_CORNER, CARD_PAD, cardLook } from "../styles/pages.css.ts";
 import { bleedStart } from "@stillfail/ui/styles/align.ts";
 import { DIALOG_INNER, command, dialogBody } from "@stillfail/ui/parts.css.ts";
 
@@ -14,7 +14,8 @@ export const memberGroup = style({ display: "flex", alignItems: "baseline", gap:
 export const roleSelect = style({ width: "120px", flex: "none" });
 export const stationHeading = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
 /** As the settings pages' cards (pages.css.ts card). */
-export const onboardingCard = style({ width: "100%", textAlign: "left", padding: "18px 20px", border: "0", ...cardLook });
+// Its buttons reach its corners (the first station's form): its corner theirs (pages.css.ts BUTTON_CARD_CORNER).
+export const onboardingCard = style({ width: "100%", textAlign: "left", padding: CARD_PAD, border: "0", ...cardLook, borderRadius: BUTTON_CARD_CORNER });
 export const onboardingRow = style({ display: "flex", alignItems: "stretch", gap: "8px" });
 /** 「添加这台 Mac」 under the first station's form (the desktop app's). */
 export const firstThisMac = style({ marginTop: "12px" });
