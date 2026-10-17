@@ -109,6 +109,8 @@ export function moveSidebar(change: () => void): void {
   document.documentElement.dataset.sidebarMoving = "";
   void moveState([
     ...moves(`.${shellCss.shell}`, ["grid-template-columns"]),
+    // The page as wide as it was, moved aside for the folded sidebar shown a while (shell.css.ts main).
+    ...moves(`.${shellCss.shell} > .${shellCss.main}`, ["left"]),
     ...moves(`.${css.sidebarBuddy}`, ["left"]),
     ...moves(`.${css.sidebarUpdate}`, ["left", "transform"]),
     ...moves(`.${railCss.edge}`, ["left"]),
