@@ -507,5 +507,17 @@
   "android-misc.drive.chooseNone": "Deselect all",
   "android-misc.drive.stale": "Couldn't read it; showing the last loaded content: {error}",
   "android-misc.drive.view": "View",
-  "android-misc.drive.chosenActions": "Actions for selected items"
+  "android-misc.drive.chosenActions": "Actions for selected items",
+  "android-misc.shareIn.to": "Send to",
+  "android-misc.shareIn.search": "Search",
+  "android-misc.shareIn.find": "Find a chat",
+  "android-misc.shareIn.newChat": "New chat",
+  "android-misc.shareIn.on": "On {name}",
+  "android-misc.shareIn.note": "Add a note (optional)",
+  "android-misc.shareIn.sent": "Sent to “{title}”",
+  "android-misc.shareIn.open": "Open",
+  "android-misc.shareIn.failed": "Not sent: {error}",
+  "android-misc.shareIn.signIn": "Sign in to still.fail first, then share",
+  "android-misc.shareIn.openApp": "Open still.fail",
+  "android-misc.shareIn.update": "still.fail on this phone needs an update to share"
 }

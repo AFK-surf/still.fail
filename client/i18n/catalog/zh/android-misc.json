@@ -480,5 +480,17 @@
   "android-misc.drive.chooseNone": "取消全选",
   "android-misc.drive.stale": "暂时无法读取，当前显示上次的内容：{error}",
   "android-misc.drive.view": "显示方式",
-  "android-misc.drive.chosenActions": "对所选项的操作"
+  "android-misc.drive.chosenActions": "对所选项的操作",
+  "android-misc.shareIn.to": "发到",
+  "android-misc.shareIn.search": "搜索",
+  "android-misc.shareIn.find": "找 chat",
+  "android-misc.shareIn.newChat": "新 chat",
+  "android-misc.shareIn.on": "在 {name} 上开",
+  "android-misc.shareIn.note": "补一句（可选）",
+  "android-misc.shareIn.sent": "已发到「{title}」",
+  "android-misc.shareIn.open": "打开",
+  "android-misc.shareIn.failed": "没发出去：{error}",
+  "android-misc.shareIn.signIn": "先在 still.fail 里登录，再来分享",
+  "android-misc.shareIn.openApp": "打开 still.fail",
+  "android-misc.shareIn.update": "这台手机上的 still.fail 需要更新才能分享"
 }

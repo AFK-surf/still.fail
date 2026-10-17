@@ -329,6 +329,8 @@ object Topics {
     }
     /** A new chat's page in a scope: its stations, the one it starts on and what it runs there, as last picked here (web/src/pick.ts). */
     fun newChat(scope: String) = buildJsonObject { put("topic", "newChat"); put("scope", scope) }
+    /** Where something another app shares goes (docs/share-in.md): `source` what is shared, `query` what is typed to find a chat. */
+    fun shareIn(scope: String, source: String, query: String) = buildJsonObject { put("topic", "shareIn"); put("scope", scope); put("source", source); put("query", query) }
     /** A model control: what it runs on now and what its panel picked (`of`: new, session:<key>, connect:<id>, connect-new). */
     fun pick(station: String, of: String) = buildJsonObject { put("topic", "pick"); put("station", station); put("of", of) }
 

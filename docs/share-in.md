@@ -23,7 +23,7 @@ from is in front again; a note says where it went, with 打开.
   — what `shareIn.pick` picked, else `kept`, else the latest chat, else a new chat on the station new chats last
   started on. `stations`: the scope's stations up now (`{station, name}`), for 新 chat.
 - `shareIn.pick` (`scope`, `source`, `station`, `id?`): a chat by its row's `id`, or with no `id` a new chat on
-  `station`. Held while a page shows the view, dropped once none does.
+  `station`. Held in memory for that `scope` and `source` (whatever is typed in the sheet) until it is sent from.
 - `shareIn.send` (`scope`, `source`, `title?` (what the app gave as its subject), `text?` (what the person added),
   `client?`): the message is what was added, a blank line, the title on a line of its own when the shared text does
   not hold it, and what was shared. It answers `{ station, session, thread?, title }` once the message is in the chat's

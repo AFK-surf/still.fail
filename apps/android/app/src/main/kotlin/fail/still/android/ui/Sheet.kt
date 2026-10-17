@@ -90,9 +90,10 @@ import fail.still.android.data.t
 /**
  * A sheet: how much of the screen it takes at first, and whether its grabber drags it. `fit`: as tall as what it shows
  * instead (that much, over the navigation bar), for one whose content is a known few lines. `onClose`: told when it is
- * closed by hand (a tap beside it, dragged down, back), not otherwise.
+ * closed by hand (a tap beside it, dragged down, back), not otherwise. `solid`: on the page's paper, not frosted (over
+ * another app, where there is no page of the app's own to frost: share/ShareActivity.kt).
  */
-class SheetSpec(val height: Float, val draggable: Boolean = false, val fit: Dp? = null, val onClose: (() -> Unit)? = null, val content: @Composable ColumnScope.() -> Unit)
+class SheetSpec(val height: Float, val draggable: Boolean = false, val fit: Dp? = null, val onClose: (() -> Unit)? = null, val solid: Boolean = false, val content: @Composable ColumnScope.() -> Unit)
 
 /** Drags the open sheet by its top; `release` has the finger's speed (px/s of height, up is positive). */
 class SheetDrag(val draggable: Boolean, val drag: (Float) -> Unit, val release: (Float) -> Unit, val tap: () -> Unit)
@@ -195,10 +196,10 @@ fun SheetHost(spec: SheetSpec?, haze: HazeState, close: () -> Unit) {
                 .clip(Smooth(topStart = 26.dp, topEnd = 26.dp))
                 // Frosted glass over the page, as the bars and capsules are. The web's backdrop has the scrim in it (it
                 // frosts all that is behind it); here the pages alone are the source, so the scrim goes under the glass.
-                .hazeEffect(haze) {
+                .then(if (current.solid) Modifier.background(paper) else Modifier.hazeEffect(haze) {
                     backgroundColor = paper; blurRadius = cssBlur(28f); noiseFactor = 0f
                     tints = listOf(HazeTint(Color.Black.copy(alpha = 0.28f * scrim)), HazeTint(glass))
-                }
+                })
                 .pointerInput(Unit) { detectTapGestures { } }
                 // With a finger its top (the grabber and the head, 64dp) drags it, as web mobile's does.
                 .pointerInput(drag) { dragTop(drag) }

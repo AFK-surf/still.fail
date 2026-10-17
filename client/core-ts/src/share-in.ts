@@ -25,6 +25,8 @@ const get = (v: unknown, k: string): J => getU(v, k);
 const TABLE = "choice";
 /// At most this many chats are offered (the search finds among all of them).
 export const LISTED = 30;
+/// The picks kept for sheets not sent from (yet).
+const PICKS_KEPT = 16;
 
 /// Where a shared thing goes: a chat (its row's `id`) or, without one, a new chat on `station`.
 export type Target = { station: string; id?: string };
@@ -85,7 +87,8 @@ function keptRow(rows: J[], k: J): J | undefined {
 export class ShareIn implements Owner {
   readonly #inner: Inner;
   readonly #watches = new Map<string, Watch[]>();
-  /// What is picked, by the sheet's topic without its query (scope and what is shared): dropped as it closes.
+  /// What is picked, by scope and what is shared (a sheet's topics, whatever is typed in it): dropped once sent; the
+  /// latest few kept, for a sheet opened again on the same thing.
   readonly #picked = new Map<string, Target>();
 
   constructor(inner: Inner) {
@@ -106,11 +109,6 @@ export class ShareIn implements Owner {
   stop(topic: Topic): void {
     for (const w of this.#watches.get(topicKey(topic)) ?? []) w.drop();
     this.#watches.delete(topicKey(topic));
-    if (![...this.#watches.keys()].some((k) => this.#sheet(JSON.parse(k)) === this.#sheet(topic))) this.#picked.delete(this.#sheet(topic));
-  }
-
-  #sheet(topic: Topic): string {
-    return JSON.stringify([topic.scope, topic.source]);
   }
 
   #rows(scope: string): J[] | null {
@@ -166,7 +164,10 @@ export class ShareIn implements Owner {
 
   /// `shareIn.pick`: where what is shared goes.
   pick(scope: string, source: string, target: Target): void {
-    this.#picked.set(JSON.stringify([scope, source]), target);
+    const key = JSON.stringify([scope, source]);
+    this.#picked.delete(key);
+    this.#picked.set(key, target);
+    for (const k of [...this.#picked.keys()].slice(0, Math.max(0, this.#picked.size - PICKS_KEPT))) this.#picked.delete(k);
     this.#inner.store.invalidateAll((x) => x.topic === "shareIn" && x.scope === scope && x.source === source);
   }
 
