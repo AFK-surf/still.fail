@@ -299,7 +299,7 @@ class VaultTest {
         h.fake.put(Topics.vaults(ws), view)
         h.fake.put(Topics.vaultItems(ws, "v_lib"), libItems)
         h.fake.put(Topics.vaultUses(ws, "v_lib", "i_1"), VaultUsesView("i_1", ghUses))
-        h.fake.put(Topics.profiles(ws), ProfilesView(listOf(claude), loading = false))
+        h.fake.put(Topics.profiles(ws), ProfilesView(listOf(claude), wait = Fixtures.NO_WAIT))
         h.launch(stack, false)
     }
 
