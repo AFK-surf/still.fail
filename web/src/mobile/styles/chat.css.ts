@@ -17,5 +17,5 @@ export const mPlain = style({
 });
 /** What a job told its agent, opened: program output, its columns kept. */
 export const mOutput = style({
-  margin: "0", fontFamily: vars.fontMono, fontSize: vars.textMeta, lineHeight: vars.leadingMeta, whiteSpace: "pre-wrap", overflowWrap: "anywhere",
+  margin: "0", fontFamily: vars.fontMono, fontSize: vars.textCaption, lineHeight: "1.55", whiteSpace: "pre-wrap", overflowWrap: "anywhere",
 });

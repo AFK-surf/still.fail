@@ -8,7 +8,7 @@ import { textToggle } from "@stillfail/ui/styles/controls.css.ts";
 import { accountMenu } from "./cloud/workspace.css.ts";
 import { detailRow, details, sideContent } from "./pages/ChatPage.css.ts";
 import { msgRoute } from "./Chat.css.ts";
-import { bleedStart, bleedX, columns, inLine } from "@stillfail/ui/styles/align.ts";
+import { bleedStart, bleedX, columns } from "@stillfail/ui/styles/align.ts";
 import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 
 export const history = style({
@@ -72,7 +72,7 @@ export const hPlace = style({
 /** A person's words to the agent: plain text in the panel's size, folded to a few lines. */
 export const hWords = style({ fontSize: vars.textUi, color: vars.text, whiteSpace: "pre-wrap", overflowWrap: "anywhere" });
 /** What a job told its agent: program output, its columns kept. */
-export const hOutput = style({ fontFamily: vars.fontMono, fontSize: vars.textMeta, lineHeight: vars.leadingMeta, color: vars.text, whiteSpace: "pre-wrap", overflowWrap: "anywhere" });
+export const hOutput = style({ fontFamily: vars.fontMono, fontSize: vars.textCaption, lineHeight: "1.55", color: vars.text, whiteSpace: "pre-wrap", overflowWrap: "anywhere" });
 /** A message the agent sent: what people were sent leads the history, on a card in the size it was read in. */
 export const hCard = style({
   marginTop: "4px", padding: "8px 12px", border: `1px solid ${vars.line}`, borderRadius: vars.rField,
@@ -164,16 +164,17 @@ export const hItem = style({
 });
 /** A turn's rule: when it began and what it did, a line on to the edge; room above it parts it from the turn before. */
 export const hTurn = style({
-  display: "flex", alignItems: "center", gap: "8px", paddingTop: "8px", fontSize: vars.textCaption,
+  position: "relative", display: "flex", alignItems: "center", gap: "8px", paddingTop: "8px", fontSize: vars.textCaption,
   lineHeight: vars.leadingCaption, color: vars.muted, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
   selectors: {
     "&::after": { content: "\"\"", flex: "1", minWidth: "24px", height: "1px", background: vars.line },
   },
 });
 globalStyle(`${hTurn} > span`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis" });
-/** The turn's link to copy: past the end of its rule, shown while the row is pointed at. */
+/** The turn's link to copy: over the end of its rule, on the canvas, shown while the row is pointed at. */
 export const hTurnLink = style({
-  order: "1", width: "24px", height: "24px", ...inLine(8), borderRadius: vars.rOption, opacity: "0",
+  position: "absolute", right: "0", bottom: "-4px", width: "24px", height: "24px", borderRadius: vars.rOption, opacity: "0",
+  background: vars.canvas,
   selectors: {
     [`${hItem}:hover &, &:focus-visible`]: { opacity: "1" },
   },
