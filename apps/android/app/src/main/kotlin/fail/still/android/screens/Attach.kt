@@ -7,14 +7,12 @@ package fail.still.android.screens
 
 import android.Manifest
 import android.app.Activity
-import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
-import android.os.Bundle
 import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Size
@@ -212,20 +210,38 @@ private suspend fun thumbnail(context: Context, uri: Uri): ImageBitmap? = withCo
 }
 
 /**
- * The photos latest into the gallery, as many as it lets the app read: by the order the gallery took them in, not by
- * DATE_ADDED, which an app saving a picture may write in milliseconds (a thousand times later than any other, ahead of
- * every screenshot since).
+ * The gallery's latest photos, as many as it lets the app read. Not as the gallery sorts them: what it says of when a
+ * photo came may be wrong (written in milliseconds, or ahead of now, by an app saving a picture or a phone maker's own
+ * gallery and cloud), and that put old photos ahead of every screenshot since. Each photo's times are read (added,
+ * changed, taken) and the latest believable one of them ranks it (`latest`).
  */
 private suspend fun recentPhotos(context: Context): List<Uri> = withContext(Dispatchers.IO) {
-    val args = Bundle().apply {
-        putStringArray(ContentResolver.QUERY_ARG_SORT_COLUMNS, arrayOf(MediaStore.Images.Media._ID))
-        putInt(ContentResolver.QUERY_ARG_SORT_DIRECTION, ContentResolver.QUERY_SORT_DIRECTION_DESCENDING)
-        putInt(ContentResolver.QUERY_ARG_LIMIT, RECENT)
-    }
     val from = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-    try {
-        context.contentResolver.query(from, arrayOf(MediaStore.Images.Media._ID), args, null)?.use { c ->
-            buildList { while (c.moveToNext()) add(ContentUris.withAppendedId(from, c.getLong(0))) }
+    val columns = arrayOf(MediaStore.Images.Media._ID, MediaStore.Images.Media.DATE_ADDED, MediaStore.Images.Media.DATE_MODIFIED, MediaStore.Images.Media.DATE_TAKEN)
+    val photos = try {
+        context.contentResolver.query(from, columns, null, null, null)?.use { c ->
+            fun at(i: Int) = if (c.isNull(i)) null else c.getLong(i)
+            buildList { while (c.moveToNext()) add(GalleryPhoto(c.getLong(0), at(1), at(2), at(3)?.let { it / 1000 })) }
         } ?: emptyList()
     } catch (_: SecurityException) { emptyList() }
+    latest(photos, System.currentTimeMillis() / 1000, RECENT).map { ContentUris.withAppendedId(from, it) }
+}
+
+/** A photo of the gallery's and what it says of when, each in seconds (as it says them: perhaps wrong). */
+class GalleryPhoto(val id: Long, val added: Long?, val modified: Long?, val taken: Long?)
+
+/**
+ * The ids of the `n` photos latest at `now` (seconds), newest first: each by the latest of its times that can be
+ * believed, a time in milliseconds taken as the seconds it means and one still ahead of now (by more than a day) left
+ * out; the gallery's own order (its id) between photos of the same time.
+ */
+fun latest(photos: List<GalleryPhoto>, now: Long, n: Int): List<Long> {
+    fun believed(t: Long?): Long? {
+        val s = t?.let { if (it > 100_000_000_000L) it / 1000 else it } ?: return null
+        return s.takeIf { it in 1..(now + 86_400) }
+    }
+    return photos.asSequence()
+        .map { p -> p.id to (listOfNotNull(believed(p.added), believed(p.modified), believed(p.taken)).maxOrNull() ?: 0L) }
+        .sortedWith(compareByDescending<Pair<Long, Long>> { it.second }.thenByDescending { it.first })
+        .take(n).map { it.first }.toList()
 }
