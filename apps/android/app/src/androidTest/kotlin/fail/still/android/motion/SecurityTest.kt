@@ -1,10 +1,15 @@
 // The workspace's security mode (Security.kt): its row in the settings, its page off and on, a waiting device confirmed
 // from a bottom sheet once its code is compared (and that sheet put up by itself wherever the app is), turning it on,
-// and what a device waiting itself shows.
+// turning it off only once the workspace's name is typed, and what a device waiting itself shows.
 package fail.still.android.motion
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -109,6 +114,27 @@ class SecurityTest {
         val call = h.fake.calls.first { it.first == "lock.confirm" }.second
         assertEquals("cc".repeat(32), call["device"]!!.jsonPrimitive.content)
         assertEquals("K7F-2QX", call["code"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun turningItOffTakesTheWorkspaceName() {
+        val h = Harness(rule)
+        h.fake.put(Topics.lock(ws), on())
+        h.launch(listOf(Screen.Home, Screen.Settings, Screen.Security))
+        rule.onNodeWithText("关闭安全模式").performScrollTo().performClick()
+        h.settle()
+        rule.onNodeWithText("关闭安全模式？").assertIsDisplayed()
+        rule.onNodeWithText("密钥库将无法使用").assertIsDisplayed()
+        picture(h, "security-turn-off")
+        // Not yet named: the button does nothing.
+        rule.onAllNodesWithText("关闭安全模式").onLast().performClick()
+        h.settle()
+        rule.runOnIdle { assertTrue(h.fake.calls.none { it.first == "lock.disable" }) }
+        rule.onNode(hasSetTextAction()).performTextInput("Dev")
+        h.settle()
+        picture(h, "security-turn-off-named")
+        rule.onAllNodesWithText("关闭安全模式").onLast().performClick()
+        h.settle()
+        rule.runOnIdle { assertTrue(h.fake.calls.any { it.first == "lock.disable" && it.second["workspace"]!!.jsonPrimitive.content == ws }) }
     }
 
     @Test fun aDeviceWaitingOnThisOnePutsItselfUp() {

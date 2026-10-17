@@ -28,6 +28,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -205,6 +208,16 @@ private fun On(current: WorkspaceEntry, lock: LockView) {
     }
     SectionHeader(t("web-pages.security.webTitle"), start = 24.dp)
     ListCard { Body { Note(t("web-pages.security.webRisk")) } }
+    if (lock.owner && lock.signs) {
+        val turningOff = app.isDoing("lock.disable", "workspace" to ws)
+        Spacer(Modifier.height(18.dp))
+        ListCard {
+            ListRow(onClick = if (turningOff) null else ({ turnOffSheet(app, ws, current.workspace.name) })) {
+                Text(t("web-pages.security.turnOff"), fontSize = 15.sp, color = C.red, modifier = Modifier.weight(1f))
+                if (turningOff) Spinner(14.dp)
+            }
+        }
+    }
 }
 
 @Composable
@@ -225,6 +238,42 @@ private fun DeviceRow(ws: String, d: LockDevice, canRenew: Boolean) {
             Text(meta, fontSize = 13.sp, color = if (d.renewSoon) C.warn else C.muted)
         }
         if (renewing) Spinner(14.dp) else if (renew) Text(t("web-pages.security.renew"), fontSize = 14.sp, color = C.accent)
+    }
+}
+
+/**
+ * 关闭安全模式？, as the desktop asks it (web/src/cloud/Security.tsx TurnOff): what turning it off gives up, a line each,
+ * and the workspace's name typed before it can go. The core then has the system ask the person (fingerprint, the
+ * screen lock) before it signs; their no says nothing.
+ */
+private fun turnOffSheet(app: AppState, ws: String, name: String) {
+    app.sheet = SheetSpec(0.66f) {
+        var typed by remember { mutableStateOf("") }
+        val named = typed.trim() == name.trim()
+        SheetGrab()
+        SheetHead(t("web-pages.security.turnOffTitle"))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(t("web-pages.security.turnOffBody"), fontSize = 14.sp, color = C.muted)
+            listOf(
+                Icons.Server to t("web-pages.security.nowRisk"),
+                Icons.Devices to t("web-pages.security.turnOffApproval"),
+                Icons.Key to t("web-pages.security.turnOffVault"),
+            ).forEach { (icon, said) ->
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.padding(top = 2.dp)) { IconIn(icon, 18.dp, C.muted) }
+                    Text(said, fontSize = 15.sp, lineHeight = 22.sp, color = C.ink)
+                }
+            }
+            Text(t("web-pages.security.turnOffType", "name" to name), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 6.dp))
+            Field(typed, { typed = it }, "")
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                Button(t("common.cancel"), primary = false) { app.sheet = null }
+                Button(t("web-pages.security.turnOff"), primary = true, danger = true, enabled = named) {
+                    app.sheet = null
+                    app.vaultAct(t("web-pages.security.turnOff")) { app.core.call("lock.disable", buildJsonObject { put("workspace", ws) }) }
+                }
+            }
+        }
     }
 }
 
