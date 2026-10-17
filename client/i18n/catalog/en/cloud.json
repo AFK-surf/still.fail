@@ -60,6 +60,7 @@
   "cloud.login.choose.title": "Sign in to still.fail",
   "cloud.login.code.expired": "The code expired. Send a new one",
   "cloud.login.code.other": "Use another email",
+  "cloud.login.code.placeholder": "6-digit code",
   "cloud.login.code.resend": "Send again",
   "cloud.login.code.sent": "A 6-digit code is on its way to {email}. It works for 10 minutes",
   "cloud.login.code.submit": "Sign in",

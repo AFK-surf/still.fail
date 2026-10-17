@@ -292,7 +292,7 @@ export class LoginAttempt extends DurableObject<Env> {
       lang,
       tr(lang, "cloud.login.code.title"),
       `<p>${tr(lang, "cloud.login.code.sent", { email: `<strong>${escape(attempt.email ?? "")}</strong>` })}</p>` +
-        `<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="code"><input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" maxlength="7" required autofocus><button>${tr(lang, "cloud.login.code.submit")}</button></form>` +
+        `<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="code"><input class="code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" maxlength="7" placeholder="${tr(lang, "cloud.login.code.placeholder")}" aria-label="${tr(lang, "cloud.login.code.placeholder")}" required autofocus><button>${tr(lang, "cloud.login.code.submit")}</button></form>` +
         (error ? `<p class="error">${escape(error)}</p>` : "") +
         `<p class="links"><button form="resend" class="link">${tr(lang, "cloud.login.code.resend")}</button><button form="back" class="link">${tr(lang, "cloud.login.code.other")}</button></p>` +
         `<form id="resend" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="resend"></form><form id="back" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="back"></form>`,

@@ -60,6 +60,7 @@
   "cloud.login.choose.title": "登录 still.fail",
   "cloud.login.code.expired": "验证码过期了，重新发送一个",
   "cloud.login.code.other": "换个邮箱",
+  "cloud.login.code.placeholder": "6 位验证码",
   "cloud.login.code.resend": "重新发送",
   "cloud.login.code.sent": "6 位验证码已发到 {email}，10 分钟内有效",
   "cloud.login.code.submit": "登录",
