@@ -243,7 +243,13 @@ export async function harness(
       code_challenge: await digest(verifier),
       code_challenge_method: "S256",
     });
-    const response = await fetch("/v1/auth/google/start?" + start, { redirect: "manual" });
+    let response = await fetch("/v1/auth/google/start?" + start, { redirect: "manual" });
+    // With signing in by email offered (`mail`), the page that asks how comes first: Google, as a browser chooses it.
+    if (response.status === 200 && options.mail) {
+      const id = /action="\/v1\/auth\/login\/([A-Za-z0-9_-]{43})"/.exec(await response.text())?.[1];
+      const cookie = response.headers.get("set-cookie")?.split(";")[0] ?? "";
+      response = await fetch(`/v1/auth/login/${id}`, { method: "POST", redirect: "manual", headers: { "content-type": "application/x-www-form-urlencoded", origin, cookie }, body: new URLSearchParams({ csrf: cookie.split("=")[1] ?? "", via: "google" }).toString() });
+    }
     if (response.status !== 302) throw new Error("login start: " + response.status);
     const google = new URL(response.headers.get("location")!);
     const googleCode = ulid();
