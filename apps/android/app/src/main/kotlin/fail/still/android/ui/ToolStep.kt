@@ -292,6 +292,7 @@ fun ToolCall(name: String, call: String, said: Boolean) {
     val list = (a["todos"] as? JsonArray) ?: (a["plan"] as? JsonArray)
     val prompt = a["prompt"].str()
     val text = a["text"].str()
+    val queries = (a["queries"] as? JsonArray)?.map { it.str() }?.takeIf { q -> q.isNotEmpty() && q.all { it != null } }?.filterNotNull()
     when {
         command != null -> { Block(command, "sh"); Facts(a, skip + listOf("command", "cmd")) }
         file != null && a["old_string"].str() != null && a["new_string"].str() != null -> {
@@ -307,7 +308,7 @@ fun ToolCall(name: String, call: String, said: Boolean) {
             a["explanation"].str()?.let { Prose(it) }
             Plan(list.filterIsInstance<JsonObject>().map { t -> (t["content"].str() ?: t["step"].str() ?: "") to (t["status"].str() ?: "") })
         }
-        prompt != null && (name == "Agent" || name == "Task" || prompt.length > 200) -> { Facts(a, skip + "prompt"); Prose(prompt) }
+        prompt != null && (name == "Agent" || name == "Task" || name == "subagent" || prompt.length > 200) -> { Facts(a, skip + "prompt"); Prose(prompt) }
         text != null && text.isNotEmpty() && a.values.count { (it.str()?.length ?: 0) > 120 } <= 1 -> { Facts(a, skip + "text"); Prose(text) }
         file != null && a.keys.all { it in listOf("file_path", "path", "notebook_path", "offset", "limit") + skip } -> {
             val from = a["offset"].num()?.toLong()
@@ -315,6 +316,11 @@ fun ToolCall(name: String, call: String, said: Boolean) {
             val range = if (from != null && count != null) t("android-misc.tool.linesFrom", "from" to from, "n" to count)
                 else from?.let { t("android-misc.tool.from", "from" to it) } ?: count?.let { t("android-misc.tool.lines", "n" to it) }
             PathLine(file, range)
+        }
+        // DeepSeek Harness's web_search: several queries at once.
+        queries != null -> {
+            queries.forEach { Text(it, fontFamily = mono, fontSize = 12.sp, lineHeight = 18.sp, color = C.ink, modifier = Modifier.padding(horizontal = 2.dp)) }
+            Facts(a, skip + "queries")
         }
         a["pattern"].str() != null || a["query"].str() != null || a["url"].str() != null -> {
             val key = listOf("pattern", "query", "url").first { a[it].str() != null }
@@ -334,10 +340,19 @@ private fun commandOutput(text: String): Pair<List<String>, String>? {
     return listOfNotNull(code?.let { t("android-misc.tool.exitCode", "code" to it) }, wall?.let { t("android-misc.tool.took", "time" to it) }) to text.substring(m.range.last + 1)
 }
 
-/** Claude Code's Read: `cat -n` lines (`   12→text` or `   12\ttext`), without their numbers; what follows them is left out. */
-private fun readLines(text: String): String? {
+/** DeepSeek Harness's bash: its output, then how it ended where that was not well (`[exit code: 1]`). */
+private fun exitMarker(text: String): Pair<List<String>, String>? {
+    val m = Regex("\\n?\\[exit code: (-?\\d+)]\\s*$").find(text) ?: return null
+    return listOf(t("android-misc.tool.exitCode", "code" to m.groupValues[1])) to text.substring(0, m.range.first)
+}
+
+/** DeepSeek Harness's read and write: the file's path and kind, then what is in it (or what was done), in tags (the end missing where the station cut it short). */
+private fun unwrap(text: String): String? =
+    Regex("^<path>[^\\n]*</path>\\n<type>[^\\n]*</type>\\n<content>\\n?([\\s\\S]*?)\\n?(?:</content>\\s*)?$").find(text)?.groupValues?.get(1)
+
+/** Claude Code's Read: `cat -n` lines (`   12→text` or `   12\ttext`), without their numbers; what follows them is left out. DeepSeek Harness's read numbers them `12: text`. */
+private fun readLines(text: String, numbered: Regex = Regex("^\\s*\\d+(→|\\t)")): String? {
     val lines = text.split("\n")
-    val numbered = Regex("^\\s*\\d+(→|\\t)")
     val end = lines.indexOfFirst { !numbered.containsMatchIn(it) }.let { if (it < 0) lines.size else it }
     if (end == 0) return null
     return lines.take(end).joinToString("\n") { it.replaceFirst(numbered, "") }
@@ -357,15 +372,19 @@ fun ToolResult(name: String, call: String, result: String, failed: Boolean) {
     val args = parse(call) as? JsonObject
     val file = args?.let { it["file_path"].str() ?: it["path"].str() }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        val codex = commandOutput(result)
+        val codex = commandOutput(result) ?: if (name == "bash") exitMarker(result) else null
         val read = if (!failed && (name == "Read" || name == "NotebookRead")) readLines(result) else null
-        val parsed = if (failed || codex != null || read != null) null else parse(result)
+        val inner = if (!failed && codex == null && read == null && (name == "read" || name == "write")) unwrap(result) else null
+        val innerLines = if (inner != null && name == "read") readLines(inner, Regex("^\\d+: ?")) else null
+        val parsed = if (failed || codex != null || read != null || inner != null) null else parse(result)
         when {
             codex != null -> {
                 if (codex.first.isNotEmpty()) FactRow(codex.first.map { it to null })
                 if (codex.second.isNotBlank()) Output(codex.second, failed) else None(t("android-misc.tool.noOutput"))
             }
             read != null -> Block(read, languageOf(file))
+            innerLines != null -> Block(innerLines, languageOf(file))
+            inner != null -> Output(inner, false)
             parsed is JsonObject -> Fields(parsed)
             parsed != null -> JsonBlock(parsed)
             else -> Output(result, failed)

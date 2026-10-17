@@ -182,7 +182,7 @@ export function ToolCall({ name, call, said }: { name: string; call: string; sai
     const items = ((a.todos ?? a.plan) as unknown[]).filter(isArgs).map((t) => ({ text: str(t.content) ?? str(t.step) ?? "", status: str(t.status) ?? "" }));
     return <>{typeof a.explanation === "string" && <Markdown text={a.explanation} />}<Plan items={items} /></>;
   }
-  if (typeof a.prompt === "string" && (name === "Agent" || name === "Task" || a.prompt.length > 200)) {
+  if (typeof a.prompt === "string" && (name === "Agent" || name === "Task" || name === "subagent" || a.prompt.length > 200)) {
     return <><Facts a={a} skip={[...skip, "prompt"]} /><Markdown text={a.prompt} /></>;
   }
   if (typeof a.text === "string" && a.text.length > 0 && Object.values(a).filter((v) => typeof v === "string" && v.length > 120).length <= 1) {
@@ -194,6 +194,10 @@ export function ToolCall({ name, call, said }: { name: string; call: string; sai
     const range = from !== undefined && count !== undefined ? t("web-main.tool.linesFromCount", { from, n: count })
       : from !== undefined ? t("web-main.tool.linesFrom", { from }) : count !== undefined ? t("web-main.tool.lines", { n: count }) : undefined;
     return <Path path={file} extra={range} />;
+  }
+  // DeepSeek Harness's web_search: several queries at once.
+  if (Array.isArray(a.queries) && a.queries.length > 0 && a.queries.every((q) => typeof q === "string")) {
+    return <>{(a.queries as string[]).map((q, i) => <div key={i} className={css.lead}>{q}</div>)}<Facts a={a} skip={[...skip, "queries"]} /></>;
   }
   if (typeof a.pattern === "string" || typeof a.query === "string" || typeof a.url === "string") {
     const main = str(a.pattern) ?? str(a.query) ?? str(a.url)!;
@@ -210,13 +214,25 @@ function commandOutput(text: string): { facts: string[]; output: string } | null
   return { facts: [m[2] !== undefined ? t("web-main.tool.exitCode", { code: m[2] }) : "", m[1] ? t("web-main.tool.took", { time: m[1] }) : ""].filter(Boolean), output: text.slice(m[0].length) };
 }
 
+/** DeepSeek Harness's bash: its output, then how it ended where that was not well (`[exit code: 1]`). */
+function exitMarker(text: string): { facts: string[]; output: string } | null {
+  const m = /\n?\[exit code: (-?\d+)\]\s*$/.exec(text);
+  return m ? { facts: [t("web-main.tool.exitCode", { code: m[1]! })], output: text.slice(0, m.index) } : null;
+}
+
+/** DeepSeek Harness's read and write: the file's path and kind, then what is in it (or what was done), in tags (the end
+ * missing where the station cut it short). */
+function unwrap(text: string): string | null {
+  const m = /^<path>[^\n]*<\/path>\n<type>[^\n]*<\/type>\n<content>\n?([\s\S]*?)\n?(?:<\/content>\s*)?$/.exec(text);
+  return m ? m[1]! : null;
+}
+
 /**
  * Claude Code's Read: `cat -n` lines (`   12→text` or `   12\ttext`), without their numbers; what follows them (a note
- * to the model, where the station cut it short) is left out.
+ * to the model, where the station cut it short) is left out. DeepSeek Harness's read numbers them `12: text`.
  */
-function readLines(text: string): string | null {
+function readLines(text: string, numbered = /^\s*\d+(→|\t)/): string | null {
   const lines = text.split("\n");
-  const numbered = /^\s*\d+(→|\t)/;
   let end = 0;
   while (end < lines.length && numbered.test(lines[end]!)) end++;
   if (end === 0) return null;
@@ -228,7 +244,7 @@ export function ToolResult({ name, call, result, failed }: { name: string; call:
   if (!result.trim()) return <div className={css.none}>{t("web-main.tool.noOutput")}</div>;
   const args = parse(call);
   const file = isArgs(args) ? str(args.file_path) ?? str(args.path) : undefined;
-  const codex = commandOutput(result);
+  const codex = commandOutput(result) ?? (name === "bash" ? exitMarker(result) : null);
   if (codex) {
     return (
       <div className={css.result} data-failed={failed || undefined}>
@@ -239,6 +255,11 @@ export function ToolResult({ name, call, result, failed }: { name: string; call:
   }
   const read = !failed && (name === "Read" || name === "NotebookRead") ? readLines(result) : null;
   if (read !== null) return <div className={css.result}><Block text={read} language={languageOf(file)} /></div>;
+  const inner = !failed && (name === "read" || name === "write") ? unwrap(result) : null;
+  if (inner !== null) {
+    const lines = name === "read" ? readLines(inner, /^\d+: ?/) : null;
+    return <div className={css.result}>{lines !== null ? <Block text={lines} language={languageOf(file)} /> : <pre className={css.output}>{inner}</pre>}</div>;
+  }
   const parsed = failed ? undefined : parse(result);
   if (parsed !== undefined) {
     return <div className={css.result}>{isArgs(parsed) ? <Fields a={parsed} /> : <pre className={css.json}>{JSON.stringify(parsed, null, 2)}</pre>}</div>;

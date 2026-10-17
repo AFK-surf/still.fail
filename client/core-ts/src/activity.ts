@@ -9,25 +9,32 @@ export function toolName(tool: string): string {
   return tool;
 }
 
-/// What kind of thing a tool does, for its icon and its verb.
+/// What kind of thing a tool does, for its icon and its verb. Claude Code's names, Codex's, and DeepSeek Harness's
+/// (lowercase: read, bash, …).
 export function kindOf(tool: string): string {
   switch (toolName(tool)) {
     case "Read":
     case "NotebookRead":
     case "view_image":
+    case "read":
       return "read";
     case "Glob":
     case "Grep":
     case "LS":
     case "ToolSearch":
+    case "glob":
+    case "grep":
       return "search";
     case "Edit":
     case "MultiEdit":
     case "Write":
     case "NotebookEdit":
     case "apply_patch":
+    case "edit":
+    case "write":
       return "edit";
     case "Bash":
+    case "bash":
     case "BashOutput":
     case "KillShell":
     case "exec_command":
@@ -39,10 +46,12 @@ export function kindOf(tool: string): string {
     case "WebFetch":
     case "WebSearch":
     case "web_search":
+    case "web_fetch":
       return "web";
     case "Task":
     case "Agent":
     case "spawn_agent":
+    case "subagent":
       return "agent";
     case "chat_history":
     case "chat_list":
@@ -140,7 +149,7 @@ export function doing(tool: string, input: string): string {
   if (said) return said;
   const kind = kindOf(tool);
   let target = "";
-  for (const name of ["command", "cmd", "file_path", "path", "pattern", "url", "query", "prompt"]) {
+  for (const name of ["command", "cmd", "file_path", "path", "pattern", "url", "query", "queries", "prompt"]) {
     const v = a[name];
     const s = typeof v === "string" ? v : Array.isArray(v) ? v.filter((p): p is string => typeof p === "string").join(" ") : null;
     if (s === null) continue;

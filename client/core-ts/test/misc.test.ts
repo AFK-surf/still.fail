@@ -85,6 +85,12 @@ test("it_says_the_call_it_runs_or_its_reply_or_where_the_turn_stands", () => {
   // A call's own description says it best.
   assert.equal(doing("Bash", '{"command":"npm i","description":"安装依赖"}'), "安装依赖");
   assert.equal(doing("Read", '{"file_path":"/w/web/src/Chat.tsx"}'), "读取 Chat.tsx");
+  // DeepSeek Harness's lowercase names are said as Claude Code's are.
+  assert.equal(doing("read", '{"file_path":"/w/web/src/Chat.tsx"}'), "读取 Chat.tsx");
+  assert.equal(doing("bash", '{"command":"ls -la"}'), "运行 ls -la");
+  assert.equal(doing("grep", '{"pattern":"TODO"}'), "搜索 TODO");
+  assert.equal(doing("web_search", '{"queries":["deepseek","harness"]}'), "访问 deepseek harness");
+  assert.equal(doing("subagent", '{"prompt":"look around"}'), "分派子 agent look around");
   // An older station's step carries the input's first 300 characters, cut anywhere: what is there is read.
   assert.equal(doing("Bash", '{"command":"node --test","description":"Run account-proxy tests 3 times with new m'), "Run account-proxy tests 3 times with new m…");
   assert.equal(doing("Bash", '{"command":"cd x && ls\\necho'), "运行 cd x && ls");
