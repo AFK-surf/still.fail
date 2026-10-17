@@ -169,7 +169,10 @@ once the finger has been still 600 ms. Directly, a tap clicks where it is, a pre
 way two fingers spreading zoom the picture on the phone only (never sent); zoomed, the trackpad's pointer is kept in sight.
 A keys row under the picture while driving sends what a phone's keyboard lacks (Esc, Tab, the arrows) and holds ⌘ ⌃ ⌥ ⇧
 for the next key, typed or tapped (⌘ then c: `{t:"key", code:"KeyC", mods:4}`). On Android a stage made shorter by the
-keyboard keeps the picture as large as it was, the pointer in sight (`ViewZoom.refit`), rather than fitting it smaller.
+keyboard keeps the picture as large as it was, the pointer in sight (`ViewZoom.refit`), rather than fitting it smaller. 全屏 puts
+the screen alone on the phone: Android hides the system bars, turns sideways and draws it edge to edge; the phone web
+asks the browser's full screen and, where it lets a page, to turn sideways. The tools fold into one button over the
+corner (the letterbox, for a screen wider than the phone).
 
 ### Asking a person to take over
 
