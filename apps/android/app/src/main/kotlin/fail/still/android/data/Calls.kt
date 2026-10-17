@@ -479,6 +479,17 @@ class StationApi(private val core: StillFailCore, val station: String) {
 
     /** The folders the station lends its members, the whole list (the workspace's owners and admins). */
     suspend fun driveSetRoots(roots: List<String>) { ops.driveSetRoots(roots) }
+
+    // ── what macOS lets a Mac station's still.fail Helper do (docs/remote-screens.md "Grants") ──
+
+    /**
+     * The helper's window for `grant` (a StationGrant's id) put up on the Mac. Answers whether the next step is the
+     * Mac's screen from here: the window is up and that screen can be seen and driven.
+     */
+    suspend fun requestGrant(grant: String): Boolean {
+        val r = ops.permissionsRequest(grant) as? JsonObject ?: return false
+        return (r["window"] as? JsonPrimitive)?.content == "up" && (r["screen"] as? JsonPrimitive)?.content == "true"
+    }
     /** The folders in `path` on the station (its home when null), to pick one to lend (owners and admins). */
     suspend fun driveFolders(path: String?): DriveFolders = decode(DriveFolders.serializer(), ops.driveFolders { if (path != null) this.path = path })
     suspend fun driveMkdir(root: String, path: String) { ops.driveMkdir(root, path) }

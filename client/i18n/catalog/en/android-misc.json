@@ -526,5 +526,13 @@
   "android-misc.shareIn.failed": "Couldn't open it: {error}",
   "android-misc.shareIn.signIn": "Sign in to still.fail first, then share",
   "android-misc.shareIn.openApp": "Open still.fail",
-  "android-misc.shareIn.update": "still.fail on this phone needs an update to share"
+  "android-misc.shareIn.update": "still.fail on this phone needs an update to share",
+  "android-misc.permissions.section": "Permissions",
+  "android-misc.permissions.granted": "Allowed",
+  "android-misc.permissions.openScreen": "Open screen",
+  "android-misc.permissions.waiting": "Waiting",
+  "android-misc.permissions.request": "Request",
+  "android-misc.permissions.requestWhat": "request {name}",
+  "android-misc.permissions.requestLabel": "Request {name}",
+  "android-misc.permissions.missing": "Not allowed"
 }

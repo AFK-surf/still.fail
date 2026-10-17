@@ -499,5 +499,13 @@
   "android-misc.shareIn.failed": "没能打开：{error}",
   "android-misc.shareIn.signIn": "先在 still.fail 里登录，再来分享",
   "android-misc.shareIn.openApp": "打开 still.fail",
-  "android-misc.shareIn.update": "这台手机上的 still.fail 需要更新才能分享"
+  "android-misc.shareIn.update": "这台手机上的 still.fail 需要更新才能分享",
+  "android-misc.permissions.section": "权限",
+  "android-misc.permissions.granted": "已允许",
+  "android-misc.permissions.openScreen": "打开屏幕",
+  "android-misc.permissions.waiting": "等待允许",
+  "android-misc.permissions.request": "申请",
+  "android-misc.permissions.requestWhat": "申请「{name}」",
+  "android-misc.permissions.requestLabel": "申请「{name}」",
+  "android-misc.permissions.missing": "未允许"
 }

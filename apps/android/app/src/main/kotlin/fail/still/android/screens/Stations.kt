@@ -311,6 +311,8 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                 overview?.drive?.let { drive -> GoRow(t("android-misc.drive.title"), fail.still.android.drive.driveValue(drive.roots)) { app.push(Screen.Drive(address, null, "")) } }
             }
             StationScreens(address)
+            // What macOS lets a Mac station's helper do (StationPermissions.kt); nothing from another or an older one.
+            if (s.online) overview?.permissions?.let { StationPermissionsSection(address, s.name, it) }
             if (manager && s.joined != true) StationWorkspaces(address)
             // Its updates are its home workspace's managers' (docs/multi-workspace.md).
             if (s.online && overview != null) Versions(address, overview.updates, manager && s.joined != true, beta = s.betaOffered == true)
