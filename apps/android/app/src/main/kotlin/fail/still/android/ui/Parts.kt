@@ -66,6 +66,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -244,25 +245,9 @@ fun PeopleStack(people: List<Person>, size: Dp = 18.dp, ring: Color = C.bg) {
 /** How full, as a colour: the core's level (ok | amber | red). */
 private fun levelColor(c: StillFailColors, level: String): Color = when (level) { "red" -> c.red; "amber" -> c.warn; "progress" -> c.accent; else -> c.green }
 
-/**
- * An allowance as a ring, as the web draws it: what is left, eaten clockwise from the top as it is used; coloured by
- * the core's level. The number is what is left, and a full one shows none.
- */
+/** One window of an allowance (the one an agent is short of) as a chip, its mark before what is left: as the web's QuotaChip. */
 @Composable
-fun QuotaRing(left: Long, level: String, size: Dp = 20.dp) {
-    val c = C
-    val used = 100 - left
-    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            val w = 2.dp.toPx()
-            val inset = w / 2 + 0.5.dp.toPx()
-            val box = Size(this.size.width - inset * 2, this.size.height - inset * 2)
-            drawArc(c.line, 0f, 360f, false, Offset(inset, inset), box, style = Stroke(w))
-            if (left > 0) drawArc(levelColor(c, level), -90f + used * 3.6f, 360f * left / 100, false, Offset(inset, inset), box, style = Stroke(w, cap = StrokeCap.Round))
-        }
-        if (left < 100) Text("$left", fontSize = (size.value * 0.42f).sp, lineHeight = (size.value * 0.42f).sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-    }
-}
+fun QuotaChip(mark: String, left: Long, level: String, small: Boolean = true) = FillChip(leftOf(left), level, mark, "$left%", small)
 
 /** A profile's allowance in a line: the web's chips (QuotaChips), one per window. */
 @Composable
@@ -270,8 +255,8 @@ fun QuotaRings(quota: fail.still.android.data.Quota?) = QuotaChips(quota)
 
 /**
  * A profile's allowance, compact, as the web's QuotaBars draws it: a rounded box per window (shortest first) with what
- * is left written in it (its mark too when there is more than one), its edge drawn as far as is left, clockwise from
- * the top left. Its number in the text's colour while there is plenty, in its colour once it runs low. `small`: a lower line.
+ * is left written in it (its mark too when there is more than one), its ground filled from the left as far as is left.
+ * Its number in the ink's colour while there is plenty, in its colour once it runs low. `small`: a lower line.
  */
 @Composable
 fun QuotaChips(quota: fail.still.android.data.Quota?, small: Boolean = false) {
@@ -279,69 +264,52 @@ fun QuotaChips(quota: fail.still.android.data.Quota?, small: Boolean = false) {
     if (windows.isEmpty()) return
     val lone = windows.size == 1
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        windows.forEach { w -> EdgeChip(w.left, w.level, if (lone) null else w.mark, small) }
+        windows.forEach { w -> FillChip(leftOf(w.left), w.level, if (lone) null else w.mark, "${w.left}%", small) }
     }
 }
 
 /**
  * A machine's CPU, memory and disk as an allowance's boxes are drawn (QuotaChips): each its name and what is left, its
- * edge drawn as far as that. `alerts`: only the ones running low, as the web's station cards do.
+ * ground filled as far as is used (a fuller box, less room). `alerts`: only the ones running low, as the web's station
+ * cards do.
  */
 @Composable
 fun MeterChips(meters: List<fail.still.android.data.Meter>, modifier: Modifier = Modifier, alerts: Boolean = false) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        meters.filter { !alerts || it.level != "ok" }.forEach { m -> EdgeChip(m.left, m.level, m.short, text = m.remaining) }
+        meters.filter { !alerts || it.level != "ok" }.forEach { m -> FillChip(usedOf(m.left), m.level, m.short, m.remaining) }
     }
 }
 
-/** How much of what a runtime's install downloads is in: the allowance's rounded box, its edge going round as it comes. As the web's DownloadChip (Versions.tsx). */
+/** How much of what a runtime's install downloads is in: the allowance's rounded box, filled in the accent as it comes. As the web's ProgressChip. */
 @Composable
-fun DownloadChip(percent: Long) = EdgeChip(percent, "progress", null)
+fun DownloadChip(percent: Long) = FillChip(percent.coerceIn(0L, 100L), "progress", null, "$percent%")
+
+// How far a box is filled or a dial's cells lit, as the web decides it (components.tsx): an allowance as a battery, as
+// far as is left; a machine's CPU, memory or disk as a disk's bar, as far as is used, though its words say what is left.
+private fun leftOf(left: Long) = left.coerceIn(0L, 100L)
+private fun usedOf(left: Long) = 100L - leftOf(left)
 
 /**
- * A rounded box with a figure in it (`text`, or how full; its mark before it, when given) and its edge drawn as far as `fill` (0–100),
- * clockwise from the top left, in the colour of the core's level; the figure in the text's colour while it is ok (its
- * mark halfway to the muted grey, as the web's), in that colour once it is not. Level `progress`: a download's share, in the accent, its edge moving smoothly to each new one. As the
- * web's EdgeChip (components.tsx).
+ * A rounded box with a figure in it (its mark before it, when given) and its ground filled from the left as far as `fill`
+ * (0–100): a quiet grey while it is ok, the colour of the core's level, faintly, once it is not, the figure then in that
+ * colour too. Level `progress`: a download's share, in the accent, its fill moving smoothly to each new one. As the
+ * web's FillChip (components.tsx).
  */
 @Composable
-private fun EdgeChip(fill: Long, level: String, mark: String?, small: Boolean = false, text: String? = null) {
+private fun FillChip(fill: Long, level: String, mark: String?, text: String, small: Boolean = false) {
     val c = C
     val tone = levelColor(c, level)
     val low = level == "amber" || level == "red"
-    val drawn by animateFloatAsState(fill.coerceIn(0L, 100L).toFloat(), if (level == "progress") tween(500) else snap(), label = "edge")
-    Box(Modifier.height(if (small) 16.dp else 20.dp), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.matchParentSize()) {
-            val sw = (if (small) 2.dp else 2.5.dp).toPx()
-            val inset = sw / 2
-            val r = 6.dp.toPx() - inset
-            val x0 = inset; val y0 = inset; val x1 = size.width - inset; val y1 = size.height - inset
-            // As an SVG <rect> is stroked: from the top edge's start, clockwise.
-            val path = androidx.compose.ui.graphics.Path().apply {
-                moveTo(x0 + r, y0); lineTo(x1 - r, y0)
-                arcTo(androidx.compose.ui.geometry.Rect(x1 - 2 * r, y0, x1, y0 + 2 * r), -90f, 90f, false)
-                lineTo(x1, y1 - r)
-                arcTo(androidx.compose.ui.geometry.Rect(x1 - 2 * r, y1 - 2 * r, x1, y1), 0f, 90f, false)
-                lineTo(x0 + r, y1)
-                arcTo(androidx.compose.ui.geometry.Rect(x0, y1 - 2 * r, x0 + 2 * r, y1), 90f, 90f, false)
-                lineTo(x0, y0 + r)
-                arcTo(androidx.compose.ui.geometry.Rect(x0, y0, x0 + 2 * r, y0 + 2 * r), 180f, 90f, false)
-                close()
-            }
-            drawPath(path, c.line, style = Stroke(sw))
-            val p = drawn
-            if (p > 0f) {
-                val measure = androidx.compose.ui.graphics.PathMeasure().apply { setPath(path, false) }
-                val part = androidx.compose.ui.graphics.Path()
-                measure.getSegment(0f, measure.length * p / 100f, part, true)
-                drawPath(part, tone, style = Stroke(sw, cap = StrokeCap.Round))
-            }
-        }
+    val drawn by animateFloatAsState(fill.coerceIn(0L, 100L).toFloat(), if (level == "progress") tween(500) else snap(), label = "fill")
+    val ground = if (low || level == "progress") tone.copy(alpha = 0.2f) else c.muted.copy(alpha = 0.22f)
+    Box(Modifier.height(if (small) 16.dp else 20.dp).clip(Smooth(6.dp)).background(c.chip).drawBehind {
+        if (drawn > 0f) drawRect(ground, size = Size(size.width * drawn / 100f, size.height))
+    }, contentAlignment = Alignment.Center) {
         Row(Modifier.padding(horizontal = if (small) 5.dp else 8.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             val fs = if (small) 10.sp else 11.sp
             // On one baseline: a mark in Chinese (内存) sits lower in its line than figures do.
-            if (mark != null) Text(mark, Modifier.alignByBaseline(), fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = androidx.compose.ui.graphics.lerp(C.ink, C.muted, 0.5f))
-            Text(text ?: "$fill%", Modifier.alignByBaseline(), fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = if (low) tone else C.ink)
+            if (mark != null) Text(mark, Modifier.alignByBaseline(), fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = androidx.compose.ui.graphics.lerp(c.ink, c.muted, 0.5f))
+            Text(text, Modifier.alignByBaseline(), fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = if (low) tone else c.ink)
         }
     }
 }
@@ -356,25 +324,25 @@ fun QuotaDials(quota: fail.still.android.data.Quota?, modifier: Modifier = Modif
     val windows = quota?.takeIf { it.state == "ok" }?.windows.orEmpty()
     if (windows.isEmpty()) return
     androidx.compose.foundation.layout.FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(36.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        windows.forEach { w -> Dial("${w.left}", "%", w.left, w.level, w.label, w.refills, Modifier.widthIn(min = 96.dp)) }
+        windows.forEach { w -> Dial("${w.left}", "%", leftOf(w.left), w.level, w.label, w.refills, Modifier.widthIn(min = 96.dp)) }
     }
 }
 
 /**
  * A machine's CPU, memory and disk on its own page, as an allowance's windows on its profile's (QuotaDials): each what is
- * left large over its cells, what it is and what it is out of. As the web's MeterDials (components.tsx); a row of three
+ * left large over its cells (lit as far as is used), what it is and what it is out of. As the web's MeterDials (components.tsx); a row of three
  * that share the width, a phone being narrow.
  */
 @Composable
 fun MeterDials(meters: List<fail.still.android.data.Meter>, modifier: Modifier = Modifier) {
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        meters.forEach { m -> Dial(m.big, m.unit, m.left, m.level, m.title, m.total, Modifier.weight(1f)) }
+        meters.forEach { m -> Dial(m.big, m.unit, usedOf(m.left), m.level, m.title, m.total, Modifier.weight(1f)) }
     }
 }
 
-/** A figure large, ten cells lit as far as is left (0–100) in the colour of its level, its name and a quiet note under. */
+/** A figure large, ten cells lit as far as `fill` (0–100) in the colour of its level, its name and a quiet note under. */
 @Composable
-private fun Dial(number: String, unit: String, left: Long, level: String, label: String, note: String?, modifier: Modifier = Modifier) {
+private fun Dial(number: String, unit: String, fill: Long, level: String, label: String, note: String?, modifier: Modifier = Modifier) {
     val tone = levelColor(C, level)
     val low = level == "amber" || level == "red"
     Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -383,7 +351,7 @@ private fun Dial(number: String, unit: String, left: Long, level: String, label:
             Text(unit, fontSize = 15.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium, color = C.muted, modifier = Modifier.padding(start = 1.dp), maxLines = 1)
         }
         Row(Modifier.padding(top = 4.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            val lit = Math.round(left / 10.0).toInt()
+            val lit = Math.round(fill / 10.0).toInt()
             repeat(10) { i -> Box(Modifier.size(7.dp, 14.dp).clip(RoundedCornerShape(2.dp)).background(if (i < lit) tone else C.chip)) }
         }
         Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.ink, maxLines = 1)

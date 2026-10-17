@@ -92,7 +92,7 @@ import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.MakerIcon
 import fail.still.android.ui.ProviderMark
-import fail.still.android.ui.QuotaRing
+import fail.still.android.ui.QuotaChip
 import fail.still.android.ui.QuotaRings
 import fail.still.android.ui.Icons
 import fail.still.android.ui.NavButton
@@ -201,10 +201,7 @@ private fun Summary(agent: ChatAgent) {
         agent.attention.forEach { a ->
             val quota = a.quota
             when {
-                quota != null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    QuotaRing(quota.left, quota.level)
-                    Text(quota.mark, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = C.subtle)
-                }
+                quota != null -> QuotaChip(quota.mark, quota.left, quota.level)
                 a.kind == "disk" -> Text(a.text, fontSize = 12.sp, color = C.warn)
                 else -> Text(a.text, fontSize = 12.sp, color = C.red)
             }
