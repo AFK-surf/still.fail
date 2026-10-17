@@ -13,7 +13,7 @@
 # STILLFAIL_CHECK_PART="<part> …" (ts, browser, station, core, android) runs only those parts of it: ts the icons, the clients'
 # types and bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the core: client/core-ts);
 # browser the web in Chrome (its stories measured, the message list's motion watched; STILLFAIL_BROWSER="stories <i>/<n>"
-# or "motion" one share of it); station the station (station/, its typecheck and tests) and its native parts' own tests
+# or "motion <i>/<n>" one share of it); station the station (station/, its typecheck and tests) and its native parts' own tests
 # (station/native); core client/'s Rust (the core's native shells: iroh for the web and Android's IO); android the app.
 # Unset: all of them.
 #
@@ -286,9 +286,11 @@ if [ $full = 1 ]; then
       wasm_pkg
       prep core deps client/core-ts
       chrome='export PLAYWRIGHT_MODULE=playwright-core PLAYWRIGHT_CHANNEL=chrome'
+      # Its share: "<part> <i>/<n>" (none said: all of it).
+      share=${STILLFAIL_BROWSER#* }; [ "$share" = "${STILLFAIL_BROWSER:-}" ] && share=1/1
       case "${STILLFAIL_BROWSER:-}" in
         stories*) step "web: stories measured (${STILLFAIL_BROWSER#stories })" after root after core sh -c "$chrome SHARD='${STILLFAIL_BROWSER#stories }'; node test/browser/stories.mjs" ;;
-        motion) step "web: the message list's motion watched" after root after core sh -c "$chrome; node test/browser/list-settle.mjs" ;;
+        motion*) step "web: the message list's motion watched ($share)" after root after core sh -c "$chrome SHARD='$share'; node test/browser/list-settle.mjs" ;;
         *) step "web: stories measured, the message list's motion watched" after root after core sh -c "$chrome; node test/browser/stories.mjs && node test/browser/list-settle.mjs" ;;
       esac
     else

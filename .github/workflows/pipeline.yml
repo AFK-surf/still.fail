@@ -230,7 +230,8 @@ jobs:
           if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
 
   # The web in Chrome (scripts/check.sh's browser part: its stories measured, the message list's motion watched), shared
-  # out between three of GitHub's runners side by side: on one beside the Linux check it took ~3 minutes (2026-10-15).
+  # out between four of GitHub's runners side by side: on one beside the Linux check it took ~3 minutes (2026-10-15);
+  # the motion in two since its cases grew to over two minutes (2026-10-17).
   check-browser:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() }}
@@ -239,7 +240,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        share: ["stories 1/2", "stories 2/2", "motion"]
+        share: ["stories 1/2", "stories 2/2", "motion 1/2", "motion 2/2"]
     env:
       STILLFAIL_CHECK_PART: browser
       STILLFAIL_BROWSER: ${{ matrix.share }}

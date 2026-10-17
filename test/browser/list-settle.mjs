@@ -230,8 +230,12 @@ createRoot(root).render(<DemoApp phone={location.hash === '#phone'} />);
   browser = await playwright.chromium.launch(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {});
   const failures = [];
   const notes = [];
+  // SHARD=<i>/<n>: only the i-th of every n of the plays (CI's jobs side by side).
+  const [shard, shards] = (process.env.SHARD || '1/1').split('/').map(Number);
+  let played = -1;
   for (const phone of [false, true]) for (const [name, play] of Object.entries(CASES)) {
     if (process.env.ONLY && process.env.ONLY !== name) continue;
+    if (++played % shards !== shard - 1) continue;
     const context = await browser.newContext(phone
       ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'zh-CN' }
       : { viewport: { width: 1280, height: 800 }, locale: 'zh-CN' });
