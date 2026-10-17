@@ -3,7 +3,9 @@
 // it, open to agents through the proxy for one host; an agent (the fake claude's own MCP token, as a real agent calls
 // the station's tools) asks for it, the owner's core approves, and the command run with the grant reaches an HTTPS host
 // with the token in its Authorization header, while the agent sees only the placeholder and, in the environment's
-// mode, the value hidden. A refusal and a spent grant are refused.
+// mode, the value hidden. A refusal and a spent grant are refused. Before the lock, the plain library (docs/vault.md
+// 不加锁的库): a token kept on the station as it is, asked for and approved with nothing to unseal, used through the
+// proxy; once the lock is on, moved into the vault by `vault.migrate`.
 //
 //   node station/side/vault-e2e.ts         (from a worktree with `pnpm run build` done in station/, the iroh dev relay
 //                                            on :3340; PORT, default 8887, and PORT+1..+4 free; curl on PATH)
@@ -196,6 +198,42 @@ async function main() {
   const owner = core("owner");
   await owner.call("migrate", { accounts: [alice] });
   await until(async () => (await owner.call("lock.state", { workspace: ws })).me.device, "owner core up");
+
+  say("no security mode: the plain library on the station, its token asked for and used through the proxy");
+  const plainView = await until(async () => {
+    const v = await owner.call("vault.state", { workspace: ws });
+    return v.plain === true && v.vaults?.[0]?.id === "plain" ? v : null;
+  }, "the plain library shown");
+  check("the library without the lock is the plain one, on the station", `plain ${plainView.plain}; vault ${plainView.vaults[0].id} on ${plainView.vaults[0].stationName}`, plainView.vaults[0].station === A.id);
+  const PLAIN_TOKEN = `ghp_plain${randomBytes(12).toString("hex")}`;
+  const plainPut = await owner.call("vault.putItem", {
+    workspace: ws, vault: "plain",
+    plain: { kind: "token", name: "Plain host", fields: { value: PLAIN_TOKEN }, domains: [], notes: "" },
+    listing: { name: "Plain host", kind: "token", modes: ["proxy"], hosts: ["localhost"], env: "GH_TOKEN" },
+  });
+  const plainDb = new DatabaseSync(join(A.data, "stillfail.db"), { readOnly: true });
+  const plainRows = (plainDb.prepare("SELECT body FROM vault_plain").all() as { body: string }[]).map((r) => r.body).join("\n");
+  check("kept on the station as it is (plain text, by design)", `vault_plain rows ${plainRows.split("\n").length}; the token in them: ${plainRows.includes(PLAIN_TOKEN) ? "yes" : "no"}`, plainRows.includes(PLAIN_TOKEN));
+  const chat = await owner.call("chat.create", { station: `${ws}/${A.id}`, runtime: "claude", model: "claude-opus-4-1" });
+  const session = String(chat.key);
+  await owner.call("chat.send", { station: `${ws}/${A.id}`, session, text: "say:hello" });
+  await until(async () => readFileSync(join(WORK, "claude.dump"), "utf8").includes("STILLFAIL_MCP_TOKEN"), "the agent started");
+  const tool = agent();
+  const plainListed = await tool("secret_list", {});
+  check("secret_list without the lock: the plain item, never its value", plainListed.text.replace(/\s+/g, " ").slice(0, 160), plainListed.text.includes("Plain host") && !plainListed.text.includes(PLAIN_TOKEN));
+  const plainCommand = `curl -sS --fail https://localhost:${hostPort}/ -H "Authorization: Bearer $GH_TOKEN"`;
+  const plainAsking = tool("secret_use", { item: "Plain host", reason: "e2e: plain", command: plainCommand });
+  const plainRequest = await until(async () => (await owner.call("vault.state", { workspace: ws })).requests?.[0], "the plain request reaches the owner");
+  const askedBefore = owner.asked.length;
+  await owner.call("vault.approve", { workspace: ws, request: plainRequest.id, scope: "once" });
+  const plainGranted = await plainAsking;
+  check("approved by its owner, nobody asked to unseal", `${plainGranted.text.slice(0, 100)}…; asked: ${owner.asked.length - askedBefore}`, /Granted/.test(plainGranted.text) && owner.asked.length === askedBefore);
+  const plainRan = await tool("secret_run", { grant: plainRequest.id, command: plainCommand });
+  check("by proxy: the host got the plain token, the agent did not", plainRan.text.trim().replace(/\n/g, " | "), plainRan.text.includes(`authorization-sha256=${sha(`Bearer ${PLAIN_TOKEN}`)}`) && !plainRan.text.includes(PLAIN_TOKEN));
+  const plainUses = plainDb.prepare("SELECT status FROM vault_requests WHERE json_extract(body, '$.vault') = 'plain'").all() as { status: string }[];
+  check("its use kept (vault/uses reads these)", plainUses.map((u) => u.status).join(", "), plainUses.some((u) => u.status === "granted"));
+
+  say("the lock on");
   await until(async () => owner.call("lock.open", { workspace: ws }).catch((e) => (console.log("  open:", e.message), null)), "lock.open", 30);
   await until(async () => JSON.parse(readFileSync(join(A.data, "mesh/lock.json"), "utf8")).entries.length > 0, "station pinned");
 
@@ -213,19 +251,23 @@ async function main() {
   const stored = (db.prepare("SELECT body FROM vault_items").all() as { body: string }[]).map((r) => r.body).join("\n");
   check("the station holds ciphertext only", `vault_items rows ${stored.split("\n").length}; the token in them: ${stored.includes(TOKEN) ? "yes" : "no"}`, stored !== "" && !stored.includes(TOKEN));
 
-  say("a chat on the station, its agent's tools");
-  const chat = await owner.call("chat.create", { station: `${ws}/${A.id}`, runtime: "claude", model: "claude-opus-4-1" });
-  const session = String(chat.key);
-  await owner.call("chat.send", { station: `${ws}/${A.id}`, session, text: "say:hello" });
-  await until(async () => readFileSync(join(WORK, "claude.dump"), "utf8").includes("STILLFAIL_MCP_TOKEN"), "the agent started");
-  const tool = agent();
+  say("the plain library moved into the vault");
+  const left = await until(async () => (await owner.call("vault.state", { workspace: ws })).plainLeft, "what is left of the plain library counted");
+  const moved = await owner.call("vault.migrate", { workspace: ws });
+  const plainAfter = (plainDb.prepare("SELECT body FROM vault_plain").all() as { body: string }[]).map((r) => r.body).join("\n");
+  const sealedAfter = (plainDb.prepare("SELECT body FROM vault_items").all() as { body: string }[]).map((r) => r.body).join("\n");
+  check("migrate: moved, the plain text gone from the station, kept encrypted", `left ${left}; ${JSON.stringify(moved)}; plain token still in vault_plain: ${plainAfter.includes(PLAIN_TOKEN)}; in vault_items: ${sealedAfter.includes(PLAIN_TOKEN)}`,
+    left === 1 && moved.moved === 1 && !plainAfter.includes(PLAIN_TOKEN) && sealedAfter.includes("Plain host") && !sealedAfter.includes(PLAIN_TOKEN));
+  plainDb.close();
+
+  say("the agent's tools, the lock on");
   const listed = await tool("secret_list", {});
   check("secret_list: the item by name, never its value", listed.text.replace(/\s+/g, " ").slice(0, 160), listed.text.includes("Test host") && !listed.text.includes(TOKEN));
 
   say("the agent asks; the owner's core approves it once; the command reaches the host with the token");
   const command = `curl -sS --fail https://localhost:${hostPort}/ -H "Authorization: Bearer $GH_TOKEN"`;
   const asking = tool("secret_use", { item: "Test host", reason: "e2e: call the test host", command });
-  const request = await until(async () => (await owner.call("vault.state", { workspace: ws })).requests?.[0], "the request reaches the owner");
+  const request = await until(async () => (await owner.call("vault.state", { workspace: ws })).requests?.find((r: any) => r.vault !== "plain"), "the request reaches the owner");
   await owner.call("vault.approve", { workspace: ws, request: request.id, scope: "once" });
   const granted = await asking;
   check("secret_use: asked, approved in the app, granted", `${granted.text.slice(0, 120)}…; the core asked the person: ${JSON.stringify(owner.asked.slice(-1))}`, /Granted/.test(granted.text) && owner.asked.length > 0);
