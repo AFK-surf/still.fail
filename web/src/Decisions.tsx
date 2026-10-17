@@ -145,6 +145,15 @@ export function MessageDecision({ message: m, thread }: { message: ChatMessage; 
   const shown = open || drawnOpen;
   useSettling(box, open, drawnOpen, setDrawnOpen, { arriving: `.${css.settledLine}` });
   if (!m.card && !m.options?.length) return null;
+  // A login card stays as its login goes (waiting, done, failed, cancelled): it says how it ended itself, once closed.
+  if (m.card?.type === "login" && m.card.login) {
+    return (
+      <div ref={box} className={css.decision}>
+        {open && m.card.assigneeText && <p className={css.settledLine}>{m.card.assigneeText}</p>}
+        <LoginCard station={loginStation(station, m.card)} id={m.card.login} />
+      </div>
+    );
+  }
   return (
     <div ref={box} className={css.decision}>
       {shown ? <>
@@ -153,7 +162,6 @@ export function MessageDecision({ message: m, thread }: { message: ChatMessage; 
         {m.card?.vault ? <VaultCard address={station} id={m.card.vault} />
           : thread !== null && cardType(m.card, m.options) === "options" && !!m.options?.length &&
           <DecisionOptions station={station} thread={thread} seq={m.seq} options={m.options} />}
-        {m.card?.type === "login" && m.card.login && <LoginCard station={loginStation(station, m.card)} id={m.card.login} />}
       </> : d?.text ? <p className={css.settledLine}>{d.text}</p> : null}
     </div>
   );
