@@ -381,7 +381,18 @@ export type CodexDriverOptions = {
   lent?: { borrowed(profile: Profile): boolean; write(profile: Profile): Promise<number> };
   /// The version of Codex `codex` on the PATH is now (null: not known); `codex --version` by default.
   installedVersion?: () => Promise<string | null>;
+  /// Bytes of output an app-server may have before it is replaced (OUTPUT_LIMIT).
+  outputLimit?: number;
 };
+
+/// An app-server's runner keeps all it wrote (every diff and command output of every thread on it, hundreds of MB in a
+/// week) as long as it runs, and a station taking it up after a crash reads all of it again: past this, it is replaced
+/// once no turn runs on it, as one Codex was updated under is, and its runner's file goes with it.
+const OUTPUT_LIMIT = 64 * 1024 * 1024;
+
+/// What an app-server writes most of and that says nothing of where a thread stands (LiveFromCodex keeps no state of
+/// either): not parsed again when its output is read after a crash.
+const UNTOLD = ['{"method":"turn/diff/updated"', '{"method":"item/commandExecution/outputDelta"'];
 
 /// A borrowed login this close to its end is replaced in its home's auth.json, under the app-server running on it: Codex
 /// reads that file again when it is refused (UnauthorizedRecovery's first step, codex-rs login/src/auth/manager.rs) and
@@ -456,12 +467,28 @@ export class CodexDriver implements AgentDriver {
     return host.version !== null && installed !== null && host.version !== installed;
   }
 
-  /// Replaces a profile's app-server Codex was updated under, once no turn runs on it: its sessions are opened again on a
-  /// new one with their next turn.
+  /// An app-server whose output has grown past the limit (OUTPUT_LIMIT).
+  private outgrown(host: Host): number | null {
+    try {
+      const size = statSync(outFile(this.data, host.proc.info.id)).size;
+      return size > (this.options.outputLimit ?? OUTPUT_LIMIT) ? size : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /// Replaces a profile's app-server Codex was updated under, or whose output has grown too long, once no turn runs on
+  /// it: its sessions are opened again on a new one with their next turn.
   private async retireStale(profileId: string, installed: string | null) {
     const host = this.hosts.get(profileId);
-    if (!host || !host.alive() || !this.stale(host) || host.turns.size > 0) return;
-    log.info("agents::codex", "codex was updated under its app-server; restarting it", { profile: profileId, running: host.version, installed });
+    if (!host || !host.alive() || host.turns.size > 0) return;
+    if (this.stale(host)) {
+      log.info("agents::codex", "codex was updated under its app-server; restarting it", { profile: profileId, running: host.version, installed });
+    } else {
+      const output = this.outgrown(host);
+      if (output === null) return;
+      log.info("agents::codex", "its app-server's output has grown long; restarting it", { profile: profileId, bytes: output });
+    }
     this.hosts.delete(profileId);
     await host.proc.kill(5000);
   }
@@ -474,12 +501,13 @@ export class CodexDriver implements AgentDriver {
     });
   }
 
-  /// A turn ended on a host: if Codex was updated under it, it is replaced now that it may be idle.
+  /// A turn ended on a host: if Codex was updated under it or its output has grown too long, it is replaced now that it
+  /// may be idle.
   hostIdle(host: Host) {
     if (host.turns.size > 0 || this.hosts.get(host.profile) !== host) return;
     void (async () => {
       const installed = await this.installedVersion();
-      if (!this.stale(host)) return;
+      if (!this.stale(host) && this.outgrown(host) === null) return;
       await this.serial(() => this.retireStale(host.profile, installed));
     })().catch((error) => log.warn("agents::codex", "a codex app-server not replaced", { profile: host.profile, error: String(error) }));
   }
@@ -530,6 +558,7 @@ export class CodexDriver implements AgentDriver {
     const at = await ackedOffset(info, out);
     const recovered = new Map<string, Recovered>();
     for (const line of linesBefore(out, at)) {
+      if (UNTOLD.some((m) => line.startsWith(m))) continue;
       let msg: Json;
       try {
         msg = JSON.parse(line);

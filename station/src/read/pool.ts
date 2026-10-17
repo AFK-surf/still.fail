@@ -86,6 +86,11 @@ export class Readers {
     });
   }
 
+  /// Each running reader's JS heap in use, in bytes (for the memory log).
+  heaps(): Promise<number[]> {
+    return Promise.all(this.slots.map((s) => s.worker.getHeapStatistics().then((h) => h.used_heap_size, () => 0)));
+  }
+
   close() {
     this.closed = true;
     for (const { worker } of this.slots) void worker.terminate();

@@ -155,6 +155,13 @@ const host: Host = {
     return `${osType()} ${release()}`;
   },
   ownRss() {
+    // macOS: its footprint, as Activity Monitor says it. Resident memory there also counts the system's libraries,
+    // shared with every process, and what was freed but not yet taken back: twice or more what it holds.
+    if (MACOS) {
+      const said = output("footprint", ["-f", "bytes", "--noCategories", "-p", String(process.pid)]);
+      const bytes = said?.match(/phys_footprint:\s*(\d+)\s*B/)?.[1];
+      if (bytes !== undefined) return Number(bytes);
+    }
     const kb = parseU64(trim(output("ps", ["-o", "rss=", "-p", String(process.pid)]) ?? ""));
     return kb === null ? 0 : kb * 1024;
   },

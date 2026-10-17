@@ -138,13 +138,16 @@ function run() {
     yield* SubscriptionRef.set(yield* Up, true);
     control.ready(version());
     log.info("station", "station up", { version: version(), data });
-    // STILLFAIL_MEMLOG: where the memory goes, now and then (for measuring).
-    if (process.env.STILLFAIL_MEMLOG) {
-      wall.every(10_000, () => {
-        const m = process.memoryUsage();
-        log.info("memory", "now", Object.fromEntries(Object.entries(m).map(([k, v]) => [k, Math.round(v / 1048576)])));
-      });
-    }
+    // Where the memory goes, in MB: the main thread's (and resident), and each reader's heap. Every ten minutes, or
+    // every ten seconds with STILLFAIL_MEMLOG (for measuring).
+    const readers = yield* Readers;
+    wall.every(process.env.STILLFAIL_MEMLOG ? 10_000 : 600_000, () => {
+      const m = process.memoryUsage();
+      const mb = (v: number) => Math.round(v / 1048576);
+      void readers.heaps().then((heaps) =>
+        log.info("memory", "now", { ...Object.fromEntries(Object.entries(m).map(([k, v]) => [k, mb(v)])), readers: heaps.map(mb) }),
+      );
+    });
     return yield* Effect.never;
   }).pipe(Effect.provide(station));
   const fiber = Effect.runFork(main);

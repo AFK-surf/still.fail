@@ -310,6 +310,22 @@ describe("the Codex driver", { concurrency: true }, () => {
     await c.until(ended(1));
   });
 
+  test("an app-server whose output has grown long is replaced once its turn ends, its sessions opened again", async () => {
+    // Every app-server has written more than this by its first turn's end.
+    const d = driver({ outputLimit: 1 });
+    const p = profile();
+    const a = listen();
+    const one = await d.open(options(p), a.push);
+    await one.prompt("say:x");
+    await a.until(ended(1));
+    await a.until((e) => e.some((x) => x.type === "closed"));
+    const b = listen();
+    const two = await d.open(options(p), b.push);
+    assert.equal(starts(p.dump).length, 2);
+    await two.prompt("say:back");
+    await b.until(ended(1));
+  });
+
   test("a turn asked of an app-server Codex was updated under is refused, so it is opened again on a new one", async () => {
     // Codex updated from outside the station, while the app-server started: it runs the old one.
     const d = driver({ installedVersion: async () => "2.0.0" });

@@ -22,7 +22,7 @@ export type Host = {
   cpuModel(): string;
   uptimeSec(): number;
   osName(): string;
-  /// This process's resident memory.
+  /// This process's memory: its footprint on macOS, resident memory elsewhere.
   ownRss(): number;
 };
 

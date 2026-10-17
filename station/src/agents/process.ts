@@ -272,22 +272,33 @@ export function ackedOffset(info: RunnerInfo, out: string): Promise<number> {
   });
 }
 
-/// The whole lines of `file` before byte `end` (a line boundary: acknowledgements are at line ends).
-export function linesBefore(file: string, end: number): string[] {
-  if (end <= 0) return [];
-  const buf = Buffer.alloc(end);
+/// How much of a runner's output `linesBefore` holds at once.
+const READ_CHUNK = 1 << 20;
+
+/// The whole lines of `file` before byte `end` (a line boundary: acknowledgements are at line ends), one at a time: an
+/// app-server's output holds days of its threads (hundreds of MB), more than one string can, so it is never held whole.
+export function* linesBefore(file: string, end: number, chunk = READ_CHUNK): Generator<string> {
+  if (end <= 0) return;
   const fd = openSync(file, "r");
   try {
-    let got = 0;
-    while (got < end) {
-      const n = readSync(fd, buf, got, end - got, got);
+    let carry = Buffer.alloc(0);
+    let at = 0;
+    while (at < end) {
+      const buf = Buffer.allocUnsafe(Math.min(chunk, end - at));
+      const n = readSync(fd, buf, 0, buf.length, at);
       if (n <= 0) break;
-      got += n;
+      at += n;
+      const bytes = carry.length === 0 ? buf.subarray(0, n) : Buffer.concat([carry, buf.subarray(0, n)]);
+      let from = 0;
+      for (let i = bytes.indexOf(0x0a); i >= 0; i = bytes.indexOf(0x0a, from)) {
+        const line = bytes.toString("utf8", from, i);
+        from = i + 1;
+        yield line.endsWith("\r") ? line.slice(0, -1) : line;
+      }
+      // A line longer than a chunk is carried whole into the next read.
+      carry = Buffer.from(bytes.subarray(from));
     }
   } finally {
     closeSync(fd);
   }
-  const lines = buf.toString("utf8").split("\n");
-  lines.pop();
-  return lines.map((l) => (l.endsWith("\r") ? l.slice(0, -1) : l));
 }
