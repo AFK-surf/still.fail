@@ -29,7 +29,8 @@ is its agent's business (a chat kept for videos, told once what to do with them)
   chat's composer key on the page that opens it, when not `new:<station>`: the phone web's `new:`)): into the chat's
   composer (`<station>:<session>`, the row's; with no `id`, the new chat's on `station`, which new chats then start
   on): its first link as a `ComposerFile` with `link` (`{url, title?, site?}`: the app's subject as its title, else
-  the short words before it, as apps put a page's title before its link), once per link; the words around it after
+  the short words before it, as apps put a page's title before its link; what apps add to a link to know who shared it,
+  YouTube's `si`, `utm_*`, Bilibili's `spm_id_from` …, left out), once per link; the words around it after
   what is written, once. The composer keeps links with its draft and sends them as words after the text
   (`composer.take`). Nothing is sent. It answers
   `{ station, key, session?, thread?, title? }` for the page to open the chat. The chat is kept as where that site's
