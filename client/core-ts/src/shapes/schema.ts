@@ -1186,6 +1186,7 @@ export const SHAPES: Record<string, Shape> = {
     ["itemName", opt("String")],
     ["session", "String"],
     ["chat", "String"],
+    ["station", opt("String"), { doc: "The station that asked (its id): the chat is its, `/w/<workspace>/s/<station>/chats/<session>`." }],
     ["mode", "String", { doc: "`proxy`, `ssh` or `env`." }],
     ["reason", "String"],
     ["command", opt("String")],
@@ -1215,6 +1216,7 @@ export const SHAPES: Record<string, Shape> = {
     ["listed", "bool", { doc: "Agents see it (it has a listing)." }],
     ["modes", vec("String")],
     ["hosts", vec("String")],
+    ["env", opt("String"), { doc: "The variable its listing suggests the command gets it in (`GH_TOKEN`)." }],
   ], { doc: "An item of a vault." }),
   VaultItemsView: struct([
     ["vault", "String"],

@@ -353,7 +353,7 @@ export function vaultsView(inner: Inner, ws: string): J {
       const item = items(inner, ws, r.vault)[r.item];
       return {
         id: r.id, vault: r.vault, vaultName: h.vaults[r.vault]!.name, item: r.item, itemName: item?.listing?.name ?? null,
-        session: r.session, chat: r.chat, mode: r.mode, reason: r.reason, command: r.command ?? null, hosts: r.hosts ?? [], at: r.at,
+        session: r.session, chat: r.chat, station: h.asked[r.id] ?? null, mode: r.mode, reason: r.reason, command: r.command ?? null, hosts: r.hosts ?? [], at: r.at,
       };
     });
   return { ...base, canSign: self !== null, setUp: mine !== undefined && mine.box === m.box, vaults, requests };
@@ -379,7 +379,7 @@ export function itemsView(inner: Inner, ws: string, id: string): J {
       return {
         id: i.id, version: i.version, at: i.at,
         name: str(plain?.name) ?? i.listing?.name ?? null, kind: str(plain?.kind) ?? i.listing?.kind ?? null,
-        listed: i.listing !== undefined, modes: i.listing?.modes ?? [], hosts: i.listing?.hosts ?? [],
+        listed: i.listing !== undefined, modes: i.listing?.modes ?? [], hosts: i.listing?.hosts ?? [], env: i.listing?.env ?? null,
       };
     })
     .sort((a, b) => ((a.name ?? "") < (b.name ?? "") ? -1 : (a.name ?? "") > (b.name ?? "") ? 1 : a.id < b.id ? -1 : 1));

@@ -4031,7 +4031,9 @@ data class VaultItemRow (
 	/// Agents see it (it has a listing).
 	val listed: Boolean,
 	val modes: List<String>,
-	val hosts: List<String>
+	val hosts: List<String>,
+	/// The variable its listing suggests the command gets it in (`GH_TOKEN`).
+	val env: String? = null
 )
 
 /// A vault's items (the `vaultItems` topic).
@@ -4069,6 +4071,8 @@ data class VaultRequest (
 	val itemName: String? = null,
 	val session: String,
 	val chat: String,
+	/// The station that asked (its id): the chat is its, `/w/<workspace>/s/<station>/chats/<session>`.
+	val station: String? = null,
 	/// `proxy`, `ssh` or `env`.
 	val mode: String,
 	val reason: String,

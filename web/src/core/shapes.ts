@@ -4038,6 +4038,8 @@ export interface VaultItemRow {
 	listed: boolean;
 	modes: string[];
 	hosts: string[];
+	/** The variable its listing suggests the command gets it in (`GH_TOKEN`). */
+	env?: string;
 }
 
 /** A vault's items (the `vaultItems` topic). */
@@ -4071,6 +4073,8 @@ export interface VaultRequest {
 	itemName?: string;
 	session: string;
 	chat: string;
+	/** The station that asked (its id): the chat is its, `/w/<workspace>/s/<station>/chats/<session>`. */
+	station?: string;
 	/** `proxy`, `ssh` or `env`. */
 	mode: string;
 	reason: string;
