@@ -145,7 +145,7 @@ private val TILE_H = 122.dp
 
 /** ＋'s sheet: the recent photos, then 照片, 文件 and (`station`) Station 文件. As tall as those two rows. */
 fun openAttach(app: AppState, attach: Attach, station: (() -> Unit)? = null) {
-    app.sheet = SheetSpec(0.32f, fit = 25.dp + 4.dp + TILE_H + 12.dp + 44.dp + 18.dp) {
+    app.sheet = SheetSpec(0.32f, fit = 25.dp + 4.dp + TILE_H + 12.dp + 70.dp + 18.dp) {
         SheetGrab()
         RecentPhotos(app, attach)
         Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -154,12 +154,13 @@ fun openAttach(app: AppState, attach: Attach, station: (() -> Unit)? = null) {
                 Triple(t("android-chat.attach.files"), Icons.File, attach.files),
                 station?.let { Triple(t("web-pages.chat.files"), Icons.Server, it) },
             ).forEach { (label, icon, go) ->
-                Row(
-                    Modifier.weight(1f).height(44.dp).clip(Smooth(14.dp)).background(C.chip).clickable { app.sheet = null; go() }.padding(horizontal = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically,
+                // Its name under its icon, the tile's whole width for it (Station files, on a phone set to show things large).
+                Column(
+                    Modifier.weight(1f).height(70.dp).clip(Smooth(14.dp)).background(C.chip).clickable { app.sheet = null; go() }.padding(horizontal = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
                 ) {
-                    IconIn(icon, 18.dp, C.muted)
-                    Text(label, fontSize = 14.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    IconIn(icon, 22.dp)
+                    Text(label, fontSize = 13.sp, lineHeight = 18.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -210,10 +211,14 @@ private suspend fun thumbnail(context: Context, uri: Uri): ImageBitmap? = withCo
     try { context.contentResolver.loadThumbnail(uri, Size(276, 366), null).asImageBitmap() } catch (_: Exception) { null }
 }
 
-/** The gallery's latest photos, as many as it lets the app read. */
+/**
+ * The photos latest into the gallery, as many as it lets the app read: by the order the gallery took them in, not by
+ * DATE_ADDED, which an app saving a picture may write in milliseconds (a thousand times later than any other, ahead of
+ * every screenshot since).
+ */
 private suspend fun recentPhotos(context: Context): List<Uri> = withContext(Dispatchers.IO) {
     val args = Bundle().apply {
-        putStringArray(ContentResolver.QUERY_ARG_SORT_COLUMNS, arrayOf(MediaStore.Images.Media.DATE_ADDED, MediaStore.Images.Media._ID))
+        putStringArray(ContentResolver.QUERY_ARG_SORT_COLUMNS, arrayOf(MediaStore.Images.Media._ID))
         putInt(ContentResolver.QUERY_ARG_SORT_DIRECTION, ContentResolver.QUERY_SORT_DIRECTION_DESCENDING)
         putInt(ContentResolver.QUERY_ARG_LIMIT, RECENT)
     }

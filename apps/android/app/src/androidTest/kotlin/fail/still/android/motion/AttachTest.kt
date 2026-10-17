@@ -1,6 +1,7 @@
 // ＋'s sheet (screens/Attach.kt) in a chat on the fake core: without the gallery's permission the strip is the camera and
 // 显示最近照片; allowed, the gallery's latest photos follow the camera, newest first, and a tap on one closes the sheet
-// and puts it in the composer. The photos are put in the gallery here (screenshots drawn) and taken out after. Pictured
+// and puts it in the composer, the newest even where an older one says it was added later (in milliseconds, as some
+// apps write it). The photos are put in the gallery here (screenshots drawn) and taken out after. Pictured
 // light and dark, and in English (the longest words: Station files), as settled.png under motion/attach-*.
 package fail.still.android.motion
 
@@ -120,6 +121,18 @@ class AttachTest {
     /** Six phone screenshots, light and dark by turns, put in the gallery a second apart (the last drawn the newest). */
     private fun screenshots(context: android.content.Context) {
         val now = System.currentTimeMillis() / 1000
+        // Older than them all, saved by an app that wrote when in milliseconds: not ahead of them for that.
+        val saved = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, "Saved_by_app.png")
+            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Saved")
+        })!!
+        context.contentResolver.openOutputStream(saved)!!.use { Bitmap.createBitmap(540, 1170, Bitmap.Config.ARGB_8888).apply { eraseColor(0xFF8A5A3C.toInt()) }.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        context.contentResolver.update(saved, ContentValues().apply { put(MediaStore.Images.Media.DATE_ADDED, now * 1000) }, null, null)
+        put += saved
+        context.contentResolver.query(saved, arrayOf(MediaStore.Images.Media.DATE_ADDED), null, null, null)?.use { c ->
+            if (c.moveToFirst()) android.util.Log.i("AttachTest", "saved_by_app date_added=${c.getLong(0)} now=$now")
+        }
         repeat(6) { i ->
             val dark = i % 2 == 1
             val bitmap = Bitmap.createBitmap(540, 1170, Bitmap.Config.ARGB_8888)
