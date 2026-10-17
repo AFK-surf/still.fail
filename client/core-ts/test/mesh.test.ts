@@ -14,7 +14,7 @@ import { CoreError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Iroh } from "../src/iroh.ts";
-import { ALPN, clearlyBetter, cost, DEVICE_KEY, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, Mesh, MeshWire, PROBE_MS, RENEW_MS, RETIRE_MS, SPEED_MIN_BYTES, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
+import { ALPN, clearlyBetter, cost, DEVICE_KEY, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, Mesh, MeshWire, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_MIN_BYTES, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -823,6 +823,62 @@ sim("a_way_just_dialled_and_clearly_quicker_is_taken_when_asked", async (s) => {
   await s.run(mesh.remeasure(id));
   assert.equal(via(mesh, id), b, JSON.stringify(mesh.measured(id)));
   assert.equal(mesh.measured(id)!.relays.length, 2, JSON.stringify(mesh.measured(id)));
+  await close(s, station, mesh);
+});
+
+/// A station on the phone's LAN, at home on a (the device's own relay, far) and held on b (near): the phone's link to it
+/// on b's own endpoint comes through first, the main endpoint's through a after it and direct once iroh punches a hole.
+async function onLan(s: Sim) {
+  s.net.direct = { ms: 3 };
+  s.net.lan = { punchMs: 500 };
+  const a = s.relay("https://a.relay.test/", { device: { ms: 40 }, station: { ms: 40 } });
+  const b = s.relay("https://b.relay.test/", { device: { ms: 10 }, station: { ms: 10 } });
+  const station = await s.stationBound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [a], discovery: false, bindAddr: "127.0.0.1:0" });
+  await s.settle(station.endpoint.online());
+  station.endpoint.keep([b]);
+  const mesh = await s.run(Mesh.make(env(s), [a, b]));
+  return { station, mesh, id: station.id() };
+}
+
+const direct = (mesh: Mesh, id: string) => mesh.current(id)?.path() === "direct";
+
+/// 2026-10-17: a phone on its station's LAN went on through a relay most of the time. Its link came through first on a
+/// relay's own endpoint, and the main endpoint's, gone direct beside it, waited BETTER_TICKS and MIN_STAY_MS to be
+/// taken, minutes on a phone opened for a while; gone quiet as the phone slept, it waited EXPLORE_MS to be dialled
+/// again. The requests go direct within seconds, from the start and as the phone comes back.
+sim("a_phone_on_its_stations_lan_goes_direct_within_seconds", async (s) => {
+  const { station, mesh, id } = await onLan(s);
+  const started = s.time.now();
+  await reach(s, mesh, id);
+  await s.until(() => direct(mesh, id), 60_000);
+  assert.ok(s.time.now() - started <= 3 * TICK_MS, `direct ${s.time.now() - started} ms after the first link`);
+  // Back from sleep: every connection it had is gone at the station.
+  station.deadBelow = station.conns.length;
+  s.wakes.wake(network(s.host));
+  await s.until(() => !direct(mesh, id), 60_000);
+  const woke = s.time.now();
+  await s.until(() => direct(mesh, id), 5 * 60_000);
+  assert.ok(s.time.now() - woke <= 3 * TICK_MS, `direct again ${s.time.now() - woke} ms after the phone came back`);
+  // And stays so.
+  const moves = mesh.moves(id);
+  await s.time.pass(30 * 60_000);
+  assert.ok(direct(mesh, id));
+  assert.equal(mesh.moves(id), moves);
+  await close(s, station, mesh);
+});
+
+/// The direct link lost alone (the requests on to a relay meanwhile): the main endpoint dials the station again well
+/// before EXPLORE_MS, and the requests go direct again.
+sim("a_direct_link_lost_is_dialled_again_soon", async (s) => {
+  const { station, mesh, id } = await onLan(s);
+  await reach(s, mesh, id);
+  await s.until(() => direct(mesh, id), 60_000);
+  await s.time.pass(60_000);
+  const lost = s.time.now();
+  for (const c of station.conns) if (c.remoteId() === mesh.deviceId() && c.reason === null) c.close(0, "restart");
+  await s.until(() => !direct(mesh, id), 60_000);
+  await s.until(() => direct(mesh, id), EXPLORE_MS);
+  assert.ok(s.time.now() - lost <= REDIAL_MAIN_MS + 3 * TICK_MS, `direct again ${s.time.now() - lost} ms after it was lost`);
   await close(s, station, mesh);
 });
 

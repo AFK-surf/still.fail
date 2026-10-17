@@ -58,6 +58,11 @@ const BETTER_TICKS = 6;
 export const MIN_STAY_MS = 3 * 60_000;
 /// Pings in a row a way may miss before it is let go.
 const DEAD_PINGS = 3;
+/// How often the main endpoint dials a station again whose link on it is gone, while the station was reached direct
+/// within DIRECT_RECALL_MS: only it can go direct (each relay's own endpoint is on that relay alone), and waiting out
+/// EXPLORE_MS kept a phone on the station's LAN on a relay for minutes after a link of it went quiet (2026-10-17).
+export const REDIAL_MAIN_MS = 30_000;
+export const DIRECT_RECALL_MS = 10 * 60_000;
 /// The least a read waits for its answer on its way before it is asked on the next best way as well.
 export const HEDGE_FLOOR_MS = 1_000;
 /// How often a read gone slow looks again for another way to be asked on, while there is none.
@@ -520,6 +525,9 @@ export class Mesh {
   readonly #retiring = new Set<Link>();
   readonly #exploring = new Set<string>();
   readonly #exploredAt = new Map<string, number>();
+  /// By address: when a way to it was last seen going direct, and when the main endpoint last dialled it again.
+  readonly #directAt = new Map<string, number>();
+  readonly #mainDialledAt = new Map<string, number>();
   /// Dials under way on pinned endpoints (their endpoints are not let go meanwhile).
   #dialing = 0;
   /// By address: the relay requests last moved to (its host), and how many times they moved.
@@ -1094,6 +1102,17 @@ export class Mesh {
       if (best !== null) this.#promote(addr, best, "lost");
       return;
     }
+    // A way gone direct and answering clearly quicker is taken at once: the station is on the LAN (or a hole was punched
+    // to it), where a relay only adds its round trip. A phone that came back to the app on its station's LAN went on
+    // through a relay as that link came through first, and stayed there for minutes (BETTER_TICKS, MIN_STAY_MS) while
+    // the direct way waited its turn (2026-10-17).
+    if (mine.samples > 0 && mine.key() !== "direct") {
+      const direct = this.#best(addr, up.filter((w) => w.link !== cur && w.samples > 0 && w.missed === 0 && w.key() === "direct"));
+      if (direct !== null && clearlyBetter(this.#score(addr, mine), this.#score(addr, direct))) {
+        this.#promote(addr, direct, "direct");
+        return;
+      }
+    }
     if (mine.samples < MIN_SAMPLES) return;
     if (!now && this.now() - (this.#movedAt.get(addr) ?? -Infinity) < MIN_STAY_MS) return;
     const best = this.#best(addr, up.filter((w) => w.link !== cur && w.samples >= MIN_SAMPLES));
@@ -1136,6 +1155,9 @@ export class Mesh {
     for (const w of this.#live(addr)) if (w.link !== cur && w.missed >= DEAD_PINGS) this.#retire(addr, w);
     const byKey = new Map<string, Way>();
     for (const w of this.#live(addr)) {
+      // Not before it was pinged MIN_SAMPLES times: a link on the main endpoint goes through a relay at first, and direct
+      // once a hole is punched; let go as the twin of that relay's own, it never went direct (2026-10-17).
+      if (w.link !== cur && w.samples < MIN_SAMPLES) continue;
       const k = w.key();
       const other = byKey.get(k);
       if (other === undefined) {
@@ -1152,17 +1174,19 @@ export class Mesh {
     for (const w of others.slice(Math.max(0, KEEP_WAYS - 1))) this.#retire(addr, w);
   }
 
-  /// Dials the station on the ways not open to it (the main endpoint, each relay's own), each come through a way.
-  #explore(addr: string, credentials: CredentialSource): Effect.Effect<void> {
+  /// Dials the station on the ways not open to it (the main endpoint, each relay's own; `mainOnly`: the main endpoint
+  /// alone), each come through a way.
+  #explore(addr: string, credentials: CredentialSource, mainOnly = false): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       if (this.#exploring.has(addr)) return;
       this.#exploring.add(addr);
-      this.#exploredAt.set(addr, this.now());
+      this.#mainDialledAt.set(addr, this.now());
+      if (!mainOnly) this.#exploredAt.set(addr, this.now());
       const have = new Set(this.#live(addr).map((w) => w.link.pinned ?? "main"));
       const relays = this.relaysFor(addr);
       const tries: Effect.Effect<Link, CoreError>[] = [];
       if (!have.has("main")) tries.push(open(this.#env, this.#endpoint, relays, stationId(addr), credentials, false, null, undefined));
-      for (const r of this.#pinnable(addr)) if (!have.has(r)) tries.push(this.#dialPinned(addr, r, credentials, false, undefined));
+      if (!mainOnly) for (const r of this.#pinnable(addr)) if (!have.has(r)) tries.push(this.#dialPinned(addr, r, credentials, false, undefined));
       yield* Effect.all(
         tries.map((attempt) => Effect.map(Effect.result(attempt), (r) => (r._tag === "Success" ? this.#adopt(addr, r.success) : undefined))),
         { concurrency: "unbounded" },
@@ -1172,7 +1196,8 @@ export class Mesh {
   }
 
   /// While the station has a way open: every TICK_MS each pinged, the requests moved to the best (`#choose`), the
-  /// ways not worth keeping let go (`#prune`), and every EXPLORE_MS the others dialled again (`#explore`).
+  /// ways not worth keeping let go (`#prune`), and every EXPLORE_MS the others dialled again (`#explore`); the main
+  /// endpoint's link, gone from a station reached direct within DIRECT_RECALL_MS, every REDIAL_MAIN_MS.
   #steer(addr: string): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       for (;;) {
@@ -1183,8 +1208,17 @@ export class Mesh {
         yield* this.#sample(addr);
         this.#choose(addr, false);
         this.#prune(addr);
-        const credentials = (this.current(addr) ?? this.#live(addr)[0]?.link)?.credentials;
-        if (credentials !== undefined && this.now() - (this.#exploredAt.get(addr) ?? 0) >= EXPLORE_MS) this.#env.runner.fork(this.#explore(addr, credentials));
+        const live = this.#live(addr);
+        if (live.some((w) => w.key() === "direct")) this.#directAt.set(addr, this.now());
+        const credentials = (this.current(addr) ?? live[0]?.link)?.credentials;
+        if (credentials === undefined) continue;
+        if (this.now() - (this.#exploredAt.get(addr) ?? 0) >= EXPLORE_MS) this.#env.runner.fork(this.#explore(addr, credentials));
+        else if (
+          !live.some((w) => w.link.pinned === null) &&
+          this.now() - (this.#directAt.get(addr) ?? -Infinity) < DIRECT_RECALL_MS &&
+          this.now() - (this.#mainDialledAt.get(addr) ?? -Infinity) >= REDIAL_MAIN_MS
+        )
+          this.#env.runner.fork(this.#explore(addr, credentials, true));
       }
       this.#steering.delete(addr);
     });

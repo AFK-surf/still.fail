@@ -139,10 +139,11 @@ export class SimTime implements HostTime {
 }
 const NEVER = new Promise<never>(() => {});
 
-/// Where a connection goes: through a relay (its two endpoints' legs to it, as they are now) or direct.
+/// Where a connection goes: through a relay (its two endpoints' legs to it, as they are now) or direct (from the
+/// start, or once a hole is punched: `SimNet.lan`).
 class Way {
   readonly net: SimNet;
-  readonly relay: string | null;
+  relay: string | null;
   readonly sides: ["device" | "station", "device" | "station"];
   constructor(net: SimNet, relay: string | null, sides: ["device" | "station", "device" | "station"]) {
     this.net = net;
@@ -566,6 +567,15 @@ export class SimEndpoint {
     this.net.opened(mine);
     this.conns.push(mine);
     there.#arrived(theirs);
+    // Through a relay to a station on the device's LAN, from an endpoint not on relays alone: iroh punches a hole and
+    // the connection goes direct.
+    const lan = this.net.lan;
+    if (relay !== null && lan !== null && !this.relayOnly && there.direct)
+      void this.net.sleep(lan.punchMs).then(() => {
+        if (mine.reason !== null) return;
+        mine.way.relay = theirs.way.relay = null;
+        this.net.note(`${this.id().slice(0, 8)} to ${there.id().slice(0, 8)} direct`);
+      });
     return mine;
   }
 
@@ -629,6 +639,9 @@ export class SimNet {
   readonly rng: Rng;
   /// A direct way between two endpoints on this machine.
   direct: Leg = { ms: 1 };
+  /// The device on the LAN of the stations bound at an address: a connection to one through a relay goes direct
+  /// `punchMs` after it opens. Null: none does.
+  lan: { punchMs: number } | null = null;
   readonly #relays = new Map<string, { device: Leg; station: Leg }>();
   /// Entries (cloud relays.ts RELAY_ENTRIES): a URL on one relay's machine taking what comes to it on to another relay.
   readonly #entries = new Map<string, string>();

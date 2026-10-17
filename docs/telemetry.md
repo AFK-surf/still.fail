@@ -99,7 +99,8 @@ Inside a trace:
   that came through first), with the still.fail cloud requests it made; still.fail
   cloud requests made inside the trace (`/v1/me`, credentials, workspaces).
 - **core, on its own**: `mesh.route` when a station's requests move to another
-  way (`stillfail.why`: `better` by its pings, `asked`, `lost`), with
+  way (`stillfail.why`: `better` by its pings, `asked`, `lost`, `direct` as a
+  way gone direct answers clearly quicker), with
   `stillfail.from`/`stillfail.to` (the relay, or `direct`) and their scores in
   ms (`.score`: round trip, a typical reply at the speed seen, twice the
   deviation).
