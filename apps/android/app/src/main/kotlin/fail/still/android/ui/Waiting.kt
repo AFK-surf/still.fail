@@ -142,51 +142,55 @@ fun WaitLine(text: String = t("common.reading"), error: Boolean = false, modifie
 enum class WaitShape { Rows, Messages, Cards }
 
 /**
- * The light over placeholders (the web's waiting.css.ts shapes): where it is across them, 0 to 1 in 1.6s, left to right,
- * again and again; null under reduced motion (none). `still`: what is waited on failed, faded (0.6) and no light.
+ * The light over placeholders (the web's waiting.css.ts shapes): where it is in its round, 0 to 1 in 1.4s, again and
+ * again; null under reduced motion (none). `still`: what is waited on failed, faded (0.6) and no light.
  */
 class Sweep(val still: Boolean, val at: (() -> Float)?)
 
 @Composable
 fun rememberSweep(still: Boolean = false): Sweep {
     if (still || reducedMotion()) return remember(still) { Sweep(still, null) }
-    val at = rememberInfiniteTransition(label = "light").animateFloat(0f, 1f, infiniteRepeatable(tween(1600, easing = LinearEasing)), label = "at")
+    val at = rememberInfiniteTransition(label = "light").animateFloat(0f, 1f, infiniteRepeatable(tween(1400, easing = LinearEasing)), label = "at")
     return remember(at) { Sweep(false, { at.value }) }
 }
 
 /**
- * Something to come drawn as a grey placeholder (a list's rows, a station's figures, a page of a document) with the light
- * sweeping over it: a band of white at 35% from left of it to right of it, drawn only over what it draws.
+ * Something to come drawn as a grey placeholder (a bar of a list's row, a station's figure, a page of a document) with the
+ * light sweeping over it, as the web's: a band of the muted ink at 22%, 0.8 of its width wide, crossing it in the first
+ * third of the round (its middle from one width before it to five after), drawn only over what it draws.
  */
 fun Modifier.sweeping(sweep: Sweep): Modifier =
     if (sweep.still) graphicsLayer { alpha = 0.6f }
     else sweep.at?.let { at -> graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
         drawContent()
         val w = size.width
-        val peak = -0.5f * w + 2f * w * at()
-        val light = Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.35f), Color.Transparent), startX = peak - 0.3f * w, endX = peak + 0.3f * w)
+        val peak = -w + 6f * w * at()
+        val light = Brush.horizontalGradient(listOf(Color.Transparent, C.muted.copy(alpha = 0.22f), Color.Transparent), startX = peak - 0.4f * w, endX = peak + 0.4f * w)
         drawRect(light, blendMode = BlendMode.SrcAtop)
     } } ?: this
 
+/** One of the shapes: grey, the light sweeping over it on its own (as the web's each span). */
 @Composable
-private fun Bar(width: Dp, height: Dp, shape: Shape = CircleShape) = Box(Modifier.width(width).height(height).background(C.bubble, shape))
+private fun Placeholder(modifier: Modifier, sweep: Sweep, shape: Shape = CircleShape) = Box(modifier.sweeping(sweep).background(C.bubble, shape))
 
 /**
- * The shapes of what will come, the light sweeping over them: rows as the chats' list's (66 high, a title and a line, a picture at the end),
- * a chat's messages (theirs with a picture on the left, the viewer's on the right) or a settings page's cards.
+ * The shapes of what will come, the light sweeping over each: rows as the chats' list's (66 high, a title and a line, a
+ * picture at the end), a chat's messages (theirs with a picture on the left, the viewer's on the right) or a settings
+ * page's cards.
  */
 @Composable
 fun WaitShapes(shape: WaitShape = WaitShape.Rows, count: Int? = null, still: Boolean = false, modifier: Modifier = Modifier) {
-    val m = modifier.fillMaxWidth().sweeping(rememberSweep(still)).clearAndSetSemantics {}
+    val sweep = rememberSweep(still)
+    val m = modifier.fillMaxWidth().clearAndSetSemantics {}
     when (shape) {
         WaitShape.Rows -> Column(m) {
             repeat(count ?: 7) { i ->
                 Row(Modifier.fillMaxWidth().height(66.dp).padding(start = 22.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Bar(TITLES[i % TITLES.size].dp, 13.dp)
-                        Bar(LINES[i % LINES.size].dp, 10.dp)
+                        Placeholder(Modifier.width(TITLES[i % TITLES.size].dp).height(13.dp), sweep)
+                        Placeholder(Modifier.width(LINES[i % LINES.size].dp).height(10.dp), sweep)
                     }
-                    Box(Modifier.size(22.dp).background(C.bubble, CircleShape))
+                    Placeholder(Modifier.size(22.dp), sweep)
                 }
             }
         }
@@ -194,14 +198,14 @@ fun WaitShapes(shape: WaitShape = WaitShape.Rows, count: Int? = null, still: Boo
             val most = maxWidth * 0.7f
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 for ((mine, w, h) in MESSAGES.take(count ?: MESSAGES.size)) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
-                    if (!mine) { Box(Modifier.size(28.dp).background(C.bubble, CircleShape)); Spacer(Modifier.width(10.dp)) }
-                    Box(Modifier.widthIn(max = most).width(w.dp).height(h.dp).background(C.bubble, Smooth(18.dp)))
+                    if (!mine) { Placeholder(Modifier.size(28.dp), sweep); Spacer(Modifier.width(10.dp)) }
+                    Placeholder(Modifier.widthIn(max = most).width(w.dp).height(h.dp), sweep, Smooth(18.dp))
                 }
             }
         }
         WaitShape.Cards -> Column(m.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             // A page's card's corner (Parts.kt Card).
-            repeat(count ?: 3) { i -> Box(Modifier.fillMaxWidth().height(CARDS[i % CARDS.size].dp).background(C.bubble, Smooth(20.dp))) }
+            repeat(count ?: 3) { i -> Placeholder(Modifier.fillMaxWidth().height(CARDS[i % CARDS.size].dp), sweep, Smooth(20.dp)) }
         }
     }
 }

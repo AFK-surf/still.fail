@@ -10,9 +10,9 @@ import { centred } from "./styles/align.ts";
 export const LATER_MS = 400;
 const later = `${appearKeyframes} 0s linear ${LATER_MS}ms both`;
 
-// A light sweeping across the shapes, left to right in 1.6s: one band for all of them (fixed to the window, so the
-// bars of a list light up in turn as it passes); still for reduced motion, and faded, still, when what is waited on failed.
-const sweepLight = keyframes({ from: { backgroundPosition: "100% 0" }, to: { backgroundPosition: "0% 0" } });
+// A light sweeping across each of the shapes, left to right, every 1.4s (as hover cards' bars did); still for reduced
+// motion, and faded, still, when what is waited on failed.
+const sweepLight = keyframes({ from: { backgroundPosition: "100% 0" }, to: { backgroundPosition: "-100% 0" } });
 
 export const wait = style({ position: "relative", display: "flex", flexDirection: "column", minHeight: 0 });
 export const fill = style({ flex: "1", minHeight: "100%" });
@@ -34,9 +34,9 @@ export const line = style({
 export const shapes = style({ selectors: { "&[data-still]": { opacity: 0.6 } } });
 // Its bars (spans and i's in it, whatever their own shape and ground): the light over their ground.
 globalStyle(`${shapes} span, ${shapes} i`, {
-  backgroundImage: `linear-gradient(100deg, transparent 40%, color-mix(in srgb, white 35%, transparent) 50%, transparent 60%)`,
-  backgroundSize: "300% 100%", backgroundAttachment: "fixed", backgroundRepeat: "no-repeat",
-  animation: `${sweepLight} 1.6s linear infinite`,
+  backgroundImage: `linear-gradient(90deg, transparent 40%, color-mix(in srgb, ${vars.muted} 22%, transparent) 50%, transparent 60%)`,
+  backgroundSize: "400% 100%", backgroundRepeat: "no-repeat",
+  animation: `${sweepLight} 1.4s linear infinite`,
   "@media": { "(prefers-reduced-motion: reduce)": { animation: "none", backgroundImage: "none" } },
 });
 globalStyle(`${shapes}[data-still] span, ${shapes}[data-still] i`, { animation: "none", backgroundImage: "none" });

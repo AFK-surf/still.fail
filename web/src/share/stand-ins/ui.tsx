@@ -4,6 +4,7 @@
 import type { ReactNode } from "react";
 
 export { Avatar, Segmented } from "@stillfail/ui/parts.tsx";
+export { Progress, Spinner, WaitLine, WaitPill, Waiting } from "@stillfail/ui/waiting.tsx";
 
 export function Tip({ children }: { label?: ReactNode; children: ReactNode; side?: string; shortcut?: unknown; cut?: boolean }) {
   return <>{children}</>;
