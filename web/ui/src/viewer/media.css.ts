@@ -40,7 +40,7 @@ export const vvFact = style({
   flex: "none",
   "@media": {
     "(max-width: 640px)": {
-      selectors: { "&[data-fact=time], &[data-fact=fps], &[data-fact=note]": { display: "none" } },
+      selectors: { "&[data-fact=time], &[data-fact=note]": { display: "none" } },
     },
   },
 });

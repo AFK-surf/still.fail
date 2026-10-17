@@ -591,7 +591,7 @@
   "web-main.video.saveTip": "将此帧保存为 PNG",
   "web-main.video.turn": "横屏",
   "web-main.video.unturn": "退出横屏",
-  "web-main.video.variableRate": "可变帧率 · 均 {fps} fps",
+  "web-main.video.variableRate": "均 {fps} fps（可变帧率）",
   "web-main.viewport.auto": "自动",
   "web-main.viewport.custom": "自定义",
   "web-main.viewport.desktop": "桌面",

@@ -543,6 +543,8 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
   const thumb = useFileUrl(sessionKey, file, known.kind === "image" && loaded.state === "loading", true);
   const [sniffed, setSniffed] = useState<PreviewKind | "binary" | null>(null);
   const [controls, setControls] = useState<ReactNode>(null);
+  // A video's own facts (VideoViewer: its size in pixels, how long, its rate), after the file's in the bar.
+  const [videoMeta, setVideoMeta] = useState<string | null>(null);
   const blob = loaded.state === "ready" ? loaded.blob : null;
   useEffect(() => {
     if (known.kind || !blob) return;
@@ -606,7 +608,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
     const { url, blob } = loaded;
     switch (kind) {
       case "image": body = <ImageViewer key={file.path} url={url} file={file} setControls={setControls} swipe={swipe} onMarking={setMarking} onClose={onClose} />; break;
-      case "video": body = <VideoViewer key={file.path} url={url} blob={blob} name={file.name} />; break;
+      case "video": body = <VideoViewer key={file.path} url={url} blob={blob} name={file.name} onMeta={setVideoMeta} />; break;
       case "audio": body = <div className={css2.fpAudio}><span className={css2.fpAudioName}>{file.name}</span><audio src={url} controls autoPlay /></div>; break;
       case "pdf": body = <PdfViewer blob={blob} />; break;
       case "markdown": case "csv": case "html": case "code": case "text":
@@ -657,7 +659,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
           // A picture: gone with the rest as the pointer rests (back as it moves); what is read down: as it is read down.
           hidden={kind === "image" ? !(awake || coming !== undefined || marking) : barOnScroll.hidden}
           name={<RDialog.Title asChild><span>{file.name}</span></RDialog.Title>}
-          meta={`${count > 1 && at >= 0 ? `${at + 1} / ${count} · ` : ""}${fileSize(file.size)}${kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}`}
+          meta={`${count > 1 && at >= 0 ? `${at + 1} / ${count} · ` : ""}${fileSize(file.size)}${kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}${kind === "video" && videoMeta ? ` · ${videoMeta}` : ""}`}
           tools={<>
             {coming !== undefined && <Progress got={coming} size={file.size} inBar />}
             {controls}
@@ -671,7 +673,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
         onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; onBar.current = false; wake(); }}>
         <div className={css2.fpTitle}>
           <Tip label={file.path}><RDialog.Title className={css2.fpName}>{file.name}</RDialog.Title></Tip>
-          <span className={css2.fpMeta}>{count > 1 && at >= 0 ? `${at + 1} / ${count} · ` : ""}{fileSize(file.size)}{kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}</span>
+          <span className={css2.fpMeta}>{count > 1 && at >= 0 ? `${at + 1} / ${count} · ` : ""}{fileSize(file.size)}{kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}{kind === "video" && videoMeta ? ` · ${videoMeta}` : ""}</span>
         </div>
         {coming !== undefined && <Progress got={coming} size={file.size} inBar />}
         {controls}

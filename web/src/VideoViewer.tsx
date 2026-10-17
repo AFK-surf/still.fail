@@ -140,7 +140,11 @@ function rateOf(starts: number[]): { fps: number; steady: boolean } {
 type Turnable = ScreenOrientation & { lock?(orientation: "landscape"): Promise<void>; unlock?(): void };
 const canTurn = () => !!document.fullscreenEnabled && typeof (screen.orientation as Turnable | undefined)?.lock === "function";
 
-export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name: string }) {
+/**
+ * `onMeta`: what the video is (its size in pixels, how long, its rate), for the preview's bar on top; the bar below is
+ * for what is done with it, and where it is.
+ */
+export function VideoViewer({ url, blob, name, onMeta }: { url: string; blob: Blob; name: string; onMeta?: (meta: string | null) => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const picture = useRef<HTMLCanvasElement>(null);
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
@@ -304,11 +308,18 @@ export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name
   const facts = decoded ? [
     { key: "frame", text: <><b className={css.vvNow}>{at + 1}</b><span className={css.vvDim}> / {t("web-main.video.frames", { n: count })}</span></> },
     { key: "time", text: clock(now) },
-    ...(rateInfo ? [{ key: "fps", text: <span className={css.vvDim}>{rateInfo.steady ? `${Math.round(rateInfo.fps)} fps` : t("web-main.video.variableRate", { fps: Math.round(rateInfo.fps) })}</span> }] : []),
   ] : [
     { key: "time", text: <><b className={css.vvNow}>{clock(time)}</b><span className={css.vvDim}> / {clock(duration)}</span></> },
     { key: "note", text: <span className={css.vvDim}>{frames === null ? t("web-main.video.readingFrames") : t("web-main.video.guessed")}</span> },
   ];
+  const end = decoded ? decoded.starts.at(-1)! + decoded.lastDuration : duration;
+  const meta = natural ? [
+    `${natural.w}×${natural.h}`,
+    end > 0 ? clock(end) : null,
+    rateInfo ? (rateInfo.steady ? `${Math.round(rateInfo.fps)} fps` : t("web-main.video.variableRate", { fps: Math.round(rateInfo.fps) })) : null,
+  ].filter(Boolean).join(" · ") : null;
+  useEffect(() => { onMeta?.(meta); }, [onMeta, meta]);
+  useEffect(() => () => onMeta?.(null), [onMeta]);
   // Beside the pointer, on the side with room.
   const left = pixel && pixel.clientX > window.innerWidth - 220;
   return (
@@ -340,7 +351,7 @@ export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name
         onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; onControls.current = false; wake(); }}
         // A finger on them keeps them a while longer.
         onPointerDown={(e) => { if (e.pointerType !== "mouse") wake(TAP_REST_MS); }}>
-        <Timeline start={decoded?.starts[0] ?? 0} end={decoded ? decoded.starts.at(-1)! + decoded.lastDuration : duration} now={now} onSeek={seek} />
+        <Timeline start={decoded?.starts[0] ?? 0} end={end} now={now} onSeek={seek} />
         <div className={css.vvRow}>
           <span className={css.vvGroup}>
             <Tip label={t("web-main.video.prevKey")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-main.video.prev")} onClick={() => go((i) => i - 1)}><ChevronLeft size={18} /></button></Tip>

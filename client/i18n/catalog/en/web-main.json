@@ -657,7 +657,7 @@
   "web-main.video.saveTip": "Save frame as PNG",
   "web-main.video.turn": "Landscape",
   "web-main.video.unturn": "Exit landscape",
-  "web-main.video.variableRate": "Variable rate · avg {fps} fps",
+  "web-main.video.variableRate": "avg {fps} fps (variable)",
   "web-main.viewport.auto": "Auto",
   "web-main.viewport.custom": "Custom",
   "web-main.viewport.desktop": "Desktop",
