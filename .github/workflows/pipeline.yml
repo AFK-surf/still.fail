@@ -279,11 +279,12 @@ jobs:
   bundle:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && (needs.plan.outputs.api == 'true' || needs.plan.outputs.static == 'true') }}
-    runs-on: [self-hosted, mini1]
+    # On GitHub's runners, not mini1: a dry run of half a minute that queued there behind the builds (2026-10-16).
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup-mac
+      - uses: ./.github/actions/setup
       - uses: ./.github/actions/natives
       - name: deploy.py --dry-run
         run: sh .github/deploy.sh --dry-run $([ '${{ needs.plan.outputs.api }}' = true ] && echo api) ${{ needs.plan.outputs.parts }}
