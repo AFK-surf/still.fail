@@ -3787,6 +3787,11 @@ export interface PrefsView {
 	driveViews?: Record<string, string>;
 	/** How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path. */
 	dropAs?: string;
+	/**
+	 * How a finger drives a station's screen on a phone: `direct` (a tap clicks where it is), or (none) as a
+	 * trackpad (the finger moves the pointer, a tap clicks where it points).
+	 */
+	screenTouch?: string;
 	/** A Slack app made for a new connect, to go on with, by station (the Android app's). */
 	resume?: Record<string, string>;
 	/** Versions dismissed on this device, by workspace/station. */

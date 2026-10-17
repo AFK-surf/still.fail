@@ -2,7 +2,9 @@
 // made-up station draws real JPEG frames: web/stories/screens.ts, which keeps what the view was told in
 // `window.screenInputs`), the picture letterboxed in a window of another shape, then a mouse (a click at the picture's
 // middle is 0.5, 0.5; one in the letterbox says nothing), the wheel, keys, an IME's and a paste's text, 只看 (nothing
-// goes), and on a phone a finger: a tap clicks, a drag holds the button, two fingers scroll. Builds the stories and serves
+// goes), and on a phone a finger: as a trackpad (it moves the pointer, a tap clicks where it points, two tapped
+// right-click), the keys row's modifiers held for the next key; then directly, a tap clicks, a drag holds the button,
+// two fingers scroll. Builds the stories and serves
 // the build, as stories.mjs does. PLAYWRIGHT_MODULE selects Playwright; SHOTS keeps a picture of each.
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
@@ -116,6 +118,40 @@ try {
   const touch = (type, points) => fingers.send('Input.dispatchTouchEvent', { type, touchPoints: points.map((q, id) => ({ ...q, id })) });
   const said = () => p.evaluate(() => window.screenInputs.splice(0));
   await said();
+  // ── as a trackpad (unless the device keeps `direct`) ──
+  // A tap anywhere: a click where the pointer is (where the station says it is: the demo's 0.5, 0.565).
+  await p.touchscreen.tap(at(0.1, 0.1).x, at(0.1, 0.1).y);
+  got = (await said()).filter((i) => i.t === 'pointer');
+  assert.deepEqual(got.map((i) => [i.kind, i.buttons]), [['down', 1], ['up', 0]], 'a tap on the trackpad clicks');
+  near(got[0].x, 0.5, 'trackpad tap x'); near(got[0].y, 0.565, 'trackpad tap y');
+  await p.waitForTimeout(400);
+  // A finger moved right: the pointer goes right, no button held.
+  await touch('touchStart', [at(0.2, 0.3)]);
+  for (let i = 1; i <= 6; i++) { await touch('touchMove', [at(0.2 + i * 0.03, 0.3)]); await p.waitForTimeout(20); }
+  await touch('touchEnd', []);
+  got = (await said()).filter((i) => i.t === 'pointer');
+  assert.ok(got.length > 0 && got.every((i) => i.kind === 'move' && i.buttons === 0), `the trackpad moves the pointer: ${JSON.stringify(got)}`);
+  const padX = got.at(-1).x;
+  assert.ok(padX > 0.55 && padX <= 1, `moved right: ${padX}`);
+  near(got.at(-1).y, 0.565, 'moved along');
+  // Two fingers tapped: the right button where it points.
+  await p.waitForTimeout(400);
+  await touch('touchStart', [at(0.3, 0.5), at(0.6, 0.5)]);
+  await p.waitForTimeout(60);
+  await touch('touchEnd', []);
+  got = (await said()).filter((i) => i.t === 'pointer');
+  assert.deepEqual(got.map((i) => [i.kind, i.buttons]), [['down', 2], ['up', 0]], 'two fingers tapped right-click');
+  near(got[0].x, padX, 'right click where it points');
+  // ⌘ held on the keys row, then Tab: ⌘Tab; Tab again goes alone.
+  await p.getByRole('button', { name: 'Command' }).click();
+  await p.getByRole('button', { name: 'Tab' }).click();
+  await p.getByRole('button', { name: 'Tab' }).click();
+  got = await said();
+  assert.deepEqual(got.map((i) => [i.kind, i.code, i.mods]), [['down', 'Tab', 4], ['up', 'Tab', 4], ['down', 'Tab', 0], ['up', 'Tab', 0]], 'a modifier held for the next key');
+  // ── directly ──
+  await p.getByRole('button', { name: '触控板' }).click();
+  await p.waitForFunction(() => document.querySelector('button[aria-label="触控板"]')?.getAttribute('aria-pressed') === 'false');
+  await p.waitForTimeout(400);
   // A tap: a click where it is.
   await p.touchscreen.tap(at(0.5, 0.5).x, at(0.5, 0.5).y);
   got = (await said()).filter((i) => i.t === 'pointer');

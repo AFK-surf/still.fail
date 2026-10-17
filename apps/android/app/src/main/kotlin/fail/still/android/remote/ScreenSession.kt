@@ -26,6 +26,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -71,6 +72,18 @@ class ScreenSession(
      * agent at work) drives it, else in 控制, so opening a screen never takes it from whoever is on it.
      */
     var wantsControl by mutableStateOf<Boolean?>(null); private set
+
+    /**
+     * A finger drives it as a trackpad (it moves the pointer, a tap clicks where that points), or (false) directly (a
+     * tap clicks where it is): as this device keeps it (`prefs.screenTouch`), as chosen at once.
+     */
+    var pad by mutableStateOf(true)
+
+    /** Trackpad or direct, chosen: kept on this device for every screen. Throws [CoreException]. */
+    suspend fun choosePad(on: Boolean) {
+        pad = on
+        core.call("prefs.set", buildJsonObject { if (on) put("screenTouch", JsonNull) else put("screenTouch", "direct") })
+    }
 
     /** 控制 or 只看 as the view is meant to be now: as chosen, else as the core opened it (只看 while another drives). */
     val controlling: Boolean get() = wantsControl ?: (state?.takeOver != true)

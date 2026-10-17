@@ -17,6 +17,8 @@ export const page = style({
 /** Phone: the bars' heights and how far from the edges they float. */
 const HEAD = 44;
 const FOOT = 48;
+/** The keys row over the foot while driving (Esc, Tab, the modifiers, the arrows). */
+const KEYS = 44;
 const EDGE = 12;
 const GAP = 8;
 
@@ -35,6 +37,7 @@ export const stage = style({
       bottom: `calc(max(${EDGE}px, var(--safe-bottom)) + ${FOOT + GAP}px)`,
       left: "var(--safe-left)", right: "var(--safe-right)",
     },
+    [`${viewer}[data-phone][data-keys] &`]: { bottom: `calc(max(${EDGE}px, var(--safe-bottom)) + ${FOOT + GAP + KEYS + GAP}px)` },
     // The desktop app's window is dragged by the page's top: not over a screen being driven.
     "[data-desktop] &": { WebkitAppRegion: "no-drag" },
   },
@@ -131,3 +134,21 @@ export const controllers = style({
 export const controllersDot = style({ flex: "none", width: "8px", height: "8px", borderRadius: "50%", background: vars.amber });
 export const controllersText = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const takeOver = style({ flex: "none" });
+
+/**
+ * The keys a phone's keyboard has not, floating over the foot while driving: a pill 4 round its keys (pills too), as
+ * wide as the screen lets it be, the keys sharing it alike (all of them in sight, as a keyboard's row).
+ */
+export const keysRow = style({
+  ...glass,
+  position: "absolute", zIndex: "3", bottom: `calc(max(${EDGE}px, var(--safe-bottom)) + ${FOOT + GAP}px)`, ...centredX,
+  display: "flex", alignItems: "center", gap: "4px", width: "calc(100% - 24px)", maxWidth: "480px", boxSizing: "border-box",
+  height: `${KEYS}px`, padding: "4px", borderRadius: "999px",
+  selectors: { "[data-desktop] &": { WebkitAppRegion: "no-drag" } },
+});
+export const rowKey = style({
+  display: "grid", placeItems: "center", flex: "1 1 0", minWidth: "0", height: "36px", padding: "0", border: "0", borderRadius: "999px",
+  background: `color-mix(in srgb, ${vars.text} 6%, transparent)`, color: vars.text, cursor: "pointer",
+  fontSize: vars.textMeta, fontWeight: "600", lineHeight: "1", whiteSpace: "nowrap",
+  selectors: { "&[aria-pressed=true]": { background: vars.text, color: vars.canvas } },
+});

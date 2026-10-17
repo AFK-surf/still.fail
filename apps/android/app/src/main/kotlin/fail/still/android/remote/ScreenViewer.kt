@@ -14,6 +14,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.SurfaceTexture
 import android.os.Build
+import android.os.SystemClock
+import android.view.HapticFeedbackConstants
 import android.view.Surface
 import android.view.TextureView
 import android.view.inputmethod.InputMethodManager
@@ -24,6 +26,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -79,6 +83,7 @@ import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
@@ -128,33 +133,103 @@ internal class ViewZoom {
     /** Where the frame is drawn on the stage, fitted at `fit`. */
     fun shown(fit: Rect): Rect = Rect(fit.left + x, fit.top + y, fit.left + x + fit.width * scale, fit.top + y + fit.height * scale)
 
+    /** At `next` over `fit`, its top left at `left`, `top` on the stage as near as its edges let it be. */
+    private fun put(next: Float, left: Float, top: Float, fit: Rect, box: Size) {
+        fun place(want: Float, size: Float, room: Float) = if (size <= room) (room - size) / 2 else want.coerceIn(room - size, 0f)
+        scale = next
+        x = place(left, fit.width * next, box.width) - fit.left
+        y = place(top, fit.height * next, box.height) - fit.top
+    }
+
     /** By `factor` around `focus`, and moved by `pan` (on the stage, px). */
     fun by(factor: Float, focus: Offset, pan: Offset, fit: Rect, box: Size) {
         if (fit.width <= 0f) return
         val before = shown(fit)
         val next = (scale * factor).coerceIn(1f, MAX_ZOOM)
         val u = Offset((focus.x - before.left) / before.width, (focus.y - before.top) / before.height)
-        val w = fit.width * next
-        val h = fit.height * next
-        fun place(want: Float, size: Float, room: Float) = if (size <= room) (room - size) / 2 else want.coerceIn(room - size, 0f)
-        val left = place(focus.x - u.x * w + pan.x, w, box.width)
-        val top = place(focus.y - u.y * h + pan.y, h, box.height)
-        scale = next
-        x = left - fit.left
-        y = top - fit.top
+        put(next, focus.x - u.x * fit.width * next + pan.x, focus.y - u.y * fit.height * next + pan.y, fit, box)
     }
 
     fun pan(d: Offset, fit: Rect, box: Size) = by(1f, Offset(fit.center.x, fit.center.y), d, fit, box)
 
+    /** `at` (0..1 of the frame) brought `margin` px within the stage's edges, the frame moved as little as it takes. */
+    fun keep(at: Offset, margin: Float, fit: Rect, box: Size) {
+        val s = shown(fit)
+        val p = Offset(s.left + at.x * s.width, s.top + at.y * s.height)
+        fun off(v: Float, room: Float) = when {
+            room < 2 * margin -> room / 2 - v
+            v < margin -> margin - v
+            v > room - margin -> room - margin - v
+            else -> 0f
+        }
+        val d = Offset(off(p.x, box.width), off(p.y, box.height))
+        if (d != Offset.Zero) pan(d, fit, box)
+    }
+
+    /**
+     * The stage resized (the keyboard up or down): the frame drawn as large as it was, so what is typed into stays as
+     * legible, `at` (0..1 of the frame; else what was in the middle) where it was on the stage and kept in sight.
+     */
+    fun refit(before: Rect, after: Rect, box: Size, at: Offset?, margin: Float) {
+        if (before.width <= 0f || after.width <= 0f) { reset(); return }
+        val was = shown(before)
+        val u = at ?: Offset((before.center.x - was.left) / was.width, (before.center.y - was.top) / was.height)
+        val next = (was.width / after.width).coerceIn(1f, MAX_ZOOM)
+        put(next, was.left + u.x * was.width - u.x * after.width * next, was.top + u.y * was.height - u.y * after.height * next, after, box)
+        keep(u, margin, after, box)
+    }
+
     fun reset() { scale = 1f; x = 0f; y = 0f }
 }
+
+/**
+ * Where the pointer is as the trackpad moves it (0..1 of the frame), ahead of the station saying so; where the station
+ * says it is once the finger has been still a moment (something else moved it, or the screen's edge held it).
+ */
+internal class PadPointer {
+    var x by mutableFloatStateOf(0.5f); private set
+    var y by mutableFloatStateOf(0.5f); private set
+    val at get() = Offset(x, y)
+    /** When the finger last moved it (uptime, ms). */
+    private var movedAt = Long.MIN_VALUE / 2
+
+    fun by(dx: Float, dy: Float, now: Long) {
+        x = (x + dx).coerceIn(0f, 1f)
+        y = (y + dy).coerceIn(0f, 1f)
+        movedAt = now
+    }
+
+    fun follow(cursor: ScreenCursor?, now: Long) {
+        if (cursor == null || now - movedAt < PAD_SETTLE_MS) return
+        x = cursor.x.toFloat().coerceIn(0f, 1f)
+        y = cursor.y.toFloat().coerceIn(0f, 1f)
+    }
+}
+
+/** How long after the finger moved the pointer the station's word on it is taken again (its echo of the moves is behind). */
+private const val PAD_SETTLE_MS = 600L
+
+/**
+ * How far the pointer goes for a finger's move of 1 px, by how fast it moves (px per ms, in dp): slowly, less than the
+ * finger, to land on something small; fast, further, to cross the screen in a stroke.
+ */
+private fun padGain(dpPerMs: Float): Float = 0.55f + 1.6f * ((dpPerMs - 0.1f) / 1.4f).coerceIn(0f, 1f)
 
 /** The viewer: `title` until the core says one (the link's own, or the row's it was opened from); `onExit` closes it. */
 @Composable
 fun ScreenViewer(session: ScreenSession, title: String?, onExit: () -> Unit) {
     val zoom = remember { ViewZoom() }
+    val pad = remember { PadPointer() }
+    val held = remember { HeldKeys() }
     val context = LocalContext.current
     var catcher by remember { mutableStateOf<KeyCatcher?>(null) }
+    // The pointer where the station says it is, once the finger has let it be (and again once its echo has come).
+    val cursor = session.state?.cursor
+    LaunchedEffect(cursor) {
+        pad.follow(cursor, SystemClock.uptimeMillis())
+        kotlinx.coroutines.delay(PAD_SETTLE_MS + 100)
+        pad.follow(cursor, SystemClock.uptimeMillis())
+    }
     val density = LocalDensity.current
     val ime = WindowInsets.ime
     val typing = ime.getBottom(density) > 0
@@ -212,33 +287,45 @@ fun ScreenViewer(session: ScreenSession, title: String?, onExit: () -> Unit) {
         dropTo = session.dropsTo ?: return
         pick.launch(arrayOf("*/*"))
     }
-    val tools = Tools(pasting, ::paste, ::send)
+    /** Trackpad or direct, said as it is chosen: how a finger drives it now. */
+    fun choosePad(on: Boolean) {
+        note = t(if (on) "android-misc.screen.padOn" else "android-misc.screen.padOff")
+        act(t("android-misc.screen.touchWhat")) { session.choosePad(on) }
+    }
+    val tools = Tools(pasting, ::paste, ::send, ::choosePad)
     val dropActs = DropActs(
         pastePath = { d -> act(t("android-misc.screen.pasteWhat")) { session.paste(d.path) } },
         reveal = { d -> act(t("android-misc.screen.revealWhat")) { session.reveal(d.path) } },
     )
     BoxWithConstraints(Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.safeDrawing)) {
         // Unseen, where the keyboard's input goes.
-        AndroidView({ KeyCatcher(it) { input -> session.input(input) }.also { catcher = it } }, Modifier.size(1.dp).alpha(0f))
+        AndroidView({ KeyCatcher(it, held) { input -> session.input(input) }.also { catcher = it } }, Modifier.size(1.dp).alpha(0f))
         val sideways = maxWidth > maxHeight
         if (sideways) Row(Modifier.fillMaxSize()) {
             Rail(session, typing, ::keyboard, tools, onExit)
             Box(Modifier.weight(1f).fillMaxHeight()) {
-                Stage(session, zoom, dropActs, Modifier.fillMaxSize(), onExit)
+                Stage(session, zoom, pad, dropActs, Modifier.fillMaxSize(), onExit)
                 // Sideways the frame takes the height: who drives it floats over its top, while it does.
                 if (session.canTakeOver) TakeOver(session, Modifier.align(Alignment.TopCenter).padding(top = 12.dp))
+                // The keys a phone's keyboard has not, over the frame's foot while it is up.
+                if (session.driving && typing) KeysRow(session, held, Modifier.align(Alignment.BottomCenter).padding(8.dp).floatingStill(CircleShape).padding(4.dp))
             }
         } else Column(Modifier.fillMaxSize()) {
-            Bar(session, title, typing, ::keyboard, tools, onExit)
+            Bar(session, title, tools, onExit)
             if (session.canTakeOver) TakeOver(session, Modifier.align(Alignment.CenterHorizontally).padding(horizontal = 12.dp, vertical = 4.dp))
-            Stage(session, zoom, dropActs, Modifier.weight(1f).fillMaxWidth(), onExit)
+            Stage(session, zoom, pad, dropActs, Modifier.weight(1f).fillMaxWidth(), onExit)
+            // Upright, under the frame: trackpad or direct, the keys a phone's keyboard has not, the keyboard.
+            if (session.driving) Foot(session, held, typing, ::keyboard, tools)
         }
         ToastHost(note) { note = null }
     }
 }
 
-/** The clipboard and files, from the bar: pasting the phone's text (under way: `pasting`), picking files to send. */
-private class Tools(val pasting: Boolean, val paste: () -> Unit, val send: () -> Unit)
+/**
+ * The clipboard and files, from the bar: pasting the phone's text (under way: `pasting`), picking files to send; and
+ * trackpad or direct, chosen.
+ */
+private class Tools(val pasting: Boolean, val paste: () -> Unit, val send: () -> Unit, val choosePad: (Boolean) -> Unit)
 
 /** What can be done with a file once it is on the machine: its path pasted, shown in the machine's file manager. */
 private class DropActs(val pastePath: (Drop) -> Unit, val reveal: (Drop) -> Unit)
@@ -266,9 +353,9 @@ private fun undriven(session: ScreenSession): String? {
     return state.access?.message?.takeIf { it.isNotEmpty() }
 }
 
-/** Upright: close, the title over the core's line (只看 or 控制, who else is on it), 只看/控制, the keyboard. */
+/** Upright: close, the title over the core's line (只看 or 控制, who else is on it), 只看/控制, the clipboard and files. */
 @Composable
-private fun Bar(session: ScreenSession, title: String?, typing: Boolean, keyboard: () -> Unit, tools: Tools, onExit: () -> Unit) {
+private fun Bar(session: ScreenSession, title: String?, tools: Tools, onExit: () -> Unit) {
     val state = session.state
     Row(
         Modifier.fillMaxWidth().height(56.dp).padding(start = 6.dp, end = 10.dp),
@@ -285,7 +372,64 @@ private fun Bar(session: ScreenSession, title: String?, typing: Boolean, keyboar
             { session.control(it == 1) }, height = 32.dp, radius = 16.dp,
         )
         ClipButtons(session, tools)
-        if (session.driving) RoundButton(Icons.Keyboard, t("android-misc.screen.keyboard"), pressed = typing, onClick = keyboard)
+    }
+}
+
+/** Trackpad (on) or direct, as a round button that is on while it is a trackpad. */
+@Composable
+private fun PadButton(session: ScreenSession, tools: Tools) =
+    RoundButton(Icons.Trackpad, t("android-misc.screen.trackpad"), pressed = session.pad) { tools.choosePad(!session.pad) }
+
+/** Upright, under the frame while driving it: trackpad or direct, the keys row, the keyboard. */
+@Composable
+private fun Foot(session: ScreenSession, held: HeldKeys, typing: Boolean, keyboard: () -> Unit, tools: Tools) {
+    Row(
+        Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        PadButton(session, tools)
+        KeysRow(session, held, Modifier.weight(1f))
+        RoundButton(Icons.Keyboard, t("android-misc.screen.keyboard"), pressed = typing, onClick = keyboard)
+    }
+}
+
+/** A key of the keys row: what it sends, or a modifier held for the next key (`mod`, its bit). */
+private class RowKeyDef(val label: String, val name: String, val key: String = "", val code: String = "", val mod: Int = 0, val icon: ImageVector? = null)
+
+private fun rowKeys() = listOf(
+    RowKeyDef("Esc", "Esc", "Escape", "Escape"),
+    RowKeyDef("Tab", "Tab", "Tab", "Tab"),
+    RowKeyDef("⌘", t("android-misc.screen.key.command"), mod = META),
+    RowKeyDef("⌃", t("android-misc.screen.key.control"), mod = CTRL),
+    RowKeyDef("⌥", t("android-misc.screen.key.option"), mod = ALT),
+    RowKeyDef("⇧", t("android-misc.screen.key.shift"), mod = SHIFT),
+    RowKeyDef("", t("android-misc.screen.key.left"), "ArrowLeft", "ArrowLeft", icon = Icons.ArrowLeft),
+    RowKeyDef("", t("android-misc.screen.key.up"), "ArrowUp", "ArrowUp", icon = Icons.ArrowUp),
+    RowKeyDef("", t("android-misc.screen.key.down"), "ArrowDown", "ArrowDown", icon = Icons.ArrowDown),
+    RowKeyDef("", t("android-misc.screen.key.right"), "ArrowRight", "ArrowRight", icon = Icons.ArrowRight),
+)
+
+/**
+ * The keys a phone's keyboard has not (Esc, Tab, the arrows) and the modifiers (⌘ ⌃ ⌥ ⇧: held, shown solid, for the
+ * next key, typed or here), in a row that scrolls when it is wider than its room.
+ */
+@Composable
+private fun KeysRow(session: ScreenSession, held: HeldKeys, modifier: Modifier) {
+    Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        rowKeys().forEach { k ->
+            val on = k.mod != 0 && held.mods and k.mod != 0
+            Box(
+                Modifier.height(36.dp).widthIn(min = 40.dp).clip(CircleShape).background(if (on) C.ink else C.ink.copy(alpha = 0.06f))
+                    .clickable {
+                        if (k.mod != 0) held.toggle(k.mod) else stroke(session::input, k.key, k.code, held.take())
+                    }
+                    .semantics { contentDescription = k.name }.padding(horizontal = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (k.icon != null) IconIn(k.icon, 18.dp, C.ink)
+                else Text(k.label, fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold, color = if (on) C.bg else C.ink, maxLines = 1)
+            }
+        }
     }
 }
 
@@ -314,6 +458,7 @@ private fun Rail(session: ScreenSession, typing: Boolean, keyboard: () -> Unit, 
                 if (session.controlling) t("android-misc.screen.drive") else t("android-misc.screen.look"),
                 pressed = session.controlling,
             ) { session.control(!session.controlling) }
+            if (session.driving) PadButton(session, tools)
             ClipButtons(session, tools)
             if (session.driving) RoundButton(Icons.Keyboard, t("android-misc.screen.keyboard"), pressed = typing, onClick = keyboard)
         }
@@ -363,21 +508,34 @@ private fun RoundButton(icon: ImageVector, label: String, pressed: Boolean = fal
 
 /** The frame, fitted and zoomed, its pointer; the gestures; how the view is, and the files sent, over it. */
 @Composable
-private fun Stage(session: ScreenSession, zoom: ViewZoom, dropActs: DropActs, modifier: Modifier, onExit: () -> Unit) {
+private fun Stage(session: ScreenSession, zoom: ViewZoom, pad: PadPointer, dropActs: DropActs, modifier: Modifier, onExit: () -> Unit) {
     val picture = session.picture
     val size = session.size ?: picture?.let { IntSize(it.bitmap.width, it.bitmap.height) }
     var box by remember { mutableStateOf(Size.Zero) }
     val fit = if (size == null) Rect.Zero else fitIn(box, Size(size.width.toFloat(), size.height.toFloat()))
-    // Turned, or another size of frame: fitted again.
-    LaunchedEffect(box, size) { zoom.reset() }
+    // Another size of frame: fitted again.
+    LaunchedEffect(size) { zoom.reset() }
     val phase = session.phase
     val density = LocalDensity.current
+    val margin = with(density) { 40.dp.toPx() }
     val fitNow by rememberUpdatedState(fit)
     val boxNow by rememberUpdatedState(box)
     val sizeNow by rememberUpdatedState(size)
+    val view = LocalView.current
+    /** Where the pointer is now as this phone draws it: the trackpad's while it drives it so, else the station's. */
+    val padNow = session.driving && session.pad
+    fun resized(next: Size) {
+        val frame = sizeNow?.let { Size(it.width.toFloat(), it.height.toFloat()) }
+        if (frame != null && boxNow != Size.Zero) {
+            // Turned: fitted again; else (the keyboard up or down) drawn as large as it was, the pointer in sight.
+            if ((boxNow.width > boxNow.height) != (next.width > next.height)) zoom.reset()
+            else zoom.refit(fitIn(boxNow, frame), fitIn(next, frame), next, if (padNow) pad.at else session.state?.cursor?.let { Offset(it.x.toFloat(), it.y.toFloat()) }, margin)
+        }
+        box = next
+    }
     Box(
-        modifier.clipToBounds().testTag(STAGE).onSizeChanged { box = it.toSize() }
-            .pointerInput(session, zoom) { gestures(session, zoom, { fitNow }, { boxNow }, { sizeNow }) },
+        modifier.clipToBounds().testTag(STAGE).onSizeChanged { resized(it.toSize()) }
+            .pointerInput(session, zoom) { gestures(session, zoom, pad, margin, { fitNow }, { boxNow }, { sizeNow }) { view.performHapticFeedback(it) } },
     ) {
         if (size != null && fit.width > 0f) {
             val still = phase != "live" && session.shownAny
@@ -397,8 +555,9 @@ private fun Stage(session: ScreenSession, zoom: ViewZoom, dropActs: DropActs, mo
                     drawImage(p.bitmap.asImageBitmap(), dstSize = IntSize(this.size.width.roundToInt(), this.size.height.roundToInt()), filterQuality = FilterQuality.Medium)
                     session.drew(p)
                 }
-                session.state?.cursor?.let { Pointer(it) }
             }
+            // Drawn over the frame at its own size, however zoomed: where the trackpad has it, else where the station says.
+            Pointer({ if (padNow) pad.at else session.state?.cursor?.let { Offset(it.x.toFloat(), it.y.toFloat()) } }, { zoom.shown(fitNow) })
         }
         Over(session, phase, Modifier.align(Alignment.Center), onExit)
         Column(
@@ -498,16 +657,21 @@ private fun Texture(session: ScreenSession) {
     }, Modifier.fillMaxSize())
 }
 
-/** Where the station's pointer is: an arrow, white with a dark edge, its tip there. */
+/**
+ * Where the pointer is (`at`, 0..1 of the frame drawn at `shown` on the stage; read as it is drawn, it moves without
+ * the page composed again): an arrow, white with a dark edge, its tip there.
+ */
 @Composable
-private fun Pointer(cursor: ScreenCursor) {
+private fun Pointer(at: () -> Offset?, shown: () -> Rect) {
     Canvas(Modifier.fillMaxSize()) {
+        val at = at() ?: return@Canvas
+        val shown = shown()
         val k = 1.dp.toPx()
         val arrow = Path().apply {
             moveTo(0f, 0f); lineTo(0f, 16 * k); lineTo(4 * k, 12.5f * k); lineTo(7 * k, 18.5f * k)
             lineTo(9.5f * k, 17.5f * k); lineTo(6.5f * k, 11.5f * k); lineTo(11.5f * k, 11.5f * k); close()
         }
-        translate(cursor.x.toFloat() * size.width, cursor.y.toFloat() * size.height) {
+        translate(shown.left + at.x * shown.width, shown.top + at.y * shown.height) {
             drawPath(arrow, Color.White)
             drawPath(arrow, Color(0xFF1B1C1F), style = Stroke(1.2f * k))
         }
@@ -552,97 +716,215 @@ private fun centroid(fingers: List<PointerInputChange>): Offset =
 private fun spread(fingers: List<PointerInputChange>, around: Offset): Float =
     fingers.sumOf { (it.position - around).getDistance().toDouble() }.toFloat() / fingers.size
 
+/** A tap's end on the trackpad (uptime, ms; where): a finger down again soon after, and moved, drags. */
+private class LastTap(var at: Long = Long.MIN_VALUE / 2, var where: Offset = Offset.Zero)
+
 /**
- * The stage's gestures. Driving it: a tap is a click (down and up, the primary button), a press held a right click,
- * a drag a drag (down, moves, up), two fingers moving together a wheel. Either way two fingers spreading zoom the
- * frame here (it is not sent), and moving together pan it when zoomed and not driving; one finger pans it too then.
+ * The stage's gestures. Driving it as a trackpad (`session.pad`): one finger moves the pointer, a tap clicks where it
+ * points, tapped again and moved (or held still) it drags, two fingers tapped click the right button, two moving
+ * together scroll. Driving it directly: a tap is a click where it is (down and up, the primary button), a press held a
+ * right click, a drag a drag (down, moves, up), two fingers moving together a wheel. Either way two fingers spreading
+ * zoom the frame here (it is not sent); only looking, moving together pan it when zoomed, one finger too.
  */
 private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.gestures(
-    session: ScreenSession, zoom: ViewZoom, fit: () -> Rect, box: () -> Size, frame: () -> IntSize?,
+    session: ScreenSession, zoom: ViewZoom, pad: PadPointer, margin: Float, fit: () -> Rect, box: () -> Size, frame: () -> IntSize?,
+    buzz: (Int) -> Unit,
+) {
+    val tapped = LastTap()
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        if (session.driving && session.pad) padGesture(down, session, zoom, pad, margin, fit, box, frame, tapped, buzz)
+        else directGesture(down, session, zoom, fit, box, frame, buzz)
+    }
+}
+
+/** Two fingers on the stage: spreading (1, zooming here), or moving together (2), once they have gone past the slop. */
+private class TwoFingers(fingers: List<PointerInputChange>) {
+    var kind = 0
+    private val c0 = centroid(fingers)
+    private val s0 = spread(fingers, c0)
+    var from = c0; private set
+    var spreadWas = s0; private set
+
+    /** Where they are now: what they are doing told once they have moved enough, and then how far since the last. */
+    fun at(fingers: List<PointerInputChange>, slop: Float): Pair<Offset, Float> {
+        val c = centroid(fingers)
+        val s = spread(fingers, c)
+        if (kind == 0) {
+            val spreading = abs(s - s0)
+            val moving = (c - c0).getDistance()
+            if (spreading > slop || moving > slop) kind = if (spreading > moving) 1 else 2
+        }
+        return c to s
+    }
+
+    /** Gone on to `c`, `s`: once told what they are doing (until then measured from where they began, none of the way lost). */
+    fun went(c: Offset, s: Float) { if (kind != 0) { from = c; spreadWas = s } }
+}
+
+/** Two fingers moving together over `d` (stage px) as a wheel at `at` (0..1): the page under them moves with them. */
+private fun scrollBy(session: ScreenSession, d: Offset, at: Offset, shown: Rect, frame: IntSize?) {
+    if (frame == null || shown.width <= 0f) return
+    // The fingers' way in the frame's own pixels.
+    val k = frame.width / shown.width
+    session.input(wheel(at, -d.x * k, -d.y * k))
+}
+
+private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.padGesture(
+    down: PointerInputChange, session: ScreenSession, zoom: ViewZoom, pad: PadPointer, margin: Float,
+    fit: () -> Rect, box: () -> Size, frame: () -> IntSize?, tapped: LastTap, buzz: (Int) -> Unit,
 ) {
     val slop = viewConfiguration.touchSlop
     val hold = viewConfiguration.longPressTimeoutMillis
-    awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false)
-        val drives = session.driving
-        val start = down.position
-        fun at(p: Offset, clamp: Boolean) = frameAt(p, zoom.shown(fit()), clamp)
-        // 0: not yet told, 1: a drag sent, 2: panning here, 3: two fingers, 4: nothing more (a right click sent, or ignored).
-        var mode = 0
-        var last = start
-        var lastTime = down.uptimeMillis
-        // Two fingers: 0 not yet told, 1 zooming, 2 scrolling; where they were and how far apart.
-        var two = 0
-        var from = Offset.Zero
-        var c0 = Offset.Zero
-        var s0 = 0f
-        var s1 = 0f
-        while (true) {
-            val event = if (mode == 0) withTimeoutOrNull(max(1L, hold - (lastTime - down.uptimeMillis))) { awaitPointerEvent() } else awaitPointerEvent()
-            if (event == null) {
-                // Held still: a right click where it is.
-                if (drives) at(start, false)?.let { session.input(pointer("down", it, SECONDARY)); session.input(pointer("up", it, SECONDARY)) }
-                mode = 4
-                continue
-            }
-            event.changes.firstOrNull()?.let { lastTime = it.uptimeMillis }
-            val pressed = event.changes.filter { it.pressed }
-            if (pressed.isEmpty()) {
-                when (mode) {
-                    0 -> if (drives) at(start, false)?.let { session.input(pointer("down", it, PRIMARY)); session.input(pointer("up", it, PRIMARY)) }
-                    1 -> at(last, true)?.let { session.input(pointer("up", it, PRIMARY)) }
-                }
-                break
-            }
-            if (pressed.size >= 2 && mode != 3) {
-                // A second finger: what the first was doing ends where it is.
-                if (mode == 1) at(last, true)?.let { session.input(pointer("up", it, PRIMARY)) }
-                mode = 3
-                two = 0
-                c0 = centroid(pressed); s0 = spread(pressed, c0)
-                from = c0; s1 = s0
-                event.changes.forEach { it.consume() }
-                continue
-            }
-            val finger = pressed.firstOrNull { it.id == down.id } ?: pressed.first()
-            when (mode) {
-                0 -> if ((finger.position - start).getDistance() > slop) {
-                    mode = when {
-                        drives -> at(start, false)?.let { session.input(pointer("down", it, PRIMARY)); 1 } ?: 4
-                        zoom.zoomed -> 2
-                        else -> 4
-                    }
-                    if (mode == 1) at(finger.position, true)?.let { session.input(pointer("move", it, PRIMARY)) }
-                    last = finger.position
-                }
-                1 -> {
-                    at(finger.position, true)?.let { session.input(pointer("move", it, PRIMARY)) }
-                    last = finger.position
-                }
-                2 -> zoom.pan(finger.position - finger.previousPosition, fit(), box())
-                3 -> if (pressed.size >= 2) {
-                    val c = centroid(pressed)
-                    val s = spread(pressed, c)
-                    if (two == 0) {
-                        val spreading = abs(s - s0)
-                        val moving = (c - c0).getDistance()
-                        if (spreading > slop || moving > slop) two = if (spreading > moving) 1 else 2
-                    } else if (two == 1) {
-                        zoom.by(if (s1 > 0f) s / s1 else 1f, c, c - from, fit(), box())
-                    } else {
-                        val d = c - from
-                        val shown = zoom.shown(fit())
-                        val f = frame()
-                        if (drives && f != null && shown.width > 0f) {
-                            // The fingers' way in the frame's own pixels; the page under them moves with them.
-                            val k = f.width / shown.width
-                            at(c, true)?.let { session.input(wheel(it, -d.x * k, -d.y * k)) }
-                        } else if (zoom.zoomed) zoom.pan(d, fit(), box())
-                    }
-                    from = c; s1 = s
-                }
-            }
-            event.changes.forEach { if (it.positionChanged()) it.consume() }
+    // Down again soon after a tap, near it: a move (or holding still) drags from where it points.
+    val again = down.uptimeMillis - tapped.at < viewConfiguration.doubleTapTimeoutMillis && (down.position - tapped.where).getDistance() < slop * 4
+    // 0: not yet told, 1: moving the pointer, 2: dragging (the button down), 3: two fingers, 4: nothing more.
+    var mode = 0
+    var two: TwoFingers? = null
+    var twoAt = 0L
+    var twoMoved = false
+    var lastTime = down.uptimeMillis
+    fun press(kind: String, buttons: Int) = session.input(pointer(kind, pad.at, buttons))
+    while (true) {
+        val event = if (mode == 0) withTimeoutOrNull(max(1L, hold - (lastTime - down.uptimeMillis))) { awaitPointerEvent() } else awaitPointerEvent()
+        if (event == null) {
+            // Held still: the button down where it points, for what moves next to drag.
+            press("down", PRIMARY)
+            buzz(HapticFeedbackConstants.LONG_PRESS)
+            mode = 2
+            continue
         }
+        event.changes.firstOrNull()?.let { lastTime = it.uptimeMillis }
+        val pressed = event.changes.filter { it.pressed }
+        if (pressed.isEmpty()) {
+            // Let go on something over the frame that took it (a button of the files' panel): a tap not for the screen.
+            val taken = event.changes.any { it.isConsumed }
+            when (mode) {
+                0 -> if (!taken) {
+                    press("down", PRIMARY); press("up", PRIMARY)
+                    tapped.at = event.changes.first().uptimeMillis; tapped.where = down.position
+                }
+                2 -> press("up", PRIMARY)
+                3 -> if (!taken && !twoMoved && event.changes.first().uptimeMillis - twoAt < hold) {
+                    press("down", SECONDARY); press("up", SECONDARY)
+                    buzz(HapticFeedbackConstants.CONTEXT_CLICK)
+                }
+            }
+            break
+        }
+        if (pressed.size >= 2 && mode != 3) {
+            // A second finger: a drag under way ends where it points.
+            if (mode == 2) press("up", PRIMARY)
+            mode = 3
+            two = TwoFingers(pressed)
+            twoAt = event.changes.first().uptimeMillis
+            event.changes.forEach { it.consume() }
+            continue
+        }
+        val finger = pressed.firstOrNull { it.id == down.id } ?: pressed.first()
+        when (mode) {
+            0 -> if ((finger.position - down.position).getDistance() > slop) {
+                if (again) { press("down", PRIMARY); mode = 2 } else mode = 1
+            }
+            1, 2 -> {
+                val d = finger.position - finger.previousPosition
+                val dt = max(1L, finger.uptimeMillis - finger.previousUptimeMillis)
+                val shown = zoom.shown(fit())
+                if (shown.width > 0f && d != Offset.Zero) {
+                    val gain = padGain(d.getDistance() / density / dt)
+                    pad.by(d.x * gain / shown.width, d.y * gain / shown.height, finger.uptimeMillis)
+                    session.input(pointer("move", pad.at, if (mode == 2) PRIMARY else 0))
+                    if (zoom.zoomed) zoom.keep(pad.at, margin, fit(), box())
+                }
+            }
+            3 -> {
+                val t = two ?: return
+                if (pressed.size >= 2) {
+                    val (c, sp) = t.at(pressed, slop)
+                    if (t.kind != 0) twoMoved = true
+                    if (t.kind == 1) zoom.by(if (t.spreadWas > 0f) sp / t.spreadWas else 1f, c, c - t.from, fit(), box())
+                    else if (t.kind == 2) scrollBy(session, c - t.from, pad.at, zoom.shown(fit()), frame())
+                    t.went(c, sp)
+                }
+            }
+        }
+        event.changes.forEach { if (it.positionChanged()) it.consume() }
+    }
+}
+
+private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.directGesture(
+    down: PointerInputChange, session: ScreenSession, zoom: ViewZoom, fit: () -> Rect, box: () -> Size, frame: () -> IntSize?,
+    buzz: (Int) -> Unit,
+) {
+    val slop = viewConfiguration.touchSlop
+    val hold = viewConfiguration.longPressTimeoutMillis
+    val drives = session.driving
+    val start = down.position
+    fun at(p: Offset, clamp: Boolean) = frameAt(p, zoom.shown(fit()), clamp)
+    // 0: not yet told, 1: a drag sent, 2: panning here, 3: two fingers, 4: nothing more (a right click sent, or ignored).
+    var mode = 0
+    var last = start
+    var lastTime = down.uptimeMillis
+    var two: TwoFingers? = null
+    while (true) {
+        val event = if (mode == 0) withTimeoutOrNull(max(1L, hold - (lastTime - down.uptimeMillis))) { awaitPointerEvent() } else awaitPointerEvent()
+        if (event == null) {
+            // Held still: a right click where it is.
+            if (drives) at(start, false)?.let {
+                session.input(pointer("down", it, SECONDARY)); session.input(pointer("up", it, SECONDARY))
+                buzz(HapticFeedbackConstants.LONG_PRESS)
+            }
+            mode = 4
+            continue
+        }
+        event.changes.firstOrNull()?.let { lastTime = it.uptimeMillis }
+        val pressed = event.changes.filter { it.pressed }
+        if (pressed.isEmpty()) {
+            // Let go on something over the frame that took it (a button of the files' panel): a tap not for the screen.
+            val taken = event.changes.any { it.isConsumed }
+            when (mode) {
+                0 -> if (drives && !taken) at(start, false)?.let { session.input(pointer("down", it, PRIMARY)); session.input(pointer("up", it, PRIMARY)) }
+                1 -> at(last, true)?.let { session.input(pointer("up", it, PRIMARY)) }
+            }
+            break
+        }
+        if (pressed.size >= 2 && mode != 3) {
+            // A second finger: what the first was doing ends where it is.
+            if (mode == 1) at(last, true)?.let { session.input(pointer("up", it, PRIMARY)) }
+            mode = 3
+            two = TwoFingers(pressed)
+            event.changes.forEach { it.consume() }
+            continue
+        }
+        val finger = pressed.firstOrNull { it.id == down.id } ?: pressed.first()
+        when (mode) {
+            0 -> if ((finger.position - start).getDistance() > slop) {
+                mode = when {
+                    drives -> at(start, false)?.let { session.input(pointer("down", it, PRIMARY)); 1 } ?: 4
+                    zoom.zoomed -> 2
+                    else -> 4
+                }
+                if (mode == 1) at(finger.position, true)?.let { session.input(pointer("move", it, PRIMARY)) }
+                last = finger.position
+            }
+            1 -> {
+                at(finger.position, true)?.let { session.input(pointer("move", it, PRIMARY)) }
+                last = finger.position
+            }
+            2 -> zoom.pan(finger.position - finger.previousPosition, fit(), box())
+            3 -> {
+                val t = two ?: return
+                if (pressed.size >= 2) {
+                    val (c, sp) = t.at(pressed, slop)
+                    if (t.kind == 1) zoom.by(if (t.spreadWas > 0f) sp / t.spreadWas else 1f, c, c - t.from, fit(), box())
+                    else if (t.kind == 2) {
+                        if (drives) at(c, true)?.let { scrollBy(session, c - t.from, it, zoom.shown(fit()), frame()) }
+                        else if (zoom.zoomed) zoom.pan(c - t.from, fit(), box())
+                    }
+                    t.went(c, sp)
+                }
+            }
+        }
+        event.changes.forEach { if (it.positionChanged()) it.consume() }
     }
 }

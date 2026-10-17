@@ -161,6 +161,16 @@ changes; it opens the view again when the link drops or 只看/控制 changes. A
 `GET /screens` 404: its list is empty and says it needs an update, and a link to one of its screens says so without
 opening a stream (such a station would take the stream for a request and wait for a body).
 
+On a phone (Android, the phone web) a finger drives a screen as a trackpad unless the device keeps `direct`
+(`prefs.screenTouch`, switched on the viewer's foot): one finger moves the pointer (relative, faster strokes further:
+`padGain`), a tap clicks where it points, tapped again and moved (or held) it drags, two fingers tapped right-click, two
+moving together scroll. The page draws its own pointer while the finger moves it and takes the station's `cursor` again
+once the finger has been still 600 ms. Directly, a tap clicks where it is, a press held right-clicks, a drag drags. Either
+way two fingers spreading zoom the picture on the phone only (never sent); zoomed, the trackpad's pointer is kept in sight.
+A keys row under the picture while driving sends what a phone's keyboard lacks (Esc, Tab, the arrows) and holds ⌘ ⌃ ⌥ ⇧
+for the next key, typed or tapped (⌘ then c: `{t:"key", code:"KeyC", mods:4}`). On Android a stage made shorter by the
+keyboard keeps the picture as large as it was, the pointer in sight (`ViewZoom.refit`), rather than fitting it smaller.
+
 ### Asking a person to take over
 
 The agents' `screen` tool lists the station's screens and gives a link to one: `<cloud>/w/<workspace>/s/<station>/screen/<id>`.

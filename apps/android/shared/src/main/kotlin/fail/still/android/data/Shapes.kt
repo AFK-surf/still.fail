@@ -3756,6 +3756,9 @@ data class PrefsView (
 	val driveViews: Map<String, String>? = null,
 	/// How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path.
 	val dropAs: String? = null,
+	/// How a finger drives a station's screen on a phone: `direct` (a tap clicks where it is), or (none) as a
+	/// trackpad (the finger moves the pointer, a tap clicks where it points).
+	val screenTouch: String? = null,
 	/// A Slack app made for a new connect, to go on with, by station (the Android app's).
 	val resume: Map<String, String>? = null,
 	/// Versions dismissed on this device, by workspace/station.

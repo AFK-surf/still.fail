@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { core } from "../core/react.ts";
 import type { ScreenViewState } from "../core/shapes.ts";
-import { ChevronLeft, Keyboard, Paste, Upload } from "@stillfail/ui/icons.tsx";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, Keyboard, Paste, Trackpad, Upload } from "@stillfail/ui/icons.tsx";
 import { useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { ViewerBar, ViewerTool, VIEWER_BAR_REACH } from "@stillfail/ui/viewer/ViewerBar.tsx";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
@@ -22,6 +22,8 @@ import { Button, PanelButton, Segmented, Tip, WaitPill } from "../ui.tsx";
 import { t } from "../i18n.ts";
 import { ScreenFrames, decodable, viewSize, type FrameConfig, type FrameHead } from "./frames.ts";
 import { hearInput, type ScreenInput } from "./input.ts";
+import { PAD_SETTLE_MS, PadPointer, Zoom, fitIn } from "./zoom.ts";
+import { setPrefs, usePrefs } from "../prefs.ts";
 import { CopiedNote, DropVeil, SendsPanel, clipOf, pasted, putClip, useSends, type Clip } from "./Transfer.tsx";
 import * as css from "./ScreenViewer.css.ts";
 
@@ -60,6 +62,17 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
   const size = useRef({ width: 0, height: 0 });
   /** A mouse over the picture while driving: the station's pointer is not drawn then (the mouse's own takes its shape). */
   const hovering = useRef(false);
+  /** A phone's zoom of the picture, and the pointer its finger moves as a trackpad (zoom.ts). */
+  const zoom = useRef(new Zoom());
+  const padPointer = useRef(new PadPointer());
+  /** A finger drives it as a trackpad (unless this device keeps `direct`), on a phone. */
+  const pad = usePrefs((p) => p.screenTouch) !== "direct" && phone;
+  const padRef = useRef(pad);
+  padRef.current = pad;
+  /** The modifiers held on the keys row (bit 0 Alt, 1 Ctrl, 2 Meta, 3 Shift), for the next key. */
+  const [held, setHeld] = useState(0);
+  const heldRef = useRef(0);
+  heldRef.current = held;
 
   const [attempt, setAttempt] = useState(0);
   const [shown, setShown] = useState<Shown | null>(null);
@@ -91,18 +104,22 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
   clipTypesRef.current = clipTypes;
   const drop = driving ? shown?.drop : undefined;
 
-  /** The picture fitted in the stage, whole, in the middle (letterboxed). */
+  /** The stage's size, and the picture fitted in it, whole, in the middle (letterboxed). */
+  const room = useCallback(() => ({ width: stage.current?.clientWidth ?? 0, height: stage.current?.clientHeight ?? 0 }), []);
+  const fit = useCallback(() => fitIn(room(), size.current.width, size.current.height), [room]);
+  /** The picture where it is drawn: fitted, and zoomed on a phone. */
   const place = useCallback(() => {
-    const s = stage.current, p = picture.current;
-    const { width, height } = size.current;
-    if (!s || !p || !width || !height) return;
-    const scale = Math.min(s.clientWidth / width, s.clientHeight / height);
-    const w = Math.round(width * scale), h = Math.round(height * scale);
-    p.style.width = `${w}px`;
-    p.style.height = `${h}px`;
-    p.style.left = `${Math.round((s.clientWidth - w) / 2)}px`;
-    p.style.top = `${Math.round((s.clientHeight - h) / 2)}px`;
-  }, []);
+    const p = picture.current;
+    if (!p || !size.current.width || !size.current.height) return;
+    const f = fit();
+    // Kept within the stage as it resizes.
+    zoom.current.pan({ x: 0, y: 0 }, f, room());
+    const shown = zoom.current.shown(f);
+    p.style.width = `${Math.round(shown.width)}px`;
+    p.style.height = `${Math.round(shown.height)}px`;
+    p.style.left = `${Math.round(shown.left)}px`;
+    p.style.top = `${Math.round(shown.top)}px`;
+  }, [fit, room]);
   useLayoutEffect(() => {
     const s = stage.current;
     if (!s) return;
@@ -114,7 +131,9 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
   /** The station's pointer where it says, and the mouse's own in its shape while it drives here. */
   const drawPointer = useCallback(() => {
     const el = pointer.current;
-    const at = latest.current?.cursor;
+    const station = latest.current?.cursor;
+    // Driven as a trackpad: where the finger has moved it (ahead of the station's word), in the station's shape.
+    const at = padRef.current && drivingRef.current && station ? { ...station, x: padPointer.current.x, y: padPointer.current.y } : padRef.current && drivingRef.current ? { x: padPointer.current.x, y: padPointer.current.y, shape: "" } : station;
     if (el) {
       el.hidden = !at || (hovering.current && drivingRef.current);
       if (at) { el.style.left = `${at.x * 100}%`; el.style.top = `${at.y * 100}%`; }
@@ -135,6 +154,8 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
       ack: (ts) => tell("screen.ack", { view: name, ts }),
       keyframe: () => tell("screen.keyframe", { view: name }),
       drawn: (width, height) => {
+        // Another size of frame: fitted again.
+        if (width !== size.current.width || height !== size.current.height) zoom.current.reset();
         size.current = { width, height };
         place();
         setDrawn(true);
@@ -144,8 +165,13 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
     const copiedThere = (clip: Clip) => {
       putClip(clip).then(() => { if (open) { setCopied(null); toastRef.current(t("web-pages.screen.copied")); } }, () => { if (open) setCopied(clip); });
     };
+    const settle = { timer: 0 };
     const took = (state: ScreenViewState) => {
       latest.current = state;
+      // The trackpad's pointer where the station says, once the finger has let it be (and again once its echo has come).
+      padPointer.current.follow(state.cursor, performance.now());
+      clearTimeout(settle.timer);
+      settle.timer = window.setTimeout(() => { padPointer.current.follow(latest.current?.cursor, performance.now()); drawPointer(); }, PAD_SETTLE_MS + 100);
       drawPointer();
       const { cursor: _, ...rest } = state;
       setShown((was) => (was && JSON.stringify(was) === JSON.stringify(rest) ? was : rest));
@@ -169,6 +195,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
     });
     return () => {
       open = false;
+      clearTimeout(settle.timer);
       abort.abort();
       frames.close();
     };
@@ -192,8 +219,13 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
         void pasted(data, types).then((clip) => { if (clip) setClipboard(clip); });
         return true;
       },
+      ...(phone ? { fingers: {
+        pad: () => padRef.current, pointer: padPointer.current, zoom: zoom.current, fit, room,
+        moved: () => { place(); drawPointer(); },
+      } } : {}),
+      held: { take: () => { const m = heldRef.current; if (m) { heldRef.current = 0; setHeld(0); } return m; } },
     });
-  }, [drawPointer]);
+  }, [drawPointer, phone, fit, room, place]);
   // Only looking (or no longer live): the keys let go, the keyboard down.
   useEffect(() => {
     drawPointer();
@@ -292,7 +324,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
   );
 
   return (
-    <div className={css.viewer} data-phone={phone || undefined} data-phase={phase} onPointerMove={onPointerMove} onPointerDown={onPointerMove}
+    <div className={css.viewer} data-phone={phone || undefined} data-keys={(phone && !over && driving) || undefined} data-phase={phase} onPointerMove={onPointerMove} onPointerDown={onPointerMove}
       onDragOver={(e) => { if (drop && e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDragging(true); } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
       onDrop={(e) => { if (!drop || !e.dataTransfer.files.length) return; e.preventDefault(); setDragging(false); sendFiles([...e.dataTransfer.files]); }}>
@@ -332,9 +364,39 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
             <Tip label={backLabel}><button type="button" className={css.back} aria-label={backLabel} onClick={onBack}><ChevronLeft size={20} /></button></Tip>
             <span className={css.headText}><b>{title}</b>{line && <small>{line}</small>}</span>
           </header>
+          {!over && driving && (
+            <div className={css.keysRow} role="toolbar" aria-label={t("web-pages.screen.keysRow")}>
+              {ROW_KEYS.map((k) => {
+                const on = k.mod !== undefined && (held & k.mod) !== 0;
+                const name = k.name ? t(k.name) : k.label;
+                return (
+                  <button key={k.code ?? k.name} type="button" className={css.rowKey} aria-label={name} aria-pressed={k.mod !== undefined ? on : undefined}
+                    // The keyboard stays up: the field keeps the focus.
+                    onPointerDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      if (k.mod !== undefined) { setHeld((m) => m ^ k.mod!); return; }
+                      const m = heldRef.current;
+                      if (m) { heldRef.current = 0; setHeld(0); }
+                      tell("screen.input", { view: view.current, input: { t: "key", kind: "down", key: k.key, code: k.code, mods: m } });
+                      tell("screen.input", { view: view.current, input: { t: "key", kind: "up", key: k.key, code: k.code, mods: m } });
+                    }}>
+                    {k.icon ?? k.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {!over && (
             <div className={css.foot}>
               {takeOver ? <>{others}{takeOverButton}</> : modes}
+              {driving && (
+                <Tip label={t("web-pages.screen.trackpad")}>
+                  <button type="button" className={css.keyboard} aria-label={t("web-pages.screen.trackpad")} aria-pressed={pad}
+                    onClick={() => { setPrefs({ screenTouch: pad ? "direct" : null }); toast(t(pad ? "web-pages.screen.padOff" : "web-pages.screen.padOn")); }}>
+                    <Trackpad size={18} />
+                  </button>
+                </Tip>
+              )}
               <Tip label={t("web-pages.screen.keyboard")}>
                 <button type="button" className={css.keyboard} aria-label={t("web-pages.screen.keyboard")} aria-pressed={typing} disabled={!driving}
                   // The keyboard comes up for the field only from within the tap itself.
@@ -363,6 +425,20 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
     </div>
   );
 }
+
+/** The keys row's keys (a phone's keyboard has not these): what each sends, or the modifier it holds for the next key. */
+const ROW_KEYS: { label: string; name?: string; key?: string; code?: string; mod?: number; icon?: React.ReactNode }[] = [
+  { label: "Esc", key: "Escape", code: "Escape" },
+  { label: "Tab", key: "Tab", code: "Tab" },
+  { label: "⌘", name: "web-pages.screen.key.command", mod: 4 },
+  { label: "⌃", name: "web-pages.screen.key.control", mod: 2 },
+  { label: "⌥", name: "web-pages.screen.key.option", mod: 1 },
+  { label: "⇧", name: "web-pages.screen.key.shift", mod: 8 },
+  { label: "", name: "web-pages.screen.key.left", key: "ArrowLeft", code: "ArrowLeft", icon: <ArrowLeft size={16} /> },
+  { label: "", name: "web-pages.screen.key.up", key: "ArrowUp", code: "ArrowUp", icon: <ArrowUp size={16} /> },
+  { label: "", name: "web-pages.screen.key.down", key: "ArrowDown", code: "ArrowDown", icon: <ArrowDown size={16} /> },
+  { label: "", name: "web-pages.screen.key.right", key: "ArrowRight", code: "ArrowRight", icon: <ArrowRight size={16} /> },
+];
 
 /** The station's pointer: an arrow, its tip at the point. */
 function Arrow() {

@@ -469,6 +469,10 @@ export function Ticket(props: IconProps) {
   return <Svg {...props}><path d="M5.5 5H18.5Q20.5 5 20.5 7V9.5A2.5 2.5 0 0 0 20.5 14.5V17Q20.5 19 18.5 19H5.5Q3.5 19 3.5 17V14.5A2.5 2.5 0 0 0 3.5 9.5V7Q3.5 5 5.5 5Z M14 8.5V15.5" /></Svg>;
 }
 
+export function Trackpad(props: IconProps) {
+  return <Svg {...props}><rect x="3.5" y="4.5" width="17" height="15" rx="3.5" /><path d="M3.5 15H20.5 M12 15V19.5" /></Svg>;
+}
+
 export function Trash(props: IconProps) {
   return <Svg {...props}><path d="M4 7H20 M9 6.5V3.5H15V6.5 M6 7L6.5 17Q6.5 20.5 10 20.5H14Q17.5 20.5 17.5 17L18 7 M10 11V16 M14 11V16" /></Svg>;
 }
@@ -641,6 +645,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "think": Think,
   "thread": Thread,
   "ticket": Ticket,
+  "trackpad": Trackpad,
   "trash": Trash,
   "unplug": Unplug,
   "upload": Upload,

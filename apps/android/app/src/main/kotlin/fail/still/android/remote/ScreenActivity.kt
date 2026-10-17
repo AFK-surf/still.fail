@@ -87,12 +87,14 @@ class ScreenActivity : ComponentActivity() {
             appearance = prefs.appearance ?: "system"
             fail.still.android.ui.Motion.chosen = prefs.motion
             val made = ScreenSession(core, station, screen, lifecycleScope, limit(this@ScreenActivity))
+            made.pad = prefs.screenTouch != "direct"
             session = made
             if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) made.open()
             // The theme and the language, followed as they change.
             core.topic(Topics.prefs).collect { state ->
                 val value = state.value?.takeIf { it !is JsonNull }?.let { runCatching { decode(PrefsView.serializer(), it) }.getOrNull() } ?: return@collect
                 appearance = value.appearance ?: "system"
+                made.pad = value.screenTouch != "direct"
                 fail.still.android.ui.Motion.chosen = value.motion
                 I18n.follow(value.lang)
             }

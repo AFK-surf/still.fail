@@ -9,6 +9,9 @@ import android.view.View
 import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import kotlinx.serialization.json.JsonObject
@@ -56,6 +59,48 @@ internal fun key(kind: String, key: String, code: String, mods: Int): JsonObject
 }
 
 internal fun text(text: String): JsonObject = buildJsonObject { put("t", "text"); put("text", text) }
+
+/** A key pressed and let go. */
+internal fun stroke(send: (JsonObject) -> Unit, k: String, code: String, mods: Int) {
+    send(key("down", k, code, mods))
+    send(key("up", k, code, mods))
+}
+
+/** The modifier bits as the station takes them (mods below). */
+internal const val ALT = 1
+internal const val CTRL = 2
+internal const val META = 4
+internal const val SHIFT = 8
+
+/**
+ * The modifiers tapped on the keys row (⌘ ⌃ ⌥ ⇧, which a phone's keyboard has not): held for the next key or character,
+ * then let go, as a phone's own shift is.
+ */
+internal class HeldKeys {
+    var mods by mutableIntStateOf(0); private set
+    fun toggle(bit: Int) { mods = mods xor bit }
+    /** What is held, for a key now: let go of after it. */
+    fun take(): Int = mods.also { if (it != 0) mods = 0 }
+}
+
+/** The DOM's `code` of a character typed with a modifier held (⌘ then c: KeyC); "" for one with no key of its own. */
+internal fun codeOf(c: Char): String = when (c.lowercaseChar()) {
+    in 'a'..'z' -> "Key${c.uppercaseChar()}"
+    in '0'..'9' -> "Digit$c"
+    ' ' -> "Space"
+    '-' -> "Minus"
+    '=' -> "Equal"
+    '[' -> "BracketLeft"
+    ']' -> "BracketRight"
+    '\\' -> "Backslash"
+    ';' -> "Semicolon"
+    '\'' -> "Quote"
+    ',' -> "Comma"
+    '.' -> "Period"
+    '/' -> "Slash"
+    '`' -> "Backquote"
+    else -> ""
+}
 
 /** Android's modifier keys as the station takes them: bit 0 Alt, 1 Ctrl, 2 Meta, 3 Shift. */
 internal fun mods(meta: Int): Int =
@@ -107,9 +152,10 @@ internal fun domKey(keyCode: Int, char: Int, meta: Int): Pair<String, String>? {
 /**
  * An unseen view that takes the keyboard (the system's IME, or one plugged in) for the screen: what is typed and
  * committed goes as text, Enter / Backspace / arrows and shortcuts as keys. It keeps nothing itself: there is no text
- * here to edit, the station's is.
+ * here to edit, the station's is. With a modifier held on the keys row (`held`), what is typed next goes as keys with
+ * it (⌘ then c: ⌘C).
  */
-internal class KeyCatcher(context: Context, private val send: (JsonObject) -> Unit) : View(context) {
+internal class KeyCatcher(context: Context, private val held: HeldKeys, private val send: (JsonObject) -> Unit) : View(context) {
     init {
         isFocusable = true
         isFocusableInTouchMode = true
@@ -123,33 +169,41 @@ internal class KeyCatcher(context: Context, private val send: (JsonObject) -> Un
         return Connection()
     }
 
-    /** Types `s`: lines as text, Enter between them. */
+    /** Types `s`: lines as text, Enter between them; with a modifier held, each character as its key with it. */
     private fun type(s: CharSequence) {
+        val mods = held.take()
+        if (mods != 0) {
+            s.forEach { c -> if (c == '\n') tap("Enter", "Enter", mods) else tap(c.toString(), codeOf(c), mods) }
+            return
+        }
         s.toString().split('\n').forEachIndexed { i, line ->
             if (i > 0) tap("Enter", "Enter", 0)
             if (line.isNotEmpty()) send(text(line))
         }
     }
 
-    private fun tap(k: String, code: String, mods: Int) {
-        send(key("down", k, code, mods))
-        send(key("up", k, code, mods))
-    }
+    private fun tap(k: String, code: String, mods: Int) = stroke(send, k, code, mods)
+
+    /** The modifiers held from the keys row as each key went down, for it to go up with them too. */
+    private val downWith = HashMap<Int, Int>()
 
     /** A key event (from the IME or a keyboard): named keys and shortcuts as keys, characters as text. */
     private fun press(event: KeyEvent): Boolean {
         val kind = when (event.action) { KeyEvent.ACTION_DOWN -> "down"; KeyEvent.ACTION_UP -> "up"; else -> return false }
         val named = domKey(event.keyCode, event.unicodeChar, event.metaState)
+        if (named == null && event.unicodeChar <= 0) return false
+        val extra = if (kind == "down") held.take().also { downWith[event.keyCode] = it } else downWith.remove(event.keyCode) ?: 0
         if (named != null) {
-            send(key(kind, named.first, named.second, mods(event.metaState)))
+            send(key(kind, named.first, named.second, mods(event.metaState) or extra))
             return true
         }
         val char = event.unicodeChar
         if (char > 0) {
-            if (kind == "down") send(text(String(Character.toChars(char))))
-            return true
+            val s = String(Character.toChars(char))
+            if (extra != 0) send(key(kind, s, s.singleOrNull()?.let(::codeOf) ?: "", mods(event.metaState) or extra))
+            else if (kind == "down") send(text(s))
         }
-        return false
+        return true
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean =
@@ -184,15 +238,16 @@ internal class KeyCatcher(context: Context, private val send: (JsonObject) -> Un
                 composing = composing.dropLast(beforeLength)
                 return true
             }
-            repeat(beforeLength) { tap("Backspace", "Backspace", 0) }
-            repeat(afterLength) { tap("Delete", "Delete", 0) }
+            val mods = held.take()
+            repeat(beforeLength) { tap("Backspace", "Backspace", mods) }
+            repeat(afterLength) { tap("Delete", "Delete", mods) }
             return true
         }
 
         override fun sendKeyEvent(event: KeyEvent): Boolean = press(event)
 
         override fun performEditorAction(actionCode: Int): Boolean {
-            tap("Enter", "Enter", 0)
+            tap("Enter", "Enter", held.take())
             return true
         }
     }

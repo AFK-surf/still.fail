@@ -34,6 +34,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.unit.IntSize
 import fail.still.android.data.ScreenAccess
@@ -198,7 +199,9 @@ class ScreenViewerTest {
         v.shot("screen-live")
         rule.onNodeWithText("控制 · 李雷也在看").assertIsDisplayed()
 
-        // A tap: down and up with the primary button, where it was in the frame.
+        // Driven directly (not as a trackpad): a tap is down and up with the primary button, where it was in the frame.
+        rule.runOnUiThread { s.pad = false }
+        v.h.settle()
         rule.onNodeWithTag(STAGE).performTouchInput { click(v.at(0.25f, 0.75f)) }
         rule.waitUntil(5_000) { v.inputs().size >= 2 }
         val (down, up) = v.inputs().take(2)
@@ -234,6 +237,97 @@ class ScreenViewerTest {
         v.shot("screen-live-landscape")
         assertEquals(1, v.told(VIEW).size)
         rule.runOnUiThread { rule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
+    }
+
+    /**
+     * Driven as a trackpad (as it is unless chosen otherwise): a finger moves the pointer (no button held) by how far it
+     * went, a tap anywhere clicks where the pointer is, two fingers tapped click the right button; the keys row sends
+     * the keys a phone's keyboard has not, a modifier tapped held for the next key alone.
+     */
+    @Test fun aTrackpadMovesThePointerAndClicksWhereItPoints() {
+        val v = Viewer()
+        val s = v.open()
+        v.state("live", others = emptyList())
+        v.config()
+        v.frame(1000)
+        rule.waitUntil(5_000) { v.acked(1000) }
+        assertTrue(s.pad)
+
+        // A tap far from the pointer: a click where it points (the middle, before anything moved it).
+        rule.onNodeWithTag(STAGE).performTouchInput { click(v.at(0.1f, 0.1f)) }
+        rule.waitUntil(5_000) { v.inputs().size >= 2 }
+        val (down, up) = v.inputs().take(2)
+        assertEquals(listOf("down", 1), listOf(down["kind"]!!.jsonPrimitive.contentOrNull, down["buttons"]!!.jsonPrimitive.int))
+        assertEquals("up", up["kind"]!!.jsonPrimitive.contentOrNull)
+        close(0.5f, down["x"]!!.jsonPrimitive.double); close(0.5f, down["y"]!!.jsonPrimitive.double)
+
+        // A finger moved right, slowly: the pointer goes right, no button held, and stays in the frame.
+        v.h.settle(); rule.mainClock.advanceTimeBy(500)
+        rule.onNodeWithTag(STAGE).performTouchInput { swipe(v.at(0.2f, 0.5f), v.at(0.4f, 0.5f), 600) }
+        v.h.settle()
+        val moves = v.inputs().drop(2)
+        assertTrue(moves.isNotEmpty() && moves.all { it["kind"]!!.jsonPrimitive.contentOrNull == "move" && it["buttons"]!!.jsonPrimitive.int == 0 })
+        val x = moves.last()["x"]!!.jsonPrimitive.double
+        assertTrue("moved right: $x", x > 0.55 && x <= 1.0)
+        close(0.5f, moves.last()["y"]!!.jsonPrimitive.double)
+        v.shot("screen-trackpad")
+
+        // A tap: a click where it points now.
+        rule.mainClock.advanceTimeBy(500)
+        rule.onNodeWithTag(STAGE).performTouchInput { click(v.at(0.9f, 0.9f)) }
+        rule.waitUntil(5_000) { v.inputs().drop(2 + moves.size).size >= 2 }
+        val click = v.inputs().drop(2 + moves.size).first()
+        assertEquals("down", click["kind"]!!.jsonPrimitive.contentOrNull)
+        close(x.toFloat(), click["x"]!!.jsonPrimitive.double)
+
+        // Two fingers tapped: a right click there.
+        val before = v.inputs().size
+        rule.mainClock.advanceTimeBy(500)
+        rule.onNodeWithTag(STAGE).performTouchInput { down(0, v.at(0.3f, 0.5f)); down(1, v.at(0.6f, 0.5f)); advanceEventTime(80); up(0); up(1) }
+        rule.waitUntil(5_000) { v.inputs().size >= before + 2 }
+        val right = v.inputs().drop(before)
+        assertEquals(listOf("down", 2), listOf(right[0]["kind"]!!.jsonPrimitive.contentOrNull, right[0]["buttons"]!!.jsonPrimitive.int))
+        close(x.toFloat(), right[0]["x"]!!.jsonPrimitive.double)
+
+        // ⌘ held, then Tab: ⌘Tab; Tab again goes alone.
+        val keysFrom = v.inputs().size
+        rule.onNodeWithContentDescription("Command").performClick()
+        v.h.settle()
+        v.shot("screen-trackpad-command")
+        rule.onNodeWithContentDescription("Tab").performClick()
+        rule.onNodeWithContentDescription("Tab").performClick()
+        rule.waitUntil(5_000) { v.inputs().size >= keysFrom + 4 }
+        val keys = v.inputs().drop(keysFrom)
+        assertEquals(listOf("key", "down", "Tab", 4), listOf(keys[0]["t"]!!.jsonPrimitive.contentOrNull, keys[0]["kind"]!!.jsonPrimitive.contentOrNull, keys[0]["code"]!!.jsonPrimitive.contentOrNull, keys[0]["mods"]!!.jsonPrimitive.int))
+        assertEquals(4, keys[1]["mods"]!!.jsonPrimitive.int)
+        assertEquals(0, keys[2]["mods"]!!.jsonPrimitive.int)
+
+        // Chosen direct: kept on this device.
+        rule.onNodeWithContentDescription("触控板").performClick()
+        rule.waitUntil(5_000) { v.told("prefs.set").isNotEmpty() }
+        assertEquals("direct", v.told("prefs.set").last()["screenTouch"]!!.jsonPrimitive.contentOrNull)
+        assertTrue(!s.pad)
+    }
+
+    /**
+     * The stage made shorter (the keyboard up, sideways): the frame drawn as large as it was, not fitted smaller, the
+     * pointer still in sight; made tall again, fitted as before.
+     */
+    @Test fun theKeyboardUpKeepsTheFrameAsLarge() {
+        val frame = Size(1280f, 720f)
+        val zoom = fail.still.android.remote.ViewZoom()
+        val tall = Size(800f, 360f)
+        val short = Size(800f, 150f)
+        val before = fitIn(tall, frame)
+        val after = fitIn(short, frame)
+        zoom.refit(before, after, short, Offset(0.5f, 0.9f), 40f)
+        val shown = zoom.shown(after)
+        assertTrue("as wide as it was: ${shown.width}", abs(shown.width - before.width) < 1f)
+        val y = shown.top + 0.9f * shown.height
+        assertTrue("the pointer in sight: $y", y in 0f..short.height)
+        zoom.refit(after, before, tall, Offset(0.5f, 0.9f), 40f)
+        assertTrue(!zoom.zoomed)
+        assertEquals(before, zoom.shown(before))
     }
 
     /**
