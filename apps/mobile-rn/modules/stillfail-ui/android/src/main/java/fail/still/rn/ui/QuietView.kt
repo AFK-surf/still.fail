@@ -30,6 +30,9 @@ class QuietView(context: Context, appContext: AppContext) : ExpoView(context, ap
     }
 
     override fun notifySubtreeAccessibilityStateChanged(child: View, source: View, changeType: Int) {}
+
+    // React Native places what it holds (an ExpoView is a LinearLayout, which would line them up itself: SmoothView.kt).
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {}
 }
 
 class StillfailQuietModule : Module() {

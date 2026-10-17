@@ -46,6 +46,11 @@ class SmoothView(context: Context, appContext: AppContext) : ExpoView(context, a
         invalidate()
     }
 
+    // An ExpoView is a LinearLayout: left to its own layout (a child's requestLayout, a row added), it would line its
+    // children up side by side, over where React Native placed them (the second row of a card off to the right, unseen).
+    // React Native places them; as its own views, this does nothing.
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {}
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         reshape()
