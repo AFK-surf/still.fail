@@ -250,7 +250,11 @@ export class Choose implements Owner {
     const all = overview !== null ? arr(overview.profiles) : [];
     const profiles = overview !== null && joined ? arr(servingIn(overview, scope).profiles) : all;
     view.waiting = overview === null;
-    view.blocked = overview !== null && profiles.length === 0 ? (joined && all.length > 0 ? "shared" : "profile") : overview !== null && options.length === 0 ? "models" : null;
+    // No profile of its own, but another station of the workspace has models it could borrow: its model control
+    // offers them (borrowed before the chat is made) rather than only adding a profile.
+    const lends = overview !== null && profiles.length === 0 && !joined
+      && borrowable(this.#env.store.get({ topic: "stations", scope }), typeof station.station === "string" ? station.station : "", [], null, this.#env.now()).length > 0;
+    view.blocked = overview !== null && profiles.length === 0 ? (joined && all.length > 0 ? "shared" : lends ? null : "profile") : overview !== null && options.length === 0 ? "models" : null;
     // This workspace's name: as it is held, else as an account's `/v1/me` lists it.
     const here = get(this.#env.data.shared({ topic: "workspace", workspace: scope }), "name")
       ?? this.#env.data.mes().flatMap(([, me]) => arr(get(me, "workspaces"))).find((w) => get(w, "id") === scope)?.name;
@@ -258,6 +262,7 @@ export class Choose implements Owner {
       ? t("core-logic.choose.problem.not_shared", { name, home: station.home, workspace: typeof here === "string" ? here : "" })
       : t("core-logic.choose.problem.not_shared_elsewhere", { name, workspace: typeof here === "string" ? here : "" });
     view.problem = overview === null ? t("core-logic.choose.problem.loading", { name })
+      : lends ? t("core-logic.choose.problem.borrow_only", { name })
       : view.blocked === "shared" ? notShared()
       : profiles.length > 0 && options.length === 0 ? t("core-logic.choose.problem.no_models") : null;
     if (r.entry !== null && isObject(r.entry.spent)) {

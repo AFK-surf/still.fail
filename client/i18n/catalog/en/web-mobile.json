@@ -672,5 +672,7 @@
   "web-mobile.files.wholeFolder": "This whole folder",
   "web-mobile.files.add": "Add",
   "web-mobile.files.addCount": "Add {n}",
-  "web-mobile.history.jobMessage": "Message from job {name}"
+  "web-mobile.history.jobMessage": "Message from job {name}",
+  "web-mobile.borrow.title": "Borrow account",
+  "web-mobile.borrow.done": "Borrowed; usable here once it reaches this station"
 }

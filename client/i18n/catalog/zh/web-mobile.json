@@ -639,5 +639,7 @@
   "web-mobile.files.wholeFolder": "整个文件夹",
   "web-mobile.files.add": "添加",
   "web-mobile.files.addCount": "添加 {n} 个",
-  "web-mobile.history.jobMessage": "收到来自任务 {name} 的消息"
+  "web-mobile.history.jobMessage": "收到来自任务 {name} 的消息",
+  "web-mobile.borrow.title": "借用账号",
+  "web-mobile.borrow.done": "已借用，同步到此 station 后即可使用"
 }

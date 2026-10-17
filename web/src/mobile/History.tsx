@@ -11,6 +11,8 @@ import { stationApi, useAgentCard, useChat, useHistory, useHistoryDetail, useHis
 import { Agent, ArrowRight, Check, ChevronDown, Command, Copy, ChevronRight, Wait, Received, Send, Stop, Unplug } from "@stillfail/ui/icons.tsx";
 import { optionOf } from "../ModelTriple.tsx";
 import { usePick } from "../pick.ts";
+import { FromMark, openBorrow } from "./Borrow.tsx";
+import * as borrowCss from "./Borrow.css.ts";
 import { MdView } from "../Prose.tsx";
 import type { Md } from "../core/md.ts";
 import { useLoadNear, Waited } from "../Chat.tsx";
@@ -517,10 +519,17 @@ export function RunSettingsScreen() {
         </SettingRow>
         <div style={{ height: 16 }} />
       </div>
-      <button type="button" className={historyCss.mRunGo} data-changed={v.changed || undefined} disabled={busy} onClick={save}>
-        {busy && <Spinner className={partsCss.mSpinOnColor} />}
-        {v.saveText}
-      </button>
+      {/* The model picked is another station's: said so, and the button borrows it (asked again) rather than saving. */}
+      {v.borrow && <p className={borrowCss.mBorrowNote}>{v.borrow.allowed ? v.borrow.note : v.borrow.why ?? v.borrow.note}</p>}
+      {v.borrow
+        ? <button type="button" className={historyCss.mRunGo} data-changed disabled={!v.borrow.allowed || pick.borrowing} onClick={() => openBorrow(app, station.address, `session:${key}`)}>
+          {pick.borrowing && <Spinner className={partsCss.mSpinOnColor} />}
+          {v.borrow.action}
+        </button>
+        : <button type="button" className={historyCss.mRunGo} data-changed={v.changed || undefined} disabled={busy} onClick={save}>
+          {busy && <Spinner className={partsCss.mSpinOnColor} />}
+          {v.saveText}
+        </button>}
     </div>
   );
 }
@@ -553,7 +562,9 @@ export function ModelList({ models, runtime, picked, onPick }: { models: ModelOp
       {names.map((who) => (
         <div key={who}>
           {names.length > 1 && <GroupLabel>{who}</GroupLabel>}
-          {groups.get(who)!.map((m) => <PickLine key={m.model} label={m.name} checked={m === on} onClick={() => onPick(m.model)} leading={<MakerIcon maker={m.maker} runtime={runtime} size={18} />} />)}
+          {/* Another station's: its station after its name, faint till borrowed. */}
+          {groups.get(who)!.map((m) => <PickLine key={m.model} label={m.name} checked={m === on} onClick={() => onPick(m.model)} leading={<MakerIcon maker={m.maker} runtime={runtime} size={18} />}
+            faded={m.availability === "borrowable" && m !== on} trailing={<FromMark option={m} picked={m === on} />} />)}
         </div>
       ))}
       {shown.length === 0 && <p className={partsCss.mMuted}>{t("web-mobile.history.noMatch")}</p>}
@@ -578,11 +589,11 @@ export function AccountList({ accounts, runtime, picked, onPick }: { accounts: R
 }
 
 /** A choice in a list: what it is, a note under it, and a check when it is the one chosen. */
-function PickLine({ label, checked, onClick, leading, trailing }: { label: string; checked: boolean; onClick: () => void; leading?: ReactNode; trailing?: ReactNode }) {
+function PickLine({ label, checked, onClick, leading, trailing, faded = false }: { label: string; checked: boolean; onClick: () => void; leading?: ReactNode; trailing?: ReactNode; faded?: boolean }) {
   return (
     <button type="button" className={css.mPickLine} onClick={onClick}>
       {leading}
-      <span className={partsCss.mGrow}>{label}</span>
+      <span className={faded ? `${partsCss.mGrow} ${borrowCss.mFaded}` : partsCss.mGrow}>{label}</span>
       {trailing}
       <span className={css.mPickCheck}>{checked && <Check size={16} />}</span>
     </button>

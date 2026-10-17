@@ -53,6 +53,7 @@
   "core-logic.choose.force.dropped": "Account “{account}” doesn't have {model}; switched to auto",
   "core-logic.choose.force.moves_off": "Account “{account}” doesn't have {model}; will switch to one that does",
   "core-logic.choose.pick_model": "Choose a model",
+  "core-logic.choose.problem.borrow_only": "{name} has no profile of its own; pick a model from another station to borrow its account",
   "core-logic.choose.problem.loading": "Loading {name}'s Profiles",
   "core-logic.choose.problem.no_models": "No Profile on this station has models enabled. Use the link below to enable some.",
   "core-logic.choose.problem.not_shared": "{name} belongs to {home}, and none of its Profiles is available to this workspace yet. Turn on “Also for {workspace}” on a Profile",

@@ -201,7 +201,8 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
             {composer}
             <FrequentCombos items={choice.frequent} onPick={pickCombo} />
             {/* What it waits for, in a line of its own under the composer, kept whether or not there is anything to say. */}
-            <p className={css.newChatStatus} data-made-leave="fade">{choice.waiting ? choice.problem : ""}</p>
+            {/* Also what to do on a station with no profile of its own but models it could borrow. */}
+            <p className={css.newChatStatus} data-made-leave="fade">{choice.waiting || !choice.model ? (choice.problem ?? "") : ""}</p>
             {/* Out of the page's flow: it comes once the station has said what there is, and would move the composer. */}
             <div className={css.newChatOffer} data-made-leave="fade">
               <MachineSessions name={station.name} models={view.models} onContinued={(key) => {

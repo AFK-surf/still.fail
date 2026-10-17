@@ -53,6 +53,7 @@
   "core-logic.choose.force.dropped": "所选账号「{account}」未启用 {model}，已改为自动分配",
   "core-logic.choose.force.moves_off": "当前账号「{account}」未启用 {model}，将自动切换到已启用的账号",
   "core-logic.choose.pick_model": "选择模型",
+  "core-logic.choose.problem.borrow_only": "{name} 没有自己的 Profile，可以在模型里选择其他 station 的账号借用",
   "core-logic.choose.problem.loading": "正在读取 {name} 的 Profile",
   "core-logic.choose.problem.no_models": "此 station 的 Profile 均未启用模型。点击下方「去勾选」启用可用的模型。",
   "core-logic.choose.problem.not_shared": "{name} 属于 {home}，其 Profile 尚未对此 workspace 开放：在 Profile 页开启「同时用于 {workspace}」",

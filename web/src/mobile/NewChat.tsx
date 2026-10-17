@@ -5,7 +5,8 @@ import { useLayoutEffect, useRef, type ReactNode } from "react";
 import type { ModelOption, RuntimeKind, StationView } from "../api.ts";
 import { FrequentCombos } from "../FrequentCombos.tsx";
 import type { NewChatView } from "../core/shapes.ts";
-import { useNewChat, type PickPatch } from "../pick.ts";
+import { useNewChat, usePick, type PickPatch } from "../pick.ts";
+import { FromMark, openBorrow } from "./Borrow.tsx";
 import { RUNTIME_LABEL } from "../format.ts";
 import { StationMark } from "../StationMark.tsx";
 import { sendDraft } from "../Chat.tsx";
@@ -68,6 +69,16 @@ function NewChatOn({ choice, view, stations, pick, create }: {
   const effort = choice.effort ?? "";
   const navigate = useNavigate();
   const problem = choice.problem;
+  // The models as its model control has them (the core's `pick`): its own, and those another station could lend it.
+  const control = usePick(view.station, "new", choice);
+  const options = choice.pick?.options ?? view.models;
+  const lendable = options.filter((m) => m.availability === "borrowable");
+  // Another station's not borrowed yet: picked in the control, then borrowed, asked again first.
+  const choose = (m: ModelOption) => {
+    if (m.availability !== "borrowable") return pick({ model: m.model });
+    control.set({ model: m.model });
+    openBorrow(app, view.station, "new");
+  };
   // The first message makes the chat as the wide screen's does (../NewChat.tsx's useEnsureChat, then ../Chat.tsx's
   // sendDraft: the message waits in its outbox, its quotes and files with it), and the page becomes it; what follows
   // goes in after it. The chat is started on this station: the next new chat starts here too.
@@ -122,12 +133,14 @@ function NewChatOn({ choice, view, stations, pick, create }: {
           <div className={css.mChoosers}>
             <Chooser leading={<StationMark emoji={view.emoji} icon={view.icon} />} label={view.name} onClick={() => pickStation(app, stations, view.station, (id) => pick({ station: id }))} />
             {!runtime || !model ? (
-              // Nothing to choose from: the chooser leads to where models are enabled.
-              <Chooser label={t("web-mobile.newChat.noModels")} onClick={() => app.push(app.at("/settings/profiles"))} />
+              // Nothing of its own to choose from: another station's models to borrow, else where models are enabled.
+              lendable.length > 0
+                ? <Chooser label={t("web-mobile.newChat.pickModel")} onClick={() => pickModel(app, lendable, "", choose)} />
+                : <Chooser label={t("web-mobile.newChat.noModels")} onClick={() => app.push(app.at("/settings/profiles"))} />
             ) : (
               <>
                 <Chooser leading={<MakerIcon maker={entry.maker} runtime={runtime} size={14} />} label={entry.name}
-                  onClick={() => pickModel(app, view, model, (m) => pick({ model: m.model }))} />
+                  onClick={() => pickModel(app, options, model, choose)} />
                 {/* The runtime only when the model runs on more than one. */}
                 {entry.runtimes.length > 1 && <Chooser leading={<MakerIcon runtime={runtime} size={14} />} label={RUNTIME_LABEL[runtime as RuntimeKind] ?? runtime}
                   onClick={() => pickRuntime(app, entry.runtimes, runtime, (rt) => pick({ runtime: rt as RuntimeKind }))} />}
@@ -159,14 +172,16 @@ function pickStation(app: MobileApp, stations: StationView[], current: string, o
   ) });
 }
 
-function pickModel(app: MobileApp, view: StationView, current: string, onPick: (m: ModelOption) => void) {
+function pickModel(app: MobileApp, models: ModelOption[], current: string, onPick: (m: ModelOption) => void) {
   app.sheet({ height: 0.5, content: () => (
     <>
       <SheetGrab /><SheetHead title={t("web-mobile.newChat.pickModel")} />
       <div className={sheetsCss.mSheetScroll}>
-        {view.models.map((m) => (
+        {/* Another station's: its station after its name, faint till borrowed. */}
+        {models.map((m) => (
           <PickRow key={m.model} label={m.name} sub={[m.runtimes.map((r) => RUNTIME_LABEL[r] ?? r).join(" · "), m.spent?.text].filter(Boolean).join(" · ")}
-            checked={m.model === current} leading={<ModelMark maker={m.maker} runtime={m.runtimes[0]!} size={36} />} onClick={() => { onPick(m); app.sheet(null); }} />
+            mark={<FromMark option={m} picked={m.model === current} />}
+            checked={m.model === current} leading={<ModelMark maker={m.maker} runtime={m.runtimes[0]!} size={36} />} onClick={() => { app.sheet(null); onPick(m); }} />
         ))}
       </div>
     </>

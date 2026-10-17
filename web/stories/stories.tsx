@@ -37,6 +37,7 @@ import { libraryDemo, vaultDemo } from "./vault.ts";
 import { permissionsDemo } from "./permissions.ts";
 import { lockDemo } from "./lock.ts";
 import { ModelTriple } from "../src/ModelTriple.tsx";
+import { ModelList } from "../src/mobile/History.tsx";
 import type { Picking } from "../src/pick.ts";
 import type { ModelOption, PickView } from "../src/core/shapes.ts";
 import CLIP_URL from "./assets/story-clip.mp4?url";
@@ -262,6 +263,8 @@ function borrowPick(picked: boolean): Picking {
   } as unknown as PickView;
   return { view, set: noop, save: () => Promise.resolve({ saved: false }), borrow: () => new Promise(() => {}) };
 }
+/** The phone's list of models (mobile/History.tsx ModelList, as a chat's run settings show it), with the workspace's. */
+const phoneModels = () => stage(<div style={{ width: 390, height: "100%", display: "flex", flexDirection: "column" }}><ModelList models={borrowPick(false).view!.options} runtime="claude" picked="deepseek-v4-pro" onPick={noop} /></div>);
 const borrowStory = (picked: boolean) => stage(<div style={{ padding: 32 }}><ModelTriple pick={borrowPick(picked)} onConfirm={noop} /></div>);
 
 /** Parts side by side on a page of the app: sections of them, each named. */
@@ -486,6 +489,7 @@ export const stories: Story[] = [
   { id: "app-profile-opencode-signing-in", group: "应用", title: "Profile · OpenCode Go 重新登录（设备码）", app: true, demo: openCode(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "pick-workspace-models", group: "选模型", title: "模型 · 本机、借用的、可借用的", render: () => borrowStory(false), steps: [{ click: "text=Opus 5.5" }] },
   { id: "pick-borrow", group: "选模型", title: "模型 · 选了别的 station 的，借用", render: () => borrowStory(true), steps: [{ click: "text=Opus 5.5" }] },
+  { id: "pick-phone-models", group: "选模型", title: "手机 · 模型列表（本机、借用的、可借用的）", phone: true, render: phoneModels },
   { id: "pick-borrow-confirm", group: "选模型", title: "模型 · 借用前再次确认", render: () => borrowStory(true), steps: [{ click: "text=Opus 5.5" }, { click: "text=借用账号" }] },
   { id: "app-new-chat-not-shared", group: "应用", title: "新建对话 · 加入的 station 没有开放的 Profile", app: true, demo: notShared, steps: [{ text: "新建对话" }] },
   { id: "app-connects", group: "应用", title: "连接", app: true, steps: [{ click: '[aria-label="连接"]' }] },
