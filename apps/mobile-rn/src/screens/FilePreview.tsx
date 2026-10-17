@@ -246,7 +246,10 @@ export class ViewerFlight {
 
 /** How much of the viewer's ground and bars shows. */
 function useChrome(f: ViewerFlight): SharedValue<number> {
-  return useDerivedValue(() => (f.phase.value === Phase.Waiting ? 0 : f.phase.value === Phase.Flying ? f.p.value : 1));
+  // Its shared values alone into the worklet: the flight itself (a class, with functions of the JS thread's) is not one
+  // the UI thread can take.
+  const { phase, p } = f;
+  return useDerivedValue(() => (phase.value === Phase.Waiting ? 0 : phase.value === Phase.Flying ? p.value : 1));
 }
 
 /** Where a picture proportioned like `to` shows letterboxed in the box `box`: fitted inside it, centred. */
@@ -264,17 +267,19 @@ export const NoStage: StageWrap = ({ children }) => <>{children}</>;
 
 /** The stage (what shows the picture) carried from the thumbnail's box to its own place, or back. */
 export function ViewerFlying({ f, children }: { f: ViewerFlight; children?: ReactNode }) {
+  // Its shared values alone into the worklets (useChrome).
+  const { phase, p, fade, from: fromBox, radius, smooth, letterbox, to: toBox } = f;
   const W = useSharedValue(0);
   const H = useSharedValue(0);
   const [laid, setLaid] = useState(false);
   const flying = () => {
     "worklet";
-    if (f.phase.value !== Phase.Flying) return null;
-    const to = f.to.value;
-    const raw = f.from.value;
-    const from = raw && f.letterbox.value && to ? fitted(raw, to) : raw;
+    if (phase.value !== Phase.Flying) return null;
+    const to = toBox.value;
+    const raw = fromBox.value;
+    const from = raw && letterbox.value && to ? fitted(raw, to) : raw;
     if (!from || !to || to.width <= 0 || to.height <= 0) return null;
-    const t = f.p.value;
+    const t = p.value;
     // Covering the thumbnail's box at the start, as a cropped picture does.
     const s0 = Math.max(from.width / to.width, from.height / to.height);
     const s = s0 + (1 - s0) * t;
@@ -284,11 +289,11 @@ export function ViewerFlying({ f, children }: { f: ViewerFlight; children?: Reac
     // The crop, in the stage's own (unscaled) terms: the thumbnail's box growing into the picture's.
     const w = (from.width + (to.width - from.width) * t) / s;
     const h = (from.height + (to.height - from.height) * t) / s;
-    const r = (f.radius.value * (1 - t)) / s;
+    const r = (radius.value * (1 - t)) / s;
     return { s, tcx, tcy, dx: cx - tcx, dy: cy - tcy, box: { left: tcx - w / 2, top: tcy - h / 2, width: w, height: h }, r };
   };
   const outer = useAnimatedStyle(() => {
-    if (f.phase.value === Phase.Waiting) return { opacity: 0, transform: [] };
+    if (phase.value === Phase.Waiting) return { opacity: 0, transform: [] };
     const k = flying();
     if (!k) return { opacity: 1, transform: [] };
     // Scaled about the picture's centre, then moved to where the flight has it.
@@ -304,7 +309,7 @@ export function ViewerFlying({ f, children }: { f: ViewerFlight; children?: Reac
   const clip = useAnimatedStyle(() => {
     const k = flying();
     if (!k) return { left: 0, top: 0, width: W.value, height: H.value, borderRadius: 0 };
-    return { left: k.box.left, top: k.box.top, width: k.box.width, height: k.box.height, borderRadius: f.smooth.value ? k.r * SMOOTH_SCALE : k.r };
+    return { left: k.box.left, top: k.box.top, width: k.box.width, height: k.box.height, borderRadius: smooth.value ? k.r * SMOOTH_SCALE : k.r };
   });
   const inner = useAnimatedStyle(() => {
     const k = flying();
@@ -422,7 +427,8 @@ function ViewerLayer({ open }: { open: ViewerOpen }) {
       open.onClose();
     })();
   };
-  const faded = useAnimatedStyle(() => ({ opacity: flight.phase.value === Phase.Fading ? flight.fade.value : 1 }));
+  const { phase: flightPhase, fade: flightFade } = flight;
+  const faded = useAnimatedStyle(() => ({ opacity: flightPhase.value === Phase.Fading ? flightFade.value : 1 }));
   return (
     <Animated.View
       ref={layer}

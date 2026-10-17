@@ -111,12 +111,14 @@ function NewChatOn({ workspace, choice, view, stations, onStation, host, leaving
   const launchers = AttachLaunchers((picked: Picked) => upload(app, draft, view.station, picked));
   // Leaving: the scene up out of view as it fades (140 ms, Ease.Arrive), the choices fading where they are (80 ms).
   const lift = 32;
+  // The host's shared value alone into the worklets (the host is a class the UI thread cannot take).
+  const leave = host.leave;
   const scene = useAnimatedStyle(() => {
-    const a = leaving ? arrive(Math.min(1, Math.max(0, host.leave.value / SCENE_LEAVE_MS))) : 0;
+    const a = leaving ? arrive(Math.min(1, Math.max(0, leave.value / SCENE_LEAVE_MS))) : 0;
     const s = 1 - 0.04 * a;
     return { transform: [{ translateY: -lift * a }, { scaleX: s }, { scaleY: s }], opacity: 1 - a };
   });
-  const footFade = useAnimatedStyle(() => ({ opacity: 1 - (leaving ? leaveFade(Math.min(1, Math.max(0, host.leave.value / 80))) : 0) }));
+  const footFade = useAnimatedStyle(() => ({ opacity: 1 - (leaving ? leaveFade(Math.min(1, Math.max(0, leave.value / 80))) : 0) }));
   // What stands at the foot (the choices, the composer's room) is over the scene, which runs on under them: they frost it.
   const [foot, setFoot] = useState(0);
   // The composer's room: as tall as it was when the page began to leave (it changes shape under what leaves).
