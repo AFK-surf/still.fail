@@ -262,6 +262,27 @@ test("compressed history keeps usage offsets and sub-agent discovery", async () 
   assert.deepEqual(await readAll(main, 13), ["third\n", 19]);
 });
 
+test("a large compressed file is read in parts from its offset, and from its start once shorter than that", async () => {
+  const root = tempdir();
+  const path = join(root, "big.jsonl");
+  const line = (i: number) => `${String(i).padStart(6, "0")}${"y".repeat(99_993)}\n`;
+  const text = Array.from({ length: 30 }, (_, i) => line(i)).join("") + "partial";
+  writeFileSync(path, text);
+  pack(path);
+  const whole = text.length - "partial".length;
+  const offsets: number[] = [];
+  let read = "";
+  for await (const p of readFrom(path, line(0).length * 7)) {
+    offsets.push(p.offset);
+    read += p.text;
+  }
+  assert.ok(offsets.length > 1, "in parts");
+  assert.equal(offsets.at(-1), whole);
+  assert.equal(read, text.slice(line(0).length * 7, whole));
+  assert.deepEqual(await readAll(path, whole), null);
+  assert.deepEqual(await readAll(path, whole + 100), [text.slice(0, whole), whole]);
+});
+
 test("a file read in parts records each part's whole lines and leaves a partial last line for later", async () => {
   const root = tempdir();
   const path = join(root, "big.jsonl");

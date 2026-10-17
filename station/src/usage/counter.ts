@@ -11,10 +11,9 @@
 import { Clock, Effect, Fiber, Queue } from "effect";
 import { liveClock } from "../ops/fibers.ts";
 import { createReadStream } from "node:fs";
-import { type FileHandle, open, readFile, readdir, realpath, stat } from "node:fs/promises";
+import { type FileHandle, open, readdir, realpath, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { promisify } from "node:util";
-import { createZstdDecompress, zstdDecompress } from "node:zlib";
+import { createZstdDecompress } from "node:zlib";
 import { log } from "../ops/log.ts";
 import { parseIso, transcriptPath } from "../read/transcript.ts";
 import type { SessionRow, Store, UsageCall, UsageFile, UsageFor, UsageTurn } from "../store/store.ts";
@@ -201,21 +200,55 @@ function* partsOf(bytes: Buffer, from: number): Generator<Part> {
   }
 }
 
-const decompress = promisify(zstdDecompress);
+/// A file put away, past `offset`, as `readFrom` says it: decompressed as it is read, never whole (one is hundreds of MB,
+/// and every one is read again as the station starts). Shorter than `offset`: read again from its start.
+async function* packedFrom(path: string, offset: number): AsyncGenerator<Part> {
+  const raw = createReadStream(packed(path), { highWaterMark: CHUNK });
+  const stream = raw.pipe(createZstdDecompress({ chunkSize: CHUNK }));
+  raw.on("error", (error) => stream.destroy(error));
+  // What is past `offset` and not given yet, from `start`.
+  let held: Buffer[] = [];
+  let heldBytes = 0;
+  let start = offset;
+  let total = 0;
+  const give = function* (): Generator<Part> {
+    const bytes = Buffer.concat(held, heldBytes);
+    const cut = bytes.lastIndexOf(0x0a);
+    if (cut < 0) return;
+    yield* partsOf(bytes.subarray(0, cut + 1), start);
+    const rest = Buffer.from(bytes.subarray(cut + 1));
+    start += cut + 1;
+    held = rest.length === 0 ? [] : [rest];
+    heldBytes = rest.length;
+  };
+  try {
+    for await (const chunk of stream as AsyncIterable<Buffer>) {
+      const from = Math.max(0, offset - total);
+      total += chunk.length;
+      if (from >= chunk.length) continue;
+      held.push(from === 0 ? chunk : chunk.subarray(from));
+      heldBytes += chunk.length - from;
+      if (heldBytes >= CHUNK) yield* give();
+    }
+  } catch {
+    return;
+  } finally {
+    raw.destroy();
+    stream.destroy();
+  }
+  if (total < offset) {
+    yield* packedFrom(path, 0);
+    return;
+  }
+  yield* give();
+}
 
 /// read_from: what a file holds past `offset`, up to its last whole line, in parts with where each ends. A file now
 /// shorter than `offset` was written anew: it is read from its start (calls already recorded stay once). A file put
 /// away (only its `.zst` there) is read decompressed.
 export async function* readFrom(path: string, offset: number): AsyncGenerator<Part> {
   if (!(await exists(path)) && (await exists(packed(path)))) {
-    let bytes: Buffer;
-    try {
-      bytes = await decompress(await readFile(packed(path)));
-    } catch {
-      return;
-    }
-    const from = offset > bytes.length ? 0 : offset;
-    yield* partsOf(bytes.subarray(from), from);
+    yield* packedFrom(path, offset);
     return;
   }
   let size: number;
