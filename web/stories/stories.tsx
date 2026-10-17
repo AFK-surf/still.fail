@@ -117,7 +117,11 @@ const openCode = (signingIn: boolean): DemoExtension => ({
       profiles: o.profiles.map((p) => ({
         ...p, machine: false, runtimes: ["claude", "codex", "dsh"], loginCommand: "", providerName: undefined,
         access: { kind: "opencode-go", key: "st_4a…3f9c", login: true },
-        ...(signingIn ? { login, check: { ...(p.check as object), state: "login", detail: "OpenCode 登录已失效", models: null } } : { login: null }),
+        // Its check and allowance as they would be for it, not the demo's Claude account's.
+        quota: null, trouble: null,
+        ...(signingIn
+          ? { login, check: { ...(p.check as object), state: "login", detail: "OpenCode 登录已失效", models: null }, checkText: "需要登录", checkTone: "amber" }
+          : { login: null, check: { ...(p.check as object), state: "ok", detail: "可用，29 个模型" }, checkText: "可用", checkTone: "green" }),
       })),
     };
   },
