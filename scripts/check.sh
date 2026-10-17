@@ -206,6 +206,12 @@ if part ts; then
   fi
   # The UIs never make a request of a station or still.fail cloud themselves: they name what they want done
   # (client/core-ts/src/ops.ts), and the core, which knows what it changes, brings every topic that shows it up to date.
+  # The phone's corners are Smooth (ui/Corners.kt: the web's superellipse), not RoundedCornerShape, in what a change adds
+  # (a capsule's 50%, or a line that says why with "own corner:", aside).
+  if touches '^apps/android/'; then
+    added 'apps/android/*.kt' | grep 'RoundedCornerShape(' | grep -vE 'RoundedCornerShape\(50\)|own corner:' > "$tmp/android-corners" || true
+    step "phone corners smooth (in what this adds)" sh -c "! grep . '$tmp/android-corners'"
+  fi
   if touches '^(web/src|web/ui|apps/desktop/src|apps/android)/'; then
     step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src web/ui apps/desktop/src apps/android'
   fi

@@ -272,7 +272,7 @@ private fun Reconnecting() = Row(verticalAlignment = Alignment.CenterVertically,
 /** A grey bar where a figure would be, not known now. */
 @Composable
 private fun Bar(width: androidx.compose.ui.unit.Dp, height: androidx.compose.ui.unit.Dp = 10.dp, radius: androidx.compose.ui.unit.Dp = 5.dp) =
-    Box(Modifier.width(width).height(height).clip(RoundedCornerShape(radius)).background(C.line.copy(alpha = 0.7f)))
+    Box(Modifier.width(width).height(height).clip(Smooth(radius)).background(C.line.copy(alpha = 0.7f)))
 
 @Composable
 fun StationScreen(current: WorkspaceEntry, address: String) {

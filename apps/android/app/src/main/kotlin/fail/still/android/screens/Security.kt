@@ -4,8 +4,8 @@
 package fail.still.android.screens
 
 import androidx.compose.foundation.background
+import fail.still.android.ui.Smooth
 import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -95,7 +95,7 @@ private fun Note(text: String) = Text(text, fontSize = 12.sp, lineHeight = 18.sp
 internal fun WideButton(label: String, primary: Boolean, modifier: Modifier = Modifier, busy: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
     val on = enabled && !busy
     Row(
-        modifier.height(46.dp).clip(RoundedCornerShape(23.dp)).background(if (primary) (if (!enabled) C.line else C.ink) else C.chip).clickable(enabled = on, onClick = onClick),
+        modifier.height(46.dp).clip(Smooth(23.dp)).background(if (primary) (if (!enabled) C.line else C.ink) else C.chip).clickable(enabled = on, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
     ) {
         if (busy) { Spinner(14.dp); Spacer(Modifier.width(8.dp)) }

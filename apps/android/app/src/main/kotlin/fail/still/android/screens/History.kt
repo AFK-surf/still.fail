@@ -758,7 +758,7 @@ internal fun EffortChips(efforts: List<String?>, picked: String?, onPick: (Strin
             val on = e == picked
             Text(
                 e ?: t("android-chat.pick.default"), fontSize = 14.sp, color = if (on) C.bg else C.ink, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
-                modifier = Modifier.clip(RoundedCornerShape(18.dp)).background(if (on) C.ink else C.chip).clickable { onPick(e) }.padding(horizontal = 16.dp, vertical = 9.dp),
+                modifier = Modifier.clip(Smooth(18.dp)).background(if (on) C.ink else C.chip).clickable { onPick(e) }.padding(horizontal = 16.dp, vertical = 9.dp),
             )
         }
     }

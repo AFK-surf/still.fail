@@ -5,6 +5,7 @@
 package fail.still.android.screens
 
 import androidx.activity.compose.BackHandler
+import fail.still.android.ui.Smooth
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -23,7 +24,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
@@ -90,7 +90,7 @@ internal fun SearchField(onOpen: (Float, Float) -> Unit, hidden: Boolean) {
     var at by remember { mutableStateOf(Rect.Zero) }
     Row(
         Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 6.dp).height(FIELD).onGloballyPositioned { at = it.boundsInRoot() }
-            .graphicsLayer { alpha = if (hidden) 0f else 1f }.clip(RoundedCornerShape(FIELD / 2)).background(C.ink.copy(alpha = 0.06f)).clickable { onOpen(at.top, at.width) }.padding(horizontal = 12.dp),
+            .graphicsLayer { alpha = if (hidden) 0f else 1f }.clip(Smooth(FIELD / 2)).background(C.ink.copy(alpha = 0.06f)).clickable { onOpen(at.top, at.width) }.padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         IconIn(Icons.Search, 17.dp, C.muted)
@@ -154,7 +154,7 @@ internal fun SearchPage(scope: String, from: Float, wide: Float, onLeave: () -> 
                     val placeable = measurable.measure(constraints.copy(minWidth = now, maxWidth = now))
                     layout(room, placeable.height) { placeable.place(0, 0) }
                 }.height(FIELD).graphicsLayer { translationY = (from - to) * (1f - up.value) }
-                    .clip(RoundedCornerShape(FIELD / 2)).background(C.ink.copy(alpha = 0.06f)).padding(horizontal = 12.dp),
+                    .clip(Smooth(FIELD / 2)).background(C.ink.copy(alpha = 0.06f)).padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 IconIn(Icons.Search, 17.dp, C.muted)

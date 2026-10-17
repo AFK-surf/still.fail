@@ -47,7 +47,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -406,9 +405,9 @@ private fun PreviewBar(
         loading?.invoke()
         if (instead != null) Box(Modifier.weight(1f).padding(horizontal = 4.dp)) { instead() }
         else Row(
-            Modifier.weight(1f).padding(horizontal = 4.dp).height(30.dp).clip(RoundedCornerShape(15.dp))
+            Modifier.weight(1f).padding(horizontal = 4.dp).height(30.dp).clip(Smooth(15.dp))
                 .background(if (editing) C.surface else C.chip)
-                .then(if (editing) Modifier.border(1.5.dp, C.accent.copy(alpha = 0.5f), RoundedCornerShape(15.dp)) else Modifier)
+                .then(if (editing) Modifier.border(1.5.dp, C.accent.copy(alpha = 0.5f), Smooth(15.dp)) else Modifier)
                 .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -444,7 +443,7 @@ private fun BarIcon(icon: ImageVector, enabled: Boolean, pressed: Boolean = fals
 @Composable
 private fun SizeButton(viewport: Viewport?, onClick: () -> Unit) {
     Row(
-        Modifier.height(28.dp).clip(RoundedCornerShape(14.dp)).background(if (viewport != null) C.chip else Color.Transparent).clickable(onClick = onClick).padding(horizontal = if (viewport != null) 9.dp else 7.dp),
+        Modifier.height(28.dp).clip(Smooth(14.dp)).background(if (viewport != null) C.chip else Color.Transparent).clickable(onClick = onClick).padding(horizontal = if (viewport != null) 9.dp else 7.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         IconIn(Icons.Devices, 14.dp, C.ink)
@@ -759,7 +758,7 @@ private fun CustomSize(viewport: Viewport?, set: (Viewport?) -> Unit, turn: () -
 private fun MarkMode(state: PageState, leave: () -> Unit, send: () -> Unit) {
     val n = state.marks.size
     Row(
-        Modifier.fillMaxWidth().height(30.dp).clip(RoundedCornerShape(15.dp)).background(lerp(C.chip, C.accent, 0.10f)).padding(start = 12.dp, end = 3.dp),
+        Modifier.fillMaxWidth().height(30.dp).clip(Smooth(15.dp)).background(lerp(C.chip, C.accent, 0.10f)).padding(start = 12.dp, end = 3.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Box(
@@ -777,7 +776,7 @@ private fun MarkMode(state: PageState, leave: () -> Unit, send: () -> Unit) {
         val ground = if (able) C.ink else C.ink.copy(alpha = 0.4f)
         val ink = if (C.dark) C.bg else Color.White
         Row(
-            Modifier.height(24.dp).clip(RoundedCornerShape(12.dp)).background(ground)
+            Modifier.height(24.dp).clip(Smooth(12.dp)).background(ground)
                 .clickable(enabled = able, onClick = send).padding(horizontal = 10.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
@@ -812,7 +811,7 @@ private fun androidx.compose.foundation.layout.BoxScope.MarksOver(state: PageSta
                 )
                 // The pin's point on the element's top-left corner (kept in sight at the page's edges).
                 val pinX = maxOf(2.dp.toPx(), x); val pinY = maxOf(24.dp.toPx(), y)
-                val pinShape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomEnd = 12.dp, bottomStart = 3.dp)
+                val pinShape = Smooth(topStart = 12.dp, topEnd = 12.dp, bottomEnd = 12.dp, bottomStart = 3.dp)
                 Box(
                     Modifier.offset { IntOffset((pinX - 2.dp.toPx()).roundToInt(), (pinY - 22.dp.toPx()).roundToInt()) }.size(24.dp)
                         .shadow(3.dp, pinShape).clip(pinShape).background(Color.White).padding(2.dp).clip(pinShape).background(C.accent)
@@ -835,7 +834,7 @@ private fun androidx.compose.foundation.layout.BoxScope.MarksOver(state: PageSta
                     ) {
                         Text(
                             m.comment, fontSize = 12.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.height(26.dp).shadow(3.dp, RoundedCornerShape(13.dp)).clip(RoundedCornerShape(13.dp)).background(bubble())
+                            modifier = Modifier.height(26.dp).shadow(3.dp, Smooth(13.dp)).clip(Smooth(13.dp)).background(bubble())
                                 .clickable { state.editing = m.picked.n }.padding(horizontal = 10.dp, vertical = 5.dp),
                         )
                     }
@@ -861,7 +860,7 @@ private fun Note(mark: Mark, x: Float, y: Float, stageW: Float, onDone: () -> Un
         val top = maxOf(8.dp.toPx(), y - 28.dp.toPx())
         Row(
             Modifier.offset { IntOffset(left.roundToInt(), top.roundToInt()) }.width(width.toDp()).height(36.dp)
-                .shadow(6.dp, RoundedCornerShape(18.dp)).clip(RoundedCornerShape(18.dp)).background(bubble()).padding(start = 12.dp, end = 4.dp),
+                .shadow(6.dp, Smooth(18.dp)).clip(Smooth(18.dp)).background(bubble()).padding(start = 12.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {

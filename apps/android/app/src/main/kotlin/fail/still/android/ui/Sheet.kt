@@ -309,7 +309,7 @@ fun ToastHost(toast: String?, done: () -> Unit) {
         AnimatedVisibility(text != null, enter = fadeIn(tween(200, easing = Ease.Css)), exit = fadeOut(tween(200, easing = Ease.Css))) {
             Text(
                 last, color = C.bg, fontSize = 14.sp,
-                modifier = Modifier.padding(horizontal = 24.dp).clip(RoundedCornerShape(18.dp)).background(C.ink).padding(horizontal = 16.dp, vertical = 10.dp),
+                modifier = Modifier.padding(horizontal = 24.dp).clip(Smooth(18.dp)).background(C.ink).padding(horizontal = 16.dp, vertical = 10.dp),
             )
         }
     }

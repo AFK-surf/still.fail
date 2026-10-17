@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import fail.still.android.ui.InComposer
 import fail.still.android.ui.InComposerFiles
+import fail.still.android.ui.concentric
 import fail.still.android.ui.ComposerFilesIn
 import fail.still.android.ui.ComposerInset
 import fail.still.android.ui.ComposerCorner
@@ -55,7 +56,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.content.consume
@@ -479,7 +479,7 @@ fun ChatRefMenu(draft: Draft, station: String, here: String?, haze: HazeState, m
         }
     }
     Column(
-        modifier.fillMaxWidth().padding(bottom = 8.dp).floating(haze, RoundedCornerShape(ComposerCorner)).heightIn(max = 320.dp)
+        modifier.fillMaxWidth().padding(bottom = 8.dp).floating(haze, Smooth(ComposerCorner)).heightIn(max = 320.dp)
             .verticalScroll(rememberScrollState()).padding(12.dp),
     ) {
         Row(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -492,7 +492,7 @@ fun ChatRefMenu(draft: Draft, station: String, here: String?, haze: HazeState, m
                 modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp))
             else -> items.forEach { item ->
                 Row(
-                    Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(RoundedCornerShape(20.dp)).clickable { pick(item) }.padding(horizontal = 12.dp, vertical = 8.dp),
+                    Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(Smooth(20.dp)).clickable { pick(item) }.padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Box(Modifier.width(16.dp), contentAlignment = Alignment.Center) { item.agents.firstOrNull()?.let { MakerIcon(it.maker, it.runtime, 14.dp) } }
@@ -762,8 +762,9 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
                 // Only where it is drawn: Compose would take a touch target this small out to 48dp, most of the tile,
                 // and a tap meant to open the picture removed it.
                 CompositionLocalProvider(LocalViewConfiguration provides LocalViewConfiguration.current.exact()) {
-                    // In the picture's corner, concentric with it: its corner (16) less its own half (10) in.
-                    Box(Modifier.align(Alignment.TopEnd).padding(6.dp).size(20.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).clickable(onClick = remove), contentAlignment = Alignment.Center) {
+                    // In the picture's corner, concentric with it: its corner (round 18, ComposerCorner less ComposerFilesIn as
+                    // Smooth draws it) less its own half (10) in.
+                    Box(Modifier.align(Alignment.TopEnd).padding(8.dp).size(20.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).clickable(onClick = remove), contentAlignment = Alignment.Center) {
                         IconIn(Icons.Close, 12.dp, Color.White)
                     }
                 }
@@ -879,7 +880,7 @@ private fun Modifier.draftPicture(f: Pending, station: String?): Modifier {
     val id = FileViewers.id(station, "", file.path)
     ForgetThumb(id)
     if (open) FilePreview(station, "", file, canDraft = false) { open = false }
-    return viewerThumb(id, with(LocalDensity.current) { (ComposerCorner - ComposerFilesIn).toPx() }, smooth = false) { f.preview }
+    return viewerThumb(id, with(LocalDensity.current) { concentric(ComposerCorner, ComposerFilesIn).toPx() }) { f.preview }
         .clickable {
             FileData.keep(FileData.id(station, "", file, thumb = false), bytes)
             open = true

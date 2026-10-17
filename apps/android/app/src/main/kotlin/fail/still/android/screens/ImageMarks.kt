@@ -35,7 +35,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -578,7 +577,7 @@ class ImageMarks(private val zoom: ZoomState, private val density: Float) : Stro
         val k = zoom.k
         val numbers = numbersOf(shapes)
         if (numbers.isEmpty()) return
-        val pinShape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomEnd = 12.dp, bottomStart = 3.dp)
+        val pinShape = Smooth(topStart = 12.dp, topEnd = 12.dp, bottomEnd = 12.dp, bottomStart = 3.dp)
         with(LocalDensity.current) {
             for (s in shapes) {
                 val n = numbers[s.id] ?: continue
@@ -831,12 +830,12 @@ private class PngRows(private val out: java.io.OutputStream, private val width: 
 fun MarksActions(marks: ImageMarks, canDraft: Boolean, onDownload: () -> Unit, onDraft: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         marks.error?.let { Text(it, fontSize = 13.sp, color = Color(0xFFFF7B6B), maxLines = 1, modifier = Modifier.padding(horizontal = 6.dp)) }
-        Box(Modifier.height(30.dp).clip(RoundedCornerShape(15.dp)).clickable { marks.leave() }.padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.height(30.dp).clip(Smooth(15.dp)).clickable { marks.leave() }.padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
             Text(t("common.cancel"), fontSize = 13.sp, color = Color.White.copy(alpha = 0.6f))
         }
         PictureButton(Icons.Download, t("android-chat.marks.downloadMarked"), enabled = !marks.busy && marks.any, onClick = onDownload)
         if (canDraft) Row(
-            Modifier.padding(start = 4.dp).height(30.dp).clip(RoundedCornerShape(15.dp)).background(INK).alpha(if (!marks.busy && marks.any) 1f else 0.4f)
+            Modifier.padding(start = 4.dp).height(30.dp).clip(Smooth(15.dp)).background(INK).alpha(if (!marks.busy && marks.any) 1f else 0.4f)
                 .clickable(enabled = !marks.busy && marks.any, onClick = onDraft).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {

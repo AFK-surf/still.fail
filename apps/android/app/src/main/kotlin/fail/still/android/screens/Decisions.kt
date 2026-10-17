@@ -122,6 +122,7 @@ import fail.still.android.ui.Icons
 import fail.still.android.ui.MoveSpring
 import fail.still.android.ui.reducedMotion
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.SMOOTH_SCALE
 import fail.still.core.CoreException
 import kotlin.math.abs
 import kotlinx.coroutines.launch
@@ -140,27 +141,28 @@ private val Digits = listOf(Icons.Option1, Icons.Option2, Icons.Option3, Icons.O
 @Composable
 internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier = Modifier, enabled: Boolean = true, busy: String? = null, onPick: (DecisionOption) -> Unit) {
     val hairline = C.ink.copy(alpha = 0.07f)
-    Column(modifier.fillMaxWidth().clip(Smooth(20.dp)).background(C.chip)) {
+    // A card of rows to be pressed (web pages.css.ts listCard, docs/ui-panels.md 页面卡片): each row's ground under the
+    // finger OPTION_PAD from the card's edge, rounded OPTION_CORNER, the card's corner theirs and that together; its
+    // number in its row's corner, concentric with it; its words OPTION_WORDS from the card's edge, as a card of words'.
+    Column(modifier.fillMaxWidth().clip(Smooth(OPTION_CORNER + OPTION_PAD / SMOOTH_SCALE)).background(C.chip).padding(OPTION_PAD)) {
         options.forEachIndexed { i, o ->
             val strong = o.recommended == true
             val said = if (strong) t("common.recommended") else null
             val free = enabled && busy == null
-            if (i > 0) Box(Modifier.padding(start = 48.dp, end = 18.dp).fillMaxWidth().height(1.dp).background(hairline))
+            if (i > 0) Box(Modifier.padding(start = NUMBER_IN + NUMBER + 12.dp, end = OPTION_WORDS - OPTION_PAD).fillMaxWidth().height(1.dp).background(hairline))
             Row(
-                Modifier.fillMaxWidth().alpha(if (enabled) 1f else 0.5f)
+                Modifier.fillMaxWidth().clip(Smooth(OPTION_CORNER)).alpha(if (enabled) 1f else 0.5f)
                     .clickable(enabled = free, interactionSource = remember(o.label) { MutableInteractionSource() }, indication = ripple(color = C.ink)) { onPick(o) }
-                    // The card's room above the first and below the last is theirs: the ripple reaches its edge.
-                    .padding(start = 14.dp, end = 18.dp, top = if (i == 0) 14.dp else 10.dp, bottom = if (i == options.lastIndex) 14.dp else 10.dp)
+                    .padding(start = NUMBER_IN, end = OPTION_WORDS - OPTION_PAD, top = NUMBER_IN, bottom = NUMBER_IN)
                     .semantics(mergeDescendants = true) { said?.let { stateDescription = it } },
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                // As tall as the label's line, a little lower, where Chinese sits.
                 Box(
-                    Modifier.padding(top = 0.5.dp).size(22.dp).clip(CircleShape).background(if (strong) C.accent else C.ink.copy(alpha = 0.09f)),
+                    Modifier.size(NUMBER).clip(CircleShape).background(if (strong) C.accent else C.ink.copy(alpha = 0.09f)),
                     contentAlignment = Alignment.Center,
                 ) {
                     val ink = if (strong) Color.White else C.muted
-                    Digits.getOrNull(i)?.let { IconIn(it, 22.dp, ink) }
+                    Digits.getOrNull(i)?.let { IconIn(it, NUMBER, ink) }
                         ?: Text("${i + 1}", fontSize = 12.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = ink)
                 }
                 Column(Modifier.weight(1f)) {
@@ -172,6 +174,13 @@ internal fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier =
         }
     }
 }
+
+private val OPTION_PAD = 8.dp
+private val OPTION_CORNER = 18.dp
+private val OPTION_WORDS = 20.dp
+private val NUMBER = 22.dp
+/** The number in its row's corner: the row's corner less its half (both as round as they are drawn: Smooth's is round 18). */
+private val NUMBER_IN = OPTION_CORNER - NUMBER / 2
 
 /**
  * A button as wide as it is given (留着 / 归档这个 chat under a post that ended all done, Chat.kt ArchiveUnder): the

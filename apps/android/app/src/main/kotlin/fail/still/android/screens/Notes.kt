@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -69,7 +68,7 @@ interface NoteLike {
 @Composable
 private fun Pin(n: Int, open: Boolean = false, small: Boolean = false, color: Color? = null, onClick: (() -> Unit)? = null) {
     val size = if (small) 16.dp else 20.dp
-    val shape = if (small) RoundedCornerShape(8.dp, 8.dp, 2.dp, 8.dp) else RoundedCornerShape(10.dp, 10.dp, 2.dp, 10.dp)
+    val shape = if (small) Smooth(8.dp, 8.dp, 2.dp, 8.dp) else Smooth(10.dp, 10.dp, 2.dp, 10.dp)
     // In the margin: pops in from its point, and grows a little while its note is open (160ms, as the web's).
     val grown by animateFloatAsState(if (open) 1.12f else 1f, tween(160, easing = Ease.Arrive), label = "pin")
     Box(
@@ -90,7 +89,7 @@ internal fun NoteBox(note: NoteLike, modifier: Modifier, onDone: () -> Unit, onR
     val into = remember { BringIntoViewRequester() }
     LaunchedEffect(Unit) { focus.requestFocus(); into.bringIntoView() }
     Column(
-        modifier.fillMaxWidth().bringIntoViewRequester(into).pop().floatingStill(RoundedCornerShape(26.dp)).padding(start = 8.dp, end = 8.dp, top = 10.dp, bottom = 8.dp),
+        modifier.fillMaxWidth().bringIntoViewRequester(into).pop().floatingStill(Smooth(26.dp)).padding(start = 8.dp, end = 8.dp, top = 10.dp, bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {

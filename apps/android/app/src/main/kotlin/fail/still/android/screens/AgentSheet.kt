@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -124,7 +123,7 @@ fun openAgent(app: AppState, station: String, of: ChatOf, agent: ChatAgent) {
 private fun StopButton(app: AppState, station: String, key: String) {
     val busy = app.isDoing("session.stop", "station" to station, "key" to key)
     Row(
-        Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).background(C.red.copy(alpha = 0.14f))
+        Modifier.height(32.dp).clip(Smooth(16.dp)).background(C.red.copy(alpha = 0.14f))
             .clickable(enabled = !busy) { app.act(t("android-chat.agent.stop"), done = t("android-chat.history.stopped")) { app.api(station).stop(key) } }
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),

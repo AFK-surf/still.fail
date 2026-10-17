@@ -16,6 +16,7 @@
 package fail.still.android.screens
 
 import androidx.compose.animation.core.Animatable
+import fail.still.android.ui.Smooth
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
@@ -35,7 +36,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
@@ -89,6 +89,8 @@ import fail.still.android.Screen
 import fail.still.android.data.WorkspaceEntry
 import fail.still.android.ui.C
 import fail.still.android.ui.ComposerCorner
+import fail.still.android.ui.ComposerFilesIn
+import fail.still.android.ui.concentric
 import fail.still.android.ui.ComposerInset
 import fail.still.android.ui.Ease
 import fail.still.android.ui.floating
@@ -477,7 +479,7 @@ internal fun HostComposer(host: Host, modifier: Modifier, overContent: Boolean =
         Box(Modifier.fillMaxWidth().onSizeChanged { host.composerHeight = it.height }.padding(start = if (besideRecent) BesideRecent else 10.dp, end = 10.dp, top = 8.dp, bottom = 10.dp)) {
             Column(
                 Modifier.fillMaxWidth().onGloballyPositioned { host.capsule = it }
-                    .then(if (overContent) Modifier.floating(host.haze, RoundedCornerShape(ComposerCorner)) else Modifier.floatingStill(RoundedCornerShape(ComposerCorner)))
+                    .then(if (overContent) Modifier.floating(host.haze, Smooth(ComposerCorner)) else Modifier.floatingStill(Smooth(ComposerCorner)))
                     // A tap on the capsule's own room is a tap on the field.
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { draft.focus++ }
                     .padding(ComposerInset).morph(morph)
@@ -656,7 +658,7 @@ private fun DrawScope.files(flight: Flight, overlay: LayoutCoordinates) {
     if (flight.files.isEmpty()) return
     val across = flight.across()
     val up = flight.up()
-    val fromCorner = (ComposerCorner - ComposerInset).toPx()
+    val fromCorner = concentric(ComposerCorner, ComposerFilesIn).toPx()
     val toCorner = 10.dp.toPx()
     for (ff in flight.files) {
         val to = ff.to?.takeIf { it.isAttached }

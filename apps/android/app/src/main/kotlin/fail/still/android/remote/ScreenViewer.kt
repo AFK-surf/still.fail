@@ -8,6 +8,7 @@
 package fail.still.android.remote
 
 import android.content.ClipData
+import fail.still.android.ui.Smooth
 import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.SurfaceTexture
@@ -42,7 +43,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -320,7 +320,7 @@ private fun Rail(session: ScreenSession, typing: Boolean, keyboard: () -> Unit, 
         if (saying && state != null) Text(
             state.line, fontSize = 13.sp, lineHeight = 18.sp, color = C.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.align(Alignment.BottomStart).offset(x = 64.dp, y = (-8).dp).widthIn(max = 280.dp)
-                .floatingStill(RoundedCornerShape(18.dp)).padding(horizontal = 14.dp, vertical = 8.dp),
+                .floatingStill(Smooth(18.dp)).padding(horizontal = 14.dp, vertical = 8.dp),
         )
     }
 }
@@ -334,7 +334,7 @@ private fun TakeOver(session: ScreenSession, modifier: Modifier) {
     val who = session.state?.controllers.orEmpty()
     // A capsule round a 32 high button 6 in from its edge: its corner 6 + 16.
     Row(
-        modifier.widthIn(max = 480.dp).floatingStill(RoundedCornerShape(22.dp)).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+        modifier.widthIn(max = 480.dp).floatingStill(Smooth(22.dp)).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Box(Modifier.size(8.dp).clip(CircleShape).background(C.warn))
@@ -345,7 +345,7 @@ private fun TakeOver(session: ScreenSession, modifier: Modifier) {
         )
         // The main solid button, as the web's primary (dark in the light theme, light in the dark one), not the accent.
         Box(
-            Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).background(C.ink).clickable { session.control(true) }.padding(horizontal = 14.dp),
+            Modifier.height(32.dp).clip(Smooth(16.dp)).background(C.ink).clickable { session.control(true) }.padding(horizontal = 14.dp),
             contentAlignment = Alignment.Center,
         ) { Text(t("android-misc.screen.takeOver"), fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold, color = C.bg, maxLines = 1) }
     }
@@ -408,7 +408,7 @@ private fun Stage(session: ScreenSession, zoom: ViewZoom, dropActs: DropActs, mo
             Drops(session, dropActs)
             undriven(session)?.let { why ->
                 Row(
-                    Modifier.floatingStill(RoundedCornerShape(18.dp)).padding(horizontal = 14.dp, vertical = 8.dp),
+                    Modifier.floatingStill(Smooth(18.dp)).padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     IconIn(Icons.Info, 16.dp, C.muted)
@@ -425,7 +425,7 @@ private fun Drops(session: ScreenSession, acts: DropActs) {
     val list = session.drops.list
     if (list.isEmpty()) return
     // Its corner as the panel the view's end is said in (Over).
-    Column(Modifier.fillMaxWidth().floatingStill(RoundedCornerShape(24.dp)).padding(vertical = 6.dp)) {
+    Column(Modifier.fillMaxWidth().floatingStill(Smooth(24.dp)).padding(vertical = 6.dp)) {
         list.forEach { d -> key(d) { DropRow(session, d, acts) } }
     }
 }
@@ -523,7 +523,7 @@ private fun Over(session: ScreenSession, phase: String, modifier: Modifier, onEx
         "connecting" -> Waiting(message ?: t("android-misc.screen.connecting"), modifier)
         "reconnecting" -> Waiting(message ?: t("android-misc.screen.reconnecting"), modifier)
         else -> Column(
-            modifier.padding(24.dp).widthIn(max = 360.dp).floatingStill(RoundedCornerShape(24.dp)).padding(horizontal = 24.dp, vertical = 20.dp),
+            modifier.padding(24.dp).widthIn(max = 360.dp).floatingStill(Smooth(24.dp)).padding(horizontal = 24.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             IconIn(if (session.state?.kind == "browser") Icons.Web else Icons.Monitor, 28.dp, C.muted)
@@ -545,7 +545,7 @@ private fun Over(session: ScreenSession, phase: String, modifier: Modifier, onEx
 @Composable
 private fun Waiting(text: String, modifier: Modifier) {
     Row(
-        modifier.padding(24.dp).floatingStill(RoundedCornerShape(20.dp)).padding(horizontal = 16.dp, vertical = 10.dp),
+        modifier.padding(24.dp).floatingStill(Smooth(20.dp)).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Spinner(14.dp)

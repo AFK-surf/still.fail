@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -287,7 +286,7 @@ private fun ColumnScope.JobBody(app: AppState, station: String, job: Job, tab: I
             }
         }
         if (running) Row(
-            Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(23.dp)).background(C.red.copy(alpha = 0.12f)).clickable(enabled = !app.stopping(station, job)) { app.stopJob(station, job) },
+            Modifier.fillMaxWidth().height(46.dp).clip(Smooth(23.dp)).background(C.red.copy(alpha = 0.12f)).clickable(enabled = !app.stopping(station, job)) { app.stopJob(station, job) },
             horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically,
         ) {
             val stopFailed = app.stopFailed(station, job)

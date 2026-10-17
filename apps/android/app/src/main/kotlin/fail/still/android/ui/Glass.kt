@@ -6,7 +6,6 @@
 package fail.still.android.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -66,11 +65,11 @@ val GlassBlur = cssBlur(20f)
 /** The composer's capsule: its corner and the room inside it; what sits in it takes the corner that is concentric with it. */
 val ComposerCorner = 26.dp
 val ComposerInset = 8.dp
-val InComposer = RoundedCornerShape(ComposerCorner - ComposerInset)
+val InComposer = Smooth(concentric(ComposerCorner, ComposerInset))
 /** The files in it: as far from its edge as from its top (its room and 2 more, as the web phone's: ChatHost.css.ts), and
  *  rounded as its corner less that. */
 val ComposerFilesIn = 10.dp
-val InComposerFiles = RoundedCornerShape(ComposerCorner - ComposerFilesIn)
+val InComposerFiles = Smooth(concentric(ComposerCorner, ComposerFilesIn))
 
 /**
  * A capsule floating over the list that `state` is the source of: raised and frosted as the web phone's (pages.css.ts

@@ -5,6 +5,7 @@
 package fail.still.android.screens
 
 import android.content.ClipData
+import fail.still.android.ui.Smooth
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.activity.compose.BackHandler
@@ -20,7 +21,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -234,7 +234,7 @@ internal fun PickLayer(pick: MessagePick, follow: () -> Unit, moving: Boolean, t
  */
 @Composable
 private fun PickBar(modifier: Modifier, quotes: Boolean, everything: Boolean, onQuote: () -> Unit, onCopy: () -> Unit, onAll: () -> Unit) {
-    val shape = RoundedCornerShape(20.dp)
+    val shape = Smooth(20.dp)
     // Placed by its middle (the offset is where its middle goes).
     Box(modifier.layoutCentred()) {
         Row(
@@ -260,7 +260,7 @@ private fun Modifier.layoutCentred() = this.layout { measurable, constraints ->
 @Composable
 private fun BarButton(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector?, onClick: () -> Unit) {
     Row(
-        Modifier.height(32.dp).clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp),
+        Modifier.height(32.dp).clip(Smooth(16.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         if (icon != null) IconIn(icon, 15.dp, C.ink)

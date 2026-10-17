@@ -4,6 +4,7 @@
 package fail.still.android.screens
 
 import androidx.compose.animation.core.RepeatMode
+import fail.still.android.ui.Smooth
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -20,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -43,7 +43,7 @@ import fail.still.android.ui.reducedMotion
 fun LoadingPill(text: String, error: Boolean = false, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxWidth().padding(top = 14.dp, bottom = 4.dp, start = 20.dp, end = 20.dp), contentAlignment = Alignment.Center) {
         Row(
-            Modifier.background(C.chip, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 6.dp)
+            Modifier.background(C.chip, Smooth(16.dp)).padding(horizontal = 12.dp, vertical = 6.dp)
                 .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -63,7 +63,7 @@ private fun placeholderAlpha(still: Boolean): () -> Float {
 }
 
 @Composable
-private fun Bar(width: Dp, height: Dp, shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(7.dp)) =
+private fun Bar(width: Dp, height: Dp, shape: androidx.compose.ui.graphics.Shape = Smooth(7.dp)) =
     Box(Modifier.width(width).height(height).background(C.bubble, shape))
 
 /** The chat list's rows to come (Home.kt ChatRowBody's size: 66 high, its title and line, who is in it at the end). */
@@ -90,7 +90,7 @@ fun PlaceholderMessages(still: Boolean = false) {
     Column(Modifier.fillMaxWidth().padding(top = 8.dp).graphicsLayer { this.alpha = alpha() }.clearAndSetSemantics {}, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         for ((mine, w, h) in MESSAGES) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
             if (!mine) { Box(Modifier.size(28.dp).background(C.bubble, CircleShape)); Spacer(Modifier.width(10.dp)) }
-            Bar(w.dp, h.dp, RoundedCornerShape(18.dp))
+            Bar(w.dp, h.dp, Smooth(18.dp))
         }
     }
 }

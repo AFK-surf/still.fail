@@ -6,12 +6,12 @@
 package fail.still.android.screens
 
 import fail.still.android.data.t
+import fail.still.android.ui.Smooth
 import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.LaunchedEffect
@@ -116,7 +116,7 @@ fun ArchiveScreen(current: WorkspaceEntry) {
 private fun ArchiveSearch(q: String, onChange: (String) -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 8.dp).height(38.dp)
-            .clip(RoundedCornerShape(19.dp)).background(C.ink.copy(alpha = 0.06f)).padding(horizontal = 12.dp),
+            .clip(Smooth(19.dp)).background(C.ink.copy(alpha = 0.06f)).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         IconIn(Icons.Search, 17.dp, C.muted)

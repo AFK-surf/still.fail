@@ -37,7 +37,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.ui.semantics.semantics
@@ -179,7 +178,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
                             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 combos.forEach { combo ->
                                     Text(combo.label, fontSize = 13.sp, lineHeight = 18.sp, color = if (combo.selected) C.ink else C.muted,
-                                        modifier = Modifier.semantics { selected = combo.selected }.clip(RoundedCornerShape(18.dp))
+                                        modifier = Modifier.semantics { selected = combo.selected }.clip(Smooth(18.dp))
                                             .background(C.ink.copy(alpha = if (combo.selected) 0.10f else 0.04f))
                                             .clickable(enabled = !leaving) { app.pickNew(workspace) {
                                                 put("model", combo.model); put("runtime", combo.runtime); put("effort", combo.effort)
@@ -273,7 +272,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
 private fun Chooser(haze: HazeState, leading: (@Composable () -> Unit)?, label: String, modifier: Modifier = Modifier, chevron: Boolean = false, onClick: () -> Unit) {
     // The same glass as the composer's capsule under it, over the scene running on under both.
     Row(
-        modifier.height(30.dp).floating(haze, RoundedCornerShape(15.dp)).clickable(onClick = onClick).padding(horizontal = 11.dp),
+        modifier.height(30.dp).floating(haze, Smooth(15.dp)).clickable(onClick = onClick).padding(horizontal = 11.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         leading?.invoke()
@@ -324,7 +323,7 @@ private fun openRunPicker(app: AppState, station: String) {
         SheetGrab()
         if (accounts) {
             Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 18.dp, top = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(36.dp).clip(RoundedCornerShape(18.dp)).clickable { accounts = false }, contentAlignment = Alignment.Center) { IconIn(Icons.ChevronLeft, 20.dp, C.ink) }
+                Box(Modifier.size(36.dp).clip(Smooth(18.dp)).clickable { accounts = false }, contentAlignment = Alignment.Center) { IconIn(Icons.ChevronLeft, 20.dp, C.ink) }
                 Text(t("android-chat.new.account"), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.ink)
             }
         } else SheetHead(t("android-chat.new.model"))
@@ -384,7 +383,7 @@ private fun openRunPicker(app: AppState, station: String) {
             // Saving: a spinner in it, the sheet open until the core has it (closed then, unless another took its place).
             val saving = app.isDoing("pick.save", "station" to station, "of" to "new")
             Row(
-                Modifier.clip(RoundedCornerShape(19.dp)).background(if (v.changed) C.ink else C.chip).clickable(enabled = v.option != null && !saving) {
+                Modifier.clip(Smooth(19.dp)).background(if (v.changed) C.ink else C.chip).clickable(enabled = v.option != null && !saving) {
                     if (!v.changed) { app.sheet = null; return@clickable }
                     val sheet = app.sheet
                     app.scope.launch {

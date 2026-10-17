@@ -35,7 +35,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -387,7 +386,7 @@ fun AudioViewer(file: File, name: String) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).widthIn(max = 480.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(name, fontSize = 15.sp, color = C.muted, maxLines = 1)
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 54.dp).clip(RoundedCornerShape(27.dp)).background(C.chip).padding(horizontal = 8.dp),
+            Modifier.fillMaxWidth().heightIn(min = 54.dp).clip(Smooth(27.dp)).background(C.chip).padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Box(Modifier.size(38.dp).clip(CircleShape).background(C.ink).clickable(enabled = ready) {

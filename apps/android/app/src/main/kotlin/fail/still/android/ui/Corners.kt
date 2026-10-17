@@ -57,6 +57,13 @@ class Smooth(topStart: CornerSize, topEnd: CornerSize, bottomEnd: CornerSize, bo
 }
 
 /**
+ * The corner, as Smooth takes it, of a smooth box `inset` inside a smooth one of corner `outer`, concentric with it: a
+ * curve moved in by `inset` is drawn `inset` smaller, and Smooth draws a corner a quarter larger than it is given, so
+ * the inset is taken a quarter smaller here (as the web's squarer corners less their padding, align.ts surface).
+ */
+fun concentric(outer: Dp, inset: Dp): Dp = outer - inset / SMOOTH_SCALE
+
+/**
  * A box on its way between a round-cornered place and a smooth one (a note flying from a capsule into its card):
  * `amount` of the smoothing, 0 the plain round corner and 1 Smooth's own.
  */
