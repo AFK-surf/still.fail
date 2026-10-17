@@ -10,7 +10,8 @@
 //
 // It prints a line per check and a table at the end, and exits 1 if any check failed. Real processes and a real relay:
 // a side test (scripts/side.sh), not one of the deterministic ones.
-import { type ChildProcess, execFileSync, spawn } from "node:child_process";
+import { type ChildProcess, execFile, execFileSync, spawn } from "node:child_process";
+import { promisify } from "node:util";
 import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync, openSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:https";
@@ -233,7 +234,8 @@ async function main() {
   check("by proxy: the host got the token; the agent saw neither it nor more than the placeholder", ran.text.trim().replace(/\n/g, " | "), ran.text.includes(`authorization-sha256=${want}`) && !ran.text.includes(TOKEN));
   const again = await tool("secret_run", { grant: request.id, command });
   check("a grant for one use, used: refused", again.text, again.error && /one use/.test(again.text));
-  const direct = execFileSync("curl", ["-sS", "--cacert", hostCaFile, `https://localhost:${hostPort}/`, "-H", "Authorization: Bearer stillfail-secret:" + request.id], { encoding: "utf8" });
+  // Not execFileSync: the host answers from this process.
+  const direct = (await promisify(execFile)("curl", ["-sS", "--cacert", hostCaFile, `https://localhost:${hostPort}/`, "-H", "Authorization: Bearer stillfail-secret:" + request.id], { encoding: "utf8" })).stdout;
   check("the placeholder alone (not through the proxy) is no token", direct.trim(), !direct.includes(want));
 
   say("by environment: the value hidden in what the agent sees");
