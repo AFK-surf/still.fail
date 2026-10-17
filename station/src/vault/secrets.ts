@@ -238,9 +238,11 @@ export class Secrets {
   /// The card for request `r` in the session's chat: the vault's owner decides it in the app.
   async #post(session: string, thread: SessionThread, r: Request, l: Listing, owner: string | undefined): Promise<string | null> {
     const how = r.mode === "proxy" ? `代理 · 只发往 ${(r.hosts ?? l.hosts).join(", ")}` : r.mode === "ssh" ? "ssh-agent（钥匙不离开 station）" : "环境变量（命令看得到原值）";
-    const text = [`agent 要用「${l.name}」：${r.reason}`, ...(r.command ? [`命令：\`${r.command.replace(/`/g, "'")}\``] : []), `方式：${how}`, "在 still.fail app 里批准，要验证指纹或锁屏密码。"].join("\n\n");
     const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
     const stillfail = thread.thread.surface === STILLFAIL_SURFACE;
+    // In a still.fail chat the card says where it is approved; Slack has no card, so the words say it.
+    const where = stillfail ? [] : ["在 still.fail app 的「密钥」里批准，要验证指纹或锁屏密码。"];
+    const text = [`agent 要用「${l.name}」：${r.reason}`, ...(r.command ? [`命令：\`${r.command.replace(/`/g, "'")}\``] : []), `方式：${how}`, ...where].join("\n\n");
     const card = stillfail
       ? {
           type: "options",
