@@ -1,15 +1,11 @@
 // What another app shares into still.fail (docs/share-in.md): the system's share sheet hands this activity a link or
 // some text (ACTION_SEND, text/plain), and it shows over that app, not over still.fail: one sheet of the chats it can
-// go to, the composer under them. Sent, the sheet goes and only a note is left at the foot of the screen (its window
-// shrunk to it, touches beside it going to the app under it), with 打开; then the activity ends, and the app it came
-// from is as it was.
+// go to. A tap puts what is shared in that chat's composer and opens still.fail at the chat (MainActivity, by
+// `OPEN_STATION` / `OPEN_SESSION`), where it is added to and sent; this activity ends.
 package fail.still.android.share
 
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
-import android.view.Gravity
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -69,28 +65,18 @@ class ShareActivity : ComponentActivity() {
         setContent {
             val dark = when (appearance) { "light" -> false; "dark" -> true; else -> isSystemInDarkTheme() }
             StillFailTheme(dark) {
-                ShareScreen(shared, target, onSent = ::sent, onOpenApp = ::openApp, onClose = ::finish)
+                ShareScreen(shared, target, onOpen = { openApp(it) }, onOpenApp = { openApp(null) }, onClose = ::finish)
             }
         }
     }
 
-    /**
-     * Sent: the window only as tall as the note at its foot (`height` px; a window of WRAP_CONTENT stays the screen's,
-     * as what is in it fills its parent), and what is beside it the app's under it.
-     */
-    private fun sent(height: Int) {
-        if (window.attributes.height == height) return
-        // The keyboard (gone with the sheet) no longer moves what is left.
-        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING or WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
-        window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, height)
-        window.setGravity(Gravity.BOTTOM)
-        window.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL)
-    }
-
-    /** still.fail itself: at a chat (`link`, as an item's link opens it), or as it was. */
-    private fun openApp(link: String?) {
+    /** still.fail itself: at a chat (`to`: its session, or a new chat on its station), or as it was. */
+    private fun openApp(to: Opened?) {
         val open = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (link != null) open.setAction(Intent.ACTION_VIEW).setData(Uri.parse(link))
+        if (to != null) {
+            open.putExtra(MainActivity.OPEN_STATION, to.station)
+            to.session?.let { open.putExtra(MainActivity.OPEN_SESSION, it) }
+        }
         startActivity(open)
         finish()
     }
@@ -111,10 +97,5 @@ class ShareActivity : ComponentActivity() {
             return Shared(text, title)
         }
 
-        /** An item's link, as Slack's open the app at it (MainActivity.handle → link.parse). */
-        fun itemLink(station: String, session: String): String {
-            val (ws, st) = station.split('/', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
-            return "${BuildConfig.CLOUD_ORIGIN.trimEnd('/')}/o/${Uri.encode(ws)}/${Uri.encode(st)}/${Uri.encode(session)}"
-        }
     }
 }

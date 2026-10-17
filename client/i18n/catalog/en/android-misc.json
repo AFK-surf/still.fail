@@ -513,10 +513,7 @@
   "android-misc.shareIn.find": "Find a chat",
   "android-misc.shareIn.newChat": "New chat",
   "android-misc.shareIn.on": "On {name}",
-  "android-misc.shareIn.note": "Add a note (optional)",
-  "android-misc.shareIn.sent": "Sent to “{title}”",
-  "android-misc.shareIn.open": "Open",
-  "android-misc.shareIn.failed": "Not sent: {error}",
+  "android-misc.shareIn.failed": "Couldn't open it: {error}",
   "android-misc.shareIn.signIn": "Sign in to still.fail first, then share",
   "android-misc.shareIn.openApp": "Open still.fail",
   "android-misc.shareIn.update": "still.fail on this phone needs an update to share"

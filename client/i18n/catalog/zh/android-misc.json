@@ -486,10 +486,7 @@
   "android-misc.shareIn.find": "找 chat",
   "android-misc.shareIn.newChat": "新 chat",
   "android-misc.shareIn.on": "在 {name} 上开",
-  "android-misc.shareIn.note": "补一句（可选）",
-  "android-misc.shareIn.sent": "已发到「{title}」",
-  "android-misc.shareIn.open": "打开",
-  "android-misc.shareIn.failed": "没发出去：{error}",
+  "android-misc.shareIn.failed": "没能打开：{error}",
   "android-misc.shareIn.signIn": "先在 still.fail 里登录，再来分享",
   "android-misc.shareIn.openApp": "打开 still.fail",
   "android-misc.shareIn.update": "这台手机上的 still.fail 需要更新才能分享"

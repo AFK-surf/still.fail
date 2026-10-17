@@ -29,9 +29,12 @@ import fail.still.android.ui.Icons
  */
 @Composable
 fun DoingMark(running: Boolean, failed: String?, size: Dp = 14.dp) {
-    val app = LocalApp.current
     if (running) Spinner(size)
-    else if (failed != null) IconIn(Icons.Info, size, C.red, Modifier.semantics { contentDescription = failed }.clickable { app.toast = failed })
+    // The app only for what failed: a spinner shows where there is none (the share sheet over another app).
+    else if (failed != null) {
+        val app = LocalApp.current
+        IconIn(Icons.Info, size, C.red, Modifier.semantics { contentDescription = failed }.clickable { app.toast = failed })
+    }
 }
 
 /**

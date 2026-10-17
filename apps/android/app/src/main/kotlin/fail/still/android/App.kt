@@ -492,6 +492,13 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
         stack = listOf(Screen.Home, Screen.Chat(address, ChatOf.Session(session), at = at)) + listOfNotNull(service?.let { Screen.Preview(address, it) })
     }
 
+    /** A new chat's page from outside (what is shared, in its composer): over the workspace's list. */
+    fun openNew(workspace: String) {
+        pickWorkspace(workspace)
+        sheet = null; menu = null; forward = true
+        stack = listOf(Screen.Home, Screen.NewChat)
+    }
+
     /** An agent's execution history, over the chat it is in (at `entry`, else its newest): not twice over itself. */
     private fun pushHistory(address: String, of: ChatOf, key: String, entry: Long?) {
         val page = Screen.History(address, of, key, entry)

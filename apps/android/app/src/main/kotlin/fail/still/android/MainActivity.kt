@@ -39,6 +39,12 @@ import kotlinx.serialization.json.put
 import fail.still.android.ui.LocalUi
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        /** A chat to open at (share/ShareActivity.kt): its station's address, and its session (none: a new chat there). */
+        const val OPEN_STATION = "fail.still.android.OPEN_STATION"
+        const val OPEN_SESSION = "fail.still.android.OPEN_SESSION"
+    }
+
     private var app by mutableStateOf<AppState?>(null)
 
     /**
@@ -207,8 +213,16 @@ class MainActivity : ComponentActivity() {
      * an invitation's link and a chat's reference link go as links tapped in the app (AppState.openLink).
      */
     private fun handle(intent: Intent?) {
-        val uri = intent?.data ?: return
         val app = app ?: return
+        // Something shared into a chat's composer (share/ShareActivity.kt): that chat, or a new chat on its station.
+        intent?.getStringExtra(OPEN_STATION)?.let { station ->
+            setIntent(Intent())
+            val workspace = station.substringBefore('/')
+            val session = intent.getStringExtra(OPEN_SESSION)
+            if (session != null) app.openItem(workspace, station.substringAfter('/'), session) else app.openNew(workspace)
+            return
+        }
+        val uri = intent?.data ?: return
         // What the link opens is the core’s (`link.parse`), including a dev cloud’s http origin.
         // A notification's opens its chat at the message it is about.
         if (uri.scheme == "https" || uri.scheme == "http") {
