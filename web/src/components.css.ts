@@ -50,14 +50,14 @@ export const quotaChipFill = style({
   },
 });
 /** Its number in the text's colour while there is plenty (the muted grey over the fill read too faint); in its colour
- * once it runs low. Its mark stays quiet. */
+ * once it runs low. Its mark a step quieter, halfway to the muted grey (still about 6:1 over the fill). */
 export const quotaChipText = style({
   position: "relative", display: "inline-flex", gap: "5px", color: vars.text,
   selectors: {
     [`${quotaChip}:is([data-level="amber"], [data-level="red"]) &`]: { color: "currentColor" },
   },
 });
-export const quotaChipMark = style({ color: vars.muted });
+export const quotaChipMark = style({ color: `color-mix(in srgb, ${vars.text} 50%, ${vars.muted})` });
 // Its mark and number trimmed to their capitals and figures, so they sit in the middle of the box (as the font sets
 // them, lower by the room it keeps above for accents).
 globalStyle(`${quotaChipText} > span`, { display: "inline-block", textBoxTrim: "trim-both", textBoxEdge: "cap alphabetic" });
