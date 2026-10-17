@@ -138,9 +138,9 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
                   {list.map((o) => (
                     <Tip key={o.model} label={o.ids.join("\n")}><button type="button" className={css2.runPickerOption} aria-pressed={v.option === o.model} data-availability={o.availability} onClick={() => pick.set({ model: o.model })}>
                       <ModelLogo maker={o.maker} runtime={o.runtimes[0] ?? value.runtime} size={14} />
-                      <span className={css2.runOptionText}><span className={css2.runOptionName}>{o.name}</span>{o.spent && <span className={css2.runPickerSpent}>{o.spent.text}</span>}
-                        {/* Another station's: where it comes from (borrowed), or where it is (not usable here till borrowed). */}
-                        {o.fromText && <span className={css2.runOptionFrom}>{o.fromText}</span>}</span>
+                      <span className={css2.runOptionText}><span className={css2.runOptionName}>{o.name}</span>{o.spent && <span className={css2.runPickerSpent}>{o.spent.text}</span>}</span>
+                      {/* Another station's, on the same line: where it comes from (borrowed), or where it is (not usable here till borrowed). */}
+                      {o.fromText && <span className={css2.runOptionFrom}>{o.fromText}</span>}
                       <Check size={14} className={css2.runCheck} />
                     </button></Tip>
                   ))}

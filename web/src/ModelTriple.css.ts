@@ -164,8 +164,8 @@ export const runPickerSpent = style({ fontSize: vars.textMeta, color: vars.amber
 export const runPickerModels = style({ minWidth: "200px", maxWidth: "300px", flex: "1 1 auto", overflowY: "auto" });
 /** A model's name too long for the column is cut short. */
 export const runOptionName = style({ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-/** Where another station's model comes from, under its name. */
-export const runOptionFrom = style({ fontSize: vars.textMeta, fontWeight: 400, color: vars.muted });
+/** Where another station's model comes from, after its name on its line (the name gives way first). */
+export const runOptionFrom = style({ flex: "none", fontSize: vars.textMeta, fontWeight: 400, color: vars.muted, whiteSpace: "nowrap" });
 /** One not usable here till borrowed: faint, until it is the one picked. */
 globalStyle(`${runPickerOption}[data-availability="borrowable"]:not([aria-pressed="true"]) ${runOptionName}`, { color: vars.muted });
 /** Over the foot: the model picked is not usable here yet. */
