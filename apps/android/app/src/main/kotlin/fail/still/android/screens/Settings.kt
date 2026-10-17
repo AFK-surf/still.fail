@@ -550,7 +550,9 @@ private fun JoinStation(current: WorkspaceEntry, view: JoinableView, onClose: ()
     var picked by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var done by remember { mutableStateOf<String?>(null) }
-    val chosen = view.items.firstOrNull { it.station == picked } ?: view.items.firstOrNull()
+    // One whose home's security mode keeps it out is shown, not picked.
+    val open = view.items.filter { !it.needsLock }
+    val chosen = open.firstOrNull { it.station == picked } ?: open.firstOrNull()
     val busy = chosen != null && app.isDoing("station.join", "workspace" to ws, "station" to chosen.station)
     // The words 20 in from the sheet's edges; the picking rows edge to edge, their own room making it 20 for theirs.
     val side = Modifier.padding(horizontal = 20.dp)
@@ -565,7 +567,7 @@ private fun JoinStation(current: WorkspaceEntry, view: JoinableView, onClose: ()
         else Column {
             view.items.forEach { s ->
                 // Its mark before its name, as a station's own sheet has it: every name starts in one line.
-                PickRow(s.name, s.line, checked = s.station == chosen?.station, enabled = !busy,
+                PickRow(s.name, s.line, checked = s.station == chosen?.station, enabled = !busy && !s.needsLock,
                     mark = if (hasStationMark(s.emoji, s.icon)) ({ StationMark(s.emoji, s.icon, 15.dp, C.ink) }) else null) {
                     picked = s.station; error = null
                 }

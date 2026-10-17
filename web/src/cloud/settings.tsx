@@ -670,8 +670,10 @@ function AddKinds({ kind, onKind }: { kind: AddKind; onKind(kind: AddKind): void
  * join with it). What that shares of the machine is said under the list: one system user, kept apart, not a sandbox.
  */
 export function JoinStationDialog({ view, joinable, onKind, onClose }: { view: WorkspaceView; joinable: JoinableView; onKind(kind: AddKind): void; onClose(): void }) {
-  const [picked, setPicked] = useState<string>(joinable.items[0]?.station ?? "");
-  const chosen = joinable.items.find((s) => s.station === picked) ?? joinable.items[0];
+  // One whose home's security mode keeps it out is shown, not picked.
+  const open = joinable.items.filter((s) => !s.needsLock);
+  const [picked, setPicked] = useState<string>(open[0]?.station ?? "");
+  const chosen = open.find((s) => s.station === picked) ?? open[0];
   const join = useAction((station: string) => cloud.joinStation(view.id, station));
   const busy = useDoing("station.join", { workspace: view.id, station: chosen?.station ?? "" }) || join.busy;
   const done = join.result ? joinable.items.find((s) => s.station === join.arg) ?? chosen : undefined;
@@ -689,7 +691,7 @@ export function JoinStationDialog({ view, joinable, onKind, onClose }: { view: W
         <Field label={t("web-pages.settings.stations.existingLabel")} hint={t("web-pages.settings.stations.softIsolation")}>
           <Choices<string> label={t("web-pages.settings.stations.existingLabel")} value={chosen?.station ?? ""} onChange={setPicked}
             options={joinable.items.map((s) => ({
-              value: s.station, title: s.name, description: s.line,
+              value: s.station, title: s.name, description: s.line, disabled: s.needsLock,
               icon: <MarkOrLetter emoji={s.emoji} icon={s.icon} name={s.name} />,
             }))} />
         </Field>

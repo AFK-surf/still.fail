@@ -130,6 +130,8 @@ export const JOINABLE = {
     { station: "lab/mini1", id: "mini1", name: "Mini1", icon: "glyph:dice-1", workspace: "lab", workspaceName: "Lab", online: true, line: "Lab · 在线" },
     { station: "lab/gpu", id: "gpu", name: "GPU 主机", emoji: "🔥", workspace: "lab", workspaceName: "Lab", online: false, line: "Lab · 离线" },
     { station: "home/nas", id: "nas", name: "NAS", workspace: "home", workspaceName: "家里", online: true, line: "家里 · 在线" },
+    // Its home in security mode, this workspace not: shown, not to be picked.
+    { station: "safe/vault", id: "vault", name: "Vault", workspace: "safe", workspaceName: "保险库", online: true, line: "保险库 已开启安全模式，需在此 workspace 也开启安全模式后才能添加", needsLock: true },
   ],
 };
 /** None to add: the viewer manages another workspace, but its stations are all here already. */

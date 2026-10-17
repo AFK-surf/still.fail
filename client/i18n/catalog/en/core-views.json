@@ -189,6 +189,7 @@
   "core-views.flow.verify_add": "Verify and add",
   "core-views.flow.wait": "Wait for the current step to finish",
   "core-views.joinable.offline": "offline",
+  "core-views.joinable.needsLock": "{workspace} is in security mode. Turn on security mode in this workspace to add it.",
   "core-views.joinable.online": "online",
   "core-views.list_separator": ", ",
   "core-views.local_author": "Local",

@@ -208,8 +208,10 @@ export function AddStationSheet({ known, existing: first = false }: { known: str
  */
 function JoinStation({ joinable }: { joinable: JoinableView }) {
   const app = useApp();
-  const [picked, setPicked] = useState<string>(joinable.items[0]?.station ?? "");
-  const chosen = joinable.items.find((s) => s.station === picked) ?? joinable.items[0];
+  // One whose home's security mode keeps it out is shown, not picked.
+  const open = joinable.items.filter((s) => !s.needsLock);
+  const [picked, setPicked] = useState<string>(open[0]?.station ?? "");
+  const chosen = open.find((s) => s.station === picked) ?? open[0];
   const busy = useDoing("station.join", { workspace: app.entry.id, station: chosen?.station ?? "" });
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -227,7 +229,7 @@ function JoinStation({ joinable }: { joinable: JoinableView }) {
       {joinable.items.length > 0 ? (
         <div>
           {joinable.items.map((s) => (
-            <PickRow key={s.station} label={s.name} sub={s.line} checked={s.station === chosen?.station}
+            <PickRow key={s.station} label={s.name} sub={s.line} checked={s.station === chosen?.station} enabled={!s.needsLock}
               leading={<MarkOrLetter emoji={s.emoji} icon={s.icon} name={s.name} />} onClick={() => setPicked(s.station)} />
           ))}
         </div>

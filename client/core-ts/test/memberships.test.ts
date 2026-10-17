@@ -47,7 +47,8 @@ class Wire implements StationWire {
 /// The viewer: an admin of W (`ws`, the fixture's `st`, and x1, which W joined: its home is 甲), the owner of 甲 (`wa`:
 /// a1 up, a2 joined from elsewhere, st which 甲 joined, x1), a member of 丙 (`wc`, c1) and an admin of 乙 (`wb`, b1
 /// down). What still.fail cloud was asked to make (enrollments) is kept.
-async function setUp(o: { stJoined?: boolean; answers?: ReturnType<typeof base> } = {}) {
+/// `wbLocked`: 乙 in security mode (W is not).
+async function setUp(o: { stJoined?: boolean; wbLocked?: boolean; answers?: ReturnType<typeof base> } = {}) {
   let wire: Wire | null = null;
   const made: { path: string; body: J }[] = [];
   const s = await started(o.answers ?? base(), 0, (host) => (wire = new Wire(host)), ({ host }) => {
@@ -72,7 +73,7 @@ async function setUp(o: { stJoined?: boolean; answers?: ReturnType<typeof base> 
         ]);
       }
       if (path === "/v1/workspaces/wc") return ws("wc", [{ id: "c1", name: "C1", online: true, last_seen: null }]);
-      if (path === "/v1/workspaces/wb") return ws("wb", [{ id: "b1", name: "B1", online: false, last_seen: null }]);
+      if (path === "/v1/workspaces/wb") return Effect.succeed(jsonResponse(200, { id: "wb", stations: [{ id: "b1", name: "B1", online: false, last_seen: null }], ...(o.wbLocked ? { locked: true } : {}) }));
       if (req.method === "POST" && path === "/v1/workspaces/ws/enrollments") {
         made.push({ path, body: JSON.parse(new TextDecoder().decode(req.body!)) });
         return Effect.succeed(jsonResponse(200, { token: "tok-1", expires_at: 1, install: "", command: "" }));
@@ -108,13 +109,27 @@ test("the stations to add are those whose home the viewer manages and that are n
     offered: true,
     loading: false,
     items: [
-      { station: "wa/a1", id: "a1", name: "A1", workspace: "wa", workspaceName: "甲", online: true, line: "甲 · 在线" },
-      { station: "wb/b1", id: "b1", name: "B1", workspace: "wb", workspaceName: "乙", online: false, line: "乙 · 离线" },
+      { station: "wa/a1", id: "a1", name: "A1", workspace: "wa", workspaceName: "甲", online: true, line: "甲 · 在线", needsLock: false },
+      { station: "wb/b1", id: "b1", name: "B1", workspace: "wb", workspaceName: "乙", online: false, line: "乙 · 离线", needsLock: false },
     ],
   });
   // In W's list, the one W joined says so, and where it is from.
   const listed = (v(values, 2) as J[]).map((s) => [s.id, s.joined, s.home ?? null]);
   assert.deepEqual(listed, [["st", false, null], ["x1", true, "甲"]]);
+  core.close();
+});
+
+test("a station whose home is in security mode is listed for a workspace not in it, but not to be picked, saying why", async () => {
+  const { host, core } = await setUp({ wbLocked: true });
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "joinable", workspace: "ws" });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual((v(values, 1) as J).items.map((s: J) => [s.id, s.needsLock, s.line]), [
+    ["a1", false, "甲 · 在线"],
+    ["b1", true, "乙 已开启安全模式，需在此 workspace 也开启安全模式后才能添加"],
+  ]);
   core.close();
 });
 

@@ -79,13 +79,13 @@ export function joinable(inner: Inner, workspace: string): J {
   const here = new Set((stationsOf(inner, workspace) ?? []).map((s) => get(s, "id")));
   const theirs = all.filter((p) => p.id !== workspace && manager(p.role));
   let loading = stationsOf(inner, workspace) === null;
-  // A station whose home is in security mode joins only workspaces in it too.
+  // A station whose home is in security mode joins only workspaces in it too: listed, not to be picked, saying so.
   const locked = lockedWs(inner, workspace);
   const items: J[] = [];
   const seen = new Set<string>();
   for (const p of theirs) {
     const stations = stationsOf(inner, p.id);
-    if (!locked && lockedWs(inner, p.id)) continue;
+    const needsLock = !locked && lockedWs(inner, p.id);
     if (stations === null) {
       loading = true;
       continue;
@@ -105,7 +105,8 @@ export function joinable(inner: Inner, workspace: string): J {
         workspace: p.id,
         workspaceName: p.name,
         online,
-        line: `${p.name} · ${online ? t("core-views.joinable.online") : t("core-views.joinable.offline")}`,
+        line: needsLock ? t("core-views.joinable.needsLock", { workspace: p.name }) : `${p.name} · ${online ? t("core-views.joinable.online") : t("core-views.joinable.offline")}`,
+        ...(needsLock ? { needsLock: true } : {}),
       });
     }
   }

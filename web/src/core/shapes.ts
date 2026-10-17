@@ -2771,8 +2771,13 @@ export interface JoinableStation {
 	workspace: string;
 	workspaceName: string;
 	online: boolean;
-	/** Its home workspace and whether it is up, in a line: Acme · 在线. */
+	/** Its home workspace and whether it is up, in a line: Acme · 在线; with `needsLock`, why it cannot be added. */
 	line: string;
+	/**
+	 * Its home is in security mode and this workspace is not: it joins only one in it too, so it is shown
+	 * but not to be picked (docs/multi-workspace.md).
+	 */
+	needsLock?: boolean;
 }
 
 /**

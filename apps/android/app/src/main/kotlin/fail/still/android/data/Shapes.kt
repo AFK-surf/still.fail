@@ -2781,8 +2781,11 @@ data class JoinableStation (
 	val workspace: String,
 	val workspaceName: String,
 	val online: Boolean,
-	/// Its home workspace and whether it is up, in a line: Acme · 在线.
-	val line: String
+	/// Its home workspace and whether it is up, in a line: Acme · 在线; with `needsLock`, why it cannot be added.
+	val line: String,
+	/// Its home is in security mode and this workspace is not: it joins only one in it too, so it is shown
+	/// but not to be picked (docs/multi-workspace.md).
+	val needsLock: Boolean? = null
 )
 
 /// The stations that could be added to a workspace as they are (the `joinable` topic; views/memberships.ts): those

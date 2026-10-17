@@ -2094,7 +2094,8 @@ export const SHAPES: Record<string, Shape> = {
     ["workspace", "String", { doc: "Its home workspace." }],
     ["workspaceName", "String"],
     ["online", "bool"],
-    ["line", "String", { doc: "Its home workspace and whether it is up, in a line: Acme · 在线." }],
+    ["line", "String", { doc: "Its home workspace and whether it is up, in a line: Acme · 在线; with `needsLock`, why it cannot be added." }],
+    ["needsLock", "bool", { default: true, doc: "Its home is in security mode and this workspace is not: it joins only one in it too, so it is shown\nbut not to be picked (docs/multi-workspace.md)." }],
   ], { doc: "A station that could be added to a workspace." }),
   MembershipsView: struct([
     ["manages", "bool", { doc: "The viewer is an owner or admin of its home workspace (the one the page is in): only they see this." }],

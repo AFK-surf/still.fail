@@ -153,6 +153,7 @@
   "core-views.flow.verify_add": "验证并添加",
   "core-views.flow.wait": "请等待当前操作完成",
   "core-views.joinable.offline": "离线",
+  "core-views.joinable.needsLock": "{workspace} 已开启安全模式，需在此 workspace 也开启安全模式后才能添加",
   "core-views.joinable.online": "在线",
   "core-views.list_separator": "、",
   "core-views.local_author": "本机",
