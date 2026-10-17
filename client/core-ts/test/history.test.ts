@@ -49,16 +49,34 @@ test("a_prompt_is_the_messages_it_carried_and_embers_words_around_them", () => {
   assert.equal(old[0].text, "yo");
 });
 
-test("a_station_notice_is_drawn_as_still_fails_or_as_the_job_that_spoke", () => {
+test("a_station_notice_is_a_jobs_words_or_an_event_in_a_line", () => {
   const said = "OVER BUDGET: run 1 took 301 s\n\njobs:\n  +   0 s    13 s  plan";
-  const notices = [`Job "ci-time-watch" (job_2b767635) says: ${said}`, 'Service "web" (job_1, port 5173) says: up', "Job \"x\" (job_2) ended with exit code 1.\nIts last lines:\n```\nboom\n```"];
+  const notices = [
+    `Job "ci-time-watch" (job_2b767635) says: ${said}`,
+    'Service "web" (job_1, port 5173) says: up',
+    'Job "shot" (job_2) ended with exit code 1.\nIts last lines:\n```\nboom\n```',
+    'Service "web" (job_1, port 5173) ended with a signal; the station starts it again in 2 s.',
+    'Job "shot" (job_2) was stopped by Ada from still.fail\'s page.',
+    'The station restarted; Job "shot" (job_2) could not be started again: no such file',
+    'The chat you opened, "Fix CI" (https://still.fail/chats/c-1), needs a person: pick one. They are asked there; help if you can, or wait. Read it with chat_read; write to its agent with session_send to its link.',
+    'Remote task t1 on mini1: {"job":{"state":"running"}}',
+  ];
   const text = notices.map((n) => `<message via="ember" from="ember" ts="9.1">\n${n}\n</message>`).join("\n");
   assert.equal(parsePrompt(text)[0][0].station, true);
   const h = presentHistory({ loaded: true, timeline: [{ kind: "user", text }] }, cx([], [], []));
-  const [job, service, ended] = h.items[0].body.content.messages;
-  assert.deepEqual([job.notice, job.from.name, job.text], ["job", "ci-time-watch", said]);
-  assert.deepEqual([service.notice, service.from.name, service.text], ["job", "web", "up"]);
-  assert.deepEqual([ended.notice, ended.from.name, ended.md !== undefined], ["stillfail", "still.fail", true]);
+  const { tasks, messages } = h.items[0].body.content;
+  assert.deepEqual(messages.map((m: J) => [m.key, m.notice, m.from.name, m.text]), [
+    ["9.1.0", "job", "ci-time-watch", said],
+    ["9.1.1", "job", "web", "up"],
+    ["9.1.7", "stillfail", "still.fail", notices[7]],
+  ]);
+  assert.deepEqual(tasks.map((x: J) => [x.text, x.agent, x.failed, x.result]), [
+    ["任务已退出（退出码 1）：shot", false, true, "boom"],
+    ["服务被信号终止，正在重新启动：web", false, true, null],
+    ["任务已被 Ada 停止：shot", false, false, null],
+    ["任务无法重新启动：shot", false, true, "no such file"],
+    ["对话需要你处理：Fix CI", true, false, "pick one"],
+  ]);
 });
 
 test("a_task_notification_is_read_into_how_the_work_ended", () => {

@@ -171,6 +171,13 @@ export const hTurn = style({
   },
 });
 globalStyle(`${hTurn} > span`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis" });
+/** The turn's link to copy: past the end of its rule, shown while the row is pointed at. */
+export const hTurnLink = style({
+  order: "1", width: "24px", height: "24px", marginBlock: "-4px", borderRadius: vars.rOption, opacity: "0",
+  selectors: {
+    [`${hItem}:hover &, &:focus-visible`]: { opacity: "1" },
+  },
+});
 /** An item's events, one under another (a prompt can carry a note, tasks and messages). `data-rail`: the turn goes on
  * past it, its rail running down to the next item. */
 export const hMain = style({
@@ -206,6 +213,8 @@ export const hIcon = style({
   position: "relative", width: "20px", height: "20px", display: "grid", placeItems: "center", color: vars.muted,
   background: vars.canvas,
   selectors: {
+    // In a group's line pointed at: on its ground, as the line is.
+    [`${hGroupHead}:hover > &`]: { background: `linear-gradient(${vars.hover}, ${vars.hover}), ${vars.canvas}` },
     [`${hEv}[data-state] > &`]: { background: "none", color: "inherit" },
     [`${hEv}[data-state="done"] > &`]: { color: vars.green },
     [`${hEv}[data-tone="accent"] > &`]: { color: vars.accent },
@@ -265,12 +274,6 @@ export const onlyIo = style({
   },
 });
 /** An item's link, copied from its top-right corner: shown while the item is pointed at (or the button focused). */
-export const hItemLink = style({
-  position: "absolute", top: "-4px", right: "0", opacity: "0", background: vars.canvas,
-  selectors: {
-    [`${hMain}:hover > &, &:focus-visible`]: { opacity: "1" },
-  },
-});
 export const hPhaseText = style({ animation: `${fadeInKeyframes} 180ms ${vars.easeOut}` });
 export const hStepSaid = style({
   minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: vars.text,

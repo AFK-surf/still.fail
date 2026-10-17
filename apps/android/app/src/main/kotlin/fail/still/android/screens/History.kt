@@ -317,12 +317,9 @@ private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgen
                     Text(after, fontSize = 13.sp, color = C.muted)
                     m.place?.let { Text(" · ", fontSize = 13.sp, color = C.muted); Box(Modifier.weight(1f, fill = false)) { Place(station, of, it) } }
                 }, m.text) {
-                    // The station's notices: a job's words as it wrote them (program output); still.fail's own, Markdown.
-                    when (m.notice) {
-                        "job" -> Text(m.text, style = Mono, color = C.ink)
-                        "stillfail" -> Markdown(m.text, size = 15)
-                        else -> Text(m.text, fontSize = 15.sp, lineHeight = 23.sp, color = C.ink)
-                    }
+                    // A job's words as it wrote them (program output), its columns kept.
+                    if (m.notice == "job") Text(m.text, style = Mono, color = C.ink)
+                    else Text(m.text, fontSize = 15.sp, lineHeight = 23.sp, color = C.ink)
                 }
             }
         }

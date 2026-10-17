@@ -64,10 +64,46 @@ function fileOf(text: string): string | null {
 /// A message a prompt carried; `station`: a notice of the station's own (via="ember"), not a person's.
 export type Sourced = { user: string; name: string | null; ts: string; text: string; thread: string | null; slack: boolean; station: boolean };
 
-/// A station notice a job gave (`stillfail-job notify`, jobs.ts `named`): the job's name and what it said, as written.
-export function jobSaid(text: string): { name: string; said: string } | null {
-  const m = /^(?:Job|Service) "(.+?)" \([^()\s,]+(?:, port \d+)?\) says: ([\s\S]*)$/.exec(text);
-  return m ? { name: m[1], said: m[2] } : null;
+/// What a station notice told its agent, read back from the words it was given (jobs.ts `named` and its notices,
+/// opened.ts `notice`): a job's own words (`said`), or an event of a job's or of a chat it opened, in a line with what
+/// more it carried (a job's last lines, its error, the chat's words); null for words of any other kind.
+export type Notice =
+  | { kind: "said"; name: string; said: string }
+  | { kind: "event"; line: string; failed: boolean; chat: boolean; more: string | null; output: boolean };
+
+const CHAT_ENDS: Record<string, [string, boolean]> = {
+  "ended its turn all_done": ["done", false],
+  "needs a person": ["human", false],
+  "stopped with an error": ["failed", true],
+  "was stopped by a person": ["stopped", false],
+};
+
+export function readNotice(text: string): Notice | null {
+  const chat = /^The chat you opened, "(.+?)"(?: \(\S+\))?, (ended its turn all_done|needs a person|stopped with an error|was stopped by a person)(?:: ([\s\S]*?))?(?:\. They are asked there; help if you can, or wait)?\. Read it with chat_read; write to its agent with session_send to its link\.$/.exec(text);
+  if (chat) {
+    const [how, failed] = CHAT_ENDS[chat[2]];
+    return { kind: "event", line: t(`core-logic.history.notice.chat.${how}`, { name: chat[1] }), failed, chat: true, more: chat[3] || null, output: false };
+  }
+  const restarted = text.startsWith("The station restarted; ");
+  const job = /^(Job|Service) "(.+?)" \([^()\s,]+(?:, port \d+)?\) ([\s\S]*)$/.exec(restarted ? text.slice("The station restarted; ".length) : text);
+  if (!job) return null;
+  const [, kind, name, rest] = job;
+  const what = t(kind === "Service" ? "core-logic.history.notice.service" : "core-logic.history.notice.job");
+  const event = (key: string, failed: boolean, more: string | null = null, output = false, args: Record<string, string | number> = {}): Notice =>
+    ({ kind: "event", line: t(`core-logic.history.notice.${key}`, { what, name, ...args }), failed, chat: false, more, output });
+  if (!restarted && rest.startsWith("says: ")) return { kind: "said", name, said: rest.slice("says: ".length) };
+  if (restarted && rest === "was started again.") return event("restarted", false);
+  const unstarted = /^could not be started again: ([\s\S]*)$/.exec(rest);
+  if (unstarted) return event("unstarted", true, unstarted[1]);
+  const stopped = /^was stopped by (.+) from still\.fail's page\.$/.exec(rest);
+  if (stopped) return event("stopped", false, null, false, { who: stopped[1] });
+  const ended = /^ended with (?:exit code (-?\d+)|a signal)(; the station starts it again(?: in [\d.]+ s)?)?\.(?:\nIts last lines:\n```\n([\s\S]*)\n```)?$/.exec(rest);
+  if (ended) {
+    const again = ended[2] !== undefined ? "Again" : "";
+    const code = ended[1] !== undefined ? Number(ended[1]) : null;
+    return code !== null ? event(`exited${again}`, code !== 0, ended[3] ?? null, true, { code }) : event(`signaled${again}`, true, ended[3] ?? null, true);
+  }
+  return null;
 }
 
 function attr(attrs: string, name: string): string | null {
@@ -292,6 +328,9 @@ export function presentHistory(live: J, cx: Context): J {
       case "received": {
         const [messages, said] = parsePrompt(s(timeline[item.i], "text"));
         const [tasks, note] = parseTasks(said);
+        // The station's own notices: an event of a job's or of a chat it opened, in a line as background work's end is.
+        const notices = messages.map((m) => (m.station ? readNotice(m.text) : null));
+        const events = notices.flatMap((n) => (n?.kind === "event" ? [n] : []));
         v = {
           kind: "received",
           note: note !== "" ? note : null,
@@ -301,14 +340,19 @@ export function presentHistory(live: J, cx: Context): J {
             failed: task.status === "failed" || task.status === "killed",
             result: task.result,
             md: task.result !== null ? markdown(task.result) : null,
-          })),
-          messages: messages.map((m) => {
-            // The station's own notice: a job's words as it wrote them (program output), else still.fail's, in Markdown.
-            if (m.station) {
-              const job = jobSaid(m.text);
-              if (job) return { key: m.ts, from: { name: job.name, slackUser: null, bound: false }, text: job.said, place: null, notice: "job" };
-              return { key: m.ts, from: { name: brand.name(), slackUser: null, bound: false }, text: m.text, place: null, notice: "stillfail", md: markdown(m.text) };
-            }
+          })).concat(events.map((n) => ({
+            text: n.line,
+            agent: n.chat,
+            failed: n.failed,
+            result: n.more,
+            md: n.more === null ? null : markdown(n.output ? `\`\`\`\n${n.more}\n\`\`\`` : n.more),
+          }))),
+          messages: messages.flatMap((m, k) => {
+            // A job's own words, as it wrote them (drawn in a monospaced font); still.fail's of any other kind, as they are.
+            const notice = notices[k];
+            if (notice?.kind === "event") return [];
+            if (notice?.kind === "said") return [{ key: `${m.ts}.${k}`, from: { name: notice.name, slackUser: null, bound: false }, text: notice.said, place: null, notice: "job" }];
+            if (m.station) return [{ key: `${m.ts}.${k}`, from: { name: brand.name(), slackUser: null, bound: false }, text: m.text, place: null, notice: "stillfail" }];
             let from: J;
             if (m.slack) {
               const bound = cx.slackUsers.includes(m.user);
@@ -318,7 +362,7 @@ export function presentHistory(live: J, cx: Context): J {
               const name = present.memberName(cx.members, m.user) ?? (m.name !== null && m.name !== "" ? m.name : m.user);
               from = { name, slackUser: null, bound: false };
             }
-            return { key: m.ts, from, text: mentions(m.text, cx), place: place(m.thread) };
+            return [{ key: m.ts, from, text: mentions(m.text, cx), place: place(m.thread) }];
           }),
         };
         break;

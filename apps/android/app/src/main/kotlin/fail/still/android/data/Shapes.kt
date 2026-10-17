@@ -2589,11 +2589,10 @@ data class HistoryMessage (
 	val from: HistoryFrom,
 	val text: String,
 	val place: Place? = null,
-	/// A notice of the station's own, not a person's message: `job` (a job told its agent: `from` is its name,
-	/// `text` what it said, as written: drawn in a monospaced font) or `stillfail` (still.fail's words: drawn from `md`).
-	val notice: String? = null,
-	/// A `stillfail` notice's `text` read as Markdown (markdown.ts): what the clients draw.
-	val md: JsonElement? = null
+	/// A notice of the station's own, not a person's message: `job` (a job's words to its agent: `from` is its
+	/// name, `text` what it said as it wrote it, drawn in a monospaced font) or `stillfail` (still.fail's words of no kind
+	/// the history knows; a job's or a chat's events are `tasks`).
+	val notice: String? = null
 )
 
 @Serializable

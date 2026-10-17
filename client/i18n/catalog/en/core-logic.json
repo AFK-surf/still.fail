@@ -543,5 +543,18 @@
   "core-logic.shareIn.kept_text": "Shared text went here last time",
   "core-logic.shareIn.none": "No chat to send to, and no station online",
   "core-logic.shareIn.error.empty": "Nothing to send",
-  "core-logic.shareIn.new_chat": "New chat"
+  "core-logic.shareIn.new_chat": "New chat",
+  "core-logic.history.notice.job": "Job",
+  "core-logic.history.notice.service": "Service",
+  "core-logic.history.notice.exited": "{what} exited (exit code {code}): {name}",
+  "core-logic.history.notice.exitedAgain": "{what} exited (exit code {code}), restarting: {name}",
+  "core-logic.history.notice.signaled": "{what} ended by a signal: {name}",
+  "core-logic.history.notice.signaledAgain": "{what} ended by a signal, restarting: {name}",
+  "core-logic.history.notice.stopped": "{what} stopped by {who}: {name}",
+  "core-logic.history.notice.restarted": "{what} restarted with the station: {name}",
+  "core-logic.history.notice.unstarted": "{what} couldn't be restarted: {name}",
+  "core-logic.history.notice.chat.done": "Chat done: {name}",
+  "core-logic.history.notice.chat.human": "Chat needs you: {name}",
+  "core-logic.history.notice.chat.failed": "Chat failed: {name}",
+  "core-logic.history.notice.chat.stopped": "Chat stopped: {name}"
 }

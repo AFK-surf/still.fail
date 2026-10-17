@@ -219,8 +219,7 @@ function Item({ item, station, chat, agentText }: { item: HistoryItem; station: 
           {body.content.messages.map((m) => (
             <Message key={m.key} icon={Received}
               label={<>{tNodes(m.notice === "job" ? "web-mobile.history.jobMessage" : "web-mobile.history.message", { name: <b>{m.notice === "stillfail" ? NAME : m.from.name}</b> })}{m.place && <> · <PlaceMark station={station} chat={chat} place={m.place} /></>}</>}
-              text={m.text} full={m.notice === "stillfail" && m.md != null ? <div className={`${rootCss.wide} ${conversationCss.markdown}`}><MdView md={m.md as Md} /></div>
-                : <p className={m.notice === "job" ? chatCss.mOutput : chatCss.mPlain}>{m.text}</p>} />
+              text={m.text} full={<p className={m.notice === "job" ? chatCss.mOutput : chatCss.mPlain}>{m.text}</p>} />
           ))}
         </div>
       );

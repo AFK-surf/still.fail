@@ -240,19 +240,20 @@ const HistoryRow = memo(function HistoryRow({ item, rail, enter, station, sessio
   const hold = useRowKept(keep, key);
   return (
     <div className={css.hItem} data-vk={key} data-enter={enter || undefined}>
-      {item.turn && <TurnRule turn={item.turn} />}
+      {item.turn && <TurnRule turn={item.turn}>
+        {title !== undefined && entry !== undefined && <IconButton className={css.hTurnLink} label={t("web-main.history.copyLink")} icon={Copy}
+          onClick={() => copyLink({ station, session, id: session, title }, { key: session, entry })} />}
+      </TurnRule>}
       <div className={css.hMain} data-rail={rail || undefined}>
         <KeepRow.Provider value={hold}><HistoryItemView item={item} /></KeepRow.Provider>
-        {title !== undefined && entry !== undefined && <IconButton className={css.hItemLink} label={t("web-main.history.copyLink")} icon={Copy}
-          onClick={() => copyLink({ station, session, id: session, title }, { key: session, entry })} />}
       </div>
     </div>
   );
 });
 
-/** Where a turn begins: when, and what it did (the core's words), on a rule. */
-function TurnRule({ turn }: { turn: HistoryTurn }) {
-  return <div className={css.hTurn}><span>{turn.time ? `${turn.time} · ${turn.text}` : turn.text}</span></div>;
+/** Where a turn begins: when, and what it did (the core's words), on a rule; at its end, the turn's link to copy. */
+function TurnRule({ turn, children }: { turn: HistoryTurn; children?: ReactNode }) {
+  return <div className={css.hTurn}><span>{turn.time ? `${turn.time} · ${turn.text}` : turn.text}</span>{children}</div>;
 }
 
 /**
@@ -414,18 +415,13 @@ function SlackName({ user, name, bound }: { user: string; name: string; bound: b
   );
 }
 
-/**
- * A message: who and where in a line, their words under it. The station's notices: a job's words as it wrote them, in
- * a monospaced font; still.fail's own, as Markdown.
- */
+/** A message: who and where in a line, their words under it; a job's as it wrote them, in a monospaced font. */
 function Received({ from, message, place }: { from: ReactNode; message: HistoryMessage; place?: ReactNode }) {
   const { text, notice } = message;
   return (
     <Ev icon={<ReceivedIcon {...ICON} size={14} />}>
       <div className={css.hLabel}>{t(notice === "job" ? "web-main.history.jobMessage.before" : "web-main.history.message.before")}<strong>{from}</strong>{t(notice === "job" ? "web-main.history.jobMessage.after" : "web-main.history.message.after")}{place && <> · {place}</>}</div>
-      {notice === "stillfail" && message.md != null
-        ? <Fold className={conversationCss.markdown} of={message.md as Md} lines={WORDS_LINES} head={headOf(message.md as Md)}><MdView md={message.md as Md} /></Fold>
-        : <Fold className={notice === "job" ? css.hOutput : css.hWords} of={text} lines={WORDS_LINES} head={textHead(text, HEAD_LINES)}>{text}</Fold>}
+      <Fold className={notice === "job" ? css.hOutput : css.hWords} of={text} lines={WORDS_LINES} head={textHead(text, HEAD_LINES)}>{text}</Fold>
     </Ev>
   );
 }
