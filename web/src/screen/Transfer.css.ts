@@ -9,11 +9,15 @@ import { panelCard, popover } from "@stillfail/ui/styles/controls.css.ts";
 /** A panel of the viewer's: its corner from the 24 tall pills and circles in its corners (docs/ui-panels.md). */
 const pills = { vars: { [IN]: pillInner(PANEL_PAD, PANEL_PILL, vars.cornerScale) } };
 
-/** A copy made on the screen, to put on this device's clipboard with a press: one line, its buttons at its end. */
+/**
+ * A copy made on the screen, to put on this device's clipboard with a press: one line, its buttons at its end. Not
+ * popped in as a menu is (as the viewer's other panels): it is part of the view, and a panel still scaling is measured
+ * smaller than it is (its padding and inner corner read 0.97 of themselves against its corner).
+ */
 export const copied = style([popover, pills, {
   position: "absolute", zIndex: "4", top: "calc(var(--m-top, 0px) + 64px)", ...centredX,
   display: "flex", alignItems: "center", gap: "6px", maxWidth: "min(520px, calc(100% - 32px))", boxSizing: "border-box",
-  color: vars.text, fontSize: vars.textUi, lineHeight: "24px",
+  color: vars.text, fontSize: vars.textUi, lineHeight: "24px", animation: "none",
   selectors: { "[data-phone] &": { top: "calc(var(--m-top, 0px) + max(12px, var(--safe-top)) + 52px)" } },
 }]);
 export const copiedText = style({ minWidth: "0", flex: "1 1 auto", paddingInline: "10px 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
