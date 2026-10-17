@@ -51,7 +51,8 @@ function useBack(enabled: boolean, onBack: () => void) {
 }
 
 /** expo-blur's intensity for a CSS blur of `px` (as Glass.tsx reckons it). */
-const blurOf = (px: number) => ({ intensity: px * 4, blurReductionFactor: 4 }) as const;
+// As Glass.tsx blur: the radius px, no white of expo-blur's own over it (its intensity kept at 1).
+const blurOf = (px: number) => ({ intensity: 1, blurReductionFactor: 1 / px }) as const;
 const canBlur = Platform.OS === "android" ? (Platform.Version as number) >= 31 : true;
 
 /** `haze`: the Android app's frosting source; here what is behind is blurred as it is (Glass.tsx), so none is needed. */

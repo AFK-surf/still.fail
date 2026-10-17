@@ -8,8 +8,12 @@ import { Quiet } from "./Quiet";
 import { concentric, Smooth } from "./Smooth";
 import { raised, useC, withAlpha } from "./Theme";
 
-/** expo-blur takes an intensity it divides by blurReductionFactor into the blur's radius: a CSS blur's px as radius. */
-const blur = (px: number) => ({ intensity: px * 4, blurReductionFactor: 4 }) as const;
+/**
+ * expo-blur takes an intensity it divides by blurReductionFactor into the blur's radius: a CSS blur's px as radius. Its
+ * intensity also lays a white of its own over the blur (44% of the intensity, as a share of 100): kept at 1, so the
+ * only tint is ours (the glass's 72% or 70%), as the Kotlin's Haze has it.
+ */
+const blur = (px: number) => ({ intensity: 1, blurReductionFactor: 1 / px }) as const;
 
 interface GlassProps { tint: string; alpha: number; px: number; style?: StyleProp<ViewStyle>; children?: ReactNode }
 
