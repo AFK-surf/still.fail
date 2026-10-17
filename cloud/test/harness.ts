@@ -4,6 +4,7 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { ulid } from "ulid";
 import { digest, randomSecret, type Tokens } from "../src/auth.ts";
 import { shareFiles } from "../src/share.ts";
+import type { MailMessage } from "../src/mail.ts";
 import { createRequire } from "node:module";
 
 // workerd keeps a WebSocket's TCP connection open some ten seconds after a close the Worker began (Cloudflare does
@@ -69,6 +70,9 @@ export async function harness(
     fcm?: string;
     /** "real": the machine's time instead of NOW_MS (dev.ts, which real stations sign in to). */
     clock?: "real";
+    /** Signing in with an email: the codes sent are kept in `mails` (and handed to this, if it is one: false, or an
+     * error code, and the binding throws as Cloudflare's would). */
+    mail?: true | ((message: MailMessage) => boolean | string);
     /** Push services, FCM and its token endpoint: a stand-in answering every other outbound request. */
     push?: (request: OutboundRequest) => Promise<{ status: number; body?: string }> | { status: number; body?: string };
   } = {},
@@ -93,6 +97,7 @@ export async function harness(
     use: "sig",
   };
   const codes = new Map<string, { nonce: string; challenge: string; sub: string; invalid?: string }>();
+  const mails: MailMessage[] = [];
   const grantPair = await generateKeyPair("EdDSA", { crv: "Ed25519", extractable: true });
   const grantJwk = { ...(await exportJWK(grantPair.privateKey)), kid: "test-grant" };
   const grantPublicJwk = { ...(await exportJWK(grantPair.publicKey)), kid: "test-grant" };
@@ -155,6 +160,7 @@ export async function harness(
         ...(options.vapid ? { VAPID_PUBLIC_KEY: options.vapid.publicKey, VAPID_PRIVATE_KEY: options.vapid.privateKey, VAPID_SUBJECT: "mailto:ops@example.test" } : {}),
         ...(options.fcm ? { FCM_SERVICE_ACCOUNT: options.fcm } : {}),
         ...(options.reviewAccounts ? { REVIEW_ACCOUNTS: options.reviewAccounts } : {}),
+        ...(options.mail ? { TEST_MAIL: "1" } : {}),
         ...(options.axiom ? { AXIOM_TOKEN: options.axiom === "real" ? process.env.AXIOM_TOKEN! : "test-axiom-token", AXIOM_DATASET: options.axiom === "real" ? process.env.AXIOM_DATASET ?? "ember" : "ember-test" } : {}),
       },
       r2Buckets: ["RELEASES"],
@@ -184,6 +190,13 @@ export async function harness(
             .setAudience(code.invalid === "aud" ? "wrong" : "test-google-client")
             .sign(privateKey);
           return MFResponse.json({ id_token: idToken });
+        }
+        if (url.href === "https://mail.test/send" && options.mail) {
+          const message = JSON.parse(await request.text()) as MailMessage;
+          const sent = options.mail === true ? true : options.mail(message);
+          if (sent !== true) return new MFResponse(sent || "E_INTERNAL_SERVER_ERROR", { status: 500 });
+          mails.push(message);
+          return new MFResponse(null, { status: 200 });
         }
         if (url.origin === "https://api.axiom.co" && options.axiom) {
           if (options.axiom !== "real") return options.axiom(request as unknown as Request) as any;
@@ -296,6 +309,7 @@ export async function harness(
     adminToken,
     signingKey,
     codes,
+    mails,
     fetch,
     fetchAdmin,
     fetchPreview,

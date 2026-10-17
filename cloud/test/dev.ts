@@ -18,6 +18,7 @@
 //                                    without its signature (the workspace lock's tests, docs/workspace-lock.md)
 // PERSIST=<dir> keeps what the cloud holds there, and AUTH_KEY=<k> (43 characters or more) keeps sign-ins good, across restarts: a restart is a
 // cloud with a new grant key (what the workspace lock's tests swap).
+// With MAIL=1, signing in offers an email too (login.ts): the codes are printed here instead of being sent.
 // With PUSH_LOG=<file>, pushes work with a VAPID key made at start, and what the cloud pushes (to browsers, to FCM)
 // is written there, a JSON line each (its body base64), instead of reaching a push service.
 import { appendFileSync } from "node:fs";
@@ -74,7 +75,7 @@ const pushes = pushLog ? {
 } : {};
 
 // With AXIOM_TOKEN (and AXIOM_DATASET) in the environment, traces go to Axiom as they would from Cloudflare.
-const h = await harness({ clock: "real", ...pushes, origin, adminOrigin, previewOrigin, betaOrigin, shareOrigin, assets, port: port + 1, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340", adminEmail: process.env.ADMIN_EMAIL ?? "alice@example.test", ...(process.env.AXIOM_TOKEN ? { axiom: "real" as const } : {}), ...(process.env.REVIEW_ACCOUNTS ? { reviewAccounts: process.env.REVIEW_ACCOUNTS } : {}), ...(process.env.PERSIST ? { persist: process.env.PERSIST } : {}), ...(process.env.AUTH_KEY ? { signingKey: process.env.AUTH_KEY } : {}) });
+const h = await harness({ clock: "real", ...pushes, origin, adminOrigin, previewOrigin, betaOrigin, shareOrigin, assets, port: port + 1, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340", adminEmail: process.env.ADMIN_EMAIL ?? "alice@example.test", ...(process.env.AXIOM_TOKEN ? { axiom: "real" as const } : {}), ...(process.env.REVIEW_ACCOUNTS ? { reviewAccounts: process.env.REVIEW_ACCOUNTS } : {}), ...(process.env.MAIL ? { mail: (m: { to: string; subject: string }) => (console.log(`mail to ${m.to}: ${m.subject}`), true) } : {}), ...(process.env.PERSIST ? { persist: process.env.PERSIST } : {}), ...(process.env.AUTH_KEY ? { signingKey: process.env.AUTH_KEY } : {}) });
 const aliceTokens = await h.login("alice");
 const alice = h.as(aliceTokens);
 // alice may use the test channel (the console's switch does the same).

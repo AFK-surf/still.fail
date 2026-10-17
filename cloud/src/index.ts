@@ -111,6 +111,9 @@ async function handle(request: Request, env: Env): Promise<Response> {
     const lang = requestLang(request);
     return devicePage(lang, tr(lang, "cloud.login.complete.title"), `<p>${tr(lang, "cloud.login.complete.body")}</p>`);
   }
+  // The sign-in page's forms (Google, or a code sent to an email: login.ts `choose`).
+  const choice = /^\/v1\/auth\/login\/([A-Za-z0-9_-]{43})$/.exec(path);
+  if (choice && request.method === "POST") return env.LOGINS.getByName(choice[1]!).choose(choice[1]!, request);
   const device = /^\/v1\/auth\/device\/([A-Za-z0-9_-]{43})$/.exec(path);
   if (device && (request.method === "GET" || request.method === "POST")) {
     return env.LOGINS.getByName(device[1]).authorizeDevice(device[1], request);

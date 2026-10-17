@@ -1,5 +1,6 @@
 import { devicePage, escape } from "./page";
-import { requestLang, tr } from "./i18n.ts";
+import { requestLang, tr, type Lang } from "./i18n.ts";
+import { mailConfigured, sendCode } from "./mail";
 export { devicePage } from "./page";
 import { DurableObject } from "cloudflare:workers";
 import { ulid } from "ulid";
@@ -15,20 +16,50 @@ type Attempt = {
   nonce: string;
   googleVerifier: string;
   expires: number;
-  phase: "waiting" | "started" | "callback" | "complete" | "used" | "cancelled";
+  /** waiting: a device's, its page not used yet; choosing: the page asks Google or an email; code: a code was sent to
+   * `email`; started: gone to Google. */
+  phase: "waiting" | "choosing" | "code" | "started" | "callback" | "complete" | "used" | "cancelled";
   device?: boolean;
   nextPoll?: number;
   receipt?: string;
   identity?: Identity;
   codeHash?: string;
   sessionId?: string;
+  /** Signing in with an email: where the code went, the code's hash (with the attempt's id), until when it holds and how
+   * many wrong ones were typed. */
+  email?: string;
+  mailCode?: string;
+  mailExpires?: number;
+  tries?: number;
 };
+
+/** Wrong codes a code takes before the sign-in ends. */
+const CODE_TRIES = 5;
+const EMAIL = /^[^\s@]{1,64}@[^\s@.][^\s@]{0,189}$/;
+
+/** Six digits, each as likely. */
+function newMailCode(): string {
+  for (;;) {
+    const n = crypto.getRandomValues(new Uint32Array(1))[0]!;
+    // 4 294 000 000 is a multiple of a million: the rest would make the low codes likelier.
+    if (n < 4_294_000_000) return String(n % 1_000_000).padStart(6, "0");
+  }
+}
 
 function cookieName(origin: string, id: string) {
   return `${origin.startsWith("https:") ? "__Host-" : ""}zork_login_${id}`;
 }
 function cookie(origin: string, id: string, value: string, age: number) {
   return `${cookieName(origin, id)}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${origin.startsWith("https:") ? "; Secure" : ""}`;
+}
+function cookieOf(request: Request, origin: string, id: string): string {
+  return (
+    (request.headers.get("cookie") ?? "")
+      .split(";")
+      .map((v) => v.trim())
+      .find((v) => v.startsWith(cookieName(origin, id) + "="))
+      ?.split("=")[1] ?? ""
+  );
 }
 function redirect(location: string, cookies: string): Response {
   return new Response(null, {
@@ -94,6 +125,7 @@ export class LoginAttempt extends DurableObject<Env> {
         const browser = randomSecret();
         attempt.browserHash = await digest(browser);
         this.ctx.storage.kv.put("attempt", attempt);
+        if (mailConfigured(this.env)) return this.choosePage(lang, id, attempt, browser);
         return devicePage(
           lang,
           tr(lang, "cloud.login.device.title"),
@@ -101,12 +133,7 @@ export class LoginAttempt extends DurableObject<Env> {
           cookie(this.env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
         );
       }
-      const browser =
-        (request.headers.get("cookie") ?? "")
-          .split(";")
-          .map((v) => v.trim())
-          .find((v) => v.startsWith(cookieName(this.env.PUBLIC_ORIGIN, id) + "="))
-          ?.split("=")[1] ?? "";
+      const browser = cookieOf(request, this.env.PUBLIC_ORIGIN, id);
       try {
         if (request.headers.get("origin") !== this.env.PUBLIC_ORIGIN || request.headers.get("content-type")?.split(";")[0] !== "application/x-www-form-urlencoded") return reply({ error: "invalid_login_state" }, 400);
         const csrf = new URLSearchParams(await readText(request, 1024)).get("csrf");
@@ -160,65 +187,208 @@ export class LoginAttempt extends DurableObject<Env> {
       return result;
     });
   }
-  async start(id: string, params: { redirect: string; state: string; challenge: string; name: string }): Promise<Response> {
+  async start(id: string, params: { redirect: string; state: string; challenge: string; name: string }, request: Request): Promise<Response> {
     return this.ctx.blockConcurrencyWhile(async () => {
       if (this.ctx.storage.kv.get("attempt")) return reply({ error: "login_exists" }, 409);
       if (!validSecret(id) || !validRedirect(this.env, params.redirect) || !validSecret(params.state) || !validSecret(params.challenge) || params.name.length > 80) return reply({ error: "invalid_login" }, 400);
       const browser = randomSecret();
+      const choosing = mailConfigured(this.env);
       const attempt: Attempt = {
         ...params,
         browserHash: await digest(browser),
         nonce: randomSecret(),
         googleVerifier: randomSecret(),
         expires: nowSeconds() + LOGIN_TTL_SEC,
-        phase: "started",
+        phase: choosing ? "choosing" : "started",
       };
       this.ctx.storage.kv.put("attempt", attempt);
       await this.ctx.storage.setAlarm(attempt.expires * 1000);
-      return this.google(id, attempt, browser);
+      // Without a way to send codes, straight to Google, as before there was another way.
+      return choosing ? this.choosePage(requestLang(request), id, attempt, browser) : this.google(id, attempt, browser);
     });
   }
 
   async callback(id: string, request: Request): Promise<Response> {
     return this.ctx.blockConcurrencyWhile(async () => {
       const attempt = this.ctx.storage.kv.get<Attempt>("attempt");
-      const cookies = (request.headers.get("cookie") ?? "").split(";").map((value) => value.trim());
-      const value = cookies.find((value) => value.startsWith(cookieName(this.env.PUBLIC_ORIGIN, id) + "="))?.split("=")[1] ?? "";
+      const value = cookieOf(request, this.env.PUBLIC_ORIGIN, id);
       if (!attempt || attempt.expires <= nowSeconds() || attempt.phase !== "started" || !validSecret(value) || (await digest(value)) !== attempt.browserHash) return reply({ error: "invalid_login_state" }, 400);
       // Consume before any external I/O; a repeated callback cannot replay Google.
       attempt.phase = "callback";
       this.ctx.storage.kv.put("attempt", attempt);
       const url = new URL(request.url);
-      const finish = new URL(attempt.device ? `${this.env.PUBLIC_ORIGIN}/v1/auth/device/complete` : attempt.redirect);
-      finish.searchParams.set("state", attempt.state);
+      let finish = this.finish(attempt);
+      let done = false;
       const code = url.searchParams.get("code");
       if (url.searchParams.has("error") || !code || code.length > 4096) {
         finish.searchParams.set("error", "login_cancelled");
       } else {
         try {
-          attempt.identity = await googleIdentity(this.env, code, attempt.googleVerifier, attempt.nonce, url.origin);
-          const secret = randomSecret();
-          if (!attempt.device) attempt.codeHash = await digest(secret);
-          attempt.phase = "complete";
-          attempt.expires = nowSeconds() + CODE_TTL_SEC;
-          attempt.sessionId = ulid();
-          // Code is a locator and an independent random capability; no credentials
-          // or Google tokens are returned through the browser's URL/history.
-          if (!attempt.device) finish.searchParams.set("code", `${id}.${secret}`);
-          this.ctx.storage.kv.put("attempt", attempt);
-          await this.ctx.storage.setAlarm(attempt.expires * 1000);
+          const identity = await googleIdentity(this.env, code, attempt.googleVerifier, attempt.nonce, url.origin);
+          // An account that signed up with this email (a code sent to it) is this one too.
+          const account = await this.env.DIRECTORY.getByName("primary").accountFor(identity.sub, identity.email);
+          finish = await this.complete(id, attempt, { ...identity, sub: account?.sub ?? identity.sub });
+          done = true;
         } catch {
           finish.searchParams.set("error", "google_login_failed");
         }
       }
       if (attempt.device) {
-        if (attempt.phase !== "complete") {
+        if (!done) {
           attempt.phase = "cancelled";
           this.ctx.storage.kv.put("attempt", attempt);
         }
         finish.searchParams.delete("state");
       }
       return redirect(finish.toString(), cookie(this.env.PUBLIC_ORIGIN, id, "", 0));
+    });
+  }
+
+  /** Where the browser goes once the sign-in is done: the client's callback with its state, or the device's page. */
+  private finish(attempt: Attempt): URL {
+    const finish = new URL(attempt.device ? `${this.env.PUBLIC_ORIGIN}/v1/auth/device/complete` : attempt.redirect);
+    finish.searchParams.set("state", attempt.state);
+    return finish;
+  }
+
+  /** The attempt has proved it is `identity` (Google said so, or the email's code was right): its code is made, and where the browser goes with it. */
+  private async complete(id: string, attempt: Attempt, identity: Identity): Promise<URL> {
+    const finish = this.finish(attempt);
+    attempt.identity = identity;
+    const secret = randomSecret();
+    if (!attempt.device) attempt.codeHash = await digest(secret);
+    attempt.phase = "complete";
+    attempt.expires = nowSeconds() + CODE_TTL_SEC;
+    attempt.sessionId = ulid();
+    // Code is a locator and an independent random capability; no credentials
+    // or Google tokens are returned through the browser's URL/history.
+    if (!attempt.device) finish.searchParams.set("code", `${id}.${secret}`);
+    this.ctx.storage.kv.put("attempt", attempt);
+    await this.ctx.storage.setAlarm(attempt.expires * 1000);
+    return finish;
+  }
+
+  /** The page that asks how to sign in: Google, or a code sent to an email (`email` typed, `error` with it). */
+  private choosePage(lang: Lang, id: string, attempt: Attempt, browser: string, email = "", error?: string): Response {
+    const csrf = `<input type="hidden" name="csrf" value="${browser}">`;
+    const action = `/v1/auth/login/${id}`;
+    const device = attempt.device ? `<p>${tr(lang, "cloud.login.device.signingIn", { name: `<strong>${escape(attempt.name)}</strong>` })}</p><p>${tr(lang, "cloud.login.device.reach")}</p>` : "";
+    return devicePage(
+      lang,
+      tr(lang, attempt.device ? "cloud.login.device.title" : "cloud.login.choose.title"),
+      `${device}<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="google"><button>${tr(lang, "cloud.login.device.continue")}</button></form>` +
+        `<p class="or">${tr(lang, "cloud.login.choose.or")}</p>` +
+        `<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="email"><input type="email" name="email" value="${escape(email)}" placeholder="${tr(lang, "cloud.login.email.placeholder")}" autocomplete="email" required maxlength="254"><button>${tr(lang, "cloud.login.email.send")}</button></form>` +
+        (error ? `<p class="error">${escape(error)}</p>` : ""),
+      cookie(this.env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
+    );
+  }
+
+  /** The page that asks for the code sent to the attempt's email. */
+  private codePage(lang: Lang, id: string, attempt: Attempt, browser: string, error?: string): Response {
+    const csrf = `<input type="hidden" name="csrf" value="${browser}">`;
+    const action = `/v1/auth/login/${id}`;
+    return devicePage(
+      lang,
+      tr(lang, "cloud.login.code.title"),
+      `<p>${tr(lang, "cloud.login.code.sent", { email: `<strong>${escape(attempt.email ?? "")}</strong>` })}</p>` +
+        `<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="code"><input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" maxlength="7" required autofocus><button>${tr(lang, "cloud.login.code.submit")}</button></form>` +
+        (error ? `<p class="error">${escape(error)}</p>` : "") +
+        `<p class="links"><button form="resend" class="link">${tr(lang, "cloud.login.code.resend")}</button><button form="back" class="link">${tr(lang, "cloud.login.code.other")}</button></p>` +
+        `<form id="resend" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="resend"></form><form id="back" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="back"></form>`,
+      cookie(this.env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
+    );
+  }
+
+  /** The account a code sent to `email` signs in to: the one with that email (a Google one too), else a new one of its own. */
+  private async emailIdentity(email: string): Promise<Identity> {
+    const own = `em-${(await digest(email)).slice(0, 32)}`;
+    const account = await this.env.DIRECTORY.getByName("primary").accountFor(own, email);
+    return { sub: account?.sub ?? own, email, name: account?.name ?? "", picture: account?.picture ?? "" };
+  }
+
+  /**
+   * POST /v1/auth/login/:id, from the page that asks how to sign in (choosePage, codePage), in the browser that started
+   * the attempt (its cookie and the form's csrf): `via` google (on to Google), email (a code to `email`), resend, back
+   * (another email) or code (the `code` typed).
+   */
+  async choose(id: string, request: Request): Promise<Response> {
+    return this.ctx.blockConcurrencyWhile(async () => {
+      const attempt = this.ctx.storage.kv.get<Attempt>("attempt");
+      const lang = requestLang(request);
+      const ended = (title = "cloud.login.ended.title") => devicePage(lang, tr(lang, title), `<p>${tr(lang, "cloud.login.ended.body")}</p>`, cookie(this.env.PUBLIC_ORIGIN, id, "", 0));
+      if (!attempt || attempt.expires <= nowSeconds() || !(attempt.phase === "choosing" || attempt.phase === "code" || (attempt.phase === "waiting" && attempt.device)) || !mailConfigured(this.env)) return ended();
+      const browser = cookieOf(request, this.env.PUBLIC_ORIGIN, id);
+      let form: URLSearchParams;
+      try {
+        if (request.headers.get("origin") !== this.env.PUBLIC_ORIGIN || request.headers.get("content-type")?.split(";")[0] !== "application/x-www-form-urlencoded") return reply({ error: "invalid_login_state" }, 400);
+        form = new URLSearchParams(await readText(request, 2048));
+        if (!validSecret(browser) || form.get("csrf") !== browser || (await digest(browser)) !== attempt.browserHash) return reply({ error: "invalid_login_state" }, 400);
+      } catch {
+        return reply({ error: "invalid_login_state" }, 400);
+      }
+      const save = async () => {
+        this.ctx.storage.kv.put("attempt", attempt);
+        await this.ctx.storage.setAlarm(attempt.expires * 1000);
+      };
+      const send = async (email: string): Promise<Response> => {
+        // Per address, as starting one is, and per email: nobody fills someone's inbox.
+        if (!(await consumeLoginRate(this.env, request)) || !(await this.env.LOGIN_LIMITS.getByName(await digest(`${this.env.AUTH_SIGNING_KEY}:email:${email}`)).consumeMail()))
+          return this.choosePage(lang, id, attempt, browser, email, tr(lang, "cloud.login.email.limited"));
+        const code = newMailCode();
+        try {
+          // A device's sign-in names the device in the mail: someone asked to read a code out for another's device can tell.
+          await sendCode(this.env, lang, email, code, attempt.device ? attempt.name : "");
+        } catch (error) {
+          console.error("login: no code sent", (error as { code?: string }).code ?? String(error));
+          return this.choosePage(lang, id, attempt, browser, email, tr(lang, "cloud.login.email.failed"));
+        }
+        attempt.phase = "code";
+        attempt.email = email;
+        attempt.mailCode = await digest(`${id}:${code}`);
+        attempt.mailExpires = nowSeconds() + LOGIN_TTL_SEC;
+        attempt.tries = 0;
+        attempt.expires = Math.max(attempt.expires, attempt.mailExpires);
+        await save();
+        return this.codePage(lang, id, attempt, browser);
+      };
+      const via = form.get("via");
+      if (via === "google") {
+        attempt.phase = "started";
+        this.ctx.storage.kv.put("attempt", attempt);
+        return this.google(id, attempt, browser);
+      }
+      if (via === "email") {
+        const email = (form.get("email") ?? "").trim().toLowerCase();
+        if (!EMAIL.test(email) || !email.split("@")[1]!.includes(".")) return this.choosePage(lang, id, attempt, browser, email, tr(lang, "cloud.login.email.invalid"));
+        return send(email);
+      }
+      if (via === "resend" && attempt.phase === "code" && attempt.email) return send(attempt.email);
+      if (via === "back") {
+        attempt.phase = "choosing";
+        delete attempt.email;
+        delete attempt.mailCode;
+        await save();
+        return this.choosePage(lang, id, attempt, browser, "");
+      }
+      if (via === "code" && attempt.phase === "code" && attempt.email && attempt.mailCode) {
+        const code = (form.get("code") ?? "").replace(/\s/g, "");
+        if ((attempt.mailExpires ?? 0) <= nowSeconds()) return this.codePage(lang, id, attempt, browser, tr(lang, "cloud.login.code.expired"));
+        if (!/^\d{6}$/.test(code) || (await digest(`${id}:${code}`)) !== attempt.mailCode) {
+          attempt.tries = (attempt.tries ?? 0) + 1;
+          if (attempt.tries >= CODE_TRIES) {
+            attempt.phase = "cancelled";
+            await save();
+            return ended("cloud.login.code.tooMany");
+          }
+          await save();
+          return this.codePage(lang, id, attempt, browser, tr(lang, "cloud.login.code.wrong", { n: CODE_TRIES - attempt.tries }));
+        }
+        const finish = await this.complete(id, attempt, await this.emailIdentity(attempt.email));
+        if (attempt.device) finish.searchParams.delete("state");
+        return redirect(finish.toString(), cookie(this.env.PUBLIC_ORIGIN, id, "", 0));
+      }
+      return attempt.phase === "code" ? this.codePage(lang, id, attempt, browser) : this.choosePage(lang, id, attempt, browser);
     });
   }
 
@@ -275,6 +445,20 @@ export class LoginLimiter extends DurableObject<Env> {
     await this.ctx.storage.setAlarm((day + 1) * 86400 * 1000);
     return true;
   }
+  /** One code sent to an email, this object keyed by its salted hash: 5 an hour, 10 a day. */
+  async consumeMail(): Promise<boolean> {
+    const now = nowSeconds();
+    const hour = Math.floor(now / 3600);
+    const day = Math.floor(now / 86400);
+    const old = this.ctx.storage.kv.get<{ hour: number; hourly: number; day: number; daily: number }>("mail");
+    const next = { hour, day, hourly: old?.hour === hour ? old.hourly : 0, daily: old?.day === day ? old.daily : 0 };
+    if (next.hourly >= 5 || next.daily >= 10) return false;
+    next.hourly++;
+    next.daily++;
+    this.ctx.storage.kv.put("mail", next);
+    await this.ctx.storage.setAlarm((day + 1) * 86400 * 1000);
+    return true;
+  }
   async alarm() {
     await this.ctx.storage.deleteAll();
   }
@@ -289,7 +473,7 @@ export async function googleStart(env: Env, request: Request): Promise<Response>
   if (!(await consumeLoginRate(env, request))) return limited();
   const id = randomSecret();
   const name = (url.searchParams.get("name") ?? "still.fail").slice(0, 80);
-  return env.LOGINS.getByName(id).start(id, { redirect: callback, state, challenge, name });
+  return env.LOGINS.getByName(id).start(id, { redirect: callback, state, challenge, name }, request);
 }
 
 export async function consumeLoginRate(env: Env, request: Request): Promise<boolean> {

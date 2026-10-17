@@ -1,6 +1,7 @@
 import type { Account } from "./account";
 import type { Directory } from "./directory";
 import type { LoginAttempt, LoginLimiter } from "./login";
+import type { Mailer } from "./mail";
 import type { TelemetryLimiter } from "./tracing";
 
 export interface Env {
@@ -53,4 +54,9 @@ export interface Env {
   FCM_SERVICE_ACCOUNT?: string;
   /** The accounts that sign in with an email and a password (password.ts): a JSON list of {email, password, name?}, App Store review's. Unset: none. */
   REVIEW_ACCOUNTS?: string;
+  /** Cloudflare Email Service's send_email binding (wrangler.jsonc), which sends the sign-in codes (mail.ts). */
+  EMAIL?: Mailer;
+  /** The address the codes come from (its domain onboarded for sending). Unset, or without EMAIL: nobody signs in with
+   * an email, and a sign-in goes straight to Google, as before there was another way. */
+  EMAIL_FROM?: string;
 }

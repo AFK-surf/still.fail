@@ -245,6 +245,17 @@ export class Directory extends DurableObject<Env> {
     this.#tell(subs, ...(list ? [LIST] : []), { type: "workspace", id: workspace });
   }
 
+  /**
+   * The account a sign-in that proved it holds `email` (Google's, or a code sent to it: login.ts) is, with the name and
+   * picture it has: the one `sub` already is, else the first signed in with that email, so whoever signed up one way and
+   * signs in the other is the same account, with its workspaces; null for a new one. App Store review's (`pw-`,
+   * password.ts) is nobody's but its own.
+   */
+  accountFor(sub: string, email: string): { sub: string; name: string; picture: string } | null {
+    const row = this.#one("SELECT sub, name, picture FROM users WHERE sub = ?", sub) ?? this.#one("SELECT sub, name, picture FROM users WHERE lower(email) = lower(?) AND sub NOT LIKE 'pw-%' ORDER BY created_at, rowid LIMIT 1", email);
+    return row ? { sub: row.sub as string, name: row.name as string, picture: row.picture as string } : null;
+  }
+
   upsertUser(identity: Identity): void {
     const old = this.#one("SELECT email, name, picture FROM users WHERE sub = ?", identity.sub);
     this.#run(

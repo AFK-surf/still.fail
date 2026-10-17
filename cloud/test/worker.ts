@@ -1,13 +1,30 @@
 // Only the test bundler imports this entry. Production exports no fixture routes.
-import worker, { Account as ProductionAccount, Directory as ProductionDirectory, LoginAttempt, LoginLimiter, TelemetryLimiter } from "../src/index";
+import worker, { Account as ProductionAccount, Directory as ProductionDirectory, LoginAttempt as ProductionLoginAttempt, LoginLimiter, TelemetryLimiter } from "../src/index";
 import { clock, signToken, nowSeconds, reply, readJson } from "../src/auth";
 import type { Env } from "../src/env";
-export { LoginAttempt, LoginLimiter, TelemetryLimiter };
+import type { MailMessage } from "../src/mail";
+export { LoginLimiter, TelemetryLimiter };
 
 // The moment the tests run at (harness.ts NOW_MS), unless they run on the machine's time (dev.ts). The Worker and its
 // objects share this isolate, and so the clock.
 declare const TEST_NOW_MS: number | null;
 if (TEST_NOW_MS !== null) clock.now = () => TEST_NOW_MS;
+
+/**
+ * With TEST_MAIL (harness.ts `mail`), signing in with an email is offered, its codes sent to https://mail.test/send,
+ * where the harness keeps them, instead of through Cloudflare Email Service; an answer other than 200 is the error the
+ * binding throws, its body the error's code.
+ */
+export class LoginAttempt extends ProductionLoginAttempt {
+  constructor(ctx: DurableObjectState, env: Env & { TEST_MAIL?: string }) {
+    const send = async (message: MailMessage) => {
+      const answer = await fetch("https://mail.test/send", { method: "POST", body: JSON.stringify(message) });
+      if (!answer.ok) throw Object.assign(new Error("not sent"), { code: await answer.text() });
+      return { messageId: crypto.randomUUID() };
+    };
+    super(ctx, env.TEST_MAIL ? { ...env, EMAIL: { send }, EMAIL_FROM: "noreply@relay.example" } : env);
+  }
+}
 
 export class Directory extends ProductionDirectory {
   /** The presence alarm's check, as if it ran at `ms`. */

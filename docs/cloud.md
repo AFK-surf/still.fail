@@ -22,7 +22,7 @@ still.fail 以 p2p 为主：设备直接连 station，看 station 在不在线�
 
 | 对象 | 是什么 | 标识 |
 |---|---|---|
-| 账号 | 一个 Google 身份 | Google `sub` |
+| 账号 | 一个邮箱：用 Google 登录，或用发到邮箱的验证码登录（同一个邮箱两种方式进的是同一个账号） | Google `sub`；只用邮箱注册的是 `em-…` |
 | 客户端 | 一个浏览器或 App 安装，持有一把 iroh 设备密钥；可以同时登录多个账号 | 设备公钥 |
 | workspace | 一组人和一组 station；账号在其中的角色是 owner / admin / member | ULID |
 | station | 一台 still.fail 节点，属于一个或几个 workspace（第一个加入的是它的**主 workspace**） | station 的 iroh 公钥 |
@@ -35,9 +35,13 @@ still.fail 以 p2p 为主：设备直接连 station，看 station 在不在线�
 
 ## 登录
 
-Google OAuth（`openid email profile`），access token 5 分钟，refresh token 轮换、闲置 7 天 / 最长 30 天过期，重放旧 refresh token 会吊销整个会话。
+两种方式：Google OAuth（`openid email profile`），或邮箱验证码。之后都一样：access token 5 分钟，refresh token 轮换、闲置 7 天 / 最长 30 天过期，重放旧 refresh token 会吊销整个会话。
 
 网页版在同一域名下走标准的授权码 + PKCE：页面生成 verifier，跳到 `/v1/auth/google/start`，回到 `/auth/callback?code=…`，再用 verifier 换 token。回调地址只允许本域的 `/auth/callback`（网页）和 `127.0.0.1` 回环地址（命令行）。token 不出现在 URL 里。
+
+`/v1/auth/google/start`（名字是历史原因）和设备登录页先出一个选择页：「使用 Google 账号继续」或输入邮箱（`cloud/src/login.ts`，表单都 POST 到 `/v1/auth/login/<id>`，带发起登录的那个浏览器的 cookie 和 csrf）。选邮箱就发一封 6 位验证码（Cloudflare Email Service，`cloud/src/mail.ts`），10 分钟有效，错 5 次这次登录就结束；同一邮箱每小时最多 5 封、每天 10 封，按 IP 的登录限流照旧。验证码只能在发起登录的浏览器里填，邮件里不放直接登录的链接：设备登录时，一点就登录的链接会让「替别人的设备填了邮箱」的人一下拿到账号，所以设备登录的邮件里写明是在给哪台设备登录。
+
+账号按邮箱合并（Directory `accountFor`）：验证码登录时，这个邮箱已有账号（包括 Google 的）就登进那个；Google 登录时，Google `sub` 还没有账号而这个邮箱已有（先用邮箱注册的），也进那个。App Store 审核账号（`pw-`）不参与。没有 `EMAIL` 绑定或 `EMAIL_FROM` 时不出选择页，直接去 Google，和以前一样。
 
 ## station 登记
 

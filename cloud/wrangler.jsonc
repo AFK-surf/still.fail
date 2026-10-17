@@ -67,7 +67,13 @@
     "GOOGLE_CLIENT_ID": "",
     // The operator console's one Google account (src/admin.ts); replace it when deploying your own.
     "ADMIN_EMAIL": "zuozijian1994@gmail.com",
+    // Where the sign-in codes come from (src/mail.ts).
+    "EMAIL_FROM": "noreply@still.fail",
   },
+  // Signing in with an email (src/login.ts): Cloudflare Email Service sends the codes, from EMAIL_FROM (vars), whose
+  // domain is onboarded for sending (dashboard: Email Service › Email Sending; it adds the DNS records). Without the
+  // binding or the address, a sign-in goes straight to Google.
+  "send_email": [{ "name": "EMAIL" }],
   // The stations' releases (scripts/release.sh puts them, install.sh gets them from /releases/).
   "r2_buckets": [{ "binding": "RELEASES", "bucket_name": "stillfail-releases" }],
   "durable_objects": {
