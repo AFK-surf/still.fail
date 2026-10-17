@@ -5,6 +5,9 @@
 package fail.still.android.screens
 
 import fail.still.android.data.t
+import androidx.compose.ui.layout.AlignmentLine
+import androidx.compose.ui.layout.FirstBaseline
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -554,6 +557,18 @@ private fun rowBusy(app: AppState, item: ChatItem): Boolean =
 private fun rowFailed(app: AppState, item: ChatItem): String? =
     app.failedOf(setOf("chat.pin", "chat.archive"), "station" to item.station, "session" to item.session)
 
+/**
+ * Text moved so its characters' ink, not its line, is in the middle of its box: the marks centred beside it are then
+ * centred on its words. A Chinese font's line has more room above its characters than below (its ascent is the line's),
+ * so they sit low in it; a character's ink is centred 0.38em above the baseline.
+ */
+private fun Modifier.inkCentred(size: androidx.compose.ui.unit.TextUnit) = layout { m, c ->
+    val p = m.measure(c)
+    val base = p[FirstBaseline]
+    val dy = if (base == AlignmentLine.Unspecified) 0 else (p.height / 2f - base + 0.38f * size.toPx()).roundToInt()
+    layout(p.width, p.height) { p.place(0, dy) }
+}
+
 /** What a row shows, `lead` leading who is in it (RowPicture.kt); its station by its icon (the core gives one only with several stations); the time while it is `held`; `busy`: a spinner where its mark goes; `failed`: a red mark there a moment (DoingMark). */
 @Composable
 internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Boolean = false, failed: String? = null, onArchive: (() -> Unit)? = null, onStateLine: (Rect) -> Unit = {}, modifier: Modifier = Modifier) {
@@ -578,7 +593,7 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Bool
                 ChatMark(item, Modifier)
                 Text(
                     item.title, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = if (item.unread) FontWeight.SemiBold else FontWeight.Normal,
-                    color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).alpha(dim),
+                    color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).alpha(dim).inkCentred(16.sp),
                 )
                 // The station it runs on, by its icon (the core gives one only with several stations), as on the web.
                 if (hasStationMark(item.stationEmoji, item.stationIcon)) Box(Modifier.alpha(dim).semantics { contentDescription = item.stationName }) {
