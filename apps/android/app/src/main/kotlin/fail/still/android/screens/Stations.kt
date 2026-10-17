@@ -492,7 +492,7 @@ internal fun AgentStationMark(address: String, who: String, maker: Maker?, runti
     }
 }
 
-/** A station named in a small outlined tag, its icon before its name (in a chat's bar, how it is reached as a dot before both): in a chat's bar (ChatStationChip) and on a chat's row in the lists. */
+/** A station named in a small outlined tag, its icon before its name (in a chat's bar, how it is reached as a dot before both): in a chat's bar (ChatStationChip) and the composer's chats from elsewhere. */
 @Composable
 internal fun StationTag(name: String, emoji: String?, icon: String?, modifier: Modifier = Modifier, via: String? = null) {
     val shape = RoundedCornerShape(50)

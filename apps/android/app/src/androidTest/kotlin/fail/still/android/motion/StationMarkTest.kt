@@ -9,6 +9,11 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import fail.still.android.Screen
+import fail.still.android.data.ChatDay
+import fail.still.android.data.ChatItem
+import fail.still.android.data.ChatsView
+import fail.still.android.data.Me
+import fail.still.android.data.StationState
 import fail.still.android.data.Link
 import fail.still.android.data.StationView
 import fail.still.android.data.Topics
@@ -63,6 +68,41 @@ class StationMarkTest {
         rule.onNodeWithContentDescription("chess-knight").performScrollTo().performClick()
         h.settle()
         assertEquals("glyph:chess-knight:green", sent(h))
+    }
+
+    @Test fun chatsLight() = chats(false)
+    @Test fun chatsDark() = chats(true)
+
+    /** A chat's row names its station by its icon alone, as on the web, before a Slack or offline mark. */
+    private fun chats(dark: Boolean) {
+        val theme = if (dark) "dark" else "light"
+        fun item(i: Int, title: String, name: String, emoji: String?, icon: String?, connect: String? = null, offline: String? = null) = ChatItem(
+            id = "c$i", session = "ember:c-$i", thread = 100L + i, title = title, agents = emptyList(), unread = i == 0, mine = true,
+            lastActiveAt = Fixtures.NOW - i * 60_000L, station = "${Fixtures.WS}/$name", stationName = name, stationEmoji = emoji, stationIcon = icon,
+            connect = connect, offline = offline,
+        )
+        val items = listOf(
+            item(0, "修一下登录", "Studio", "🧠", "glyph:chip:purple"),
+            item(1, "整理发布流程，顺便看看测试版的更新说明", "Mini1", "🎲", "glyph:dice-1:blue", connect = "slack"),
+            item(2, "看看 CI 为什么慢", "ccvm", "🧊", null, offline = "ccvm 离线"),
+            item(3, "没设图标的 station", "test", null, null),
+        )
+        val view = ChatsView(
+            me = Me("alice", "alice@example.com"), loading = false,
+            stations = listOf("Studio", "Mini1", "ccvm", "test").map { StationState("${Fixtures.WS}/$it", it, it, "online") },
+            days = listOf(ChatDay(0, Fixtures.NOW.toDouble(), "今天", items)),
+        )
+        val h = Harness(rule)
+        h.fake.put(Topics.chats(Fixtures.WS, false), view)
+        h.fake.put(Topics.chats(Fixtures.WS, true), view)
+        h.launch(listOf(Screen.Home), dark)
+        h.settle()
+        h.record("mark-chats-$theme").end()
+
+        // Its icon, named for the station; never the station's name written out in a tag.
+        rule.onNodeWithContentDescription("Studio").assertExists()
+        rule.onNodeWithText("Studio").assertDoesNotExist()
+        rule.onNodeWithContentDescription("test").assertDoesNotExist()
     }
 
     /** The icon last sent to the cloud. */
