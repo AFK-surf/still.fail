@@ -172,10 +172,10 @@ function composerView(key: string): unknown {
   return c ? { text: c.text, rev: c.rev, version: c.version, quotes: [], files: [], uploading: false, ready: c.text.trim() !== "", starting: false } : null;
 }
 /** `shareIn.open`: the title (when the link does not hold it) and what is shared, after what the composer holds, once. */
-function shareOpen(source: string, station: string, id: string | undefined, title: string | undefined): unknown {
+function shareOpen(source: string, station: string, id: string | undefined, title: string | undefined, newKey?: string): unknown {
   const words = title && !source.includes(title) ? `${title}\n${source}` : source;
   const row = id === undefined ? undefined : shareRows().find((r) => r.station === station && r.id === id);
-  const key = row ? `${station}:${row.session}` : `new:${station}`;
+  const key = row ? `${station}:${row.session}` : newKey ?? `new:${station}`;
   const c = composers.get(key) ?? { text: "", rev: 0, version: 0 };
   if (!c.text.includes(words)) composers.set(key, { text: c.text.trim() ? `${c.text.trimEnd()}\n${words}` : words, rev: c.rev + 1, version: c.version + 1 });
   if (row) shareKept.set(siteOf(source) ?? "", row.id);
@@ -214,7 +214,7 @@ function answer(name: string, params: Record<string, unknown>, emit: (value: unk
     return null;
   }
   if (name === "shareIn.open" && typeof params.source === "string") {
-    return shareOpen(params.source, String(params.station), params.id as string | undefined, params.title as string | undefined);
+    return shareOpen(params.source, String(params.station), params.id as string | undefined, params.title as string | undefined, typeof params.key === "string" && params.key.startsWith("new:") ? params.key : undefined);
   }
   // Words typed into a composer the core has words in (what was shared): kept with them.
   const written = name === "composer.text" ? composers.get(String(params.key)) : undefined;
