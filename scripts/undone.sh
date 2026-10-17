@@ -10,6 +10,8 @@
 #   sh scripts/undone.sh HEAD index <msg>  what is staged against HEAD (a commit; <msg> its message file)
 #
 # A commit meant to take one back says so in its message: `Reverts <sha>` (or `Undoes <sha>`), 7 or more of its hex.
+# A file this moves (git's rename detection) is looked for where it went: main's change to it checked there, not taken
+# as undone because the old path is gone.
 set -eu
 base=$1
 tree=$2
@@ -27,6 +29,15 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 GIT_INDEX_FILE="$work/index" git read-tree "$tree"
 GIT_INDEX_FILE="$work/base-index" git read-tree "$base"
+git diff --name-status -M "$base" "$tree" | awk '$1 ~ /^R/ { print $2, $3 }' > "$work/moved"
+# A patch's paths as this has them: a moved file's old path its new one.
+moved() {
+  awk -v moved="$work/moved" '
+    BEGIN { while ((getline line < moved) > 0) { split(line, p, " "); to[p[1]] = p[2] } }
+    /^diff --git a\// { a = substr($3, 3); b = substr($4, 3); if (a in to) a = to[a]; if (b in to) b = to[b]; print "diff --git a/" a " b/" b; next }
+    /^(---|\+\+\+) [ab]\// { path = substr($0, 7); if (path in to) path = to[path]; print substr($0, 1, 6) path; next }
+    { print }' "$1"
+}
 
 undone=""
 # A branch lives hours, a day or two: what main took in before that is not this one's to undo.
@@ -41,9 +52,10 @@ for m in $(git rev-list --no-merges --since="$since" -n 120 "$base" -- $files); 
   # a loss introduced by this branch; don't blame it for the base tree's state.
   if ! GIT_INDEX_FILE="$work/base-index" git apply --cached --check -R "$work/patch" 2>/dev/null &&
      GIT_INDEX_FILE="$work/base-index" git apply --cached --check "$work/patch" 2>/dev/null; then continue; fi
+  if [ -s "$work/moved" ]; then moved "$work/patch" > "$work/here"; else cp "$work/patch" "$work/here"; fi
   # Still there, or changed again since on main (then neither way applies): fine.
-  GIT_INDEX_FILE="$work/index" git apply --cached --check -R "$work/patch" 2>/dev/null && continue
-  GIT_INDEX_FILE="$work/index" git apply --cached --check "$work/patch" 2>/dev/null || continue
+  GIT_INDEX_FILE="$work/index" git apply --cached --check -R "$work/here" 2>/dev/null && continue
+  GIT_INDEX_FILE="$work/index" git apply --cached --check "$work/here" 2>/dev/null || continue
   touched=$(git diff --name-only --no-renames "$m^" "$m" -- $files | tr '\n' ' ')
   undone="$undone
   $short $(git log -1 --format=%s "$m")
