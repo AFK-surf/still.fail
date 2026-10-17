@@ -482,7 +482,7 @@ test("a_draft_is_kept_on_the_device_until_emptied", async () => {
   await host.settle();
   const values = new Map();
   apply(host, values);
-  assert.deepEqual(values.get(1), { text: "", quotes: [], files: [] });
+  assert.deepEqual(values.get(1), { text: "", quotes: [], files: [], links: [] });
   call(core, ui, 2, "draft.put", { station: "ws/st", chat: "new", text: "修一下登录", quotes: [{ author: "a", text: "b", comment: "" }], files: [{ name: "x.png", path: "up/x.png", size: 3 }] });
   await host.settle();
   apply(host, values);
@@ -503,7 +503,7 @@ test("a_draft_is_kept_on_the_device_until_emptied", async () => {
   call(again, ui2, 2, "draft.put", { station: "ws/st", chat: "new", text: " ", quotes: [], files: [] });
   await host.settle();
   apply(host, values2);
-  assert.deepEqual(values2.get(1), { text: "", quotes: [], files: [] });
+  assert.deepEqual(values2.get(1), { text: "", quotes: [], files: [], links: [] });
   await run(again.inner.data.written);
   again.close();
   again = await Core.create(host, { clock: host.time.clock, sample: 0 });
