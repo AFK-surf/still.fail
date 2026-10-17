@@ -5,6 +5,7 @@ import { vars } from "./styles/tokens.css.ts";
 import { appearKeyframes } from "./styles/keyframes.css.ts";
 import { pictureGlass } from "./styles/glass.ts";
 import { centred } from "./styles/align.ts";
+import { STILL } from "./styles/still.ts";
 
 /** Words about a wait come only when it takes a while: what is there in a moment (from the device) shows none. */
 export const LATER_MS = 400;
@@ -33,8 +34,7 @@ export const line = style({
 });
 export const shapes = style({
   animation: `${breathe} 1.4s ease-in-out infinite`,
-  selectors: { "&[data-still]": { animation: "none", opacity: 0.6 } },
-  "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } },
+  selectors: { "&[data-still]": { animation: "none", opacity: 0.6 }, [`${STILL} &`]: { animation: "none" } },
 });
 const bar = { display: "block", background: vars.neutralBg, borderRadius: "999px" } as const;
 export const row = style({
@@ -59,6 +59,5 @@ export const track = style({
 const sweep = keyframes({ from: { transform: "translateX(-100%)" }, to: { transform: "translateX(250%)" } });
 export const progress = style({
   position: "absolute", inset: "0 auto 0 0", borderRadius: "inherit", background: vars.accent, transition: `width 200ms ${vars.easeOut}`,
-  selectors: { "&[data-unknown]": { width: "40%", animation: `${sweep} 1.4s ease-in-out infinite` } },
-  "@media": { "(prefers-reduced-motion: reduce)": { selectors: { "&[data-unknown]": { animation: "none", width: "100%", opacity: 0.35 } } } },
+  selectors: { "&[data-unknown]": { width: "40%", animation: `${sweep} 1.4s ease-in-out infinite` }, [`${STILL} &[data-unknown]`]: { animation: "none", width: "100%", opacity: 0.35 } },
 });

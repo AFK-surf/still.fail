@@ -2,6 +2,7 @@
 import { AppearanceSetting } from "../components.tsx";
 import { t } from "../i18n.ts";
 import { setPrefs, usePrefs } from "../prefs.ts";
+import { useMotionSetting } from "../theme.ts";
 import { Button, MobileBack, Section, Segmented } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
@@ -15,6 +16,9 @@ export function AppearancePage({ back }: { back: string }) {
       <header className={pagesCss.pageHead}><div><h1>{t("web-pages.appearance.title")}</h1></div></header>
       <Section title={t("web-pages.appearance.theme.title")} description={t("web-pages.appearance.theme.description")}>
         <div className={chatCss.appearanceSetting}><AppearanceSetting /></div>
+      </Section>
+      <Section title={t("web-pages.appearance.motion.title")} description={t("web-pages.appearance.motion.description")}>
+        <div className={chatCss.appearanceSetting}><MotionSetting /></div>
       </Section>
       <Section title={t("common.language")} description={t("web-pages.appearance.language.description")}>
         <div className={chatCss.appearanceSetting}><LanguageSetting /></div>
@@ -42,6 +46,19 @@ function DropSetting() {
       options={[
         { value: "path", label: t("web-pages.appearance.drop.path") },
         { value: "file", label: t("web-pages.appearance.drop.file") },
+      ]} />
+  );
+}
+
+/** 动画: as the system asks, or reduced, or full whatever it asks (kept by the core with the other prefs). */
+function MotionSetting() {
+  const [motion, setMotion] = useMotionSetting();
+  return (
+    <Segmented label={t("web-pages.appearance.motion.title")} value={motion} onChange={setMotion}
+      options={[
+        { value: "system", label: t("web-pages.appearance.motion.system") },
+        { value: "reduce", label: t("web-pages.appearance.motion.reduce") },
+        { value: "full", label: t("web-pages.appearance.motion.full") },
       ]} />
   );
 }

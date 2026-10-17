@@ -8,6 +8,7 @@ import { codeBar, codeBlock, codeShiki } from "./Prose.css.ts";
 import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
 import { segmented, segmentedOption } from "@stillfail/ui/parts.css.ts";
 import { pictureGlass } from "@stillfail/ui/styles/glass.ts";
+import { STILL } from "@stillfail/ui/styles/still.ts";
 
 /** Frosted glass over a picture (@stillfail/ui's, as its viewers have it). */
 export const glass = pictureGlass;
@@ -25,11 +26,7 @@ const pageGlass = {
 export const fp = style({
   position: "fixed", inset: "0", zIndex: "61", display: "grid", gridTemplateRows: "minmax(0, 1fr)",
   background: vars.canvas, color: vars.text, outline: "none", animation: `${fadeInKeyframes} 140ms ${vars.easeOut}`,
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none",
-    },
-  },
+  selectors: { [`${STILL} &`]: { animation: "none" } },
 });
 // The page bars under it drag the desktop window whatever lies over them: without this, the top of its bar takes no pointer.
 globalStyle(`[data-desktop] ${fp}`, { WebkitAppRegion: "no-drag" });
@@ -46,10 +43,9 @@ export const fpHead = style({
   top: "max(16px, var(--safe-top))", width: "max-content", maxWidth: "min(100% - 32px, 1080px)", height: "44px", gap: "12px",
   padding: "0 6px 0 16px",
   // Under the Windows app's window buttons, which the system draws over the page's top right (styles/global.css.ts).
-  selectors: { ':is([data-desktop="overlay"], [data-desktop="custom"]):not([data-fullscreen]) &': { top: "calc(env(titlebar-area-height, 44px) + 8px)" } },
+  selectors: { ':is([data-desktop="overlay"], [data-desktop="custom"]):not([data-fullscreen]) &': { top: "calc(env(titlebar-area-height, 44px) + 8px)" }, [`${STILL} &`]: { transition: "none" } },
   "@media": {
     "(max-width: 640px)": { top: "max(8px, var(--safe-top))", maxWidth: "calc(100% - 16px)", gap: "4px", padding: "0 6px 0 12px" },
-    "(prefers-reduced-motion: reduce)": { transition: "none" },
   },
 });
 globalStyle(`${fp}[data-kind="image"] ${fpHead}`, glass);

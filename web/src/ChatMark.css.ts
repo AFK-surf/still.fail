@@ -2,6 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { busyRing } from "@stillfail/ui/styles/busyRing.ts";
 import { leadBeatKeyframes, leadBreatheKeyframes, leadLitKeyframes, spinKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { STILL } from "@stillfail/ui/styles/still.ts";
 
 /**
  * A chat's state on its row's picture (ChatMark.tsx), at the corner, over the picture: a gap of the row's ground
@@ -35,8 +36,8 @@ export const chatMark = style({
       content: "\"\"", position: "absolute", inset: 0, background: `${busyRing(10)} center / 100% no-repeat`,
       animation: `${spinKeyframes} 1.2s linear infinite`,
     },
+    [`${STILL} &[data-tone="busy"]::after`]: { animation: "none" },
   },
-  "@media": { "(prefers-reduced-motion: reduce)": { selectors: { '&[data-tone="busy"]::after': { animation: "none" } } } },
 });
 
 /** The same state as a dot in a line, before the chat's title: no gap round it, the row's ground is behind it. */
@@ -55,8 +56,8 @@ export const chatMarkInline = style({
       width: 10, height: 10, background: `${busyRing(10)} center / 100% no-repeat`,
       animation: `${spinKeyframes} 1.2s linear infinite`,
     },
+    [`${STILL} &[data-tone="busy"]`]: { animation: "none" },
   },
-  "@media": { "(prefers-reduced-motion: reduce)": { selectors: { '&[data-tone="busy"]': { animation: "none" } } } },
 });
 
 /** A workspace's counts (ChatMark.tsx MarkCounts): each dot with its number, small and quiet beside its name. */
@@ -94,5 +95,5 @@ globalStyle(`${leadSlot}[data-motion="wait"] > [data-part="4"]`, { animationDela
 globalStyle(`${leadSlot}[data-motion="watch"] > [data-part="1"]`, { animation: `${leadBeatKeyframes} 3.1s ease-out infinite` });
 globalStyle(`${leadSlot}[data-motion="watch"] > :is([data-part="2"], [data-part="3"])`, { opacity: .3, animation: `${leadLitKeyframes} 3.1s ease-out .18s infinite` });
 globalStyle(`${leadSlot}[data-motion="watch"] > [data-part="3"]`, { animationDelay: ".42s" });
-globalStyle(`${leadSlot}[data-motion] > [data-part]`, { "@media": { "(prefers-reduced-motion: reduce)": { animation: "none", opacity: 1 } } });
+globalStyle(`${STILL} ${leadSlot}[data-motion] > [data-part]`, { animation: "none", opacity: 1 });
 export const leadRest = style({ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });

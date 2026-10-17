@@ -21,7 +21,7 @@ import { Chats } from "@stillfail/ui/icons.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as rootCss from "./styles/root.css.ts";
 import * as css from "./app.css.ts";
-import { follower, type Follower } from "@stillfail/ui/motion.ts";
+import { follower, reducedMotion, type Follower } from "@stillfail/ui/motion.ts";
 import { useInWorkspace } from "../notify.ts";
 import { BottomBar, PLACE_PATHS, placeOfPath, useBars, type BarPlace } from "./Bar.tsx";
 import { t } from "../i18n.ts";
@@ -191,7 +191,7 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
     setPages(next);
     const drawn = type === "POP" && drawnByBrowser;
     drawnByBrowser = false;
-    const moves = type !== "REPLACE" && !drawn && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const moves = type !== "REPLACE" && !drawn && !reducedMotion();
     // Back, the page as it is in the list (its key the one it was first opened with, kept as it became another in place:
     // a chat opened by a link becoming the list), or it would not be the one coming in, and stay hidden as it comes.
     if (moves) setMoving({ from: top, to: type === "POP" && at >= 0 ? pages[at]! : page, forward });

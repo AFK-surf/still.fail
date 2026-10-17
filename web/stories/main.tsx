@@ -22,8 +22,11 @@ import { CHANGELOG, PEEK, SENT, readFile } from "./data.ts";
 import { DEVICES, device, wear, type Device } from "./devices.ts";
 import { play } from "./play.ts";
 import { stories, type Story } from "./stories.tsx";
+import { followMotion } from "@stillfail/ui/motion.ts";
 
 const root = document.getElementById("app")!;
+// Motion as the system (a test's browser) asks: no setting of this device here.
+followMotion();
 const query = new URLSearchParams(location.search);
 const id = query.get("story");
 const theme = query.get("theme");

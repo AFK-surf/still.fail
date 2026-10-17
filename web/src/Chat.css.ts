@@ -10,13 +10,14 @@ import { onboardingCard } from "./cloud/settings.css.ts";
 import { glass } from "@stillfail/ui/styles/glass.ts";
 import { columns, outsetStart } from "@stillfail/ui/styles/align.ts";
 import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
+import { STILL } from "@stillfail/ui/styles/still.ts";
 
 export const msgName = style({ fontWeight: "600" });
 /** A chat's list of messages, on either screen (the wide screen's pane, the phone's page): what quotes jump within. */
 export const chatMessages = style({});
 // Historical loading changes opacity only, all rows in a commit together: no queue, motion or repeated layout.
 globalStyle(`${chatMessages} > ${msg}[data-history-fade]`, { animation: `${fadeKeyframes} 180ms ${vars.easeOut}` });
-globalStyle(`${chatMessages} > ${msg}[data-history-fade]`, { "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } } });
+globalStyle(`${STILL} ${chatMessages} > ${msg}[data-history-fade]`, { animation: "none" });
 export const chatToBottom = style({
   position: "absolute", right: "24px", bottom: "12px", zIndex: "5", display: "grid", placeItems: "center",
   width: "34px", height: "34px", borderRadius: "50%", border: `1px solid ${vars.line}`, background: vars.canvas,
@@ -222,13 +223,7 @@ export const msgAvatarSlack = style({
 export const fileCard = style({
   selectors: {
     [`${composerFiles} &`]: { animation: `${enterUpKeyframes} 180ms ${vars.easeOut} both` },
-  },
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      selectors: {
-        [`${composerFiles} &`]: { animation: "none" },
-      },
-    },
+    [`${STILL} ${composerFiles} &`]: { animation: "none" },
   },
 });
 // Digits all one width: a percentage counting up does not shake.
@@ -328,8 +323,8 @@ globalStyle(`${msgImageWait} i`, {
 blots.forEach((b, i) => {
   globalStyle(`${msgImageWait} i:nth-child(${i + 1})`, {
     ...b.place, background: b.color, animation: `${blotDrift[i]} ${b.time} ease-in-out infinite alternate`,
-    "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } },
   });
+  globalStyle(`${STILL} ${msgImageWait} i:nth-child(${i + 1})`, { animation: "none" });
 });
 const msgImageRevealKeyframes = keyframes({
   from: { maskPosition: "0 100%", filter: "blur(14px)", transform: "scale(1.04)" },
@@ -350,11 +345,7 @@ export const quotePop = style({
   boxShadow: `0 6px 16px ${vars.shadow}`, cursor: "pointer", animation: `${popInKeyframes} 120ms ${vars.easeOut}`,
   selectors: {
     "&:hover": { background: vars.primaryHover },
-  },
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none",
-    },
+    [`${STILL} &`]: { animation: "none" },
   },
 });
 export const activityLine = style({
@@ -396,13 +387,7 @@ export const activityAvatar = style({
     [`${agentActivity}[data-waiting] &::after`]: { borderColor: vars.line, animation: "none" },
     [`${agentActivity}[data-leaving] &::after`]: { opacity: "0", transition: "opacity 160ms" },
     [`${agentActivity}[data-away] &`]: { visibility: "hidden" },
-  },
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      selectors: {
-        "&::after": { animation: "none" },
-      },
-    },
+    [`${STILL} &::after`]: { animation: "none" },
   },
 });
 export const activityTail = style({
@@ -419,14 +404,8 @@ export const activityNowText = style({
   selectors: {
     "&[data-in]": { animation: `${nowInKeyframes} 240ms ${vars.easeOut} both` },
     "&[data-out]": { animation: `${nowOutKeyframes} 240ms ${vars.easeOut} both`, pointerEvents: "none" },
-  },
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      selectors: {
-        "&[data-in]": { animation: "none" },
-        "&[data-out]": { animation: "none" },
-      },
-    },
+    [`${STILL} &[data-in]`]: { animation: "none" },
+    [`${STILL} &[data-out]`]: { animation: "none" },
   },
 });
 export const activityElapsed = style({ flex: "none", color: vars.subtle, fontVariantNumeric: "tabular-nums" });

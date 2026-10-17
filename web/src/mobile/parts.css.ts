@@ -10,6 +10,7 @@ import { mSteps } from "./styles/settings.css.ts";
 import { mHomeBar, mHomeWorkspace } from "./Home.css.ts";
 import { outsetTop } from "@stillfail/ui/styles/align.ts";
 import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
+import { STILL } from "@stillfail/ui/styles/still.ts";
 
 export const mMaker = style({
   display: "block", flex: "none",
@@ -68,15 +69,13 @@ export const mSegThumb = style({
     "&[data-moved]": {
       transition: "transform 240ms cubic-bezier(0, 0, .2, 1), width 240ms cubic-bezier(0, 0, .2, 1)",
     },
+    [`${STILL} &`]: { animation: "none !important", transition: "none !important" },
   },
   "@media": {
     "(prefers-color-scheme: dark)": {
       selectors: {
         [`:root:not([data-theme="light"]) ${m} ${mSeg}:not([data-track]) &`]: { background: "color-mix(in srgb, var(--m-ink) 13%, transparent)" },
       },
-    },
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none !important", transition: "none !important",
     },
   },
 });

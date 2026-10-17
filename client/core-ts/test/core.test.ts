@@ -403,6 +403,18 @@ test("prefs_are_kept_on_the_device_and_moved_in_once_without_writing_over", asyn
   await host.settle();
   const refused = host.takeEmitted().filter(([, m]) => "error" in m && (m.id === 5 || m.id === 6)).length;
   assert.equal(refused, 2);
+  // Motion: reduced or full, or (none) as the system asks.
+  set(30, { motion: "reduce" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).motion, "reduce");
+  set(31, { motion: "slow" });
+  await host.settle();
+  assert.equal(host.takeEmitted().filter(([, m]) => "error" in m && m.id === 31).length, 1);
+  set(32, { motion: null });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).motion, undefined);
   set(7, { invite: "ABCD-EFGH" });
   await host.settle();
   apply(host, values);

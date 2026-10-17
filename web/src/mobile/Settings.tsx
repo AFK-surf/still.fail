@@ -10,7 +10,7 @@ import { ROLE_LABEL } from "../cloud/settings.tsx";
 import { useLock } from "../cloud/Security.tsx";
 import { useVaults, vaultStatus } from "../vault.ts";
 import { ChevronRight } from "@stillfail/ui/icons.tsx";
-import { useAppearance, type Appearance } from "../theme.ts";
+import { useAppearance, useMotionSetting, type Appearance } from "../theme.ts";
 import { CAN_NOTIFY, setNotify, useNotifyState } from "../notify.ts";
 import { useApp } from "./app.tsx";
 import { t } from "../i18n.ts";
@@ -144,10 +144,12 @@ function Notify() {
   );
 }
 
-/** How this device shows still.fail: its theme. */
+/** How this device shows still.fail: its theme, and its motion (the wide screen's 外观 page has the same). */
 export function AppearanceScreen() {
   const app = useApp();
   const [appearance, setAppearance] = useAppearance();
+  const [motion, setMotion] = useMotionSetting();
+  const motions = [["system", t("web-pages.appearance.motion.system")], ["reduce", t("web-pages.appearance.motion.reduce")], ["full", t("web-pages.appearance.motion.full")]] as const;
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} />
@@ -157,6 +159,12 @@ export function AppearanceScreen() {
         <Seg options={themes().map(([, label]) => label)} selected={Math.max(0, themes().findIndex(([v]) => v === appearance))}
           onSelect={(i) => setAppearance(themes()[i]![0])} height={34} fill />
       </div>
+      <SectionHeader title={t("web-pages.appearance.motion.title")} start={24} />
+      <div style={{ padding: "0 12px" }}>
+        <Seg options={motions.map(([, label]) => label)} selected={Math.max(0, motions.findIndex(([v]) => v === motion))}
+          onSelect={(i) => setMotion(motions[i]![0])} height={34} fill />
+      </div>
+      <div className={css.mSegNote}>{t("web-pages.appearance.motion.description")}</div>
       <div style={{ height: 30 }} />
     </div>
   );

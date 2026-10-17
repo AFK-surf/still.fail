@@ -2,6 +2,7 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
 import { VIEWER_BAR } from "./ViewerBar.css.ts";
 import { panel as panelGround } from "../styles/glass.ts";
+import { STILL } from "../styles/still.ts";
 
 /**
  * The papers, of still.fail's own grounds: the phone's warm page and its night (mobile/styles/root.css.ts), the desktop's
@@ -87,8 +88,7 @@ const glassy = {
 } as const;
 const fades = {
   opacity: "0", pointerEvents: "none", transition: `opacity 240ms ${vars.easeOut}, translate 240ms ${vars.easeOut}`,
-  selectors: { "&[data-shown]": { opacity: "1", pointerEvents: "auto", translate: "0 0", transitionDuration: "140ms" } },
-  "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } },
+  selectors: { "&[data-shown]": { opacity: "1", pointerEvents: "auto", translate: "0 0", transitionDuration: "140ms" }, [`${STILL} &`]: { transition: "none" } },
 } as const;
 
 export const top = style({

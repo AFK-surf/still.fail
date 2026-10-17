@@ -7,6 +7,7 @@ import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { pictureGlass as glass } from "@stillfail/ui/styles/glass.ts";
 import { IN, PANEL_PAD, PANEL_PILL, centred, centredX, pillInner } from "@stillfail/ui/styles/align.ts";
 import { panelCard, popover } from "@stillfail/ui/styles/controls.css.ts";
+import { STILL } from "@stillfail/ui/styles/still.ts";
 
 /** The page it is on, over the whole window (as a file opened is: pages/Drive.css.ts opened). */
 export const page = style({
@@ -48,8 +49,8 @@ export const picture = style({
     "&[data-shown]": { visibility: "visible" },
     // Over (ended, gone…): the last picture stays, faded under what it says.
     "&[data-faded]": { opacity: ".35" },
+    [`${STILL} &`]: { transition: "none" },
   },
-  "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } },
 });
 export const canvas = style({ display: "block", width: "100%", height: "100%" });
 

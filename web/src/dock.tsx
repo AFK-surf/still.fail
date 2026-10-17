@@ -13,6 +13,7 @@ import * as composerCss from "./styles/composer.css.ts";
 import * as css from "./dock.css.ts";
 import { easeOut, morph, shapeOf, stop, type Shape } from "./morph.ts";
 import { whenRowIn } from "./madeChat.ts";
+import { reducedMotion } from "@stillfail/ui/motion.ts";
 
 export interface ComposerSpec extends ComposerProps {
   /** The station it sends to (uploads, warming, sending are its). */
@@ -177,7 +178,7 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     const b = inner();
     const wrap = b?.parentElement;
     if (!before || !spec || before === spec.variant || !from || !b || !wrap) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (reducedMotion()) return;
     // From where it was to where its place is now (read without the move under way), its shape and what it holds with
     // it (morph.ts).
     const animate = () => {
@@ -250,7 +251,7 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     if (!dock) return;
     const hold = (event: Event) => {
       const b = inner();
-      if (!b || variant.current !== "new" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      if (!b || variant.current !== "new" || reducedMotion()) return;
       held.current?.release();
       const shape = shapeOf(b);
       const before = { height: b.style.height, width: b.style.width, borderRadius: b.style.borderRadius };

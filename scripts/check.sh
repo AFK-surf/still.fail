@@ -241,6 +241,10 @@ if part ts; then
     # The safe area is read through --safe-top … (styles/global.css.ts), never env() itself: the stories put the page on
     # each phone's by setting those.
     step "safe area through its vars" sh -c '! git grep -n "env(safe-area-inset" -- "web/src/*.ts" "web/src/*.tsx" "web/ui/*.ts" "web/ui/*.tsx" ":!web/src/styles/global.css.ts"'
+    # Motion reduced is read from the page's root (@stillfail/ui styles/still.ts STILL, motion.ts reducedMotion), which
+    # the 外观 page's setting decides when it says so; a media query of its own would not hear the setting. The official
+    # site's own motion, before its script runs, goes by the query.
+    step "reduced motion from the root" sh -c '! git grep -n "prefers-reduced-motion" -- "web/src/*.ts" "web/src/*.tsx" "web/ui/*.ts" "web/ui/*.tsx" ":!web/ui/src/motion.ts" ":!web/ui/src/styles/still.ts" ":!web/src/site/"'
     # No corner of its own in what a change adds: a corner is a token (vars.r*) or follows what it sits in (align.ts
     # surface/inner, docs/ui-panels.md); circles, capsules and marks of 4 or less may say theirs, as may a line that says
     # why with "own corner:".

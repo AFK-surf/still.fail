@@ -19,7 +19,7 @@ Object.assign(globalThis, {
   addEventListener: noop,
   removeEventListener: noop,
   // A document with no body: what the app would put on the page (the sidebar's buddy) is drawn in place (brand.tsx).
-  document: { documentElement: { dataset: { theme: "dark" } }, body: null, getElementById: () => null, querySelector: () => null, addEventListener: noop, removeEventListener: noop },
+  document: { documentElement: { dataset: { theme: "dark" }, hasAttribute: () => false }, body: null, getElementById: () => null, querySelector: () => null, addEventListener: noop, removeEventListener: noop },
 });
 
 const dist = (path) => fileURLToPath(new URL(`../dist/${path}`, import.meta.url));

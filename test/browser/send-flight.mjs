@@ -10,6 +10,9 @@ try {
   writeFileSync(fixture, `
 import './styles/index.ts';
 import { sendingHere } from './madeChat.ts';
+import { followMotion } from '@stillfail/ui/motion.ts';
+// The emulated system's reduced motion on the root, as the app's pages put it.
+followMotion();
 import { chatMessages } from './Chat.css.ts';
 import { msg, msgBubble, msgTime } from './styles/conversation.css.ts';
 import { msgMine, msgPlain } from './styles/chat.css.ts';

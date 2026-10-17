@@ -16,6 +16,9 @@ import { BrowserRouter, useNavigate, type Location } from 'react-router';
 import './src/styles/index.ts';
 import './src/demo/mount.tsx';
 import { ACCOUNT } from './src/demo/station.ts';
+import { followMotion } from '@stillfail/ui/motion.ts';
+// The emulated system's reduced motion on the root, as the app's pages put it.
+followMotion();
 import { setPageRoot } from './src/brand.tsx';
 import { MobileShell, useApp } from './src/mobile/app.tsx';
 import * as css from './src/mobile/app.css.ts';

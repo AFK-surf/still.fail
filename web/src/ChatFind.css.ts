@@ -2,15 +2,16 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { fadeKeyframes, searchStrokeKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { glass } from "@stillfail/ui/styles/glass.ts";
+import { STILL } from "@stillfail/ui/styles/still.ts";
 
 /** The chat's find bar (ChatFind.tsx): in the page's bar, in place of its buttons while it is open, so it covers
  *  nothing of the chat. Where a page has no such place, over the top right of the list. */
 export const bar = style({
   display: "flex", alignItems: "center", gap: "8px", minWidth: "0", WebkitAppRegion: "no-drag",
   animation: `${fadeKeyframes} 120ms ${vars.easeOut}`,
-  "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } },
   selectors: {
     "&[data-over]": { position: "absolute", top: "12px", right: "24px", zIndex: "6", maxWidth: "calc(100% - 48px)" },
+    [`${STILL} &`]: { animation: "none" },
   },
 });
 export const field = style({
@@ -46,5 +47,5 @@ globalStyle("[data-search-marks][data-find] path", { animation: "none", strokeDa
 globalStyle("[data-search-marks][data-find] svg[data-current] path", { strokeWidth: "4.5", opacity: "1" });
 globalStyle("[data-search-marks][data-find] svg[data-current][data-fresh] path", {
   strokeDashoffset: "1", animation: `${searchStrokeKeyframes} 320ms cubic-bezier(.4, 0, .2, 1) forwards`, animationDelay: "0ms !important",
-  "@media": { "(prefers-reduced-motion: reduce)": { animation: "none", strokeDashoffset: "0" } },
 });
+globalStyle(`${STILL} [data-search-marks][data-find] svg[data-current][data-fresh] path`, { animation: "none", strokeDashoffset: "0" });
