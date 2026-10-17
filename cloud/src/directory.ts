@@ -30,6 +30,8 @@ const MANAGERS: readonly Role[] = ["owner", "admin"];
 
 export const INVITATION_TTL_SEC = 7 * 24 * 60 * 60;
 export const ENROLLMENT_TTL_SEC = 60 * 60;
+/** How long a device's request to be confirmed into the lock waits before it is dropped (one long gone, a browser profile thrown away). */
+export const LOCK_REQUEST_TTL_SEC = 7 * 24 * 60 * 60;
 const LIMITS = { openInvitations: 50, pushPerUser: 32 };
 /**
  * What an account may create, and what each workspace it created may hold (its creator counted among the people). Every
@@ -471,7 +473,29 @@ export class Directory extends DurableObject<Env> {
 
   /** How many devices wait to be confirmed, of those the caller sees (all for owners and admins, their own for others). */
   #lockRequestCount(workspace: string, sub: string, role: Role): number {
-    return this.#one("SELECT COUNT(*) AS n FROM lock_requests WHERE workspace = ? AND (? OR sub = ?)", workspace, MANAGERS.includes(role) ? 1 : 0, sub)!.n as number;
+    return this.#lockRequestRows(workspace, sub, role).length;
+  }
+
+  /**
+   * The devices waiting to be confirmed that the caller sees, oldest first: not past their time, and of one person's
+   * devices with the same kind and name (the same browser on the same computer, its storage cleared; an app installed
+   * again) only the latest.
+   */
+  #lockRequestRows(workspace: string, sub: string, role: Role): Record<string, unknown>[] {
+    const rows = this.#rows(
+      `SELECT r.base, r.sub, COALESCE(u.email, '') AS email, r.request, r.created_at FROM lock_requests r LEFT JOIN users u ON u.sub = r.sub
+        WHERE r.workspace = ? AND (? OR r.sub = ?) AND r.created_at > ? ORDER BY r.created_at DESC, r.rowid DESC`,
+      workspace, MANAGERS.includes(role) ? 1 : 0, sub, nowSeconds() - LOCK_REQUEST_TTL_SEC,
+    );
+    const seen = new Set<string>();
+    return rows.filter((r) => {
+      const { kind, label } = JSON.parse(r.request as string) as { kind: string; label: string };
+      if (!label) return true;
+      const same = JSON.stringify([r.sub, kind, label]);
+      if (seen.has(same)) return false;
+      seen.add(same);
+      return true;
+    }).reverse();
   }
 
   /** Whether a workspace is locked: it has a chain, not turned off. */
@@ -574,8 +598,14 @@ export class Directory extends DurableObject<Env> {
     const endpoints = Array.isArray(input.endpoints) ? input.endpoints.filter((e): e is string => typeof e === "string" && /^[0-9a-f]{64}$/.test(e)).slice(0, 16) : [];
     const code = await shortCode(base);
     const request = { kind, label, sign_key, endpoints };
+    // Asked again, it waits anew; those past their time, and the person's others it now stands for (the same kind and
+    // name: see #lockRequestRows), go.
+    this.#run("DELETE FROM lock_requests WHERE workspace = ? AND created_at <= ?", workspace, nowSeconds() - LOCK_REQUEST_TTL_SEC);
+    if (label) {
+      this.#run("DELETE FROM lock_requests WHERE workspace = ? AND sub = ? AND base != ? AND json_extract(request, '$.kind') = ? AND json_extract(request, '$.label') = ?", workspace, sub, base, kind, label);
+    }
     this.#run(
-      "INSERT INTO lock_requests (workspace, base, sub, request, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (workspace, base) DO UPDATE SET sub = excluded.sub, request = excluded.request",
+      "INSERT INTO lock_requests (workspace, base, sub, request, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (workspace, base) DO UPDATE SET sub = excluded.sub, request = excluded.request, created_at = excluded.created_at",
       workspace, base, sub, JSON.stringify(request), nowSeconds(),
     );
     this.#changed(workspace, false);
@@ -584,12 +614,7 @@ export class Directory extends DurableObject<Env> {
 
   /** Devices waiting to be confirmed: all of them for owners and admins, a member's own for a member. */
   async lockRequests(sub: string, workspace: string): Promise<{ requests: LockRequestView[] }> {
-    const role = this.#role(sub, workspace);
-    const rows = this.#rows(
-      `SELECT r.base, r.sub, COALESCE(u.email, '') AS email, r.request, r.created_at FROM lock_requests r LEFT JOIN users u ON u.sub = r.sub
-        WHERE r.workspace = ? AND (? OR r.sub = ?) ORDER BY r.created_at`,
-      workspace, MANAGERS.includes(role) ? 1 : 0, sub,
-    );
+    const rows = this.#lockRequestRows(workspace, sub, this.#role(sub, workspace));
     const requests = await Promise.all(rows.map(async (r) => ({ base: r.base as string, sub: r.sub as string, email: r.email as string, ...(JSON.parse(r.request as string) as { kind: string; label: string; sign_key: string | null; endpoints: string[] }), code: await shortCode(r.base as string), created_at: r.created_at as number })));
     return { requests };
   }

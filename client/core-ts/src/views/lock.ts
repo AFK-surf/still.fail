@@ -9,7 +9,8 @@
 // Calls (lock.<name> {workspace, …}):
 //   open                    the owner turns it on, as the draft stands
 //   toggle {id}             a device or station of the draft left out, or put back
-//   request                 this device asks to be confirmed (done by itself when a station refuses it)
+//   request                 this device asks to be confirmed (done by itself when it reads a lock without it, or a
+//                           station refuses it; once turned down, only by hand)
 //   confirm {device, code}  a waiting device confirmed, its code compared on both screens
 //   deny {device}           a waiting device turned down
 //   addStation {station, code}  a station enrolled with the lock's hash, confirmed by the code it printed
@@ -48,8 +49,10 @@ export const RENEW_SECS = 5 * 86400;
 /// A device of the person's own added this recently is pointed out on their other devices.
 const RECENT_SECS = 7 * 86400;
 
-/// What the cloud keeps of a workspace's lock, as held here (the `lock` record of the workspace).
-type Held = { head: Head | null; entries: Entry[]; requests: J[] };
+/// What the cloud keeps of a workspace's lock, as held here (the `lock` record of the workspace); `declined`, this
+/// device's base key once its request went without it being let in (turned down, dropped by the cloud): it does not
+/// ask by itself again, when the lock moves on or after a restart, only by hand.
+type Held = { head: Head | null; entries: Entry[]; requests: J[]; declined?: string };
 
 /// What this device keeps of a workspace's lock this run.
 type Part = {
@@ -186,14 +189,20 @@ function readOnce(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
     let entries = same ? [...was!.entries, ...more.filter((e) => e.seq > was!.head!.seq)] : more;
     if (!same && head && (more.length === 0 || more[0]!.seq !== 0)) entries = arr(get(yield* cloud("/lock"), "entries")) as Entry[];
     const requests = head === null ? [] : yield* Effect.orElseSucceed(Effect.map(cloud("/lock/requests"), (r) => arr(get(r, "requests"))), () => was?.requests ?? []);
-    inner.data.put("lock", ws, { head, entries: head === null ? [] : entries, requests });
+    const asking = head !== null && inner.provider.kind === "stillfail";
+    const base = asking ? yield* Effect.orElseSucceed(new Lock(inner, ws, sub, null).base(), () => null) : null;
+    const f = fold(head === null ? [] : entries);
+    // Its request gone while it is still not in the lock: turned down (or dropped by the cloud). Read between a confirm's
+    // entry and its request's removal it looks the same, until the next read finds it in the lock.
+    let declined = was?.declined;
+    if (base !== null && (f.devices.has(base) || requests.some((r) => r.base === base))) declined = undefined;
+    else if (base !== null && (was?.requests ?? []).some((r) => r.base === base)) declined = base;
+    inner.data.put("lock", ws, { head, entries: head === null ? [] : entries, requests, ...(declined ? { declined } : {}) });
     if ((was?.head?.hash ?? null) !== (head?.hash ?? null)) moved(inner, ws);
     inner.store.invalidateAll((t) => (t.topic === "lock" || t.topic === "lockDraft") && t.workspace === ws);
     // This device not in the lock (left out when it was turned on, or new): it asks to be confirmed now, not only once
     // a station it reaches refuses it (one it is connected to may not be asked again for a while).
-    if (head === null || inner.provider.kind !== "stillfail") return;
-    const base = yield* Effect.orElseSucceed(new Lock(inner, ws, sub, null).base(), () => null);
-    const f = fold(entries);
+    if (!asking) return;
     if (base !== null && !f.disabled && !f.devices.has(base) && !requests.some((r) => r.base === base)) ask(inner, ws);
   });
 }
@@ -216,13 +225,14 @@ function refused(inner: Inner, ws: string, station: string): void {
   ask(inner, ws);
 }
 
-/// This device asks to be confirmed, once a head.
+/// This device asks to be confirmed, once a head; not by itself once turned down (`Held.declined`).
 function ask(inner: Inner, ws: string): void {
   const p = part(inner, ws);
-  const head = held(inner, ws)?.head?.hash ?? null;
+  const h = held(inner, ws);
+  const head = h?.head?.hash ?? null;
   inner.store.invalidateAll((t) => t.topic === "lock" && t.workspace === ws);
   const sub = inner.workspaces.owner(ws);
-  if (p.requested === head || sub === null) return;
+  if (p.requested === head || sub === null || (h?.declined !== undefined && h.declined === p.base)) return;
   p.requested = head;
   // Asked again a few times if the cloud did not take it (the page says the others were told); after that, the next
   // refusal asks anew.
@@ -343,7 +353,7 @@ export function lockView(inner: Inner, ws: string): J {
       // A station refused this device, or it asked, and the lock has not moved on since: it waits to be confirmed.
       // Its request waits at the cloud, or is on its way there; not when turned down (asked again by hand then).
       asked: p.sending || (h?.requests ?? []).some((r) => r.base === p.base),
-      waiting: locked && p.base !== null && mine === undefined && (p.refused.size > 0 || p.requested === (h?.head?.hash ?? null) || (h?.requests ?? []).some((r) => r.base === p.base)),
+      waiting: locked && p.base !== null && mine === undefined && (p.refused.size > 0 || p.requested === (h?.head?.hash ?? null) || h?.declined === p.base || (h?.requests ?? []).some((r) => r.base === p.base)),
     },
     signers: [...f.devices.values()].filter((d) => typeof d.sign_key === "string").length,
     members,

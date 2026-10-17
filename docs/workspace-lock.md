@@ -67,7 +67,7 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 ## 新设备
 
 - 锁住的 station 拒绝不在锁里的设备时回 `{code: "lock_unconfirmed", lock}`，core 报 `lock_unconfirmed`。
-- `lock.request`：设备把基础公钥（app 还有签名公钥）交给 cloud（`/v1/workspaces/:ws/lock/requests`），显示 6 位短码（由基础公钥算出，两边各自算）。
+- `lock.request`：设备把基础公钥（app 还有签名公钥）交给 cloud（`/v1/workspaces/:ws/lock/requests`），显示 6 位短码（由基础公钥算出，两边各自算）。cloud 上的申请 7 天后作废（重新申请就重新计时）；同一个人、同一类（app/web）、同一个名字的设备只留最新的一条（同一个浏览器清了存储、app 重装后会换一把钥匙）。
 - `lock.confirm {device, code}`：这个人自己另一台锁里的 app 设备、或 owner/admin，核对短码后签 `device` 条目；网页版的设备 30 天到期。
 - 老客户端的新设备只看到 station 的拒绝文字。
 
@@ -91,7 +91,7 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 
 ## 界面（第二步）
 
-- core：`lock`、`lockDraft` 两个 topic 和 `lock.*` 调用（`client/core-ts/src/views/lock.ts`），锁记录存在 workspace 的 `lock` 里；workspace 视图多了 `lock`、`lock_requests`，变了就重读。core 读到锁、发现这台设备不在里面（开启时没勾上，或之后才加的），就自己提交确认请求并显示等待页，不等 station 拒绝（还连着的 station 不会马上拒绝，没连过的也不会）；station 以 `lock_unconfirmed` 拒绝这台设备后同样会请求，锁没变前不再连那台 station；锁一变（有人确认了）立刻重试。
+- core：`lock`、`lockDraft` 两个 topic 和 `lock.*` 调用（`client/core-ts/src/views/lock.ts`），锁记录存在 workspace 的 `lock` 里；workspace 视图多了 `lock`、`lock_requests`，变了就重读。core 读到锁、发现这台设备不在里面（开启时没勾上，或之后才加的），就自己提交确认请求并显示等待页，不等 station 拒绝（还连着的 station 不会马上拒绝，没连过的也不会）；station 以 `lock_unconfirmed` 拒绝这台设备后同样会请求，锁没变前不再连那台 station；锁一变（有人确认了）立刻重试。被拒过的设备（申请没了、自己也没进锁：被拒绝，或被 cloud 作废）记在锁记录的 `declined` 里，之后锁再变、重启都不再自己申请，只能在它的等待页上手动「发送批准请求」。
 - 桌面/网页：设置 › 安全（`web/src/cloud/Security.tsx`）；开启前核对页 `settings/security/open`；owner 在设置页顶上的一行提示（`lock.dismiss` 关掉，记在 prefs `lockNotice`）；等待确认的设备看到的整页。
 - 等这台设备确认的新设备自己弹出来（`lock` topic 的 `prompt`）：这台能签名、锁开着时，`requests` 里第一个还没在这台弹过的。界面弹出核对短码的窗口（桌面对话框，手机网页和安卓底部面板），换页不关；用户手动关掉时调 `lock.shown {device}`，这次运行里同一台不再弹，仍在 设置 › 安全 里。别的设备上确认或拒绝了，`requests` 里没了它，弹窗跟着关。
 - 手机网页（`web/src/mobile/Security.tsx`）和安卓（`screens/Security.kt`）同一套：设置里「安全」一行写现状（等你确认的件数标红），确认设备用底部面板。

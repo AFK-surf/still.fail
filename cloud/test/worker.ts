@@ -48,6 +48,10 @@ export class Directory extends ProductionDirectory {
   expireInviteCode(code: string) {
     this.ctx.storage.sql.exec("UPDATE invite_codes SET expires_at = ? WHERE code = ?", nowSeconds(), code);
   }
+  /** A device's request to be confirmed into a workspace's lock, made `secs` ago. */
+  ageLockRequest(workspace: string, base: string, secs: number) {
+    this.ctx.storage.sql.exec("UPDATE lock_requests SET created_at = ? WHERE workspace = ? AND base = ?", nowSeconds() - secs, workspace, base);
+  }
   /** An account as members were before invite codes: in a workspace, admitted by nothing on record. */
   forgetAdmission(sub: string) {
     this.ctx.storage.sql.exec("UPDATE users SET admitted = NULL WHERE sub = ?", sub);

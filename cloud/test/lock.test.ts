@@ -132,6 +132,29 @@ test("devices that asked for credentials, for the owner to check; devices waitin
     assert.deepEqual(((await (await alice("GET", `/v1/workspaces/${ws}/lock/requests`)).json()) as any).requests.map((r: any) => [r.base, r.email, r.code]), [[waiting.id, "bob@example.test", asked.code]]);
     assert.equal((await alice("DELETE", `/v1/workspaces/${ws}/lock/requests/${waiting.id}`)).status, 200);
     assert.deepEqual(((await (await bob("GET", `/v1/workspaces/${ws}/lock/requests`)).json()) as any).requests, []);
+
+    // Of one person's devices with the same kind and name only the latest waits (the same browser, its storage
+    // cleared); those without a name, or of another kind, each wait. One asked a week ago is dropped; asking again,
+    // it waits anew.
+    const listed = async () => ((await (await alice("GET", `/v1/workspaces/${ws}/lock/requests`)).json()) as any).requests.map((r: any) => r.base);
+    const count = async () => ((await (await alice("GET", `/v1/workspaces/${ws}`)).json()) as any).lock_requests;
+    const [chrome, again, phone, unnamed, unnamed2] = await Promise.all([key(), key(), key(), key(), key()]);
+    const ask = (k: { id: string }, kind: string, label: string) => bob("POST", `/v1/workspaces/${ws}/lock/requests`, { base: k.id, kind, label });
+    await ask(chrome, "web", "still.fail · Chrome · macOS");
+    await ask(phone, "app", "still.fail · Chrome · macOS");
+    await ask(unnamed, "web", "");
+    await ask(unnamed2, "web", "");
+    await ask(again, "web", "still.fail · Chrome · macOS");
+    assert.deepEqual((await listed()).sort(), [phone.id, unnamed.id, unnamed2.id, again.id].sort());
+    assert.equal(await count(), 4);
+    const directories: any = await h.mf.getDurableObjectNamespace("DIRECTORY", "api");
+    const directory = directories.get(directories.idFromName("primary"));
+    await directory.ageLockRequest(ws, phone.id, 7 * 86400);
+    await directory.ageLockRequest(ws, unnamed.id, 7 * 86400 - 60);
+    assert.deepEqual((await listed()).sort(), [unnamed.id, unnamed2.id, again.id].sort());
+    assert.equal(await count(), 3);
+    await ask(phone, "app", "still.fail · Chrome · macOS");
+    assert.deepEqual((await listed()).sort(), [phone.id, unnamed.id, unnamed2.id, again.id].sort());
   } finally {
     await h.close();
   }

@@ -242,7 +242,7 @@ async function main() {
   const laptopSays = (await laptop.call("lock.state", { workspace: ws })).me;
   check("turned down, it asks again by hand", `laptop: after deny ${deniedSays}; asked again ${askedAgain}, asked ${laptopSays.asked}, waiting ${laptopSays.waiting}`, "-", deniedSays === "not asked" && askedAgain && laptopSays.asked === true && laptopSays.waiting === true);
   await owner.call("lock.deny", { workspace: ws, device: laptopId });
-  laptop.close();
+  await until(async () => (await laptop.call("lock.state", { workspace: ws })).me.asked === false, "the laptop sees it turned down again", 50).catch(() => false);
 
   say("a new device of alice's: waits, asks, the owner compares its code and confirms it");
   await nextMinute();
@@ -259,6 +259,16 @@ async function main() {
   const wrong = await owner.call("lock.confirm", { workspace: ws, device: asked.device, code: "AAA-AAA" }).then(() => "confirmed", (e) => `refused: ${e.message}`);
   await owner.call("lock.confirm", { workspace: ws, device: asked.device, code: listed.code });
   const after = await until(async () => phone.call("tools.access", { station: `${ws}/${A.id}` }).then(() => "admitted", () => null), "phone admitted", 50);
+  // The lock moved on (the phone's entry): the laptop, turned down, does not ask by itself again.
+  await until(async () => (await laptop.call("lock.state", { workspace: ws })).members.some((m: any) => m.devices.some((d: any) => d.id === asked.device)), "the laptop read the phone's entry", 50).catch(() => false);
+  let laptopBack = false;
+  for (let i = 0; i < 15 && !laptopBack; i++) {
+    laptopBack = (await owner.call("lock.state", { workspace: ws })).requests.some((r: any) => r.device === laptopId);
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  const laptopAfter = (await laptop.call("lock.state", { workspace: ws })).me;
+  check("turned down, it does not ask by itself when the lock moves on", `laptop: listed again ${laptopBack}; asked ${laptopAfter.asked}, waiting ${laptopAfter.waiting}`, "-", !laptopBack && laptopAfter.asked === false && laptopAfter.waiting === true);
+  laptop.close();
   check("a new device: refused, asks, confirmed by its code", `${A.name}: before ${waits}; code on the phone ${asked.code}, listed for the owner ${listed?.code}, put up ${prompted ? "once" : "never"}${promptedAgain ? " and again" : ""}; a wrong code ${wrong}; after ${after}`, "-", waits.startsWith("lock_unconfirmed") && asked.code === listed?.code && prompted && !promptedAgain && wrong.startsWith("refused") && after === "admitted");
 
   say("a new station joins with the lock's hash and is confirmed by the code it printed");
