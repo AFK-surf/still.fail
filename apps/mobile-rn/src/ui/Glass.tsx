@@ -4,6 +4,7 @@
 import { BlurView } from "expo-blur";
 import type { ReactNode } from "react";
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { Quiet } from "./Quiet";
 import { concentric, Smooth } from "./Smooth";
 import { raised, useC, withAlpha } from "./Theme";
 
@@ -16,11 +17,14 @@ interface GlassProps { tint: string; alpha: number; px: number; style?: StylePro
 export function Frost({ tint, alpha, px, style, children }: GlassProps) {
   return (
     <View style={style}>
-      {Platform.OS === "android" && Platform.Version >= 31 ? (
-        <BlurView experimentalBlurMethod="dimezisBlurView" {...blur(px)} tint="default" style={StyleSheet.absoluteFill} />
-      ) : (
-        <BlurView {...blur(px)} tint="default" style={StyleSheet.absoluteFill} />
-      )}
+      {/* Quiet: the blur draws anew each frame what moves behind it, and Android tells accessibility of each (Quiet.tsx). */}
+      <Quiet style={StyleSheet.absoluteFill}>
+        {Platform.OS === "android" && Platform.Version >= 31 ? (
+          <BlurView experimentalBlurMethod="dimezisBlurView" {...blur(px)} tint="default" style={StyleSheet.absoluteFill} />
+        ) : (
+          <BlurView {...blur(px)} tint="default" style={StyleSheet.absoluteFill} />
+        )}
+      </Quiet>
       <View style={[StyleSheet.absoluteFill, { backgroundColor: withAlpha(tint, alpha) }]} />
       {children}
     </View>
