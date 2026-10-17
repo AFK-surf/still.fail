@@ -27,7 +27,7 @@
 //   migrate                       the plain library's items moved into one's own vault, encrypted (security mode on)
 //   lock                          the unlocked keys forgotten now
 //   state                         the `vaults` topic's value, as a call
-import { Effect } from "effect";
+import { Effect, Schedule } from "effect";
 import type { Inner } from "../core.ts";
 import { ulid } from "../accounts.ts";
 import { handlers } from "../core/execute.ts";
@@ -501,6 +501,23 @@ export function itemsView(inner: Inner, ws: string, id: string): J {
     })
     .sort((a, b) => ((a.name ?? "") < (b.name ?? "") ? -1 : (a.name ?? "") > (b.name ?? "") ? 1 : a.id < b.id ? -1 : 1));
   return { vault: id, name: v.name, open: key !== null, items: list };
+}
+
+// ── security mode turned off (docs/vault.md 一个库) ──
+
+/// What the person's own vaults hold, opened on this device while the lock is still on (the person asked, unless the
+/// vaults are unlocked): none where this device keeps no vault keys or holds none of theirs.
+export function unsealOwn(inner: Inner, ws: string): Effect.Effect<{ plain: Plain; listing: Listing | null }[], CoreError> {
+  return new Vaults(inner, ws, null).unsealOwn();
+}
+
+/// Those secrets written into the plain library once the lock is off: tried again a while, as the station may not have
+/// heard yet that it is off (`vault_locked`). One that fails stays in the vault, seen again if security mode comes back.
+export function writePlain(inner: Inner, ws: string, secrets: { plain: Plain; listing: Listing | null }[]): Effect.Effect<void> {
+  const v = new Vaults(inner, ws, null);
+  return Effect.forEach(secrets, (s) =>
+    Effect.ignore(Effect.retry(v.putPlain(null, s.plain, s.listing), { times: 30, schedule: Schedule.spaced("2 seconds"), while: (e) => e.code === "vault_locked" || e.code === "vault_no_station" })),
+  { discard: true });
 }
 
 // ── what a person does ──
@@ -1006,8 +1023,33 @@ class Vaults {
     });
   }
 
+  /// The person's own vaults' items opened (their plaintext and listing), for security mode turned off.
+  unsealOwn(): Effect.Effect<{ plain: Plain; listing: Listing | null }[], CoreError> {
+    const self = this;
+    return Effect.gen(function* () {
+      const inner = self.#inner;
+      if (!able(inner) || lockOf(inner, self.ws) instanceof CoreError) return [];
+      const ready = yield* Effect.result(self.#ready());
+      if (ready._tag === "Failure") return [];
+      const { lock, self: who } = ready.success;
+      const out: { plain: Plain; listing: Listing | null }[] = [];
+      for (const v of Object.values(held(inner, self.ws).vaults)) {
+        if (!trusted(lock, v) || v.owner !== who.sub || !v.keys.some((k) => k.cert.device === who.device)) continue;
+        const all = Object.values(items(inner, self.ws, v.id)).filter((i) => !i.deleted && i.epoch === v.epoch);
+        if (all.length === 0) continue;
+        const key = yield* self.#key(v, who, false, t("core-misc.vault.reason.unlock", { name: v.name }));
+        for (const item of all) {
+          const bytes = yield* Effect.result(self.#plain(lock, v, item, key));
+          if (bytes._tag === "Success") out.push({ plain: plainOf(JSON.parse(new TextDecoder().decode(bytes.success))), listing: item.listing ?? null });
+        }
+      }
+      return out;
+    });
+  }
+
   /// Security mode on: each item left in the plain library written into the person's own vault (encrypted, its listing
-  /// kept), then deleted where it was. One that fails stays, said in the count.
+  /// kept), then deleted where it was; one the vault holds already (written back when security mode was off, and on
+  /// again) only deleted. One that fails stays, said in the count.
   migrate(): Effect.Effect<unknown, CoreError> {
     const self = this;
     return Effect.gen(function* () {
@@ -1015,13 +1057,15 @@ class Vaults {
       const { lock, self: who } = yield* self.#ready();
       const own = Object.values(held(inner, self.ws).vaults).find((v) => trusted(lock, v) && v.owner === who.sub);
       if (!own) return yield* fail("vault_not_set_up", t("core-misc.vault.notSetUp"));
+      const same = (p: Plain) => JSON.stringify([p.kind, p.name, p.fields]);
+      const had = new Set((yield* self.unsealOwn()).map((s) => same(s.plain)));
       let moved = 0;
       let left = 0;
       for (const row of Object.values(held(inner, self.ws).plain)) {
         if (row.deleted) continue;
         const done = yield* Effect.result(Effect.gen(function* () {
           const opened = (yield* self.openPlain(row.id)) as { plain: Plain };
-          yield* self.putItem(own.id, null, opened.plain, row.listing ?? null);
+          if (!had.has(same(plainOf(opened.plain)))) yield* self.putItem(own.id, null, opened.plain, row.listing ?? null);
           yield* self.deletePlain(row.id);
         }));
         if (done._tag === "Success") moved++;

@@ -35,6 +35,7 @@ import { StationAddr } from "../station/addr.ts";
 import { Priority } from "../sync/scheduler.ts";
 import type { SpanContext } from "../trace.ts";
 import { get, isObject } from "../util.ts";
+import { unsealOwn, writePlain } from "./vault.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -477,10 +478,15 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
       case "removeDevice":
         result = yield* lock.append("device.remove", { id: param("device") });
         break;
-      case "disable":
+      case "disable": {
+        // The person's own secrets opened while the lock still says whose they are (docs/vault.md 一个库): once it is
+        // off they go into the plain library, as the dialog said. Turned down there, nothing is turned off.
+        const secrets = yield* unsealOwn(inner, c.workspace);
         yield* askPerson(inner, t("core-misc.lock.reason.disable"));
         result = yield* lock.append("disable", {});
+        if (secrets.length > 0) inner.runner.fork(writePlain(inner, c.workspace, secrets));
         break;
+      }
       default:
         return yield* Effect.fail(CoreError.invalid(`no lock call ${c.name}`));
     }

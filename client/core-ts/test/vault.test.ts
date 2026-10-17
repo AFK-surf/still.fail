@@ -455,3 +455,33 @@ test("the plain library: no security mode, items kept on the station as they are
   assert.equal(vaults().plainLeft, undefined);
   r.core.close();
 });
+
+test("turning the lock off: the person's own secrets opened first, then written into the plain library once it is off", async () => {
+  const r = await rig();
+  r.putLock();
+  await r.ask("vault.setup", {});
+  const made = await r.ask("vault.create", { name: "Personal" });
+  await r.ask("vault.putItem", { vault: made.id, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } }, listing: { name: "GitHub", kind: "token", modes: ["proxy"], hosts: ["api.github.com"] } });
+  await r.ask("vault.lock", {});
+  // The cloud keeps the chain: the entries posted are taken into it.
+  stationReplies(r.host, (req) => {
+    if (!req.url.endsWith("/v1/workspaces/ws/lock")) return r.st.reply(req);
+    if (req.method === "GET") return r.lock;
+    const posted = JSON.parse(new TextDecoder().decode(req.body!)).entries as Entry[];
+    r.lock.entries.push(...posted);
+    r.lock.head = { ...r.lock.head, seq: r.lock.entries.length - 1, hash: entryHash(r.lock.entries.at(-1)!) };
+    return { ok: true };
+  });
+  r.st.plainLock.on = true;
+  const asked = r.host.secureAsked.length;
+  await r.ask("lock.disable", {});
+  assert.deepEqual(r.host.secureAsked.slice(asked).map((a) => a.key), [BOX_KEY, ""], "the vault opened, then the person asked to turn it off");
+  // The station hears the lock is off a little later: tried again until it takes it.
+  assert.equal(r.st.plain.size, 0);
+  r.st.plainLock.on = false;
+  r.putLock();
+  await r.host.time.pass(5000, 1000);
+  const back = [...r.st.plain.values()];
+  assert.deepEqual(back.map((i) => [i.name, i.fields.value, i.listing?.hosts]), [["GitHub", "ghp_x", ["api.github.com"]]]);
+  r.core.close();
+});

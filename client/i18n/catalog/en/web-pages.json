@@ -1339,7 +1339,7 @@
   "web-pages.security.turnOffBody": "Once off, still.fail's servers manage who can access your stations again",
   "web-pages.security.turnOffTitle": "Turn off security mode?",
   "web-pages.security.turnOffType": "Type the workspace name “{name}” to confirm",
-  "web-pages.security.turnOffVault": "Vaults will stop working",
+  "web-pages.security.turnOffVault": "Secrets in your vault will be decrypted and stored in plain text on the station",
   "web-pages.security.turnOn": "Turn on security mode",
   "web-pages.security.turnedOn": "Security mode is on",
   "web-pages.security.unavailable": "This workspace's server doesn't support security mode",

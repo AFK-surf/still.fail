@@ -1267,7 +1267,7 @@
   "web-pages.security.turnOffBody": "关闭后，将重新由 still.fail 的服务器管理谁能访问你的 station",
   "web-pages.security.turnOffTitle": "关闭安全模式？",
   "web-pages.security.turnOffType": "输入 workspace 名称「{name}」以确认",
-  "web-pages.security.turnOffVault": "密钥库将无法使用",
+  "web-pages.security.turnOffVault": "密钥库中的密钥将解密，改为明文保存在 station 上",
   "web-pages.security.turnOn": "开启安全模式",
   "web-pages.security.turnedOn": "安全模式已开启",
   "web-pages.security.unavailable": "此 workspace 所在的服务器不支持安全模式",
