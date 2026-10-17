@@ -347,7 +347,15 @@ if [ $full = 1 ]; then
   if part android && printf '%s\n' "$changed" | sh apps/android/carries.sh; then
     sdk=${ANDROID_HOME:-$HOME/Library/Android/sdk}
     if [ -d "$sdk/platforms" ]; then
-      remembered "Android${STILLFAIL_CHECK_APK:+ (and the debug app)}" "apps/android client web/src/viz web/public/avatars scripts/native.ts scripts/icons.py design/icons design/station-icons package.json pnpm-lock.yaml" heavy env ORG_GRADLE_PROJECT_stillfailBuild=1 python3 apps/android/build.py --tasks :app:compileDebugKotlin :app:testDebugUnitTest :core:testDebugUnitTest :app:lintDebug :core:lintDebug ${STILLFAIL_CHECK_APK:+:app:assembleDebug}
+      # STILLFAIL_ANDROID=build (its Kotlin, unit tests and the debug app) or lint: one share of it (CI's two jobs side
+      # by side, lint the longest part); unset, all of it.
+      case "${STILLFAIL_ANDROID:-}" in
+        build) what="Android: build and tests${STILLFAIL_CHECK_APK:+, the debug app}"; tasks=":app:compileDebugKotlin :app:testDebugUnitTest :core:testDebugUnitTest ${STILLFAIL_CHECK_APK:+:app:assembleDebug}" ;;
+        lint) what="Android: lint"; tasks=":app:lintDebug :core:lintDebug" ;;
+        *) what="Android${STILLFAIL_CHECK_APK:+ (and the debug app)}"; tasks=":app:compileDebugKotlin :app:testDebugUnitTest :core:testDebugUnitTest :app:lintDebug :core:lintDebug ${STILLFAIL_CHECK_APK:+:app:assembleDebug}" ;;
+      esac
+      # shellcheck disable=SC2086 # the tasks are words
+      remembered "$what" "apps/android client web/src/viz web/public/avatars scripts/native.ts scripts/icons.py design/icons design/station-icons package.json pnpm-lock.yaml" heavy env ORG_GRADLE_PROJECT_stillfailBuild=1 python3 apps/android/build.py --tasks $tasks
     else later "Android"; fi
   fi
 fi

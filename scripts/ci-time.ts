@@ -49,7 +49,7 @@ export function timing(id: string, attempt?: number) {
   const kind =
     branchKind === "release" ? branchKind
     : jobs.some((j) => j.name === "windows-smoke") ? "windows"
-    : jobs.some((j) => j.name === "check-android") ? "android"
+    : jobs.some((j) => j.name.startsWith("check-android")) ? "android"
     : branchKind;
   const steps = jobs
     .flatMap((j) => (j.steps ?? []).filter((s) => s.started_at && s.completed_at).map((s) => ({ job: j.name, step: s.name, seconds: secs(s.started_at!, s.completed_at!) })))

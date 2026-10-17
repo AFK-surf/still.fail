@@ -263,8 +263,14 @@ jobs:
     if: ${{ !cancelled() && !failure() && needs.plan.outputs.android == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    # Two jobs side by side: its Kotlin, unit tests and debug app; and its lint, the longest part (2026-10-17).
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [build, lint]
     env:
       STILLFAIL_CHECK_PART: android
+      STILLFAIL_ANDROID: ${{ matrix.part }}
       # A branch: the debug app made in the check's Gradle run (main releases its own: android).
       STILLFAIL_CHECK_APK: ${{ github.ref != 'refs/heads/main' && '1' || '' }}
     steps:
@@ -289,11 +295,11 @@ jobs:
             apps/android/build
             apps/android/app/build
             apps/android/core/build
-          key: android-build-${{ github.ref_name }}-${{ github.sha }}
+          key: android-${{ matrix.part }}-${{ github.ref_name }}-${{ github.sha }}
           restore-keys: |
-            android-build-${{ github.ref_name }}-
-            android-build-main-
-      - name: Full check (android)
+            android-${{ matrix.part }}-${{ github.ref_name }}-
+            android-${{ matrix.part }}-main-
+      - name: Full check (android, ${{ matrix.part }})
         run: |
           range='${{ needs.plan.outputs.range }}'
           if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
