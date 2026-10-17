@@ -172,32 +172,37 @@ export function AddStationSheet({ known, existing: first = false }: { known: str
     <>
       <SheetGrab />
       <SheetHead title={t("web-mobile.stations.add")} />
-      <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
-        {joinable?.offered && joinable.items.length > 0 && !made && (
+      {/* The choice stays at the top; only what is under it scrolls. */}
+      {joinable?.offered && joinable.items.length > 0 && !made && (
+        <div className={sheetsCss.mSheetTop}>
           <Seg options={[t("web-pages.settings.stations.kindNew"), t("web-pages.settings.stations.kindExisting")]} selected={existing ? 1 : 0}
             onSelect={(i) => setExisting(i === 1)} fill height={34} radius={17} />
-        )}
-        {joinable?.offered && joinable.items.length > 0 && existing && !made ? <JoinStation joinable={joinable} /> : !made ? (
-          <>
-            <p className={partsCss.mMuted}>{t("web-mobile.stations.addNote", { name: NAME })}</p>
-            <b className={sheetsCss.mFormLabel}>{t("web-mobile.workspaces.name")}</b>
-            <Field value={name} onChange={setName} placeholder={t("web-mobile.stations.namePlaceholder")} />
-            {error && <p className={partsCss.mError}>{error}</p>}
-            <div className={sheetsCss.mFormActions}>
-              <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
-              <Button label={t("web-mobile.stations.makeCommand")} primary busy={busy} enabled={!!name.trim()} onClick={() => {
-                setError(null);
-                cloud.enroll(me.sub, app.entry.id, name.trim()).then(setMade, (e: Error) => setError(e.message));
-              }} />
-            </div>
-          </>
-        ) : joined ? (
-          <>
-            <p>{t("web-mobile.stations.joined", { name: joined.name })}</p>
-            <div className={sheetsCss.mFormActions}><Button label={t("common.done")} primary onClick={() => app.sheet(null)} /></div>
-          </>
-        ) : <EnrollSteps install={made.install} />}
-      </div>
+        </div>
+      )}
+      {joinable?.offered && joinable.items.length > 0 && existing && !made ? <JoinStation joinable={joinable} /> : (
+        <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
+          {!made ? (
+            <>
+              <p className={partsCss.mMuted}>{t("web-mobile.stations.addNote", { name: NAME })}</p>
+              <b className={sheetsCss.mFormLabel}>{t("web-mobile.workspaces.name")}</b>
+              <Field value={name} onChange={setName} placeholder={t("web-mobile.stations.namePlaceholder")} />
+              {error && <p className={partsCss.mError}>{error}</p>}
+              <div className={sheetsCss.mFormActions}>
+                <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
+                <Button label={t("web-mobile.stations.makeCommand")} primary busy={busy} enabled={!!name.trim()} onClick={() => {
+                  setError(null);
+                  cloud.enroll(me.sub, app.entry.id, name.trim()).then(setMade, (e: Error) => setError(e.message));
+                }} />
+              </div>
+            </>
+          ) : joined ? (
+            <>
+              <p>{t("web-mobile.stations.joined", { name: joined.name })}</p>
+              <div className={sheetsCss.mFormActions}><Button label={t("common.done")} primary onClick={() => app.sheet(null)} /></div>
+            </>
+          ) : <EnrollSteps install={made.install} />}
+        </div>
+      )}
     </>
   );
 }
@@ -217,26 +222,29 @@ function JoinStation({ joinable }: { joinable: JoinableView }) {
   const [done, setDone] = useState<string | null>(null);
   if (done !== null) {
     return (
-      <>
+      <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
         <p>{t("web-pages.settings.stations.joinedHere", { name: done })}</p>
         <div className={sheetsCss.mFormActions}><Button label={t("common.done")} primary onClick={() => app.sheet(null)} /></div>
-      </>
+      </div>
     );
   }
+  // The stations scroll; the actions stay under them.
   return (
     <>
-      <p className={partsCss.mMuted}>{t("web-pages.settings.stations.existingLead")}</p>
-      {joinable.items.length > 0 ? (
-        <div>
-          {joinable.items.map((s) => (
-            <PickRow key={s.station} label={s.name} sub={s.line} checked={s.station === chosen?.station} enabled={!s.needsLock}
-              leading={<MarkOrLetter emoji={s.emoji} icon={s.icon} name={s.name} />} onClick={() => setPicked(s.station)} />
-          ))}
-        </div>
-      ) : <p className={partsCss.mMuted}>{joinable.loading ? t("web-mobile.reading") : t("web-pages.settings.stations.existingNone")}</p>}
-      <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-pages.settings.stations.softIsolation")}</p>
-      {error && <p className={partsCss.mError}>{error}</p>}
-      <div className={sheetsCss.mFormActions}>
+      <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
+        <p className={partsCss.mMuted}>{t("web-pages.settings.stations.existingLead")}</p>
+        {joinable.items.length > 0 ? (
+          <div>
+            {joinable.items.map((s) => (
+              <PickRow key={s.station} label={s.name} sub={s.line} checked={s.station === chosen?.station} enabled={!s.needsLock}
+                leading={<MarkOrLetter emoji={s.emoji} icon={s.icon} name={s.name} />} onClick={() => setPicked(s.station)} />
+            ))}
+          </div>
+        ) : <p className={partsCss.mMuted}>{joinable.loading ? t("web-mobile.reading") : t("web-pages.settings.stations.existingNone")}</p>}
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-pages.settings.stations.softIsolation")}</p>
+        {error && <p className={partsCss.mError}>{error}</p>}
+      </div>
+      <div className={sheetsCss.mSheetFoot}>
         <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
         <Button label={t("web-pages.settings.stations.joinAction")} primary busy={busy} enabled={!!chosen} onClick={() => {
           if (!chosen) return;

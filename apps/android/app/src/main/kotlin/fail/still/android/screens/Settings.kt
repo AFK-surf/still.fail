@@ -520,19 +520,17 @@ fun openAddStation(app: AppState, current: WorkspaceEntry, known: List<String>, 
         val offered = joinable.value?.let { it.offered && it.items.isNotEmpty() } == true
         SheetGrab()
         SheetHead(t("android-settings.station.add"))
-        // Unpadded itself: the picking rows of an existing station go edge to edge (their words in line with the rest).
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (offered && !made) {
-                val kind = t("web-pages.settings.stations.kind")
-                Seg(listOf(t("web-pages.settings.stations.kindNew"), t("web-pages.settings.stations.kindExisting")), if (existing) 1 else 0, { existing = it == 1 },
-                    Modifier.padding(horizontal = 20.dp).fillMaxWidth().semantics { contentDescription = kind }, height = 34.dp, fill = true, radius = 17.dp)
-            }
-            val view = joinable.value
-            if (view != null && offered && existing && !made) JoinStation(current, view, onClose = { app.sheet = null })
-            else Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(t("android-settings.station.addNote", "app" to BuildConfig.APP_NAME), fontSize = 14.sp, color = C.muted)
-                AddStationSteps(current, known, onCancel = { app.sheet = null }, onMade = { made = true }) { app.sheet = null }
-            }
+        // The choice stays at the top; only what is under it scrolls.
+        if (offered && !made) {
+            val kind = t("web-pages.settings.stations.kind")
+            Seg(listOf(t("web-pages.settings.stations.kindNew"), t("web-pages.settings.stations.kindExisting")), if (existing) 1 else 0, { existing = it == 1 },
+                Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp).fillMaxWidth().semantics { contentDescription = kind }, height = 34.dp, fill = true, radius = 17.dp)
+        }
+        val view = joinable.value
+        if (view != null && offered && existing && !made) JoinStation(current, view, onClose = { app.sheet = null }, modifier = Modifier.weight(1f))
+        else Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(t("android-settings.station.addNote", "app" to BuildConfig.APP_NAME), fontSize = 14.sp, color = C.muted)
+            AddStationSteps(current, known, onCancel = { app.sheet = null }, onMade = { made = true }) { app.sheet = null }
         }
     }
 }
@@ -543,7 +541,7 @@ fun openAddStation(app: AppState, current: WorkspaceEntry, known: List<String>, 
  * joined the sheet says so, with Done.
  */
 @Composable
-private fun JoinStation(current: WorkspaceEntry, view: JoinableView, onClose: () -> Unit) {
+private fun JoinStation(current: WorkspaceEntry, view: JoinableView, onClose: () -> Unit, modifier: Modifier = Modifier) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val ws = current.workspace.id
@@ -556,26 +554,31 @@ private fun JoinStation(current: WorkspaceEntry, view: JoinableView, onClose: ()
     val busy = chosen != null && app.isDoing("station.join", "workspace" to ws, "station" to chosen.station)
     // The words 20 in from the sheet's edges; the picking rows edge to edge, their own room making it 20 for theirs.
     val side = Modifier.padding(horizontal = 20.dp)
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(modifier.fillMaxWidth()) {
         done?.let { name ->
-            Text(t("web-pages.settings.stations.joinedHere", "name" to name), side, fontSize = 14.sp, color = C.ink)
-            Row(side.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(t("common.done"), primary = true) { onClose() } }
+            Column(Modifier.padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(t("web-pages.settings.stations.joinedHere", "name" to name), side, fontSize = 14.sp, color = C.ink)
+                Row(side.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(t("common.done"), primary = true) { onClose() } }
+            }
             return@Column
         }
-        Text(t("web-pages.settings.stations.existingLead"), side, fontSize = 14.sp, color = C.muted)
-        if (view.items.isEmpty()) Text(t(if (view.loading) "android-settings.reading" else "web-pages.settings.stations.existingNone"), side, fontSize = 14.sp, color = C.muted)
-        else Column {
-            view.items.forEach { s ->
-                // Its mark before its name, as a station's own sheet has it: every name starts in one line.
-                PickRow(s.name, s.line, checked = s.station == chosen?.station, enabled = !busy && s.needsLock != true,
-                    mark = if (hasStationMark(s.emoji, s.icon)) ({ StationMark(s.emoji, s.icon, 15.dp, C.ink) }) else null) {
-                    picked = s.station; error = null
+        // The stations scroll; the actions stay under them.
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(t("web-pages.settings.stations.existingLead"), side, fontSize = 14.sp, color = C.muted)
+            if (view.items.isEmpty()) Text(t(if (view.loading) "android-settings.reading" else "web-pages.settings.stations.existingNone"), side, fontSize = 14.sp, color = C.muted)
+            else Column {
+                view.items.forEach { s ->
+                    // Its mark before its name, as a station's own sheet has it: every name starts in one line.
+                    PickRow(s.name, s.line, checked = s.station == chosen?.station, enabled = !busy && s.needsLock != true,
+                        mark = if (hasStationMark(s.emoji, s.icon)) ({ StationMark(s.emoji, s.icon, 15.dp, C.ink) }) else null) {
+                        picked = s.station; error = null
+                    }
                 }
-            }
         }
         Text(t("web-pages.settings.stations.softIsolation"), side, fontSize = 12.sp, color = C.muted)
         error?.let { Text(it, side, fontSize = 13.sp, color = C.red) }
-        Row(side.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+        }
+        Row(side.fillMaxWidth().padding(top = 10.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             Button(t("common.cancel"), primary = false) { onClose() }
             Button(t("web-pages.settings.stations.joinAction"), primary = true, busy = busy, enabled = chosen != null) {
                 val s = chosen ?: return@Button

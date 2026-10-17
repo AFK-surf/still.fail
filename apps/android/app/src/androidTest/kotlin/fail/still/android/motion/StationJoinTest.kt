@@ -160,6 +160,23 @@ class StationJoinTest {
         picture(h, "join-page-joined-$tone")
     }
 
+    /** Many to pick from: the choice stays at the top and the actions under the list; only the list scrolls. */
+    @Test fun longList() {
+        val many = (1..14).map { JoinableStation(station = "ws-acme/m$it", id = "m$it", name = "machine $it", workspace = "ws-acme", workspaceName = "Acme", online = false, line = "Acme · 离线") }
+        val h = start(false, JoinableView(offered = true, loading = false, items = many))
+        openSheet(h)
+        rule.onNodeWithText("已有的 station").performClick()
+        h.settle()
+        rule.onNodeWithText("新机器").assertIsDisplayed()
+        join().assertIsDisplayed()
+        picture(h, "join-sheet-long-light")
+        rule.onNodeWithText("machine 14").performScrollTo()
+        h.settle()
+        rule.onNodeWithText("新机器").assertIsDisplayed()
+        join().assertIsDisplayed()
+        picture(h, "join-sheet-long-scrolled-light")
+    }
+
     /** One who manages no other workspace: no choice, the sheet as it was. */
     @Test fun notOffered() {
         val h = start(false, JoinableView(offered = false, loading = false, items = emptyList()))

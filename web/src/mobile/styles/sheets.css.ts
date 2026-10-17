@@ -7,4 +7,8 @@ export const mSheetScroll = style({
 export const mForm = style({ display: "flex", flexDirection: "column", gap: "10px", padding: "0 20px 24px" });
 export const mFormLabel = style({ fontSize: vars.textMeta, fontWeight: "600" });
 export const mFormActions = style({ display: "flex", justifyContent: "flex-end", gap: "8px", paddingTop: "6px" });
+/** What stays above a sheet's scrolling part (a choice of what it shows), in line with its form. */
+export const mSheetTop = style({ padding: "0 20px 10px" });
+/** A sheet's actions kept under its scrolling part, in line with its form. */
+export const mSheetFoot = style({ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "10px 20px 24px" });
 globalStyle(`${mForm} > p`, { fontSize: vars.textUi });
