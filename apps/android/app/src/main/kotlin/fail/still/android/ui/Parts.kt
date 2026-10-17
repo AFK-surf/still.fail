@@ -271,7 +271,7 @@ fun QuotaRings(quota: fail.still.android.data.Quota?) = QuotaChips(quota)
 /**
  * A profile's allowance, compact, as the web's QuotaBars draws it: a rounded box per window (shortest first) with what
  * is left written in it (its mark too when there is more than one), its edge drawn as far as is left, clockwise from
- * the top left. Its number grey while there is plenty, in its colour once it runs low. `small`: a lower line.
+ * the top left. Its number in the text's colour while there is plenty, in its colour once it runs low. `small`: a lower line.
  */
 @Composable
 fun QuotaChips(quota: fail.still.android.data.Quota?, small: Boolean = false) {
@@ -300,8 +300,8 @@ fun DownloadChip(percent: Long) = EdgeChip(percent, "progress", null)
 
 /**
  * A rounded box with a figure in it (`text`, or how full; its mark before it, when given) and its edge drawn as far as `fill` (0–100),
- * clockwise from the top left, in the colour of the core's level; the figure grey while it is ok, in that colour once
- * it is not. Level `progress`: a download's share, in the accent, its edge moving smoothly to each new one. As the
+ * clockwise from the top left, in the colour of the core's level; the figure in the text's colour while it is ok (its
+ * mark halfway to the muted grey, as the web's), in that colour once it is not. Level `progress`: a download's share, in the accent, its edge moving smoothly to each new one. As the
  * web's EdgeChip (components.tsx).
  */
 @Composable
@@ -340,8 +340,8 @@ private fun EdgeChip(fill: Long, level: String, mark: String?, small: Boolean = 
         Row(Modifier.padding(horizontal = if (small) 5.dp else 8.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             val fs = if (small) 10.sp else 11.sp
             // On one baseline: a mark in Chinese (内存) sits lower in its line than figures do.
-            if (mark != null) Text(mark, Modifier.alignByBaseline(), fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = C.muted)
-            Text(text ?: "$fill%", Modifier.alignByBaseline(), fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = if (low) tone else C.muted)
+            if (mark != null) Text(mark, Modifier.alignByBaseline(), fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = androidx.compose.ui.graphics.lerp(C.ink, C.muted, 0.5f))
+            Text(text ?: "$fill%", Modifier.alignByBaseline(), fontSize = fs, lineHeight = fs, fontWeight = FontWeight.SemiBold, color = if (low) tone else C.ink)
         }
     }
 }
