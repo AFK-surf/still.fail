@@ -9,6 +9,8 @@ import { test } from "node:test";
 import { type Entry, entryHash, genesis, signedBytes as lockBytes } from "../src/cloud/lock.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
 import { routes } from "../src/api/routes/vault.ts";
+import { routes as requestRoutes } from "../src/api/routes/vault-requests.ts";
+import { PlainStore } from "../src/vault/plain.ts";
 import type { Request } from "../src/api/request.ts";
 import {
   type BoxCert, type Grant, type Item, type Sig, type Vault, TAG, boxPublic, decrypt, encryptWith, grantContext, itemContext, itemOk,
@@ -327,4 +329,53 @@ test("routes: box certificates, published by the lock's app devices, the latest 
   const c2 = certOf(w.bob.signer, w.bob.base.hex, newBoxPair().pub, 1100);
   await s.ask("PUT", "/vault/boxes", "bob", c2);
   assert.deepEqual((await s.ask("GET", "/vault/boxes", "alice")).body.boxes, [c2]);
+});
+
+test("routes: the plain library (no security mode) is each person's own, version after version, told to them alone; locked, it only empties", async () => {
+  let w: ReturnType<typeof lock> | null = null;
+  const told: { event: string; data: any; to: string[] }[] = [];
+  const viewers = ["alice", "bob"].map((sub) => viewer(sub));
+  const events = { tell: (event: string, data: unknown, _of: string, to: (v: Viewer) => boolean) => told.push({ event, data, to: viewers.filter(to).map((v) => v.sub) }) };
+  const granted: unknown[] = [];
+  const secrets = { pending: () => [], uses: () => [], grantPlain: (...a: unknown[]) => (granted.push(a), null), denyPlain: () => null };
+  const all = requestRoutes({ secrets: secrets as never, plain: new PlainStore(new DatabaseSync(":memory:")), lock: (ws) => (w !== null && ws === WS ? w.state : null), events: events as any });
+  const ask = async (method: string, path: string, sub: string, body?: unknown) => {
+    const [p, q] = path.split("?");
+    const r: Request = { method, path: p!, query: q ? (q.split("&").map((kv) => kv.split("=")) as [string, string][]) : [], headers: {}, body: Buffer.from(body === undefined ? "" : JSON.stringify(body)), viewer: viewer(sub), lang: "en" };
+    for (const route of all) {
+      const m = method === route.method ? route.pattern.exec(r.path) : null;
+      if (m) {
+        const a = await route.handle(r, m.slice(1));
+        return { status: a.status, body: JSON.parse((a.body as Buffer).toString()) };
+      }
+    }
+    throw new Error(`no route ${method} ${path}`);
+  };
+  const id = "i_01JAPLA1N000000000000000GH";
+  const item = { id, version: 0, kind: "token", name: "GitHub", fields: { value: "ghp_x" }, notes: "", listing: { name: "GitHub", kind: "token", modes: ["proxy"], hosts: ["api.github.com"], env: "GH_TOKEN" }, at: 5 };
+  const put = await ask("PUT", "/vault/plain", "alice", item);
+  assert.equal(put.status, 200, JSON.stringify(put.body));
+  assert.equal(put.body.item.fields, undefined, "its value is not said back");
+  assert.deepEqual(told.map((t) => [t.event, t.data.id, t.data.fields, t.to]), [["vault-plain", id, undefined, ["alice"]]]);
+  assert.deepEqual((await ask("GET", "/vault/plain", "alice")).body.items.map((i: any) => [i.name, i.owner, i.fields]), [["GitHub", "alice@x", undefined]]);
+  assert.deepEqual((await ask("GET", "/vault/plain", "bob")).body.items, [], "bob's library has none of alice's");
+  assert.equal((await ask("GET", `/vault/plain/item?id=${id}`, "alice")).body.item.fields.value, "ghp_x");
+  assert.equal((await ask("GET", `/vault/plain/item?id=${id}`, "bob")).status, 404);
+  // bob cannot write over it; a version out of order is a conflict; a bad one says why.
+  assert.equal((await ask("PUT", "/vault/plain", "bob", { ...item, version: 1 })).status, 404);
+  assert.equal((await ask("PUT", "/vault/plain", "alice", { ...item, version: 3 })).body.code, "vault_conflict");
+  assert.match((await ask("PUT", "/vault/plain", "alice", { ...item, version: 1, fields: { password: "x" } })).body.error, /fields are value/);
+  assert.match((await ask("PUT", "/vault/plain", "alice", { ...item, version: 1, listing: { ...item.listing, hosts: [] } })).body.error, /names its hosts/);
+  assert.equal((await ask("PUT", "/vault/plain", "alice", { ...item, version: 1, name: "GitHub 2" })).status, 200);
+  // Decided by its owner (the secrets' check), not signed.
+  assert.equal((await ask("POST", "/vault/plain/grants", "alice", { request: "r_1", scope: "once" })).status, 200);
+  assert.equal(granted.length, 1);
+  // Security mode on: nothing new, only deleted (moved into the vault), and then nothing of it kept.
+  w = lock();
+  assert.equal((await ask("PUT", "/vault/plain", "alice", { ...item, version: 2 })).body.code, "vault_locked");
+  assert.equal((await ask("GET", "/vault/plain", "alice")).body.locked, true);
+  assert.equal((await ask("PUT", "/vault/plain", "alice", { ...item, version: 2, deleted: true })).status, 200);
+  const gone = (await ask("GET", "/vault/plain", "alice")).body.items[0];
+  assert.deepEqual([gone.deleted, gone.name, gone.listing], [true, "", undefined]);
+  assert.equal((await ask("GET", `/vault/plain/item?id=${id}`, "alice")).status, 404);
 });
