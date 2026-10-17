@@ -768,7 +768,9 @@ export function ChatRowBody({ item, lead, held, busy = false, failed = null, onA
     </View>
   );
   if (!modifier) return <View style={frame}>{content}</View>;
-  return <Pressable {...modifier} style={frame}>{content}</Pressable>;
+  // Named by its title, what it says under it as the hint (Compose merges a clickable row's words into it; a Pressable
+  // here is one node, its words not read through).
+  return <Pressable accessibilityLabel={item.title} accessibilityHint={state ?? undefined} {...modifier} style={frame}>{content}</Pressable>;
 }
 
 /**
