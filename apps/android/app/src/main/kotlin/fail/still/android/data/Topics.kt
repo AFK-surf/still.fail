@@ -315,6 +315,8 @@ object Topics {
     fun vaults(workspace: String) = buildJsonObject { put("topic", "vaults"); put("workspace", workspace) }
     /** A vault's items: their names once it is unlocked on this device, else the listed ones' (Vault.kt). */
     fun vaultItems(workspace: String, vault: String) = buildJsonObject { put("topic", "vaultItems"); put("workspace", workspace); put("vault", vault) }
+    /** An item's uses by agents, the latest first (the station's record of them; Vault.kt's item page). */
+    fun vaultUses(workspace: String, vault: String, item: String) = buildJsonObject { put("topic", "vaultUses"); put("workspace", workspace); put("vault", vault); put("item", item) }
     /** What is written to a chat on this device until sent (`chat`: its key, `thread:<id>`, or `new`; Drafts). */
     fun draft(station: String, chat: String) = buildJsonObject { put("topic", "draft"); put("station", station); put("chat", chat) }
     /**

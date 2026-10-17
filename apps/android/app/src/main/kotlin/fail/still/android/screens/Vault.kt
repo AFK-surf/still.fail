@@ -1,9 +1,11 @@
-// The workspace's vault (docs/vault.md), as the narrow web has it (one interaction set: bottom sheets): its row in the
-// settings, its page (turning it on and the recovery words shown that once, each vault's items, the devices holding its
-// key, recovering with the words), an item opened and edited in bottom sheets, and an agent's request approved where it
-// is asked (its card in the chat, the 奏 page, the page's 等你批准). All of it is the core's (`vaults`, `vaultItems`
-// topics, `vault.*` calls, client/core-ts/src/views/vault.ts): the system's prompt (fingerprint or screen lock) comes up
-// from its calls through the host, never from here. What an item holds is shown only in its sheet, never kept.
+// The workspace's library (docs/vault.md 一个库), as the narrow web has it (web/src/mobile/Vault.tsx; one interaction set:
+// bottom sheets): its row in the settings, its page (what it waits for first when locked, turning it on and the recovery
+// words shown that once; then the requests waiting, whether it is locked, the profiles' accounts, each vault's secrets a
+// section a kind, the devices holding its key), a secret's own page (its content shown, how agents may use it, when they
+// did), adding and editing in bottom sheets, and an agent's request approved where it is asked (its card in the chat, the
+// 奏 page, the page's 待批准). All of it is the core's (`vaults`, `vaultItems`, `vaultUses` topics, `vault.*` calls,
+// client/core-ts/src/views/vault.ts): the system's prompt (fingerprint or screen lock) comes up from its calls through the
+// host, never from here. What an item holds is shown only on its page, while it is up, never kept.
 package fail.still.android.screens
 
 import android.content.ClipData
@@ -25,6 +27,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
@@ -47,7 +50,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -55,6 +60,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fail.still.android.AppState
@@ -62,12 +68,15 @@ import fail.still.android.LocalApp
 import fail.still.android.Screen
 import fail.still.android.data.ChatOf
 import fail.still.android.data.DecisionOption
+import fail.still.android.data.ProfilesView
 import fail.still.android.data.StillFailJson
 import fail.still.android.data.Topics
 import fail.still.android.data.VaultItemRow
 import fail.still.android.data.VaultItemsView
 import fail.still.android.data.VaultRequest
 import fail.still.android.data.VaultRow
+import fail.still.android.data.VaultUse
+import fail.still.android.data.VaultUsesView
 import fail.still.android.data.VaultsView
 import fail.still.android.data.WorkspaceEntry
 import fail.still.android.data.errorText
@@ -80,6 +89,8 @@ import fail.still.android.ui.Icons
 import fail.still.android.ui.LargeTitle
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
+import fail.still.android.ui.NavBar
+import fail.still.android.ui.ProviderMark
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.Seg
 import fail.still.android.ui.SheetGrab
@@ -141,7 +152,7 @@ private val FIELDS = mapOf("token" to listOf("value"), "ssh_key" to listOf("priv
 private val OPEN_FIELDS = setOf("public_key", "username")
 
 private fun kindName(kind: String?) = if (kind in KINDS) t("android-settings.vault.kind.$kind") else ""
-private fun kindIcon(kind: String?): ImageVector = when (kind) { "ssh_key" -> Icons.Server; "login" -> Icons.LogIn; else -> Icons.Key }
+private fun kindIcon(kind: String?): ImageVector = when (kind) { "ssh_key" -> Icons.Server; "login" -> Icons.User; else -> Icons.Key }
 private fun modeName(mode: String) = if (mode in setOf("proxy", "env", "ssh")) t("android-settings.vault.mode.$mode") else mode
 private fun fieldName(field: String) = when (field) {
     "value" -> t("android-settings.vault.value")
@@ -159,8 +170,12 @@ private fun agentLine(listed: Boolean, modes: List<String>, hosts: List<String>,
     else (listOf(t("android-settings.vault.agentCan")) + modes.map(::modeName) + listOfNotNull(hosts.joinToString(", ").ifEmpty { null }, env?.ifEmpty { null }?.let { t("android-settings.vault.envLine", "name" to it) }))
         .joinToString(" · ")
 
-/** How a request would be given: by the proxy (to which hosts), the station's ssh-agent, or the command's environment. */
-private fun howLine(mode: String, hosts: List<String>) = listOfNotNull(modeName(mode), hosts.joinToString(", ").ifEmpty { null }.takeIf { mode == "proxy" }).joinToString(" · ")
+/** How a request would be given: by the proxy (限 which hosts), the station's ssh-agent, or the command's environment. */
+private fun howLine(mode: String, hosts: List<String>) =
+    listOfNotNull(modeName(mode), hosts.joinToString(", ").ifEmpty { null }?.takeIf { mode == "proxy" }?.let { t("web-pages.vault.onlyTo", "hosts" to it) }).joinToString(" · ")
+
+/** The kinds the library lists after the profiles' accounts, a section each, in this order (the editor's). */
+private val ITEM_SECTIONS = KINDS
 
 /**
  * The recovery words `vault.setup` gave, by workspace, until the person says they have written them down: in memory
@@ -170,7 +185,7 @@ private val recoveryWords = mutableStateMapOf<String, List<String>>()
 
 // ── the settings' row ──────────────────────────────────────────────────
 
-/** Settings' 密钥 (SettingsHome.kt, beside 安全): off, how many items, or how many requests wait (in red). */
+/** Settings' 密钥 (SettingsHome.kt, beside 安全), as the web's vaultStatus: how many requests wait (in red), else how many items, else off. */
 @Composable
 fun VaultSettingsRow(ws: String) {
     val app = LocalApp.current
@@ -178,9 +193,9 @@ fun VaultSettingsRow(ws: String) {
     val v = topic.value ?: return
     val waiting = v.requests.size
     val value = when {
-        !v.locked || !v.setUp -> t("android-settings.vault.off")
         waiting > 0 -> t("android-settings.vault.waiting", "n" to waiting)
-        else -> t("android-settings.vault.items", "n" to v.vaults.sumOf { it.items.toInt() })
+        v.vaults.isNotEmpty() -> t("android-settings.vault.items", "n" to v.vaults.sumOf { it.items.toInt() })
+        else -> t("android-settings.vault.off")
     }
     GoRow(t("android-settings.vault.title"), value, bad = waiting > 0) { app.push(Screen.Vault) }
 }
@@ -194,13 +209,17 @@ fun VaultScreen(current: WorkspaceEntry) {
     val topic by rememberTopic<VaultsView>(app.core, Topics.vaults(ws))
     val view = topic.value
     val words = recoveryWords[ws]
+    // Not locked (no security mode in the workspace): the library kept in the clear on its station, usable at once.
+    val plain = view?.plain == true
+    val usable = view != null && words == null && (plain || (view.available && view.locked && view.canSign && view.setUp))
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
-            TopBack(t("android-settings.title"), app::pop)
+            TopBack(t("android-settings.title"), app::pop, trailing = if (usable) ({ RoundIcon(Icons.Plus, t("android-settings.vault.add"), C.ink) { addSheet(app, ws) } }) else null)
             LargeTitle("", t("android-settings.vault.title"))
             when {
                 words != null -> Words(words)
                 view == null -> PageNote(topic.error?.message ?: t("web-pages.settings.reading"))
+                plain -> Library(ws, view)
                 // A web page's (no keys kept there): what is known of the names, nothing to open.
                 !view.available -> {
                     view.vaults.forEach { VaultSection(ws, it, readOnly = true) }
@@ -209,7 +228,7 @@ fun VaultScreen(current: WorkspaceEntry) {
                 !view.locked -> ToSecurity(t("android-settings.vault.needsLock"), t("android-settings.vault.needsLockWhy"))
                 !view.canSign -> ToSecurity(t("android-settings.vault.notSigner"), t("android-settings.vault.notSignerWhy"))
                 !view.setUp -> Off()
-                else -> On(ws, view)
+                else -> Library(ws, view)
             }
             Spacer(Modifier.height(30.dp))
         }
@@ -284,22 +303,32 @@ private fun Words(words: List<String>) = ListCard {
     }
 }
 
-/** Set up: the requests waiting on the viewer, each vault's items, the devices that hold the keys. */
+/**
+ * The library (docs/vault.md 一个库), not locked or set up: the requests waiting on the viewer, whether it is locked (and
+ * what is still in the clear from before), the profiles' accounts, each vault's secrets a section a kind, the devices
+ * that hold the keys (locked).
+ */
 @Composable
-private fun On(ws: String, view: VaultsView) {
+private fun Library(ws: String, view: VaultsView) {
     val app = LocalApp.current
+    val plain = view.plain == true
     if (view.requests.isNotEmpty()) {
         SectionHeader("${t("android-settings.vault.waitingTitle")} · ${view.requests.size}", start = 24.dp)
         view.requests.forEach { r -> RequestCard(ws, view, r) }
     }
-    if (view.vaults.isEmpty()) ListCard {
+    LibraryState(plain)
+    val left = view.plainLeft?.toInt() ?: 0
+    if (!plain && left > 0) PlainLeft(ws, left)
+    ProfileAccounts(ws)
+    if (!plain && view.vaults.isEmpty()) ListCard {
         Body {
             Para(t("android-settings.vault.none"))
             WideButton(t("android-settings.vault.create"), primary = true, modifier = Modifier.fillMaxWidth(), busy = app.isDoing("vault.create", "workspace" to ws)) { createFirst(app, ws) }
         }
     }
-    view.vaults.forEach { VaultSection(ws, it, readOnly = false) }
-    if (view.vaults.isNotEmpty()) Devices(ws, view)
+    // A vault this device has no key to: what is known of it, and how to get the key.
+    view.vaults.forEach { if (plain || it.keyed) LibraryVault(ws, it, plain) else VaultSection(ws, it, readOnly = false) }
+    if (!plain && view.vaults.isNotEmpty()) Devices(ws, view)
     view.refused.forEach { r ->
         val name = r.name.ifEmpty { r.station }
         PageNote(if (r.code == "vault_needs_lock") t("android-settings.vault.refusedLock", "name" to name) else t("android-settings.vault.refusedOld", "name" to name))
@@ -383,51 +412,180 @@ internal fun VaultApproval(workspace: String, request: String, mine: Boolean, mo
 }
 
 /**
- * A vault: its name (and whether it is unlocked here: 锁上 then), `+` to add an item; its items, each opened by a tap (the
- * system's prompt when it is locked); this device without its key, how to get it (the recovery words, when it has them).
- * `readOnly`: names only (a web page).
+ * A vault as far as it is known here, names only: a web page's (`readOnly`), or one this device has no key to (then how
+ * to get it: the recovery words, when it has them).
  */
 @Composable
 private fun VaultSection(ws: String, v: VaultRow, readOnly: Boolean) {
     val app = LocalApp.current
     val topic by rememberTopic<VaultItemsView>(app.core, Topics.vaultItems(ws, v.id))
     val items = topic.value?.items.orEmpty()
-    val open = topic.value?.open ?: v.open
-    val usable = !readOnly && v.keyed
-    Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 14.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(v.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-            if (usable && !open && items.isNotEmpty()) Text(t("android-settings.vault.lockedNote"), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        if (usable && open) TextAction(t("android-settings.vault.lock")) { app.scope.launch { runCatching { app.vaultCall(ws, "lock") } } }
-        if (usable) RoundIcon(Icons.Plus, t("android-settings.vault.add"), C.accent) { editorSheet(app, ws, v.id, null) }
-    }
+    SectionHeader(v.name, start = 24.dp)
     if (!readOnly && !v.keyed) ListCard {
         Body { Para(t("android-settings.vault.noKey"), t("android-settings.vault.noKeyHow")) }
         if (v.recoverable) GoRow(t("android-settings.vault.recover")) { recoverSheet(app, ws) }
     }
     ListCard {
         if (items.isEmpty()) Body { Text(if (topic.value == null) t("web-pages.settings.reading") else t("android-settings.vault.empty"), fontSize = 14.sp, color = C.muted) }
-        items.forEach { ItemRow(ws, v.id, it, usable) }
+        items.forEach { ItemRow(it) }
     }
 }
 
-/** An item: its kind's mark, its name (unknown while it is locked and not listed), what agents may do with it. */
+/** An item known by name: its kind's mark, its name (unknown while it is locked and not listed), what agents may do with it. */
 @Composable
-private fun ItemRow(ws: String, vault: String, item: VaultItemRow, usable: Boolean) {
+private fun ItemRow(item: VaultItemRow) = ListRow {
+    KindTile(item.kind)
+    Column(Modifier.weight(1f)) {
+        Text(item.name ?: t("android-settings.vault.lockedItem"), fontSize = 15.sp, color = if (item.name == null) C.muted else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (item.listed) Box(Modifier.size(6.dp).clip(CircleShape).background(C.green))
+            Text(agentLine(item.listed, item.modes, item.hosts), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+// ── the library's parts (docs/vault.md 一个库) ─────────────────────────
+
+/** A row's mark: an icon in the narrow column the library's rows keep for it. */
+@Composable
+private fun RowMark(content: @Composable () -> Unit) = Box(Modifier.width(18.dp), contentAlignment = Alignment.Center) { content() }
+
+/** First in the library: whether it is locked (security mode on), and the way to lock it when not; a tap opens 安全. */
+@Composable
+private fun LibraryState(plain: Boolean) {
     val app = LocalApp.current
-    // `vault.open` is a read (no doing): its row turns until it answers (the prompt included).
-    var opening by remember(item.id) { mutableStateOf(false) }
-    ListRow(onClick = if (!usable || opening) null else ({ opening = true; openItem(app, ws, vault, item) { opening = false } })) {
-        KindTile(item.kind)
-        Column(Modifier.weight(1f)) {
-            Text(item.name ?: t("android-settings.vault.lockedItem"), fontSize = 15.sp, color = if (item.name == null) C.muted else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (item.listed) Box(Modifier.size(6.dp).clip(CircleShape).background(C.green))
-                Text(agentLine(item.listed, item.modes, item.hosts), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    ListCard {
+        ListRow(onClick = { app.push(Screen.Security) }) {
+            RowMark { IconIn(Icons.ShieldCheck, 18.dp, if (plain) C.warn else C.subtle) }
+            Column(Modifier.weight(1f)) {
+                Text(t(if (plain) "web-pages.vault.lib.plain" else "web-pages.vault.lib.sealed"), fontSize = 15.sp, color = if (plain) C.warn else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(t(if (plain) "web-pages.vault.lib.plainWhy" else "web-pages.vault.lib.sealedWhy"), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (plain) Text(t("web-pages.vault.lib.turnOn"), fontSize = 15.sp, color = C.accent, maxLines = 1)
+            else IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+        }
+    }
+}
+
+/** Security mode on, the viewer's secrets saved before it still in plain text: encrypted into their vault (`vault.migrate`). */
+@Composable
+private fun PlainLeft(ws: String, n: Int) {
+    val app = LocalApp.current
+    ListCard {
+        ListRow {
+            Column(Modifier.weight(1f)) {
+                Text(t("android-settings.vault.migrate.title", "n" to n), fontSize = 15.sp, color = C.ink)
+                Text(t("android-settings.vault.migrate.body"), fontSize = 13.sp, lineHeight = 19.sp, color = C.muted)
+            }
+            Button(t("android-settings.vault.migrate.action"), primary = true, busy = app.isDoing("vault.migrate", "workspace" to ws)) {
+                app.vaultAct(t("android-settings.vault.migrate.what"), t("android-settings.vault.migrate.done")) { app.vaultCall(ws, "migrate") }
             }
         }
-        if (opening) Spinner(14.dp) else if (usable) IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+    }
+}
+
+/**
+ * The profiles' accounts the library keeps (a subscription's sign-in, a model's key), a section a kind as the Profile
+ * list groups them; each opens its profile as that list does (an account on several stations, its own page).
+ */
+@Composable
+private fun ProfileAccounts(ws: String) {
+    val app = LocalApp.current
+    val topic by rememberTopic<ProfilesView>(app.core, Topics.profiles(ws))
+    val view = topic.value ?: return
+    view.items.groupBy { it.group }.forEach { (_, g) ->
+        SectionHeader(g.first().groupTitle, start = 24.dp)
+        ListCard {
+            g.forEach { e ->
+                val p = e.profile
+                ListRow(onClick = { app.push(if (e.members.orEmpty().count { it.role != "user" } > 1) Screen.ProfileAccount(e.key) else Screen.Profile(e.station, p.id)) }) {
+                    RowMark { ProviderMark(p.runtime, p.access.kind, 18.dp, p.providerMark) }
+                    Column(Modifier.weight(1f)) {
+                        Text(p.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(listOf("Profile", e.where).filter { it.isNotEmpty() }.joinToString(" · "), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A vault's secrets after the profiles' accounts, a section each kind: each one's name, and when an agent last used it
+ * (else what agents may do with it); in a library not locked, that it is not encrypted, first. A tap opens its page.
+ */
+@Composable
+private fun LibraryVault(ws: String, v: VaultRow, plain: Boolean) {
+    val app = LocalApp.current
+    val topic by rememberTopic<VaultItemsView>(app.core, Topics.vaultItems(ws, v.id))
+    val items = topic.value?.items ?: return
+    val warn = C.warn
+    ITEM_SECTIONS.forEach { kind ->
+        val rows = items.filter { it.name != null && it.kind == kind }
+        if (rows.isEmpty()) return@forEach
+        SectionHeader(kindName(kind), start = 24.dp)
+        ListCard {
+            rows.forEach { row ->
+                ListRow(onClick = { app.push(Screen.VaultItem(v.id, row.id)) }) {
+                    RowMark { IconIn(kindIcon(row.kind), 18.dp, C.subtle) }
+                    Column(Modifier.weight(1f)) {
+                        Text(row.name.orEmpty(), fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            buildAnnotatedString {
+                                if (plain) withStyle(SpanStyle(color = warn)) { append("${t("web-pages.vault.risk.row")} · ") }
+                                append(row.lastUse?.let { t("web-pages.vault.uses.last", "when" to it.at.ago) } ?: agentLine(row.listed, row.modes, row.hosts))
+                            },
+                            fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+                }
+            }
+        }
+    }
+    // Locked here: those whose names it does not know, a tap unlocking it; unlocked, locking it again.
+    val hidden = items.filter { it.name == null }
+    if (!plain && (hidden.isNotEmpty() || v.open)) ListCard {
+        if (hidden.isNotEmpty()) ListRow(onClick = { app.vaultAct(t("android-settings.vault.lockedNote")) { app.vaultCall(ws, "open") { put("item", hidden.first().id) } } }) {
+            RowMark { IconIn(Icons.Key, 18.dp, C.subtle) }
+            Text(t("android-settings.vault.lockedNote"), fontSize = 15.sp, color = C.muted, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (v.open) ListRow(onClick = { app.scope.launch { runCatching { app.vaultCall(ws, "lock") } } }) {
+            RowMark {}
+            Text(t("android-settings.vault.lock"), fontSize = 15.sp, color = C.accent, modifier = Modifier.weight(1f))
+        }
+    }
+}
+
+/**
+ * 添加 in the library: a subscription or a model's key (a profile, added on the Profile list), or a secret of a kind (its
+ * editor, the kind fixed). Not locked: that such a secret is kept in the clear, under the list.
+ */
+private fun addSheet(app: AppState, ws: String) {
+    app.sheet = SheetSpec(0.55f, draggable = true) {
+        val topic by rememberTopic<VaultsView>(app.core, Topics.vaults(ws))
+        val view = topic.value
+        val mine = view?.vaults?.firstOrNull { it.mine }
+        val plain = view?.plain == true
+        SheetGrab()
+        SheetHead(t("web-pages.vault.addKind.title"))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            ListCard {
+                AddRow(Icons.Quota, "profile") { app.sheet = null; app.push(Screen.Profiles()) }
+                if (mine != null) ITEM_SECTIONS.forEach { k -> AddRow(kindIcon(k), k) { editorSheet(app, ws, mine.id, null, kind = k, plain = plain) } }
+            }
+            if (plain && mine != null) Text(t("web-pages.vault.risk.editor"), fontSize = 13.sp, lineHeight = 19.sp, color = C.warn, modifier = Modifier.padding(horizontal = 24.dp))
+        }
+    }
+}
+
+@Composable
+private fun AddRow(icon: ImageVector, kind: String, onClick: () -> Unit) = ListRow(onClick = onClick) {
+    RowMark { IconIn(icon, 18.dp, C.subtle) }
+    Column(Modifier.weight(1f)) {
+        Text(t("web-pages.vault.addKind.$kind"), fontSize = 15.sp, color = C.ink)
+        Text(t("web-pages.vault.addKind.${kind}Detail"), fontSize = 13.sp, color = C.muted)
     }
 }
 
@@ -474,40 +632,130 @@ private fun Devices(ws: String, view: VaultsView) {
 
 // ── an item ────────────────────────────────────────────────────────────
 
-/** An item opened (`vault.open`: the system's prompt when its vault is locked here), then shown in its sheet. */
-private fun openItem(app: AppState, ws: String, vault: String, item: VaultItemRow, done: () -> Unit) {
-    app.scope.launch {
-        try {
-            val said = app.vaultCall(ws, "open") { put("item", item.id) } as JsonObject
-            val plain = StillFailJson.decodeFromJsonElement(Plain.serializer(), said["plain"]!!)
-            itemSheet(app, ws, vault, item, plain)
-        } catch (e: CoreException) {
-            vaultSaid(e)?.let { app.toast = t("android-misc.act.failed", "what" to t("android-settings.vault.openWhat"), "error" to it) }
-        } finally {
-            done()
+/** What `vault.open` gives of an item (the system's prompt first when its vault is locked here), or null when it did not. */
+private suspend fun openPlain(app: AppState, ws: String, item: String): Plain? = try {
+    val said = app.vaultCall(ws, "open") { put("item", item) } as JsonObject
+    StillFailJson.decodeFromJsonElement(Plain.serializer(), said["plain"]!!)
+} catch (e: CoreException) {
+    vaultSaid(e)?.let { app.toast = t("android-misc.act.failed", "what" to t("android-settings.vault.openWhat"), "error" to it) }
+    null
+}
+
+/**
+ * A secret's page (as the narrow web's VaultItemScreen): its kind and where it is kept; in a library not locked, that it
+ * is not encrypted and the way to lock it; its content masked until shown (`vault.open`), each field shown and copied;
+ * how agents may use it; when they did, each use leading to its chat. 编辑 opens it first, then its editor.
+ */
+@Composable
+fun VaultItemScreen(current: WorkspaceEntry, vault: String, item: String) {
+    val app = LocalApp.current
+    val ws = current.workspace.id
+    val vaults by rememberTopic<VaultsView>(app.core, Topics.vaults(ws))
+    val items by rememberTopic<VaultItemsView>(app.core, Topics.vaultItems(ws, vault))
+    val uses by rememberTopic<VaultUsesView>(app.core, Topics.vaultUses(ws, vault, item))
+    // What it holds, once shown: on this page only, while it is up.
+    var opened by remember { mutableStateOf<Plain?>(null) }
+    var opening by remember { mutableStateOf(false) }
+    val v = vaults.value?.vaults?.firstOrNull { it.id == vault }
+    val row = items.value?.items?.firstOrNull { it.id == item }
+    val plain = vaults.value?.plain == true
+    fun open(then: (Plain) -> Unit = {}) {
+        if (opening) return
+        opening = true
+        app.scope.launch {
+            openPlain(app, ws, item)?.let { opened = it; then(it) }
+            opening = false
+        }
+    }
+    val back = t("android-settings.vault.title")
+    Column(Modifier.fillMaxSize()) {
+        if (v == null || row == null) {
+            NavBar(back, app::pop, back)
+            PageNote(vaults.error?.message ?: items.error?.message ?: t("web-pages.settings.reading"))
+            return@Column
+        }
+        NavBar(
+            back, app::pop, row.name.orEmpty(),
+            sub = { Text(listOf(kindName(row.kind), t("web-pages.vault.storedOn", "station" to v.stationName)).filter { it.isNotEmpty() }.joinToString(" · "), fontSize = 11.sp, color = C.muted, maxLines = 1) },
+            trailing = { RoundIcon(Icons.Edit, t("common.edit"), C.ink) { opened?.let { editorSheet(app, ws, vault, Editing(row, it), plain = plain) } ?: open { editorSheet(app, ws, vault, Editing(row, it), plain = plain) } } },
+        )
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+            if (plain) ListCard {
+                Body {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Dot(false, warn = true)
+                        Text(t("web-pages.vault.risk.title"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                    }
+                    Text(t("web-pages.vault.risk.body", "station" to v.stationName), fontSize = 14.sp, lineHeight = 21.sp, color = C.subtle)
+                    Link(t("web-pages.vault.lib.turnOn")) { app.push(Screen.Security) }
+                }
+            }
+            SectionHeader(t("web-pages.vault.content"), start = 24.dp)
+            ListCard {
+                val shown = opened
+                if (shown == null) ListRow {
+                    // Masked, as long whatever its length (which would say something of it).
+                    Text("••••••••••••••••••••", fontSize = 14.sp, fontFamily = CodeFont, color = C.ink, maxLines = 1, overflow = TextOverflow.Clip, modifier = Modifier.weight(1f))
+                    if (opening) Spinner(14.dp) else Link(t("web-pages.vault.show")) { open() }
+                } else {
+                    val fields = FIELDS[shown.kind] ?: shown.fields.keys.toList()
+                    fields.forEach { f -> shown.fields[f]?.takeIf { it.isNotEmpty() }?.let { FieldRow(fieldName(f), it, secret = f !in OPEN_FIELDS) } }
+                }
+            }
+            SectionHeader(t("web-pages.vault.forAgents"), start = 24.dp)
+            ListCard {
+                Body {
+                    if (!row.listed) Text(t("web-pages.vault.notForAgents"), fontSize = 15.sp, color = C.muted)
+                    else {
+                        Fact(t("web-pages.vault.how"), row.modes.joinToString("、") { howLine(it, row.hosts) })
+                        row.env?.ifEmpty { null }?.let { Fact(t("android-settings.vault.env"), it, mono = true) }
+                    }
+                }
+            }
+            SectionHeader(t("web-pages.vault.uses.title"), start = 24.dp)
+            ListCard {
+                val list = uses.value?.uses
+                when {
+                    list == null -> ListRow { Text(uses.error?.message ?: t("web-pages.settings.reading"), fontSize = 15.sp, color = C.muted) }
+                    list.isEmpty() -> ListRow { Text(t("web-pages.vault.uses.none"), fontSize = 15.sp, color = C.muted) }
+                    else -> list.forEach { UseRow(ws, it) }
+                }
+            }
+            Spacer(Modifier.height(30.dp))
         }
     }
 }
 
-/** An item as it is: its fields (the secret ones masked until shown, each copied), what agents may do with it, 编辑. */
-private fun itemSheet(app: AppState, ws: String, vault: String, item: VaultItemRow, plain: Plain) {
-    app.sheet = SheetSpec(0.5f, draggable = true) {
-        SheetGrab()
-        SheetHead(plain.name, lead = { KindTile(plain.kind) }, trailing = { TextAction(t("common.edit")) { editorSheet(app, ws, vault, Editing(item, plain)) } })
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            ListCard {
-                val fields = FIELDS[plain.kind] ?: plain.fields.keys.toList()
-                fields.forEach { f -> plain.fields[f]?.takeIf { it.isNotEmpty() }?.let { FieldRow(fieldName(f), it, secret = f !in OPEN_FIELDS) } }
-            }
-            ListCard {
-                ListRow {
-                    if (item.listed) Box(Modifier.size(6.dp).clip(CircleShape).background(C.green))
-                    Text(agentLine(item.listed, item.modes, item.hosts, item.env), fontSize = 14.sp, color = C.muted, modifier = Modifier.weight(1f))
-                }
-            }
+/** A fact of an item: its name in a narrow column, then what it is. */
+@Composable
+private fun Fact(label: String, value: String, mono: Boolean = false) = Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    Text(label, fontSize = 14.sp, lineHeight = 21.sp, color = C.muted, modifier = Modifier.widthIn(min = 52.dp))
+    Text(value, fontSize = if (mono) 14.sp else 15.sp, lineHeight = 21.sp, fontFamily = if (mono) CodeFont else null, color = C.ink, modifier = Modifier.weight(1f))
+}
+
+/** An agent's use of an item: its chat (turned down, said so), the command or how it was given, when; a tap opens the chat. */
+@Composable
+private fun UseRow(ws: String, u: VaultUse) {
+    val app = LocalApp.current
+    val warn = C.warn
+    ListRow(onClick = u.station?.let { s -> { app.push(Screen.Chat("$ws/$s", ChatOf.Session(u.session))) } }) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                buildAnnotatedString {
+                    append(u.chatTitle ?: u.session)
+                    if (u.denied == true) withStyle(SpanStyle(color = warn)) { append(" · ${t("web-pages.vault.uses.denied")}") }
+                },
+                fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+            Text(u.command ?: howLine(u.mode, u.hosts), fontSize = 13.sp, fontFamily = CodeFont, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+        Text(u.at.ago, fontSize = 13.sp, color = C.muted, maxLines = 1)
     }
 }
+
+/** A link in words in a card's body: no ground, flush with the text around it. */
+@Composable
+private fun Link(label: String, onClick: () -> Unit) = Text(label, fontSize = 15.sp, color = C.accent, modifier = Modifier.clickable(onClick = onClick))
 
 /** A field of an opened item: its name over its value (dots until shown, when secret), shown and copied from beside it. */
 @Composable
@@ -551,8 +799,9 @@ private fun copy(context: Context, app: AppState, text: String, secret: Boolean)
 /** An item being changed: as its vault's list has it (its listing), and what it holds as opened. */
 private class Editing(val item: VaultItemRow, val plain: Plain)
 
-private fun editorSheet(app: AppState, ws: String, vault: String, editing: Editing?) {
-    app.sheet = SheetSpec(0.92f) { Editor(app, ws, vault, editing) }
+/** `kind`: a new one of that kind (chosen in 添加), no kind to switch; `plain`: the library not locked, said at its top. */
+private fun editorSheet(app: AppState, ws: String, vault: String, editing: Editing?, kind: String? = null, plain: Boolean = false) {
+    app.sheet = SheetSpec(0.92f) { Editor(app, ws, vault, editing, kind, plain) }
 }
 
 /**
@@ -561,9 +810,9 @@ private fun editorSheet(app: AppState, ws: String, vault: String, editing: Editi
  * vault): turned down, nothing is lost; refused, why stands under it. 删除这一条 for one that is there.
  */
 @Composable
-private fun ColumnScope.Editor(app: AppState, ws: String, vault: String, editing: Editing?) {
+private fun ColumnScope.Editor(app: AppState, ws: String, vault: String, editing: Editing?, fixed: String?, plainLibrary: Boolean) {
     val was = editing?.plain
-    var kind by remember { mutableIntStateOf(KINDS.indexOf(was?.kind).coerceAtLeast(0)) }
+    var kind by remember { mutableIntStateOf(KINDS.indexOf(was?.kind ?: fixed).coerceAtLeast(0)) }
     var name by remember { mutableStateOf(was?.name.orEmpty()) }
     val fields = remember { mutableStateMapOf<String, String>().apply { was?.fields?.let { putAll(it) } } }
     var agent by remember { mutableStateOf(editing?.item?.listed ?: false) }
@@ -627,7 +876,8 @@ private fun ColumnScope.Editor(app: AppState, ws: String, vault: String, editing
         trailing = { Button(t("common.save"), primary = true, busy = saving, enabled = ready) { save() } },
     )
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Seg(KINDS.map(::kindName), kind, { kind = it }, Modifier.fillMaxWidth(), height = 34.dp, fill = true)
+        if (plainLibrary) Text(t("web-pages.vault.risk.editor"), fontSize = 13.sp, lineHeight = 19.sp, color = C.warn)
+        if (was == null && fixed == null) Seg(KINDS.map(::kindName), kind, { kind = it }, Modifier.fillMaxWidth(), height = 34.dp, fill = true)
         Labeled(t("android-settings.vault.name")) { VaultField(name, { name = it }, t("android-settings.vault.namePlaceholder")) }
         val optional = { f: String -> t("android-settings.vault.optional", "name" to fieldName(f)) }
         when (k) {

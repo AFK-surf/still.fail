@@ -443,9 +443,24 @@ function ProfileAccounts() {
  * (in a library not locked, that it is not encrypted, first). */
 function LibraryVault({ v, plain }: { v: VaultRow; plain: boolean }) {
   const app = useApp();
+  const run = useVaultCall();
   const items = useVaultItems(app.entry.id, v.id);
   if (!items) return null;
-  return <>{ITEM_SECTIONS.map((kind) => {
+  const hidden = items.items.filter((i) => !i.name);
+  // Locked here: those it does not name, a tap unlocking it; unlocked, locking it again.
+  const locking = !plain && (hidden.length > 0 || v.open) && (
+    <ListCard>
+      {hidden.length > 0 && <ListRow onClick={() => void run("vault.open", { workspace: app.entry.id, item: hidden[0]!.id }, t("web-pages.vault.unlockWhat"))}>
+        <span className={css.mIcon} /><span className={`${partsCss.mGrow} ${partsCss.mSubtle}`}>{t("web-pages.vault.hidden", { n: hidden.length })}</span>
+        <span className={partsCss.mAccent}>{t("web-pages.vault.unlock")}</span>
+      </ListRow>}
+      {v.open && <ListRow onClick={() => void run("vault.lock", { workspace: app.entry.id }, t("web-pages.vault.lockNow"))}>
+        <span className={css.mIcon} /><span className={`${partsCss.mGrow} ${partsCss.mSubtle}`}>{t("web-pages.vault.opened")}</span>
+        <span className={partsCss.mAccent}>{t("web-pages.vault.lockNow")}</span>
+      </ListRow>}
+    </ListCard>
+  );
+  return <>{locking}{ITEM_SECTIONS.map((kind) => {
     const rows = items.items.filter((i) => i.name && i.kind === kind);
     if (rows.length === 0) return null;
     return (

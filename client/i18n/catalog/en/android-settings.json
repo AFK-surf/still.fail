@@ -709,5 +709,13 @@
   "android-settings.vault.approve.decided": "This request was already decided",
   "android-settings.vault.request.title": "An agent wants “{name}”",
   "android-settings.vault.request.someItem": "a secret",
-  "android-settings.vault.request.openChat": "Open the chat"
+  "android-settings.vault.request.openChat": "Open the chat",
+  "android-settings.vault.migrate.title": {
+    "one": "1 secret not yet encrypted",
+    "other": "{n} secrets not yet encrypted"
+  },
+  "android-settings.vault.migrate.body": "Secrets saved before security mode was turned on are still stored in plain text on the station",
+  "android-settings.vault.migrate.action": "Encrypt",
+  "android-settings.vault.migrate.what": "encrypt secrets",
+  "android-settings.vault.migrate.done": "Encrypted"
 }

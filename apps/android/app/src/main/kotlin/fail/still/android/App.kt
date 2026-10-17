@@ -167,6 +167,8 @@ sealed interface Screen {
     data object SecurityOpen : Screen { override val id = "security/open" }
     /** The workspace's vault: its items, the agents' requests waiting, turning it on (screens/Vault.kt). */
     data object Vault : Screen { override val id = "vault" }
+    /** A secret of the library: what it is, its content shown, how agents may use it and when they did (screens/Vault.kt). */
+    data class VaultItem(val vault: String, val item: String) : Screen { override val id = "vault/$vault/$item" }
     /** A connect of a station; how it runs; a new one on a station. */
     data class Connect(val station: String, val connect: String) : Screen { override val id = "connect/$station/$connect" }
     data class ConnectRun(val station: String, val connect: String) : Screen { override val id = "connect-run/$station/$connect" }
@@ -749,6 +751,8 @@ private fun opening(screen: Screen, workspace: String): List<Pair<JsonObject, ko
     is Screen.Station -> listOf(Topics.stations(workspace) to kotlinx.serialization.builtins.ListSerializer(fail.still.android.data.StationView.serializer()))
     // A folder as it was last read (held on the device): the page slides in with its rows.
     is Screen.Drive -> listOfNotNull(screen.root?.let { Topics.drive(screen.station, it, screen.path) to fail.still.android.data.DriveFolder.serializer() })
+    // A secret's page: what it is (its row), its uses after.
+    is Screen.VaultItem -> listOf(Topics.vaultItems(workspace, screen.vault) to fail.still.android.data.VaultItemsView.serializer())
     Screen.Archive -> listOf(Topics.archive(workspace) to fail.still.android.data.ArchiveView.serializer())
     Screen.Decisions -> listOf(Topics.decisions(workspace) to fail.still.android.data.DecisionsView.serializer())
     Screen.Files, Screen.Stations -> listOf(Topics.stations(workspace) to kotlinx.serialization.builtins.ListSerializer(fail.still.android.data.StationView.serializer()))
@@ -939,6 +943,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     Screen.Security -> fail.still.android.screens.SecurityScreen(current)
                     Screen.SecurityOpen -> fail.still.android.screens.SecurityOpenScreen(current)
                     Screen.Vault -> fail.still.android.screens.VaultScreen(current)
+                    is Screen.VaultItem -> fail.still.android.screens.VaultItemScreen(current, screen.vault, screen.item)
                     is Screen.Preview -> fail.still.android.screens.PreviewScreen(screen.station, screen.job)
                     is Screen.PreviewFile -> fail.still.android.screens.PreviewFileScreen(screen.station, screen.session, screen.path, screen.name)
                     is Screen.Connect -> fail.still.android.screens.ConnectScreen(screen.station, screen.connect)

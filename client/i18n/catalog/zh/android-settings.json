@@ -649,5 +649,10 @@
   "android-settings.vault.approve.decided": "此申请已处理",
   "android-settings.vault.request.title": "申请使用「{name}」",
   "android-settings.vault.request.someItem": "一条密钥",
-  "android-settings.vault.request.openChat": "打开对话"
+  "android-settings.vault.request.openChat": "打开对话",
+  "android-settings.vault.migrate.title": "{n} 条密钥尚未加密",
+  "android-settings.vault.migrate.body": "开启安全模式前保存的密钥仍以明文保存在 station 上",
+  "android-settings.vault.migrate.action": "加密",
+  "android-settings.vault.migrate.what": "加密密钥",
+  "android-settings.vault.migrate.done": "已加密"
 }

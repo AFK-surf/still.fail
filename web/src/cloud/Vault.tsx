@@ -289,6 +289,12 @@ function LibraryVault({ entry, v, plain, many }: { entry: WorkspaceEntry; v: Vau
           <span className={css.link}>{t("web-pages.vault.unlock")}</span>
         </button>
       )}
+      {!plain && v.open && (
+        <button type="button" className={`${pagesCss.listRow} ${css.rowButton}`} onClick={() => void run("vault.lock", { workspace: entry.id }, t("web-pages.vault.lockNow"))}>
+          <span className={css.rowIcon} /><span className={`${pagesCss.listRowText} ${css.rowMeta}`}>{t("web-pages.vault.opened")}</span>
+          <span className={css.link}>{t("web-pages.vault.lockNow")}</span>
+        </button>
+      )}
       {items.items.length === 0 && <p className={css.note}>{t("web-pages.vault.empty")}</p>}
     </>
   );
