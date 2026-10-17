@@ -1226,6 +1226,7 @@
   "web-pages.security.newDevicesHow": "由本人的其他受信任设备或管理员验证安全码后批准",
   "web-pages.security.notSignerApp": "此设备尚未受信任：成为受信任设备后，才能在此批准设备和续期",
   "web-pages.security.notSignerWeb": "网页版不能作为受信任设备：请在桌面或安卓客户端中批准设备和续期",
+  "web-pages.security.noStations": "暂无 station",
   "web-pages.security.notice": "安全模式未开启：当前由 still.fail 的服务器管理访问权限",
   "web-pages.security.now": "当前由 still.fail 的服务器决定谁能访问你的 station",
   "web-pages.security.nowRisk": "如果服务器被攻破，攻击者可以为自己授予访问权限、添加机器，并在你的 station 上执行命令",

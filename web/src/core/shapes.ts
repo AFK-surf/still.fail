@@ -2966,7 +2966,7 @@ export interface LockMe {
 	kind: string;
 	confirmed: boolean;
 	daysLeft?: number;
-	/** A station refused this device for the lock: it waits to be confirmed. */
+	/** Not in the lock, it asked or a station refused it: it waits to be confirmed. */
 	waiting: boolean;
 }
 

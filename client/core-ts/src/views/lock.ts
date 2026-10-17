@@ -187,6 +187,12 @@ function readOnce(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
     inner.data.put("lock", ws, { head, entries: head === null ? [] : entries, requests });
     if ((was?.head?.hash ?? null) !== (head?.hash ?? null)) moved(inner, ws);
     inner.store.invalidateAll((t) => (t.topic === "lock" || t.topic === "lockDraft") && t.workspace === ws);
+    // This device not in the lock (left out when it was turned on, or new): it asks to be confirmed now, not only once
+    // a station it reaches refuses it (one it is connected to may not be asked again for a while).
+    if (head === null || inner.provider.kind !== "stillfail") return;
+    const base = yield* Effect.orElseSucceed(new Lock(inner, ws, sub, null).base(), () => null);
+    const f = fold(entries);
+    if (base !== null && !f.disabled && !f.devices.has(base) && !requests.some((r) => r.base === base)) ask(inner, ws);
   });
 }
 
@@ -205,6 +211,13 @@ function refused(inner: Inner, ws: string, station: string): void {
   const p = part(inner, ws);
   const head = held(inner, ws)?.head?.hash ?? null;
   p.refused.set(station, head);
+  ask(inner, ws);
+}
+
+/// This device asks to be confirmed, once a head.
+function ask(inner: Inner, ws: string): void {
+  const p = part(inner, ws);
+  const head = held(inner, ws)?.head?.hash ?? null;
   inner.store.invalidateAll((t) => t.topic === "lock" && t.workspace === ws);
   if (p.requested === head) return;
   p.requested = head;
@@ -212,8 +225,8 @@ function refused(inner: Inner, ws: string, station: string): void {
   if (sub === null) return;
   // Asked again a few times if the cloud did not take it (the page says the others were told); after that, the next
   // refusal asks anew.
-  const ask = Effect.retry(new Lock(inner, ws, sub, null).request(), { times: 5, schedule: Schedule.spaced("2 seconds") });
-  inner.scheduler.enqueue("cloud", `lock/${ws}/request`, Priority.background, Effect.asVoid(Effect.tapError(ask, () => Effect.sync(() => (p.requested = undefined)))));
+  const asking = Effect.retry(new Lock(inner, ws, sub, null).request(), { times: 5, schedule: Schedule.spaced("2 seconds") });
+  inner.scheduler.enqueue("cloud", `lock/${ws}/request`, Priority.background, Effect.asVoid(Effect.tapError(asking, () => Effect.sync(() => (p.requested = undefined)))));
 }
 
 /// Why a station is not asked now: it refused this device and the lock has not moved on since.
@@ -310,8 +323,8 @@ export function lockView(inner: Inner, ws: string): J {
     me: {
       device: p.base, code: p.base ? shortCode(p.base) : null, kind: inner.host.appKeys ? "app" : "web",
       confirmed: mine !== undefined, daysLeft: typeof mine?.exp === "number" ? daysLeft(mine.exp - t) : null,
-      // A station refused this device and the lock has not moved on since: it waits to be confirmed.
-      waiting: locked && mine === undefined && p.refused.size > 0,
+      // A station refused this device, or it asked, and the lock has not moved on since: it waits to be confirmed.
+      waiting: locked && p.base !== null && mine === undefined && (p.refused.size > 0 || p.requested === (h?.head?.hash ?? null) || (h?.requests ?? []).some((r) => r.base === p.base)),
     },
     signers: [...f.devices.values()].filter((d) => typeof d.sign_key === "string").length,
     members,

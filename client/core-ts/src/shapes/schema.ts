@@ -1108,7 +1108,7 @@ export const SHAPES: Record<string, Shape> = {
     ["kind", "String"],
     ["confirmed", "bool"],
     ["daysLeft", opt("u32")],
-    ["waiting", "bool", { doc: "A station refused this device for the lock: it waits to be confirmed." }],
+    ["waiting", "bool", { doc: "Not in the lock, it asked or a station refused it: it waits to be confirmed." }],
   ], { doc: "This device in the workspace's lock." }),
   LockView: struct([
     ["available", "bool", { doc: "Whether the control plane keeps locks (still.fail cloud's does; Comma's not)." }],

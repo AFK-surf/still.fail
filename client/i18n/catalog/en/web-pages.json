@@ -1298,6 +1298,7 @@
   "web-pages.security.newDevicesHow": "Approved by verifying a security code, from another of the person's trusted devices or by an admin",
   "web-pages.security.notSignerApp": "This device isn't trusted yet: once it is, you can approve devices and renew here",
   "web-pages.security.notSignerWeb": "The web app can't be a trusted device: approve devices and renew in the desktop or Android app",
+  "web-pages.security.noStations": "No stations yet",
   "web-pages.security.notice": "Security mode is off: still.fail's servers manage access",
   "web-pages.security.now": "Currently, still.fail's servers decide who can access your stations",
   "web-pages.security.nowRisk": "If the servers were compromised, an attacker could grant themselves access, add machines, and run commands on your stations",

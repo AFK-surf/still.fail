@@ -121,9 +121,9 @@ function On({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
         </div></div>
       </Section>
       <Section title="Station">
-        <div className={pagesCss.card}><div className={css.rows}>
+        <div className={pagesCss.card}>{lock.stations.length === 0 ? <p className={css.sub}>{t("web-pages.security.noStations")}</p> : <div className={css.rows}>
           {lock.stations.map((s) => <StationRow key={s.id} entry={entry} s={s} canJoin={lock.owner && lock.signs} onJoin={() => setJoining(s)} />)}
-        </div></div>
+        </div>}</div>
       </Section>
       <Section title={t("web-pages.security.webTitle")}>
         <div className={pagesCss.card}><p className={css.sub}>{t("web-pages.security.webRisk")}</p></div>

@@ -103,6 +103,7 @@ function On({ lock }: { lock: LockView }) {
       </ListCard>
       <SectionHeader title="Station" start={24} />
       <ListCard>
+        {lock.stations.length === 0 && <div className={css.mBody}><span className={partsCss.mSubtle}>{t("web-pages.security.noStations")}</span></div>}
         {lock.stations.map((s) => {
           const join = !s.protected && lock.owner && lock.signs;
           return (

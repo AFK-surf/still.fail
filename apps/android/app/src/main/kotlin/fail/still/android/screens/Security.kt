@@ -184,6 +184,7 @@ private fun On(current: WorkspaceEntry, lock: LockView) {
     }
     SectionHeader("Station", start = 24.dp)
     ListCard {
+        if (lock.stations.isEmpty()) Body { Note(t("web-pages.security.noStations")) }
         lock.stations.forEach { s ->
             val join = !s.protected && lock.owner && lock.signs
             val joining = app.isDoing("lock.joinStation", "workspace" to ws, "station" to s.id)

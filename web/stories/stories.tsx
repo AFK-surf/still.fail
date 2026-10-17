@@ -31,6 +31,7 @@ import type { Shared } from "../src/shareIn.ts";
 import { ScreenViewer } from "../src/screen/ScreenViewer.tsx";
 import { OUTDATED, SCREENS_LACKING, screensDemo, type ViewStory } from "./screens.ts";
 import { vaultDemo } from "./vault.ts";
+import { lockDemo } from "./lock.ts";
 import CLIP_URL from "./assets/story-clip.mp4?url";
 import TALL_CLIP_URL from "./assets/story-clip-tall.mp4?url";
 import PICTURE_URL from "./assets/story-picture.png?url";
@@ -406,6 +407,9 @@ export const stories: Story[] = [
   { id: "settings-memory-global", group: "设置", title: "记忆 · 全局", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "合并" }] },
   { id: "settings-workspace", group: "设置", title: "Workspace", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "Workspace · Acme" }] },
   { id: "settings-security", group: "设置", title: "安全", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }] },
+  { id: "settings-security-on", group: "设置", title: "安全 · 已开启", app: true, demo: lockDemo("on"), steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }] },
+  { id: "settings-security-no-stations", group: "设置", title: "安全 · 暂无 station", app: true, demo: lockDemo("noStations"), steps: [{ click: '[aria-label="设置"]' }, { text: "安全" }] },
+  { id: "phone-settings-security-no-stations", group: "设置", title: "手机 · 安全 · 暂无 station", app: true, phone: true, demo: lockDemo("noStations"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "安全" }] },
 
   // ── the vault (docs/vault.md) ──
   { id: "vault-web", group: "密钥", title: "网页只看名字", app: true, demo: vaultDemo("web"), steps: toVault },

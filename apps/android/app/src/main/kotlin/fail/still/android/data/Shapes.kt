@@ -2981,7 +2981,7 @@ data class LockMe (
 	val kind: String,
 	val confirmed: Boolean,
 	val daysLeft: UInt? = null,
-	/// A station refused this device for the lock: it waits to be confirmed.
+	/// Not in the lock, it asked or a station refused it: it waits to be confirmed.
 	val waiting: Boolean
 )
 
