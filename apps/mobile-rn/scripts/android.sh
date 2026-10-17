@@ -12,6 +12,8 @@ cd "$here"
 npx expo prebuild -p android --no-install > /dev/null
 sed -i '' 's/^reactNativeArchitectures=.*/reactNativeArchitectures=arm64-v8a/' android/gradle.properties
 variant=Release; [ "${1:-}" = --debug ] && variant=Debug
+# The JS bundled again each time: Gradle takes it as up to date when only EXPO_PUBLIC_* (the cloud it is for) changed.
+rm -rf android/app/build/generated/assets/createBundleReleaseJsAndAssets android/app/build/intermediates/assets/release
 # Studio's way to Maven sometimes drops the TLS handshake: tried again then, and only then.
 for n in 1 2 3; do
   (cd android && ./gradlew "assemble$variant" --console=plain -q) > gradle.log 2>&1 && break
