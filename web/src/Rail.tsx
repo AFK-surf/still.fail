@@ -662,7 +662,8 @@ function peekShift(): number {
     right = Math.max(right, r.right);
   }
   if (left === Infinity) return 0;
-  const room = page.right - PEEK_GAP - Math.min(right, page.right);
+  // As far from the window's edge as from the sidebar's, and the ground round what is at the end (the composer's) too.
+  const room = page.right - 2 * PEEK_GAP - Math.min(right, page.right);
   return Math.round(Math.max(0, Math.min(width, room, reach - Math.max(left, page.left))));
 }
 /** Shown a while, closed or about to be (in the move that closes it). */
