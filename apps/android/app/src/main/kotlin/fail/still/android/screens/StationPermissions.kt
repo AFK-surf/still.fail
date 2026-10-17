@@ -114,7 +114,7 @@ private fun RowAction(label: String, description: String? = null, busy: Boolean 
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (busy || failed != null) DoingMark(busy, failed, 12.dp)
+        if (busy || failed != null) DoingMark(busy, failed, inline = true)
         Text(label, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium, color = if (busy) C.muted else C.accent, maxLines = 1)
     }
 }
