@@ -88,7 +88,9 @@ export interface StationWire {
 }
 
 /// What a screen view asks for, as its head line's `screen` has it (docs/remote-screens.md).
-export type ScreenAsk = { maxWidth: number; maxHeight: number; codecs: string[]; control: boolean };
+/// `peek`: a preview (a link's card in a chat): it only looks and is not among those on the screen (a station from
+/// before previews would take it for a view; one is asked only of a screen its list says can be previewed).
+export type ScreenAsk = { maxWidth: number; maxHeight: number; codecs: string[]; control: boolean; peek?: boolean };
 
 export function noMeasure(): Effect.Effect<void, CoreError> {
   return Effect.fail(new CoreError("unsupported", t("station.core.oneWay")));

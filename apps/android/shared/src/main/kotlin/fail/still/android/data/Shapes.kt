@@ -3984,7 +3984,12 @@ data class ScreenCard (
 	/// Its page in the app (`ScreenItem.link`).
 	val link: String,
 	/// Its station is reached and no longer has it.
-	val gone: Boolean
+	val gone: Boolean,
+	/// It can be previewed: the card shows it live (`screen.view` with `peek`, docs/remote-screens.md).
+	val peek: Boolean,
+	/// Its size in its station's list (0 when not known): the card's picture keeps its shape.
+	val width: UInt,
+	val height: UInt
 )
 
 /// Where a screen's pointer is, as its station says.
@@ -4027,6 +4032,8 @@ data class ScreenItem (
 	val clipboard: List<String>? = null,
 	/// Where a file dropped into a view of it is put on the station's machine; none from a station before files.
 	val drop: ScreenDrop? = null,
+	/// It can be previewed (`screen.view` with `peek`): a tab of the station's browser; none from a station before previews.
+	val peek: Boolean? = null,
 	/// What the core says of it under its title: what it is, its size, who is on it (core).
 	val line: String,
 	/// Its page in the app: `/w/<workspace>/s/<station>/screen/<id>` (the id encoded), as the agents' links name it.

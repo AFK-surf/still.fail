@@ -154,7 +154,8 @@ export class ScreenHub implements Screens {
   }
 
   /// GET /admin/api/screens, in `lang`: `{screens: [{id, kind, title, width, height, viewers, controlledBy, access?,
-  /// clipboard?, drop?}]}`: `clipboard`, the types a view that drives it carries both ways; `drop`, where a file
+  /// clipboard?, peek?, drop?}]}`: `clipboard`, the types a view that drives it carries both ways; `peek`, it can be
+  /// previewed (ViewOptions.peek); `drop`, where a file
   /// dropped into a view is put (`folder`) and whether the view can show it in the machine's file manager (`reveal`).
   listed(lang: Lang): { screens: Record<string, unknown>[] } {
     const folder = this.#o.drop?.() ?? null;
@@ -166,6 +167,7 @@ export class ScreenHub implements Screens {
         return {
           id: s.id, kind: s.kind, title: s.title(), width, height, ...this.people(s.id), ...(access ? { access } : {}),
           ...(clipboard.length > 0 ? { clipboard } : {}),
+          ...(s.peek ? { peek: true } : {}),
           ...(folder !== null ? { drop: { folder, reveal: s.reveal === true } } : {}),
         };
       }),

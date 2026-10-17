@@ -19,7 +19,8 @@ export type ScreenInput =
   | { t: "key"; kind: "down" | "up"; key: string; code: string; mods: number }
   | { t: "text"; text: string };
 
-export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[] };
+/// `peek`: a preview (a link's card in a chat): it brings nothing forward, wakes nothing and is not among those on it.
+export type ViewOptions = { maxWidth: number; maxHeight: number; codecs: Codec[]; peek?: boolean };
 
 /// What a screen's clipboard holds, as a view carries it (docs/remote-screens.md `clipboard`): text, or a PNG picture.
 export type ClipType = "text" | "png";
@@ -75,6 +76,8 @@ export interface ScreenSource {
   clipboard?(): ClipType[];
   /// Its views can show a file in the machine's file manager (`reveal`).
   readonly reveal?: boolean;
+  /// It can be previewed (`ViewOptions.peek`): a tab of the browser, not the desktop (whose view wakes its display).
+  readonly peek?: boolean;
 }
 
 /// The station's sources: parts add theirs (the desktop at start, the browser per tab) and take them away.

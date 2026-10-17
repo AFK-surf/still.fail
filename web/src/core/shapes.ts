@@ -4019,6 +4019,11 @@ export interface ScreenCard {
 	link: string;
 	/** Its station is reached and no longer has it. */
 	gone: boolean;
+	/** It can be previewed: the card shows it live (`screen.view` with `peek`, docs/remote-screens.md). */
+	peek: boolean;
+	/** Its size in its station's list (0 when not known): the card's picture keeps its shape. */
+	width: number;
+	height: number;
 }
 
 /** Where a screen's pointer is, as its station says. */
@@ -4058,6 +4063,8 @@ export interface ScreenItem {
 	clipboard?: string[];
 	/** Where a file dropped into a view of it is put on the station's machine; none from a station before files. */
 	drop?: ScreenDrop;
+	/** It can be previewed (`screen.view` with `peek`): a tab of the station's browser; none from a station before previews. */
+	peek?: boolean;
 	/** What the core says of it under its title: what it is, its size, who is on it (core). */
 	line: string;
 	/** Its page in the app: `/w/<workspace>/s/<station>/screen/<id>` (the id encoded), as the agents' links name it. */

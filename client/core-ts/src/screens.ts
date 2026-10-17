@@ -70,13 +70,15 @@ export function parseScreen(name: string, params: unknown): ScreenCall | null {
         return finite(v) && v >= 1 ? Math.min(Math.round(v), LIMIT) : otherwise;
       };
       const control = get(params, "control");
+      // A preview (a link's card in a chat): only looking, whoever drives it.
+      const peek = get(params, "peek") === true;
       return {
         kind: "view",
         station,
         screen: text(params, "screen"),
         view: text(params, "view"),
-        ask: { maxWidth: size("maxWidth", MAX_WIDTH), maxHeight: size("maxHeight", MAX_HEIGHT), codecs, control: control !== false },
-        auto: typeof control !== "boolean",
+        ask: { maxWidth: size("maxWidth", MAX_WIDTH), maxHeight: size("maxHeight", MAX_HEIGHT), codecs, control: control !== false && !peek, ...(peek ? { peek: true } : {}) },
+        auto: !peek && typeof control !== "boolean",
       };
     }
     case "screen.ack": {
@@ -227,7 +229,7 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
     const width = size(get(s, "width"));
     const height = size(get(s, "height"));
     const title = typeof get(s, "title") === "string" && get(s, "title") !== "" ? (get(s, "title") as string) : kind === "browser" ? t("core-views.screen.kind.browser") : t("core-views.screen.kind.desktop");
-    const item = { id, kind, title, width, height, viewers: names(get(s, "viewers")), controlledBy: names(get(s, "controlledBy")) };
+    const item = { id, kind, title, width, height, viewers: names(get(s, "viewers")), controlledBy: names(get(s, "controlledBy")), ...(get(s, "peek") === true ? { peek: true } : {}) };
     const access = accessOf(get(s, "access"));
     const clipboard = clipTypesOf(get(s, "clipboard"));
     const drop = dropOf(get(s, "drop"));
@@ -240,11 +242,11 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
 /// list has it; one the list no longer has, as gone; one of a station not reached, as what its id says it is.
 export function screenCard(inner: Inner, station: string, id: string, held: Held | undefined, online: boolean): J {
   const listed = screensView(inner, station, held, online).screens.find((s: J) => s.id === id);
-  if (listed) return { kind: listed.kind, title: listed.title, line: listed.line, link: listed.link, gone: false };
+  if (listed) return { kind: listed.kind, title: listed.title, line: listed.line, link: listed.link, gone: false, peek: listed.peek === true, width: listed.width, height: listed.height };
   const kind = id.startsWith("browser:") ? "browser" : "desktop";
   const gone = held !== undefined && !held.outdated && online;
   const line = gone ? t("core-views.screen.gone") : held?.outdated ? t("core-views.screen.outdated") : t("core-views.screen.remote");
-  return { kind, title: kind === "browser" ? t("core-views.screen.kind.browser") : t("core-views.screen.kind.desktop"), line, link: screenPath(station, id), gone };
+  return { kind, title: kind === "browser" ? t("core-views.screen.kind.browser") : t("core-views.screen.kind.desktop"), line, link: screenPath(station, id), gone, peek: false, width: 0, height: 0 };
 }
 
 /// The clipboard types a station says a screen carries (`clipboard`): ours only.
@@ -447,6 +449,14 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
     if (listedItem() === undefined && inner.stations.screens(station) !== undefined) {
       state.phase = "gone";
       state.message = t("core-views.screen.gone");
+      tell();
+      return null;
+    }
+    // A preview only of a screen its station says can be previewed: one from before previews would take it for a view
+    // (shown among those on it, its tab brought forward).
+    if (c.ask.peek && get(listedItem(), "peek") !== true) {
+      state.phase = "denied";
+      state.message = t("core-views.screen.denied");
       tell();
       return null;
     }

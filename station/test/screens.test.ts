@@ -264,6 +264,33 @@ test("who is on a screen: every view's person, told to all on it and in the list
   assert.deepEqual(hub.people("fake"), { viewers: [], controlledBy: [] });
 });
 
+test("a preview (a link's card in a chat) only looks, is not among those on it, and only of a source that can be previewed", async () => {
+  const hub = new ScreenHub();
+  const source = Object.assign(new FakeSource(), { peek: true });
+  const still = new FakeSource("still");
+  hub.add(source);
+  hub.add(still);
+  assert.equal(hub.listed("en").screens[0]!.peek, true);
+  assert.equal("peek" in hub.listed("en").screens[1]!, false);
+  const card = await open(hub, member, { maxWidth: 480, maxHeight: 300, codecs: ["jpeg"], control: true, peek: true });
+  assert.equal(card.answer.status, 200);
+  const states: any[] = [];
+  await until(card.frames, KIND.video, states);
+  await settle();
+  assert.equal(states[0].control, false);
+  assert.equal(source.opened.at(-1)!.peek, true);
+  assert.deepEqual(hub.people("fake"), { viewers: [], controlledBy: [] });
+  // Its input is dropped: it only looks.
+  await card.stream.write(frame(KIND.input, Buffer.from(JSON.stringify({ t: "text", text: "x" }))));
+  await card.stream.finish();
+  await card.served;
+  assert.deepEqual(source.views[0]!.inputs, []);
+  // One that cannot be previewed (the desktop, whose view wakes its display) is refused, not opened.
+  const refused = await open(hub, member, { maxWidth: 480, maxHeight: 300, codecs: ["jpeg"], peek: true }, "/admin/api/screens/still/view");
+  assert.equal(refused.answer.status, 501);
+  assert.equal(still.opened.length, 0);
+});
+
 /// The rest of a view's frames, its states gathered, until the station finishes it.
 async function rest(frames: FrameIn): Promise<any[]> {
   const states: any[] = [];

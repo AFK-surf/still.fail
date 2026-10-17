@@ -1298,6 +1298,7 @@ export const SHAPES: Record<string, Shape> = {
     ["access", opt("ScreenAccess"), { doc: "What is missing for it to be seen or driven (macOS's grants), when something is." }],
     ["clipboard", vec("String"), { default: true, doc: "The clipboard types a view that drives it carries both ways (`text`, `png`); none from a station before them." }],
     ["drop", opt("ScreenDrop"), { doc: "Where a file dropped into a view of it is put on the station's machine; none from a station before files." }],
+    ["peek", "bool", { default: true, doc: "It can be previewed (`screen.view` with `peek`): a tab of the station's browser; none from a station before previews." }],
     ["line", "String", { doc: "What the core says of it under its title: what it is, its size, who is on it (core)." }],
     ["link", "String", { doc: "Its page in the app: `/w/<workspace>/s/<station>/screen/<id>` (the id encoded), as the agents' links name it." }],
   ], { doc: "A screen of a station a person can see and drive (docs/remote-screens.md)." }),
@@ -1314,6 +1315,9 @@ export const SHAPES: Record<string, Shape> = {
     ["line", "String", { doc: "Under the title: what the list's row says of it (core); else that it is gone, or that it is a remote screen." }],
     ["link", "String", { doc: "Its page in the app (`ScreenItem.link`)." }],
     ["gone", "bool", { doc: "Its station is reached and no longer has it." }],
+    ["peek", "bool", { doc: "It can be previewed: the card shows it live (`screen.view` with `peek`, docs/remote-screens.md)." }],
+    ["width", "u32", { doc: "Its size in its station's list (0 when not known): the card's picture keeps its shape." }],
+    ["height", "u32"],
   ], { doc: "A link to one of a station's screens as a message shows it (the `screenCard` topic; client/core-ts/src/screens.ts)." }),
   ScreenAccess: struct([
     ["capture", "bool", { doc: "It can be seen." }],

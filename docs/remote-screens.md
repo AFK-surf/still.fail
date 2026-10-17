@@ -51,11 +51,15 @@ JPEG frames are all key frames and their config has no `description`.
   without macOS's grants, or on a machine it is not supported on). `clipboard`: the types a view that drives it carries
   both ways (`"text"`, `"png"`; the desktop both, a browser tab text); `drop`: `{folder, reveal}`, where a file a person
   drops into a view is put on the machine (with the drive's upload, `root` the folder: docs/drive.md) and whether the
-  view can show it in the machine's file manager. A station from before them says neither: clients offer neither. An old station answers this route 404: a client
+  view can show it in the machine's file manager. `peek`: it can be previewed (a tab of the browser). A station from
+  before them says none of these: clients offer none. An old station answers this route 404: a client
   opens a view only on a station that listed the screen (an old one would read the view's head as a request whose
   body never ends).
 - **View**: a stream whose head line carries a `screen` object:
   `{"method":"POST","path":"/admin/api/screens/<id>/view","headers":{},"screen":{"maxWidth":1920,"maxHeight":1080,"codecs":["h264","jpeg"],"control":true}}`.
+  With `"peek": true` it is a preview (a link's card in a chat, below): it only looks (`control` is false), is not in
+  `viewers`, and brings no tab forward (a tab behind another casts nothing then); only of a screen the list says
+  `peek` (a tab of the browser: the desktop's view wakes its display), else 501.
   The station answers `{"status":200,"headers":{"content-type":"application/x-stillfail-screen"}}`, or an error status
   with `{error, access?}` (404 no such screen, 400 no codec it knows, 415 none it sends, 501 not supported here, 503
   not now: no grant, the capture failed), then both directions carry frames: a kind byte, the payload's length
@@ -162,6 +166,12 @@ opening a stream (such a station would take the stream for a request and wait fo
 The agents' `screen` tool lists the station's screens and gives a link to one: `<cloud>/w/<workspace>/s/<station>/screen/<id>`.
 The agent posts it with `chat_post` (need_human: "log in here", "solve the captcha") and ends its turn; clients open
 the link in their screen viewer (web: a page; Android: a full-screen activity; in a chat, `link.parse` → `screen`).
+
+In a message the link alone on its line is the screen's card (the core's `screenCard` topic: its title and line from
+the list, `gone` once the list has it no more); within a sentence, its title. A screen the list says `peek` shows live
+in its card: a preview view (JPEG, about the card's width in device pixels) while the card is on the screen and the
+app shown, each frame acknowledged half a second after the one before, so about two pictures a second; its mark until
+the first comes.
 
 ### Agents on a screen (station/src/tools/computer.ts)
 

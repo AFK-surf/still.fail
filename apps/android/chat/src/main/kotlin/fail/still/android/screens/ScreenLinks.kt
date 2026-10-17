@@ -1,8 +1,43 @@
 // Links to a station's screens in an agent's words (docs/remote-screens.md), as the web draws them: one alone in a
 // paragraph is the screen's card, as a file's is (ChatFiles.kt FileCard); a bare one within a sentence reads as the
-// screen's title. What the card says is the core's (`screenCard`, client/core-ts/src/screens.ts).
+// screen's title. What the card says is the core's (`screenCard`, client/core-ts/src/screens.ts); a screen its station
+// previews is live in its card while the card is on the screen (`screen.view` with `peek`, as remote/ScreenSession.kt
+// views one: JPEG only, small, slow).
 package fail.still.android.screens
 
+import android.graphics.BitmapFactory
+import android.os.SystemClock
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
+import fail.still.core.CoreException
+import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.put
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -55,25 +90,102 @@ private fun screenCardOf(href: String): ScreenCard? {
 
 /**
  * A screen as a card: its kind's mark, its title (the link's own words, when it has them) over what its station says
- * of it; one its station no longer has, its title quieter. Its size is kept while the core has not said, its lines empty. A tap
- * opens it, as the link does (App.kt → AppState.openLink: the viewer).
+ * of it; one its station no longer has, its title quieter. Its size is kept while the core has not said, its lines
+ * empty. One its station previews (a tab of its browser) is the screen live across the card's top, the words under it.
+ * A tap opens it, as the link does (App.kt → AppState.openLink: the viewer).
  */
 @Composable
 private fun ScreenLinkCard(href: String, words: String?) {
     val card = screenCardOf(href)
     val uris = LocalUriHandler.current
     val gone = card?.gone == true
+    val of = screenOfLink(href)
+    val lines: @Composable (Modifier) -> Unit = { m ->
+        Column(m) {
+            Text(words ?: card?.title.orEmpty(), fontSize = 15.sp, lineHeight = 20.sp, color = if (gone) C.muted else C.ink, maxLines = 1, minLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(card?.line.orEmpty(), fontSize = 11.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1, minLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+    val box = Modifier.clip(Smooth(8.dp)).background(chatInk().neutral).clickable { uris.openUri(href) }
+    if (card != null && card.peek && !gone && of != null) {
+        Column(box.width(280.dp)) {
+            Peek(of.first, of.second, card)
+            lines(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp))
+        }
+        return
+    }
     Row(
-        Modifier.width(236.dp).clip(Smooth(8.dp)).background(chatInk().neutral).clickable { uris.openUri(href) }.padding(horizontal = 10.dp, vertical = 8.dp),
+        box.width(236.dp).padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         val mark = when (card?.kind) { null -> null; "browser" -> Globe; else -> Monitor }
         if (mark != null) Icon(mark, null, Modifier.size(30.dp, 36.dp), tint = C.muted)
         else Box(Modifier.size(30.dp, 36.dp))
-        Column(Modifier.weight(1f)) {
-            Text(words ?: card?.title.orEmpty(), fontSize = 15.sp, lineHeight = 20.sp, color = if (gone) C.muted else C.ink, maxLines = 1, minLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(card?.line.orEmpty(), fontSize = 11.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1, minLines = 1, overflow = TextOverflow.Ellipsis)
+        lines(Modifier.weight(1f))
+    }
+}
+
+/** A preview's pace: a picture at most this often (the station sends the next once the last is acknowledged). */
+private const val PEEK_MS = 500L
+/** The picture a preview asks for, in pixels at most: the card's width, twice over. */
+private const val PEEK_SIZE = 640
+
+/** The web's --hover, the ground a preview's picture comes onto. */
+private val peekGround @Composable get() = if (C.dark) Color.White.copy(alpha = 0.05f) else Color(0xFF322D24).copy(alpha = 0.065f)
+
+/**
+ * The screen live in its card (`screen.view` with `peek`: only looking, not among those on it, its tab not brought
+ * forward), a picture every PEEK_MS while the card is on the screen and the app in front; its mark until a picture
+ * comes (a tab behind another casts none). In its shape as its station lists it, within bounds: the card does not
+ * change size as it comes.
+ */
+@Composable
+private fun Peek(station: String, screen: String, card: ScreenCard) {
+    val core = LocalApp.current.core
+    val started = LocalLifecycleOwner.current.lifecycle.currentStateAsState().value.isAtLeast(Lifecycle.State.STARTED)
+    var inView by remember { mutableStateOf(false) }
+    var picture by remember(station, screen) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(station, screen, inView && started) {
+        if (!inView || !started) return@LaunchedEffect
+        val view = "android-peek-" + UUID.randomUUID().toString().take(8)
+        val params = buildJsonObject {
+            put("station", station); put("screen", screen); put("view", view)
+            put("codecs", JsonArray(listOf(JsonPrimitive("jpeg"))))
+            put("maxWidth", PEEK_SIZE); put("maxHeight", PEEK_SIZE); put("peek", true)
         }
+        // Frames as they come (on the core's thread), decoded and acknowledged off the main thread.
+        val frames = Channel<Pair<ByteArray?, Long>>(Channel.UNLIMITED)
+        coroutineScope {
+            launch(Dispatchers.Default) {
+                // Each acknowledgement PEEK_MS after the one before: the station sends no faster.
+                var at = 0L
+                for ((bytes, ts) in frames) {
+                    bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }?.asImageBitmap()?.let { b -> withContext(Dispatchers.Main) { picture = b } }
+                    at = maxOf(SystemClock.uptimeMillis(), at + PEEK_MS)
+                    val wait = at - SystemClock.uptimeMillis()
+                    launch { delay(wait); core.tell("screen.ack", buildJsonObject { put("view", view); put("ts", ts) }) }
+                }
+            }
+            try {
+                core.stream("screen.view", params) { value, bytes ->
+                    val f = (value as? JsonObject)?.get("frame") as? JsonObject ?: return@stream
+                    val ts = (f["ts"] as? JsonPrimitive)?.let { it.longOrNull ?: it.contentOrNull?.toDoubleOrNull()?.toLong() } ?: return@stream
+                    frames.trySend(bytes to ts)
+                }
+            } catch (_: CoreException) {
+                // Refused or ended (the station no longer previews it): its mark stays.
+            }
+            frames.close()
+        }
+    }
+    val ratio = if (card.width > 0u && card.height > 0u) (card.width.toFloat() / card.height.toFloat()).coerceIn(0.75f, 2f) else 16f / 10f
+    Box(
+        Modifier.fillMaxWidth().aspectRatio(ratio).background(peekGround).onGloballyPositioned { inView = it.isAttached && !it.boundsInWindow().isEmpty },
+        contentAlignment = Alignment.Center,
+    ) {
+        val shown = picture
+        if (shown != null) Image(shown, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, alignment = Alignment.TopCenter)
+        else Icon(if (card.kind == "browser") Globe else Monitor, null, Modifier.size(30.dp, 36.dp), tint = C.muted)
     }
 }
 

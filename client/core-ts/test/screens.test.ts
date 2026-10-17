@@ -235,8 +235,8 @@ each("a_link_to_a_screen_shows_it_as_its_list_has_it_and_as_gone_once_the_list_h
   subscribe(core, ui, 2, { topic: "screenCard", station: "ws/st", screen: "browser:CLOSED" });
   await host.settle();
   apply(host, values);
-  assert.deepEqual(values.get(1), { kind: "browser", title: "登录 - GitHub", line: "浏览器标签页 · 1280×800 · Bob 正在查看", link: "/w/ws/s/st/screen/browser%3AT1", gone: false });
-  assert.deepEqual(values.get(2), { kind: "browser", title: "浏览器标签页", line: "此屏幕已不存在", link: "/w/ws/s/st/screen/browser%3ACLOSED", gone: true });
+  assert.deepEqual(values.get(1), { kind: "browser", title: "登录 - GitHub", line: "浏览器标签页 · 1280×800 · Bob 正在查看", link: "/w/ws/s/st/screen/browser%3AT1", gone: false, peek: false, width: 1280, height: 800 });
+  assert.deepEqual(values.get(2), { kind: "browser", title: "浏览器标签页", line: "此屏幕已不存在", link: "/w/ws/s/st/screen/browser%3ACLOSED", gone: true, peek: false, width: 0, height: 0 });
   push("screens", { screens: [SCREENS.screens[0]] });
   await host.settle();
   apply(host, values);
@@ -250,7 +250,29 @@ test("a_link_to_a_screen_of_a_station_not_reached_says_what_its_id_does", async 
   subscribe(core, ui, 1, { topic: "screenCard", station: "ws/elsewhere", screen: "desktop" });
   await host.settle();
   apply(host, values);
-  assert.deepEqual(values.get(1), { kind: "desktop", title: "桌面", line: "远程屏幕", link: "/w/ws/s/elsewhere/screen/desktop", gone: false });
+  assert.deepEqual(values.get(1), { kind: "desktop", title: "桌面", line: "远程屏幕", link: "/w/ws/s/elsewhere/screen/desktop", gone: false, peek: false, width: 0, height: 0 });
+  core.close();
+});
+
+test("a_preview_only_looks_and_is_asked_only_of_a_screen_its_station_says_can_be_previewed", async () => {
+  const answers = { ...base(), "GET /screens": { screens: [SCREENS.screens[0], { ...SCREENS.screens[1], peek: true }] } };
+  const { host, core, ui, views } = await viewing(1, answers);
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "screenCard", station: "ws/st", screen: "browser:T1" });
+  await host.settle();
+  apply(host, values);
+  assert.equal((values.get(1) as J).peek, true);
+  const log: J[] = [];
+  call(core, ui, 2, "screen.view", { station: "ws/st", screen: "browser:T1", view: "card", maxWidth: 480, maxHeight: 300, codecs: ["jpeg"], peek: true, control: true });
+  await host.settle();
+  assert.equal(views.length, 1);
+  assert.deepEqual(views[0]!.ask, { maxWidth: 480, maxHeight: 300, codecs: ["jpeg"], control: false, peek: true });
+  // The desktop is not said to be previewable (its view wakes its display): asked as a preview, no stream is opened.
+  call(core, ui, 3, "screen.view", { station: "ws/st", screen: "desktop", view: "card2", codecs: ["jpeg"], peek: true });
+  await host.settle();
+  said(host, log);
+  assert.equal(views.length, 1);
+  assert.equal(lastState(log, 3).phase, "denied");
   core.close();
 });
 

@@ -188,6 +188,8 @@ export class TabView implements ScreenView {
   #buttons = 0;
   #click = { count: 0, at: -Infinity, x: 0, y: 0, button: "none" };
   #unlisten: () => void;
+  /// A preview's (ViewOptions.peek): the tab is not brought forward for it, so what is behind another casts nothing.
+  #peek = false;
 
   constructor(p: ViewParts) {
     this.#p = p;
@@ -198,6 +200,7 @@ export class TabView implements ScreenView {
   /// Starts casting; `viewport`: the page's size before the first frame says it.
   async start(options: ViewOptions, viewport?: { width: number; height: number }) {
     if (viewport) this.#viewport = viewport;
+    this.#peek = options.peek === true;
     const { cdp, session } = this.#p;
     await cdp.send("Page.enable", {}, session);
     if (!viewport) {
@@ -208,7 +211,7 @@ export class TabView implements ScreenView {
         this.#p.sized?.(v);
       }
     }
-    await this.front();
+    if (!this.#peek) await this.front();
     await cdp.send(
       "Page.startScreencast",
       { format: "jpeg", quality: QUALITY, maxWidth: Math.max(1, Math.round(options.maxWidth)), maxHeight: Math.max(1, Math.round(options.maxHeight)), everyNthFrame: 1 },
@@ -237,7 +240,7 @@ export class TabView implements ScreenView {
 
   keyframe() {
     this.#keyframe = true;
-    void this.front();
+    if (!this.#peek) void this.front();
     if (this.#waiter && this.#last) {
       const w = this.#waiter;
       this.#waiter = null;

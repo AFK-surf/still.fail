@@ -132,10 +132,12 @@ export function parseInput(v: any): ScreenInput | null {
 }
 
 /// What a view's ask says: its bounds (16..8192, 1920×1080 when not said) and the codecs it takes, ours only.
-function asked(screen: any): { maxWidth: number; maxHeight: number; codecs: Codec[]; control: boolean } {
+function asked(screen: any): { maxWidth: number; maxHeight: number; codecs: Codec[]; control: boolean; peek: boolean } {
   const bound = (v: unknown, otherwise: number) => (num(v) ? Math.min(8192, Math.max(16, Math.round(v))) : otherwise);
   const codecs = Array.isArray(screen.codecs) ? CODECS.filter((c) => screen.codecs.includes(c)) : [];
-  return { maxWidth: bound(screen.maxWidth, 1920), maxHeight: bound(screen.maxHeight, 1080), codecs, control: screen.control === true };
+  // A preview (`peek`, a link's card in a chat) only looks.
+  const peek = screen.peek === true;
+  return { maxWidth: bound(screen.maxWidth, 1920), maxHeight: bound(screen.maxHeight, 1080), codecs, control: screen.control === true && !peek, peek };
 }
 
 /// A stream whose head says `"screen"` (serve.ts dispatches it): a view of a screen, for as long as both sides keep it.
@@ -164,11 +166,12 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
   if (source === undefined) return refuse(404, tr(lang, "station.screen.notFound"));
   const ask = asked(head.screen);
   if (ask.codecs.length === 0) return refuse(400, `screen.codecs: one of ${CODECS.join(", ")}`);
+  if (ask.peek && !source.peek) return refuse(501, "this screen is not previewed");
   // A viewer (read-only member) sees, and does not drive.
   const control = ask.control && !readOnly(viewer);
   let view: ScreenView;
   try {
-    view = await source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs });
+    view = await source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs, ...(ask.peek ? { peek: true } : {}) });
   } catch (error) {
     if (error instanceof ScreenRefused) {
       // What is missing says it all, and where it is granted.
@@ -189,7 +192,7 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
     return;
   }
   const access = accessShown(source.access?.(), lang);
-  await new ViewSession({ hub, id, source, view, stream, frames: new FrameIn(stream, carry), name: viewer.name || viewer.email, control, access }).run();
+  await new ViewSession({ hub, id, source, view, stream, frames: new FrameIn(stream, carry), name: viewer.name || viewer.email, control, peek: ask.peek, access }).run();
 }
 
 /// One view while it lasts.
@@ -218,9 +221,11 @@ class ViewSession {
   /// Whose it is, whether their input is taken, and what is missing of the source's access (as they read it).
   readonly name: string;
   readonly control: boolean;
+  /// A preview's: not among those on the screen.
+  readonly peek: boolean;
   readonly access: AccessShown | undefined;
 
-  constructor(o: { hub: ScreenHub; id: string; source: ScreenSource; view: ScreenView; stream: Stream; frames: FrameIn; name: string; control: boolean; access: AccessShown | undefined }) {
+  constructor(o: { hub: ScreenHub; id: string; source: ScreenSource; view: ScreenView; stream: Stream; frames: FrameIn; name: string; control: boolean; peek?: boolean; access: AccessShown | undefined }) {
     this.hub = o.hub;
     this.id = o.id;
     this.source = o.source;
@@ -229,6 +234,7 @@ class ViewSession {
     this.frames = o.frames;
     this.name = o.name;
     this.control = o.control;
+    this.peek = o.peek === true;
     this.access = o.access;
     this.#title = o.source.title();
   }
@@ -266,7 +272,7 @@ class ViewSession {
   async run(): Promise<void> {
     // How it starts: what it is and whether this view drives it; then who is on it (the hub tells everyone on it).
     void this.#state({ title: this.#title, control: this.control, ...(this.access ? { access: this.access } : {}) });
-    this.#leave = this.hub.join(this.id, { name: this.name, control: this.control, tell: (people) => void this.#state(people) });
+    if (!this.peek) this.#leave = this.hub.join(this.id, { name: this.name, control: this.control, tell: (people) => void this.#state(people) });
     const unwatch = this.hub.watch(() => {
       if (this.hub.get(this.id) !== this.source) return this.#stop("gone");
       const title = this.source.title();

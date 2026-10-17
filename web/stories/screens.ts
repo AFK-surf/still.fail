@@ -25,8 +25,8 @@ export const OUTDATED: ScreensView = { screens: [], outdated: true, control: tru
 
 /** The demo station's screens as links in a message show them (the core's `screenCard`), and one its browser closed. */
 const CARDS: Record<string, ScreenCard> = Object.fromEntries([
-  ...SCREENS.screens.map((s) => [s.id, { kind: s.kind, title: s.title, line: s.line, link: s.link, gone: false }] as const),
-  ["browser:0FF1CE", { kind: "browser", title: "浏览器标签页", line: "此屏幕已不存在", link: `${LINK}/browser%3A0FF1CE`, gone: true }],
+  ...SCREENS.screens.map((s) => [s.id, { kind: s.kind, title: s.title, line: s.line, link: s.link, gone: false, peek: s.kind === "browser", width: s.width, height: s.height }] as const),
+  ["browser:0FF1CE", { kind: "browser", title: "浏览器标签页", line: "此屏幕已不存在", link: `${LINK}/browser%3A0FF1CE`, gone: true, peek: false, width: 0, height: 0 }],
 ]);
 const SAID = [
   "浏览器开好了，登录页在这里，密码在那个页面里输入：",
@@ -36,8 +36,9 @@ const SAID = [
   "要在 Mac 上点允许的话用这个：",
   `https://app.still.fail${LINK}/desktop`,
 ].join("\n\n");
-/** The chat's first agent message linking the demo station's screens (src/screen/ScreenLink.tsx): alone on their lines, one gone, one within a sentence. */
+/** The chat's first agent message linking the demo station's screens (src/screen/ScreenLink.tsx): alone on their lines, one gone, one within a sentence; the tab's card live. */
 export const screenLinksDemo: DemoExtension = {
+  stream: (name, params, emit, signal) => (name === "screen.view" ? play("live", false, params, emit, signal) : undefined),
   topic: (t) => (t.topic === "screenCard" ? CARDS[String(t.screen)] ?? null : undefined),
   then: (t, value) => {
     if (t.topic !== "chat" || !value) return undefined;

@@ -32,6 +32,7 @@ const TITLES_AFTER_MS = [1000, 5000];
 class Tab implements ScreenSource {
   readonly id: string;
   readonly kind = "browser" as const;
+  readonly peek = true;
   info: { targetId: string; title: string; url: string; attached: boolean };
   #size = { width: 0, height: 0 };
   readonly #tabs: Tabs;
