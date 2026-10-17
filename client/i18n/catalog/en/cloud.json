@@ -78,7 +78,7 @@
   "cloud.mail.code.lead": "Your still.fail code, which works for 10 minutes:",
   "cloud.mail.code.for": "It signs in {name}.",
   "cloud.mail.code.notYou": "If you aren't signing in, ignore this email. Never tell anyone the code.",
-  "cloud.mail.code.subject": "Your still.fail code: {code}",
+  "cloud.mail.code.subject": "Your still.fail sign-in code",
   "cloud.notice.block": "Needs you · {text}",
   "cloud.notice.failed": "Failed · {text}",
   "cloud.preview.gone": "Preview disconnected; reopen it in still.fail",

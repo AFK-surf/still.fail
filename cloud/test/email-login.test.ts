@@ -77,7 +77,7 @@ test("an email signs up with a code sent to it, and signs in to the same account
     assert.match(await sent.text(), /new\.person@example\.test/, "the code page says where it went");
     assert.equal(h.mails.length, 1);
     assert.equal(h.mails[0]!.to, "new.person@example.test");
-    assert.match(h.mails[0]!.subject, /\d{6}/);
+    assert.doesNotMatch(h.mails[0]!.subject, /\d{6}/, "the code is not in the subject: lock screens show it");
     const code = codeFor(h, "new.person@example.test");
     const wrong = await b.post({ via: "code", code: code === "000000" ? "111111" : "000000" });
     assert.equal(wrong.status, 200);

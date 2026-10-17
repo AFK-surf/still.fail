@@ -75,7 +75,7 @@
   "cloud.mail.code.lead": "你的 still.fail 验证码如下，10 分钟内有效：",
   "cloud.mail.code.for": "正在为 {name} 登录。",
   "cloud.mail.code.notYou": "如果不是你本人在登录，忽略这封邮件即可，不要把验证码告诉任何人。",
-  "cloud.mail.code.subject": "still.fail 验证码：{code}",
+  "cloud.mail.code.subject": "still.fail 登录验证码",
   "cloud.notice.block": "需要你处理 · {text}",
   "cloud.notice.failed": "出错 · {text}",
   "cloud.preview.gone": "预览已断开：在 still.fail 中重新打开",
