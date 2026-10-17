@@ -3669,6 +3669,11 @@ export interface PrefsView {
 	 */
 	listFilter?: Record<string, ListFilter>;
 	appearance?: Appearance;
+	/**
+	 * Motion on this device's pages: `reduce` (what moves only fades or is there at once), `full`, or none to
+	 * follow the system's setting.
+	 */
+	motion?: string;
 	rowPicture?: RowPictureSetting;
 	/** Times are shown as dates rather than "3 分钟前". */
 	absoluteTime?: boolean;

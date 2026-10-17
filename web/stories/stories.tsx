@@ -476,6 +476,7 @@ export const stories: Story[] = [
 
   // ── settings ──
   { id: "settings-appearance", group: "设置", title: "外观", app: true, steps: [{ click: '[aria-label="设置"]' }] },
+  { id: "phone-settings-appearance", group: "设置", title: "手机 · 外观", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "外观" }] },
   { id: "settings-notifications", group: "设置", title: "通知", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "通知" }] },
   { id: "settings-notifications-type", group: "设置", title: "通知 · 展开一个类别", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "通知" }, { click: 'button:has-text("有人发言")' }] },
   {

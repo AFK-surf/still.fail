@@ -5,6 +5,7 @@ import { list, pageNarrow } from "./styles/pages.css.ts";
 import { newChat } from "./NewChat.css.ts";
 import { pageBar } from "./styles/sidebar.css.ts";
 import { neg, outset } from "@stillfail/ui/styles/align.ts";
+import { STILL } from "@stillfail/ui/styles/still.ts";
 
 export const brandLockup = style({ display: "block" });
 export const illus = style({
@@ -95,10 +96,4 @@ globalStyle(list, { listStyle: "none", marginBlock: "0", ...outset(12), padding:
  * out past it by their padding. Its own margin above would take the column's centring away (it comes later). */
 globalStyle(`${pageNarrow} > ${list}`, { maxWidth: "none", marginLeft: `max(${neg(12)}, calc(50% - 392px))`, marginRight: `max(${neg(12)}, calc(50% - 392px))` });
 globalStyle(`${sidebarBuddy}[data-pose="hop"] img`, { animation: `${buddyHopKeyframes} 380ms ${vars.easeOut}` });
-globalStyle(`${sidebarBuddy}[data-pose="hop"] img`, {
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none",
-    },
-  },
-});
+globalStyle(`${STILL} ${sidebarBuddy}[data-pose="hop"] img`, { animation: "none" });

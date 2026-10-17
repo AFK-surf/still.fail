@@ -9,6 +9,7 @@ import { DIALOG_INNER, DIALOG_PAD, dialogBody } from "@stillfail/ui/parts.css.ts
 import { pageBar } from "./styles/sidebar.css.ts";
 import { markdown } from "./styles/conversation.css.ts";
 import { card, listRow } from "./styles/pages.css.ts";
+import { STILL } from "@stillfail/ui/styles/still.ts";
 
 export const kindIcon = style({
   display: "inline-grid", placeItems: "center", width: "20px", height: "20px", flex: "none", color: vars.muted,
@@ -36,8 +37,8 @@ export const agentMark = style({
       content: "\"\"", position: "absolute", right: "-1px", bottom: "-1px", width: "8px", height: "8px", zIndex: 1,
       background: `${busyRing(8)} center / 100% no-repeat`, animation: `${spinKeyframes} 1.2s linear infinite`,
     },
+    [`${STILL} &[data-badge="run"]::before`]: { animation: "none" },
   },
-  "@media": { "(prefers-reduced-motion: reduce)": { selectors: { "&[data-badge=\"run\"]::before": { animation: "none" } } } },
 });
 /**
  * With the station it runs on: one tile, as tall, the maker's part square, the station's (its icon or its name) after it,

@@ -36,6 +36,9 @@ import { MemoryRouter } from 'react-router';
 import { Tooltip } from 'radix-ui';
 import './src/styles/index.ts';
 import { setCore, useTopic } from './src/core/react.ts';
+import { followMotion } from '@stillfail/ui/motion.ts';
+// The emulated system's reduced motion on the root, as the app's pages put it.
+followMotion();
 import { CoreClient } from './src/core/client.ts';
 import { useDraft } from './src/draft.ts';
 import { ComposerView, ChatRows, useMessageList } from './src/Chat.tsx';

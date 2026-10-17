@@ -42,7 +42,24 @@ export const GLIDE_EASE = `linear(${Array.from({ length: 31 }, (_, i) => ((1 - M
  */
 export const LOCAL_MS = 100;
 
-export const reducedMotion = (): boolean => matchMedia("(prefers-reduced-motion: reduce)").matches;
+/** Whether motion is reduced on the page now: its root says so (followMotion; styles/still.ts STILL for the styles). */
+export const reducedMotion = (): boolean => document.documentElement.hasAttribute("data-reduced-motion");
+
+/**
+ * The page's motion reduced, or not, as `choice` says (a device's setting: `reduce`, `full`, or none to follow the
+ * system's), from now on: again as the system's changes, and whenever what it returns is called (the setting changed).
+ * Each page calls it before its first render; one with no setting of its own follows the system.
+ */
+export function followMotion(choice: () => string | undefined = () => undefined): () => void {
+  const system = matchMedia("(prefers-reduced-motion: reduce)");
+  const apply = () => {
+    const chosen = choice();
+    document.documentElement.toggleAttribute("data-reduced-motion", chosen === "reduce" || (chosen !== "full" && system.matches));
+  };
+  apply();
+  system.addEventListener("change", apply);
+  return apply;
+}
 
 /**
  * A motion that plays for `duration` ms in every `period` and rests the rest of it (a blink, a beat, a breath and then

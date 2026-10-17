@@ -8,6 +8,7 @@ import { activityLine, agentActivity, chatMessages, composerThumb, msgFlash, msg
 import { tokenGuide } from "./pages/SlackApp.css.ts";
 import { TEXT_IN, outsetStart } from "@stillfail/ui/styles/align.ts";
 import { segmented, segmentedOption } from "@stillfail/ui/parts.css.ts";
+import { STILL } from "@stillfail/ui/styles/still.ts";
 
 export const jobDot = style({
   position: "relative", flex: "none", width: "8px", height: "8px", borderRadius: "50%", background: vars.lineStrong,
@@ -21,14 +22,8 @@ export const jobDot = style({
       content: "\"\"", position: "absolute", inset: "-4px", borderRadius: "50%", background: vars.online,
       animation: `${jobLiveKeyframes} 2.4s ease-in-out infinite`,
     },
-  },
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none !important",
-      selectors: {
-        "&::after": { animation: "none !important" },
-      },
-    },
+    [`${STILL} &`]: { animation: "none !important" },
+    [`${STILL} &::after`]: { animation: "none !important" },
   },
 });
 export const jobRow = style({
@@ -197,13 +192,7 @@ globalStyle(`${msg}[data-emitting] > *`, {
   animation: `${emitOutKeyframes} 380ms ${vars.easeOut} both`,
 });
 /** Here rather than with its class: it comes after .agent-activity, and wins over it. */
-globalStyle(`${msg}[data-emitting] > *`, {
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none",
-    },
-  },
-});
+globalStyle(`${STILL} ${msg}[data-emitting] > *`, { animation: "none" });
 /** Here rather than with its class: it comes after [data-enter], and wins over it; over a row that faded in with
  *  the history (Chat.css.ts [data-history-fade], which stays on it) too, or a jump to it would not show. */
 const flashing = `${msgFlash}, ${chatMessages} > ${msg}${msgFlash}[data-history-fade]`;
@@ -216,14 +205,8 @@ globalStyle(flashing, {
 globalStyle(`${msgMine}${msgFlash}:has(${msgBubble}), ${chatMessages} > ${msgMine}${msgFlash}[data-history-fade]:has(${msgBubble})`, { animation: "none" });
 globalStyle(`${msgMine}${msgFlash} ${msgBubble}`, { animation: `${bubbleFlashKeyframes} 1700ms` });
 /** Here rather than with its class: it comes after .msg-flash, and wins over it. */
-globalStyle(flashing, {
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none", outline: `2px solid ${vars.accent}`,
-    },
-  },
-});
-globalStyle(`${msgMine}${msgFlash} ${msgBubble}`, { "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } } });
+globalStyle(`${STILL} ${msgFlash}, ${STILL} ${chatMessages} > ${msg}${msgFlash}[data-history-fade]`, { animation: "none", outline: `2px solid ${vars.accent}` });
+globalStyle(`${STILL} ${msgMine}${msgFlash} ${msgBubble}`, { animation: "none" });
 /** Here rather than with its class: it comes after [data-enter], and wins over it. */
 globalStyle(composerThumb, {
   position: "relative", display: "block", width: "64px", height: "64px",

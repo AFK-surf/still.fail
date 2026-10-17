@@ -10,6 +10,7 @@ import { LIMIT, PRESETS, presetOf, setViewport, type Viewport } from "./viewport
 import { dims, useTouch, ViewportSheet, type Zoom } from "./ViewportSize.tsx";
 import * as css from "./PreviewStage.css.ts";
 import { t } from "./i18n.ts";
+import { reducedMotion } from "@stillfail/ui/motion.ts";
 
 /** The page's box in the stage: its top-left, how much it is drawn at, and the size it is laid out at. */
 export interface Placed { x: number; y: number; scale: number; width: number; height: number }
@@ -270,7 +271,7 @@ export function PreviewStage({ stage, link, over, children, after }:
     const was = stage.turned.current;
     if (!was || !placed) return;
     stage.turned.current = null;
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (reducedMotion()) return;
     const w = placed.width * placed.scale, h = placed.height * placed.scale;
     const k0 = (was.height / w + was.width / h) / 2;
     const frames = (steps: number) => Array.from({ length: steps + 1 }, (_, i) => {

@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import type { Appearance } from "./core/shapes.ts";
 import { onPrefs, prefs, setPrefs, usePrefs } from "./prefs.ts";
+import { followMotion } from "@stillfail/ui/motion.ts";
 
 export type { Appearance };
 const EVENT = "stillfail-appearance";
@@ -24,10 +25,12 @@ function applyAppearance(value: Appearance): void {
   window.dispatchEvent(new Event(EVENT));
 }
 
-/** The page shows the appearance kept on this device from now on; call once before the first render. */
+/** The page shows the appearance kept on this device from now on, and moves as its motion setting says; call once
+ * before the first render. */
 export function followAppearance(): void {
   applyAppearance(prefs().appearance);
   onPrefs(() => applyAppearance(prefs().appearance));
+  onPrefs(followMotion(() => prefs().motion));
 }
 
 /** Tells the page's parts that follow the appearance to read it again: a page that sets it itself (the official site). */
@@ -38,6 +41,12 @@ export function announceAppearance(): void {
 /** The choice kept on this device, and how to change it. */
 export function useAppearance(): [Appearance, (value: Appearance) => void] {
   return [usePrefs((p) => p.appearance), (appearance) => setPrefs({ appearance })];
+}
+
+/** 动画: as the system asks (none), reduced or full on this device, and how to change it. */
+export function useMotionSetting(): ["system" | "reduce" | "full", (value: "system" | "reduce" | "full") => void] {
+  const motion = usePrefs((p) => p.motion);
+  return [motion === "reduce" || motion === "full" ? motion : "system", (value) => setPrefs({ motion: value === "system" ? null : value })];
 }
 
 /** Whether the page shows dark now: its choice, or the system's when following it. */

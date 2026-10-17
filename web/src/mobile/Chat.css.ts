@@ -3,6 +3,7 @@ import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { jobDot } from "../Jobs.css.ts";
 import { mChat, mMessages } from "./styles/chat.css.ts";
 import { outsetTop } from "@stillfail/ui/styles/align.ts";
+import { STILL } from "@stillfail/ui/styles/still.ts";
 
 export const mCenter = style({
   flex: "1", display: "grid", placeItems: "center", padding: "32px", textAlign: "center", fontSize: vars.textUi,
@@ -94,11 +95,7 @@ export const mJump = style({
     },
     // With how many new messages wait at the end: a pill, growing leftwards from where it sits.
     "&[data-count]": { width: "auto", display: "flex", alignItems: "center", gap: "4px", padding: "0 14px 0 10px", borderRadius: "18px", whiteSpace: "nowrap" },
-  },
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none !important", transition: "none !important",
-    },
+    [`${STILL} &`]: { animation: "none !important", transition: "none !important" },
   },
 });
 /** The way to what waits to be decided (Chat.tsx): as mJump, over it when both show. */

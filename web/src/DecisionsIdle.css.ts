@@ -2,6 +2,7 @@ import { style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { busyRing } from "@stillfail/ui/styles/busyRing.ts";
 import { spinKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { STILL } from "@stillfail/ui/styles/still.ts";
 
 /** None left: the day, then where the next may come from and what was answered, in a column. */
 export const idle = style({
@@ -32,7 +33,7 @@ export const row = style({
 export const busy = style({
   flex: "none", width: 12, height: 12, marginTop: 4, background: `${busyRing(12)} center / 100% no-repeat`,
   animation: `${spinKeyframes} 1.2s linear infinite`,
-  "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } },
+  selectors: { [`${STILL} &`]: { animation: "none" } },
 });
 /** Answered: a quiet dot. */
 export const done = style({ flex: "none", width: 6, height: 6, margin: "7px 3px 0", borderRadius: "50%", background: vars.subtle });

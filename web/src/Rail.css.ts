@@ -5,6 +5,7 @@ import { floatingThumb } from "./scrollbars.css.ts";
 import { dock } from "./styles/shell.css.ts";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { outsetBottom, TEXT_IN } from "@stillfail/ui/styles/align.ts";
+import { STILL } from "@stillfail/ui/styles/still.ts";
 
 const wide = "(min-width: 701px)";
 const narrow = "(max-width: 700px)";
@@ -79,8 +80,9 @@ export const edge = style({
     "&:not([data-closed]):hover::before, &[data-active]::before": { opacity: 1 },
     "&:hover::after, &:focus-visible::after, &[data-active]::after": { height: 48, opacity: 1 },
     "&:active::after, &[data-active]::after": { background: vars.fieldHover },
+    [`${STILL} &::after`]: { transition: "none" },
   },
-  "@media": { [narrow]: { display: "none" }, "(prefers-reduced-motion: reduce)": { selectors: { "&::after": { transition: "none" } } } },
+  "@media": { [narrow]: { display: "none" } },
 });
 // A scrollbar in the sidebar (scrollbars.ts) a pixel clear of the edge's line, not on it.
 globalStyle(`${dock} *`, { "@media": { [wide]: { scrollPaddingRight: 1 } } });

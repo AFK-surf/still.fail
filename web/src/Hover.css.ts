@@ -6,6 +6,7 @@ import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { panelCard, popover } from "@stillfail/ui/styles/controls.css.ts";
 import { IN, PANEL_PAD, PANEL_PILL, TEXT_IN, pillInner } from "@stillfail/ui/styles/align.ts";
+import { STILL } from "@stillfail/ui/styles/still.ts";
 
 const enter = keyframes({ from: { opacity: "0", transform: "scale(.96)", filter: "blur(2px)" } });
 const exit = keyframes({ to: { opacity: "0", transform: "scale(.97)" } });
@@ -21,8 +22,8 @@ export const card = style([popover, panelCard, {
     '&[data-state="open"]': { animation: `${enter} 160ms ${vars.easeOut}` },
     '&[data-state="closed"]': { animation: `${exit} 90ms ease-in forwards` },
     "&[data-instant]": { animation: "none" },
+    [`${STILL} &`]: { animation: "none !important" },
   },
-  "@media": { "(prefers-reduced-motion: reduce)": { animation: "none !important" } },
 }]);
 /** A card that only names where a link goes (no page read): narrower. */
 export const cardTile = style({ width: "auto", minWidth: "220px", maxWidth: "min(420px, calc(100vw - 16px))" });

@@ -8,6 +8,7 @@ import { kindIcon, kindMark } from "./ui.css.ts";
 import { outsetEnd, outsetStart, oversize } from "@stillfail/ui/styles/align.ts";
 import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
 import { resizeHandle } from "@stillfail/ui/parts.css.ts";
+import { STILL } from "@stillfail/ui/styles/still.ts";
 
 const wide = "(min-width: 701px)";
 const narrow = "(max-width: 700px)";
@@ -96,8 +97,8 @@ export const navTrack = style({
     "&[data-filter=archive]": { transform: "translateX(-80%)" },
     // To 奏 from its row in the sidebar's foot: its rows come out of that row instead (DecisionDesk.tsx).
     "&[data-instant]": { transition: "none" },
+    [`${STILL} &`]: { transition: "none" },
   },
-  "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } },
 });
 // Each pane sized by the track alone: otherwise the track's height is its tallest pane's content, and any change in a
 // row (the time shown on hover) lays out every row of all the lists again, a frame dropped per row passed while scrolling.

@@ -9,6 +9,7 @@ import { composerQuote, msgUnsent } from "./Chat.css.ts";
 import { hPhaseText } from "./History.css.ts";
 import { panelCard, popover } from "@stillfail/ui/styles/controls.css.ts";
 import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
+import { STILL } from "@stillfail/ui/styles/still.ts";
 
 /** A web service on the station's machine, in the side panel: where it is, then the page. */
 export const preview = style({ flex: "1", minHeight: "0", display: "flex", flexDirection: "column" });
@@ -40,11 +41,7 @@ export const previewRestart = style({
 export const previewRestartDot = style({
   width: "8px", height: "8px", borderRadius: "50%", background: vars.amber,
   animation: `${jobBreatheKeyframes} 1.4s ease-in-out infinite`,
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none !important",
-    },
-  },
+  selectors: { [`${STILL} &`]: { animation: "none !important" } },
 });
 export const previewPath = style({
   flex: "1", minWidth: "0", padding: "0", border: "0", background: "none", color: vars.muted, font: "inherit",
@@ -67,13 +64,7 @@ globalStyle(`${msg}[data-unsent] > :not(${msgUnsent})`, { opacity: "0.55" });
 /** Here rather than with its class: it comes after .preview-restart-dot, and wins over it. */
 globalStyle("[data-enter]", { animation: `${enterUpKeyframes} 220ms ${vars.easeOut} both` });
 /** Here rather than with its class: it comes after .preview-restart, and wins over it. */
-globalStyle(`[data-enter], ${hPhaseText}, ${composerQuote}, ${sidePanel}`, {
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none",
-    },
-  },
-});
+globalStyle(`${STILL} [data-enter], ${STILL} ${hPhaseText}, ${STILL} ${composerQuote}, ${STILL} ${sidePanel}`, { animation: "none" });
 /** Here rather than with its class: it comes after .preview-restart > span:last-child, and wins over it. */
 globalStyle(`${enrollWait} > span:last-child`, { display: "grid", gap: "2px", fontSize: vars.textUi });
 

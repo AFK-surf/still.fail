@@ -2,6 +2,7 @@ import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { mScroll } from "./styles/pages.css.ts";
 import { mFromLeftKeyframes, mFromRightKeyframes, mRiseInKeyframes, mRiseOutKeyframes, mToLeftKeyframes, mToRightKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { STILL } from "@stillfail/ui/styles/still.ts";
 
 // Another place on the bottom bar: its page comes in from 30 toward the way the ball goes (a place further right, from
 // the right), as it shows; from another bar, it only shows.
@@ -32,11 +33,7 @@ export const mPage = style({
     "&[data-way=\"rise\"][data-forward][data-role=\"in\"]": { animation: `${mRiseInKeyframes} 380ms var(--m-ease) both` },
     "&[data-way=\"rise\"]:not([data-forward])[data-role=\"out\"]": { animation: `${mRiseOutKeyframes} 380ms var(--m-ease) both` },
     "&[data-place-in]": { animation: `${placeIn} 220ms var(--m-ease) both` },
-  },
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none !important", transition: "none !important",
-    },
+    [`${STILL} &`]: { animation: "none !important", transition: "none !important" },
   },
 });
 // As wide as Safari's own edge gesture reaches in, which a touch here keeps from starting (app.tsx EdgeStrip).
@@ -82,11 +79,7 @@ export const mRecent = style({
   transition: "opacity 160ms, transform 200ms var(--m-ease)",
   selectors: {
     [`${mRecentLayer}[data-open] &`]: { opacity: "1", transform: "none", transition: "opacity 180ms, transform 280ms var(--m-ease)" },
-  },
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none !important", transition: "none !important",
-    },
+    [`${STILL} &`]: { animation: "none !important", transition: "none !important" },
   },
 });
 export const mScrim = style({
@@ -106,11 +99,7 @@ export const mSheet = style({
   selectors: {
     "&[data-open]": { transform: "none", transition: "transform 380ms var(--m-ease)" },
     "&[data-dragging]": { transition: "none" },
-  },
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none !important", transition: "none !important",
-    },
+    [`${STILL} &`]: { animation: "none !important", transition: "none !important" },
   },
 });
 export const mGrab = style({
@@ -128,11 +117,7 @@ export const mMenu = style({
   transform: "scale(.9)", transition: "opacity 150ms, transform 150ms",
   selectors: {
     "&[data-open]": { opacity: "1", transform: "none", transition: "opacity 200ms, transform 200ms" },
-  },
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none !important", transition: "none !important",
-    },
+    [`${STILL} &`]: { animation: "none !important", transition: "none !important" },
   },
 });
 export const mToast = style({
@@ -148,11 +133,7 @@ export const mReader = style({
   transform: "translateX(100%)", transition: "transform 300ms var(--m-standard)",
   selectors: {
     "&[data-open]": { transform: "none" },
-  },
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none !important", transition: "none !important",
-    },
+    [`${STILL} &`]: { animation: "none !important", transition: "none !important" },
   },
 });
 export const mReaderBar = style({ padding: "calc(var(--m-top) + 6px) 16px 10px 10px" });

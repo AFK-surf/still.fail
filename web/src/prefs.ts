@@ -13,9 +13,11 @@ import { legacyPrefs } from "./core/migrate.ts";
 const COPY = "stillfail.prefs";
 /** The appearance's own copy, read by index.html before the first paint (and by pages from before prefs). */
 const APPEARANCE = "stillfail.appearance";
+/** The motion's own copy, read by index.html before the first paint, as the appearance's. */
+const MOTION = "stillfail.motion";
 
 /** The prefs with what the core fills in when nothing was chosen (its shape leaves them optional). */
-export type Prefs = Required<Omit<PrefsView, "workspace" | "invite" | "device" | "language" | "lang" | "badge" | "badgeKinds" | "rail" | "dropAs">> & Pick<PrefsView, "workspace" | "invite" | "language" | "lang" | "badge" | "badgeKinds" | "rail" | "dropAs"> & { device: Required<Omit<DeviceView, "locale">> & Pick<DeviceView, "locale"> };
+export type Prefs = Required<Omit<PrefsView, "workspace" | "invite" | "device" | "language" | "lang" | "badge" | "badgeKinds" | "rail" | "dropAs" | "motion">> & Pick<PrefsView, "workspace" | "invite" | "language" | "lang" | "badge" | "badgeKinds" | "rail" | "dropAs" | "motion"> & { device: Required<Omit<DeviceView, "locale">> & Pick<DeviceView, "locale"> };
 /** What `prefs.set` takes: a field, or a map's entries (null: gone). */
 export type PrefsPatch = { [K in keyof Omit<Prefs, "device">]?: NonNullable<Prefs[K]> extends Record<string, infer V> ? Record<string, V | null> : Prefs[K] | null };
 
@@ -54,6 +56,7 @@ function keep(next: Prefs): void {
   try {
     s?.setItem(COPY, JSON.stringify(next));
     if (next.appearance === "system") s?.removeItem(APPEARANCE); else s?.setItem(APPEARANCE, next.appearance);
+    if (next.motion === "reduce" || next.motion === "full") s?.setItem(MOTION, next.motion); else s?.removeItem(MOTION);
   } catch { /* private mode: not copied */ }
   for (const f of watchers) f();
 }

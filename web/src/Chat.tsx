@@ -25,7 +25,7 @@ import { thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
 import { useVirtualList, useVirtualModel, type VirtualList } from "./virtual/list.tsx";
 import type { Align, Item } from "./virtual/model.ts";
-import { animate, arrive, EASE_OUT, follower, glider, moveState, type AnimationPlaybackControls, type Follower } from "@stillfail/ui/motion.ts";
+import { animate, arrive, EASE_OUT, follower, glider, moveState, reducedMotion, type AnimationPlaybackControls, type Follower } from "@stillfail/ui/motion.ts";
 import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
 import { DraftKey, offerToDraft, pathWords, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
@@ -2254,7 +2254,6 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>, following: 
   const [current, setCurrent] = useState<{ seq: number; agent: string; pose: Pose; at: number; chain?: boolean } | null>(null);
   const flight = useRef<{ el: HTMLElement; x: Follower; y: Follower; s: MotionValue<number>; sx: MotionValue<number>; sy: MotionValue<number> } | null>(null);
   const [, rerender] = useState(0);
-  const reduced = useMemo(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
 
   // Where the avatar of an agent's activity shows: where it is laid out, and how far its row is from there, gliding.
   const home = (avatar: HTMLElement) => {
@@ -2439,7 +2438,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>, following: 
       for (const m of messages) {
         if (decided.current.has(m.seq)) continue;
         const agent = m.authorKind === "agent" ? m.by.agent : undefined;
-        const emits = !reduced && watched() && saidHere(m.seq) && agent !== undefined && showing.has(agent);
+        const emits = !reducedMotion() && watched() && saidHere(m.seq) && agent !== undefined && showing.has(agent);
         decided.current.set(m.seq, emits);
         if (emits) queue.current.push({ seq: m.seq, agent: agent!, at: performance.now() });
       }

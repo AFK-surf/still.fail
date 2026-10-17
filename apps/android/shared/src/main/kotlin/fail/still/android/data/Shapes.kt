@@ -3652,6 +3652,9 @@ data class PrefsView (
 	/// `only_decisions` (one filter for all, as devices kept it before).
 	val listFilter: Map<String, ListFilter>? = null,
 	val appearance: Appearance? = null,
+	/// Motion on this device's pages: `reduce` (what moves only fades or is there at once), `full`, or none to
+	/// follow the system's setting.
+	val motion: String? = null,
 	val rowPicture: RowPictureSetting? = null,
 	/// Times are shown as dates rather than "3 分钟前".
 	val absoluteTime: Boolean? = null,

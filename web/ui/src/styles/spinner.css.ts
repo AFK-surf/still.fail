@@ -4,6 +4,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./tokens.css.ts";
 import { spinKeyframes } from "./keyframes.css.ts";
+import { STILL } from "./still.ts";
 
 export const spinner = style({});
 globalStyle(spinner, {
@@ -13,10 +14,6 @@ globalStyle(spinner, {
 });
 export const inline = style({});
 globalStyle(`${spinner}${inline}`, { width: "12px", height: "12px" });
-globalStyle(spinner, {
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animationDuration: "2.4s",
-    },
-  },
-});
+// With motion reduced, slower: still turning, as it is still under way. Over the page's 1ms for every motion then
+// (styles/global.css.ts), which would draw it at another angle each frame.
+globalStyle(`${STILL} ${spinner}`, { animationDuration: "2.4s !important" });

@@ -5,5 +5,8 @@ import { StrictMode } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { mountDemo } from "../demo/mount.tsx";
 import { Site } from "./Site.tsx";
+import { followMotion } from "@stillfail/ui/motion.ts";
 
+// The demo in it moves as the system asks (the site's own motion goes by its media query: site.css.ts).
+followMotion();
 hydrateRoot(document.getElementById("site")!, <StrictMode><Site mountDemo={mountDemo} /></StrictMode>);

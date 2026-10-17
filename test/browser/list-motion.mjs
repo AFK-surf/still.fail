@@ -11,6 +11,9 @@ import React, { useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { useListMotion } from './listMotion.ts';
+import { followMotion } from '@stillfail/ui/motion.ts';
+// The emulated system's reduced motion on the root, as the app's pages put it.
+followMotion();
 import * as nav from './Sidebar.css.ts';
 import './styles/index.ts';
 function List() {
