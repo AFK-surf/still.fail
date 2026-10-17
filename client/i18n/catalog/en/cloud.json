@@ -75,7 +75,7 @@
   "cloud.login.email.limited": "Too many codes. Try again in a while",
   "cloud.login.email.placeholder": "Email",
   "cloud.login.email.send": "Send code",
-  "cloud.mail.code.body": "Your still.fail code is {code}. It works for 10 minutes.",
+  "cloud.mail.code.lead": "Your still.fail code, which works for 10 minutes:",
   "cloud.mail.code.for": "It signs in {name}.",
   "cloud.mail.code.notYou": "If you aren't signing in, ignore this email. Never tell anyone the code.",
   "cloud.mail.code.subject": "Your still.fail code: {code}",

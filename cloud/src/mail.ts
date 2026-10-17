@@ -18,11 +18,13 @@ export const mailConfigured = (env: Env) => Boolean(env.EMAIL && env.EMAIL_FROM)
 
 /** Sends `code` to `to`, in `lang`; `device`, what is signing in when it is a device's sign-in (the name it gave), else "". */
 export async function sendCode(env: Env, lang: Lang, to: string, code: string, device: string): Promise<void> {
-  const body = tr(lang, "cloud.mail.code.body", { code });
+  const lead = tr(lang, "cloud.mail.code.lead");
   const more = [...(device ? [tr(lang, "cloud.mail.code.for", { name: device })] : []), tr(lang, "cloud.mail.code.notYou")];
+  // The code on a line of its own, big, to read off or copy.
   const html =
-    `<div style="font:16px/1.7 system-ui;color:#242424"><p>${escape(body).replace(code, `<strong style="font-size:28px;letter-spacing:4px">${code}</strong>`)}</p>` +
+    `<div style="font:16px/1.7 system-ui;color:#242424"><p>${escape(lead)}</p>` +
+    `<p style="margin:16px 0;font-size:32px;font-weight:700;letter-spacing:6px;font-variant-numeric:tabular-nums">${code}</p>` +
     more.map((line, i) => `<p${i === more.length - 1 ? ' style="color:#777"' : ""}>${escape(line)}</p>`).join("") +
     "</div>";
-  await env.EMAIL!.send({ from: { email: env.EMAIL_FROM!, name: "still.fail" }, to, subject: tr(lang, "cloud.mail.code.subject", { code }), text: [body, ...more].join("\n\n"), html });
+  await env.EMAIL!.send({ from: { email: env.EMAIL_FROM!, name: "still.fail" }, to, subject: tr(lang, "cloud.mail.code.subject", { code }), text: [lead, code, ...more].join("\n\n"), html });
 }

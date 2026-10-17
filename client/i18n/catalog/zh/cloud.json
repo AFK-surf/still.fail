@@ -72,7 +72,7 @@
   "cloud.login.email.limited": "发得太频繁了，过一会儿再试",
   "cloud.login.email.placeholder": "邮箱",
   "cloud.login.email.send": "发送验证码",
-  "cloud.mail.code.body": "你的 still.fail 验证码是 {code}，10 分钟内有效。",
+  "cloud.mail.code.lead": "你的 still.fail 验证码如下，10 分钟内有效：",
   "cloud.mail.code.for": "正在为 {name} 登录。",
   "cloud.mail.code.notYou": "如果不是你本人在登录，忽略这封邮件即可，不要把验证码告诉任何人。",
   "cloud.mail.code.subject": "still.fail 验证码：{code}",
