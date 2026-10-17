@@ -700,19 +700,13 @@
   "web-main.logins.lead": "agent 在这台 station 上做的登录，所有 chat 的 agent 都会用",
   "web-main.logins.cancelWhat": "取消登录",
   "web-main.logins.openWhat": "打开浏览器",
-  "web-main.logins.gone": "找不到这个登录，可能早就结束了",
-  "web-main.logins.loopback": "要在浏览器里登录 {domain}",
-  "web-main.logins.openBrowser": "打开浏览器",
   "web-main.logins.openAgain": "再打开一次",
   "web-main.logins.waitingBrowser": "等浏览器回来…",
-  "web-main.logins.needsDesktop": "这个登录要用桌面 app 接住浏览器的回调",
+  "web-main.logins.needsDesktop": "这一步要在桌面 app 里完成",
   "web-main.logins.domain": "登录页在 {domain}",
   "web-main.logins.device": "打开 {domain}，输入",
-  "web-main.logins.deviceNote": "输完后这里会自己更新",
-  "web-main.logins.openStep": "在浏览器里完成登录",
-  "web-main.logins.terminal": "命令输出",
-  "web-main.logins.footer": "这个登录在 {station} 上，所有 chat 的 agent 都会用这个账号",
   "web-main.logins.copyOpen": "复制并打开",
   "web-main.logins.startedIn": "「{chat}」的 agent 发起",
-  "web-main.logins.aChat": "一个对话"
+  "web-main.logins.aChat": "一个对话",
+  "web-main.logins.signIn": "在浏览器里登录"
 }

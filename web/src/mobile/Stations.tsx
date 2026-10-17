@@ -7,7 +7,7 @@ import { useReady } from "../core/react.ts";
 import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
-import { openLoginSheet, useMachineLogins } from "../MachineLogins.tsx";
+import { LoginCard, useMachineLogins } from "../MachineLogins.tsx";
 import * as loginsCss from "../MachineLogins.css.ts";
 import { useJoinable, useMemberships, useStations, type StationView } from "../api.ts";
 import type { Host, JoinableView, StationNet } from "../core/shapes.ts";
@@ -266,10 +266,8 @@ export function StationScreen() {
   const stations = useStations(app.entry.id);
   const s = stations.value?.find((x) => x.id === id);
   const manager = useManager();
-  // A login's link (`s/<station>/login/<id>`, docs/remote-login.md): its sheet over the page, once.
+  // A login's link (`s/<station>/login/<id>`, docs/remote-login.md): its card brought into view.
   const { login } = useParams();
-  const address = s?.station;
-  useEffect(() => { if (login && address) openLoginSheet(app, { station: address, id: login }); }, [login, address]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className={pagesCss.mScreen}>
       <NavBar back="Station" onBack={app.pop} title={s?.name ?? id} sub={s?.reconnecting ? <Reconnecting /> : s ? <span className={barsCss.mNavbarNote}>{[joinedText(s), s.host?.identity || (s.online ? t("web-mobile.stations.online") : t("web-mobile.stations.offline"))].filter(Boolean).join(" · ")}</span> : undefined}
@@ -293,7 +291,7 @@ export function StationScreen() {
           </ListCard>
           {/* Its screens, to see and drive (docs/remote-screens.md). */}
           <ScreensCard station={s.station} />
-          <Logins station={s.station} />
+          <Logins station={s.station} marked={login ?? null} />
           {manager && !s.joined && <Workspaces s={s} />}
           {s.online && s.overview && <Versions station={s.station} updates={s.overview.updates} manager={manager && !s.joined} beta={s.betaOffered ?? false} />}
           <div style={{ height: 30 }} />
@@ -305,21 +303,25 @@ export function StationScreen() {
 
 /**
  * The logins done on it through still.fail (as the wide screen's station page, ../MachineLogins.tsx LoginsSection):
- * agents start them; one under way opens its sheet. Nothing when there are none.
+ * agents start them; one under way is its card, as in its chat; those ended, rows. Nothing when there are none.
  */
-function Logins({ station }: { station: string }) {
-  const app = useApp();
+function Logins({ station, marked }: { station: string; marked: string | null }) {
   const view = useMachineLogins(station);
   if (!view || !view.supported || view.logins.length === 0) return null;
+  const active = view.logins.filter((l) => l.active);
+  const past = view.logins.filter((l) => !l.active);
   return (
     <>
       <SectionHeader title={t("web-main.logins.title")} start={24} />
-      <ListCard>
-        {view.logins.map((l) => {
-          const said = [l.chatTitle ? t("web-main.logins.startedIn", { chat: l.chatTitle }) : null, l.doneByText, l.whenText, l.doneByText ? null : l.statusText].filter(Boolean).join(" · ");
-          return <PickRow key={l.id} label={l.command} sub={said} enabled={l.active} onClick={() => openLoginSheet(app, { station, id: l.id })} />;
-        })}
-      </ListCard>
+      {active.length > 0 && <div className={loginsCss.phoneCards}>{active.map((l) => <LoginCard key={l.id} station={station} id={l.id} marked={l.id === marked} />)}</div>}
+      {past.length > 0 && (
+        <ListCard>
+          {past.map((l) => {
+            const said = [l.chatTitle ? t("web-main.logins.startedIn", { chat: l.chatTitle }) : null, l.doneByText, l.whenText, l.doneByText ? null : l.statusText].filter(Boolean).join(" · ");
+            return <ListRow key={l.id}><span className={loginsCss.phoneRowText}><span className={listsCss.mRowTitle}>{l.command}</span><span className={loginsCss.phoneState}>{said}</span></span></ListRow>;
+          })}
+        </ListCard>
+      )}
       <p className={loginsCss.phoneLead}>{t("web-main.logins.lead")}</p>
     </>
   );

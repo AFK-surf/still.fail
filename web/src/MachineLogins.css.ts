@@ -1,88 +1,48 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { pillInner, surfaceCorner, TEXT_IN, PANEL_PILL } from "@stillfail/ui/styles/align.ts";
-import { DIALOG_INNER } from "@stillfail/ui/parts.css.ts";
 
-// A station's logins (MachineLogins.tsx, docs/remote-login.md): its page's 登录 list, the login panel (a dialog; the
-// phone's sheet) and a chat's login card. Grey but for what is off.
+// A station's logins (MachineLogins.tsx, docs/remote-login.md): the login card (a chat's, 奏's, and the station page's
+// for one under way) and the station page's rows of those ended. Grey but for what is off, and the code.
 
 const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
+/** The ground a link pointed to (`?login=`) is shown on, a moment: the accent, faint. */
+const markedGround = `color-mix(in srgb, ${vars.accent} 12%, transparent)`;
 
-// ── the station page's list ──
+// ── the station page ──
 
-/** A login done there, as the page's list rows, pressed to open its panel. */
-export const loginRow = style({ width: "100%", border: "0", background: "none", color: vars.text, font: "inherit", textAlign: "left", cursor: "pointer" });
+/** The cards of those under way, one under another, above the rows of those ended. */
+export const cards = style({ display: "grid", justifyItems: "start", gap: "8px", marginBottom: "8px" });
 /** A login that ended: what it says is all there is (not pressed). */
-export const pastRow = style({ selectors: { "&:hover": { background: "none" } } });
+export const pastRow = style({ selectors: { "&:hover": { background: "none" }, "&[data-marked]": { background: markedGround } } });
 export const mark = style({ width: "36px", height: "36px", color: vars.muted });
 export const name = style({ fontWeight: "500", color: vars.text, ...ellipsis });
 /** The chat whose agent started it. */
 export const chatLink = style({ color: "inherit", textDecoration: "underline", textUnderlineOffset: "2px" });
 export const state = style({ color: vars.muted, ...ellipsis });
-export const stateActive = style({ color: vars.accentText, ...ellipsis });
 export const stateFailed = style({ color: vars.red, ...ellipsis });
-export const rowChevron = style({ flex: "none", color: vars.muted });
-export const note = style({ margin: "0", fontSize: vars.textUi, color: vars.muted });
-
-// ── the panel ──
-
-export const body = style({ display: "grid", gap: "14px", minWidth: 0 });
-/** The command it runs, under the panel's title. */
-export const commandLine = style({ margin: "0", fontFamily: vars.fontMono, fontSize: vars.textMeta, color: vars.muted, overflowWrap: "anywhere" });
-export const line = style({ margin: "0", fontSize: vars.textUi, lineHeight: "20px", overflowWrap: "anywhere" });
-export const quiet = style([line, { color: vars.muted }]);
-export const failed = style([line, { color: vars.red, fontWeight: "500" }]);
-export const done = style([line, { fontWeight: "500" }]);
-/** What is done about it: its buttons side by side. */
-export const actions = style({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" });
-/** A step: what to do, its code large where there is one, its buttons, a quiet line after. */
-export const step = style({ display: "grid", justifyItems: "start", gap: "10px", minWidth: 0 });
-export const code = style({
-  fontFamily: vars.fontMono, fontSize: vars.textHeading, fontWeight: "600", letterSpacing: "0.08em", lineHeight: "1.3",
-  userSelect: "all",
-});
-export const waitingLine = style([quiet, { display: "inline-flex", alignItems: "center", gap: "8px" }]);
-
-/** The terminal: a line that opens it (what it waits for after it), then its screen, a field and its keys. */
-export const terminal = style({ display: "grid", gap: "10px", minWidth: 0 });
-export const terminalToggle = style({
-  display: "inline-flex", alignItems: "center", gap: "6px", justifySelf: "start", padding: "0", border: "0", background: "none",
-  color: vars.text, font: "inherit", fontSize: vars.textUi, fontWeight: "500", cursor: "pointer",
-});
-export const chevron = style({ color: vars.muted, transition: `transform ${vars.dur} ${vars.easeOut}`, selectors: { "&[data-open]": { transform: "rotate(90deg)" } } });
-/** Its screen: the station's lines in monospace, wrapped to the width (they come 200 columns wide), the cursor a block. */
-export const screen = style({
-  margin: "0", padding: "12px 14px", minHeight: "96px", maxHeight: "260px", overflowY: "auto", boxSizing: "border-box",
-  borderRadius: DIALOG_INNER, cornerShape: vars.cornerShape, background: `var(--m-chip, color-mix(in srgb, ${vars.text} 6%, transparent))`, color: vars.text,
-  fontFamily: vars.fontMono, fontSize: vars.textMeta, lineHeight: "1.5", whiteSpace: "pre-wrap", overflowWrap: "anywhere",
-});
-export const screenRow = style({ minHeight: "1.5em" });
-export const cursor = style({ background: vars.text, color: vars.canvas });
-/** The command's last lines, as the screen is drawn. */
-export const lastLines = style([screen, { minHeight: "0" }]);
-/** The dialog's foot: where the login is and who uses it, on the buttons' left. */
-export const foot = style({ flex: "1", minWidth: 0, margin: "0", fontSize: vars.textMeta, color: vars.muted });
-/** The phone's sheet: its words in from its edges as its other sheets' are. */
-export const sheetBody = style({ padding: "0 20px 24px" });
-export const sheetFoot = style({ margin: "16px 0 0", fontSize: vars.textMeta, color: vars.muted });
-
+/** The phone's station page: the cards of those under way, in from its edges as its cards are. */
+export const phoneCards = style({ display: "grid", gap: "8px", padding: "0 16px" });
+/** The phone's station page: a login's command over who, when and how it ended. */
+export const phoneRowText = style({ flex: "1", minWidth: 0, display: "grid", gap: "2px" });
+export const phoneState = style({ fontSize: vars.textMeta, color: "var(--m-muted)", ...ellipsis });
+/** The phone's station page: under the list, what it is. */
 export const phoneLead = style({ margin: "8px 24px 0", fontSize: vars.textCaption, color: "var(--m-muted)" });
 
-// ── a chat's card ──
+// ── the card ──
 
 /** Where the card's buttons stand from its edges: they sit at its corner, its corner theirs and this together. */
 const CARD_PAD = 8;
 /**
- * A login in a chat, under the agent's message as a decision's options are: the same grey ground and no line, its
- * title and how it stands, then its buttons (small pills) along its foot. Pressed anywhere else, the panel opens.
+ * A login, as a card: under the agent's message as a decision's options are, the same grey ground and no line; its title,
+ * what the person does now or how it stands, its buttons (small pills) along its foot. It opens nothing.
  */
 export const card = style({
   padding: CARD_PAD, borderRadius: surfaceCorner(CARD_PAD, pillInner(CARD_PAD, PANEL_PILL, vars.cornerScale)), cornerShape: vars.cornerShape,
   display: "grid", justifyItems: "start", gap: "2px", width: "fit-content", minWidth: "min(100%, 360px)", maxWidth: "100%",
   boxSizing: "border-box", marginTop: "8px", background: `var(--m-chip, color-mix(in srgb, ${vars.text} 5%, transparent))`,
-  color: vars.text, textAlign: "left", cursor: "pointer", WebkitTapHighlightColor: "transparent",
-  transition: `background-color ${vars.dur}`,
-  selectors: { "&:hover": { background: `var(--m-chip, color-mix(in srgb, ${vars.text} 8%, transparent))` } },
+  color: vars.text, textAlign: "left", transition: `background-color ${vars.dur}`,
+  selectors: { "&[data-marked]": { background: markedGround } },
 });
 /** Its words in by a row's padding (as a small panel's), and as far from its top and foot when first or last. */
 const cardText = {
@@ -90,8 +50,17 @@ const cardText = {
   selectors: { "&:first-child": { paddingTop: TEXT_IN }, "&:last-child": { paddingBottom: TEXT_IN } },
 } as const;
 export const cardTitle = style({ ...cardText, fontSize: vars.textUi, lineHeight: "20px", fontWeight: "500" });
-export const cardStatus = style({ ...cardText, fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted });
+export const cardStatus = style({ ...cardText, display: "inline-flex", alignItems: "center", gap: "6px", fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted });
+export const cardDone = style([cardStatus, { color: vars.text, fontWeight: "500" }]);
+export const cardFailed = style([cardStatus, { color: vars.red, fontWeight: "500" }]);
+/** A device code, large enough to read and copy by eye (it is copied as its page opens, too). */
+export const cardCode = style({
+  ...cardText, paddingBlock: "4px", fontFamily: vars.fontMono, fontSize: vars.textHeading, fontWeight: "600", letterSpacing: "0.08em",
+  lineHeight: "1.3", userSelect: "all",
+});
 export const cardActions = style({ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "6px" });
+/** 取消, small, under what is to be done. */
+export const cardFoot = style({ display: "flex", marginTop: "2px" });
 /** A button's words, sized here: the phone's buttons take their font from what they are in. */
 export const cardButtonText = style({ fontSize: vars.textMeta, fontWeight: "500", lineHeight: `${PANEL_PILL}px` });
 globalStyle(`${card} :focus-visible`, { outlineOffset: "-2px" });

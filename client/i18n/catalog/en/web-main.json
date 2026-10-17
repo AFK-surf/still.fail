@@ -775,19 +775,13 @@
   "web-main.logins.lead": "Logins agents made on this station, used by every chat's agent",
   "web-main.logins.cancelWhat": "cancel the login",
   "web-main.logins.openWhat": "open the browser",
-  "web-main.logins.gone": "This login is not known here: it may have ended long ago",
-  "web-main.logins.loopback": "Log in to {domain} in the browser",
-  "web-main.logins.openBrowser": "Open browser",
   "web-main.logins.openAgain": "Open again",
   "web-main.logins.waitingBrowser": "Waiting for the browser…",
-  "web-main.logins.needsDesktop": "This login needs the desktop app to take the browser's callback",
+  "web-main.logins.needsDesktop": "This step needs the desktop app",
   "web-main.logins.domain": "The login page is on {domain}",
   "web-main.logins.device": "Open {domain} and enter",
-  "web-main.logins.deviceNote": "This updates by itself once it is entered",
-  "web-main.logins.openStep": "Finish logging in in the browser",
-  "web-main.logins.terminal": "Command output",
-  "web-main.logins.footer": "This login is on {station}: every chat's agents there use this account",
   "web-main.logins.copyOpen": "Copy & open",
   "web-main.logins.startedIn": "started by the agent of “{chat}”",
-  "web-main.logins.aChat": "a chat"
+  "web-main.logins.aChat": "a chat",
+  "web-main.logins.signIn": "Sign in in the browser"
 }

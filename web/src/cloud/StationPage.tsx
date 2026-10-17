@@ -21,7 +21,7 @@ import { HostDetails, joinedText, Net, problems, state, useLong } from "./Statio
 import { MarkPick } from "./MarkPick.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
 import { ScreensSection } from "../screen/ScreenList.tsx";
-import { LoginPanel, LoginsSection } from "../MachineLogins.tsx";
+import { LoginsSection } from "../MachineLogins.tsx";
 import { NavAction, NavList, NavItem, NavLine, NavTop, navFill } from "../SidebarList.tsx";
 import { AddStationDialog, useStationEdits, useWorkspace } from "./settings.tsx";
 import type { WorkspaceEntry } from "./workspace.tsx";
@@ -113,9 +113,6 @@ export function StationSettings({ entry }: { entry: WorkspaceEntry }) {
   const edits = useStationEdits(view, entry.account, listed ?? []);
   const found = listed?.find((s) => s.id === id);
   const back = `/w/${entry.id}/settings/stations`;
-  // A login's link (`/w/<ws>/s/<station>/login/<id>`, workspace.tsx) comes here with it: its panel open over the page.
-  const [search, setSearch] = useSearchParams();
-  const login = search.get("login");
   if (!listed) return <Loading label={t("web-pages.settings.workspace.loading")} />;
   // Removed (or a link from before): the list, or the first of them.
   if (!found) return <Navigate to={back} replace />;
@@ -126,7 +123,6 @@ export function StationSettings({ entry }: { entry: WorkspaceEntry }) {
       <Head s={s} manager={manager} edits={edits} />
       {edits.dialogs}
       <Body s={s} manager={manager} />
-      {login && <LoginPanel key={login} station={s.station} id={login} onClose={() => setSearch({}, { replace: true })} />}
     </div>
   );
 }
@@ -176,6 +172,8 @@ function Head({ s, manager, edits }: { s: StationView; manager: boolean; edits: 
 
 /** The rest of it, each part once there is something to show of it. */
 function Body({ s, manager }: { s: StationView; manager: boolean }) {
+  // A login's link (`/w/<ws>/s/<station>/login/<id>`, workspace.tsx) comes here with it: its card brought into view.
+  const [search] = useSearchParams();
   const o = s.overview;
   const base = stationBase(s.station);
   const folders = o?.drive?.roots ?? [];
@@ -215,7 +213,7 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
         </Section>
       )}
       {/* The command-line tools its agents use, logged in here for every chat (docs/remote-login.md). */}
-      <LoginsSection station={s.station} />
+      <LoginsSection station={s.station} marked={search.get("login")} />
       {o && o.connects.length > 0 && (
         <Section title={<>{t("web-pages.settings.nav.connects")}<span className={settingsCss.titleCount}>{o.connects.length}</span></>}>
           <ul className={pagesCss.list}>
