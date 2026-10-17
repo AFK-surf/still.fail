@@ -115,6 +115,8 @@ final class Permissions {
     previous?.activate(options: [.activateIgnoringOtherApps])
     previous = nil
     DispatchQueue.main.async { _ = NSApp.setActivationPolicy(.accessory) }
+    // The station hears it is no longer asking (the page stops saying it waits on this Mac).
+    daemon?.notify(["event": "grants"])
     // A grant taken while it was up is had once this app starts again.
     let daemon = daemon
     DispatchQueue.global().async {

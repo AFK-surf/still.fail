@@ -20,7 +20,8 @@
 //                       connection then carries ScreenView.swift's messages both ways until either side closes it
 //   files.*             the drive's protected folders (Files.swift says them)
 //   watch               → {ok}, then held open for as long as this process is (the station's supervision); a grant
-//                         changing while the window is up is told on it as a line {event: "grants"}
+//                         changing while the window is up, and the window closing, are told on it as a line
+//                         {event: "grants"}
 //   restart             → {ok}, then this app starts again (a grant to take effect)
 //   quit                → {ok}, then it ends
 // Capabilities to come (the camera) are ops of their own namespace in this one app, as `screen.*` and `files.*` are, so

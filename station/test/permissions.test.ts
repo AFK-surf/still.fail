@@ -188,8 +188,8 @@ test("a grant asked for: the window up for it once, not again while it is up nor
   assert.equal(s.fake.shown[0].words.title, "允许 still.fail 使用这台 Mac 的权限");
   assert.equal(s.fake.shown[0].words.desktop, "桌面");
   assert.equal(s.fake.shown[0].words.capture, "屏幕录制");
-  // The page says it is asking.
-  await until(() => s.grants.view()?.asking.includes("desktop") === true);
+  // The page says it is asking as soon as it is answered.
+  assert.deepEqual(s.grants.view()?.asking, ["desktop"]);
   // Asked again while it is up (a second tap, another member): left as it is.
   assert.deepEqual(await ask(s.grants, "desktop"), { status: 200, body: { window: "up", screen: true } });
   assert.equal(s.fake.shown.length, 1);
@@ -197,8 +197,11 @@ test("a grant asked for: the window up for it once, not again while it is up nor
   const files = new HelperFiles({ helper: s.helper, changed: () => {}, grants: s.grants });
   assert.equal(await files.ask("desktop", "/Users/a/Desktop"), "up");
   assert.equal(s.fake.shown.length, 1);
-  // Closed without it: asked again within AGAIN_MS, refused saying so; not shown.
+  // Closed without it (the helper says so on the station's watch): the page stops saying it asks.
   s.fake.up = null;
+  s.fake.tell();
+  await until(() => s.grants.view()?.asking.length === 0);
+  // Asked again within AGAIN_MS, refused saying so; not shown.
   s.clock.now += 60_000;
   assert.deepEqual(await ask(s.grants, "desktop", "en"), { status: 409, body: { error: "The window for Desktop was closed a moment ago; request it again in a few minutes" } });
   assert.equal(s.fake.shown.length, 1);

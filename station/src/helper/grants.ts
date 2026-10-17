@@ -25,6 +25,9 @@ const SCREEN: readonly GrantId[] = ["capture", "control"];
 export const AGAIN_MS = 3 * 60_000;
 /// A look at the grants is this fresh at most where it matters (a list asked for twice at once looks once).
 const FRESH_MS = 2_000;
+/// How long the window has to come up after the helper answered `permissions.show`, looked at every UP_MS.
+const UP_TRIES = 20;
+const UP_MS = 100;
 /// The station's page reads what was looked at last; looked at again (in the background) once it is this old.
 const SHOWN_MS = 30_000;
 
@@ -144,12 +147,22 @@ export class HelperGrants {
     this.#asked.set(grant, this.#now());
     try {
       await this.helper.request({ op: "permissions.show", words, grants: [grant], ...(paths ? { paths } : {}) });
-      // Its window up: what it asks for is told.
-      void this.refresh(true);
+      // The helper puts it up on its main thread after it answers: what it asks for is known (and told) once it says so.
+      await this.#upFor(grant);
       return "up";
     } catch (error) {
       log.warn("helper", "still.fail Helper's window did not show", { error: (error as Error).message });
       return "none";
+    }
+  }
+
+  /// Until the helper says its window asks for `grant` (at most a moment: UP_TRIES looks), learnt either way.
+  async #upFor(grant: GrantId) {
+    for (let i = 0; i < UP_TRIES; i++) {
+      const status: HelperStatus | null = await this.helper.request({ op: "status" }).catch(() => null);
+      if (status !== null) this.#learn(status);
+      if (status === null || (status.asking === true && status.asked?.includes(grant))) return;
+      await wall.sleep(UP_MS);
     }
   }
 
