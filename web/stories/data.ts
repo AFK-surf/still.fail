@@ -155,7 +155,7 @@ export const MEMBERSHIPS = {
 const call = (name: string, hint: string, meta: string): HistoryStep =>
   ({ name, hint, meta, failed: false, call: JSON.stringify({ hint }), result: "ok", entries: [], brief: false });
 const posted = (text: string, ends?: string): HistoryItem["body"] =>
-  ({ kind: "post", content: { text, md: markdown(text), place: { name: "看看我的 screencam 的 Windows 版本", surface: "stillfail" }, block: false, failed: false, ...(ends ? { ends } : {}) } });
+  ({ kind: "post", content: { text, md: markdown(text), place: { name: "看看我的 screencam 的 Windows 版本，我感觉某些 UI 还是粗糙", surface: "stillfail" }, block: false, failed: false, ...(ends ? { ends } : {}) } });
 const own = (text: string): HistoryItem["body"] => ({ kind: "text", content: { text, md: markdown(text), subagent: false } });
 const WAITED_AT = Date.parse("2026-10-16T08:27:00Z");
 const WAITING_SINCE = Date.now() - 23_000;

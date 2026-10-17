@@ -45,10 +45,12 @@ export const hSteps = style({
 export const historyEdge = style({ margin: "4px 0", textAlign: "center", fontSize: vars.textMeta, color: vars.muted });
 /** An event's line, as tall as its mark in the gutter: what does not fit goes to the next line, and a long place is cut
  * short, rather than squeezing the words. */
+/** Who and where, in one line: a long name or place is cut short, never put on a line of its own. */
 export const hLabel = style({
-  display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0 6px", minWidth: "0", minHeight: "20px",
+  display: "flex", alignItems: "center", gap: "0 6px", minWidth: "0", minHeight: "20px", whiteSpace: "nowrap",
   fontSize: vars.textMeta, lineHeight: "20px", color: vars.muted,
 });
+globalStyle(`${hLabel} > strong`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis" });
 /** A Slack user's name: a button that says whether it is the viewer. */
 export const hPerson = style({
   font: "inherit", color: "inherit", background: "none", border: "0", padding: "0", cursor: "pointer",
@@ -315,6 +317,7 @@ globalStyle(`${historyDetails} ${detailRow}`, {
 });
 globalStyle(`${historyDetails} ${detailRow} dd`, { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 globalStyle(`${hPlace} > svg`, { flex: "none" });
+globalStyle(`${hLabel} > ${hPlace}`, { overflow: "hidden" });
 /** In a chat message's head (Chat.tsx SentElsewhere): the place is what is cut short there, not what follows it. */
 globalStyle(`${msgRoute} > ${hPlace}`, { overflow: "hidden" });
 globalStyle(`${msgRoute} > ${hPlace} ~ *`, { flex: "none" });
