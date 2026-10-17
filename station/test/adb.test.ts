@@ -42,7 +42,8 @@ function fakeAdb(files: Record<string, string> = {}) {
       return [];
     }
   };
-  return { path: exe(path), calls: () => lines("calls").map((l) => JSON.parse(l) as string[]), dialed: () => lines("dialed") };
+  const say = (name: string, content: string) => writeFileSync(join(dir, name), content);
+  return { path: exe(path), calls: () => lines("calls").map((l) => JSON.parse(l) as string[]), dialed: () => lines("dialed"), say };
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -453,6 +454,14 @@ test("a phone offered over the mesh: adb connects through its tunnel, asks reach
     const granted = await mesh.answer({ op: "grant", phone: PHONE });
     assert.deepEqual(granted.body, { message: "app 现在可以自行开启无线调试" });
     assert.ok(adb.calls().some((c) => c.join(" ") === `-s ${serial} shell pm grant fail.still.android android.permission.WRITE_SECURE_SETTINGS`));
+    // ColorOS (an OPPO, 2026-10-17) and MIUI refuse the shell's grant with a page of stack: said as the switch to turn
+    // on; anything else by its first line.
+    adb.say("grant-says", "Exception occurred while executing 'grant':\njava.lang.SecurityException: grantRuntimePermission: Neither user 2000 nor current process has android.permission.GRANT_RUNTIME_PERMISSIONS.\n  at android.app.ContextImpl.enforce(ContextImpl.java:2493)");
+    const refused = await mesh.answer({ op: "grant", phone: PHONE });
+    assert.deepEqual(refused.body, { message: "手机不允许 adb 授权：请在开发者选项中开启「禁止权限监控」（ColorOS）或「USB 调试（安全设置）」（MIUI）后重试" });
+    adb.say("grant-says", "Error: Unknown permission\n  at something");
+    const failed = await mesh.answer({ op: "grant", phone: PHONE });
+    assert.deepEqual(failed.body, { message: "授权失败：Error: Unknown permission" });
 
     // The phone stops reading the offer: the phone is kept for GRACE, then adb lets it go and its port closes.
     const disconnects = () => adb.calls().filter((c) => c[0] === "disconnect").length;

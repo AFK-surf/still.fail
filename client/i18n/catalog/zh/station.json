@@ -2,6 +2,7 @@
   "station.adb.allowPrompt": "手机上弹出「允许 USB 调试吗？」时，点「允许」",
   "station.adb.codeDigits": "配对码应为 6 位数字",
   "station.adb.grantFailed": "授权失败：{said}",
+  "station.adb.grantRefused": "手机不允许 adb 授权：请在开发者选项中开启「禁止权限监控」（ColorOS）或「USB 调试（安全设置）」（MIUI）后重试",
   "station.adb.granted": "app 现在可以自行开启无线调试",
   "station.adb.install": "此 station 未安装 adb：请安装 Android platform-tools（macOS：brew install android-platform-tools）后重新共享",
   "station.adb.noAdb": "此 station 未安装 adb",

@@ -75,6 +75,9 @@ export class Share {
   version = 0;
   /// Why the phone last turned a tunnel down (its adbd not there, say): what adb not getting in is put down to.
   refused: string | null = null;
+  /// The `adb connect` under way, if one is; `again`: an offer came meanwhile, so it is done once more after.
+  connecting: Promise<void> | null = null;
+  again = false;
   readonly server: net.Server;
   private waiters: (() => void)[] = [];
 
@@ -244,7 +247,7 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
     }
   }
   await writeLine(stream, { status: 200, headers: { "content-type": "application/x-ndjson" } });
-  log.info("adb", "adb offer", { offer: number, ...about(conn), main: conn.remoteId() === ask.phone });
+  log.info("adb", "adb offer", { offer: number, ...about(conn), main: conn.remoteId() === ask.phone, adbd: info.adbd, pair: info.pair });
   void connect(shares, share).catch(() => {});
 
   let unlisten = () => {};
@@ -404,8 +407,31 @@ function toSocket(socket: net.Socket, bytes: Buffer): Promise<void> {
   });
 }
 
+/// `adb connect` to the phone, one at a time: offers come a few at once as the phone finds its ports (three within 60 ms,
+/// 2026-10-17), and each connect begins by disconnecting, so side by side they undid each other. One that comes while
+/// another is under way has it done once more after, with what the phone said last.
+function connect(shares: Shares, share: Share): Promise<void> {
+  if (share.connecting !== null) {
+    share.again = true;
+    return share.connecting;
+  }
+  const started = wall.now();
+  share.connecting = (async () => {
+    try {
+      do {
+        share.again = false;
+        await connectOnce(shares, share);
+      } while (share.again && !shares.isStopping);
+    } finally {
+      share.connecting = null;
+      log.info("adb", "adb holds the phone", { adb: share.state.adb, ms: wall.now() - started });
+    }
+  })();
+  return share.connecting;
+}
+
 /// `adb connect` to the phone (unless adb holds it already), and how adb holds it then.
-async function connect(shares: Shares, share: Share) {
+async function connectOnce(shares: Shares, share: Share) {
   const speaks = share.lang;
   const adb = shares.adb();
   if (adb === null) return share.set("missing", tr(speaks, "station.adb.install"));
@@ -485,8 +511,10 @@ async function grant(shares: Shares, share: Share, lang: Lang): Promise<string> 
   const adb = shares.adb();
   if (adb === null) throw new Error(tr(lang, "station.adb.noAdb"));
   const said = await run(adb, ["-s", share.serial(), "shell", "pm", "grant", pkg, "android.permission.WRITE_SECURE_SETTINGS"], shares.limits.long);
-  // Quiet is granted; a refusal says why (MIUI and ColorOS want 「USB 调试（安全设置）」 on).
-  if (said !== "") throw new Error(tr(lang, "station.adb.grantFailed", { said }));
+  // Quiet is granted. MIUI and ColorOS refuse the shell's grant (a SecurityException, a page of stack) until a switch in
+  // Developer options is on: said as which one; anything else, by its first line.
+  if (/GRANT_RUNTIME_PERMISSIONS/.test(said)) throw new Error(tr(lang, "station.adb.grantRefused"));
+  if (said !== "") throw new Error(tr(lang, "station.adb.grantFailed", { said: said.split("\n")[0]!.trim() }));
   return tr(lang, "station.adb.granted");
 }
 

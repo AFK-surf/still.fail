@@ -127,6 +127,8 @@ fun AdbShareScreen(current: WorkspaceEntry, address: String) {
                         }
                         Text(sub, fontSize = 13.sp, color = if (here && view!!.adb in setOf("missing", "failed")) C.red else C.muted)
                     }
+                    // Until the station's adb has the phone (or says why not): what comes below waits on it.
+                    DoingMark(here && (view!!.phase != "offered" || view.adb == null || view.adb == "connecting"), null)
                     Switch(here)
                 }
                 if (here) {
