@@ -781,6 +781,9 @@
   "web-main.logins.domain": "The login page is on {domain}",
   "web-main.logins.device": "Open {domain} and enter",
   "web-main.logins.copyOpen": "Copy & open",
+  "web-main.logins.copyCode": "Copy the code",
+  "web-main.logins.copyCodeWhat": "copy the code",
+  "web-main.logins.codeCopied": "Code copied",
   "web-main.logins.startedIn": "started by the agent of “{chat}”",
   "web-main.logins.aChat": "a chat",
   "web-main.logins.signIn": "Sign in in the browser"

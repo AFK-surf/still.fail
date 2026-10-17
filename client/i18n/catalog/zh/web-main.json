@@ -706,6 +706,9 @@
   "web-main.logins.domain": "登录页在 {domain}",
   "web-main.logins.device": "打开 {domain}，输入",
   "web-main.logins.copyOpen": "复制并打开",
+  "web-main.logins.copyCode": "复制验证码",
+  "web-main.logins.copyCodeWhat": "复制验证码",
+  "web-main.logins.codeCopied": "验证码已复制",
   "web-main.logins.startedIn": "「{chat}」的 agent 发起",
   "web-main.logins.aChat": "一个对话",
   "web-main.logins.signIn": "在浏览器里登录"

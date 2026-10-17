@@ -423,6 +423,8 @@ export const stories: Story[] = [
   { id: "login-card-done", group: "登录", title: "卡片 · 已登录", render: loginCard("done"), demo: logins() },
   { id: "login-card-failed", group: "登录", title: "卡片 · 失败", render: loginCard("failed"), demo: logins() },
   { id: "login-card-timeout", group: "登录", title: "卡片 · 超时", render: loginCard("timeout"), demo: logins() },
+  { id: "login-card-code-copied", group: "登录", title: "卡片 · 设备码 · 点码复制之后", render: loginCard("device"), demo: logins(), steps: [{ click: "[data-login-code]" }] },
+  { id: "login-card-code-copied-phone", group: "登录", title: "卡片 · 设备码 · 点码复制之后 · 手机", phone: true, render: loginCard("device", 12), demo: logins(), steps: [{ click: "[data-login-code]" }] },
   { id: "login-card-question-phone", group: "登录", title: "卡片 · agent 在回答命令的问题 · 手机", phone: true, render: loginCard("question", 12), demo: logins() },
   { id: "login-card-device-phone", group: "登录", title: "卡片 · 设备码 · 手机", phone: true, render: loginCard("device", 12), demo: logins() },
   { id: "login-card-failed-phone", group: "登录", title: "卡片 · 失败 · 手机", phone: true, render: loginCard("failed", 12), demo: logins() },

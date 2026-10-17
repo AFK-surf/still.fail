@@ -53,10 +53,18 @@ export const cardTitle = style({ ...cardText, fontSize: vars.textUi, lineHeight:
 export const cardStatus = style({ ...cardText, display: "inline-flex", alignItems: "center", gap: "6px", fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted });
 export const cardDone = style([cardStatus, { color: vars.text, fontWeight: "500" }]);
 export const cardFailed = style([cardStatus, { color: vars.red, fontWeight: "500" }]);
-/** A device code, large enough to read and copy by eye (it is copied as its page opens, too). */
+/**
+ * A device code, large enough to read and copy by eye (it is copied as its page opens, too), and a button: pressed, it is
+ * copied. No ground, at rest or under the pointer (none to round): the pointer's hand says it can be pressed, a toast that
+ * it was copied.
+ */
 export const cardCode = style({
-  ...cardText, paddingBlock: "4px", fontFamily: vars.fontMono, fontSize: vars.textHeading, fontWeight: "600", letterSpacing: "0.08em",
-  lineHeight: "1.3", userSelect: "all",
+  ...cardText, display: "block", width: "fit-content", paddingBlock: "4px", border: "0", background: "none", color: "inherit",
+  textAlign: "left", cursor: "pointer", WebkitTapHighlightColor: "transparent",
+});
+/** Its words, set on them rather than the button: a phone's root gives every button `font: inherit`. */
+export const cardCodeText = style({
+  fontFamily: vars.fontMono, fontSize: vars.textHeading, fontWeight: "600", letterSpacing: "0.08em", lineHeight: "1.3",
 });
 /**
  * One row of buttons at its foot: what is to be done first, then 取消 (they fit a phone's width side by side). The pills'

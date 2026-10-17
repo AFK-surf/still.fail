@@ -110,7 +110,7 @@ function ActiveCard({ station, login, canRelay }: { station: string; login: Mach
   let said: ReactNode = waiting(login.statusText);
   let main: ReactNode = null;
   if (step === "device" && login.code) {
-    said = <><span className={css.cardStatus}>{t("web-main.logins.device", { domain: login.domain ?? "" })}</span><span className={css.cardCode}>{login.code}</span></>;
+    said = <><span className={css.cardStatus}>{t("web-main.logins.device", { domain: login.domain ?? "" })}</span><CardCode code={login.code} /></>;
     main = <CardButton label={t("web-main.logins.copyOpen")} onClick={() => copyAndOpen(login)} />;
   } else if (step === "loopback") {
     // A web page cannot take the browser's callback: said here, the page's host all the same.
@@ -134,6 +134,19 @@ function ActiveCard({ station, login, canRelay }: { station: string; login: Mach
         </PanelButton>
       </span>
     </>
+  );
+}
+
+/** The device code, pressed to copy it (and nothing opened): a toast says it is copied, or why not. */
+function CardCode({ code }: { code: string }) {
+  const act = useAct();
+  const copy = () => act(navigator.clipboard ? navigator.clipboard.writeText(code) : Promise.reject(new Error("no clipboard")),
+    t("web-main.logins.copyCodeWhat"), t("web-main.logins.codeCopied"));
+  return (
+    <button type="button" className={css.cardCode} aria-label={`${t("web-main.logins.copyCode")} ${code}`} title={t("web-main.logins.copyCode")}
+      data-login-code="" onClick={copy}>
+      <span className={css.cardCodeText}>{code}</span>
+    </button>
   );
 }
 
