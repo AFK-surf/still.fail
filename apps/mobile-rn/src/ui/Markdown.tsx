@@ -35,6 +35,7 @@ import { CodeInk } from "./CodeInk";
 import { Icon, Icons } from "./Icon";
 import { appendLinked, isWebAddress, linkHold } from "./Links";
 import { pickable, pickedText } from "./Pick";
+import { SideScroll } from "./SideScroll";
 import { Smooth } from "./Smooth";
 import { markWeight, passageMark } from "./TextMark";
 import { CODE_FONT, useC, withAlpha, type StillFailColors } from "./Theme";
@@ -484,9 +485,9 @@ export function CodeBlock({ code, language, bar = true, modifier }: { code: stri
           </Smooth>
         </View>
       )}
-      <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ alignSelf: "stretch" }} contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 12 }}>
+      <SideScroll nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ alignSelf: "stretch" }} contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 12 }}>
         <CodeInk code={code} language={language} dark={C.dark} />
-      </ScrollView>
+      </SideScroll>
     </Smooth>
   );
 }
@@ -572,7 +573,7 @@ function Table({ table, ctx }: { table: MdTable; ctx: Ctx }) {
       )}
       {widths != null && avail != null && (
         <Smooth radius={20} stroke={{ width: 1, color: line }} style={{ alignSelf: "flex-start", backgroundColor: tableGround(C), padding: 1 }}>
-          <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ width: Math.min(total, avail) }}>
+          <SideScroll nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ width: Math.min(total, avail) }}>
             <View style={{ width: total }}>
               {cells.map((row, r) => {
                 const header = r === 0;
@@ -596,7 +597,7 @@ function Table({ table, ctx }: { table: MdTable; ctx: Ctx }) {
                 );
               })}
             </View>
-          </ScrollView>
+          </SideScroll>
         </Smooth>
       )}
     </View>
