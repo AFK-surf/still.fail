@@ -75,6 +75,7 @@ export class Share {
   version = 0;
   /// Why the phone last turned a tunnel down (its adbd not there, say): what adb not getting in is put down to.
   refused: string | null = null;
+  private refusalWaiters: (() => void)[] = [];
   /// The `adb connect` under way, if one is; `again`: an offer came meanwhile, so it is done once more after.
   connecting: Promise<void> | null = null;
   again = false;
@@ -102,6 +103,18 @@ export class Share {
     const waiters = this.waiters;
     this.waiters = [];
     for (const f of waiters) f();
+  }
+
+  /// The phone turned a tunnel down, saying why.
+  refuse(why: string) {
+    this.refused = why;
+    for (const f of this.refusalWaiters.splice(0)) f();
+  }
+
+  /// Resolves once a tunnel is turned down (at once if one was since `refused` was cleared).
+  refusal(): Promise<void> {
+    if (this.refused !== null) return Promise.resolve();
+    return new Promise((resolve) => this.refusalWaiters.push(resolve));
   }
 
   /// Resolves at the next `set`.
@@ -222,6 +235,10 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
   };
   const number = nextOffer++;
   let share = shares.byKey.get(device);
+  // What adb is asked again on: only what changes how it reaches the phone. Offers come again and again as the phone's
+  // link moves (relay, LAN, main endpoint: twenty in five minutes, 2026-10-17), and adb, once it has the phone, reaches
+  // it again through the new link by itself; connecting anew each time held the page at 正在连接 adb for up to 100 s.
+  const before = share?.info.adbd;
   if (share) {
     share.info = info;
     share.conn = conn;
@@ -248,7 +265,7 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
   }
   await writeLine(stream, { status: 200, headers: { "content-type": "application/x-ndjson" } });
   log.info("adb", "adb offer", { offer: number, ...about(conn), main: conn.remoteId() === ask.phone, adbd: info.adbd, pair: info.pair });
-  void connect(shares, share).catch(() => {});
+  if (before === undefined || before !== info.adbd || share.state.adb === "failed" || share.state.adb === "missing") void connect(shares, share).catch(() => {});
 
   let unlisten = () => {};
   const removed = new Promise<"removed">((resolve) => {
@@ -305,7 +322,7 @@ function listen(share: Share) {
     const conn = share.conn;
     tunnel(conn, "connect", socket).catch((error) => {
       log.info("adb", "adb tunnel ended", { error: (error as Error).message, offer: share.offer, ...about(conn) });
-      share.refused = (error as Error).message;
+      share.refuse((error as Error).message);
     });
   });
 }
@@ -454,14 +471,15 @@ async function connectOnce(shares: Shares, share: Share) {
     return share.set("failed", (error as Error).message);
   }
   // adb says `connected to …` for a TLS port it is not paired with too; only its state says whether it got in: looked
-  // at every 500 ms until it is `device` or SETTLE is over.
+  // at every 500 ms until it is `device`, the phone turned its tunnel down (nothing listens there: no use waiting), or
+  // SETTLE is over.
   const now = await shares.run(
     Effect.gen(function* () {
       const started = yield* Clock.currentTimeMillis;
       for (;;) {
         const now = yield* Effect.promise(state);
-        if (now === "device" || (yield* Clock.currentTimeMillis) - started >= SETTLE) return now;
-        yield* Effect.sleep(500);
+        if (now === "device" || share.refused !== null || (yield* Clock.currentTimeMillis) - started >= SETTLE) return now;
+        yield* Effect.raceFirst(Effect.sleep(500), Effect.promise(() => share.refusal()));
       }
     }),
   );
@@ -469,8 +487,11 @@ async function connectOnce(shares: Shares, share: Share) {
   share.refused = null;
   if (now === "device") share.set("connected");
   else if (now === "unauthorized") share.set("unauthorized", tr(speaks, "station.adb.allowPrompt"));
-  else if (refused !== null) share.set("failed", refused);
-  else share.set("unpaired", tr(speaks, "station.adb.unpaired"));
+  else if (refused !== null) {
+    // adb would go on dialling it a few times a second (260 refusals in 12 s): let go until the next offer.
+    await run(adb, ["disconnect", serial], shares.limits.quick).catch(() => {});
+    share.set("failed", refused);
+  } else share.set("unpaired", tr(speaks, "station.adb.unpaired"));
 }
 
 /// `adb pair` through the phone's pairing port (open while its 使用配对码配对设备 dialog is), then connected anew.
