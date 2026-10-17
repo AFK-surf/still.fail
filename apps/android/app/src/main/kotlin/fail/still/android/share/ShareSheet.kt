@@ -211,7 +211,7 @@ private fun ColumnScope.ShareSheetContent(shared: Shared, target: ShareTarget?, 
                 view.items.forEach { item ->
                     val kept = view.kept?.takeIf { it.station == item.station && it.id == item.id }
                     PickRow(
-                        item.title, kept?.text ?: lineOf(item), checked = picked?.station == item.station && picked.id == item.id,
+                        item.title, kept?.text ?: item.last?.preview?.takeIf { it.isNotBlank() } ?: lineOf(item), checked = picked?.station == item.station && picked.id == item.id, subLines = 1,
                         leading = { Box(Modifier.width(16.dp), contentAlignment = Alignment.Center) { item.agents.firstOrNull()?.let { MakerIcon(it.maker, it.runtime, 14.dp) } } },
                     ) { pick(item.station, item.id) }
                 }
@@ -221,7 +221,7 @@ private fun ColumnScope.ShareSheetContent(shared: Shared, target: ShareTarget?, 
                     val on = view.stations.firstOrNull { it.station == picked?.station } ?: view.stations.first()
                     PickRow(
                         t("android-misc.shareIn.newChat"), if (new) t("android-misc.shareIn.on", "name" to on.name) else null, checked = new,
-                        leading = { Box(Modifier.width(16.dp), contentAlignment = Alignment.Center) { IconIn(Icons.Plus, 14.dp, C.muted) } },
+                        leading = { Box(Modifier.width(16.dp), contentAlignment = Alignment.Center) { IconIn(Icons.Compose, 16.dp, C.muted) } },
                     ) { pick(on.station, null) }
                     // Which station it starts on, when there is a choice.
                     if (new && view.stations.size > 1) view.stations.forEach { s ->
@@ -242,13 +242,18 @@ private fun SharedHead(shared: Shared) {
     val first = shared.source.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }.orEmpty()
     val head = shared.title ?: first
     val sub = if (shared.title != null) first else null
-    Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 2.dp)) {
-        Text(head, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        sub?.let { Text(it, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    // Its mark in the rows' column: a link's, or text's.
+    val link = Regex("https?://", RegexOption.IGNORE_CASE).containsMatchIn(shared.source)
+    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.width(16.dp).padding(top = 3.dp), contentAlignment = Alignment.Center) { IconIn(if (link) Icons.Web else Icons.Text, 16.dp, C.muted) }
+        Column(Modifier.weight(1f)) {
+            Text(head, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            sub?.let { Text(it, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        }
     }
 }
 
-/** A row's second line: when it was last active, and on which station. */
+/** A row's second line without a last message: when it was last active, and on which station. */
 private fun lineOf(item: ChatItem): String = listOfNotNull(item.time?.get("lastActiveAt")?.ago, item.stationName.takeIf { it.isNotEmpty() }).joinToString(" · ")
 
 @Composable
