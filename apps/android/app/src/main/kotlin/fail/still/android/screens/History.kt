@@ -313,7 +313,7 @@ private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgen
                     val (before, after) = around(if (m.notice == "job") "android-chat.history.received.jobMessage" else "android-chat.history.received.message")
                     Text(before, fontSize = 13.sp, color = C.muted)
                     val user = m.from.slackUser
-                    if (user != null) SlackName(station, user, m.from.name, m.from.bound) else Strong(if (m.notice == "stillfail") BuildConfig.APP_NAME else m.from.name)
+                    if (user != null) SlackName(station, user, m.from.name, m.from.bound) else Strong(if (m.notice == "stillfail") BuildConfig.APP_NAME else m.from.name, Modifier.weight(1f, fill = false))
                     Text(after, fontSize = 13.sp, color = C.muted)
                     m.place?.let { Text(" · ", fontSize = 13.sp, color = C.muted); Box(Modifier.weight(1f, fill = false)) { Place(station, of, it) } }
                 }, m.text) {
@@ -375,7 +375,7 @@ private fun plain(text: String): String = text
     .trim()
 
 @Composable
-internal fun Strong(text: String) = Text(text, fontSize = 13.sp, color = C.ink, fontWeight = FontWeight.SemiBold)
+internal fun Strong(text: String, modifier: Modifier = Modifier) = Text(text, modifier, fontSize = 13.sp, color = C.ink, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
 
 /**
  * A message in or out, drawn alike: a line saying what and where, then its words in brief beside a bar (they answer

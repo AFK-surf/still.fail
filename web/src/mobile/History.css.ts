@@ -42,8 +42,9 @@ export const mHLive = style({
 });
 export const mHReceived = style({ display: "flex", flexDirection: "column", gap: "10px" });
 export const mHMessage = style({ display: "flex", flexDirection: "column", gap: "5px" });
+/** Who and where, in one line: a long name or place is cut short, never put on a line of its own. */
 export const mHLabel = style({
-  display: "flex", alignItems: "center", flexWrap: "wrap", fontSize: vars.textMeta, color: "var(--m-muted)", minWidth: "0",
+  display: "flex", alignItems: "center", gap: "4px", whiteSpace: "nowrap", fontSize: vars.textMeta, color: "var(--m-muted)", minWidth: "0",
 });
 export const mHQuote = style({ paddingLeft: "10px", borderLeft: "2px solid var(--m-line)" });
 export const mHBrief = style({
@@ -160,13 +161,15 @@ globalStyle(`${mHHead} > b`, {
   whiteSpace: "nowrap",
 });
 globalStyle(`${mHSteps} > *`, { flex: "none" });
-globalStyle(`${mHLabel} > svg`, { flex: "none", marginRight: "5px" });
+globalStyle(`${mHLabel} > svg`, { flex: "none", marginRight: "1px" });
 globalStyle(`${mHLabel} b`, { color: "var(--m-ink)", fontWeight: "600" });
 globalStyle(`${mHPlace} b`, {
   fontSize: vars.textMeta, fontWeight: "600", color: "var(--m-ink)", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 });
 globalStyle(`${mHPlace}[data-link] b`, { color: "var(--m-accent-ink)" });
+globalStyle(`${mHLabel} ${mHPlace}`, { overflow: "hidden" });
+globalStyle(`${mHLabel} > b`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis" });
 globalStyle(`${mHGroupHead} > span:not(${mPill})`, {
   flex: "0 1 auto", minWidth: "0", fontSize: vars.textMeta, color: "var(--m-muted)", overflow: "hidden",
   textOverflow: "ellipsis", whiteSpace: "nowrap",
