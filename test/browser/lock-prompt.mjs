@@ -62,7 +62,7 @@ createRoot(root).render(<DemoApp phone={location.search.includes('phone')} />);
     // Waiting from the start: put up as the app opens, wherever it is.
     await page.addInitScript((l) => { globalThis.__lock = l; }, lock([request], request));
     await page.goto(`${base}/lock-prompt-check.html${phone ? '?phone' : ''}`);
-    const title = page.getByText('确认李二的新设备', { exact: true });
+    const title = page.getByText('验证李二的新设备', { exact: true });
     await title.waitFor({ timeout: 30000 }).catch(async (e) => {
       if (out) await page.screenshot({ path: `${out}/failed-${phone ? 'phone' : 'desktop'}.png` });
       console.error('core patched:', await page.evaluate(() => typeof globalThis.__publish), 'calls:', JSON.stringify(await page.evaluate(() => globalThis.__calls ?? null)));

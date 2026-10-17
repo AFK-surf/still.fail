@@ -366,7 +366,7 @@
   "core-logic.mesh.credential_expired": "授权已过期",
   "core-logic.mesh.credential_refused": "station 拒绝了授权",
   "core-logic.mesh.credential_refused_why": "station 拒绝了授权：{reason}",
-  "core-logic.mesh.lock_unconfirmed": "此设备尚未在 workspace 的安全模式中确认：{reason}",
+  "core-logic.mesh.lock_unconfirmed": "此设备尚未在 workspace 的安全模式中获批：{reason}",
   "core-logic.mesh.credential_revoked": "授权已被撤销",
   "core-logic.mesh.credential_unreadable": "无法解析 station 的授权响应：{error}",
   "core-logic.mesh.credential_unsent": "授权请求未送达 station：{error}",

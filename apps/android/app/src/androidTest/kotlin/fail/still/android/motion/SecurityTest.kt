@@ -84,12 +84,12 @@ class SecurityTest {
         val h = Harness(rule)
         h.fake.put(Topics.lockDraft(ws), draft())
         h.launch(listOf(Screen.Home, Screen.Settings, Screen.Security, Screen.SecurityOpen))
-        rule.onNodeWithText("版本过旧，不受保护 · 更新后可在此加入").assertIsDisplayed()
+        rule.onNodeWithText("版本过旧，不受保护 · 更新后可在此保护").assertIsDisplayed()
         picture(h, "security-draft")
         rule.onNodeWithText("李二 · still.fail 网页版 · Firefox · Windows").performClick()
         h.settle()
         assertTrue(h.fake.calls.any { it.first == "lock.toggle" && it.second["id"]!!.jsonPrimitive.content == "dd".repeat(32) })
-        rule.onNodeWithText("签名并开启").performClick()
+        rule.onNodeWithText("批准并开启").performClick()
         h.settle()
         assertTrue(h.fake.calls.any { it.first == "lock.open" })
     }
@@ -102,9 +102,9 @@ class SecurityTest {
         picture(h, "security-on")
         rule.onNodeWithText("李二的新设备").performClick()
         h.settle()
-        rule.onNodeWithText("确认李二的新设备").assertIsDisplayed()
+        rule.onNodeWithText("验证李二的新设备").assertIsDisplayed()
         picture(h, "security-confirm")
-        rule.onNodeWithText("一致，确认").performClick()
+        rule.onNodeWithText("一致，批准").performClick()
         h.settle()
         val call = h.fake.calls.first { it.first == "lock.confirm" }.second
         assertEquals("cc".repeat(32), call["device"]!!.jsonPrimitive.content)
@@ -116,14 +116,14 @@ class SecurityTest {
         val lock = on()
         h.fake.put(Topics.lock(ws), lock.copy(prompt = lock.requests.first()))
         h.launch(listOf(Screen.Home))
-        rule.onNodeWithText("确认李二的新设备").assertIsDisplayed()
+        rule.onNodeWithText("验证李二的新设备").assertIsDisplayed()
         rule.onNodeWithText("K7F-2QX").assertIsDisplayed()
         picture(h, "security-prompt")
         rule.runOnIdle { assertTrue(h.fake.calls.none { it.first == "lock.shown" }) }
         // Closed by hand: said shown, so the core puts it up no more.
         rule.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
         h.settle()
-        rule.onNodeWithText("确认李二的新设备").assertDoesNotExist()
+        rule.onNodeWithText("验证李二的新设备").assertDoesNotExist()
         rule.runOnIdle { assertTrue(h.fake.calls.any { it.first == "lock.shown" && it.second["device"]!!.jsonPrimitive.content == "cc".repeat(32) }) }
     }
 
@@ -131,7 +131,7 @@ class SecurityTest {
         val h = Harness(rule)
         h.fake.put(Topics.lock(ws), off().copy(locked = true, me = me.copy(confirmed = false, waiting = true)))
         h.launch(listOf(Screen.Home))
-        rule.onNodeWithText("等待确认此设备").assertIsDisplayed()
+        rule.onNodeWithText("等待批准此设备").assertIsDisplayed()
         rule.onNodeWithText("SZN-LYA").assertIsDisplayed()
         picture(h, "security-waiting")
     }
