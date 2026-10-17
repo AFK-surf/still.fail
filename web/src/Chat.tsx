@@ -1200,7 +1200,7 @@ function Quotes({ quotes, files }: { quotes: Quote[] | undefined; files: Attachm
       const target = pane.querySelector<HTMLElement>(`[data-ts="${CSS.escape(ts)}"]`);
       if (!target) return;
       const range = findText(target, text);
-      if (range && "highlights" in CSS) {
+      if (range) {
         const rect = range.getBoundingClientRect();
         const box = pane.getBoundingClientRect();
         way.goto(ts, "at", box.height / 2 - (rect.top + rect.height / 2 - target.getBoundingClientRect().top));
@@ -2643,18 +2643,47 @@ function findText(root: Element, wanted: string): Range | null {
   return range;
 }
 
-let flashTimer: ReturnType<typeof setTimeout> | undefined;
-/** Highlights a range for a moment (CSS custom highlights; the style fades via the ::highlight rule). */
+let passageMarks: { host: HTMLElement; layer: HTMLElement; timer: ReturnType<typeof setTimeout> } | null = null;
+/**
+ * Marks a range for a moment, as Android's TextMark: a rounded ground behind each of its lines, as tall as its words, a
+ * little past their ends; in, held, and faded (`[data-passage-marks]`, global.css.ts). The layer is in the block the
+ * words are in, below them and above its ground (your bubble's).
+ */
 function flashRange(range: Range): void {
-  const highlights = (CSS as unknown as { highlights: Map<string, unknown> }).highlights;
-  const Highlight = (window as unknown as { Highlight: new (...r: Range[]) => unknown }).Highlight;
-  highlights.set("quote-flash", new Highlight(range));
-  document.documentElement.dataset.quoteFlash = "on";
-  clearTimeout(flashTimer);
-  flashTimer = setTimeout(() => { document.documentElement.dataset.quoteFlash = "fading"; }, 1600);
-  setTimeout(() => {
-    if (document.documentElement.dataset.quoteFlash === "fading") { highlights.delete("quote-flash"); delete document.documentElement.dataset.quoteFlash; }
-  }, 2600);
+  unmarkPassage();
+  const common = range.commonAncestorContainer;
+  const at = common instanceof HTMLElement ? common : common.parentElement;
+  const host = at?.closest<HTMLElement>(`p, li, td, th, h1, h2, h3, h4, h5, h6, blockquote, .${conversationCss.msgBubble}`) ?? at;
+  if (!host) return;
+  host.dataset.passageHost = "";
+  const layer = document.createElement("span");
+  layer.dataset.passageMarks = "";
+  layer.setAttribute("aria-hidden", "true");
+  host.append(layer);
+  // One ground a line: a range's rects may be one per element it crosses (code, a link) on the same line.
+  const lines: { left: number; top: number; right: number; bottom: number }[] = [];
+  for (const r of range.getClientRects()) {
+    if (r.width < 1) continue;
+    const line = lines.find((l) => r.top < l.bottom && r.bottom > l.top && Math.abs((r.top + r.bottom) - (l.top + l.bottom)) < r.height);
+    if (line) Object.assign(line, { left: Math.min(line.left, r.left), top: Math.min(line.top, r.top), right: Math.max(line.right, r.right), bottom: Math.max(line.bottom, r.bottom) });
+    else lines.push({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+  }
+  const box = host.getBoundingClientRect();
+  const x = box.left + host.clientLeft, y = box.top + host.clientTop;
+  layer.replaceChildren(...lines.map((l) => {
+    const ground = document.createElement("span");
+    Object.assign(ground.style, { left: `${l.left - x - 3}px`, top: `${l.top - y - 1}px`, width: `${l.right - l.left + 6}px`, height: `${l.bottom - l.top + 2}px` });
+    return ground;
+  }));
+  passageMarks = { host, layer, timer: setTimeout(unmarkPassage, 2400) };
+}
+
+function unmarkPassage(): void {
+  if (!passageMarks) return;
+  clearTimeout(passageMarks.timer);
+  passageMarks.layer.remove();
+  delete passageMarks.host.dataset.passageHost;
+  passageMarks = null;
 }
 
 /** Opens the chat `step` rows above (-1) or below (1) the open one in the sidebar; false when there is none. */

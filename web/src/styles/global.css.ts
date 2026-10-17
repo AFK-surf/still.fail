@@ -1,6 +1,6 @@
 import { globalStyle } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { searchStrokeKeyframes, splashFloatKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { passageFlashKeyframes, searchStrokeKeyframes, splashFloatKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 
 /**
  * Corners, after Codex: plain rounding by default; where the browser draws superellipses, rounded rectangles get a
@@ -283,8 +283,12 @@ globalStyle("[data-search-marks] path", {
 });
 globalStyle("[data-search-marks][data-settled] path", { animation: "none", strokeDashoffset: "0" });
 globalStyle("[data-search-marks] path", { "@media": { "(prefers-reduced-motion: reduce)": { animation: "none", strokeDashoffset: "0" } } });
-/** The quoted passage, highlighted where it was said after following a quote. */
-globalStyle("::highlight(quote-flash)", {
-  backgroundColor: `color-mix(in srgb, ${vars.accent} 28%, transparent)`, color: "inherit",
+/** The quoted passage, marked for a moment where it was said after following a quote (Chat.tsx flashRange): a rounded
+ *  ground behind each of its lines, under the words (the layer is below the text of the block it is in). */
+globalStyle("[data-passage-host]", { position: "relative", isolation: "isolate" });
+globalStyle("[data-passage-marks]", { position: "absolute", inset: "0", zIndex: "-1", pointerEvents: "none" });
+globalStyle("[data-passage-marks] > span", {
+  position: "absolute", borderRadius: `calc(4px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: `color-mix(in srgb, ${vars.accent} 24%, transparent)`, animation: `${passageFlashKeyframes} 2400ms both`,
 });
-globalStyle(":root[data-quote-flash=\"fading\"] ::highlight(quote-flash)", { backgroundColor: `color-mix(in srgb, ${vars.accent} 12%, transparent)` });
+globalStyle("[data-passage-marks] > span", { "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } } });

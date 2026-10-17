@@ -1,9 +1,10 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { emitOutKeyframes, enterUpKeyframes, jobBreatheKeyframes, jobLiveKeyframes, msgFlashKeyframes, msgWaitingInKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
-import { msg } from "./styles/conversation.css.ts";
+import { emitOutKeyframes, enterUpKeyframes, jobBreatheKeyframes, jobLiveKeyframes, msgFlashKeyframes, msgWaitingInKeyframes, bubbleFlashKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { msg, msgBubble } from "./styles/conversation.css.ts";
+import { msgMine } from "./styles/chat.css.ts";
 import { detailsList, jobsPanel } from "./pages/ChatPage.css.ts";
-import { activityLine, agentActivity, composerThumb, msgFlash, msgWaitingLate } from "./Chat.css.ts";
+import { activityLine, agentActivity, chatMessages, composerThumb, msgFlash, msgWaitingLate } from "./Chat.css.ts";
 import { tokenGuide } from "./pages/SlackApp.css.ts";
 import { TEXT_IN, outsetStart } from "@stillfail/ui/styles/align.ts";
 import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
@@ -206,19 +207,26 @@ globalStyle(`${msg}[data-emitting] > *`, {
     },
   },
 });
-/** Here rather than with its class: it comes after [data-enter], and wins over it. */
-globalStyle(msgFlash, {
-  animation: `${msgFlashKeyframes} 1400ms ${vars.easeOut}`, borderRadius: `calc(12px * ${vars.cornerScale})`,
+/** Here rather than with its class: it comes after [data-enter], and wins over it; over a row that faded in with
+ *  the history (Chat.css.ts [data-history-fade], which stays on it) too, or a jump to it would not show. */
+const flashing = `${msgFlash}, ${chatMessages} > ${msg}${msgFlash}[data-history-fade]`;
+globalStyle(flashing, {
+  animation: `${msgFlashKeyframes} 1700ms`,
+  borderRadius: `calc(6px * ${vars.cornerScale})`, // own corner: 14 outside with its ground's 8px (as Android's flash)
   cornerShape: vars.cornerShape,
 });
+/** Your words: their bubble is the message, and takes the tint; the row round it does not. */
+globalStyle(`${msgMine}${msgFlash}:has(${msgBubble}), ${chatMessages} > ${msgMine}${msgFlash}[data-history-fade]:has(${msgBubble})`, { animation: "none" });
+globalStyle(`${msgMine}${msgFlash} ${msgBubble}`, { animation: `${bubbleFlashKeyframes} 1700ms` });
 /** Here rather than with its class: it comes after .msg-flash, and wins over it. */
-globalStyle(msgFlash, {
+globalStyle(flashing, {
   "@media": {
     "(prefers-reduced-motion: reduce)": {
       animation: "none", outline: `2px solid ${vars.accent}`,
     },
   },
 });
+globalStyle(`${msgMine}${msgFlash} ${msgBubble}`, { "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } } });
 /** Here rather than with its class: it comes after [data-enter], and wins over it. */
 globalStyle(composerThumb, {
   position: "relative", display: "block", width: "64px", height: "64px",
