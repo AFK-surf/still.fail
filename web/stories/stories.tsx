@@ -173,7 +173,7 @@ const logins = ({ canLogin = true, canRelay = true, old = false, card, listed }:
   },
 });
 /** One login's card, as an agent's message has it. */
-const loginCard = (id: string) => loginCards([id]);
+const loginCard = (id: string, padding?: number) => loginCards([id], padding);
 /** A chat's login cards, one for each login, as an agent's message has them. */
 const loginCards = (ids: string[], padding = 40) => () => stage(
   <div style={{ display: "grid", alignContent: "start", gap: 4, padding, maxWidth: 720 }}>{ids.map((id) => <LoginCard key={id} station="demo/local" id={id} />)}</div>,
@@ -423,6 +423,9 @@ export const stories: Story[] = [
   { id: "login-card-done", group: "登录", title: "卡片 · 已登录", render: loginCard("done"), demo: logins() },
   { id: "login-card-failed", group: "登录", title: "卡片 · 失败", render: loginCard("failed"), demo: logins() },
   { id: "login-card-timeout", group: "登录", title: "卡片 · 超时", render: loginCard("timeout"), demo: logins() },
+  { id: "login-card-question-phone", group: "登录", title: "卡片 · agent 在回答命令的问题 · 手机", phone: true, render: loginCard("question", 12), demo: logins() },
+  { id: "login-card-device-phone", group: "登录", title: "卡片 · 设备码 · 手机", phone: true, render: loginCard("device", 12), demo: logins() },
+  { id: "login-card-failed-phone", group: "登录", title: "卡片 · 失败 · 手机", phone: true, render: loginCard("failed", 12), demo: logins() },
   { id: "login-card-readonly", group: "登录", title: "卡片 · 只读成员", render: loginCard("device"), demo: logins({ canLogin: false }) },
   { id: "login-cards", group: "登录", title: "对话里的卡片", render: loginCards(["question", "device", "loopback", "open", "done", "failed", "cancelled"]), demo: logins() },
   { id: "login-cards-phone", group: "登录", title: "对话里的卡片 · 手机宽度（按钮仍一排）", phone: true, render: loginCards(["device", "loopback", "open", "listening"], 12), demo: logins() },

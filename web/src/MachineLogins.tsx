@@ -96,7 +96,8 @@ export function LoginCard({ station, id, marked = false }: { station: string; id
 
 /**
  * A login under way, for one who may finish it: what the person does now, by its step (or, while its agent answers the
- * command or it is starting, how it stands), then one row of buttons: the step's own first, 取消 beside it.
+ * command or it is starting, how it stands), then one row of buttons: the step's own first (filled), 取消 beside it
+ * (plain: a ground only under the pointer).
  */
 function ActiveCard({ station, login, canRelay }: { station: string; login: MachineLoginShown; canRelay: boolean }) {
   const relay = useRelay(station, login);
@@ -127,9 +128,9 @@ function ActiveCard({ station, login, canRelay }: { station: string; login: Mach
       {said}
       <span className={css.cardActions}>
         {main}
-        <PanelButton className={css.cardCancel} disabled={cancelling} aria-busy={cancelling || undefined}
+        <PanelButton disabled={cancelling} aria-busy={cancelling || undefined}
           onClick={() => act(call("machineLogin.cancel", { station, id: login.id }), t("web-main.logins.cancelWhat"))}>
-          <span className={css.cardButtonText}>{t("common.cancel")}</span>
+          {t("common.cancel")}
         </PanelButton>
       </span>
     </>
@@ -139,7 +140,7 @@ function ActiveCard({ station, login, canRelay }: { station: string; login: Mach
 function CardButton({ label, busy = false, onClick }: { label: string; busy?: boolean; onClick(): void }) {
   return (
     <PanelButton tone="filled" disabled={busy} aria-busy={busy || undefined} onClick={onClick}>
-      <span className={css.cardButtonText}>{label}</span>
+      {label}
     </PanelButton>
   );
 }

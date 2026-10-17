@@ -59,19 +59,8 @@ export const cardCode = style({
   lineHeight: "1.3", userSelect: "all",
 });
 /**
- * One row of buttons at its foot: what is to be done first, then 取消 (they fit a phone's width side by side). In by its
- * words' padding, so that the first pill's ground starts where the title does, and as far from the foot as the title
- * is from the top.
+ * One row of buttons at its foot: what is to be done first, then 取消 (they fit a phone's width side by side). The pills'
+ * grounds on the card's padding, concentric with its corner; their words in by 10 more, in line with the title's.
  */
-export const cardActions = style({
-  display: "flex", flexWrap: "nowrap", alignItems: "center", gap: "4px", marginTop: "6px", paddingInline: TEXT_IN,
-  selectors: { "&:last-child": { paddingBottom: TEXT_IN } },
-});
-/** 取消: a pill as the main one is, quieter: the page's ground on the card's grey, the text's colour. */
-export const cardCancel = style({
-  background: vars.canvas, color: vars.text,
-  selectors: { "&:hover:not(:disabled)": { background: `color-mix(in srgb, ${vars.text} 8%, ${vars.canvas})` } },
-});
-/** A button's words, sized here: the phone's buttons take their font from what they are in. */
-export const cardButtonText = style({ fontSize: vars.textMeta, fontWeight: "500", lineHeight: `${PANEL_PILL}px` });
+export const cardActions = style({ display: "flex", flexWrap: "nowrap", alignItems: "center", gap: "4px", marginTop: "6px" });
 globalStyle(`${card} :focus-visible`, { outlineOffset: "-2px" });
