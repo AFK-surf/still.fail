@@ -4,7 +4,7 @@
 import { BlurView } from "expo-blur";
 import type { ReactNode } from "react";
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
-import { Smooth } from "./Smooth";
+import { concentric, Smooth } from "./Smooth";
 import { raised, useC, withAlpha } from "./Theme";
 
 /** expo-blur takes an intensity it divides by blurReductionFactor into the blur's radius: a CSS blur's px as radius. */
@@ -57,3 +57,13 @@ export function Floating({ radius, tint, style, children }: { radius: number; ti
     </Smooth>
   );
 }
+
+/** The composer's capsule (ui/Glass.kt): its corner and the room inside it; what sits in it takes the corner concentric with it. */
+export const ComposerCorner = 26;
+export const ComposerInset = 8;
+export const InComposer = concentric(ComposerCorner, ComposerInset);
+/** The files in it: as far from its edge as from its top, and rounded as its corner less that. */
+export const ComposerFilesIn = 10;
+export const InComposerFiles = concentric(ComposerCorner, ComposerFilesIn);
+/** The CSS blur of a floating capsule's glass (ui/Glass.kt GlassBlur, cssBlur(20)). */
+export const GlassBlur = 20;

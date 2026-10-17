@@ -12,6 +12,15 @@ export const SMOOTH_SCALE = 1.25;
 /** The corner of a smooth box `inset` inside one of corner `outer`, concentric with it (Corners.kt concentric). */
 export const concentric = (outer: number, inset: number) => outer - inset / SMOOTH_SCALE;
 
+/** The superellipse's exponent (Corners.kt SMOOTH_EXPONENT, CSS superellipse(1.5)). */
+const SMOOTH_EXPONENT = 2.8284271;
+
+/**
+ * How far in from each of its edges a Smooth corner of `radius` (room enough to be wholly smooth) passes at its middle,
+ * where it turns 45° (Corners.kt smoothMiddle).
+ */
+export const smoothMiddle = (radius: number) => radius * SMOOTH_SCALE * (1 - Math.pow(2, -1 / SMOOTH_EXPONENT));
+
 type Radii = number | [topLeft: number, topRight: number, bottomRight: number, bottomLeft: number];
 
 interface NativeProps extends ViewProps { radii: number[]; amount: number; strokeWidth: number; strokeColor?: string }
