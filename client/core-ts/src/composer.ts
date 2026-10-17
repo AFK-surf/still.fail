@@ -28,7 +28,17 @@ export type ComposerQuote = { id: string; author: string; text: string; comment:
 
 /// A file in what is written: going up (`sent` of `size`), up (`done`, as the station keeps it) or failed (`error`).
 /// `pasted`: long words pasted, kept as a file (what the page says of them). `ref`: one dragged in from where it is.
-export type ComposerFile = { id: string; name: string; size: number; sent?: number; width?: number; height?: number; done: J | null; error: string | null; pasted?: J; ref?: ComposerRef };
+/// `link`: a link shared into the chat (share-in.ts), drawn as a file is and sent as words: nothing goes up.
+export type ComposerFile = { id: string; name: string; size: number; sent?: number; width?: number; height?: number; done: J | null; error: string | null; pasted?: J; ref?: ComposerRef; link?: ComposerLink };
+
+/// A link in what is written, as a file is: where it goes, what the app that shared it called it, and its site.
+export type ComposerLink = { url: string; title?: string; site?: string };
+
+/// What a link in what is written goes as: its title on a line, then where it goes.
+const linkWords = (link: ComposerLink) => (link.title ? `${link.title}\n${link.url}` : link.url);
+
+/// Nothing of it goes up: named by its path, or a link.
+const named = (f: ComposerFile) => f.ref?.mode === "path" || f.link !== undefined;
 
 /// A file or folder dragged in from where it is (a station's files, or Finder on a machine that is a station): named by
 /// its path (`mode: "path"`: the message says which station has it and where, nothing goes up), or sent (`file`: it goes
@@ -96,7 +106,7 @@ export class Composers {
   /// The topic's value: what is written in `key`, read from the chat's draft the first time.
   value(key: string): unknown {
     const s = this.#state(key);
-    const uploading = s.files.some((f) => !f.done && !f.error && f.ref?.mode !== "path");
+    const uploading = s.files.some((f) => !f.done && !f.error && !named(f));
     const ready = (s.text.trim() !== "" || s.files.some((f) => !f.error) || s.quotes.length > 0) && !s.starting && !s.files.some((f) => f.pasted && f.error);
     return {
       text: s.text, rev: s.rev, quotes: s.quotes, ...(s.focus !== null ? { focus: s.focus } : {}),
@@ -184,11 +194,16 @@ export class Composers {
     if (s.text) s.rev = 1;
     s.quotes = (Array.isArray(kept.quotes) ? kept.quotes : []).filter(isObject).map((q: J) => ({ ...q, id: `kept-${this.#keptId++}` }) as ComposerQuote);
     s.files = (Array.isArray(kept.files) ? kept.files : []).filter(isObject).map((f: J) => ({ id: `kept-${this.#keptId++}`, name: String(f.name ?? ""), size: Number(f.size ?? 0), done: f, error: null }));
+    for (const l of Array.isArray(kept.links) ? kept.links : []) {
+      if (isObject(l) && typeof l.url === "string") s.files.push(linkFile(`kept-${this.#keptId++}`, l as ComposerLink));
+    }
     return s;
   }
 
   #draft(s: State) {
-    return { text: s.text, quotes: s.quotes.map(({ id: _, ...q }) => q), files: s.files.flatMap((f) => f.done ? [f.done] : []) };
+    // Links kept with it too: read back here (`#from`), not a field of the `draft` topic's (the pages draw the composer's).
+    const links = s.files.flatMap((f) => (f.link ? [f.link] : []));
+    return { text: s.text, quotes: s.quotes.map(({ id: _, ...q }) => q), files: s.files.flatMap((f) => f.done ? [f.done] : []), ...(links.length ? { links } : {}) };
   }
 
   #forget(key: string): void {
@@ -201,7 +216,7 @@ export class Composers {
     if (!at || s.db !== this.#db(key)) return;
     const topic = { topic: "draft", station: at[0], chat: at[1] };
     const draft = this.#draft(s);
-    if (!draft.text.trim() && draft.quotes.length === 0 && draft.files.length === 0) this.#inner.data.forgetTopic(topic);
+    if (!draft.text.trim() && draft.quotes.length === 0 && draft.files.length === 0 && !draft.links) this.#inner.data.forgetTopic(topic);
     else if (immediate) this.#inner.data.set(topic, draft, false);
     else this.#inner.data.setSoon(topic, draft);
   }
@@ -267,6 +282,15 @@ export class Composers {
   append(key: string, words: string): number {
     const s = this.#state(key);
     this.#say(s, s.text.trim() ? `${s.text.trimEnd()}\n${words}` : words);
+    return this.#changed(key, s);
+  }
+
+  /// A link shared into it (share-in.ts), after the files it has, unless it has that link already: drawn as a file is,
+  /// sent as words after what is written.
+  link(key: string, link: ComposerLink): number {
+    const s = this.#state(key);
+    if (s.files.some((f) => f.link?.url === link.url)) return s.version;
+    s.files = [...s.files, linkFile(`link-${this.#keptId++}`, link)];
     return this.#changed(key, s);
   }
 
@@ -510,11 +534,12 @@ export class Composers {
     s.error = null;
     s.focus = null;
     const version = this.#changed(key, s);
-    // Those named by their path go as words, after what is written: where each is.
-    const named = taken.files.filter((f) => f.ref?.mode === "path");
-    const sent = taken.files.filter((f) => f.ref?.mode !== "path");
+    // Links and those named by their path go as words, after what is written: each link, then where each file is.
+    const links = taken.files.flatMap((f) => (f.link ? [f.link] : []));
+    const paths = taken.files.filter((f) => f.ref?.mode === "path");
+    const sent = taken.files.filter((f) => !named(f));
     return {
-      text: [taken.text.trim(), ...named.map((f) => pathWords(f.ref!))].filter((w) => w !== "").join("\n"),
+      text: [taken.text.trim(), ...links.map(linkWords), ...paths.map((f) => pathWords(f.ref!))].filter((w) => w !== "").join("\n"),
       attachments: sent.flatMap((f) => (f.done ? [f.done] : [])),
       quotes: taken.quotes.map(({ author, text, comment, ts, role, file }) => ({ author, text, comment: comment.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}), ...(file ? { file } : {}) })),
       files: sent.map((f) => f.id),
@@ -571,6 +596,11 @@ export class Composers {
 const zippable = (f: FileIn, station: string) => !!f.drive && (f.drive.station === undefined || f.drive.station === station);
 
 /// Where a file named by its path is, as the message says it: its station's name and its path there.
+/// A link as a file of what is written.
+function linkFile(id: string, link: ComposerLink): ComposerFile {
+  return { id, name: link.title || link.url, size: 0, done: null, error: null, link };
+}
+
 export const pathWords = (ref: ComposerRef) => t(ref.dir ? "common.folderOn" : "common.pathOn", { station: ref.stationName, path: ref.path });
 
 /// Another station's file read from its drive a part at a time (`drive.read`), to be sent up to the chat's station.

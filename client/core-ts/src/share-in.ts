@@ -6,6 +6,7 @@
 import { Effect } from "effect";
 import type { Inner } from "./core.ts";
 import type { Call } from "./core/calls.ts";
+import type { ComposerLink } from "./composer.ts";
 import { handlers } from "./core/execute.ts";
 import type { Owner } from "./core/routing.ts";
 import { asCoreError, CoreError } from "./error.ts";
@@ -27,6 +28,9 @@ export const LISTED = 30;
 /// Where a shared thing goes: a chat (its row's `id`) or, without one, a new chat on `station`.
 export type Target = { station: string; id?: string };
 
+/// A link in what is shared: up to a space or a closing bracket.
+const LINK = /https?:\/\/[^\s<>"'）)】」]+/i;
+
 /// Sites that share links under a short host of their own, by the site they are of.
 const SHORT: Record<string, string> = {
   "youtu.be": "youtube.com",
@@ -40,7 +44,7 @@ const SHORT: Record<string, string> = {
 
 /// The site of the first link in what is shared (`youtube.com`), its www./m. left out; null when it has none.
 export function siteOf(source: string): string | null {
-  const m = /https?:\/\/[^\s<>"'）)】」]+/i.exec(source);
+  const m = LINK.exec(source);
   if (m === null) return null;
   let host: string;
   try {
@@ -65,6 +69,26 @@ export function messageOf(source: string, title: string | null, note: string | n
   parts.push(tt !== "" && !s.includes(tt) ? `${tt}\n${s}` : s);
   return parts.join("\n\n");
 }
+
+/// What is shared as it goes into a composer: its first link as an attachment (with the title the app gave, else the
+/// words before it when they are short, as apps put a page's title before its link), and the words around it, those not
+/// taken for its title; with no link, the title on a line and the words.
+export function splitShared(source: string, title: string | null): { link: ComposerLink | null; words: string } {
+  const m = LINK.exec(source);
+  const tt = title?.trim() ?? "";
+  if (m === null) return { link: null, words: messageOf(source, title, null) };
+  const url = m[0];
+  const rest = (source.slice(0, m.index) + source.slice(m.index + url.length)).replace(/[ \t]+\n/g, "\n").trim();
+  const site = siteOf(url);
+  // Words that only name it (an app's "<title> <link>", or the subject itself): its title, not words of the message.
+  const naming = rest !== "" && !rest.includes("\n") && Array.from(rest).length <= TITLE_MAX && (tt === "" || rest === tt);
+  const linkTitle = tt !== "" ? tt : naming ? rest : "";
+  const words = naming || rest === tt ? "" : rest;
+  return { link: { url, ...(linkTitle ? { title: linkTitle } : {}), ...(site ? { site } : {}) }, words };
+}
+
+/// The longest words before a link taken as its title.
+const TITLE_MAX = 120;
 
 /// The rows a shared thing can go to, of a `chats` view's: the workspace's own chats on still.fail's page (a Slack
 /// chat takes no message from here), not one still being made.
@@ -145,17 +169,21 @@ export class ShareIn implements Owner {
   /// sends it from its composer. The chat is kept as where that site's things go.
   open(scope: string, source: string, title: string | null, target: Target, newKey: string | null = null): J {
     if (source.trim() === "") throw CoreError.invalid(t("core-logic.shareIn.error.empty"));
-    const words = messageOf(source, title, null);
+    let row: J | undefined;
+    let key: string;
     if (target.id === undefined) {
       this.#inner.choose.pickNew(scope, { station: target.station.slice(target.station.lastIndexOf("/") + 1) });
-      const key = newKey ?? `new:${target.station}`;
-      this.#inner.composers.offer(key, words);
-      return { station: target.station, key };
+      key = newKey ?? `new:${target.station}`;
+    } else {
+      row = (this.#rows(scope) ?? []).find((r) => r.station === target.station && r.id === target.id);
+      if (row === undefined) throw CoreError.invalid(t("core-views.error.no_chat"));
+      key = `${target.station}:${row.session}`;
     }
-    const row = (this.#rows(scope) ?? []).find((r) => r.station === target.station && r.id === target.id);
-    if (row === undefined) throw CoreError.invalid(t("core-views.error.no_chat"));
-    const key = `${target.station}:${row.session}`;
-    this.#inner.composers.offer(key, words);
+    // A link as an attachment of what is written, the words around it (a selection, what an app says with it) as words.
+    const shared = splitShared(source, title);
+    if (shared.words !== "") this.#inner.composers.offer(key, shared.words);
+    if (shared.link !== null) this.#inner.composers.link(key, shared.link);
+    if (row === undefined) return { station: target.station, key };
     this.#inner.data.put(TABLE, `ws:${scope}:shareIn:${siteOf(source) ?? ""}`, { station: target.station, id: row.id }, false);
     this.#inner.store.invalidateAll((x) => x.topic === "shareIn" && x.scope === scope);
     return { station: target.station, key, session: row.session, ...(typeof row.thread === "number" ? { thread: row.thread } : {}), title: row.title };

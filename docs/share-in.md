@@ -10,8 +10,11 @@ The system's share sheet (Android), the browser's toolbar button or its context 
 installed page's share target (web) opens one sheet: what is shared at the top, **发到** a list of chats (the one
 a thing from the same site went to last first, saying so; 搜索 from six chats), the last row 新 chat (then which
 station it starts on, when there are more than one). No field of its own and no quick actions: a tap opens that chat
-with what is shared in its composer, after anything written there already, where the person adds to it and sends it
-as anything else (user, 2026-10-17: a field in the sheet would split the composer in two). What the chat does with it
+with what is shared in its composer, where the person adds to it and sends it as anything else (user, 2026-10-17: a
+field in the sheet would split the composer in two). A link goes in as an attachment (user: 做成附件形式), a card among
+the composer's files (its title, its site; × takes it out), sent as words after what is written (its title on a line,
+then the link), as a file named by its path is; the words around it (a selection, what an app says with it) go in as
+words, and text with no link as words. What the chat does with it
 is its agent's business (a chat kept for videos, told once what to do with them).
 
 ## The core (client/core-ts/src/share-in.ts)
@@ -23,10 +26,12 @@ is its agent's business (a chat kept for videos, told once what to do with them)
   `xhslink.com` …; text without a link is a site of its own), listed first, with why (`text`). `stations`: the
   scope's stations up now (`{station, name}`), and `newOn`, the one a new chat starts on unless another is picked.
 - `shareIn.open` (`scope`, `source`, `station`, `id?`, `title?` (what the app gave as its subject), `key?` (a new
-  chat's composer key on the page that opens it, when not `new:<station>`: the phone web's `new:`)): the title on a
-  line of its own when the shared text does not hold it, then what was shared, put after what the chat's composer
-  holds (`<station>:<session>`, the row's), once (shared again, it is not put twice); with no `id`, into the new
-  chat's composer on `station` (`new:<station>`), which new chats then start on. Nothing is sent. It answers
+  chat's composer key on the page that opens it, when not `new:<station>`: the phone web's `new:`)): into the chat's
+  composer (`<station>:<session>`, the row's; with no `id`, the new chat's on `station`, which new chats then start
+  on): its first link as a `ComposerFile` with `link` (`{url, title?, site?}`: the app's subject as its title, else
+  the short words before it, as apps put a page's title before its link), once per link; the words around it after
+  what is written, once. The composer keeps links with its draft and sends them as words after the text
+  (`composer.take`). Nothing is sent. It answers
   `{ station, key, session?, thread?, title? }` for the page to open the chat. The chat is kept as where that site's
   things go (`choice` records `ws:<scope>:shareIn:<site>`); a new chat is not, until a thing is shared into it.
 

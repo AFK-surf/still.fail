@@ -1718,7 +1718,16 @@ export interface ComposerRef {
 	mode: ComposerRefMode;
 }
 
-/** A file in what is being written: going up, up, or failed. */
+/** A link in what is being written, as a file is. */
+export interface ComposerLink {
+	url: string;
+	/** What the app that shared it called it. */
+	title?: string;
+	/** Its site (`youtube.com`). */
+	site?: string;
+}
+
+/** A file in what is being written: going up, up, or failed; or a link. */
 export interface ComposerFile {
 	/** The page's id for it (`composer.add`). */
 	id: string;
@@ -1738,6 +1747,11 @@ export interface ComposerFile {
 	pasted?: PastedInfo;
 	/** Dragged in from where it is (a station's files, or Finder on a machine that is a station). */
 	ref?: ComposerRef;
+	/**
+	 * A link shared into the chat (docs/share-in.md): drawn as a file is, sent as words after what is written
+	 * (its title on a line, then the link); nothing goes up. Removed as a file is (`composer.remove`).
+	 */
+	link?: ComposerLink;
 }
 
 /** A message sent from here that the chat does not show yet (sending | failed); `seq` once the station has it. */

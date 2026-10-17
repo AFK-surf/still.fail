@@ -1704,7 +1704,17 @@ data class ComposerRef (
 	val mode: ComposerRefMode
 )
 
-/// A file in what is being written: going up, up, or failed.
+/// A link in what is being written, as a file is.
+@Serializable
+data class ComposerLink (
+	val url: String,
+	/// What the app that shared it called it.
+	val title: String? = null,
+	/// Its site (`youtube.com`).
+	val site: String? = null
+)
+
+/// A file in what is being written: going up, up, or failed; or a link.
 @Serializable
 data class ComposerFile (
 	/// The page's id for it (`composer.add`).
@@ -1722,7 +1732,10 @@ data class ComposerFile (
 	val error: String? = null,
 	val pasted: PastedInfo? = null,
 	/// Dragged in from where it is (a station's files, or Finder on a machine that is a station).
-	val ref: ComposerRef? = null
+	val ref: ComposerRef? = null,
+	/// A link shared into the chat (docs/share-in.md): drawn as a file is, sent as words after what is written
+	/// (its title on a line, then the link); nothing goes up. Removed as a file is (`composer.remove`).
+	val link: ComposerLink? = null
 )
 
 /// A message sent from here that the chat does not show yet (sending | failed); `seq` once the station has it.

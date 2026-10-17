@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Core } from "../src/core.ts";
-import { messageOf, siteOf } from "../src/share-in.ts";
+import { messageOf, siteOf, splitShared } from "../src/share-in.ts";
 import type { FakeHost } from "../src/testing.ts";
 import { apply, call, subscribe, v } from "./helpers.ts";
 import { base, overview, started, threadView } from "./station-fixture.ts";
@@ -73,18 +73,21 @@ test("a_link_shared_goes_into_the_composer_of_the_chat_picked_and_that_chat_come
   assert.deepEqual(view.stations, [{ station: "ws/st", name: "studio" }]);
   assert.equal(view.newOn, "ws/st");
 
-  // Into that chat's composer, after what is written there already; nothing is sent.
+  // Into that chat's composer as an attachment, beside what is written there already; nothing is sent.
   await ask(host, core, ui, 2, "composer.text", { key: "ws/st:k7", text: "先看这个" });
   const opened = await ask(host, core, ui, 3, "shareIn.open", { scope: "ws", source: yt, station: "ws/st", id: "k7" });
   assert.deepEqual(opened, { station: "ws/st", key: "ws/st:k7", session: "k7", thread: 7, title: "视频管理" });
   subscribe(core, ui, 4, { topic: "composer", key: "ws/st:k7" });
   await host.settle();
   apply(host, values);
-  assert.equal(v(values, 4).text, `先看这个\n${yt}`);
+  const links = () => v(values, 4).files.map((f: J) => f.link);
+  assert.equal(v(values, 4).text, "先看这个");
+  assert.deepEqual(links(), [{ url: yt, site: "youtube.com" }]);
+  assert.equal(v(values, 4).ready, true);
   // Shared again: in it once.
   await ask(host, core, ui, 5, "shareIn.open", { scope: "ws", source: yt, station: "ws/st", id: "k7" });
   apply(host, values);
-  assert.equal(v(values, 4).text, `先看这个\n${yt}`);
+  assert.deepEqual(links(), [{ url: yt, site: "youtube.com" }]);
   assert.equal(posted(host, "/threads/7/messages").length, 0);
 
   // Another link from the site, by its short host: that chat first, saying why.
@@ -100,6 +103,12 @@ test("a_link_shared_goes_into_the_composer_of_the_chat_picked_and_that_chat_come
   await host.settle();
   apply(host, values);
   assert.deepEqual(v(values, 7).items.map((i: J) => i.title), ["读书笔记"]);
+
+  // Sent: the words, then the link's (its title on a line, then it).
+  await ask(host, core, ui, 50, "shareIn.open", { scope: "ws", source: "https://a.com/x", title: "A 的标题", station: "ws/st", id: "k7" });
+  const taken = await ask(host, core, ui, 51, "composer.take", { key: "ws/st:k7" });
+  assert.equal(taken.text, `先看这个\n${yt}\nA 的标题\nhttps://a.com/x`);
+  assert.deepEqual(taken.attachments, []);
 
   // Text from another app, into a new chat's composer on the station, with the title the app gave.
   const made = await ask(host, core, ui, 8, "shareIn.open", { scope: "ws", source: "一段笔记", title: "标题", station: "ws/st" });
@@ -118,6 +127,15 @@ test("a_link_shared_goes_into_the_composer_of_the_chat_picked_and_that_chat_come
   apply(host, values);
   assert.equal(v(values, 12).text, "另一段");
   core.close();
+});
+
+test("a_shared_things_link_goes_as_an_attachment_and_the_words_around_it_as_words", () => {
+  assert.deepEqual(splitShared("https://youtu.be/x", "视频标题"), { link: { url: "https://youtu.be/x", title: "视频标题", site: "youtube.com" }, words: "" });
+  // An app's "<title> <link>": its title.
+  assert.deepEqual(splitShared("【装 NAS】 https://b23.tv/abc", null), { link: { url: "https://b23.tv/abc", title: "【装 NAS】", site: "bilibili.com" }, words: "" });
+  // A selection with the page's link: the words stay words.
+  assert.deepEqual(splitShared("第一行\n第二行\nhttps://a.com/p", "页面"), { link: { url: "https://a.com/p", title: "页面", site: "a.com" }, words: "第一行\n第二行" });
+  assert.deepEqual(splitShared("一段笔记", "标题"), { link: null, words: "标题\n一段笔记" });
 });
 
 test("a_shared_things_site_and_message", () => {

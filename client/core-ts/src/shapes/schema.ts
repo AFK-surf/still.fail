@@ -976,7 +976,13 @@ export const SHAPES: Record<string, Shape> = {
     ["error", opt("String")],
     ["pasted", opt("PastedInfo")],
     ["ref", opt("ComposerRef"), { doc: "Dragged in from where it is (a station's files, or Finder on a machine that is a station)." }],
-  ], { doc: "A file in what is being written: going up, up, or failed." }),
+    ["link", opt("ComposerLink"), { doc: "A link shared into the chat (docs/share-in.md): drawn as a file is, sent as words after what is written\n(its title on a line, then the link); nothing goes up. Removed as a file is (`composer.remove`)." }],
+  ], { doc: "A file in what is being written: going up, up, or failed; or a link." }),
+  ComposerLink: struct([
+    ["url", "String"],
+    ["title", opt("String"), { doc: "What the app that shared it called it." }],
+    ["site", opt("String"), { doc: "Its site (`youtube.com`)." }],
+  ], { doc: "A link in what is being written, as a file is." }),
   ComposerRef: struct([
     ["station", "String", { doc: "The station it is on (its address)." }],
     ["stationName", "String"],
