@@ -44,6 +44,9 @@ test("one chain per workspace: kept for members, carried to stations, healed by 
     const ts = h.now();
     const socket = (await h.fetch("/v1/stations/connect", { headers: { upgrade: "websocket", "x-stillfail-station": station.id, "x-stillfail-ts": String(ts), "x-stillfail-signature": await station.sign(`stillfail-station-connect-v1:${h.origin}:${station.id}:${ts}`) } })).webSocket!;
     // What the station is told, as it comes: the next frame that `is` so (no deadline: it comes, or the test times out).
+    // What comes while one is awaited, before it, is older than it and let go: kept, a state frame from before (the
+    // chain at seq 2, ahead of its clearing) answered the wait for the chain a station brought back at seq 2, before the
+    // cloud had taken it, and the next entry was posted onto no chain (CI, 2026-10-16).
     const frames: any[] = [];
     let waiting: { is: (f: any) => boolean; resolve: (f: any) => void } | null = null;
     socket.addEventListener("message", (event) => {
@@ -52,12 +55,13 @@ test("one chain per workspace: kept for members, carried to stations, healed by 
       if (waiting?.is(f)) {
         waiting.resolve(f);
         waiting = null;
-      } else frames.push(f);
+      } else if (!waiting) frames.push(f);
     });
     socket.accept();
     const next = (is: (f: any) => boolean) => {
       const had = frames.findIndex(is);
       if (had >= 0) return Promise.resolve(frames.splice(0, had + 1).at(-1));
+      frames.length = 0;
       return new Promise<any>((resolve) => (waiting = { is, resolve }));
     };
     const state = (lock: (l: any) => boolean) => next((f) => f.type === "state" && lock(f.lock));
@@ -88,7 +92,7 @@ test("one chain per workspace: kept for members, carried to stations, healed by 
     await state((l) => l?.seq === 2);
     // Turned off, a new genesis starts another chain.
     const off = await entry(ws, e2, "disable", {});
-    await alice("POST", `/v1/workspaces/${ws}/lock`, { entries: [off] });
+    assert.equal((await alice("POST", `/v1/workspaces/${ws}/lock`, { entries: [off] })).status, 200, "turned off");
     const g2 = await entry(ws, null, "genesis", { owner: "alice", again: true });
     assert.equal(((await (await alice("POST", `/v1/workspaces/${ws}/lock`, { entries: [g2] })).json()) as any).head.genesis, await entryHash(g2));
     assert.equal(((await (await alice("GET", `/v1/workspaces/${ws}`)).json()) as any).lock.seq, 0);
