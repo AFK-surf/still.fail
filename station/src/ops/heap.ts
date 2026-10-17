@@ -63,27 +63,39 @@ export function answerHeapRequests(data: string): () => void {
   return () => watcher.close();
 }
 
-/// `stillfail-station heap`: asks the running station for a snapshot and waits for its answer; the exit code.
+/// `stillfail-station heap`: asks the running station for a snapshot and waits for its answer (watching for it); the
+/// exit code.
 export async function heapCommand(data: string, waitMs = WAIT_MS): Promise<number> {
   const dir = runDir(data);
   const answerPath = join(dir, ANSWER);
+  mkdirSync(dir, { recursive: true });
   rmSync(answerPath, { force: true });
-  writePrivate(join(dir, REQUEST), String(process.pid));
-  const until = Date.now() + waitMs;
-  while (Date.now() < until) {
-    if (existsSync(answerPath)) {
-      const answer = JSON.parse(readFileSync(answerPath, "utf8")) as HeapAnswer;
-      rmSync(answerPath, { force: true });
-      if ("error" in answer) {
-        console.error(`the station could not write a heap snapshot: ${answer.error}`);
-        return 1;
-      }
-      console.log(`${answer.path} (${Math.round(answer.bytes / 1048576)} MB, ${answer.ms} ms)`);
-      return 0;
-    }
-    await new Promise((r) => setTimeout(r, 200));
+  const answer = await new Promise<HeapAnswer | null>((resolve) => {
+    const read = () => {
+      if (!existsSync(answerPath)) return;
+      done(JSON.parse(readFileSync(answerPath, "utf8")) as HeapAnswer);
+    };
+    const watcher = watch(dir, (_, name) => {
+      if (name === ANSWER) read();
+    });
+    const giveUp = wall.after(waitMs, () => done(null));
+    const done = (said: HeapAnswer | null) => {
+      watcher.close();
+      giveUp();
+      resolve(said);
+    };
+    writePrivate(join(dir, REQUEST), String(process.pid));
+  });
+  rmSync(answerPath, { force: true });
+  if (answer === null) {
+    rmSync(join(dir, REQUEST), { force: true });
+    console.error("the station did not answer: is it running on this data directory?");
+    return 1;
   }
-  rmSync(join(dir, REQUEST), { force: true });
-  console.error("the station did not answer: is it running on this data directory?");
-  return 1;
+  if ("error" in answer) {
+    console.error(`the station could not write a heap snapshot: ${answer.error}`);
+    return 1;
+  }
+  console.log(`${answer.path} (${Math.round(answer.bytes / 1048576)} MB, ${answer.ms} ms)`);
+  return 0;
 }
