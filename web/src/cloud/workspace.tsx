@@ -125,10 +125,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
   if (waiting && !settings) {
     return (
       <><WorkspaceKept entry={entry} />
-        <div className={shellCss.shell}>
-          <nav className={nav.sidebar} aria-label={entry.name}><div className={nav.brand}><SidebarBrand /></div><div className={nav.navScroll} /><div className={nav.navFoot}><WorkspaceSwitcher current={entry} /></div></nav>
-          <main className={shellCss.main}>{lock && <SecurityWaiting entry={entry} lock={lock} />}</main>
-        </div>
+        <Bare entry={entry}><main>{lock && <SecurityWaiting entry={entry} lock={lock} />}</main></Bare>
       </>
     );
   }
@@ -273,6 +270,20 @@ function StationPages({ stations }: { stations: Station[] | undefined }) {
   );
 }
 
+/** A workspace with none of its pages yet (no station, or this device not yet approved): the brand and the workspace
+ * switcher over the one page there is. */
+function Bare({ entry, children }: { entry: WorkspaceEntry; children: ReactNode }) {
+  return (
+    <div className={css.onboarding}>
+      <header className={css.onboardingBar}>
+        <div className={`${nav.brand} ${nav.brandCompact}`}><PageBrand /></div>
+        <div className={css.onboardingAccount}><WorkspaceSwitcher current={entry} /></div>
+      </header>
+      {children}
+    </div>
+  );
+}
+
 /**
  * A workspace with no station: what a station is and adding the first one, in the page; the workspace switcher (the
  * account, other workspaces) and the workspace's settings (inviting people) stay at hand. Its pages come once a station
@@ -280,11 +291,7 @@ function StationPages({ stations }: { stations: Station[] | undefined }) {
  */
 function Onboarding({ entry }: { entry: WorkspaceEntry }) {
   return (
-    <div className={css.onboarding}>
-      <header className={css.onboardingBar}>
-        <div className={`${nav.brand} ${nav.brandCompact}`}><PageBrand /></div>
-        <div className={css.onboardingAccount}><WorkspaceSwitcher current={entry} /></div>
-      </header>
+    <Bare entry={entry}>
       <main className={css.onboardingMain}>
         <Illustration name="no-station" />
         <h1 className={css.onboardingTitle}>{t("web-pages.workspace.onboarding.title")}</h1>
@@ -297,7 +304,7 @@ function Onboarding({ entry }: { entry: WorkspaceEntry }) {
           <JoinExistingLink entry={entry} className={`${chatCss.inlineLink} ${css.onboardingLinkButton}`} />
         </p>
       </main>
-    </div>
+    </Bare>
   );
 }
 
