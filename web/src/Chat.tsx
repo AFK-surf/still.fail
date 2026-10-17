@@ -1335,7 +1335,10 @@ function Files({ files }: { files: Attachment[] | undefined }) {
 /** Images already brushed in on this page (session key and path): shown again, they just show. */
 const revealed = new Set<string>();
 
-/** Images and video stills load near the screen; other files are a card. Either opens in a preview. */
+/**
+ * Images and video stills load near the screen; other files are a card. Either opens in a preview, an image's whether
+ * its thumbnail has come or not (the preview fetches the image itself, showing how far it has come).
+ */
 function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attachment }) {
   const station = useStation();
   const image = isImage(file.name);
@@ -1387,7 +1390,7 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (image) {
     return (
       <>
-        <button ref={box} type="button" className={look.image} data-send-image={sentFileKey(file)} onClick={() => (url || failed) && setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })} style={size} data-letterbox={letterbox ? "" : undefined}
+        <button ref={box} type="button" className={look.image} data-send-image={sentFileKey(file)} onClick={() => setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })} style={size} data-letterbox={letterbox ? "" : undefined}
           data-viewer-thumb={url && sessionKey !== null ? thumbId(station.address, sessionKey, file.path) : undefined}
           data-loaded={loaded ?? undefined} data-failed={failed || undefined} data-near={near || undefined}>
           {loaded !== "instant" && <Waiting hash={file.thumbhash} fit={letterbox} />}
