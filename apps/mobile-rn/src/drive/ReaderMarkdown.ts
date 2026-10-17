@@ -2,6 +2,7 @@
 // the styles over its ranges (`Styled`), which the reader draws as nested Text (Reader.tsx `StyledText`).
 import { JAVA_SPACE } from "./TextModel";
 import type { ChapterMark } from "./TextModel";
+import { sp } from "../ui/Text";
 
 /** A style over a range of a text (Compose's SpanStyle): what is set wins over what is under it. */
 export interface SpanStyle {
@@ -202,7 +203,7 @@ export function renderMarkdown(chunk: string, bodySp: number, colors: MarkdownCo
       const body = trim(heading[2]!);
       const start = text.length;
       inline(lineStart + Math.max(0, line.indexOf(body)), body, { fontWeight: "600" });
-      addStyle({ fontSize: bodySp * scale, fontWeight: "600" }, start, text.length);
+      addStyle({ fontSize: sp(bodySp * scale), fontWeight: "600" }, start, text.length);
     } else if (rule) {
       if (leading === null) leading = 14;
       const start = text.length;

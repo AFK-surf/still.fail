@@ -25,7 +25,7 @@ import { Ease } from "../ui/Motion";
 import { IconIn, Seg } from "../ui/Parts";
 import { SheetGrab, SheetHead } from "../ui/Sheet";
 import { Smooth } from "../ui/Smooth";
-import { T } from "../ui/Text";
+import { sp, T } from "../ui/Text";
 import { useC, withAlpha } from "../ui/Theme";
 import { Progress, WaitPill } from "../ui/Waiting";
 import { nameOf, parentOf } from "./DriveScreen";
@@ -629,7 +629,7 @@ function SearchSheet({ r }: { r: Reading }) {
           <TextInput
             ref={input} value={r.query} onChangeText={(it) => { r.query = it; }} multiline={false} returnKeyType="search"
             placeholder={t("android-misc.drive.reader.searchAll")} placeholderTextColor={C.subtle} cursorColor={C.accent} selectionColor={withAlpha(C.accent, 0.4)}
-            style={{ color: C.ink, fontSize: 15, padding: 0, includeFontPadding: false }}
+            style={{ color: C.ink, fontSize: sp(15), padding: 0, includeFontPadding: false }}
           />
         </View>
         {r.query.trim().length > 0 ? (
@@ -647,7 +647,7 @@ function SearchSheet({ r }: { r: Reading }) {
             android_ripple={ripple(C.ink)} style={{ paddingHorizontal: 20, paddingVertical: 10 }}
             onPress={() => { input.current?.blur(); r.hit = i; r.jumpTo(m.chunk, m.start); app.sheet = null; }}
           >
-            <StyledText styled={snippet(r.novel.chunks[m.chunk] ?? "", m, C.accent)} numberOfLines={2} style={{ fontSize: 15, lineHeight: 22, color: C.ink, letterSpacing: 0, includeFontPadding: false }} />
+            <StyledText styled={snippet(r.novel.chunks[m.chunk] ?? "", m, C.accent)} numberOfLines={2} style={{ fontSize: sp(15), lineHeight: 22, color: C.ink, letterSpacing: 0, includeFontPadding: false }} />
           </Pressable>
         )}
       />

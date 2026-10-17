@@ -12,7 +12,7 @@ import { ModelMark, PeopleStack, QuotaRings, SlackMark } from "../ui/Parts";
 import { SheetGrab, SheetHead } from "../ui/Sheet";
 import { Smooth } from "../ui/Smooth";
 import { T } from "../ui/Text";
-import { useC, withAlpha } from "../ui/Theme";
+import { dp, useC, withAlpha } from "../ui/Theme";
 import { Spinner } from "../ui/Waiting";
 import { agentSince, openAgent } from "./AgentSheet";
 import { chatLink, copyChatLink } from "./ChatLink";
@@ -298,7 +298,7 @@ export function InfoList({ children }: { children?: ReactNode }) {
 
 export function InfoRow({ onClick = null, children }: { onClick?: (() => void) | null; children?: ReactNode }) {
   const C = useC();
-  const row = { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 12, paddingVertical: 10 } as const;
+  const row = { flexDirection: "row", alignItems: "center", gap: dp(12), paddingHorizontal: dp(12), paddingVertical: dp(10) } as const;
   if (onClick == null) return <View style={row}>{children}</View>;
   return <Pressable onPress={onClick} android_ripple={{ color: withAlpha(C.ink, 0.1) }} style={row}>{children}</Pressable>;
 }

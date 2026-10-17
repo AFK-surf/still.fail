@@ -23,7 +23,7 @@ import { t } from "../i18n";
 import { Icon, Icons } from "../ui/Icon";
 import type { IconPaths } from "../ui/IconSet";
 import { Smooth } from "../ui/Smooth";
-import { T } from "../ui/Text";
+import { sp, T } from "../ui/Text";
 import { lerpColor, useC, withAlpha } from "../ui/Theme";
 import { rememberStationName } from "../ui/ChatInk";
 import { NavBar } from "../ui/Parts";
@@ -422,7 +422,7 @@ function PreviewBar({ name, at, go, reload, back, forward, canBack, canForward, 
                   onChangeText={setTyped}
                   multiline={false}
                   numberOfLines={1}
-                  style={{ flex: 1, fontSize: 16, color: editing ? C.ink : C.muted, padding: 0, includeFontPadding: false }}
+                  style={{ flex: 1, fontSize: sp(16), color: editing ? C.ink : C.muted, padding: 0, includeFontPadding: false }}
                   selectionColor={C.accent}
                   cursorColor={C.accent}
                   keyboardType="url"
@@ -771,7 +771,7 @@ function CustomSize({ viewport, set, turn }: { viewport: Viewport | null; set: (
           onChangeText={(s) => change(s.replace(/\D/g, "").substring(0, 4))}
           keyboardType="number-pad"
           returnKeyType="done"
-          style={{ fontSize: 15, color: C.ink, padding: 0, textAlign: "left", includeFontPadding: false }}
+          style={{ fontSize: sp(15), color: C.ink, padding: 0, textAlign: "left", includeFontPadding: false }}
           selectionColor={C.accent}
           cursorColor={C.accent}
           onFocus={() => setTyping(true)}
@@ -914,7 +914,7 @@ function Note({ mark, x, y, stageW, onChange, onDone, onRemove }: { mark: Mark; 
               onChangeText={(s) => { mark.comment = s; onChange(); }}
               returnKeyType="done"
               onSubmitEditing={onDone}
-              style={{ fontSize: 13, color: C.ink, padding: 0, includeFontPadding: false }}
+              style={{ fontSize: sp(13), color: C.ink, padding: 0, includeFontPadding: false }}
               selectionColor={C.accent}
               cursorColor={C.accent}
             />

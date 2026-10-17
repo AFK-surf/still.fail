@@ -24,6 +24,7 @@ import { Picked, uriSource } from "./Composer";
 import { Card, NoteBox, type NoteLike } from "./Notes";
 import { OfferQuote } from "./Preview";
 import { keyboard } from "../ui/Keyboard";
+import { sp } from "../ui/Text";
 
 /** A point (Offset there), in the image's pixels or on the stage. */
 export interface Offset { x: number; y: number }
@@ -742,7 +743,7 @@ function MarksPins({ marks, zoom, density }: { marks: ImageMarks; zoom: ZoomStat
                   onPress={() => marks.open(open ? null : s.id)} accessibilityLabel={t("android-chat.marks.pin", { n })}
                   style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
                 >
-                  <Text style={{ fontSize: 11, lineHeight: 11 * 1.4, fontWeight: "700", color: halo, includeFontPadding: false }}>{`${n}`}</Text>
+                  <Text style={{ fontSize: sp(11), lineHeight: 11 * 1.4, fontWeight: "700", color: halo, includeFontPadding: false }}>{`${n}`}</Text>
                 </Pressable>
               </Smooth>
             </Smooth>
@@ -775,7 +776,7 @@ function MarksWriting({ marks, zoom, density }: { marks: ImageMarks; zoom: ZoomS
         returnKeyType="done" onSubmitEditing={() => marks.putDown()}
         style={{
           padding: 0, margin: 0, includeFontPadding: false, width: "100%", height: "100%",
-          color: w.color, fontSize: size, lineHeight: size * LINE_HEIGHT, fontWeight: "600",
+          color: w.color, fontSize: sp(size), lineHeight: size * LINE_HEIGHT, fontWeight: "600",
           textShadowColor: halo, textShadowRadius: w.w * k * 0.2 / density, textShadowOffset: { width: 0, height: 0 },
         }}
       />
@@ -791,10 +792,10 @@ export function MarksActions({ marks, canDraft, onDownload, onDraft }: { marks: 
   const able = !marks.busy && marks.any;
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-      {marks.error != null && <Text numberOfLines={1} style={{ fontSize: 13, lineHeight: 13 * 1.4, color: "#FF7B6B", paddingHorizontal: 6 }}>{marks.error}</Text>}
+      {marks.error != null && <Text numberOfLines={1} style={{ fontSize: sp(13), lineHeight: 13 * 1.4, color: "#FF7B6B", paddingHorizontal: 6 }}>{marks.error}</Text>}
       <Smooth radius={15} style={{ height: 30 }}>
         <Pressable onPress={() => marks.leave()} android_ripple={{ color: "rgba(255,255,255,0.12)", borderless: false }} style={{ height: 30, paddingHorizontal: 10, alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ fontSize: 13, lineHeight: 13 * 1.4, color: "rgba(255,255,255,0.6)" }}>{t("common.cancel")}</Text>
+          <Text style={{ fontSize: sp(13), lineHeight: 13 * 1.4, color: "rgba(255,255,255,0.6)" }}>{t("common.cancel")}</Text>
         </Pressable>
       </Smooth>
       <PictureButton icon={Icons.Download} label={t("android-chat.marks.downloadMarked")} enabled={able} onClick={onDownload} />
@@ -806,7 +807,7 @@ export function MarksActions({ marks, canDraft, onDownload, onDraft }: { marks: 
               style={{ height: 30, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 5 }}
             >
               <Icon icon={Icons.Send} size={12} color="#FFFFFF" />
-              <Text style={{ fontSize: 13, lineHeight: 13 * 1.4, fontWeight: "600", color: "#FFFFFF" }}>{marks.busy ? t("android-chat.marks.making") : t("android-chat.preview.put")}</Text>
+              <Text style={{ fontSize: sp(13), lineHeight: 13 * 1.4, fontWeight: "600", color: "#FFFFFF" }}>{marks.busy ? t("android-chat.marks.making") : t("android-chat.preview.put")}</Text>
             </Pressable>
           </Smooth>
         </View>

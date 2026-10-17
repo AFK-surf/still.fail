@@ -14,7 +14,7 @@ import { Icons } from "../ui/Icon";
 import { IconIn, LargeTitle, ListCard, ListRow, ripple, SectionHeader } from "../ui/Parts";
 import { SheetGrab, SheetHead } from "../ui/Sheet";
 import { Smooth } from "../ui/Smooth";
-import { T } from "../ui/Text";
+import { sp, T } from "../ui/Text";
 import { CODE_FONT, useC, withAlpha } from "../ui/Theme";
 import { BusyIcon, Spinner, WaitLine, WaitShape, Waiting } from "../ui/Waiting";
 import { PageNote } from "./SettingParts";
@@ -302,7 +302,7 @@ function NameField({ value, onChange }: { value: string; onChange: (v: string) =
         autoCorrect={false}
         cursorColor={C.accent}
         selectionColor={withAlpha(C.accent, 0.4)}
-        style={{ color: C.ink, fontSize: 15, lineHeight: 21, paddingHorizontal: 12, paddingVertical: 11, includeFontPadding: false }}
+        style={{ color: C.ink, fontSize: sp(15), lineHeight: 21, paddingHorizontal: 12, paddingVertical: 11, includeFontPadding: false }}
       />
     </Smooth>
   );

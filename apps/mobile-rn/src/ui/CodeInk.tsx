@@ -7,6 +7,7 @@ import { AnnotatedString, AnnotatedText } from "./Annotated";
 import { highlight } from "./Highlight";
 import { CodeWeight, webSubtle } from "./Markdown";
 import { CODE_FONT, useC } from "./Theme";
+import { sp } from "./Text";
 
 /**
  * Coloured code kept by its key. Bound by source characters (not entry count), so a few large replies cannot keep
@@ -73,7 +74,7 @@ export function CodeInk({ code, language, dark }: { code: string; language: stri
   const result = prepared?.key === key ? prepared.text : first?.text;
   if (result == null) {
     // Nothing drawn till it is ready: even a plain 20 MB string is not safe to lay out at once.
-    return <Text style={{ fontSize: 12.5, lineHeight: 20, height: 20, color: webSubtle(C), includeFontPadding: false }}>{t("android-misc.markdown.laying")}</Text>;
+    return <Text style={{ fontSize: sp(12.5), lineHeight: 20, height: 20, color: webSubtle(C), includeFontPadding: false }}>{t("android-misc.markdown.laying")}</Text>;
   }
   return (
     <AnnotatedText

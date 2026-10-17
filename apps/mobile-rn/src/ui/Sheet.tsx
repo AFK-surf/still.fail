@@ -15,7 +15,7 @@ import { Ease, SheetSpring, motionSpring } from "./Motion";
 import { IconIn, NavBack } from "./Parts";
 import { Smooth } from "./Smooth";
 import { T } from "./Text";
-import { useC, withAlpha } from "./Theme";
+import { dp, useC, withAlpha } from "./Theme";
 import { Quiet } from "./Quiet";
 
 /**
@@ -190,10 +190,10 @@ function SheetBody({ spec, current, scrim, close, gone }: { spec: SheetSpec | nu
 export function SheetGrab() {
   const C = useC();
   const drag = useContext(LocalSheetDrag);
-  const bar = <View style={{ width: 38, height: 5, borderRadius: 3, backgroundColor: C.line }} />;
-  const inner = { alignSelf: "stretch" as const, paddingVertical: 4, alignItems: "center" as const, justifyContent: "center" as const };
+  const bar = <View style={{ width: dp(38), height: dp(5), borderRadius: 3, backgroundColor: C.line }} />;
+  const inner = { alignSelf: "stretch" as const, paddingVertical: dp(4), alignItems: "center" as const, justifyContent: "center" as const };
   return (
-    <View style={{ alignSelf: "stretch", paddingTop: 8, paddingBottom: 4 }}>
+    <View style={{ alignSelf: "stretch", paddingTop: dp(8), paddingBottom: dp(4) }}>
       {/* Its drag is the sheet's top's (SheetHost); a tap switches a draggable sheet between half and full. */}
       {drag?.draggable === true ? <Pressable onPress={() => drag.tap()} style={inner}>{bar}</Pressable> : <View style={inner}>{bar}</View>}
     </View>
@@ -203,7 +203,7 @@ export function SheetGrab() {
 export function SheetHead({ title, trailing, lead }: { title: string; trailing?: Slot | null; lead?: Slot | null }) {
   const C = useC();
   return (
-    <View style={{ alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 18, paddingRight: 18, paddingTop: 4, paddingBottom: 10 }}>
+    <View style={{ alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: dp(8), paddingLeft: dp(18), paddingRight: dp(18), paddingTop: dp(4), paddingBottom: dp(10) }}>
       {slot(lead)}
       <T size={17} weight="700" color={C.ink} style={{ flex: 1 }}>{title}</T>
       {slot(trailing)}

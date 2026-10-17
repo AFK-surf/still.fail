@@ -16,7 +16,7 @@
 // mdast's names (a soft line break is a "\n" in a text node, a reference link is resolved by its definition here).
 import * as Clipboard from "expo-clipboard";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Pressable, ScrollView, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { PixelRatio, Pressable, ScrollView, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import type { Definition, Image, Link, List, ListItem, Nodes, Paragraph, PhrasingContent, Root, RootContent, Table as MdTable, TableCell } from "mdast";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmStrikethroughFromMarkdown } from "mdast-util-gfm-strikethrough";
@@ -38,8 +38,9 @@ import { pickable, pickedText } from "./Pick";
 import { SideScroll } from "./SideScroll";
 import { Smooth } from "./Smooth";
 import { markWeight, passageMark } from "./TextMark";
-import { CODE_FONT, useC, withAlpha, type StillFailColors } from "./Theme";
+import { CODE_FONT, dp, useC, withAlpha, type StillFailColors } from "./Theme";
 import { Mermaid } from "./Viz";
+import { sp } from "./Text";
 
 type Node = Nodes;
 
@@ -229,7 +230,7 @@ export function Markdown({ text, modifier: modifier_, style, size = 15, placing,
   return (
     <View style={modifier}>
       {blocks == null
-        ? <Text style={{ color: webSubtle(C), fontSize: size, lineHeight: size * 1.4, includeFontPadding: false }}>{t("android-misc.markdown.laying")}</Text>
+        ? <Text style={{ color: webSubtle(C), fontSize: sp(size), lineHeight: size * 1.4, includeFontPadding: false }}>{t("android-misc.markdown.laying")}</Text>
         : <Stack pieces={blocks} />}
     </View>
   );
@@ -427,7 +428,7 @@ function Item({ ordered, depth, size, inner }: { ordered: number | null; depth: 
   return (
     <View style={{ flexDirection: "row" }}>
       {ordered != null
-        ? <Text numberOfLines={1} ellipsizeMode="clip" style={{ color: ink, fontSize: size, lineHeight: lh(size), textAlign: "right", width: 20, paddingRight: 5, includeFontPadding: false, letterSpacing: 0 }}>{`${ordered}.`}</Text>
+        ? <Text numberOfLines={1} ellipsizeMode="clip" style={{ color: ink, fontSize: sp(size), lineHeight: lh(size), textAlign: "right", width: 20, paddingRight: 5, includeFontPadding: false, letterSpacing: 0 }}>{`${ordered}.`}</Text>
         : <Bullet depth={depth} textSize={size} ink={ink} />}
       <View style={{ flex: 1, minWidth: 0 }}><Stack pieces={inner} /></View>
     </View>
@@ -472,7 +473,7 @@ export function CodeBlock({ code, language, bar = true, modifier }: { code: stri
     <Smooth radius={12} style={[modifier, { alignSelf: "stretch", backgroundColor: codeGround(C) }]}>
       {bar && (
         <View style={{ flexDirection: "row", paddingLeft: 4, paddingRight: 4, paddingTop: 4, height: 28, justifyContent: "flex-end", alignItems: "center" }}>
-          <Text style={{ fontSize: 10, lineHeight: 14, letterSpacing: 0.2, color: webSubtle(C), paddingHorizontal: 6, includeFontPadding: false }}>{language ?? "text"}</Text>
+          <Text style={{ fontSize: sp(10), lineHeight: 14, letterSpacing: 0.2, color: webSubtle(C), paddingHorizontal: 6, includeFontPadding: false }}>{language ?? "text"}</Text>
           <Smooth radius={6} style={{ height: 24, backgroundColor: withAlpha(C.surface, 0.8) }}>
             <Pressable
               onPress={() => { void Clipboard.setStringAsync(code); setCopied(true); }}
@@ -480,7 +481,7 @@ export function CodeBlock({ code, language, bar = true, modifier }: { code: stri
               style={{ height: 24, flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 7 }}
             >
               <Icon icon={copied ? Icons.Check : Icons.Copy} size={12} color={webMuted(C)} />
-              <Text style={{ fontSize: 11, lineHeight: 15.4, color: webMuted(C), includeFontPadding: false }}>{copied ? t("common.copied") : t("common.copy")}</Text>
+              <Text style={{ fontSize: sp(11), lineHeight: 15.4, color: webMuted(C), includeFontPadding: false }}>{copied ? t("common.copied") : t("common.copy")}</Text>
             </Pressable>
           </Smooth>
         </View>
@@ -527,7 +528,12 @@ function Table({ table, ctx }: { table: MdTable; ctx: Ctx }) {
   if (columns === 0) return null;
   const line = webLine(C);
   const muted = webMuted(C);
-  const least = 4 * 13 + 24;
+  // Reckoned in whole pixels as Compose's Layout does (each dp rounded on its own, each cell's intrinsic width whole
+  // pixels): in dp, a column a pixel or two off decided whether "3 × 22 MB" broke in it.
+  const k = PixelRatio.get();
+  const px = (v: number) => Math.round(v * k);
+  const pad = px(12) * 2;
+  const least = px(4 * 13) + px(24);
   // The flat index of each cell (r * columns + c), as the Kotlin's measurables are.
   const flat: { r: number; c: number; cell: TableCell | undefined }[] = [];
   cells.forEach((row, r) => { for (let c = 0; c < columns; c++) flat.push({ r, c, cell: row[c] }); });
@@ -539,12 +545,12 @@ function Table({ table, ctx }: { table: MdTable; ctx: Ctx }) {
   if (measured && avail != null) {
     const mn = new Array<number>(columns).fill(0);
     const mx = new Array<number>(columns).fill(0);
-    let k = 0;
+    let n = 0;
     for (const { c, cell } of flat) {
       let lo = least, hi = least;
       const images = imagesOf(cell);
-      if (images) { const w = cellImagesWidth(images) + 24; lo = Math.max(least, w); hi = lo; }
-      else if (cell) { lo = Math.max(least, mins[k]! + 24); hi = Math.max(least, maxs[k]! + 24); k++; }
+      if (images) { const w = Math.ceil(cellImagesWidth(images) * k - 0.01) + pad; lo = Math.max(least, w); hi = lo; }
+      else if (cell) { lo = Math.max(least, Math.ceil(mins[n]! * k - 0.01) + pad); hi = Math.max(least, Math.ceil(maxs[n]! * k - 0.01) + pad); n++; }
       mn[c] = Math.max(mn[c]!, lo); mx[c] = Math.max(mx[c]!, hi);
     }
     const sumMin = mn.reduce((a, b) => a + b, 0);
@@ -555,6 +561,7 @@ function Table({ table, ctx }: { table: MdTable; ctx: Ctx }) {
     } else if (sumMax <= avail) widths = mx;
     else if (sumMin >= avail) widths = mn;
     else widths = mn.map((w, c) => w + Math.round(((mx[c]! - w) * (avail - sumMin)) / (sumMax - sumMin)));
+    widths = widths.map((w) => w / k);
   }
   const total = widths?.reduce((a, b) => a + b, 0) ?? 0;
   const rowsHeight = cells.reduce((sum, _, r) => sum + (rowHeights[r] ?? 0), 0);
@@ -569,7 +576,7 @@ function Table({ table, ctx }: { table: MdTable; ctx: Ctx }) {
               const images = imagesOf(cell);
               // Middle-aligned, as the browser's cells are; a rule under every row but the last.
               return (
-                <View key={c} style={{ width: widths[c], backgroundColor: header ? codeGround(C) : undefined, paddingHorizontal: 12, paddingVertical: 7, justifyContent: "center" }}>
+                <View key={c} style={{ width: widths[c], backgroundColor: header ? codeGround(C) : undefined, paddingHorizontal: dp(12), paddingVertical: dp(7), justifyContent: "center" }}>
                   {r < cells.length - 1 && <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1, backgroundColor: line }} />}
                   {images != null ? <CellImageRow files={images} placing={ctx.placing!} />
                     : cell != null && header ? <LocalMdInk.Provider value={muted}>{cellWords(cell, true, ctx)}</LocalMdInk.Provider>
@@ -584,17 +591,17 @@ function Table({ table, ctx }: { table: MdTable; ctx: Ctx }) {
     </View>
   );
   return (
-    <View style={{ alignSelf: "stretch" }} onLayout={(e) => setAvail(Math.floor(e.nativeEvent.layout.width) - 2)}>
+    <View style={{ alignSelf: "stretch" }} onLayout={(e) => setAvail(px(e.nativeEvent.layout.width) - px(2))}>
       {!measured && (
         // Laid out unseen, unbounded sideways: each cell's words on one line, and broken at every chance.
         <ScrollView horizontal scrollEnabled={false} pointerEvents="none" style={{ position: "absolute", opacity: 0, left: 0, top: 0, height: 0 }}>
           <View style={{ alignItems: "flex-start" }}>
             {unknown.map(({ r, cell }, k) => (
               <View key={k}>
-                <View style={{ alignSelf: "flex-start" }} onLayout={(e) => { const w = Math.ceil(e.nativeEvent.layout.width); setMaxs((m) => (m[k] === w ? m : { ...m, [k]: w })); }}>
+                <View style={{ alignSelf: "flex-start" }} onLayout={(e) => { const w = e.nativeEvent.layout.width; setMaxs((m) => (m[k] === w ? m : { ...m, [k]: w })); }}>
                   {cellWords(cell!, r === 0, ctx, "max")}
                 </View>
-                <View style={{ alignSelf: "flex-start" }} onLayout={(e) => { const w = Math.ceil(e.nativeEvent.layout.width); setMins((m) => (m[k] === w ? m : { ...m, [k]: w })); }}>
+                <View style={{ alignSelf: "flex-start" }} onLayout={(e) => { const w = e.nativeEvent.layout.width; setMins((m) => (m[k] === w ? m : { ...m, [k]: w })); }}>
                   {cellWords(cell!, r === 0, ctx, "min")}
                 </View>
               </View>
@@ -603,11 +610,11 @@ function Table({ table, ctx }: { table: MdTable; ctx: Ctx }) {
         </ScrollView>
       )}
       {widths != null && avail != null && (
-        <Smooth radius={20} stroke={{ width: 1, color: line }} style={{ alignSelf: "flex-start", backgroundColor: tableGround(C), padding: 1 }}>
-          {total <= avail ? rows(widths) : (
+        <Smooth radius={20} stroke={{ width: 1, color: line }} style={{ alignSelf: "flex-start", backgroundColor: tableGround(C), padding: dp(1) }}>
+          {total * k <= avail + 0.5 ? rows(widths) : (
             // Wider than there is room for: it scrolls sideways, as tall as its rows (a horizontal ScrollView left to
             // size itself took the whole list's height).
-            <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ width: avail, height: rowsHeight }}>
+            <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ width: avail / k, height: rowsHeight }}>
               {rows(widths)}
             </ScrollView>
           )}

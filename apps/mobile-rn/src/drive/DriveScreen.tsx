@@ -35,7 +35,7 @@ import { Icons, type IconPaths } from "../ui/IconSet";
 import { DownloadChip, IconIn, NavBar, NavButton, SectionHeader } from "../ui/Parts";
 import { SheetGrab, SheetHead } from "../ui/Sheet";
 import { Smooth } from "../ui/Smooth";
-import { T } from "../ui/Text";
+import { sp, T } from "../ui/Text";
 import { useC, withAlpha } from "../ui/Theme";
 import { Progress, Spinner, WaitLine, Waiting } from "../ui/Waiting";
 
@@ -570,8 +570,8 @@ function FolderPage({ station, s, roots, root, path, top, can }: { station: stri
                   <T size={15} color={C.accent}>{t(chosen.length === shownEntries.length ? "android-misc.drive.chooseNone" : "android-misc.drive.chooseAll")}</T>
                 </Pressable>
               </Smooth>
-              <View accessibilityLabel={t("android-misc.drive.chosenActions")}>
-                <NavButton icon={Icons.More} onClick={() => openChosenSheet(station, root, path, chosenEntries(), can, new Set(entries.map((it) => it.name)), () => setChosen([]))} />
+              <View>
+                <NavButton icon={Icons.More} label={t("android-misc.drive.chosenActions")} onClick={() => openChosenSheet(station, root, path, chosenEntries(), can, new Set(entries.map((it) => it.name)), () => setChosen([]))} />
               </View>
             </View>
           }
@@ -589,9 +589,9 @@ function FolderPage({ station, s, roots, root, path, top, can }: { station: stri
                 {refreshing ? <Spinner /> : <IconIn icon={Icons.Refresh} size={18} />}
               </Pressable>
               {can.write ? (
-                <View accessibilityLabel={t("android-misc.drive.add")}>
+                <View>
                   <NavButton
-                    icon={Icons.Plus} iconSize={20}
+                    icon={Icons.Plus} iconSize={20} label={t("android-misc.drive.add")}
                     onClick={() => {
                       const rows = can.manage && top ? 3 : 2;
                       app.sheet = sheet({
@@ -610,8 +610,8 @@ function FolderPage({ station, s, roots, root, path, top, can }: { station: stri
                 </View>
               ) : null}
               {/* How the folder is shown (its order, hidden files), and the folders lent for those who name them. */}
-              <View accessibilityLabel={t("android-misc.drive.view")}>
-                <NavButton icon={Icons.More} onClick={() => openViewSheet(station, can.manage && top)} />
+              <View>
+                <NavButton icon={Icons.More} label={t("android-misc.drive.view")} onClick={() => openViewSheet(station, can.manage && top)} />
               </View>
             </View>
           }
@@ -1170,7 +1170,7 @@ function PickFilter({ text, onChange, input }: { text: string; onChange: (s: str
             ref={input} value={text} onChangeText={onChange} multiline={false} returnKeyType="done"
             placeholder={t("android-misc.drive.pick.filter")} placeholderTextColor={C.muted} cursorColor={C.accent} selectionColor={withAlpha(C.accent, 0.4)}
             accessibilityLabel={t("android-misc.drive.pick.filter")}
-            style={{ fontSize: 15, color: C.ink, padding: 0, includeFontPadding: false }}
+            style={{ fontSize: sp(15), color: C.ink, padding: 0, includeFontPadding: false }}
           />
         </View>
         {text.length > 0 ? (

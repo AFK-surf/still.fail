@@ -26,7 +26,7 @@ import { Ease } from "../ui/Motion";
 import { MakerIcon } from "../ui/Parts";
 import { SheetGrab, SheetHead } from "../ui/Sheet";
 import { concentric, Smooth, smoothMiddle } from "../ui/Smooth";
-import { T } from "../ui/Text";
+import { sp, T } from "../ui/Text";
 import { lerpColor, raised, useC, withAlpha } from "../ui/Theme";
 import { BusyIcon, Spinner, WaitLine } from "../ui/Waiting";
 import { openAttach, AttachLaunchers } from "./Attach";
@@ -792,13 +792,13 @@ function DraftQuoteCard({ draft, q }: { draft: Draft; q: DraftQuote }) {
       <View style={{ width: "100%" }}>
         <Text
           numberOfLines={2} ellipsizeMode="tail"
-          style={{ fontSize: 13, lineHeight: 19.5, color: ink.muted, paddingLeft: 16, paddingRight: 34, paddingTop: 9, includeFontPadding: false, letterSpacing: 0 }}
+          style={{ fontSize: sp(13), lineHeight: 19.5, color: ink.muted, paddingLeft: 16, paddingRight: 34, paddingTop: 9, includeFontPadding: false, letterSpacing: 0 }}
         >{quoteLine(q.author, q.text)}</Text>
         <View style={{ width: "100%", paddingLeft: 16, paddingRight: 16, paddingTop: 3, paddingBottom: 10 }}>
           {q.comment === "" && <T size={15} line={22} color={ink.subtle} style={{ position: "absolute", left: 16, top: 3 }}>{t("android-chat.quote.comment")}</T>}
           <TextInput
             ref={field} value={q.comment} onChangeText={(v) => { q.comment = v; }} multiline={false}
-            style={{ color: C.ink, fontSize: 15, lineHeight: 22, padding: 0, margin: 0, includeFontPadding: false, width: "100%" }}
+            style={{ color: C.ink, fontSize: sp(15), lineHeight: 22, padding: 0, margin: 0, includeFontPadding: false, width: "100%" }}
             cursorColor={C.accent} selectionColor={withAlpha(C.accent, 0.35)}
             returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => { draft.focus++; }}
           />

@@ -185,39 +185,43 @@ export function DecisionOptions({ options, modifier: modifier_, style = modifier
   // A card of rows to be pressed (web pages.css.ts listCard, docs/ui-panels.md 页面卡片): each row's ground under the
   // finger OPTION_PAD from the card's edge, rounded OPTION_CORNER, the card's corner theirs and that together; its
   // number in its row's corner, concentric with it; its words OPTION_WORDS from the card's edge, as a card of words'.
+  // `style` outside the card (Kotlin's `modifier` comes before its clip and ground: a padding there is room round it, not
+  // in it; given to the card itself, a paddingTop also won over its own padding).
   return (
-    <Smooth radius={OPTION_CORNER + OPTION_PAD / SMOOTH_SCALE} style={[style, { alignSelf: "stretch", backgroundColor: C.chip, padding: OPTION_PAD }]}>
-      {options.map((o, i) => {
-        const strong = o.recommended === true;
-        const said = strong ? t("common.recommended") : undefined;
-        const free = enabled && busy == null;
-        const ink = strong ? "#FFFFFF" : C.muted;
-        const digit = Digits[i];
-        return (
-          <View key={`${i}-${o.label}`}>
-            {i > 0 && <View style={{ marginLeft: NUMBER_IN + NUMBER + 12, marginRight: OPTION_WORDS - OPTION_PAD, height: 1, backgroundColor: hairline }} />}
-            <Smooth radius={OPTION_CORNER} style={{ opacity: enabled ? 1 : 0.5 }}>
-              <Pressable
-                onPress={() => onPick(o)}
-                disabled={!free}
-                android_ripple={ripple(C.ink)}
-                accessibilityValue={said ? { text: said } : undefined}
-                style={{ flexDirection: "row", gap: 12, paddingLeft: NUMBER_IN, paddingRight: OPTION_WORDS - OPTION_PAD, paddingTop: NUMBER_IN, paddingBottom: NUMBER_IN }}
-              >
-                <View style={{ width: NUMBER, height: NUMBER, borderRadius: NUMBER / 2, overflow: "hidden", backgroundColor: strong ? C.accent : withAlpha(C.ink, 0.09), alignItems: "center", justifyContent: "center" }}>
-                  {digit ? <IconIn icon={digit} size={NUMBER} tint={ink} /> : <T size={12} line={22} weight="600" color={ink}>{`${i + 1}`}</T>}
-                </View>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <T size={15} line={21} weight="500" color={C.ink}>{o.label}</T>
-                  {o.detail != null && <T size={13} line={18} color={C.muted}>{o.detail}</T>}
-                </View>
-                {busy === o.label && <DoingMark running failed={null} inline />}
-              </Pressable>
-            </Smooth>
-          </View>
-        );
-      })}
-    </Smooth>
+    <View style={[{ alignSelf: "stretch" }, style]}>
+      <Smooth radius={OPTION_CORNER + OPTION_PAD / SMOOTH_SCALE} style={{ alignSelf: "stretch", backgroundColor: C.chip, padding: OPTION_PAD }}>
+        {options.map((o, i) => {
+          const strong = o.recommended === true;
+          const said = strong ? t("common.recommended") : undefined;
+          const free = enabled && busy == null;
+          const ink = strong ? "#FFFFFF" : C.muted;
+          const digit = Digits[i];
+          return (
+            <View key={`${i}-${o.label}`}>
+              {i > 0 && <View style={{ marginLeft: NUMBER_IN + NUMBER + 12, marginRight: OPTION_WORDS - OPTION_PAD, height: 1, backgroundColor: hairline }} />}
+              <Smooth radius={OPTION_CORNER} style={{ opacity: enabled ? 1 : 0.5 }}>
+                <Pressable
+                  onPress={() => onPick(o)}
+                  disabled={!free}
+                  android_ripple={ripple(C.ink)}
+                  accessibilityValue={said ? { text: said } : undefined}
+                  style={{ flexDirection: "row", gap: 12, paddingLeft: NUMBER_IN, paddingRight: OPTION_WORDS - OPTION_PAD, paddingTop: NUMBER_IN, paddingBottom: NUMBER_IN }}
+                >
+                  <View style={{ width: NUMBER, height: NUMBER, borderRadius: NUMBER / 2, overflow: "hidden", backgroundColor: strong ? C.accent : withAlpha(C.ink, 0.09), alignItems: "center", justifyContent: "center" }}>
+                    {digit ? <IconIn icon={digit} size={NUMBER} tint={ink} /> : <T size={12} line={22} weight="600" color={ink}>{`${i + 1}`}</T>}
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <T size={15} line={21} weight="500" color={C.ink}>{o.label}</T>
+                    {o.detail != null && <T size={13} line={18} color={C.muted}>{o.detail}</T>}
+                  </View>
+                  {busy === o.label && <DoingMark running failed={null} inline />}
+                </Pressable>
+              </Smooth>
+            </View>
+          );
+        })}
+      </Smooth>
+    </View>
   );
 }
 

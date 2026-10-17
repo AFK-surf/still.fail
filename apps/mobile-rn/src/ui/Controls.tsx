@@ -9,8 +9,8 @@ import type { IconPaths } from "./IconSet";
 import { useUi } from "./Host";
 import { IconIn, ripple } from "./Parts";
 import { Smooth } from "./Smooth";
-import { T } from "./Text";
-import { CODE_FONT, useC } from "./Theme";
+import { sp, T } from "./Text";
+import { CODE_FONT, dp, useC } from "./Theme";
 import { BusyIcon, Spinner } from "./Waiting";
 
 /**
@@ -45,12 +45,12 @@ export function PickRow({ label, sub, checked = false, enabled = true, busy = fa
   const C = useC();
   const ink = enabled ? (color ?? C.ink) : C.subtle;
   return (
-    <View style={{ paddingHorizontal: 12 }}>
+    <View style={{ paddingHorizontal: dp(12) }}>
       <Pressable
         onPress={onClick}
         disabled={!(enabled && !busy && !done)}
         android_ripple={ripple(C.ink)}
-        style={{ alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 8, paddingVertical: 12 }}
+        style={{ alignSelf: "stretch", flexDirection: "row", alignItems: "center", gap: dp(12), paddingHorizontal: dp(8), paddingVertical: dp(12) }}
       >
         {slot(leading)}
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -111,7 +111,7 @@ export function Field({ value, onChange, placeholder, mono = false, modifier: mo
         selectionColor={C.accent}
         underlineColorAndroid="transparent"
         textAlignVertical="top"
-        style={[{ color: C.ink, fontSize: 15, padding: 0, margin: 0, includeFontPadding: false }, lines > 1 && { minHeight: lines * 15 * 1.17 }, font]}
+        style={[{ color: C.ink, fontSize: sp(15), padding: 0, margin: 0, includeFontPadding: false }, lines > 1 && { minHeight: lines * 15 * 1.17 }, font]}
       />
     </Smooth>
   );

@@ -23,7 +23,7 @@ import { Avatar, Card, ListCard, ListRow, MakerIcon, NavBar, NavButton, SectionH
 import { SheetGrab, SheetHead } from "../ui/Sheet";
 import { Smooth } from "../ui/Smooth";
 import { StatusText } from "../ui/StatusText";
-import { T } from "../ui/Text";
+import { sp, T } from "../ui/Text";
 import { CODE_FONT, useC, withAlpha } from "../ui/Theme";
 import { BusyIcon, WaitLine, WaitShape, Waiting } from "../ui/Waiting";
 import { rememberConnectFlow, type ConnectFlow } from "./ConnectFlow";
@@ -638,7 +638,7 @@ export function SecretField({ value, onChange, placeholder }: { value: string; o
         selectionColor={C.accent}
         cursorColor={C.accent}
         underlineColorAndroid="transparent"
-        style={{ alignSelf: "stretch", color: C.ink, fontSize: 15, fontFamily: CODE_FONT, padding: 0, margin: 0, includeFontPadding: false }}
+        style={{ alignSelf: "stretch", color: C.ink, fontSize: sp(15), fontFamily: CODE_FONT, padding: 0, margin: 0, includeFontPadding: false }}
       />
     </Smooth>
   );

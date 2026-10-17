@@ -11,6 +11,7 @@
 import { Fragment, type ReactNode } from "react";
 import { Linking, StyleSheet, Text, View, type NativeSyntheticEvent, type StyleProp, type TextLayoutEventData, type TextProps, type TextStyle } from "react-native";
 import { app } from "../AppState";
+import { cjkRoom, sp, withRoom } from "./Text";
 
 /** A span's style (Compose's SpanStyle): only what is given changes the words under it. */
 export interface SpanStyle {
@@ -158,8 +159,9 @@ function spanStyle(s: SpanStyle, base: number): TextStyle {
   if (s.fontWeight !== undefined) out.fontWeight = s.fontWeight;
   if (s.fontStyle !== undefined) out.fontStyle = s.fontStyle;
   if (s.fontFamily !== undefined) out.fontFamily = s.fontFamily;
-  if (s.fontSize !== undefined) out.fontSize = s.fontSize;
-  if (s.fontSizeEm !== undefined) out.fontSize = base * s.fontSizeEm;
+  // As Compose's sizes are drawn (Text.tsx sp): `base` is the paragraph's size in sp.
+  if (s.fontSize !== undefined) out.fontSize = sp(s.fontSize);
+  if (s.fontSizeEm !== undefined) out.fontSize = sp(base * s.fontSizeEm);
   if (s.letterSpacing !== undefined) out.letterSpacing = s.letterSpacing;
   if (s.textDecorationLine !== undefined) out.textDecorationLine = s.textDecorationLine;
   if (s.backgroundColor !== undefined) out.backgroundColor = s.backgroundColor;
@@ -216,7 +218,7 @@ export function AnnotatedText({ text, style, inlineContent, modifier, onTextLayo
   const props = modifier?.props ?? {};
   const laid = (e: TextLayout) => { onTextLayout?.(e); props.onTextLayout?.(e); };
   const body = (
-    <Text {...rest} {...props} style={[{ letterSpacing: 0, includeFontPadding: false }, style, props.style]} onTextLayout={laid}>
+    <Text {...rest} {...props} style={withRoom([{ letterSpacing: 0, includeFontPadding: false }, style, typeof flat.fontSize === "number" && { fontSize: sp(flat.fontSize) }, props.style], typeof flat.lineHeight === "number" ? cjkRoom(base, flat.lineHeight, text.text) : null)} onTextLayout={laid}>
       {annotatedRuns(text, base, inlineContent)}
     </Text>
   );

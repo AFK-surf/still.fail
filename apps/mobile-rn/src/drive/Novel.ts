@@ -8,6 +8,7 @@ import { t } from "../i18n";
 import { Dark, Light } from "../ui/Theme";
 import { markdownChapters } from "./ReaderMarkdown";
 import { chunkIndexFor, chunkText, decodeText, detectWrapWidth, findChapters, normaliseLineEndings, reflow, type NovelChapter } from "./TextModel";
+import { sp } from "../ui/Text";
 
 /**
  * A text, ready to show in pieces: [chunks] are contiguous blocks of the text shown (each starts at [starts] of it), a
@@ -131,7 +132,7 @@ export class ReaderTypography {
   constructor(readonly fontSp: number, readonly lineSpacing: number, readonly marginDp: number, readonly family: ReaderFamily, readonly indent: boolean) {}
 
   style(color: string): TextStyle {
-    return { color, fontSize: this.fontSp, lineHeight: this.fontSp * this.lineSpacing, fontFamily: this.family.family, textAlign: "left", letterSpacing: 0, includeFontPadding: false };
+    return { color, fontSize: sp(this.fontSp), lineHeight: this.fontSp * this.lineSpacing, fontFamily: this.family.family, textAlign: "left", letterSpacing: 0, includeFontPadding: false };
   }
 
   /** Each setting's range (the core keeps them within it): where the sheet's steps stop. */
