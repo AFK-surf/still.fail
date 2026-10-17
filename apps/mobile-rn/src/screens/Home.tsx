@@ -281,6 +281,15 @@ function ChatPane({ current, chats, filter, padding, onSearch, searching, index,
   }
   const note = view?.note;
   const waiting = note?.reading === true;
+  // Starting past the search field (Kotlin's LazyListState(1)): Android's list takes no first offset (contentOffset is
+  // iOS's), so it is scrolled there once it has rows.
+  const list = useRef<FlatList<PaneItem>>(null);
+  const placed = useRef(false);
+  const place = () => {
+    if (placed.current || items.length === 0) return;
+    placed.current = true;
+    list.current?.scrollToOffset({ offset: top, animated: false });
+  };
 
   return (
     <Animated.View
@@ -293,8 +302,10 @@ function ChatPane({ current, chats, filter, padding, onSearch, searching, index,
       {view != null && motion.ghosts.map((g) => <Leaving key={`${g.key}@${g.at}`} g={g} view={view} motion={motion} />)}
       <PaneContext.Provider value={{ motion, still, sizes }}>
         <FlatList
+          ref={list}
           style={StyleSheet.absoluteFill}
           data={items}
+          onContentSizeChange={place}
           keyExtractor={(i) => i.key}
           extraData={hold}
           contentOffset={{ x: 0, y: top }}

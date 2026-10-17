@@ -642,7 +642,8 @@ function Pages({ app, current }: { app: AppState; current: WorkspaceEntry }) {
         place as the bar switches, rather than out of the app.
       */}
       <BackHandlerOf enabled={root != null && root.kind !== "Home" && placeOf(root) != null && !overlaid} onBack={() => app.place({ kind: "Home" })} />
-      <View style={{ flex: 1 }}>
+      {/* A view of its own (not flattened into its parent): the pages' zIndex orders them among themselves, not over the bar. */}
+      <View style={{ flex: 1 }} collapsable={false}>
         <LocalWide.Provider value={wide}>
           {order.current.map((key) => {
             const screen = screens.get(key);

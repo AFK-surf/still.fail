@@ -1070,18 +1070,6 @@ export function BottomBar({
     const v = model.value.vis.value;
     return { opacity: v, transform: [{ translateY: (1 - v) * 120 }] };
   });
-  // TEMP: what the bar is, a moment after it is drawn (it does not show on the emulator).
-  useEffect(() => {
-    const id = setTimeout(() => {
-      runOnUI(() => {
-        "worklet";
-        const m = model.value;
-        console.log(`stillfail bar: shown=${m.told.shown} vis=${m.vis.value}->${m.vis.target} o=${m.o.value} k=${m.k.value} running=${m.running} why=${whyMoving(m)} w=${w} panel=${g.panel} glass=${glassD.value.slice(0, 120)}`);
-      })();
-    }, 6000);
-    return () => clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   const glassBox = useAnimatedStyle(() => {
     const top = clipTop(model.value, g);
     const h = Math.max(1, g.panel - top);
