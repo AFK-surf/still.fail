@@ -3,7 +3,7 @@
 // over the page (the composer starts beside it); Home's new-chat button is at its bottom right.
 import { useEffect, useState } from "react";
 import { BackHandler, FlatList, Pressable, View, type ViewStyle } from "react-native";
-import Animated, { useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTopic } from "../../../../web/src/core/react.ts";
 import type { ChatsView } from "../../../../web/src/core/shapes.ts";
@@ -16,6 +16,7 @@ import { T } from "../ui/Text";
 import { lerpColor, raised, useC, type StillFailColors } from "../ui/Theme";
 import { Waiting } from "../ui/Waiting";
 import { ChatRowBody, DecisionsCapsule, decisionsWaiting } from "./Home";
+import { keyboard } from "../ui/Keyboard";
 
 /** Wider than this, the screen is wide (web: app.tsx WIDE). */
 export const WideAt = 680;
@@ -39,9 +40,10 @@ export function floatingStill(C: StillFailColors, tint?: string): ViewStyle {
 
 /** The keyboard or the system's bars at the foot, whichever is higher: what is at the bottom sits over it. */
 function useFoot() {
-  const keyboard = useAnimatedKeyboard();
+  // One keyboard for the app (ui/Keyboard.tsx): a second one asked of Reanimated with other window options blanks the window.
+  const ime = keyboard();
   const insets = useSafeAreaInsets();
-  return useAnimatedStyle(() => ({ paddingBottom: Math.max(keyboard.height.value, insets.bottom) }));
+  return useAnimatedStyle(() => ({ paddingBottom: Math.max(ime.value, insets.bottom) }));
 }
 
 /** What is at the screen's bottom corners, over the page (Home draws its own new-chat button only when not wide). */

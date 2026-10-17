@@ -228,6 +228,8 @@ function MenuBody({ spec, current, closed, gone }: { spec: MenuSpec | null; curr
   const C = useC();
   const window = useWindowDimensions();
   const [box, setBox] = useState({ width: window.width, height: window.height });
+  const layer = useRef<View>(null);
+  const [origin, setOrigin] = useState({ x: 0, y: 0 });
   // Keep the closed state alive before the first menu is mounted, and keep its
   // content until both the menu and its backdrop have finished leaving.
   const visible = spec != null;
@@ -255,20 +257,29 @@ function MenuBody({ spec, current, closed, gone }: { spec: MenuSpec | null; curr
   useBack(spec != null, close);
 
   const width = 180;
-  const x = Math.max(12, Math.min(current.anchor.left, box.width - width - 12));
+  // The anchor is measured in the window (measureInWindow), whose top Android puts under the status bar; this layer
+  // starts at the screen's top: the anchor moved by where the layer itself is in the window.
+  const at = { x: current.anchor.left - origin.x, top: current.anchor.top - origin.y, bottom: current.anchor.bottom - origin.y };
+  const x = Math.max(12, Math.min(at.x, box.width - width - 12));
   // Under the message, or over it when there is no room below.
   const menuHeight = 45 * current.items.length;
-  const below = current.anchor.bottom + 6;
-  const y = below + menuHeight < box.height - 24 ? below : Math.max(24, current.anchor.top - menuHeight - 6);
-  const origin = y === below ? "left top" : "left bottom";
+  const below = at.bottom + 6;
+  const y = below + menuHeight < box.height - 24 ? below : Math.max(24, at.top - menuHeight - 6);
+  const grows = y === below ? "left top" : "left bottom";
   const dim = useAnimatedStyle(() => ({ opacity: scrim.value }));
   const menu = useAnimatedStyle(() => ({ opacity: alpha.value, transform: [{ scale: scale.value }] }));
   return (
-    <View style={StyleSheet.absoluteFill} onLayout={(e) => setBox({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}>
+    <View
+      ref={layer} collapsable={false} style={StyleSheet.absoluteFill}
+      onLayout={(e) => {
+        setBox({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height });
+        layer.current?.measureInWindow((wx, wy) => setOrigin({ x: wx, y: wy }));
+      }}
+    >
       <Pressable style={StyleSheet.absoluteFill} onPress={close}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.28)" }, dim]} />
       </Pressable>
-      <Animated.View style={[{ position: "absolute", left: x, top: y, width, transformOrigin: origin }, menu]} pointerEvents={visible ? "auto" : "none"}>
+      <Animated.View style={[{ position: "absolute", left: x, top: y, width, transformOrigin: grows }, menu]} pointerEvents={visible ? "auto" : "none"}>
         <Smooth radius={14} style={{ width, backgroundColor: C.surface, elevation: 18, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 18, shadowOffset: { width: 0, height: 6 } }}>
           {current.items.map((item, i) => (
             <Pressable

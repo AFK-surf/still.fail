@@ -12,7 +12,7 @@ import { requireOptionalNativeModule } from "expo";
 import * as LegacyFS from "expo-file-system/legacy";
 import { useEffect, useRef, useSyncExternalStore, type ComponentType, type ReactNode } from "react";
 import { Pressable, ScrollView, Text, TextInput, View, type StyleProp, type ViewStyle } from "react-native";
-import Animated, { useAnimatedKeyboard, useAnimatedStyle } from "react-native-reanimated";
+import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { t } from "../i18n";
 import { Icon, Icons } from "../ui/Icon";
@@ -23,6 +23,7 @@ import type { Strokes, ZoomState } from "../ui/Zoom";
 import { Picked, uriSource } from "./Composer";
 import { Card, NoteBox, type NoteLike } from "./Notes";
 import { OfferQuote } from "./Preview";
+import { keyboard } from "../ui/Keyboard";
 
 /** A point (Offset there), in the image's pixels or on the stage. */
 export interface Offset { x: number; y: number }
@@ -887,9 +888,10 @@ export function MarksFoot({ marks, haze, glass }: { marks: ImageMarks; haze: unk
 
 /** Kept over the keyboard as it comes up (WindowInsets.keyboard less the navigation bar's). */
 function OverKeyboard({ children }: { children: ReactNode }) {
-  const keyboard = useAnimatedKeyboard();
+  // One keyboard for the app (ui/Keyboard.tsx): a second one asked of Reanimated with other window options blanks the window.
+  const ime = keyboard();
   const bottom = useSafeAreaInsets().bottom;
-  const lift = useAnimatedStyle(() => ({ paddingBottom: Math.max(0, keyboard.height.value - bottom) }));
+  const lift = useAnimatedStyle(() => ({ paddingBottom: Math.max(0, ime.value - bottom) }));
   return <Animated.View style={lift}>{children}</Animated.View>;
 }
 

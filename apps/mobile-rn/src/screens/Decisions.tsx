@@ -13,7 +13,7 @@
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { Easing, runOnJS, useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from "react-native-reanimated";
+import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CoreError } from "../../../../web/src/core/client.ts";
 import type { Attachment, ChatMessage, ChatView, DecisionItem, DecisionOption, DecisionsView } from "../../../../web/src/core/shapes.ts";
@@ -43,6 +43,7 @@ import { letsGoOfPick, LocalMessagePick, MessagePick, PickLayer } from "./Messag
 import { PlacePage } from "./PlacePage";
 import { DecisionOptions } from "./SettingParts";
 import { VaultApproval } from "./Vault";
+import { keyboard } from "../ui/Keyboard";
 
 /** A box in the window (what Compose's LayoutCoordinates give the deck here): where a text card's field is. */
 interface Rect { x: number; y: number; width: number; height: number }
@@ -265,8 +266,9 @@ export function DecisionsScreen({ current }: { current: WorkspaceEntry }) {
   // Its foot over the bottom bar when it is there (the keyboard, when up, is higher: the bar steps aside for it).
   const room = useContext(LocalBarRoom);
   const insets = useSafeAreaInsets();
-  const keyboard = useAnimatedKeyboard();
-  const foot = useAnimatedStyle(() => ({ paddingBottom: Math.max(keyboard.height.value, insets.bottom + room) }));
+  // One keyboard for the app (ui/Keyboard.tsx): a second one asked of Reanimated with other window options blanks the window.
+  const ime = keyboard();
+  const foot = useAnimatedStyle(() => ({ paddingBottom: Math.max(ime.value, insets.bottom + room) }));
   // 令 in the bar's notch, as on the chats' list; nothing of its own to add.
   return (
     <PlacePage current={current} place="decisions" primary={null} back={placeLabel("chats")}>

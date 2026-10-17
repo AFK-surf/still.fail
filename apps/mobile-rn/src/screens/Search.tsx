@@ -5,7 +5,7 @@
 // field back in the list.
 import { useEffect, useRef, useState } from "react";
 import { BackHandler, FlatList, Keyboard, Pressable, Text, TextInput, View } from "react-native";
-import Animated, { runOnJS, useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { ChatItem, ChatSearchView, FoundMessage } from "../../../../web/src/core/shapes.ts";
 import { app } from "../AppState";
@@ -18,6 +18,7 @@ import { Smooth } from "../ui/Smooth";
 import { T } from "../ui/Text";
 import { useC, withAlpha } from "../ui/Theme";
 import { ChatRowBody } from "./Home";
+import { keyboard } from "../ui/Keyboard";
 
 /** How many of the messages that have the words the search lists, under the chats. */
 const FOUND_MESSAGES = 50;
@@ -78,7 +79,8 @@ export function SearchPage({ scope, from, wide, onLeave = () => {}, onClose }: {
   const field = useRef<TextInput>(null);
   const room = useSharedValue(0);
   const cancelWidth = useSharedValue(0);
-  const keyboard = useAnimatedKeyboard();
+  // One keyboard for the app (ui/Keyboard.tsx): a second one asked of Reanimated with other window options blanks the window.
+  const ime = keyboard();
   useEffect(() => {
     field.current?.focus();
     up.value = withTiming(1, { duration: 280, easing: Ease.Arrive });
@@ -110,7 +112,7 @@ export function SearchPage({ scope, from, wide, onLeave = () => {}, onClose }: {
   });
   const cancelStyle = useAnimatedStyle(() => ({ opacity: up.value, transform: [{ translateX: (cancelWidth.value + 12) * (1 - up.value) }] }));
   const listStyle = useAnimatedStyle(() => ({ opacity: up.value }));
-  const imeStyle = useAnimatedStyle(() => ({ paddingBottom: keyboard.height.value }));
+  const imeStyle = useAnimatedStyle(() => ({ paddingBottom: ime.value }));
 
   const rows: Found[] = [];
   if (words && view == null && search.error != null) rows.push({ key: "update", kind: "update" });
