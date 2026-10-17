@@ -518,7 +518,8 @@ function Table({ table, ctx }: { table: MdTable; ctx: Ctx }) {
   const [avail, setAvail] = useState<number | null>(null);
   const [mins, setMins] = useState<Record<number, number>>({});
   const [maxs, setMaxs] = useState<Record<number, number>>({});
-  useEffect(() => { setMins({}); setMaxs({}); }, [table]);
+  const [rowHeights, setRowHeights] = useState<Record<number, number>>({});
+  useEffect(() => { setMins({}); setMaxs({}); setRowHeights({}); }, [table]);
   if (columns === 0) return null;
   const line = webLine(C);
   const muted = webMuted(C);
@@ -552,6 +553,7 @@ function Table({ table, ctx }: { table: MdTable; ctx: Ctx }) {
     else widths = mn.map((w, c) => w + Math.round(((mx[c]! - w) * (avail - sumMin)) / (sumMax - sumMin)));
   }
   const total = widths?.reduce((a, b) => a + b, 0) ?? 0;
+  const rowsHeight = cells.reduce((sum, _, r) => sum + (rowHeights[r] ?? 0), 0);
   return (
     <View style={{ alignSelf: "stretch" }} onLayout={(e) => setAvail(Math.floor(e.nativeEvent.layout.width) - 2)}>
       {!measured && (
@@ -573,12 +575,12 @@ function Table({ table, ctx }: { table: MdTable; ctx: Ctx }) {
       )}
       {widths != null && avail != null && (
         <Smooth radius={20} stroke={{ width: 1, color: line }} style={{ alignSelf: "flex-start", backgroundColor: tableGround(C), padding: 1 }}>
-          <SideScroll nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ width: Math.min(total, avail) }}>
+          {total <= avail ? (
             <View style={{ width: total }}>
               {cells.map((row, r) => {
                 const header = r === 0;
                 return (
-                  <View key={r} style={{ flexDirection: "row", alignItems: "stretch" }}>
+                  <View key={r} style={{ flexDirection: "row", alignItems: "stretch" }} onLayout={(e) => { const h = e.nativeEvent.layout.height; setRowHeights((hs) => (hs[r] === h ? hs : { ...hs, [r]: h })); }}>
                     {Array.from({ length: columns }, (_, c) => {
                       const cell = row[c];
                       const images = imagesOf(cell);
@@ -593,11 +595,33 @@ function Table({ table, ctx }: { table: MdTable; ctx: Ctx }) {
                         </View>
                       );
                     })}
-                  </View>
-                );
-              })}
             </View>
-          </SideScroll>
+          ) : (
+            // Wider than there is room for: it scrolls sideways, as tall as its rows (a horizontal ScrollView left to
+            // size itself took the whole list's height).
+            <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ width: avail, height: rowsHeight }}>
+              <View style={{ width: total }}>
+                {cells.map((row, r) => {
+                  const header = r === 0;
+                  return (
+                    <View key={r} style={{ flexDirection: "row", alignItems: "stretch" }} onLayout={(e) => { const h = e.nativeEvent.layout.height; setRowHeights((hs) => (hs[r] === h ? hs : { ...hs, [r]: h })); }}>
+                      {Array.from({ length: columns }, (_, c) => {
+                        const cell = row[c];
+                        const images = imagesOf(cell);
+                        // Middle-aligned, as the browser's cells are; a rule under every row but the last.
+                        return (
+                          <View key={c} style={{ width: widths![c], backgroundColor: header ? codeGround(C) : undefined, paddingHorizontal: 12, paddingVertical: 7, justifyContent: "center" }}>
+                            {r < cells.length - 1 && <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1, backgroundColor: line }} />}
+                            {images != null ? <CellImageRow files={images} placing={ctx.placing!} />
+                              : cell != null && header ? <LocalMdInk.Provider value={muted}>{cellWords(cell, true, ctx)}</LocalMdInk.Provider>
+                              : cell != null ? cellWords(cell, false, ctx)
+                              : null}
+                          </View>
+                        );
+                      })}
+              </View>
+            </ScrollView>
+          )}
         </Smooth>
       )}
     </View>
