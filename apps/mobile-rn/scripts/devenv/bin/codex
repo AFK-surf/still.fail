@@ -1,0 +1,7 @@
+#!/bin/sh
+# The dev environment's codex: signed in (for the profiles page); the rest is the repository's fake.
+here=$(cd "$(dirname "$0")" && pwd)
+case "$1 $2" in
+  "login status") echo "Logged in using ChatGPT"; exit 0 ;;
+esac
+exec "$here/../../../../../station/test/fake/codex" "$@"

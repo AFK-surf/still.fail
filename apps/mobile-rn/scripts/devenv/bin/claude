@@ -1,0 +1,9 @@
+#!/bin/sh
+# The dev environment's claude: signed in (for the profiles page), its turns played by ../agent.mjs; the rest is the
+# repository's fake (station/test/fake/claude).
+here=$(cd "$(dirname "$0")" && pwd)
+case "$1 $2" in
+  "auth status") echo '{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty","email":"alice@example.test","orgName":"Dev","subscriptionType":"max"}'; exit 0 ;;
+esac
+case " $* " in *" --input-format "*) exec node "$here/../agent.mjs" "$@" ;; esac
+exec "$here/../../../../../station/test/fake/claude" "$@"
