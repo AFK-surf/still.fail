@@ -49,9 +49,10 @@ export const quotaChipFill = style({
     [`${quotaChip}[data-level="progress"] > &`]: { transition: "width .5s ease-out" },
   },
 });
-/** Its number quiet while there is plenty; in its colour once it runs low. */
+/** Its number in the text's colour while there is plenty (the muted grey over the fill read too faint); in its colour
+ * once it runs low. Its mark stays quiet. */
 export const quotaChipText = style({
-  position: "relative", display: "inline-flex", gap: "5px", color: vars.muted,
+  position: "relative", display: "inline-flex", gap: "5px", color: vars.text,
   selectors: {
     [`${quotaChip}:is([data-level="amber"], [data-level="red"]) &`]: { color: "currentColor" },
   },
