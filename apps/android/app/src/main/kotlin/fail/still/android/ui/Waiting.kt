@@ -145,13 +145,14 @@ enum class WaitShape { Rows, Messages, Cards }
  * The light over placeholders (the web's waiting.css.ts shapes): where it is in its round, 0 to 1 in 1.4s, again and
  * again; null under reduced motion (none). `still`: what is waited on failed, faded (0.6) and no light.
  */
-class Sweep(val still: Boolean, val at: (() -> Float)?)
+class Sweep(val still: Boolean, val at: (() -> Float)?, val band: Color = Color.Transparent)
 
 @Composable
 fun rememberSweep(still: Boolean = false): Sweep {
+    val band = C.muted.copy(alpha = 0.22f)
     if (still || reducedMotion()) return remember(still) { Sweep(still, null) }
     val at = rememberInfiniteTransition(label = "light").animateFloat(0f, 1f, infiniteRepeatable(tween(1400, easing = LinearEasing)), label = "at")
-    return remember(at) { Sweep(false, { at.value }) }
+    return remember(at, band) { Sweep(false, { at.value }, band) }
 }
 
 /**
@@ -165,7 +166,7 @@ fun Modifier.sweeping(sweep: Sweep): Modifier =
         drawContent()
         val w = size.width
         val peak = -w + 6f * w * at()
-        val light = Brush.horizontalGradient(listOf(Color.Transparent, C.muted.copy(alpha = 0.22f), Color.Transparent), startX = peak - 0.4f * w, endX = peak + 0.4f * w)
+        val light = Brush.horizontalGradient(listOf(Color.Transparent, sweep.band, Color.Transparent), startX = peak - 0.4f * w, endX = peak + 0.4f * w)
         drawRect(light, blendMode = BlendMode.SrcAtop)
     } } ?: this
 
