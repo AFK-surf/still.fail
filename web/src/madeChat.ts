@@ -353,6 +353,18 @@ export function whenLanded(then: () => void): () => void {
   return () => { const i = landing.indexOf(then); if (i >= 0) landing.splice(i, 1); };
 }
 
+/** Told once the row of what the reader just sent is in its chat's list (or it will not be): `sendingHere` waits for it. */
+const rowIn: (() => void)[] = [];
+let rowAwaited = false;
+const rowCame = () => { rowAwaited = false; for (const then of rowIn.splice(0)) then(); };
+/** Calls `then` once the row of what the reader just sent is in its chat's list (in the frame it comes, before it is
+ *  painted), or now if none is awaited. */
+export function whenRowIn(then: () => void): () => void {
+  if (!rowAwaited) { then(); return () => {}; }
+  rowIn.push(then);
+  return () => { const i = rowIn.indexOf(then); if (i >= 0) rowIn.splice(i, 1); };
+}
+
 /**
  * A message is sent in an open chat from `field` (a composer's text box, still showing `text`) into `list` (the chat's
  * list): its words stay where they were typed, drawn in `layer` (over the composer, at `z`), its hint gone, until this
@@ -420,6 +432,7 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     over = true;
     if (flying?.done === done) {
       flying = null;
+      rowCame();
       for (const then of landing.splice(0)) then();
     }
     observer.disconnect();
@@ -515,6 +528,7 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
   const start = () => {
     const row = take();
     if (!row || ghost) return;
+    rowCame();
     const flies = (stand && row.querySelector(`.${msgCss.msgPlain}`)) || pictures.some((p) => row.querySelector(`[data-send-image="${p.key}"]`));
     if (!flies) { done(); return; }
     clearTimeout(timeout);
@@ -539,4 +553,5 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
   observer.observe(list, { childList: true, subtree: true });
   const timeout = setTimeout(done, WAIT_FOR_ROW);
   flying = { done };
+  rowAwaited = true;
 }

@@ -20,6 +20,7 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as rootCss from "./styles/root.css.ts";
 import { t } from "../i18n.ts";
+import { whenRowIn } from "../madeChat.ts";
 
 // The composer's height, set at its page's root (MobileComposer), as that element's own; the room it leaves a chat's
 // list, a length worked out there and inherited (ChatHost.css.ts): one changing with the other only past a few lines.
@@ -129,12 +130,21 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, inli
     // Every element of the page inherits it: each change has the whole page's style worked out anew (a long chat's, all
     // its messages). So it changes once the capsule has its new shape, not at every frame of its motion there (morph.ts).
     let waiting = false;
-    const set = () => {
-      waiting = false;
+    let held: (() => void) | null = null;
+    const put = () => {
+      held = null;
       const height = `${el.offsetHeight}px`;
       if (page.style.getPropertyValue("--m-bottom") !== height) page.style.setProperty("--m-bottom", height);
     };
-    set();
+    // Shorter as what was just sent leaves it, it keeps the list's foot until the message's row is in the list (madeChat.ts
+    // whenRowIn), and gives it up in that frame: given up before, the list's end drops at once, and rises as the row comes.
+    const set = () => {
+      waiting = false;
+      held?.();
+      if (el.offsetHeight < (parseFloat(page.style.getPropertyValue("--m-bottom")) || 0)) held = whenRowIn(put);
+      else put();
+    };
+    put();
     const observer = new ResizeObserver(() => {
       // A new chat's choices sit just above the composer: they must follow its height while it moves, or the
       // growing box covers them. There is no long message list to invalidate on that page.
@@ -145,7 +155,7 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, inli
       void moving.then(set, set);
     });
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); held?.(); };
   }, [root]);
   const { menu, bar, expanded } = useComposerBar({
     draft, draftKey, sessionKey: shown.session ?? null, placeholder: shown.placeholder, locked,

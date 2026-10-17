@@ -12,6 +12,7 @@ import { pageChanging, transitionTo } from "./ui.tsx";
 import * as composerCss from "./styles/composer.css.ts";
 import * as css from "./dock.css.ts";
 import { easeOut, morph, shapeOf, stop, type Shape } from "./morph.ts";
+import { whenRowIn } from "./madeChat.ts";
 
 export interface ComposerSpec extends ComposerProps {
   /** The station it sends to (uploads, warming, sending are its). */
@@ -274,9 +275,22 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     setHeight(el.offsetHeight);
     // Taken in the frame it changes (the composer growing a line, or moving from capsule to box): its place, and the
     // list's foot with it, keep up with it frame by frame rather than a frame or two behind.
-    const resize = new ResizeObserver(() => { if (!moving.current) flushSync(() => setHeight(el.offsetHeight)); });
+    // Shorter as what was just sent leaves it (its images' strip, its lines), it keeps the list's foot where it was until
+    // the message's row is in the list and the pane has started toward it, and gives it up the frame after: given up
+    // before, the list's end, at the pane's foot, drops by as much at once, and rises again as the row comes; in the
+    // row's own frame, the pane takes the two at once rather than gliding.
+    let waiting: (() => void) | null = null;
+    const take = () => { waiting = null; if (el.offsetHeight !== heightNow.current) flushSync(() => setHeight(el.offsetHeight)); };
+    const resize = new ResizeObserver(() => {
+      if (moving.current) return;
+      waiting?.();
+      if (el.offsetHeight >= heightNow.current) { take(); return; }
+      let frame = 0;
+      const stop = whenRowIn(() => { frame = requestAnimationFrame(() => { frame = requestAnimationFrame(take); }); });
+      waiting = () => { stop(); cancelAnimationFrame(frame); waiting = null; };
+    });
     resize.observe(el);
-    return () => resize.disconnect();
+    return () => { resize.disconnect(); waiting?.(); };
   }, [made]);
   // The frame its layout changes with the page (a chat's foot, a new chat's roomy box) it changes at once: eased, its
   // corners showed as a jump (its styles ease them as it grows while typed in).
