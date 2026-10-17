@@ -13,9 +13,10 @@ export const BUDGET = {
   branch: 180,
   /** main, releasing nothing (docs, the site): the check (~40 s) and the tag. */
   main: 180,
-  /** A branch or main that checked the Android app (check-android): its Gradle run alone is ~2 min (2026-10-07: the app
-   * one module of ~31k lines, compiled then linted, one after the other). */
-  android: 240,
+  /** A branch or main that checked the Android app (check-android, its build and its lint side by side on GitHub's
+   * runners): lint, which reads the whole app on one of their four cores, takes 185-195 s of a run with its build kept,
+   * and stays there as asked (2026-10-17: not mini1's). */
+  android: 300,
   /** A branch that built the Windows app and tried it on Windows (windows-smoke): its build, its upload and then the
    * smoke, one after another, ~280 s (2026-10-09). */
   windows: 330,
