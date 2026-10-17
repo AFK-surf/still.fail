@@ -485,12 +485,16 @@ export function CodeBlock({ code, language, bar = true, modifier }: { code: stri
           </Smooth>
         </View>
       )}
-      <SideScroll nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ alignSelf: "stretch" }} contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 12 }}>
+      {/* As tall as its lines (CodeInk.tsx: 20 each) and its padding. */}
+      <SideScroll height={codeLines(code) * 20 + 24} nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ alignSelf: "stretch" }} contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 12 }}>
         <CodeInk code={code} language={language} dark={C.dark} />
       </SideScroll>
     </Smooth>
   );
 }
+
+/** How many lines a code block draws (a last line break draws none). */
+const codeLines = (code: string) => code.replace(/\n$/, "").split("\n").length;
 
 /** Code blocks' weight: the code face's regular, as the web's SF Mono / Menlo. */
 export const CodeWeight = "400" as const;
