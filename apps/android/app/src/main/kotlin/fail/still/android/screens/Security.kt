@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -252,21 +253,24 @@ private fun turnOffSheet(app: AppState, ws: String, name: String) {
         val named = typed.trim() == name.trim()
         SheetGrab()
         SheetHead(t("web-pages.security.turnOffTitle"))
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(t("web-pages.security.turnOffBody"), fontSize = 14.sp, color = C.muted)
-            listOf(
-                Icons.Server to t("web-pages.security.nowRisk"),
-                Icons.Devices to t("web-pages.security.turnOffApproval"),
-                Icons.Key to t("web-pages.security.turnOffVault"),
-            ).forEach { (icon, said) ->
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(Modifier.padding(top = 2.dp)) { IconIn(icon, 18.dp, C.muted) }
-                    Text(said, fontSize = 15.sp, lineHeight = 22.sp, color = C.ink)
+        // The buttons stay over the keyboard while the name is typed; what it gives up scrolls above them.
+        Column(Modifier.weight(1f).imePadding()) {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(t("web-pages.security.turnOffBody"), fontSize = 14.sp, color = C.muted)
+                listOf(
+                    Icons.Server to t("web-pages.security.nowRisk"),
+                    Icons.Devices to t("web-pages.security.turnOffApproval"),
+                    Icons.Key to t("web-pages.security.turnOffVault"),
+                ).forEach { (icon, said) ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        IconIn(icon, 18.dp, C.muted, Modifier.padding(top = 2.dp))
+                        Text(said, fontSize = 15.sp, lineHeight = 22.sp, color = C.ink)
+                    }
                 }
+                Text(t("web-pages.security.turnOffType", "name" to name), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 6.dp))
+                Field(typed, { typed = it }, "")
             }
-            Text(t("web-pages.security.turnOffType", "name" to name), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 6.dp))
-            Field(typed, { typed = it }, "")
-            Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                 Button(t("common.cancel"), primary = false) { app.sheet = null }
                 Button(t("web-pages.security.turnOff"), primary = true, danger = true, enabled = named) {
                     app.sheet = null
