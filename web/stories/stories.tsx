@@ -528,7 +528,7 @@ export const stories: Story[] = [
   { id: "phone-share-search", group: "手机", title: "分享进来 · 搜索 chat", app: true, phone: true, ...sharing("search"), steps: [{ text: "搜索" }, { key: "N" }, { key: "A" }, { key: "S" }] },
   { id: "phone-share-search-none", group: "手机", title: "分享进来 · 搜索没找到", app: true, phone: true, ...sharing("search"), steps: [{ text: "搜索" }, { key: "z" }, { key: "z" }] },
   { id: "phone-agent", group: "手机", title: "agent 名片", app: true, phone: true, steps: [{ click: '[aria-label$="的名片"]' }] },
-  { id: "phone-chat-history-turns", group: "手机", title: "执行历史 · 一轮一轮", app: true, phone: true, steps: [{ click: '[aria-label$="的名片"]' }, { text: "执行历史" }], demo: historyTurns },
+  { id: "phone-chat-history-turns", group: "手机", title: "执行历史 · 一轮一轮", app: true, phone: true, steps: [{ click: '[aria-label$="的名片"]' }, { text: "历史" }], demo: historyTurns },
   { id: "phone-chat-info", group: "手机", title: "对话信息", app: true, phone: true, steps: [{ click: '[aria-label="对话信息"]' }] },
   { id: "phone-files", group: "手机", title: "文件", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="文件"]' }] },
   { id: "phone-profile", group: "手机", title: "Profile", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }] },
