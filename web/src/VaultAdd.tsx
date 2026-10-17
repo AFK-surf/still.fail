@@ -7,7 +7,6 @@ import { KindIcon } from "./cloud/Vault.tsx";
 import { ITEM_SECTIONS, type Kind } from "./vault.ts";
 import { t } from "./i18n.ts";
 import * as pagesCss from "./styles/pages.css.ts";
-import * as accountsCss from "./pages/Accounts.css.ts";
 import * as css from "./cloud/Vault.css.ts";
 
 export type AddKind = "profile" | Kind;
@@ -17,19 +16,17 @@ export function AddKinds({ secrets, plain, onPick }: { secrets: boolean; plain: 
   const kinds: AddKind[] = ["profile", ...(secrets ? ITEM_SECTIONS : [])];
   return (
     <>
-      <ul className={pagesCss.list}>
+      <div className={pagesCss.listCard}>
         {kinds.map((k) => (
-          <li key={k}>
-            <button type="button" className={`${pagesCss.listRow} ${accountsCss.pickRow}`} onClick={() => onPick(k)}>
-              <span className={css.rowIcon}>{k === "profile" ? <Quota {...ICON} /> : <KindIcon kind={k} />}</span>
-              <span className={pagesCss.listRowText}>
-                <span className={pagesCss.listRowTitle}>{t(`web-pages.vault.addKind.${k}`)}</span>
-                <span className={css.rowMeta}>{t(`web-pages.vault.addKind.${k}Detail`)}</span>
-              </span>
-            </button>
-          </li>
+          <button key={k} type="button" className={`${pagesCss.listCardRow} ${pagesCss.cardRow} ${css.rowButton}`} onClick={() => onPick(k)}>
+            <span className={css.rowIcon}>{k === "profile" ? <Quota {...ICON} /> : <KindIcon kind={k} />}</span>
+            <span className={pagesCss.cardRowText}>
+              <span className={pagesCss.listRowTitle}>{t(`web-pages.vault.addKind.${k}`)}</span>
+              <span className={css.rowMeta}>{t(`web-pages.vault.addKind.${k}Detail`)}</span>
+            </span>
+          </button>
         ))}
-      </ul>
+      </div>
       {plain && secrets && <p className={css.warn}>{t("web-pages.vault.risk.editor")}</p>}
     </>
   );
