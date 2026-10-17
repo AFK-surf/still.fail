@@ -17,6 +17,9 @@
 #   stillfail station id
 #   stillfail lock status|reset                         the workspace lock on this station: what is pinned, or taking
 #                                                       it away (when every device that could sign is lost)
+#   stillfail heap                                      a heap snapshot of the running station's main thread, written
+#                                                       to <data>/run (only the latest kept; it holds the station's
+#                                                       tokens): what its memory holds, for Chrome's DevTools
 # The data is in $STILLFAIL_DATA (else $EMBER_DATA), default ~/.stillfail; ~/.ember is the old default, which the
 # station moves there on its first start (the Rust station's former.rs).
 set -eu
@@ -52,5 +55,9 @@ PLAN
   "status "*|"station status") exec "$station" status --data "$data" ;;
   "station id") exec "$station" id --data "$data" ;;
   "lock status"|"lock reset") exec "$station" lock "$2" --data "$data" ;;
-  *) echo "usage: stillfail start [--port N] | stillfail status | stillfail update [--beta|--stable] | stillfail station enroll <cloud-origin> <token> [--provider comma] [--lock <hash>] | stillfail station id | stillfail lock status|reset" >&2; exit 2 ;;
+  "heap "*)
+    node=${STILLFAIL_NODE:-$here/node/bin/node}
+    [ -x "$node" ] && [ -f "$here/station/main.js" ] || { echo "stillfail heap: $here is not an installed release (no node/bin/node or station/main.js)" >&2; exit 1; }
+    exec "$node" "$here/station/main.js" heap --data "$data" ;;
+  *) echo "usage: stillfail start [--port N] | stillfail status | stillfail update [--beta|--stable] | stillfail station enroll <cloud-origin> <token> [--provider comma] [--lock <hash>] | stillfail station id | stillfail lock status|reset | stillfail heap" >&2; exit 2 ;;
 esac

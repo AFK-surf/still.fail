@@ -31,6 +31,7 @@ import { version } from "./ops/version.ts";
 import { AdbShares, AdminApi, AdminHost, ControlPlane, Events, Grants, Helper, Key, MeshNative, Paths, Readers, ScreenRegistry, Store, Up } from "./services.ts";
 import { PROVIDERS, type Provider } from "./cloud/provider.ts";
 import { wall } from "./ops/fibers.ts";
+import { answerHeapRequests, heapCommand } from "./ops/heap.ts";
 import { platform } from "./platform/index.ts";
 
 // Run by the desktop app on its own Electron as Node (apps/desktop/src/station.ts): what this starts (agents, jobs,
@@ -53,7 +54,7 @@ try {
 } catch {}
 
 function usage(): never {
-  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--join] | status | id | channel [stable|beta] | update [--beta|--stable] --app DIR | lock status|reset");
+  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--join] | status | id | channel [stable|beta] | update [--beta|--stable] --app DIR | lock status|reset | heap");
   process.exit(2);
 }
 
@@ -141,6 +142,8 @@ function run() {
     // Where the memory goes, in MB: the main thread's (and resident), and each reader's heap. Every ten minutes, or
     // every ten seconds with STILLFAIL_MEMLOG (for measuring).
     const readers = yield* Readers;
+    // `stillfail heap`: a snapshot of this thread's heap, asked for from the command line.
+    answerHeapRequests(data);
     wall.every(process.env.STILLFAIL_MEMLOG ? 10_000 : 600_000, () => {
       const m = process.memoryUsage();
       const mb = (v: number) => Math.round(v / 1048576);
@@ -223,6 +226,10 @@ switch (command) {
     process.exitCode = code;
     break;
   }
+  // A heap snapshot of the running station (ops/heap.ts).
+  case "heap":
+    process.exitCode = await heapCommand(data);
+    break;
   default:
     usage();
 }

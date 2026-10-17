@@ -6,6 +6,8 @@
 
 station 必须加入 workspace 才接 Slack、运行 agent。数据默认在 `~/.stillfail`（`STILLFAIL_DATA` 可改，兼容 `EMBER_DATA`）；旧版 `~/.ember` 在首次启动时迁移。开发测试使用独立数据目录，不使用已有真实会话的 station。
 
+查内存：station 每 10 分钟在日志里记一行 `memory: now`（主线程的 heap、external，各读取线程的 heap）。`stillfail heap` 让运行中的 station 把主线程的堆快照写到 `<数据目录>/run/heap-*.heapsnapshot`（只留最新一份，0600：里面有 station 持有的 token），用 Chrome DevTools 的 Memory 打开；写的几秒里 station 不响应（station/src/ops/heap.ts）。macOS 上看进程占用以 footprint 为准（`footprint -p <pid>`），RSS 含共享库。
+
 更新支持原地交接：启动器（station/native/launcher，pid 不变）收到 SIGUSR2，在旁边起新版本的 Node 进程，新的就绪后放掉旧的，轮次、运行时和 job 不断（station/native/launcher/src/run.rs、station/src/ops/launcher.ts）；不支持交接的旧版本（Rust station），安装器会先排空再重启。
 
 ## 管理界面
