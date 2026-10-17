@@ -8,7 +8,7 @@ import { textToggle } from "@stillfail/ui/styles/controls.css.ts";
 import { accountMenu } from "./cloud/workspace.css.ts";
 import { detailRow, details, sideContent } from "./pages/ChatPage.css.ts";
 import { msgRoute } from "./Chat.css.ts";
-import { bleedStart, bleedX, columns } from "@stillfail/ui/styles/align.ts";
+import { bleedStart, bleedX, columns, inLine } from "@stillfail/ui/styles/align.ts";
 import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 
 export const history = style({
@@ -173,7 +173,7 @@ export const hTurn = style({
 globalStyle(`${hTurn} > span`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis" });
 /** The turn's link to copy: past the end of its rule, shown while the row is pointed at. */
 export const hTurnLink = style({
-  order: "1", width: "24px", height: "24px", marginBlock: "-4px", borderRadius: vars.rOption, opacity: "0",
+  order: "1", width: "24px", height: "24px", ...inLine(8), borderRadius: vars.rOption, opacity: "0",
   selectors: {
     [`${hItem}:hover &, &:focus-visible`]: { opacity: "1" },
   },
