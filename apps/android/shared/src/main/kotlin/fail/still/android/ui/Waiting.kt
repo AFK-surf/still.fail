@@ -10,10 +10,8 @@ package fail.still.android.ui
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -33,6 +31,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -86,8 +85,8 @@ private fun later(now: Boolean): Boolean {
 fun Spinner(inline: Boolean = false, color: Color? = null, modifier: Modifier = Modifier) {
     val arc = color ?: C.accent
     val track = color?.copy(alpha = color.alpha * 0.3f) ?: C.lineStrong
-    val turn = rememberInfiniteTransition(label = "spinner")
-        .animateFloat(0f, 360f, infiniteRepeatable(tween(if (reducedMotion()) 2400 else 800, easing = LinearEasing)), label = "turn")
+    // With motion reduced, slower (2.4s, as the web's): still turning, as it is still under way.
+    val turn = rememberLoop(0f, 360f, infiniteRepeatable(tween(800, easing = LinearEasing)), "turn", slowMs = 2400)
     Canvas(modifier.size(if (inline) 12.dp else 14.dp).semantics { progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate }) {
         val w = 2.dp.toPx()
         val r = (size.minDimension - w) / 2
@@ -141,8 +140,7 @@ enum class WaitShape { Rows, Messages, Cards }
 @Composable
 fun rememberBreath(still: Boolean = false): () -> Float {
     if (still) return { 0.6f }
-    if (reducedMotion()) return { 1f }
-    val pulse = rememberInfiniteTransition(label = "breathe").animateFloat(1f, 0.5f, infiniteRepeatable(tween(700, easing = EaseInOut), RepeatMode.Reverse), label = "alpha")
+    val pulse = rememberLoop(1f, 0.5f, infiniteRepeatable(tween(700, easing = EaseInOut), RepeatMode.Reverse), "alpha", still = 1f)
     return { pulse.value }
 }
 
@@ -221,15 +219,19 @@ fun Progress(part: Float?, modifier: Modifier = Modifier, color: Color = C.accen
         if (known != null) {
             val shown by animateFloatAsState(known, tween(200, easing = Ease.Out), label = "progress")
             Box(Modifier.fillMaxWidth(shown).height(3.dp).background(color, CircleShape))
-        } else if (reducedMotion()) {
-            Box(Modifier.fillMaxWidth().height(3.dp).background(color.copy(alpha = color.alpha * 0.35f), CircleShape))
         } else {
-            // The web's: a segment 40% wide, from just before the track's start to just past its end, again and again.
-            val sweep = rememberInfiniteTransition(label = "sweep").animateFloat(-1f, 2.5f, infiniteRepeatable(tween(1400, easing = EaseInOut)), label = "at")
-            Box(Modifier.fillMaxWidth(0.4f).height(3.dp).graphicsLayer { translationX = sweep.value * size.width }.background(color, CircleShape))
+            // The web's: a segment 40% wide, from just before the track's start to just past its end, again and again;
+            // with motion reduced, held off its way (HELD): the whole bar, faint.
+            val sweep = rememberLoop(-1f, 2.5f, infiniteRepeatable(tween(1400, easing = EaseInOut)), "at", still = HELD)
+            val held by remember(sweep) { derivedStateOf { sweep.value == HELD } }
+            if (held) Box(Modifier.fillMaxWidth().height(3.dp).background(color.copy(alpha = color.alpha * 0.35f), CircleShape))
+            else Box(Modifier.fillMaxWidth(0.4f).height(3.dp).graphicsLayer { translationX = sweep.value * size.width }.background(color, CircleShape))
         }
     }
 }
+
+/** An indeterminate bar's still pose (rememberLoop), off the sweep's way (-1 to 2.5). */
+private const val HELD = -2f
 
 private val TITLES = listOf(150, 110, 170, 130, 96, 160, 120)
 private val LINES = listOf(230, 190, 250, 170, 210, 200, 180)

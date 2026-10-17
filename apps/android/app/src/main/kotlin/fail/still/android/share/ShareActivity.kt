@@ -43,6 +43,7 @@ class ShareActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge(SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT))
         super.onCreate(savedInstanceState)
+        fail.still.android.ui.Motion.install(applicationContext)
         I18n.load(applicationContext)
         val shared = sharedOf(intent)
         if (shared == null) { finish(); return }
@@ -52,6 +53,7 @@ class ShareActivity : ComponentActivity() {
             val prefs = Prefs.first(core)
             I18n.follow(prefs.lang)
             appearance = prefs.appearance ?: "system"
+            fail.still.android.ui.Motion.chosen = prefs.motion
             // The workspace last open, else the first one the accounts have (none signed in: none).
             val workspace = prefs.workspace ?: run {
                 val accounts = core.topic(Topics.accounts).first { it.value != null }.value as? JsonArray

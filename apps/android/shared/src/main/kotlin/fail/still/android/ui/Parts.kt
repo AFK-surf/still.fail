@@ -10,9 +10,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.rememberInfiniteTransition
-import android.provider.Settings
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
@@ -25,7 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInParent
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
@@ -148,8 +144,7 @@ fun Badge(state: ChatState, size: Dp, ring: Dp, around: Color, modifier: Modifie
 @Composable
 fun AgentStateMark(state: ChatState, around: Color, modifier: Modifier = Modifier) {
     if (state == ChatState.Done) return
-    val turn = if (state == ChatState.Running && !reducedMotion()) rememberInfiniteTransition(label = "agent-mark")
-        .animateFloat(0f, 360f, infiniteRepeatable(tween(1200, easing = androidx.compose.animation.core.LinearEasing)), label = "turn").value else 0f
+    val turn = if (state == ChatState.Running) rememberLoop(0f, 360f, infiniteRepeatable(tween(1200, easing = androidx.compose.animation.core.LinearEasing)), "turn", still = 0f).value else 0f
     Canvas(modifier.size(12.dp)) {
         val r = size.minDimension / 2
         val ring = 2.dp.toPx()
@@ -393,13 +388,6 @@ fun ProviderMark(runtime: String, kind: String?, size: Dp = 16.dp, mark: String?
 
 // ── controls ───────────────────────────────────────────────────────────
 
-/** Whether the person asked for less motion (animations off in the system settings). */
-@Composable
-fun reducedMotion(): Boolean {
-    val context = LocalContext.current
-    return remember { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }
-}
-
 /**
  * A segmented choice: a track that tints whatever it sits on (the text colour
  * at 6%), and a light thumb that slides to the chosen option. Without `track`
@@ -411,12 +399,11 @@ fun Seg(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier:
     val places = remember(options) { mutableStateListOf(*Array(options.size) { 0f to 0f }) }
     val x = remember { Animatable(0f) }
     val w = remember { Animatable(0f) }
-    val still = reducedMotion()
     val (tx, tw) = places.getOrElse(selected) { 0f to 0f }
     LaunchedEffect(tx, tw) {
         if (tw == 0f) return@LaunchedEffect
-        // The first placement and reduced motion jump; a change of choice slides.
-        if (w.value == 0f || still) { x.snapTo(tx); w.snapTo(tw); return@LaunchedEffect }
+        // The first placement jumps; a change of choice slides.
+        if (w.value == 0f) { x.snapTo(tx); w.snapTo(tw); return@LaunchedEffect }
         val ease = tween<Float>(240, easing = CubicBezierEasing(0f, 0f, 0.2f, 1f))
         launch { x.animateTo(tx, ease) }
         w.animateTo(tw, ease)
@@ -588,14 +575,12 @@ fun ListRow(onClick: (() -> Unit)? = null, content: @Composable RowScope.() -> U
  */
 @Composable
 fun Splash(label: String? = null, now: Boolean = false) {
-    val still = reducedMotion()
-    val float = rememberInfiniteTransition(label = "splash")
-    val lift by float.animateFloat(0f, 1f, infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "lift")
+    val lift by rememberLoop(0f, 1f, infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse), "lift", still = 0f)
     var shown by remember { mutableStateOf(now) }
     LaunchedEffect(now) { if (!now) { delay(1000); shown = true } else shown = true }
     Column(Modifier.fillMaxSize().background(C.bg).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
         val px = with(LocalDensity.current) { 5.dp.toPx() }
-        Box(Modifier.graphicsLayer { translationY = if (still) 0f else -lift * px }) { Mark(56.dp) }
+        Box(Modifier.graphicsLayer { translationY = -lift * px }) { Mark(56.dp) }
         if (label != null) Text(label, color = C.muted, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.alpha(if (shown) 1f else 0f))
     }
 }

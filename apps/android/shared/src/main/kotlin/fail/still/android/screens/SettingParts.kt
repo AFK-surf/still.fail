@@ -163,7 +163,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import fail.still.android.ui.reducedMotion
 import fail.still.android.ui.StationGlyph
 import fail.still.android.ui.glyphCounts
 import androidx.compose.runtime.mutableIntStateOf

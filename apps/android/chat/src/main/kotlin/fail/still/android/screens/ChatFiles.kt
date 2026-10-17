@@ -16,9 +16,8 @@ import android.util.LruCache
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import fail.still.android.ui.rememberLoop
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -457,10 +456,10 @@ private fun BoxScope.Blots(still: Boolean) {
             Blot(if (dark) Color(0xFF6B3534) else Color(0xFFE7A9A1), 0.15f, 0.65f, 0.2f, -0.3f, 1.1f, 8000),
         )
     }
-    val drift = rememberInfiniteTransition("blots")
+    // Drifting; where they start with motion reduced (the web's, without its animation).
     val phases = blots.map { b ->
         if (still) remember { mutableStateOf(0f) }
-        else drift.animateFloat(0f, 1f, infiniteRepeatable(tween(b.ms, easing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)), RepeatMode.Reverse), "blot")
+        else rememberLoop(0f, 1f, infiniteRepeatable(tween(b.ms, easing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)), RepeatMode.Reverse), "blot", still = 0f)
     }
     Box(Modifier.matchParentSize().drawWithContent {
         val side = size.width * 0.7f

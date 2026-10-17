@@ -6,9 +6,8 @@ package fail.still.android.screens
 
 import fail.still.android.data.t
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import fail.still.android.ui.rememberLoop
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -108,7 +107,7 @@ fun metaOf(job: Job): AnnotatedString {
 @Composable
 fun JobDot(tone: Tone, modifier: Modifier = Modifier) {
     val breath = if (tone == Tone.Restart) {
-        rememberInfiniteTransition(label = "restart").animateFloat(1f, 0.35f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "breath").value
+        rememberLoop(1f, 0.35f, infiniteRepeatable(tween(700), RepeatMode.Reverse), "breath", still = 1f).value
     } else 1f
     Box(modifier.size(8.dp).alpha(breath).clip(CircleShape).background(toneTint(tone) ?: C.subtle))
 }

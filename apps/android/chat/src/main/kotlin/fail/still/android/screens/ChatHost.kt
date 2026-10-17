@@ -95,7 +95,6 @@ import fail.still.android.ui.ComposerInset
 import fail.still.android.ui.Ease
 import fail.still.android.ui.floating
 import fail.still.android.ui.floatingStill
-import fail.still.android.ui.reducedMotion
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import fail.still.android.ui.drawSmooth
@@ -272,7 +271,6 @@ class Host {
     var leaving by mutableStateOf(false)
         internal set
     internal val leave = Animatable(0f)
-    internal var still = false
     /** How many messages the composer has sent: the list goes to its end with each (Chat.kt). */
     var sends by mutableIntStateOf(0)
         private set
@@ -290,7 +288,7 @@ class Host {
         val field = field?.takeIf { it.isAttached }
         val overlay = overlay?.takeIf { it.isAttached }
         val capsule = capsule?.takeIf { it.isAttached }
-        if (still || field == null || overlay == null || capsule == null) return
+        if (field == null || overlay == null || capsule == null) return
         val taken = files.mapNotNull { p ->
             val path = p.done?.path ?: return@mapNotNull null
             val tile = tiles[p.id] ?: return@mapNotNull null
@@ -434,7 +432,6 @@ internal fun Flight.bubbleAt(coords: LayoutCoordinates, host: Host, pad: Offset,
 @Composable
 fun ChatHost(current: WorkspaceEntry, screen: Screen) {
     val host = remember { Host() }
-    host.still = reducedMotion()
     host.density = LocalDensity.current
     host.graphics = LocalGraphicsContext.current
     val chat = screen as? Screen.Chat

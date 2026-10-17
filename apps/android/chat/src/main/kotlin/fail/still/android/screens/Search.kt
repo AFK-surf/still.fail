@@ -71,7 +71,6 @@ import fail.still.android.ui.Ease
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.SectionHeader
-import fail.still.android.ui.reducedMotion
 import fail.still.android.data.t
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -117,8 +116,7 @@ internal fun SearchPage(scope: String, from: Float, wide: Float, onLeave: () -> 
     val messages = if (words) view?.messages.orEmpty() else emptyList()
     // Where the field is laid out (under the status bar, as the home bar's top), so its move is known before it is drawn.
     val to = WindowInsets.statusBars.getTop(density) + with(density) { BAR_TOP.toPx() }
-    val still = reducedMotion()
-    val up = remember { Animatable(if (still) 1f else 0f) }
+    val up = remember { Animatable(0f) }
     var leaving by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -133,7 +131,7 @@ internal fun SearchPage(scope: String, from: Float, wide: Float, onLeave: () -> 
             keyboard?.hide()
             onLeave()
             coroutines.launch {
-                if (!still) up.animateTo(0f, tween(240, easing = Ease.Standard))
+                up.animateTo(0f, tween(240, easing = Ease.Standard))
                 onClose()
             }
         }

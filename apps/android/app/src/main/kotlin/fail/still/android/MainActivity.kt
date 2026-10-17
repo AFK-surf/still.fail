@@ -130,6 +130,8 @@ class MainActivity : ComponentActivity() {
         // composition is laid out inside the system bars and moves when they are taken away.
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // The app's clock, reduced motion or not, under every window it draws (ui/Motion.kt).
+        fail.still.android.ui.Motion.install(applicationContext)
         Crashes.install(applicationContext)
         BarTiming.start(applicationContext)
         StillFailCore.onFailed = { reason -> Crashes.coreFailed(applicationContext, reason) }

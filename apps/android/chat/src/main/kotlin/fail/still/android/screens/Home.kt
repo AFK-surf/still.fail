@@ -32,15 +32,12 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.zIndex
-import kotlinx.coroutines.delay
 import androidx.compose.foundation.Canvas
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import fail.still.android.ui.reducedMotion
+import fail.still.android.ui.rememberLoop
 import fail.still.android.ui.Waiting
 import fail.still.android.ui.StationGlyph
 import fail.still.android.ui.glyphCounts
@@ -267,7 +264,6 @@ private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, filter: S
     val app = LocalApp.current
     // The rows move as the list changes (ListMotion.kt); while a finger is on the list or it scrolls, they keep their
     // places (the web holds them while the mouse is over the list), and move when it is let go.
-    val still = reducedMotion()
     val motion = remember(current.workspace.id) { ListMotion() }
     val order = remember(current.workspace.id) { HeldOrder() }
     var pressed by remember { mutableStateOf(false) }
@@ -276,7 +272,7 @@ private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, filter: S
         for (day in raw) for (item in day.items) MarksSeen.note(rowKey(item), rowTone(item))
         order.of(raw, hold)
     }.orEmpty()
-    motion.update(days, Snapshot.withoutReadObservation { list.layoutInfo.visibleItemsInfo.mapNotNullTo(HashSet()) { it.key as? String } }, still)
+    motion.update(days, Snapshot.withoutReadObservation { list.layoutInfo.visibleItemsInfo.mapNotNullTo(HashSet()) { it.key as? String } })
     Box(modifier.fillMaxHeight().pointerInput(Unit) {
         awaitEachGesture {
             awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
@@ -307,8 +303,8 @@ private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, filter: S
             // What is left up a long while on the stations (OpenJobs.kt): nothing while there is none.
             item(key = "open-jobs") { OpenJobs(current.workspace.id) }
             for (day in days) {
-                item(key = dayKey(day)) { Moving(motion, dayKey(day), still) { SectionHeader(day.label) } }
-                items(day.items, key = ::rowKey) { Moving(motion, rowKey(it), still) { ChatRow(it, view, motion = motion) } }
+                item(key = dayKey(day)) { Moving(motion, dayKey(day)) { SectionHeader(day.label) } }
+                items(day.items, key = ::rowKey) { Moving(motion, rowKey(it)) { ChatRow(it, view, motion = motion) } }
             }
         }
     }
@@ -321,20 +317,20 @@ private fun ChatPane(current: WorkspaceEntry, chats: Topic<ChatsView>, filter: S
  * them on its way up (web: listMotion.ts).
  */
 @Composable
-private fun LazyItemScope.Moving(motion: ListMotion, key: String, still: Boolean, content: @Composable () -> Unit) {
-    val arrive = remember { if (!still && motion.arriving(key)) Animatable(0f) else null }
-    if (arrive != null) LaunchedEffect(Unit) { delay(100); arrive.animateTo(1f, tween(240, easing = ArriveEasing)) }
+private fun LazyItemScope.Moving(motion: ListMotion, key: String, content: @Composable () -> Unit) {
+    val arrive = remember { if (motion.arriving(key)) Animatable(0f) else null }
+    if (arrive != null) LaunchedEffect(Unit) { arrive.animateTo(1f, tween(240, delayMillis = 100, easing = ArriveEasing)) }
     val lift = motion.liftedAt(key)
     val raise = remember { Animatable(1f) }
     LaunchedEffect(lift) {
         if (lift == null) return@LaunchedEffect
         try { raise.snapTo(0f); raise.animateTo(1f, tween(480, easing = LinearEasing)) } finally { if (motion.lifted[key] == lift) motion.lifted.remove(key) }
     }
-    val lifting = lift != null && !still
+    val lifting = lift != null
     val ground = lerp(C.bg, C.ink, 0.06f)
     val placement = remember(key) { motion.placement(key) }
     Box(
-        Modifier.animateItem(fadeInSpec = null, placementSpec = if (still) null else placement, fadeOutSpec = null)
+        Modifier.animateItem(fadeInSpec = null, placementSpec = placement, fadeOutSpec = null)
             .zIndex(if (lifting) 1f else 0f)
             .onGloballyPositioned { motion.placed[key] = it.positionInParent().y }
             .graphicsLayer { arrive?.value?.let { alpha = it; scaleX = 0.9f + 0.1f * it; scaleY = scaleX } }
@@ -442,7 +438,6 @@ private const val ARCHIVE_AT = 0.35f
 private fun SwipeToArchive(item: ChatItem, motion: ListMotion?, content: @Composable () -> Unit) {
     val app = LocalApp.current
     val haptics = LocalHapticFeedback.current
-    val still = reducedMotion()
     val scope = rememberCoroutineScope()
     val key = rowKey(item)
     val drag = remember { Animatable(0f) }
@@ -451,14 +446,14 @@ private fun SwipeToArchive(item: ChatItem, motion: ListMotion?, content: @Compos
     val past = drag.value < -width * ARCHIVE_AT
     val fill by animateFloatAsState(if (past) 1f else 0f, tween(140), label = "archive-fill")
 
-    fun back(v: Float = 0f) { scope.launch { if (still) drag.snapTo(0f) else drag.animateTo(0f, MoveSpring, v) } }
+    fun back(v: Float = 0f) { scope.launch { drag.animateTo(0f, MoveSpring, v) } }
     fun archive(v: Float) {
         if (gone || rowBusy(app, item)) return back(v)
         if (item.watch != null) { back(v); archiveRow(app, item); return }
         gone = true
         motion?.swiped?.add(key)
         scope.launch {
-            if (!still) drag.animateTo(-width.toFloat(), tween(200, easing = Ease.Standard), v) else drag.snapTo(-width.toFloat())
+            drag.animateTo(-width.toFloat(), tween(200, easing = Ease.Standard), v)
             app.act(t("android-chat.archive.verb"), failed = { motion?.swiped?.remove(key); gone = false; back() }) {
                 app.api(item.station).setArchived(item.thread, item.session, true); app.toast = t("android-chat.archived")
             }
@@ -661,12 +656,10 @@ private fun ChatMark(item: ChatItem, modifier: Modifier) {
     }
     // A mark that comes while the chat is in view pops in (web: ChatMark.tsx, 320 ms ease-out, 0 → 1.3 at 60 % → 1);
     // ones there when the list is first drawn do not.
-    val still = reducedMotion()
-    val pop = remember(tone) { if (!still && MarksSeen.fresh(rowKey(item))) Animatable(0f) else null }
+    val pop = remember(tone) { if (MarksSeen.fresh(rowKey(item))) Animatable(0f) else null }
     if (pop != null) LaunchedEffect(pop) { pop.animateTo(1f, tween(320, easing = CssEaseOut)) }
     val subtle = C.subtle
-    val turn = if (tone == RowTone.Busy && !still) rememberInfiniteTransition(label = "mark")
-        .animateFloat(0f, 360f, infiniteRepeatable(tween(1200, easing = LinearEasing)), label = "turn").value else 0f
+    val turn = if (tone == RowTone.Busy) rememberLoop(0f, 360f, infiniteRepeatable(tween(1200, easing = LinearEasing)), "turn", still = 0f).value else 0f
     Canvas(modifier.size(10.dp).graphicsLayer {
         pop?.value?.let { p -> val k = if (p < 0.6f) 1.3f * p / 0.6f else 1.3f - 0.3f * (p - 0.6f) / 0.4f; scaleX = k; scaleY = k }
     }.semantics { contentDescription = label }) {

@@ -7,10 +7,8 @@ package fail.still.android.ui
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.keyframes
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
@@ -86,14 +84,13 @@ fun StationGlyph(counts: GlyphCounts, size: Dp = 24.dp, tint: androidx.compose.u
     val ink = tint
     val red = C.red
     val blinking = if (counts.asleep) 0 else counts.working
-    val still = reducedMotion()
-    // A blink: open most of the time, shut for a moment (the web's 2.6s, shut at 93%).
-    val eye = if (blinking > 0 && !still) rememberInfiniteTransition(label = "blink").animateFloat(
-        1f, 1f, infiniteRepeatable(keyframes { durationMillis = 2600; 1f at 2288; 0.1f at 2418; 1f at 2600 }), label = "eye",
+    // A blink: open most of the time, shut for a moment (the web's 2.6s, shut at 93%); open with motion reduced.
+    val eye = if (blinking > 0) rememberLoop(
+        1f, 1f, infiniteRepeatable(keyframes { durationMillis = 2600; 1f at 2288; 0.1f at 2418; 1f at 2600 }), "eye", still = 1f,
     ).value else 1f
     // A link on its way: its arc breathes between the track and ink (the web's 1.4s); held halfway with motion reduced.
-    val pulse = if (arcs.any { it.pulse } && !still) rememberInfiniteTransition(label = "pulse").animateFloat(
-        TRACK, 0.85f, infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "pulse",
+    val pulse = if (arcs.any { it.pulse }) rememberLoop(
+        TRACK, 0.85f, infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse), "pulse", still = 0.5f,
     ).value else 0.5f
     Canvas(Modifier.size(size).graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen; alpha = if (counts.asleep) 0.4f else 1f }) {
         val u = this.size.width / 24f

@@ -41,6 +41,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.MotionDurationScale
+import kotlinx.coroutines.currentCoroutineContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -320,7 +322,9 @@ private class BarSpring(start: Float, var tension: Float, var friction: Float, p
         velocity = 0f
     }
 
-    fun step(dt: Float) {
+    /** A frame of `dt` seconds; `instant` (motion reduced: ui/Motion.kt), at its target at once. */
+    fun step(dt: Float, instant: Boolean = false) {
+        if (instant) return jump(target)
         var x = value
         var v = velocity
         var left = dt
@@ -364,7 +368,8 @@ private class Glide(start: Float) {
         target = at
     }
 
-    fun step(dt: Float) {
+    fun step(dt: Float, instant: Boolean = false) {
+        if (instant) return jump(target)
         t += dt
         val p = if (span <= 0f) 1f else min(1f, t / span)
         value = if (p >= 1f) target else from + (target - from) * easing.transform(p)
@@ -433,29 +438,37 @@ private class BarModel(shown: Boolean, notched: Boolean, ballShown: Boolean) {
         get() = o.moving || k.moving || held.moving || vis.moving || ballAlpha.moving || ballScale.moving || iconSwap.moving ||
             iconWas != null || swap != null || ball?.resting == false || tints.values.any { it.moving }
 
-    /** The loop: a frame at a time while anything moves, asleep otherwise. */
+    /**
+     * The loop: a frame at a time while anything moves, asleep otherwise, on the app's clock (ui/Motion.kt: its
+     * MotionDurationScale, as the web's `if (instant) spring.jump(spring.target)`): with motion reduced each frame puts
+     * everything where it is going.
+     */
     suspend fun run() {
         while (true) {
             snapshotFlow { moving }.first { it }
             var last = -1L
-            while (moving) withFrameNanos { now ->
-                step(if (last < 0) 1 / 60f else ((now - last) / 1e9f).coerceIn(0f, 0.05f))
-                last = now
+            while (moving) {
+                val scale = currentCoroutineContext()[MotionDurationScale]?.scaleFactor ?: 1f
+                withFrameNanos { now ->
+                    val dt = if (last < 0) 1 / 60f else ((now - last) / 1e9f).coerceIn(0f, 0.05f)
+                    step(if (scale > 0f) dt / scale else dt, instant = scale <= 0f)
+                    last = now
+                }
             }
         }
     }
 
-    fun step(dt: Float) {
+    fun step(dt: Float, instant: Boolean = false) {
         val s = swap
         // The frame a bar is chosen from a panel at rest, the stack is drawn as the rows were: it slides from the next.
-        if (s != null && s.still) s.still = false else if (o.moving) o.step(dt)
-        for (sp in arrayOf(k, held)) if (sp.moving) sp.step(dt)
-        for (g in arrayOf(vis, ballAlpha, ballScale, iconSwap)) if (g.moving) g.step(dt)
-        for (g in tints.values) if (g.moving) g.step(dt)
+        if (s != null && s.still) s.still = false else if (o.moving) o.step(dt, instant)
+        for (sp in arrayOf(k, held)) if (sp.moving) sp.step(dt, instant)
+        for (g in arrayOf(vis, ballAlpha, ballScale, iconSwap)) if (g.moving) g.step(dt, instant)
+        for (g in tints.values) if (g.moving) g.step(dt, instant)
         // Riding a bar chosen: the ball goes on its spring after the place it rides, from wherever it was.
         val b = ball
         if (b != null && s != null) ride(s)?.let { b.goX = it.x; b.goY = it.y; b.tension = 300f }
-        if (b != null && !b.resting) b.step(dt)
+        if (b != null && !b.resting) b.step(dt, instant)
         if (iconWas != null && !iconSwap.moving) iconWas = null
         // A bar chosen: landed, the stack is where the bar is, drawn as the bar will be; it goes in this same frame.
         if (s != null && !o.moving && o.value <= 0f) swap = null
@@ -1075,7 +1088,8 @@ private class BallMotion(x: Float, y: Float) {
 
     fun snapTo(x0: Float, y0: Float) { x = x0; y = y0; vx = 0f; vy = 0f }
 
-    fun step(dt: Float) {
+    fun step(dt: Float, instant: Boolean = false) {
+        if (instant) return snapTo(goX, goY)
         val cx = 2 * 0.635f * sqrt(tension)
         val cy = 2 * 0.635f * sqrt(300f)
         var nx = x

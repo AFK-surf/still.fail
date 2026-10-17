@@ -71,6 +71,7 @@ class ScreenActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        fail.still.android.ui.Motion.install(applicationContext)
         // While it is looked at, the phone stays awake: a screen is watched more than touched.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         I18n.load(applicationContext)
@@ -84,6 +85,7 @@ class ScreenActivity : ComponentActivity() {
             val prefs = Prefs.first(core)
             I18n.follow(prefs.lang)
             appearance = prefs.appearance ?: "system"
+            fail.still.android.ui.Motion.chosen = prefs.motion
             val made = ScreenSession(core, station, screen, lifecycleScope, limit(this@ScreenActivity))
             session = made
             if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) made.open()
@@ -91,6 +93,7 @@ class ScreenActivity : ComponentActivity() {
             core.topic(Topics.prefs).collect { state ->
                 val value = state.value?.takeIf { it !is JsonNull }?.let { runCatching { decode(PrefsView.serializer(), it) }.getOrNull() } ?: return@collect
                 appearance = value.appearance ?: "system"
+                fail.still.android.ui.Motion.chosen = value.motion
                 I18n.follow(value.lang)
             }
         }

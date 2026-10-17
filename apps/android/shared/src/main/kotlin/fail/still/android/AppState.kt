@@ -204,8 +204,11 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
     /** One entry of an execution history in full, over everything (the sheet stays under it). */
     var reader by mutableStateOf<ReaderSpec?>(null)
 
-    /** How its person likes it on this device, as the core keeps it (data/Prefs.kt). */
-    var kept by mutableStateOf(kept); private set
+    /** How its person likes it on this device, as the core keeps it (data/Prefs.kt); its `motion` the app's clock (ui/Motion.kt). */
+    var kept: PrefsView
+        get() = keptNow.value
+        private set(value) { keptNow.value = value; fail.still.android.ui.Motion.chosen = value.motion }
+    private val keptNow = mutableStateOf(kept).also { fail.still.android.ui.Motion.chosen = kept.motion }
     /** Changes sent and not answered yet; the core's values meanwhile wait, the latest shown once all are. */
     private var sending = 0
     private var waiting: PrefsView? = null
@@ -305,6 +308,10 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
     /** 外观: "system" (the default), "light" or "dark". */
     val theme: String get() = kept.appearance ?: "system"
     fun useTheme(value: String) = setPrefs(kept.copy(appearance = value), buildJsonObject { put("appearance", value) })
+
+    /** 动画: "reduce" or "full" as chosen; null follows the system's (ui/Motion.kt). */
+    val motion: String? get() = kept.motion
+    fun setMotion(value: String?) = setPrefs(kept.copy(motion = value), buildJsonObject { put("motion", value) })
 
     /** How the drive's reader lays text out on this device (the core's `prefs.reader`, whole; its defaults before it says). */
     val readerPrefs: fail.still.android.data.ReaderPrefs get() = kept.reader ?: fail.still.android.data.ReaderPrefs(size = 18, line = 1.7, margin = 22, face = "sans", indent = true, paper = "follow")

@@ -68,6 +68,9 @@ import fail.still.android.ui.LocalWide
 
 private fun themes() = listOf("system" to t("android-settings.theme.system"), "light" to t("android-settings.theme.light"), "dark" to t("android-settings.theme.dark"))
 
+/** The motions to choose: null follows the system's (ui/Motion.kt; the core's `motion`, client/core-ts/src/prefs.ts). */
+private fun motions() = listOf(null to t("web-pages.appearance.motion.system"), "reduce" to t("web-pages.appearance.motion.reduce"), "full" to t("web-pages.appearance.motion.full"))
+
 /** The languages to choose: null follows the phone (the core's `language`, client/core-ts/src/prefs.ts). */
 private fun languages() = listOf(null to t("common.language.system"), "zh" to t("common.language.zh"), "en" to t("common.language.en"))
 
@@ -180,7 +183,7 @@ private fun Version() {
     }
 }
 
-/** How this device shows still.fail: its theme, and the language it speaks. */
+/** How this device shows still.fail: its theme, its motion, and the language it speaks (the web's 外观 the same). */
 @Composable
 fun AppearanceScreen() {
     val app = LocalApp.current
@@ -191,9 +194,24 @@ fun AppearanceScreen() {
         val themes = themes()
         Seg(themes.map { it.second }, themes.indexOfFirst { it.first == app.theme }.coerceAtLeast(0), { app.useTheme(themes[it].first) },
             Modifier.padding(horizontal = 12.dp).fillMaxWidth(), height = 34.dp, fill = true)
+        Motions()
         Language()
         Spacer(Modifier.height(30.dp))
     }
+}
+
+/** Whether motion is reduced on this device, as the web's (prefs `motion`): the system's say, reduced, or in full. */
+@Composable
+private fun Motions() {
+    val app = LocalApp.current
+    val motions = motions()
+    SectionHeader(t("web-pages.appearance.motion.title"), start = 24.dp)
+    Seg(motions.map { it.second }, motions.indexOfFirst { it.first == app.motion }.coerceAtLeast(0), { i ->
+        val value = motions[i].first
+        if (value != app.motion) app.setMotion(value)
+    }, Modifier.padding(horizontal = 12.dp).fillMaxWidth(), height = 34.dp, fill = true)
+    // As the web's note under it (mobile/Settings.css.ts mSegNote).
+    Text(t("web-pages.appearance.motion.description"), fontSize = 13.sp, lineHeight = 19.5.sp, color = C.muted, modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp))
 }
 
 /**

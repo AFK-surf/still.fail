@@ -426,8 +426,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     }
 
     // Agents' messages coming out of their activity's avatar (ChatMotion.kt), and a quoted message flashing.
-    val reduced = fail.still.android.ui.reducedMotion()
-    val motion = remember { ChatMotion(reduced) }
+    val motion = remember { ChatMotion() }
     motion.ring = ringClock()
     // Each agent at work, and each that stopped a moment ago, on its own (web useLinger): one whose turn ends stays
     // 600ms (a turn ending and the next starting leave a moment between), then fades 220ms and goes, whatever the others
@@ -1559,8 +1558,11 @@ private val RingEase = androidx.compose.animation.core.CubicBezierEasing(0.42f, 
 
 /** The work ring's clock: ms into its 6s loop, which its turn (2s) and its stretch (1.5s) both come round in. */
 @Composable
-private fun ringClock(): androidx.compose.runtime.State<Float> = androidx.compose.animation.core.rememberInfiniteTransition(label = "ring")
-    .animateFloat(0f, 6000f, androidx.compose.animation.core.infiniteRepeatable(tween(6000, easing = androidx.compose.animation.core.LinearEasing)), label = "ring-ms")
+private fun ringClock(): androidx.compose.runtime.State<Float> = fail.still.android.ui.rememberLoop(
+    0f, 6000f, androidx.compose.animation.core.infiniteRepeatable(tween(6000, easing = androidx.compose.animation.core.LinearEasing)), "ring-ms",
+    // With motion reduced, a still arc (the web's ring without its animation), not the dot at the loop's end.
+    still = 750f,
+)
 
 /** What an activity shows, steadied: another thing replaces the shown one after it has stayed 700 ms. */
 @Composable

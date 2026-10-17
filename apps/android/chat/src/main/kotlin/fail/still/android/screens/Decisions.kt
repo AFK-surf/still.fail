@@ -118,7 +118,6 @@ import fail.still.android.ui.Ease
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.MoveSpring
-import fail.still.android.ui.reducedMotion
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.SMOOTH_SCALE
 import fail.still.android.ui.BusyIcon
@@ -140,13 +139,12 @@ import fail.still.android.ui.chatSubtle
  */
 @Composable
 internal fun OptionButton(label: String, modifier: Modifier = Modifier, strong: Boolean = false, enabled: Boolean = true, busy: Boolean = false, failed: String? = null, onPick: () -> Unit) {
-    val still = reducedMotion()
     val ink = if (strong) Color.White else C.ink
     val touch = remember(label) { MutableInteractionSource() }
     val pressed by touch.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        if (pressed && !still) 0.97f else 1f,
-        tween(if (still) 0 else if (pressed) 80 else 180, easing = Ease.Out), label = "option press",
+        if (pressed) 0.97f else 1f,
+        tween(if (pressed) 80 else 180, easing = Ease.Out), label = "option press",
     )
     Row(
         modifier.fillMaxWidth().graphicsLayer { scaleX = scale; scaleY = scale }
@@ -183,18 +181,14 @@ internal fun DecisionUnder(ctx: Here, m: ChatMessage) {
     }
     val app = LocalApp.current
     val station = ctx.station
-    val still = reducedMotion()
     val busy = options.firstOrNull { app.isDoing("decision.answer", "station" to station, "thread" to m.thread, "seq" to m.seq, "option" to it.label) }?.label
     Column {
         // Match chat-list archive: the whole group shrinks/fades, then a delayed spring closes its space.
         AnimatedVisibility(
             visible = !resolved, enter = EnterTransition.None,
-            exit = fadeOut(tween(if (still) 0 else LEAVE_MS, easing = CssEaseOut)) +
-                scaleOut(tween(if (still) 0 else LEAVE_MS, easing = CssEaseOut), targetScale = 0.9f) +
-                shrinkVertically(
-                    if (still) tween(0) else closeGap(IntSize.VisibilityThreshold),
-                    shrinkTowards = Alignment.Top, clip = false,
-                ),
+            exit = fadeOut(tween(LEAVE_MS, easing = CssEaseOut)) +
+                scaleOut(tween(LEAVE_MS, easing = CssEaseOut), targetScale = 0.9f) +
+                shrinkVertically(closeGap(IntSize.VisibilityThreshold), shrinkTowards = Alignment.Top, clip = false),
         ) {
             Column {
                 card?.assigneeText?.let { Text(it, fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle(), modifier = Modifier.padding(top = 2.dp)) }
@@ -212,8 +206,8 @@ internal fun DecisionUnder(ctx: Here, m: ChatMessage) {
         }
         AnimatedVisibility(
             visible = resolved && decision?.text != null,
-            enter = fadeIn(tween(if (still) 0 else LEAVE_MS, delayMillis = if (still) 0 else LEAVE_MS, easing = CssEaseOut)) +
-                expandVertically(if (still) tween(0) else closeGap(IntSize.VisibilityThreshold), expandFrom = Alignment.Top),
+            enter = fadeIn(tween(LEAVE_MS, delayMillis = LEAVE_MS, easing = CssEaseOut)) +
+                expandVertically(closeGap(IntSize.VisibilityThreshold), expandFrom = Alignment.Top),
         ) {
             Text(decision?.text.orEmpty(), fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle(), modifier = Modifier.padding(top = 2.dp))
         }
@@ -372,13 +366,12 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
     val app = LocalApp.current
     val item = shown.first()
     val n = shown.size
-    val still = reducedMotion()
     val scope = rememberCoroutineScope()
     // The front one's way across (px), its coming in (0 → 1) and its departure as it is answered: its own, new with
     // another in front, so what went is not snapped back a frame before the next takes its place.
     val drag = remember(item.key) { Animatable(0f) }
     val lift = remember(item.key) { Animatable(0f) }
-    val arrive = remember(item.key) { Animatable(if (local.arriving && !still) 0f else 1f) }
+    val arrive = remember(item.key) { Animatable(if (local.arriving) 0f else 1f) }
     LaunchedEffect(item.key) {
         local.arriving = false
         if (arrive.value < 1f) arrive.animateTo(1f, tween(260, easing = Ease.Out))
@@ -407,10 +400,8 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
         if (busy) return
         busy = true
         scope.launch {
-            if (!still) {
-                if (dir == 0) lift.animateTo(height.toFloat(), tween(360, easing = androidx.compose.animation.core.CubicBezierEasing(0.55f, 0f, 0.85f, 0.35f)))
-                else drag.animateTo(dir * width * 1.25f, tween(260, easing = Ease.Standard))
-            }
+            if (dir == 0) lift.animateTo(height.toFloat(), tween(360, easing = androidx.compose.animation.core.CubicBezierEasing(0.55f, 0f, 0.85f, 0.35f)))
+            else drag.animateTo(dir * width * 1.25f, tween(260, easing = Ease.Standard))
             // The next card is already laid out underneath the departing one.
             local.arriving = n == 1
             val alone = n == 1
@@ -419,7 +410,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
             // The only one, set aside: still the one in front; it comes in again.
             if (alone && item.key !in local.gone) {
                 drag.snapTo(0f)
-                if (!still) { arrive.snapTo(0f); arrive.animateTo(1f, tween(260, easing = Ease.Out)) }
+                arrive.snapTo(0f); arrive.animateTo(1f, tween(260, easing = Ease.Out))
                 local.arriving = false
             }
         }
@@ -451,7 +442,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
         Box(
             Modifier.weight(1f).fillMaxWidth().clipToBounds().onSizeChanged { width = it.width.coerceAtLeast(1); height = it.height.coerceAtLeast(1) }
                 .onGloballyPositioned { frame = it }
-                .pointerInput(item.key, still) {
+                .pointerInput(item.key) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                         if (busy || local.replying != null || inField(down.position)) return@awaitEachGesture
@@ -472,7 +463,7 @@ private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Mod
                                         busy -> {}
                                         at > width * THRESHOLD || fling && at > 0 -> dismiss()
                                         at < -width * THRESHOLD || fling && at < 0 -> defer()
-                                        else -> scope.launch { if (still) drag.snapTo(0f) else drag.animateTo(0f, MoveSpring, v) }
+                                        else -> scope.launch { drag.animateTo(0f, MoveSpring, v) }
                                     }
                                 }
                                 break

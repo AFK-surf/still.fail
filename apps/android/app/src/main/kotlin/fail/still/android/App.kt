@@ -34,7 +34,6 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -304,7 +303,6 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         app.place(Screen.Home)
     }
     val saved = rememberSaveableStateHolder()
-    val still = fail.still.android.ui.reducedMotion()
     val density = androidx.compose.ui.platform.LocalDensity.current
     // Each page's topics, followed while it is in the stack (data/Topics.kt: PageTopics); those of the pages gone from it
     // let go, once they are not drawn either (a page going away is drawn until it has).
@@ -370,7 +368,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
     transition.AnimatedContent(
         transitionSpec = {
             // Switched on the bar: in place, nothing slides.
-            if (app.switched) return@AnimatedContent placeSwitch(initialState, targetState, app.bars, still, with(density) { 30.dp.roundToPx() })
+            if (app.switched) return@AnimatedContent placeSwitch(initialState, targetState, app.bars, with(density) { 30.dp.roundToPx() })
             // Layered by depth in the stack, the deeper page over: a page's zIndex is fixed when it comes in (AnimatedContent
             // keeps the first spec's), so by the way it came it was wrong later (one come back to, then swiped away, went under).
             val z = app.stack.indexOfLast { app.pageOf(it) == app.pageOf(targetState) }.coerceAtLeast(0).toFloat()
@@ -485,10 +483,9 @@ private val PLACE_OF_PAGE = PLACES.associateBy { screenOf(it).id }
  * Switched on the bar from one place's page to another's (not a push: nothing to go back to): a shared axis along the
  * bar. The page coming in moves 30dp in from the side the ball goes to, fading in (220 ms); the one going fades out in
  * the first 90 ms, moving 30dp the other way. To a place not in the bar in view (chosen through the panel of the other
- * bars), no side to come from: it only fades in over the page going (180 ms). Reduced motion: at once.
+ * bars), no side to come from: it only fades in over the page going (180 ms).
  */
-private fun placeSwitch(from: Screen, to: Screen, bars: fail.still.android.data.BarPrefs, still: Boolean, shift: Int): ContentTransform {
-    if (still) return (EnterTransition.None togetherWith ExitTransition.None).apply { targetContentZIndex = 0f }
+private fun placeSwitch(from: Screen, to: Screen, bars: fail.still.android.data.BarPrefs, shift: Int): ContentTransform {
     val bar = bars.sets.getOrNull(bars.current.toInt()).orEmpty()
     val a = bar.indexOf(placeOf(from))
     val b = bar.indexOf(placeOf(to))

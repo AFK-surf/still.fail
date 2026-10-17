@@ -1000,7 +1000,6 @@ class Morph {
     private var to = -1
     /** Set between a change being seen (in layout) and its motion starting (a frame later): it shows as it began. */
     private var starting = false
-    internal var still = false
 
     // Both read whatever holds (what reads them, a layout or a part's layer, is to run again as either changes).
     private fun e(): Float { val t = progress.value; return if (starting || run < 0) 0f else Ease.Out.transform(t) }
@@ -1016,7 +1015,7 @@ class Morph {
 
     /** The content laid out anew, `h` tall: from where it shows now to there. */
     internal fun retarget(h: Int) {
-        if (to < 0 || still) { to = h; from = -1; return }
+        if (to < 0) { to = h; from = -1; return }
         val now = height()
         // From where each part was last seen (a layout may have moved it since, before this change of height was seen).
         parts.values.forEach { it.from = it.drawn ?: shown(it) }
@@ -1072,11 +1071,10 @@ fun Modifier.part(m: Morph?, key: String): Modifier = if (m == null) this else t
     .onPlaced { coords -> m.placed(key, coords) }
     .graphicsLayer { val d = m.offset(key); translationX = d.x; translationY = d.y }
 
-/** A morph for a capsule, played whenever its height changes (at once with the system's animations off). */
+/** A morph for a capsule, played whenever its height changes (at once with motion reduced: ui/Motion.kt). */
 @Composable
 fun rememberMorph(): Morph {
     val m = remember { Morph() }
-    m.still = fail.still.android.ui.reducedMotion()
     LaunchedEffect(m.run) { if (m.run > 0) m.play() }
     return m
 }

@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import fail.still.android.data.ChatMessage
 import fail.still.android.ui.Ease
+import fail.still.android.ui.flash
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.exp
@@ -48,12 +49,12 @@ internal val LocalChatMotion = staticCompositionLocalOf<ChatMotion?> { null }
  * useEmissions): the activity folds to its avatar (Fold), the avatar hops to where the message goes (Float: up, slowing,
  * then falling ever faster, stretched, stopping dead there), the message comes out of it as it lands, the avatar
  * flattened by the fall and springing back (Spit), and the avatar goes on down to where the activity now is, which
- * unfolds again (Return). Until its turn a message waits out of the list. With animations off messages just
- * appear, and so do those no one watches come out: arriving while the page is not in front or the reader has scrolled
- * up, and all still waiting when that happens.
+ * unfolds again (Return). Until its turn a message waits out of the list. With motion reduced the same, each pose at
+ * once (ui/Motion.kt). Messages no one watches come out just appear: arriving while the page is not in front or the
+ * reader has scrolled up, and all still waiting when that happens.
  */
 @Stable
-internal class ChatMotion(private val reduced: Boolean) {
+internal class ChatMotion {
     enum class Pose(val ms: Int) { Fold(170), Float(440), Spit(380), Return(320) }
     /** Where the flying avatar's 18dp face is, in the pane, and how it is scaled about its middle (`sx`, `sy`). */
     class Flying(val at: Offset, val sx: Float, val sy: Float)
@@ -94,7 +95,7 @@ internal class ChatMotion(private val reduced: Boolean) {
         for (m in messages) {
             if (m.seq in decided) continue
             val agent = if (m.authorKind == "agent" && !m.mine && !m.system) m.by.agent else null
-            val emits = !reduced && watched && m.said == true && agent != null && agent in showing
+            val emits = watched && m.said == true && agent != null && agent in showing
             decided[m.seq] = emits
             if (emits) queue.addLast(Triple(m.seq, agent!!, android.os.SystemClock.uptimeMillis()))
         }
@@ -262,7 +263,8 @@ internal class ChatMotion(private val reduced: Boolean) {
      * The message a jump last led to, by ts. A quote's passage is marked in its words (`mark`: rounded grounds on its
      * lines, the accent at [MARK_LEVEL]); a message whose words do not hold it (the mark never `found`), or a jump to a
      * whole message, flashes it instead (`flash`: the accent's ground round the message, your bubble tinted). Either
-     * comes in over [FLASH_IN_MS], holds, then fades out: a highlight that steps or snaps reads as a flicker.
+     * comes in over [FLASH_IN_MS], holds, then fades out: a highlight that steps or snaps reads as a flicker. With motion
+     * reduced it is there, held, as long, then gone (ui/Motion.kt flash).
      */
     var flashed by mutableStateOf<String?>(null)
         private set
@@ -287,7 +289,6 @@ internal class ChatMotion(private val reduced: Boolean) {
     /** Draws in the strokes under a search's words (TextMark.drawn), once the message is in view. */
     suspend fun drawFound() {
         val m = found ?: return
-        if (reduced) { m.drawn = Float.MAX_VALUE; return }
         val until = fail.still.android.ui.STROKE_MS + fail.still.android.ui.STROKE_GAP_MS * 12
         androidx.compose.animation.core.animate(0f, until, animationSpec = androidx.compose.animation.core.tween(until.toInt(), easing = androidx.compose.animation.core.LinearEasing)) { v, _ -> m.drawn = v }
         m.drawn = Float.MAX_VALUE
@@ -307,12 +308,12 @@ internal class ChatMotion(private val reduced: Boolean) {
             kotlinx.coroutines.coroutineScope {
                 launch {
                     flash.snapTo(0f)
-                    flash.animateTo(0f, keyframes { durationMillis = 1700; 0f at 0 using Ease.Out; 1f at FLASH_IN_MS; 1f at 900 using Ease.Standard; 0f at 1700 })
+                    flash.flash(1f, keyframes { durationMillis = 1700; 0f at 0 using Ease.Out; 1f at FLASH_IN_MS; 1f at 900 using Ease.Standard; 0f at 1700 })
                 }
                 launch {
                     marking.snapTo(0f)
-                    marking.animateTo(0f, keyframes { durationMillis = 2400; 0f at 0 using Ease.Out; MARK_LEVEL at FLASH_IN_MS; MARK_LEVEL at 1400 using Ease.Standard; 0f at 2400 }) {
-                        m?.level = value
+                    marking.flash(MARK_LEVEL, keyframes { durationMillis = 2400; 0f at 0 using Ease.Out; MARK_LEVEL at FLASH_IN_MS; MARK_LEVEL at 1400 using Ease.Standard; 0f at 2400 }) {
+                        m?.level = it
                     }
                 }
             }

@@ -66,9 +66,9 @@ internal class ListMotion {
 
     /**
      * The list as drawn now, in order: sets what moves from what was drawn last. `visible` are the keys on screen (only
-     * those leave by a copy). Nothing moves the first time, or with no motion wanted.
+     * those leave by a copy). Nothing moves the first time.
      */
-    fun update(days: List<ChatDay>, visible: Set<String>, still: Boolean) {
+    fun update(days: List<ChatDay>, visible: Set<String>) {
         val keys = ArrayList<String>()
         val now = HashMap<String, Any>()
         for (day in days) {
@@ -80,8 +80,8 @@ internal class ListMotion {
         was = keys
         val old = shown
         shown = now
-        // Nothing to move from (the list's first rows), or no motion wanted: only where they are is kept.
-        if (before.isNullOrEmpty() || still) return
+        // Nothing to move from (the list's first rows): only where they are is kept.
+        if (before.isNullOrEmpty()) return
         val t = SystemClock.uptimeMillis()
         changedAt = t
         val oldSet = before.toHashSet()
