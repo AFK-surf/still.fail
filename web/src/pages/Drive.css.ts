@@ -177,9 +177,18 @@ export const treeNote = style({ margin: "0", padding: "8px 10px", paddingLeft: "
 export const treeError = style({ color: vars.red });
 /** Columns, a folder each, side by side; more than fit scroll sideways, the last kept in view. */
 export const columns = style({ display: "flex", alignItems: "stretch", gap: "6px", minHeight: "0", overflowX: "auto", overscrollBehaviorX: "contain" });
+/** A column and its edge, as wide as it is set (DriveViews.tsx ColumnsView). */
+export const columnBox = style({ flex: "none", position: "relative", display: "grid", gridTemplateRows: "minmax(0, 1fr)", minHeight: "0" });
 export const column = style({
-  flex: "0 0 240px", display: "grid", alignContent: "start", gap: "2px", minWidth: "0", overflowY: "auto", borderRadius: vars.rField, cornerShape: vars.cornerShape,
+  display: "grid", alignContent: "start", gap: "2px", minWidth: "0", overflowY: "auto", borderRadius: vars.rField, cornerShape: vars.cornerShape,
   selectors: { "&[data-drop]": { background: vars.accentBg } },
+});
+/** Its edge's line in the middle of the gap to the next column (ui's resizeHandle: the line 3 in, 7 wide); the last's on its own edge. */
+export const columnEdge = style({
+  selectors: {
+    [`${columnBox} > &[data-edge]`]: { right: "-7px" },
+    [`${columnBox}:last-child > &[data-edge]`]: { right: "-4px" },
+  },
 });
 /** A name being changed in place, where the name was. */
 export const nameField = style({

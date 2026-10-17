@@ -1,7 +1,8 @@
 // What the files keep as they are left, as a local file browser does, for this page's life (not stored): how far each
-// folder was scrolled (by where it is shown and how), the folders a tree had open, what was last opened in each folder
-// (marked when it is shown again), the folder last open in a workspace's files' page (the rail's 文件 comes back to it)
-// and in its chats' 文件 tab (the same over each chat, as the tab is kept while chats change beside it).
+// folder was scrolled (by where it is shown and how), the folders a tree had open, a column's width dragged, what was
+// last opened in each folder (marked when it is shown again), the folder last open in a workspace's files' page (the
+// rail's 文件 comes back to it) and in its chats' 文件 tab (the same over each chat, as the tab is kept while chats
+// change beside it).
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore, type RefObject } from "react";
 import type { At } from "./model.ts";
 
@@ -15,6 +16,7 @@ const trees = new Map<string, ReadonlySet<string>>();
 const opened = new Map<string, string>();
 const lastFolder = new Map<string, string>();
 const tabs = new Map<string, unknown>();
+const widths = new Map<string, number>();
 
 /**
  * The element given the ref (or the one `scroller` finds from it: the page it is in) scrolled as far as when the folder
@@ -67,6 +69,22 @@ export function useTree(owner: Owner, at: At): ReadonlySet<string> {
   const key = keyOf(owner, at);
   return useSyncExternalStore((f) => { treeWatchers.add(f); return () => { treeWatchers.delete(f); }; }, () => trees.get(key) ?? NONE, () => NONE);
 }
+
+/** The width a folder's column was dragged to (columns), kept for when it is shown again; none: as every column is. */
+export function useColumnWidth(owner: Owner, at: At): number | undefined {
+  const key = keyOf(owner, at, "width");
+  return useSyncExternalStore((f) => { widthWatchers.add(f); return () => { widthWatchers.delete(f); }; }, () => widths.get(key), () => undefined);
+}
+export function keepColumnWidth(owner: Owner, at: At, px: number): void {
+  widths.set(keyOf(owner, at, "width"), px);
+  for (const f of widthWatchers) f();
+}
+/** Every column of `owner` as wide as the rest again (all of them dragged at once). */
+export function forgetColumnWidths(owner: Owner): void {
+  for (const key of widths.keys()) if (key.startsWith(`${owner}\n`)) widths.delete(key);
+  for (const f of widthWatchers) f();
+}
+const widthWatchers = new Set<() => void>();
 
 /** What was last opened in the folder at `at` (a folder gone into, a file), by its name. */
 export function lastOpened(owner: Owner, at: At): string | undefined {

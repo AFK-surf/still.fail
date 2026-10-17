@@ -3679,7 +3679,8 @@ data class PrefsView (
 	val dropFiles: Map<String, Boolean>? = null,
 	/// How a station's files are listed on this device: each place's view (`page`: the files' page, `tab`: a
 	/// chat's 文件 tab; tree, columns or list, none: columns), their order (`sort`: name, time, size or kind, `-down`
-	/// after it for the other way; none: name) and whether hidden files show (`hidden`: shown).
+	/// after it for the other way; none: name), whether hidden files show (`hidden`: shown) and how wide columns are
+	/// (`column`: in pixels; none: 240).
 	val driveViews: Map<String, String>? = null,
 	/// How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path.
 	val dropAs: String? = null,

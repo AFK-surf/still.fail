@@ -5,14 +5,15 @@
 // what a row does (`rowOf`, ../drive/browse.ts) and in what order a folder's entries go (`arranged`). Each keeps what a
 // local file browser does as folders are gone into and left (../drive/kept.ts): how far it was scrolled, a tree's
 // folders open.
-import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type MouseEvent, type ReactNode } from "react";
 import type { DriveEntry } from "../core/shapes.ts";
 import { joinPath, useFolder, type At } from "../drive/model.ts";
-import { toggleTree, useKeptScroll, useTree, type Owner } from "../drive/kept.ts";
+import { forgetColumnWidths, keepColumnWidth, toggleTree, useColumnWidth, useKeptScroll, useTree, type Owner } from "../drive/kept.ts";
 import type { Dragged } from "../drive/drag.ts";
 import { setPrefs, usePrefs } from "../prefs.ts";
 import { ViewColumns, ViewTree, List } from "@stillfail/ui/icons.tsx";
-import { ICON, Tip, type MenuItem, WaitLine } from "../ui.tsx";
+import { ICON, Tip, type MenuItem, usePointerTip, WaitLine } from "../ui.tsx";
+import { resizeHandle } from "@stillfail/ui/parts.css.ts";
 import { DriveRow } from "./Drive.tsx";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./Drive.css.ts";
@@ -128,11 +129,18 @@ function TreeFolder({ at, depth, open, toggle, shown, compact, empty }: {
 
 // ── columns ──
 
+/** A column's width: as wide as every column is until one is dragged (240 until all are, kept on this device). */
+const COLUMN = 240, COLUMN_MIN = 160, COLUMN_MAX = 640;
+const clampColumn = (px: number) => Math.round(Math.min(COLUMN_MAX, Math.max(COLUMN_MIN, px)));
+/** A column being dragged wider or narrower: that folder's (`path`), or (null, ⌥ held) every one. */
+type Dragging = { path: string | null; px: number } | null;
+
 /**
  * A column a folder, from the one it starts at (`at.path` "" under its root, or where the page is) to the one open
  * (`open`, under it), each with the next open marked; a folder pressed opens next to its column, the columns after it
  * let go. The last is kept in view as more open (there at once when the columns are first drawn). Each column takes
- * what is dropped on it into its folder.
+ * what is dropped on it into its folder. Its edge, dragged, makes it wider or narrower (as Finder's: with ⌥ held every
+ * column, and the columns opened after; a double click as wide as its longest name).
  */
 export function ColumnsView({ owner, at, open, shown, empty }: { owner: Owner; at: At; open: string; shown: Shown; empty?: ReactNode }) {
   const parts = open.split("/").filter(Boolean);
@@ -144,26 +152,101 @@ export function ColumnsView({ owner, at, open, shown, empty }: { owner: Owner; a
     if (el) el.scrollTo({ left: el.scrollWidth, behavior: drawn.current ? "smooth" : "instant" });
     drawn.current = true;
   }, [open]);
+  // Every column's width: as kept on this device, or as just dragged until the kept one comes back from the core.
+  const kept = Number(usePrefs((p) => p.driveViews.column)) || COLUMN;
+  const [all, setAll] = useState<number | null>(null);
+  useEffect(() => setAll(null), [kept]);
+  const [dragging, setDragging] = useState<Dragging>(null);
+  const setEvery = (px: number) => {
+    forgetColumnWidths(owner);
+    setAll(px);
+    setPrefs({ driveViews: { column: px === COLUMN ? null : String(px) } });
+  };
   return (
     <div ref={strip} className={css.columns}>
       {paths.map((path, i) => (
-        <Column key={path} owner={owner} at={{ ...at, path }} next={parts[i] ?? null} shown={shown} empty={i === 0 ? empty : undefined} />
+        <Column key={path} owner={owner} at={{ ...at, path }} next={parts[i] ?? null} shown={shown} empty={i === 0 ? empty : undefined}
+          every={all ?? kept} dragging={dragging} onDrag={setDragging} onEvery={setEvery} />
       ))}
     </div>
   );
 }
 
-function Column({ owner, at, next, shown, empty }: { owner: Owner; at: At; next: string | null; shown: Shown; empty?: ReactNode }) {
+function Column({ owner, at, next, shown, empty, every, dragging, onDrag, onEvery }: {
+  owner: Owner; at: At; next: string | null; shown: Shown; empty?: ReactNode;
+  every: number; dragging: Dragging; onDrag: (d: Dragging) => void; onEvery: (px: number) => void;
+}) {
   const folder = useFolder(at.station, at.root, at.path);
   const entries = shown.arranged(folder.value?.entries ?? []);
   const scroller = useKeptScroll<HTMLDivElement>(owner, at, "columns", folder.value !== undefined || folder.error !== null);
   const zone = useDropZone(shown.dropOn?.(at));
+  const own = useColumnWidth(owner, at);
+  const width = dragging && (dragging.path === null || dragging.path === at.path) ? dragging.px : own ?? every;
+  // As wide as its longest name needs (narrower too), its rows as they are drawn.
+  const fit = () => {
+    const el = scroller.current;
+    if (!el) return;
+    let need = -Infinity;
+    for (const name of el.querySelectorAll<HTMLElement>(`.${css.name}`)) {
+      const range = document.createRange();
+      range.selectNodeContents(name);
+      need = Math.max(need, range.getBoundingClientRect().width - name.clientWidth);
+    }
+    if (need !== -Infinity) keepColumnWidth(owner, at, clampColumn(width + Math.ceil(need) + 1));
+  };
   return (
-    <div ref={scroller} className={css.column} data-drop={zone.over || undefined} {...zone.props} onClick={(e) => { if (e.target === e.currentTarget) shown.clear(); }}>
-      {folder.error ? <p className={`${css.treeNote} ${css.treeError}`}>{folder.error.message}</p>
-        : !folder.value ? <div className={css.treeNote}><WaitLine /></div>
-        : !entries.length ? (empty ?? <p className={`${css.treeNote} ${shellCss.muted}`}>{t("web-pages.drive.emptyFolder")}</p>)
-        : entries.map((e) => <DriveRow key={e.name} at={at} entry={e} row={shown.rowOf(at, e)} compact column along={e.name === next} />)}
+    <div className={css.columnBox} style={{ width }}>
+      <div ref={scroller} className={css.column} data-drop={zone.over || undefined} {...zone.props} onClick={(e) => { if (e.target === e.currentTarget) shown.clear(); }}>
+        {folder.error ? <p className={`${css.treeNote} ${css.treeError}`}>{folder.error.message}</p>
+          : !folder.value ? <div className={css.treeNote}><WaitLine /></div>
+          : !entries.length ? (empty ?? <p className={`${css.treeNote} ${shellCss.muted}`}>{t("web-pages.drive.emptyFolder")}</p>)
+          : entries.map((e) => <DriveRow key={e.name} at={at} entry={e} row={shown.rowOf(at, e)} compact column along={e.name === next} />)}
+      </div>
+      <ColumnEdge width={width} dragging={dragging !== null && (dragging.path === null || dragging.path === at.path)}
+        onMove={(px, every) => onDrag({ path: every ? null : at.path, px })}
+        onDone={(px, every) => { if (every) onEvery(px); else keepColumnWidth(owner, at, px); onDrag(null); }}
+        onFit={fit} />
     </div>
+  );
+}
+
+/** A column's edge (as the app's other columns' edges look, ui.tsx ResizeHandle): dragged, its width; ⌥ held, every one's. */
+function ColumnEdge({ width, dragging, onMove, onDone, onFit }: {
+  width: number; dragging: boolean; onMove: (px: number, every: boolean) => void; onDone: (px: number, every: boolean) => void; onFit: () => void;
+}) {
+  const tip = usePointerTip();
+  const words = t("web-pages.drive.resizeColumn");
+  return (
+    <>
+      <div className={`${resizeHandle} ${css.columnEdge}`} data-edge="right" data-active={dragging || undefined} role="separator" aria-orientation="vertical"
+        aria-label={words} {...tip.on} onDoubleClick={onFit}
+        onPointerDown={(e) => {
+          if (e.button !== 0) return;
+          tip.hide();
+          const handle = e.currentTarget;
+          const from = e.clientX;
+          let moved = false, px = width, every = e.altKey;
+          handle.setPointerCapture(e.pointerId);
+          const move = (ev: PointerEvent) => {
+            if (!moved && Math.abs(ev.clientX - from) < 3) return;
+            if (!moved) { moved = true; document.body.dataset.resizing = "true"; }
+            px = clampColumn(width + ev.clientX - from);
+            every = ev.altKey;
+            onMove(px, every);
+          };
+          const up = () => {
+            handle.removeEventListener("pointermove", move);
+            handle.removeEventListener("pointerup", up);
+            handle.removeEventListener("pointercancel", up);
+            delete document.body.dataset.resizing;
+            if (moved) onDone(px, every);
+          };
+          handle.addEventListener("pointermove", move);
+          handle.addEventListener("pointerup", up);
+          handle.addEventListener("pointercancel", up);
+          e.preventDefault();
+        }} />
+      {!dragging && tip.draw(words, "right")}
+    </>
   );
 }

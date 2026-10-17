@@ -1231,6 +1231,7 @@
   "web-pages.drive.pickClear": "Clear",
   "web-pages.drive.view.label": "View",
   "web-pages.drive.view.columns": "Columns",
+  "web-pages.drive.resizeColumn": "Resize column",
   "web-pages.drive.view.tree": "Tree",
   "web-pages.drive.view.list": "List",
   "web-pages.notifications.browserNote": "When the browser is closed, the system delivers notifications as push notifications; sounds are set in the browser's and system's notification settings",

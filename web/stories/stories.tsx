@@ -398,6 +398,7 @@ export const stories: Story[] = [
   { id: "app-files", group: "应用", title: "文件", app: true, steps: [{ click: '[aria-label="文件"]' }] },
   { id: "app-files-home", group: "应用", title: "文件 · 主目录", app: true, steps: [{ click: '[aria-label="文件"]' }, { text: "主目录" }] },
   { id: "app-files-deep", group: "应用", title: "文件 · 分栏", app: true, steps: [{ click: '[aria-label="文件"]' }, { text: "主目录" }, { text: "code" }, { text: "acme" }, { text: "web" }] },
+  { id: "app-files-column-edge", group: "应用", title: "文件 · 分栏 · 调整栏宽", app: true, steps: [{ click: '[aria-label="文件"]' }, { text: "主目录" }, { text: "code" }, { text: "acme" }, { text: "web" }, { hover: '[role="separator"][aria-label="调整栏宽"]' }] },
   { id: "app-files-tree", group: "应用", title: "文件 · 文件树", app: true, steps: [{ click: '[aria-label="文件"]' }, { text: "主目录" }, { click: '[aria-label="文件树"]' }, { text: "code" }, { key: "ArrowRight" }, { key: "ArrowRight" }, { key: "ArrowRight" }, { key: "ArrowRight" }, { key: "ArrowDown" }, { key: "ArrowRight" }] },
   { id: "app-files-list", group: "应用", title: "文件 · 列表", app: true, steps: [{ click: '[aria-label="文件"]' }, { text: "主目录" }, { click: '[aria-label="列表"]' }] },
   { id: "app-files-row-menu", group: "应用", title: "文件 · 文件夹右键", app: true, steps: [{ click: '[aria-label="文件"]' }, { text: "主目录" }, { rightClick: "button:has-text(\"Movies\")" }] },

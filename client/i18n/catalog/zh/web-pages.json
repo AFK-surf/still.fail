@@ -1159,6 +1159,7 @@
   "web-pages.drive.pickClear": "清除",
   "web-pages.drive.view.label": "显示方式",
   "web-pages.drive.view.columns": "分栏",
+  "web-pages.drive.resizeColumn": "调整栏宽",
   "web-pages.drive.view.tree": "文件树",
   "web-pages.drive.view.list": "列表",
   "web-pages.notifications.browserNote": "浏览器关闭时，通知由系统推送；提示音在浏览器和系统的通知设置中调整",
