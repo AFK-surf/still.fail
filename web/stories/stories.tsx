@@ -698,6 +698,8 @@ export const stories: Story[] = [
   { id: "screen-denied", group: "屏幕", title: "屏幕 · 没有权限", ...screenView("denied") },
   { id: "screen-failed", group: "屏幕", title: "屏幕 · 没连上", ...screenView("failed") },
   { id: "screen-phone", group: "屏幕", title: "屏幕 · 手机", phone: true, ...screenView("live", true) },
+  { id: "screen-phone-full", group: "屏幕", title: "屏幕 · 手机 · 全屏", phone: true, ...screenView("live", true), steps: [{ click: '[aria-label="全屏"]' }] },
+  { id: "screen-phone-full-tools", group: "屏幕", title: "屏幕 · 手机 · 全屏 · 工具", phone: true, ...screenView("live", true), steps: [{ click: '[aria-label="全屏"]' }, { click: '[aria-label="工具"]' }] },
   { id: "screen-phone-command", group: "屏幕", title: "屏幕 · 手机 · 按住 ⌘", phone: true, ...screenView("live", true), steps: [{ click: '[aria-label="Command"]' }] },
   // Measured once the note is up: it comes with the stream's first clipboard event, at no set time.
   { id: "screen-copied", group: "屏幕", title: "屏幕 · 远端复制了（浏览器没让直接写剪贴板）", ...screenView("copied"), steps: [{ hover: '[role="status"]:has(button)' }] },

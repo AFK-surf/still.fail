@@ -181,6 +181,14 @@ try {
   got = await said();
   assert.deepEqual(got.map((i) => i.t === 'text' ? i.text : `${i.kind} ${i.key}`), ['ok', 'down Enter', 'up Enter'], 'typed on the phone');
   if (out) await p.screenshot({ path: `${out}/screen-input-phone.png` });
+  // 全屏: the picture's stage the whole window, the bars away, the tools folded into the corner's button.
+  await p.getByRole('button', { name: '全屏' }).click();
+  const whole = await p.evaluate(() => { const r = document.querySelector('[data-full] [data-driving]')?.getBoundingClientRect(); return r && [r.left, r.top, r.width, r.height]; });
+  assert.deepEqual(whole, [0, 0, 390, 844], 'full: the stage is the window');
+  assert.equal(await p.getByRole('button', { name: '键盘' }).count(), 0, 'full: the bars folded away');
+  await p.getByRole('button', { name: '工具' }).click();
+  await p.getByRole('button', { name: '退出全屏' }).click();
+  assert.equal(await p.locator('[data-full]').count(), 0, 'out of full');
   await phone.close();
 
   // ── an agent driving it: opened to look (nothing goes), 接管 makes it this view's ──

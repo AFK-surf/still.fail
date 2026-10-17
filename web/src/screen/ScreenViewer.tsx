@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { core } from "../core/react.ts";
 import type { ScreenViewState } from "../core/shapes.ts";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, Keyboard, Paste, Trackpad, Upload } from "@stillfail/ui/icons.tsx";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, Close, Cursor, Eye, Keyboard, Landscape, More, Paste, Trackpad, Upload } from "@stillfail/ui/icons.tsx";
 import { useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { ViewerBar, ViewerTool, VIEWER_BAR_REACH } from "@stillfail/ui/viewer/ViewerBar.tsx";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
@@ -69,6 +69,30 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
   const pad = usePrefs((p) => p.screenTouch) !== "direct" && phone;
   const padRef = useRef(pad);
   padRef.current = pad;
+  /**
+   * 全屏 on a phone: the screen alone, the browser's own full screen where it has one (and sideways where it lets the
+   * page turn it), the bars folded into one button over the corner (open: `toolsOpen`).
+   */
+  const viewerEl = useRef<HTMLDivElement>(null);
+  const [full, setFull] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const goFull = (on: boolean) => {
+    setFull(on);
+    setToolsOpen(false);
+    const el = viewerEl.current;
+    if (on) {
+      el?.requestFullscreen?.({ navigationUI: "hide" }).then(() => (window.screen.orientation as { lock?: (o: string) => Promise<void> } | undefined)?.lock?.("landscape")).catch(() => undefined);
+    } else {
+      try { window.screen.orientation?.unlock?.(); } catch { /* not locked */ }
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    }
+  };
+  // The browser's full screen left (its back, a swipe): 全屏 too.
+  useEffect(() => {
+    const left = () => { if (!document.fullscreenElement) setFull(false); };
+    document.addEventListener("fullscreenchange", left);
+    return () => document.removeEventListener("fullscreenchange", left);
+  }, []);
   /** The modifiers held on the keys row (bit 0 Alt, 1 Ctrl, 2 Meta, 3 Shift), for the next key. */
   const [held, setHeld] = useState(0);
   const heldRef = useRef(0);
@@ -324,7 +348,8 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
   );
 
   return (
-    <div className={css.viewer} data-phone={phone || undefined} data-keys={(phone && !over && driving) || undefined} data-phase={phase} onPointerMove={onPointerMove} onPointerDown={onPointerMove}
+    <div ref={viewerEl} className={css.viewer} data-phone={phone || undefined} data-full={(phone && full) || undefined}
+      data-keys={(phone && !over && driving && (!full || typing)) || undefined} data-phase={phase} onPointerMove={onPointerMove} onPointerDown={onPointerMove}
       onDragOver={(e) => { if (drop && e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDragging(true); } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
       onDrop={(e) => { if (!drop || !e.dataTransfer.files.length) return; e.preventDefault(); setDragging(false); sendFiles([...e.dataTransfer.files]); }}>
@@ -364,7 +389,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
             <Tip label={backLabel}><button type="button" className={css.back} aria-label={backLabel} onClick={onBack}><ChevronLeft size={20} /></button></Tip>
             <span className={css.headText}><b>{title}</b>{line && <small>{line}</small>}</span>
           </header>
-          {!over && driving && (
+          {!over && driving && (!full || typing) && (
             <div className={css.keysRow} role="toolbar" aria-label={t("web-pages.screen.keysRow")}>
               {ROW_KEYS.map((k) => {
                 const on = k.mod !== undefined && (held & k.mod) !== 0;
@@ -413,6 +438,38 @@ export function ScreenViewer({ station, screen, backLabel, onBack, phone = false
                 <Tip label={t("web-pages.screen.sendFile")}>
                   <button type="button" className={css.keyboard} aria-label={t("web-pages.screen.sendFile")} onClick={() => files.current?.click()}><Upload size={18} /></button>
                 </Tip>
+              )}
+              <Tip label={t("web-pages.screen.full")}>
+                <button type="button" className={css.keyboard} aria-label={t("web-pages.screen.full")} onClick={() => goFull(true)}><Landscape size={18} /></button>
+              </Tip>
+            </div>
+          )}
+          {full && (
+            <div className={css.fullTools}>
+              <button type="button" className={css.keyboard} aria-label={t(toolsOpen ? "web-pages.screen.toolsClose" : "web-pages.screen.tools")} aria-expanded={toolsOpen}
+                onClick={() => setToolsOpen((o) => !o)}>{toolsOpen ? <Close size={18} /> : <More size={18} />}</button>
+              {toolsOpen && (
+                <>
+                  {!over && may && live && !undrivable && !takeOver && (
+                    <button type="button" className={css.keyboard} aria-label={control ? t("web-pages.screen.control") : t("web-pages.screen.look")}
+                      onClick={() => setControl(!control)}>{control ? <Cursor size={18} /> : <Eye size={18} />}</button>
+                  )}
+                  {driving && (
+                    <button type="button" className={css.keyboard} aria-label={t("web-pages.screen.trackpad")} aria-pressed={pad}
+                      onClick={() => { setPrefs({ screenTouch: pad ? "direct" : null }); toast(t(pad ? "web-pages.screen.padOff" : "web-pages.screen.padOn")); }}><Trackpad size={18} /></button>
+                  )}
+                  {driving && (
+                    <button type="button" className={css.keyboard} aria-label={t("web-pages.screen.keyboard")} aria-pressed={typing}
+                      onClick={() => { if (typing) keys.current?.blur(); else keys.current?.focus({ preventScroll: true }); }}><Keyboard size={18} /></button>
+                  )}
+                  {clipTypes.includes("text") && (
+                    <button type="button" className={css.keyboard} aria-label={t("web-pages.screen.paste")} onClick={pasteHere}><Paste size={18} /></button>
+                  )}
+                  {drop && (
+                    <button type="button" className={css.keyboard} aria-label={t("web-pages.screen.sendFile")} onClick={() => files.current?.click()}><Upload size={18} /></button>
+                  )}
+                  <button type="button" className={css.keyboard} aria-label={t("web-pages.screen.unfull")} onClick={() => goFull(false)}><Landscape size={18} /></button>
+                </>
               )}
             </div>
           )}

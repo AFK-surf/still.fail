@@ -38,6 +38,8 @@ export const stage = style({
       left: "var(--safe-left)", right: "var(--safe-right)",
     },
     [`${viewer}[data-phone][data-keys] &`]: { bottom: `calc(max(${EDGE}px, var(--safe-bottom)) + ${FOOT + GAP + KEYS + GAP}px)` },
+    // 全屏: the whole window.
+    [`${viewer}[data-phone][data-full] &`]: { top: "0", bottom: "0", left: "0", right: "0" },
     // The desktop app's window is dragged by the page's top: not over a screen being driven.
     "[data-desktop] &": { WebkitAppRegion: "no-drag" },
   },
@@ -151,4 +153,17 @@ export const rowKey = style({
   background: `color-mix(in srgb, ${vars.text} 6%, transparent)`, color: vars.text, cursor: "pointer",
   fontSize: vars.textMeta, fontWeight: "600", lineHeight: "1", whiteSpace: "nowrap",
   selectors: { "&[aria-pressed=true]": { background: vars.text, color: vars.canvas } },
+});
+
+// ── a phone's 全屏 ──
+
+globalStyle(`${viewer}[data-phone][data-full]`, { background: "#000" });
+// The bars folded away: only the corner's button (fullTools) and, while typing, the keys row at the foot.
+globalStyle(`${viewer}[data-full] ${head}, ${viewer}[data-full] ${foot}`, { display: "none" });
+globalStyle(`${viewer}[data-full] ${keysRow}`, { bottom: `max(${EDGE}px, var(--safe-bottom))` });
+/** 全屏's tools, folded into one button over the picture's corner; open, the foot's down from it: a pill 4 round them. */
+export const fullTools = style({
+  ...glass,
+  position: "absolute", zIndex: "4", top: `max(${EDGE}px, var(--safe-top))`, right: `max(${EDGE}px, var(--safe-right))`,
+  display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", padding: "4px", borderRadius: "999px",
 });

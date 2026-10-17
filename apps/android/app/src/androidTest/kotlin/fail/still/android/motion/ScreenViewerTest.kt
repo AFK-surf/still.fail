@@ -310,6 +310,35 @@ class ScreenViewerTest {
     }
 
     /**
+     * 全屏: the screen alone, sideways, edge to edge, its tools folded into one button over the corner; opened, the same
+     * tools; 退出全屏 upright again with the bar.
+     */
+    @Test fun fullScreenShowsTheScreenAlone() {
+        val v = Viewer()
+        v.open()
+        v.state("live", others = emptyList())
+        v.config()
+        v.frame(1000)
+        rule.waitUntil(5_000) { v.acked(1000) }
+        rule.onNodeWithContentDescription("全屏").performClick()
+        rule.waitUntil(10_000) { rule.onNodeWithTag(STAGE).fetchSemanticsNode().size.let { it.width > it.height } }
+        v.h.settle()
+        v.frame(1033)
+        rule.waitUntil(5_000) { v.acked(1033) }
+        // Edge to edge: the stage is the whole window.
+        val stage = rule.onNodeWithTag(STAGE).fetchSemanticsNode().size
+        val window = rule.activity.window.decorView.let { IntSize(it.width, it.height) }
+        assertEquals(window, IntSize(stage.width, stage.height))
+        v.shot("screen-full")
+        rule.onNodeWithContentDescription("工具").performClick()
+        v.h.settle()
+        v.shot("screen-full-tools")
+        rule.onNodeWithContentDescription("退出全屏").performClick()
+        rule.waitUntil(10_000) { rule.onNodeWithTag(STAGE).fetchSemanticsNode().size.let { it.width < it.height } }
+        rule.onNodeWithContentDescription("全屏").assertIsDisplayed()
+    }
+
+    /**
      * The stage made shorter (the keyboard up, sideways): the frame drawn as large as it was, not fitted smaller, the
      * pointer still in sight; made tall again, fitted as before.
      */

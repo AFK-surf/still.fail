@@ -15,10 +15,12 @@ import android.content.Context
 import android.graphics.SurfaceTexture
 import android.os.Build
 import android.os.SystemClock
+import android.content.pm.ActivityInfo
 import android.view.HapticFeedbackConstants
 import android.view.Surface
 import android.view.TextureView
 import android.view.inputmethod.InputMethodManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -58,6 +60,10 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -292,16 +298,35 @@ fun ScreenViewer(session: ScreenSession, title: String?, onExit: () -> Unit) {
         note = t(if (on) "android-misc.screen.padOn" else "android-misc.screen.padOff")
         act(t("android-misc.screen.touchWhat")) { session.choosePad(on) }
     }
-    val tools = Tools(pasting, ::paste, ::send, ::choosePad)
+    // 全屏: the screen alone on the phone, sideways, the system bars away (a swipe from an edge shows them a moment), the
+    // tools folded into one button over the frame's corner; back (or 退出全屏) as it was.
+    var full by rememberSaveable { mutableStateOf(false) }
+    val window = LocalView.current
+    DisposableEffect(full) {
+        val activity = context as? android.app.Activity
+        val controller = activity?.window?.let { WindowCompat.getInsetsController(it, window) }
+        controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        if (full) controller?.hide(WindowInsetsCompat.Type.systemBars()) else controller?.show(WindowInsetsCompat.Type.systemBars())
+        activity?.requestedOrientation = if (full) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        onDispose { if (full) { controller?.show(WindowInsetsCompat.Type.systemBars()); activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED } }
+    }
+    BackHandler(full) { full = false }
+    val tools = Tools(pasting, ::paste, ::send, ::choosePad, full) { full = it }
     val dropActs = DropActs(
         pastePath = { d -> act(t("android-misc.screen.pasteWhat")) { session.paste(d.path) } },
         reveal = { d -> act(t("android-misc.screen.revealWhat")) { session.reveal(d.path) } },
     )
-    BoxWithConstraints(Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.safeDrawing)) {
+    // Full, edge to edge (only the keyboard keeps its room), on black as a video is.
+    BoxWithConstraints(Modifier.fillMaxSize().background(if (full) Color.Black else C.bg).windowInsetsPadding(if (full) WindowInsets.ime else WindowInsets.safeDrawing)) {
         // Unseen, where the keyboard's input goes.
         AndroidView({ KeyCatcher(it, held) { input -> session.input(input) }.also { catcher = it } }, Modifier.size(1.dp).alpha(0f))
         val sideways = maxWidth > maxHeight
-        if (sideways) Row(Modifier.fillMaxSize()) {
+        if (full) Box(Modifier.fillMaxSize()) {
+            Stage(session, zoom, pad, dropActs, Modifier.fillMaxSize(), onExit)
+            if (session.canTakeOver) TakeOver(session, Modifier.align(Alignment.TopCenter).padding(top = 12.dp))
+            if (session.driving && typing) KeysRow(session, held, Modifier.align(Alignment.BottomCenter).padding(8.dp).floatingStill(CircleShape).padding(4.dp))
+            FullTools(session, typing, ::keyboard, tools, Modifier.align(Alignment.TopEnd).padding(12.dp))
+        } else if (sideways) Row(Modifier.fillMaxSize()) {
             Rail(session, typing, ::keyboard, tools, onExit)
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 Stage(session, zoom, pad, dropActs, Modifier.fillMaxSize(), onExit)
@@ -325,7 +350,11 @@ fun ScreenViewer(session: ScreenSession, title: String?, onExit: () -> Unit) {
  * The clipboard and files, from the bar: pasting the phone's text (under way: `pasting`), picking files to send; and
  * trackpad or direct, chosen.
  */
-private class Tools(val pasting: Boolean, val paste: () -> Unit, val send: () -> Unit, val choosePad: (Boolean) -> Unit)
+private class Tools(
+    val pasting: Boolean, val paste: () -> Unit, val send: () -> Unit, val choosePad: (Boolean) -> Unit,
+    /** 全屏, and asking for it (or out of it). */
+    val full: Boolean, val setFull: (Boolean) -> Unit,
+)
 
 /** What can be done with a file once it is on the machine: its path pasted, shown in the machine's file manager. */
 private class DropActs(val pastePath: (Drop) -> Unit, val reveal: (Drop) -> Unit)
@@ -372,6 +401,40 @@ private fun Bar(session: ScreenSession, title: String?, tools: Tools, onExit: ()
             { session.control(it == 1) }, height = 32.dp, radius = 16.dp,
         )
         ClipButtons(session, tools)
+        FullButton(tools)
+    }
+}
+
+/** 全屏 (on) or not. */
+@Composable
+private fun FullButton(tools: Tools) =
+    RoundButton(Icons.Landscape, t(if (tools.full) "android-misc.screen.unfull" else "android-misc.screen.full"), pressed = tools.full) { tools.setFull(!tools.full) }
+
+/**
+ * 全屏's tools, folded into one round button over the frame's corner (in the letterbox, as a screen wider than the phone
+ * leaves one): open, the same as the rail's down from it — 只看/控制, trackpad, the clipboard and files, the keyboard,
+ * 退出全屏 (closed from there, or with back twice).
+ */
+@Composable
+private fun FullTools(session: ScreenSession, typing: Boolean, keyboard: () -> Unit, tools: Tools, modifier: Modifier) {
+    var open by remember { mutableStateOf(false) }
+    // A round button 4 in from the capsule's edge: its corner 20 + 4.
+    Column(
+        modifier.floatingStill(Smooth(24.dp)).padding(4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        RoundButton(if (open) Icons.Close else Icons.More, t(if (open) "android-misc.screen.toolsClose" else "android-misc.screen.tools"), pressed = open) { open = !open }
+        if (open) {
+            if (choosable(session)) RoundButton(
+                if (session.controlling) Icons.Cursor else Icons.Eye,
+                if (session.controlling) t("android-misc.screen.drive") else t("android-misc.screen.look"),
+                pressed = session.controlling,
+            ) { session.control(!session.controlling) }
+            if (session.driving) PadButton(session, tools)
+            ClipButtons(session, tools)
+            if (session.driving) RoundButton(Icons.Keyboard, t("android-misc.screen.keyboard"), pressed = typing, onClick = keyboard)
+            FullButton(tools)
+        }
     }
 }
 
@@ -442,7 +505,8 @@ private fun Rail(session: ScreenSession, typing: Boolean, keyboard: () -> Unit, 
     Box {
         Column(
             Modifier.fillMaxHeight().width(60.dp).padding(vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp),
+            // Eight at most down a phone's short side: close together.
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             RoundButton(Icons.Close, t("android-misc.screen.close"), onClick = onExit)
             Spacer(Modifier.weight(1f))
@@ -461,6 +525,7 @@ private fun Rail(session: ScreenSession, typing: Boolean, keyboard: () -> Unit, 
             if (session.driving) PadButton(session, tools)
             ClipButtons(session, tools)
             if (session.driving) RoundButton(Icons.Keyboard, t("android-misc.screen.keyboard"), pressed = typing, onClick = keyboard)
+            FullButton(tools)
         }
         if (saying && state != null) Text(
             state.line, fontSize = 13.sp, lineHeight = 18.sp, color = C.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
