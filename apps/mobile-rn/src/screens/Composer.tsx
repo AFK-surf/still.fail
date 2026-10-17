@@ -1211,10 +1211,13 @@ export function MorphContent({ m, style, children }: { m: Morph; style?: StylePr
   const [measured, setMeasured] = useState(false);
   const holder = useRef<View>(null);
   useLayoutEffect(() => { m.content = holder.current; });
+  // Its shared values alone into the worklet: the morph itself (a class, with its view and its private parts) is not
+  // one the UI thread can take.
+  const { fromH, toH, progress } = m;
   const box = useAnimatedStyle(() => {
-    const f = m.fromH.value, to = m.toH.value;
+    const f = fromH.value, to = toH.value;
     if (to < 0) return {};
-    return { height: f < 0 ? to : f + (to - f) * m.progress.value };
+    return { height: f < 0 ? to : f + (to - f) * progress.value };
   });
   return (
     <Animated.View style={[{ width: "100%", overflow: "hidden" }, measured ? box : null]}>
@@ -1233,12 +1236,15 @@ export function MorphContent({ m, style, children }: { m: Morph; style?: StylePr
 export function Part({ m, name, style, children }: { m: Morph | null; name: string; style?: StyleProp<ViewStyle>; children?: ReactNode }) {
   const view = useRef<View>(null);
   const p = m?.part(name) ?? null;
+  // Shared values alone into the worklet (MorphContent).
+  const fromH = m?.fromH ?? null, toH = m?.toH ?? null, progress = m?.progress ?? null;
+  const inContent = p?.inContent ?? null, from = p?.from ?? null;
   const moved = useAnimatedStyle(() => {
-    if (!m || !p) return {};
-    const f = m.fromH.value, to = m.toH.value, e = m.progress.value;
+    if (!fromH || !toH || !progress || !inContent || !from) return {};
+    const f = fromH.value, to = toH.value, e = progress.value;
     const h = f < 0 ? to : f + (to - f) * e;
-    const ic = p.inContent.value;
-    const was = p.from.value;
+    const ic = inContent.value;
+    const was = from.value;
     const at = { x: ic.x, y: ic.y - to };
     const shown = was ? { x: was.x + (at.x - was.x) * e, y: was.y + (at.y - was.y) * e } : at;
     return { transform: [{ translateX: shown.x - ic.x }, { translateY: shown.y - (ic.y - h) }] };
