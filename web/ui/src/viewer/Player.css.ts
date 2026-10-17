@@ -7,7 +7,8 @@ import { spinner as turning } from "../styles/spinner.css.ts";
 
 /** The player fills its page (the phone's, or the desktop's main pane), in the theme's colours as the chat's video viewer. */
 export const player = style({ position: "absolute", inset: "0", userSelect: "none", WebkitUserSelect: "none" });
-export const stage = style({ position: "absolute", inset: "0", display: "grid", placeItems: "center" });
+// One cell the stage's size: the picture's own height must not grow it (a phone's tall recording, cut off in a wide window).
+export const stage = style({ position: "absolute", inset: "0", display: "grid", gridTemplate: "minmax(0, 1fr) / minmax(0, 1fr)", placeItems: "center" });
 export const media = style({
   display: "block", width: "100%", height: "100%", objectFit: "contain", background: "transparent",
   selectors: { "&[data-audio]": { position: "absolute", inset: "0", opacity: "0" } },

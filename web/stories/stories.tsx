@@ -30,6 +30,7 @@ import { ScreenViewer } from "../src/screen/ScreenViewer.tsx";
 import { OUTDATED, SCREENS_LACKING, screensDemo, type ViewStory } from "./screens.ts";
 import { vaultDemo } from "./vault.ts";
 import CLIP_URL from "./assets/story-clip.mp4?url";
+import TALL_CLIP_URL from "./assets/story-clip-tall.mp4?url";
 import PICTURE_URL from "./assets/story-picture.png?url";
 
 /**
@@ -422,6 +423,8 @@ export const stories: Story[] = [
   { id: "player-phone", group: "文件", title: "播放器 · 手机", phone: true, render: () => stage(<Player file={driveFile(at(clips[0]!.name), clips[0]!)} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />) },
   { id: "attachment-md", group: "文件", title: "附件 · Markdown", render: () => stage(<AttachmentDemo name="orders-慢查询.md" url={NOTE_URL} type="text/markdown" />) },
   { id: "attachment-video", group: "文件", title: "附件 · 视频", render: () => stage(<AttachmentDemo name="发版录屏 1014.mp4" url={CLIP_URL} type="video/mp4" />), steps: [{ move: [640, 400] }] },
+  // A phone's recording, taller than the window is: all of it in the window, not cut off at the top and the bottom.
+  { id: "attachment-video-tall", group: "文件", title: "附件 · 竖屏视频", render: () => stage(<AttachmentDemo name="手机录屏 1017.mp4" url={TALL_CLIP_URL} type="video/mp4" />), steps: [{ move: [640, 400] }] },
   { id: "attachment-picture", group: "文件", title: "附件 · 图片", render: () => stage(<AttachmentDemo name="login-375.png" url={PICTURE_URL} type="image/png" />), steps: [{ move: [640, 400] }] },
   { id: "preview-picture", group: "文件", title: "图片预览", render: () => stage(<DrivePreview at={at(picture.name)} entries={folder} entry={picture} onClose={noop} />), steps: [{ move: [640, 400] }] },
   { id: "preview-unshown", group: "文件", title: "预览 · 不能预览的文件", render: () => stage(<DrivePreview at={at(apk.name)} entries={[...folder, apk]} entry={apk} onClose={noop} />), steps: [{ move: [640, 400] }] },
