@@ -42,6 +42,8 @@ export const mCallout = style({
   background: "color-mix(in srgb, var(--m-warn) 12%, transparent)", fontSize: vars.textMeta, lineHeight: "1.5",
   selectors: {
     [`${mForm} &`]: { margin: "0" },
+    // Done: what was asked happened (a station joined).
+    "&[data-tone=\"green\"]": { display: "flex", alignItems: "center", gap: "8px", background: "color-mix(in srgb, var(--m-green) 12%, transparent)", color: "var(--m-green)" },
   },
 });
 export const mFormGroup = style({

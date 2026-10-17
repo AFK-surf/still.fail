@@ -12,7 +12,7 @@ import * as loginsCss from "../MachineLogins.css.ts";
 import { useJoinable, useMemberships, useStations, type StationView } from "../api.ts";
 import type { Host, JoinableView, StationNet } from "../core/shapes.ts";
 import { illustrationUrl } from "../brand.tsx";
-import { ChevronRight, Close, ImageUpload, More } from "@stillfail/ui/icons.tsx";
+import { Check, ChevronRight, Close, ImageUpload, More } from "@stillfail/ui/icons.tsx";
 import { cloud, useWorkspace } from "../cloud/api.ts";
 import { track } from "../telemetry.ts";
 import { useDark } from "../theme.ts";
@@ -171,18 +171,22 @@ export function AddStationSheet({ known, existing: first = false }: { known: str
   // A station the viewer manages in another workspace, offered beside a new machine (docs/multi-workspace.md).
   const joinable = useJoinable(app.entry.id).value;
   const [existing, setExisting] = useState(first);
+  // A station of another workspace that joined (its name): the choice above is gone with the form, as one by command.
+  const [took, setTook] = useState<string | null>(null);
+  const offered = joinable?.offered && joinable.items.length > 0 && !made && took === null;
   return (
     <>
       <SheetGrab />
       <SheetHead title={t("web-mobile.stations.add")} />
       {/* The choice stays at the top; only what is under it scrolls. */}
-      {joinable?.offered && joinable.items.length > 0 && !made && (
+      {offered && (
         <div className={sheetsCss.mSheetTop}>
           <Seg options={[t("web-pages.settings.stations.kindNew"), t("web-pages.settings.stations.kindExisting")]} selected={existing ? 1 : 0}
             onSelect={(i) => setExisting(i === 1)} fill height={34} radius={17} />
         </div>
       )}
-      {joinable?.offered && joinable.items.length > 0 && existing && !made ? <JoinStation joinable={joinable} /> : (
+      {took !== null ? <Joined text={t("web-pages.settings.stations.joinedHere", { name: took })} />
+        : offered && existing ? <JoinStation joinable={joinable} onJoined={setTook} /> : (
         <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
           {!made ? (
             <>
@@ -198,23 +202,35 @@ export function AddStationSheet({ known, existing: first = false }: { known: str
                 }} />
               </div>
             </>
-          ) : joined ? (
-            <>
-              <p>{t("web-mobile.stations.joined", { name: joined.name })}</p>
-              <div className={sheetsCss.mFormActions}><Button label={t("common.done")} primary onClick={() => app.sheet(null)} /></div>
-            </>
-          ) : <EnrollSteps install={made.install} />}
+          ) : joined ? <JoinedBody text={t("web-mobile.stations.joined", { name: joined.name })} />
+            : <EnrollSteps install={made.install} />}
         </div>
       )}
     </>
   );
 }
 
+/** A station joined, in 添加 station: said in green (as the desktop's), and the sheet closed by Done. */
+function JoinedBody({ text }: { text: string }) {
+  const app = useApp();
+  return (
+    <>
+      <p className={settingsCss.mCallout} data-tone="green"><Check size={16} /><span>{text}</span></p>
+      <div className={sheetsCss.mFormActions}><Button label={t("common.done")} primary onClick={() => app.sheet(null)} /></div>
+    </>
+  );
+}
+
+function Joined({ text }: { text: string }) {
+  return <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}><JoinedBody text={text} /></div>;
+}
+
 /**
  * 添加 station with a station the viewer manages in another workspace: picked from those not here yet (the core's
- * `joinable`), then added as it is (`station.join`). What that shares of the machine is said under the list.
+ * `joinable`), then added as it is (`station.join`); `onJoined` with its name. What that shares of the machine is said
+ * under the list.
  */
-function JoinStation({ joinable }: { joinable: JoinableView }) {
+function JoinStation({ joinable, onJoined }: { joinable: JoinableView; onJoined(name: string): void }) {
   const app = useApp();
   // One whose home's security mode keeps it out is shown, not picked.
   const open = joinable.items.filter((s) => !s.needsLock);
@@ -222,15 +238,6 @@ function JoinStation({ joinable }: { joinable: JoinableView }) {
   const chosen = open.find((s) => s.station === picked) ?? open[0];
   const busy = useDoing("station.join", { workspace: app.entry.id, station: chosen?.station ?? "" });
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
-  if (done !== null) {
-    return (
-      <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
-        <p>{t("web-pages.settings.stations.joinedHere", { name: done })}</p>
-        <div className={sheetsCss.mFormActions}><Button label={t("common.done")} primary onClick={() => app.sheet(null)} /></div>
-      </div>
-    );
-  }
   // The stations scroll; the actions stay under them.
   return (
     <>
@@ -252,7 +259,7 @@ function JoinStation({ joinable }: { joinable: JoinableView }) {
         <Button label={t("web-pages.settings.stations.joinAction")} primary busy={busy} enabled={!!chosen} onClick={() => {
           if (!chosen) return;
           setError(null);
-          cloud.joinStation(app.entry.id, chosen.station).then(() => setDone(chosen.name), (e: Error) => setError(e.message));
+          cloud.joinStation(app.entry.id, chosen.station).then(() => onJoined(chosen.name), (e: Error) => setError(e.message));
         }} />
       </div>
     </>

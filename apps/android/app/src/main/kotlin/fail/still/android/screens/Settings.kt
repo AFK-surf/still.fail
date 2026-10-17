@@ -516,18 +516,24 @@ fun openAddStation(app: AppState, current: WorkspaceEntry, known: List<String>, 
         var existing by remember { mutableStateOf(existingFirst) }
         // A new machine's command made: that is the way now, the choice gone.
         var made by remember { mutableStateOf(false) }
+        // A station of another workspace that joined (its name): the choice gone with the list, as once a command is made.
+        var took by remember { mutableStateOf<String?>(null) }
         // A station of another workspace to add: offered only while there is one.
         val offered = joinable.value?.let { it.offered && it.items.isNotEmpty() } == true
         SheetGrab()
         SheetHead(t("android-settings.station.add"))
         // The choice stays at the top; only what is under it scrolls.
-        if (offered && !made) {
+        if (offered && !made && took == null) {
             val kind = t("web-pages.settings.stations.kind")
             Seg(listOf(t("web-pages.settings.stations.kindNew"), t("web-pages.settings.stations.kindExisting")), if (existing) 1 else 0, { existing = it == 1 },
                 Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp).fillMaxWidth().semantics { contentDescription = kind }, height = 34.dp, fill = true, radius = 17.dp)
         }
         val view = joinable.value
-        if (view != null && offered && existing && !made) JoinStation(current, view, onClose = { app.sheet = null }, modifier = Modifier.weight(1f))
+        val name = took
+        if (name != null) Column(Modifier.weight(1f).padding(start = 20.dp, end = 20.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Joined(t("web-pages.settings.stations.joinedHere", "name" to name)) { app.sheet = null }
+        }
+        else if (view != null && offered && existing && !made) JoinStation(current, view, onClose = { app.sheet = null }, onJoined = { took = it }, modifier = Modifier.weight(1f))
         else Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(t("android-settings.station.addNote", "app" to BuildConfig.APP_NAME), fontSize = 14.sp, color = C.muted)
             AddStationSteps(current, known, onCancel = { app.sheet = null }, onMade = { made = true }) { app.sheet = null }
@@ -535,19 +541,29 @@ fun openAddStation(app: AppState, current: WorkspaceEntry, known: List<String>, 
     }
 }
 
+/** A station joined, in 添加 station: said in green (as the desktop's), and the sheet closed by Done. */
+@Composable
+private fun Joined(text: String, onDone: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.green.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        IconIn(Icons.Check, 16.dp, C.green)
+        Text(text, fontSize = 14.sp, color = C.green)
+    }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(t("common.done"), primary = true) { onDone() } }
+}
+
 /**
  * A station of another workspace the viewer manages, picked from `view` (the first at first) and added to this one as
- * it is (`station.join`): what that shares of the machine said under the list, why it was refused in red. Once it has
- * joined the sheet says so, with Done.
+ * it is (`station.join`): what that shares of the machine said under the list, why it was refused in red. `onJoined`
+ * with its name once it has joined.
  */
 @Composable
-private fun JoinStation(current: WorkspaceEntry, view: JoinableView, onClose: () -> Unit, modifier: Modifier = Modifier) {
+private fun JoinStation(current: WorkspaceEntry, view: JoinableView, onClose: () -> Unit, onJoined: (String) -> Unit, modifier: Modifier = Modifier) {
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     val ws = current.workspace.id
     var picked by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var done by remember { mutableStateOf<String?>(null) }
     // One whose home's security mode keeps it out is shown, not picked.
     val open = view.items.filter { it.needsLock != true }
     val chosen = open.firstOrNull { it.station == picked } ?: open.firstOrNull()
@@ -555,13 +571,6 @@ private fun JoinStation(current: WorkspaceEntry, view: JoinableView, onClose: ()
     // The words 20 in from the sheet's edges; the picking rows edge to edge, their own room making it 20 for theirs.
     val side = Modifier.padding(horizontal = 20.dp)
     Column(modifier.fillMaxWidth()) {
-        done?.let { name ->
-            Column(Modifier.padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(t("web-pages.settings.stations.joinedHere", "name" to name), side, fontSize = 14.sp, color = C.ink)
-                Row(side.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(t("common.done"), primary = true) { onClose() } }
-            }
-            return@Column
-        }
         // The stations scroll; the actions stay under them.
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(t("web-pages.settings.stations.existingLead"), side, fontSize = 14.sp, color = C.muted)
@@ -584,7 +593,7 @@ private fun JoinStation(current: WorkspaceEntry, view: JoinableView, onClose: ()
                 val s = chosen ?: return@Button
                 error = null
                 scope.launch {
-                    try { done = app.api(s.station).joinWorkspace(ws) ?: s.name } catch (e: CoreException) { error = errorText(e) }
+                    try { onJoined(app.api(s.station).joinWorkspace(ws) ?: s.name) } catch (e: CoreException) { error = errorText(e) }
                 }
             }
         }
@@ -622,10 +631,7 @@ private fun AddStationSteps(current: WorkspaceEntry, known: List<String>, label:
                     }
                 }
             }
-            joined != null -> {
-                Text(t("android-settings.station.joined", "name" to joined.name), fontSize = 14.sp, color = C.ink)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(t("common.done"), primary = true) { onJoined() } }
-            }
+            joined != null -> Joined(t("android-settings.station.joined", "name" to joined.name)) { onJoined() }
             else -> {
                 Text(t("android-settings.station.run"), fontSize = 14.sp, color = C.ink)
                 CommandBox(enrollment.install)

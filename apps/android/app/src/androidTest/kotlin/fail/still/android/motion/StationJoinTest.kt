@@ -129,13 +129,14 @@ class StationJoinTest {
         assertEquals("ws-acme/box", params["station"]!!.jsonPrimitive.content)
         picture(h, "join-sheet-error-$tone")
 
-        // Joined: said with the name it has here, and Done.
+        // Joined: said with the name it has here, and Done; the choice of a new machine or one of these is gone.
         h.fake.answer = { name, _ ->
             if (name == "station.join") buildJsonObject { putJsonObject("joined") { put("workspace", ws); put("workspaceName", "Dev"); put("name", "box") } } else JsonNull
         }
         join().performClick()
         h.settle()
         rule.onNodeWithText("「box」已加入此 workspace").assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithText("已有的 station").fetchSemanticsNodes().size)
         picture(h, "join-sheet-joined-$tone")
         rule.runOnUiThread { h.app.sheet = null }
         h.settle()
