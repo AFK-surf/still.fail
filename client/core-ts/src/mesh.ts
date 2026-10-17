@@ -75,6 +75,8 @@ export const TYPICAL_BYTES = 256 * 1024;
 export const SPEED_KEPT_MS = 6 * 3600_000;
 /// A reply head is a line of JSON; anything longer is not a station talking.
 const MAX_HEAD = 64 * 1024;
+/// How many links in a row a read is asked again on when each is found gone under it.
+const LOST_TRIES = 3;
 /// How long a write gone unanswered is asked again with its key (station.rs RECHECK_MS).
 export const RECHECK_MS = 5 * 60 * 1000;
 
@@ -1569,8 +1571,17 @@ export class MeshWire implements StationWire {
               }
             }).pipe(Effect.ensuring(Effect.sync(() => w.end())));
           } else if (r.failure.code === "mesh") {
-            const l = yield* waiting(status, address, t("station.core.connecting"), mesh.link(key, credentials, theirs));
-            answered = yield* ask(l);
+            // Its link went: asked again on the one in its place, and again while each it is asked on is found gone too
+            // (a station restarting drops all its connections at once; a way not told so yet is taken next, side run
+            // seed 143365259, 2026-10-17), a few times.
+            answered = yield* Effect.gen(function* () {
+              for (let tries = 1; ; tries++) {
+                const l = yield* waiting(status, address, t("station.core.connecting"), mesh.link(key, credentials, theirs));
+                const again = yield* Effect.result(ask(l));
+                if (again._tag === "Success") return again.success;
+                if (again.failure.code !== "mesh" || l.closed() === null || tries >= LOST_TRIES) return yield* Effect.fail(again.failure);
+              }
+            });
           } else return yield* Effect.fail(r.failure);
         } else if ("replaced" in first) {
           // Replaced while under way: asked again on the new one at once, the first answer taken.

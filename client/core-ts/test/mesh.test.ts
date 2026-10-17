@@ -438,6 +438,23 @@ sim("a_link_lost_soon_after_it_replaced_one_gone_quiet_is_not_traded_for_that_on
   await close(s, station, mesh);
 });
 
+/// The side run, seed 143365259 (2026-10-17): the station dropped both its connections to the device at once (a restart);
+/// the read asked then failed on its link, was asked again on the other way, which was gone too though the device was
+/// not told so yet, and failed. It is asked again until a link holds.
+sim("a_read_asked_as_its_station_drops_every_connection_is_answered", async (s) => {
+  const relays = [s.relay("https://a.relay.test/", { device: { ms: 20 }, station: { ms: 20 } }), s.relay("https://b.relay.test/", { device: { ms: 50 }, station: { ms: 120 } })];
+  const { station, mesh, id } = await onRelays(s, relays);
+  const wire = wireOf(s, mesh);
+  const addr = StationAddr.parse(`w/${id}`);
+  const get: RequestHead = { method: "GET", path: "/admin/api/overview", headers: [] };
+  const ask = () => s.runner.run(Effect.scoped(Effect.flatMap(wire.request(addr, get, new Uint8Array()), (r) => Effect.map(readAll(r.body), () => r.status))));
+  assert.equal(await s.settle(ask()), 200);
+  await s.until(() => mesh.ways(addr.toString()).length >= 2);
+  for (const c of station.conns.filter((c) => !c.isClosed())) c.close(0, "restart");
+  assert.equal(await s.settle(ask()), 200);
+  await close(s, station, mesh);
+});
+
 sim("a_write_is_asked_again_only_of_a_station_that_does_it_once", async (s) => {
   const { mesh, station } = await setup(s);
   const wire = wireOf(s, mesh);
