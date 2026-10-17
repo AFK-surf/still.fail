@@ -289,7 +289,8 @@ function ChatPane({ current, chats, filter, padding, onSearch, searching, index,
   const place = () => {
     if (placed.current || view == null || items.length === 0) return;
     placed.current = true;
-    if (view.note?.empty !== true) list.current?.scrollToOffset({ offset: SEARCH_HEIGHT, animated: false });
+    // The frame after: the list takes no offset before its rows are laid out.
+    if (view.note?.empty !== true) requestAnimationFrame(() => list.current?.scrollToOffset({ offset: SEARCH_HEIGHT, animated: false }));
   };
 
   return (
