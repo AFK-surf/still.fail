@@ -830,6 +830,7 @@ export const SHAPES: Record<string, Shape> = {
   Link: struct([
     ["state", "String"],
     ["message", opt("String")],
+    ["retrying", opt("bool"), { doc: "Found offline and tried again just now (a person's 重试, or the device back): still taken for down\nuntil the try reaches it, its 重试 turning meanwhile." }],
   ], { doc: "A station's mesh link: connecting | online | offline | error." }),
   StationState: struct([
     ["station", "String"],

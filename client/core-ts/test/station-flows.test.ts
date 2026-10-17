@@ -309,12 +309,20 @@ test("a_station_down_shows_it_is_tried_again_as_soon_as_a_person_asks", async ()
   await host.settle();
   apply(host, values);
   assert.equal(linkOf(values, 1), "offline");
-  // 重试 (client.wake, network), and the try it starts takes a while: not "down" meanwhile.
+  subscribe(core, ui, 3, { topic: "stations", scope: "ws" });
+  await host.settle();
+  apply(host, values);
+  const shown = () => (values.get(3) as J[]).find((s) => s.station === ST);
+  assert.equal(shown().online, false);
+  // 重试 (client.wake, network), and the try it starts takes a while: said to be tried, still down meanwhile (what
+  // shows of it does not change to come back as the try fails).
   gate.stream = "hang";
   call(core, ui, 2, "client.wake", { away: 0, network: true });
   await host.settle();
   apply(host, values);
-  assert.equal(linkOf(values, 1), "reconnecting");
+  assert.equal(linkOf(values, 1), "connecting");
+  assert.equal((values.get(1) as J).retrying, true);
+  assert.deepEqual([shown().online, shown().reconnecting, shown().link.retrying], [false, false, true]);
   core.close();
 });
 

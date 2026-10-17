@@ -168,7 +168,7 @@ function Head({ s, manager, edits }: { s: StationView; manager: boolean; edits: 
           {wrong.length > 0 && <div className={css.warn}>{wrong.map((p) => <span key={p.key} data-level={p.level}>{p.text}</span>)}</div>}
         </div>
         <div className={css.headActions}>
-          {(!s.online || silent) && <RetryPill />}
+          {(!s.online || silent) && <RetryPill trying={s.link.retrying === true} />}
           {s.overview?.drive && <Button icon={Folder} onClick={() => navigate(`${stationBase(s.station)}/files`)}>{t("web-pages.drive.title")}</Button>}
           {manager && edits.busy(s)}
           {items.length > 0 && <Menu items={items} />}

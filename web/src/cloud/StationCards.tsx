@@ -204,7 +204,7 @@ function StationCard({ s, menu, page, manager, onMark, markBusy }: { s: StationV
         </span>
         {s.online && s.host && <MeterChips meters={s.host.meters} alerts />}
         {/* Away or silent, it is tried again here (not beside the sidebar's line: a station may stay down for long). */}
-        {(!s.online || silent) && <RetryPill />}
+        {(!s.online || silent) && <RetryPill trying={s.link.retrying === true} />}
         <span className={css.menu}>{menu}</span>
       </div>
       {foot && <div className={css.cardFoot}>{foot}</div>}

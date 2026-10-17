@@ -89,6 +89,7 @@ test("a_chat_link_is_said_only_while_down_or_coming_back", () => {
   assert.equal(linkShown({ state: "offline", message: "别的：原因" }, "").detail, "别的：原因");
   assert.equal(linkShown({ state: "offline" }, "").text, "无法连接 station");
   assert.deepEqual(linkShown({ state: "reconnecting" }, "S"), { tone: "busy", text: "正在重新连接「S」" });
+  assert.deepEqual(linkShown({ state: "connecting", retrying: true }, "S"), { tone: "busy", text: "正在重新连接「S」" });
   assert.equal(linkShown({ state: "online" }, "S"), null);
   assert.equal(face(true, { counts: { running: 2 } }), "working");
   assert.equal(face(false, { counts: { running: 2 } }), "offline");

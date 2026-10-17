@@ -1782,7 +1782,10 @@ data class Outgoing (
 @Serializable
 data class Link (
 	val state: String,
-	val message: String? = null
+	val message: String? = null,
+	/// Found offline and tried again just now (a person's 重试, or the device back): still taken for down
+	/// until the try reaches it, its 重试 turning meanwhile.
+	val retrying: Boolean? = null
 )
 
 /// A chat's link to its station while it is not as it should be: `tone` trouble (down; `detail` why) | busy (coming

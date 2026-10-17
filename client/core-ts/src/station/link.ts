@@ -290,10 +290,14 @@ export class Links {
     this.#told.changed(address, "link");
   }
 
-  /// Down, and tried again now: `reconnecting` until the try ends.
+  /// Down, and tried again now, until the try ends: one found offline is still taken for down (views.ts `down`), what
+  /// shows of it unchanged but its 重试 turning (`retrying`), so a try that fails moves nothing; one that answered with
+  /// an error is coming back.
   #retrying(address: string): void {
     const link = this.#links.get(address);
-    if (link && (link.state.state === "offline" || link.state.state === "error")) this.setLink(address, { state: "reconnecting", message: link.state.message ?? null });
+    const state = link?.state.state;
+    if (state === "offline") this.setLink(address, { state: "connecting", last: "offline", retrying: true, message: link?.state.message ?? null });
+    else if (state === "error") this.setLink(address, { state: "reconnecting", message: link?.state.message ?? null });
   }
 
   // ── the events stream ──

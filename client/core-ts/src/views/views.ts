@@ -662,12 +662,12 @@ export class Views implements Owner {
     return data.listed(station, "threads") ? (data.listedThread(station, id) ?? null) : null;
   }
 
-  /// The station's link as `{ state, message, last }`.
+  /// The station's link as `{ state, message, last, retrying }`.
   link(station: string): J {
     const v = this.value({ topic: "link", station });
     if (v === undefined) return { state: "connecting", message: null };
     if ("err" in v) return { state: "error", message: v.err.message };
-    return { state: get(v.ok, "state") ?? "connecting", message: get(v.ok, "message") ?? null, last: get(v.ok, "last") ?? null };
+    return { state: get(v.ok, "state") ?? "connecting", message: get(v.ok, "message") ?? null, last: get(v.ok, "last") ?? null, ...(get(v.ok, "retrying") === true ? { retrying: true } : {}) };
   }
 
   #clock(): present.Clock {

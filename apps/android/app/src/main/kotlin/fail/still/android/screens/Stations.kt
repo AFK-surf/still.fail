@@ -299,7 +299,7 @@ fun StationScreen(current: WorkspaceEntry, address: String) {
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Illustration(R.drawable.illus_station_offline, R.drawable.illus_station_offline_dark, 220.dp)
                     Text(t("android-settings.stations.offline", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted, textAlign = TextAlign.Center)
-                    RetryPill(Modifier.padding(top = 6.dp))
+                    RetryPill(Modifier.padding(top = 6.dp), retrying = s.link.retrying == true)
                 }
             }
             val overview = s.overview

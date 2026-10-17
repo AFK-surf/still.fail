@@ -23,13 +23,13 @@ import kotlinx.serialization.json.put
 import fail.still.android.ui.C
 
 /**
- * 重试 as a small grey pill: the connections tried again at once, a spinner in it until the core has. On a station down,
- * where it is tried again (Stations.kt).
+ * 重试 as a small grey pill: the connections tried again at once, a spinner in it until the core has and while `retrying`
+ * (the station's link: down, and tried again just now). On a station down, where it is tried again (Stations.kt).
  */
 @Composable
-fun RetryPill(modifier: Modifier = Modifier) {
+fun RetryPill(modifier: Modifier = Modifier, retrying: Boolean = false) {
     val app = LocalApp.current
-    val trying = app.isDoing("client.wake")
+    val trying = retrying || app.isDoing("client.wake")
     Row(
         modifier.height(22.dp).clip(RoundedCornerShape(50)).background(C.chip).clickable(enabled = !trying) {
             // A person's retry (client/core-ts/src/wake.ts): `network` for a core from before `retry`.

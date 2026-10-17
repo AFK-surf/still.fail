@@ -1797,6 +1797,11 @@ export interface Outgoing {
 export interface Link {
 	state: string;
 	message?: string;
+	/**
+	 * Found offline and tried again just now (a person's 重试, or the device back): still taken for down
+	 * until the try reaches it, its 重试 turning meanwhile.
+	 */
+	retrying?: boolean;
 }
 
 /**

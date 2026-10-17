@@ -89,7 +89,7 @@ export function linkShown(link: J, name: string): J {
     }
     return { tone: "trouble", text: said("core-logic.looks.link.down", "core-logic.looks.link.down.named"), detail: why };
   }
-  if (state === "reconnecting") return { tone: "busy", text: said("core-logic.looks.link.reconnecting", "core-logic.looks.link.reconnecting.named") };
+  if (state === "reconnecting" || get(link, "retrying") === true) return { tone: "busy", text: said("core-logic.looks.link.reconnecting", "core-logic.looks.link.reconnecting.named") };
   return null;
 }
 

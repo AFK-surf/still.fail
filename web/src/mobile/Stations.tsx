@@ -292,7 +292,7 @@ export function StationScreen() {
           {/* Every part keeps its room as what it shows comes and goes (not read yet: grey bars); only being online or
               offline changes what the page is. */}
           {s.online ? <Card><StationFigures s={s} /></Card> : (
-            <Card><span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>{t("web-mobile.stations.offlineNote", { name: NAME })}</span><RetryPill /></span></Card>
+            <Card><span className={css.mStationOffline}><Illustration name="station-offline" width={220} /><span>{t("web-mobile.stations.offlineNote", { name: NAME })}</span><RetryPill trying={s.link.retrying === true} /></span></Card>
           )}
           {/* What runs on it is in settings' lists, every station's together; here, how much of it there is (once read), and its versions. */}
           <SectionHeader title={t("web-mobile.stations.onThis")} start={24} />
