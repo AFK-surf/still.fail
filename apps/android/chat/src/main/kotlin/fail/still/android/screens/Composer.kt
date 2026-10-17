@@ -759,7 +759,7 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
 }
 
 /** How far a composer picture's remove button reaches beyond its corner. */
-private val PictureRemoveOut = 6.dp
+private val PictureRemoveOut = 4.dp
 
 /** A link shared in (share/), as a file of the draft: nothing goes up, it is sent as words after the text. */
 internal fun linkPending(link: ComposerLink) = Pending(System.nanoTime(), link.title ?: link.url, 0, null, link = link)
