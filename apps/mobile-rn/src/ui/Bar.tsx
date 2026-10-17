@@ -375,7 +375,7 @@ interface BarModel {
   /** The touch that is the gesture's, and whether its end was heard. */
   finger: number; ended: boolean;
   /** The loop: running, and the frame before. */
-  running: boolean; last: number;
+  running: boolean; last: number; frames?: number;
   out: Said[];
 }
 
@@ -402,6 +402,19 @@ function moving(m: BarModel): boolean {
   if (m.iconWas || m.swap != null || (m.ball != null && !ballResting(m.ball))) return true;
   for (const id in m.tints) if (glideMoving(m.tints[id]!)) return true;
   return false;
+}
+
+/** What keeps the loop going (a log of a loop that does not end: a value gone NaN never reaches its target). */
+function whyMoving(m: BarModel): string {
+  "worklet";
+  const sp = (n: string, x: BarSpring) => (springMoving(x) ? `${n}=${x.value}->${x.target} ` : "");
+  const gl = (n: string, x: Glide) => (glideMoving(x) ? `${n}=${x.value}->${x.target} ` : "");
+  let out = sp("o", m.o) + sp("k", m.k) + sp("held", m.held) + gl("vis", m.vis) + gl("ballAlpha", m.ballAlpha) + gl("ballScale", m.ballScale) + gl("iconSwap", m.iconSwap);
+  if (m.iconWas) out += "iconWas ";
+  if (m.swap != null) out += "swap ";
+  if (m.ball != null && !ballResting(m.ball)) out += `ball=${JSON.stringify(m.ball)} `;
+  for (const id in m.tints) out += gl(`tint:${id}`, m.tints[id]!);
+  return out;
 }
 
 function step(m: BarModel, dt: number) {
@@ -930,8 +943,11 @@ export function BottomBar({
         m.out = [];
         runOnJS(said)(out);
       }
-      if (moving(m)) requestAnimationFrame(tick);
-      else m.running = false;
+      if (moving(m)) {
+        m.frames = (m.frames ?? 0) + 1;
+        if (m.frames % 600 === 0) runOnJS(console.log)(`stillfail: the bar's loop, ${m.frames} frames on: ${whyMoving(m)}`);
+        requestAnimationFrame(tick);
+      } else { m.running = false; m.frames = 0; }
       return m;
     }, true);
   }
