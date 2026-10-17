@@ -122,7 +122,7 @@ jobs:
   natives:
     needs: plan
     if: needs.plan.outputs.natives == 'needed'
-    runs-on: [self-hosted, mini1]
+    runs-on: [self-hosted, quick]
     timeout-minutes: 10
     permissions:
       contents: write # the release native-artifacts' assets, on main only
@@ -154,6 +154,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: "natives-${{ github.sha }}", path: "${{ runner.temp }}/natives", if-no-files-found: ignore, retention-days: 7 }
 
+  # mini1-5 (label quick, on mini1 too) takes only the short jobs everything else waits on: natives (what a run's
+  # builds and checks need), and main's done and station-update. Behind the builds in mini1's four, natives waited
+  # 4-5 minutes, and with it every job of the run, GitHub's too (2026-10-16).
   # No job may take over 10 minutes (2026-10-16, as asked: none should; the longest, a stable Android release, ~7):
   # one that does is stuck, and on mini1 it holds one of four runners every run waits on.
   # The full check (scripts/check.sh) in two jobs: the parts that need a Mac (the station with its native parts' own
@@ -577,7 +580,7 @@ jobs:
   station-update:
     needs: [station, put]
     if: always() && !cancelled() && github.ref == 'refs/heads/main' && needs.station.result == 'success' && needs.put.result == 'success'
-    runs-on: [self-hosted, mini1]
+    runs-on: [self-hosted, quick]
     timeout-minutes: 10
     steps:
       - name: studio's station takes the published release
@@ -604,7 +607,7 @@ jobs:
   done:
     needs: [plan, natives, check, check-linux, check-browser, check-android, api, static, station, android, desktop, desktop-win, desktop-web, put]
     if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result)
-    runs-on: [self-hosted, mini1]
+    runs-on: [self-hosted, quick]
     timeout-minutes: 10
     permissions:
       contents: write # only this job updates the tag deployed/beta
