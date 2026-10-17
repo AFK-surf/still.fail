@@ -81,6 +81,9 @@ export function applyStep(view: LiveView, event: unknown, now: number): void {
   }
 }
 
+/// How long a folder's watch waits before asking again, the station not reached or its asking failed.
+const WATCH_AGAIN_MS = 5_000;
+
 export class StationsSync {
   readonly #core: Inner;
   readonly requests: Requests;
@@ -393,6 +396,31 @@ export class StationsSync {
         link.errors.set(key, answer.failure);
         this.#core.data.forgetTopic(topic);
         this.onChange(address, "errors", key);
+      }
+    });
+  }
+
+  /// A folder of the drive shown, kept as it is on the station's disk (an agent writing there, a file renamed on the
+  /// machine): the station answers GET /drive/watch once something in it changes (else after a while), and it is read
+  /// again. A station from before watching, or a folder gone, answers 4xx: then it is read only as it is shown.
+  driveWatch(address: string, root: string, path: string): Effect.Effect<void, never> {
+    const id = Array.from(crypto.getRandomValues(new Uint8Array(9)), (b) => b.toString(16).padStart(2, "0")).join("");
+    const asked = `/drive/watch?root=${encode(root)}&path=${encode(path)}&id=${id}`;
+    return Effect.gen({ self: this }, function* () {
+      for (;;) {
+        const link = this.#links.get(address);
+        if (!link || !this.reachable(address)) {
+          yield* Effect.sleep(WATCH_AGAIN_MS);
+          continue;
+        }
+        const answer = yield* Effect.result(this.requests.call(link.addr, "GET", asked, null, { quiet: true }));
+        if (answer._tag === "Failure") {
+          const status = answer.failure.status;
+          if (status !== undefined && status >= 400 && status < 500) return;
+          yield* Effect.sleep(WATCH_AGAIN_MS);
+          continue;
+        }
+        if (get(answer.success, "changed") === true) yield* Effect.ignore(this.ask(address, `drive/${root}/${path}`, this.#drive(address, root, path)));
       }
     });
   }

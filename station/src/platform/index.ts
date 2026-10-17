@@ -153,6 +153,9 @@ export type Platform = {
   // What only some machines have.
   /// The macOS keychain (Claude Code keeps its login there).
   hasKeychain: boolean;
+  /// The trash its file browser deletes to (drive/trash.ts): Finder's (`finder`: ~/.Trash, a disk's .Trashes/<uid>),
+  /// the freedesktop one (`freedesktop`: files/ and info/), or none the drive puts into (Windows).
+  trash: "finder" | "freedesktop" | null;
   /// QuickLook's thumbnails (qlmanage).
   hasQuickLook: boolean;
   /// Privacy permissions a folder can be denied by (macOS's).

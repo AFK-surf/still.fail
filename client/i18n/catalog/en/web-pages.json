@@ -1404,5 +1404,15 @@
   "web-pages.drive.sortBy.sizeHead": "Size",
   "web-pages.drive.sortBy.timeHead": "Date modified",
   "web-pages.drive.showHidden": "Show hidden files",
-  "web-pages.drive.hideHidden": "Hide hidden files"
+  "web-pages.drive.hideHidden": "Hide hidden files",
+  "web-pages.drive.toTrash": "Move to Trash",
+  "web-pages.drive.toTrashMany": {
+    "one": "Move 1 item to Trash",
+    "other": "Move {n} items to Trash"
+  },
+  "web-pages.drive.trashed": {
+    "one": "Moved to the station's Trash",
+    "other": "{n} items moved to the station's Trash"
+  },
+  "web-pages.drive.downloadZip": "Download as zip"
 }

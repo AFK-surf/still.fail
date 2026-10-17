@@ -18,6 +18,7 @@ import { useDoing } from "../doing.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import type { DriveEntry, DriveRoot, StationView } from "../core/shapes.ts";
 import { useTopicSelect } from "../core/react.ts";
+import { CoreError } from "../core/client.ts";
 import { Button, Confirm, Dialog, ICON, IconButton, Menu, Tip, type MenuItem } from "../ui.tsx";
 import { Check, ChevronLeft, ChevronRight, Close, Copy, Disk, Server, Download, Edit, Folder, FolderPlus, Pin, Plus, Refresh, Retry, Trash, Upload } from "@stillfail/ui/icons.tsx";
 import { KindIcon } from "../drive/KindIcon.tsx";
@@ -177,7 +178,18 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
   const files = useRef<HTMLInputElement>(null);
   const [refreshing, setRefreshing] = useState(false);
   // What is removed or previewed, with the folder it is in (a tree or columns show more than the one folder).
+  // What is asked about before it goes for good (no trash takes it there).
   const [removing, setRemoving] = useState<{ at: At; entry: DriveEntry }[] | null>(null);
+  // Deleted: to the machine's trash, as Finder does, nothing asked; where none takes it, asked first, then for good.
+  const remove = (items: { at: At; entry: DriveEntry }[]) => {
+    if (!d.trash) return setRemoving(items);
+    const trashed = Promise.all(items.map((x) => drive.remove(x.at, x.entry).then(() => null, (e: unknown) => (e instanceof CoreError && e.code === "no_trash" ? x : Promise.reject(e)))));
+    act(trashed.then((left) => {
+      const rest = left.filter((x): x is { at: At; entry: DriveEntry } => x !== null);
+      if (rest.length) setRemoving(rest);
+      else if (items.length) toast(t("web-pages.drive.trashed", { n: items.length }));
+    }), t("web-pages.drive.deleteWhat"));
+  };
   const [preview, setPreview] = useState<{ at: At; entries: readonly DriveEntry[]; entry: DriveEntry } | null>(null);
   const [view, setView] = useDriveView("page");
   // Back where it was, as each folder was left (the page scrolls, the list in it); the folder kept for the rail's 文件
@@ -216,7 +228,7 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
   const browse = useBrowse({
     owner: "page", view, at, write: d.write, act, open: openRow, preview: openRow,
     go: (p, replace) => go(drivePath(station.base, root, p), replace ? { replace: true } : undefined),
-    remove: setRemoving,
+    remove,
   });
   const shownEntries = browse.arranged(entries);
   // What goes into a folder dropped on it: this station's files moved, the computer's put up.
@@ -233,12 +245,14 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
     return [
       ...(files.length ? [{ label: t("web-pages.drive.downloadMany", { n: files.length }), icon: Download, onSelect: () => { for (const x of files) save(x.at, x.entry); } }] : []),
       { label: t("web-pages.drive.copyPaths"), icon: Copy, onSelect: () => copyPath(all.map((x) => absoluteOf(root, joinPath(x.at.path, x.entry.name))).join("\n")) },
-      ...(d.write ? [{ label: t("web-pages.drive.deleteMany", { n: all.length }), icon: Trash, danger: true, onSelect: () => setRemoving(all) }] : []),
+      ...(d.write ? [{ label: t(d.trash ? "web-pages.drive.toTrashMany" : "web-pages.drive.deleteMany", { n: all.length }), icon: Trash, danger: true, onSelect: () => remove(all) }] : []),
     ];
   };
   const oneItems = (in_: At, e: DriveEntry): MenuItem[] => [
     { label: t("web-pages.drive.open"), onSelect: () => openIn(in_, e) },
-    ...(e.dir ? [] : [{ label: t("web-pages.drive.download"), icon: Download, onSelect: () => save(in_, e) }]),
+    ...(!e.dir ? [{ label: t("web-pages.drive.download"), icon: Download, onSelect: () => save(in_, e) }]
+      : d.zip ? [{ label: t("web-pages.drive.downloadZip"), icon: Download, onSelect: () => act(drive.zip(in_, e).then((z) => download({ station: in_.station, root: z.root, path: z.path }, { name: z.name, size: z.size, type: "application/zip" })), t("web-pages.drive.downloadWhat")) }]
+      : []),
     { label: t("web-pages.drive.copyPath"), icon: Copy, onSelect: () => copyPath(absoluteOf(root, joinPath(in_.path, e.name))) },
     ...(e.dir && d.anywhere ? [(() => {
       const abs = absoluteOf(root, joinPath(in_.path, e.name));
@@ -247,7 +261,7 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
     })()] : []),
     ...(d.write ? [
       { label: t("web-pages.drive.rename"), icon: Edit, onSelect: () => browse.startRename(in_, e.name) },
-      { label: t("web-pages.drive.delete"), icon: Trash, danger: true, onSelect: () => setRemoving([{ at: in_, entry: e }]) },
+      { label: t(d.trash ? "web-pages.drive.toTrash" : "web-pages.drive.delete"), icon: Trash, danger: true, onSelect: () => remove([{ at: in_, entry: e }]) },
     ] : []),
   ];
   const rowOf: RowOf = (in_, e) => ({
@@ -383,7 +397,7 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
       <Confirm open={removing !== null} onClose={() => setRemoving(null)}
         title={!removing ? "" : removing.length > 1 ? t("web-pages.drive.deleteManyAsk", { n: removing.length }) : t(removing[0]!.entry.dir ? "web-pages.drive.deleteFolderAsk" : "web-pages.drive.deleteAsk", { name: removing[0]!.entry.name })}
         description={removing?.some((r) => r.entry.dir) ? t("web-pages.drive.deleteFolderText") : t("web-pages.drive.deleteText")} action={t("web-pages.drive.delete")}
-        onConfirm={() => { const r = removing; setRemoving(null); if (r) act(Promise.all(r.map((x) => drive.remove(x.at, x.entry))), t("web-pages.drive.deleteWhat")); }} />
+        onConfirm={() => { const r = removing; setRemoving(null); if (r) act(Promise.all(r.map((x) => drive.remove(x.at, x.entry, true))), t("web-pages.drive.deleteWhat")); }} />
       {preview && <DrivePreview at={preview.at} entries={preview.entries} entry={preview.entry} onClose={() => setPreview(null)} />}
       {manage.dialogs}
     </>

@@ -382,5 +382,6 @@
   "station.drive.place.Movies": "Movies",
   "station.drive.place.Videos": "Videos",
   "station.drive.place.Music": "Music",
-  "station.drive.place.Pictures": "Pictures"
+  "station.drive.place.Pictures": "Pictures",
+  "station.drive.no_trash": "There is no trash for it here: it can only be deleted for good"
 }

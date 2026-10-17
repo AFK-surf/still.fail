@@ -28,16 +28,18 @@ no allowlist of its own, no transport of its own).
 
 | Request | Answer |
 |---|---|
-| `GET /drive` | `{roots: [{path, name, state}], manage, write, anywhere?, home?}` (also in the overview as `drive`) |
+| `GET /drive` | `{roots: [{path, name, state}], manage, write, anywhere?, home?, trash?, watch, zip?}` (also in the overview as `drive`) |
 | `PUT /drive/roots {roots}` | the folders pinned, by any member who may write; each new one must be there, a folder, none of the station's data |
 | `GET /drive/folders?path=` | members who may write: the folders in `path` (the home when empty), to pick one to pin |
-| `GET /drive/list?root=&path=` | `{path, entries: [{name, dir, size, mtime, type}], truncated}`, folders first, names by number |
+| `GET /drive/list?root=&path=` | `{path, entries: [{name, dir, size, mtime, type}], truncated}`, folders first, names by number; past 50000 entries the first 50000 in that order |
 | `GET /drive/stat?root=&path=` | one entry |
 | `GET /drive/read?root=&path=&offset=&length=` | the bytes (at most 8 MB), `stillfail-total`, `stillfail-mtime`, `content-type` |
 | `PUT /drive/upload?root=&path=&id=&offset=&total=(&replace=1)` | a part (the body); `{have, entry}`, `entry` once whole |
 | `POST /drive/mkdir {root, path}` | the new folder's entry |
 | `POST /drive/rename {root, from, to}` | within the root, nothing replaced |
-| `POST /drive/remove {root, path}` | a folder with what it holds; a link as a link |
+| `POST /drive/remove {root, path, permanent?}` | to the machine's trash (macOS ~/.Trash, the freedesktop trash; another disk's own), a name there taken given a number; `no_trash` where none takes it (Windows), the asker then saying whether it goes for good (`permanent`: a folder with what it holds); a link as a link |
+| `GET /drive/watch?root=&path=&id=` | `{changed}`: answered once something in the folder changes, else after 25 s; each asker's watch (`id`) kept a minute between its askings, a change meanwhile told at the next |
+| `POST /drive/zip {root, path}` | a folder zipped (as `stage` zips one) in a place of its own among the machine's temporary files, let go after an hour: `{root, path, name, size}`, read as any file of the drive is; members who may write |
 | `POST /drive/stage {root, path}` | a file copied among the uploads (a clone where the disk can), answered as an upload is (`{name, path, size}`), for a message to send; at most 1 GB |
 
 A refusal is `{error, code}` (`error` in the asker's language) with the code's
@@ -54,7 +56,8 @@ part that leaves a gap is refused `upload_lost` with `have`, where to go on from
 ## Core
 
 - Topic `drive {station, root, path}`: the folder (`DriveFolder`), kept on the
-  device (a station document), read again each time it is shown; each entry
+  device (a station document), read again each time it is shown, and while shown
+  again each time the station says something in it changed (`GET /drive/watch`); each entry
   with its `kind` (what opens it: folder, video, audio, image, markdown, text,
   code, csv, html, pdf, subtitle, other), `sizeText`, `timeText`, and the
   folder's `countText`. A folder the station refuses (gone, out of its root) is

@@ -1332,5 +1332,15 @@
   "web-pages.drive.sortBy.sizeHead": "大小",
   "web-pages.drive.sortBy.timeHead": "修改时间",
   "web-pages.drive.showHidden": "显示隐藏文件",
-  "web-pages.drive.hideHidden": "不显示隐藏文件"
+  "web-pages.drive.hideHidden": "不显示隐藏文件",
+  "web-pages.drive.toTrash": "移到废纸篓",
+  "web-pages.drive.toTrashMany": {
+    "one": "将 {n} 项移到废纸篓",
+    "other": "将 {n} 项移到废纸篓"
+  },
+  "web-pages.drive.trashed": {
+    "one": "已移到 station 的废纸篓",
+    "other": "已将 {n} 项移到 station 的废纸篓"
+  },
+  "web-pages.drive.downloadZip": "下载为 zip"
 }

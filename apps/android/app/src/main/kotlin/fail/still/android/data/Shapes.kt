@@ -2300,7 +2300,14 @@ data class DriveRoots (
 	/// before, which lends only the folders pinned.
 	val anywhere: Boolean? = null,
 	/// Where browsing starts, with `anywhere`: the home of the station's machine.
-	val home: String? = null
+	val home: String? = null,
+	/// What is deleted goes to the machine's trash (`drive.remove`; `permanent` for good); absent where there
+	/// is none, or from a station from before, which deletes for good.
+	val trash: Boolean? = null,
+	/// The station says when something in a folder shown changes (GET /drive/watch).
+	val watch: Boolean? = null,
+	/// A folder can be zipped to download (`drive.zip`).
+	val zip: Boolean? = null
 )
 
 @Serializable
