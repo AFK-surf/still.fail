@@ -336,7 +336,9 @@ if [ $full = 1 ]; then
   if part core && touches '^client/(shell|iroh-wasm)/|^client/Cargo\.(toml|lock)$|^vendor/'; then
     if has cargo; then remembered "Rust: client" "client vendor" heavy cargo_test client --workspace -q; else later "Rust: client"; fi
   fi
-  # Its shell and engine prebuilt (apps/android/build.py): only a JDK and the SDK needed.
+  # Its shell and engine prebuilt (apps/android/build.py): only a JDK and the SDK needed. Built as build 1, not the
+  # commits' count: a number new each commit is in its BuildConfig and manifest, and with it everything was compiled and
+  # linted anew, where the build CI keeps of it (pipeline.yml) leaves all but what changed up to date.
   # What it is built from, and so what runs it: apps/android/carries.sh. STILLFAIL_CHECK_APK=1 (a branch's CI)
   # makes the debug app in the same Gradle run, as evidence it builds: one build, not a second job doing it again;
   # only for a change to how it is put together (its Gradle files, manifests, resources, prebuilt parts), as code that
@@ -345,7 +347,7 @@ if [ $full = 1 ]; then
   if part android && printf '%s\n' "$changed" | sh apps/android/carries.sh; then
     sdk=${ANDROID_HOME:-$HOME/Library/Android/sdk}
     if [ -d "$sdk/platforms" ]; then
-      remembered "Android${STILLFAIL_CHECK_APK:+ (and the debug app)}" "apps/android client web/src/viz web/public/avatars scripts/native.ts scripts/icons.py design/icons design/station-icons package.json pnpm-lock.yaml" heavy python3 apps/android/build.py --tasks :app:compileDebugKotlin :app:testDebugUnitTest :core:testDebugUnitTest :app:lintDebug :core:lintDebug ${STILLFAIL_CHECK_APK:+:app:assembleDebug}
+      remembered "Android${STILLFAIL_CHECK_APK:+ (and the debug app)}" "apps/android client web/src/viz web/public/avatars scripts/native.ts scripts/icons.py design/icons design/station-icons package.json pnpm-lock.yaml" heavy env ORG_GRADLE_PROJECT_stillfailBuild=1 python3 apps/android/build.py --tasks :app:compileDebugKotlin :app:testDebugUnitTest :core:testDebugUnitTest :app:lintDebug :core:lintDebug ${STILLFAIL_CHECK_APK:+:app:assembleDebug}
     else later "Android"; fi
   fi
 fi
