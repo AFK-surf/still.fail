@@ -178,6 +178,7 @@ const SHAPED: Record<string, Ty> = {
   lockDraft: "LockDraftView",
   vaults: "VaultsView",
   vaultItems: "VaultItemsView",
+  vaultUses: "VaultUsesView",
   joinable: "JoinableView",
   memberships: "MembershipsView",
   screens: "ScreensView",

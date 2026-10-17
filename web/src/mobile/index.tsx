@@ -29,7 +29,7 @@ import { WorkspaceScreen } from "./WorkspacePage.tsx";
 import { SecurityOpenScreen, SecurityPrompt, SecurityScreen, SecurityWaitingScreen } from "./Security.tsx";
 import { ShareInSheet } from "./ShareIn.tsx";
 import { useLock } from "../cloud/Security.tsx";
-import { VaultScreen } from "./Vault.tsx";
+import { VaultItemScreen, VaultScreen } from "./Vault.tsx";
 import { identify } from "../telemetry.ts";
 import { t } from "../i18n.ts";
 
@@ -60,6 +60,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="settings/security" element={<SecurityScreen />} />
       <Route path="settings/security/open" element={<SecurityOpenScreen />} />
       <Route path="settings/vault" element={<VaultScreen />} />
+      <Route path="settings/vault/:vault/:item" element={<VaultItemScreen />} />
       <Route path="settings/stations" element={<StationsScreen />} />
       <Route path="settings/connects" element={<ConnectsScreen />} />
       <Route path="settings/automatic-decisions" element={<AutomaticDecisionsScreen />} />

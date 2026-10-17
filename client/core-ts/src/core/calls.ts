@@ -199,7 +199,7 @@ export function counts(call: Call, name: string): boolean {
 const S = "string" as const;
 
 /// The vault's calls (views/vault.ts).
-export const VAULT_CALLS = ["state", "lock", "setup", "create", "addDevice", "putItem", "deleteItem", "open", "recover", "approve", "deny"];
+export const VAULT_CALLS = ["state", "lock", "setup", "create", "addDevice", "putItem", "deleteItem", "open", "recover", "approve", "deny", "migrate"];
 
 /// The workspace lock's calls (views/lock.ts).
 export const LOCK_CALLS = ["state", "open", "toggle", "dismiss", "shown", "request", "confirm", "deny", "addStation", "joinStation", "renew", "removeDevice", "disable"];

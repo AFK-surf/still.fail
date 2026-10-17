@@ -33,7 +33,7 @@ import type { ShareInView } from "../src/core/shapes.ts";
 import type { Shared } from "../src/shareIn.ts";
 import { ScreenViewer } from "../src/screen/ScreenViewer.tsx";
 import { OUTDATED, SCREENS_LACKING, screensDemo, type ViewStory } from "./screens.ts";
-import { vaultDemo } from "./vault.ts";
+import { libraryDemo, vaultDemo } from "./vault.ts";
 import { permissionsDemo } from "./permissions.ts";
 import { lockDemo } from "./lock.ts";
 import CLIP_URL from "./assets/story-clip.mp4?url";
@@ -508,6 +508,18 @@ export const stories: Story[] = [
   { id: "phone-vault-editor", group: "密钥", title: "手机 · 添加", app: true, phone: true, demo: vaultDemo("on"), steps: [...toPhoneVault, { text: "添加" }] },
   { id: "phone-vault-editor-agent", group: "密钥", title: "手机 · 编辑 · agent 可申请", app: true, phone: true, demo: vaultDemo("on"), steps: [...toPhoneVault, { text: "GitHub token" }, { text: "编辑" }] },
   { id: "phone-vault-card", group: "密钥", title: "手机 · 对话里的申请", app: true, phone: true, demo: vaultDemo("waiting", true) },
+  // ── the library: the profiles' accounts and the secrets in one place (docs/vault.md 一个库) ──
+  { id: "lib-plain", group: "密钥", title: "库 · 未加锁", app: true, demo: libraryDemo(false), steps: toVault },
+  { id: "lib-plain-item", group: "密钥", title: "库 · 未加锁 · 一条 token", app: true, demo: libraryDemo(false), steps: [...toVault, { text: "GitHub token" }] },
+  { id: "lib-sealed", group: "密钥", title: "库 · 已加锁", app: true, demo: libraryDemo(true), steps: toVault },
+  { id: "lib-migrate", group: "密钥", title: "库 · 开启安全模式后待加密", app: true, demo: libraryDemo(true, 2), steps: toVault },
+  { id: "phone-lib-migrate", group: "密钥", title: "手机 · 库 · 开启安全模式后待加密", app: true, phone: true, demo: libraryDemo(true, 2), steps: toPhoneVault },
+  { id: "lib-add", group: "密钥", title: "库 · 添加", app: true, demo: libraryDemo(false), steps: [...toVault, { click: 'main button:has-text("添加")' }] },
+  { id: "lib-add-token", group: "密钥", title: "库 · 未加锁时添加 token", app: true, demo: libraryDemo(false), steps: [...toVault, { click: 'main button:has-text("添加")' }, { click: 'button:has-text("GitHub、Cloudflare")' }] },
+  { id: "phone-lib-plain", group: "密钥", title: "手机 · 库 · 未加锁", app: true, phone: true, demo: libraryDemo(false), steps: toPhoneVault },
+  { id: "phone-lib-item", group: "密钥", title: "手机 · 库 · 未加锁 · 一条 token", app: true, phone: true, demo: libraryDemo(false), steps: [...toPhoneVault, { text: "GitHub token" }] },
+  { id: "phone-lib-sealed", group: "密钥", title: "手机 · 库 · 已加锁", app: true, phone: true, demo: libraryDemo(true), steps: toPhoneVault },
+  { id: "phone-lib-add", group: "密钥", title: "手机 · 库 · 添加", app: true, phone: true, demo: libraryDemo(false), steps: [...toPhoneVault, { click: '[aria-label="添加"]' }] },
   { id: "phone-vault-card-web", group: "密钥", title: "手机 · 对话里的申请 · 网页", app: true, phone: true, demo: vaultDemo("web", true) },
 
   // ── small panels (docs/ui-panels.md) ──

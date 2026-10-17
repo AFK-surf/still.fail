@@ -2,7 +2,7 @@
 // them together (client/core-ts/src/views/vault.ts) in each state the page has, what its calls answer (the words once,
 // an item opened), and an agent's request for an item as a card in the demo's chat.
 import type { DemoExtension } from "../src/demo/mount.tsx";
-import type { ChatMessage, ChatView, VaultItemRow, VaultItemsView, VaultRequest, VaultRow, VaultsView } from "../src/core/shapes.ts";
+import type { ChatMessage, ChatView, Stamp, VaultItemRow, VaultItemsView, VaultRequest, VaultRow, VaultsView, VaultUse, VaultUsesView } from "../src/core/shapes.ts";
 
 const AT = 1_792_200_000;
 const WORDS = "orbit canvas lemon thrive patrol velvet ankle humble glide quarter mosaic ripple sponsor dune fabric wisdom cradle ozone timber jungle echo salute pigeon harbor";
@@ -91,5 +91,36 @@ export function vaultDemo(story: VaultStory, card = false): DemoExtension {
       if (name.startsWith("vault.")) return {};
       return undefined;
     },
+  };
+}
+
+// ── the library: the profiles and the secrets in one place (docs/vault.md 一个库) ──
+
+const stamp = (minutes: number, full: string): Stamp => ({ at: (AT - minutes * 60) * 1000, ago: minutes < 60 ? `${minutes} 分钟前` : minutes < 1440 ? `${Math.round(minutes / 60)} 小时前` : `${Math.round(minutes / 1440)} 天前`, full, until: "", past: true });
+const use = (minutes: number, full: string, chatTitle: string, mode: string, command?: string, hosts: string[] = [], denied?: boolean): VaultUse =>
+  ({ at: stamp(minutes, full), session: "ember:c-demo-safari", station: "local", chatTitle, mode, ...(command ? { command } : {}), hosts, ...(denied ? { denied } : {}) });
+const USES: Record<string, VaultUse[]> = {
+  i_gh: [
+    use(12, "10/17 20:28", "修 Safari 上的登录跳转", "proxy", "gh pr create --fill", ["api.github.com"]),
+    use(130, "10/17 18:30", "重跑发布流水线", "proxy", "gh run rerun 1846 --failed", ["api.github.com"]),
+    use(1500, "10/16 19:40", "清理过期分支", "proxy", "gh api -X DELETE repos/acme/web/git/refs/heads/old", ["api.github.com"], true),
+  ],
+  i_deploy: [use(2900, "10/15 20:20", "部署 staging", "ssh", "git push deploy main")],
+};
+const LIB_ITEMS: VaultItemRow[] = ITEMS.filter((i) => i.id !== "i_openai").map((i) => (USES[i.id] ? { ...i, lastUse: USES[i.id]![0]! } : i));
+
+/** The library `locked` (security mode on, unlocked here) or not (kept in plain text on the station). */
+export function libraryDemo(locked: boolean, left = 0): DemoExtension {
+  const vaults: VaultsView = locked
+    ? { available: true, locked: true, canSign: true, setUp: true, vaults: [PERSONAL], requests: [], refused: [], ...(left ? { plainLeft: left } : {}) }
+    : { available: true, locked: false, canSign: false, setUp: true, vaults: [{ ...PERSONAL, recoverable: false }], requests: [], refused: [], plain: true };
+  return {
+    topic: (t) => {
+      if (t.topic === "vaults") return vaults;
+      if (t.topic === "vaultItems") return { vault: PERSONAL.id, name: "个人", open: true, items: LIB_ITEMS } satisfies VaultItemsView;
+      if (t.topic === "vaultUses") return { item: t.item, uses: USES[t.item] ?? [] } satisfies VaultUsesView;
+      return undefined;
+    },
+    call: (name, params) => vaultDemo("on").call!(name, params),
   };
 }

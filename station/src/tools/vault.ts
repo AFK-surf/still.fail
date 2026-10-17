@@ -24,7 +24,7 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
       description: SECRET_LIST_DESCRIPTION,
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
       run: async (key) => {
-        const items = secrets.listings(key).map(({ item }) => ({ item: item.id, name: item.listing.name, kind: item.listing.kind, modes: item.listing.modes, hosts: item.listing.hosts, ...(item.listing.env ? { env: item.listing.env } : {}) }));
+        const items = secrets.listings(key).map(({ item, listing }) => ({ item, name: listing.name, kind: listing.kind, modes: listing.modes, hosts: listing.hosts, ...(listing.env ? { env: listing.env } : {}) }));
         const held = secrets.held(key).map((h) => ({ grant: h.request.id, item: h.request.item, mode: h.grant.mode, hosts: h.grant.hosts, scope: h.grant.scope, until: new Date(h.grant.exp * 1000).toISOString(), ...(h.grant.mode === "proxy" ? { placeholder: placeholder(h.request.id) } : {}) }));
         if (items.length === 0 && held.length === 0) return "No secrets may be asked for here: none of the vault's items are open to agents for whoever started this chat.";
         return JSON.stringify({ secrets: items, grants: held }, null, 2);

@@ -77,6 +77,21 @@ export class Keeper {
     return null;
   }
 
+  /// Holds an item of the plain library for `request`, as its owner decided (docs/vault.md 不加锁的库): no seal and no
+  /// signature, the secret read from the station's own store; the same limits as a grant's otherwise.
+  hold(request: Request, d: { scope: Scope; hosts: string[]; listing: { modes: Mode[]; hosts: string[] } }, secret: Secret): string | null {
+    if (request.status !== "pending") return `the request is ${request.status}`;
+    if (!(d.scope in LASTS)) return "scope is once, hour or chat";
+    if (!d.listing.modes.includes(request.mode)) return `the item is not given by ${request.mode}`;
+    if (!d.hosts.every((h) => d.listing.hosts.includes(h) || (!h.startsWith("*.") && hostAllowed(h, d.listing.hosts)))) return "the hosts are not all the item's";
+    if (request.mode === "proxy" && d.hosts.length === 0) return "given through the proxy, it names its hosts";
+    if (valueOf(secret) === null) return "the item has no value to use";
+    const now = this.#now();
+    const grant = { v: 1, ws: request.ws, request: request.id, vault: request.vault, item: request.item, mode: request.mode, hosts: d.hosts, scope: d.scope, exp: now + (d.scope === "chat" ? LASTS.chat : LASTS.hour), secret: "", at: now } as unknown as Grant;
+    this.#held.set(request.id, { request: { ...request, status: "granted" }, grant, secret, uses: 0 });
+    return null;
+  }
+
   /// The grant `id` as `session` may use it now; else why not.
   usable(session: string, id: string): Held | string {
     const h = this.#held.get(id);

@@ -25,6 +25,8 @@ export type Scope = "once" | "hour" | "chat";
 export type Request = {
   id: string; ws: string; vault: string; item: string; session: string; chat: string; mode: Mode; reason: string;
   command?: string; hosts?: string[]; box: string; at: number; status: "pending" | "granted" | "denied" | "expired";
+  /// A request for an item of the plain library (`vault` is `plain`, no box): its owner's email, who decides it.
+  owner?: string;
 };
 export type Grant = {
   v: 1; ws: string; request: string; vault: string; item: string; mode: Mode; hosts: string[]; scope: Scope; exp: number;

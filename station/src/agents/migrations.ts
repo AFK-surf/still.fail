@@ -47,6 +47,7 @@ export const NOTES: [number, string][] = [
   [40, "New tool login: when a command fails because this station is not logged in to a CLI, or a person asks, run the tool's own login command with login {command}, answer its prompts yourself (login {id, input/key}; never a password), and once a browser step is ready post a login card (card {\"type\": \"login\", \"login\": <id>}) with its link, ending need_human. Never ask a person to run a command; a station notice tells you when it ends."],
   [41, "chat_create's runtime also takes dsh (DeepSeek Harness), where the station has a profile that runs it."],
   [42, "New tool permissions: what macOS lets still.fail Helper do on this Mac (Screen Recording, Accessibility, the protected folders for the drive); with request it puts the helper's window for one grant up on the Mac and says what to post with need_human (the screen's link when the screen can be driven, else to go to the Mac)."],
+  [43, "secret_list/secret_use/secret_run also work without security mode: then the secrets are the person's on this station (kept in plain text), and the card is decided by the item's owner in any still.fail client. The same flow otherwise; you still never see the value."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

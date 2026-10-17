@@ -129,7 +129,8 @@ export type Topic =
   // The vault (docs/vault.md, client/core-ts/src/views/vault.ts): the viewer's vaults in a workspace and what waits on
   // them; a vault's items. A core from before has neither.
   | { topic: "vaults"; workspace: string }
-  | { topic: "vaultItems"; workspace: string; vault: string };
+  | { topic: "vaultItems"; workspace: string; vault: string }
+  | { topic: "vaultUses"; workspace: string; vault: string; item: string };
 
 /** A chat as a page shows it (`client.focus`): by its thread, or its key before it has one; `end`: its end in view. */
 export interface ChatShown { station: string; thread: number | null; session: string | null; end?: boolean }

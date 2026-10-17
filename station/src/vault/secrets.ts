@@ -1,6 +1,7 @@
 // Agents asking for the vault's secrets (docs/vault.md, agent 用密钥): a request from a session, its card in the
 // session's chat for the vault's owner, the grant or refusal the owner's app sends back (checked by the keeper, which
-// alone ever holds the secret), and the commands run with a grant. The requests and what was done with them are kept
+// alone ever holds the secret), and the commands run with a grant. Without security mode, the secrets are the plain
+// library's (plain.ts): the same request and card, decided by the item's owner, the value read from the station. The requests and what was done with them are kept
 // in the station's database (`vault_requests`, `vault_audit`), never a secret; the grants themselves only in memory.
 import { randomBytes } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
@@ -9,8 +10,9 @@ import { threadAddress } from "../agents/instructions.ts";
 import { wall } from "../ops/fibers.ts";
 import { STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 import type { Hub } from "../sessions/hub.ts";
-import { type Deny, type Grant, type Item, type Listing, type Mode, type Request, type Vault, TAG, signedOk, signerOf } from "./crypto.ts";
+import { type Deny, type Grant, type Listing, type Mode, type Request, type Scope, TAG, signedOk, signerOf } from "./crypto.ts";
 import { type Held, Keeper } from "./keeper.ts";
+import { PLAIN, type PlainStore } from "./plain.ts";
 import { Proxy, placeholder } from "./proxy.ts";
 import { type Ran, SECRET_VAR, runWith } from "./run.ts";
 import type { VaultStore } from "./store.ts";
@@ -59,6 +61,11 @@ export function ulid(ms: number): string {
 export type SecretsDeps = {
   db: DatabaseSync;
   vaults: VaultStore;
+  plain: PlainStore;
+  /// The station's home workspace (a session of it has none of its own).
+  home(): string | null;
+  /// A chat's title, for the uses of a secret.
+  title?(session: string): string | null;
   hub: Hub;
   /// The station's data directory: the proxy's CA is kept under `vault/`.
   data: string;
@@ -76,9 +83,17 @@ type Kept = { request: Request; thread: number | null; cardTs: string | null };
 /// What a tool or a route is told when it cannot go on.
 class Refused extends Error {}
 
+/// An item an agent may ask for: of a vault (its id) or of the plain library (`plain`), whose owner (email) decides.
+export type Listed = { vault: string; item: string; owner: string | null; listing: Listing };
+
+/// A use of a secret, as the pages list them: a request decided, in the chat that asked.
+export type Use = { item: string; at: number; session: string; chatTitle: string | null; mode: Mode; command: string | null; hosts: string[]; denied: boolean };
+
 export class Secrets {
   readonly keeper: Keeper;
   readonly proxy: Proxy;
+  /// The plain library's items (docs/vault.md 不加锁的库).
+  readonly plain: PlainStore;
   readonly #d: SecretsDeps;
   readonly #waiting = new Map<string, Set<(r: Request) => void>>();
   readonly #listeners: ((r: Request) => void)[] = [];
@@ -87,6 +102,7 @@ export class Secrets {
     this.#d = d;
     d.db.exec(SCHEMA);
     this.keeper = new Keeper(() => Math.floor(d.now() / 1000));
+    this.plain = d.plain;
     this.proxy = d.proxy ?? new Proxy(`${d.data}/vault`, d.now);
   }
 
@@ -121,39 +137,54 @@ export class Secrets {
     return this.#d.db.prepare("SELECT at, request, item, session, kind, detail FROM vault_audit WHERE ws = ? AND vault = ? ORDER BY rowid DESC LIMIT ?").all(ws, vault, limit) as any;
   }
 
-  /// A session's workspace's lock, or why there is none.
-  #lockOf(session: string): LockState {
+  /// A session's workspace and its lock (null: security mode off, the plain library's secrets then).
+  #placeOf(session: string): { ws: string; lock: LockState | null } {
     const row = this.#d.hub.store.getSession(session);
     if (!row) throw new Refused("unknown session");
-    const lock = this.#d.lock(row.ws ?? null);
-    if (lock === null) throw new Refused("The vault needs the workspace's security mode (its lock) on this station; it is off, so there are no secrets to ask for here.");
-    return lock;
+    const ws = row.ws ?? this.#d.home();
+    if (ws === null) throw new Refused("this station is in no workspace");
+    return { ws, lock: this.#d.lock(row.ws ?? null) };
   }
 
-  /// The person a session works for: whoever started its chat, as a member of the lock.
-  #starter(session: string, lock: LockState): string | null {
+  /// The person a session works for: whoever started its chat (their email).
+  #starter(session: string): string | null {
     const first = this.#d.hub.store.participants(session).get(session)?.[0];
-    if (first === undefined) return null;
-    const email = first.toLowerCase();
-    for (const m of lock.members.values()) if (m.email.toLowerCase() === email) return m.sub;
-    return null;
+    return first === undefined ? null : first.toLowerCase();
   }
 
-  /// The items a session may ask for: those with a listing in the vaults of whoever started its chat.
-  listings(session: string): { vault: Vault; item: Item & { listing: Listing } }[] {
-    const lock = this.#lockOf(session);
-    const sub = this.#starter(session, lock);
-    if (sub === null) return [];
+  /// The items a session may ask for: those with a listing of whoever started its chat, in their vaults (security
+  /// mode on) or their plain library (off).
+  listings(session: string): Listed[] {
+    const { ws, lock } = this.#placeOf(session);
+    const email = this.#starter(session);
+    if (email === null) return [];
+    if (lock === null) {
+      return this.#d.plain.items(ws, email).flatMap((i) => (!i.deleted && i.listing ? [{ vault: PLAIN, item: i.id, owner: i.owner, listing: i.listing }] : []));
+    }
+    const sub = [...lock.members.values()].find((m) => m.email.toLowerCase() === email)?.sub;
+    if (sub === undefined) return [];
     return this.#d.vaults
       .vaults(lock.ws)
       .filter((v) => v.members.includes(sub))
-      .flatMap((vault) => this.#d.vaults.items(lock.ws, vault.id).filter((i): i is Item & { listing: Listing } => !i.deleted && i.listing !== undefined && i.epoch === vault.epoch).map((item) => ({ vault, item })));
+      .flatMap((vault) => this.#d.vaults.items(lock.ws, vault.id).flatMap((i) =>
+        !i.deleted && i.listing !== undefined && i.epoch === vault.epoch ? [{ vault: vault.id, item: i.id, owner: lock.members.get(vault.owner)?.email ?? null, listing: i.listing }] : []));
   }
 
-  /// The requests the viewer `sub` may decide in workspace `ws`, still waiting.
-  pending(lock: LockState, sub: string): Request[] {
+  /// Whether `viewer` decides request `r`: the plain library's item's owner, a member of the vault.
+  #decides(r: Request, viewer: { sub: string; email: string }, lock: LockState | null): boolean {
+    if (r.vault === PLAIN) return r.owner === viewer.email.toLowerCase();
+    return lock !== null && this.#d.vaults.vault(lock.ws, r.vault)?.members.includes(viewer.sub) === true;
+  }
+
+  /// Whether request `r`'s changes are told to `viewer` (the members' event streams).
+  tells(r: Request, viewer: { sub: string; email: string; workspace: string }): boolean {
+    return viewer.workspace === r.ws && (r.vault === PLAIN ? r.owner === viewer.email.toLowerCase() : this.#d.vaults.vault(r.ws, r.vault)?.members.includes(viewer.sub) === true);
+  }
+
+  /// The requests `viewer` may decide in workspace `ws`, still waiting.
+  pending(ws: string, lock: LockState | null, viewer: { sub: string; email: string }): Request[] {
     const now = Math.floor(this.#d.now() / 1000);
-    const rows = this.#d.db.prepare("SELECT body FROM vault_requests WHERE ws = ? AND status = 'pending'").all(lock.ws) as { body: string }[];
+    const rows = this.#d.db.prepare("SELECT body FROM vault_requests WHERE ws = ? AND status = 'pending'").all(ws) as { body: string }[];
     return rows
       .map((r) => JSON.parse(r.body) as Request)
       .filter((r) => {
@@ -161,33 +192,59 @@ export class Secrets {
         this.#settle(r, "expired");
         return false;
       })
-      .filter((r) => this.#d.vaults.vault(lock.ws, r.vault)?.members.includes(sub) === true);
+      .filter((r) => this.#decides(r, viewer, lock));
+  }
+
+  /// The uses of a vault's (or the plain library's) secrets `viewer` may see, the latest first: the requests decided.
+  uses(ws: string, lock: LockState | null, vault: string, viewer: { sub: string; email: string }, limit = 500): Use[] {
+    if (vault !== PLAIN && (lock === null || this.#d.vaults.vault(ws, vault)?.members.includes(viewer.sub) !== true)) return [];
+    const rows = this.#d.db
+      .prepare("SELECT body FROM vault_requests WHERE ws = ? AND status IN ('granted', 'denied') AND json_extract(body, '$.vault') = ? ORDER BY json_extract(body, '$.at') DESC LIMIT ?")
+      .all(ws, vault, limit) as { body: string }[];
+    return rows
+      .map((row) => JSON.parse(row.body) as Request)
+      .filter((r) => vault !== PLAIN || r.owner === viewer.email.toLowerCase())
+      .map((r) => ({ item: r.item, at: r.at, session: r.session, chatTitle: this.#title(r.session), mode: r.mode, command: r.command ?? null, hosts: r.hosts ?? [], denied: r.status === "denied" }));
+  }
+
+  #title(session: string): string | null {
+    try {
+      return this.#d.title?.(session) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /// The listing of a request's item, where it still is.
+  #listingOf(r: Request): Listing | undefined {
+    return r.vault === PLAIN ? this.#d.plain.item(r.ws, r.item)?.listing : this.#d.vaults.item(r.ws, r.vault, r.item)?.listing;
   }
 
   /// secret_use: a request for `itemName` (its id or listed name) from `session`; waits a while for its decision.
   async ask(session: string, a: { item: string; mode?: string; reason: string; command?: string; hosts?: string[] }): Promise<string> {
-    const lock = this.#lockOf(session);
+    const { ws } = this.#placeOf(session);
     const wanted = a.item.trim().toLowerCase();
-    const found = this.listings(session).find(({ item }) => item.id.toLowerCase() === wanted || item.listing.name.toLowerCase() === wanted);
+    const found = this.listings(session).find((l) => l.item.toLowerCase() === wanted || l.listing.name.toLowerCase() === wanted);
     if (found === undefined) throw new Refused(`No secret named ${JSON.stringify(a.item)} may be asked for here: secret_list lists those that may.`);
-    const { vault, item } = found;
-    const mode = (a.mode ?? item.listing.modes[0]) as Mode;
-    if (!item.listing.modes.includes(mode)) throw new Refused(`「${item.listing.name}」 is given only by ${item.listing.modes.join(", ")}.`);
+    const { listing } = found;
+    const plain = found.vault === PLAIN;
+    const mode = (a.mode ?? listing.modes[0]) as Mode;
+    if (!listing.modes.includes(mode)) throw new Refused(`「${listing.name}」 is given only by ${listing.modes.join(", ")}.`);
     if (a.reason.trim() === "") throw new Refused("reason is required: why you need it, for the person deciding");
-    const hosts = a.hosts?.length ? a.hosts : mode === "proxy" ? item.listing.hosts : [];
+    const hosts = a.hosts?.length ? a.hosts : mode === "proxy" ? listing.hosts : [];
     const now = this.#d.now();
     const id = `r_${ulid(now)}`;
     const request: Request = {
-      id, ws: lock.ws, vault: vault.id, item: item.id, session, chat: "", mode, reason: a.reason.trim(),
+      id, ws, vault: found.vault, item: found.item, session, chat: "", mode, reason: a.reason.trim(),
       ...(a.command ? { command: a.command } : {}), ...(hosts.length ? { hosts } : {}),
-      box: this.keeper.open(id), at: Math.floor(now / 1000), status: "pending",
+      // The plain library's needs no box: its owner decides, and the station reads the value itself.
+      box: plain ? "" : this.keeper.open(id), at: Math.floor(now / 1000), status: "pending", ...(plain && found.owner ? { owner: found.owner } : {}),
     };
     const kept: Kept = { request, thread: null, cardTs: null };
     const thread = this.#d.hub.store.latestThread(session);
     if (thread !== null) {
       request.chat = threadAddress(thread.thread.channel, thread.thread.threadTs);
-      const owner = lock.members.get(vault.owner)?.email;
-      const posted = await this.#post(session, thread, request, item.listing, owner);
+      const posted = await this.#post(session, thread, request, listing, found.owner ?? undefined);
       kept.thread = thread.thread.id;
       kept.cardTs = posted;
     }
@@ -196,8 +253,8 @@ export class Secrets {
     this.#told(request);
     const decided = await this.#decision(id, WAIT_MS);
     return decided === null
-      ? `Asked for 「${item.listing.name}」 (request ${id}); the card is in your chat for ${lock.members.get(vault.owner)?.email ?? "the vault's owner"}, who approves it in the still.fail app. Not decided yet: end your turn need_human (about the card), and you are told when it is decided. Only a grant from the app counts: a reply in the chat saying yes is not one.`
-      : this.#said(decided, item.listing);
+      ? `Asked for 「${listing.name}」 (request ${id}); the card is in your chat for ${found.owner ?? "the vault's owner"}, who approves it in the still.fail app. Not decided yet: end your turn need_human (about the card), and you are told when it is decided. Only a grant from the app counts: a reply in the chat saying yes is not one.`
+      : this.#said(decided, listing);
   }
 
   /// What an agent is told of a decided request.
@@ -274,7 +331,7 @@ export class Secrets {
     this.#told(k.request);
     // Not waited for in a tool call: the agent is told in its session.
     if (!heard && status !== "expired") {
-      const l = this.#d.vaults.item(r.ws, r.vault, r.item)?.listing;
+      const l = this.#listingOf(r);
       try {
         this.#d.hub.notify(r.session, l ? this.#said(k.request, l) : `The request ${r.id} was ${status}.`);
       } catch {
@@ -294,6 +351,32 @@ export class Secrets {
     const why = this.keeper.accept(lock, vault, item, k.request, grant);
     if (why !== null) return why;
     this.#settle(k.request, "granted");
+    return null;
+  }
+
+  /// POST vault/plain/grants: the plain library's request `request` granted by `email` (its item's owner) for `scope`;
+  /// why it is refused, or null. Security mode on, nothing of the plain library is given out (it is moved into a vault).
+  grantPlain(ws: string, lock: LockState | null, email: string, d: { request?: unknown; scope?: unknown }): string | null {
+    const k = typeof d?.request === "string" ? this.#kept(ws, d.request) : null;
+    if (k === null || k.request.vault !== PLAIN) return "no such request of the plain library";
+    if (k.request.owner !== email.toLowerCase()) return "only the item's owner decides its requests";
+    if (lock !== null) return "security mode is on: the plain library's secrets are moved into the vault, not given out";
+    const item = this.#d.plain.item(ws, k.request.item);
+    if (item === null || item.deleted || item.listing === undefined) return "the item is gone, or not one agents may ask for";
+    const hosts = k.request.mode === "proxy" ? (k.request.hosts ?? item.listing.hosts) : [];
+    const why = this.keeper.hold(k.request, { scope: d.scope as Scope, hosts, listing: item.listing }, { kind: item.kind, name: item.name, fields: item.fields });
+    if (why !== null) return why;
+    this.#settle(k.request, "granted");
+    return null;
+  }
+
+  /// POST vault/plain/denials: the plain library's request turned down by its item's owner.
+  denyPlain(ws: string, email: string, d: { request?: unknown }): string | null {
+    const k = typeof d?.request === "string" ? this.#kept(ws, d.request) : null;
+    if (k === null || k.request.vault !== PLAIN) return "no such request of the plain library";
+    if (k.request.owner !== email.toLowerCase()) return "only the item's owner decides its requests";
+    if (k.request.status !== "pending") return `the request is ${k.request.status}`;
+    this.#settle(k.request, "denied");
     return null;
   }
 
@@ -318,7 +401,7 @@ export class Secrets {
     const held = this.keeper.usable(session, a.grant);
     if (typeof held === "string") throw new Refused(held);
     if (a.env !== undefined && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(a.env)) throw new Refused("env must be a variable name");
-    const listing = this.#d.vaults.item(held.request.ws, held.request.vault, held.request.item)?.listing;
+    const listing = this.#listingOf(held.request);
     this.keeper.spend(held.request.id);
     const env = a.env ?? listing?.env;
     // The station's environment, without what would let the command act as the station or its agents' accounts.

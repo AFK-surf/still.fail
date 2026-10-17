@@ -19,6 +19,7 @@ import { Keeper, hostAllowed } from "../src/vault/keeper.ts";
 import { Proxy, placeholder, swap } from "../src/vault/proxy.ts";
 import { runWith } from "../src/vault/run.ts";
 import { HIDDEN, Scrubber, scrub } from "../src/vault/scrub.ts";
+import { PLAIN, PlainStore } from "../src/vault/plain.ts";
 import { Secrets } from "../src/vault/secrets.ts";
 import { answer, parseSshKey, serveAgent } from "../src/vault/ssh-agent.ts";
 import { VaultStore } from "../src/vault/store.ts";
@@ -335,11 +336,11 @@ test("a request from secret_use to the grant: listed for the chat's starter, dec
     notify: (k: string, text: string) => notified.push([k, text]),
   };
   const dir = mkdtempSync(join(tmpdir(), "vault-secrets-"));
-  const secrets = new Secrets({ db, vaults, hub: hub as never, data: dir, lock: () => w.state, now: () => 1_000_000 });
+  const secrets = new Secrets({ db, vaults, plain: new PlainStore(db), home: () => w.state.ws, hub: hub as never, data: dir, lock: () => w.state, now: () => 1_000_000 });
   const seen: Request[] = [];
   secrets.listen((r) => seen.push(r));
   try {
-    assert.deepEqual(secrets.listings("s1").map((l) => l.item.listing.name), ["GitHub"]);
+    assert.deepEqual(secrets.listings("s1").map((l) => l.listing.name), ["GitHub"]);
     // carol is in no vault: nothing for her chats.
     starter = "carol@x.com";
     assert.deepEqual(secrets.listings("s1"), []);
@@ -350,17 +351,81 @@ test("a request from secret_use to the grant: listed for the chat's starter, dec
     // Asked, then granted by alice while the tool waits.
     const asked = secrets.ask("s1", { item: "github", reason: "rerun CI", command: "gh run rerun 1" });
     await new Promise((r) => setImmediate(r));
-    const [request] = secrets.pending(w.state, "alice");
+    const [request] = secrets.pending(w.state.ws, w.state, { sub: "alice", email: "alice@x.com" });
     assert.ok(request && request.status === "pending" && request.command === "gh run rerun 1" && request.hosts?.join() === "api.github.com,*.example.com");
-    assert.deepEqual(secrets.pending(w.state, "carol"), [], "only the vault's members see it");
+    assert.deepEqual(secrets.pending(w.state.ws, w.state, { sub: "carol", email: "carol@x.com" }), [], "only the vault's members see it");
     assert.match(secrets.grant(w.state, "carol", grantOf(request, w.carol, w.plain, { exp: 1000 + 600 }))!, /members decide/);
     assert.equal(secrets.grant(w.state, "alice", grantOf(request, w.alice, w.plain, { exp: 1000 + 600 })), null);
     assert.match(await asked, /Granted: 「GitHub」, grant r_/);
     assert.deepEqual(secrets.held("s1").map((h) => h.request.id), [request.id]);
     assert.deepEqual(seen.map((r) => r.status), ["pending", "granted"]);
-    assert.deepEqual(secrets.pending(w.state, "alice"), []);
+    assert.deepEqual(secrets.pending(w.state.ws, w.state, { sub: "alice", email: "alice@x.com" }), []);
     assert.match(secrets.grant(w.state, "alice", grantOf(request, w.alice, w.plain, { exp: 1000 + 600 }))!, /granted/);
     assert.deepEqual(notified, [], "told in the tool's answer");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("the plain library (no security mode): listed for its owner's chats, decided by the owner alone, its uses kept; locked, nothing given", async () => {
+  const db = new DatabaseSync(":memory:");
+  const plain = new PlainStore(db);
+  const ws = "ws1";
+  const item = { ws, id: "i_01JAPLAIN0000000000000000GH", owner: "bob@x.com", version: 0, kind: "token" as const, name: "GitHub", fields: { value: TOKEN }, notes: "", listing: { name: "GitHub", kind: "token" as const, modes: ["proxy" as const, "env" as const], hosts: ["api.github.com"], env: "GH_TOKEN" }, at: 1000 };
+  plain.put(item);
+  plain.put({ ...item, id: "i_01JAPLAIN0000000000000000XX", name: "Private", listing: undefined as never });
+  let lock: ReturnType<typeof world>["state"] | null = null;
+  let starter = "bob@x.com";
+  const notified: [string, string][] = [];
+  const hub = {
+    store: {
+      getSession: (k: string) => (k === "s1" ? { key: "s1", ws: null, workspace: "/tmp" } : null),
+      participants: (k: string) => new Map([[k, [starter]]]),
+      latestThread: () => null,
+      withdrawCard: () => true,
+    },
+    notify: (k: string, text: string) => notified.push([k, text]),
+  };
+  const dir = mkdtempSync(join(tmpdir(), "vault-plain-"));
+  const secrets = new Secrets({ db, vaults: new VaultStore(db), plain, home: () => ws, hub: hub as never, data: dir, lock: () => lock, now: () => 1_000_000, title: () => "修 CI" });
+  try {
+    assert.deepEqual(secrets.listings("s1").map((l) => [l.vault, l.listing.name, l.owner]), [[PLAIN, "GitHub", "bob@x.com"]], "only the listed one");
+    starter = "carol@x.com";
+    assert.deepEqual(secrets.listings("s1"), [], "another's chat lists none of bob's");
+    starter = "bob@x.com";
+
+    const asked = secrets.ask("s1", { item: "GitHub", reason: "rerun CI", command: "gh run rerun 1" });
+    await new Promise((r) => setImmediate(r));
+    const bob = { sub: "bob", email: "Bob@x.com" };
+    const [request] = secrets.pending(ws, null, bob);
+    assert.ok(request && request.vault === PLAIN && request.owner === "bob@x.com" && request.box === "");
+    assert.deepEqual(secrets.pending(ws, null, { sub: "carol", email: "carol@x.com" }), [], "only its owner sees it");
+    assert.match(secrets.grantPlain(ws, null, "carol@x.com", { request: request.id, scope: "once" })!, /owner decides/);
+    assert.equal(secrets.grantPlain(ws, null, bob.email, { request: request.id, scope: "once" }), null);
+    assert.match(await asked, /Granted: 「GitHub」, grant r_/);
+    const held = secrets.held("s1")[0]!;
+    assert.equal(held.grant.mode, "proxy");
+    assert.deepEqual(held.grant.hosts, ["api.github.com"]);
+
+    // Turned down: a use too, said so.
+    const again = secrets.ask("s1", { item: "GitHub", reason: "again" });
+    await new Promise((r) => setImmediate(r));
+    const [second] = secrets.pending(ws, null, bob);
+    assert.equal(secrets.denyPlain(ws, bob.email, { request: second!.id }), null);
+    assert.match(await again, /refused/);
+    const uses = secrets.uses(ws, null, PLAIN, bob);
+    // Both asked in the same second: in either order.
+    assert.deepEqual(uses.map((u) => [u.item, u.denied, u.chatTitle, u.command]).sort((x, y) => Number(x[1]) - Number(y[1])), [[item.id, false, "修 CI", "gh run rerun 1"], [item.id, true, "修 CI", null]]);
+    assert.deepEqual(secrets.uses(ws, null, PLAIN, { sub: "carol", email: "carol@x.com" }), [], "not carol's to see");
+
+    // Security mode on: the plain library is no longer offered, and nothing of it is granted.
+    const third = secrets.ask("s1", { item: "GitHub", reason: "once more" });
+    await new Promise((r) => setImmediate(r));
+    const [pending] = secrets.pending(ws, null, bob);
+    lock = world().state;
+    assert.match(secrets.grantPlain(ws, lock, bob.email, { request: pending!.id, scope: "once" })!, /security mode is on/);
+    assert.equal(secrets.denyPlain(ws, bob.email, { request: pending!.id }), null);
+    await third;
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

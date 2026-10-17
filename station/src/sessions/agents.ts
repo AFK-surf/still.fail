@@ -67,6 +67,7 @@ import { chatsTouched, forPeer, READ } from "./others.ts";
 import { FILE, fileForPeer, PUT, putForPeer } from "./peer-files.ts";
 import { reviewUndecided, startReview } from "./review.ts";
 import { Secrets } from "../vault/secrets.ts";
+import { plainStore } from "../vault/plain.ts";
 import { vaultStore } from "../vault/store.ts";
 import { vaultTools } from "../tools/vault.ts";
 
@@ -407,8 +408,12 @@ export const AgentsLive = (control: Control) =>
       ];
       // The vault's secrets, asked for by agents and granted from the members' apps (docs/vault.md).
       const vaults = vaultStore(store.db);
-      const secrets = new Secrets({ db: store.db, vaults, hub, data, lock: (ws) => cloud.locked(ws === null || ws === cloud.home() ? null : ws)?.state ?? null, now: () => wall.now() });
-      secrets.listen((r) => events.tell("vault-request", r, `vault-request\0${r.id}`, (viewer) => viewer.workspace === r.ws && vaults.vault(r.ws, r.vault)?.members.includes(viewer.sub) === true));
+      const secrets = new Secrets({
+        db: store.db, vaults, plain: plainStore(store.db), hub, data, home: () => cloud.home(),
+        lock: (ws) => cloud.locked(ws === null || ws === cloud.home() ? null : ws)?.state ?? null, now: () => wall.now(),
+        title: (session) => sender(hub, session)[0] ?? null,
+      });
+      secrets.listen((r) => events.tell("vault-request", r, `vault-request\0${r.id}`, (viewer) => secrets.tells(r, viewer)));
       tools.push(...vaultTools(secrets, (k) => store.getSession(k)?.workspace ?? null));
       // The station's and the runtimes' versions, read at start and every few hours; updated from the pages, or by
       // itself while nothing runs and nothing is asked of it (auto update), watched or not.

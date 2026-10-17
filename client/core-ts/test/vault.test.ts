@@ -111,13 +111,40 @@ function fakeStation() {
   const grants: unknown[] = [];
   const denials: unknown[] = [];
   const locked = { on: true };
+  // The plain library (no security mode): items as they are, the owner's decisions, the uses said.
+  const plain = new Map<string, any>();
+  const plainGrants: unknown[] = [];
+  const uses: unknown[] = [];
+  const plainLock = { on: false };
   const reply = (req: HttpRequest): unknown => {
     const path = req.url.replace("https://stillfail.test/admin/api", "");
     if (!path.startsWith("/vault/")) return undefined;
-    if (!locked.on) return status(409, { error: "no lock", code: "vault_needs_lock" });
     const body = req.body && req.body.length > 0 ? JSON.parse(new TextDecoder().decode(req.body)) : null;
     const [route, query] = path.split("?");
     const key = `${req.method} ${route}`;
+    const shown = ({ fields: _, ...rest }: any) => rest;
+    switch (key) {
+      case "GET /vault/plain":
+        return { items: [...plain.values()].map(shown), locked: plainLock.on };
+      case "GET /vault/plain/item":
+        return { item: plain.get(new URLSearchParams(query).get("id") ?? "") };
+      case "PUT /vault/plain": {
+        const prev = plain.get(body.id);
+        if (plainLock.on && !body.deleted) return status(409, { error: "locked", code: "vault_locked" });
+        if (body.version !== (prev ? prev.version + 1 : 0)) return status(409, { error: "version", code: "vault_conflict" });
+        plain.set(body.id, { ...body, owner: "me@x.com" });
+        return { item: shown(plain.get(body.id)) };
+      }
+      case "POST /vault/plain/grants":
+        plainGrants.push(body);
+        for (const q of requests) if (q.id === body.request) q.status = "granted";
+        return { ok: true };
+      case "GET /vault/uses":
+        return { uses: query === "vault=plain" ? uses : [] };
+      case "GET /vault/requests":
+        return { requests };
+    }
+    if (!locked.on) return status(409, { error: "no lock", code: "vault_needs_lock" });
     switch (key) {
       case "GET /vault/vaults":
         return { vaults: [...vaults.values()] };
@@ -156,7 +183,7 @@ function fakeStation() {
     }
     return status(404, { error: `no route ${key}` });
   };
-  return { vaults, items, boxes, requests, grants, denials, locked, reply };
+  return { vaults, items, boxes, requests, grants, denials, locked, plain, plainGrants, uses, plainLock, reply };
 }
 
 /// A core on an app's host (keys kept, secure storage), reaching `ws/st` (the fake station); its lock put in place.
@@ -384,5 +411,47 @@ test("a station without the lock pinned holds no vault, and says so", async () =
   await r.host.time.pass(500);
   assert.deepEqual(vaults().refused, [{ station: "st", name: "studio", code: "vault_needs_lock" }]);
   await fails(r.ask("vault.setup", {}), "vault_no_station");
+  r.core.close();
+});
+
+test("the plain library: no security mode, items kept on the station as they are, used by agents, moved into the vault once it is on", async () => {
+  const r = await rig();
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  await r.host.time.pass(500);
+  r.take();
+  assert.equal(vaults().plain, true);
+  assert.deepEqual(vaults().vaults.map((v: any) => [v.id, v.stationName, v.open]), [["plain", "studio", true]]);
+  const put = await r.ask("vault.putItem", { vault: "plain", plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } }, listing: { name: "GitHub", kind: "token", modes: ["proxy"], hosts: ["api.github.com"], env: "GH_TOKEN" } });
+  assert.equal(r.st.plain.get(put.id).fields.value, "ghp_x");
+  assert.equal(r.host.secureAsked.length, 0, "nothing asked of the person: nothing to unseal");
+  const shown = await r.watch(2, { topic: "vaultItems", workspace: "ws", vault: "plain" });
+  assert.deepEqual(shown().items.map((i: any) => [i.name, i.kind, i.listed, i.env]), [["GitHub", "token", true, "GH_TOKEN"]]);
+  assert.equal((await r.ask("vault.open", { item: put.id })).plain.fields.value, "ghp_x");
+
+  // An agent asks: its owner approves, with nothing signed; the use shown on the item.
+  r.st.requests.push({ id: "r_p", ws: "ws", vault: "plain", item: put.id, session: "ember:s", chat: "", mode: "proxy", reason: "ci", hosts: ["api.github.com"], box: "", at: 1000, status: "pending" } as Request);
+  await r.ask("vault.approve", { request: "r_p", scope: "once" });
+  assert.deepEqual(r.st.plainGrants, [{ request: "r_p", scope: "once" }]);
+  assert.deepEqual(r.st.grants, [], "no signed grant");
+  r.st.uses.push({ item: put.id, at: 1000, session: "ember:s", chatTitle: "修 CI", mode: "proxy", command: "gh pr list", hosts: ["api.github.com"], denied: false });
+  const used = await r.watch(3, { topic: "vaultUses", workspace: "ws", vault: "plain", item: put.id });
+  await r.host.time.pass(500);
+  r.take();
+  assert.deepEqual(used().uses.map((u: any) => [u.chatTitle, u.command, u.station, typeof u.at.ago]), [["修 CI", "gh pr list", "st", "string"]]);
+  assert.equal(shown().items[0].lastUse.command, "gh pr list");
+
+  // Security mode on: the vault is the library; what was plain is counted, kept from new writes, and moved.
+  r.putLock();
+  r.st.plainLock.on = true;
+  await r.ask("vault.setup", {});
+  await r.ask("vault.create", { name: "Personal" });
+  assert.equal(vaults().plain, undefined);
+  assert.equal(vaults().plainLeft, 1);
+  await fails(r.ask("vault.putItem", { vault: "plain", plain: { kind: "token", name: "x", fields: { value: "y" } } }), "vault_locked");
+  assert.deepEqual(await r.ask("vault.migrate", {}), { moved: 1, left: 0 });
+  assert.equal(r.st.plain.get(put.id).deleted, true);
+  const moved = [...r.st.items.values()];
+  assert.deepEqual(moved.map((i) => i.listing?.name), ["GitHub"]);
+  assert.equal(vaults().plainLeft, undefined);
   r.core.close();
 });

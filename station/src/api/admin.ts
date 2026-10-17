@@ -145,7 +145,12 @@ export class Admin {
           })
         : []),
       ...(deps.agents?.cloud && deps.agents.secrets
-        ? vaultRequests({ secrets: deps.agents.secrets, lock: (ws) => deps.agents!.cloud.locked(ws === deps.agents!.cloud.home() ? null : ws)?.state ?? null })
+        ? vaultRequests({
+            secrets: deps.agents.secrets,
+            plain: deps.agents.secrets.plain,
+            lock: (ws) => deps.agents!.cloud.locked(ws === deps.agents!.cloud.home() ? null : ws)?.state ?? null,
+            events: deps.events,
+          })
         : []),
       ...(deps.agents?.config
         ? drive({

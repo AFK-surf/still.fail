@@ -1230,6 +1230,8 @@ export const SHAPES: Record<string, Shape> = {
     ["vaults", vec("VaultRow")],
     ["requests", vec("VaultRequest")],
     ["refused", vec("VaultRefusal")],
+    ["plain", opt("bool"), { doc: "No lock in the workspace: the library is kept in the clear on its station (its one vault, id `plain`), and any item but a subscription or a model's key is said to be at risk (docs/vault.md 不加锁的库)." }],
+    ["plainLeft", opt("u32"), { doc: "Security mode on, items of the viewer's still kept in plain text from before: `vault.migrate` encrypts them into their own vault." }],
   ], { doc: "The workspace's vaults as the viewer sees them (the `vaults` topic; client/core-ts/src/views/vault.ts, docs/vault.md)." }),
   VaultItemRow: struct([
     ["id", "String"],
@@ -1241,7 +1243,22 @@ export const SHAPES: Record<string, Shape> = {
     ["modes", vec("String")],
     ["hosts", vec("String")],
     ["env", opt("String"), { doc: "The variable its listing suggests the command gets it in (`GH_TOKEN`)." }],
+    ["lastUse", opt("VaultUse"), { doc: "The last time an agent used it." }],
   ], { doc: "An item of a vault." }),
+  VaultUse: struct([
+    ["at", "Stamp"],
+    ["session", "String"],
+    ["station", opt("String"), { doc: "The station of the chat (its id)." }],
+    ["chatTitle", opt("String")],
+    ["mode", "String", { doc: "`proxy`, `ssh` or `env`." }],
+    ["command", opt("String")],
+    ["hosts", vec("String")],
+    ["denied", opt("bool"), { doc: "Asked for and turned down." }],
+  ], { doc: "An agent's use of an item (the station's `vault_audit`): when, in which chat, how." }),
+  VaultUsesView: struct([
+    ["item", "String"],
+    ["uses", vec("VaultUse")],
+  ], { doc: "An item's uses, the latest first (the `vaultUses` topic)." }),
   VaultItemsView: struct([
     ["vault", "String"],
     ["name", "String"],

@@ -67,3 +67,12 @@ export const secretValue = style({
 /** How agents may ask for it: the switch and what it opens, set apart. */
 export const agentBox = style({ display: "grid", gap: "10px", paddingTop: "4px" });
 export const area = style({ resize: "vertical", lineHeight: "1.5", fontFamily: vars.fontMono, fontSize: vars.textMeta });
+
+/** A secret's page (VaultItem.tsx): that it is not encrypted, in the tone of what is at risk. */
+export const riskTitle = style({ color: vars.amber });
+/** Its uses: a row each, the chat and how over the time at its end. */
+export const uses = style({ display: "grid", gap: "14px" });
+export const use = style({ display: "flex", alignItems: "baseline", gap: "12px" });
+export const useText = style({ flex: "1", minWidth: "0", display: "grid", gap: "2px" });
+export const useTime = style({ flex: "none", fontSize: vars.textMeta, color: vars.muted, fontVariantNumeric: "tabular-nums" });
+export const chatLink = style({ color: "inherit", textDecoration: "none", marginRight: "8px", selectors: { "&:hover": { textDecoration: "underline" } } });

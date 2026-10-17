@@ -4,11 +4,11 @@
 // VaultApproval.tsx: they only draw.
 import { useCallback, useState } from "react";
 import { useCall, useTopic } from "./core/react.ts";
-import type { VaultItemRow, VaultItemsView, VaultRequest, VaultsView } from "./core/shapes.ts";
+import type { VaultItemRow, VaultItemsView, VaultRequest, VaultsView, VaultUse, VaultUsesView } from "./core/shapes.ts";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { t } from "./i18n.ts";
 
-export type { VaultItemRow, VaultItemsView, VaultRequest, VaultRow, VaultsView } from "./core/shapes.ts";
+export type { VaultItemRow, VaultItemsView, VaultRequest, VaultRow, VaultsView, VaultUse, VaultUsesView } from "./core/shapes.ts";
 
 export type Kind = "token" | "ssh_key" | "login";
 export type Mode = "proxy" | "env" | "ssh";
@@ -26,6 +26,21 @@ export function useVaults(workspace: string): VaultsView | undefined {
 export function useVaultItems(workspace: string, vault: string): VaultItemsView | undefined {
   return useTopic<VaultItemsView>({ topic: "vaultItems", workspace, vault }).value;
 }
+
+/** An item's uses by agents, the latest first (the station's record of them). */
+export function useVaultUses(workspace: string, vault: string, item: string): VaultUsesView | undefined {
+  return useTopic<VaultUsesView>({ topic: "vaultUses", workspace, vault, item }).value;
+}
+
+/** An item's page (设置 › 密钥 › the item). */
+export const itemPath = (workspace: string, vault: string, item: string) => `/w/${workspace}/settings/vault/${encodeURIComponent(vault)}/${encodeURIComponent(item)}`;
+
+/** The kinds the library lists after the profiles, a section each, in this order. */
+export const ITEM_SECTIONS: Kind[] = ["token", "ssh_key", "login"];
+
+/** An item's second line in the library's list: when an agent last used it, else how agents may ask for it. */
+export const listLine = (row: VaultItemRow): string => (row.lastUse ? usedLine(row.lastUse) : itemLine(row));
+export const usedLine = (use: VaultUse): string => t("web-pages.vault.uses.last", { when: use.at.ago });
 
 export const kindName = (kind: string | undefined): string => (KINDS.includes(kind as Kind) ? t(`web-pages.vault.kind.${kind}`) : "");
 export const modeName = (mode: string): string => (["proxy", "env", "ssh"].includes(mode) ? t(`web-pages.vault.mode.${mode}`) : mode);

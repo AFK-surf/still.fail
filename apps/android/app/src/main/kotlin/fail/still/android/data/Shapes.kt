@@ -4216,6 +4216,22 @@ data class UsageView (
 	val prices: List<UsagePriceTable>? = null
 )
 
+/// An agent's use of an item (the station's `vault_audit`): when, in which chat, how.
+@Serializable
+data class VaultUse (
+	val at: Stamp,
+	val session: String,
+	/// The station of the chat (its id).
+	val station: String? = null,
+	val chatTitle: String? = null,
+	/// `proxy`, `ssh` or `env`.
+	val mode: String,
+	val command: String? = null,
+	val hosts: List<String>,
+	/// Asked for and turned down.
+	val denied: Boolean? = null
+)
+
 /// An item of a vault.
 @Serializable
 data class VaultItemRow (
@@ -4231,7 +4247,9 @@ data class VaultItemRow (
 	val modes: List<String>,
 	val hosts: List<String>,
 	/// The variable its listing suggests the command gets it in (`GH_TOKEN`).
-	val env: String? = null
+	val env: String? = null,
+	/// The last time an agent used it.
+	val lastUse: VaultUse? = null
 )
 
 /// A vault's items (the `vaultItems` topic).
@@ -4305,6 +4323,13 @@ data class VaultRow (
 	val recoverable: Boolean
 )
 
+/// An item's uses, the latest first (the `vaultUses` topic).
+@Serializable
+data class VaultUsesView (
+	val item: String,
+	val uses: List<VaultUse>
+)
+
 /// The workspace's vaults as the viewer sees them (the `vaults` topic; client/core-ts/src/views/vault.ts, docs/vault.md).
 @Serializable
 data class VaultsView (
@@ -4318,7 +4343,11 @@ data class VaultsView (
 	val setUp: Boolean,
 	val vaults: List<VaultRow>,
 	val requests: List<VaultRequest>,
-	val refused: List<VaultRefusal>
+	val refused: List<VaultRefusal>,
+	/// No lock in the workspace: the library is kept in the clear on its station (its one vault, id `plain`), and any item but a subscription or a model's key is said to be at risk (docs/vault.md 不加锁的库).
+	val plain: Boolean? = null,
+	/// Security mode on, items of the viewer's still kept in plain text from before: `vault.migrate` encrypts them into their own vault.
+	val plainLeft: UInt? = null
 )
 
 /// A workspace's mark: of the chats its person takes part in, how many want them (blocked or failed) and how many

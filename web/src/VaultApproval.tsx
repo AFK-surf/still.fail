@@ -33,7 +33,8 @@ export function VaultChoices({ workspace, id, onDecided }: { workspace: string; 
   const doing = useDoingList().filter((d) => !failed(d) && doingMatches(d, ["vault.approve", "vault.deny"], { workspace, request: id }));
   // What was tapped, while the core has it (and the system asks the person).
   const [pending, setPending] = useState<Choice["scope"] | undefined>(undefined);
-  const able = !!view?.available && request !== undefined;
+  // The plain library's (no security mode) are approved anywhere: nothing is unsealed for them.
+  const able = (!!view?.available || view?.plain === true) && request !== undefined;
   const under = pending !== undefined || doing.length > 0;
   const busy = (c: Choice) => pending === c.scope || doing.some((d) => (c.scope === null ? d.call === "vault.deny" : d.call === "vault.approve" && d.params.scope === c.scope));
   const pick = (c: Choice) => {
@@ -48,7 +49,7 @@ export function VaultChoices({ workspace, id, onDecided }: { workspace: string; 
     });
   };
   // A web page keeps no keys: no rows to look at, only where to go.
-  if (view && !view.available) {
+  if (view && !view.available && view.plain !== true) {
     return (
       <div className={`${css.options} ${own.inClient}`}>
         <span className={own.inClientTitle}>{t("web-pages.vault.approve.inClient")}</span>

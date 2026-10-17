@@ -4235,6 +4235,21 @@ export interface UsageView {
 	prices?: UsagePriceTable[];
 }
 
+/** An agent's use of an item (the station's `vault_audit`): when, in which chat, how. */
+export interface VaultUse {
+	at: Stamp;
+	session: string;
+	/** The station of the chat (its id). */
+	station?: string;
+	chatTitle?: string;
+	/** `proxy`, `ssh` or `env`. */
+	mode: string;
+	command?: string;
+	hosts: string[];
+	/** Asked for and turned down. */
+	denied?: boolean;
+}
+
 /** An item of a vault. */
 export interface VaultItemRow {
 	id: string;
@@ -4250,6 +4265,8 @@ export interface VaultItemRow {
 	hosts: string[];
 	/** The variable its listing suggests the command gets it in (`GH_TOKEN`). */
 	env?: string;
+	/** The last time an agent used it. */
+	lastUse?: VaultUse;
 }
 
 /** A vault's items (the `vaultItems` topic). */
@@ -4318,6 +4335,12 @@ export interface VaultRow {
 	recoverable: boolean;
 }
 
+/** An item's uses, the latest first (the `vaultUses` topic). */
+export interface VaultUsesView {
+	item: string;
+	uses: VaultUse[];
+}
+
 /** The workspace's vaults as the viewer sees them (the `vaults` topic; client/core-ts/src/views/vault.ts, docs/vault.md). */
 export interface VaultsView {
 	/** An app keeping keys in the system's secure storage (a web page is not). */
@@ -4331,6 +4354,10 @@ export interface VaultsView {
 	vaults: VaultRow[];
 	requests: VaultRequest[];
 	refused: VaultRefusal[];
+	/** No lock in the workspace: the library is kept in the clear on its station (its one vault, id `plain`), and any item but a subscription or a model's key is said to be at risk (docs/vault.md 不加锁的库). */
+	plain?: boolean;
+	/** Security mode on, items of the viewer's still kept in plain text from before: `vault.migrate` encrypts them into their own vault. */
+	plainLeft?: number;
 }
 
 /**

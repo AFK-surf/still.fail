@@ -4,20 +4,23 @@
 // opens in a bottom sheet (its fields masked, shown or copied) and is edited in another. A web page only lists the
 // names it is told. All of it is the core's (`vaults`, `vaultItems`, `vault.*`; ../vault.ts): this only draws.
 import { useState } from "react";
-import { ChevronRight, Copy, Eye, Plus } from "@stillfail/ui/icons.tsx";
+import { ChevronRight, Copy, Edit, Eye, Plus, Quota, ShieldCheck } from "@stillfail/ui/icons.tsx";
+import { useParams } from "react-router";
+import { useProfiles } from "../api.ts";
+import { hosts, profileGroups } from "../cloud/settings.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing } from "../doing.ts";
 import { KindIcon } from "../cloud/Vault.tsx";
 import { VaultChoices } from "../VaultApproval.tsx";
 import { stationBase } from "../station.tsx";
 import {
-  KINDS, blankForm, copySecret, fieldsOf, formOf, formProblem, howLine, itemLine, kindName, masked, modeName, modesOf, putOf, useForm,
+  ITEM_SECTIONS, KINDS, blankForm, copySecret, listLine, useVaultUses, type Kind, fieldsOf, formOf, formProblem, howLine, itemLine, kindName, masked, modeName, modesOf, putOf, useForm,
   useVaultCall, useVaultItems, useVaults, type Form, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView,
 } from "../vault.ts";
 import { t } from "../i18n.ts";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
 import { confirm } from "./sheets.tsx";
-import { Button, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavButton, SectionHeader, Seg, Spinner, TopBack } from "./parts.tsx";
+import { Button, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, ProviderMark, SectionHeader, Seg, Spinner, TopBack } from "./parts.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
@@ -44,8 +47,7 @@ export function VaultScreen() {
     if (view?.vaults.some((v) => v.mine)) return setWords(null);
     void create().then(() => setWords(null));
   };
-  const mine = view?.vaults.find((v) => v.mine && v.keyed);
-  const ready = !!view && !words && view.available && view.locked && view.canSign && view.setUp;
+  const ready = !!view && !words && (view.plain === true || (view.available && view.locked && view.canSign && view.setUp));
   const foot = !view ? null
     : words ? <Button primary busy={creating} label={t("web-pages.vault.words.done")} onClick={written} />
     : view.available && view.locked && view.canSign && (!view.setUp || view.vaults.length === 0)
@@ -55,10 +57,11 @@ export function VaultScreen() {
     <div className={pagesCss.mScreen}>
       <div className={pagesCss.mScroll}>
         <TopBack label={t("web-mobile.settings.title")} onBack={app.pop}
-          trailing={ready && mine ? <NavButton icon={Plus} label={t("web-pages.vault.add")} onClick={() => openEditor(app, mine.id, blankForm(), null)} /> : undefined} />
+          trailing={ready ? <NavButton icon={Plus} label={t("web-pages.vault.add")} onClick={() => openAdd(app)} /> : undefined} />
         <LargeTitle small="" big={t("web-pages.vault.title")} />
         {!view ? <Loading text={t("web-pages.settings.reading")} />
           : words ? <Words words={words} />
+          : view.plain === true ? <Vaults view={view} />
           : !view.available ? <ReadOnly view={view} />
           : !view.locked ? <Gate title={t("web-pages.vault.needsLock")} why={t("web-pages.vault.needsLockWhy")} />
           : !view.canSign ? <Gate title={t("web-pages.vault.notSigner")} why={t("web-pages.vault.notSignerWhy")} />
@@ -120,15 +123,21 @@ function ReadOnly({ view }: { view: VaultsView }) {
   );
 }
 
+/** The library (docs/vault.md 一个库): what waits on the viewer, whether it is locked, the profiles' accounts kept in it,
+ * each vault's secrets a section a kind, the devices holding its key (locked). */
 function Vaults({ view }: { view: VaultsView }) {
+  const plain = view.plain === true;
   return (
     <>
       {view.requests.length > 0 && <>
         <SectionHeader title={`${t("web-pages.vault.requests")} · ${view.requests.length}`} start={24} />
         {view.requests.map((r) => <Request key={r.id} r={r} />)}
       </>}
-      {view.vaults.map((v) => <VaultItems key={v.id} v={v} />)}
-      {view.vaults.length > 0 && <>
+      <LibraryState />
+      {!plain && (view.plainLeft ?? 0) > 0 && <Migrate n={view.plainLeft!} />}
+      <ProfileAccounts />
+      {view.vaults.map((v) => (plain || v.keyed ? <LibraryVault key={v.id} v={v} plain={plain} /> : <VaultItems key={v.id} v={v} />))}
+      {!plain && view.vaults.length > 0 && <>
         <SectionHeader title={t("web-pages.vault.devices")} start={24} />
         <ListCard>{view.vaults.map((v) => <Devices key={v.id} v={v} many={view.vaults.length > 1} />)}</ListCard>
       </>}
@@ -235,8 +244,8 @@ function Devices({ v, many }: { v: VaultRow; many: boolean }) {
 
 // ── the sheets ──
 
-function openEditor(app: ReturnType<typeof useApp>, vault: string, first: Form, id: string | null) {
-  app.sheet({ height: 0.9, content: () => <EditorSheet vault={vault} first={first} id={id} /> });
+function openEditor(app: ReturnType<typeof useApp>, vault: string, first: Form, id: string | null, plain = false, kinds = true) {
+  app.sheet({ height: 0.9, content: () => <EditorSheet vault={vault} first={first} id={id} plain={plain} kinds={kinds} /> });
 }
 
 /** An item opened: its fields (masked; shown, copied), how agents may ask for it, and editing it. */
@@ -275,7 +284,7 @@ function Secret({ label, value, secret, mono }: { label: string; value: string; 
 }
 
 /** An item written: a new one (`id` null) or an opened one changed; deleted from here too. */
-function EditorSheet({ vault, first, id }: { vault: string; first: Form; id: string | null }) {
+function EditorSheet({ vault, first, id, plain = false, kinds = true }: { vault: string; first: Form; id: string | null; plain?: boolean; kinds?: boolean }) {
   const app = useApp();
   const ws = app.entry.id;
   const [f, change] = useForm(() => first);
@@ -297,7 +306,8 @@ function EditorSheet({ vault, first, id }: { vault: string; first: Form; id: str
       <SheetGrab />
       <SheetHead title={id ? first.name : t("web-pages.vault.editor.new")} />
       <div className={css.mSheetBody}>
-        {!id && <Seg fill options={KINDS.map(kindName)} selected={KINDS.indexOf(f.kind)} onSelect={(i) => change({ kind: KINDS[i]! })} />}
+        {plain && <span className={securityCss.mWarn}>{t("web-pages.vault.risk.editor")}</span>}
+        {!id && kinds && <Seg fill options={KINDS.map(kindName)} selected={KINDS.indexOf(f.kind)} onSelect={(i) => change({ kind: KINDS[i]! })} />}
         <span className={css.mLabel}>{t("web-pages.vault.editor.name")}</span>
         {field("name", t("web-pages.vault.editor.namePlaceholder"))}
         {f.kind === "token" && <><span className={css.mLabel}>{t("web-pages.vault.editor.value")}</span>{field("value", t("web-pages.vault.editor.value"), { secret: true, mono: true })}</>}
@@ -361,5 +371,203 @@ function RecoverSheet() {
         </div>
       </div>
     </>
+  );
+}
+
+// ── the library's parts (docs/vault.md 一个库) ──
+
+/** First in the library's list: whether it is locked (security mode on), and the way to lock it when not. */
+function LibraryState() {
+  const app = useApp();
+  const view = useVaults(app.entry.id);
+  if (!view) return null;
+  const plain = view.plain === true;
+  return (
+    <ListCard>
+      <ListRow onClick={() => app.push(app.at("/settings/security"))}>
+        <span className={css.mIcon} style={plain ? { color: "var(--m-warn)" } : undefined}><ShieldCheck size={18} /></span>
+        <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+          <span className={listsCss.mRowTitle} style={plain ? { color: "var(--m-warn)" } : undefined}>{plain ? t("web-pages.vault.lib.plain") : t("web-pages.vault.lib.sealed")}</span>
+          <span className={listsCss.mRowNote}>{plain ? t("web-pages.vault.lib.plainWhy") : t("web-pages.vault.lib.sealedWhy")}</span>
+        </span>
+        {plain ? <span className={partsCss.mAccent}>{t("web-pages.vault.lib.turnOn")}</span> : <ChevronRight size={14} className={partsCss.mSubtle} />}
+      </ListRow>
+    </ListCard>
+  );
+}
+
+/** Security mode on, what the plain library still holds from before: moved into the person's vault, encrypted. */
+function Migrate({ n }: { n: number }) {
+  const app = useApp();
+  const run = useVaultCall();
+  const toast = useToast();
+  const moving = useDoing("vault.migrate", { workspace: app.entry.id });
+  const go = () => void run<{ moved: number; left: number }>("vault.migrate", { workspace: app.entry.id }, t("web-pages.vault.migrate.what")).then((r) => {
+    if (r) toast(r.left > 0 ? t("web-pages.vault.migrate.partly", { n: r.moved, left: r.left }) : t("web-pages.vault.migrate.done", { n: r.moved }));
+  });
+  return (
+    <ListCard><div className={securityCss.mBody}>
+      <div className={securityCss.mState}><span className={securityCss.mDot} data-tone="amber" />{t("web-pages.vault.migrate.title", { n })}</div>
+      <span className={partsCss.mSubtle}>{t("web-pages.vault.migrate.body")}</span>
+      <LinkButton label={t("web-pages.vault.migrate.go")} busy={moving} className={css.mStart} onClick={go} />
+    </div></ListCard>
+  );
+}
+
+/** The profiles' accounts the library keeps (a subscription's sign-in, a model's key), a section a kind as the profiles
+ * list them; each leads to its profile, whose page is where it is set. */
+function ProfileAccounts() {
+  const app = useApp();
+  const profiles = useProfiles(app.entry.id).value;
+  if (!profiles) return null;
+  return <>{profileGroups(profiles.items).map((g) => (
+    <div key={g[0]!.group}>
+      <SectionHeader title={g[0]!.groupTitle} start={24} />
+      <ListCard>
+        {g.map((e) => (
+          <ListRow key={e.key} onClick={() => app.push(app.at(hosts(e).length > 1 ? `/settings/profiles/account/${encodeURIComponent(e.key)}` : `/s/${e.stationId}/settings/accounts/${encodeURIComponent(e.profile.id)}`))}>
+            <span className={css.mIcon}><ProviderMark runtime={e.profile.runtime} kind={e.profile.access.kind} mark={e.profile.providerMark} size={18} /></span>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+              <span className={listsCss.mRowTitle}>{e.profile.name}</span>
+              <span className={listsCss.mRowNote}>{["Profile", e.where].filter(Boolean).join(" · ")}</span>
+            </span>
+            <ChevronRight size={14} className={partsCss.mSubtle} />
+          </ListRow>
+        ))}
+      </ListCard>
+    </div>
+  ))}</>;
+}
+
+/** A vault's secrets after the profiles' accounts: a section each kind, each one's name and when an agent last used it
+ * (in a library not locked, that it is not encrypted, first). */
+function LibraryVault({ v, plain }: { v: VaultRow; plain: boolean }) {
+  const app = useApp();
+  const items = useVaultItems(app.entry.id, v.id);
+  if (!items) return null;
+  return <>{ITEM_SECTIONS.map((kind) => {
+    const rows = items.items.filter((i) => i.name && i.kind === kind);
+    if (rows.length === 0) return null;
+    return (
+      <div key={kind}>
+        <SectionHeader title={kindName(kind)} start={24} />
+        <ListCard>
+          {rows.map((row) => (
+            <ListRow key={row.id} onClick={() => app.push(app.at(`/settings/vault/${encodeURIComponent(v.id)}/${encodeURIComponent(row.id)}`))}>
+              <span className={css.mIcon}><KindIcon kind={row.kind} size={18} /></span>
+              <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+                <span className={listsCss.mRowTitle}>{row.name}</span>
+                <span className={listsCss.mRowNote}>{plain && <span className={securityCss.mWarn}>{t("web-pages.vault.risk.row")} · </span>}{listLine(row)}</span>
+              </span>
+              <ChevronRight size={14} className={partsCss.mSubtle} />
+            </ListRow>
+          ))}
+        </ListCard>
+      </div>
+    );
+  })}</>;
+}
+
+/** 添加 in the library: a subscription or a model's key (a profile, made on the profiles' page), or a secret of a kind. */
+function openAdd(app: ReturnType<typeof useApp>) {
+  app.sheet({ height: 0.55, content: () => <AddSheet /> });
+}
+
+function AddSheet() {
+  const app = useApp();
+  const view = useVaults(app.entry.id);
+  const mine = view?.vaults.find((v) => v.mine);
+  const plain = view?.plain === true;
+  const kinds: ("profile" | Kind)[] = ["profile", ...(mine ? ITEM_SECTIONS : [])];
+  const pick = (k: "profile" | Kind) => {
+    if (k === "profile") { app.sheet(null); app.push(app.at("/settings/profiles")); return; }
+    if (mine) openEditor(app, mine.id, { ...blankForm(), kind: k }, null, plain, false);
+  };
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title={t("web-pages.vault.addKind.title")} />
+      <div className={css.mSheetBody}>
+        <ListCard>
+          {kinds.map((k) => (
+            <ListRow key={k} onClick={() => pick(k)}>
+              <span className={css.mIcon}>{k === "profile" ? <Quota size={18} /> : <KindIcon kind={k} size={18} />}</span>
+              <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+                <span className={listsCss.mRowTitle}>{t(`web-pages.vault.addKind.${k}`)}</span>
+                <span className={listsCss.mRowNote}>{t(`web-pages.vault.addKind.${k}Detail`)}</span>
+              </span>
+            </ListRow>
+          ))}
+        </ListCard>
+        {plain && mine && <span className={securityCss.mWarn}>{t("web-pages.vault.risk.editor")}</span>}
+      </div>
+    </>
+  );
+}
+
+/** A secret's page (as cloud/VaultItem.tsx): what it is, in a library not locked that it is not encrypted, its content
+ * masked until shown, how agents may use it, and when they did. */
+export function VaultItemScreen() {
+  const app = useApp();
+  const ws = app.entry.id;
+  const { vault = "", item = "" } = useParams();
+  const view = useVaults(ws);
+  const items = useVaultItems(ws, vault);
+  const uses = useVaultUses(ws, vault, item);
+  const run = useVaultCall();
+  const [opened, setOpened] = useState<Opened | null>(null);
+  const opening = useDoing("vault.open", { workspace: ws, item });
+  const v = view?.vaults.find((x) => x.id === vault);
+  const row = items?.items.find((i) => i.id === item);
+  const back = t("web-pages.vault.title");
+  if (!view || !items || !v || !row) return <div className={pagesCss.mScreen}><NavBar back={back} onBack={app.pop} title={back} /><Loading text={t("web-pages.settings.reading")} /></div>;
+  const plain = view.plain === true;
+  const open = (then?: (o: Opened) => void) => void run<Opened>("vault.open", { workspace: ws, item }, t("web-pages.vault.openWhat")).then((o) => { if (o) { setOpened(o); then?.(o); } });
+  const edit = () => (opened ? openEditor(app, vault, formOf(opened, row), opened.id, plain) : open((o) => openEditor(app, vault, formOf(o, row), o.id, plain)));
+  return (
+    <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
+      <NavBar back={back} onBack={app.pop} title={row.name ?? ""} sub={<span>{[kindName(row.kind), t("web-pages.vault.storedOn", { station: v.stationName })].join(" · ")}</span>}
+        trailing={<NavButton icon={Edit} label={t("common.edit")} onClick={edit} />} />
+      {plain && (
+        <ListCard><div className={securityCss.mBody}>
+          <div className={securityCss.mState}><span className={securityCss.mDot} data-tone="amber" />{t("web-pages.vault.risk.title")}</div>
+          <span className={partsCss.mSubtle}>{t("web-pages.vault.risk.body", { station: v.stationName })}</span>
+          <LinkButton label={t("web-pages.vault.lib.turnOn")} className={css.mStart} onClick={() => app.push(app.at("/settings/security"))} />
+        </div></ListCard>
+      )}
+      <SectionHeader title={t("web-pages.vault.content")} start={24} />
+      <ListCard>
+        {opened
+          ? <div className={securityCss.mBody}>{fieldsOf(opened.plain).map((f) => <Secret key={f.key} label={f.label} value={f.value} secret={f.secret} mono={f.mono} />)}</div>
+          : <div className={securityCss.mBody}><div className={css.mSecretLine}>
+              <span className={`${css.mSecretValue} ${css.mMono}`}>{masked("x".repeat(20))}</span>
+              <LinkButton label={t("web-pages.vault.show")} busy={opening} onClick={() => open()} />
+            </div></div>}
+      </ListCard>
+      <SectionHeader title={t("web-pages.vault.forAgents")} start={24} />
+      <ListCard><div className={securityCss.mBody}>
+        {row.listed ? (
+          <dl className={css.mFacts}>
+            <dt>{t("web-pages.vault.how")}</dt><dd>{row.modes.map((m) => howLine(m, row.hosts)).join("、")}</dd>
+            {row.env && <><dt>{t("web-pages.vault.editor.env")}</dt><dd className={css.mMono}>{row.env}</dd></>}
+          </dl>
+        ) : <span className={partsCss.mSubtle}>{t("web-pages.vault.notForAgents")}</span>}
+      </div></ListCard>
+      <SectionHeader title={t("web-pages.vault.uses.title")} start={24} />
+      <ListCard>
+        {!uses ? <ListRow><span className={partsCss.mSubtle}>{t("web-pages.settings.reading")}</span></ListRow>
+          : uses.uses.length === 0 ? <ListRow><span className={partsCss.mSubtle}>{t("web-pages.vault.uses.none")}</span></ListRow>
+          : uses.uses.map((u, i) => (
+            <ListRow key={i} onClick={u.station ? () => app.push(`${stationBase(`${ws}/${u.station}`)}/chats/${encodeURIComponent(u.session)}`) : undefined}>
+              <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+                <span className={listsCss.mRowTitle}>{u.chatTitle ?? u.session}{u.denied && <span className={securityCss.mWarn}> · {t("web-pages.vault.uses.denied")}</span>}</span>
+                <span className={`${listsCss.mRowNote} ${css.mMono}`}>{u.command ?? howLine(u.mode, u.hosts)}</span>
+              </span>
+              <span className={listsCss.mRowNote}>{u.at.ago}</span>
+            </ListRow>
+          ))}
+      </ListCard>
+      <div style={{ height: 30 }} />
+    </div>
   );
 }
