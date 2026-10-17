@@ -41,6 +41,17 @@ export function compactNumber(n: number): string {
   return String(round(n));
 }
 
+/// A decimal kept as text, as people read it: "62500.0000000000" is 62,500, "12.5000" is 12.5; at most two decimals,
+/// cut rather than rounded up. Text that is not a decimal stays as it is.
+export function decimal(text: string): string {
+  const m = /^(-?)(\d+)(?:\.(\d+))?$/.exec(text.trim());
+  if (!m) return text;
+  const whole = m[2].replace(/^0+(?=\d)/, "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const fraction = (m[3] ?? "").slice(0, 2).replace(/0+$/, "");
+  const sign = m[1] && (whole !== "0" || fraction) ? "-" : "";
+  return `${sign}${whole}${fraction ? `.${fraction}` : ""}`;
+}
+
 /// 850ms, 12 秒, 3 分 5 秒, 2 小时 4 分.
 export function duration(ms: number): string {
   return durationIn(current(), ms);

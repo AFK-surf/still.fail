@@ -102,7 +102,7 @@ export function times(value: unknown, c: Clock): unknown {
         credits.unlimited === true
           ? t("core-views.present.credits.unlimited")
           : typeof credits.balance === "string"
-            ? t("core-views.present.credits.balance", { balance: credits.balance })
+            ? t("core-views.present.credits.balance", { balance: format.decimal(credits.balance) })
             : credits.hasCredits === false
               ? t("core-views.present.credits.none")
               : t("core-views.present.credits.unknown");
