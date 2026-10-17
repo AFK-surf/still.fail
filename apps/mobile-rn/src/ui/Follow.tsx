@@ -476,7 +476,19 @@ export function rememberFollow(of: LazyListState | RefObject<FlatList<any> | nul
       } finally { holding = false; }
     };
 
+    // What it sets tells its listeners at once, this among them: a change made while it runs runs it again after,
+    // not within (as Compose's snapshotFlow sees each change once, after it).
+    let checking = false;
+    let checkAgain = false;
     const check = () => {
+      if (checking) { checkAgain = true; return; }
+      checking = true;
+      try {
+        let rounds = 0;
+        do { checkAgain = false; checkOnce(); } while (checkAgain && live && ++rounds < 8);
+      } finally { checking = false; }
+    };
+    const checkOnce = () => {
       if (!live) return;
       if (follow.placed && grownTimer == null && !follow.grown) grownTimer = setTimeout(() => { follow.grown = true; }, 500);
       // A scroll it did not make itself, once the list is at rest: at the end it follows again, elsewhere it stops.
