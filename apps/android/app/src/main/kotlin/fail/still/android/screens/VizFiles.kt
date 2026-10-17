@@ -37,8 +37,8 @@ import fail.still.android.ui.VizFull
 import fail.still.android.ui.webSubtle
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.WaitLine
-import fail.still.android.ui.sweeping
-import fail.still.android.ui.rememberSweep
+import fail.still.android.ui.breathing
+import fail.still.android.ui.rememberBreath
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
@@ -74,8 +74,8 @@ fun VizFile(station: String, key: String, file: Attachment, failed: @Composable 
     var full by remember { mutableStateOf(false) }
     when (val l = loaded) {
         Loaded.Failed -> failed()
-        // Its place, the light sweeping over it as over every wait's shapes, till the page comes.
-        Loaded.Waiting -> Box(Modifier.fillMaxWidth().padding(bottom = 8.dp).height(120.dp).sweeping(rememberSweep()).clip(Smooth(12.dp)).background(C.bubble))
+        // Its place, breathing as every wait's shapes, till the page comes.
+        Loaded.Waiting -> Box(Modifier.fillMaxWidth().padding(bottom = 8.dp).height(120.dp).breathing(rememberBreath()).clip(Smooth(12.dp)).background(C.bubble))
         is Loaded.Ready -> {
             var kept by remember(l) { mutableStateOf(l.state) }
             val keep: (JsonElement) -> Unit = { s -> kept = s; keepViz(app, scope, station, key, file.path, s) }

@@ -1,7 +1,6 @@
 // Waiting, drawn one way everywhere (docs/ui-panels.md「等待」; web ui/src/waiting.tsx draws the same). Three kinds:
-// - a page or list read for the first time: `Waiting`, placeholders shaped as what will come with a light sweeping over
-//   them, no words (the page's frame, its bar, title and composer, drawn as ever around it); what could not be read
-//   said over them in red;
+// - a page or list read for the first time: `Waiting`, placeholders shaped as what will come, breathing, no words (the
+//   page's frame, its bar, title and composer, drawn as ever around it); what could not be read said over them in red;
 // - a row or button at work: `Spinner` in its place (DoingMark where it is a core call), in one of two sizes;
 // - what has a size on its way (a file, an update): `Progress`.
 // Words (a pill, a line) come only after a moment (LATER_MS), so what is there at once shows none; what failed says so
@@ -10,6 +9,7 @@ package fail.still.android.ui
 
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -40,10 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -141,57 +137,39 @@ fun WaitLine(text: String = t("common.reading"), error: Boolean = false, modifie
 /** The shapes of what will come: rows (a list's: a title and a line), messages (a chat's) or cards (a settings page's). */
 enum class WaitShape { Rows, Messages, Cards }
 
-/**
- * The light over placeholders (the web's waiting.css.ts shapes): where it is in its round, 0 to 1 in 1.4s, again and
- * again; null under reduced motion (none). `still`: what is waited on failed, faded (0.6) and no light.
- */
-class Sweep(val still: Boolean, val at: (() -> Float)?, val band: Color = Color.Transparent)
-
+/** How much the shapes show: breathing (1 → 0.5 → 1 in 1.4s) while waited on, still under reduced motion; faded and still with `still`. */
 @Composable
-fun rememberSweep(still: Boolean = false): Sweep {
-    val band = C.muted.copy(alpha = 0.22f)
-    if (still || reducedMotion()) return remember(still) { Sweep(still, null) }
-    val at = rememberInfiniteTransition(label = "light").animateFloat(0f, 1f, infiniteRepeatable(tween(1400, easing = LinearEasing)), label = "at")
-    return remember(at, band) { Sweep(false, { at.value }, band) }
+fun rememberBreath(still: Boolean = false): () -> Float {
+    if (still) return { 0.6f }
+    if (reducedMotion()) return { 1f }
+    val pulse = rememberInfiniteTransition(label = "breathe").animateFloat(1f, 0.5f, infiniteRepeatable(tween(700, easing = EaseInOut), RepeatMode.Reverse), label = "alpha")
+    return { pulse.value }
 }
 
-/**
- * Something to come drawn as a grey placeholder (a bar of a list's row, a station's figure, a page of a document) with the
- * light sweeping over it, as the web's: a band of the muted ink at 22%, 0.8 of its width wide, crossing it in the first
- * third of the round (its middle from one width before it to five after), drawn only over what it draws.
- */
-fun Modifier.sweeping(sweep: Sweep): Modifier =
-    if (sweep.still) graphicsLayer { alpha = 0.6f }
-    else sweep.at?.let { at -> graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
-        drawContent()
-        val w = size.width
-        val peak = -w + 6f * w * at()
-        val light = Brush.horizontalGradient(listOf(Color.Transparent, sweep.band, Color.Transparent), startX = peak - 0.4f * w, endX = peak + 0.4f * w)
-        drawRect(light, blendMode = BlendMode.SrcAtop)
-    } } ?: this
+/** Something to come drawn as a grey placeholder breathing (a station's figures, a page of a document): as WaitShapes. */
+fun Modifier.breathing(alpha: () -> Float): Modifier = graphicsLayer { this.alpha = alpha() }
 
-/** One of the shapes: grey, the light sweeping over it on its own (as the web's each span). */
+/** One of the shapes: grey. */
 @Composable
-private fun Placeholder(modifier: Modifier, sweep: Sweep, shape: Shape = CircleShape) = Box(modifier.sweeping(sweep).background(C.bubble, shape))
+private fun Placeholder(modifier: Modifier, shape: Shape = CircleShape) = Box(modifier.background(C.bubble, shape))
 
 /**
- * The shapes of what will come, the light sweeping over each: rows as the chats' list's (66 high, a title and a line, a
+ * The shapes of what will come, breathing: rows as the chats' list's (66 high, a title and a line, a
  * picture at the end), a chat's messages (theirs with a picture on the left, the viewer's on the right) or a settings
  * page's cards.
  */
 @Composable
 fun WaitShapes(shape: WaitShape = WaitShape.Rows, count: Int? = null, still: Boolean = false, modifier: Modifier = Modifier) {
-    val sweep = rememberSweep(still)
-    val m = modifier.fillMaxWidth().clearAndSetSemantics {}
+    val m = modifier.fillMaxWidth().breathing(rememberBreath(still)).clearAndSetSemantics {}
     when (shape) {
         WaitShape.Rows -> Column(m) {
             repeat(count ?: 7) { i ->
                 Row(Modifier.fillMaxWidth().height(66.dp).padding(start = 22.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Placeholder(Modifier.width(TITLES[i % TITLES.size].dp).height(13.dp), sweep)
-                        Placeholder(Modifier.width(LINES[i % LINES.size].dp).height(10.dp), sweep)
+                        Placeholder(Modifier.width(TITLES[i % TITLES.size].dp).height(13.dp))
+                        Placeholder(Modifier.width(LINES[i % LINES.size].dp).height(10.dp))
                     }
-                    Placeholder(Modifier.size(22.dp), sweep)
+                    Placeholder(Modifier.size(22.dp))
                 }
             }
         }
@@ -199,20 +177,20 @@ fun WaitShapes(shape: WaitShape = WaitShape.Rows, count: Int? = null, still: Boo
             val most = maxWidth * 0.7f
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 for ((mine, w, h) in MESSAGES.take(count ?: MESSAGES.size)) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
-                    if (!mine) { Placeholder(Modifier.size(28.dp), sweep); Spacer(Modifier.width(10.dp)) }
-                    Placeholder(Modifier.widthIn(max = most).width(w.dp).height(h.dp), sweep, Smooth(18.dp))
+                    if (!mine) { Placeholder(Modifier.size(28.dp)); Spacer(Modifier.width(10.dp)) }
+                    Placeholder(Modifier.widthIn(max = most).width(w.dp).height(h.dp), Smooth(18.dp))
                 }
             }
         }
         WaitShape.Cards -> Column(m.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             // A page's card's corner (Parts.kt Card).
-            repeat(count ?: 3) { i -> Placeholder(Modifier.fillMaxWidth().height(CARDS[i % CARDS.size].dp), sweep, Smooth(20.dp)) }
+            repeat(count ?: 3) { i -> Placeholder(Modifier.fillMaxWidth().height(CARDS[i % CARDS.size].dp), Smooth(20.dp)) }
         }
     }
 }
 
 /**
- * A page's or list's content while it is read the first time: its shapes with the light sweeping over them, what it
+ * A page's or list's content while it is read the first time: its shapes breathing, what it
  * waits on (`note`, else `text`, else 正在读取) said only to a screen reader; over them in red what could not be read
  * (`error`, `note.failing`), the shapes then still. The page's frame (its bar, title, composer) is drawn around it as ever.
  */

@@ -1,6 +1,6 @@
 // What waits looks the same everywhere (waiting.tsx; Android ui/Waiting.kt draws the same): placeholders shaped as
-// what will come with a light sweeping over them, in red what could not be read, a bar for what has a size.
-import { globalStyle, keyframes, style } from "@vanilla-extract/css";
+// what will come, breathing, in red what could not be read, a bar for what has a size.
+import { keyframes, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
 import { appearKeyframes } from "./styles/keyframes.css.ts";
 import { pictureGlass } from "./styles/glass.ts";
@@ -10,9 +10,9 @@ import { centred } from "./styles/align.ts";
 export const LATER_MS = 400;
 const later = `${appearKeyframes} 0s linear ${LATER_MS}ms both`;
 
-// A light sweeping across each of the shapes, left to right, every 1.4s (as hover cards' bars did); still for reduced
-// motion, and faded, still, when what is waited on failed.
-const sweepLight = keyframes({ from: { backgroundPosition: "100% 0" }, to: { backgroundPosition: "-100% 0" } });
+// 1 → 0.5 and back in 1.4s; still for reduced motion (and faded, still, when what is waited on failed). A light
+// sweeping over them was tried and judged busier (2026-10-17).
+const breathe = keyframes({ "0%, 100%": { opacity: 1 }, "50%": { opacity: 0.5 } });
 
 export const wait = style({ position: "relative", display: "flex", flexDirection: "column", minHeight: 0 });
 export const fill = style({ flex: "1", minHeight: "100%" });
@@ -31,17 +31,11 @@ export const line = style({
   display: "flex", alignItems: "center", gap: "8px", color: vars.muted, fontSize: vars.textMeta, lineHeight: "18px",
   animation: later, selectors: { "&[data-error]": { color: vars.red, animation: "none" } },
 });
-export const shapes = style({ selectors: { "&[data-still]": { opacity: 0.6 } } });
-// Its bars (the empty spans and i's in it, or itself when it is one, whatever their own shape and ground; not what
-// holds a few of them): the light over their ground.
-const bars = `${shapes} :is(span, i):empty, :is(span, i)${shapes}:empty`;
-globalStyle(bars, {
-  backgroundImage: `linear-gradient(90deg, transparent 40%, color-mix(in srgb, ${vars.muted} 22%, transparent) 50%, transparent 60%)`,
-  backgroundSize: "400% 100%", backgroundRepeat: "no-repeat",
-  animation: `${sweepLight} 1.4s linear infinite`,
-  "@media": { "(prefers-reduced-motion: reduce)": { animation: "none", backgroundImage: "none" } },
+export const shapes = style({
+  animation: `${breathe} 1.4s ease-in-out infinite`,
+  selectors: { "&[data-still]": { animation: "none", opacity: 0.6 } },
+  "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } },
 });
-globalStyle(`${shapes}[data-still] :is(span, i):empty`, { animation: "none", backgroundImage: "none" });
 const bar = { display: "block", background: vars.neutralBg, borderRadius: "999px" } as const;
 export const row = style({
   display: "flex", alignItems: "center", gap: "12px", height: "66px", padding: "0 16px 0 22px", boxSizing: "border-box",

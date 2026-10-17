@@ -89,8 +89,8 @@ import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.Waiting
 import fail.still.android.ui.WaitShape
-import fail.still.android.ui.sweeping
-import fail.still.android.ui.rememberSweep
+import fail.still.android.ui.breathing
+import fail.still.android.ui.rememberBreath
 import fail.still.android.ui.NavBack
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.NavButton
@@ -273,10 +273,10 @@ private fun Reconnecting() = Row(verticalAlignment = Alignment.CenterVertically,
     Text(t("common.reconnecting"), fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1)
 }
 
-/** A grey bar where a figure would be, not known now: the light sweeping over it as over every wait's shapes (Waiting.kt). */
+/** A grey bar where a figure would be, not known now: breathing as every wait's shapes (Waiting.kt). */
 @Composable
 private fun Bar(width: androidx.compose.ui.unit.Dp, height: androidx.compose.ui.unit.Dp = 10.dp, radius: androidx.compose.ui.unit.Dp = 5.dp) =
-    Box(Modifier.width(width).height(height).sweeping(rememberSweep()).clip(Smooth(radius)).background(C.bubble))
+    Box(Modifier.width(width).height(height).breathing(rememberBreath()).clip(Smooth(radius)).background(C.bubble))
 
 @Composable
 fun StationScreen(current: WorkspaceEntry, address: String) {

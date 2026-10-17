@@ -119,7 +119,7 @@ const unreadHost: Host = {
   details: ["主机名", "芯片", "已运行", "进程"].map((label) => ({ label, value: "直连" })),
 };
 
-/** A grey line of text, one line however long; a grey bar `bar` wide in its room while it is not known, the light sweeping over it as over
+/** A grey line of text, one line however long; a grey bar `bar` wide in its room while it is not known, breathing as
  *  every wait's shapes (@stillfail/ui waiting.tsx), the line as tall either way. */
 function Known({ text, bar }: { text: string | null; bar: number }) {
   return <span className={css.mStationLine} data-unknown={text === null || undefined}>{text ?? <i className={waitCss.shapes} style={{ width: bar }} />}</span>;
