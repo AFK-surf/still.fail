@@ -30,6 +30,7 @@ import { MeterChips } from "../components.tsx";
 import { Button, Card, Field, Illustration, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, PlaceHead, SectionHeader, Seg, Spinner } from "./parts.tsx";
 import { usePlaceActions } from "./placeActions.tsx";
 import { ScreensCard } from "./Screen.tsx";
+import { PermissionsCard } from "./StationPermissions.tsx";
 import * as css from "./Stations.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
@@ -291,6 +292,8 @@ export function StationScreen() {
           </ListCard>
           {/* Its screens, to see and drive (docs/remote-screens.md). */}
           <ScreensCard station={s.station} />
+          {/* What macOS lets its still.fail Helper do (a Mac's station only), each grant asked for from here. */}
+          {s.online && s.overview?.permissions && <PermissionsCard station={s.station} permissions={s.overview.permissions} />}
           <Logins station={s.station} marked={login ?? null} />
           {manager && !s.joined && <Workspaces s={s} />}
           {s.online && s.overview && <Versions station={s.station} updates={s.overview.updates} manager={manager && !s.joined} beta={s.betaOffered ?? false} />}

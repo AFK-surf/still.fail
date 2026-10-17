@@ -21,6 +21,7 @@ import { HostDetails, joinedText, Net, problems, state, useLong } from "./Statio
 import { MarkPick } from "./MarkPick.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
 import { ScreensSection } from "../screen/ScreenList.tsx";
+import { PermissionsSection } from "../StationPermissions.tsx";
 import { LoginsSection } from "../MachineLogins.tsx";
 import { NavAction, NavList, NavItem, NavLine, NavTop, navFill } from "../SidebarList.tsx";
 import { AddStationDialog, useStationEdits, useWorkspace } from "./settings.tsx";
@@ -199,6 +200,8 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
       )}
       {/* Its screens, to see and drive (docs/remote-screens.md); a station from before them says so quietly. */}
       <ScreensSection station={s.station} />
+      {/* What macOS lets its still.fail Helper do (a Mac's station only), each grant asked for from here. */}
+      {s.online && o?.permissions && <PermissionsSection station={s.station} permissions={o.permissions} />}
       {o && o.profiles.length > 0 && (
         <Section title={<>Profile<span className={settingsCss.titleCount}>{o.profiles.length}</span></>}>
           <ul className={pagesCss.list}>

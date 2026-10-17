@@ -34,6 +34,7 @@ import type { Shared } from "../src/shareIn.ts";
 import { ScreenViewer } from "../src/screen/ScreenViewer.tsx";
 import { OUTDATED, SCREENS_LACKING, screensDemo, type ViewStory } from "./screens.ts";
 import { vaultDemo } from "./vault.ts";
+import { permissionsDemo } from "./permissions.ts";
 import { lockDemo } from "./lock.ts";
 import CLIP_URL from "./assets/story-clip.mp4?url";
 import TALL_CLIP_URL from "./assets/story-clip-tall.mp4?url";
@@ -70,6 +71,8 @@ export interface Story {
 const at = (name: string) => ({ ...AT, path: name });
 /** To 设置 › 密钥: the wide screen's settings, the phone's (from its chat, back to the list). */
 const toVault: Step[] = [{ click: '[aria-label="设置"]' }, { text: "密钥" }];
+/** To a station's page on the phone (settings › Station › the demo's one). */
+const toPhoneStation: Step[] = [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }];
 const toPhoneVault: Step[] = [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "密钥" }];
 
 /** The demo with stations of other workspaces to add (`list`), or one that refuses to join (none to add: no choice). */
@@ -589,6 +592,22 @@ export const stories: Story[] = [
   { id: "app-station-screens-outdated", group: "屏幕", title: "station · 屏幕 · 要更新", app: true, demo: screensDemo("live", OUTDATED), steps: [{ click: '[aria-label^="Station"]' }] },
   { id: "app-screen", group: "屏幕", title: "station · 打开屏幕", app: true, demo: screensDemo(), steps: [{ click: '[aria-label^="Station"]' }, { click: 'a[href$="/screen/desktop"]' }, ...toTheBar] },
   { id: "phone-station-screens", group: "屏幕", title: "手机 · station 的屏幕", app: true, phone: true, demo: screensDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }] },
+  // ── a Mac station's grants to still.fail Helper (docs/remote-screens.md "Grants") ──
+  { id: "app-station-permissions", group: "权限", title: "station · 权限 · 都已允许", app: true, demo: permissionsDemo("granted"), steps: [{ click: '[aria-label^="Station"]' }] },
+  { id: "app-station-permissions-missing", group: "权限", title: "station · 权限 · 缺几项", app: true, demo: permissionsDemo("missing"), steps: [{ click: '[aria-label^="Station"]' }] },
+  { id: "app-station-permissions-asking", group: "权限", title: "station · 权限 · 申请中（可远程点）", app: true, demo: permissionsDemo("asking"), steps: [{ click: '[aria-label^="Station"]' }] },
+  { id: "app-station-permissions-asking-there", group: "权限", title: "station · 权限 · 申请中（要去那台 Mac）", app: true, demo: permissionsDemo("askingThere"), steps: [{ click: '[aria-label^="Station"]' }] },
+  // Asked for where the screen can be driven: one tap, and the desktop opens with the window up on it.
+  { id: "app-station-permissions-requested", group: "权限", title: "station · 权限 · 申请后打开屏幕", app: true, demo: permissionsDemo("missing", screensDemo()), steps: [{ click: '[aria-label^="Station"]' }, { click: '[aria-label="申请「桌面」"]' }, ...toTheBar] },
+  { id: "app-station-permissions-read-only", group: "权限", title: "station · 权限 · 只读成员", app: true, demo: permissionsDemo("readOnly"), steps: [{ click: '[aria-label^="Station"]' }] },
+  { id: "app-station-permissions-none", group: "权限", title: "station · 权限 · 不是 Mac（不显示）", app: true, demo: permissionsDemo("none"), steps: [{ click: '[aria-label^="Station"]' }] },
+  { id: "phone-station-permissions", group: "权限", title: "手机 · station · 权限 · 都已允许", app: true, phone: true, demo: permissionsDemo("granted"), steps: toPhoneStation },
+  { id: "phone-station-permissions-missing", group: "权限", title: "手机 · station · 权限 · 缺几项", app: true, phone: true, demo: permissionsDemo("missing"), steps: toPhoneStation },
+  { id: "phone-station-permissions-asking", group: "权限", title: "手机 · station · 权限 · 申请中（可远程点）", app: true, phone: true, demo: permissionsDemo("asking"), steps: toPhoneStation },
+  { id: "phone-station-permissions-asking-there", group: "权限", title: "手机 · station · 权限 · 申请中（要去那台 Mac）", app: true, phone: true, demo: permissionsDemo("askingThere"), steps: toPhoneStation },
+  { id: "phone-station-permissions-requested", group: "权限", title: "手机 · station · 权限 · 申请后打开屏幕", app: true, phone: true, demo: permissionsDemo("missing", screensDemo()), steps: [...toPhoneStation, { click: '[aria-label="申请「桌面」"]' }] },
+  { id: "phone-station-permissions-read-only", group: "权限", title: "手机 · station · 权限 · 只读成员", app: true, phone: true, demo: permissionsDemo("readOnly"), steps: toPhoneStation },
+  { id: "phone-station-permissions-none", group: "权限", title: "手机 · station · 权限 · 不是 Mac（不显示）", app: true, phone: true, demo: permissionsDemo("none"), steps: toPhoneStation },
   { id: "phone-screen", group: "屏幕", title: "手机 · 打开屏幕", app: true, phone: true, demo: screensDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }, { text: "登录 · GitHub" }] },
 
   // ── the phone ──
