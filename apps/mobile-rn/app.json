@@ -40,7 +40,15 @@
         }
       ],
       "expo-localization",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/JetBrainsMono.ttf"
+          ]
+        }
+      ]
     ],
     "scheme": [
       "stillfailrn",
