@@ -27,6 +27,7 @@ import { dirname, join, relative, sep } from "node:path";
 import type { Clock } from "effect";
 import type { Env, MachineToken } from "../agents/machine-logins.ts";
 import { codexAuthFile } from "../agents/machine-logins.ts";
+import { CONSOLE_FILE } from "../accounts/console.ts";
 import type { Cloud } from "../cloud/state.ts";
 import type { ConfigFile } from "../ops/config.ts";
 import { Fibers } from "../ops/fibers.ts";
@@ -101,6 +102,9 @@ type State = {
 const isObject = (v: unknown): v is Record<string, any> => v !== null && typeof v === "object" && !Array.isArray(v);
 const hashOf = (v: unknown) => createHash("sha256").update(typeof v === "string" ? v : JSON.stringify(v)).digest("hex");
 const newId = () => `sh-${randomBytes(10).toString("hex")}`;
+/// The files of a login in a profile's home, handed over with it when it moves: Claude's, Codex's, an OpenCode Console
+/// sign-in's (accounts/console.ts).
+const SIGN_INS = [".credentials.json", ".claude.json", "auth.json", CONSOLE_FILE];
 const keyed = (kind: unknown) => kind === "opencode-go" || kind === "anthropic-api" || kind === "api-provider";
 
 /// A profile as another station gets it: what it is, its key when it has one, never where its files are or a login.
@@ -896,7 +900,7 @@ export class Sharing {
     const allow: string[] | null = Array.isArray(p.share.allow) ? p.share.allow : null;
     const credentials: Record<string, string> = {};
     const home = this.home(p);
-    for (const name of [".credentials.json", ".claude.json", "auth.json"]) {
+    for (const name of SIGN_INS) {
       try {
         const path = join(home, name);
         if (!lstatSync(path).isSymbolicLink()) credentials[name] = readFileSync(path).toString("base64");
@@ -943,7 +947,7 @@ export class Sharing {
     const home = join(this.deps.data, "homes", localId);
     mkdirSync(home, { recursive: true });
     for (const [name, data] of Object.entries(isObject(request.credentials) ? request.credentials : {})) {
-      if (![".credentials.json", ".claude.json", "auth.json"].includes(name) || typeof data !== "string") continue;
+      if (!SIGN_INS.includes(name) || typeof data !== "string") continue;
       const path = join(home, name);
       try {
         if (lstatSync(path).isSymbolicLink()) unlinkSync(path);

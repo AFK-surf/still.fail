@@ -490,6 +490,7 @@
   "web-pages.profiles.deleteBody": "仅从 {name} 的配置中移除，配置目录及其中的登录状态不会删除。正在使用它的会话会切换到其他 Profile 继续运行；没有可切换的 Profile 时会停止。",
   "web-pages.profiles.deleted": "已删除 Profile",
   "web-pages.profiles.deviceCodeNote": "在打开的 OpenAI 页面，用 {name} 要使用的 ChatGPT 账号登录并粘贴代码。完成后此处会自动继续，无需返回操作。如果页面提示设备码登录未开启，请先在 ChatGPT 的安全设置中开启。",
+  "web-pages.profiles.deviceCodeNoteOpencode": "在打开的 OpenCode 页面登录，确认代码一致后，选择订阅了 Go 的 workspace 并授权。完成后此处会自动继续，无需返回操作。",
   "web-pages.profiles.disable": "停用",
   "web-pages.profiles.disableBody": "{name} 不再使用这台机器上 {runtime} 的登录；这台机器上的登录本身不受影响，以后可以再次使用。正在使用它的会话会切换到其他 Profile 继续运行；没有可切换的 Profile 时会停止。",
   "web-pages.profiles.disableConfirm": "停用「{name}」？",

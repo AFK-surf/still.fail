@@ -209,6 +209,28 @@ test("a_vendor_with_a_plan_and_a_key_asks_which_and_one_with_a_key_goes_straight
   assert.equal(flows.value(topic).error, null);
 });
 
+test("opencode_go_is_signed_in_to_with_an_opencode_account_where_the_station_can_and_given_a_key_elsewhere", () => {
+  const { s, flows, topic } = flow();
+  flows.change(topic, 1, "open", {});
+  s.set(overview, { ok: { apiProviders: [{ id: "deepseek" }], consoleSignIn: true } });
+  flows.change(topic, 1, "edit", { provider: "opencode-go" });
+  let view = flows.value(topic);
+  assert.ok("ok" in conform("ProfileFlowView", view), JSON.stringify(conform("ProfileFlowView", view)));
+  assert.deepEqual([view.step, view.choices.map((c: J) => c.id), view.choices[0].title], ["method", ["plan", "key"], "订阅 · OpenCode Go"]);
+  flows.change(topic, 1, "edit", { method: "plan" });
+  view = flows.value(topic);
+  assert.deepEqual([view.step, view.signIn, view.usesLine], ["connect", { runtime: "claude", access: "opencode-go", provider: "OpenCode" }, "添加后可用于：Claude Code · Codex"]);
+  // A vendor's plan says whose sign-in it is too.
+  flows.change(topic, 1, "edit", { provider: "openai" });
+  flows.change(topic, 1, "edit", { method: "plan" });
+  assert.deepEqual(flows.value(topic).signIn, { runtime: "codex", provider: "ChatGPT" });
+  // A station from before it: a key, straight to the form.
+  s.set(overview, { ok: { apiProviders: [{ id: "deepseek" }] } });
+  flows.change(topic, 1, "edit", { provider: "opencode-go" });
+  view = flows.value(topic);
+  assert.deepEqual([view.step, view.showKey, view.signIn], ["connect", true, null]);
+});
+
 test("deepseek_harness_is_offered_where_the_station_runs_it_on_any_endpoint", () => {
   const { s, flows, topic } = flow();
   flows.change(topic, 1, "open", {});

@@ -490,7 +490,8 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                 }
             }
             if (p.trouble != null) ProfileRecovery(s, p)
-            if (!copy && kind == "subscription" && p.machine != true) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN)
+            // A subscription, or an OpenCode Go profile on an OpenCode account: signed in (again) here.
+            if (!copy && (kind == "subscription" || (kind == "opencode-go" && p.access.login == true)) && p.machine != true) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN)
             if (p.trouble?.action != "quota") QuotaSection(address, p)
             if (s.overview?.sharing == true) ShareSection(current, s, p)
             if (!copy) WorkspacesSection(address, p)
@@ -552,7 +553,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                     Text(t("android-settings.profile.machineLogin", "station" to s.name, "runtime" to runtime), fontSize = 15.sp, color = C.ink)
                     Text(t("android-settings.profile.machineNote", "runtime" to runtime), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp))
                 }
-            } else if (kind in KEYED) {
+            } else if (kind in KEYED && p.access.login != true) {
                 val name = if (kind == "opencode-go") "OpenCode Go key" else p.providerName?.let { "$it key" } ?: "API key"
                 SectionHeader(t("android-settings.run.account"), start = 24.dp)
                 ListCard {
@@ -817,7 +818,7 @@ private fun SignIn(station: String, p: Profile, needed: Boolean) {
     val api = app.api(station)
     val job = p.login
     val active = job != null && job.state in SIGNING_IN
-    val provider = if (p.runtime == "claude") "Claude" else "ChatGPT"
+    val provider = if (p.access.kind == "opencode-go") "OpenCode" else if (p.runtime == "claude") "Claude" else "ChatGPT"
     val busy = app.isDoing("profile.login", "station" to station, "id" to p.id)
     var manual by remember { mutableStateOf(false) }
     var previous by remember { mutableStateOf(job?.state) }
@@ -839,8 +840,11 @@ private fun SignIn(station: String, p: Profile, needed: Boolean) {
                 Button(if (job?.state == "done" || !needed) t("android-settings.login.again") else t("android-settings.login.signIn"), primary = needed, busy = busy) {
                     scope.launch { try { api.startLogin(p.id) } catch (e: CoreException) { app.toast = t("android-settings.signIn.beginFailed", "error" to errorText(e)) } }
                 }
-                Text(t("android-settings.login.manual"), fontSize = 13.sp, color = C.muted, modifier = Modifier.clickable { manual = !manual }.padding(vertical = 4.dp))
-                if (manual) CommandBox(p.loginCommand)
+                // OpenCode's has no command to run by hand.
+                if (p.loginCommand.isNotEmpty()) {
+                    Text(t("android-settings.login.manual"), fontSize = 13.sp, color = C.muted, modifier = Modifier.clickable { manual = !manual }.padding(vertical = 4.dp))
+                    if (manual) CommandBox(p.loginCommand)
+                }
             }
         }
     }
@@ -875,7 +879,7 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("still.fail", userCode))
                 copied = true; open(url)
             }
-            Text(t("android-settings.login.codexNote", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted)
+            Text(if (provider == "OpenCode") t("android-settings.login.opencodeNote") else t("android-settings.login.codexNote", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted)
         }
         job.state == "needs_code" && url != null -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row {
@@ -977,11 +981,14 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
     val go = { id: String, message: String -> app.toast = message; app.replace(Screen.Profile(address, id)) }
     // The sign-in made its profile: on to it.
     LaunchedEffect(pending?.created) { pending?.created?.let { go(it, t("android-settings.profile.addedLogin")) } }
-    val runtime = if (d?.tile?.runtime == "codex") "codex" else "claude"
+    // What the plan signs in to (the core's): a runtime's subscription, or OpenCode's account for OpenCode Go.
+    val runtime = d?.signIn?.runtime ?: if (d?.tile?.runtime == "codex") "codex" else "claude"
+    val provider = d?.signIn?.provider ?: if (runtime == "claude") "Claude" else "ChatGPT"
+    val access = d?.signIn?.access
     // A plan's sign-in starts when it is chosen; leaving before it made its profile leaves nothing behind.
     val planning = d?.step == "connect" && d.method == "plan"
     LaunchedEffect(planning) {
-        if (planning) { error = null; try { login = api.newLogin(runtime) } catch (e: CoreException) { error = e.message } }
+        if (planning) { error = null; try { login = api.newLogin(runtime, access) } catch (e: CoreException) { error = e.message } }
     }
     val dropLogin = {
         val l = login
@@ -1015,15 +1022,15 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
                 }
                 d.step == "method" -> Column(Modifier.fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
                     d.choices.forEach { c ->
-                        PickRow(c.title, c.hint, leading = { ProviderMark(runtime, if (c.id == "plan") "subscription" else d.tile?.kind ?: "api-provider", 18.dp, d.tile?.mark) }) { edit("method", c.id) }
+                        PickRow(c.title, c.hint, leading = { ProviderMark(runtime, if (c.id == "plan" && d.tile?.kind != "opencode-go") "subscription" else d.tile?.kind ?: "api-provider", 18.dp, d.tile?.mark) }) { edit("method", c.id) }
                     }
                 }
                 d.method == "plan" -> {
                     val l = login
                     if (error != null || job?.state == "failed" || job?.state == "cancelled") {
                         Text(error ?: job?.error ?: t("android-settings.login.unfinished"), fontSize = 13.sp, color = C.red)
-                        Button(t("android-settings.login.restart"), primary = false) { dropLogin(); error = null; scope.launch { try { login = api.newLogin(runtime) } catch (e: CoreException) { error = e.message } } }
-                    } else LoginSteps(job, if (runtime == "claude") "Claude" else "ChatGPT") { code -> api.newLoginCode(l ?: return@LoginSteps, code) }
+                        Button(t("android-settings.login.restart"), primary = false) { dropLogin(); error = null; scope.launch { try { login = api.newLogin(runtime, access) } catch (e: CoreException) { error = e.message } } }
+                    } else LoginSteps(job, provider) { code -> api.newLoginCode(l ?: return@LoginSteps, code) }
                     if (d.usesLine.isNotEmpty()) Text(d.usesLine, fontSize = 13.sp, color = C.muted)
                 }
                 else -> ConnectForm(d, ::edit, submitting) {

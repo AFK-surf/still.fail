@@ -367,6 +367,7 @@ export const SHAPES: Record<string, Shape> = {
     ["provider", opt("String"), { doc: "The provider of an `api-provider` (shapes/providers.ts); an older core reads such a profile as `env` and drops this." }],
     ["endpoint", opt("String"), { doc: "Its address, where the provider has none of its own (Azure, Cloudflare, custom)." }],
     ["protocol", opt("String"), { doc: "At such an address, the protocol it speaks there: chat_completions, responses or anthropic." }],
+    ["login", "bool", { default: true, doc: "An OpenCode Go profile whose key is the token of a sign-in to the OpenCode Console: signed in again, not given a\nkey (false from a station older than it)." }],
   ]),
   ProfileCheck: struct([
     ["decision", opt("DecisionCapability")],
@@ -412,6 +413,7 @@ export const SHAPES: Record<string, Shape> = {
   LoginJob: struct([
     ["profile", "String"],
     ["runtime", "RuntimeKind"],
+    ["provider", opt("String"), { doc: "opencode: a sign-in to the OpenCode Console (an OpenCode Go profile); none: the runtime's subscription." }],
     ["state", "String", { doc: "starting | needs_code | needs_approval | verifying | done | failed | cancelled" }],
     ["url", opt("String")],
     ["userCode", opt("String")],
@@ -628,7 +630,13 @@ export const SHAPES: Record<string, Shape> = {
     ["pending", "bool"],
     ["submitLabel", "String"],
     ["usesLine", "String", { doc: "What the profile will be usable for, in words (the line under the page)." }],
+    ["signIn", opt("FlowSignIn"), { default: true, doc: "At a plan's connect step: the sign-in to start." }],
   ], { doc: "The add-profile pages, as the core keeps them for one device: the picker, how to connect what was picked (a plan or\na key), and the form with what it will be usable for. The views draw it and name what changed (`profile.flow.edit`)." }),
+  FlowSignIn: struct([
+    ["runtime", "RuntimeKind", { doc: "The runtime whose subscription is signed in to (`login.new` runtime)." }],
+    ["access", opt("String"), { doc: "opencode-go: the OpenCode Console instead (`login.new` access)." }],
+    ["provider", "String", { doc: "Who is signed in to, as the steps name it: Claude, ChatGPT, OpenCode." }],
+  ], { doc: "A sign-in the add-profile pages start." }),
   FlowChoice: struct([
     ["id", "String"],
     ["title", "String"],
@@ -653,6 +661,7 @@ export const SHAPES: Record<string, Shape> = {
     ["logins", vec("PendingLogin")],
     ["machineLogins", vec("MachineLogin"), { default: true, doc: "This machine's own logins (none from a station older than them)." }],
     ["sharing", "bool", { default: true, doc: "It can share profiles and skills with the workspace's other stations (docs/station-share.md)." }],
+    ["consoleSignIn", "bool", { default: true, doc: "An OpenCode Go profile can be signed in to the OpenCode Console rather than given a key (false from a station\nolder than it: not offered)." }],
     ["apiProviders", vec("ApiProvider"), { default: true, doc: "The providers a key can be added for (none from a station older than them: they are then not offered), as the\nstation lists them." }],
     ["updates", vec("SoftwareVersion"), { default: true, doc: "The station's and its runtimes' versions, and whether newer ones are out (none from a station older than them)." }],
     ["processesText", "String", { doc: "Its agents' processes, in a line." }],

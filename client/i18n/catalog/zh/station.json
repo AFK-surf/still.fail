@@ -409,5 +409,10 @@
   "station.machineLogin.exited": "登录命令退出了（{code}）",
   "station.machineLogin.badCommand": "要一条登录命令，用工具自己的，比如 gh auth login",
   "station.machineLogin.unknown": "没有这个登录（可能已经结束很久了）",
-  "station.machineLogin.ended": "这个登录已经结束了"
+  "station.machineLogin.ended": "这个登录已经结束了",
+  "station.login.consoleFailed": "无法登录 OpenCode：{error}",
+  "station.login.consoleExpired": "授权码已过期，请重新登录",
+  "station.login.consoleDenied": "授权已被拒绝",
+  "station.login.consoleUnreadable": "已登录，但无法读取 OpenCode 的登录信息",
+  "station.profile.consoleSignedOut": "OpenCode 登录已失效"
 }

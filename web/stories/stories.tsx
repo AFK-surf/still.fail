@@ -104,6 +104,24 @@ const addModel: DemoExtension = {
     return { ...o, profiles: o.profiles.map((p) => ({ ...p, canAddModel: true })) };
   },
 };
+/** The demo's profile as an OpenCode Go one on an OpenCode account (accounts/console.ts): signed in, or being signed in
+ *  again (`signingIn`: the device code is up). */
+const openCode = (signingIn: boolean): DemoExtension => ({
+  then: (t, value) => {
+    if (t.topic !== "overview" || !value || typeof value !== "object") return undefined;
+    const o = value as { profiles: Record<string, unknown>[] };
+    const at = Date.UTC(2026, 9, 18, 3, 0);
+    const login = { profile: "machine-claude", runtime: "claude", provider: "opencode", state: "needs_approval", url: "https://opencode.ai/console/device?user_code=WXYZ-1234&client_id=still.fail", userCode: "WXYZ-1234", startedAt: at, expiresAt: at + 600_000 };
+    return {
+      ...o,
+      profiles: o.profiles.map((p) => ({
+        ...p, machine: false, runtimes: ["claude", "codex", "dsh"], loginCommand: "", providerName: undefined,
+        access: { kind: "opencode-go", key: "st_4a…3f9c", login: true },
+        ...(signingIn ? { login, check: { ...(p.check as object), state: "login", detail: "OpenCode 登录已失效", models: null } } : { login: null }),
+      })),
+    };
+  },
+});
 /** A new chat on a station this workspace joined that has no profile open to it (the core's `blocked: shared`). */
 const notShared: DemoExtension = {
   then: (t, value) => (t.topic === "newChat" && value && typeof value === "object"
@@ -428,6 +446,8 @@ export const stories: Story[] = [
   { id: "app-profile-workspaces", group: "应用", title: "Profile · 也给加入的 workspace 用", app: true, demo: profileFor(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-workspaces-on", group: "应用", title: "Profile · 已开放给加入的 workspace", app: true, demo: profileFor(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-add-model", group: "应用", title: "Profile · 按名称添加模型", app: true, demo: addModel, steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-opencode", group: "应用", title: "Profile · OpenCode Go 账号登录", app: true, demo: openCode(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-opencode-signing-in", group: "应用", title: "Profile · OpenCode Go 重新登录（设备码）", app: true, demo: openCode(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-new-chat-not-shared", group: "应用", title: "新建对话 · 加入的 station 没有开放的 Profile", app: true, demo: notShared, steps: [{ text: "新建对话" }] },
   { id: "app-connects", group: "应用", title: "连接", app: true, steps: [{ click: '[aria-label="连接"]' }] },
   { id: "app-usage", group: "应用", title: "用量", app: true, steps: [{ click: '[aria-label="用量"]' }] },
@@ -686,6 +706,7 @@ export const stories: Story[] = [
   { id: "phone-memory", group: "手机", title: "记忆", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }] },
   { id: "phone-memory-skill", group: "手机", title: "记忆 · 项目", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }, { text: "acme-web" }] },
   { id: "phone-profile-workspaces", group: "手机", title: "Profile · 也给加入的 workspace 用", app: true, phone: true, demo: profileFor(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "phone-profile-opencode-signing-in", group: "手机", title: "Profile · OpenCode Go 重新登录（设备码）", app: true, phone: true, demo: openCode(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-new-chat-not-shared", group: "手机", title: "新建对话 · 加入的 station 没有开放的 Profile", app: true, phone: true, demo: notShared, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="新建对话"]' }] },
   { id: "phone-station-add-existing", group: "手机", title: "添加 station · 已有的", app: true, phone: true, demo: joining("list"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }] },
   { id: "phone-station-add-existing-done", group: "手机", title: "添加 station · 已加入", app: true, phone: true, demo: joining("list"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }, { text: "添加到此 workspace" }] },

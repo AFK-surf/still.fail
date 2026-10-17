@@ -70,9 +70,11 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
   const overview = useOverview(address);
   const [login, setLogin] = useState<string | null>(null);
   const [code, setCode] = useState("");
-  const runtime = d?.tile?.runtime === "codex" ? "codex" : "claude";
+  // What the plan signs in to (the core's): a runtime's subscription, or OpenCode's account for OpenCode Go.
+  const runtime = d?.signIn?.runtime ?? (d?.tile?.runtime === "codex" ? "codex" : "claude");
+  const signInTo = d?.signIn?.provider ?? (runtime === "claude" ? "Claude" : "ChatGPT");
   const pending = login ? overview.value?.logins.find((l) => l.id === login) : undefined;
-  const start = useAction(() => api.newLogin(runtime), ({ id }) => setLogin(id));
+  const start = useAction(() => api.newLogin(runtime, d?.signIn?.access), ({ id }) => setLogin(id));
   const send = useAction(() => api.newLoginCode(login!, code), () => setCode(""));
   const started = useRef(false);
   const planning = d?.step === "connect" && d.method === "plan";
@@ -131,7 +133,7 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
       ) : d.method === "plan" ? (
         pending?.error || pending?.job?.state === "failed" || pending?.job?.state === "cancelled"
           ? <div className={css.form}><p className={controlsCss.fieldError}>{pending?.error ?? pending?.job?.error ?? t("web-pages.profiles.signInUnfinished")}</p><Button onClick={() => { if (login) void api.dropLogin(login).catch(() => undefined); setLogin(null); void start.run(); }}>{t("web-pages.profiles.restart")}</Button></div>
-          : <div className={css.form}><LoginSteps job={pending?.job ?? null} provider={runtime === "claude" ? "Claude" : "ChatGPT"} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} /></div>
+          : <div className={css.form}><LoginSteps job={pending?.job ?? null} provider={signInTo} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} /></div>
       ) : (
         <ConnectForm key={d.tile?.id} d={d} edit={edit} submitting={submitting} onSubmit={() => void submit().then(added, () => undefined)} />
       )}

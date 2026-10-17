@@ -217,6 +217,7 @@
   "android-settings.login.cancel": "Cancel sign-in",
   "android-settings.login.cancelWhat": "cancel sign-in",
   "android-settings.login.codexNote": "On the OpenAI page that opens, sign in with the ChatGPT account {app} should use, then paste the code. This screen continues automatically when done. If the page says device code sign-in is off, turn it on in ChatGPT's security settings first.",
+  "android-settings.login.opencodeNote": "On the OpenCode page that opens, sign in, check that the code matches, then choose the workspace with Go and authorize. This page continues by itself once you are done.",
   "android-settings.login.copyOpen": "Copy code and open sign-in page",
   "android-settings.login.done": "Signed in",
   "android-settings.login.failed": "Last sign-in failed: {error}",

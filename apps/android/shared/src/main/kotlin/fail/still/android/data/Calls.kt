@@ -166,8 +166,9 @@ class StationApi(private val core: StillFailCore, val station: String) {
     suspend fun startLogin(profile: String) { ops.profileLogin(id = profile) }
     suspend fun cancelLogin(profile: String) { ops.profileCancelLogin(id = profile) }
     suspend fun loginCode(profile: String, code: String) { ops.profileLoginCode(id = profile) { this.code = code } }
-    /** A subscription signed in before its profile exists: the station makes the profile when it succeeds. Answers the login's id. */
-    suspend fun newLogin(runtime: String): String = ops.loginNew() { this.runtime = runtime }.jsonObject["id"]!!.jsonPrimitive.content
+    /** A subscription (or, `access` opencode-go, an OpenCode Console account) signed in before its profile exists: the
+     *  station makes the profile when it succeeds. Answers the login's id. */
+    suspend fun newLogin(runtime: String, access: String? = null): String = ops.loginNew() { this.runtime = runtime; if (access != null) this.access = access }.jsonObject["id"]!!.jsonPrimitive.content
     suspend fun newLoginCode(id: String, code: String) { ops.loginCode(id = id) { this.code = code } }
     suspend fun dropLogin(id: String) { ops.loginDrop(id = id) }
     /** A keyed (or variables) profile, made only once its key is checked; answers its id. */

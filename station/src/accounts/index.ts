@@ -11,6 +11,8 @@
 // - every profile checked 3 s after start (what changed while the station was off: keys revoked, logins expired).
 // - the machine's logins: read again when the overview is read with a reading over 2 minutes old (machine.ts).
 // - a sign-in times out after 15 minutes; a finished sign-in for a new profile is kept 15 minutes for its page.
+// - an OpenCode Go profile signed in to the OpenCode Console: its token renewed some days before it runs out, looked at
+//   shortly after start and every few hours (console.ts).
 import { runtimeKind, runtimeLabel } from "../agents/runtime.ts";
 import type { Clock } from "effect";
 import { randomBytes } from "node:crypto";
@@ -32,8 +34,9 @@ import { joinPath } from "../ops/paths.ts";
 import { modelName } from "../ops/model-name.ts";
 import { titleOf } from "../read/views.ts";
 import { currentPolicy, LEGACY_OPTIONS, savePolicy } from "../sessions/archive-policy.ts";
-import { Fibers } from "../ops/fibers.ts";
+import { Fibers, wall } from "../ops/fibers.ts";
 import { checkAutomaticDecisions } from "./check.ts";
+import { readConsole, RenewRefused, renewToken, writeConsole } from "./console.ts";
 import { type LoginCommands, type LoginJob, LoginManager } from "./login.ts";
 import { codexClaims, type MachineLogin, MachineLogins } from "./machine.ts";
 import { adopted, OUTDATED, uncheckOutdated } from "./models.ts";
@@ -52,6 +55,10 @@ const QUOTA_EVERY_MS = 5 * 60_000;
 /// last less than this, so it is not swapped soon after.
 const HANDED_MARGIN_MS = 3600_000;
 const CHECK_ON_START_MS = 3_000;
+/// An OpenCode Console token (30 days) is renewed when it has less than this left, looked at this often: renewing ends
+/// the token the runtimes were given, so it is done seldom, long before it would run out.
+const CONSOLE_RENEW_BEFORE_MS = 7 * 86_400_000;
+const CONSOLE_RENEW_EVERY_MS = 6 * 3600_000;
 const PENDING_KEPT_MS = 15 * 60_000;
 /// The checks the policy page counts: of the last days, and the chats it names for each option at most.
 const POLICY_DAYS = 7;
@@ -67,7 +74,7 @@ export class Refusal extends Error {
 }
 
 /// What a check is asked: the account and where it signs in (its home, or a trial one for a key being tried).
-export type CheckRequest = { runtime: Runtime; kind: AccessKind; key: string; via: Via; home: string; machine: boolean };
+export type CheckRequest = { runtime: Runtime; kind: AccessKind; key: string; via: Via; home: string; machine: boolean; login?: boolean };
 
 /// The profile's codex app-server, for what only it says (the agents' CodexDriver: rateLimits, resetQuota, models).
 export type CodexAccess = {
@@ -120,7 +127,8 @@ export type AccountsDeps = {
 };
 
 /// A sign-in with no profile yet: its runtime, its home while signing in, who started it, what it made.
-type Pending = { runtime: Runtime; home: string; by: Viewer; created: string | null; error: string | null };
+/// `access`: an OpenCode Go profile signed in to the OpenCode Console (absent: the runtime's subscription).
+type Pending = { runtime: Runtime; access?: "opencode-go"; home: string; by: Viewer; created: string | null; error: string | null };
 
 const isObject = (v: unknown): v is Record<string, any> => v !== null && typeof v === "object" && !Array.isArray(v);
 const manages = managesStation;
@@ -139,6 +147,8 @@ export class Accounts {
   private checks = new Map<string, ProfileCheck>();
   private quotas = new Map<string, ProfileQuota>();
   private quotaBusy = new Map<string, Promise<void>>();
+  /// OpenCode Console tokens being renewed, by profile (a refresh token is spent once).
+  private renewing = new Map<string, Promise<void>>();
   private pending = new Map<string, Pending>();
   private listeners = new Set<() => void>();
   private background: Fibers;
@@ -157,7 +167,7 @@ export class Accounts {
     this.background = new Fibers("accounts", deps.clock);
     this.env = deps.env ?? (process.env as Env);
     this.urls = deps.urls ?? URLS;
-    this.logins = new LoginManager(deps.data, deps.loginCommands, undefined, deps.clock);
+    this.logins = new LoginManager(deps.data, deps.loginCommands, undefined, deps.clock, this.urls.console);
     this.machine =
       deps.machine !== undefined ? deps.machine : new MachineLogins(this.env, (runtime, env) => machineUsage(runtime, env, this.urls), undefined, deps.clock);
     this.checkFn =
@@ -195,8 +205,11 @@ export class Accounts {
       this.logins.changes((id) => {
         const pending = this.pending.has(id);
         if (pending) this.pendingChanged(id);
+        const job = this.logins.get(id);
+        // An OpenCode sign-in of a profile there is: its token is its key from now on.
+        if (!pending && job?.state === "done" && job.provider === "opencode") this.signedInConsole(id);
         this.changed();
-        if (!pending && this.logins.get(id)?.state === "done") this.afterSignIn(id);
+        if (!pending && job?.state === "done") this.afterSignIn(id);
       }),
     );
     if (this.machine) {
@@ -206,8 +219,10 @@ export class Accounts {
     if (this.deps.checkOnStart !== false) {
       this.background.after(CHECK_ON_START_MS, () => {
         for (const p of this.profiles()) this.background.spawn(() => this.check(p.id));
+        this.renewConsoles();
       });
     }
+    this.background.every(CONSOLE_RENEW_EVERY_MS, () => this.renewConsoles());
     this.background.every(QUOTA_EVERY_MS, () => {
       if (this.deps.following?.() === true) this.refreshQuotas(false);
     });
@@ -368,6 +383,8 @@ export class Accounts {
         if (api && provider !== undefined) next.access.provider = provider;
         if (api && endpoint !== undefined) next.access.endpoint = endpoint;
         if (api && protocol !== undefined) next.access.protocol = protocol;
+        // Signed in to the OpenCode Console: still, unless a key was given in place of its token.
+        if (kind === "opencode-go" && keep?.login === true && givenKey === undefined) next.access.login = true;
       }
       next.home = home;
       next.env = env;
@@ -510,19 +527,28 @@ export class Accounts {
   async startLogin(id: string, viewer: Viewer, lang: Lang = stationLang()): Promise<LoginJob> {
     const profile = this.profile(id);
     if (!profile) throw new Refusal(404, `unknown profile ${id}`);
-    if (accessKind(profile) !== "subscription") throw new Refusal(400, tr(lang, "station.admin.loginSubscriptionOnly"));
+    const kind = accessKind(profile);
+    if (kind !== "subscription" && kind !== "opencode-go") throw new Refusal(400, tr(lang, "station.admin.loginSubscriptionOnly"));
     if (profile.machine === true) throw new Refusal(400, tr(lang, "station.admin.loginOnMachine"));
     if (borrowed(profile)) throw new Refusal(409, tr(lang, "station.share.borrowedEdit"));
     log.info("accounts", "login started from the admin page", { profile: id, by: viewer.email });
+    // An OpenCode Go one signs in to the OpenCode Console (its key replaced by the token once it is done).
+    if (kind === "opencode-go") return this.logins.startConsole({ id, home: profile.home }, lang);
     return this.logins.start({ id, runtime: profile.runtime, home: profile.home }, lang);
   }
 
   /// POST /logins: signing a subscription in before there is a profile; the profile is made once it succeeds.
+  /// `access: "opencode-go"`: an OpenCode Go profile signed in to the OpenCode Console instead (no runtime given).
   async newLogin(input: Record<string, unknown>, viewer: Viewer, lang: Lang = stationLang()): Promise<{ id: string; job: LoginJob }> {
-    const runtime = runtimeOf(input.runtime);
-    if (!runtime) throw new Refusal(400, `unknown runtime ${text(input.runtime)}`);
     const id = `login-${randomBytes(4).toString("hex")}`;
     const home = join(this.deps.data, "homes", id);
+    if (input.access === "opencode-go") {
+      this.pending.set(id, { runtime: "claude", access: "opencode-go", home, by: viewer, created: null, error: null });
+      log.info("accounts", "OpenCode sign-in for a new profile started", { login: id, by: viewer.email });
+      return { id, job: await this.logins.startConsole({ id, home }, lang) };
+    }
+    const runtime = runtimeOf(input.runtime);
+    if (!runtime) throw new Refusal(400, `unknown runtime ${text(input.runtime)}`);
     this.pending.set(id, { runtime, home, by: viewer, created: null, error: null });
     log.info("accounts", "sign-in for a new profile started", { login: id, runtime, by: viewer.email });
     const job = await this.logins.start({ id, runtime, home }, lang);
@@ -555,8 +581,10 @@ export class Accounts {
     }
     if (state !== "done" || p.created !== null || p.error !== null) return;
     const lang = stationLang();
-    const email = accountEmail(p.runtime, p.home);
-    const base = slug(email ?? `${p.runtime}-subscription`, 40) || p.runtime;
+    const signedIn = p.access === "opencode-go" ? readConsole(p.home) : null;
+    if (p.access === "opencode-go" && !signedIn) return this.pendingFailed(id, tr(lang, "station.login.consoleUnreadable"));
+    const email = signedIn ? signedIn.email : accountEmail(p.runtime, p.home);
+    const base = signedIn ? "opencode-go" : slug(email ?? `${p.runtime}-subscription`, 40) || p.runtime;
     const profileId = unique(base, this.takenIds());
     const target = join(this.deps.data, "homes", profileId);
     try {
@@ -565,10 +593,13 @@ export class Accounts {
       log.warn("accounts", "could not move a new profile's home", { login: id, error: (e as Error).message });
       return this.pendingFailed(id, tr(lang, "station.login.homeFailed", { error: (e as Error).message }));
     }
-    const name = email ?? tr(lang, p.runtime === "claude" ? "station.profile.claudeSubscription" : "station.profile.chatgptSubscription");
+    const name = signedIn ? (email ?? "OpenCode Go") : (email ?? tr(lang, p.runtime === "claude" ? "station.profile.claudeSubscription" : "station.profile.chatgptSubscription"));
     try {
       this.save(p.by, `profile ${profileId} from a sign-in`, (raw) => {
-        const made = { id: profileId, name, runtime: p.runtime, access: { kind: "subscription" }, home: `homes/${profileId}`, env: {} };
+        // An OpenCode Go one runs every runtime its key does (it has none of its own).
+        const made = signedIn
+          ? { id: profileId, name, access: { kind: "opencode-go", key: signedIn.access, login: true }, home: `homes/${profileId}`, env: {} }
+          : { id: profileId, name, runtime: p.runtime, access: { kind: "subscription" }, home: `homes/${profileId}`, env: {} };
         raw.profiles = [...(Array.isArray(raw.profiles) ? raw.profiles : []), made];
       });
     } catch (e) {
@@ -588,6 +619,64 @@ export class Accounts {
     const p = this.pending.get(id);
     if (p) p.error = error;
     this.changed();
+  }
+
+  /// An OpenCode Go profile just signed in to the OpenCode Console: the token left in its home is its key now.
+  private signedInConsole(id: string) {
+    const profile = this.profile(id);
+    const login = profile ? readConsole(profile.home) : null;
+    if (!login) return log.warn("accounts", "an OpenCode sign-in left no token", { profile: id });
+    try {
+      this.setConsoleKey(id, login.access, "signed in to OpenCode");
+    } catch (e) {
+      log.warn("accounts", "the OpenCode sign-in was not saved", { profile: id, error: (e as Error).message });
+    }
+  }
+
+  /// The key of a profile signed in to the OpenCode Console, set to its current token (the runtimes are given it).
+  private setConsoleKey(id: string, key: string, why: string) {
+    this.deps.config.update((raw) => {
+      const p = (Array.isArray(raw.profiles) ? raw.profiles : []).find((x: Json) => x?.id === id);
+      if (!p) throw new Error(`unknown profile ${id}`);
+      p.access = { kind: "opencode-go", key, login: true };
+    });
+    log.info("accounts", "OpenCode token saved as the profile's key", { profile: id, why });
+  }
+
+  /// Each profile signed in to the OpenCode Console whose token runs out within CONSOLE_RENEW_BEFORE_MS, renewed (only
+  /// where it is signed in: a copy another station shares gets the new key from it).
+  private renewConsoles() {
+    for (const p of this.profiles()) {
+      if (accessKind(p) !== "opencode-go" || (p.access as Json)?.login !== true || borrowed(p)) continue;
+      const login = readConsole(p.home);
+      if (!login || login.expiresAt - wall.now() > CONSOLE_RENEW_BEFORE_MS) continue;
+      this.background.spawn(() => this.renewConsole(p.id));
+    }
+  }
+
+  /// Renews a profile's OpenCode Console token now (once at a time: its refresh token is spent).
+  renewConsole(id: string): Promise<void> {
+    const busy = this.renewing.get(id);
+    if (busy) return busy;
+    const run = (async () => {
+      const profile = this.profile(id);
+      const login = profile ? readConsole(profile.home) : null;
+      if (!profile || !login) return;
+      let token;
+      try {
+        token = await renewToken(this.urls.console, login.refresh);
+      } catch (e) {
+        log.warn("accounts", "could not renew an OpenCode token", { profile: id, error: (e as Error).message });
+        // Refused: signed out there; its check says it needs signing in again.
+        if (e instanceof RenewRefused) await this.check(id).catch(() => undefined);
+        return;
+      }
+      // The refresh token was spent: the new one is written before anything else can fail.
+      writeConsole(profile.home, { ...login, access: token.access, refresh: token.refresh, expiresAt: wall.now() + token.expiresInMs, org: token.org ?? login.org });
+      this.setConsoleKey(id, token.access, "renewed");
+    })().finally(() => this.renewing.delete(id));
+    this.renewing.set(id, run);
+    return run;
   }
 
   /// A profile just signed in: checked (which lists its models) and its allowance read, so its page shows them at once.
@@ -669,7 +758,7 @@ export class Accounts {
     const kind = accessKind(profile);
     if (borrowed(profile) && kind === "subscription" && this.deps.shared) return this.checkBorrowed(profile, lang);
     const check = await this.checkFn(
-      { runtime: profile.runtime, kind, key: String((profile.access as Json)?.key ?? "").trim(), via: profileVia(profile), home: profile.home, machine: profile.machine === true },
+      { runtime: profile.runtime, kind, key: String((profile.access as Json)?.key ?? "").trim(), via: profileVia(profile), home: profile.home, machine: profile.machine === true, login: (profile.access as Json)?.login === true },
       lang,
     );
     // Codex capabilities kept for each account, including providers whose model ids came from their API.
@@ -983,17 +1072,19 @@ export class Accounts {
       }
       return {
         id: p.id, name: p.name, runtime: p.runtime, runtimes: p.runtimes,
-        email: kind === "subscription" ? this.email(p) : null,
+        email: kind === "subscription" ? this.email(p) : a.login === true ? (readConsole(p.home)?.email ?? null) : null,
         // A provider's key says `env` where an older core reads it; the provider next to it tells a newer core it is not.
         access: {
           kind: kind === "api-provider" ? "env" : kind, key: mask(String(a.key ?? "").trim()),
           provider: via.provider ?? null, endpoint: via.endpoint ?? null, protocol: via.protocol ?? null,
+          // Its key is the token of a sign-in to the OpenCode Console (signed in again, not replaced).
+          login: kind === "opencode-go" && a.login === true,
         },
         home: p.home, homeExists: existsSync(p.home), model: p.model ?? null, models: p.models,
         env,
         // Connects whose sessions can run on it: of its runtime, and its models have theirs.
         usedBy: config.connects.filter((c) => p.runtimes.includes(c.bind.runtime) && serves(p, c.bind.model)).map((c) => c.id),
-        loginCommand: loginCommand(p.runtime, p.home),
+        loginCommand: kind === "subscription" ? loginCommand(p.runtime, p.home) : "",
         machine: p.machine === true,
         backgroundOnMessage: p.backgroundOnMessage,
         fast: p.runtime === "codex" && kind === "subscription" ? p.fast === true : null,

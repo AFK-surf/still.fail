@@ -449,8 +449,9 @@ export function stationApi(t: StationCall) {
     startLogin: (profile: string) => ops.profileLogin<{ job: LoginJob }>({ id: profile }),
     cancelLogin: (profile: string) => ops.profileCancelLogin<{ job: LoginJob | null }>({ id: profile }),
     loginCode: (profile: string, code: string) => ops.profileLoginCode<{ job: LoginJob }>({ id: profile, code }),
-    /** A subscription signed in before its profile exists; the station makes the profile when it succeeds. */
-    newLogin: (runtime: RuntimeKind) => ops.loginNew<{ id: string; job: LoginJob }>({ runtime }),
+    /** A subscription (or, `access` opencode-go, an OpenCode Console account) signed in before its profile exists; the
+     *  station makes the profile when it succeeds. */
+    newLogin: (runtime: RuntimeKind, access?: string | null) => ops.loginNew<{ id: string; job: LoginJob }>({ runtime, ...(access ? { access } : {}) }),
     newLoginCode: (id: string, code: string) => ops.loginCode<{ job: LoginJob }>({ id, code }),
     dropLogin: (id: string) => ops.loginDrop<{ ok: true }>({ id }),
     /** A profile on the machine's own login of `runtime` (one kept in a file). */

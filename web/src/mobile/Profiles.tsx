@@ -383,7 +383,7 @@ function ProfilePage({ p }: { p: Profile }) {
   const checkFailed = useDoingFailed("profile.check", { station: station.address, id: p.id });
   const quotaFailed = useDoingFailed("profile.quota", { station: station.address, id: p.id });
   const signingIn = !!p.login && ["starting", "needs_code", "needs_approval", "verifying"].includes(p.login.state);
-  const keyed = KEYED.has(p.access.kind);
+  const keyed = KEYED.has(p.access.kind) && !p.access.login;
   // A copy of another station's: shown, used, changed only there.
   const copy = p.share?.role === "user";
   return (
@@ -402,7 +402,8 @@ function ProfilePage({ p }: { p: Profile }) {
           </span>
         </div>
         {p.trouble && <ProfileRecovery p={p} />}
-        {!copy && p.access.kind === "subscription" && !p.machine && <SignIn p={p} needed={p.check?.state === "login" || signingIn} />}
+        {/* A subscription, or an OpenCode Go profile on an OpenCode account: signed in (again) here. */}
+        {!copy && (p.access.kind === "subscription" || (p.access.kind === "opencode-go" && !!p.access.login)) && !p.machine && <SignIn p={p} needed={p.check?.state === "login" || signingIn} />}
         {p.trouble?.action !== "quota" && <Quota p={p} />}
         {overview?.sharing && <ShareRows p={p} />}
         {!copy && <WorkspaceRows p={p} />}
@@ -747,7 +748,7 @@ function SignIn({ p, needed }: { p: Profile; needed: boolean }) {
   const api = useApi();
   const job = p.login;
   const active = !!job && ["starting", "needs_code", "needs_approval", "verifying"].includes(job.state);
-  const provider = p.runtime === "claude" ? "Claude" : "ChatGPT";
+  const provider = p.access.kind === "opencode-go" ? "OpenCode" : p.runtime === "claude" ? "Claude" : "ChatGPT";
   const busy = useDoing("profile.login", { station: useStation().address, id: p.id });
   const cancelling = useDoing("profile.cancelLogin", { station: useStation().address, id: p.id });
   const previous = useRef(job?.state);
@@ -770,7 +771,8 @@ function SignIn({ p, needed }: { p: Profile; needed: boolean }) {
             <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{job?.state === "failed" ? t("web-mobile.profiles.loginFailed", { error: job.error ?? "" }) : job?.state === "done" ? t("web-mobile.profiles.loginDone") : t("web-mobile.profiles.loginWhere", { name: NAME })}</p>
             <Button label={job?.state === "done" || !needed ? t("web-mobile.profiles.relogin") : t("web-mobile.workspaces.signIn")} primary={needed} busy={busy}
               onClick={() => { api.startLogin(p.id).catch((e: Error) => app.toast(t("web-mobile.profiles.startLoginFailed", { error: e.message }))); }} />
-            <details className={css.mDetails}><summary>{t("web-mobile.profiles.manualLogin")}</summary><CommandBox text={p.loginCommand} /></details>
+            {/* OpenCode's has no command to run by hand. */}
+            {p.loginCommand && <details className={css.mDetails}><summary>{t("web-mobile.profiles.manualLogin")}</summary><CommandBox text={p.loginCommand} /></details>}
           </>
         )}
       </div>
@@ -795,7 +797,7 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
         <span className={css.mDeviceCode}>{job.userCode}</span>
         <Button label={copied ? t("web-mobile.profiles.reopen") : t("web-mobile.profiles.copyOpen")} primary
           onClick={() => { void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => app.toast(t("web-mobile.profiles.copyCodeFailed"))).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
-        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.profiles.codexNote", { name: NAME })}</p>
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{provider === "OpenCode" ? t("web-mobile.profiles.opencodeNote") : t("web-mobile.profiles.codexNote", { name: NAME })}</p>
       </>
     );
   }
@@ -882,7 +884,10 @@ export function NewProfileScreen() {
   const [login, setLogin] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pending = login ? overview?.logins.find((l) => l.id === login) : undefined;
-  const runtime = d?.tile?.runtime === "codex" ? "codex" : "claude";
+  // What the plan signs in to (the core's): a runtime's subscription, or OpenCode's account for OpenCode Go.
+  const runtime = d?.signIn?.runtime ?? (d?.tile?.runtime === "codex" ? "codex" : "claude");
+  const provider = d?.signIn?.provider ?? (runtime === "claude" ? "Claude" : "ChatGPT");
+  const begin = () => api.newLogin(runtime, d?.signIn?.access).then(({ id }) => setLogin(id), (e: Error) => setError(e.message));
   const go = (id: string, message: string) => { app.toast(message); app.replace(`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(id)}`); };
   // The sign-in made its profile: on to it.
   useEffect(() => { if (pending?.created) go(pending.created, t("web-mobile.profiles.signedInAdded")); }, [pending?.created]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -891,7 +896,7 @@ export function NewProfileScreen() {
   const started = useRef(false);
   const dropped = (e: Error) => app.toast(t("web-mobile.profiles.dropFailed", { error: e.message }));
   useEffect(() => {
-    if (planning && !started.current) { started.current = true; setError(null); api.newLogin(runtime).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)); }
+    if (planning && !started.current) { started.current = true; setError(null); void begin(); }
     if (!planning && started.current) { started.current = false; if (login && !pending?.created) api.dropLogin(login).catch(dropped); setLogin(null); }
   }, [planning]); // eslint-disable-line react-hooks/exhaustive-deps
   // Back goes a step back, from the picker out.
@@ -922,15 +927,15 @@ export function NewProfileScreen() {
           </>
         ) : d.step === "method" ? (
           <ListCard>
-            {d.choices.map((c) => <PickRow key={c.id} label={c.title} sub={c.hint} onClick={() => edit({ method: c.id })} leading={<ProviderMark runtime={runtime} kind={c.id === "plan" ? "subscription" : d.tile?.kind ?? "api-provider"} mark={d.tile?.mark} size={18} />} />)}
+            {d.choices.map((c) => <PickRow key={c.id} label={c.title} sub={c.hint} onClick={() => edit({ method: c.id })} leading={<ProviderMark runtime={runtime} kind={c.id === "plan" && d.tile?.kind !== "opencode-go" ? "subscription" : d.tile?.kind ?? "api-provider"} mark={d.tile?.mark} size={18} />} />)}
           </ListCard>
         ) : d.method === "plan" ? (
           error || pending?.error || job?.state === "failed" || job?.state === "cancelled" ? (
             <>
               <p className={partsCss.mError}>{error ?? pending?.error ?? job?.error ?? t("web-mobile.profiles.loginIncomplete")}</p>
-              <Button label={t("web-mobile.profiles.restart")} primary={false} onClick={() => { if (login) api.dropLogin(login).catch(dropped); setLogin(null); setError(null); api.newLogin(runtime).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)); }} />
+              <Button label={t("web-mobile.profiles.restart")} primary={false} onClick={() => { if (login) api.dropLogin(login).catch(dropped); setLogin(null); setError(null); void begin(); }} />
             </>
-          ) : <LoginSteps job={job} provider={runtime === "claude" ? "Claude" : "ChatGPT"} send={(code) => api.newLoginCode(login!, code)} />
+          ) : <LoginSteps job={job} provider={provider} send={(code) => api.newLoginCode(login!, code)} />
         ) : (
           <ConnectForm key={d.tile?.id} d={d} edit={edit} busy={submitting}
             onSubmit={() => { submit().then(({ id }) => go(id, t("web-mobile.profiles.verifiedAdded")), () => undefined); }} />

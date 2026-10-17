@@ -23,7 +23,10 @@ data class Access (
 	/// Its address, where the provider has none of its own (Azure, Cloudflare, custom).
 	val endpoint: String? = null,
 	/// At such an address, the protocol it speaks there: chat_completions, responses or anthropic.
-	val protocol: String? = null
+	val protocol: String? = null,
+	/// An OpenCode Go profile whose key is the token of a sign-in to the OpenCode Console: signed in again, not given a
+	/// key (false from a station older than it).
+	val login: Boolean? = null
 )
 
 /// What an agent at work does now (activity.ts): `key` names the thing (a step, or where the turn stands), `text` says
@@ -931,6 +934,8 @@ data class ProfileCheck (
 data class LoginJob (
 	val profile: String,
 	val runtime: RuntimeKind,
+	/// opencode: a sign-in to the OpenCode Console (an OpenCode Go profile); none: the runtime's subscription.
+	val provider: String? = null,
 	/// starting | needs_code | needs_approval | verifying | done | failed | cancelled
 	val state: String,
 	val url: String? = null,
@@ -2351,6 +2356,17 @@ data class FlowOption (
 	val label: String
 )
 
+/// A sign-in the add-profile pages start.
+@Serializable
+data class FlowSignIn (
+	/// The runtime whose subscription is signed in to (`login.new` runtime).
+	val runtime: RuntimeKind,
+	/// opencode-go: the OpenCode Console instead (`login.new` access).
+	val access: String? = null,
+	/// Who is signed in to, as the steps name it: Claude, ChatGPT, OpenCode.
+	val provider: String
+)
+
 @Serializable
 data class FootprintConfirm (
 	val title: String,
@@ -3418,6 +3434,9 @@ data class Overview (
 	val machineLogins: List<MachineLogin>? = null,
 	/// It can share profiles and skills with the workspace's other stations (docs/station-share.md).
 	val sharing: Boolean? = null,
+	/// An OpenCode Go profile can be signed in to the OpenCode Console rather than given a key (false from a station
+	/// older than it: not offered).
+	val consoleSignIn: Boolean? = null,
 	/// The providers a key can be added for (none from a station older than them: they are then not offered), as the
 	/// station lists them.
 	val apiProviders: List<ApiProvider>? = null,
@@ -3753,7 +3772,9 @@ data class ProfileFlowView (
 	val pending: Boolean,
 	val submitLabel: String,
 	/// What the profile will be usable for, in words (the line under the page).
-	val usesLine: String
+	val usesLine: String,
+	/// At a plan's connect step: the sign-in to start.
+	val signIn: FlowSignIn? = null
 )
 
 /// One station's copy of an account in the workspace's list.

@@ -112,7 +112,7 @@ export const PARAMS: Record<string, string> = {
   "profile.login": "id:string",
   "profile.cancelLogin": "id:string",
   "profile.loginCode": "id:string code?:string",
-  "login.new": "runtime?:string",
+  "login.new": "runtime?:string access?:string",
   "login.code": "id:string code?:string",
   "login.drop": "id:string",
   "job.get": "id:string",
@@ -391,7 +391,7 @@ function stationOp(name: string, params: unknown): Request | null {
     case "profile.loginCode":
       return op("POST", () => `/profiles/${p.at("id")}/login-code`, p.pick(["code"]), OVERVIEW);
     case "login.new":
-      return op("POST", () => "/logins", p.pick(["runtime"]), NONE);
+      return op("POST", () => "/logins", p.pick(["runtime", "access"]), NONE);
     case "login.code":
       return op("POST", () => `/logins/${p.at("id")}/code`, p.pick(["code"]), NONE);
     case "login.drop":

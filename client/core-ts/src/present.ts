@@ -690,7 +690,9 @@ export function profileTrouble(p: J): J {
     const machine = get(p, "machine") === true;
     if (machine && state === "login") return issue(title, why, t("core-views.present.trouble.command_next"), "command", t("core-views.present.trouble.command_label"));
     const kind = str(get(get(p, "access"), "kind"));
-    if (kind === "subscription" && !machine && state === "login") return issue(title, why, t("core-views.present.trouble.login_next"), "login", t("core-views.present.trouble.login_label"));
+    // A subscription, or an OpenCode Go profile signed in to the OpenCode Console: signed in again.
+    const signsIn = kind === "subscription" || (kind === "opencode-go" && get(get(p, "access"), "login") === true);
+    if (signsIn && !machine && state === "login") return issue(title, why, t("core-views.present.trouble.login_next"), "login", t("core-views.present.trouble.login_label"));
     if (kind === "anthropic-api" || kind === "opencode-go" || kind === "api-provider") return issue(title, why, t("core-views.present.trouble.key_next"), "key", t("core-views.present.trouble.key_label"));
     if (kind === "env") return issue(title, why, t("core-views.present.trouble.env_next"), "env", t("core-views.present.trouble.env_label"));
     return issue(title, why, t("core-views.present.trouble.check_next"), "check", t("core-views.present.trouble.check_label"));

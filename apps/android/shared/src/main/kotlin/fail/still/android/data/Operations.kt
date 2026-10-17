@@ -397,6 +397,7 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
     }
     class LoginNewFields : OperationFields() {
         var runtime: String? by field<String>("runtime") { JsonPrimitive(it) }
+        var access: String? by field<String>("access") { JsonPrimitive(it) }
     }
     suspend fun loginNew(fill: LoginNewFields.() -> Unit = {}): JsonElement {
         val values = LoginNewFields().apply(fill).fields

@@ -415,5 +415,10 @@
   "station.machineLogin.exited": "The login command exited ({code})",
   "station.machineLogin.badCommand": "Give a login command, the tool's own, e.g. gh auth login",
   "station.machineLogin.unknown": "No such login (it may have ended a while ago)",
-  "station.machineLogin.ended": "This login has ended"
+  "station.machineLogin.ended": "This login has ended",
+  "station.login.consoleFailed": "Couldn't sign in to OpenCode: {error}",
+  "station.login.consoleExpired": "The code has expired; sign in again",
+  "station.login.consoleDenied": "Authorization was denied",
+  "station.login.consoleUnreadable": "Signed in, but the OpenCode sign-in couldn't be read",
+  "station.profile.consoleSignedOut": "OpenCode sign-in expired"
 }

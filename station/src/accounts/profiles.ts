@@ -11,6 +11,7 @@ import { type Endpoints, endpoints, find, type Source } from "../agents/provider
 import type { Capability } from "../sessions/decision.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { claudeToken as tokenOf } from "./oauth.ts";
+import { CONSOLE } from "./console.ts";
 import { platform } from "../platform/index.ts";
 
 type Json = any;
@@ -54,6 +55,8 @@ export type Urls = {
   chatgpt: string;
   /// Claude's OAuth token endpoint (renewing a login).
   claudeToken: string;
+  /// The OpenCode Console (an OpenCode Go profile signed in to it: console.ts).
+  console: string;
 };
 
 export const URLS: Urls = {
@@ -61,6 +64,7 @@ export const URLS: Urls = {
   anthropic: "https://api.anthropic.com",
   chatgpt: "https://chatgpt.com",
   claudeToken: "https://platform.claude.com/v1/oauth/token",
+  console: CONSOLE,
 };
 
 /// The access kinds each runtime can use.
@@ -108,6 +112,8 @@ export type CheckOptions = {
   env: Env;
   /// On the machine's own login.
   machine: boolean;
+  /// An OpenCode Go profile whose key is the token of a sign-in to the OpenCode Console.
+  login?: boolean;
   /// The machine login's current token, renewed when about to run out (oauth.ts).
   machineToken?: (env: Env) => Promise<{ token: string }>;
   urls?: Urls;
@@ -160,6 +166,8 @@ async function checkInner(o: CheckOptions, lang: Lang): Promise<ProfileCheck> {
   if (o.kind === "opencode-go") {
     // The model list answers any key; the usage is the key's own, so it is what tells a key that works.
     const usage = await get(`${urls.opencode}/v1/usage`, { authorization: `Bearer ${o.key}` });
+    // A sign-in refused is one to sign in again (the account's own key would not be).
+    if (o.login === true && (usage.status === 401 || usage.status === 403)) return check("login", t("station.profile.consoleSignedOut"), null);
     if (!usage.ok) return check("failed", t("station.profile.keyRefused", { provider: "OpenCode Go", status: usage.status }), null);
     const response = await get(`${urls.opencode}/v1/models`, { authorization: `Bearer ${o.key}` });
     if (!response.ok) return check("failed", t("station.profile.modelsUnreadable", { provider: "OpenCode Go", status: response.status }), null);

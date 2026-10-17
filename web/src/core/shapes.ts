@@ -15,6 +15,11 @@ export interface Access {
 	endpoint?: string;
 	/** At such an address, the protocol it speaks there: chat_completions, responses or anthropic. */
 	protocol?: string;
+	/**
+	 * An OpenCode Go profile whose key is the token of a sign-in to the OpenCode Console: signed in again, not given a
+	 * key (false from a station older than it).
+	 */
+	login?: boolean;
 }
 
 /**
@@ -917,6 +922,8 @@ export interface ProfileCheck {
 export interface LoginJob {
 	profile: string;
 	runtime: RuntimeKind;
+	/** opencode: a sign-in to the OpenCode Console (an OpenCode Go profile); none: the runtime's subscription. */
+	provider?: string;
 	/** starting | needs_code | needs_approval | verifying | done | failed | cancelled */
 	state: string;
 	url?: string;
@@ -2385,6 +2392,16 @@ export interface FlowOption {
 	label: string;
 }
 
+/** A sign-in the add-profile pages start. */
+export interface FlowSignIn {
+	/** The runtime whose subscription is signed in to (`login.new` runtime). */
+	runtime: RuntimeKind;
+	/** opencode-go: the OpenCode Console instead (`login.new` access). */
+	access?: string;
+	/** Who is signed in to, as the steps name it: Claude, ChatGPT, OpenCode. */
+	provider: string;
+}
+
 export interface FootprintConfirm {
 	title: string;
 	text: string;
@@ -3408,6 +3425,11 @@ export interface Overview {
 	/** It can share profiles and skills with the workspace's other stations (docs/station-share.md). */
 	sharing?: boolean;
 	/**
+	 * An OpenCode Go profile can be signed in to the OpenCode Console rather than given a key (false from a station
+	 * older than it: not offered).
+	 */
+	consoleSignIn?: boolean;
+	/**
 	 * The providers a key can be added for (none from a station older than them: they are then not offered), as the
 	 * station lists them.
 	 */
@@ -3789,6 +3811,8 @@ export interface ProfileFlowView {
 	submitLabel: string;
 	/** What the profile will be usable for, in words (the line under the page). */
 	usesLine: string;
+	/** At a plan's connect step: the sign-in to start. */
+	signIn?: FlowSignIn;
 }
 
 /** One station's copy of an account in the workspace's list. */

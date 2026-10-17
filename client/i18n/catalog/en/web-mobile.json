@@ -333,6 +333,7 @@
   "web-mobile.profiles.claudeStep1": "1. {link}, sign in with the Claude account {name} should use, and approve.",
   "web-mobile.profiles.claudeStep2": "2. After approving, copy the code the page shows:",
   "web-mobile.profiles.codexNote": "On the OpenAI page, sign in with the ChatGPT account {name} should use and paste the code. This page continues automatically. If device code sign-in is off, turn it on in ChatGPT's security settings first.",
+  "web-mobile.profiles.opencodeNote": "On the OpenCode page that opens, sign in, check that the code matches, then choose the workspace with Go and authorize. This page continues by itself once you are done.",
   "web-mobile.profiles.copyCodeFailed": "Couldn't copy; enter the code above manually",
   "web-mobile.profiles.copyOpen": "Copy code, open sign-in",
   "web-mobile.profiles.credits": "Credits",

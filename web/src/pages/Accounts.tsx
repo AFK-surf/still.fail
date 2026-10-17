@@ -108,7 +108,8 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
   const users = profile.usedBy.map((id) => overview.connects.find((c) => c.id === id)).filter((c) => c !== undefined);
   const [deleting, setDeleting] = useState(false);
 
-  const signIn = profile.access.kind === "subscription";
+  // A subscription, or an OpenCode Go profile on an OpenCode account: signed in (again) rather than given a key.
+  const signIn = profile.access.kind === "subscription" || (profile.access.kind === "opencode-go" && !!profile.access.login);
   // A copy of another station's: shown, used, but changed only there.
   const copy = profile.share?.role === "user";
   const signingIn = profile.login && ["starting", "needs_code", "needs_approval", "verifying"].includes(profile.login.state);
@@ -403,8 +404,9 @@ function AccountSection({ profile, signedIn, onSave, busy }: { profile: Profile;
   const [key, setKey] = useState("");
   // Where a provider is at an address of the person's own, that too can be changed (a blank key keeps the stored one).
   const [endpoint, setEndpoint] = useState(profile.access.endpoint ?? "");
-  const keyed = KEYED.has(profile.access.kind);
-  if (!keyed && profile.access.kind !== "subscription") return null;
+  // An OpenCode Go profile on an OpenCode account is signed in again, as a subscription is.
+  const keyed = KEYED.has(profile.access.kind) && !profile.access.login;
+  if (!keyed && profile.access.kind !== "subscription" && !profile.access.login) return null;
   const label = profile.access.kind === "opencode-go" ? "OpenCode Go key" : profile.providerName ? `${profile.providerName} key` : "API key";
   const changed = !!key || (profile.access.endpoint !== undefined && endpoint.trim() !== profile.access.endpoint);
   const stop = () => { setReplacing(false); setKey(""); setEndpoint(profile.access.endpoint ?? ""); };
@@ -503,7 +505,7 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
   const cancel = useAction(() => api.cancelLogin(profile.id));
   const send = useAction(() => api.loginCode(profile.id, code), () => setCode(""));
   const active = job && ["starting", "needs_code", "needs_approval", "verifying"].includes(job.state);
-  const provider = profile.runtime === "claude" ? "Claude" : "ChatGPT";
+  const provider = signInProvider(profile);
   // Announce a sign-in finishing while the page is open, not one that finished earlier.
   const previous = useRef(job?.state);
   useEffect(() => {
@@ -526,8 +528,9 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
           </Button>
         </div>
         {start.error && <p className={controlsCss.fieldError} role="alert">{start.error.message}</p>}
-        <button type="button" className={controlsCss.textToggle} onClick={() => setManual(!manual)}>{manual ? t("web-pages.profiles.collapse") : t("web-pages.profiles.manual")}</button>
-        {manual && <CopyCommand text={profile.loginCommand} />}
+        {/* OpenCode's has no command to run by hand. */}
+        {profile.loginCommand && <button type="button" className={controlsCss.textToggle} onClick={() => setManual(!manual)}>{manual ? t("web-pages.profiles.collapse") : t("web-pages.profiles.manual")}</button>}
+        {manual && profile.loginCommand && <CopyCommand text={profile.loginCommand} />}
       </div>
     );
   }
@@ -544,11 +547,14 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
   );
 }
 
+/** Who a profile signs in to: OpenCode for OpenCode Go, else its runtime's vendor. */
+const signInProvider = (profile: Profile) => (profile.access.kind === "opencode-go" ? "OpenCode" : profile.runtime === "claude" ? "Claude" : "ChatGPT");
+
 /**
- * Codex's device sign-in: the code comes first and is copied as the login page opens, so it is pasted there with no
- * trip back; the rest finishes by itself.
+ * A device sign-in (Codex's, OpenCode's): the code comes first and is copied as the login page opens, so it is pasted
+ * there with no trip back; the rest finishes by itself.
  */
-function DeviceCode({ url, code }: { url: string; code: string }) {
+function DeviceCode({ url, code, provider }: { url: string; code: string; provider: string }) {
   const [copied, setCopied] = useState(false);
   const toast = useToast();
   const go = () => {
@@ -559,7 +565,7 @@ function DeviceCode({ url, code }: { url: string; code: string }) {
     <div className={css.deviceCode}>
       <span className={`${css.deviceCodeValue} ${shellCss.mono}`}>{code}</span>
       <Button variant="primary" icon={External} onClick={go}>{copied ? t("web-pages.profiles.copiedReopen") : t("web-pages.profiles.copyOpen")}</Button>
-      <p className={shellCss.muted}>{t("web-pages.profiles.deviceCodeNote", { name: NAME })}</p>
+      <p className={shellCss.muted}>{provider === "OpenCode" ? t("web-pages.profiles.deviceCodeNoteOpencode") : t("web-pages.profiles.deviceCodeNote", { name: NAME })}</p>
     </div>
   );
 }
@@ -589,7 +595,7 @@ export function LoginSteps({ job, provider, code, setCode, send, sending, sendEr
           </li>
         </ol>
       )}
-      {job.state === "needs_approval" && job.url && job.userCode && <DeviceCode url={job.url} code={job.userCode} />}
+      {job.state === "needs_approval" && job.url && job.userCode && <DeviceCode url={job.url} code={job.userCode} provider={provider} />}
       {job.state === "verifying" && <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.finishing")}</p>}
       {job.state === "done" && <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.adding")}</p>}
     </>

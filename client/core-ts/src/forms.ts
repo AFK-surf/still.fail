@@ -656,14 +656,14 @@ function tileOf(source: providers.Source, hasKey: boolean, hasPlan: boolean, run
 }
 
 /// The picker's groups: every provider the station can take a key for, those with a plan, the variables by hand (for
-/// each runtime it can run, `runtimes`).
-export function groups(supported: string[] | null, runtimes: string[] = format.RUNTIMES): J[] {
+/// each runtime it can run, `runtimes`). `console`: the station signs OpenCode Go in to the OpenCode Console (its plan).
+export function groups(supported: string[] | null, runtimes: string[] = format.RUNTIMES, console = false): J[] {
   const listed = (id: string) => supported !== null && supported.includes(id);
   const out: J[] = [];
   for (const group of providers.GROUPS) {
     const tiles = providers.SOURCES.filter((s) => s.group === group && !providers.isChinaVariant(s.id)).flatMap((s) => {
       const hasKey = s.legacy !== undefined || listed(s.id);
-      const hasPlan = s.id === "openai" || s.id === "anthropic";
+      const hasPlan = s.id === "openai" || s.id === "anthropic" || (s.id === "opencode-go" && console);
       return hasKey || hasPlan ? [tileOf(s, hasKey, hasPlan, runtimes)] : [];
     });
     if (group === "local") {
@@ -677,6 +677,8 @@ export function groups(supported: string[] | null, runtimes: string[] = format.R
   return out;
 }
 
+const consoleOf = (overview: J): boolean => get(overview, "consoleSignIn") === true;
+
 function supportedOf(overview: J): string[] | null {
   const list = get(overview, "apiProviders");
   return Array.isArray(list) ? list.flatMap((p) => (typeof get(p, "id") === "string" ? [p.id] : [])) : null;
@@ -687,24 +689,26 @@ const blank = () => ({ provider: "", method: "", endpoint: "", protocol: "", reg
 
 function profileView(station: string, draft: J, overview: J): J {
   const runtimes = stationRuntimes(overview);
-  const gs = groups(supportedOf(overview), runtimes);
+  const gs = groups(supportedOf(overview), runtimes, consoleOf(overview));
   const tile = typeof draft.provider === "string" ? findTile(gs, draft.provider) : undefined;
   const method = typeof draft.method === "string" && draft.method !== "" ? draft.method : null;
   const out: J = {
     step: "pick", station, title: t("core-views.flow.pick"), hint: t("core-views.flow.pick_hint"), groups: gs, tile: tile ?? null, method, choices: [], showEndpoint: false,
     endpoint: draft.endpoint ?? null, protocols: [], regions: [], region: null, showKey: false, key: draft.key ?? null, keyLabel: "", canSubmit: false, pending: draft.pending === true,
-    submitLabel: "", usesLine: "", error: draft.error ?? null,
+    submitLabel: "", usesLine: "", error: draft.error ?? null, signIn: null,
   };
   if (tile === undefined) return out;
   const name = str(tile.name);
   out.title = t("core-views.flow.connect", { name });
   out.hint = "";
   const runtime = str(tile.runtime, "claude");
+  // OpenCode Go's plan is signed in to with the person's OpenCode account, and runs every runtime its key does.
+  const opencode = tile.id === "opencode-go";
   if (method === null) {
-    const plan = runtime === "claude" ? "Claude" : "ChatGPT";
+    const plan = opencode ? "OpenCode Go" : runtime === "claude" ? "Claude" : "ChatGPT";
     out.step = "method";
     out.choices = [
-      { id: "plan", title: t("core-views.flow.plan", { plan }), hint: t(`core-views.flow.plan_hint.${runtime}`) },
+      { id: "plan", title: t("core-views.flow.plan", { plan }), hint: t(`core-views.flow.plan_hint.${opencode ? "opencode" : runtime}`) },
       { id: "key", title: t("core-views.flow.key_card"), hint: t("core-views.flow.key_card_hint", { name }) },
     ];
     return out;
@@ -712,6 +716,12 @@ function profileView(station: string, draft: J, overview: J): J {
   out.step = "connect";
   const kind = str(tile.kind, "api-provider");
   if (method === "plan") {
+    if (opencode) {
+      out.signIn = { runtime: "claude", access: "opencode-go", provider: "OpenCode" };
+      out.usesLine = t("core-views.flow.uses", { uses: usesTextOf(arr(tile.uses).filter((u: unknown) => u !== "decision")) });
+      return out;
+    }
+    out.signIn = { runtime, provider: runtime === "claude" ? "Claude" : "ChatGPT" };
     out.usesLine = t("core-views.flow.uses", { uses: runtimeName(runtime) });
     return out;
   }
@@ -796,7 +806,7 @@ export class ProfileFlows {
     if (action === "edit") {
       if (d.pending) throw CoreError.invalid(t("core-views.flow.wait"));
       const o = overviewOf(this.#store, station);
-      const gs = groups(supportedOf(o), stationRuntimes(o));
+      const gs = groups(supportedOf(o), stationRuntimes(o), consoleOf(o));
       if (!isObject(patch)) return null;
       if (typeof patch.provider === "string") {
         if (patch.provider === "") d.value = blank();

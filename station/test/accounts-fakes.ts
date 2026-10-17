@@ -17,7 +17,8 @@ export const sameAs = (variable: string, under: string) =>
 /// What runs a stand-in made by `script` at `path`: itself, on Windows its .cmd.
 export const exe = (path: string) => (WINDOWS ? `${path}.cmd` : path);
 
-export type Asked = { method: string; url: string; headers: Record<string, string>; body: any };
+/// `body`: parsed as JSON where it is; `form`: as a form (what an OAuth endpoint is sent).
+export type Asked = { method: string; url: string; headers: Record<string, string>; body: any; form: Record<string, string> };
 export type Reply = { status: number; body: unknown; delayMs?: number };
 
 /// A provider at a local address: `answer` says what each request gets; `asked` keeps the requests in order.
@@ -31,7 +32,8 @@ export async function provider(answer: (asked: Asked) => Reply) {
     try {
       body = text === "" ? null : JSON.parse(text);
     } catch {}
-    const one: Asked = { method: req.method ?? "", url: req.url ?? "", headers: Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, String(v)])), body };
+    const form = Object.fromEntries(new URLSearchParams(String(req.headers["content-type"] ?? "").startsWith("application/x-www-form-urlencoded") ? text : ""));
+    const one: Asked = { method: req.method ?? "", url: req.url ?? "", headers: Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, String(v)])), body, form };
     asked.push(one);
     const reply = answer(one);
     if (reply.delayMs) await new Promise((r) => setTimeout(r, reply.delayMs));
