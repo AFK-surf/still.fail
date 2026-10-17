@@ -1,6 +1,6 @@
 // Every story (web/stories/stories.tsx) opened, taken to its state by its steps, and measured (measure.mjs: every
-// corner, every small panel; docs/ui-panels.md); then opened again with motion reduced, taken there the same way, and
-// drawn the same (measure.mjs drawn: motion reduced only takes the time out of motion). A new part of the app with a
+// corner, every small panel; docs/ui-panels.md); then, as it rests, drawn the same with motion reduced (measure.mjs
+// drawn: motion reduced only takes the time out of motion). A new part of the app with a
 // story is measured with no more written here. Builds the stories once (as a page, not module by module: the dev server's per-module transforms were most of
 // the time on CI's four cores) and serves the build. PLAYWRIGHT_MODULE selects Playwright (PLAYWRIGHT_CHANNEL a Chrome the
 // machine has, as CI's); SHOTS keeps a picture of each story; ONLY=<id,…> opens only those; REPORT=1 lists what is off
@@ -53,8 +53,8 @@ try {
 
   const wrong = [];
   /** A page with the story in it, taken to its state by its steps; whether it got there. */
-  const open = async (story, reducedMotion) => {
-    const page = await browser.newPage({ viewport: story.phone ? { width: 390, height: 844 } : { width: 1280, height: 800 }, deviceScaleFactor: 1, locale: 'zh-CN', reducedMotion });
+  const open = async (story) => {
+    const page = await browser.newPage({ viewport: story.phone ? { width: 390, height: 844 } : { width: 1280, height: 800 }, deviceScaleFactor: 1, locale: 'zh-CN', reducedMotion: 'no-preference' });
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(`${base}?story=${story.id}&theme=light`);
@@ -81,47 +81,40 @@ try {
         await settle(page, 450);
       } catch (e) {
         reached = false;
-        wrong.push(`${story.id}${reducedMotion === 'reduce' ? ' (motion reduced)' : ''}: could not take step ${JSON.stringify(step)} (${e.message.split('\n')[0]})`);
+        wrong.push(`${story.id}: could not take step ${JSON.stringify(step)} (${e.message.split('\n')[0]})`);
         break;
       }
     }
     return { page, errors, reached };
   };
   const take = async (story) => {
-    // With motion and with motion reduced side by side, from the same moment (the demo's chats go on as time does).
-    const [{ page, errors, reached }, still] = await Promise.all([open(story, 'no-preference'), open(story, 'reduce')]);
+    const { page, errors, reached } = await open(story);
     if (reached) {
       const c = await page.evaluate(corners);
       const p = await page.evaluate(panels);
       for (const w of [...c.wrong, ...p.wrong]) wrong.push(`${story.id}: ${w}`);
-      // With motion reduced, drawn as it is with motion: both still, then read in the same moment; what loops in either
-      // (and what is in it) left out.
-      if (still.reached) {
-        const compare = async () => {
-          await Promise.all([steady(page), steady(still.page)]);
-          const [moving, resting] = await Promise.all([page.evaluate(drawn), still.page.evaluate(drawn)]);
-          const loops = [...moving.loops, ...resting.loops];
-          const shown = (lines) => lines.filter((l) => { const at = l.split(' ')[0]; return !loops.some((x) => at === x || at.startsWith(`${x}>`)); });
-          const a = shown(moving.lines), b = shown(resting.lines);
-          const only = (x, y) => { const has = new Set(y); return x.filter((l) => !has.has(l)); };
-          return [...only(a, b).map((l) => `with motion ${l}`), ...only(b, a).map((l) => `motion reduced ${l}`)];
-        };
-        // What differs only for a while (the demo's chats go on; what follows a motion comes sooner without it) is not
-        // a difference: only what still does a moment later.
-        let differs = await compare();
-        if (differs.length) {
-          await page.waitForTimeout(1500);
-          const again = new Set(await compare());
-          differs = differs.filter((l) => again.has(l));
-        }
-        if (differs.length) wrong.push(`${story.id}: drawn otherwise with motion reduced (${differs.length} line(s)): ${differs.slice(0, 6).join('; ')}`);
-        if (out && differs.length) {
-          await still.page.screenshot({ path: `${out}/${story.id}-reduced.png` });
-          await writeFile(`${out}/${story.id}-reduced.txt`, differs.join('\n'));
-        }
-      }
-      for (const e of still.errors) console.log(`${story.id}: page error (motion reduced) ${e}`);
-      await still.page.close();
+      // Motion reduced, then not again, on the page held still (the demo's chats ended where they are): drawn as it was
+      // (it only takes the time out of motion). What changed both ways (a time read anew) is not its doing; nor is what
+      // loops, or what is in it.
+      await page.evaluate(() => window.endDemo?.());
+      const at = async (reducedMotion) => {
+        await page.emulateMedia({ reducedMotion });
+        await steady(page);
+        return page.evaluate(drawn);
+      };
+      const look = async () => {
+        const before = await at('no-preference'), still = await at('reduce'), after = await at('no-preference');
+        const loops = [...before.loops, ...still.loops, ...after.loops];
+        const shown = (lines) => new Set(lines.filter((l) => { const at = l.split(' ')[0]; return !loops.some((x) => at === x || at.startsWith(`${x}>`)); }));
+        const [was, reduced, again] = [shown(before.lines), shown(still.lines), shown(after.lines)];
+        return [
+          ...[...was].filter((l) => again.has(l) && !reduced.has(l)).map((l) => `with motion ${l}`),
+          ...[...reduced].filter((l) => !was.has(l) && !again.has(l)).map((l) => `motion reduced ${l}`),
+        ];
+      };
+      const differs = await look();
+      if (differs.length) wrong.push(`${story.id}: drawn otherwise with motion reduced (${differs.length} line(s)): ${differs.slice(0, 6).join('; ')}`);
+      if (out && differs.length) await writeFile(`${out}/${story.id}-reduced.txt`, differs.join('\n'));
       if (out) await page.screenshot({ path: `${out}/${story.id}.png` });
       // Then each list scrolled to its end, and measured again: what is at a list's foot (⌘K's last row) shows only so.
       const scrolled = await page.evaluate(() => {
@@ -144,7 +137,6 @@ try {
     }
     for (const e of errors) console.log(`${story.id}: page error ${e}`);
     await page.close();
-    if (!still.page.isClosed()) await still.page.close();
   };
   // Several at once, each in a page of its own.
   const queue = [...stories];

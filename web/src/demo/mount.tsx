@@ -430,6 +430,11 @@ export function DemoApp({ phone }: { phone: boolean }) {
 export const demoCore = { chats, publish };
 
 /** Runs the demo in `element` (once): the app, its made-up core, and the story played when it comes into view. */
+/** The demo's chats stop where they are, nobody at work any more (the stories' tests, to look at a page that holds still). */
+export function endDemo(): void {
+  story.end();
+}
+
 export function mountDemo(element: HTMLElement): void {
   if (mounted) return;
   mounted = true;
