@@ -130,7 +130,7 @@ export function moveSidebar(change: () => void): void {
     // The lists' marks on the rail, and the app's bubbles beside it.
     ...moves(`.${railCss.listMark}`, ["opacity", "transform"]),
     ...moves(`.${bubblesCss.stack}`, ["left", "bottom"]),
-    ...moves(`.${sidebarCss.pageBar}`, ["padding-left", "margin-left"]),
+    ...moves(`.${sidebarCss.pageBar}`, ["padding-left", "margin-left", "margin-right"]),
   ], change).then(() => { if (turn === moving) delete document.documentElement.dataset.sidebarMoving; });
 }
 

@@ -64,8 +64,10 @@ globalStyle(`${railed}[data-desktop="inset"]:not([data-fullscreen])[data-sidebar
 globalStyle(`${railed}:has(${sidebarUpdate})[data-sidebar="closed"] ${pageBar}`, { "@media": { [wide]: { paddingLeft: "72px" } } });
 globalStyle(`${railed}:has(${sidebarUpdate})[data-desktop="inset"]:not([data-fullscreen])[data-sidebar="closed"] ${pageBar}`, { "@media": { [wide]: { paddingLeft: "84px" } } });
 // A folded sidebar shown a while (Rail.tsx peekSidebar): the page moved only as far as its column needs (shell.css.ts
-// main), its bar starts past the sidebar's edge.
-globalStyle(`${railed}[data-sidebar="closed"][data-sidebar-peek] ${pageBar}`, { "@media": { [wide]: { marginLeft: "max(0px, var(--sidebar-w, 240px) - 8px - var(--peek-shift, 0px))" } } });
+// main), its bar from past the sidebar's edge to the window's, its buttons not moved out of it.
+globalStyle(`${railed}[data-sidebar="closed"][data-sidebar-peek] ${pageBar}`, {
+  "@media": { [wide]: { marginLeft: "max(0px, var(--sidebar-w, 240px) - 8px - var(--peek-shift, 0px))", marginRight: "var(--peek-shift, 0px)" } },
+});
 
 export const brandWordmark = style({
   display: "block",
