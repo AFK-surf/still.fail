@@ -154,21 +154,28 @@ test("made-up 1080p pictures: encoded on the hardware, over iroh, decoded; a sti
 });
 
 test("the display itself: still, then with the pointer moving", { skip: !MAC }, async (t) => {
-  const status: HelperStatus = await helper().request({ op: "status" });
-  console.log(`screen: status ${JSON.stringify(status)}`);
-  if (!status.capture) return t.skip(`Screen Recording is not granted to ${status.responsible?.path || "still.fail Helper"} (opening the desktop puts its window up)`);
-  const hub = new ScreenHub();
-  const desktop = new Desktop({ supported: true, helper: helper(), changed: () => {} });
-  hub.add(desktop);
-  const link = await linked(hub);
+  // One helper for the whole test, asked to end at its end: a HelperApp watches the app it started (and starts it
+  // again), so one left behind keeps this file's process from ending.
+  const app = helper();
   try {
-    decodes(await view(link, "display-still"), "display-still");
-    if (!status.control) return t.skip(`Accessibility is not granted to ${status.responsible?.path}: the pointer is not moved`);
-    const moving = await view(link, "display-moving", (n) => ({ t: "pointer", kind: "move", x: 0.5 + 0.3 * Math.sin(n / 10), y: 0.5 + 0.3 * Math.cos(n / 10), buttons: 0 }));
-    assert.ok(moving.frames > SECONDS);
-    decodes(moving, "display-moving");
+    const status: HelperStatus = await app.request({ op: "status" });
+    console.log(`screen: status ${JSON.stringify(status)}`);
+    if (!status.capture) return t.skip(`Screen Recording is not granted to ${status.responsible?.path || "still.fail Helper"} (opening the desktop puts its window up)`);
+    const hub = new ScreenHub();
+    const desktop = new Desktop({ supported: true, helper: app, changed: () => {} });
+    hub.add(desktop);
+    const link = await linked(hub);
+    try {
+      decodes(await view(link, "display-still"), "display-still");
+      if (!status.control) return t.skip(`Accessibility is not granted to ${status.responsible?.path}: the pointer is not moved`);
+      const moving = await view(link, "display-moving", (n) => ({ t: "pointer", kind: "move", x: 0.5 + 0.3 * Math.sin(n / 10), y: 0.5 + 0.3 * Math.cos(n / 10), buttons: 0 }));
+      assert.ok(moving.frames > SECONDS);
+      decodes(moving, "display-moving");
+    } finally {
+      await desktop.close();
+      await link.close();
+    }
   } finally {
-    await desktop.close();
-    await link.close();
+    await app.quit();
   }
 });
