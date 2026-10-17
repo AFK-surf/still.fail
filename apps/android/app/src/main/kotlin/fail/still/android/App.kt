@@ -349,7 +349,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
     val wide = maxWidth >= fail.still.android.screens.WideAt
     Box(Modifier.fillMaxSize()) {
     Box(Modifier.fillMaxSize().hazeSource(barHaze)) {
-    CompositionLocalProvider(fail.still.android.screens.LocalWide provides wide) {
+    CompositionLocalProvider(fail.still.android.ui.LocalWide provides wide) {
     transition.AnimatedContent(
         transitionSpec = {
             // Switched on the bar: in place, nothing slides.

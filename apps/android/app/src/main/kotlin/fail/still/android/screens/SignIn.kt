@@ -45,16 +45,6 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-/** Starts a Google sign-in through still.fail cloud in a Custom Tab; MainActivity finishes it when stillfail://auth/callback comes back. */
-suspend fun signIn(app: AppState, context: Context) {
-    try {
-        val url = Auth.begin(app.core)
-        CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(context, url.toUri())
-    } catch (e: CoreException) {
-        app.toast = t("android-settings.signIn.beginFailed", "error" to e.message)
-    }
-}
-
 /** A dev cloud (cloud/test/dev.ts) signs its users in without Google: alice (its admin, with a workspace) or bob (let in by nothing yet), through the core (`dev.signIn`). */
 private val DEV_CLOUD = Regex("^http://(127\\.0\\.0\\.1|localhost|10\\.0\\.2\\.2):\\d+$")
 

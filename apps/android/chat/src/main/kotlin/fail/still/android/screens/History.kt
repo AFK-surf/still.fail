@@ -1,0 +1,720 @@
+// An agent's execution history (web/src/mobile/History.tsx), as a full-screen page: what it received and what it sent, drawn
+// alike (a line, then the words beside a bar); what it did in between,
+// grouped, each group opening to its commands and output; and its details
+// (model, allowance, the station it runs on).
+package fail.still.android.screens
+
+import fail.still.android.ui.BusyIcon
+import fail.still.android.ui.WaitLine
+import fail.still.android.ui.WaitShape
+import fail.still.android.ui.Waiting
+import fail.still.android.data.t
+import fail.still.android.shared.BuildConfig
+import androidx.compose.foundation.background
+import androidx.compose.ui.text.withStyle
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.WindowInsets
+import fail.still.android.ui.NavBar
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import fail.still.android.AppState
+import fail.still.android.LocalApp
+import fail.still.android.Screen
+import fail.still.android.data.ChatAgent
+import fail.still.android.data.ChatOf
+import fail.still.android.data.ChatView
+import fail.still.android.data.RunnableProfile
+import fail.still.android.data.HistoryItem
+import fail.still.android.data.HistoryBody
+import fail.still.android.data.HistoryGroup
+import fail.still.android.data.HistoryLive
+import fail.still.android.data.HistoryPhase
+import fail.still.android.data.HistoryStep
+import fail.still.android.data.HistoryRow
+import fail.still.android.data.HistoryView
+import fail.still.android.data.ModelOption
+import fail.still.android.data.PickView
+import fail.still.android.data.Host
+import fail.still.android.data.AgentCardView
+import fail.still.android.data.Topics
+import fail.still.android.data.rememberTopic
+import fail.still.android.data.errorText
+import fail.still.android.data.state
+import fail.still.android.ui.C
+import fail.still.android.ui.IconIn
+import fail.still.android.ui.MakerIcon
+import fail.still.android.ui.ProviderMark
+import fail.still.android.ui.QuotaChip
+import fail.still.android.ui.QuotaRings
+import fail.still.android.ui.Icons
+import fail.still.android.ui.NavButton
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import fail.still.android.ui.Mark
+import fail.still.android.ui.Markdown
+import fail.still.android.ui.MenuItem
+import fail.still.android.ui.MenuSpec
+import fail.still.android.ui.ModelMark
+import fail.still.android.ui.Mono
+import fail.still.android.ui.ReaderSpec
+import fail.still.android.ui.MeterChips
+import fail.still.android.ui.Seg
+import fail.still.android.ui.SlackMark
+import fail.still.android.ui.Follow
+import fail.still.android.ui.rememberFollow
+import fail.still.android.ui.Smooth
+import fail.still.core.CoreException
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.animation.core.tween
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.put
+import fail.still.android.ui.DoingMark
+import fail.still.android.ui.Field
+import fail.still.android.ui.GroupLabel
+import fail.still.android.ui.rememberStationName
+
+/** Opens an agent's execution history, over the item's page it belongs to. */
+/** `entry`: the transcript entry to open at (an activity row's), else its newest. */
+fun openHistory(app: AppState, station: String, of: ChatOf, key: String, entry: Long? = null) {
+    app.push(Screen.History(station, of, key, entry))
+}
+
+@Composable
+fun HistoryScreen(station: String, of: ChatOf, key: String, entry: Long? = null) {
+    val app = LocalApp.current
+    val context = LocalContext.current
+    val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
+    // Its link, to paste into another chat for its agent to read (or a person to open here), as the web's.
+    val title = chat.value?.title
+    val link = chatLink(app.cloudOrigin, station, key)?.let { "$it?history=${encodeComponent(key)}" }
+    Column(Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.navigationBars)) {
+        NavBar(t("common.back"), { app.pop() }, t("android-chat.history.title"), trailing = if (title != null && link != null) ({
+            Box(Modifier.semantics { contentDescription = t("web-mobile.history.copyLink") }) { NavButton(Icons.Copy, { copyChatLink(app, context, title, link) }) }
+        }) else null)
+        HistoryContent(station, of, key, entry)
+    }
+}
+
+@Composable
+private fun ColumnScope.HistoryContent(station: String, of: ChatOf, key: String, entry: Long? = null) {
+    val app = LocalApp.current
+    val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
+    val history by rememberTopic<HistoryView>(app.core, Topics.history(station, key))
+    val host by rememberTopic<Host>(app.core, Topics.host(station))
+    val agent = chat.value?.agents?.firstOrNull { it.session.key == key }
+    var tab by rememberSaveable { mutableStateOf(0) }
+    if (agent == null) return Waiting(WaitShape.Messages, text = t("common.reading"), error = chat.error?.message)
+    val s = agent.session
+    Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        ModelMark(s.maker, s.runtime, 20.dp, agent.state)
+        // The page is the agent's history; its head is the agent, with the room its name needs.
+        Text(s.agentText, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Actions(station, agent)
+        Seg(listOf(t("android-chat.history.tab.steps"), t("android-chat.history.tab.details")), tab, { tab = it })
+    }
+    Summary(agent)
+    Box(Modifier.weight(1f).fillMaxWidth()) {
+        if (tab == 0) Steps(station, of, agent, history.value, entry) else Details(station, of, agent, history.value, host.value)
+    }
+}
+
+/** What can be done to it right now: stop a turn, release an idle process. */
+@Composable
+private fun Actions(station: String, agent: ChatAgent) {
+    val app = LocalApp.current
+    val scope = rememberCoroutineScope()
+    val s = agent.session
+    val st = agent.status
+    @Composable
+    fun act(icon: androidx.compose.ui.graphics.vector.ImageVector, done: String, name: String, call: suspend () -> Unit) {
+        val busy = app.isDoing(name, "station" to station, "key" to s.key)
+        Box(
+            Modifier.size(28.dp).clip(CircleShape).background(C.chip).clickable(enabled = !busy) {
+                    scope.launch {
+                    try { call(); app.toast = done } catch (e: CoreException) { app.toast = e.message }
+                }
+            },
+            contentAlignment = Alignment.Center,
+        ) { BusyIcon(busy) { IconIn(icon, 14.dp, C.ink) } }
+    }
+    if (st == "running" || st == "queued") act(Icons.Stop, t("android-chat.history.stopped"), "session.stop") { app.api(station).stop(s.key) }
+    if (s.process == "warm") act(Icons.Unplug, t("android-chat.history.evicted"), "session.evict") { app.api(station).evict(s.key) }
+}
+
+/** The head's short line: only what is worth a look now (an account signed out, a quota running out, the disk filling up). */
+@Composable
+private fun Summary(agent: ChatAgent) {
+    if (agent.attention.isEmpty()) return Box(Modifier.height(8.dp))
+    Row(
+        Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 6.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
+    ) {
+        agent.attention.forEach { a ->
+            val quota = a.quota
+            when {
+                quota != null -> QuotaChip(quota.mark, quota.left, quota.level)
+                a.kind == "disk" -> Text(a.text, fontSize = 12.sp, color = C.warn)
+                else -> Text(a.text, fontSize = 12.sp, color = C.red)
+            }
+        }
+    }
+}
+
+private sealed interface Line {
+    data class Item(val item: HistoryItem) : Line
+    data class Live(val step: HistoryLive) : Line
+    data class Phase(val phase: HistoryPhase) : Line
+}
+
+@Composable
+private fun Steps(station: String, of: ChatOf, agent: ChatAgent, history: HistoryView?, entry: Long? = null) {
+    if (history == null) return Waiting(WaitShape.Messages, text = t("android-chat.history.loading"))
+    if (history.empty) return Edge(history.edge)
+    val items = history.items
+    val lines = items.map { Line.Item(it) } + history.live.map { Line.Live(it) } + listOfNotNull(history.phase?.let { Line.Phase(it) })
+    val list = rememberLazyListState()
+    val follow = rememberFollow(list)
+    val api = LocalApp.current.api(station)
+    // Only its latest entries come first: near the top, the page before comes in (once per page).
+    val more = history.more == true
+    val first = items.firstOrNull()?.key
+    val asked = remember { mutableStateOf<String?>(null) }
+    // The page before on its way: said at the top, where it comes in.
+    var older by remember { mutableStateOf(false) }
+    LaunchedEffect(more, first, follow.placed) {
+        if (!more || !follow.placed) return@LaunchedEffect
+        snapshotFlow { list.firstVisibleItemIndex }.collect { index ->
+            if (index <= 2 && asked.value != first) {
+                asked.value = first
+                older = true
+                try { api.historyOlder(agent.session.key) } catch (_: CoreException) { asked.value = null } finally { older = false }
+            }
+        }
+    }
+    // It opens at its newest, and follows new steps while the reader stays there.
+    val density = LocalDensity.current
+    // Opened at an entry (an activity row): that item, near the top, for a moment marked; else the newest, followed.
+    // One before what is loaded: the pages before come first.
+    var marked by remember { mutableStateOf<String?>(null) }
+    val before = entry != null && more && entry < (items.firstOrNull()?.entries?.firstOrNull() ?: 0L)
+    LaunchedEffect(before, first) {
+        if (follow.placed) return@LaunchedEffect
+        if (before) {
+            older = true
+            try { api.historyOlder(agent.session.key); return@LaunchedEffect } catch (_: CoreException) {} finally { older = false }
+        }
+        val at = entry?.let { e -> items.indexOfFirst { it.entries.size == 2 && e in it.entries[0]..it.entries[1] } }?.takeIf { it >= 0 }
+        if (at != null) {
+            list.scrollToItem(at + 1, -with(density) { 24.dp.roundToPx() })
+            follow.placed = true; follow.on = false
+            marked = items[at].key
+            delay(1600); marked = null
+        } else {
+            follow.toEnd(); follow.placed = true; follow.on = true
+        }
+    }
+    // A step or thought in brief is read whole as it is opened (`history.detail`).
+    val detail: suspend (List<Long>) -> Unit = { entries -> api.historyDetail(agent.session.key, entries) }
+    CompositionLocalProvider(LocalFollow provides follow, LocalDetail provides detail) {
+        LazyColumn(Modifier.fillMaxWidth(), state = list, contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item(key = "edge") { if (older) Box(Modifier.fillMaxWidth().padding(vertical = 10.dp), contentAlignment = Alignment.Center) { WaitLine() } else Edge(history.edge) }
+            itemsIndexed(lines, key = { _, l -> when (l) { is Line.Live -> "live/${l.step.id}"; is Line.Phase -> "phase"; is Line.Item -> l.item.key } }) { _, line ->
+                when (line) {
+                    is Line.Item -> {
+                        val shade by androidx.compose.animation.animateColorAsState(if (line.item.key == marked) C.accent.copy(alpha = 0.10f) else androidx.compose.ui.graphics.Color.Transparent, tween(900), label = "marked")
+                        Box(Modifier.clip(Smooth(8.dp)).background(shade)) { Item(line.item, station, of, agent) }
+                    }
+                    is Line.Live -> Text(line.step.text, fontSize = 13.sp, color = C.muted, maxLines = 1)
+                    is Line.Phase -> PhaseLine(line.phase)
+                }
+            }
+    }
+    }
+}
+
+/** The steps' list: a group or a step opened is read from its top, not followed down to the end. */
+private val LocalFollow = staticCompositionLocalOf<Follow?> { null }
+
+/** Reads whole what a step or thought in brief holds (its transcript entries), as it is opened. */
+private val LocalDetail = staticCompositionLocalOf<suspend (List<Long>) -> Unit> { {} }
+
+@Composable
+private fun Edge(text: String) = Text(text, color = C.subtle, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp))
+
+@Composable
+private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgent) {
+    when (val body = item.body) {
+        is HistoryBody.Received -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            body.content.note?.let { note ->
+                Message(Icons.Received, { val (before, after) = around("android-chat.history.received.note"); Text(before, fontSize = 13.sp, color = C.muted); Strong(BuildConfig.APP_NAME); Text(after, fontSize = 13.sp, color = C.muted) }, note) {
+                    Text(note, fontSize = 15.sp, lineHeight = 23.sp, color = C.ink)
+                }
+            }
+            body.content.tasks.forEach { task ->
+                val icon = if (task.agent) Icons.Agent else Icons.Command
+                val color = if (task.failed) C.red else C.muted
+                val result = task.result
+                if (result != null) Message(icon, { Text(task.text, fontSize = 13.sp, color = color) }, result) { Markdown(result, size = 15) }
+                else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    IconIn(icon, 14.dp, color)
+                    Text(task.text, fontSize = 13.sp, color = color)
+                }
+            }
+            body.content.messages.forEach { m ->
+                Message(Icons.Received, {
+                    val (before, after) = around(if (m.notice == "job") "android-chat.history.received.jobMessage" else "android-chat.history.received.message")
+                    Text(before, fontSize = 13.sp, color = C.muted)
+                    val user = m.from.slackUser
+                    if (user != null) SlackName(station, user, m.from.name, m.from.bound) else Strong(if (m.notice == "stillfail") BuildConfig.APP_NAME else m.from.name, Modifier.weight(1f, fill = false))
+                    Text(after, fontSize = 13.sp, color = C.muted)
+                    m.place?.let { Text(" · ", fontSize = 13.sp, color = C.muted); Box(Modifier.weight(1f, fill = false)) { Place(station, of, it) } }
+                }, m.text) {
+                    // A job's words as it wrote them (program output), its columns kept.
+                    if (m.notice == "job") Text(m.text, style = Mono, color = C.ink)
+                    else Text(m.text, fontSize = 15.sp, lineHeight = 23.sp, color = C.ink)
+                }
+            }
+        }
+        is HistoryBody.Post -> {
+            val post = body.content
+            Message(Icons.Send, {
+                val (before, after) = around("android-chat.history.sent.to")
+                Text(before, fontSize = 13.sp, color = C.muted)
+                Box(Modifier.weight(1f, fill = false)) {
+                    val place = post.place
+                    if (place != null) Place(station, of, place) else Row(verticalAlignment = Alignment.CenterVertically) { SlackMark(12.dp); Strong(" Slack") }
+                }
+                Text(after, fontSize = 13.sp, color = C.muted)
+                if (post.block) Pill("Block", C.blue)
+                if (post.failed) Pill(t("android-chat.history.send.failed"), C.red)
+            }, post.text) { Markdown(post.text, size = 15) }
+        }
+        is HistoryBody.Mark -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            val wait = body.content.wait
+            if (wait != null) IconIn(Icons.Wait, 14.dp, C.muted)
+            // A wait: how long it waited, said by the core once it is over; still waiting, it counts on here.
+            if (wait != null && wait.until == null) {
+                var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
+                val waited = ((now - wait.since) / 1000).coerceAtLeast(0).let { s -> wait.seconds?.let { minOf(s, it) } ?: s }
+                Text((wait.what?.let { "$it · " } ?: "") + t("android-chat.history.waiting", "time" to shortSpan(waited)) + (wait.seconds?.let { " / ${shortSpan(it)}" } ?: ""), fontSize = 13.sp, color = C.muted)
+            } else Text(body.content.text, fontSize = 13.sp, color = C.muted)
+        }
+        is HistoryBody.Text -> Box(Modifier.let { if (body.content.subagent) it.padding(start = 12.dp) else it }) {
+            val app = LocalApp.current
+            val text = body.content.text
+            Brief(text) { app.reader = ReaderSpec({ Text(t("android-chat.history.wrote", "name" to agent.session.agentText), fontSize = 13.sp, color = C.muted) }) { Markdown(text, size = 15) } }
+        }
+        is HistoryBody.Group -> Group(body.content)
+    }
+}
+
+/** What an entry says, in brief: its words as plain text, two lines at most. A tap opens it in full. */
+@Composable
+private fun Brief(text: String, open: () -> Unit) {
+    Text(
+        plain(text), fontSize = 14.sp, lineHeight = 21.sp, color = C.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.fillMaxWidth().clip(Smooth(6.dp)).clickable(onClick = open),
+    )
+}
+
+/** Markdown as one run of plain words, for a brief: no fences, headings, emphasis or line breaks. */
+private fun plain(text: String): String = text
+    .replace(Regex("```[^\\n]*"), " ")
+    .replace(Regex("(?m)^\\s{0,3}(#{1,6}|>|[-*+]|\\d+\\.)\\s+"), "")
+    .replace(Regex("\\*\\*|__|`"), "")
+    .replace(Regex("\\s+"), " ")
+    .trim()
+
+@Composable
+internal fun Strong(text: String, modifier: Modifier = Modifier) = Text(text, modifier, fontSize = 13.sp, color = C.ink, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+
+/**
+ * A message in or out, drawn alike: a line saying what and where, then its words in brief beside a bar (they answer
+ * each other). A tap on the words opens the whole of it on its own page, under the same line.
+ */
+@Composable
+internal fun Message(icon: androidx.compose.ui.graphics.vector.ImageVector, label: @Composable RowScope.() -> Unit, text: String, full: @Composable () -> Unit) {
+    val app = LocalApp.current
+    val line: @Composable RowScope.() -> Unit = {
+        IconIn(icon, 14.dp, C.muted, Modifier.padding(end = 5.dp))
+        label()
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, content = line)
+        Row(Modifier.height(IntrinsicSize.Min)) {
+            Box(Modifier.width(2.dp).fillMaxHeight().clip(RoundedCornerShape(1.dp)).background(C.line))
+            Box(Modifier.padding(start = 10.dp).weight(1f)) { Brief(text) { app.reader = ReaderSpec(line, full) } }
+        }
+    }
+}
+
+/** A sentence of the catalog's around a part drawn on its own (`{name}`): its words before it and after it. */
+internal fun around(key: String): Pair<String, String> = t(key).split("{name}", limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+
+@Composable
+internal fun Pill(text: String, color: androidx.compose.ui.graphics.Color) =
+    Text(text, fontSize = 11.sp, color = color, modifier = Modifier.padding(start = 6.dp).clip(Smooth(6.dp)).background(color.copy(alpha = 0.12f)).padding(horizontal = 6.dp, vertical = 1.dp))
+
+/**
+ * A place, as the core names it: its platform's mark and its name; a chat on still.fail's page leads to it, a Slack thread
+ * opens in Slack (its link, while a connect is signed in to its workspace).
+ */
+@Composable
+internal fun Place(station: String, of: ChatOf, place: fail.still.android.data.Place) {
+    val app = LocalApp.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // A still.fail chat (surface "ember") is its agent's item: opened by the session it is bound to.
+    val chat = place.session?.let { key -> { if (of != ChatOf.Session(key)) app.push(Screen.Chat(station, ChatOf.Session(key))) else app.pop() } }
+    // A Slack thread by its link: the Slack app takes it when installed, the browser otherwise.
+    val slack = place.url?.takeIf { place.surface == "slack" }?.let { url ->
+        {
+            try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
+            catch (_: android.content.ActivityNotFoundException) { app.toast = t("android-chat.link.failed") }
+        }
+    }
+    val open = chat ?: slack
+    Row(
+        Modifier.clip(Smooth(4.dp)).let { if (open != null) it.clickable(onClick = open) else it },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        if (place.surface in setOf("ember", "stillfail")) Mark(12.dp) else SlackMark(12.dp)
+        Text(place.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (open != null) C.accentInk else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/**
+ * A Slack user's name (你 once the viewer said it is them, the core says). A tap offers "这是我" (the station then takes
+ * that Slack user for the viewer), or "不是我" once it does.
+ */
+@Composable
+private fun SlackName(station: String, user: String, name: String, mine: Boolean) {
+    val app = LocalApp.current
+    var bounds by remember { mutableStateOf(Rect.Zero) }
+    // Said and not answered yet: a spinner beside the name, the menu not offered again meanwhile; failed: a red mark a moment.
+    val binding = app.isDoing("slack.identity", "station" to station, "user" to user)
+    val failed = app.failedOf("slack.identity", "station" to station, "user" to user)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            name, fontSize = 13.sp, color = C.accentInk, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.clip(Smooth(4.dp)).clickable(enabled = !binding) {
+                app.menu = MenuSpec(bounds, listOf(MenuItem(if (mine) t("android-chat.history.identity.notMe") else t("android-chat.history.identity.me"), if (mine) Icons.Close else Icons.Check) {
+                    app.act(if (mine) t("android-chat.history.identity.unbind") else t("android-chat.history.identity.bind")) { app.api(station).slackIdentity(user, !mine) }
+                }))
+            },
+        )
+        DoingMark(binding, failed, inline = true)
+    }
+}
+
+@Composable
+private fun Group(g: HistoryGroup) {
+    var open by remember { mutableStateOf(false) }
+    val follow = LocalFollow.current
+    Column {
+        Row(Modifier.fillMaxWidth().clip(Smooth(6.dp)).clickable { if (!open) follow?.stay(); open = !open }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconIn(if (open) Icons.ChevronDown else Icons.ChevronRight, 13.dp, C.subtle)
+            Text(g.summary, color = if (g.failures > 0) C.red else C.muted, fontSize = 14.sp, maxLines = if (open) 3 else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            if (g.failures > 0) Pill(t("android-chat.history.group.failed", "n" to g.failures), C.red)
+            if (g.pending > 0) Pill(t("android-chat.history.group.pending", "n" to g.pending), C.accentInk)
+        }
+        if (open) Column(Modifier.padding(start = 19.dp, top = 4.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            val calls = g.rows.any { it is HistoryRow.Step }
+            g.rows.forEach { row ->
+                when (row) {
+                    is HistoryRow.Step -> StepRow(row.content)
+                    is HistoryRow.Thought ->
+                        if (!calls) Whole(row.content.brief, row.content.entries) { Text(row.content.text, fontSize = 13.sp, lineHeight = 20.sp, color = C.muted) }
+                        else Folding(t("android-chat.history.thinking"), row.content.first, null, false) {
+                            Whole(row.content.brief, row.content.entries) { Text(row.content.text, fontSize = 13.sp, lineHeight = 20.sp, color = C.muted) }
+                        }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StepRow(step: HistoryStep) {
+    // Opened: the call drawn by what it is (a command, a diff, code, a plan, its fields), then what came back (ui/ToolStep.kt).
+    Folding(step.said ?: step.name, if (step.said == null) step.hint else null, step.meta, step.failed) {
+        Whole(step.brief, step.entries) { fail.still.android.ui.ToolStepBody(step.name, step.call, step.said != null, step.result, step.failed) }
+    }
+}
+
+/** How long what was read whole has to show before what is held is taken for all there is (it came back in brief). */
+private const val SETTLE_MS = 1000L
+
+/**
+ * What a step or thought holds, as it shows: in brief (only what names it came), read whole now (and again when it is in
+ * brief anew: its result came, in brief), saying so till it comes; read and in brief still a moment later, what is held
+ * is all there is.
+ */
+@Composable
+private fun Whole(brief: Boolean, entries: List<Long>, body: @Composable () -> Unit) {
+    if (!brief) return body()
+    val detail = LocalDetail.current
+    var error by remember(entries) { mutableStateOf<String?>(null) }
+    var settled by remember(entries) { mutableStateOf(false) }
+    LaunchedEffect(entries) {
+        error = null
+        settled = false
+        try {
+            detail(entries)
+            delay(SETTLE_MS)
+            settled = true
+        } catch (e: CoreException) {
+            error = errorText(e)
+        }
+    }
+    if (settled) body()
+    else Text(error?.let { t("android-chat.history.stepUnread", "error" to it) } ?: t("common.reading"), fontSize = 13.sp, color = C.muted)
+}
+
+/** A line that opens to what is behind it. */
+@Composable
+private fun Folding(name: String, hint: String?, meta: String?, failed: Boolean, body: @Composable () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val follow = LocalFollow.current
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth().clickable { if (!open) follow?.stay(); open = !open }.padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(name, fontSize = 13.sp, color = if (failed) C.red else C.ink, fontWeight = if (hint != null) FontWeight.Medium else null, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = if (hint == null) Modifier.weight(1f) else Modifier.widthIn(max = 160.dp))
+            // The hint takes all the width the name and meta leave: two weights would cut it at half the row.
+            if (hint != null) Text(hint, fontSize = 12.sp, style = Mono, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            if (!meta.isNullOrEmpty()) Text(meta, fontSize = 11.sp, color = if (failed) C.red else C.subtle)
+        }
+        if (open) body()
+    }
+}
+
+/** The turn's state with the model (the core's words), with a running clock. */
+@Composable
+private fun PhaseLine(phase: HistoryPhase) {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.size(7.dp).clip(CircleShape).background(C.accent))
+        Text(phase.text, fontSize = 13.sp, color = C.ink)
+        Text("${((now - phase.since) / 1000).coerceAtLeast(0)}s", fontSize = 12.sp, color = C.subtle)
+    }
+}
+
+/** Where it stands and its figures, how it runs (which can be changed here), what it has used, the station. */
+@Composable
+private fun Details(station: String, of: ChatOf, agent: ChatAgent, history: HistoryView?, host: Host?) {
+    val app = LocalApp.current
+    val s = agent.session
+    val card by rememberTopic<AgentCardView>(app.core, Topics.agentCard(station, s.key))
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, bottom = 30.dp)) {
+        // Where it stands and the figures that say most, as its card has them (AgentSheet.kt).
+        AgentStatus(agent, Modifier.padding(top = 2.dp))
+        AgentTiles(card.value)
+        AgentNotes(card.value)
+        Box(Modifier.height(6.dp))
+        // Changing how it runs is a screen of its own.
+        RunRow(agent) { app.push(Screen.RunSettings(station, of, s.key)) }
+        Column(Modifier.padding(top = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Detail(t("android-chat.history.detail.runtime"), s.runtimeText)
+            s.processText?.let { Detail(t("android-chat.history.detail.process"), it) }
+            card.value?.work?.let { Detail(t("android-chat.agent.turns"), it) }
+        }
+        history?.usage?.takeIf { it.isNotEmpty() }?.let { usage ->
+            GroupLabel(t("android-chat.agent.usage"))
+            Column(Modifier.padding(top = 6.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { usage.forEach { Detail(it.label, it.value) } }
+        }
+        GroupLabel("Station")
+        Column(Modifier.padding(top = 6.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Detail(t("android-chat.history.detail.name"), rememberStationName(station))
+            if (host != null) Detail(t("android-chat.history.detail.machine"), host.identity)
+        }
+        if (host != null && host.meters.any { it.level != "ok" }) MeterChips(host.meters, Modifier.padding(vertical = 10.dp), alerts = true)
+    }
+}
+
+/** How it runs, in one line: the model (never cut short), how hard it thinks, the account (cut short first). */
+@Composable
+private fun RunRow(agent: ChatAgent, onOpen: () -> Unit) {
+    val s = agent.session
+    // The account it runs on now, as the core says.
+    val name = agent.account?.name ?: ""
+    Row(
+        Modifier.fillMaxWidth().padding(top = 6.dp).clip(Smooth(10.dp))
+            .border(1.dp, C.line, Smooth(10.dp)).clickable(onClick = onOpen).padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        MakerIcon(s.maker, s.runtime, 15.dp)
+        Text(s.model?.let { s.modelName ?: it } ?: t("android-chat.pick.model"), fontSize = 14.sp, color = C.ink, maxLines = 1, softWrap = false)
+        Text(
+            " · ${s.effort ?: t("android-chat.pick.effort.default")} · ${if (s.profilePinned == true) name else t("android-chat.history.run.auto", "name" to name)}",
+            fontSize = 14.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+        )
+        QuotaRings(agent.account?.quota)
+        IconIn(Icons.ChevronDown, 14.dp, C.muted)
+    }
+}
+
+/**
+ * Changing how an agent runs, full screen: what it is now, then the model, how hard it thinks and who runs it (the
+ * station's pick, or one profile kept to), each said in plain words. Picks are a draft; the button at the bottom says
+ * what it becomes (不变 when nothing changed); back leaves it as it was. A profile kept to that does not run the model
+ * picked gives way to the station's pick, said so.
+ */
+@Composable
+fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
+    val app = LocalApp.current
+    val scope = rememberCoroutineScope()
+    val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
+    val agent = chat.value?.agents?.firstOrNull { it.session.key == key }
+    // What it runs on, what is picked here and what that means, as the core has them (web/src/pick.ts).
+    val pickOf = "session:$key"
+    val picking by rememberTopic<PickView>(app.core, Topics.pick(station, pickOf))
+    val v = picking.value
+    val pick = { fill: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit -> scope.launch { try { app.api(station).pickSet(pickOf, fill) } catch (e: CoreException) { app.toast = t("android-chat.pick.failed", "error" to errorText(e)) } }; Unit }
+    // Picked from what it runs on now, each time it is opened.
+    LaunchedEffect(station, key) { pick { put("open", true) } }
+    // A long list (the models, the accounts) is a list of its own, picked from and back.
+    var list by remember { mutableStateOf<String?>(null) }
+    androidx.activity.compose.BackHandler(enabled = list != null) { list = null }
+    Column(Modifier.fillMaxSize()) {
+        NavBar(if (list != null) t("android-chat.run.title") else t("common.back"), { if (list != null) list = null else app.pop() }, when (list) { "model" -> t("android-chat.pick.model"); "account" -> t("android-chat.run.account.choose"); else -> t("android-chat.run.title") })
+        if (agent == null || v == null) return Waiting(WaitShape.Cards, text = t("common.reading"), error = chat.error?.message ?: picking.error?.message)
+        val s = agent.session
+        val busy = app.isDoing("pick.save", "station" to station, "of" to "session:$key")
+        val chosen = v.draft.profile
+        if (list == "model") return ModelList(v.options, s.runtime, v.option) { m -> pick { put("model", m) }; list = null }
+        if (list == "account") return AccountList(v.accounts, s.runtime, chosen) { p -> pick { put("profile", p) }; list = null }
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
+            // Always on top: what it was, and what it becomes, the changes marked; and when the account must change, why.
+            Column(Modifier.fillMaxWidth().padding(top = 8.dp).clip(Smooth(14.dp)).background(C.chip).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                // Each property on its line: what it was, and, when it changes, an arrow to what it becomes.
+                (listOf(t("android-chat.run.label.model"), t("android-chat.run.label.effort"), t("android-chat.run.label.account")) + if (v.fastAvailable == true) listOf(t("android-chat.run.label.speed")) else emptyList()).forEachIndexed { i, label ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(label, fontSize = 13.sp, color = C.muted, modifier = Modifier.width(if (fail.still.android.data.I18n.lang == "zh") 32.dp else 60.dp))
+                        val was = v.was.getOrElse(i) { "" }
+                        val becomes = v.becomes.getOrElse(i) { "" }
+                        val moved = becomes != was
+                        Text(was, fontSize = 14.sp, color = if (moved) C.muted else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = !moved))
+                        if (moved) {
+                            IconIn(Icons.ArrowRight, 14.dp, C.accent)
+                            Text(becomes, fontSize = 14.sp, color = C.accent, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+                v.force?.let { Text(it, fontSize = 12.sp, color = C.warn) }
+                Text(t("android-chat.run.next"), fontSize = 12.sp, color = C.subtle)
+            }
+            GroupLabel(t("android-chat.run.label.model"))
+            SettingRow(onClick = { list = "model" }, leading = { MakerIcon(v.maker, s.runtime, 18.dp) }) { Text(v.modelText, fontSize = 15.sp, color = C.ink) }
+            GroupLabel(t("android-chat.run.effort.title"))
+            Text(t("android-chat.run.effort.note"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
+            EffortChips(listOf<String?>(null) + v.efforts, v.draft.effort) { e -> pick { put("effort", e) } }
+            if (v.fastAvailable == true) {
+                GroupLabel(t("android-chat.run.label.speed"))
+                Text(t("android-chat.run.speed.note"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
+                val asPlan = t("android-chat.pick.speed.follow")
+                val standard = t("android-chat.pick.speed.standard")
+                EffortChips(listOf(asPlan, standard, "Fast"), when (v.draft.fast) { true -> "Fast"; false -> standard; null -> asPlan }) { speed ->
+                    pick { put("fast", when (speed) { "Fast" -> true; standard -> false; else -> null } as Boolean?) }
+                }
+            }
+            GroupLabel(t("android-chat.run.label.account"))
+            SettingRow(onClick = { list = "account" }, leading = { chosen?.let { id -> v.accounts.firstOrNull { it.id == id } }?.let { ProviderMark(it.runtime ?: s.runtime, it.kind, 18.dp, it.mark) } }) {
+                Text(v.accountText, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(v.accountNote, fontSize = 12.sp, color = C.muted)
+                if (v.accountWarn) Text(t("android-chat.run.account.warn"), fontSize = 12.sp, color = C.warn)
+            }
+            Box(Modifier.height(16.dp))
+        }
+        val go = v.changed && v.option != null && !busy
+        Box(
+            Modifier.windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp, vertical = 12.dp).fillMaxWidth().heightIn(min = 52.dp)
+                .clip(Smooth(16.dp)).background(if (v.changed) C.ink else C.chip)
+                .clickable(enabled = !busy) {
+                    // Back at once, not waiting on the station; failed, a toast says why.
+                    app.pop()
+                    if (!go) return@clickable
+                    app.scope.launch {
+                        try { app.api(station).pickSave(pickOf); app.toast = t("android-chat.run.saved") }
+                        catch (err: CoreException) { app.toast = t("android-chat.save.failed", "error" to errorText(err)) }
+                    }
+                }
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                BusyIcon(busy, solid = if (v.changed) C.bg else null)
+                Text(v.saveText, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (v.changed) C.bg else C.ink, maxLines = 2, textAlign = TextAlign.Center)
+            }
+        }
+    }
+}
+
+@Composable
+private fun Detail(label: String, value: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        // As wide as the longest of them (缓存命中率): a label is not broken.
+        Text(label, fontSize = 14.sp, color = C.muted, maxLines = 1, softWrap = false, modifier = Modifier.width(76.dp))
+        Text(value, fontSize = 14.sp, color = C.ink)
+    }
+}
+
+/** Seconds in short, as the chat's activity says them: 45s, 3m 20s, 10m, 1h 5m. */
+private fun shortSpan(s: Long): String = when {
+    s < 60 -> "${s}s"
+    s < 3600 -> if (s % 60 != 0L) "${s / 60}m ${s % 60}s" else "${s / 60}m"
+    else -> if (s % 3600 / 60 != 0L) "${s / 3600}h ${s % 3600 / 60}m" else "${s / 3600}h"
+}

@@ -22,6 +22,10 @@ android {
         minSdk = 29
         buildConfigField("String", "VERSION_NAME", "\"0.1.$stillfailBuild\"")
         buildConfigField("boolean", "BETA", "$beta")
+        // As the app's (app/build.gradle.kts): the name it goes by, where its core finds still.fail cloud.
+        buildConfigField("String", "APP_NAME", "\"${if (beta) "youdid.wtf" else "still.fail"}\"")
+        val cloud = providers.gradleProperty("stillfailCloud").orElse(providers.gradleProperty("emberCloud")).getOrElse("https://app.still.fail")
+        buildConfigField("String", "CLOUD_ORIGIN", "\"$cloud\"")
     }
     buildFeatures {
         compose = true

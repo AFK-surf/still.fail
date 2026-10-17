@@ -599,15 +599,20 @@ The `:core` module is `fail.still.core.StillFailCore` (behind its `Engine`
 interface): `call(name, params)` and `topic(topic)` as a `Flow<TopicState>` —
 shared by everyone who collects the same topic, deltas applied as on the web
 (keyed ones too: `Delta.kt`), unsubscribed 2 s after the last collector leaves.
-`:shared` (`fail.still.android.data` and `fail.still.android.ui`) is what the
-pages are built on: the core's data and calls, with the generated `Shapes.kt`,
-`Operations.kt`, and the design system, with the generated `Icons.kt`. It sees
-`:core` but not the app, so the compiler keeps it below the pages: what it must
-tell the app (the bar's timing) goes through a hook the app sets
-(`TopicTiming`). `:shared` also has the small parts the pages share (`ui/Controls.kt`: buttons,
-fields, rows to pick from) and what the pages and the drive both need of a drive (`data/Drives.kt`, `DriveCache`).
-`:app` has the pages and everything else; in it the drive (`drive/`) is built on the pages (`screens/`), never the
-other way, and the remote screens (`remote/`) on neither (`scripts/check.sh`: phone packages one way).
+The app is in modules, each seeing only those under it, so the compiler keeps the layering:
+
+| module | what | on |
+|---|---|---|
+| `:shared` | the core's data and calls (`data/`, with the generated `Shapes.kt`, `Operations.kt`), the design (`ui/`, with the generated `Icons.kt`; `ui/Controls.kt`: buttons, fields, rows to pick from), the app's state and routes (`AppState.kt`: `AppState`, `Screen`, `LocalApp`; `Places.kt`) | `:core` |
+| `:settings` | the settings' pages (`screens/`: stations, profiles, connects, the vault, the workspace…) and what other pages take of them (`SettingParts.kt`) | `:shared` |
+| `:chat` | the chats' pages (`screens/`: home, a chat, its composer, files, previews, history, decisions…) | `:settings` |
+| `:drive` | a station's drive (`drive/`) | `:chat` |
+| `:app` | the activity, the app's frame (`App.kt`: the pages drawn by `Screen`), notifications, pushes, updates, adb lending, the remote screens (`remote/`), the share sheet (`share/`), sign-in and settings' home | all |
+
+What `:shared` must tell the app goes through hooks the app sets as it starts (`TopicTiming`, `AppHooks`) or an
+interface it fills (`AppUpdates`). The pages keep their package (`fail.still.android.screens`) across `:settings` and
+`:chat`; what one page module takes of another is public. In `:app`, the remote screens and the share sheet take
+nothing of the drive, and the remote screens nothing of the pages (`scripts/check.sh`: phone packages one way).
 
 ## Desktop
 

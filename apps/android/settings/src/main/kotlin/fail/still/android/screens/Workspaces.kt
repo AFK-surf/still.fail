@@ -1,0 +1,451 @@
+// Workspaces, as still.fail cloud's pages have them (web/src/cloud/CloudApp.tsx,
+// workspace.tsx): straight into one; for an account with none, its invitations
+// or a new workspace of its own (with an invite code when still.fail cloud asks for
+// one); the switcher with the invitations waiting, every account's workspaces
+// and a new one.
+package fail.still.android.screens
+
+import fail.still.android.ui.BusyIcon
+import fail.still.android.ui.WaitLine
+import fail.still.android.data.t
+import fail.still.android.shared.BuildConfig
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import fail.still.android.ui.CodeFont
+import fail.still.android.ui.keyboard
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import fail.still.android.AppState
+import fail.still.android.LocalApp
+import fail.still.android.shared.R
+import fail.still.android.data.Account
+import fail.still.android.data.AccountWorkspaces
+import fail.still.android.data.Auth
+import fail.still.android.data.Cloud
+import fail.still.android.data.PendingInvitation
+import fail.still.android.data.ROLE_LABEL
+import fail.still.android.data.Topics
+import fail.still.android.data.WorkspaceMark
+import fail.still.android.data.WorkspaceMarksView
+import fail.still.android.data.WorkspaceSummary
+import fail.still.android.data.errorText
+import fail.still.android.data.needsInviteCode
+import fail.still.android.data.rememberTopic
+import fail.still.android.ui.Avatar
+import fail.still.android.ui.C
+import fail.still.android.ui.IconIn
+import fail.still.android.ui.Icons
+import fail.still.android.ui.Illustration
+import fail.still.android.ui.SheetGrab
+import fail.still.android.ui.SheetHead
+import fail.still.android.ui.SheetSpec
+import fail.still.android.ui.Smooth
+import fail.still.android.ui.StationMark
+import fail.still.android.ui.hasStationMark
+import fail.still.core.CoreException
+import kotlinx.coroutines.launch
+import fail.still.android.ui.PickRow
+import fail.still.android.ui.Button
+import fail.still.android.ui.Field
+
+/** A write behind a button: whether it runs, and how the last try ended. */
+private class Write(app: AppState) : Action(app) {
+    /** What the running (or last) try was given. */
+    var arg by mutableStateOf<String?>(null)
+    var done by mutableStateOf(false)
+}
+
+/** Runs `write` for a button: busy while it runs, its error kept until the next try. */
+private fun AppState.run(w: Write, arg: String? = null, write: suspend () -> Unit) {
+    w.arg = arg; w.done = false
+    w.run { write(); w.done = true }
+}
+
+/** The workspace an invitation's acceptance joined becomes the one in view. */
+private suspend fun AppState.join(account: Account, invite: PendingInvitation) {
+    pickWorkspace(Cloud(core, account.sub).acceptInvitation(invite.id))
+    home()
+}
+
+/**
+ * Signed in, with no workspace yet: the invitations waiting, or, with none, said so; a workspace of the first account's
+ * own is made only when asked for (with the invite code still.fail cloud wants, once it asks for one).
+ */
+@Composable
+fun Landing(accounts: List<Account>, workspaces: List<AccountWorkspaces>) {
+    val app = LocalApp.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val first = accounts.first()
+    val create = remember { Write(app) }
+    val accept = remember { Write(app) }
+    val pending = workspaces.flatMap { a -> a.invitations.map { a.account to it } }
+    val make = { code: String -> app.run(create, code) { app.pickWorkspace(Cloud(app.core, first.sub).createWorkspace(t("android-misc.workspace.defaultName", "name" to first.name.ifEmpty { first.email.substringBefore('@') }), code)) } }
+    // Once asked for a code, the form stays while a code is tried, rather than flicking to "creating…".
+    var asked by remember { mutableStateOf(false) }
+    if (needsInviteCode(create.error)) asked = true
+    val asking = asked && !create.done
+    Column(
+        Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.keyboard)).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Illustration(R.drawable.illus_sign_in, R.drawable.illus_sign_in_dark, 260.dp)
+        when {
+            pending.isNotEmpty() -> {
+                Title(t("android-misc.invite.received"))
+                pending.forEach { (account, invite) ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(Smooth(16.dp)).background(C.surface).padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(invite.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                            Text(t("android-misc.invite.invitedAs", "inviter" to invite.inviter.ifEmpty { t("android-misc.invite.someone") }, "email" to account.email, "role" to (ROLE_LABEL[invite.role] ?: invite.role)), fontSize = 13.sp, color = C.muted)
+                        }
+                        Button(t("android-misc.invite.join"), primary = true, busy = accept.busy && accept.arg == invite.id) { app.run(accept, invite.id) { app.join(account, invite) } }
+                    }
+                }
+                accept.error?.let { Error(it.message) }
+                if (asking) InviteCodeForm(create, make)
+                else Button(t("android-misc.invite.declineCreate"), primary = false, busy = create.busy) { make("") }
+            }
+            asking -> {
+                Title(t("android-misc.invite.onlyInvited", "app" to BuildConfig.APP_NAME))
+                Lead(t("android-misc.invite.codeLead", "app" to BuildConfig.APP_NAME, "email" to first.email))
+                InviteCodeForm(create, make)
+                Button(t("android-misc.account.switch"), primary = false, busy = app.isDoing("auth.begin")) { scope.launch { signIn(app, context) } }
+            }
+            else -> {
+                Title(t("android-misc.workspace.none"))
+                Lead(t("android-misc.workspace.none.lead", "app" to BuildConfig.APP_NAME, "email" to first.email))
+                Button(t("android-misc.workspace.createOne"), primary = true, busy = create.busy) { make("") }
+                create.error?.let { Error(errorText(it)) }
+                Button(t("android-misc.invite.byLink"), primary = false) { openInviteLink(app) }
+                Button(t("android-misc.account.switch"), primary = false, busy = app.isDoing("auth.begin")) { scope.launch { signIn(app, context) } }
+            }
+        }
+    }
+}
+
+/** An account the beta app cannot be used with (the core's `blocked`): it signs out, or another signs in. */
+@Composable
+fun Blocked(entry: AccountWorkspaces) {
+    val app = LocalApp.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val out = remember { Write(app) }
+    Column(
+        Modifier.fillMaxSize().background(C.bg).windowInsetsPadding(WindowInsets.systemBars).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Illustration(R.drawable.illus_sign_in, R.drawable.illus_sign_in_dark, 260.dp)
+        Title(entry.blocked ?: "")
+        Lead(entry.account.email)
+        Button(t("android-misc.account.signOut"), primary = true, busy = out.busy) { app.run(out, entry.account.sub) { Auth.signOut(app.core, entry.account.sub) } }
+        out.error?.let { Error(it.message) }
+        Button(t("android-misc.account.switch"), primary = false, busy = app.isDoing("auth.begin")) { scope.launch { signIn(app, context) } }
+    }
+}
+
+@Composable
+private fun Title(text: String) = Text(text, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, textAlign = TextAlign.Center)
+
+@Composable
+private fun Lead(text: String) = Text(text, fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
+
+@Composable
+private fun Error(text: String) = Text(text, fontSize = 13.sp, color = C.red)
+
+/** Asks for the invite code a new workspace needs; what the last try said stands under it. */
+@Composable
+private fun InviteCodeForm(create: Write, make: (String) -> Unit) {
+    var code by remember { mutableStateOf(create.arg ?: "") }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Field(code, { code = it }, "XXXX-XXXX-XXXX", mono = true, modifier = Modifier.weight(1f))
+            Button(t("android-misc.workspace.create"), primary = true, busy = create.busy, enabled = code.isNotBlank()) { make(code.trim()) }
+        }
+        // Nothing was wrong with a code nobody had typed yet.
+        val error = create.error
+        if (error != null && !create.arg.isNullOrEmpty()) Error(errorText(error))
+    }
+}
+
+// ── the switcher ───────────────────────────────────────────────────────
+
+fun openWorkspaces(app: AppState) {
+    app.sheet = SheetSpec(0.7f, draggable = true) { WorkspacesSheet(app) }
+}
+
+/**
+ * The workspace sheet, opened from its name on Home (web/src/mobile/Workspaces.tsx): the invitations waiting, the one in
+ * use (checked) and the others to switch to (with more than one account signed in, whose each is under its name; what it
+ * holds at the row's end), a new one, and joining by an invitation's link. The workspace's settings are in 设置
+ * (SettingsHome.kt).
+ */
+@Composable
+private fun ColumnScope.WorkspacesSheet(app: AppState) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val all by rememberTopic<List<AccountWorkspaces>>(app.core, Topics.workspaces)
+    val byAccount = all.value.orEmpty()
+    val respond = remember { Write(app) }
+    val pending = byAccount.flatMap { a -> a.invitations.map { a.account to it } }
+    val currentOf = byAccount.firstOrNull { a -> a.workspaces.any { it.id == app.workspace } }
+    val current = currentOf?.workspaces?.firstOrNull { it.id == app.workspace }
+    val others = byAccount.flatMap { a -> a.workspaces.filter { it.id != app.workspace }.map { a.account to it } }
+    // Each its mark before its name, its letter where it has none, once any has one.
+    val anyMarked = byAccount.any { a -> a.workspaces.any { hasStationMark(it.emoji, it.icon) } }
+    // What each of the others has waiting, as the core counts it.
+    val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(app.workspace.orEmpty()))
+    SheetGrab()
+    SheetHead(t("android-misc.workspace.sheet.title"))
+    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+        if (current != null) {
+            Label(t("android-misc.workspace.current"))
+            Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp).clip(Smooth(16.dp)).background(C.bg)) {
+                PickRow(current.name, sub = currentOf.account.email, checked = true, leading = if (anyMarked) ({ WorkspaceIcon(current) }) else null) { app.sheet = null }
+            }
+        }
+        if (pending.isNotEmpty()) {
+            Label(t("android-misc.invite.label"))
+            pending.forEach { (account, invite) ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Text(t("android-misc.invite.invitedYou", "inviter" to invite.inviter.ifEmpty { t("android-misc.invite.someone") }, "name" to invite.name), fontSize = 15.sp, color = C.ink)
+                        Text(account.email, fontSize = 12.sp, color = C.muted)
+                    }
+                    Button(t("android-misc.invite.join"), primary = true, busy = respond.busy && respond.arg == "+${invite.id}") {
+                        app.run(respond, "+${invite.id}") { app.join(account, invite); app.toast = t("android-misc.invite.joined", "name" to invite.name) }
+                    }
+                    Button(t("android-misc.invite.ignore"), primary = false, busy = respond.busy && respond.arg == "-${invite.id}") {
+                        app.run(respond, "-${invite.id}") { Cloud(app.core, account.sub).declineInvitation(invite.id); app.toast = t("android-misc.invite.ignored") }
+                    }
+                }
+            }
+            respond.error?.let { Box(Modifier.padding(horizontal = 20.dp)) { Error(it.message) } }
+        }
+        if (others.isNotEmpty()) Label(t("android-misc.workspace.others"))
+        others.forEach { (account, w) ->
+            WorkspaceRow(w, account.email, marks.value?.workspaces?.get(w.id), anyMarked) { app.pickWorkspace(w.id); app.home() }
+        }
+    }
+    Column(Modifier.padding(top = 8.dp, bottom = 16.dp)) {
+        PickRow(t("android-misc.workspace.addAccount"), sub = t("android-misc.workspace.addAccount.sub"), busy = app.isDoing("auth.begin"), leading = { IconIn(Icons.LogIn, 20.dp) }) { scope.launch { signIn(app, context) } }
+        PickRow(t("android-misc.workspace.new"), leading = { IconIn(Icons.Plus, 20.dp) }) { openNewWorkspace(app) }
+    }
+}
+
+/** Workspace identity (its icon, when it has one, and name) and its waiting work; membership counts belong in settings. */
+@Composable
+private fun WorkspaceRow(w: WorkspaceSummary, email: String, mark: WorkspaceMark?, lead: Boolean, onClick: () -> Unit) {
+    Row(Modifier.padding(horizontal = 12.dp).fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (lead) WorkspaceIcon(w)
+        Column(Modifier.weight(1f)) {
+            Text(w.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(email, fontSize = 12.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (mark != null) MarkCounts(mark)
+    }
+}
+
+/** A workspace's mark in the sheet's rows, drawn as a station's is; its first letter, muted, where it has none. */
+@Composable
+private fun WorkspaceIcon(w: WorkspaceSummary) = Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+    if (hasStationMark(w.emoji, w.icon)) StationMark(w.emoji, w.icon, 22.dp, C.ink)
+    else Text(w.name.trim().take(1).uppercase(), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.muted)
+}
+
+@Composable
+private fun Label(text: String) = Text(text, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 2.dp))
+
+// ── a new workspace ────────────────────────────────────────────────────
+
+private fun openNewWorkspace(app: AppState) {
+    app.sheet = SheetSpec(0.8f) { NewWorkspaceSheet(app) }
+}
+
+@Composable
+private fun ColumnScope.NewWorkspaceSheet(app: AppState) {
+    val accounts by rememberTopic<List<Account>>(app.core, Topics.accounts)
+    val list = accounts.value.orEmpty()
+    var name by remember { mutableStateOf("") }
+    var owner by remember { mutableStateOf<String?>(null) }
+    // Sent every time: still.fail cloud looks at it only for an account not let in yet, and then asks for it when it is missing or wrong.
+    var code by remember { mutableStateOf("") }
+    val create = remember { Write(app) }
+    var asked by remember { mutableStateOf(false) }
+    if (needsInviteCode(create.error)) asked = true
+    val sub = owner?.takeIf { o -> list.any { it.sub == o } } ?: list.firstOrNull()?.sub
+    val go = {
+        if (name.isNotBlank() && sub != null) app.run(create) {
+            val id = Cloud(app.core, sub).createWorkspace(name.trim(), code.trim())
+            app.pickWorkspace(id)
+            app.home()
+        }
+    }
+    SheetGrab()
+    SheetHead(t("android-misc.workspace.new"))
+    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(t("android-misc.workspace.new.text"), fontSize = 14.sp, color = C.muted)
+        Label0(t("android-misc.workspace.name"))
+        Field(name, { name = it }, t("android-misc.workspace.name.placeholder"))
+        if (list.size > 1) {
+            Label0(t("android-misc.workspace.account"))
+            list.forEach { a -> PickRow(a.email, checked = a.sub == sub) { owner = a.sub } }
+        }
+        if (asked) {
+            Label0(t("android-misc.invite.code"))
+            Field(code, { code = it }, "XXXX-XXXX-XXXX", mono = true)
+            val error = create.error
+            if (error != null && needsInviteCode(error) && code.isNotBlank()) Error(errorText(error))
+            else Text(t("android-misc.invite.codeNeeded", "app" to BuildConfig.APP_NAME), fontSize = 12.sp, color = C.muted)
+        }
+        create.error?.takeIf { !needsInviteCode(it) }?.let { Error(it.message) }
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+            Button(t("common.cancel"), primary = false) { app.sheet = null }
+            Button(t("android-misc.workspace.createButton"), primary = true, busy = create.busy, enabled = name.isNotBlank()) { go() }
+        }
+    }
+}
+
+@Composable
+private fun Label0(text: String) = Text(text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+
+/** Whether invitations wait for any signed-in account: the switcher says so with a dot. */
+@Composable
+fun invitationsWaiting(app: AppState): Boolean {
+    val all by rememberTopic<List<AccountWorkspaces>>(app.core, Topics.workspaces)
+    return all.value.orEmpty().any { it.invitations.isNotEmpty() }
+}
+
+// ── an invitation's link ───────────────────────────────────────────────
+
+/** The token of an invitation's link (`<cloud>/invite#<token>`), or what was pasted when it is a token by itself. */
+fun invitationToken(text: String): String? {
+    val t = text.trim()
+    if (t.isEmpty()) return null
+    val hash = t.substringAfter("/invite#", "")
+    return (hash.ifEmpty { if (t.contains('/') || t.contains(' ')) "" else t }).trim().ifEmpty { null }
+}
+
+/** Joining by an invitation's link: pasted here, then what it leads to is shown before it is accepted (as the web's /invite). */
+fun openInviteLink(app: AppState) {
+    app.sheet = SheetSpec(0.5f) { InviteLinkSheet(app, null) }
+}
+
+/** An invitation's link opened in the app: what it leads to, before it is accepted. */
+fun openInvite(app: AppState, token: String) {
+    app.sheet = SheetSpec(0.5f) { InviteLinkSheet(app, token) }
+}
+
+@Composable
+private fun ColumnScope.InviteLinkSheet(app: AppState, given: String?) {
+    val accounts by rememberTopic<List<Account>>(app.core, Topics.accounts)
+    val list = accounts.value.orEmpty()
+    var text by remember { mutableStateOf("") }
+    var token by remember { mutableStateOf(given) }
+    var chosen by remember { mutableStateOf<String?>(null) }
+    val sub = chosen?.takeIf { c -> list.any { it.sub == c } } ?: list.firstOrNull()?.sub
+    // Read once per account: what the link leads to depends on who looks.
+    var preview by remember { mutableStateOf<fail.still.android.data.InvitationPreview?>(null) }
+    var failed by remember { mutableStateOf<String?>(null) }
+    val accept = remember { Write(app) }
+    androidx.compose.runtime.LaunchedEffect(token, sub) {
+        preview = null; failed = null
+        val t = token ?: return@LaunchedEffect
+        if (sub == null) return@LaunchedEffect
+        try { preview = Cloud(app.core, sub).previewInvitation(t) } catch (e: CoreException) { failed = e.message }
+    }
+    SheetGrab()
+    // Signed out: nothing reads the invitation yet (as the web's /invite: sign in first, then decide).
+    if (accounts.value != null && list.isEmpty()) {
+        val context = LocalContext.current
+        val scope = rememberCoroutineScope()
+        SheetHead(t("android-misc.signIn.title", "app" to BuildConfig.APP_NAME))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(t("android-misc.signIn.invited", "app" to BuildConfig.APP_NAME), fontSize = 14.sp, color = C.muted)
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                Button(t("common.cancel"), primary = false) { app.sheet = null }
+                Button(t("android-misc.signIn.google"), primary = true, busy = app.isDoing("auth.begin")) { scope.launch { signIn(app, context) } }
+            }
+        }
+        return
+    }
+    val p = preview
+    SheetHead(if (token == null) t("android-misc.invite.byLink") else if (p != null) t("android-misc.invite.joinNamed", "name" to p.name) else if (failed != null) t("android-misc.invite.unusable") else t("android-misc.invite.loading"))
+    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        val link = token
+        when {
+            link == null -> {
+                Text(t("android-misc.invite.pasteLink", "app" to BuildConfig.APP_NAME), fontSize = 14.sp, color = C.muted)
+                Field(text, { text = it }, "https://app.still.fail/invite#…", lines = 2)
+                Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                    Button(t("common.cancel"), primary = false) { app.sheet = null }
+                    Button(t("android-misc.invite.view"), primary = true, enabled = invitationToken(text) != null) { token = invitationToken(text) }
+                }
+            }
+            failed != null -> {
+                Text(failed ?: "", fontSize = 14.sp, color = C.muted)
+                Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                    if (given == null) Button(t("android-misc.invite.otherLink"), primary = false) { token = null }
+                    Button(t("common.close"), primary = true) { app.sheet = null }
+                }
+            }
+            p == null -> WaitLine(t("common.reading"))
+            else -> {
+                Text(t(if (p.email != null) "android-misc.invite.invitedYouAsOnly" else "android-misc.invite.invitedYouAs", "inviter" to p.inviter.ifEmpty { t("android-misc.invite.someone") }, "role" to (ROLE_LABEL[p.role] ?: p.role), "email" to p.email), fontSize = 14.sp, color = C.muted)
+                if (list.size > 1) {
+                    Label0(t("android-misc.invite.whichAccount"))
+                    Column { list.forEach { a -> PickRow(a.email, checked = a.sub == sub) { chosen = a.sub } } }
+                }
+                accept.error?.let { Error(it.message) }
+                Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                    Button(t("common.cancel"), primary = false) { app.sheet = null }
+                    Button(t("android-misc.invite.joinAs", "email" to (list.firstOrNull { it.sub == sub }?.email ?: "")), primary = true, busy = accept.busy, enabled = sub != null) {
+                        app.run(accept) {
+                            val id = Cloud(app.core, sub!!).acceptInvitationToken(link)
+                            app.pickWorkspace(id); app.home(); app.toast = t("android-misc.invite.joined", "name" to p.name)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -46,10 +46,7 @@ object Notifier {
     const val AT = "fail.still.android.AT"
 
     /** The words, in the language last followed (a push may come with no app started). */
-    fun words(context: Context) {
-        I18n.load(context)
-        if (!KeptLang.followed) KeptLang.kept(context.getSharedPreferences("stillfail", Context.MODE_PRIVATE))?.let(I18n::follow)
-    }
+    fun words(context: Context) = KeptLang.words(context)
 
     /** Whether MainActivity is started. */
     @Volatile var inFront = false

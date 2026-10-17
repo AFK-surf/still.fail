@@ -1,0 +1,646 @@
+// Decisions (web mobile, the same interaction set): an agent's post that ends its turn asking people to decide carries
+// options. In the chat they are a column of buttons right under the post, full width, one per line, the one the agent
+// recommends last and filled in ink; a tap answers with it (the viewer's message, quoting the post). Answered (or
+// replaced), the buttons go and a quiet line says how it went.
+// The decisions page 「奏」 (from the home page's 奏 N) shows the workspace's decisions waiting for the viewer one at a
+// time: the chat's title small at the top (to its chat), the messages before the post and the post itself as the chat
+// draws them, and at the foot its options, the hint and `1 / N`. The whole decision is swiped: left 待定 (set aside on
+// this device: last of the page, still waiting), right 不再提醒 (dismissed for the viewer). Let go past about a third
+// of the width, or flung, it flies off and the next comes in; short of that it springs back.
+// Options and text cards both have a multiline reply field on the page, below any options
+// offered (the reply is the viewer's message quoting the post, `decision.reply`); a swipe never starts in the field. A card
+// of a type this app does not know is answered in its chat. In a chat only an options card has anything under it.
+package fail.still.android.screens
+
+import fail.still.android.data.t
+import dev.chrisbanes.haze.hazeSource
+import androidx.compose.animation.AnimatedVisibility
+import fail.still.android.ui.AgentStateMark
+import fail.still.android.data.ChatState
+import fail.still.android.shared.R
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.material3.ripple
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import fail.still.android.ui.keyboard
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.add
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.constrainHeight
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.MutableIntState
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.util.lerp
+import fail.still.android.LocalApp
+import fail.still.android.Screen
+import fail.still.android.data.ChatMessage
+import fail.still.android.data.ChatOf
+import fail.still.android.data.ChatView
+import fail.still.android.data.DecisionItem
+import fail.still.android.data.DecisionOption
+import fail.still.android.data.DecisionsView
+import fail.still.android.data.Link
+import fail.still.android.data.Me
+import fail.still.android.data.Topics
+import fail.still.android.data.WorkspaceEntry
+import fail.still.android.data.errorText
+import fail.still.android.data.rememberTopic
+import fail.still.android.ui.C
+import fail.still.android.ui.Ease
+import fail.still.android.ui.IconIn
+import fail.still.android.ui.Icons
+import fail.still.android.ui.MoveSpring
+import fail.still.android.ui.reducedMotion
+import fail.still.android.ui.Smooth
+import fail.still.android.ui.SMOOTH_SCALE
+import fail.still.android.ui.BusyIcon
+import fail.still.android.ui.WaitPill
+import fail.still.android.ui.WaitShape
+import fail.still.android.ui.Waiting
+import fail.still.core.CoreException
+import kotlin.math.abs
+import kotlinx.coroutines.launch
+import fail.still.android.ui.DoingMark
+import fail.still.android.ui.chatSubtle
+
+// ── the options ────────────────────────────────────────────────────────
+
+/**
+ * A button as wide as it is given (留着 / 归档这个 chat under a post that ended all done, Chat.kt ArchiveUnder): the
+ * label in medium, in the accent with white words when `strong`, the chip colour otherwise; a spinner while `busy`,
+ * a mark when `failed`.
+ */
+@Composable
+internal fun OptionButton(label: String, modifier: Modifier = Modifier, strong: Boolean = false, enabled: Boolean = true, busy: Boolean = false, failed: String? = null, onPick: () -> Unit) {
+    val still = reducedMotion()
+    val ink = if (strong) Color.White else C.ink
+    val touch = remember(label) { MutableInteractionSource() }
+    val pressed by touch.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        if (pressed && !still) 0.97f else 1f,
+        tween(if (still) 0 else if (pressed) 80 else 180, easing = Ease.Out), label = "option press",
+    )
+    Row(
+        modifier.fillMaxWidth().graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(Smooth(12.dp)).background(if (strong) C.accent else C.chip)
+            .alpha(if (enabled) 1f else 0.5f)
+            .clickable(enabled = enabled && !busy, interactionSource = touch, indication = ripple(color = ink)) { onPick() }
+            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .semantics(mergeDescendants = true) {},
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(label, Modifier.weight(1f), fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = ink)
+        // On the solid one the spinner turns in its words' white (BusyIcon's rule); what failed, the core's red mark.
+        if (busy) BusyIcon(true, solid = if (strong) ink else null) else if (failed != null) DoingMark(false, failed)
+    }
+}
+
+/**
+ * Under a post in a chat (Chat.kt SaidRow): its options while it waits, a tap answering with one; once answered (or
+ * dismissed by the viewer, or replaced), no buttons, and how it went in a quiet line when the core says. Nothing under
+ * other messages, nor from a station before decisions.
+ */
+@Composable
+internal fun DecisionUnder(ctx: Here, m: ChatMessage) {
+    val card = m.card
+    if (card == null && m.options == null) return
+    // Buttons only for an options card (a core before cards: `options` alone); a text card is answered on the 奏 page.
+    val options = if (card != null) card.options.takeIf { card.type == "options" } else m.options
+    val decision = m.decision
+    val resolved = decision?.resolved == true || decision?.dismissed == true
+    if (options.isNullOrEmpty()) {
+        val label = if (resolved) decision?.text else card?.assigneeText
+        label?.let { Text(it, fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle(), modifier = Modifier.padding(top = 2.dp)) }
+        return
+    }
+    val app = LocalApp.current
+    val station = ctx.station
+    val still = reducedMotion()
+    val busy = options.firstOrNull { app.isDoing("decision.answer", "station" to station, "thread" to m.thread, "seq" to m.seq, "option" to it.label) }?.label
+    Column {
+        // Match chat-list archive: the whole group shrinks/fades, then a delayed spring closes its space.
+        AnimatedVisibility(
+            visible = !resolved, enter = EnterTransition.None,
+            exit = fadeOut(tween(if (still) 0 else LEAVE_MS, easing = CssEaseOut)) +
+                scaleOut(tween(if (still) 0 else LEAVE_MS, easing = CssEaseOut), targetScale = 0.9f) +
+                shrinkVertically(
+                    if (still) tween(0) else closeGap(IntSize.VisibilityThreshold),
+                    shrinkTowards = Alignment.Top, clip = false,
+                ),
+        ) {
+            Column {
+                card?.assigneeText?.let { Text(it, fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle(), modifier = Modifier.padding(top = 2.dp)) }
+            // An agent's request for a vault item: approved here (Vault.kt), not answered in the chat.
+            val vault = card?.vault
+            if (vault != null) {
+                val me = ctx.view.me.email
+                val who = card?.assignee
+                VaultApproval(station.substringBefore('/'), vault, mine = who == null || me == null || who.equals(me, ignoreCase = true), Modifier.padding(top = 6.dp))
+            } else DecisionOptions(
+                options, Modifier.padding(top = 6.dp),
+                enabled = !ctx.view.offline && ctx.view.archived != true, busy = busy,
+            ) { o -> if (!resolved) app.act(t("android-misc.decisions.answerWhat")) { app.api(station).answerDecision(m.thread, m.seq, o.label) } }
+            }
+        }
+        AnimatedVisibility(
+            visible = resolved && decision?.text != null,
+            enter = fadeIn(tween(if (still) 0 else LEAVE_MS, delayMillis = if (still) 0 else LEAVE_MS, easing = CssEaseOut)) +
+                expandVertically(if (still) tween(0) else closeGap(IntSize.VisibilityThreshold), expandFrom = Alignment.Top),
+        ) {
+            Text(decision?.text.orEmpty(), fontSize = 13.sp, lineHeight = 19.sp, color = chatSubtle(), modifier = Modifier.padding(top = 2.dp))
+        }
+    }
+}
+
+// ── the page ───────────────────────────────────────────────────────────
+
+/** A decision's own key: its station, chat and post. */
+private val DecisionItem.key get() = "$station\t$thread\t$seq"
+
+/** Let go past this share of its width, the decision goes. */
+private const val THRESHOLD = 0.35f
+
+/**
+ * What this device did to the page's decisions before the core says so (kept with the page): one answered or dismissed
+ * is not shown, one set aside goes last; each until the core's list has it so.
+ */
+@Stable
+private class DecisionsLocal {
+    val gone = mutableStateListOf<String>()
+    val later = mutableStateListOf<String>()
+    /** The decision in front came in as the one before went: it comes in, not there at once. */
+    var arriving by mutableStateOf(false)
+    // Keep a reply visible if the core removes it before its exit finishes.
+    var replying by mutableStateOf<DecisionItem?>(null)
+
+    fun undo(key: String) { gone.remove(key); later.remove(key) }
+
+    fun caughtUp(items: List<DecisionItem>) {
+        val keys = items.mapTo(HashSet()) { it.key }
+        gone.removeAll { it !in keys }
+        later.removeAll { it !in keys }
+    }
+
+    fun shown(items: List<DecisionItem>): List<DecisionItem> {
+        val held = replying
+        val source = if (held != null) listOf(held) + items.filter { it.key != held.key } else items
+        val left = source.filter { it.key !in gone }
+        val (moved, rest) = left.partition { it.key in later }
+        return rest + later.mapNotNull { k -> moved.find { it.key == k } }
+    }
+}
+
+@Composable
+fun DecisionsScreen(current: WorkspaceEntry) {
+    val app = LocalApp.current
+    val topic by rememberTopic<DecisionsView>(app.core, Topics.decisions(current.workspace.id))
+    val local = remember { DecisionsLocal() }
+    val view = topic.value
+    val items = view?.items.orEmpty()
+    SideEffect { local.caughtUp(items) }
+    val shown = local.shown(items)
+    // With none left the page stays, for the next to come.
+    // Its foot over the bottom bar when it is there (the keyboard, when up, is higher: the bar steps aside for it).
+    val room = fail.still.android.LocalBarRoom.current
+    // 令 in the bar's notch, as on the chats' list; nothing of its own to add.
+    PlacePage(current, "decisions", null, back = fail.still.android.placeLabel("chats")) { top ->
+    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars.add(WindowInsets(bottom = room))))) {
+        if (shown.isEmpty()) {
+            // None yet while stations are still read is not none: their cards to come, and what each still waits on.
+            // All read, the day so far (a station that could not be read said in red over it). It scrolls under the top bar.
+            if (view != null && !view.wait.reading) {
+                Idle(view, top, Modifier.weight(1f))
+                return@Column
+            }
+            Spacer(Modifier.height(top))
+            Waiting(WaitShape.Cards, count = 2, error = topic.error?.message, note = view?.wait, modifier = Modifier.weight(1f))
+            return@Column
+        }
+        Spacer(Modifier.height(top))
+        Deck(shown, local, Modifier.weight(1f))
+    }
+    }
+}
+
+/**
+ * None left (web DecisionsIdle.tsx): the page stays for the next to come and says how the day went (how many answered,
+ * how long they waited on average, how many agents are at work), where the next may come from (the viewer's chats with
+ * an agent at work or waiting) and what was answered today. Each opens its chat.
+ */
+@Composable
+private fun Idle(view: DecisionsView, top: androidx.compose.ui.unit.Dp, modifier: Modifier) {
+    val app = LocalApp.current
+    val today = view.today
+    val working = view.working.orEmpty()
+    val answered = view.answered.orEmpty()
+    Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = top + 16.dp, bottom = 24.dp)) {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            view.wait.failing.forEach { WaitPill(it.text, error = true, modifier = Modifier.padding(bottom = 8.dp)) }
+            Image(painterResource(if (C.dark) R.drawable.buddy_idle_dark else R.drawable.buddy_idle), null, Modifier.size(72.dp))
+            Text(t("android-misc.decisions.idle.title"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink, modifier = Modifier.padding(top = 8.dp))
+            Text(t("android-misc.decisions.idle.note"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(top = 4.dp))
+            if (today != null) {
+                Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                    Figure(today.count.toString(), t("android-misc.decisions.idle.answered"))
+                    today.waited?.let { Figure(it, t("android-misc.decisions.idle.waited")) }
+                    Figure(today.working.toString(), t("android-misc.decisions.idle.working"))
+                }
+            }
+        }
+        if (working.isNotEmpty()) {
+            IdleTitle(t("android-misc.decisions.idle.workingTitle"))
+            working.forEach { w ->
+                IdleRow(w.title, w.line, w.time?.get("lastActiveAt")?.ago.orEmpty(), busy = true) { app.push(Screen.Chat(w.station, ChatOf.Session(w.session))) }
+            }
+        }
+        if (answered.isNotEmpty()) {
+            IdleTitle(t("android-misc.decisions.idle.answeredTitle"))
+            answered.forEach { a ->
+                IdleRow(a.text, "${a.title} · ${a.answer}", a.clock, busy = false) { app.push(Screen.Chat(a.station, ChatOf.Session(a.session))) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Figure(figure: String, words: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(figure, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+        Text(words, fontSize = 12.sp, color = C.subtle)
+    }
+}
+
+@Composable
+private fun IdleTitle(text: String) {
+    Text(text, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = C.subtle, modifier = Modifier.padding(start = 10.dp, top = 28.dp, bottom = 4.dp))
+}
+
+/** A chat at work (the turning yellow ring) or a card answered (a quiet dot): its words over where it is, when at its end. */
+@Composable
+private fun IdleRow(main: String, meta: String, at: String, busy: Boolean, onOpen: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(Smooth(10.dp)).clickable(onClick = onOpen).padding(horizontal = 10.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(Modifier.padding(top = 4.dp).size(12.dp), contentAlignment = Alignment.Center) {
+            if (busy) AgentStateMark(ChatState.Running, C.bg)
+            else Box(Modifier.size(6.dp).clip(CircleShape).background(C.subtle))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(main, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(meta, fontSize = 13.sp, color = C.subtle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Text(at, fontSize = 12.sp, color = C.subtle)
+    }
+}
+
+/**
+ * The decision in front, swiped where it rests: the drag is read on the page's frame (which does not move) before
+ * anything in it (PointerEventPass.Initial), so it works over messages and buttons that take touches; across first, it
+ * is the swipe and they let go (a tap on an option still answers); up or down first, it is theirs (the messages scroll).
+ */
+@Composable
+private fun Deck(shown: List<DecisionItem>, local: DecisionsLocal, modifier: Modifier) {
+    val app = LocalApp.current
+    val item = shown.first()
+    val n = shown.size
+    val still = reducedMotion()
+    val scope = rememberCoroutineScope()
+    // The front one's way across (px), its coming in (0 → 1) and its departure as it is answered: its own, new with
+    // another in front, so what went is not snapped back a frame before the next takes its place.
+    val drag = remember(item.key) { Animatable(0f) }
+    val lift = remember(item.key) { Animatable(0f) }
+    val arrive = remember(item.key) { Animatable(if (local.arriving && !still) 0f else 1f) }
+    LaunchedEffect(item.key) {
+        local.arriving = false
+        if (arrive.value < 1f) arrive.animateTo(1f, tween(260, easing = Ease.Out))
+    }
+    var width by remember { mutableIntStateOf(1) }
+    var height by remember { mutableIntStateOf(1) }
+    var busy by remember { mutableStateOf(false) }
+    // The deck's frame and a text card's field in it: a touch that begins in the field is the field's (no swipe).
+    var frame by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var field by remember(item.key) { mutableStateOf<LayoutCoordinates?>(null) }
+    fun inField(p: Offset): Boolean {
+        val f = field?.takeIf { it.isAttached } ?: return false
+        val box = frame?.takeIf { it.isAttached } ?: return false
+        return box.localBoundingBoxOf(f).contains(p)
+    }
+
+    /** Says it to the core; refused, the decision is back and why is said. */
+    fun call(what: String, run: suspend () -> Unit) {
+        app.scope.launch {
+            try { run() } catch (e: CoreException) { local.undo(item.key); app.toast = t(if (e.code == "unconfirmed") "android-misc.act.unconfirmed" else "android-misc.act.failed", "what" to what, "error" to errorText(e)) }
+        }
+    }
+
+    /** The front one goes (`dir` its side, 0 up after answering), `then` is done, and the next comes in. */
+    fun go(dir: Int, then: () -> Unit) {
+        if (busy) return
+        busy = true
+        scope.launch {
+            if (!still) {
+                if (dir == 0) lift.animateTo(height.toFloat(), tween(360, easing = androidx.compose.animation.core.CubicBezierEasing(0.55f, 0f, 0.85f, 0.35f)))
+                else drag.animateTo(dir * width * 1.25f, tween(260, easing = Ease.Standard))
+            }
+            // The next card is already laid out underneath the departing one.
+            local.arriving = n == 1
+            val alone = n == 1
+            then()
+            busy = false
+            // The only one, set aside: still the one in front; it comes in again.
+            if (alone && item.key !in local.gone) {
+                drag.snapTo(0f)
+                if (!still) { arrive.snapTo(0f); arrive.animateTo(1f, tween(260, easing = Ease.Out)) }
+                local.arriving = false
+            }
+        }
+    }
+    val defer = { if (local.replying == null) go(-1) { local.later.remove(item.key); local.later.add(item.key); call(t("android-misc.decisions.deferWhat")) { app.api(item.station).deferDecision(item.thread, item.seq) } } }
+    val dismiss = { if (local.replying == null) go(1) { local.gone.add(item.key); call(t("android-misc.decisions.dismissWhat")) { app.api(item.station).dismissDecision(item.thread, item.seq) } } }
+    val answer = { o: DecisionOption -> if (local.replying == null) go(0) { local.gone.add(item.key); call(t("android-misc.decisions.answerWhat")) { app.api(item.station).answerDecision(item.thread, item.seq, o.label) } } }
+    // A text card's reply: it goes as a message does, at once (its chat's outbox has it: sending, or not sent with a way
+    // to send it again), not waiting on the station; refused by the core, the decision and what was written are back.
+    val replyDraft = rememberDraft("decision:${item.station}:${item.thread}:${item.seq}")
+    val reply = {
+        if (replyDraft.ready && !busy && local.replying == null) {
+            val taken = replyDraft.take()
+            go(0) { local.gone.add(item.key) }
+            app.scope.launch {
+                try {
+                    app.api(item.station).replyDecision(item.thread, item.seq, taken.text, taken.files.mapNotNull { it.done }, taken.quotes.map { it.sent() })
+                } catch (e: CoreException) {
+                    local.undo(item.key)
+                    if (e.code == "invalid_params" && replyDraft.empty) replyDraft.restore(taken)
+                    app.toast = t("android-misc.decisions.replyFailed", "error" to errorText(e))
+                }
+            }
+        }
+        Unit
+    }
+
+    Column(modifier.fillMaxWidth()) {
+        Box(
+            Modifier.weight(1f).fillMaxWidth().clipToBounds().onSizeChanged { width = it.width.coerceAtLeast(1); height = it.height.coerceAtLeast(1) }
+                .onGloballyPositioned { frame = it }
+                .pointerInput(item.key, still) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        if (busy || local.replying != null || inField(down.position)) return@awaitEachGesture
+                        val tracker = VelocityTracker()
+                        var pos = drag.value
+                        var across = 0f
+                        var upDown = 0f
+                        var swiping = false
+                        while (true) {
+                            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) {
+                                if (swiping) {
+                                    change.consume()
+                                    val v = tracker.calculateVelocity().x
+                                    val at = drag.value
+                                    val fling = abs(v) > 900.dp.toPx() && abs(at) > 16.dp.toPx() && (v > 0) == (at > 0)
+                                    when {
+                                        busy -> {}
+                                        at > width * THRESHOLD || fling && at > 0 -> dismiss()
+                                        at < -width * THRESHOLD || fling && at < 0 -> defer()
+                                        else -> scope.launch { if (still) drag.snapTo(0f) else drag.animateTo(0f, MoveSpring, v) }
+                                    }
+                                }
+                                break
+                            }
+                            val dx = change.position.x - change.previousPosition.x
+                            if (!swiping) {
+                                across += dx
+                                upDown += change.position.y - change.previousPosition.y
+                                // Up or down first: the messages' (they scroll), not a swipe.
+                                if (abs(upDown) > viewConfiguration.touchSlop && abs(upDown) > abs(across)) break
+                                if (abs(across) <= viewConfiguration.touchSlop) continue
+                                swiping = true
+                                tracker.resetTracking()
+                            }
+                            change.consume()
+                            if (busy) continue
+                            tracker.addPosition(change.uptimeMillis, change.position)
+                            pos += dx
+                            val to = pos
+                            scope.launch { drag.snapTo(to) }
+                        }
+                    }
+                }
+                .semantics {
+                    customActions = listOf(
+                        CustomAccessibilityAction(t("android-misc.decisions.defer")) { defer(); true },
+                        CustomAccessibilityAction(t("android-misc.decisions.dismiss")) { dismiss(); true },
+                    )
+                },
+        ) {
+            // Under it, what letting it go that way does: left 待定 (at the right edge it uncovers), right 不再提醒.
+            val x = drag.value
+            if (x != 0f && !busy) Box(
+                Modifier.matchParentSize().padding(horizontal = 24.dp).graphicsLayer { alpha = (abs(drag.value) / (width * 0.12f)).coerceIn(0f, 1f) },
+                contentAlignment = if (x > 0) Alignment.CenterStart else Alignment.CenterEnd,
+            ) {
+                Text(if (x > 0) t("android-misc.decisions.dismiss") else t("android-misc.decisions.defer"), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = C.muted)
+            }
+            if (busy && n > 1) {
+                Column(Modifier.fillMaxSize().background(C.bg)) {
+                    Face(shown[1], onPick = {}, onReply = {}, onField = {})
+                }
+            }
+            Column(
+                Modifier.fillMaxSize().graphicsLayer {
+                    val a = arrive.value
+                    val progress = (lift.value / height).coerceIn(0f, 1f)
+                    val gathered = (progress / 0.4f).coerceIn(0f, 1f)
+                    val s = lerp(0.94f, 1f, a) * lerp(1f, 0.88f, gathered)
+                    scaleX = s; scaleY = s
+                    translationX = drag.value
+                    translationY = -lift.value
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
+                    rotationZ = drag.value / width * 4f
+                    alpha = a
+                }.background(C.bg),
+            ) { Face(item, onPick = answer, onReply = reply, onField = { field = it }) }
+        }
+        // The hint and where this one is among them, still.
+        Row(
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(t("android-misc.decisions.hint"), fontSize = 12.sp, color = C.subtle, maxLines = 1, modifier = Modifier.weight(1f))
+            Text("1 / $n", fontSize = 12.sp, color = C.subtle, maxLines = 1)
+        }
+    }
+}
+
+/**
+ * A decision as the page shows it: its chat's title (to the chat), the messages before it and the post as the chat
+ * draws them (scrolled to the post), its options under the post, the chat's composer floating over them at the foot.
+ */
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.Face(
+    item: DecisionItem, onPick: (DecisionOption) -> Unit, onReply: () -> Unit, onField: (LayoutCoordinates) -> Unit,
+) {
+    val app = LocalApp.current
+    val messages = item.before + item.message
+    // The chat as far as these messages go: enough for them to be drawn as in it (files kept by the post's agent).
+    val view = remember(item) {
+        ChatView(
+            me = Me(), title = item.title, people = emptyList(), agents = emptyList(), messages = messages, more = false,
+            outbox = emptyList(), link = Link("online"), offline = false,
+        )
+    }
+    val of = ChatOf.Session(item.session)
+    val ctx = remember(item) { Here(item.station, of, view, emptyList(), orOwner = item.message.by.agent ?: item.session) }
+    Row(
+        Modifier.fillMaxWidth().clickable { app.push(Screen.Chat(item.station, of)) }.padding(horizontal = 16.dp, vertical = 8.dp)
+            .semantics(mergeDescendants = true) { contentDescription = t("android-misc.decisions.openChat", "title" to item.title) },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(item.title, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+    }
+    item.card?.assigneeText?.let { Text(it, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
+    val scroll = rememberScrollState()
+    val density = LocalDensity.current
+    var postAt by remember(item.key) { mutableStateOf<Float?>(null) }
+    // Long, it opens at the post (what is to be decided), with a little of what came before above it.
+    LaunchedEffect(item.key, postAt) {
+        val y = postAt ?: return@LaunchedEffect
+        scroll.scrollTo((y - with(density) { 48.dp.toPx() }).toInt().coerceAtLeast(0))
+    }
+    val card = item.card
+    val type = card?.type ?: "options"
+    // The composer floats over the messages, as in the chat: they scroll on under it, their end kept clear of it.
+    val host = remember(item.key) { Host() }
+    var footHeight by remember(item.key) { mutableIntStateOf(0) }
+    // The room an expanded composer's toolbar takes, kept clear at the messages' end.
+    val room = remember(item.key) { mutableIntStateOf(0) }
+    // A passage of a message picked where it is (MessagePick.kt): quoted into the reply's draft (DecisionComposer's), or
+    // only copied where there is no composer.
+    val replies = type == "options" || type == "text"
+    val draft = if (replies) rememberDraft("decision:${item.station}:${item.thread}:${item.seq}") else null
+    val pick = remember(item.key, draft) { MessagePick(draft) }
+    Box(Modifier.weight(1f).fillMaxWidth().letsGoOfPick(pick)) {
+        CompositionLocalProvider(LocalMessagePick provides pick) { Column(
+            Modifier.fillMaxSize().hazeSource(host.haze).background(C.bg).verticalScroll(scroll)
+                .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 10.dp + with(density) { (footHeight + room.intValue).toDp() }),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            messages.forEach { m ->
+                Box(if (m === item.message) Modifier.onGloballyPositioned { if (postAt == null) postAt = it.positionInParent().y } else Modifier) {
+                    SaidAlone(ctx, m)
+                }
+            }
+            // Under the post, as in its chat: its options, or (a card this app does not know) the way to answer it there.
+            when (type) {
+                // An agent's request for a vault item: approved here (Vault.kt); the 奏 page's are the viewer's.
+                "options" -> card?.vault?.let { VaultApproval(item.station.substringBefore('/'), it, mine = true) } ?: DecisionOptions(card?.options ?: item.options, onPick = onPick)
+                "text" -> {}
+                else -> Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(t("android-misc.decisions.replyInChat"), fontSize = 13.sp, color = C.muted)
+                    Box(
+                        Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.ink)
+                            .clickable { app.push(Screen.Chat(item.station, of, at = item.seq)) }.padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center,
+                    ) { Text(t("android-misc.decisions.goReply"), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = C.bg) }
+                }
+            }
+        }
+        PickLayer(pick, follow = { scroll.value }, moving = scroll.isScrollInProgress, top = 0.dp, bottom = with(density) { footHeight.toDp() }, modifier = Modifier.matchParentSize())
+        }
+        if (replies) {
+            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { footHeight = it.height }) {
+                DecisionComposer(item, host, if (type == "text") card?.placeholder else null, room, onField, onReply)
+            }
+        }
+    }
+}
+
+/** Uses the chat's entire composer: attachments, references, draft extras, capsule and resizing. */
+@Composable
+private fun DecisionComposer(item: DecisionItem, host: Host, placeholder: String?, room: MutableIntState, onField: (LayoutCoordinates) -> Unit, onReply: () -> Unit) {
+    val app = LocalApp.current
+    val draft = rememberDraft("decision:${item.station}:${item.thread}:${item.seq}")
+    val launchers = AttachLaunchers { picked -> app.upload(draft, item.station, picked, app.scope) }
+    host.spec = ComposerSpec(
+        station = item.station, here = item.session, draft = draft, placeholder = placeholder ?: t("android-misc.decisions.placeholder"),
+        onPlus = { openAttach(app, launchers) }, onSend = onReply,
+    )
+    HostComposer(host, Modifier.onGloballyPositioned(onField).layout { measurable, constraints ->
+        val composer = measurable.measure(constraints)
+        // The toolbar an expanded composer adds, kept as room over the options (the messages' end clear of it), not
+        // between them and the composer.
+        room.intValue = if (draft.composerExpanded) 0 else 4.dp.roundToPx() + 36.dp.roundToPx()
+        layout(composer.width, composer.height) { composer.place(0, 0) }
+    }, besideRecent = false)
+}

@@ -178,64 +178,7 @@ class Updates(context: Context, private val origin: String, private val core: St
     }
 }
 
-/** Whether this app may install apps (安装未知应用); when not, the system's page for it opens instead. */
-fun mayInstall(context: Context): Boolean {
-    if (context.packageManager.canRequestPackageInstalls()) return true
-    context.startActivity(
-        Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-    )
-    return false
-}
-
-/**
- * Hands an APK to the system's installer; what it says comes to [InstallResult], which opens its page for the person
- * to confirm. `self`: this app's own newer build, installed over it without asking where the system allows that.
- */
-fun installApk(context: Context, apk: File, self: Boolean = false) {
-    val installer = context.packageManager.packageInstaller
-    val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
-        if (self) {
-            setAppPackageName(context.packageName)
-            if (Build.VERSION.SDK_INT >= 31) setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
-        }
-        setSize(apk.length())
-    }
-    val id = installer.createSession(params)
-    installer.openSession(id).use { session ->
-        session.openWrite("stillfail.apk", 0, apk.length()).use { out ->
-            apk.inputStream().use { it.copyTo(out) }
-            session.fsync(out)
-        }
-        val intent = Intent(context, InstallResult::class.java).putExtra(InstallResult.SELF, self)
-        // The installer puts its status in the intent: it has to be mutable.
-        val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
-        session.commit(PendingIntent.getBroadcast(context, id, intent, flags).intentSender)
-    }
-}
-
 /** What the installer says of a commit: it wants the person to confirm (its page is opened), or it failed. */
 /** Tries in a row that got no further before a download gives up (pauses 1, 2, 4, 8, 16 s between them). */
 private const val RETRIES = 6
 
-class InstallResult : BroadcastReceiver() {
-    companion object { const val SELF = "self" }
-
-    override fun onReceive(context: Context, intent: Intent) {
-        when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
-            PackageInstaller.STATUS_PENDING_USER_ACTION -> {
-                @Suppress("DEPRECATION")
-                val confirm = (if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
-                else intent.getParcelableExtra(Intent.EXTRA_INTENT)) ?: return
-                context.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            }
-            PackageInstaller.STATUS_SUCCESS -> Unit
-            PackageInstaller.STATUS_FAILURE_ABORTED -> Unit
-            else -> {
-                Notifier.words(context)
-                val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: t("android-misc.updates.installFailed")
-                val words = if (intent.getBooleanExtra(SELF, true)) "android-misc.updates.failed" else "android-chat.file.installFailed"
-                Toast.makeText(context, t(words, "error" to message), Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-}

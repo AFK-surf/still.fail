@@ -677,4 +677,10 @@ object KeptLang {
 
     /** The language kept, for a process that has not followed the core's. */
     fun kept(prefs: SharedPreferences): String? = prefs.getString(KEY, null)
+
+    /** The words, in the language last followed (a push, an installer's answer, may come with no app started). */
+    fun words(context: android.content.Context) {
+        fail.still.android.data.I18n.load(context)
+        if (!followed) kept(context.getSharedPreferences("stillfail", android.content.Context.MODE_PRIVATE))?.let(fail.still.android.data.I18n::follow)
+    }
 }

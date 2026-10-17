@@ -64,29 +64,12 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import fail.still.android.ui.fileSize
+import fail.still.android.ui.LocalWide
 
 private fun themes() = listOf("system" to t("android-settings.theme.system"), "light" to t("android-settings.theme.light"), "dark" to t("android-settings.theme.dark"))
 
 /** The languages to choose: null follows the phone (the core's `language`, client/core-ts/src/prefs.ts). */
 private fun languages() = listOf(null to t("common.language.system"), "zh" to t("common.language.zh"), "en" to t("common.language.en"))
-
-/** A row that opens a page: its name, how things stand (`bad` in red; `dot`, a red dot before it), a chevron. */
-@Composable
-fun GoRow(title: String, value: String? = null, bad: Boolean = false, dot: Boolean = false, lead: (@Composable RowScope.() -> Unit)? = null, onClick: () -> Unit) {
-    ListRow(onClick = onClick) {
-        lead?.invoke(this)
-        Text(title, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        if (value != null) Row(Modifier.widthIn(max = 220.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (dot) PresenceDot("error")
-            Text(value, fontSize = 14.sp, color = if (bad) C.red else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        IconIn(Icons.ChevronRight, 14.dp, C.subtle)
-    }
-}
-
-/** A page's note under its title, in a line or two. */
-@Composable
-fun PageNote(text: String) = Text(text, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 10.dp))
 
 @Composable
 fun SettingsScreen(current: WorkspaceEntry) {

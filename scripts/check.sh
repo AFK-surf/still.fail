@@ -212,11 +212,12 @@ if part ts; then
     added 'apps/android/*.kt' | grep 'RoundedCornerShape(' | grep -vE 'RoundedCornerShape\(50\)|own corner:' > "$tmp/android-corners" || true
     step "phone corners smooth (in what this adds)" sh -c "! grep . '$tmp/android-corners'"
   fi
-  # The app's packages one way (docs/client-core.md): the drive (drive/) is built on the pages (screens/), never the other
-  # way; the remote screens (remote/) on neither, the share sheet (share/) not on the drive. What they share is in :shared.
+  # The pages' modules keep their order themselves (docs/client-core.md: :settings, :chat on it, :drive on both); in
+  # :app, the remote screens (remote/) and the share sheet (share/) are on none of the drive, and the remote screens on
+  # no page either. What they share is in :shared.
   if touches '^apps/android/app/'; then
     k=apps/android/app/src/main/kotlin/fail/still/android
-    step "phone packages one way" sh -c "! git grep -n 'fail\\.still\\.android\\.drive\\.' -- $k/screens $k/remote $k/share && ! git grep -n 'fail\\.still\\.android\\.screens\\.' -- $k/remote"
+    step "phone packages one way" sh -c "! git grep -n 'fail\\.still\\.android\\.drive\\.' -- $k/remote $k/share && ! git grep -n 'fail\\.still\\.android\\.screens\\.' -- $k/remote"
   fi
   if touches '^(web/src|web/ui|apps/desktop/src|apps/android)/'; then
     step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src web/ui apps/desktop/src apps/android'
@@ -357,9 +358,9 @@ if [ $full = 1 ]; then
       # caught here and not when someone next runs them; unit tests and the debug app) or lint: one share of it (CI's two jobs side
       # by side, lint the longest part); unset, all of it.
       case "${STILLFAIL_ANDROID:-}" in
-        build) what="Android: build and tests${STILLFAIL_CHECK_APK:+, the debug app}"; tasks=":app:compileDebugKotlin :app:compileDebugAndroidTestKotlin :app:testDebugUnitTest :core:testDebugUnitTest :shared:testDebugUnitTest ${STILLFAIL_CHECK_APK:+:app:assembleDebug}" ;;
-        lint) what="Android: lint"; tasks=":app:lintDebug :core:lintDebug :shared:lintDebug" ;;
-        *) what="Android${STILLFAIL_CHECK_APK:+ (and the debug app)}"; tasks=":app:compileDebugKotlin :app:compileDebugAndroidTestKotlin :app:testDebugUnitTest :core:testDebugUnitTest :shared:testDebugUnitTest :app:lintDebug :core:lintDebug :shared:lintDebug ${STILLFAIL_CHECK_APK:+:app:assembleDebug}" ;;
+        build) what="Android: build and tests${STILLFAIL_CHECK_APK:+, the debug app}"; tasks=":app:compileDebugKotlin :app:compileDebugAndroidTestKotlin :app:testDebugUnitTest :core:testDebugUnitTest :shared:testDebugUnitTest :chat:testDebugUnitTest :drive:testDebugUnitTest ${STILLFAIL_CHECK_APK:+:app:assembleDebug}" ;;
+        lint) what="Android: lint"; tasks=":app:lintDebug :core:lintDebug :shared:lintDebug :settings:lintDebug :chat:lintDebug :drive:lintDebug" ;;
+        *) what="Android${STILLFAIL_CHECK_APK:+ (and the debug app)}"; tasks=":app:compileDebugKotlin :app:compileDebugAndroidTestKotlin :app:testDebugUnitTest :core:testDebugUnitTest :shared:testDebugUnitTest :chat:testDebugUnitTest :drive:testDebugUnitTest :app:lintDebug :core:lintDebug :shared:lintDebug :settings:lintDebug :chat:lintDebug :drive:lintDebug ${STILLFAIL_CHECK_APK:+:app:assembleDebug}" ;;
       esac
       # shellcheck disable=SC2086 # the tasks are words
       remembered "$what" "apps/android client web/src/viz web/public/avatars scripts/native.ts scripts/icons.py design/icons design/station-icons package.json pnpm-lock.yaml" heavy env ORG_GRADLE_PROJECT_stillfailBuild=1 python3 apps/android/build.py --tasks $tasks
