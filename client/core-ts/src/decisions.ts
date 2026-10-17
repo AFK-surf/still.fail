@@ -57,6 +57,9 @@ export function ofMessage(m: J): J | null {
 export function cardShown(card: J): J {
   const v: J = { type: kind(card) };
   for (const field of ["assignee", "assigneeText"]) if (get(card, field) !== undefined) v[field] = card[field];
+  // An agent's request for a vault item: its id, for an app to approve it (docs/vault.md).
+  const request = trimmed(get(get(card, "vault"), "request"));
+  if (request !== null) v.vault = request;
   if (kind(card) === "options") v.options = optionsShown(get(card, "options"));
   else if (kind(card) === "text") {
     const p = trimmed(get(card, "placeholder"));

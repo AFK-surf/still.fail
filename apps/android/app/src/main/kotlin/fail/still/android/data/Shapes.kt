@@ -1321,7 +1321,11 @@ data class MessageCard (
 	/// options | text
 	val type: String,
 	val options: List<DecisionOption>? = null,
-	val placeholder: String? = null
+	val placeholder: String? = null,
+	/// An agent's request to use a vault item (docs/vault.md): the request's id. An app shows approving it (the options,
+	/// then the person confirms: `vault.approve` with the option's scope, `vault.deny`) rather than answering in the chat;
+	/// a web page says to approve it in the app.
+	val vault: String? = null
 )
 
 /// A chat's card still pending (a row's, a chat page's; named for when the only cards were decisions): its post's entry,

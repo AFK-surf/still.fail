@@ -207,6 +207,7 @@ export const SHAPES: Record<string, Shape> = {
     ["type", "String", { doc: "options | text" }],
     ["options", opt(vec("DecisionOption"))],
     ["placeholder", opt("String")],
+    ["vault", opt("String"), { doc: "An agent's request to use a vault item (docs/vault.md): the request's id. An app shows approving it (the options,\nthen the person confirms: `vault.approve` with the option's scope, `vault.deny`) rather than answering in the chat;\na web page says to approve it in the app." }],
   ], { doc: "What an agent's message asks people to answer it with (core decisions.ts): `type` options (`options`, as shown: the\nrecommended one last; a tap answers, `decision.answer`) or text (a field to write in, with a `placeholder`;\n`decision.reply`). A type a UI does not know: answered by writing in the chat." }),
   DecisionOption: struct([
     ["label", "String"],

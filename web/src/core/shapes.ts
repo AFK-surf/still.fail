@@ -1307,6 +1307,12 @@ export interface MessageCard {
 	type: string;
 	options?: DecisionOption[];
 	placeholder?: string;
+	/**
+	 * An agent's request to use a vault item (docs/vault.md): the request's id. An app shows approving it (the options,
+	 * then the person confirms: `vault.approve` with the option's scope, `vault.deny`) rather than answering in the chat;
+	 * a web page says to approve it in the app.
+	 */
+	vault?: string;
 }
 
 /**
