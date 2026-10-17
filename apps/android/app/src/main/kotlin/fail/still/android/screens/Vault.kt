@@ -33,6 +33,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -394,9 +395,10 @@ private fun VaultSection(ws: String, v: VaultRow, readOnly: Boolean) {
     val open = topic.value?.open ?: v.open
     val usable = !readOnly && v.keyed
     Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 14.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(v.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-        if (usable && !open && items.isNotEmpty()) Text(t("android-settings.vault.lockedNote"), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-        Spacer(Modifier.weight(1f))
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(v.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+            if (usable && !open && items.isNotEmpty()) Text(t("android-settings.vault.lockedNote"), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
         if (usable && open) TextAction(t("android-settings.vault.lock")) { app.scope.launch { runCatching { app.vaultCall(ws, "lock") } } }
         if (usable) RoundIcon(Icons.Plus, t("android-settings.vault.add"), C.accent) { editorSheet(app, ws, v.id, null) }
     }
@@ -489,7 +491,7 @@ private fun openItem(app: AppState, ws: String, vault: String, item: VaultItemRo
 
 /** An item as it is: its fields (the secret ones masked until shown, each copied), what agents may do with it, 编辑. */
 private fun itemSheet(app: AppState, ws: String, vault: String, item: VaultItemRow, plain: Plain) {
-    app.sheet = SheetSpec(0.62f, draggable = true) {
+    app.sheet = SheetSpec(0.5f, draggable = true) {
         SheetGrab()
         SheetHead(plain.name, lead = { KindTile(plain.kind) }, trailing = { TextAction(t("common.edit")) { editorSheet(app, ws, vault, Editing(item, plain)) } })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
@@ -561,7 +563,7 @@ private fun editorSheet(app: AppState, ws: String, vault: String, editing: Editi
 @Composable
 private fun ColumnScope.Editor(app: AppState, ws: String, vault: String, editing: Editing?) {
     val was = editing?.plain
-    var kind by remember { mutableStateOf(KINDS.indexOf(was?.kind).coerceAtLeast(0)) }
+    var kind by remember { mutableIntStateOf(KINDS.indexOf(was?.kind).coerceAtLeast(0)) }
     var name by remember { mutableStateOf(was?.name.orEmpty()) }
     val fields = remember { mutableStateMapOf<String, String>().apply { was?.fields?.let { putAll(it) } } }
     var agent by remember { mutableStateOf(editing?.item?.listed ?: false) }
