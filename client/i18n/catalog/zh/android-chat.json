@@ -246,6 +246,7 @@
   "android-chat.run.account.choose": "选择账号",
   "android-chat.run.account.note": "自动分配时，额度用完或登录失效会切换账号；指定账号后将始终使用该账号。",
   "android-chat.run.account.warn": "此模型需要更换账号",
+  "android-chat.run.borrowed": "已借用，同步到此 station 后即可使用",
   "android-chat.run.effort.note": "深度越高，速度越慢，消耗的额度也越多。",
   "android-chat.run.effort.title": "思考深度",
   "android-chat.run.label.account": "账号",

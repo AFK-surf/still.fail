@@ -193,7 +193,8 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
                             }
                         }
                     }
-                    choice.problem?.let { Text(it, fontSize = 13.sp, color = if (choice.waiting) C.muted else C.red, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp)) }
+                    // Not in red when nothing blocks it: a station with no profile of its own, but models another could lend it, says what to do.
+                    choice.problem?.let { Text(it, fontSize = 13.sp, color = if (choice.waiting || choice.blocked == null) C.muted else C.red, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp)) }
                     // No profile yet: adding one is the first step, here (the machine's own logins, when there are any, offered too).
                     val overview = view.overview
                     if (overview != null && choice.blocked == "profile") {
@@ -227,11 +228,16 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
                 Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Chooser(haze, { StationMark(view.emoji, view.icon, 14.dp, C.ink, none = Icons.Server) }, view.name, Modifier.widthIn(max = 128.dp)) { pickStation(app, stations, view.station, onStation) }
                     val p = choice.pick
-                    if (runtime == null || model == null || p == null || p.options.isEmpty()) {
+                    if (p == null || p.options.isEmpty()) {
                         // Nothing to choose from: the chooser leads to where models are enabled.
                         Chooser(haze, null, t("android-chat.new.noModels"), Modifier.weight(1f, fill = false)) { app.push(Screen.Profiles()) }
+                    } else if (runtime == null || model == null) {
+                        // None of its own: another station's to borrow, in its model control.
+                        Chooser(haze, null, t("android-chat.pick.model"), Modifier.weight(1f, fill = false), chevron = true) { openRunPicker(app, view.station) }
                     } else {
-                        Chooser(haze, { MakerIcon(p.valueOption?.maker ?: entry.maker, runtime, 14.dp) }, tripleLabel(p), Modifier.weight(1f, fill = false), chevron = true) {
+                        val on = p.valueOption
+                        Chooser(haze, { MakerIcon(on?.maker ?: entry.maker, runtime, 14.dp) }, tripleLabel(p), Modifier.weight(1f, fill = false), chevron = true,
+                            tag = on?.let { o -> o.fromStation?.let { from -> { ModelFrom(from, o.fromText) } } }) {
                             openRunPicker(app, view.station)
                         }
                     }
@@ -275,7 +281,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NewChatOn(workspace: 
 }
 
 @Composable
-private fun Chooser(haze: HazeState, leading: (@Composable () -> Unit)?, label: String, modifier: Modifier = Modifier, chevron: Boolean = false, onClick: () -> Unit) {
+private fun Chooser(haze: HazeState, leading: (@Composable () -> Unit)?, label: String, modifier: Modifier = Modifier, chevron: Boolean = false, tag: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
     // The same glass as the composer's capsule under it, over the scene running on under both.
     Row(
         modifier.height(30.dp).floating(haze, Smooth(15.dp)).clickable(onClick = onClick).padding(horizontal = 11.dp),
@@ -283,6 +289,7 @@ private fun Chooser(haze: HazeState, leading: (@Composable () -> Unit)?, label: 
     ) {
         leading?.invoke()
         Text(label, fontSize = 13.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        tag?.invoke()
         if (chevron) IconIn(Icons.ChevronDown, 12.dp, C.muted)
     }
 }
@@ -353,7 +360,11 @@ private fun openRunPicker(app: AppState, station: String) {
                 groups.forEach { (who, list) ->
                     if (groups.size > 1) CascadeLabel(who)
                     list.forEach { o ->
-                        CascadeOption(o.name, o.spent?.text, v.option == o.model, leading = { MakerIcon(o.maker, o.runtimes.firstOrNull() ?: draft.runtime, 16.dp) }) { set { put("model", o.model) } }
+                        // Another station's: its station after its name; not usable here till borrowed, faint until picked.
+                        val picked = v.option == o.model
+                        val faint = o.availability == "borrowable" && !picked
+                        CascadeOption(o.name, o.spent?.text, picked, leading = { MakerIcon(o.maker, o.runtimes.firstOrNull() ?: draft.runtime, 16.dp) }, faint = faint,
+                            tag = o.fromStation?.let { from -> { ModelFrom(from, o.fromText, faint) } }) { set { put("model", o.model) } }
                     }
                 }
                 Spacer(Modifier.height(12.dp))
@@ -373,6 +384,9 @@ private fun openRunPicker(app: AppState, station: String) {
                 }
             }
         }
+        // The model picked is another station's: said so over the foot, which borrows it (asked again) rather than confirming.
+        val borrow = v.borrow
+        borrow?.let { Text(if (it.allowed) it.note else it.why ?: it.note, fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp)) }
         // The foot: who runs it (the station's pick, most of the time), and 确定.
         Row(
             Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).padding(start = 10.dp, end = 14.dp, top = 10.dp, bottom = 12.dp),
@@ -385,6 +399,19 @@ private fun openRunPicker(app: AppState, station: String) {
                 Text(t("android-chat.new.account"), fontSize = 14.sp, color = C.muted)
                 Text(v.who, fontSize = 14.sp, color = if (v.whoLevel != null) C.warn else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 IconIn(Icons.ChevronRight, 14.dp, C.muted)
+            }
+            if (borrow != null) {
+                val borrowing = app.isDoing("pick.borrow", "station" to station, "of" to "new")
+                Row(
+                    Modifier.clip(Smooth(19.dp)).background(if (borrow.allowed) C.ink else C.chip).clickable(enabled = borrow.allowed && !borrowing) {
+                        confirmBorrow(app, station, "new", borrow)
+                    }.padding(horizontal = 22.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    BusyIcon(borrowing, solid = if (borrow.allowed) C.bg else null)
+                    Text(borrow.action, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (borrow.allowed) C.bg else C.muted)
+                }
+                return@Row
             }
             // Saving: a spinner in it, the sheet open until the core has it (closed then, unless another took its place).
             val saving = app.isDoing("pick.save", "station" to station, "of" to "new")
@@ -411,14 +438,18 @@ private fun CascadeLabel(text: String) = Text(text, fontSize = 12.sp, color = C.
 
 /** A choice in a column of the picker: the chosen one on the accent's pale ground, its words in the accent and bold. */
 @Composable
-private fun CascadeOption(label: String, sub: String?, checked: Boolean, subColor: androidx.compose.ui.graphics.Color = C.muted, leading: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
+private fun CascadeOption(label: String, sub: String?, checked: Boolean, subColor: androidx.compose.ui.graphics.Color = C.muted, leading: (@Composable () -> Unit)? = null, tag: (@Composable () -> Unit)? = null, faint: Boolean = false, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clip(Smooth(10.dp)).background(if (checked) C.accentBg else androidx.compose.ui.graphics.Color.Transparent).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         leading?.invoke()
         Column(Modifier.weight(1f)) {
-            Text(label, fontSize = 15.sp, color = if (checked) C.accentInk else C.ink, fontWeight = if (checked) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // A tag (a model's station) after the label, on its line.
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(label, fontSize = 15.sp, color = if (checked) C.accentInk else if (faint) C.muted else C.ink, fontWeight = if (checked) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                tag?.invoke()
+            }
             if (sub != null) Text(sub, fontSize = 12.sp, color = subColor, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         if (checked) IconIn(Icons.Check, 14.dp, C.accent)

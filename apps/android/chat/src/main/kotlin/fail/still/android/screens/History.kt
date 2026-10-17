@@ -658,7 +658,14 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
                 Text(t("android-chat.run.next"), fontSize = 12.sp, color = C.subtle)
             }
             GroupLabel(t("android-chat.run.label.model"))
-            SettingRow(onClick = { list = "model" }, leading = { MakerIcon(v.maker, s.runtime, 18.dp) }) { Text(v.modelText, fontSize = 15.sp, color = C.ink) }
+            SettingRow(onClick = { list = "model" }, leading = { MakerIcon(v.maker, s.runtime, 18.dp) }) {
+                // Another station's: where it comes from, on the same line.
+                val from = v.options.optionOf(v.option)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(v.modelText, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    from?.let { o -> o.fromStation?.let { ModelFrom(it, o.fromText) } }
+                }
+            }
             GroupLabel(t("android-chat.run.effort.title"))
             Text(t("android-chat.run.effort.note"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
             EffortChips(listOf<String?>(null) + v.efforts, v.draft.effort) { e -> pick { put("effort", e) } }
@@ -678,6 +685,26 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
                 if (v.accountWarn) Text(t("android-chat.run.account.warn"), fontSize = 12.sp, color = C.warn)
             }
             Box(Modifier.height(16.dp))
+        }
+        // The model picked is another station's: said so over the button, which borrows it (asked again) rather than saving.
+        val borrow = v.borrow
+        if (borrow != null) {
+            val borrowing = app.isDoing("pick.borrow", "station" to station, "of" to pickOf)
+            Text(if (borrow.allowed) borrow.note else borrow.why ?: borrow.note, fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 8.dp))
+            val can = borrow.allowed && !borrowing
+            Box(
+                Modifier.windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp, vertical = 12.dp).fillMaxWidth().heightIn(min = 52.dp)
+                    .clip(Smooth(16.dp)).background(if (borrow.allowed) C.ink else C.chip)
+                    .clickable(enabled = can) { confirmBorrow(app, station, pickOf, borrow) }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BusyIcon(borrowing, solid = if (borrow.allowed) C.bg else null)
+                    Text(borrow.action, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (borrow.allowed) C.bg else C.muted, maxLines = 2, textAlign = TextAlign.Center)
+                }
+            }
+            return
         }
         val go = v.changed && v.option != null && !busy
         Box(

@@ -109,6 +109,8 @@ import fail.still.android.data.HistoryStep
 import fail.still.android.data.HistoryRow
 import fail.still.android.data.HistoryView
 import fail.still.android.data.ModelOption
+import fail.still.android.data.ModelStation
+import fail.still.android.data.PickBorrow
 import fail.still.android.data.PickView
 import fail.still.android.data.Host
 import fail.still.android.data.AgentCardView
@@ -289,7 +291,12 @@ fun ModelList(models: List<ModelOption>, runtime: String, picked: String?, onPic
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             groups.forEach { (who, list) ->
                 if (groups.size > 1) GroupLabel(who)
-                list.forEach { m -> PickLine(m.name, checked = m == on, onClick = { onPick(m.model) }, leading = { MakerIcon(m.maker, runtime, 18.dp) }) }
+                list.forEach { m ->
+                    // Not usable here till borrowed: faint, its station too, until it is the one picked.
+                    val faint = m.availability == "borrowable" && m != on
+                    PickLine(m.name, checked = m == on, onClick = { onPick(m.model) }, leading = { MakerIcon(m.maker, runtime, 18.dp) }, faint = faint,
+                        tag = m.fromStation?.let { from -> { ModelFrom(from, m.fromText, faint) } })
+                }
             }
             if (shown.isEmpty()) Text(t("android-chat.run.model.none"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(vertical = 16.dp))
             Box(Modifier.windowInsetsPadding(WindowInsets.navigationBars).height(16.dp))
@@ -402,20 +409,49 @@ fun DecisionOptions(options: List<DecisionOption>, modifier: Modifier = Modifier
     }
 }
 
+/**
+ * Borrowing the picked model's account from the station that has it (a model control's `borrow`), asked again first:
+ * the stations differ. Its title, each of its lines, then `pick.borrow`; a toast says it is borrowed.
+ */
+fun confirmBorrow(app: AppState, station: String, of: String, borrow: PickBorrow) =
+    confirm(app, borrow.title, borrow.lines.joinToString("\n\n"), borrow.action) {
+        app.api(station).pickBorrow(of)
+        app.toast = t("android-chat.run.borrowed")
+    }
+
 /** The option a model is, however it is spelled (openai/gpt-6-astra is gpt-6-astra). */
 fun List<ModelOption>.optionOf(model: String?): ModelOption? =
     if (model == null) null else firstOrNull { it.model == model } ?: firstOrNull { model in it.ids }
 
-/** A choice in a list: what it is, a note under it, and a check when it is the one chosen. */
+/**
+ * Where a model of another station comes from, after its name on the same line (web ModelTriple's runOptionFrom):
+ * the station's mark where it has one, else its name, small and muted; said as `text` (借自 Studio, 在 Studio 上).
+ * `faint`: not usable here till borrowed, at half.
+ */
 @Composable
-fun PickLine(label: String, sub: String? = null, checked: Boolean, onClick: () -> Unit, leading: (@Composable () -> Unit)? = null, trailing: (@Composable () -> Unit)? = null) {
+fun ModelFrom(from: ModelStation, text: String?, faint: Boolean = false) {
+    Box(Modifier.alpha(if (faint) 0.5f else 1f).semantics { contentDescription = text ?: from.name }) {
+        if (hasStationMark(from.emoji, from.icon)) StationMark(from.emoji, from.icon, 14.dp, C.muted)
+        else Text(from.name, fontSize = 12.sp, color = C.muted, maxLines = 1, softWrap = false)
+    }
+}
+
+/**
+ * A choice in a list: what it is, a note under it, and a check when it is the one chosen. `tag`: after the label, on
+ * its line (a model's station); `faint`: the label muted (a model not usable here till borrowed).
+ */
+@Composable
+fun PickLine(label: String, sub: String? = null, checked: Boolean, onClick: () -> Unit, leading: (@Composable () -> Unit)? = null, trailing: (@Composable () -> Unit)? = null, tag: (@Composable () -> Unit)? = null, faint: Boolean = false) {
     Row(
         Modifier.fillMaxWidth().clip(Smooth(10.dp)).clickable(onClick = onClick).padding(horizontal = 4.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         leading?.invoke()
         Column(Modifier.weight(1f)) {
-            Text(label, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(label, fontSize = 15.sp, color = if (faint) C.muted else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                tag?.invoke()
+            }
             if (sub != null) Text(sub, fontSize = 12.sp, color = C.muted)
         }
         trailing?.invoke()

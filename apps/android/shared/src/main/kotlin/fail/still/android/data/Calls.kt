@@ -431,6 +431,8 @@ class StationApi(private val core: StillFailCore, val station: String) {
     }
     /** What the panel picked becomes what it runs on (nothing changed: nothing done). */
     suspend fun pickSave(of: String) { core.call("pick.save", buildJsonObject { put("station", station); put("of", of) }) }
+    /** The panel's picked model is another station's (its `borrow`): that station is asked to share its account with this one. */
+    suspend fun pickBorrow(of: String) { core.call("pick.borrow", buildJsonObject { put("station", station); put("of", of) }) }
 
     // ── the machine's own sessions (web/src/MachineSessions.tsx) ──
 
