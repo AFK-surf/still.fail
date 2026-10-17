@@ -11,6 +11,7 @@ import { Context, Effect, Layer, Stream } from "effect";
 import { Fibers, wall } from "../ops/fibers.ts";
 import { ClaudeDriver } from "../agents/claude.ts";
 import { CodexDriver } from "../agents/codex.ts";
+import { DshDriver } from "../agents/dsh.ts";
 import { Jobs, notifyEndpoint } from "../jobs/jobs.ts";
 import { Remote } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
@@ -186,6 +187,7 @@ export const AgentsLive = (control: Control) =>
         drivers: [
           new ClaudeDriver({ data, machineToken: (env, rejected) => accounts.machineToken(env, rejected), lent: { borrowed, token: (p, rejected) => sharing!.lendClaude(p, rejected) } }),
           codex,
+          new DshDriver({ data }),
         ],
         mcpUrl: () => door?.url ?? "",
         internal: new InternalChat(),

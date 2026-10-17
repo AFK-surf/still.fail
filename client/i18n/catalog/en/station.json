@@ -52,7 +52,7 @@
   "station.admin.badN": "n must be an integer",
   "station.admin.badOn": "on must be true or false",
   "station.admin.badOption": "option must be one the agent offered",
-  "station.admin.badRuntime": "runtime must be claude or codex",
+  "station.admin.badRuntime": "runtime must be claude, codex or dsh",
   "station.admin.emptyMessage": "Message is empty",
   "station.admin.footprintRemoved": "Storage stats removed",
   "station.admin.fromAndTo": "Provide from and to together",

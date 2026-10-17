@@ -203,3 +203,107 @@ export class LiveFromCodex {
     return out;
   }
 }
+
+export type DshLiveState = { open: string[]; phase: Phase | null };
+
+/// What a content block of an ACP update says (text, or anything else as JSON).
+const acpText = (content: Json): string => {
+  if (typeof content?.text === "string") return content.text;
+  if (content?.type === "content") return acpText(content.content);
+  return "";
+};
+
+/// DeepSeek Harness's ACP `session/update`s as live steps. It sends what the model said once it is said (a message or
+/// a thought whole, not as it streams), and a tool call as it starts and when it is done: a message or thought is a
+/// step that ends when something else begins or the turn ends; a call ends with its result, which carries the output.
+export class LiveFromDsh {
+  private open = new Set<string>();
+  private phase: Phase | null = null;
+
+  constructor(state?: DshLiveState) {
+    if (state) {
+      this.open = new Set(state.open);
+      this.phase = state.phase;
+    }
+  }
+
+  state(): DshLiveState {
+    return { open: [...this.open], phase: this.phase };
+  }
+
+  private to(next: Phase, out: LiveEvent[]) {
+    if (this.phase !== next) {
+      this.phase = next;
+      out.push({ kind: "phase", phase: next });
+    }
+  }
+
+  /// Ends the steps of what was said (a call keeps going until its result).
+  private endSaid(out: LiveEvent[], but?: string) {
+    for (const id of this.open) {
+      if (id !== but && !id.startsWith("call:")) {
+        this.open.delete(id);
+        out.push({ kind: "end", id });
+      }
+    }
+  }
+
+  /// A prompt was given: the turn is with the model.
+  prompted(): LiveEvent[] {
+    const out: LiveEvent[] = [];
+    this.to("requesting", out);
+    return out;
+  }
+
+  feed(update: Json): LiveEvent[] {
+    const out: LiveEvent[] = [];
+    const kind = str(update?.sessionUpdate) ?? "";
+    if (kind === "agent_message_chunk" || kind === "agent_thought_chunk") {
+      const step: Step = kind === "agent_message_chunk" ? "text" : "thinking";
+      const text = acpText(update.content);
+      if (text === "") return out;
+      const id = `${str(update.messageId) ?? "message"}/${step}`;
+      this.to("responding", out);
+      this.endSaid(out, id);
+      if (!this.open.has(id)) {
+        this.open.add(id);
+        out.push(start(id, step));
+      }
+      out.push({ kind: "delta", id, field: "text", text });
+    } else if (kind === "tool_call") {
+      const callId = nonEmpty(update.toolCallId);
+      if (callId === undefined) return out;
+      const id = `call:${callId}`;
+      this.endSaid(out);
+      this.to("working", out);
+      if (!this.open.has(id)) {
+        this.open.add(id);
+        out.push(start(id, "tool", str(update.title) ?? "", chars(pretty(update.rawInput), INPUT_MOST)));
+      }
+      this.result(id, update, out);
+    } else if (kind === "tool_call_update") {
+      const callId = nonEmpty(update.toolCallId);
+      if (callId !== undefined && this.open.has(`call:${callId}`)) this.result(`call:${callId}`, update, out);
+    }
+    return out;
+  }
+
+  /// A call's output so far, and its end once it is done.
+  private result(id: string, update: Json, out: LiveEvent[]) {
+    const output = (Array.isArray(update.content) ? update.content : []).map(acpText).filter((t: string) => t !== "").join("\n");
+    if (output !== "") out.push({ kind: "delta", id, field: "output", text: output });
+    if (update.status === "completed" || update.status === "failed") {
+      this.open.delete(id);
+      out.push({ kind: "end", id });
+      if (![...this.open].some((o) => o.startsWith("call:"))) this.to("requesting", out);
+    }
+  }
+
+  /// The turn ended: whatever is still open ends with it.
+  ended(): LiveEvent[] {
+    const out: LiveEvent[] = [...this.open].map((id) => ({ kind: "end", id }) as LiveEvent);
+    this.open.clear();
+    this.phase = null;
+    return out;
+  }
+}

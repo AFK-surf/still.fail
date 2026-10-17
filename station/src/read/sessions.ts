@@ -26,6 +26,7 @@ import { type Thumbnail, SMALL, dir as thumbsDir, idOf, kept, wanted as thumbWan
 import { parseUsize } from "./jobs.ts";
 import { agentHomeOf } from "./memory.ts";
 import { shown } from "./jobs.ts";
+import { runtimeKind } from "../agents/runtime.ts";
 
 /// The connect of the station's own chats (chat/internal.rs).
 const INTERNAL_CONNECT = "ember";
@@ -274,7 +275,7 @@ export function timeline(s: Store, key: string, beforeParam: string | undefined,
   const before = parseUsize(beforeParam) ?? 0;
   const limit = Math.min(Math.max(parseUsize(limitParam) ?? 200, 1), 1000);
   const profile = configOf(s).profiles.find((p) => p.id === row.profile);
-  const runtime = row.runtime === "claude" || row.runtime === "codex" ? row.runtime : null;
+  const runtime = runtimeKind(row.runtime) ?? null;
   if (!profile || runtime === null || row.runtimeSessionId === null) return { start: 0, entries: [] };
   // Those of the runtime sessions it ran in before come first (sessions/afresh.ts).
   const homes = [profile.home, ...configOf(s).profiles.map((p) => p.home).filter((h) => h !== profile.home)];

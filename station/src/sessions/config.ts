@@ -3,7 +3,7 @@
 // edits apply to the next decision. A profile stays config.json's object (the drivers read its access, env, model…),
 // its home made absolute and what parse_config derives added: name, runtimes, models, backgroundOnMessage.
 import { isAbsolute, join } from "node:path";
-import type { Profile as RuntimeProfile } from "../agents/runtime.ts";
+import { runtimeKind, runtimeLabel, type Profile as RuntimeProfile } from "../agents/runtime.ts";
 import { profileRuntimes, type Runtime } from "../agents/profiles.ts";
 import { modelKey } from "../read/usage.ts";
 
@@ -100,7 +100,7 @@ export function hubConfig(raw: any, dataDir: string): HubConfig {
       mode,
       requireMention: mode === "multi-session" ? true : c.requireMention !== false,
       slack: { ...(c.slack ?? {}), botName: nonEmpty(c.slack?.botName) },
-      bind: { runtime: bind.runtime === "codex" ? "codex" : "claude", profile: nonEmpty(bind.profile), model: nonEmpty(bind.model), effort: nonEmpty(bind.effort) },
+      bind: { runtime: runtimeKind(bind.runtime) ?? "claude", profile: nonEmpty(bind.profile), model: nonEmpty(bind.model), effort: nonEmpty(bind.effort) },
       ...(nonEmpty(c.workspace) !== undefined ? { workspace: nonEmpty(c.workspace) } : {}),
     };
   });
@@ -141,6 +141,6 @@ export const profilesFor = (config: HubConfig, connect: Connect, home: string | 
   config.profiles.filter((p) => p.runtimes.includes(connect.bind.runtime) && allowedIn(p, connect.workspace ?? null, home));
 
 export const runtimeName = (r: Runtime) => r;
-export const runtimeNamed = (name: string): Runtime | null => (name === "claude" || name === "codex" ? name : null);
+export const runtimeNamed = (name: string): Runtime | null => runtimeKind(name) ?? null;
 /// How people call a runtime.
-export const runtimeTitle = (r: Runtime) => (r === "claude" ? "Claude Code" : "Codex");
+export const runtimeTitle = (r: Runtime) => runtimeLabel(r);

@@ -52,7 +52,7 @@
   "station.admin.badN": "n 必须是整数",
   "station.admin.badOn": "on 必须是 true 或 false",
   "station.admin.badOption": "option 必须是 agent 提供的选项",
-  "station.admin.badRuntime": "runtime 必须是 claude 或 codex",
+  "station.admin.badRuntime": "runtime 必须是 claude、codex 或 dsh",
   "station.admin.emptyMessage": "消息不能为空",
   "station.admin.footprintRemoved": "占用统计已移除",
   "station.admin.fromAndTo": "from 和 to 必须同时提供",

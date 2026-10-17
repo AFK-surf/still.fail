@@ -11,6 +11,7 @@
 // - every profile checked 3 s after start (what changed while the station was off: keys revoked, logins expired).
 // - the machine's logins: read again when the overview is read with a reading over 2 minutes old (machine.ts).
 // - a sign-in times out after 15 minutes; a finished sign-in for a new profile is kept 15 minutes for its page.
+import { runtimeKind, runtimeLabel } from "../agents/runtime.ts";
 import type { Clock } from "effect";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from "node:fs";
@@ -121,12 +122,12 @@ type Pending = { runtime: Runtime; home: string; by: Viewer; created: string | n
 
 const isObject = (v: unknown): v is Record<string, any> => v !== null && typeof v === "object" && !Array.isArray(v);
 const manages = managesStation;
-const runtimeOf = (v: unknown): Runtime | undefined => (v === "claude" || v === "codex" ? v : undefined);
+const runtimeOf = (v: unknown): Runtime | undefined => runtimeKind(v);
 const ACCESS_KINDS: AccessKind[] = ["subscription", "opencode-go", "anthropic-api", "env", "api-provider"];
 const accessKindOf = (v: unknown): AccessKind | undefined => (ACCESS_KINDS.includes(v as AccessKind) ? (v as AccessKind) : undefined);
 /// admin/mod.rs Input::text: JavaScript's String(x ?? "").
 const text = (v: unknown) => (v === undefined || v === null ? "" : typeof v === "string" ? v : JSON.stringify(v));
-const named = (runtime: Runtime) => (runtime === "claude" ? "Claude Code" : "Codex");
+const named = (runtime: Runtime) => runtimeLabel(runtime);
 /// A copy of a profile another station shares (share/index.ts): edited, checked and signed in only there.
 export const borrowed = (p: Json): boolean => isObject(p?.share) && p.share.borrowed === true;
 

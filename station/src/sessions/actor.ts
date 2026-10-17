@@ -14,6 +14,7 @@ import { latest as latestNote, untold } from "../agents/migrations.ts";
 import { unreadableDir, unreadableDirMessage } from "../ops/files.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
+import { runtimeKind, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
 
 /// How an agent ended its turn (chat_post / chat_state `kind`).
 export type DeclaredState = { kind: "all_done" } | { kind: "need_help" } | { kind: "waiting"; seconds: number };
@@ -76,7 +77,7 @@ export type Surface = {
 export type SessionDeps = {
   store: SessionStore;
   chat(connect: string): Surface | undefined;
-  driver(runtime: "claude" | "codex"): AgentDriver;
+  driver(runtime: RuntimeKind): AgentDriver;
   /// The profile a session's runtime starts on now: its own while usable, else another that can take it on.
   runOn(key: string): Profile & { spelling?(model: string): string | null };
   /// A turn ran into its profile's allowance: the profile left and the one moved to, when it moved.
@@ -124,7 +125,7 @@ type Phase = "idle" | "running" | "waiting" | "closed";
 /// What a next station takes up from this one (session.rs `HandedSession`, without the process: the runner keeps it).
 export type Snapshot = {
   key: string;
-  runtime: "claude" | "codex";
+  runtime: RuntimeKind;
   agent: unknown | null;
   turn: { id: string; authRetried: boolean; by: TurnFor; declared: string | null; wait: number | null } | null;
   workingFor: Working[];
@@ -146,7 +147,7 @@ const FALLBACK_MOST = 4000;
 
 export class SessionActor {
   readonly key: string;
-  readonly runtime: "claude" | "codex";
+  readonly runtime: RuntimeKind;
   private deps: SessionDeps;
   private lock = Semaphore.makeUnsafe(1);
   /// Runs an effect as a fiber of this actor's (its tasks, its wait's timer): they end when it closes.
@@ -188,7 +189,7 @@ export class SessionActor {
   private steered: [number, number][] = [];
   private queued = 0;
 
-  constructor(key: string, runtime: "claude" | "codex", deps: SessionDeps) {
+  constructor(key: string, runtime: RuntimeKind, deps: SessionDeps) {
     this.key = key;
     this.runtime = runtime;
     this.deps = deps;
@@ -640,7 +641,7 @@ export class SessionActor {
       return user === "" ? name : `${name} (<@${user}>)`;
     }
     const row = this.deps.store.getSession(key);
-    return row ? `${row.runtime === "claude" ? "Claude Code" : "Codex"}${row.model ? ` ${row.model}` : ""}` : "another agent";
+    return row ? `${runtimeLabel(runtimeKind(row.runtime) ?? "claude")}${row.model ? ` ${row.model}` : ""}` : "another agent";
   }
 
   /// Starts a turn with `text` for someone. On failure the thread is told and the error thrown, so callers leave their

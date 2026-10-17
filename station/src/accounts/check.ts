@@ -4,9 +4,10 @@
 import { accessKinds, needsKey, runtimesFor } from "./profiles.ts";
 import { cleanEndpoint, endpoints, find } from "../agents/providers.ts";
 import { fallbackEfforts } from "../sessions/pool.ts";
+import { RUNTIME_KINDS } from "../agents/runtime.ts";
 
 const ACCESS_KINDS = ["subscription", "opencode-go", "anthropic-api", "env", "api-provider"];
-const RUNTIMES = ["claude", "codex"];
+const RUNTIMES: string[] = RUNTIME_KINDS;
 const MODES = ["multi-session", "single-session"];
 
 /// config.rs `id_ok`: a lowercase letter or digit, then those and dashes.
@@ -95,7 +96,7 @@ export function checkConfig(raw: any, _data: string): void {
       if (!source) throw new Error(`profile ${p.id}: api-provider needs a known provider`);
       if (endpoints(source, endpoint, protocol) === undefined) throw new Error(`profile ${p.id}: ${source.name} needs an endpoint address`);
     } else if (runtimes.length === 0) {
-      throw new Error(`profile ${p.id}: ${kind} needs a runtime (claude or codex)`);
+      throw new Error(`profile ${p.id}: ${kind} needs a runtime (claude, codex or dsh)`);
     }
     if (!runtimes.every((r) => accessKinds(r).includes(kind as any))) throw new Error(`profile ${p.id}: ${runtimes.join("/")} cannot use access ${kind}`);
     const key = String(access?.key ?? "").trim();

@@ -329,9 +329,9 @@ export class Hub {
     for (const row of this.store.listSessions()) {
       if (taken.has(row.key)) continue;
       const runtime = runtimeNamed(row.runtime);
-      // Claude's runner is the session's own (an idle one is taken up too); codex sessions share their profile's host,
-      // which its driver finds, for a turn that was running.
-      if (!runtime || (runtime === "claude" ? !runners.has(runnerId("claude", row.key)) : !row.running)) continue;
+      // Claude's and dsh's runner is the session's own (an idle one is taken up too); codex sessions share their
+      // profile's host, which its driver finds, for a turn that was running.
+      if (!runtime || (runtime !== "codex" ? !runners.has(runnerId(runtime, row.key)) : !row.running)) continue;
       const turn = row.running ? this.store.listTurns(row.key).at(-1) : undefined;
       const snap: Snapshot = {
         key: row.key,
@@ -566,13 +566,14 @@ export class Hub {
 
   // ── warm processes ─────────────────────────────────────────────────────────────────────────────────────────────
 
-  /// Ends idle claude processes beyond the warm limit, oldest first, once they have idled past warmMs. Codex threads
-  /// share a process and stay. Runs when a process goes idle (the count grew) and at each idle process's deadline.
+  /// Ends idle claude and dsh processes (one per session) beyond the warm limit, oldest first, once they have idled
+  /// past warmMs. Codex threads share a process and stay. Runs when a process goes idle (the count grew) and at each
+  /// idle process's deadline.
   private evictIdle() {
     const config = this.config();
     const now = this.now();
     const idle = [...this.actors.values()]
-      .filter((a) => a.runtime === "claude")
+      .filter((a) => a.runtime !== "codex")
       .flatMap((a) => {
         const ms = a.idleMs(now);
         return ms === null ? [] : [[a, ms] as const];

@@ -45,6 +45,7 @@ export const NOTES: [number, string][] = [
   [38, "New tools secret_list, secret_use, secret_run: credentials people keep in their still.fail vault. Ask with secret_use (they approve in the app), then run commands with secret_run; you never see the value. Ask people to add a credential to their vault rather than paste it into the chat."],
   [39, "Services on another station's localhost are reachable from here: programs calling an HTTP API use $STILLFAIL_PEER_HTTP/<station>/<port>/<path> (your stillfail MCP URL with /mcp replaced by /peer), e.g. OLLAMA_HOST=$STILLFAIL_PEER_HTTP/studio/11434; for browsers, web pages, dev servers and databases, new tool peer_forward {station, port} forwards the port to 127.0.0.1 here like ssh -L. See the stillfail-jobs skill."],
   [40, "New tool login: when a command fails because this station is not logged in to a CLI, or a person asks, run the tool's own login command with login {command}, answer its prompts yourself (login {id, input/key}; never a password), and once a browser step is ready post a login card (card {\"type\": \"login\", \"login\": <id>}) with its link, ending need_human. Never ask a person to run a command; a station notice tells you when it ends."],
+  [41, "chat_create's runtime also takes dsh (DeepSeek Harness), where the station has a profile that runs it."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.

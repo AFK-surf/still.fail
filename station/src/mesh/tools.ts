@@ -14,6 +14,7 @@ import type { Store } from "../store/store.ts";
 import type { Viewer } from "./credential.ts";
 import type { Connection } from "./native.ts";
 import { Reader, writeLine } from "./serve.ts";
+import { RUNTIME_KINDS } from "../agents/runtime.ts";
 
 export const TOOLS_ALPN = Buffer.from("comma/tools/1");
 /// A request's line holds its arguments (an fs.write's content, a long prompt): up to 12 MiB (contract §8).
@@ -110,7 +111,7 @@ export function adminSessions(admin: () => Admin, store: () => Store | null, run
   return {
     start: async ({ prompt, title, runtime, requester }) => {
       const viewer = as(requester);
-      const which = runtime ?? (runtimes().includes("claude") ? "claude" : "codex");
+      const which = runtime ?? RUNTIME_KINDS.find((r) => runtimes().includes(r)) ?? "codex";
       const made = await ask(viewer, "POST", "/sessions", { runtime: which, ...(title !== null ? { title } : {}) });
       const thread = String(made?.thread?.id ?? made?.thread?.thread ?? "");
       if (thread === "") throw new Error("the chat was made without a thread");

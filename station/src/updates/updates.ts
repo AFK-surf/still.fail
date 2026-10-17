@@ -190,7 +190,7 @@ export class Updates {
   private trusted: Map<string, string> | undefined;
   /// The channel the running release came from: as it says (CHANNEL), else the channel it started on.
   readonly installed: Channel;
-  private items: Record<Kind, Item> = { station: empty(), claude: empty(), codex: empty() };
+  private items: Record<Kind, Item> = { station: empty(), claude: empty(), codex: empty(), dsh: empty() };
   private checkedAt: number | null = null;
   private checking: Promise<void> | null = null;
   private listeners = new Set<() => void>();
@@ -386,10 +386,10 @@ export class Updates {
   }
 
   private async read() {
-    let [station, claude, codex] = await Promise.all([this.readStation(this.channel()), this.readRuntime("claude"), this.readRuntime("codex")]);
+    let [station, ...runtimes] = await Promise.all([this.readStation(this.channel()), ...RUNTIMES.map((kind) => this.readRuntime(kind))]);
     // Put on another channel while it was read: read from that one.
     while (station.channel !== this.channel()) station = await this.readStation(this.channel());
-    for (const [kind, read] of [["station", station], ["claude", claude], ["codex", codex]] as const) {
+    for (const [kind, read] of [["station", station] as const, ...RUNTIMES.map((kind, i) => [kind, runtimes[i]!] as const)]) {
       const item = this.items[kind];
       // One that is updating keeps what it was until it is done; but one not yet read (an update this process took
       // over following) is read.
@@ -531,7 +531,7 @@ export class Updates {
 
   // ---- updating ----
 
-  /// Updates one (`station`, `claude`, `codex`), or installs a runtime the machine has not: answers once it has
+  /// Updates one (`station`, `claude`, `codex`, `dsh`), or installs a runtime the machine has not: answers once it has
   /// started; how it goes shows in `get`. Refusals are said in `lang`.
   async update(id: string, lang: Lang = stationLang()): Promise<void> {
     const kind = KINDS.find((k) => k === id);

@@ -34,6 +34,7 @@ import { dir as thumbsDir, keep } from "../../sessions/thumbs.ts";
 import { imageSize } from "../../sessions/image-size.ts";
 import { wall } from "../../ops/fibers.ts";
 import { sessionSeen } from "../seen.ts";
+import { runtimeKind } from "../../agents/runtime.ts";
 
 const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
 const ok = (value: unknown, status = 200) => json(status, JSON.stringify(value));
@@ -214,8 +215,8 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
     return json(200, `{"key":${JSON.stringify(key)},"thread":${view.body.toString()}}`);
   };
   const runtime = (r: Request, i: Record<string, unknown>) => {
-    const named = text(i.runtime);
-    if (named !== "claude" && named !== "codex") throw new Refused(400, tr(r.lang, "station.admin.badRuntime"));
+    const named = runtimeKind(text(i.runtime));
+    if (named === undefined) throw new Refused(400, tr(r.lang, "station.admin.badRuntime"));
     return named;
   };
   /// Where uploaded files wait for the message that sends them.

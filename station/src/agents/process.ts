@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { log } from "../ops/log.ts";
 import { RunnerConnection, existingRunners, leave, listening, runnersDir, startRunner, type Exit, type RunnerInfo } from "./runner.ts";
 import { wall } from "../ops/fibers.ts";
+import type { RuntimeKind } from "./runtime.ts";
 
 /// A wait on another process (a grace raced against its exit): the machine's time.
 const sleep = wall.sleep;
@@ -24,7 +25,7 @@ export const debug = (at: string, message: string, fields?: Record<string, unkno
 
 /// A runner id from something of the station's (a session key, a profile id): safe as a file name and short enough for
 /// the socket's path (104 bytes on macOS); a hash keeps two keys that clean up the same apart.
-export function runnerId(kind: "claude" | "codex", key: string): string {
+export function runnerId(kind: RuntimeKind, key: string): string {
   const clean = key.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 24);
   if (clean === key) return `${kind}-${clean}`;
   return `${kind}-${clean}-${createHash("sha256").update(key).digest("hex").slice(0, 10)}`;

@@ -8,6 +8,7 @@ import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import type { Store } from "../store/store.ts";
 import { type HubConfig, type Profile, runs, runtimeNamed, runtimeTitle, sameModel, spelling } from "./config.ts";
 import { availableEfforts, commonEfforts, type ProfileHealth, pickProfile, serves, usable } from "./pool.ts";
+import type { RuntimeKind } from "../agents/runtime.ts";
 
 /// How long a profile a turn ran into the allowance of is passed over when its allowance is not read again.
 const SPENT_FOR_MS = 60 * 60 * 1000;
@@ -125,7 +126,7 @@ export class Accounts {
 
   /// The reasoning levels every eligible account offers for a model (a pinned account may offer more): automatic
   /// selection must work on every one, quota failover included. `allowed`: the profiles of the workspace asked for.
-  modelEfforts(runtime: "claude" | "codex", model: string | null, pinned: string | null, allowed: (p: Profile) => boolean = () => true): string[] {
+  modelEfforts(runtime: RuntimeKind, model: string | null, pinned: string | null, allowed: (p: Profile) => boolean = () => true): string[] {
     const profiles = this.deps
       .config()
       .profiles.filter((p) => p.runtimes.includes(runtime) && allowed(p))

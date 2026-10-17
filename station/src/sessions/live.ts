@@ -11,6 +11,7 @@ import { zstdDecompressSync } from "node:zlib";
 import type { LiveEvent } from "../agents/runtime.ts";
 import { Fibers } from "../ops/fibers.ts";
 import { type ReadState, type TimelineEntry, brief, timelineOf } from "../read/transcript.ts";
+import type { RuntimeKind } from "../agents/runtime.ts";
 
 type Json = any;
 type Phase = Extract<LiveEvent, { kind: "phase" }>["phase"];
@@ -87,7 +88,7 @@ export function briefInput(input: string): string {
 /// written since the last one, and the usage so far. Everything read is kept, so watchers joining later are served from
 /// memory.
 export class TranscriptTail {
-  readonly runtime: "claude" | "codex";
+  readonly runtime: RuntimeKind;
   readonly path: string;
   private offset = 0;
   private packedStamp: string | null = null;
@@ -101,7 +102,7 @@ export class TranscriptTail {
   private totals = new Set<number>();
   private state: ReadState = { inner: new Map() };
 
-  constructor(runtime: "claude" | "codex", path: string) {
+  constructor(runtime: RuntimeKind, path: string) {
     this.runtime = runtime;
     this.path = path;
   }
@@ -205,6 +206,20 @@ export class TranscriptTail {
         if (typeof m.model === "string" && m.model !== "<synthetic>") usage.model = m.model;
         // The main thread's prompt is the context; a subagent's is its own.
         if (r.isSidechain !== true) usage.contextTokens = input + read + written;
+      } else if (this.runtime === "dsh") {
+        // dsh's counts are apart: input is what was not cached, the cache's read and written beside it.
+        if (r?.type === "request/context" && n(r.data?.contextWindow) > 0) usage.contextWindow = n(r.data.contextWindow);
+        const u = r?.type === "assistant/message" ? r.data?.usage : undefined;
+        if (u === undefined || u === null) continue;
+        const read = n(u.cacheReadTokens);
+        const input = n(u.inputTokens) + read + n(u.cacheWriteTokens);
+        usage.modelCalls++;
+        usage.inputTokens += input;
+        usage.cachedTokens += read;
+        usage.outputTokens += n(u.outputTokens);
+        usage.contextTokens = input;
+        const model = r.data?.message?.source?.model;
+        if (typeof model === "string") usage.model = model;
       } else {
         const p = r?.payload ?? null;
         if (r?.type === "turn_context" && typeof p?.model === "string") usage.model = p.model;
@@ -233,10 +248,10 @@ export class TranscriptTail {
 /// A session's transcripts read as one: those of the runtime sessions it ran in before (done, read whole) and then the
 /// one it runs in now, their entries one after another, so its history goes on across a new runtime session.
 export class ChainTail {
-  readonly runtime: "claude" | "codex";
+  readonly runtime: RuntimeKind;
   private tails: TranscriptTail[];
 
-  constructor(runtime: "claude" | "codex", paths: string[]) {
+  constructor(runtime: RuntimeKind, paths: string[]) {
     this.runtime = runtime;
     this.tails = paths.map((path) => new TranscriptTail(runtime, path));
   }
@@ -296,7 +311,7 @@ type Watched = { tail: ChainTail; watcher: FSWatcher | null; reading: boolean; b
 
 /// Where a session's transcripts are: of the runtime sessions it ran in, the first first, ending with its current one
 /// (`current`: whether that one's is among them; when not given, it is).
-export type Locate = (key: string) => { runtime: "claude" | "codex"; paths: string[]; current?: boolean } | null;
+export type Locate = (key: string) => { runtime: RuntimeKind; paths: string[]; current?: boolean } | null;
 
 export class LiveHub {
   private steps = new Map<string, LiveStep[]>();

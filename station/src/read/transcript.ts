@@ -3,6 +3,8 @@
 // out of it and woven back in from the station's record of them (hub.rs `post_entries`).
 // - claude: <home>/projects/<cwd>/<id>.jsonl, lines of {type: user|assistant, message: {content: string | blocks}}
 // - codex: <home>/sessions/**/rollout-*<id>.jsonl, lines of {type: response_item, payload: message | reasoning | …}
+// - dsh: <home>/dsh-sessions/<cwd>/<id>/session.v<N>.jsonl, lines of {type: user/message | assistant/message |
+//   tool/result | …, time, data}
 //
 // JSON is read with JSON.parse, so a value shows as JavaScript has it: a number written `1.0` shows `1`, a key that is
 // an integer comes first, a number past 2^53 rounds (serde_json keeps each as written). Transcripts rarely have them.
@@ -11,6 +13,7 @@ import { join } from "node:path";
 import { zstdDecompressSync } from "node:zlib";
 import { tr } from "./spoken.ts";
 import type { Json } from "./store.ts";
+import type { RuntimeKind } from "../agents/runtime.ts";
 
 /// TimelineEntry as serde writes it: `tool`, `ok`, `callId`, `subagent` left out when none; `brief` when what it says is
 /// cut to what a history shows before it is opened (`brief`).
@@ -123,7 +126,8 @@ const entriesOf = (dir: string): string[] | null => {
 };
 
 /// transcript_path: where a runtime keeps a session's transcript, if it is there.
-export function transcriptPath(runtime: "claude" | "codex", home: string, id: string): string | null {
+export function transcriptPath(runtime: RuntimeKind, home: string, id: string): string | null {
+  if (runtime === "dsh") return dshTranscript(home, id);
   if (runtime === "claude") {
     for (const dir of entriesOf(join(home, "projects")) ?? []) {
       const path = join(home, "projects", dir, `${id}.jsonl`);
@@ -148,11 +152,25 @@ export function transcriptPath(runtime: "claude" | "codex", home: string, id: st
   return find(join(home, "sessions"));
 }
 
+/// dsh's: the session's directory holds one file per format it was written in (session.v<N>.jsonl); the current is the
+/// highest N. Its directory is under one named for its working directory (any).
+function dshTranscript(home: string, id: string): string | null {
+  const root = join(home, "dsh-sessions");
+  for (const dir of entriesOf(root) ?? []) {
+    const files = (entriesOf(join(root, dir, id)) ?? [])
+      .map((name) => [name, /^session\.v(\d+)\.jsonl$/.exec(name)?.[1]] as const)
+      .filter((f): f is readonly [string, string] => f[1] !== undefined)
+      .sort((a, b) => Number(b[1]) - Number(a[1]));
+    if (files.length > 0) return join(root, dir, id, files[0]![0]);
+  }
+  return null;
+}
+
 /// The transcripts of a session's runtime sessions (`ids`, the first first, ending with its current one), each looked
 /// for in the homes given (its profile's first): a runtime session that ran on another account may have written into
 /// that account's home (one whose transcript directory is not the shared one, agent-home.ts `linkTranscripts`).
 /// `current` is whether the current one's is there: a runtime writes it only once its conversation has begun.
-export function transcriptPaths(runtime: "claude" | "codex", homes: string[], ids: string[]): { paths: string[]; current: boolean } {
+export function transcriptPaths(runtime: RuntimeKind, homes: string[], ids: string[]): { paths: string[]; current: boolean } {
   const found = ids.map((id) => {
     for (const home of homes) {
       const path = transcriptPath(runtime, home, id);
@@ -187,16 +205,64 @@ function toText(v: Json): string {
 }
 
 /// A post: shown whole in the history, where the agent made it (its words are what people read, not a call to cut).
-export const isPosting = (tool: string) => tool === "mcp__stillfail__chat_post" || tool === "mcp__ember__chat_post";
+export const isPosting = (tool: string) => tool === "mcp__stillfail__chat_post" || tool === "mcp__ember__chat_post" || tool === "stillfail__chat_post";
 
 /// What reading keeps between lines: calls taken out of a script.
 export type ReadState = { inner: Map<string, number> };
 
 /// A record's timeline entries, read on from `state` (what TranscriptTail keeps between reads): for a reader that takes
 /// a transcript a piece at a time as it grows (src/sessions/live.ts).
-export function timelineOf(runtime: "claude" | "codex", record: Json, state: ReadState, out: TimelineEntry[]): void {
+export function timelineOf(runtime: RuntimeKind, record: Json, state: ReadState, out: TimelineEntry[]): void {
   if (runtime === "claude") claudeTimeline(record, state, out);
+  else if (runtime === "dsh") dshTimeline(record, out);
   else codexTimeline(record, state, out);
+}
+
+/// What a dsh content part says: its text, an image named.
+const dshText = (content: Json): string =>
+  (Array.isArray(content) ? content : [])
+    .map((c) => (get(c, "type") === "image" ? "[image]" : (stringOf(get(c, "text")) ?? "")))
+    .filter((t) => t !== "")
+    .join("\n");
+
+function dshTimeline(r: Json, out: TimelineEntry[]) {
+  const kind = stringOf(get(r, "type")) ?? "";
+  const time = get(r, "time");
+  const at = typeof time === "number" && Number.isFinite(time) ? new Date(time).toISOString() : null;
+  const data = get(r, "data");
+  const message = get(data, "message") ?? data;
+  if (kind === "user/message") {
+    // What a person (the station) said, not the context dsh adds as a user's message.
+    if (get(get(data, "source"), "kind") !== "user") return;
+    const text = dshText(get(data, "content"));
+    if (trim(text) !== "") out.push({ at, kind: "user", text: clip(text) });
+  } else if (kind === "assistant/message") {
+    for (const block of Array.isArray(get(message, "content")) ? get(message, "content") : []) {
+      const type = stringOf(get(block, "type"));
+      const text = stringOf(get(block, "text")) ?? "";
+      if (type === "text" && trim(text) !== "") out.push({ at, kind: "assistant", text: clip(text) });
+      else if (type === "reasoning" && trim(text) !== "") out.push({ at, kind: "thinking", text: clip(text) });
+      else if (type === "tool-call") {
+        const name = stringOf(get(block, "name")) ?? "";
+        const raw = stringOf(get(block, "arguments")) ?? "";
+        let input: Json = raw;
+        let args = raw;
+        try {
+          input = JSON.parse(raw);
+          args = pretty(input);
+        } catch {}
+        const e: TimelineEntry = { at, kind: "tool_call", text: isPosting(name) ? args : clip(args), tool: name };
+        const id = stringOf(get(block, "id"));
+        if (id !== undefined) e.callId = id;
+        out.push(withBrief(e, input));
+      }
+    }
+  } else if (kind === "tool/result") {
+    const e: TimelineEntry = { at, kind: "tool_result", text: clip(dshText(get(message, "content"))), ok: get(message, "isError") !== true };
+    const id = stringOf(get(message, "toolCallId"));
+    if (id !== undefined) e.callId = id;
+    out.push(e);
+  }
 }
 
 function claudeTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
@@ -676,7 +742,7 @@ function readFileOf(path: string): Buffer {
 
 /// TranscriptTail::read from the start: the timeline entries of every whole line (one still being written waits). Read
 /// a piece at a time, so a long transcript is never one string.
-export function readTimeline(runtime: "claude" | "codex", path: string): TimelineEntry[] {
+export function readTimeline(runtime: RuntimeKind, path: string): TimelineEntry[] {
   const source = transcriptBytes(path);
   if (source === null) return [];
   const out: TimelineEntry[] = [];
@@ -691,8 +757,7 @@ export function readTimeline(runtime: "claude" | "codex", path: string): Timelin
     } catch {
       return;
     }
-    if (runtime === "claude") claudeTimeline(record, state, out);
-    else codexTimeline(record, state, out);
+    timelineOf(runtime, record, state, out);
   };
   const lines = (chunk: Buffer, carry: Buffer): Buffer => {
     let data: Buffer = carry.length > 0 ? Buffer.concat([carry, chunk]) : chunk;

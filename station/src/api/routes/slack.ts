@@ -39,6 +39,7 @@ import {
   configTokens,
 } from "../../slack/index.ts";
 import { wall } from "../../ops/fibers.ts";
+import { runtimeKind, type RuntimeKind } from "../../agents/runtime.ts";
 
 type Json = any;
 type Input = Record<string, unknown>;
@@ -260,11 +261,12 @@ export const routes = (deps: SlackRoutesDeps): Route[] => {
       const profile = kept("profile");
       // A connect's runtime is chosen when it is made: its sessions and their history belong to it.
       const given = get(bind, "runtime");
-      let runtime: "claude" | "codex";
-      if (oldBind !== null) runtime = oldBind.runtime === "codex" ? "codex" : "claude";
+      let runtime: RuntimeKind;
+      if (oldBind !== null) runtime = runtimeKind(oldBind.runtime) ?? "claude";
       else if (given !== undefined) {
-        if (given !== "claude" && given !== "codex") throw new Error(`unknown runtime ${typeof given === "string" ? given : JSON.stringify(given)}`);
-        runtime = given;
+        const named = runtimeKind(given);
+        if (named === undefined) throw new Error(`unknown runtime ${typeof given === "string" ? given : JSON.stringify(given)}`);
+        runtime = named;
       } else throw new Error("runtime is required");
       // The profile its sessions keep to (null: the pool's pick), one that runs its runtime and model.
       if (profile !== null) {

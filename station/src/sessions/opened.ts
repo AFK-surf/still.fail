@@ -17,6 +17,7 @@ import { chatNamed, postFrom, sender } from "./messages.ts";
 import { Refused } from "./neighbours.ts";
 import { fromBefore, linkedStation, peersOf, sessionThreadOf } from "./others.ts";
 import { sendable, sendAlong } from "./peer-files.ts";
+import { RUNTIME_KINDS, type RuntimeKind } from "../agents/runtime.ts";
 
 type Json = any;
 
@@ -31,8 +32,8 @@ export const MAX_OPEN = 8;
 const MAX_TEXT = 200_000;
 
 const chars = (s: string) => Array.from(s).length;
-const RUNTIMES = ["claude", "codex"] as const;
-type RuntimeName = (typeof RUNTIMES)[number];
+const RUNTIMES = RUNTIME_KINDS;
+type RuntimeName = RuntimeKind;
 
 /// How a turn of an opened chat ended, as its opener is told.
 export type Settled = "all_done" | "need_human" | "failed" | "stopped";

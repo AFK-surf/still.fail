@@ -11,6 +11,7 @@ import { type Lang, tr } from "../ops/i18n.ts";
 import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, seenBy, usageGroups, usageSince, usageThreads } from "./store.ts";
 import type { InWorkspace } from "../store/rows.ts";
 import { titleOf } from "./views.ts";
+import { profileRuntimes } from "../agents/profiles.ts";
 
 // ── prices (usage.rs) ──
 
@@ -131,28 +132,6 @@ function summary(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint): Json
 
 // ── the config's profiles (config.rs parse_config, what usage shows of them) ──
 
-/// The runtimes an API provider's profile runs, from where its provider speaks (shapes providers.rs `endpoints` and
-/// `uses`, profiles.rs `runtimes_for`): Anthropic's protocol is Claude Code's, Responses Codex's.
-function providerRuntimes(provider: string | undefined, endpoint: string | undefined, protocol: string | undefined): string[] {
-  // Sources at their own address that speak Anthropic's protocol and/or Responses (the rest speak chat completions only).
-  const fixed: Record<string, string[]> = {
-    openai: ["codex"], anthropic: ["claude"], xai: ["codex"], minimax: ["claude"], "minimax-cn": ["claude"], openrouter: ["claude"],
-    "vercel-ai-gateway": ["claude"], opencode: ["claude", "codex"], "opencode-go": ["claude", "codex"], fireworks: ["claude"],
-    "azure-openai": ["codex"],
-  };
-  if (provider === undefined) return [];
-  if (provider in fixed) return fixed[provider]!;
-  const chosen = protocol === "chat_completions" || protocol === "responses" || protocol === "anthropic" ? protocol : undefined;
-  const one = (p: string) => (p === "anthropic" ? ["claude"] : p === "responses" ? ["codex"] : []);
-  if (provider === "cloudflare-ai-gateway") return chosen ? one(chosen) : ["claude", "codex"];
-  if (provider === "custom") {
-    // clean_endpoint: trimmed, without trailing slashes; Anthropic's protocol at the root above a /v1.
-    const base = (endpoint ?? "").trim().replace(/\/+$/, "");
-    return chosen ? one(chosen) : base.endsWith("/v1") ? ["claude", "codex"] : ["codex"];
-  }
-  return [];
-}
-
 /// config.rs parse_config, the profiles' ids, names and runtimes: a name is trimmed (else the id); the runtime is the
 /// first the account runs (runtimes_for), Claude's in name for one that runs neither. No config: none.
 export function configProfiles(dataDir: string): Record<string, Json> {
@@ -165,17 +144,7 @@ export function configProfiles(dataDir: string): Record<string, Json> {
   }
   for (const p of Array.isArray(raw?.profiles) ? raw.profiles : []) {
     if (typeof p?.id !== "string") continue;
-    const kind: string = p.access?.kind ?? "env";
-    const runtimes =
-      kind === "api-provider"
-        ? providerRuntimes(p.access?.provider || undefined, p.access?.endpoint, p.access?.protocol || undefined)
-        : kind === "opencode-go"
-          ? ["claude", "codex"]
-          : kind === "anthropic-api"
-            ? ["claude"]
-            : p.runtime === "claude" || p.runtime === "codex"
-              ? [p.runtime]
-              : [];
+    const runtimes = profileRuntimes({ id: p.id, home: "", runtime: p.runtime, access: p.access });
     const name = typeof p.name === "string" && p.name.trim() !== "" ? p.name.trim() : p.id;
     out[p.id] = { name, runtime: runtimes[0] ?? "claude" };
   }

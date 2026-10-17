@@ -65,7 +65,10 @@ export const URLS: Urls = {
 
 /// The access kinds each runtime can use.
 export function accessKinds(runtime: Runtime): AccessKind[] {
-  return runtime === "claude" ? ["subscription", "opencode-go", "anthropic-api", "api-provider", "env"] : ["subscription", "opencode-go", "api-provider", "env"];
+  if (runtime === "claude") return ["subscription", "opencode-go", "anthropic-api", "api-provider", "env"];
+  // DeepSeek Harness has no subscription to sign in to here: an account of its own is set up by variables.
+  if (runtime === "dsh") return ["opencode-go", "anthropic-api", "api-provider", "env"];
+  return ["subscription", "opencode-go", "api-provider", "env"];
 }
 
 /// Access kinds that authenticate with a key the profile stores.
@@ -78,9 +81,10 @@ export const needsKey = (kind: AccessKind, provider: string | undefined): boolea
 /// The runtimes an access kind runs without its provider (profiles.rs runtimes_of): a provider's follow from where it
 /// speaks (`runtimesFor`).
 export function runtimesOf(kind: AccessKind, runtime: Runtime | undefined): Runtime[] {
-  if (kind === "opencode-go") return ["claude", "codex"];
-  if (kind === "anthropic-api") return ["claude"];
+  if (kind === "opencode-go") return ["claude", "codex", "dsh"];
+  if (kind === "anthropic-api") return ["claude", "dsh"];
   if (kind === "api-provider") return [];
+  if (kind === "subscription" && runtime === "dsh") return [];
   return runtime ? [runtime] : [];
 }
 
@@ -88,7 +92,9 @@ export function runtimesOf(kind: AccessKind, runtime: Runtime | undefined): Runt
 export const runtimesFor = (access: Json, runtime: unknown): Runtime[] => profileRuntimes({ id: "", home: "", runtime: runtime as Runtime, access });
 
 /// The command to sign a subscription profile in, run on the station's machine.
-export const loginCommand = (runtime: Runtime, home: string) => (runtime === "claude" ? `CLAUDE_CONFIG_DIR=${home} claude auth login` : `CODEX_HOME=${home} codex login`);
+/// None for DeepSeek Harness, which has no subscription here.
+export const loginCommand = (runtime: Runtime, home: string) =>
+  runtime === "claude" ? `CLAUDE_CONFIG_DIR=${home} claude auth login` : runtime === "codex" ? `CODEX_HOME=${home} codex login` : "";
 
 /// What a check is given: the account and where it lives.
 export type CheckOptions = {

@@ -360,9 +360,10 @@ export const CHAT_CREATE = {
         "type": "string",
         "enum": [
           "claude",
-          "codex"
+          "codex",
+          "dsh"
         ],
-        "description": "Its agent's runtime. Default: yours."
+        "description": "Its agent's runtime (dsh: DeepSeek Harness). Default: yours."
       },
       "model": {
         "type": "string",

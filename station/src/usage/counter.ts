@@ -16,8 +16,9 @@ import { basename, join } from "node:path";
 import { promisify } from "node:util";
 import { createZstdDecompress, zstdDecompress } from "node:zlib";
 import { log } from "../ops/log.ts";
-import { parseIso } from "../read/transcript.ts";
+import { parseIso, transcriptPath } from "../read/transcript.ts";
 import type { SessionRow, Store, UsageCall, UsageFile, UsageFor, UsageTurn } from "../store/store.ts";
+import type { RuntimeKind } from "../agents/runtime.ts";
 
 /// Calls a little before a session was made (the runtime's clock against the station's) are still its own.
 export const SKEW_MS = 5_000;
@@ -31,7 +32,7 @@ export const SAFETY_MS = 10 * 60_000;
 /// How much of a transcript is read, parsed and recorded at a time before the event loop is let through.
 const CHUNK = 1 << 20;
 
-type Runtime = "claude" | "codex";
+type Runtime = RuntimeKind;
 
 /// What the counter reads of the station's config: where its data is, and each profile's home (absolute).
 export type UsageConfig = { dataDir: string; profiles: readonly { home: string }[] };
@@ -65,7 +66,10 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
   for (let line of text.split("\n")) {
     if (line.endsWith("\r")) line = line.slice(0, -1);
     // Most lines are something else: only those that may hold usage are parsed.
-    const wanted = runtime === "claude" ? line.includes('"usage"') : line.includes("token_count") || line.includes("turn_context") || line.includes("session_meta");
+    const wanted =
+      runtime === "claude" ? line.includes('"usage"')
+      : runtime === "dsh" ? line.startsWith('{"type":"assistant/message"') && line.includes('"usage"')
+      : line.includes("token_count") || line.includes("turn_context") || line.includes("session_meta");
     if (!wanted) continue;
     let r: unknown;
     try {
@@ -75,7 +79,20 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
     }
     const stamp = str(get(r, "timestamp"));
     const at = (stamp === null ? null : parseIso(stamp)) ?? 0;
-    if (runtime === "claude") {
+    if (runtime === "dsh") {
+      // dsh's counts are apart: input is what was not cached.
+      const data = get(r, "data");
+      const usage = get(data, "usage");
+      const message = get(data, "message");
+      const id = str(get(message, "id"));
+      if (usage === undefined || usage === null || id === null) continue;
+      const time = get(r, "time");
+      out.push({
+        id: `dsh:${id}`, at: typeof time === "number" ? time : 0, model: str(get(get(message, "source"), "model")), subagent, fast: false,
+        input: n(get(usage, "inputTokens")), cacheRead: n(get(usage, "cacheReadTokens")), cacheWrite: n(get(usage, "cacheWriteTokens")), cacheWriteLong: 0,
+        output: n(get(usage, "outputTokens")),
+      });
+    } else if (runtime === "claude") {
       if (str(get(r, "type")) !== "assistant") continue;
       const m = get(r, "message");
       if (m === undefined) continue;
@@ -532,6 +549,21 @@ export class UsageCounter {
         let turns = turnsOf.get(session);
         if (turns === undefined) turnsOf.set(session, (turns = { of: null }));
         added += await this.#readFile(path, "codex", false, s, known, turns);
+      }
+    }
+    // DeepSeek Harness: each runtime session's own file, looked for in every profile's home (dsh.ts).
+    for (const s of sessions) {
+      if (s.runtime !== "dsh" || (wanted !== null && !wanted.has(s.key))) continue;
+      const turns: { of: UsageTurn[] | null } = { of: null };
+      for (const id of store.runtimeSessions(s.key)) {
+        for (const p of config.profiles) {
+          const path = transcriptPath("dsh", p.home, id);
+          if (path === null) continue;
+          const real = await canonical(path);
+          if (seenFiles.has(real)) continue;
+          seenFiles.add(real);
+          added += await this.#readFile(path, "dsh", false, s, known, turns);
+        }
       }
     }
     this.#last = started;

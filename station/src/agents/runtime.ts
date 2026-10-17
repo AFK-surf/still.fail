@@ -1,8 +1,16 @@
-// The seam between the station and a coding-agent runtime (Claude Code, Codex), as the Rust station's runtime/mod.rs has it:
-// everything above is runtime-agnostic. A driver opens sessions; what a session's runtime does comes back as events,
-// in order, to the one listener it was opened with. Processes run under runners (./runner.ts): a station that starts
-// again takes its sessions up from the runners (`adopt`), from what the previous one left (`snapshot`) or, after a
-// crash, from what the runner kept unread.
+// The seam between the station and a coding-agent runtime (Claude Code, Codex, DeepSeek Harness), as the Rust station's
+// runtime/mod.rs has it: everything above is runtime-agnostic. A driver opens sessions; what a session's runtime does
+// comes back as events, in order, to the one listener it was opened with. Processes run under runners (./runner.ts): a
+// station that starts again takes its sessions up from the runners (`adopt`), from what the previous one left
+// (`snapshot`) or, after a crash, from what the runner kept unread.
+
+/// The runtimes a station runs, in the order they are offered.
+export type RuntimeKind = "claude" | "codex" | "dsh";
+export const RUNTIME_KINDS: RuntimeKind[] = ["claude", "codex", "dsh"];
+/// A runtime as stored or sent (a name of one of them), none for anything else.
+export const runtimeKind = (v: unknown): RuntimeKind | undefined => (RUNTIME_KINDS as unknown[]).includes(v) ? (v as RuntimeKind) : undefined;
+/// How a runtime is named to people.
+export const runtimeLabel = (r: RuntimeKind) => (r === "claude" ? "Claude Code" : r === "codex" ? "Codex" : "DeepSeek Harness");
 
 export type FailureReason = "auth" | "refused" | "rate_limit" | "model" | "exited" | "other";
 
@@ -29,8 +37,8 @@ export type RuntimeEvent =
 
 export type Profile = {
   id: string;
-  runtime: "claude" | "codex";
-  /// The profile's home (CLAUDE_CONFIG_DIR / CODEX_HOME).
+  runtime: RuntimeKind;
+  /// The profile's home (CLAUDE_CONFIG_DIR / CODEX_HOME / DSH_HOME).
   home: string;
   /// Whatever else the profile's config says (env, access kind, machine…): read by the drivers as runtime/*.rs do.
   [key: string]: unknown;
@@ -56,7 +64,7 @@ export type OpenOptions = {
 };
 
 export interface AgentSession {
-  /// Runtime-native id: claude session id, codex thread id. Persist it to resume.
+  /// Runtime-native id: claude session id, codex thread id, dsh session id. Persist it to resume.
   id(): string;
   busy(): boolean;
   /// Starts a turn. Fails when a turn is already running (or the runtime cannot take one as it is).
@@ -91,7 +99,7 @@ export function unreachable(text: string): boolean {
 }
 
 export interface AgentDriver {
-  runtime(): "claude" | "codex";
+  runtime(): RuntimeKind;
   open(options: OpenOptions, events: (event: RuntimeEvent) => void): Promise<AgentSession>;
   /// Takes up a session whose process a runner kept: `snapshot` as the previous station left it, or null after a crash
   /// (then what the runner kept unread says where the turn is). What it does comes to `events` from now on.

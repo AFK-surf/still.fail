@@ -1,6 +1,6 @@
-// Claude Code and Codex on this machine (the Rust station's updates.rs): where the station's PATH finds them, how each is
-// updated the way it was installed (`claude update`, npm, Homebrew, Vite+, Codex's standalone installer) or installed
-// when it is not there, and running those commands.
+// Claude Code, Codex and DeepSeek Harness on this machine (the Rust station's updates.rs): where the station's PATH finds
+// them, how each is updated the way it was installed (`claude update`, npm, Homebrew, Vite+, Codex's standalone
+// installer) or installed when it is not there, and running those commands.
 import { existsSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -8,18 +8,19 @@ import { type Lang, tr } from "../ops/i18n.ts";
 import { wall } from "../ops/fibers.ts";
 import { endCommand, startCommand } from "../ops/processes.ts";
 import { type Found as PlatformFound, platform } from "../platform/index.ts";
+import { RUNTIME_KINDS, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
 
 /// The environment commands run in: the station's own (its PATH says where the runtimes are).
 export type Env = Record<string, string | undefined>;
 
-export type Kind = "station" | "claude" | "codex";
-export const KINDS: Kind[] = ["station", "claude", "codex"];
-export const RUNTIMES: Exclude<Kind, "station">[] = ["claude", "codex"];
+export type Kind = "station" | RuntimeKind;
+export const KINDS: Kind[] = ["station", ...RUNTIME_KINDS];
+export const RUNTIMES: Exclude<Kind, "station">[] = RUNTIME_KINDS;
 
-export const kindName = (k: Kind) => (k === "station" ? "Station" : k === "claude" ? "Claude Code" : "Codex");
+export const kindName = (k: Kind) => (k === "station" ? "Station" : runtimeLabel(k));
 export const kindCommand = (k: Kind) => (k === "station" ? "stillfail-station" : k);
 /// Where the latest is said: the npm registry's latest of the runtime's package.
-export const kindPackage = (k: Kind) => (k === "claude" ? "@anthropic-ai/claude-code" : k === "codex" ? "@openai/codex" : "");
+export const kindPackage = (k: Kind) => (k === "claude" ? "@anthropic-ai/claude-code" : k === "codex" ? "@openai/codex" : k === "dsh" ? "@deepseek-ai/dsh" : "");
 
 /// How an update is done: a program and its arguments.
 export type How = { program: string; args: string[] };
@@ -94,8 +95,9 @@ export function howToUpdate(kind: Kind, found: Found, env: Env): How | Unable {
   };
   const using = (program: string | Unable, args: string[]): How | Unable => (program instanceof Unable ? program : { program, args });
   const pkg = `${kindPackage(kind)}@latest`;
-  if (realPath.includes("/Caskroom/")) return using(brew(), ["upgrade", "--cask", kind === "claude" ? "claude-code" : "codex"]);
-  if (realPath.includes("/Cellar/")) return using(brew(), ["upgrade", kind === "claude" ? "claude-code" : "codex"]);
+  // Homebrew has Claude Code and Codex (DeepSeek Harness is npm's only).
+  if (kind !== "dsh" && realPath.includes("/Caskroom/")) return using(brew(), ["upgrade", "--cask", kind === "claude" ? "claude-code" : "codex"]);
+  if (kind !== "dsh" && realPath.includes("/Cellar/")) return using(brew(), ["upgrade", kind === "claude" ? "claude-code" : "codex"]);
   if (realPath.includes("/node_modules/")) {
     // npm's shebang uses PATH's node; even the right npm can therefore choose another Node's global prefix. Explicitly
     // target the installation the station actually uses.
@@ -105,6 +107,7 @@ export function howToUpdate(kind: Kind, found: Found, env: Env): How | Unable {
     return using(npm(), ["install", "-g", pkg, "--prefix", found.real.slice(0, at)]);
   }
   if (kind === "claude") return { program: found.onPath, args: ["update"] };
+  if (kind === "dsh") return new Unable("station.updates.codexElsewhere", { path: realPath });
   // Its installer is a shell script (install.sh): where the platform runs it.
   if (platform.codexStandalone && realPath.includes("/packages/standalone/releases/")) return standaloneCodexUpdate(found);
   return new Unable("station.updates.codexElsewhere", { path: realPath });
@@ -133,11 +136,13 @@ CODEX_HOME="$1" CODEX_INSTALL_DIR="$2" CODEX_NON_INTERACTIVE=1 sh -c "$installer
 }
 
 /// How a runtime the machine has not is installed, or why it cannot be from here: Claude Code by its own installer
-/// (into ~/.local/bin, on the station's PATH as install.ts sets it), Codex by npm, else Homebrew.
+/// (into ~/.local/bin, on the station's PATH as install.ts sets it), Codex by npm, else Homebrew, DeepSeek Harness by npm.
 export function howToInstall(kind: Kind, env: Env): How | Unable {
   if (kind === "station") return new Unable("");
   if (kind === "claude") return platform.claudeInstall;
   const npm = findCommand("npm", env);
+  // DeepSeek Harness is an npm package (it runs on the Node npm is of: 22.19 or newer).
+  if (kind === "dsh") return npm ? { program: npm.onPath, args: ["install", "-g", `${kindPackage(kind)}@latest`] } : new Unable("station.updates.noNpm", { name: kindName(kind) });
   if (npm) return { program: npm.onPath, args: ["install", "-g", "@openai/codex@latest"] };
   const brew = findCommand("brew", env);
   if (brew) return { program: brew.onPath, args: ["install", "--cask", "codex"] };

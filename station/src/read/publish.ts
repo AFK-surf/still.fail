@@ -12,6 +12,7 @@ import { HttpError, apiOf, authorNames, chatTitle, useNames } from "./views.ts";
 import { mime } from "./sessions.ts";
 import { dirname, join } from "node:path";
 import { clean, samePath } from "../ops/paths.ts";
+import { runtimeKind, runtimeLabel } from "../agents/runtime.ts";
 
 /// Messages read for a snapshot at most: a chat with more is published from its latest ones.
 const MOST = 5000;
@@ -35,7 +36,7 @@ function authorOf(s: Store, m: MessageRow, names: Record<string, string>, known:
     if (model !== null) return modelName(model);
     const name = said("agent", m.author);
     if (name !== null && name !== m.author) return name;
-    return store.getSession(s, m.author)?.runtime === "codex" ? "Codex" : "Claude Code";
+    return runtimeLabel(runtimeKind(store.getSession(s, m.author)?.runtime) ?? "claude");
   }
   return said(m.authorKind, m.author) ?? "still.fail";
 }

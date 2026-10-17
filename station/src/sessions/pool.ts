@@ -109,7 +109,10 @@ export function pickProfile(candidates: Profile[], model: string | null | undefi
 export type Catalog = Record<string, Record<string, string[]>>;
 
 export function fallbackEfforts(runtime: string): string[] {
-  return runtime === "codex" ? ["minimal", "low", "medium", "high", "xhigh"] : ["low", "medium", "high", "xhigh", "max"];
+  if (runtime === "codex") return ["minimal", "low", "medium", "high", "xhigh"];
+  // DeepSeek Harness's, as dsh.ts gives each route them.
+  if (runtime === "dsh") return ["low", "medium", "high", "max"];
+  return ["low", "medium", "high", "xhigh", "max"];
 }
 
 /// The levels a model offers: as its runtime reported them (an empty list: none), else the runtime's usual ones.
