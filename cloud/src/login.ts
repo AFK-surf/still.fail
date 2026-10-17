@@ -276,7 +276,7 @@ export class LoginAttempt extends DurableObject<Env> {
     return devicePage(
       lang,
       tr(lang, attempt.device ? "cloud.login.device.title" : "cloud.login.choose.title"),
-      `${device}<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="google"><button>${tr(lang, "cloud.login.device.continue")}</button></form>` +
+      `${device}<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="google"><button class="secondary">${tr(lang, "cloud.login.device.continue")}</button></form>` +
         `<p class="or">${tr(lang, "cloud.login.choose.or")}</p>` +
         `<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="email"><input type="email" name="email" value="${escape(email)}" placeholder="${tr(lang, "cloud.login.email.placeholder")}" autocomplete="email" required maxlength="254"><button>${tr(lang, "cloud.login.email.send")}</button></form>` +
         (error ? `<p class="error">${escape(error)}</p>` : ""),
