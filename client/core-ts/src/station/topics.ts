@@ -13,6 +13,7 @@ import type { Owner } from "../core/routing.ts";
 import type { Value } from "../store.ts";
 import { Priority } from "../sync/scheduler.ts";
 import { equal, get, isObject, parseJson } from "../util.ts";
+import { ofAddress } from "../workspace.ts";
 import { StationAddr } from "./addr.ts";
 import { PAGE, TRANSCRIPT_PAGE, entriesOf, transcriptOf } from "./channel-kinds.ts";
 import type { StationsSync } from "./sync.ts";
@@ -296,7 +297,7 @@ export class StationTopics implements Owner {
       phase: view?.phase ?? null,
     };
     if (view?.rate !== null && view?.rate !== undefined) value.rate = view.rate;
-    if (view) value.activity = this.#sync.activity(value);
+    if (view) value.activity = this.#sync.activity(value, this.#core.views.stationNames(ofAddress(station)));
     // Offline, what is held is all there is: it is loaded, and says why it ends there.
     if (!this.#sync.reachable(station) || !link || link.state.state !== "online") {
       if (!view?.loaded) {

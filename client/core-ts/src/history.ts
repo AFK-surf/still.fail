@@ -1,7 +1,7 @@
 // An agent's execution history as the clients show it (history.rs): what actually ran, put together here so every
 // client draws the same thing. Messages in and out, state marks and the agent's own words are boundaries; the tool
 // calls and thinking between two boundaries fold into one group, named by its latest call (shapes: HistoryView).
-import { args, doing, epochMs, kindOf, toolName } from "./activity.ts";
+import { args, doing, epochMs, kindOf, type Known, tasksOf, told, toolName } from "./activity.ts";
 import * as format from "./format.ts";
 import * as brand from "./brand.ts";
 import { t } from "./i18n.ts";
@@ -25,6 +25,8 @@ export type Context = {
   workspaces: Map<string, format.SlackWorkspace>;
   /// Now, for the day a turn's time is said with (a turn of today says only its clock); absent: every turn says its clock alone.
   now?: number;
+  /// The workspace's stations' names by id, for the calls that work on one (station_task); absent: none known.
+  stations?: ReadonlyMap<string, string>;
 };
 
 function kindKey(kind: string): string {
@@ -270,6 +272,7 @@ export function presentHistory(live: J, cx: Context): J {
 
   const items: [Item, number, number][] = [];
   const { steps, stepAt } = pair(timeline);
+  const known: Known = { stations: cx.stations, tasks: tasksOf(timeline) };
   let grouping = false;
   const cover = (i: number) => {
     const last = items[items.length - 1];
@@ -431,7 +434,7 @@ export function presentHistory(live: J, cx: Context): J {
         }
         break;
       case "group":
-        v = group(timeline, steps, item.rows, base);
+        v = group(timeline, steps, item.rows, base, known);
         break;
     }
     const kind = v.kind ?? null;
@@ -545,7 +548,7 @@ function endsOf(kind: string | null): "done" | "human" | "waiting" | null {
 
 /// A group of the history; `base`: the transcript entry its timeline starts at (what a step's or thought's `entries` count
 /// from: what `history.detail` reads whole, of one in brief).
-function group(timeline: J[], steps: Step[], rows: Row[], base: number): J {
+function group(timeline: J[], steps: Step[], rows: Row[], base: number, known: Known): J {
   const members = rows.flatMap((r) => ("step" in r ? [r.step] : []));
   const thinking = rows.flatMap((r) => ("thought" in r ? [r.thought] : []));
   const text = (i: number): string => (typeof timeline[i]?.text === "string" ? timeline[i].text : "");
@@ -578,7 +581,7 @@ function group(timeline: J[], steps: Step[], rows: Row[], base: number): J {
   } else {
     const call = steps[lastMember].call;
     // Said as the chat's activity says the call while it runs (activity.ts doing).
-    const now = doing(tool(call), text(call));
+    const now = doing(tool(call), text(call), known);
     summary = members.length === 1 ? now : t("core-logic.history.steps", { doing: now, n: members.length });
   }
   const step = (m: number) => {
@@ -591,7 +594,7 @@ function group(timeline: J[], steps: Step[], rows: Row[], base: number): J {
     const took = b !== null && a !== null && b - a >= 0 ? b - a : null;
     const meta = result === null ? t("core-logic.history.step.running") : isFailed ? t("core-logic.history.step.failed") : took !== null ? format.duration(took) : "";
     return {
-      said: describe(text(st.call)),
+      said: describe(text(st.call)) ?? told(tool(st.call), text(st.call), known),
       name: toolName(tool(st.call)),
       hint: hint(text(st.call)),
       meta,
@@ -676,8 +679,9 @@ function pushed(live: J, runtime: string): { liveSteps: { id: string; step: stri
 /**
  * The chat's activity: the execution history's latest, in one line. The call it shows running (this turn's, said as
  * its row says it), else what is in flight (thinking, writing, a reply being written), else where the turn stands.
+ * `stations`: the workspace's stations' names by id, for a call that works on one (station_task).
  */
-export function activity(live: J): J {
+export function activity(live: J, stations?: ReadonlyMap<string, string>): J {
   const timeline: J[] = Array.isArray(live?.timeline) ? live.timeline : [];
   const s = (e: J, k: string): string => (typeof e?.[k] === "string" ? e[k] : "");
   let turn = -1;
@@ -686,12 +690,13 @@ export function activity(live: J): J {
   });
   let call: [string, string] | null = null;
   let replying = false;
+  const known: Known = { stations, tasks: tasksOf(timeline) };
   for (const st of pair(timeline).steps) {
     const e = timeline[st.call];
     if (st.call < turn || st.result !== null || e?.subagent === true) continue;
     const name = toolName(s(e, "tool"));
     if (name === "chat_post") replying = true;
-    else if (name !== "chat_state") call = [s(e, "callId") || `call:${st.call}`, doing(s(e, "tool"), s(e, "text"))];
+    else if (name !== "chat_state") call = [s(e, "callId") || `call:${st.call}`, doing(s(e, "tool"), s(e, "text"), known)];
   }
   const { liveSteps, phase } = pushed(live, "");
   // A reply being written comes as a step before its call is in the transcript.

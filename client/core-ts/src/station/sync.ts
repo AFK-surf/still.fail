@@ -924,8 +924,8 @@ export class StationsSync {
   }
 
   /// What the chat shows of a session at work (activity.ts), from its live view.
-  activity(view: Record<string, unknown>): unknown {
-    return historyActivity(view);
+  activity(view: Record<string, unknown>, stations?: ReadonlyMap<string, string>): unknown {
+    return historyActivity(view, stations);
   }
 
   // ── writes ──

@@ -249,3 +249,21 @@ test("each_prompt_that_woke_the_agent_begins_a_turn_saying_when_and_what_it_did"
   const post = presentHistory({ loaded: true, timeline: [{ kind: "tool_call", tool: "mcp__stillfail__chat_post", text: '{"to":"x","text":"t"}' }] }, cx([], [], [])).items[0].body.content;
   assert.equal(post.ends, undefined);
 });
+
+test("a_task_on_another_station_says_where_it_runs_and_what", () => {
+  const studio = "d2e33e62a1f88dd30e759c734b6604599a6e4024dbb926b1cd81b99c42da4956";
+  const call = (id: string, a: J) => ({ kind: "tool_call", tool: "mcp__stillfail__station_task", callId: id, text: JSON.stringify({ station: studio, ...a }), at: "2026-10-18T00:00:00Z" });
+  const done = (id: string) => ({ kind: "tool_result", callId: id, ok: true, text: "{}", at: "2026-10-18T00:00:01Z" });
+  const live = {
+    timeline: [
+      { kind: "user", text: "check it" },
+      call("a", { action: "prepare", key: "check", name: "typecheck web", command: "exec 2>&1\npnpm -C web tsc" }),
+      done("a"),
+      call("b", { action: "start", key: "check" }),
+      done("b"),
+    ],
+  };
+  const g = presentHistory(live, { ...cx([], [], []), stations: new Map([[studio, "Studio"]]) }).items[1].body.content;
+  assert.deepEqual(g.rows.map((r: J) => r.content.said), ["在 Studio 上准备 typecheck web", "在 Studio 上运行 typecheck web"]);
+  assert.equal(g.summary, "在 Studio 上运行 typecheck web · 共 2 项");
+});

@@ -2,7 +2,7 @@
 // a sheet on the phone, mobile/AgentSheet.tsx and the Android app's AgentSheet.kt): how much it has done, what that cost
 // and used (its tokens, the cache's hit rate, how full its context is), the latest of what it did and what it does now,
 // its jobs at work, and what is wrong.
-import { args, doing, toolName } from "../activity.ts";
+import { args, doing, type Known, tasksOf, toolName } from "../activity.ts";
 import * as format from "../format.ts";
 import { usageOf } from "../history.ts";
 import { t } from "../i18n.ts";
@@ -55,10 +55,11 @@ const firstLine = (s: string) => (s.split(/\r?\n/).find((l) => l.trim() !== "") 
 /// The latest things it did (its own, not its subagents'), oldest first, three at most, each in a line as its
 /// execution history would name it: a call by what it does, a message by what it posts, what it wrote or thought by
 /// its first line. Each is keyed by its entry's place in the transcript, which stays its own as newer ones come.
-/// From its live transcript: none before that is read.
-export function recentOf(live: unknown): { key: string; text: string }[] {
+/// From its live transcript: none before that is read. `stations`: the workspace's stations' names by id.
+export function recentOf(live: unknown, stations?: ReadonlyMap<string, string>): { key: string; text: string }[] {
   const out: { key: string; text: string }[] = [];
   const timeline = arr(get(live, "timeline"));
+  const known: Known = { stations, tasks: tasksOf(timeline) };
   const base = typeof get(live, "first") === "number" ? (get(live, "first") as number) : 0;
   for (let i = timeline.length - 1; i >= 0 && out.length < RECENT; i--) {
     const e = timeline[i];
@@ -71,7 +72,7 @@ export function recentOf(live: unknown): { key: string; text: string }[] {
       const name = toolName(tool);
       if (name === "chat_state") continue;
       const posted = name === "chat_post" ? args(text)?.text : null;
-      line = typeof posted === "string" ? firstLine(posted) : doing(tool, text);
+      line = typeof posted === "string" ? firstLine(posted) : doing(tool, text, known);
     } else if (kind === "assistant" || kind === "thinking") line = firstLine(text);
     if (line) out.unshift({ key: String(base + i), text: line });
   }
@@ -80,8 +81,8 @@ export function recentOf(live: unknown): { key: string; text: string }[] {
 
 /// Its latest lines, three at most, oldest first: what it did, then while it works what it does now (unless that is
 /// the last of them already), marked `now` and keyed so (it stays the one line while its words change).
-export function latestOf(agent: unknown, live: unknown): { key: string; text: string; now?: boolean }[] {
-  const recent: { key: string; text: string; now?: boolean }[] = recentOf(live);
+export function latestOf(agent: unknown, live: unknown, stations?: ReadonlyMap<string, string>): { key: string; text: string; now?: boolean }[] {
+  const recent: { key: string; text: string; now?: boolean }[] = recentOf(live, stations);
   const status = get(agent, "status");
   const now = get(get(get(live, "activity"), "now"), "text");
   if ((status === "running" || status === "queued") && typeof now === "string" && now !== "" && now !== recent.at(-1)?.text) recent.push({ key: "now", text: now, now: true });
@@ -97,8 +98,8 @@ const CONTEXT_RED = 95;
 
 /// The card of `agent` (a chat's agent, ViewsInner `agent`), with its live usage (none before it is read): each part
 /// only when it has one. Its account and what is left of it the card takes from the agent as it is.
-export function card(agent: J, live: J): J {
-  const out: J = { work: workText(get(agent, "turns")), jobs: jobsText(get(agent, "jobs")), latest: latestOf(agent, live), attention: [] };
+export function card(agent: J, live: J, stations?: ReadonlyMap<string, string>): J {
+  const out: J = { work: workText(get(agent, "turns")), jobs: jobsText(get(agent, "jobs")), latest: latestOf(agent, live, stations), attention: [] };
   const u = get(live, "usage");
   const n = (k: string): number => (typeof get(u, k) === "number" ? u[k] : 0);
   if (n("modelCalls") > 0) {

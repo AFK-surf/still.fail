@@ -521,6 +521,7 @@ export class Views implements Owner {
           { topic: "sessions", station },
           { topic: "chatRows", station },
           { topic: "overview", station },
+          { topic: "workspace", workspace: ofAddress(station) },
         ];
       case "history":
         return [
@@ -675,6 +676,11 @@ export class Views implements Owner {
     return { now, offsetMin: this.#core.host.utcOffsetMin(now) };
   }
 
+  /// The names of a workspace's stations by id (none until the workspace has been read).
+  stationNames(scope: string): Map<string, string> {
+    return new Map((this.stations(scope) ?? []).map((s) => [s.id, s.name]));
+  }
+
   /// A station's name as its workspace has it, else its id.
   stationName(station: string): string {
     const at = station.indexOf("/");
@@ -793,7 +799,7 @@ export class Views implements Owner {
         const agent = this.agent(view.station as string, view.key as string);
         if (agent === null) return undefined;
         const live = this.value({ topic: "live", station: view.station as string, key: view.key as string });
-        return { ok: brief.card(agent, live !== undefined && "ok" in live ? live.ok : null) };
+        return { ok: brief.card(agent, live !== undefined && "ok" in live ? live.ok : null, this.stationNames(ofAddress(view.station as string))) };
       }
       case "archive":
         return archive(this, this.local, view.scope as string, this.#core.host, typeof view.q === "string" ? view.q : "", typeof view.limit === "number" ? view.limit : 0);
@@ -1533,6 +1539,7 @@ export class Views implements Owner {
         started: typeof get(session, "runtimeSessionId") === "string",
         offsetMin: this.#core.host.utcOffsetMin(now),
         now,
+        stations: this.stationNames(ofAddress(station)),
       }),
     };
   }

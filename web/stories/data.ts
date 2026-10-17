@@ -154,6 +154,8 @@ export const MEMBERSHIPS = {
 
 const call = (name: string, hint: string, meta: string): HistoryStep =>
   ({ name, hint, meta, failed: false, call: JSON.stringify({ hint }), result: "ok", entries: [], brief: false });
+/** A call still.fail's own tools say in words (activity.ts told): where it runs and what. */
+const told = (name: string, said: string, meta: string): HistoryStep => ({ ...call(name, "", meta), said });
 const posted = (text: string, ends?: string): HistoryItem["body"] =>
   ({ kind: "post", content: { text, md: markdown(text), place: { name: "看看我的 screencam 的 Windows 版本，我感觉某些 UI 还是粗糙", surface: "stillfail" }, block: false, failed: false, ...(ends ? { ends } : {}) } });
 const own = (text: string): HistoryItem["body"] => ({ kind: "text", content: { text, md: markdown(text), subagent: false } });
@@ -161,10 +163,13 @@ const WAITED_AT = Date.parse("2026-10-16T08:27:00Z");
 const WAITING_SINCE = Date.now() - 23_000;
 const HISTORY_ITEMS: { body: HistoryItem["body"]; turn?: HistoryItem["turn"] }[] = [
   { turn: { time: "16:12", text: "5 步 · 发出 1 条" }, body: { kind: "received", content: { tasks: [], messages: [{ key: "m1", from: { name: "林晓", bound: false }, text: "看看我的 screencam 的 Windows 版本，我感觉某些 UI 还是粗糙" }] } } },
-  { body: { kind: "group", content: { summary: "读取 4 个文件 · 共 5 项", title: "读取 4 个文件、运行 1 条命令", failures: 0, pending: 0, rows: [
+  { body: { kind: "group", content: { summary: "读取 Win11 上 pnpm shot 的输出 · 共 8 项", title: "读取 4 个文件、搜索 1 次、其他 3 项", failures: 0, pending: 0, rows: [
     { kind: "step", content: call("Read", "src/ui/Toolbar.tsx", "0.2 秒") }, { kind: "step", content: call("Read", "src/ui/Countdown.tsx", "0.1 秒") },
     { kind: "step", content: call("Read", "src/ui/Tray.tsx", "0.1 秒") }, { kind: "step", content: call("Read", "src/ui/Export.tsx", "0.1 秒") },
-    { kind: "step", content: call("Bash", "pnpm shot --platform win", "12 秒") },
+    { kind: "step", content: told("ToolSearch", "加载工具 station_list、station_task", "12ms") },
+    { kind: "step", content: told("station_task", "在 Win11 上准备 pnpm shot", "73ms") },
+    { kind: "step", content: told("station_task", "在 Win11 上运行 pnpm shot", "12 秒") },
+    { kind: "step", content: told("station_task", "读取 Win11 上 pnpm shot 的输出", "64ms") },
   ] } } },
   { body: posted("看了一圈，有三处确实粗糙：\n\n- 工具栏图标在 125% 缩放下发虚；\n- 倒计时的数字会跳宽度；\n- 托盘菜单还是系统默认样式。\n\n先改哪个？", "human") },
   { turn: { time: "16:29", text: "3 步 · 发出 1 条" }, body: { kind: "received", content: { note: "Your turn ended without a state. If you need a clarification, visibly ask for it; need alone is only a status summary. Cards are optional. Do not reopen a decision the user already made.", tasks: [], messages: [] } } },

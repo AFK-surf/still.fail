@@ -141,12 +141,71 @@ function close(json: string): string {
 
 const firstLine = (s: string) => (s.split(/\r?\n/).find((l) => l.trim() !== "") ?? "").trim();
 
-/// What a call does, in a few words: its own description, else its verb and what it works on. The chat's activity
-/// says a running call so, and an execution history names a group of calls by its latest the same way.
-export function doing(tool: string, input: string): string {
+/// What a call's words need beyond its input: the workspace's stations' names by id, and what the tasks prepared on
+/// them earlier in the transcript run, by `<station>/<key>` (tasksOf).
+export type Known = { stations?: ReadonlyMap<string, string>; tasks?: ReadonlyMap<string, string> };
+
+/// The line of a command that says what it does: not `exec 2>&1`, `set -e`, a comment or a shebang.
+function commandLine(command: string): string {
+  const lines = command.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== "");
+  return lines.find((l) => !/^(#|set\s+-|exec\s+\d*[<>])/.test(l)) ?? lines[0] ?? "";
+}
+
+/// What a station task runs, in a few words: the name it was given, else its command.
+function taskOf(a: Record<string, J>): string {
+  const name = typeof a.name === "string" ? firstLine(a.name) : "";
+  return name || (typeof a.command === "string" ? commandLine(a.command) : "");
+}
+
+/// The tasks a transcript prepares on other stations (station_task prepare), by `<station>/<key>`: what each runs.
+export function tasksOf(timeline: J[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const e of timeline) {
+    if (e?.kind !== "tool_call" || typeof e.tool !== "string" || toolName(e.tool) !== "station_task" || typeof e.text !== "string") continue;
+    const a = args(e.text);
+    if (a?.action !== "prepare" || typeof a.station !== "string" || typeof a.key !== "string") continue;
+    const what = taskOf(a);
+    if (what) out.set(`${a.station}/${a.key}`, what);
+  }
+  return out;
+}
+
+/// A call of still.fail's own tools said in words rather than by its name: what it does on which station (station_task,
+/// station_file), the tools it loads (ToolSearch's `select:`); null for any other.
+export function told(tool: string, input: string, known: Known = {}): string | null {
+  const a = args(input);
+  if (!a) return null;
+  const name = toolName(tool);
+  if (name === "station_task" || name === "station_file") {
+    const id = typeof a.station === "string" ? a.station : "";
+    // An id not among the workspace's (or not read yet) is not shown as its 64 hex digits.
+    const station = known.stations?.get(id) ?? (id === "" || /^[0-9a-f]{16,}$/.test(id) ? t("core-logic.activity.remote.another") : id);
+    const key = typeof a.key === "string" ? a.key : "";
+    if (name === "station_file") {
+      const path = typeof a.path === "string" ? (a.path.split("/").pop() ?? a.path) : "";
+      return t(`core-logic.activity.remote.${a.direction === "download" ? "download" : "upload"}`, { station, what: path || key });
+    }
+    if (a.action === "list") return t("core-logic.activity.remote.list", { station });
+    if (!["prepare", "start", "get", "log", "stop"].includes(a.action)) return null;
+    const what = (a.action === "prepare" ? taskOf(a) : "") || known.tasks?.get(`${id}/${key}`) || key;
+    return t(`core-logic.activity.remote.${a.action}`, { station, what });
+  }
+  if (name === "ToolSearch" && typeof a.query === "string" && a.query.startsWith("select:")) {
+    const names = a.query.slice("select:".length).split(",").map((n) => toolName(n.trim())).filter((n) => n !== "");
+    if (names.length > 0) return t("core-logic.activity.tools", { names: names.join(t("core-logic.history.did.sep")) });
+  }
+  return null;
+}
+
+/// What a call does, in a few words: its own description, else what still.fail's own tools say of it (told), else its
+/// verb and what it works on. The chat's activity says a running call so, and an execution history names a group of
+/// calls by its latest the same way.
+export function doing(tool: string, input: string, known: Known = {}): string {
   const a = args(input) ?? {};
   const said = typeof a.description === "string" ? firstLine(a.description) : "";
   if (said) return said;
+  const own = told(tool, input, known);
+  if (own) return own;
   const kind = kindOf(tool);
   let target = "";
   for (const name of ["command", "cmd", "file_path", "path", "pattern", "url", "query", "queries", "prompt"]) {
