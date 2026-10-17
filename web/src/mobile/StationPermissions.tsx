@@ -6,7 +6,8 @@ import { useDoing } from "../doing.ts";
 import { grantEnd, grantMark, useGrantRequest, type GrantEnd } from "../StationPermissions.tsx";
 import { t } from "../i18n.ts";
 import { useApp } from "./app.tsx";
-import { ListCard, ListRow, SectionHeader, Spinner } from "./parts.tsx";
+import { Spinner } from "@stillfail/ui/waiting.tsx";
+import { ListCard, ListRow, SectionHeader } from "./parts.tsx";
 import * as partsCss from "./styles/parts.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import * as css from "./StationPermissions.css.ts";
@@ -35,7 +36,7 @@ function Row({ station, g, end, onRequest, onOpen }: { station: string; g: Stati
         <span className={listsCss.mRowTitle}>{g.name}</span>
         <span className={css.mLine} data-asking={g.asking || undefined}>{g.line}</span>
       </span>
-      {end === "request" ? (busy ? <Spinner size={13} /> : <button type="button" className={css.mAction} aria-label={t("web-pages.stations.permissions.requestLabel", { name: g.name })} onClick={onRequest}>{t("web-pages.stations.permissions.request")}</button>)
+      {end === "request" ? (busy ? <Spinner inline /> : <button type="button" className={css.mAction} aria-label={t("web-pages.stations.permissions.requestLabel", { name: g.name })} onClick={onRequest}>{t("web-pages.stations.permissions.request")}</button>)
         : end === "open" ? <button type="button" className={css.mAction} onClick={onOpen}>{t("web-pages.stations.permissions.openScreen")}</button>
         : <span className={css.mState} data-end={end}>{t(end === "granted" ? "web-pages.stations.permissions.granted" : end === "waiting" ? "web-pages.stations.permissions.waiting" : "web-pages.stations.permissions.missing")}</span>}
     </ListRow>
