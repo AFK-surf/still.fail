@@ -308,9 +308,14 @@ function listen(share: Share) {
 }
 
 /// Which of the phone's connections it is and the ways it has, for the log: a tunnel goes on its offer's.
+/// Never fails: what is not known is left out.
 function about(conn: Connection): Record<string, string> {
-  const ways = (conn.paths?.() ?? []).map((p) => `${p.selected ? "*" : ""}${p.relay ?? p.ip ?? "?"} ${Math.round(p.rttMs)}ms ${p.txPackets}/${p.lostPackets}`);
-  return { device: conn.remoteId().slice(0, 12), via: conn.via() ?? "none", ways: ways.join("; ") };
+  try {
+    const ways = (conn.paths?.() ?? []).map((p) => `${p.selected ? "*" : ""}${p.relay ?? p.ip ?? "?"} ${Math.round(p.rttMs)}ms ${p.txPackets}/${p.lostPackets}`);
+    return { device: conn.remoteId().slice(0, 12), via: conn.via?.() ?? "none", ways: ways.join("; ") };
+  } catch {
+    return {};
+  }
 }
 
 /// A port of the phone's own: its usual one if free, else any.
