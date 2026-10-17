@@ -80,6 +80,7 @@ object BarTiming {
         TopicTiming.followed = ::followed
         TopicTiming.decoded = ::decoded
         TopicTiming.shown = ::shown
+        AppHooks.placed = ::placed
     }
 
     /** Every touch of the activity: the last finger lifted is where a switch from the bar begins. */

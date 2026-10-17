@@ -34,15 +34,15 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
-class Updates(context: Context, private val origin: String, private val core: StillFailCore) {
+class Updates(context: Context, private val origin: String, private val core: StillFailCore) : AppUpdates {
     private val context = context.applicationContext
     /** A build newer than this one, once a check found it. */
-    var available by mutableStateOf<AppRelease?>(null); private set
+    override var available by mutableStateOf<AppRelease?>(null); private set
     /** What an update under way is doing ("下载中 40%"), null when none is. */
-    var progress by mutableStateOf<String?>(null); private set
+    override var progress by mutableStateOf<String?>(null); private set
 
     /** Asks the core for a newer build (it asks still.fail cloud at most once an hour unless `now`); the one it finds, if any. */
-    suspend fun check(now: Boolean = false): AppRelease? = try { ask(now) } catch (_: CoreException) { null }
+    override suspend fun check(now: Boolean): AppRelease? = try { ask(now) } catch (_: CoreException) { null }
 
     private suspend fun ask(now: Boolean): AppRelease? =
         core.call("app.update", buildJsonObject { put("platform", "android"); put("versionCode", BuildConfig.VERSION_CODE.toLong()); put("now", now) })
@@ -50,10 +50,10 @@ class Updates(context: Context, private val origin: String, private val core: St
             .also { available = it }
 
     /** Whether a check the person asked for is under way. */
-    var checking by mutableStateOf(false); private set
+    override var checking by mutableStateOf(false); private set
 
     /** Asks still.fail cloud now, as the person tapped for; what to tell them when no newer build turned up. */
-    suspend fun checkNow(): String? {
+    override suspend fun checkNow(): String? {
         if (checking || progress != null) return null
         checking = true
         return try {
@@ -69,7 +69,7 @@ class Updates(context: Context, private val origin: String, private val core: St
      * Downloads the newer build and hands it to the installer. Installing apps needs the person's leave (安装未知应用):
      * without it the system's page for it opens instead, and they tap 更新 again once it is given. A failure is said.
      */
-    suspend fun install(): String? {
+    override suspend fun install(): String? {
         if (checking || progress != null) return null
         if (!mayInstall(context)) return t("android-misc.updates.allowInstall", "app" to BuildConfig.APP_NAME)
         return try {

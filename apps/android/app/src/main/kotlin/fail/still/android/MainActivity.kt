@@ -144,7 +144,7 @@ class MainActivity : ComponentActivity() {
             Prefs.moveIn(core, shared)
             val first = Prefs.first(core)
             fail.still.android.data.I18n.follow(first.lang)
-            Notifier.keepLang(shared, first.lang)
+            KeptLang.keep(shared, first.lang)
             val made = AppState(core, shared, BuildConfig.CLOUD_ORIGIN, Updates(applicationContext, BuildConfig.CLOUD_ORIGIN, core), first)
             // The notification settings the app kept, into the core before anything goes by them.
             made.moveNotify()

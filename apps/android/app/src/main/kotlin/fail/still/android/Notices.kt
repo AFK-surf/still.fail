@@ -44,24 +44,11 @@ object Notifier {
     private const val ID = 1
     /** The message a notification is about (its seq in the chat), which its tap opens the chat at. */
     const val AT = "fail.still.android.AT"
-    /** Where the app kept 我 → 通知 before the core did (AppState.moveNotify). */
-    const val FLAG = "notify"
-
-    /** Where the language last followed is kept (AppState's prefs), for a push that wakes the app with no core to ask. */
-    private const val LANG = "lang"
-    /** Whether this process has followed the core's language (keepLang): then it is the one. */
-    @Volatile private var followed = false
-
-    fun keepLang(prefs: SharedPreferences, lang: String?) {
-        if (lang == null) return
-        followed = true
-        if (prefs.getString(LANG, null) != lang) prefs.edit().putString(LANG, lang).apply()
-    }
 
     /** The words, in the language last followed (a push may come with no app started). */
     fun words(context: Context) {
         I18n.load(context)
-        if (!followed) context.getSharedPreferences("stillfail", Context.MODE_PRIVATE).getString(LANG, null)?.let(I18n::follow)
+        if (!KeptLang.followed) KeptLang.kept(context.getSharedPreferences("stillfail", Context.MODE_PRIVATE))?.let(I18n::follow)
     }
 
     /** Whether MainActivity is started. */
