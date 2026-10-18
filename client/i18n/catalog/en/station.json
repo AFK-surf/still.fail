@@ -224,6 +224,7 @@
   "station.notice.noResultSaid": "The agent didn't reply in the chat this turn. Below is its last output, forwarded by the station as a fallback (not a message it posted). Reply to continue:",
   "station.notice.rateLimit": "Hit a usage or rate limit; continuing with another account or model. You can also reply later to continue: {error}",
   "station.notice.refused": "Anthropic refused the request. This is usually a network issue, not a sign-in issue: the station's outbound region isn't supported, or traffic isn't going through a proxy (Claude Code only reads HTTPS_PROXY / HTTP_PROXY; set them in the Profile's environment variables): {error}",
+  "station.notice.runtimeMissing": "Couldn't start the agent: {name} isn't installed on this station",
   "station.notice.stopped": "Stopped the current task",
   "station.port.mcp": "the agent MCP endpoint",
   "station.port.taken": "Port {host}:{port} for {what} is in use by another program (set in the config). Run `lsof -nP -iTCP:{port} -sTCP:LISTEN` to find it, or choose another port in the config.",

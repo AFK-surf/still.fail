@@ -36,7 +36,8 @@ import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
-import type { ArchiveCheck, ChatAsk, ChatSentElsewhere } from "./core/shapes.ts";
+import type { ArchiveCheck, ChatAsk, ChatSentElsewhere, RuntimeInstall } from "./core/shapes.ts";
+import { DownloadChip } from "./Versions.tsx";
 import * as historyCss from "./History.css.ts";
 import * as css from "./Chat.css.ts";
 import * as refCss from "./ChatRef.css.ts";
@@ -994,7 +995,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
     );
   }
   // What still.fail itself says (a limit hit, a failure): a notice across the chat, not someone's message.
-  if (m.system) return <SystemNotice vk={`m:${m.seq}`} text={m.text} profile={m.profile} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
+  if (m.system) return <SystemNotice vk={`m:${m.seq}`} text={m.text} profile={m.profile} install={m.install} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
   const who = m.by.name;
   const agent = m.by.here ? m.by.agent : undefined;
   return (
@@ -1125,9 +1126,10 @@ export function PersonWords({ text }: { text: string }) {
 /**
  * What still.fail itself says: a pill across the chat, in one line and no time. A click opens it: all its words, wrapped,
  * and its time under it. The station begins its failures with ⚠️ (Slack shows it so); here a failure is the pill in
- * red instead. In one about a profile (its sign-in failed), what went wrong (after its ：) links to that profile's page.
+ * red instead. In one about a profile (its sign-in failed), what went wrong (after its ：) links to that profile's page; under
+ * one saying the station does not have the chat's runtime, installing it (`install`).
  */
-function SystemNotice({ text, profile, time, ts, enter, caught, vk }: { text: string; profile: string | undefined; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined; /** Its item's key in a list (virtual/list.tsx). */ vk?: string }) {
+function SystemNotice({ text, profile, install, time, ts, enter, caught, vk }: { text: string; profile: string | undefined; install: RuntimeInstall | undefined; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined; /** Its item's key in a list (virtual/list.tsx). */ vk?: string }) {
   const station = useStation();
   const failed = /^⚠️\s*/u.exec(text);
   const words = failed ? text.slice(failed[0].length) : text;
@@ -1148,7 +1150,37 @@ function SystemNotice({ text, profile, time, ts, enter, caught, vk }: { text: st
             : <Prose>{said}</Prose>}
         </div>
       </div>
+      {install && <InstallOffer install={install} />}
       {open && <Time className={conversationCss.msgTime} stamp={time} />}
+    </div>
+  );
+}
+
+/**
+ * Under a notice that the station does not have the chat's runtime: installing it (a manager's button), how far that is,
+ * or why it failed, as the core says (RuntimeInstall). Once it is installed the station gives the agent what waits.
+ */
+function InstallOffer({ install }: { install: RuntimeInstall }) {
+  const station = useStation().address;
+  const busy = useDoing("software.update", { station, id: install.runtime });
+  const api = useApi();
+  const act = useAct();
+  const action = install.action;
+  return (
+    <div className={css.msgSystemInstall} data-state={install.state}>
+      {(install.text || install.state === "installing") && (
+        <span className={css.msgSystemInstallLine}>
+          {install.state === "installing" && (install.percent != null ? <DownloadChip percent={install.percent} /> : <Spinner inline />)}
+          {install.text && <span className={css.msgSystemInstallText}>{install.text}</span>}
+        </span>
+      )}
+      {action && (
+        <button type="button" className={`${decisionsCss.option} ${css.msgSystemInstallButton}`} data-recommended="" data-busy={busy || undefined}
+          disabled={busy} aria-busy={busy || undefined} onClick={() => act(api.updateSoftware(install.runtime), action)}>
+          <span className={decisionsCss.optionLabel}>{action}</span>
+          {busy && <Spinner inline className={decisionsCss.optionSpinner} />}
+        </button>
+      )}
     </div>
   );
 }

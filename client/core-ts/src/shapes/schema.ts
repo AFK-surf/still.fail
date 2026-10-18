@@ -188,6 +188,8 @@ export const SHAPES: Record<string, Shape> = {
     ["mine", "bool"],
     ["system", "bool"],
     ["profile", opt("String"), { doc: "still.fail's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it." }],
+    ["runtime", opt("String"), { doc: "still.fail's notice that the station does not have a chat's runtime installed: its id (claude | codex | dsh)." }],
+    ["install", opt("RuntimeInstall"), { doc: "With `runtime`: installing it from the chat, as it stands now (the station's updates). Absent from a station older\nthan it." }],
     ["by", "MessageBy"],
     ["waiting", "bool"],
     ["followed", opt("bool"), { doc: "In a chat's page: the viewer's, their next message sent soon after it (within 5 minutes of the time shown under a\nlater one): the two close together, its time (and that its agents have yet to take it) under the last of them only.\nAbsent otherwise." }],
@@ -203,6 +205,13 @@ export const SHAPES: Record<string, Shape> = {
     ["elsewhere", opt(vec("ChatSentElsewhere")), { doc: "In a chat's page: what its agents sent to Slack or were given there after this message, before the next. Absent\nwhen nothing." }],
     ["placed", opt(vec("String")), { doc: "In a chat's page: the names of the files its text places (`![](shot.png)`, `[the report](report.pdf)`), in the\norder it names them, drawn where it names them; the rest go below it. Absent when it places none (a person's\nwords never do)." }],
   ], { doc: "A message of a chat, with what the core decides of it: the viewer's (their bubble), still.fail's own notice, who said\nit, and whether its agents have yet to take it." }),
+  RuntimeInstall: struct([
+    ["runtime", "String", { doc: "claude | codex | dsh: what `software.update` installs ({station, id: runtime})." }],
+    ["state", "String", { doc: "missing | installing | failed | installed" }],
+    ["text", opt("String"), { doc: "A line under the notice: how far it is, why it failed, or who can install it. Absent when nothing to say." }],
+    ["action", opt("String"), { doc: "The button's label (安装 DeepSeek Harness, 重试安装) when the viewer can install it now. Absent otherwise." }],
+    ["percent", opt("i64"), { client: opt("I54"), doc: "While installing, how much of its download is in, 0–100, when known." }],
+  ], { doc: "A runtime a chat's notice says is not installed, and installing it there (core views.ts `installView`): once\ninstalled, the station gives the chat's waiting messages to the agent." }),
   MessageCard: struct([
     ["assignee", opt("String"), { doc: "The person the agent asks to decide, by email. Absent on legacy cards." }],
     ["assigneeText", opt("String"), { doc: "Who needs to decide, in the viewer's words; prepared by the core." }],

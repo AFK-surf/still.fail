@@ -53,7 +53,7 @@ export type Membership = { thread: number; session: string; connect: string; joi
 export type EntryRow = {
   agentIdentity: Json | undefined; thread: number; n: number; kind: "message" | "edit"; target: number | null;
   ts: string | null; authorKind: AuthorKind; author: string; text: string | null; attachments: Json[]; quotes: Json[];
-  declared: string | null; client: string | null; profile: string | null; options: Json | undefined; card: Json | undefined;
+  declared: string | null; client: string | null; profile: string | null; runtime: string | null; options: Json | undefined; card: Json | undefined;
   at: number;
 };
 
@@ -200,6 +200,7 @@ function toEntry(r: Json): EntryRow {
     declared: r.declared,
     client: r.client,
     profile: r.profile,
+    runtime: r.runtime ?? null,
     options: parsed(r.options),
     card: parsed(r.card),
     at: r.at,
@@ -233,7 +234,7 @@ function archivedEntry(e: Json): EntryRow {
   return {
     agentIdentity: some(e.agentIdentity), thread: e.thread, n: e.n, kind, target: e.target ?? null, ts: e.ts ?? null,
     authorKind: authorKind(e.authorKind), author: e.author, text: e.text ?? null, attachments: (e.attachments ?? []).map(attachment),
-    quotes: (e.quotes ?? []).map(quote), declared: e.declared ?? null, client: e.client ?? null, profile: e.profile ?? null,
+    quotes: (e.quotes ?? []).map(quote), declared: e.declared ?? null, client: e.client ?? null, profile: e.profile ?? null, runtime: e.runtime ?? null,
     options: some(e.options), card: some(e.card), at: e.at,
   };
 }

@@ -168,6 +168,28 @@ export function sentFrom(text: string): [string, string, string] | null {
   return [title, link, rest];
 }
 
+/// A notice that the station does not have a chat's runtime installed: installing it there, as the station's updates
+/// (`updates`, its overview's) say it stands, and whether the viewer may (`manages`: the workspace's owner or an admin).
+/// Nothing offered by a station older than its updates.
+export function installView(runtime: string, updates: J[], manages: boolean): J | null {
+  const v = updates.find((u) => get(u, "id") === runtime);
+  if (v === undefined) return null;
+  const name = str(v.name) ?? runtime;
+  if (v.state === "updating") {
+    const percent = u64(v.percent);
+    return { runtime, state: "installing", text: str(v.progress) ?? t("core-views.install.installing", { name }), ...(percent !== null ? { percent } : {}) };
+  }
+  if (v.installed === true) return { runtime, state: "installed", text: t("core-views.install.installed", { name }) };
+  const can = manages && v.updatable === true;
+  if (v.state === "failed") {
+    const why = str(v.message);
+    return { runtime, state: "failed", text: why ? t("core-views.install.failed_why", { error: why }) : t("core-views.install.failed"), ...(can ? { action: t("core-views.install.retry") } : {}) };
+  }
+  if (can) return { runtime, state: "missing", action: t("core-views.install.action", { name }) };
+  const why = str(v.note) ?? (manages ? null : t("core-views.install.managers_only"));
+  return { runtime, state: "missing", ...(why !== null ? { text: why } : {}) };
+}
+
 /// A message as a chat shows it: whether it is the viewer's, still.fail's own notice, who said it, mentions named.
 export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: string[], members_: J[], bots: [string, string][], creator: J): J {
   const m: J = { ...message };
@@ -1254,9 +1276,15 @@ export class Views implements Owner {
     const peopleSeqs = messages.filter((m) => m.authorKind === "person").flatMap((m) => (u64(m.seq) !== null ? [m.seq as number] : []));
     const waits = peopleSeqs.slice(Math.max(peopleSeqs.length - waiting, 0));
     const written = messages.filter((m) => m.authorKind === "person").flatMap((m) => (u64(m.seq) !== null ? [[m.seq as number, str(m.text) ?? ""] as [number, string]] : []));
+    // Notices that a runtime is not installed: installing it, as the station's updates have it now.
+    const updates = arr(get(this.ok({ topic: "overview", station }), "updates"));
+    const role = get(this.ok({ topic: "workspace", workspace: scope }), "role");
+    const manages = role === "owner" || role === "admin";
     for (let i = 0; i < messages.length; i++) {
       const m = shownMessage(messages[i], agents, viewer, slackUsers, members_, bots, thread.creator);
       messages[i] = { ...m, waiting: u64(m.seq) !== null && waits.includes(m.seq) };
+      const install = m.system === true && typeof m.runtime === "string" ? installView(m.runtime, updates, manages) : null;
+      if (install !== null) messages[i].install = install;
     }
     // A sent message leaves the outbox as its own entry (or anything later) arrives; before the station answered
     // with its seq, it is the viewer's first message since it was sent with the same words.

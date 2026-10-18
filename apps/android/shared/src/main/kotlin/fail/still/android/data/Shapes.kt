@@ -1608,6 +1608,22 @@ data class ChatJobsView (
 	val hiddenText: String
 )
 
+/// A runtime a chat's notice says is not installed, and installing it there (core views.ts `installView`): once
+/// installed, the station gives the chat's waiting messages to the agent.
+@Serializable
+data class RuntimeInstall (
+	/// claude | codex | dsh: what `software.update` installs ({station, id: runtime}).
+	val runtime: String,
+	/// missing | installing | failed | installed
+	val state: String,
+	/// A line under the notice: how far it is, why it failed, or who can install it. Absent when nothing to say.
+	val text: String? = null,
+	/// The button's label (安装 DeepSeek Harness, 重试安装) when the viewer can install it now. Absent otherwise.
+	val action: String? = null,
+	/// While installing, how much of its download is in, 0–100, when known.
+	val percent: Long? = null
+)
+
 /// Who said a message, as its line shows them: an agent by its label and mark, a person by name and picture.
 @Serializable
 data class MessageBy (
@@ -1696,6 +1712,11 @@ data class ChatMessage (
 	val system: Boolean,
 	/// still.fail's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it.
 	val profile: String? = null,
+	/// still.fail's notice that the station does not have a chat's runtime installed: its id (claude | codex | dsh).
+	val runtime: String? = null,
+	/// With `runtime`: installing it from the chat, as it stands now (the station's updates). Absent from a station older
+	/// than it.
+	val install: RuntimeInstall? = null,
 	val by: MessageBy,
 	val waiting: Boolean,
 	/// In a chat's page: the viewer's, their next message sent soon after it (within 5 minutes of the time shown under a

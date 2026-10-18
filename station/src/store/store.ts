@@ -739,7 +739,7 @@ export class Store {
         {
           agentIdentity: undefined, thread: m.thread, n: 0, kind: "message", target: null, ts: m.ts, authorKind: m.authorKind,
           author: m.author, text: m.text, attachments: m.attachments ?? [], quotes: m.quotes ?? [], declared: m.declared ?? null,
-          client: m.client ?? null, profile: m.profile ?? null,
+          client: m.client ?? null, profile: m.profile ?? null, runtime: m.runtime ?? null,
           // An options card is kept as options too (what stations and clients from before cards read).
           options: options ?? (card !== undefined && card !== null && typeof card === "object" && card.type === "options" ? card.options : undefined),
           card: card ?? (options === undefined ? undefined : optionsCard(options)),
@@ -763,7 +763,7 @@ export class Store {
         {
           agentIdentity: undefined, thread: message.thread, n: 0, kind: "edit", target: message.n, ts: null,
           authorKind: message.authorKind, author: message.author, text, attachments: message.attachments, quotes: message.quotes,
-          declared: null, client: null, profile: null, options: undefined, card: undefined, at: this.now(),
+          declared: null, client: null, profile: null, runtime: null, options: undefined, card: undefined, at: this.now(),
         },
         changes,
       );
@@ -1806,10 +1806,10 @@ export class Store {
 
   #insertEntry(e: EntryRow): void {
     this.#run(
-      "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, options, card, at, agent_identity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, runtime, options, card, at, agent_identity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       e.thread, e.n, e.kind, e.target, e.ts, e.authorKind, e.author, e.text,
       jsonList<Attachment>(e.attachments, attachment), jsonList<Quote>(e.quotes, quote),
-      e.declared, e.client, e.profile,
+      e.declared, e.client, e.profile, e.runtime,
       e.options === undefined ? null : JSON.stringify(e.options),
       e.card === undefined ? null : JSON.stringify(e.card),
       e.at,

@@ -424,11 +424,15 @@ export const AgentsLive = (control: Control) =>
         followed: () => accounts.followed(),
       });
       // A runtime installed or updated from the pages: the machine's logins read again.
-      updates.onRuntimeChanged(() => {
+      updates.onRuntimeChanged((kind, installed) => {
         void accounts.machine?.refresh();
+        // Installed: the sessions whose start found it missing take what waits.
+        if (installed) hub.installed(kind);
         // Codex updated: its app-servers of the old version are replaced (their files are gone).
         void codex.runtimeChanged().catch((error) => log.warn("agents::codex", "codex app-servers not checked after an update", { error: String(error) }));
       });
+      // A session found its runtime not installed: the pages read it again (removed since they last did).
+      hub.onRuntimeMissing((runtime) => updates.missing(runtime));
       // What the overview shows changes: told on the event streams.
       const unlistenOverview = [
         accounts.onChange(() => events.overviewChanged()),

@@ -77,7 +77,7 @@ export type Attachment = { name: string; path: string; size: number; width?: num
 export type EntryRow = {
   agentIdentity: Json | undefined; thread: number; n: number; kind: EntryKind; target: number | null; ts: string | null;
   authorKind: AuthorKind; author: string; text: string | null; attachments: Attachment[]; quotes: Quote[];
-  declared: string | null; client: string | null; profile: string | null; options: Json | undefined; card: Json | undefined;
+  declared: string | null; client: string | null; profile: string | null; runtime: string | null; options: Json | undefined; card: Json | undefined;
   at: number;
 };
 
@@ -121,7 +121,7 @@ export type ProcessRow = { pgid: number; startedAt: number; runtime: string; lab
 /// A message being recorded (NewMessage::new's defaults may be left out).
 export type NewMessage = {
   thread: number; ts: string; authorKind: AuthorKind; author: string; text: string; attachments?: Attachment[];
-  quotes?: Quote[]; declared?: string | null; client?: string | null; profile?: string | null; card?: Json | null;
+  quotes?: Quote[]; declared?: string | null; client?: string | null; profile?: string | null; runtime?: string | null; card?: Json | null;
   options?: Json | null; at?: number | null;
 };
 
@@ -345,7 +345,7 @@ export function toEntry(r: Json): EntryRow {
     agentIdentity: parsed(r.agent_identity), thread: r.thread, n: r.n, kind: r.kind === "edit" ? "edit" : "message",
     target: r.target, ts: r.ts, authorKind: authorKind(r.author_kind), author: r.author, text: r.text,
     attachments: fromJsonList(r.attachments, attachment), quotes: fromJsonList(r.quotes, quote), declared: r.declared,
-    client: r.client, profile: r.profile, options: parsed(r.options), card: parsed(r.card), at: r.at,
+    client: r.client, profile: r.profile, runtime: r.runtime ?? null, options: parsed(r.options), card: parsed(r.card), at: r.at,
   };
 }
 

@@ -10,6 +10,7 @@ import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
 import { GO_ON_AFTER_AUTH, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, TOOLS_LOST, continuedHere, formatInbound, formatWidgetModels, sessionInstructions, waitOver } from "../agents/instructions.ts";
 import { chars } from "../agents/live.ts";
+import { CommandMissing } from "../agents/runner.ts";
 import { latest as latestNote, untold } from "../agents/migrations.ts";
 import { unreadableDir, unreadableDirMessage } from "../ops/files.ts";
 import { Places } from "../ops/places.ts";
@@ -114,6 +115,8 @@ export type SessionDeps = {
   toolStatus(tool: string): string;
   /// How a directory it is to run in is looked at (ops/places.ts); default: without still.fail Helper.
   places?: Places;
+  /// Its runtime was not found on PATH as it started.
+  runtimeMissing?(runtime: RuntimeKind): void;
   nextTs(): string;
   /// Its time (the hub's).
   clock: Clock.Clock;
@@ -710,7 +713,12 @@ export class SessionActor {
       // It was said to be starting: no turn runs.
       this.deps.live?.turnEnded(this.key);
       this.doneWorking();
-      await this.notice(`⚠️ ${t("station.notice.cannotStart", { error: message })}`);
+      if (error instanceof CommandMissing && error.command === this.runtime) {
+        // Not installed here: said so, about the runtime (the pages offer to install it; once installed, what waits
+        // goes on).
+        this.deps.runtimeMissing?.(this.runtime);
+        await this.notice(`⚠️ ${t("station.notice.runtimeMissing", { name: runtimeLabel(this.runtime) })}`, null, this.runtime);
+      } else await this.notice(`⚠️ ${t("station.notice.cannotStart", { error: message })}`);
       throw error;
     }
   }
@@ -1053,8 +1061,9 @@ export class SessionActor {
   }
 
   /// The station's own words (not the agent's) go to the thread people spoke in last, and are recorded there; one about
-  /// a profile (`profile`, its id) is linked to that profile's page.
-  private async notice(text: string, profile: string | null = null) {
+  /// a profile (`profile`, its id) is linked to that profile's page, one about a runtime not installed (`runtime`)
+  /// offers to install it.
+  private async notice(text: string, profile: string | null = null, runtime: RuntimeKind | null = null) {
     const store = this.deps.store;
     const latest = store.latestThread(this.key);
     const chat = latest ? this.deps.chat(latest.connect) : undefined;
@@ -1064,7 +1073,7 @@ export class SessionActor {
     }
     try {
       const ts = await chat.post({ channel: latest.thread.channel, threadTs: latest.thread.threadTs }, text, []);
-      store.insertMessage({ thread: latest.thread.id, ts, authorKind: "ember", author: "ember", text, profile, attachments: [], quotes: [], declared: null, client: null, card: null, options: null, agentIdentity: null });
+      store.insertMessage({ thread: latest.thread.id, ts, authorKind: "ember", author: "ember", text, profile, runtime, attachments: [], quotes: [], declared: null, client: null, card: null, options: null, agentIdentity: null });
     } catch (error) {
       log.warn("session", "notice failed", { session: this.key, error: (error as Error).message });
     }

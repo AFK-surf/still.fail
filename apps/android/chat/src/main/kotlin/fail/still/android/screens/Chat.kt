@@ -1099,7 +1099,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
     val jump = rememberJump(list, rows)
     val ink = chatInk()
     // What still.fail itself says (role "ember", as the core sends it): a notice across the chat, apart from people's and agents' messages.
-    if (m.system) { SystemNotice(m.text, m.time?.get("createdAt"), m.profile?.let { p -> { app.push(Screen.Profile(ctx.station, p)) } }); return }
+    if (m.system) { SystemNotice(m.text, m.time?.get("createdAt"), m.profile?.let { p -> { app.push(Screen.Profile(ctx.station, p)) } }, m.install, ctx.station); return }
     val motion = LocalChatMotion.current
     val flash = accentBg()
     if (ctx.mine(m)) {
@@ -1215,10 +1215,11 @@ private fun ArchiveUnder(ctx: Here, enabled: Boolean) {
 /**
  * What still.fail itself says (web Chat.tsx → SystemNotice): a pill across the chat, in one line and no time, cut short
  * where it does not fit. A tap opens it: all its words, wrapped, and its time under it. The station begins its failures
- * with ⚠️; here a failure is the pill in red instead. A notice is a line of the UI, not prose: no 。 at its end.
+ * with ⚠️; here a failure is the pill in red instead. A notice is a line of the UI, not prose: no 。 at its end. Under one
+ * saying the station does not have the chat's runtime, installing it (`install`).
  */
 @Composable
-private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?, toProfile: (() -> Unit)?) {
+private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?, toProfile: (() -> Unit)?, install: fail.still.android.data.RuntimeInstall? = null, station: String = "") {
     val failed = remember(text) { Regex("^⚠️\\s*").find(text) }
     val said = remember(text) { (failed?.let { text.substring(it.range.last + 1) } ?: text).replace(Regex("。\\s*$"), "") }
     var open by remember { mutableStateOf(false) }
@@ -1254,7 +1255,30 @@ private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?, toP
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
+        if (install != null) InstallOffer(install, station)
         if (open) MessageTime(time)
+    }
+}
+
+/**
+ * Under a notice that the station does not have the chat's runtime (web Chat.tsx InstallOffer): installing it (a
+ * manager's button), how far that is, or why it failed, as the core says. Once installed, the station gives the agent
+ * what waits.
+ */
+@Composable
+private fun InstallOffer(install: fail.still.android.data.RuntimeInstall, station: String) {
+    val app = LocalApp.current
+    val busy = app.isDoing("software.update", "station" to station, "id" to install.runtime)
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        install.text?.let { text ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                if (install.state == "installing") Spinner(inline = true)
+                Text(text, fontSize = 12.sp, lineHeight = 18.sp, color = if (install.state == "failed") C.red else C.muted, textAlign = TextAlign.Center)
+            }
+        }
+        install.action?.let { label ->
+            OptionButton(label, strong = true, enabled = !busy, busy = busy) { app.act(label) { app.api(station).updateSoftware(install.runtime) } }
+        }
     }
 }
 

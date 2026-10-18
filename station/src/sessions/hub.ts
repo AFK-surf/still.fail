@@ -24,7 +24,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { join } from "node:path";
 import { Clock, Effect, Fiber } from "effect";
 import { liveClock, within } from "../ops/fibers.ts";
-import type { AgentDriver, AgentSession } from "../agents/runtime.ts";
+import type { AgentDriver, AgentSession, RuntimeKind } from "../agents/runtime.ts";
 import { runnerId } from "../agents/process.ts";
 import { allLeft, existingRunners } from "../agents/runner.ts";
 import { log } from "../ops/log.ts";
@@ -127,6 +127,8 @@ export class Hub {
   readonly accounts: Accounts;
   readonly clock: Clock.Clock;
   readonly places: Places;
+  /// Told when a session's runtime was not found on PATH as it started (the pages read it again).
+  private runtimeMissing: (runtime: RuntimeKind) => void = () => {};
   /// What running turns are doing, for the pages' live view.
   readonly live: LiveHub;
   readonly actors = new Map<string, SessionActor>();
@@ -570,6 +572,20 @@ export class Hub {
     }
   }
 
+  /// What to do when a session's runtime was not found as it started.
+  onRuntimeMissing(f: (runtime: RuntimeKind) => void) {
+    this.runtimeMissing = f;
+  }
+
+  /// A runtime installed here (from the pages): the sessions on it whose messages wait (their start found it missing)
+  /// take them now.
+  installed(runtime: RuntimeKind) {
+    for (const key of this.store.sessionsWithPending()) {
+      const row = this.store.getSession(key);
+      if (row && row.runtime === runtime && this.online(row)) void this.actor(row).kick();
+    }
+  }
+
   // ── warm processes ─────────────────────────────────────────────────────────────────────────────────────────────
 
   /// Ends idle claude and dsh processes (one per session) beyond the warm limit, oldest first, once they have idled
@@ -936,6 +952,7 @@ export class Hub {
       settled: (key, state, words) => settled(this, key, state, words),
       toolStatus,
       places: this.places,
+      runtimeMissing: (runtime) => this.runtimeMissing(runtime),
       nextTs: () => this.nextTs(),
       clock: this.clock,
     };

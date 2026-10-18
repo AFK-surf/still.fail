@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS entries (
   at INTEGER NOT NULL,
   client TEXT,
   profile TEXT,
+  runtime TEXT,
   options TEXT,
   card TEXT,
   PRIMARY KEY (thread, n)
@@ -379,6 +380,8 @@ export function addClientColumn(db: DatabaseSync): void {
   if (!has(db, "entries", "client")) db.exec("ALTER TABLE entries ADD COLUMN client TEXT");
   // The profile a notice is about; the `merged` view has no need of it.
   if (!has(db, "entries", "profile")) db.exec("ALTER TABLE entries ADD COLUMN profile TEXT");
+  // The runtime a notice says is not installed (offered to install).
+  if (!has(db, "entries", "runtime")) db.exec("ALTER TABLE entries ADD COLUMN runtime TEXT");
   // A block post's answers to pick from; the `merged` view has no need of them.
   if (!has(db, "entries", "options")) db.exec("ALTER TABLE entries ADD COLUMN options TEXT");
   // A message's card; an options card is kept in `options` too, which stations from before cards read.

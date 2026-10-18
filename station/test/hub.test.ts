@@ -388,6 +388,30 @@ test("claude auth retries once, then reports the profile and does not loop", asy
   await r.close();
 });
 
+test("a runtime not installed is said about it, and what waited goes on once it is installed", async () => {
+  const r = new Rig();
+  r.claude.missing = true;
+  const m = message();
+  await r.accept(m);
+  await settle();
+  assert.equal(r.chat.lastText(), "⚠️ 无法启动 agent：此 station 尚未安装 Claude Code");
+  // The notice says which runtime, for the clients to offer installing it; the message waits.
+  const thread = r.thread("C1", m.threadTs);
+  const last = r.store.entriesBefore(thread.id, null, 1).pop()!;
+  assert.deepEqual([last.authorKind, last.runtime, last.profile], ["ember", "claude", null]);
+  assert.equal(r.claude.count(), 0);
+  // Another runtime installed: nothing of this session's goes on.
+  r.claude.missing = false;
+  r.hub.installed("codex");
+  await settle();
+  assert.equal(r.claude.count(), 0);
+  r.hub.installed("claude");
+  await settle();
+  assert.equal(r.claude.count(), 1);
+  assert.ok(r.claude.last().prompts[0]!.includes(m.text), r.claude.last().prompts[0]);
+  await r.close();
+});
+
 test("claude auth recovers without replaying input, and a later turn can recover again", async () => {
   const r = new Rig();
   const m = message();

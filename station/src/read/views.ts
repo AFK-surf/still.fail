@@ -566,6 +566,7 @@ function entryJson(e: EntryRow): Json {
   });
   if (e.client !== null) v.client = e.client;
   if (e.profile !== null) v.profile = e.profile;
+  if (e.runtime !== null) v.runtime = e.runtime;
   if (e.options !== undefined) v.options = e.options;
   if (e.card !== undefined) v.card = e.card;
   v.at = e.at;

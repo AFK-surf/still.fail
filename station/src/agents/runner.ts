@@ -35,8 +35,19 @@ export const runnersDir = (data: string) => join(data, "run", "runners");
 /// way out has removed it). A pipe cannot be looked at (see above): the info file, which goes with it, says so then.
 export const listening = (info: RunnerInfo) => !platform.runnerSocketVisible || existsSync(info.socket);
 
+/// A program named by its command (not a path) that `env`'s PATH does not have: the runtime is not installed there.
+export class CommandMissing extends Error {
+  readonly command: string;
+  constructor(command: string) {
+    super(`the runner did not start: ${command} is not on PATH`);
+    this.command = command;
+  }
+}
+
 /// Starts `program` under a runner, its environment `env` (the agent's whole environment), in `cwd`.
 export function startRunner(data: string, id: string, program: string, args: string[], env: NodeJS.ProcessEnv, cwd: string): Promise<RunnerInfo> {
+  // Looked for as the runner would (its PATH is `env`'s): one not there is told apart from a runner that failed.
+  if (!/[\\/]/.test(program) && platform.findCommand(program, env) === null) return Promise.reject(new CommandMissing(program));
   return new Promise((resolve, reject) => {
     // Lower than the station (ops/nice.ts), the runtime it starts and what that starts too.
     const [command, given] = niced(runnerBinary(), ["--dir", runnersDir(data), "--id", id, "--cwd", cwd, "--", program, ...args]);

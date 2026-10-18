@@ -42,6 +42,7 @@ import { Fibers } from "../ops/fibers.ts";
 import type { ConfigFile } from "../ops/config.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
+import type { RuntimeKind } from "../agents/runtime.ts";
 import { platform as machine } from "../platform/index.ts";
 import { planUpdate, readFeed, verifiedOrNull, type Plan } from "./release.ts";
 import {
@@ -126,8 +127,8 @@ export type UpdatesOptions = {
   claudeReleases?: string;
   /// How many turns run now (the hub's), for what a drain waits on and an automatic update waits for.
   running?: () => number;
-  /// Told when a runtime was installed or updated here (the machine's logins read again).
-  runtimeChanged?: () => void;
+  /// Told when a runtime was installed or updated here (the machine's logins read again), and whether it is there now.
+  runtimeChanged?: (kind: RuntimeKind, installed: boolean) => void;
   timing?: Partial<Timing>;
   /// Its time (a TestClock in tests).
   clock?: Clock.Clock;
@@ -215,7 +216,7 @@ export class Updates {
   tried: string | null = null;
   private lastCheck: number | null = null;
   private running: () => number;
-  private runtimeChanged: () => void;
+  private runtimeChanged: (kind: RuntimeKind, installed: boolean) => void;
   // Long-lived work, and time: fibers in this part's scope on its clock, ended with it.
   private fibers: Fibers;
   private closed = false;
@@ -252,7 +253,7 @@ export class Updates {
   }
 
   /// What to do when a runtime was installed or updated from here.
-  onRuntimeChanged(f: () => void) {
+  onRuntimeChanged(f: (kind: RuntimeKind, installed: boolean) => void) {
     this.runtimeChanged = f;
   }
 
@@ -266,6 +267,16 @@ export class Updates {
       this.more = this.more.filter((m) => m !== more);
       this.changed();
     };
+  }
+
+  /// A runtime a session found not on PATH: read again when the pages still say it is there (removed since the last
+  /// check), so what they offer is installing it.
+  missing(kind: RuntimeKind) {
+    if (!this.items[kind].installed || this.items[kind].updating !== null) return;
+    this.spawn(async () => {
+      const read = await this.readRuntime(kind);
+      if (this.items[kind].updating === null) this.set(kind, (i) => Object.assign(i, read));
+    });
   }
 
   /// Hears each change of what `get` says; gives the function that stops it.
@@ -613,7 +624,7 @@ export class Updates {
     }
     this.set(kind, (i) => Object.assign(i, read, { failed }));
     try {
-      this.runtimeChanged();
+      this.runtimeChanged(kind as RuntimeKind, read.installed);
     } catch {}
     // The station's own update waited for this one.
     this.autoUpdate("a newer release out, waited for a runtime");

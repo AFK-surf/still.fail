@@ -14,7 +14,7 @@ import { Runner } from "../src/runtime.ts";
 import { EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
 import { attention, choices, runnableOn } from "../src/views/models.ts";
-import { Views, betaOffered, chatDerive, down, shownMessage } from "../src/views/views.ts";
+import { Views, betaOffered, chatDerive, down, installView, shownMessage } from "../src/views/views.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -215,6 +215,20 @@ function plain(v: J): J {
   if (v !== null && typeof v === "object") return Object.fromEntries(Object.entries(v).filter(([k, x]) => !SHOWN.has(k) && x !== null && x !== undefined).map(([k, x]) => [k, plain(x)]));
   return v;
 }
+
+test("a notice that a runtime is not installed offers installing it as the station's updates have it", () => {
+  const dsh = (over: J): J => ({ id: "dsh", name: "DeepSeek Harness", installed: false, updatable: true, state: "idle", ...over });
+  // A manager can install it; a member is told who can; a station that cannot (no npm) says why.
+  assert.deepEqual(installView("dsh", [dsh({})], true), { runtime: "dsh", state: "missing", action: "安装 DeepSeek Harness" });
+  assert.deepEqual(installView("dsh", [dsh({})], false), { runtime: "dsh", state: "missing", text: "需由 workspace 的 owner 或管理员安装" });
+  assert.deepEqual(installView("dsh", [dsh({ updatable: false, note: "未找到 npm" })], true), { runtime: "dsh", state: "missing", text: "未找到 npm" });
+  // Installing, how far; failed, why, with trying again; then installed.
+  assert.deepEqual(installView("dsh", [dsh({ state: "updating", percent: 42 })], true), { runtime: "dsh", state: "installing", text: "正在安装 DeepSeek Harness", percent: 42 });
+  assert.deepEqual(installView("dsh", [dsh({ state: "failed", message: "EACCES" })], true), { runtime: "dsh", state: "failed", text: "安装失败：EACCES", action: "重试安装" });
+  assert.deepEqual(installView("dsh", [dsh({ installed: true, version: "0.2.0" })], true), { runtime: "dsh", state: "installed", text: "已安装 DeepSeek Harness" });
+  // A station older than its updates: nothing offered.
+  assert.equal(installView("dsh", [], true), null);
+});
 
 test("canonical_and_legacy_station_notices_have_the_same_presentation", () => {
   const shown: J[] = [];

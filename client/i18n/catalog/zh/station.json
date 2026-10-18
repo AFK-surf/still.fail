@@ -224,6 +224,7 @@
   "station.notice.noResultSaid": "本轮 agent 未在对话中回复，以下是它最后输出的文字，由 station 代为转发（并非它发布的消息）；回复即可继续：",
   "station.notice.rateLimit": "已达到额度或速率限制，将换用其他账号或模型继续；也可稍后回复继续：{error}",
   "station.notice.refused": "请求被 Anthropic 拒绝，通常是网络问题而非登录问题：station 的出口地区不受支持，或未经过代理（Claude Code 只读取 HTTPS_PROXY / HTTP_PROXY，可在 Profile 的环境变量中设置）：{error}",
+  "station.notice.runtimeMissing": "无法启动 agent：此 station 尚未安装 {name}",
   "station.notice.stopped": "已停止当前任务",
   "station.port.mcp": "agent 的 MCP 端点",
   "station.port.taken": "{what} 的端口 {host}:{port} 已被别的程序占用（配置里指定了这个端口）。用 `lsof -nP -iTCP:{port} -sTCP:LISTEN` 看是谁，或在配置里换一个端口。",

@@ -25,6 +25,10 @@ A profile of custom variables keeps dsh's own configuration (DeepSeek, `DEEPSEEK
 
 dsh speaks every protocol the providers do, so an API provider's profile runs it whenever the provider has any endpoint (providers.ts `runtimesOf`): the chat-completions-only providers (DeepSeek, Kimi, Qwen, Gemini, Groq…) run dsh and nothing else. An OpenCode Go key runs all three runtimes, an Anthropic key Claude Code and dsh. dsh has no subscription here and no machine login.
 
+## Not installed
+
+dsh comes with no subscription, so a station may well not have it while its profiles offer it. A runtime is not looked for before a chat picks it: the start finds it. The runner's program is looked for on its PATH first (agents/runner.ts `CommandMissing`, for every runtime): one not there ends the start with the notice `无法启动 agent：此 station 尚未安装 {name}`, recorded with the runtime (`entries.runtime`), and the person's message stays pending. The core puts installing it under the notice (views.ts `installView`, from the station's updates: a manager's button that is `software.update {id}`, how far it is, why it failed); once the install ends with it on PATH, the hub gives that runtime's sessions what waits (`Hub.installed`).
+
 ## History and usage
 
 `read/transcript.ts` finds `<home>/dsh-sessions/<cwd>/<id>/session.v<N>.jsonl` (the highest N) and reads `user/message` (only `source.kind = user`: dsh adds its runtime context as user messages too), `assistant/message` (`text`, `reasoning`, `tool-call`) and `tool/result`. Usage is `assistant/message`'s `data.usage` (input apart from the cache's read and written).

@@ -76,6 +76,16 @@ export const msgSystemBox = style({
     "&[data-open]": { borderRadius: `calc(16px * ${vars.cornerScale})`, cornerShape: vars.cornerShape },
   },
 });
+/** Under a notice that a runtime is not installed: installing it, or how that goes, centred under the pill. */
+export const msgSystemInstall = style({ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", maxWidth: "100%" });
+/** How far it is or why it failed: a ring or how much is in, then the words. */
+export const msgSystemInstallLine = style({ display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", maxWidth: "100%" });
+export const msgSystemInstallText = style({
+  fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted, overflowWrap: "anywhere", textAlign: "center",
+  selectors: { [`${msgSystemInstall}[data-state="failed"] &`]: { color: vars.red } },
+});
+/** Its button: an answer's, as wide as its words. */
+export const msgSystemInstallButton = style({ width: "auto", textAlign: "center" });
 /** What went wrong in a notice about a profile: a link to that profile's page, in the pill's own colour, underlined. */
 export const msgSystemLink = style({ textDecoration: "underline", textUnderlineOffset: "3px" });
 globalStyle(`${msgSystemBox} ${markdown} a.${msgSystemLink}`, { color: "inherit" });

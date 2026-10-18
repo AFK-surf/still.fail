@@ -15,7 +15,7 @@ export function writeCompressed(path: string, text: string): void {
   renameSync(tmp, path);
 }
 
-/// An entry as serde writes EntryRow: agentIdentity, client, profile, options and card left out when None.
+/// An entry as serde writes EntryRow: agentIdentity, client, profile, runtime, options and card left out when None.
 export function entryJson(e: EntryRow): Record<string, Json> {
   const v: Record<string, Json> = {};
   if (e.agentIdentity !== undefined) v.agentIdentity = e.agentIdentity;
@@ -25,6 +25,7 @@ export function entryJson(e: EntryRow): Record<string, Json> {
   });
   if (e.client !== null) v.client = e.client;
   if (e.profile !== null) v.profile = e.profile;
+  if (e.runtime !== null) v.runtime = e.runtime;
   if (e.options !== undefined) v.options = e.options;
   if (e.card !== undefined) v.card = e.card;
   v.at = e.at;
@@ -40,7 +41,7 @@ export function archivedEntry(e: Json): EntryRow {
   return {
     agentIdentity: some(e.agentIdentity), thread: e.thread, n: e.n, kind, target: e.target ?? null, ts: e.ts ?? null,
     authorKind: authorKind(e.authorKind), author: e.author, text: e.text ?? null, attachments: (e.attachments ?? []).map(attachment),
-    quotes: (e.quotes ?? []).map(quote), declared: e.declared ?? null, client: e.client ?? null, profile: e.profile ?? null,
+    quotes: (e.quotes ?? []).map(quote), declared: e.declared ?? null, client: e.client ?? null, profile: e.profile ?? null, runtime: e.runtime ?? null,
     options: some(e.options), card: some(e.card), at: e.at,
   };
 }

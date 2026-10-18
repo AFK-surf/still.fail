@@ -1613,6 +1613,23 @@ export interface ChatJobsView {
 	hiddenText: string;
 }
 
+/**
+ * A runtime a chat's notice says is not installed, and installing it there (core views.ts `installView`): once
+ * installed, the station gives the chat's waiting messages to the agent.
+ */
+export interface RuntimeInstall {
+	/** claude | codex | dsh: what `software.update` installs ({station, id: runtime}). */
+	runtime: string;
+	/** missing | installing | failed | installed */
+	state: string;
+	/** A line under the notice: how far it is, why it failed, or who can install it. Absent when nothing to say. */
+	text?: string;
+	/** The button's label (安装 DeepSeek Harness, 重试安装) when the viewer can install it now. Absent otherwise. */
+	action?: string;
+	/** While installing, how much of its download is in, 0–100, when known. */
+	percent?: number;
+}
+
 /** Who said a message, as its line shows them: an agent by its label and mark, a person by name and picture. */
 export interface MessageBy {
 	name: string;
@@ -1704,6 +1721,13 @@ export interface ChatMessage {
 	system: boolean;
 	/** still.fail's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it. */
 	profile?: string;
+	/** still.fail's notice that the station does not have a chat's runtime installed: its id (claude | codex | dsh). */
+	runtime?: string;
+	/**
+	 * With `runtime`: installing it from the chat, as it stands now (the station's updates). Absent from a station older
+	 * than it.
+	 */
+	install?: RuntimeInstall;
 	by: MessageBy;
 	waiting: boolean;
 	/**

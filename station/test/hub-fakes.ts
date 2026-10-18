@@ -5,6 +5,7 @@ import { TestClock } from "effect/testing";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CommandMissing } from "../src/agents/runner.ts";
 import type { AgentDriver, AgentSession, OpenOptions, RuntimeEvent, TurnOutcome } from "../src/agents/runtime.ts";
 import type { ChatMessage, ChatSurface, InboundFile, InboundMessage, ThreadRef } from "../src/sessions/chat.ts";
 import { type HubConfig, hubConfig } from "../src/sessions/config.ts";
@@ -167,6 +168,8 @@ export class FakeDriver implements AgentDriver {
   unresumable = new Set<string>();
   /// Why every process it is asked to start does not (like a borrowed login its host did not lend).
   refuses: string | null = null;
+  /// Its command is not on PATH: every start fails as the runner says it (not installed).
+  missing = false;
   private n = 1;
   /// Times every process it started was ended.
   shutdowns = 0;
@@ -186,6 +189,7 @@ export class FakeDriver implements AgentDriver {
     return this.sessions.length;
   }
   async open(options: OpenOptions, events: (event: RuntimeEvent) => void) {
+    if (this.missing) throw new CommandMissing(this.kind);
     if (this.refuses !== null) throw new Error(this.refuses);
     if (options.resume !== undefined && this.unresumable.has(options.resume)) throw new Error("no such session");
     const session = new FakeSession(options.resume ?? `${this.kind}-${this.n++}`, options, events);
