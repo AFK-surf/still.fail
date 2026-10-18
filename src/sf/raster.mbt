@@ -211,8 +211,9 @@ fn Out::chunk(self : Out, kind : String, data : Array[Byte]) -> Unit {
 }
 
 ///|
-/// RGBA pixels (`w` × `h`, straight alpha) as a PNG.
-fn png(w : Int, h : Int, rgba : FixedArray[Byte]) -> Bytes {
+/// RGBA pixels (`w` × `h`, straight alpha) as a PNG (stored, not
+/// compressed), to hand to @ui.add_image.
+pub fn png(w : Int, h : Int, rgba : FixedArray[Byte]) -> Bytes {
   let o = { buf: [] }
   for b in [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A] {
     o.byte(b)

@@ -3,6 +3,7 @@ import {
   "mbui/host",
   "mbui/ui",
   "mbui/shelf",
+  "mbui/gallery",
 }
 
 options(

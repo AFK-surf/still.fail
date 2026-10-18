@@ -310,11 +310,19 @@ static void run_script_step(int step) {
     }
     [v requestFrame];
   } else if (strcmp(script, "photos") == 0) {
-    // decodes take a while: shots once they have had time, then far down
+    // decodes take a while: shots once they have had time; far down; back
+    // up and a picture opened
+    int narrow = s.width < 700;
     if (step == 120) shot("photos-1");
     if (step == 121) for (int i = 0; i < 30; i++) mb_cb.wheel(300, 300, 0, 200, 0);
-    if (step == 240) shot("photos-2");
-    if (step == 241) exit(0);
+    if (step == 220) shot("photos-2");
+    if (step == 221) for (int i = 0; i < 60; i++) mb_cb.wheel(300, 300, 0, -200, 0);
+    if (step == 260) {
+      double x = narrow ? 50 : 110, y = narrow ? 150 : 200;
+      mb_cb.pointer(0, x, y, 0); mb_cb.pointer(2, x, y, 0);
+    }
+    if (step == 340) shot("photos-3-viewer");
+    if (step == 341) exit(0);
     [v requestFrame];
   } else if (strcmp(script, "shot") == 0) {
     // MBUI_SHOT_AT: the frame to take it at (later for what waits on something, as the core's first answers)

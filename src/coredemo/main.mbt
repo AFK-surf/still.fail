@@ -22,6 +22,8 @@ struct App {
   mut by_hand : String
   /// the shelf over the core's media module (shelf.mbt) rather than the accounts
   mut shelf : Bool
+  /// the photos over it (photos.mbt)
+  mut photos : Bool
   /// MBUI_AUTH_LOGIN: sign in as a login command
   mut login : Bool
 }
@@ -33,6 +35,7 @@ let app : App = {
   auto_sign_in: false,
   by_hand: "",
   shelf: false,
+  photos: false,
   login: false,
 }
 
@@ -272,6 +275,11 @@ fn view(c : @ui.Ctx) -> Unit {
     @shelf.view(c, core_source)
     return
   }
+  if app.photos {
+    @gallery.view(c, photo_source)
+    flush_thumbs()
+    return
+  }
   let accounts = @core.subscribe("accounts")
   if app.auto_sign_in && accounts.value is Some(_) {
     app.auto_sign_in = false
@@ -296,6 +304,9 @@ fn view(c : @ui.Ctx) -> Unit {
       c.spacer()
       if c.button("书架", key="shelf", bg=0xE5E5EAFFL, color=0x1D1D1FFFL) {
         app.shelf = true
+      }
+      if c.button("照片", key="photos", bg=0xE5E5EAFFL, color=0x1D1D1FFFL) {
+        app.photos = true
       }
       if c.button(if app.signing_in { "登录中…" } else { "登录" }, key="sign-in") {
         sign_in()
@@ -352,6 +363,7 @@ fn main {
   }
   app.auto_sign_in = env("MBUI_CORE_SIGNIN") == "1"
   app.shelf = env("MBUI_SHELF") == "1"
+  app.photos = env("MBUI_PHOTOS") == "1"
   app.login = env("MBUI_AUTH_LOGIN") == "1"
   app.by_hand = if env("MBUI_AUTH_BEGIN") == "1" {
     "begin"
