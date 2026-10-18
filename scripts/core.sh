@@ -51,7 +51,7 @@ bundle() {
   local t0=$(now)
   $CORE_TS/node_modules/.bin/esbuild ${ENTRY:-$ROOT/core/jsc.ts} --bundle --format=iife --platform=neutral \
     --main-fields=module,main --target=es2020 --minify --legal-comments=none \
-    --alias:@core=$CORE_TS/src --resolve-extensions=.ts,.js,.mjs \
+    --alias:@core=$CORE_TS/src --alias:@ember=$EMBER --resolve-extensions=.ts,.js,.mjs \
     --outfile=$OUT/core.js --metafile=$OUT/core.meta.json --log-level=warning
   echo "bundle in $(since $t0) s: $(stat -f %z $OUT/core.js) bytes ($(gzip -9c $OUT/core.js | wc -c | tr -d ' ') gzipped)"
 }

@@ -215,6 +215,12 @@ int32_t mbc_web_auth(int32_t token, moonbit_string_t url, moonbit_string_t schem
   return 1;
 }
 
+double mbc_wall_ms(void) {
+  struct timespec t;
+  clock_gettime(CLOCK_REALTIME, &t);
+  return (double)t.tv_sec * 1000.0 + (double)t.tv_nsec / 1e6;
+}
+
 double mbc_now_ms(void) {
   struct timespec t;
   clock_gettime(CLOCK_MONOTONIC, &t);

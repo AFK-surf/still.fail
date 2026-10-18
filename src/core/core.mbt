@@ -95,6 +95,13 @@ pub fn call_bytes(
 }
 
 ///|
+/// The time of day, in milliseconds since 1970: when something was done, as
+/// the core and the stations compare it (a reading place's `at`).
+pub fn wall_ms() -> Double {
+  ffi_wall_ms()
+}
+
+///|
 /// Ends a subscription.
 pub fn unsubscribe(s : Sub) -> Unit {
   client.unsubscribe(s)

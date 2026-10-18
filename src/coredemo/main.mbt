@@ -15,10 +15,18 @@ struct App {
   mut auto_sign_in : Bool
   /// by hand: "begin", or the URL the browser was sent back to
   mut by_hand : String
+  /// the shelf over the core's media module (shelf.mbt) rather than the accounts
+  mut shelf : Bool
 }
 
 ///|
-let app : App = { status: "", signing_in: false, auto_sign_in: false, by_hand: "" }
+let app : App = {
+  status: "",
+  signing_in: false,
+  auto_sign_in: false,
+  by_hand: "",
+  shelf: false,
+}
 
 ///|
 /// Where the cloud sends the browser back: a loopback address it accepts for apps (nothing listens there; the
@@ -129,12 +137,57 @@ fn account_row(c : @ui.Ctx, a : Json) -> Unit {
 }
 
 ///|
+/// MBUI_CORE_DUMP=1 prints the accounts and each workspace's stations as the
+/// core has them (DUMP accounts …, DUMP stations <workspace> …), for seeing
+/// the topics' shapes.
+let dumped : Map[String, Int] = {}
+
+///|
+fn dump_one(name : String, s : @core.Sub) -> Unit {
+  if dumped.get(name) != Some(s.version) {
+    dumped[name] = s.version
+    match (s.value, s.error) {
+      (Some(v), _) => @host.log("DUMP \{name} \{v.stringify()}")
+      (_, Some(e)) => @host.log("DUMP \{name} error \{e.stringify()}")
+      _ => ()
+    }
+  }
+}
+
+///|
+fn dump(accounts : @core.Sub) -> Unit {
+  if env("MBUI_CORE_DUMP") != "1" {
+    return
+  }
+  dump_one("accounts", accounts)
+  let ws = @core.subscribe("workspaces")
+  dump_one("workspaces", ws)
+  // each workspace's stations
+  match ws.value {
+    Some(Array(list)) =>
+      for w in list {
+        let id = str(Some(w), "id")
+        if id.length() > 0 {
+          let s = @core.subscribe("stations", params={ "scope": Json::string(id) })
+          dump_one("stations " + id, s)
+        }
+      }
+    _ => ()
+  }
+}
+
+///|
 fn view(c : @ui.Ctx) -> Unit {
+  if app.shelf {
+    @shelf.view(c, core_source)
+    return
+  }
   let accounts = @core.subscribe("accounts")
   if app.auto_sign_in && accounts.value is Some(_) {
     app.auto_sign_in = false
     sign_in()
   }
+  dump(accounts)
   if app.by_hand.length() > 0 && accounts.value is Some(_) {
     let step = app.by_hand
     app.by_hand = ""
@@ -146,6 +199,9 @@ fn view(c : @ui.Ctx) -> Unit {
       c.text("内核 · JavaScriptCore", size=13.0, color=grey, wrap=false)
       |> ignore
       c.spacer()
+      if c.button("书架", key="shelf", bg=0xE5E5EAFFL, color=0x1D1D1FFFL) {
+        app.shelf = true
+      }
       if c.button(if app.signing_in { "登录中…" } else { "登录" }, key="sign-in") {
         sign_in()
       }
@@ -200,6 +256,7 @@ fn main {
     app.status = "这个版本没有链接内核（MBUI_CORE=1 scripts/mac.sh build）"
   }
   app.auto_sign_in = env("MBUI_CORE_SIGNIN") == "1"
+  app.shelf = env("MBUI_SHELF") == "1"
   app.by_hand = if env("MBUI_AUTH_BEGIN") == "1" {
     "begin"
   } else {

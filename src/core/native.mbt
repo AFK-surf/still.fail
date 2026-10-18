@@ -19,3 +19,5 @@ extern "C" fn ffi_now() -> Double = "mbc_now_ms"
 
 /// The bytes beside the message ffi_next took last (empty when none).
 extern "C" fn ffi_next_bytes() -> Bytes = "mbc_next_bytes"
+
+extern "C" fn ffi_wall_ms() -> Double = "mbc_wall_ms"

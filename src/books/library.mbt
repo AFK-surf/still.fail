@@ -7,23 +7,22 @@ struct Book {
   id : String
   title : String
   author : String
-  color : Int64
   chapters : Array[String]
 }
 
 ///|
 let library : Array[Book] = [
-  { id: "b1", title: "灯塔看守人", author: "林舟", color: 0x3A6EA5FFL, chapters: titles(24) },
-  { id: "b2", title: "北方的雨季", author: "苏禾", color: 0x7A4E9CFFL, chapters: titles(18) },
-  { id: "b3", title: "The Clockmaker's Garden", author: "E. Hart", color: 0x2F7D5BFFL, chapters: titles(
+  { id: "b1", title: "灯塔看守人", author: "林舟", chapters: titles(24) },
+  { id: "b2", title: "北方的雨季", author: "苏禾", chapters: titles(18) },
+  { id: "b3", title: "The Clockmaker's Garden", author: "E. Hart", chapters: titles(
       12,
     ) },
-  { id: "b4", title: "城南旧货铺", author: "陈默", color: 0xB5562AFFL, chapters: titles(30) },
-  { id: "b5", title: "星图与盐", author: "王珂", color: 0x1F3B5BFFL, chapters: titles(9) },
-  { id: "b6", title: "Notes on Small Boats", author: "M. Reyes", color: 0x8C6D1FFFL, chapters: titles(
+  { id: "b4", title: "城南旧货铺", author: "陈默", chapters: titles(30) },
+  { id: "b5", title: "星图与盐", author: "王珂", chapters: titles(9) },
+  { id: "b6", title: "Notes on Small Boats", author: "M. Reyes", chapters: titles(
       15,
     ) },
-  { id: "b7", title: "夏日的终点站", author: "林小雨", color: 0xC2416BFFL, chapters: titles(21) },
+  { id: "b7", title: "夏日的终点站", author: "林小雨", chapters: titles(21) },
 ]
 
 ///|

@@ -39,3 +39,7 @@ fn ffi_now() -> Double {
 fn ffi_next_bytes() -> Bytes {
   b""
 }
+
+///|
+extern "js" fn ffi_wall_ms() -> Double =
+  #|() => Date.now()

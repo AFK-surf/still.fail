@@ -49,6 +49,13 @@ pub fn Ctx::image_bytes(self : Ctx, key : String, data : Bytes) -> Unit {
 }
 
 ///|
+/// Hands over an encoded image to show as `key`, from outside a frame (a
+/// core call's answer). Keys starting `mem:` show nothing until given.
+pub fn add_image(key : String, data : Bytes) -> Unit {
+  image_data[key] = data
+}
+
+///|
 fn bucket(px : Double) -> Int {
   let mut b = 64
   while b.to_double() < px && b < 8192 {
@@ -77,6 +84,10 @@ fn ImageEntry::poll(self : ImageEntry, now : Double) -> Unit {
 /// smallest ready one at least that big, else the biggest ready one while
 /// a big enough one decodes (started here if none is).
 fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
+  // bytes still on their way: nothing to load yet
+  if src.has_prefix("mem:") && !image_data.contains(src) {
+    return None
+  }
   let want = bucket(px)
   let list = match image_cache.get(src) {
     Some(l) => l
