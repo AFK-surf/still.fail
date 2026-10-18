@@ -248,8 +248,8 @@ test("the machine's files are found as the drive lends them: not the station's o
   const found = (await files.query(["plan"], writer, 10))!;
   assert.deepEqual(found.hits.map((h) => h.path).sort(), [old, plan].sort());
   assert.equal(found.hits.find((h) => h.path === plan)!.text, "~/work");
-  // Everywhere for one who may write; only what is pinned for one who reads.
-  assert.deepEqual(asked[0]![1], []);
+  // The home's names and words and the apps for one who may write; only what is pinned for one who reads.
+  assert.deepEqual(asked.slice(0, 3).map(([, w]) => w), [[home], [home], ["/Applications", "/System/Applications"]]);
   personal = true;
   assert.ok((await files.query(["plan"], writer, 10))!.hits.some((h) => h.path === mail));
   const reader = (await files.query(["plan"], { ...writer, scopes: [] }, 10))!;
@@ -258,6 +258,7 @@ test("the machine's files are found as the drive lends them: not the station's o
   // Another workspace that pinned nothing: nothing for its readers.
   assert.equal(await files.query(["plan"], { workspace: "W2", home: false, scopes: [] }, 10), null);
   assert.equal(spotlightQuery(['a"b']), '(kMDItemFSName == "*a\\"b*"cd || kMDItemTextContent == "a\\"b*"cdw)');
+  assert.equal(spotlightQuery(["a"], false), 'kMDItemFSName == "*a*"cd');
 });
 
 test("a home's files walked into the index: names and the words of small texts, not the station's own nor what tools keep", async () => {

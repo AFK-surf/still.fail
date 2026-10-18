@@ -11,9 +11,11 @@ import { basename, dirname, join, sep } from "node:path";
 import { wall } from "../ops/fibers.ts";
 import type { Asker, Group, Hit } from "./index.ts";
 
+/// Where a Mac keeps its apps.
+const APPS = ["/Applications", "/System/Applications"];
 /// How long Spotlight has to answer, and how many paths it is let give before it is stopped.
 const WAIT_MS = 3_000;
-const MOST = 400;
+const MOST = 1000;
 
 /// Where a Mac keeps what is the person's own (mail, messages, calendars, contacts, notes, photos), under the home.
 export const PERSONAL = [
@@ -39,11 +41,20 @@ const under = (path: string, dir: string) => path === dir || path.startsWith(dir
 /// A word as Spotlight's query language has it in a string: its quotes, backslashes and wildcards escaped.
 const quoted = (word: string) => word.replace(/[\\"*?]/g, (c) => `\\${c}`);
 
-/// Spotlight's query for the words: each in a name (any part of it) or in what a file says (a word of it), case and
-/// diacritics aside.
-export function spotlightQuery(words: string[]): string {
-  return words.map((w) => `(kMDItemFSName == "*${quoted(w)}*"cd || kMDItemTextContent == "${quoted(w)}*"cdw)`).join(" && ");
+/// Spotlight's query for the words: each in a name (any part of it), or (`content`) in a name or what a file says (a
+/// word of it), case and diacritics aside.
+export function spotlightQuery(words: string[], content = true): string {
+  return words.map((w) => (content ? `(kMDItemFSName == "*${quoted(w)}*"cd || kMDItemTextContent == "${quoted(w)}*"cdw)` : `kMDItemFSName == "*${quoted(w)}*"cd`)).join(" && ");
 }
+
+/// What tools make and keep, never what a person looks for: a path through any of these is passed over.
+const NOISE = new Set(["node_modules", ".git", "venv", ".venv", "site-packages", "dist-packages", "__pycache__", "target", "Pods", "DerivedData", ".cache", ".Trash", ".npm", ".pnpm-store", ".cargo", ".rustup", ".gradle", ".m2"]);
+const noisy = (path: string, home: string) => {
+  const parts = path.split(sep);
+  if (parts.some((p) => NOISE.has(p) || p.endsWith(".app") && parts.indexOf(p) < parts.length - 1)) return true;
+  // The home's Library: the apps' own (their caches and data), not the person's files.
+  return under(path, join(home, "Library"));
+};
 
 /// `mdfind` asked: its paths as they come, stopped at `most` or after WAIT_MS.
 export function mdfind(query: string, within: string[], most: number): Promise<string[]> {
@@ -96,9 +107,17 @@ export class FileSearch {
     // A read-only member: only what their workspace pinned.
     if (!writer && pinned.length === 0) return null;
     const ask = this.#deps.spotlight ?? mdfind;
-    const found = await ask(spotlightQuery(words), writer ? [] : pinned, MOST);
+    const home = this.#home;
+    // Names under the home, what files there say, and the machine's apps by name; a read-only member's in what is pinned.
+    const asks = writer
+      ? [ask(spotlightQuery(words, false), [home], MOST), ask(spotlightQuery(words), [home], MOST / 2), ask(spotlightQuery(words, false), APPS, 50)]
+      : [ask(spotlightQuery(words), pinned, MOST)];
+    const own = PERSONAL.map((d) => join(home, d));
+    const personalOn = this.#deps.personal();
+    // The person's own (under the home's Library) only where the station says so; the rest of that Library never.
+    const found = [...new Set((await Promise.all(asks)).flat())].filter((p) => (personalOn && own.some((d) => under(p, d))) || !noisy(p, home));
     const protect = this.#deps.protect();
-    const personal = this.#deps.personal() ? [] : PERSONAL.map((p) => join(this.#home, p));
+    const personal = personalOn ? [] : own;
     const kept = found.filter((p) => !protect.some((d) => under(p, d)) && !personal.some((d) => under(p, d)) && (writer || pinned.some((r) => under(p, r))));
     const first = words[0]!;
     const named = (p: string) => basename(p).toLowerCase().includes(first);
@@ -113,9 +132,11 @@ export class FileSearch {
       }),
     );
     const files = known.filter((f): f is NonNullable<typeof f> => f !== null);
-    // Those named so first; then the home's, then the rest of the machine (its apps, its disks); the latest first.
-    const rank = (p: string) => (named(p) ? 0 : 2) + (under(p, this.#home) ? 0 : 1);
-    files.sort((a, b) => rank(a.path) - rank(b.path) || b.at - a.at);
+    // Those named so first, an app before a file; then the nearer the home's top, the latest.
+    const app = (p: string) => p.endsWith(".app") && APPS.some((d) => under(p, d));
+    const rank = (p: string) => (named(p) ? 0 : 4) + (app(p) ? 0 : 2);
+    const depth = (p: string) => p.split(sep).length;
+    files.sort((a, b) => rank(a.path) - rank(b.path) || depth(a.path) - depth(b.path) || b.at - a.at);
     const hits: Hit[] = files.slice(0, limit).map((f) => {
       const root = writer ? null : (pinned.find((r) => under(f.path, r)) ?? null);
       return {
