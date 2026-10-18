@@ -28,9 +28,9 @@ static struct {
 } cb;
 
 static JavaVM *vm;
-static jclass host_cls, text_cls;
+static jclass host_cls, text_cls, images_cls;
 static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m_bench,
-    m_exit, m_metrics, m_shape, m_glyph, m_generation;
+    m_exit, m_metrics, m_shape, m_glyph, m_generation, m_img_load, m_img_free, m_img_reload;
 static jdoubleArray shape_buf, small_buf;
 static int want_frame;
 
@@ -47,6 +47,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   JNIEnv *env = env_();
   host_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Host"));
   text_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/MBText"));
+  images_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Images"));
   m_request_frame = (*env)->GetStaticMethodID(env, host_cls, "requestFrame", "()V");
   m_wake_after = (*env)->GetStaticMethodID(env, host_cls, "wakeAfter", "(D)V");
   m_set_ime = (*env)->GetStaticMethodID(env, host_cls, "setIme", "(ZDDDDLjava/lang/String;II)V");
@@ -58,6 +59,9 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_shape = (*env)->GetStaticMethodID(env, text_cls, "shape", "(Ljava/lang/String;DI[D)I");
   m_glyph = (*env)->GetStaticMethodID(env, text_cls, "glyph", "(I[D)V");
   m_generation = (*env)->GetStaticMethodID(env, text_cls, "atlasGeneration", "()I");
+  m_img_load = (*env)->GetStaticMethodID(env, images_cls, "load", "(ILjava/lang/String;[BI)V");
+  m_img_free = (*env)->GetStaticMethodID(env, images_cls, "free", "(I)V");
+  m_img_reload = (*env)->GetStaticMethodID(env, images_cls, "reload", "()V");
   shape_buf = (*env)->NewGlobalRef(env, (*env)->NewDoubleArray(env, 4 * 8192));
   small_buf = (*env)->NewGlobalRef(env, (*env)->NewDoubleArray(env, 16));
   return JNI_VERSION_1_6;
@@ -72,6 +76,44 @@ static moonbit_string_t mstr(JNIEnv *env, jstring s) {
   moonbit_string_t out = moonbit_make_string_raw(n);
   (*env)->GetStringRegion(env, s, 0, n, (jchar *)out);
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Images: dev.mbui.Images decodes them on background threads and uploads
+// them here, on the GL thread, which is the only one that touches this.
+
+typedef struct {
+  int state;  // 0 decoding, 1 ready, -1 failed or freed
+  GLuint tex;
+  int w, h, ow, oh;
+} mb_image;
+
+static mb_image *imgs;  // by id; ids are not reused
+static int nimgs, img_cap;
+
+static GLuint image_tex(int id) {
+  return id > 0 && id < nimgs && imgs[id].state == 1 ? imgs[id].tex : 0;
+}
+
+// a new context has none of the old textures: forget them and decode again
+static void images_lost(JNIEnv *env) {
+  static int first = 1;
+  if (first) {
+    first = 0;
+    return;
+  }
+  for (int i = 0; i < nimgs; i++) imgs[i].tex = 0;
+  (*env)->CallStaticVoidMethod(env, images_cls, m_img_reload);
+}
+
+static int image_new(void) {
+  if (nimgs == 0) nimgs = 1;  // 0 is no image
+  if (nimgs >= img_cap) {
+    img_cap = img_cap ? img_cap * 2 : 256;
+    imgs = realloc(imgs, (size_t)img_cap * sizeof *imgs);
+  }
+  imgs[nimgs] = (mb_image){0};
+  return nimgs++;
 }
 
 // ---------------------------------------------------------------------------
@@ -91,7 +133,7 @@ static const char *VS =
     "  int vid = gl_VertexID;\n"
     "  vec2 corner = vec2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0, (vid == 2 || vid == 3 || vid == 5) ? 1.0 : 0.0);\n"
     "  int kind = int(a_p.y + 0.5);\n"
-    "  float grow = kind == 2 ? a_p.w * 2.0 + 2.0 : (kind == 0 ? 1.0 : 0.0);\n"
+    "  float grow = kind == 2 ? a_p.w * 2.0 + 2.0 : ((kind == 0 || kind == 4) ? 1.0 : 0.0);\n"
     "  vec2 pos = a_rect.xy - grow + corner * (a_rect.zw + 2.0 * grow);\n"
     "  gl_Position = vec4(pos.x / u_vp.x * 2.0 - 1.0, 1.0 - pos.y / u_vp.y * 2.0, 0.0, 1.0);\n"
     "  v_pos = pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip;\n"
@@ -104,6 +146,7 @@ static const char *FS =
     "flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip;\n"
     "uniform float u_scale;\n"
     "uniform sampler2D u_atlas;\n"
+    "uniform sampler2D u_img;\n"
     "out vec4 o;\n"
     "void main() {\n"
     "  vec2 p = v_pos;\n"
@@ -121,6 +164,11 @@ static const char *FS =
     "  float r = min(v_p.x, min(hs.x, hs.y));\n"
     "  vec2 q = abs(p - c) - hs + r;\n"
     "  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;\n"
+    "  if (kind == 4) {\n"
+    "    vec2 uv = v_c2.xy + clamp((p - v_rect.xy) / v_rect.zw, 0.0, 1.0) * v_c2.zw;\n"
+    "    o = texture(u_img, uv) * (col.a * clamp(0.5 - d * u_scale, 0.0, 1.0));\n"
+    "    return;\n"
+    "  }\n"
     "  if (kind == 2) {\n"
     "    float b = max(v_p.w, 0.5);\n"
     "    float a = 1.0 - smoothstep(-b, b, d);\n"
@@ -138,7 +186,7 @@ static const char *FS =
     "}\n";
 
 static GLuint prog, vao, vbo, atlas;
-static GLint u_vp, u_scale, u_atlas;
+static GLint u_vp, u_scale, u_atlas, u_img;
 static float *fbuf;
 static size_t fcap;
 static int fb_w, fb_h;
@@ -166,6 +214,7 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_surfaceCreated(JNIEnv *env, jclass c
   u_vp = glGetUniformLocation(prog, "u_vp");
   u_scale = glGetUniformLocation(prog, "u_scale");
   u_atlas = glGetUniformLocation(prog, "u_atlas");
+  u_img = glGetUniformLocation(prog, "u_img");
   glGenVertexArrays(1, &vao);
   glBindVertexArray(vao);
   glGenBuffers(1, &vbo);
@@ -184,6 +233,7 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_surfaceCreated(JNIEnv *env, jclass c
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   glEnable(GL_BLEND);
   glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+  images_lost(env);
 }
 
 JNIEXPORT jint JNICALL Java_dev_mbui_Native_atlasTexture(JNIEnv *env, jclass c) { return (jint)atlas; }
@@ -213,7 +263,25 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, atlas);
   glUniform1i(u_atlas, 0);
-  glDrawArraysInstanced(GL_TRIANGLES, 0, 6, count);
+  glUniform1i(u_img, 1);
+  // one draw per run of instances showing the same image (slot 20; 0: none,
+  // the atlas stands in); GLES has no base instance, so the attributes start
+  // at the run instead
+  int32_t start = 0;
+  while (start < count) {
+    int tid = (int)fbuf[start * 24 + 20];
+    int32_t end = start + 1;
+    while (end < count && (int)fbuf[end * 24 + 20] == tid) end++;
+    GLuint t = tid ? image_tex(tid) : atlas;
+    if (t) {  // 0: lost with the context, decoding again
+      glActiveTexture(GL_TEXTURE1);
+      glBindTexture(GL_TEXTURE_2D, t);
+      for (int i = 0; i < 5; i++)
+        glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, 96, (void *)(intptr_t)(start * 96 + i * 16));
+      glDrawArraysInstanced(GL_TRIANGLES, 0, 6, end - start);
+    }
+    start = end;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -351,9 +419,56 @@ JNIEXPORT jboolean JNICALL Java_dev_mbui_Native_snapshot(JNIEnv *env, jclass c, 
   return JNI_FALSE;  // screenshots come from `adb exec-out screencap`
 }
 
-// ---- images: not decoded on this platform yet; every load fails ----
+// ---- images ----
 
-int32_t mb_host_image_load(moonbit_string_t src, int32_t max_px) { (void)src; (void)max_px; return 0; }
-int32_t mb_host_image_load_bytes(moonbit_bytes_t data, int32_t max_px) { (void)data; (void)max_px; return 0; }
-int32_t mb_host_image_info(int32_t id, double *out) { (void)id; (void)out; return -1; }
-void mb_host_image_free(int32_t id) { (void)id; }
+int32_t mb_host_image_load(moonbit_string_t src, int32_t max_px) {
+  JNIEnv *env = env_();
+  int id = image_new();
+  jstring s = jstr(env, src);
+  (*env)->CallStaticVoidMethod(env, images_cls, m_img_load, id, s, NULL, max_px);
+  (*env)->DeleteLocalRef(env, s);
+  return id;
+}
+
+int32_t mb_host_image_load_bytes(moonbit_bytes_t data, int32_t max_px) {
+  JNIEnv *env = env_();
+  int id = image_new();
+  jsize n = Moonbit_array_length(data);
+  jbyteArray b = (*env)->NewByteArray(env, n);
+  (*env)->SetByteArrayRegion(env, b, 0, n, (const jbyte *)data);
+  jstring s = (*env)->NewStringUTF(env, "(bytes)");
+  (*env)->CallStaticVoidMethod(env, images_cls, m_img_load, id, s, b, max_px);
+  (*env)->DeleteLocalRef(env, s);
+  (*env)->DeleteLocalRef(env, b);
+  return id;
+}
+
+int32_t mb_host_image_info(int32_t id, double *out) {
+  if (id <= 0 || id >= nimgs) return -1;
+  mb_image *im = &imgs[id];
+  if (im->state == 1) {
+    out[0] = im->w; out[1] = im->h; out[2] = im->ow; out[3] = im->oh;
+  }
+  return im->state;
+}
+
+void mb_host_image_free(int32_t id) {
+  if (id <= 0 || id >= nimgs) return;
+  mb_image *im = &imgs[id];
+  if (im->tex) glDeleteTextures(1, &im->tex);
+  *im = (mb_image){-1};
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, images_cls, m_img_free, id);
+}
+
+JNIEXPORT void JNICALL Java_dev_mbui_Native_imageDone(JNIEnv *env, jclass c, jint id, jint tex,
+                                                     jint w, jint h, jint ow, jint oh) {
+  GLuint t = (GLuint)tex;
+  if (id <= 0 || id >= nimgs || imgs[id].state == -1) {  // freed meanwhile
+    if (t) glDeleteTextures(1, &t);
+    return;
+  }
+  mb_image *im = &imgs[id];
+  if (im->tex && im->tex != t) glDeleteTextures(1, &im->tex);
+  *im = (mb_image){t ? 1 : -1, t, w, h, ow, oh};
+}

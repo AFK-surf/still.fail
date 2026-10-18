@@ -15,4 +15,5 @@ final class Native {
     static native void text(int kind, String s, int a, int b);
     static native int atlasTexture();
     static native boolean snapshot(String path);
+    static native void imageDone(int id, int tex, int w, int h, int ow, int oh);
 }
