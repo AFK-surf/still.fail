@@ -1,6 +1,6 @@
 #!/bin/bash
 # Screenshots of the demo on every platform, compared with goldens/.
-#   scripts/shots.sh [mac web ios android]     UPDATE=1 accepts them as goldens
+#   scripts/shots.sh [mac web ios android | windows]   UPDATE=1 accepts them as goldens
 # Writes out/shots/<platform>.png and, where a golden exists,
 # out/shots/<platform>-review.png (golden | new | differences).
 D="$(cd "$(dirname "$0")" && pwd)"
@@ -19,6 +19,10 @@ for p in $PLATFORMS; do
       rm -rf out/shot-mac; mkdir -p out/shot-mac
       MBUI_BENCH=-1 MBUI_SCRIPT=shot MBUI_SHOT_DIR=$PWD/out/shot-mac ./_build/native/release/build/demo/demo.exe >/dev/null
       cp out/shot-mac/main.png out/shots/mac.png ;;
+    windows)  # on Windows (Git Bash), not part of the default set
+      MODE=release bash scripts/win.sh build >/dev/null
+      MODE=release bash scripts/win.sh shot >/dev/null
+      cp out/shot-win/main.png out/shots/windows.png ;;
     web)
       bash scripts/web.sh build >/dev/null
       NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web.png ;;
