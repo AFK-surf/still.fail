@@ -364,15 +364,15 @@ export const CHAT_CREATE = {
           "codex",
           "dsh"
         ],
-        "description": "Its agent's runtime (dsh: DeepSeek Harness). Default: yours."
+        "description": "Its agent's runtime (dsh: DeepSeek Harness). Default: that of its model."
       },
       "model": {
         "type": "string",
-        "description": "Its agent's model. Default: yours (where that station runs it; else its default)."
+        "description": "Its agent's model. Default: the one the person it goes to has opened most chats with on that station (of the models its profiles run there, of runtime when given); when several are as used, it is not opened and you are told them: ask the person which, then call again with it."
       },
       "effort": {
         "type": "string",
-        "description": "Its agent's reasoning effort. Default: yours, with your model."
+        "description": "Its agent's reasoning effort. Default: its model's."
       },
       "files": {
         "type": "array",

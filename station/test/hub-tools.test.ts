@@ -27,6 +27,7 @@ import { chatTools } from "../src/tools/chat.ts";
 import { feedbackTools } from "../src/tools/feedback.ts";
 import { stationTools } from "../src/tools/stations.ts";
 import { DEFAULT_POLICY } from "../src/sessions/archive-policy.ts";
+import { hubConfig } from "../src/sessions/config.ts";
 import { Rig, matches, message, reply, say, settle } from "./hub-fakes.ts";
 
 type Json = any;
@@ -950,7 +951,12 @@ test("an agent opens a chat on another station: made there once per key, its fir
     return noticeForPeer(near.hub, "far", request);
   });
   writeFileSync(join(near.session(keyA).workspace, "plan.txt"), "run them all");
-  const said = await near.call(keyA, "chat_create", { key: "tests", station: "studio", text: "run the tests", title: "跑测试", files: ["plan.txt"] });
+  // Nothing used there yet, and two runtimes to choose from: not opened, the agent is told which to ask about.
+  const which = await near.refused(keyA, "chat_create", { key: "tests", station: "studio", text: "run the tests" });
+  assert.ok(which.includes("no one most used model") && which.includes("claude's default") && which.includes("codex's default"), which);
+  assert.equal(far.store.listSessions().length, 0);
+  asked.length = 0;
+  const said = await near.call(keyA, "chat_create", { key: "tests", station: "studio", runtime: "claude", text: "run the tests", title: "跑测试", files: ["plan.txt"] });
   assert.deepEqual(asked, [CREATE, "session.put", "session.message"]);
   assert.ok(said.includes("station far"), said);
   const [child] = far.store.listSessions().map((s) => s.key);
@@ -1003,6 +1009,54 @@ test("an agent opens a chat on another station: made there once per key, its fir
   });
   assert.ok((await near.refused(keyA, "chat_create", { key: "old", station: "far", text: "x" })).includes("not updated yet"));
   assert.ok((await near.refused(keyA, "chat_create", { key: "nowhere", station: "mars", text: "x" })).includes("Studio"));
+  await near.close();
+  await far.close();
+});
+
+test("a chat opened on another station without a model runs what its starter uses most there, not its opener's", async () => {
+  // As on 2026-10-19: the opener runs Claude's Opus here; Studio runs gpt-6-astra on codex and DeepSeek, no Opus.
+  const near = new Rig({ link: true });
+  const far = new Rig({ link: true });
+  far.raw.profiles = [
+    { id: "cx", runtime: "codex", home: "homes/cx", models: ["gpt-6-astra"] },
+    { id: "ds", runtime: "claude", home: "homes/ds", models: ["deepseek-v4.1-flash"] },
+  ];
+  far.config = hubConfig(far.raw, far.dir);
+  const a = say("<@UBOT> sign the app in on the mac");
+  await near.accept(a);
+  await settle();
+  const keyA = sessionKey("cl", "C1", a.threadTs);
+  assert.equal(near.session(keyA).model, "opus");
+  near.hub.onPeer(async (_station, request) => {
+    if (request.method === "peers") return { workspace: "ws", stations: [{ id: "st", name: "ccvm" }, { id: "far", name: "Studio" }], current: true };
+    if (request.method === CREATE) return createForPeer(far.hub, "near", request);
+    return fromPeer(far.hub, "near", request);
+  });
+  far.hub.onPeer(async (_station, request) => noticeForPeer(near.hub, "far", request));
+  const starter = near.thread("C1", a.threadTs).createdBy!;
+  const used = (key: string, runtime: string, model: string, at: number) =>
+    far.store.insertSession({ key, connect: "ds", runtime, profile: "cx", model, createdBy: starter, workspace: `/w/${key}`, token: `t-${key}`, createdAt: at, lastActiveAt: at });
+  const now = far.hub.now();
+  used("u1", "codex", "gpt-6-astra", now - 86_400_000);
+  used("u2", "codex", "gpt-6-astra", now - 2 * 86_400_000);
+  used("u3", "claude", "deepseek-v4.1-flash", now - 86_400_000);
+  // Long ago, and someone else's: not counted.
+  used("u4", "claude", "deepseek-v4.1-flash", now - 90 * 86_400_000);
+  used("u5", "claude", "deepseek-v4.1-flash", now - 90 * 86_400_000);
+  used("u6", "claude", "deepseek-v4.1-flash", now - 90 * 86_400_000);
+  far.store.db.prepare("UPDATE sessions SET created_by = 'someone else', created_at = ? WHERE key IN ('u4', 'u5')").run(now);
+  await near.call(keyA, "chat_create", { key: "login", station: "Studio", text: "run the login" });
+  const child = far.store.openedWith("near", keyA, "login", "")!.child;
+  assert.deepEqual([far.session(child).runtime, far.session(child).model], ["codex", "gpt-6-astra"]);
+  // As used as each other (the chat just opened counts too): asked.
+  used("u7", "claude", "deepseek-v4.1-flash", now - 3600_000);
+  used("u8", "claude", "deepseek-v4.1-flash", now - 3600_000);
+  const which = await near.refused(keyA, "chat_create", { key: "login-2", station: "Studio", text: "run the login" });
+  assert.ok(which.includes("gpt-6-astra (runtime codex, 3 chats") && which.includes("deepseek-v4.1-flash (runtime claude, 3 chats"), which);
+  // A runtime named: its model there.
+  await near.call(keyA, "chat_create", { key: "login-3", station: "Studio", runtime: "claude", text: "run the login" });
+  const third = far.store.openedWith("near", keyA, "login-3", "")!.child;
+  assert.deepEqual([far.session(third).runtime, far.session(third).model], ["claude", "deepseek-v4.1-flash"]);
   await near.close();
   await far.close();
 });

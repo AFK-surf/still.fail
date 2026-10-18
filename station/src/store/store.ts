@@ -420,6 +420,16 @@ export class Store {
     return r ? toOpened(r) : null;
   }
 
+  /// How many chats `createdBy` started here since `since`, by runtime and model (what chat_create runs when it is told
+  /// no model: sessions/model-choice.ts).
+  modelsUsedBy(createdBy: string, since: number): { runtime: string; model: string | null; n: number }[] {
+    return this.#all("SELECT runtime, model, COUNT(*) AS n FROM sessions WHERE created_by = ? AND created_at >= ? GROUP BY runtime, model", createdBy, since).map((r) => ({
+      runtime: r.runtime as string,
+      model: typeof r.model === "string" ? r.model : null,
+      n: Number(r.n),
+    }));
+  }
+
   /// The chats this station's session `parent` opened, the first first.
   openedBy(parent: string): Opened[] {
     return this.#all("SELECT * FROM opened_chats WHERE parent_station = '' AND parent = ? ORDER BY created_at, rowid", parent).map(toOpened);

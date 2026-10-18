@@ -18,6 +18,7 @@ import { Refused } from "./neighbours.ts";
 import { fromBefore, linkedStation, peersOf, sessionThreadOf } from "./others.ts";
 import { sendable, sendAlong } from "./peer-files.ts";
 import { RUNTIME_KINDS, type RuntimeKind } from "../agents/runtime.ts";
+import { USED_WITHIN_MS, askWhich, candidates, choose } from "./model-choice.ts";
 
 type Json = any;
 
@@ -77,6 +78,17 @@ function makeChat(hub: Hub, o: { runtime: RuntimeName; model: string | null; eff
   }
 }
 
+/// What a chat opened here runs when its opener named no model (model-choice.ts): what its starter `createdBy` uses
+/// most here, of the models the profiles of workspace `ws` run (of `runtime` when given). Throws, naming them, when
+/// that is not one model: the opener's agent asks the person.
+function chosenHere(hub: Hub, createdBy: string, ws: string | null, runtime: RuntimeName | null): { runtime: RuntimeName; model: string | null } {
+  const cands = candidates(hub.profilesIn(ws), runtime);
+  if (cands.length === 0) throw new Error(runtime !== null ? `no ${runtime} profile on the station it is opened on` : "no profile on the station it is opened on");
+  const c = choose(cands, hub.store.modelsUsedBy(createdBy, hub.now() - USED_WITHIN_MS));
+  if ("ask" in c) throw new Error(askWhich(c.ask, "the station it is opened on"));
+  return { runtime: c.pick.runtime as RuntimeName, model: c.pick.model };
+}
+
 /// Where a session's chat is, as an agent names it.
 const addressOf = (thread: SessionThread) => threadAddress(thread.thread.channel, thread.thread.threadTs);
 
@@ -129,13 +141,13 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
   const text = given(args, "text");
   if (text === null) throw new Error("text is required: the first message, what the new chat's agent is to do, standing on its own");
   if (chars(text) > MAX_TEXT) throw new Error(`text is too long (at most ${MAX_TEXT} characters): put the rest in a file and attach it`);
-  const runtime = given(args, "runtime") ?? row.runtime;
-  if (!RUNTIMES.includes(runtime as RuntimeName)) throw new Error(`runtime must be one of ${RUNTIMES.join(", ")}`);
+  const runtime = given(args, "runtime");
+  if (runtime !== null && !RUNTIMES.includes(runtime as RuntimeName)) throw new Error(`runtime must be one of ${RUNTIMES.join(", ")}`);
   const model = given(args, "model");
   const effort = given(args, "effort");
-  // Without a model of its own it runs as its opener does, where it can.
-  const inherited = model === null && runtime === row.runtime;
-  const choice = { runtime: runtime as RuntimeName, model: inherited ? row.model : model, effort: inherited ? (effort ?? row.effort) : effort, inherited };
+  // Without a model of its own it runs what its starter uses most where it is opened (chosen there), never its
+  // opener's: the opener's model may be one that station has no profile for.
+  const choice = { runtime: (runtime ?? row.runtime) as RuntimeName, model, effort, inherited: false };
   const title = given(args, "title");
   if (title !== null && chars(title) > 120) throw new Error("title is too long (at most 120 characters)");
   const paths: string[] = Array.isArray(args.files) ? args.files.map(jsString) : [];
@@ -173,7 +185,8 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
   }
 
   if (there === null) {
-    const [child, chat] = makeChat(hub, { ...choice, title, createdBy, ws: row.ws ?? null });
+    const chosen = model === null ? chosenHere(hub, createdBy, row.ws ?? null, runtime as RuntimeName | null) : choice;
+    const [child, chat] = makeChat(hub, { ...choice, ...chosen, title, createdBy, ws: row.ws ?? null });
     const link = hub.link(child) ?? null;
     hub.store.insertOpened({ childStation: "", child, parentStation: "", parent: key, key: k, title, link });
     const thread: SessionThread = { thread: chat, connect: INTERNAL_CONNECT };
@@ -183,7 +196,9 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
   }
 
   const call = peersOf(hub, key)!;
-  const request: Json = { method: CREATE, session: key, key: k, title, ...choice, createdBy, from: { title: from, link: fromLink } };
+  // `choose`: the station it is opened on picks the model (`runtimeGiven`: of that runtime); one from before it runs the
+  // runtime's default there.
+  const request: Json = { method: CREATE, session: key, key: k, title, ...choice, choose: model === null, runtimeGiven: runtime !== null, createdBy, from: { title: from, link: fromLink } };
   let made: Json;
   try {
     made = await call(there, request);
@@ -229,7 +244,10 @@ export function createForPeer(hub: Hub, peer: string, request: Json, ws: string 
   if (!RUNTIMES.includes(runtime as RuntimeName)) throw new Error(`runtime must be one of ${RUNTIMES.join(", ")}`);
   const title = given(request, "title");
   const createdBy = given(request, "createdBy") ?? `${peer}/${parent}`;
-  const [child] = makeChat(hub, { runtime: runtime as RuntimeName, model: given(request, "model"), effort: given(request, "effort"), inherited: request?.inherited === true, title, createdBy, ws });
+  const model = given(request, "model");
+  // Its opener named no model: what its starter uses most here (an opener from before this sends its own, inherited).
+  const chosen = request?.choose === true && model === null ? chosenHere(hub, createdBy, ws, request?.runtimeGiven === true ? (runtime as RuntimeName) : null) : { runtime: runtime as RuntimeName, model };
+  const [child] = makeChat(hub, { ...chosen, effort: given(request, "effort"), inherited: request?.inherited === true, title, createdBy, ws });
   hub.store.insertOpened({ childStation: "", child, parentStation: peer, parent, key: k, title, link: hub.link(child) ?? null });
   log.info("hub", "chat opened for another station's session", { session: child, station: peer, opener: parent });
   return answer(child);
