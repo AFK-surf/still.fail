@@ -105,15 +105,17 @@ export async function profileFetch(url: string, init: { method?: string; headers
   const agent = url.startsWith("https:") ? proxyAgent(keepLocal(agentEnv())) : null;
   if (agent === null) return fetch(url, init);
   return new Promise<Response>((resolve, reject) => {
-    const req = https.request(url, { method: init.method ?? "GET", headers: init.headers, agent, signal: init.signal }, (res) => {
-      const headers = new Headers();
+    // Its length said, as fetch does (not chunked).
+    const headers = init.body === undefined ? init.headers : { "content-length": String(Buffer.byteLength(init.body)), ...init.headers };
+    const req = https.request(url, { method: init.method ?? "GET", headers, agent, signal: init.signal }, (res) => {
+      const answered = new Headers();
       for (const [k, v] of Object.entries(res.headers)) {
-        if (Array.isArray(v)) for (const one of v) headers.append(k, one);
-        else if (v !== undefined) headers.set(k, v);
+        if (Array.isArray(v)) for (const one of v) answered.append(k, one);
+        else if (v !== undefined) answered.set(k, v);
       }
       const status = res.statusCode ?? 502;
       const body = BODILESS.includes(status) || init.method === "HEAD" ? (res.resume(), null) : (Readable.toWeb(res) as ReadableStream<Uint8Array>);
-      resolve(new Response(body, { status, statusText: res.statusMessage ?? "", headers }));
+      resolve(new Response(body, { status, statusText: res.statusMessage ?? "", headers: answered }));
     });
     req.on("error", reject);
     req.end(init.body);

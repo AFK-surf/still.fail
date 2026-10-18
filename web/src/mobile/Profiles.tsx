@@ -5,7 +5,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { stationApi, useAction, useMemberships, useOverview, useProfiles, useStationCall, useStations, type LoginJob, type Profile, type Quota, type StationView, type Tone } from "../api.ts";
-import type { MachineLogin, ProfileFlowView, WorkspaceProfile } from "../core/shapes.ts";
+import type { EnvVar, MachineLogin, ProfileFlowView, WorkspaceProfile } from "../core/shapes.ts";
 import { hosts, profileGroups } from "../cloud/settings.tsx";
 import { ACCESS, KEYED, RUNTIME_LABEL } from "../format.ts";
 import { Check, ChevronRight, More } from "@stillfail/ui/icons.tsx";
@@ -451,7 +451,8 @@ function ProfilePage({ p }: { p: Profile }) {
             <SectionHeader title={t("web-mobile.profiles.env")} start={24} />
             <ListCard>
               {p.env.map((e) => <ListRow key={e.key}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={`${listsCss.mRowTitle} ${css.mMono}`}>{e.key}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{e.value}</span></span></ListRow>)}
-              <ListRow onClick={() => sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> })}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.editEnv")}</span></ListRow>
+              <ListRow onClick={() => sheet({ height: 0.8, draggable: true, content: () => <EnvSheet env={p.env} title={t("web-mobile.profiles.env")} note={t("web-mobile.profiles.envNote", { route: "{route}" })}
+                doing={["profile.put", { station: station.address, id: p.id }]} save={(env) => api.putProfile(p.id, { env })} /> })}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.editEnv")}</span></ListRow>
             </ListCard>
           </>
         )}
@@ -819,17 +820,20 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
 
 interface EnvRow { row: number; key: string; value: string; masked: string | null; original: string | null }
 
-/** The variables a custom profile runs with: what reaches its runtime's model service, set by hand. */
-function EnvSheet({ p }: { p: Profile }) {
+/**
+ * Variables set by hand: a custom profile's (what reaches its runtime's model service), or a station's for what it starts
+ * for its agents (Stations.tsx). Saved as a patch (`save`): a string sets one, null removes it, a masked one left blank
+ * is kept; `doing` names the call, for its spinner.
+ */
+export function EnvSheet({ env, title, note, doing, save }: { env: EnvVar[]; title: string; note: string; doing: [string, Record<string, string>]; save(patch: Record<string, string | null>): Promise<unknown> }) {
   const app = useApp();
-  const api = useApi();
   const next = useRef(1);
-  const [rows, setRows] = useState<EnvRow[]>(() => p.env.map((e) => ({ row: next.current++, key: e.key, value: e.secret ? "" : e.value, masked: e.secret ? e.value : null, original: e.key })));
-  const busy = useDoing("profile.put", { station: useStation().address, id: p.id });
+  const [rows, setRows] = useState<EnvRow[]>(() => env.map((e) => ({ row: next.current++, key: e.key, value: e.secret ? "" : e.value, masked: e.secret ? e.value : null, original: e.key })));
+  const busy = useDoing(doing[0], doing[1]);
   const patch = (): Record<string, string | null> => {
     const out: Record<string, string | null> = {};
     const kept = new Set(rows.map((r) => r.key.trim()));
-    for (const e of p.env) if (!kept.has(e.key)) out[e.key] = null;
+    for (const e of env) if (!kept.has(e.key)) out[e.key] = null;
     for (const r of rows) {
       const key = r.key.trim();
       if (!key) continue;
@@ -843,9 +847,9 @@ function EnvSheet({ p }: { p: Profile }) {
   return (
     <>
       <SheetGrab />
-      <SheetHead title={t("web-mobile.profiles.env")} />
+      <SheetHead title={title} />
       <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
-        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.profiles.envNote", { route: "{route}" })}</p>
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{note}</p>
         {rows.map((r) => (
           <div key={r.row} className={css.mEnvRow}>
             <input className={listsCss.mField} data-mono spellCheck={false} value={r.key} placeholder="NAME" onChange={(e) => update(r.row, { key: e.target.value })} />
@@ -857,7 +861,7 @@ function EnvSheet({ p }: { p: Profile }) {
         <button type="button" className={`${partsCss.mLink} ${settingsCss.mStepAlt}`} onClick={() => setRows([...rows, { row: next.current++, key: "", value: "", masked: null, original: null }])}>{t("web-mobile.profiles.addEnv")}</button>
         <div className={sheetsCss.mFormActions}>
           <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
-          <Button label={t("common.save")} primary busy={busy} onClick={() => { app.sheet(null); api.putProfile(p.id, { env: patch() }).then(() => app.toast(t("web-mobile.profiles.saved")), (e: Error) => app.toast(t("web-mobile.profiles.saveFailed", { error: e.message }))); }} />
+          <Button label={t("common.save")} primary busy={busy} onClick={() => { app.sheet(null); save(patch()).then(() => app.toast(t("web-mobile.profiles.saved")), (e: Error) => app.toast(t("web-mobile.profiles.saveFailed", { error: e.message }))); }} />
         </div>
       </div>
     </>

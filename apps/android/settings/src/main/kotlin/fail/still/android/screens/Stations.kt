@@ -65,6 +65,9 @@ import fail.still.android.LocalApp
 import fail.still.android.shared.R
 import fail.still.android.Screen
 import fail.still.android.data.StationView
+import fail.still.android.data.EnvVar
+import fail.still.android.ui.CodeFont
+import fail.still.android.ui.DoingMark
 import fail.still.android.data.MembershipsView
 import fail.still.android.data.StationNet
 import fail.still.android.data.NetFigure
@@ -320,6 +323,8 @@ fun StationScreen(current: WorkspaceEntry, address: String, login: String? = nul
             if (s.online) overview?.permissions?.let { StationPermissionsSection(address, s.name, it) }
             // The logins its agents did there (LoginCards.kt): those under way as their cards; nothing when none.
             StationLogins(address, marked = login)
+            // The variables what it starts for its agents runs with (docs/agent-env.md); none from a station from before them.
+            overview?.agentEnv?.let { StationAgentEnv(address, it, manager) }
             if (manager) StationWorkspaces(address)
             // Its updates are its home workspace's managers' (docs/multi-workspace.md).
             if (s.online && overview != null) Versions(address, overview.updates, manager, beta = s.betaOffered == true)
@@ -376,6 +381,40 @@ private fun StationWorkspaces(address: String) {
             ListRow {
                 Text(w.name, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Text(w.line, fontSize = 14.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 220.dp))
+            }
+        }
+    }
+}
+
+/**
+ * The variables everything the station starts for its agents runs with (docs/agent-env.md: a proxy, mostly), a row each,
+ * a secret's value masked; its managers edit them in a sheet (Profiles.kt's, as a custom profile's).
+ */
+@Composable
+private fun StationAgentEnv(address: String, env: List<EnvVar>, manager: Boolean) {
+    val app = LocalApp.current
+    if (env.isEmpty() && !manager) return
+    SectionHeader(t("android-settings.agentEnv.title"), start = 24.dp)
+    ListCard {
+        if (env.isEmpty()) ListRow { Text(t("android-settings.agentEnv.empty"), fontSize = 15.sp, color = C.muted, modifier = Modifier.weight(1f)) }
+        env.forEach { e ->
+            ListRow {
+                Column(Modifier.weight(1f)) {
+                    Text(e.key, fontSize = 15.sp, color = C.ink, fontFamily = CodeFont)
+                    Text(e.value, fontSize = 13.sp, color = C.muted, fontFamily = CodeFont, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+        if (manager) {
+            val doing = app.isDoing("agentEnv.set", "station" to address)
+            ListRow(onClick = {
+                app.sheet = SheetSpec(0.8f, draggable = true) {
+                    EnvSheet(t("android-settings.agentEnv.title"), t("android-settings.agentEnv.note"), env, doing) { changed -> app.api(address).setAgentEnv(changed) }
+                }
+            }) {
+                Text(t("android-settings.env.edit"), fontSize = 15.sp, color = C.accent, modifier = Modifier.weight(1f))
+                // Saved (the sheet gone): a spinner until the station has them.
+                DoingMark(doing, app.failedOf("agentEnv.set", "station" to address))
             }
         }
     }

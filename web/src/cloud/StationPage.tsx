@@ -20,6 +20,11 @@ import { WorkspaceMark } from "../WorkspaceMark.tsx";
 import { HostDetails, joinedText, Net, problems, state, useLong } from "./StationCards.tsx";
 import { MarkPick } from "./MarkPick.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
+import { EnvEditor } from "../pages/Accounts.tsx";
+import type { EnvVar } from "../core/shapes.ts";
+import { useCall } from "../core/react.ts";
+import { useDoing } from "../doing.ts";
+import { useAct } from "@stillfail/ui/toast.tsx";
 import { ScreensSection } from "../screen/ScreenList.tsx";
 import { PermissionsSection } from "../StationPermissions.tsx";
 import { LoginsSection } from "../MachineLogins.tsx";
@@ -260,6 +265,8 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
           </ul>
         </Section>
       )}
+      {/* The variables what it starts for its agents runs with (docs/agent-env.md); none from a station from before them. */}
+      {o?.agentEnv && <AgentEnv station={s.station} env={o.agentEnv} manager={manager} />}
       {manager && <Workspaces s={s} />}
       {/* Its updates are its home workspace's managers' to make (docs/multi-workspace.md). */}
       <Section title={t("web-pages.stations.software")}>
@@ -271,6 +278,31 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
           : <p className={css.note}>{s.online ? t("web-pages.stations.deviceLoading") : t("web-pages.stations.deviceOffline")}</p>}
       </Section>
     </>
+  );
+}
+
+/**
+ * The variables everything it starts for its agents runs with (docs/agent-env.md: a proxy, mostly): its managers edit
+ * them as a custom profile's; the others see them, a secret's value masked.
+ */
+function AgentEnv({ station, env, manager }: { station: string; env: EnvVar[]; manager: boolean }) {
+  const call = useCall();
+  const act = useAct();
+  const busy = useDoing("agentEnv.set", { station });
+  // Made again as the station tells them anew (a secret saved shows masked, as one read from it).
+  if (manager) return <EnvEditor key={env.map((e) => `${e.key}=${e.value}`).join("\n")} env={env} title={t("web-pages.stations.agentEnv")} lead={t("web-pages.stations.agentEnvLead")} busy={busy}
+    onSave={(patch) => act(call("agentEnv.set", { station, env: patch }), t("web-pages.stations.agentEnvSave"), t("web-pages.profiles.saved"))} />;
+  if (env.length === 0) return null;
+  return (
+    <Section title={t("web-pages.stations.agentEnv")} description={t("web-pages.stations.agentEnvLead")}>
+      <div className={pagesCss.card}>
+        {env.map((e) => (
+          <div key={e.key} className={pagesCss.cardRow}>
+            <span className={pagesCss.cardRowText}><strong className={shellCss.mono}>{e.key}</strong><span className={`${shellCss.muted} ${shellCss.mono}`}>{e.value}</span></span>
+          </div>
+        ))}
+      </div>
+    </Section>
   );
 }
 

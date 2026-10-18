@@ -58,6 +58,7 @@ import fail.still.android.AppState
 import fail.still.android.LocalApp
 import fail.still.android.Screen
 import fail.still.android.data.ACCESS_LABEL
+import fail.still.android.data.EnvVar
 import fail.still.android.data.KEYED
 import fail.still.android.data.LoginJob
 import fail.still.android.data.MachineLogin
@@ -597,7 +598,13 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                             }
                         }
                     }
-                    ListRow(onClick = { app.sheet = SheetSpec(0.8f, draggable = true) { EnvSheet(address, p) } }) {
+                    ListRow(onClick = {
+                        app.sheet = SheetSpec(0.8f, draggable = true) {
+                            EnvSheet(t("android-settings.env.title"), t("android-settings.env.note"), p.env, app.isDoing("profile.put", "station" to address, "id" to p.id)) { env ->
+                                app.api(address).putProfile(p.id, buildJsonObject { put("env", env) })
+                            }
+                        }
+                    }) {
                         Text(t("android-settings.env.edit"), fontSize = 15.sp, color = C.accent, modifier = Modifier.weight(1f))
                         // Saved (the sheet gone): a spinner until the station has them.
                         DoingMark(app.isDoing("profile.put", "station" to address, "id" to p.id), app.failedOf("profile.put", "station" to address, "id" to p.id))
@@ -909,18 +916,20 @@ private class EnvRow(val row: Int, key: String, value: String, val masked: Strin
     var value by mutableStateOf(value)
 }
 
-/** The variables a custom profile runs with: what reaches its runtime's model service, set by hand. */
+/**
+ * Variables set by hand: a custom profile's (what reaches its runtime's model service), or a station's for what it starts
+ * for its agents (Stations.kt). Saved as a patch: a string sets one, null removes it, a masked one left blank is kept.
+ */
 @Composable
-private fun ColumnScope.EnvSheet(station: String, p: Profile) {
+internal fun ColumnScope.EnvSheet(title: String, note: String, env: List<EnvVar>, busy: Boolean, save: suspend (JsonObject) -> Unit) {
     val app = LocalApp.current
     var next by remember { mutableIntStateOf(1) }
-    var rows by remember { mutableStateOf(p.env.mapIndexed { i, e -> EnvRow(-i - 1, e.key, if (e.secret) "" else e.value, if (e.secret) e.value else null, e.key) }) }
-    val busy = app.isDoing("profile.put", "station" to station, "id" to p.id)
+    var rows by remember { mutableStateOf(env.mapIndexed { i, e -> EnvRow(-i - 1, e.key, if (e.secret) "" else e.value, if (e.secret) e.value else null, e.key) }) }
     val patch = {
         buildJsonObject {
             val kept = rows.map { it.key.trim() }.toSet()
             val out = LinkedHashMap<String, String?>()
-            p.env.forEach { if (it.key !in kept) out[it.key] = null }
+            env.forEach { if (it.key !in kept) out[it.key] = null }
             rows.forEach { r ->
                 val key = r.key.trim()
                 if (key.isEmpty()) return@forEach
@@ -932,9 +941,9 @@ private fun ColumnScope.EnvSheet(station: String, p: Profile) {
         }
     }
     SheetGrab()
-    SheetHead(t("android-settings.env.title"))
+    SheetHead(title)
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(t("android-settings.env.note"), fontSize = 12.sp, color = C.muted)
+        Text(note, fontSize = 12.sp, color = C.muted)
         rows.forEach { r ->
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -950,9 +959,9 @@ private fun ColumnScope.EnvSheet(station: String, p: Profile) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             Button(t("common.cancel"), primary = false) { app.sheet = null }
             Button(t("common.save"), primary = true, enabled = !busy) {
-                val env = patch()
+                val changed = patch()
                 app.sheet = null
-                app.act(t("android-settings.env.saveWhat"), t("android-settings.saved")) { app.api(station).putProfile(p.id, buildJsonObject { put("env", env) }) }
+                app.act(t("android-settings.env.saveWhat"), t("android-settings.saved")) { save(changed) }
             }
         }
     }

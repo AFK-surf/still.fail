@@ -1,16 +1,16 @@
-import { useDoing } from "../doing.ts";
+import { useDoing, useDoingFailed } from "../doing.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
 // The workspace's stations on a narrow screen, as the Android app has them (apps/android/…/screens/Stations.kt): each
 // with the buddy's face for its state and its load as rings; one station's page is the machine (its load, network,
 // versions), with how many connects and profiles run on it (settings' lists have them, ./Settings.tsx).
-import { useReady } from "../core/react.ts";
+import { useCall, useReady } from "../core/react.ts";
 import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import { LoginCard, useMachineLogins } from "../MachineLogins.tsx";
 import * as loginsCss from "../MachineLogins.css.ts";
 import { useJoinable, useMemberships, useStations, type StationView } from "../api.ts";
-import type { Host, JoinableStation, StationNet } from "../core/shapes.ts";
+import type { EnvVar, Host, JoinableStation, StationNet } from "../core/shapes.ts";
 import { illustrationUrl } from "../brand.tsx";
 import { Check, ChevronRight, Close, ImageUpload, More } from "@stillfail/ui/icons.tsx";
 import { cloud, useWorkspace } from "../cloud/api.ts";
@@ -27,7 +27,9 @@ import { emojiMark, firstEmoji, glyphMark, kindOf, NO_MARK, pictureMark, picture
 import * as markCss from "../StationMark.css.ts";
 import { RetryPill } from "../Connection.tsx";
 import { MeterChips } from "../components.tsx";
-import { Button, Card, Field, Illustration, LinkButton, ListCard, ListRow, NavBar, NavButton, PickRow, PlaceHead, SectionHeader, Seg } from "./parts.tsx";
+import { Button, Card, FailedMark, Field, Illustration, LinkButton, ListCard, ListRow, NavBar, NavButton, PickRow, PlaceHead, SectionHeader, Seg } from "./parts.tsx";
+import { EnvSheet } from "./Profiles.tsx";
+import * as profilesCss from "./Profiles.css.ts";
 import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import * as waitCss from "@stillfail/ui/waiting.css.ts";
 import { usePlaceActions } from "./placeActions.tsx";
@@ -309,6 +311,8 @@ export function StationScreen() {
           {/* What macOS lets its still.fail Helper do (a Mac's station only), each grant asked for from here. */}
           {s.online && s.overview?.permissions && <PermissionsCard station={s.station} permissions={s.overview.permissions} />}
           <Logins station={s.station} marked={login ?? null} />
+          {/* The variables what it starts for its agents runs with (docs/agent-env.md); none from a station from before them. */}
+          {s.overview?.agentEnv && <AgentEnv station={s.station} env={s.overview.agentEnv} manager={manager} />}
           {manager && <Workspaces s={s} />}
           {s.online && s.overview && <Versions station={s.station} updates={s.overview.updates} manager={manager} beta={s.betaOffered ?? false} />}
           <div style={{ height: 30 }} />
@@ -342,6 +346,39 @@ function Logins({ station, marked }: { station: string; marked: string | null })
       <p className={loginsCss.phoneLead}>{t("web-main.logins.lead")}</p>
     </>
   );
+}
+
+/**
+ * The variables everything it starts for its agents runs with (docs/agent-env.md: a proxy, mostly), a row each, a
+ * secret's value masked; its managers edit them in a sheet (as a custom profile's, ./Profiles.tsx).
+ */
+function AgentEnv({ station, env, manager }: { station: string; env: EnvVar[]; manager: boolean }) {
+  const app = useApp();
+  const call = useCall();
+  if (env.length === 0 && !manager) return null;
+  return (
+    <>
+      <SectionHeader title={t("web-mobile.stations.agentEnv")} start={24} />
+      <ListCard>
+        {env.length === 0 && <ListRow><span className={`${partsCss.mGrow} ${partsCss.mMuted}`}>{t("web-mobile.stations.agentEnvEmpty")}</span></ListRow>}
+        {env.map((e) => <ListRow key={e.key}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={`${listsCss.mRowTitle} ${profilesCss.mMono}`}>{e.key}</span><span className={`${listsCss.mRowNote} ${profilesCss.mMono}`}>{e.value}</span></span></ListRow>)}
+        {manager && (
+          <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <EnvSheet env={env} title={t("web-mobile.stations.agentEnv")} note={t("web-mobile.stations.agentEnvNote")}
+            doing={["agentEnv.set", { station }]} save={(patch) => call("agentEnv.set", { station, env: patch })} /> })}>
+            <span className={`${partsCss.mGrow} ${partsCss.mAccent} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.editEnv")}</span>
+            <AgentEnvDoing station={station} />
+          </ListRow>
+        )}
+      </ListCard>
+    </>
+  );
+}
+
+/** Saved (the sheet gone): a spinner until the station has them; why it failed, a moment. */
+function AgentEnvDoing({ station }: { station: string }) {
+  const busy = useDoing("agentEnv.set", { station });
+  const failed = useDoingFailed("agentEnv.set", { station });
+  return busy ? <Spinner /> : failed ? <FailedMark error={failed} /> : null;
 }
 
 /** The workspaces it is in, for the owners and admins of its home one (this), once it is in more than one (as the wide
