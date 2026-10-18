@@ -12,7 +12,7 @@ BID=dev.mbui.demo
 DEV_NAME="mbui-iphone"
 SDK=$(xcrun --sdk iphonesimulator --show-sdk-path)
 CC="xcrun --sdk iphonesimulator clang -arch arm64 -mios-simulator-version-min=17.0 -isysroot $SDK"
-CFLAGS="-I$MOON_HOME/include -Isrc/host -Iios/shim -fwrapv -fno-strict-aliasing -Wno-unused-value -O2 -DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_MIMALLOC"
+CFLAGS="-I$MOON_HOME/include -Isrc/host -Iios/shim -fwrapv -fno-strict-aliasing -Wno-unused-value -O2 -DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_SYSTEM"
 
 device() {
   local id
@@ -43,9 +43,6 @@ case "${1:-build}" in
     for f in runtime env utf sync_io backtrace; do
       [ -f $MOON_HOME/lib/runtime/$f.c ] && { $CC $CFLAGS -c $MOON_HOME/lib/runtime/$f.c -o $OUT/obj/rt_$f.o 2>$OUT/rt_$f.err || echo "skip runtime/$f.c: $(head -1 $OUT/rt_$f.err)"; }
     done
-    # The runtime's allocator and entry points ship only as a prebuilt macOS
-    # object; it is plain arm64 code, so retag it for the iOS simulator.
-    python3 "$D/macho_retag.py" $MOON_HOME/lib/libmoonbitrun.o $OUT/obj/moonbitrun_sim.o 7 17.0
     for f in apple_render apple_text ios_app; do
       $CC $CFLAGS -fobjc-arc -c src/host/$f.m -o $OUT/obj/$f.o
     done

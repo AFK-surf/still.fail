@@ -1,0 +1,18 @@
+package dev.mbui;
+
+/** libmbui.so: the MoonBit app, its runtime and the C side of the host. */
+final class Native {
+    static {
+        System.loadLibrary("mbui");
+    }
+
+    static native void start();
+    static native void surfaceCreated();
+    static native void resize(int w, int h);
+    static native boolean frame(float w, float h, float scale, double now);
+    static native void pointer(int kind, float x, float y);
+    static native void key(int code, int mods);
+    static native void text(int kind, String s, int a, int b);
+    static native int atlasTexture();
+    static native boolean snapshot(String path);
+}
