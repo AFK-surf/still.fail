@@ -8,7 +8,6 @@ import { HttpError } from "../read/views.ts";
 import { type Answer, type Request, error, json, queryPairs } from "./request.ts";
 import { routes as chats } from "./routes/chats.ts";
 import { routes as usage } from "./routes/usage.ts";
-import { routes as search } from "./routes/search.ts";
 import { routes as sessions } from "./routes/sessions.ts";
 import { routes as events } from "./routes/events.ts";
 import { routes as marks } from "./routes/marks.ts";
@@ -128,7 +127,7 @@ export class Admin {
       agents: deps.agents,
     };
     this.tools = tools;
-    this.routes = [...chats(tools), ...usage(tools), ...search(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools), ...(deps.agents?.updates ? updates({ updates: deps.agents.updates }) : []),
+    this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools), ...(deps.agents?.updates ? updates({ updates: deps.agents.updates }) : []),
       ...(deps.agents?.slack && deps.store
         ? slack({
             slack: deps.agents.slack,

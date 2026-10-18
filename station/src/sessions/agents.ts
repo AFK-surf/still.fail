@@ -40,10 +40,6 @@ import { Forwards } from "../mesh/peer-forward.ts";
 import { nameOf, peerNamed } from "../mesh/peer-http.ts";
 import { McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
 import { remoteTools } from "../tools/remote.ts";
-import { Search } from "../search/search.ts";
-import { FileSearch } from "../search/files.ts";
-import { rootsOf } from "../drive/drive.ts";
-import { SEARCH, searchForPeer, searchTools } from "../tools/search.ts";
 import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
 import { Sharing } from "../share/index.ts";
 import { ChatShares } from "../xshare/index.ts";
@@ -77,8 +73,6 @@ export type AgentsParts = {
   remote: Remote;
   mcp: McpEndpoint;
   config: ConfigFile;
-  /// What a search finds on this station (docs/search.md).
-  search: Search;
   updates: Updates;
   accounts: Accounts;
   /// What this station shares with the workspace's other stations, and uses of theirs.
@@ -254,8 +248,6 @@ export const AgentsLive = (control: Control) =>
             return createForPeer(hub, peer, request, ws);
           case NOTICE:
             return noticeForPeer(hub, peer, request, ws);
-          case SEARCH:
-            return searchForPeer({ search, link: (session) => hub.link(session) }, request, ws, cloud.home());
           default:
             return fromPeer(hub, peer, request, ws);
         }
@@ -306,27 +298,6 @@ export const AgentsLive = (control: Control) =>
       // The profiles' homes elsewhere and the machine's runtime logins are the station's own too (ops/own.ts): never
       // reached through the drive, the device tools or a search.
       own.add(() => [...hub.config().profiles.map((p) => p.home), claudeCredentialsFile(process.env), codexAuthFile(process.env)]);
-      // What a search finds here, looked for as it is asked (docs/search.md): the machine's files too.
-      const search = new Search({
-        data,
-        files: new FileSearch({
-          protect: () => own.paths(),
-          roots: (ws) => rootsOf(config.raw(), ws),
-          personal: () => config.raw()?.search?.personal === true,
-          // Documents, Desktop and Downloads through still.fail Helper, where it holds their grant (looked at in the
-          // background where not known yet; nothing asks for one on a search's behalf).
-          helper: helperFiles
-            ? {
-                granted: (tops) => {
-                  const unknown = tops.filter((t) => helperFiles.known(t) === undefined);
-                  if (unknown.length > 0) helperFiles.check(unknown);
-                  return tops.filter((t) => helperFiles.known(t)?.state === "granted");
-                },
-                search: (top, query, most, protect) => helperFiles.search(top, query, most, protect),
-              }
-            : null,
-        }),
-      });
       const tools = [
         ...chatTools(hub),
         ...archiveTools(hub),
@@ -344,24 +315,6 @@ export const AgentsLive = (control: Control) =>
         ...computerTools(computer),
         ...forwardTools(forwards),
       ];
-      tools.push(...searchTools({
-        search,
-        workspaceOf: (session) => {
-          const row = store.getSession(session);
-          if (!row) return null;
-          const home = cloud.home();
-          return { workspace: row.ws ?? home ?? "", home: row.ws === null || row.ws === home };
-        },
-        link: (session) => hub.link(session),
-        stations: async (workspace) => {
-          const roster = await remote.ask("", { method: "peers", workspace });
-          const own = place()?.station ?? "";
-          return (Array.isArray(roster?.stations) ? roster.stations : [])
-            .filter((e: any) => typeof e?.id === "string" && e.id !== "")
-            .map((e: any) => ({ id: e.id, name: typeof e.name === "string" ? e.name : e.id, here: e.id === own }));
-        },
-        ask: (station, request) => remote.ask(station, request),
-      }));
       // The station's and the runtimes' versions, read at start and every few hours; updated from the pages, or by
       // itself while nothing runs and nothing is asked of it (auto update), watched or not.
       const updates = makeUpdates({
@@ -593,7 +546,6 @@ export const AgentsLive = (control: Control) =>
         control.failed(`the agents' side did not start: ${(e as Error).message}`);
       })));
 
-      search.start();
 
       // What the chats' people hear about while no client of theirs runs: pushed by the control plane.
       const notifier = new Notifier(store, readers, cloud, (notices, ws) => Effect.runPromise(plane.notify(notices, ws)));
@@ -659,7 +611,6 @@ export const AgentsLive = (control: Control) =>
             await hub.shutdown();
           }
           await jobs.shutdown();
-          await search.stop();
           await updates.close();
           await accounts.close();
           for (const stop of unlistenOverview) stop();
@@ -670,6 +621,6 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      return Agents.of({ pageOf, previousGone: previous, hub, jobs, remote, mcp, config, search, updates, accounts, sharing: sharing!, xshare, peers, forwards, slack, overview: view, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      return Agents.of({ pageOf, previousGone: previous, hub, jobs, remote, mcp, config, updates, accounts, sharing: sharing!, xshare, peers, forwards, slack, overview: view, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
     }),
   );
