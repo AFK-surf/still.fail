@@ -225,9 +225,11 @@ pub fn Ctx::image(
   fit? : Fit = FitCover,
   radius? : Double = 0.0,
   bg? : Int64 = 0xE5E5EAFFL,
+  fade? : Bool = true,
 ) -> Int {
   let i = self.alloc(kind_image)
   let n = self.nodes[i]
+  n.fade = fade
   n.text = src
   n.w = w
   n.h = h
@@ -275,7 +277,17 @@ fn image_leaf_size(
 
 ///|
 fn Ctx::paint_image(self : Ctx, n : Node, alpha : Double) -> Unit {
-  self.draw_image(n.text, n.x, n.y, n.fw, n.fh, n.fit, n.radius, alpha)
+  self.draw_image(
+    n.text,
+    n.x,
+    n.y,
+    n.fw,
+    n.fh,
+    n.fit,
+    n.radius,
+    alpha,
+    fade=n.fade,
+  )
 }
 
 ///|
@@ -291,6 +303,7 @@ fn Ctx::draw_image(
   fit : Fit,
   radius : Double,
   alpha : Double,
+  fade? : Bool = true,
 ) -> Unit {
   // a side still 0 waits for the image's proportions: load it anyway,
   // small if it has no size yet at all
@@ -303,7 +316,11 @@ fn Ctx::draw_image(
   if bw <= 0.0 || bh <= 0.0 {
     return
   }
-  let fade = dclamp((self.now - e.ready_at) / 150.0, 0.0, 1.0)
+  let fade = if fade {
+    dclamp((self.now - e.ready_at) / 150.0, 0.0, 1.0)
+  } else {
+    1.0
+  }
   if fade < 1.0 {
     self.wants_frame = true
   }

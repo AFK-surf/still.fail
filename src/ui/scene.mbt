@@ -169,14 +169,14 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   if n.shadow > 0.0 {
     self.push_inst(
       n.x,
-      n.y + n.shadow * 0.35,
+      n.y + (if n.shadow_y >= 0.0 { n.shadow_y } else { n.shadow * 0.35 }),
       n.fw,
       n.fh,
       n.radius,
       2.0,
       0.0,
       n.shadow,
-      0x0000002EL,
+      n.shadow_c,
       alpha,
       0.0,
       0.0,

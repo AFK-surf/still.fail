@@ -21,7 +21,14 @@ fn Node::text_layout(self : Node, max_w : Double) -> TextLayout {
       return tl
     _ => ()
   }
-  let tl = layout_text(self.text, self.font_size, self.weight, max_w, self.wrap)
+  let tl = layout_text(
+    self.text,
+    self.font_size,
+    self.weight,
+    max_w,
+    self.wrap,
+    line=self.line_h,
+  )
   self.tl = Some(tl)
   self.tl_max = max_w
   tl
@@ -31,7 +38,7 @@ fn Node::text_layout(self : Node, max_w : Double) -> TextLayout {
 /// One-line text cut to fit `w`, ending in an ellipsis.
 fn ellipsized(n : Node, tl : TextLayout, w : Double) -> TextLayout {
   let s = tl.shaped
-  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false)
+  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false, line=n.line_h)
   let room = w - dots.w
   let mut end = 0
   while end < s.starts.length() && tl.xs[end] + s.adv[end] <= room {
@@ -43,7 +50,7 @@ fn ellipsized(n : Node, tl : TextLayout, w : Double) -> TextLayout {
   }
   let cut = if end < s.starts.length() { s.starts[end] } else { s.len }
   let text = n.text.view(end_offset=cut).to_string() + "…"
-  layout_text(text, n.font_size, n.weight, 1.0e9, false)
+  layout_text(text, n.font_size, n.weight, 1.0e9, false, line=n.line_h)
 }
 
 ///|
@@ -108,6 +115,12 @@ fn Ctx::flex_tree(self : Ctx, i : Int, parent : Dir?) -> @flex.Node {
   }
   if n.max_h < 1.0e9 {
     s.max_height = Pt(n.max_h)
+  }
+  if n.min_w > 0.0 {
+    s.min_width = Pt(n.min_w)
+  }
+  if n.max_w < 1.0e9 {
+    s.max_width = Pt(n.max_w)
   }
   let in_row = parent == Some(Row)
   let in_col = parent == Some(Column)

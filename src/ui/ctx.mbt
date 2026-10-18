@@ -238,6 +238,10 @@ pub fn Ctx::box(
   pad? : Double = 0.0,
   padx? : Double = -1.0,
   pady? : Double = -1.0,
+  pl? : Double = -1.0,
+  pr? : Double = -1.0,
+  pt? : Double = -1.0,
+  pb? : Double = -1.0,
   gap? : Double = 0.0,
   align? : Align = AStretch,
   justify? : Justify = JStart,
@@ -246,6 +250,11 @@ pub fn Ctx::box(
   border? : Double = 0.0,
   border_color? : Int64 = 0L,
   shadow? : Double = 0.0,
+  shadow_color? : Int64 = 0x0000002EL,
+  shadow_y? : Double = -1.0,
+  min_w? : Double = 0.0,
+  max_w? : Double = 1.0e9,
+  min_h? : Double = 0.0,
   clip? : Bool = false,
   tx? : Double = 0.0,
   ty? : Double = 0.0,
@@ -260,10 +269,16 @@ pub fn Ctx::box(
   n.h = h
   let px = if padx >= 0.0 { padx } else { pad }
   let py = if pady >= 0.0 { pady } else { pad }
-  n.pad_l = px
-  n.pad_r = px
-  n.pad_t = py
-  n.pad_b = py
+  // one side said on its own wins over both sides
+  n.pad_l = if pl >= 0.0 { pl } else { px }
+  n.pad_r = if pr >= 0.0 { pr } else { px }
+  n.pad_t = if pt >= 0.0 { pt } else { py }
+  n.pad_b = if pb >= 0.0 { pb } else { py }
+  n.min_w = min_w
+  n.max_w = max_w
+  n.min_h = min_h
+  n.shadow_c = shadow_color
+  n.shadow_y = shadow_y
   n.gap = gap
   n.align = align
   n.justify = justify
@@ -377,9 +392,11 @@ pub fn Ctx::text(
   color? : Int64 = 0x1D1D1FFFL,
   wrap? : Bool = true,
   w? : Size = Auto,
+  line? : Double = 0.0,
 ) -> Int {
   let i = self.alloc(kind_text)
   let n = self.nodes[i]
+  n.line_h = line
   n.text = s
   n.font_size = size
   n.weight = weight
@@ -498,4 +515,32 @@ fn Ctx::wake_at_time(self : Ctx, t : Double) -> Unit {
 pub fn Ctx::stable(self : Ctx) -> Bool {
   ignore(self)
   bench.mode < 0
+}
+
+///|
+/// Where the thing with `id` was drawn last frame (x, y, w, h), as far as it
+/// showed: for parts that follow the pointer across them (a slider).
+pub fn Ctx::rect_of(self : Ctx, id : Int) -> (Double, Double, Double, Double)? {
+  let mut k = self.hit_ids.length() - 1
+  while k >= 0 {
+    if self.hit_ids[k] == id {
+      let r = k * 4
+      return Some(
+        (
+          self.hit_rects[r],
+          self.hit_rects[r + 1],
+          self.hit_rects[r + 2] - self.hit_rects[r],
+          self.hit_rects[r + 3] - self.hit_rects[r + 1],
+        ),
+      )
+    }
+    k = k - 1
+  }
+  None
+}
+
+///|
+/// The pointer, and whether it is down.
+pub fn Ctx::pointer(self : Ctx) -> (Double, Double, Bool) {
+  (self.px, self.py, self.down)
 }

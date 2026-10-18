@@ -173,9 +173,12 @@ fn layout_text(
   max_w : Double,
   wrap : Bool,
   indent? : Double = 0.0,
+  line? : Double = 0.0,
 ) -> TextLayout {
   let s = shape(text, size, weight)
-  let (asc, desc, line_h) = font_metrics(size, weight)
+  let (asc, desc, own_h) = font_metrics(size, weight)
+  // a line as high as asked, the glyphs in its middle
+  let line_h = if line > 0.0 { line } else { own_h }
   let ascent = (line_h - asc - desc) / 2.0 + asc
   let n = s.starts.length()
   let xs = Array::make(n, 0.0)

@@ -282,18 +282,31 @@ static void run_script_step(int step) {
     }
     [v requestFrame];
   } else if (strcmp(script, "books") == 0) {
-    // the shelf, a book opened, the next page, the menu, the next chapter
+    // the shelf, a book opened, the next page, then the reader's panels:
+    // with a mouse the contents and the layout docked at the right; in a
+    // phone's window the bars a tap in the middle brings, and the contents'
+    // sheet
+    int narrow = s.width < 700;
     switch (step) {
       case 30: shot("books-1-shelf"); break;
-      case 31: mb_cb.pointer(0, 80, 150, 0); mb_cb.pointer(2, 80, 150, 0); break;
-      case 50: shot("books-2-page"); break;
-      case 51: mb_cb.pointer(0, s.width - 40, 300, 0); mb_cb.pointer(2, s.width - 40, 300, 0); break;
+      case 31: {
+        double x = narrow ? 70 : 110, y = narrow ? 200 : 220;
+        mb_cb.pointer(0, x, y, 0); mb_cb.pointer(2, x, y, 0); break;
+      }
+      case 60: shot("books-2-page"); break;
+      case 61: mb_cb.pointer(0, s.width - 30, 400, 0); mb_cb.pointer(2, s.width - 30, 400, 0); break;
       case 90: shot("books-3-next"); break;
-      case 91: mb_cb.pointer(0, s.width / 2, 300, 0); mb_cb.pointer(2, s.width / 2, 300, 0); break;
-      case 110: shot("books-4-menu"); break;
-      case 111: mb_cb.pointer(0, s.width - 60, 28, 0); mb_cb.pointer(2, s.width - 60, 28, 0); break;
-      case 150: shot("books-5-chapter"); break;
-      case 151: exit(0);
+      case 91:
+        if (narrow) { mb_cb.pointer(0, s.width / 2, s.height / 2, 0); mb_cb.pointer(2, s.width / 2, s.height / 2, 0); }
+        else { mb_cb.pointer(0, s.width - 62, 22, 0); mb_cb.pointer(2, s.width - 62, 22, 0); }
+        break;
+      case 120: shot(narrow ? "books-4-bars" : "books-4-contents"); break;
+      case 121: {
+        double x = narrow ? 81 : s.width - 28, y = narrow ? s.height - 45 : 22;
+        mb_cb.pointer(0, x, y, 0); mb_cb.pointer(2, x, y, 0); break;
+      }
+      case 160: shot(narrow ? "books-5-contents" : "books-5-layout"); break;
+      case 161: exit(0);
     }
     [v requestFrame];
   } else if (strcmp(script, "photos") == 0) {
@@ -324,7 +337,11 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
-    NSRect r = NSMakeRect(120, 120, 900, 720);
+    // MBUI_WIN=<w>x<h>: the window's size (a phone's, for the narrow layouts)
+    double ww = 900, wh = 720;
+    const char *win = getenv("MBUI_WIN");
+    if (win) sscanf(win, "%lfx%lf", &ww, &wh);
+    NSRect r = NSMakeRect(120, 120, ww, wh);
     NSWindow *w = [[NSWindow alloc]
         initWithContentRect:r
                   styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |

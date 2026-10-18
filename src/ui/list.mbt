@@ -374,3 +374,16 @@ fn Ctx::paint_scrollbar(self : Ctx, n : Node, alpha : Double) -> Unit {
     None => ()
   }
 }
+
+///|
+/// Scrolls list `key` (as given to Ctx::list in the same scope) so row
+/// `item` is at its top, the end kept in view.
+pub fn Ctx::list_scroll_to(self : Ctx, key : String, item : Int) -> Unit {
+  match self.lists.get(self.id(key)) {
+    Some(st) => {
+      st.scroll_to(item)
+      self.wants_frame = true
+    }
+    None => ()
+  }
+}

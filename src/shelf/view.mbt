@@ -1,6 +1,14 @@
-// The bookshelf: a grid of books, and a reader that turns pages and keeps
-// the place (chapter and offset, as the media service stores it), over a
-// Source.
+// The bookshelf and the reader, in still.fail's design (ember web/ui: the
+// reader is viewer/Reader.tsx and its bars, the shelf a page as the drive's
+// is): a grid of books, and a reader that turns pages and keeps the place
+// (chapter and offset, as the media service stores it), over a Source.
+
+///|
+priv enum Panel {
+  NoPanel
+  Contents
+  Layout
+} derive(Eq)
 
 ///|
 struct Reading {
@@ -10,43 +18,50 @@ struct Reading {
   mut offset : Int
   mut page : Int
   mut pages : @ui.Pages?
-  mut menu : Bool
+  /// the phone's bars, shown by a tap in the middle
+  mut bars : Bool
+  mut panel : Panel
+  /// the contents scrolled to the chapter read when opened
+  mut contents_at : Int
+}
+
+///|
+/// How the reader lays text out (viewer/readerStyle.ts): its size, its
+/// lines' height, the room either side, indented paragraphs, the paper.
+struct Prefs {
+  mut size : Double
+  mut line : Double
+  mut margin : Double
+  mut indent : Bool
+  /// 0 white, 1 green, 2 grey (light papers; night is the app's dark)
+  mut paper : Int
 }
 
 ///|
 struct App {
   mut reading : Reading?
+  prefs : Prefs
 }
 
 ///|
-let app : App = { reading: None }
+let app : App = {
+  reading: None,
+  prefs: { size: 18.0, line: 1.7, margin: 22.0, indent: true, paper: 0 },
+}
 
 ///|
 fn open(book : BookInfo) -> Unit {
   let (chapter, offset) = book.place.unwrap_or((0, 0))
-  app.reading = Some({ book, chapter, offset, page: 0, pages: None, menu: false })
-}
-
-///|
-/// The chapter's pages at this size, cut again when the size changes; the
-/// page shown is the one holding the reading position.
-fn pages_for(
-  r : Reading,
-  blocks : Array[@ui.Block],
-  w : Double,
-  h : Double,
-) -> @ui.Pages {
-  match r.pages {
-    Some(p) if p.width == w && p.height == h => p
-    _ => {
-      // room at the bottom for the page number
-      let style = { ..@ui.PageStyle::default(), margin_y: 44.0 }
-      let p = @ui.paginate(blocks, w, h, style~)
-      r.pages = Some(p)
-      r.page = p.page_of(r.offset)
-      p
-    }
-  }
+  app.reading = Some({
+    book,
+    chapter,
+    offset,
+    page: 0,
+    pages: None,
+    bars: false,
+    panel: NoPanel,
+    contents_at: -1,
+  })
 }
 
 ///|
@@ -61,199 +76,311 @@ fn go_chapter(r : Reading, chapter : Int, at_end : Bool) -> Unit {
 }
 
 ///|
-fn shelf(c : @ui.Ctx, src : Source) -> Unit {
-  let books = match (src.books)() {
-    Some(Ok(b)) => b
-    Some(Err(why)) => {
-      message(c, "书架读不到", why)
-      return
-    }
-    None => {
-      message(c, "正在读书架…", "")
-      return
-    }
-  }
-  let cols = if c.width < 520.0 { 3 } else if c.width < 900.0 { 4 } else { 6 }
-  c.column(w=Fill(1.0), h=Fill(1.0), bg=0xF5F2EBFFL, fn() {
-    c.box(dir=Row, padx=20.0, pady=14.0, align=ACenter, fn() {
-      c.text("书架", size=22.0, weight=700, wrap=false) |> ignore
-      c.spacer()
-      c.text("\{books.length()} 本", size=13.0, color=0x8E8E93FFL, wrap=false)
-      |> ignore
-    })
-    |> ignore
-    c.list("shelf", (books.length() + cols - 1) / cols, 240.0, fn(r) {
-      c.box(dir=Row, padx=14.0, pady=8.0, gap=14.0, align=AStart, fn() {
-        for k in 0..<cols {
-          let i = r * cols + k
-          if i < books.length() {
-            book_cell(c, books[i])
-          } else {
-            c.box(w=Fill(1.0), fn() {  }) |> ignore
-          }
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-fn book_cell(c : @ui.Ctx, b : BookInfo) -> Unit {
-  let id = c.id("book-" + b.id)
-  if c.clicked(id) {
-    open(b)
-  }
-  c.box(w=Fill(1.0), gap=6.0, id~, fn() {
-    match b.cover {
-      Some(src) =>
-        c.image(src, h=Px(150.0), radius=6.0, bg=color_of(b.id)) |> ignore
-      // no cover: the title on a colour
-      None =>
-        c.box(
-          h=Px(150.0),
-          radius=6.0,
-          bg=color_of(b.id),
-          shadow=4.0,
-          pad=10.0,
-          justify=JEnd,
-          fn() {
-            c.text(b.title, size=15.0, weight=700, color=0xFFFFFFFFL) |> ignore
-            c.text(b.author, size=11.0, color=0xFFFFFFCCL, wrap=false) |> ignore
-          },
-        )
-        |> ignore
-    }
-    c.text(b.title, size=13.0, weight=600, wrap=false) |> ignore
-    let progress = match (b.read, b.place) {
-      (Some(r), _) => "读了 \{(r * 100.0).round().to_int()}%"
-      (_, Some((ch, _))) => "读到第 \{ch + 1} 章 / 共 \{b.chapters} 章"
-      _ => "未读"
-    }
-    c.text(progress, size=11.0, color=0x8E8E93FFL, wrap=false) |> ignore
-  })
-  |> ignore
-}
-
-///|
-fn reader(c : @ui.Ctx, src : Source, r : Reading) -> Unit {
-  let w = c.width
-  let h = c.height
-  let blocks = match (src.chapter)(r.book.id, r.chapter) {
-    Some(Ok(b)) => b
-    Some(Err(why)) => {
-      message(c, "这一章读不到", why)
-      back_button(c)
-      return
-    }
-    None => {
-      message(c, "正在读第 \{r.chapter + 1} 章…", "")
-      return
-    }
-  }
-  let titles = (src.toc)(r.book.id).unwrap_or([])
-  let title = if r.chapter < titles.length() {
-    titles[r.chapter]
-  } else {
-    "第 \{r.chapter + 1} 章"
-  }
-  let pages = pages_for(r, blocks, w, h)
-  c.column(w=Fill(1.0), h=Fill(1.0), bg=0xF7F3EAFFL, fn() {
-    let shown = c.pager(
-      "pages-\{r.chapter}",
-      pages.count(),
-      r.page,
-      fn(i) { c.page(pages, i) |> ignore },
-      on_edge=fn(dir) { go_chapter(r, r.chapter + dir, dir < 0) },
-      on_middle=fn() { r.menu = !r.menu },
-    )
-    if shown != r.page && r.pages is Some(_) {
-      r.page = shown
-      r.offset = pages.pages[shown].start
-      (src.save_place)(r.book.id, r.chapter, r.offset)
-    }
-  })
-  |> ignore
-  // over the page: its number at the bottom, and the menu on a tap in the
-  // middle
-  c.layer(fn() {
-    if r.menu {
-      c.box(
-        dir=Row,
-        padx=16.0,
-        pady=12.0,
-        gap=12.0,
-        align=ACenter,
-        bg=0xFFFFFFF2L,
-        shadow=6.0,
-        fn() {
-          if c.button("书架", key="back", bg=0xE5E5EAFFL, color=0x1D1D1FFFL) {
-            app.reading = None
-          }
-          c.text(r.book.title, size=15.0, weight=600, wrap=false) |> ignore
-          c.spacer()
-          if c.button("上一章", key="prev", bg=0xE5E5EAFFL, color=0x1D1D1FFFL) {
-            go_chapter(r, r.chapter - 1, false)
-          }
-          if c.button("下一章", key="next", bg=0xE5E5EAFFL, color=0x1D1D1FFFL) {
-            go_chapter(r, r.chapter + 1, false)
-          }
-        },
-      )
-      |> ignore
-    }
-    c.spacer()
-    c.box(dir=Row, padx=24.0, pady=10.0, fn() {
-      c.text(title, size=11.0, color=0x8E8E93FFL, wrap=false)
-      |> ignore
-      c.spacer()
-      c.text("\{r.page + 1} / \{pages.count()}", size=11.0, color=0x8E8E93FFL, wrap=false)
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
 /// The shelf, or the book being read.
 pub fn view(c : @ui.Ctx, src : Source) -> Unit {
+  @sf.begin(c) |> ignore
   match app.reading {
     Some(r) => reader(c, src, r)
     None => shelf(c, src)
   }
 }
 
+// ---------------------------------------------------------------------------
+// The shelf: a page (pages.css.ts) with its head, the books in a grid of
+// tiles whose ground shows under the pointer (as the drive's entries)
+
 ///|
-fn message(c : @ui.Ctx, head : String, line : String) -> Unit {
-  c.column(w=Fill(1.0), h=Fill(1.0), bg=0xF5F2EBFFL, align=ACenter, justify=JCenter, gap=8.0, fn() {
-    c.text(head, size=17.0, weight=600, wrap=false) |> ignore
-    if line.length() > 0 {
-      c.text(line, size=13.0, color=0x8E8E93FFL) |> ignore
+fn dmin(a : Double, b : Double) -> Double {
+  if a < b {
+    a
+  } else {
+    b
+  }
+}
+
+///|
+fn dmax(a : Double, b : Double) -> Double {
+  if a > b {
+    a
+  } else {
+    b
+  }
+}
+
+///|
+/// How the grid fits: columns, a tile's width, the gap, and how far in the
+/// tiles start (the page's padding less theirs: their ground reaches past
+/// the line the page's words are on, the covers stand on it).
+fn grid(c : @ui.Ctx) -> (Int, Double, Double, Double) {
+  let t = @sf.theme()
+  let pad = if t.narrow { 16.0 } else { 40.0 }
+  let tile_pad = tile_pad()
+  let room = dmin(c.width - 2.0 * pad, 1120.0) + 2.0 * tile_pad
+  let gap = if t.narrow { 2.0 } else { 4.0 }
+  let least = if t.narrow { 104.0 } else { 152.0 }
+  let mut cols = ((room + gap) / (least + gap)).floor().to_int()
+  if cols < 2 {
+    cols = 2
+  }
+  let tile = (room - gap * (cols - 1).to_double()) / cols.to_double()
+  (cols, tile, gap, pad - tile_pad)
+}
+
+///|
+fn tile_pad() -> Double {
+  if @sf.theme().narrow {
+    6.0
+  } else {
+    8.0
+  }
+}
+
+///|
+/// A cover's height for its width: a book's proportions.
+fn cover_h(w : Double) -> Double {
+  (w * 1.42).round()
+}
+
+///|
+fn shelf(c : @ui.Ctx, src : Source) -> Unit {
+  let t = @sf.theme()
+  let p = t.p
+  let got = (src.books)()
+  let (cols, tile, gap, inset) = grid(c)
+  let meta = match got {
+    Some(Ok(b)) if b.length() > 0 => "\{b.length()} 本书"
+    _ => ""
+  }
+  c.column(w=Fill(1.0), h=Fill(1.0), bg=p.bg, fn() {
+    // the phone's head stays over what scrolls; the wide page's goes with it
+    if t.narrow {
+      c.box(pl=20.0, pr=12.0, pt=14.0, pb=6.0, fn() { @sf.page_head(c, "书架", meta~) })
+      |> ignore
+    }
+    let books = match got {
+      Some(Ok(b)) => b
+      Some(Err(why)) => {
+        waiting(c, cols, tile, gap, inset, error=Some(why))
+        return
+      }
+      None => {
+        waiting(c, cols, tile, gap, inset)
+        return
+      }
+    }
+    if books.length() == 0 {
+      if !t.narrow {
+        c.box(pl=40.0, pr=40.0, pt=32.0, fn() { @sf.page_head(c, "书架") }) |> ignore
+      }
+      empty(c)
+      return
+    }
+    let rows = (books.length() + cols - 1) / cols
+    let head = if t.narrow { 0 } else { 1 }
+    c.list("shelf", rows + head + 1, cover_h(tile) + 60.0, fn(r) {
+      if r < head {
+        c.box(pl=40.0, pr=40.0, pt=32.0, pb=12.0, fn() {
+          @sf.page_head(c, "书架", meta~)
+        })
+        |> ignore
+      } else if r == rows + head {
+        // room under the last row (the page's 80 at its foot)
+        c.box(h=Px(if t.narrow { 40.0 } else { 72.0 }), fn() {  }) |> ignore
+      } else {
+        let row = r - head
+        c.box(dir=Row, pl=inset, pr=inset, pb=gap, gap~, align=AStart, fn() {
+          for k in 0..<cols {
+            let i = row * cols + k
+            if i < books.length() {
+              book_tile(c, books[i], tile)
+            } else {
+              c.box(w=Px(tile), fn() {  }) |> ignore
+            }
+          }
+        })
+        |> ignore
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A book: its cover, its name, how far it is read; its ground under the
+/// pointer (or a finger held on it).
+fn book_tile(c : @ui.Ctx, b : BookInfo, tile : Double) -> Unit {
+  let t = @sf.theme()
+  let p = t.p
+  let id = c.id("book-" + b.id)
+  if c.clicked(id) {
+    open(b)
+  }
+  let pad = tile_pad()
+  let inner = tile - 2.0 * pad
+  let ground = if c.pressed(id) {
+    @sf.alpha(p.text, 0.06)
+  } else if c.hovered(id) && !t.narrow {
+    p.hover
+  } else {
+    0L
+  }
+  c.box(w=Px(tile), pad~, gap=0.0, bg=ground, radius=@sf.r_field, id~, fn() {
+    cover(c, b, inner, @sf.r_field - pad)
+    c.box(h=Px(8.0), fn() {  }) |> ignore
+    c.text(
+      b.title,
+      size=t.t.ui,
+      weight=500,
+      color=p.text,
+      wrap=false,
+      line=t.t.ui_line,
+    )
+    |> ignore
+    let (line, part) = match (b.read, b.place) {
+      (Some(r), _) if r >= 0.995 => ("读完了", None)
+      (Some(r), _) if r > 0.0 => ("读了 \{(r * 100.0).round().to_int()}%", Some(r))
+      (_, Some((ch, _))) if ch > 0 =>
+        (
+          "第 \{ch + 1} 章 / 共 \{b.chapters} 章",
+          Some(ch.to_double() / dmax(b.chapters.to_double(), 1.0)),
+        )
+      _ => (if b.author != "" { b.author } else { "未读" }, None)
+    }
+    c.text(line, size=t.t.meta, color=p.muted, wrap=false, line=t.t.meta_line)
+    |> ignore
+    match part {
+      // how far: a hairline in the accent (as the drive's uploads)
+      Some(k) => {
+        c.box(h=Px(6.0), fn() {  }) |> ignore
+        c.box(dir=Row, h=Px(2.0), radius=1.0, clip=true, fn() {
+          c.box(w=Fill(k), h=Px(2.0), bg=p.accent, fn() {  }) |> ignore
+          c.box(w=Fill(1.0 - k), h=Px(2.0), bg=@sf.alpha(p.text, 0.1), fn() {  })
+          |> ignore
+        })
+        |> ignore
+      }
+      None => ()
     }
   })
   |> ignore
 }
 
 ///|
-fn back_button(c : @ui.Ctx) -> Unit {
-  c.layer(pad=16.0, align=AStart, fn() {
-    if c.button("书架", key="back-err", bg=0xE5E5EAFFL, color=0x1D1D1FFFL) {
-      app.reading = None
+/// Its cover, or its name on the paper when it has none; a hairline round
+/// it so a white cover still has an edge.
+fn cover(c : @ui.Ctx, b : BookInfo, w : Double, radius : Double) -> Unit {
+  let t = @sf.theme()
+  let p = t.p
+  let h = cover_h(w)
+  match b.cover {
+    Some(src) =>
+      c.box(w=Px(w), h=Px(h), radius~, border=1.0, border_color=@sf.alpha(p.text, 0.08), fn() {
+        c.image(src, w=Px(w), h=Px(h), radius~, bg=p.neutral_bg) |> ignore
+      })
+      |> ignore
+    None =>
+      c.box(
+        w=Px(w),
+        h=Px(h),
+        radius~,
+        bg=p.paper,
+        border=1.0,
+        border_color=@sf.alpha(p.text, 0.08),
+        pad=12.0,
+        gap=6.0,
+        justify=JEnd,
+        fn() {
+          c.text(b.title, size=t.t.title, weight=600, color=p.text, line=22.0)
+          |> ignore
+          if b.author != "" {
+            c.text(b.author, size=t.t.meta, color=p.muted, wrap=false) |> ignore
+          }
+        },
+      )
+      |> ignore
+  }
+}
+
+///|
+/// The shelf's first read (waiting.tsx Waiting): the tiles' shapes,
+/// breathing; what could not be read in a red pill over them, the shapes
+/// still and faded.
+fn waiting(
+  c : @ui.Ctx,
+  cols : Int,
+  tile : Double,
+  gap : Double,
+  inset : Double,
+  error? : String? = None,
+) -> Unit {
+  let t = @sf.theme()
+  let failed = error is Some(_)
+  c.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
+    if !t.narrow {
+      c.box(pl=40.0, pr=40.0, pt=32.0, pb=12.0, fn() { @sf.page_head(c, "书架") })
+      |> ignore
     }
+    match error {
+      Some(why) =>
+        c.box(align=ACenter, pt=14.0, pb=4.0, padx=20.0, fn() {
+          @sf.wait_pill(c, "书架读不到：" + why, error=true)
+        })
+        |> ignore
+      None => ()
+    }
+    let pad = tile_pad()
+    let inner = tile - 2.0 * pad
+    c.box(gap~, opacity=@sf.breath(c, failed~), fn() {
+      for _ in 0..<3 {
+        c.box(dir=Row, pl=inset, pr=inset, gap~, align=AStart, fn() {
+          for _ in 0..<cols {
+            c.box(w=Px(tile), pad~, gap=10.0, fn() {
+              @sf.bar(c, Px(inner), cover_h(inner), radius=@sf.r_field - pad)
+              @sf.bar(c, Px(inner * 0.7), 13.0)
+              @sf.bar(c, Px(inner * 0.45), 10.0)
+            })
+            |> ignore
+          }
+        })
+        |> ignore
+      }
+    })
+    |> ignore
   })
   |> ignore
 }
 
 ///|
-let palette : Array[Int64] = [
-  0x3A6EA5FFL, 0x7A4E9CFFL, 0x2F7D5BFFL, 0xB5562AFFL, 0x1F3B5BFFL, 0x8C6D1FFFL,
-  0xC2416BFFL,
-]
-
-///|
-fn color_of(id : String) -> Int64 {
-  palette[(id.hash() & 0x7FFFFFFF) % palette.length()]
+/// No books yet (Drive.css.ts empty): what the shelf is, grey, in the
+/// middle.
+fn empty(c : @ui.Ctx) -> Unit {
+  let t = @sf.theme()
+  c.box(
+    w=Fill(1.0),
+    h=Fill(1.0),
+    align=ACenter,
+    justify=JCenter,
+    gap=12.0,
+    padx=40.0,
+    fn() {
+      @sf.icon(c, "file-text", size=28.0, color=t.p.muted) |> ignore
+      c.text(
+        "书架上还没有书",
+        size=t.t.ui,
+        weight=500,
+        color=t.p.text,
+        wrap=false,
+      )
+      |> ignore
+      c.text(
+        "在 still.fail 的文件里把 EPUB 或 TXT 放上书架，就会出现在这里。",
+        size=t.t.ui,
+        color=t.p.muted,
+        line=t.t.ui_line,
+      )
+      |> ignore
+    },
+  )
+  |> ignore
 }

@@ -66,6 +66,8 @@ struct Node {
   mut h : Size
   mut min_h : Double
   mut max_h : Double
+  mut min_w : Double
+  mut max_w : Double
   mut pad_l : Double
   mut pad_t : Double
   mut pad_r : Double
@@ -78,6 +80,9 @@ struct Node {
   mut border_w : Double
   mut border_c : Int64
   mut shadow : Double
+  // the shadow's colour and how far down it falls (-1: a third of its blur)
+  mut shadow_c : Int64
+  mut shadow_y : Double
   mut clip : Bool
   mut tx : Double
   mut ty : Double
@@ -88,7 +93,11 @@ struct Node {
   mut weight : Int
   mut color : Int64
   mut wrap : Bool
+  // a line's height (0: the font's own)
+  mut line_h : Double
   mut fit : Fit
+  // an image fades in as it arrives
+  mut fade : Bool
   // a page of a book, and which
   mut pages : Pages?
   mut page_no : Int
@@ -129,6 +138,8 @@ fn Node::new() -> Node {
     h: Auto,
     min_h: 0.0,
     max_h: 1.0e9,
+    min_w: 0.0,
+    max_w: 1.0e9,
     pad_l: 0.0,
     pad_t: 0.0,
     pad_r: 0.0,
@@ -141,6 +152,8 @@ fn Node::new() -> Node {
     border_w: 0.0,
     border_c: 0L,
     shadow: 0.0,
+    shadow_c: 0x0000002EL,
+    shadow_y: -1.0,
     clip: false,
     tx: 0.0,
     ty: 0.0,
@@ -150,7 +163,9 @@ fn Node::new() -> Node {
     weight: 400,
     color: 0x000000FFL,
     wrap: true,
+    line_h: 0.0,
     fit: FitCover,
+    fade: true,
     pages: None,
     page_no: -1,
     pager: 0,
@@ -183,6 +198,8 @@ fn Node::reset(self : Node) -> Unit {
   self.h = Auto
   self.min_h = 0.0
   self.max_h = 1.0e9
+  self.min_w = 0.0
+  self.max_w = 1.0e9
   self.pad_l = 0.0
   self.pad_t = 0.0
   self.pad_r = 0.0
@@ -195,6 +212,8 @@ fn Node::reset(self : Node) -> Unit {
   self.border_w = 0.0
   self.border_c = 0L
   self.shadow = 0.0
+  self.shadow_c = 0x0000002EL
+  self.shadow_y = -1.0
   self.clip = false
   self.tx = 0.0
   self.ty = 0.0
@@ -204,7 +223,9 @@ fn Node::reset(self : Node) -> Unit {
   self.weight = 400
   self.color = 0x000000FFL
   self.wrap = true
+  self.line_h = 0.0
   self.fit = FitCover
+  self.fade = true
   self.pages = None
   self.page_no = -1
   self.pager = 0

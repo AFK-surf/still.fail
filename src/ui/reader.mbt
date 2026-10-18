@@ -27,6 +27,13 @@ pub(all) struct PageStyle {
   /// margins around the text, inside the page
   margin_x : Double
   margin_y : Double
+  /// the top margin when not margin_y (a bar over the page's top)
+  margin_top : Double
+  /// a line's height as a multiple of the size (0: the font's own and
+  /// `leading`)
+  line : Double
+  heading_weight : Int
+  rule_color : Int64
 }
 
 ///|
@@ -40,6 +47,10 @@ pub fn PageStyle::default() -> PageStyle {
     heading_size: 24.0,
     margin_x: 24.0,
     margin_y: 32.0,
+    margin_top: -1.0,
+    line: 0.0,
+    heading_weight: 700,
+    rule_color: 0xC7C7CCFFL,
   }
 }
 
@@ -104,7 +115,7 @@ pub fn paginate(
 ) -> Pages {
   let st = style
   let inner_w = dmax(width - 2.0 * st.margin_x, 1.0)
-  let top = st.margin_y
+  let top = if st.margin_top >= 0.0 { st.margin_top } else { st.margin_y }
   let bottom = height - st.margin_y
   let pages : Array[Page] = []
   let base = []
@@ -135,14 +146,20 @@ pub fn paginate(
         let tl = layout_text(
           text,
           size,
-          if heading { 700 } else { 400 },
+          if heading { st.heading_weight } else { 400 },
           inner_w,
           true,
           indent~,
+          line=if st.line > 0.0 { size * st.line } else { 0.0 },
         )
-        let lh = tl.line_h + st.leading
+        let lh = if st.line > 0.0 { tl.line_h } else { tl.line_h + st.leading }
         let lines = tl.line_start.length()
         let s = tl.shaped
+        // with lines set by the size, a heading has room above it (1.2em)
+        // unless it starts the page, and 0.6em under it
+        if heading && st.line > 0.0 && y > top + 0.01 {
+          y = y + size * 1.2
+        }
         for li in 0..<lines {
           if y + tl.line_h > bottom + 0.01 && items.length() > 0 {
             let (a, _) = tl.line_range(li)
@@ -161,7 +178,14 @@ pub fn paginate(
         if lines == 0 {
           end = base[bi]
         }
-        y = y + (if heading { st.para_gap * 2.0 } else { st.para_gap })
+        y = y +
+          (if heading && st.line > 0.0 {
+            size * 0.6
+          } else if heading {
+            st.para_gap * 2.0
+          } else {
+            st.para_gap
+          })
       }
       Picture(_, pw, ph) => {
         let mut w = dmin(inner_w, pw / g.scale)
@@ -335,7 +359,7 @@ fn Ctx::paint_page(self : Ctx, n : Node, alpha : Double) -> Unit {
           inner_w * 0.4,
           1.0,
           0.0,
-          0xC7C7CCFFL,
+          st.rule_color,
           0.0,
           0L,
           alpha,
