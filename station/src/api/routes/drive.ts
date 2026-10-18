@@ -27,11 +27,11 @@ const manages = (r: { viewer: { role: string } }) => r.viewer.role === "owner" |
 /// Whether the asker reaches every folder of the machine: a member who may write, whose agents could reach them anyway.
 const anywhere = (r: { viewer: Request["viewer"] }) => !readOnly(r.viewer);
 /// The drive as the asker's workspace has it: the folders that workspace pinned (docs/multi-workspace.md).
-const driveOf = (drive: Drive, r: { viewer: Request["viewer"] }) => (r.viewer.home === false ? drive.scoped(r.viewer.workspace) : drive);
+export const driveOf = (drive: Drive, r: { viewer: Request["viewer"] }) => (r.viewer.home === false ? drive.scoped(r.viewer.workspace) : drive);
 
 /// A refusal in the asker's words (`station.drive.<code>`, after the path it is about, if any). One for a folder macOS
 /// keeps from the station that still.fail Helper may not open yet says so, and whether its window is up on that Mac.
-const refused = (e: unknown, lang: Lang): Answer => {
+export const refused = (e: unknown, lang: Lang): Answer => {
   const d = e instanceof DriveError ? e : new DriveError("io", (e as Error).message);
   const words = d.need
     ? tr(lang, d.need.window === "up" ? "station.drive.helperAsking" : d.need.window === "closed" ? "station.drive.helperClosed" : "station.drive.helperNeeded", { folder: folderWords(d.need.grant, d.need.top, lang) })

@@ -28,7 +28,8 @@ import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { ownPorts } from "./ops/own.ts";
 import { version } from "./ops/version.ts";
-import { AdbShares, AdminApi, AdminHost, ControlPlane, Events, Grants, Helper, Key, MeshNative, Paths, Readers, ScreenRegistry, Store, Up } from "./services.ts";
+import { AdbShares, AdminApi, AdminHost, ControlPlane, Events, Grants, Helper, Key, MeshNative, Modules, Paths, Readers, ScreenRegistry, StationDrive, Store, Up } from "./services.ts";
+import { ModulesLive } from "./modules/live.ts";
 import { PROVIDERS, type Provider } from "./cloud/provider.ts";
 import { wall } from "./ops/fibers.ts";
 import { answerHeapRequests, heapCommand } from "./ops/heap.ts";
@@ -125,9 +126,13 @@ function run() {
   // still.fail Helper, one for the screens and the drive, and one look at its grants.
   const base = Layer.mergeAll(Key.layer, Readers.layer, Store.layer, MeshNative.layer, Up.layer, ScreenRegistry.layer.pipe(Layer.provideMerge(Grants.layer), Layer.provideMerge(Helper.layer))).pipe(Layer.provideMerge(paths));
   const parts = ControlPlane.layer.pipe(Layer.provideMerge(base));
-  const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive).pipe(
+  const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, ModulesLive).pipe(
     Layer.provideMerge(AdminApi.layer),
+    // The drive, the admin API's and the modules' local API's (modules/local.ts).
+    Layer.provideMerge(StationDrive.layer),
     Layer.provideMerge(AgentsLive(control)),
+    // The modules beside the station (docs/station-modules.md), started by ModulesLive.
+    Layer.provideMerge(Modules.layer),
     Layer.provideMerge(Events.layer),
     Layer.provideMerge(AdminHost.layer),
     Layer.provideMerge(AdbShares.layer),

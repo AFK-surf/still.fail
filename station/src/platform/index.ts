@@ -179,6 +179,8 @@ export type Platform = {
   hasSpotlight: boolean;
   /// The machine's display seen and driven from a client (docs/remote-screens.md; macOS's ScreenCaptureKit).
   hasDesktopScreen: boolean;
+  /// Unix domain sockets at a path: how the station and its modules talk (docs/station-modules.md).
+  hasUnixSockets: boolean;
 };
 
 export const platform: Platform = process.platform === "win32" ? windows : unix;

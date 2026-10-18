@@ -2,6 +2,8 @@
 // fetch the whole video (up to 1 GB) to show what it is. Made on first asking, by what the machine has: QuickLook on a
 // Mac (`qlmanage`, then `sips` to make it a JPEG), else ffmpeg where it is installed; kept in <data>/thumbs beside the
 // images' thumbnails, by the video's path. None where neither can make it: the chat then shows the video without one.
+// The drive's videos have theirs made the same way for the modules (modules/media.ts), made again once the video is
+// newer (`since`).
 import { execFile } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -26,10 +28,15 @@ const making = new Map<string, Promise<string | null>>();
 /// Videos none could be made for (by poster path, with the video's size and time then): not tried again until it changes.
 const failed = new Map<string, string>();
 
-/// The video's poster (a JPEG), made if it is not there yet; null when none can be made.
-export async function poster(video: string, thumbs: string): Promise<string | null> {
-  const path = join(thumbs, `${idOf(video)}.poster.jpg`);
-  if (statSync(path, { throwIfNoEntry: false })?.isFile()) return path;
+/// Where the video's poster is kept.
+export const posterPath = (video: string, thumbs: string) => join(thumbs, `${idOf(video)}.poster.jpg`);
+
+/// The video's poster (a JPEG), made if it is not there yet (or made again when it is older than `since`, the video's
+/// time); null when none can be made.
+export async function poster(video: string, thumbs: string, since?: number): Promise<string | null> {
+  const path = posterPath(video, thumbs);
+  const had = statSync(path, { throwIfNoEntry: false });
+  if (had?.isFile() && (since === undefined || had.mtimeMs >= since)) return path;
   const st = statSync(video, { throwIfNoEntry: false });
   if (!st?.isFile()) return null;
   const stamp = `${st.size}:${st.mtimeMs}`;

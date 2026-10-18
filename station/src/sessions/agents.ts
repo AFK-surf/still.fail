@@ -18,7 +18,7 @@ import { ConfigFile } from "../ops/config.ts";
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
 import { mcpPortFile, ownData, portsToTry, rememberedMcpPort } from "../ops/files.ts";
-import { AdbShares, AdminHost, ControlPlane, Events, Grants, Key, Paths, Readers, ScreenRegistry, Store } from "../services.ts";
+import { AdbShares, AdminHost, ControlPlane, Events, Grants, Key, Modules, Paths, Readers, ScreenRegistry, Store } from "../services.ts";
 import { permissionsView } from "../api/routes/permissions.ts";
 import { Gpus } from "../jobs/gpu.ts";
 import { Net, measure } from "../jobs/load.ts";
@@ -172,6 +172,7 @@ export const AgentsLive = (control: Control) =>
       const grants = yield* Grants;
       const browser = yield* Browser;
       const host = yield* AdminHost;
+      const modules = yield* Modules;
       const run = join(data, "run");
       const config = new ConfigFile(data);
       // An edit is taken only if it checks out as config.rs `parse_config` would have it.
@@ -580,7 +581,7 @@ export const AgentsLive = (control: Control) =>
         teams: (viewer: Viewer) => slack.overview(viewer.email).slackTeams,
         apps: (viewer: Viewer) => slack.overview(viewer.email).slackApps,
       };
-      const view = (viewer: Viewer, lang: Lang) => overview({ store, hub, cloud, config: () => config.raw(), accounts, updates, slack: slackView, rootView: (p) => rootViewThrough(p, helperFiles), ...(grants ? { permissions: (v: Viewer) => permissionsView(grants, v) } : {}) }, viewer, lang);
+      const view = (viewer: Viewer, lang: Lang) => overview({ store, hub, cloud, config: () => config.raw(), accounts, updates, slack: slackView, rootView: (p) => rootViewThrough(p, helperFiles), modules: () => modules.listed(), ...(grants ? { permissions: (v: Viewer) => permissionsView(grants, v) } : {}) }, viewer, lang);
 
       // The readers say what runs, and which chats clients made: the hub's.
       readers.processes = () => hub.processes();
