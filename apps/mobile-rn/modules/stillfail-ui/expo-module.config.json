@@ -8,12 +8,14 @@
       "fail.still.rn.ui.StillfailUiModule",
       "fail.still.rn.ui.StillfailQuietModule",
       "fail.still.rn.ui.StillfailBackdropModule",
-      "fail.still.rn.ui.StillfailFrostModule"
+      "fail.still.rn.ui.StillfailFrostModule",
+      "fail.still.rn.ui.StillfailSpinModule"
     ]
   },
   "apple": {
     "modules": [
-      "StillfailUiModule"
+      "StillfailUiModule",
+      "StillfailSpinModule"
     ]
   }
 }

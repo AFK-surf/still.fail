@@ -72,21 +72,38 @@ sleep 5
 # A stroke each way first: what the first scroll lays out once is not what scrolling costs.
 stroke() { a shell input swipe $((W / 2)) $1 $((W / 2)) $2 ${3:-250}; }
 stroke $((H * 3 / 4)) $((H / 4)); sleep 1; stroke $((H / 4)) $((H * 3 / 4)); sleep 1.5
-a shell dumpsys gfxinfo "$PKG" reset > /dev/null
-for i in 1 2 3 4 5 6; do stroke $((H * 3 / 4)) $((H / 4)); sleep 0.7; done
-for i in 1 2 3 4 5 6; do stroke $((H / 4)) $((H * 3 / 4)); sleep 0.7; done
-a shell dumpsys gfxinfo "$PKG" > "$OUT/$LABEL.txt"
-# The CPU each of its threads took over the run (main, the JS thread, Reanimated's, the core's).
 P=$(a shell pidof "$PKG" | tr -d '\r')
-a shell "cat /proc/$P/task/*/stat" | python3 -c "
-import sys, re
-rows = []
-for line in sys.stdin:
-    m = re.match(r'\d+ \((.*)\) \S+ ' + r'(\S+ )' * 10 + r'(\d+) (\d+)', line)
-    if m: rows.append((int(m.group(12)) + int(m.group(13)), m.group(1)))
-for t, name in sorted(rows, reverse=True)[:6]: print(f'{t / 100:7.2f} s  {name}')
-" > "$OUT/$LABEL.threads"
+# The CPU each of its threads takes over the strokes alone (main, the JS thread, the render thread, the core's).
+a shell "cat /proc/$P/task/*/stat" > "$OUT/.before"
+# PROFILE=1: where the time goes meanwhile (simpleperf, by thread and function: Hermes's own frames are not named, and
+# React Native's release Hermes has no sampling profiler of its own).
+[ "${PROFILE:-}" = 1 ] && { a shell "simpleperf record -p $P -e cpu-clock -f 2000 -g --duration 12 -o /data/local/tmp/perf.data" > /dev/null 2>&1 & }
+a shell dumpsys gfxinfo "$PKG" reset > /dev/null
+# IDLE=1: no strokes, as long: what it costs doing nothing.
+if [ "${IDLE:-}" = 1 ]; then sleep 13; else
+  for i in 1 2 3 4 5 6; do stroke $((H * 3 / 4)) $((H / 4)); sleep 0.7; done
+  for i in 1 2 3 4 5 6; do stroke $((H / 4)) $((H * 3 / 4)); sleep 0.7; done
+fi
+a shell dumpsys gfxinfo "$PKG" > "$OUT/$LABEL.txt"
+a shell "cat /proc/$P/task/*/stat" > "$OUT/.after"
+python3 - "$OUT/.before" "$OUT/.after" > "$OUT/$LABEL.threads" <<'PY'
+import re, sys
+def read(p):
+    d = {}
+    for line in open(p, errors="replace"):
+        m = re.match(r'(\d+) \((.*)\) \S+ ' + r'(\S+ )' * 10 + r'(\d+) (\d+)', line)
+        if m: d[m.group(1)] = (m.group(2), int(m.group(13)) + int(m.group(14)))
+    return d
+a, b = read(sys.argv[1]), read(sys.argv[2])
+rows = sorted(((t - a.get(k, (n, 0))[1], n) for k, (n, t) in b.items()), reverse=True)[:6]
+for t, n in rows: print(f"{t / 100:6.2f} s  {n}")
+PY
+if [ "${PROFILE:-}" = 1 ]; then
+  wait
+  a shell "simpleperf report -i /data/local/tmp/perf.data --sort comm,dso,symbol --percent-limit 0.7 -n" 2> /dev/null | sed -n '1,90p' > "$OUT/$LABEL.profile"
+  a shell "simpleperf report -i /data/local/tmp/perf.data --sort comm --percent-limit 0.5" 2> /dev/null | tail -15 >> "$OUT/$LABEL.profile"
+fi
 echo "== $LABEL"
 grep -a -E "Total frames|Janky frames:|50th percentile|90th percentile|99th percentile|Slow UI|Slow bitmap|Slow issue|Frame deadline missed:" "$OUT/$LABEL.txt" | sed 's/^/  /'
 sed 's/^/  thread /' "$OUT/$LABEL.threads"
-rm -f "$UI"
+rm -f "$UI" "$OUT/.before" "$OUT/.after"

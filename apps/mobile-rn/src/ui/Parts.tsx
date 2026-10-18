@@ -18,6 +18,7 @@ import { Smooth } from "./Smooth";
 import { T } from "./Text";
 import { dp, lerpColor, useC, withAlpha, type StillFailColors } from "./Theme";
 import { Quiet } from "./Quiet";
+import { Spin } from "./Spin";
 
 /**
  * What a part draws in one of its places (Kotlin's `@Composable () -> Unit` slot): what it draws, or a function that
@@ -107,14 +108,6 @@ const AGENT_YELLOW = "#F2B01E";
 export function AgentStateMark({ state, around, modifier: modifier_, style = modifier_ }: { state: ChatState; around: string; modifier?: StyleProp<ViewStyle>; style?: StyleProp<ViewStyle> }) {
   const reduced = reducedMotion();
   const turning = state === ChatState.Running && !reduced;
-  const turn = useSharedValue(0);
-  useEffect(() => {
-    if (!turning) { cancelAnimation(turn); turn.value = 0; return; }
-    turn.value = 0;
-    turn.value = withRepeat(withTiming(360, { duration: 1200, easing: (t: number) => { "worklet"; return t; } }), -1, false);
-    return () => cancelAnimation(turn);
-  }, [turning, turn]);
-  const spin = useAnimatedStyle(() => ({ transform: [{ rotate: `${turn.value}deg` }] }));
   if (state === ChatState.Done) return null;
   const size = 12;
   const r = size / 2;
@@ -138,13 +131,11 @@ export function AgentStateMark({ state, around, modifier: modifier_, style = mod
           : <Circle cx={r} cy={r} r={r - ring} fill={AGENT_RED} />}
       </Svg>
       {state === ChatState.Running && (
-        <Quiet style={{ position: "absolute", width: size, height: size }}>
-          <Animated.View style={[{ width: size, height: size }, spin]}>
-            <Svg width={size} height={size}>
-              <Path d={`M${at(from)}A${rr} ${rr} 0 1 1 ${at(from + sweep)}`} fill="none" stroke={AGENT_YELLOW} strokeWidth={ring} strokeLinecap="round" />
-            </Svg>
-          </Animated.View>
-        </Quiet>
+        <Spin spinning={turning} style={{ position: "absolute", width: size, height: size }}>
+          <Svg width={size} height={size}>
+            <Path d={`M${at(from)}A${rr} ${rr} 0 1 1 ${at(from + sweep)}`} fill="none" stroke={AGENT_YELLOW} strokeWidth={ring} strokeLinecap="round" />
+          </Svg>
+        </Spin>
       )}
     </View>
   );

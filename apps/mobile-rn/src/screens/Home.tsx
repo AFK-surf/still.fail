@@ -24,6 +24,7 @@ import { Ease, MoveSpring } from "../ui/Motion";
 import { NavButton, SectionHeader, SlackMark, StationMark, hasStationMark, reducedMotion } from "../ui/Parts";
 import { Backdrop, LocalFrostSource, useFrostName } from "../ui/Glass";
 import { Smooth } from "../ui/Smooth";
+import { Spin } from "../ui/Spin";
 import { StationGlyph, glyphCounts } from "../ui/StationGlyph";
 import { doneLead, waitLead } from "../ui/StatusText";
 import { sp, T } from "../ui/Text";
@@ -417,8 +418,10 @@ function Moving({ motion, rowKey: key, still, children }: { motion: ListMotion; 
     const p = raise.value;
     return { opacity: p < 0.6 ? 1 : 1 - (p - 0.6) / 0.4 };
   });
+  // Its animated style laid on only while it moves (arriving): each one on a row is laid again by Reanimated over every
+  // commit of React's, and a list scrolled commits often (laid on always, the list's JS thread took 4 times the time).
   return (
-    <Animated.View style={grown}>
+    <Animated.View style={arrives ? grown : undefined}>
       {lifting && <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: ground }, raised]} />}
       {children}
     </Animated.View>
@@ -506,12 +509,13 @@ function ChatRow({ item, view, live = true, motion = null }: { item: ChatItem; v
   // itself leads to), the chat opens there; not with something unread: it opens at the unread line, as any tap on the
   // row (the message is read on from there). Measured where it is as it is tapped.
   const line = useRef<View | null>(null);
-  const menu = useApp((s) => s.menu);
-  useEffect(() => { if (menu === null && menuOpen) setMenuOpen(false); }, [menu, menuOpen]);
-  // What is under way (the core's doing list, in the app's state): the row drawn again as it changes.
-  useApp((s) => s.doing);
-  const busy = rowBusy(app, item);
-  const failed = rowFailed(app, item);
+  // Each of these read as what this row draws, not as the app's state it comes from: a row drawn again for its own
+  // pin or archive under way, not for every change of the app's (a list's rows all drawn again as one thing is done).
+  const menuGone = useApp((s) => s.menu === null);
+  useEffect(() => { if (menuGone && menuOpen) setMenuOpen(false); }, [menuGone, menuOpen]);
+  // What is under way (the core's doing list, in the app's state).
+  const busy = useApp(() => rowBusy(app, item));
+  const failed = useApp(() => rowFailed(app, item));
   // Nothing left in it: archived with one tap on the 归档 at its start (as its menu's 归档), or swiped away to the left.
   const archivable = live && item.archivable === true && item.offline == null && item.pending !== true;
   const onArchive = archivable ? () => { if (!busy) archiveRow(app, item); } : undefined;
@@ -588,6 +592,8 @@ function SwipeToArchive({ item, motion, busy, children }: { item: ChatItem; moti
   const wasPast = useSharedValue(false);
   const busyNow = useRef(busy);
   busyNow.current = busy;
+  // Its animated styles laid on only while it is dragged (and on its way back): see Moving.
+  const [active, setActive] = useState(false);
   const itemNow = useRef(item);
   itemNow.current = item;
   useAnimatedReaction(() => drag.value < -width.value * ARCHIVE_AT, (past, was) => {
@@ -634,6 +640,7 @@ function SwipeToArchive({ item, motion, busy, children }: { item: ChatItem; moti
     .onStart((e) => {
       base.value = e.translationX;
       wasPast.value = false;
+      runOnJS(setActive)(true);
     })
     .onUpdate((e) => {
       const to = Math.min(0, Math.max(-width.value, start.value + e.translationX - base.value));
@@ -646,7 +653,7 @@ function SwipeToArchive({ item, motion, busy, children }: { item: ChatItem; moti
       const at = drag.value;
       const fling = v < -500 && at < -16;
       if (at < -width.value * ARCHIVE_AT || fling) runOnJS(archive)(v);
-      else drag.value = still ? 0 : withSpring(0, { ...MoveSpring, velocity: v });
+      else drag.value = still ? 0 : withSpring(0, { ...MoveSpring, velocity: v }, (done) => { if (done) runOnJS(setActive)(false); });
     }),
   // eslint-disable-next-line react-hooks/exhaustive-deps
   [key, still]);
@@ -664,10 +671,12 @@ function SwipeToArchive({ item, motion, busy, children }: { item: ChatItem; moti
         onAccessibilityAction={(e) => { if (e.nativeEvent.actionName === "archive") archive(0); }}
       >
         {/* Under it, at the right edge it uncovers: 归档, quiet until letting go would archive it, then filled in ink. */}
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { paddingHorizontal: 22, alignItems: "flex-end", justifyContent: "center" }, under]}>
-          <Animated.Text importantForAccessibility="no" style={[{ fontSize: sp(15), lineHeight: 21, fontWeight: "600", includeFontPadding: false }, word]}>{t("android-chat.archive")}</Animated.Text>
-        </Animated.View>
-        <Animated.View style={moved}>{children}</Animated.View>
+        {active ? (
+          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { paddingHorizontal: 22, alignItems: "flex-end", justifyContent: "center" }, under]}>
+            <Animated.Text importantForAccessibility="no" style={[{ fontSize: sp(15), lineHeight: 21, fontWeight: "600", includeFontPadding: false }, word]}>{t("android-chat.archive")}</Animated.Text>
+          </Animated.View>
+        ) : null}
+        <Animated.View style={active ? moved : undefined}>{children}</Animated.View>
       </View>
     </GestureDetector>
   );
@@ -868,20 +877,11 @@ function ChatMark({ item }: { item: ChatItem }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tone]);
   const turning = tone === RowTone.Busy && !still;
-  const turn = useSharedValue(0);
-  useEffect(() => {
-    if (!turning) { cancelAnimation(turn); turn.value = 0; return; }
-    turn.value = 0;
-    turn.value = withRepeat(withTiming(360, { duration: 1200, easing: Easing.linear }), -1, false);
-    return () => cancelAnimation(turn);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [turning]);
   const popped = useAnimatedStyle(() => {
     const p = pop.value;
     const k = p < 0.6 ? (1.3 * p) / 0.6 : 1.3 - (0.3 * (p - 0.6)) / 0.4;
     return { transform: [{ scale: k }] };
   });
-  const turned = useAnimatedStyle(() => ({ transform: [{ rotate: `${turn.value}deg` }] }));
   if (tone === null) return null;
   const label = {
     [RowTone.Busy]: t("android-chat.home.mark.busy"), [RowTone.Done]: t("android-chat.home.mark.done"), [RowTone.Alert]: t("android-chat.home.mark.alert"),
@@ -894,9 +894,8 @@ function ChatMark({ item }: { item: ChatItem }) {
   // Round ends (web: styles/busyRing.ts), the arc shortened by the half stroke they add so the gap stays a quarter.
   const cap = ((ring / box) * 180) / Math.PI;
   return (
-    <Animated.View accessible accessibilityLabel={label} style={[{ width: MARK, height: MARK }, popped]}>
-      <Quiet style={{ position: "absolute", left: -MARK_OUT, top: -MARK_OUT, width: MARK + 2 * MARK_OUT, height: MARK + 2 * MARK_OUT }}>
-      <Animated.View style={[{ width: MARK + 2 * MARK_OUT, height: MARK + 2 * MARK_OUT }, tone === RowTone.Busy && turned]}>
+    <Animated.View accessible accessibilityLabel={label} style={[{ width: MARK, height: MARK }, pops ? popped : null]}>
+      <Spin spinning={turning} style={{ position: "absolute", left: -MARK_OUT, top: -MARK_OUT, width: MARK + 2 * MARK_OUT, height: MARK + 2 * MARK_OUT }}>
         <Svg width={MARK + 2 * MARK_OUT} height={MARK + 2 * MARK_OUT}>
           {tone === RowTone.Alert && <Circle cx={c} cy={c} r={r - 1 + 3} fill={withAlpha(MarkRed, 0.25)} />}
           {tone === RowTone.Done && <Circle cx={c} cy={c} r={r - 1} fill={MarkBlue} />}
@@ -911,8 +910,7 @@ function ChatMark({ item }: { item: ChatItem }) {
             </>
           )}
         </Svg>
-      </Animated.View>
-      </Quiet>
+      </Spin>
     </Animated.View>
   );
 }
