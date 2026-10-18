@@ -248,6 +248,8 @@ class Host {
     }
     internal val rowPositions = mutableMapOf<String, Float>()
     internal var prepareFlight: (suspend (Flight) -> Unit)? = null
+    /** Words just sent wait their turn among what changes the chat's list (ListTurns.kt): their row is not in it yet. */
+    internal var waitingTurn: () -> Boolean = { false }
     internal var field: LayoutCoordinates? = null
     internal var fieldText: TextLayoutResult? = null
     internal var fieldWidth by mutableIntStateOf(0)
@@ -630,6 +632,8 @@ private fun FlightLayer(host: Host) {
         if (f == null) return@LaunchedEffect
         // The row never came into sight: the composer is as it was. Not a wait for the station: a flight only starts for a
         // row the core makes here at once (Composer.kt's onSend), and a refused send gives the words back by itself.
+        // (Counted from its turn: till then its row is kept out of the list.)
+        snapshotFlow { host.waitingTurn() }.first { !it }
         delay(2000)
         if (!f.placed) host.notSent()
     }

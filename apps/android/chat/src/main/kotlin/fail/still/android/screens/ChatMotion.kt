@@ -29,6 +29,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import fail.still.android.data.ChatMessage
 import fail.still.android.ui.Ease
@@ -104,9 +105,22 @@ internal class ChatMotion {
     /** Whether messages coming in are watched (the page in front, the reader at the end), as last composed. */
     var watched = false
 
-    /** The first waiting starts, once composed (not from composing itself). */
+    /** What changes the list's height, one at a time (ListTurns.kt): messages coming out of avatars take one turn, from
+     *  the first setting out till none is left. */
+    val turns = ListTurns()
+    /** Their turn asked for, not come yet. */
+    private var asking = false
+
+    /** The first waiting starts, once composed (not from composing itself), in its turn. */
     fun start() {
-        if (current == null && queue.isNotEmpty()) nextAfter(null)
+        if (current != null || queue.isEmpty() || asking) return
+        asking = true
+        val asked = turns.take {
+            asking = false
+            nextAfter(null)
+            androidx.compose.runtime.snapshotFlow { current == null }.first { it }
+        }
+        if (asked == null) { asking = false; nextAfter(null) }
     }
 
     /** Whether a message comes (or came) out of an avatar: it never eases in as others do. */

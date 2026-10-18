@@ -537,7 +537,6 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
             reveal.count = if (reveal.count + 2 >= allSize) Int.MAX_VALUE else reveal.count + 2
         }
     }
-    val rows = if (reveal.count < all.size) all.takeLast(reveal.count) else all
     host.rows = all.mapTo(HashSet()) { it.id }
     // What was in the list the last time it was drawn: an item new to it rises in; one scrolled to does not, nor one
     // caught up on rather than said while the chat is open: the core says which (attend.ts: a message `said`, an agent
@@ -551,12 +550,27 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
             else -> false
         }
     }
+    val drawn = remember { booleanArrayOf(false) }
+    val following = remember { arrayOfNulls<fail.still.android.ui.Follow>(1) }
+    // What changes the list's height comes in its turn, one at a time (ListTurns.kt): a message simply coming in, the
+    // agent's line coming (after words sent flying in have landed, under them), each kept out of the list till then.
+    // Words sent from here take theirs as they are sent: their row is kept out till then, the words in the composer.
+    // Only as the reader watches the end (as rows rise in only then).
+    val turns = motion.turns
+    val admitted = remember { HashSet<String>() }
+    val sentFrom = host.flight?.before
+    val sentRow = { r: Entry -> sentFrom != null && r.id !in sentFrom && (r is Entry.Out || (r is Entry.Said && r.m.mine && !r.m.system)) }
+    val newcomers = if (!drawn[0] || following[0]?.on == false || reveal.revealing) emptyList() else all.filter { r ->
+        r.id !in known && r.id !in admitted && !caught(r) && !sentRow(r) &&
+            (r is Entry.Working || (r is Entry.Said && !r.m.mine && !motion.emits(r.m.seq)))
+    }
+    val inList = all.filter { r -> r.id !in turns.waiting && r !in newcomers && !(turns.sendWaiting && sentRow(r)) }
+    SideEffect { newcomers.forEach { r -> admitted += r.id; turns.admit(r.id, if (r is Entry.Working) 220L else 320L) } }
+    val rows = if (reveal.count < inList.size) inList.takeLast(reveal.count) else inList
     // What is new is told here, as the list is composed: its rows are composed later (as it is laid out), after the
     // SideEffect below has counted them in. Nothing is new on the first draw, nor with the reader away from the end
     // (not following it): what arrives out of view is there when scrolled to, not coming in then.
     val arrived = remember { HashSet<String>() }
-    val drawn = remember { booleanArrayOf(false) }
-    val following = remember { arrayOfNulls<fail.still.android.ui.Follow>(1) }
     if (drawn[0] && following[0]?.on != false) rows.forEach { if (it.id !in known && !caught(it)) arrived += it.id }
     SideEffect { rows.forEach { known += it.id }; drawn[0] = true }
     val density = LocalDensity.current
@@ -588,6 +602,9 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     motion.follow = follow
     val scope = rememberCoroutineScope()
     motion.scope = scope
+    turns.scope = scope
+    turns.still = { !list.isScrollInProgress }
+    host.waitingTurn = { turns.sendWaiting }
     val jumpTo = rememberJump(list, rows, motion)
     val accent = chatInk().accent
     // What waits to be decided (the core's `asks`) whose post does not show in the list (web Chat.tsx useAsksShown): a
@@ -744,6 +761,8 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         lastHead[0] = headKey
         val sent = sends > sentCount[0]
         sentCount[0] = sends
+        // Words sent take their turn among what changes the list's height, till they have landed (or never set out).
+        host.flight?.takeIf { sent }?.let { f -> turns.send { snapshotFlow { host.flight !== f }.first { it } } }
         // Words sent flying in, while it follows: it is put in place by them (below), not glided after their row.
         if (sent && host.flight?.carried == false && !short) follow.paused = true
         if (toLatest[0] && !short) { toLatest[0] = false; atLatest(); return@SideEffect }
@@ -956,7 +975,7 @@ private fun AskDismiss(ctx: Here, m: ChatMessage) {
     var gone by remember(m.seq) { mutableStateOf(false) }
     // Going as the archive buttons go (below), rather than vanishing; back at once if letting it go failed.
     AnimatedVisibility(
-        visible = m.asked == true && !gone, enter = EnterTransition.None,
+        visible = inTurn(m.asked == true && !gone, 280), enter = EnterTransition.None,
         exit = fadeOut(tween(280, easing = ArchiveEase)) + scaleOut(tween(280, easing = ArchiveEase), targetScale = 0.85f, transformOrigin = TransformOrigin(0f, 0f)) + shrinkVertically(tween(280, easing = ArchiveEase), shrinkTowards = Alignment.Top, clip = false),
     ) {
         Text(
@@ -1164,7 +1183,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             // Under its agent's latest 做完了 while nothing is left in the chat: archiving it, right there.
             // Keep the button alive until its exit finishes; the rest of the row closes the space with it.
             if (decide) AnimatedVisibility(
-                visible = ctx.archiveUnder == m.seq,
+                visible = inTurn(ctx.archiveUnder == m.seq, 280),
                 enter = fadeIn(tween(280, easing = ArchiveEase)) + scaleIn(tween(280, easing = ArchiveEase), initialScale = 0.85f, transformOrigin = TransformOrigin(0.5f, 0f)) + expandVertically(tween(280, easing = ArchiveEase), expandFrom = Alignment.Top, clip = false),
                 exit = fadeOut(tween(280, easing = ArchiveEase)) + scaleOut(tween(280, easing = ArchiveEase), targetScale = 0.85f, transformOrigin = TransformOrigin(0.5f, 0f)) + shrinkVertically(tween(280, easing = ArchiveEase), shrinkTowards = Alignment.Top, clip = false),
             ) { ArchiveUnder(ctx, enabled = ctx.archiveUnder == m.seq) }
