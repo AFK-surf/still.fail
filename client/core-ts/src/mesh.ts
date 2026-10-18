@@ -859,7 +859,8 @@ export class Mesh {
         if (existing.result === null) return yield* Deferred.await(existing.done);
         if ("ok" in existing.result) {
           if (existing.result.ok.usable()) return existing.result.ok;
-          fresh = existing.result.ok.refused !== null;
+          // Refused for the workspace lock, the credential was fine: no new one asked of the cloud each time.
+          fresh = existing.result.ok.refused !== null && existing.result.ok.refused.code !== "lock_unconfirmed";
         } else fresh = existing.result.err.code === "credential_refused";
       }
       // Gone, with another way still open: requests go on that one at once.

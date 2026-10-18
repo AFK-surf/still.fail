@@ -342,9 +342,10 @@ private fun confirmSheet(app: AppState, ws: String, r: LockRequest, onClose: (()
             Text(t("web-pages.security.confirmBody", "device" to deviceName(r.kind, r.label), "name" to who), fontSize = 14.sp, color = C.muted)
             Text(r.code, fontFamily = CodeFont, fontWeight = FontWeight.SemiBold, fontSize = 34.sp, letterSpacing = 5.sp, color = C.ink, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             Note(if (r.kind == "web") t("web-pages.security.confirmWeb") else t("web-pages.security.confirmApp"))
-            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                WideButton(t("web-pages.security.deny"), primary = false, modifier = Modifier.weight(1f)) { app.sheet = null; app.lockCall(ws, "deny", t("web-pages.security.deny"), null, "device" to r.device) }
-                WideButton(t("web-pages.security.confirm"), primary = true, modifier = Modifier.weight(1f)) { app.sheet = null; app.lockCall(ws, "confirm", t("web-pages.security.confirm"), t("web-pages.security.confirmed"), "device" to r.device, "code" to r.code) }
+            // One above the other, as wide as the sheet: the words fit in any language.
+            Column(Modifier.fillMaxWidth().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                WideButton(t("web-pages.security.confirm"), primary = true, modifier = Modifier.fillMaxWidth()) { app.sheet = null; app.lockCall(ws, "confirm", t("web-pages.security.confirmDevice"), t("web-pages.security.confirmed"), "device" to r.device, "code" to r.code) }
+                WideButton(t("web-pages.security.deny"), primary = false, modifier = Modifier.fillMaxWidth()) { app.sheet = null; app.lockCall(ws, "deny", t("web-pages.security.denyDevice"), null, "device" to r.device) }
             }
         }
     }
@@ -374,9 +375,9 @@ private fun promptSheet(app: AppState, r: LockPrompt, onClose: (() -> Unit)? = n
             }
             Text(r.code, fontFamily = CodeFont, fontWeight = FontWeight.SemiBold, fontSize = 34.sp, letterSpacing = 5.sp, color = C.ink, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             Note(if (r.kind == "web") t("web-pages.security.confirmWeb") else t("web-pages.security.confirmApp"))
-            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                WideButton(if (many) t("web-pages.security.denyAll") else t("web-pages.security.deny"), primary = false, modifier = Modifier.weight(1f)) { app.sheet = null; app.promptCall("deny", t("web-pages.security.deny"), null, "device" to r.device) }
-                WideButton(if (many) t("web-pages.security.confirmAll") else t("web-pages.security.confirm"), primary = true, modifier = Modifier.weight(1f)) { app.sheet = null; app.promptCall("confirm", t("web-pages.security.confirm"), t("web-pages.security.confirmed"), "device" to r.device, "code" to r.code) }
+            Column(Modifier.fillMaxWidth().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                WideButton(if (many) t("web-pages.security.confirmAll") else t("web-pages.security.confirm"), primary = true, modifier = Modifier.fillMaxWidth()) { app.sheet = null; app.promptCall("confirm", t("web-pages.security.confirmDevice"), t("web-pages.security.confirmed"), "device" to r.device, "code" to r.code) }
+                WideButton(if (many) t("web-pages.security.denyAll") else t("web-pages.security.deny"), primary = false, modifier = Modifier.fillMaxWidth()) { app.sheet = null; app.promptCall("deny", t("web-pages.security.denyDevice"), null, "device" to r.device) }
             }
         }
     }

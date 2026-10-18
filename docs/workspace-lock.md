@@ -71,7 +71,8 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 - `lock.confirm {device, code}`：这个人自己另一台锁里的 app 设备、或 owner/admin，核对短码后签 `device` 条目；网页版的设备 30 天到期。
 - 批准、拒绝、续期、移除设备在 cloud 收下条目时就算完成（申请随即撤掉），再在后台把整条链送给锁里的各台 station；cloud 同时通知在线的 station，离线的上线后自己拉。以前要等每台都回话，一台离线的 station 能把一次批准拖上十几秒到几分钟（2026-10-19）。只有 `joinStation`、`addStation` 等那一台 station 的回答。
 - 批准由被批准的设备自己带到 station（2026-10-19 用户定：「只要对方设备收到了就行」）：设备连 station 时，hello 的 `lock` 里多带 `entries`，即锁里把它加进来的那条起到链头的条目（加进来 7 天内，first line 最多 12 KiB）。station 按这台锁拒绝它时，先把带来的条目当普通条目逐条校验、接到自己钉住的链上（不钉新锁，最多 64 条），再判断一次放不放行。所以 station 没从 cloud 或批准方收到批准，也不影响新设备进来。带来的条目里没有一条是加这台设备（hello 里证明过的基础公钥）的、或序号接不上 station 的链头时，station 直接不看，一条签名都不验：拿着成员凭证反复连，只能让 station 多读一行 JSON。
-- 带来的条目接不上（station 落后不止这几条）时 station 照样拒绝；锁里已有自己时，core 把它当作 station 落后，`BEHIND_MS`（3 秒）后再连，不再等锁下次变化。
+- 带来的条目接不上（station 落后不止这几条）时 station 照样拒绝；锁里已有自己时，core 把它当作 station 落后，隔 `BEHIND_MS` 的 1、2、3… 倍再连，同一个链头最多 `BEHIND_TRIES`（5）次，之后按普通连不上处理。
+- 批准、拒绝这类由人发起的调用遇到 cloud 的「请求过多」（每个账号所有设备合计每分钟 120 个请求）时，每 10 秒重试一次，最多 6 次，不直接报错。
 - 老客户端的新设备只看到 station 的拒绝文字。
 
 ## 数据
@@ -95,7 +96,7 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 
 ## 界面（第二步）
 
-- core：`lock`、`lockDraft` 两个 topic 和 `lock.*` 调用（`client/core-ts/src/views/lock.ts`），锁记录存在 workspace 的 `lock` 里；workspace 视图多了 `lock`、`lock_requests`，变了就重读。core 读到锁、发现这台设备不在里面（开启时没勾上，或之后才加的），就自己提交确认请求并显示等待页，不等 station 拒绝（还连着的 station 不会马上拒绝，没连过的也不会）；station 以 `lock_unconfirmed` 拒绝这台设备后同样会请求，锁没变前不再连那台 station；锁一变（有人确认了）立刻重试。被拒过的设备（申请没了、自己也没进锁：被拒绝，或被 cloud 作废）记在锁记录的 `declined` 里，之后锁再变、重启都不再自己申请，只能在它的等待页上手动「发送批准请求」。
+- core：`lock`、`lockDraft` 两个 topic 和 `lock.*` 调用（`client/core-ts/src/views/lock.ts`），锁记录存在 workspace 的 `lock` 里；workspace 视图多了 `lock`、`lock_requests`，变了就重读。core 读到锁、发现这台设备不在里面（开启时没勾上，或之后才加的），就显示等待页，不等 station 拒绝；**不会自己提交申请**（2026-10-19 用户定：要让用户知道，并由要核对安全码的本人发起），只有用户在等待页点「发送批准请求」（`lock.request`）才发出。station 以 `lock_unconfirmed` 拒绝这台设备后，锁没变前不再连那台 station；锁一变（有人确认了）立刻重试。被安全模式拒绝时凭证本身没问题，重连不再每次向 cloud 领新凭证。
 - 桌面/网页：设置 › 安全（`web/src/cloud/Security.tsx`）；开启前核对页 `settings/security/open`；owner 在设置页顶上的一行提示（`lock.dismiss` 关掉，记在 prefs `lockNotice`）；等待确认的设备看到的整页。
 - 等这台设备确认的新设备自己弹出来（`lockPrompts` topic，不带 workspace，2026-10-19 起）：这个人所有 workspace 里、这台是受信任设备的那些，在哪个 workspace 都能收到。同一台新设备（同一把基础公钥）在几个 workspace 都申请时合成一条，`workspaces` 逐个列出名字和图标，弹窗醒目写明「申请访问」哪几个；核对一次短码，`lockPrompt.confirm {device, code}` 在这几个 workspace 里各签一条 `device`（`lockPrompt.deny {device}` 同样全部拒绝），有的失败时报错列出没批成的 workspace。`prompt` 是第一个还有 workspace 没在这台弹过的。界面弹出核对短码的窗口（桌面对话框，手机网页和安卓底部面板），换页、换 workspace 都不关；用户手动关掉时调 `lockPrompt.shown {device}`，这次运行里同一台不再弹，仍在各 workspace 的 设置 › 安全 里（那里的「验证」只批这一个 workspace）。别的设备上确认或拒绝了，`waiting` 里没了它，弹窗跟着关。
 - 手机网页（`web/src/mobile/Security.tsx`）和安卓（`screens/Security.kt`）同一套：设置里「安全」一行写现状（等你确认的件数标红），确认设备用底部面板。

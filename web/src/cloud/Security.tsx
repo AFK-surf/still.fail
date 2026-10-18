@@ -219,8 +219,8 @@ function ConfirmDevice({ entry, request, onClose }: { entry: WorkspaceEntry; req
     <Dialog open={r !== null} onClose={onClose} title={r ? t("web-pages.security.confirmTitle", { name: r.name || r.email }) : ""}
       description={r ? t("web-pages.security.confirmBody", { device: deviceName(r), name: r.name || r.email }) : ""}
       footer={r && <>
-        <Button variant="ghost" onClick={() => { onClose(); act(call("lock.deny", { workspace: entry.id, device: r.device }), t("web-pages.security.deny")); }}>{t("web-pages.security.deny")}</Button>
-        <Button variant="primary" onClick={() => { onClose(); act(call("lock.confirm", { workspace: entry.id, device: r.device, code: r.code }), t("web-pages.security.confirm"), t("web-pages.security.confirmed")); }}>{t("web-pages.security.confirm")}</Button>
+        <Button variant="ghost" onClick={() => { onClose(); act(call("lock.deny", { workspace: entry.id, device: r.device }), t("web-pages.security.denyDevice")); }}>{t("web-pages.security.deny")}</Button>
+        <Button variant="primary" onClick={() => { onClose(); act(call("lock.confirm", { workspace: entry.id, device: r.device, code: r.code }), t("web-pages.security.confirmDevice"), t("web-pages.security.confirmed")); }}>{t("web-pages.security.confirm")}</Button>
       </>}>
       {r && <>
         <div className={css.bigCode}>{r.code}</div>
@@ -243,8 +243,8 @@ export function SecurityPrompt() {
     <Dialog open={r !== null} onClose={close} title={r ? t("web-pages.security.confirmTitle", { name: r.name || r.email }) : ""}
       description={r ? t("web-pages.security.confirmBody", { device: deviceName(r), name: r.name || r.email }) : ""}
       footer={r && <>
-        <Button variant="ghost" onClick={() => { close(); act(call("lockPrompt.deny", { device: r.device }), t("web-pages.security.deny")); }}>{many ? t("web-pages.security.denyAll") : t("web-pages.security.deny")}</Button>
-        <Button variant="primary" onClick={() => { close(); act(call("lockPrompt.confirm", { device: r.device, code: r.code }), t("web-pages.security.confirm"), t("web-pages.security.confirmed")); }}>{many ? t("web-pages.security.confirmAll") : t("web-pages.security.confirm")}</Button>
+        <Button variant="ghost" onClick={() => { close(); act(call("lockPrompt.deny", { device: r.device }), t("web-pages.security.denyDevice")); }}>{many ? t("web-pages.security.denyAll") : t("web-pages.security.deny")}</Button>
+        <Button variant="primary" onClick={() => { close(); act(call("lockPrompt.confirm", { device: r.device, code: r.code }), t("web-pages.security.confirmDevice"), t("web-pages.security.confirmed")); }}>{many ? t("web-pages.security.confirmAll") : t("web-pages.security.confirm")}</Button>
       </>}>
       {r && <>
         <PromptPlaces r={r} />
