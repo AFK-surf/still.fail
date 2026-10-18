@@ -8,7 +8,11 @@
 // web's muted; code blocks on the code ground, 12 round, their language and
 // a copy button on a row of their own above the code (a finger has no
 // hover); inline code in the code face at 0.9 in its own colour, no box;
-// links in blue (a web address alone in code is one too); rules.
+// links in blue (a web address alone in code is one too); rules. A link to
+// another chat is a reference to it (Markdown.kt appendRef): `@` a little
+// lighter, then its words, in the accent. With `files`, a message's files
+// its text names (the core's `placed`) are drawn where it names them: a
+// paragraph of only a link to one, or its images, as the files themselves.
 //
 // Spacing is the web's: each block keeps the margins a browser gives it,
 // and two blocks next to each other are as far apart as the larger of the
@@ -32,24 +36,195 @@ priv struct Md {
   on_link : (String) -> Unit
   /// a scope for ids: the n-th paragraph of the message
   mut n : Int
+  /// a placed file's drawing, by the file's name
+  files : (String) -> (() -> Unit)?
 }
 
 ///|
 let parsed : Map[String, Array[@md.Block]] = {}
 
 ///|
+/// The texts parsed lately, oldest first: past `parsed_most` the oldest half
+/// is let go (a long chat scrolled through does not keep every message).
+let parsed_order : Array[String] = []
+
+///|
+let parsed_most : Int = 4096
+
+///|
 fn blocks_of(text : String) -> Array[@md.Block] {
   match parsed.get(text) {
     Some(b) => b
     None => {
-      if parsed.length() > 512 {
-        parsed.clear()
+      if parsed_order.length() >= parsed_most {
+        let half = parsed_most / 2
+        for i in 0..<half {
+          parsed.remove(parsed_order[i])
+        }
+        let rest = parsed_order[half:].to_array()
+        parsed_order.clear()
+        parsed_order.append(rest)
       }
       let b = @md.parse(text)
       parsed[text] = b
+      parsed_order.push(text)
       b
     }
   }
+}
+
+///|
+/// A link to a chat's page (Markdown.kt isChatLink): …/chats/<key>, or
+/// still.fail cloud's /o/<workspace>/<station>/<key>.
+pub fn is_chat_link(href : String) -> Bool {
+  // …/chats/<key> with nothing after it but a slash, a query or a fragment
+  match href.find("/chats/") {
+    Some(i) => {
+      let rest = href.view(start_offset=i + 7).to_string()
+      let mut k = 0
+      while k < rest.length() {
+        let ch = rest.at(k).to_int()
+        if ch == 47 || ch == 63 || ch == 35 || ch == 32 {
+          break
+        }
+        k = k + 1
+      }
+      if k > 0 {
+        let tail = rest.view(start_offset=k).to_string()
+        if tail == "" || tail == "/" || tail.has_prefix("?") || tail.has_prefix("#") ||
+          tail.has_prefix("/?") ||
+          tail.has_prefix("/#") {
+          return true
+        }
+      }
+    }
+    None => ()
+  }
+  // https://<host>/o/<workspace>/<station>/<key>
+  let scheme = if href.has_prefix("https://") {
+    8
+  } else if href.has_prefix("http://") {
+    7
+  } else {
+    return false
+  }
+  let after = href.view(start_offset=scheme).to_string()
+  let path = match after.find("/") {
+    Some(i) => after.view(start_offset=i).to_string()
+    None => return false
+  }
+  if !path.has_prefix("/o/") {
+    return false
+  }
+  let body = match path.find("#") {
+    Some(i) => path.view(end_offset=i).to_string()
+    None => path
+  }
+  let parts = body.view(start_offset=3).to_string().split("/").map(fn(v) { v.to_string() }).to_array()
+  let parts = if parts.length() == 4 && parts[3] == "" { parts[:3].to_array() } else { parts }
+  parts.length() == 3 && parts.iter().all(fn(x) { x != "" && !x.contains("?") })
+}
+
+///|
+/// The file a link or an image names, by its name (the last part of its
+/// path): `shot.png`, `/w/shot.png`, `ember-file://…/shot.png`.
+pub fn file_name_of(url : String) -> String {
+  let mut u = url.trim(chars=" ").to_string()
+  if u.has_prefix("ember-file://") {
+    u = u.view(start_offset=13).to_string()
+  } else if u.has_prefix("file://") {
+    u = u.view(start_offset=7).to_string()
+  }
+  let u = percent_decoded(u)
+  let mut i = u.length()
+  while i > 0 && u.at(i - 1).to_int() != 47 {
+    i = i - 1
+  }
+  u.view(start_offset=i).to_string()
+}
+
+///|
+/// %XX escapes undone (as UTF-8); the text as it is where they do not make
+/// one.
+fn percent_decoded(s : String) -> String {
+  if !s.contains("%") {
+    return s
+  }
+  let hex = fn(c : Int) -> Int {
+    if c >= 48 && c <= 57 {
+      c - 48
+    } else if c >= 97 && c <= 102 {
+      c - 87
+    } else if c >= 65 && c <= 70 {
+      c - 55
+    } else {
+      -1
+    }
+  }
+  // the bytes, the text's own characters as UTF-8
+  let bytes : Array[Int] = []
+  for ch in s {
+    let k = ch.to_int()
+    if k < 0x80 {
+      bytes.push(k)
+    } else if k < 0x800 {
+      bytes.push(0xC0 | (k >> 6))
+      bytes.push(0x80 | (k & 0x3F))
+    } else if k < 0x10000 {
+      bytes.push(0xE0 | (k >> 12))
+      bytes.push(0x80 | ((k >> 6) & 0x3F))
+      bytes.push(0x80 | (k & 0x3F))
+    } else {
+      bytes.push(0xF0 | (k >> 18))
+      bytes.push(0x80 | ((k >> 12) & 0x3F))
+      bytes.push(0x80 | ((k >> 6) & 0x3F))
+      bytes.push(0x80 | (k & 0x3F))
+    }
+  }
+  let raw : Array[Int] = []
+  let mut i = 0
+  while i < bytes.length() {
+    if bytes[i] == 37 && i + 2 < bytes.length() {
+      let a = hex(bytes[i + 1])
+      let b = hex(bytes[i + 2])
+      if a >= 0 && b >= 0 {
+        raw.push(a * 16 + b)
+        i = i + 3
+        continue
+      }
+    }
+    raw.push(bytes[i])
+    i = i + 1
+  }
+  let sb = StringBuilder()
+  let mut j = 0
+  while j < raw.length() {
+    let b0 = raw[j]
+    let (n, first) = if b0 < 0x80 {
+      (1, b0)
+    } else if b0 >> 5 == 6 {
+      (2, b0 & 0x1F)
+    } else if b0 >> 4 == 14 {
+      (3, b0 & 0x0F)
+    } else if b0 >> 3 == 30 {
+      (4, b0 & 0x07)
+    } else {
+      return s
+    }
+    if j + n > raw.length() {
+      return s
+    }
+    let mut code = first
+    for k in 1..<n {
+      if raw[j + k] >> 6 != 2 {
+        return s
+      }
+      code = (code << 6) | (raw[j + k] & 0x3F)
+    }
+    sb.write_char(code.unsafe_to_char())
+    j = j + n
+  }
+  sb.to_string()
 }
 
 ///|
@@ -72,15 +247,18 @@ pub fn markdown(
   text : String,
   key? : String = "",
   size? : Double = 0.0,
+  ink? : Int64 = 0L,
   on_link? : (String) -> Unit = fn(_) {  },
+  files? : (String) -> (() -> Unit)? = fn(_) { None },
 ) -> Int {
   let t = theme()
   let md = {
     c,
     size: if size > 0.0 { size } else { t.t.body },
-    ink: t.p.text,
+    ink: if ink != 0L { ink } else { t.p.text },
     on_link,
     n: 0,
+    files,
   }
   let blocks = blocks_of(text)
   c.box(w=Fill(1.0), fn() {
@@ -130,7 +308,10 @@ fn Md::piece(self : Md, b : @md.Block, tight : Bool, task : Bool?) -> Array[Piec
     Paragraph(xs) => {
       let m = if tight { 0.0 } else { s }
       let ink = self.ink
-      [{ top: m, bottom: m, draw: fn() { self.words(xs, s, 0, ink, task) } }]
+      match self.placed(xs, m, task) {
+        Some(ps) => ps
+        None => [{ top: m, bottom: m, draw: fn() { self.words(xs, s, 0, ink, task) } }]
+      }
     }
     Heading(level, xs) => {
       let (em, margin) = if level == 5 {
@@ -186,6 +367,81 @@ fn Md::piece(self : Md, b : @md.Block, tight : Bool, task : Bool?) -> Array[Piec
       },
     ]
   }
+}
+
+///|
+/// A paragraph naming the message's files (Markdown.kt paragraph): one of
+/// only a link to one is that file (a line of its own); the files' images
+/// among words, each on a line of its own between the words around it.
+/// None when it names none of them.
+fn Md::placed(
+  self : Md,
+  xs : Array[@md.Inline],
+  margin : Double,
+  task : Bool?,
+) -> Array[Piece]? {
+  let file_of = fn(x : @md.Inline) -> (() -> Unit)? {
+    match x {
+      Link(href, _) => (self.files)(file_name_of(href))
+      Image(src, _) => (self.files)(file_name_of(src))
+      _ => None
+    }
+  }
+  let parts = xs.filter(fn(x) {
+    match x {
+      Text(t) => t.trim(chars=" \n\t").to_string() != ""
+      SoftBreak => false
+      _ => true
+    }
+  })
+  if parts.length() == 1 && task is None {
+    match parts[0] {
+      Link(_, _) =>
+        match file_of(parts[0]) {
+          Some(draw) => return Some([{ top: 8.0, bottom: 8.0, draw }])
+          None => ()
+        }
+      _ => ()
+    }
+  }
+  let has_image = xs.iter().any(fn(x) { x is Image(_, _) && file_of(x) is Some(_) })
+  if !has_image {
+    return None
+  }
+  let out : Array[Piece] = []
+  let mut run : Array[@md.Inline] = []
+  let s = self.size
+  let ink = self.ink
+  let flush = fn() {
+    let nodes = run
+    if nodes.iter().any(fn(x) {
+        match x {
+          Text(t) => t.trim(chars=" ").to_string() != ""
+          SoftBreak | HardBreak => false
+          _ => true
+        }
+      }) {
+      let box = if out.length() == 0 { task } else { None }
+      out.push({ top: margin, bottom: margin, draw: fn() { self.words(nodes, s, 0, ink, box) } })
+    }
+    run = []
+  }
+  for x in xs {
+    match (x, file_of(x)) {
+      (Image(_, _), Some(draw)) => {
+        flush()
+        let c = self.c
+        out.push({
+          top: margin,
+          bottom: margin,
+          draw: fn() { c.box(pady=8.0, fn() { draw() }) |> ignore },
+        })
+      }
+      _ => run.push(x)
+    }
+  }
+  flush()
+  Some(out)
 }
 
 ///|
@@ -312,7 +568,7 @@ fn Md::words(
   let c = self.c
   let p = theme().p
   let runs = []
-  runs_of(xs, runs, weight > 0, false, false, "")
+  runs_of(xs, runs, weight > 0, false, false, "", p.accent)
   self.n = self.n + 1
   c.rich(
     runs,
@@ -347,6 +603,7 @@ fn runs_of(
   italic : Bool,
   strike : Bool,
   link : String,
+  accent : Int64,
 ) -> Unit {
   for x in xs {
     match x {
@@ -362,10 +619,16 @@ fn runs_of(
             link=if link == "" && is_web_address(s) { s } else { link },
           ),
         )
-      Emph(c) => runs_of(c, out, bold, true, strike, link)
-      Strong(c) => runs_of(c, out, true, italic, strike, link)
-      Strike(c) => runs_of(c, out, bold, italic, true, link)
-      Link(href, c) => runs_of(c, out, bold, italic, strike, href)
+      Emph(c) => runs_of(c, out, bold, true, strike, link, accent)
+      Strong(c) => runs_of(c, out, true, italic, strike, link, accent)
+      Strike(c) => runs_of(c, out, bold, italic, true, link, accent)
+      Link(href, c) if link == "" && is_chat_link(href) => {
+        // a reference to another chat: `@` a little lighter, its title, in
+        // the accent
+        out.push(@ui.span("@", bold~, italic~, strike~, link=href, color=alpha(accent, 0.7)))
+        out.push(@ui.span(@md.plain(c), bold~, italic~, strike~, link=href, color=accent))
+      }
+      Link(href, c) => runs_of(c, out, bold, italic, strike, href, accent)
       Image(src, alt) => {
         let words = if alt != "" {
           alt

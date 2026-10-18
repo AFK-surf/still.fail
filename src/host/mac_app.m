@@ -379,6 +379,23 @@ static void run_script_step(int step) {
     }
     if (k > 81 && k <= 91) mb_cb.pointer(1, 5 + (k - 81) * 20, 400, 0);
     [v requestFrame];
+  } else if (strcmp(script, "chat") == 0) {
+    // a chat (APP=sffix MBUI_FIXTURE=chat, or APP=stillfail with MBUI_OPEN_CHAT): as it opens (at MBUI_SHOT_AT, 30 by
+    // default: later for the core's first answers), then scrolled up MBUI_CHAT_UP points (900 by default), then
+    // more by as much again (the page before coming in as the top nears)
+    static int at = -1, up = -1;
+    if (at < 0) at = getenv("MBUI_SHOT_AT") ? atoi(getenv("MBUI_SHOT_AT")) : 30;
+    if (up < 0) up = getenv("MBUI_CHAT_UP") ? atoi(getenv("MBUI_CHAT_UP")) : 900;
+    int k = step - at;
+    switch (k) {
+      case 0: shot("chat-1"); break;
+      case 1: for (int i = 0; i < up / 100; i++) mb_cb.wheel(s.width / 2, s.height / 2, 0, -100, 0); break;
+      case 60: shot("chat-2-up"); break;
+      case 61: for (int i = 0; i < up / 100; i++) mb_cb.wheel(s.width / 2, s.height / 2, 0, -100, 0); break;
+      case 160: shot("chat-3-up"); break;
+      case 161: exit(0);
+    }
+    [v requestFrame];
   } else if (strcmp(script, "shot") == 0) {
     // MBUI_SHOT_AT: the frame to take it at (later for what waits on something, as the core's first answers)
     static int at;

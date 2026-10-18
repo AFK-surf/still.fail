@@ -1,4 +1,6 @@
 import {
   "mbui/ui",
   "mbui/sf",
+  "mbui/gallery",
+  "mbui/host",
 }

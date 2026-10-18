@@ -101,6 +101,75 @@ words are the Chinese catalog's), avatars' pictures on Android (no image
 decoding there yet), `client.focus`, and picking the first workspace into the
 prefs at start (only a switch made here writes them).
 
+Slice 4, a chat read (branch chat-read, 2026-10-19): a row pushes its chat
+(src/sfapp/chat.mbt, messages.mbt over the core's `chat {station, session}`
+view, chat_model.mbt; Chat.kt ChatScreen and Messages, Prose.kt,
+ChatFiles.kt, Decisions.kt, LoginCards.kt, Follow.kt):
+
+- The bar: back, the title, its people (PeopleStack), its agents' marks, the
+  first one's tile carrying the station it runs on (the `stations` topic:
+  its mark and how it is reached), the archive button while nothing is left
+  in it, the jobs' button when it has some, "…"; the page's ground at 94%
+  with a hairline under it, the messages running under it.
+- The messages: still.fail's notices as pills (a failing one red; tapped,
+  all its words and its time), the viewer's words in bubbles on the right
+  (sent close together, 4 apart; quotes as cards ahead of them), anyone
+  else's under their picture, name and time (a tap on a time says when, in
+  all of them), a person's words with references to other chats as
+  `@title` in the accent and bare addresses as links, an agent's as
+  Markdown (`@sf.markdown`, which now draws chat references and places a
+  message's files where its text names them), files as cards and images in
+  boxes of their own proportions before they load (their ThumbHash
+  likeness meanwhile, `station.file` with `thumb`), videos as their boxes
+  with the play mark, what went to Slack, options cards (who is to decide,
+  the options, 忽略), login cards (the `machineLogin` topic), 保留 / 归档此对话
+  under the last all-done post, the unread line, the activity line of an
+  agent at work (the `live` topic), the outbox. The words are the Chinese
+  catalog's. Times are the core's (`time.createdAt.ago`); the Android app
+  has no day separators in a chat, so neither has this.
+- The list (`Ctx::list` with `stick_end`): it opens at its end (or at the
+  unread line with a few lines before it, or where the core says it was
+  left: `at`, `atOffset`), follows the newest while it is at its end, and
+  over the composer's room shows the way to the newest (↓, with how many
+  wait when the window is short of the chat's end) once it is more than a
+  corner of the screen away; tapped, the list glides back
+  (`Ctx::list_to_end`). Near its top the page before comes in (`chat.older`,
+  once a page) and what is in view stays where it is (`Ctx::list_moved`:
+  the rows that came above, or under the spinner the first message kept in
+  place); near the end of a window short of the chat's, `chat.newer`.
+- While the chat is read: its bar, the messages to come breathing, the
+  composer; what could not be read over them in red.
+- The composer is the next slice's: its capsule is drawn (＋, 发消息, send),
+  taking nothing.
+- What the reader does is told to the core as the app does
+  (`client.focus` with the chat and whether its end shows, which marks it
+  read; `left` and `chat.place` as it is left), except with
+  MBUI_READONLY=1 (Source.read_only): runs on a real account change nothing.
+  MBUI_OPEN_CHAT (words of a title, or `#n` the n-th row),
+  MBUI_OPEN_SESSION and MBUI_CHAT_AT_END open a chat for scripted runs;
+  MBUI_CHAT_BENCH=1 scrolls it up 600 frames and says the frames' times.
+- Scrolling (MBUI_CHAT_BENCH, Studio, 390×844, 600 frames at 40 a frame,
+  build + layout + paint): the made-up chat of 3000 messages 0.34–0.57 ms a
+  frame on average (p99 0.8–2.5 ms, none over 8 ms); the long real chat
+  (its 151 messages, every page brought in) 0.58–0.71 ms (p99 under 4 ms,
+  none over 8 ms). Only the rows in view are built; the views are read once
+  a version, Markdown parsed once a text.
+- `APP=sffix MBUI_FIXTURE=chat` opens a made-up chat with every kind of
+  message (src/sfapp/chat_fixture.mbt; `chat-loading`, `chat-long` with
+  3000 messages): `scripts/shots.sh chat web-chat` compares it with
+  goldens/mac-chat*.png and web-chat.png.
+
+Not yet, against the current app: sending, the composer and drafts (slice
+5); answering cards, letting go, archiving and keeping from the chat (the
+buttons are drawn, inert); the long-press menu, quoting and picking words;
+the file preview (slice 11) and opening links outside the app; tables and
+code highlighting in Markdown, a code block's sideways scroll; the messages'
+motion (rising in, coming out of an agent's avatar, the activity's glide and
+its floor); a new message followed from its top when it is taller than the
+screen; the asks' bell; the chat's sheets ("…", the agent's card, jobs);
+images on Android (no decoding there yet: their boxes and likenesses only);
+the station's update control in the bar; the frosted glass.
+
 ## What the hosts need (platform)
 
 Hermes + shell on Android; secure storage with biometrics (`secure.*`);

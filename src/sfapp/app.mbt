@@ -6,8 +6,8 @@
 /// A page of the stack.
 pub(all) enum Page {
   Home
-  /// a chat: its station, its id in the station's list, its title (slice 4 fills it)
-  Chat(String, String, String)
+  /// a chat (chat.mbt)
+  Chat(ChatRef)
   /// the archived chats (from the filter's menu)
   Archived
   /// settings (the gear)
@@ -38,7 +38,7 @@ priv struct App {
 
 ///|
 let app : App = {
-  nav: @ui.Nav::new(Home),
+  nav: new_nav(),
   picked: "",
   filters: {},
   sheet: false,
@@ -52,9 +52,24 @@ let app : App = {
 }
 
 ///|
+/// What a page left leaves behind: a chat's topic and what it told the core.
+let left_pages : Array[Page] = []
+
+///|
+fn new_nav() -> @ui.Nav[Page] {
+  @ui.Nav::new(Home, on_leave=fn(p) { left_pages.push(p) })
+}
+
+///|
+/// A chat opened over Home from the start (a link, a scripted run).
+pub fn open_chat(r : ChatRef) -> Unit {
+  app.nav.push(Chat(r))
+}
+
+///|
 /// As at the start: Home alone, nothing chosen here yet (tests).
 fn reset() -> Unit {
-  app.nav = @ui.Nav::new(Home)
+  app.nav = new_nav()
   app.picked = ""
   app.filters.clear()
   app.sheet = false
@@ -62,6 +77,9 @@ fn reset() -> Unit {
   app.held = 0
   app.toast = ""
   read_views.clear()
+  read_chats.clear()
+  readings.clear()
+  left_pages.clear()
   splash_first.val = -1.0
 }
 
@@ -81,6 +99,13 @@ fn home() -> Unit {
 /// The app over `src`: call each frame.
 pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.begin(c)
+  for p in left_pages {
+    match p {
+      Chat(r) => chat_left(src, r)
+      _ => ()
+    }
+  }
+  left_pages.clear()
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
     let accounts = (src.topic)("accounts", {})
     match (accounts.value, (src.fatal)()) {
@@ -174,7 +199,7 @@ fn page_view(
 ) -> Unit {
   match page {
     Home => home_page(c, src, w, all, invited)
-    Chat(station, id, title) => chat_page(c, src, station, id, title)
+    Chat(r) => chat_page(c, src, w, r)
     Archived => placeholder_page(c, tr("android-chat.home.filter.archived"))
     Settings => placeholder_page(c, tr("android-chat.home.settings"))
   }

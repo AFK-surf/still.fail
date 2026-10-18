@@ -398,6 +398,14 @@ fn Tester::list_state(self : Tester) -> ListState {
 }
 
 ///|
+/// The context the view is built in (between frames: for what a view would
+/// call on it while building, as Ctx::list_moved).
+pub fn Tester::ctx(self : Tester) -> Ctx {
+  ignore(self)
+  g
+}
+
+///|
 /// Scrolls the (first) list so that row `item` starts at its top, from the
 /// next frame on.
 pub fn Tester::scroll_to(self : Tester, item : Int) -> Unit {

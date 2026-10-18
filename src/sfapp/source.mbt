@@ -23,4 +23,13 @@ pub(all) struct Source {
   picture : (String) -> String
   /// what the core said when it stopped, if it did
   fatal : () -> String?
+  /// a file of a chat as its messages show it (`station.file`, an image's thumbnail): by its station, the session
+  /// that keeps it and its name; an image's key once it is here, "" while it comes, "!" when it could not be had
+  file : (String, String, String) -> String
+  /// the time of day, in milliseconds since 1970 (how long an agent's turn has run)
+  now : () -> Double
+  /// a topic no page shows any more (`unsubscribe`)
+  leave : (String, Map[String, Json]) -> Unit
+  /// nothing the reader does is told to the core (MBUI_READONLY=1): no read marks, no place kept
+  read_only : Bool
 }

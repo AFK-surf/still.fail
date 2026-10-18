@@ -247,3 +247,94 @@ test "list: scrolling up into rows never measured moves by exactly the step" {
     assert_eq(y_of(t, first), before + 360.0)
   }
 }
+
+///|
+test "list: rows come in above what is in view, which stays where it is" {
+  let n = [100]
+  let first = [0]
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.list(
+        "list",
+        n[0],
+        40.0,
+        fn(i) {
+          let k = i - first[0]
+          c.box(h=Px(varied(k + 1000)), fn() { c.text("Row \{k}", wrap=false) |> ignore })
+          |> ignore
+        },
+      )
+      |> ignore
+    },
+    w=300.0,
+    h=400.0,
+  )
+  t.move(100.0, 100.0)
+  t.wheel(100.0, 100.0, 1000.0)
+  let (a, _) = t.visible()
+  let shown = t.find("Row \{a + 1}").unwrap().1
+  // twenty rows come in before the first
+  n[0] = 120
+  first[0] = 20
+  t.ctx().list_moved("list", 0, 20)
+  t.frame()
+  assert_eq(t.find("Row \{a + 1}").unwrap().1, shown)
+  assert_eq(t.visible().0, a + 20)
+}
+
+///|
+test "list: rows come in under a spinner at the top: the first row under it stays" {
+  let n = [50]
+  let first = [1]
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.list(
+        "list",
+        n[0],
+        40.0,
+        fn(i) {
+          if i == 0 {
+            c.box(h=Px(30.0), fn() { c.text("spinner", wrap=false) |> ignore }) |> ignore
+          } else {
+            let k = i - first[0]
+            c.box(h=Px(50.0), fn() { c.text("Row \{k}", wrap=false) |> ignore }) |> ignore
+          }
+        },
+      )
+      |> ignore
+    },
+    w=300.0,
+    h=400.0,
+  )
+  assert_eq(t.visible().0, 0)
+  let y0 = t.find("Row 0").unwrap().1
+  n[0] = 60
+  first[0] = 11
+  t.ctx().list_moved("list", 1, 10)
+  t.frame()
+  assert_eq(t.find("Row 0").unwrap().1, y0)
+  assert_true(t.find("spinner") is None)
+}
+
+///|
+test "list: back to its end, gliding, then at its end" {
+  let t = @ui.Tester::new(boxes(fn() { 200 }, varied, stick_end=true), w=300.0, h=400.0)
+  assert_true(t.at_end())
+  t.move(100.0, 100.0)
+  t.wheel(100.0, 100.0, -300.0)
+  assert_true(!t.at_end())
+  let info = t.ctx().list_info("list").unwrap()
+  assert_true(info.below > 250.0)
+  t.ctx().list_to_end("list")
+  t.frame()
+  // on its way, not there at once
+  assert_true(!t.at_end())
+  t.settle() |> ignore
+  assert_true(t.at_end())
+  assert_true(t.ctx().list_info("list").unwrap().below.abs() < 0.5)
+  // far from it, most of the way at once
+  t.wheel(100.0, 100.0, -3000.0)
+  t.ctx().list_to_end("list")
+  t.frame()
+  assert_true(t.at_end())
+}

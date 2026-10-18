@@ -2,7 +2,8 @@
 // the same on every run (scripts/shots.sh home, web-home), and the web's preview. Every word here is made up.
 //
 // `mode`: "home" (signed in, the chats), "signin" (signed out), "loading" (the list being read), "empty" (a
-// workspace with nothing in it yet).
+// workspace with nothing in it yet); "chat" (the first row's chat open: chat_fixture.mbt), "chat-loading" (it being
+// read), "chat-long" (thousands of messages in it).
 
 ///|
 priv struct Fixture {
@@ -11,6 +12,8 @@ priv struct Fixture {
   archived : Map[String, Bool]
   filters : Map[String, String]
   mut version : Int
+  /// the first row's chat: how many older pages have come in
+  mut older : Int
 }
 
 ///|
@@ -249,7 +252,7 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
         "others": if f.workspace == "ws1" { "done" } else { "alert" },
       })
     "status" => Some({ "items": [] })
-    _ => None
+    _ => fixture_chat_topic(f, name, params)
   }
   { value, error: None, version: f.version }
 }
@@ -263,6 +266,7 @@ pub fn fixture(mode : String) -> Source {
     archived: {},
     filters: {},
     version: 1,
+    older: 0,
   }
   {
     topic: fn(name, params) { fixture_topic(f, name, params) },
@@ -271,6 +275,11 @@ pub fn fixture(mode : String) -> Source {
         "chat.archive" => {
           let session = text(Some(params), "session")
           f.archived[session.view(start_offset=2).to_owned()] = true
+          f.version += 1
+          done(Ok(Json::object({})))
+        }
+        "chat.older" => {
+          f.older += 1
           f.version += 1
           done(Ok(Json::object({})))
         }
@@ -299,5 +308,9 @@ pub fn fixture(mode : String) -> Source {
     signing_in: fn() { false },
     picture: fn(_) { "" },
     fatal: fn() { None },
+    file: fn(_, _, name) { fixture_file(name) },
+    now: fn() { 0.0 },
+    leave: fn(_, _) {  },
+    read_only: true,
   }
 }

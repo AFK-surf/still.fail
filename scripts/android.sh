@@ -120,6 +120,11 @@ case "${1:-build}" in
     T0=$(python3 -c 'import time;print(time.time())')
     sync
     core_parts
+    # Gradle keeps what it merged from out/android/apk (the core's .so files, core.hbc) in its intermediates, and a
+    # build of an app without the core after one with it would still pack them: built anew when that changes.
+    kind=$(has_core && echo core || echo plain)
+    if [ "$(cat $OUT/apk-kind 2>/dev/null)" != "$kind" ]; then rm -rf android/app/build; fi
+    echo $kind > $OUT/apk-kind
     rm -f $M/_build/native/release/build/$PKG/$PKG.c  # never an old one's
     (cd $M && moon build --target native --release src/$PKG 2>&1) | python3 "$D/errs.py" | grep -v '^errors: 0' || true
     mkdir -p $OUT/obj android/app/src/main/jniLibs/arm64-v8a

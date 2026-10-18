@@ -21,7 +21,7 @@ fn b64_value(ch : Int) -> Int {
 
 ///|
 /// Base64 (standard or URL-safe, padded or not).
-fn b64_decode(s : String) -> Array[Int] {
+pub fn b64_decode(s : String) -> Array[Int] {
   let out = []
   let mut acc = 0
   let mut bits = 0

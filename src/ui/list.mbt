@@ -38,6 +38,7 @@ fn Ctx::scroll_list(self : Ctx, id : Int, d : Double) -> Unit {
     Some(st) => {
       st.pending = st.pending + d
       st.last_scroll = self.now
+      st.glide = false
     }
     None => ()
   }
@@ -109,6 +110,8 @@ pub fn Ctx::list(
         vis_first: -1,
         vis_last: -1,
         owner: self.owner,
+        below: 1.0e9,
+        glide: false,
       }
       self.lists[id] = s
       self.own(id)
@@ -337,6 +340,28 @@ fn Ctx::place_list(
     }
   }
   st.at_end = last == st.count - 1 && (pinned_end || bottom <= bottom_edge + 0.5)
+  st.below = if last == st.count - 1 { bottom - bottom_edge } else { 1.0e9 }
+  if st.glide {
+    // each frame the same share of what is left (1 - e^(-dt/100ms)), at
+    // least a pixel; far below what is laid out, most of the way at once
+    if last == st.count - 1 {
+      let left = bottom - bottom_edge
+      if left < 1.0 {
+        st.glide = false
+        st.at_end = true
+      } else {
+        let step = left * (1.0 - 2.718281828459045.pow(-self.dt / 100.0))
+        st.pending = if step < 1.0 { dmin(left, 1.0) } else { step }
+        self.wants_frame = true
+      }
+    } else if st.count - 1 - last > 12 {
+      st.scroll_to_end()
+      self.wants_frame = true
+    } else {
+      st.pending = ih
+      self.wants_frame = true
+    }
+  }
 }
 
 ///|
@@ -383,13 +408,125 @@ fn Ctx::paint_scrollbar(self : Ctx, n : Node, alpha : Double) -> Unit {
 
 ///|
 /// Scrolls list `key` (as given to Ctx::list in the same scope) so row
-/// `item` is at its top, the end kept in view.
-pub fn Ctx::list_scroll_to(self : Ctx, key : String, item : Int) -> Unit {
+/// `item` is at its top (`offset` below it: its top that far above the
+/// view's, or below it when negative), the end kept in view.
+pub fn Ctx::list_scroll_to(
+  self : Ctx,
+  key : String,
+  item : Int,
+  offset? : Double = 0.0,
+) -> Unit {
   match self.lists.get(self.id(key)) {
     Some(st) => {
       st.scroll_to(item)
+      st.anchor_off = offset
       self.wants_frame = true
     }
     None => ()
+  }
+}
+
+///|
+/// Back to list `key`'s end: gliding there (each frame a share of the way
+/// left, as still.fail's lists follow their newest), or at once.
+pub fn Ctx::list_to_end(self : Ctx, key : String, glide? : Bool = true) -> Unit {
+  match self.lists.get(self.id(key)) {
+    Some(st) => {
+      if glide {
+        st.vel = 0.0
+        st.glide = true
+      } else {
+        st.scroll_to_end()
+      }
+      self.wants_frame = true
+    }
+    None => ()
+  }
+}
+
+///|
+/// Scrolls list `key` by `dy` (down when positive), as a wheel does.
+pub fn Ctx::list_scroll_by(self : Ctx, key : String, dy : Double) -> Unit {
+  self.scroll_list(self.id(key), dy)
+  self.wants_frame = true
+}
+
+///|
+/// How a list stood when it was last laid out.
+pub(all) struct ListInfo {
+  count : Int
+  /// the first and the last row in view (-1 when none)
+  first : Int
+  last : Int
+  /// at its end, nothing below the view
+  at_end : Bool
+  /// how far the last row's bottom is below the view's (1e9 when the last
+  /// row was not laid out)
+  below : Double
+  /// gliding to its end (list_to_end)
+  gliding : Bool
+}
+
+///|
+/// How list `key` stood after the last layout; None before its first.
+pub fn Ctx::list_info(self : Ctx, key : String) -> ListInfo? {
+  match self.lists.get(self.id(key)) {
+    Some(st) =>
+      Some({
+        count: st.count,
+        first: st.vis_first,
+        last: st.vis_last,
+        at_end: st.at_end,
+        below: st.below,
+        gliding: st.glide,
+      })
+    None => None
+  }
+}
+
+///|
+/// Rows came (`n` > 0) or went (`n` < 0) before row `at` of list `key`
+/// since it was last laid out: what is in view stays where it is. Where
+/// the first row in view is above `at` (a spinner over the rows, say), the
+/// row that was at `at` is kept in place instead, the new rows coming in
+/// above it. Call before the list is laid out (while building).
+pub fn Ctx::list_moved(self : Ctx, key : String, at : Int, n : Int) -> Unit {
+  match self.lists.get(self.id(key)) {
+    Some(st) => st.moved(at, n)
+    None => ()
+  }
+}
+
+///|
+fn ListState::moved(self : ListState, at : Int, n : Int) -> Unit {
+  if n == 0 || at < 0 {
+    return
+  }
+  let was = self.heights.copy()
+  self.heights.clear()
+  for i in 0..<imin(at, was.length()) {
+    self.heights.push(was[i])
+  }
+  if n > 0 {
+    for _ in 0..<n {
+      self.heights.push(-1.0)
+    }
+  }
+  let from = if n < 0 { at - n } else { at }
+  for i in from..<was.length() {
+    self.heights.push(was[i])
+  }
+  if self.stick_end && self.at_end {
+    return
+  }
+  if self.anchor >= at {
+    self.anchor = imax(at, self.anchor + n)
+  } else if n > 0 {
+    let mut off = self.anchor_off
+    for i in self.anchor..<at {
+      off = off - self.height(i)
+    }
+    self.anchor = at + n
+    self.anchor_off = off
   }
 }

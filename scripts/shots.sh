@@ -7,12 +7,14 @@
 # text, Markdown, pages): kit gives mac-kit (its first page) and mac-kit-swipe
 # (the next page pushed, then swiped halfway back from the left edge). `home` (macOS) and `web-home` are still.fail's
 # Home over made-up chats (APP=sffix, src/sfapp/fixture.mbt) in a phone's window: home gives mac-home (the list),
-# mac-home-sheet (the workspaces' sheet) and mac-home-swipe (a chat pushed, swiped halfway back).
+# mac-home-sheet (the workspaces' sheet) and mac-home-swipe (a chat pushed, swiped halfway back). `chat` (macOS) and
+# `web-chat` are a made-up chat open over it (MBUI_FIXTURE=chat, src/sfapp/chat_fixture.mbt): chat gives mac-chat (at
+# its end), mac-chat-up (scrolled up: the way to the newest over it) and mac-chat-loading (being read).
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 mkdir -p out/shots goldens
-PLATFORMS=${*:-mac kit home web web-kit web-home ios android}
+PLATFORMS=${*:-mac kit home chat web web-kit web-home web-chat ios android}
 if [ ! -d out/node/node_modules/pixelmatch ]; then
   (cd out/node 2>/dev/null || { mkdir -p out/node && cd out/node && npm init -y >/dev/null; }; npm i pngjs pixelmatch playwright >/dev/null 2>&1)
 fi
@@ -40,6 +42,18 @@ for p in $PLATFORMS; do
       cp out/shot-home/home-2-workspaces.png out/shots/mac-home-sheet.png
       cp out/shot-home/home-4-swipe.png out/shots/mac-home-swipe.png
       names="mac-home mac-home-sheet mac-home-swipe" ;;
+    chat)
+      APP=sffix MODE=release bash scripts/mac.sh build >/dev/null
+      rm -rf out/shot-chat; mkdir -p out/shot-chat
+      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat MBUI_SCRIPT=chat MBUI_SHOT_DIR=$PWD/out/shot-chat ./_build/native/release/build/sffix/sffix.exe >/dev/null
+      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-loading MBUI_SCRIPT=shot MBUI_SHOT_NAME=loading MBUI_SHOT_DIR=$PWD/out/shot-chat ./_build/native/release/build/sffix/sffix.exe >/dev/null
+      cp out/shot-chat/chat-1.png out/shots/mac-chat.png
+      cp out/shot-chat/chat-2-up.png out/shots/mac-chat-up.png
+      cp out/shot-chat/loading.png out/shots/mac-chat-loading.png
+      names="mac-chat mac-chat-up mac-chat-loading" ;;
+    web-chat)
+      APP=sffix bash scripts/web.sh build >/dev/null
+      QUERY=MBUI_FIXTURE=chat NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-chat.png ;;
     web-home)
       APP=sffix bash scripts/web.sh build >/dev/null
       NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web-home.png ;;

@@ -57,6 +57,45 @@ fn picture(url : String) -> String {
 }
 
 ///|
+/// Chats' images as their messages show them (`station.file` with `thumb`: the station's thumbnail where it keeps one),
+/// asked once each, kept as images: "" while one comes, "!" when it could not be had.
+let chat_files : Map[String, String] = {}
+
+///|
+fn chat_file(station : String, key : String, name : String) -> String {
+  let id = station + "\u{1}" + key + "\u{1}" + name
+  match chat_files.get(id) {
+    Some(k) => k
+    None => {
+      chat_files[id] = ""
+      let params : Map[String, Json] = {
+        "station": Json::string(station),
+        "key": Json::string(key),
+        "name": Json::string(name),
+        "thumb": Json::boolean(true),
+      }
+      @core.call_bytes("station.file", params=Json::object(params), on_done=fn(r) {
+        match r {
+          Ok((_, Some(bytes))) if bytes.length() > 0 => {
+            let k = "mem:chat-file/\{id.hash()}/\{id.length()}"
+            @ui.add_image(k, bytes)
+            chat_files[id] = k
+          }
+          _ => chat_files[id] = "!"
+        }
+        @host.request_frame()
+      })
+      ""
+    }
+  }
+}
+
+///|
+/// MBUI_READONLY=1: nothing the reader does is told to the core (no read marks, no place kept), for runs on a real
+/// account that must change nothing in it.
+let read_only : Bool = @host.env("MBUI_READONLY") == "1"
+
+///|
 let core_source : @sfapp.Source = {
   topic: core_topic,
   call: fn(name, params, done) {
@@ -69,6 +108,10 @@ let core_source : @sfapp.Source = {
   signing_in: fn() { @sfcore.state.busy },
   picture,
   fatal: fn() { @core.fatal() },
+  file: chat_file,
+  now: fn() { @core.wall_ms() },
+  leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params~)) },
+  read_only,
 }
 
 ///|
@@ -83,6 +126,14 @@ fn main {
       |> ignore
     })
     return
+  }
+  // scripted runs: a chat opened by words in its title once Home lists it (MBUI_OPEN_CHAT), or by its station and
+  // session at once (MBUI_OPEN_SESSION=<workspace>/<station>|<session>)
+  @sfapp.open_titled.val = @host.env("MBUI_OPEN_CHAT")
+  match @host.env("MBUI_OPEN_SESSION").split("|").map(fn(v) { v.to_string() }).to_array() {
+    [station, session] =>
+      @sfapp.open_chat({ station, session, title: "", station_name: "" })
+    _ => ()
   }
   @ui.run("still.fail", fn(c) {
     @sfcore.frame(@core.subscribe("accounts"))

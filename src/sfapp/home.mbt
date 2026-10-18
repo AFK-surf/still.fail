@@ -79,6 +79,61 @@ fn filter_of(src : Source, ws : String) -> String {
 }
 
 ///|
+/// A chat to open once Home lists it, by words in its title, or `#n` the n-th row (MBUI_OPEN_CHAT, for scripted
+/// runs): "" none.
+pub let open_titled : Ref[String] = { val: "" }
+
+///|
+/// The chat in `view` whose title has `open_titled`'s words: pushed once it is listed; said when the list, all read,
+/// has none.
+fn open_listed(view : ChatsView) -> Unit {
+  let words = open_titled.val
+  if words == "" {
+    return
+  }
+  let mut rows = 0
+  for d in view.days {
+    for item in d.items {
+      rows = rows + 1
+      // #n: the n-th row (from 1)
+      let nth = if words.has_prefix("#") {
+        let mut k = 0
+        for ch in words.view(start_offset=1) {
+          let d = ch.to_int() - 48
+          if d >= 0 && d <= 9 {
+            k = k * 10 + d
+          }
+        }
+        k
+      } else {
+        0
+      }
+      if (nth > 0 && rows == nth) || (nth == 0 && item.title.contains(words)) {
+        open_titled.val = ""
+        @host.log("OPEN found among \{rows}+ rows")
+        app.nav.push(
+          Chat({
+            station: item.station,
+            session: item.session,
+            title: item.title,
+            station_name: item.station_name,
+          }),
+        )
+        return
+      }
+    }
+  }
+  let reading = match view.note {
+    Some(n) => n.reading
+    None => false
+  }
+  if !reading && rows > 0 {
+    open_titled.val = ""
+    @host.log("OPEN not found among \{rows} rows")
+  }
+}
+
+///|
 /// The top bar's height (8 + 34 + 8), under which the list starts.
 let bar_h : Double = 50.0
 
@@ -93,6 +148,10 @@ fn home_page(
   ignore(all)
   let filter = filter_of(src, w.id)
   let (view, error) = chats_of(src, w.id, filter)
+  match view {
+    Some(v) => open_listed(v)
+    None => ()
+  }
   let list : Array[Item] = [Top]
   match view {
     None => list.push(Wait(7, None, error))
@@ -543,7 +602,14 @@ fn chat_row(c : @ui.Ctx, src : Source, item : ChatItem, lead : String) -> Unit {
     let long = app.held == id && c.now() - app.held_at >= hold_ms
     app.held = 0
     if !long {
-      app.nav.push(Chat(item.station, item.id, item.title))
+      app.nav.push(
+        Chat({
+          station: item.station,
+          session: item.session,
+          title: item.title,
+          station_name: item.station_name,
+        }),
+      )
     }
   } else if !pressed && app.held == id {
     app.held = 0

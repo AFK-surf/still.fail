@@ -23,6 +23,11 @@ struct ListState {
   mut vis_last : Int
   // the page its state belongs to (Ctx::own), which its rows' states do too
   mut owner : Int
+  // how far the last row's bottom was below the view's after the last
+  // layout (1e9 when it was not laid out)
+  mut below : Double
+  // gliding to its end (Ctx::list_to_end), until there or scrolled
+  mut glide : Bool
 }
 
 ///|
@@ -283,6 +288,7 @@ pub fn Ctx::box(
   min_w? : Double = 0.0,
   max_w? : Double = 1.0e9,
   min_h? : Double = 0.0,
+  max_h? : Double = 1.0e9,
   clip? : Bool = false,
   tx? : Double = 0.0,
   ty? : Double = 0.0,
@@ -305,6 +311,7 @@ pub fn Ctx::box(
   n.min_w = min_w
   n.max_w = max_w
   n.min_h = min_h
+  n.max_h = max_h
   n.shadow_c = shadow_color
   n.shadow_y = shadow_y
   n.gap = gap

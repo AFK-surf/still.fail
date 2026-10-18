@@ -1,49 +1,6 @@
-// The pages pushed from Home, as far as this slice goes: a chat (its bar, Chat.kt BarFrame; what it holds is slice
-// 4's), the archive and settings (Parts.kt NavBar over nothing yet); the filter's menu (Sheet.kt MenuHost) and the
-// workspaces' sheet (Workspaces.kt WorkspacesSheet, in Sheet.kt's frame).
-
-///|
-/// A chat (Chat.kt ChatBar's frame): back, its title, its "…"; what it holds comes in slice 4.
-fn chat_page(
-  c : @ui.Ctx,
-  src : Source,
-  station : String,
-  id : String,
-  title : String,
-) -> Unit {
-  ignore(src)
-  ignore(station)
-  ignore(id)
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-    c.box(dir=Row, w=Fill(1.0), pl=4.0, pr=16.0, pt=6.0, pb=8.0, align=ACenter, fn() {
-      let back = c.id("chat-back")
-      if c.clicked(back) {
-        app.nav.pop() |> ignore
-      }
-      c.box(
-        w=Px(40.0),
-        h=Px(40.0),
-        radius=20.0,
-        align=ACenter,
-        justify=JCenter,
-        bg=if c.pressed(back) { @sf.alpha(t.p.text, 0.08) } else { 0L },
-        id=back,
-        fn() { @sf.icon(c, "chevron-left", size=22.0, color=t.p.accent) |> ignore },
-      )
-      |> ignore
-      c.box(w=Fill(1.0), pr=8.0, fn() {
-        c.text(title, size=16.0, weight=600, color=t.p.text, wrap=false, line=22.0)
-        |> ignore
-      })
-      |> ignore
-      nav_button(c, "more", 18.0, key="chat-more") |> ignore
-    })
-    |> ignore
-    c.box(w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore
-  })
-  |> ignore
-}
+// The pages pushed from Home, as far as these slices go: a chat (chat.mbt), the archive and settings (Parts.kt NavBar
+// over nothing yet); the filter's menu (Sheet.kt MenuHost) and the workspaces' sheet (Workspaces.kt WorkspacesSheet, in
+// Sheet.kt's frame).
 
 ///|
 /// A page's compact bar (Parts.kt NavBar): back to the chats, in the accent; its title in the middle.
