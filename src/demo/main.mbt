@@ -155,15 +155,23 @@ fn view(c : @ui.Ctx) -> Unit {
       bg=0xFFFFFFFFL,
       fn() {
         c.text("MoonBit UI", size=17.0, weight=700, wrap=false) |> ignore
-        app.tab = c.segmented("tabs", ["全部", "未读", "@我"], app.tab)
+        let narrow = c.width < 600.0
+        app.tab = c.segmented(
+          "tabs",
+          ["全部", "未读", "@我"],
+          app.tab,
+          item_w=if narrow { 58.0 } else { 76.0 },
+        )
         c.spacer()
-        c.text(
+        if !narrow {
+          c.text(
           "\{app.msgs.length()} 条 · 帧 \{fmt_ms(c.frame_ms())} ms",
           size=12.0,
           color=0x8E8E93FFL,
           wrap=false,
-        )
-        |> ignore
+          )
+          |> ignore
+        }
       },
     )
     |> ignore
