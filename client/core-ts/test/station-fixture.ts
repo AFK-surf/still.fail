@@ -38,6 +38,13 @@ export function stationReplies(host: FakeHost, reply: (req: HttpRequest) => unkn
   replies.set(host, reply);
 }
 
+/// Station answers that take a while (a real station behind it, docs/core-modules.md's end-to-end test): asked first;
+/// `undefined`, the others'.
+const later = new WeakMap<FakeHost, (req: HttpRequest) => Promise<HttpResponse> | undefined>();
+export function stationLater(host: FakeHost, reply: (req: HttpRequest) => Promise<HttpResponse> | undefined): void {
+  later.set(host, reply);
+}
+
 /// Whether a request asks its answer compressed, as the core's do (requests.ts ZSTD).
 const asksCompressed = (req: HttpRequest) => req.headers.some(([k, v]) => k.toLowerCase() === "accept-encoding" && v.split(",").some((e) => e.trim() === "zstd"));
 
@@ -76,7 +83,7 @@ export function stationHost(answers: Answers) {
   const host = new FakeHost();
   signIn(host);
   const streams: { path: string; queue: Queue.Queue<Uint8Array | null>; closed: boolean }[] = [];
-  host.onFetch((req: HttpRequest) => compressedFor(req, answer(req)));
+  host.onFetch((req: HttpRequest) => later.get(host)?.(req) ?? compressedFor(req, answer(req)));
   // How it answers what changed of a list (POST /changed/<list>) and several reads in one (POST /batch): `false`, as a
   // station from before (no such route).
   const changes = { on: true };
