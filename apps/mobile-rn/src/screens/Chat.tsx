@@ -288,7 +288,9 @@ function Rise({ on, children }: { on: boolean; children?: ReactNode }) {
   const y = useSharedValue(on ? 1 : 0);
   useEffect(() => { if (on) y.value = withTiming(0, { duration: 320, easing: Ease.Standard }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const style = useAnimatedStyle(() => ({ transform: [{ translateY: y.value * 14 }], opacity: 1 - y.value }));
-  return <Animated.View style={style}>{children}</Animated.View>;
+  // Laid on only on a row that rises (Home.tsx Moving: Reanimated lays each style again over every React commit).
+  const [rises] = useState(on);
+  return <Animated.View style={rises ? style : undefined}>{children}</Animated.View>;
 }
 
 type Entry =
@@ -415,7 +417,8 @@ function Glide({ tops, id, on, children }: { tops: CellTops; id: string; on: boo
     off.value = withSpring(0, ACTIVITY_GLIDE);
   }), [tops, id, off]);
   const style = useAnimatedStyle(() => ({ transform: [{ translateY: off.value }] }));
-  return <Animated.View style={style}>{children}</Animated.View>;
+  // Only a row that glides has the style laid on (as Rise).
+  return <Animated.View style={on ? style : undefined}>{children}</Animated.View>;
 }
 
 /** What the rows share of the list they are in (the page's, as Messages has them). */
