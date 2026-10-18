@@ -27,13 +27,13 @@ import { routes as vault } from "./routes/vault.ts";
 import { routes as vaultRequests } from "./routes/vault-requests.ts";
 import { vaultStore } from "../vault/store.ts";
 import { routes as machineLogins } from "./routes/logins.ts";
-import { Drive } from "../drive/drive.ts";
+import { type Drive, stationDrive } from "../drive/drive.ts";
+import { type ModuleSet, moduleOf } from "../modules/modules.ts";
 import { HelperFiles } from "../helper/files.ts";
 import type { HelperApp } from "../helper/app.ts";
 import type { HelperGrants } from "../helper/grants.ts";
 import { routes as permissions } from "./routes/permissions.ts";
 import { platform } from "../platform/index.ts";
-import { ownPaths } from "../ops/own.ts";
 import type { AgentsParts } from "../sessions/agents.ts";
 import type { Store } from "../store/store.ts";
 import type { Events } from "./events.ts";
@@ -87,6 +87,10 @@ export type AdminDeps = {
   helper?: HelperApp | null;
   /// What macOS lets it do: one look at its grants and its window asking for them (the drive's, the page's).
   grants?: HelperGrants | null;
+  /// The station's drive (services.ts StationDrive); one is made for the routes when none is given.
+  drive?: Drive;
+  /// The modules beside the station (modules/modules.ts): `/m/<id>/…` passed on to them; none, no such route.
+  modules?: ModuleSet;
 };
 
 /// The header a write's key comes in, and how long an answer is kept (once.rs).
@@ -158,18 +162,20 @@ export class Admin {
       ...(deps.agents?.config
         ? drive({
             config: deps.agents.config,
-            drive: new Drive({
-              config: () => deps.agents!.config.raw(),
-              protect: () => ownPaths(deps.agents!.config.data, deps.agents!.config.path, deps.agents!.hub.config().profiles.map((p) => p.home)),
-              // The folders macOS keeps from the station, through still.fail Helper; their roots told again as its grants change.
-              // One with the agents' side (the directories people and agents name), where it made one.
-              files:
+            // The station's, shared with the modules' local API (services.ts StationDrive); made here when not given (tests).
+            drive:
+              deps.drive ??
+              stationDrive(
+                deps.agents.config,
+                () => deps.agents!.hub.config().profiles.map((p) => p.home),
+                // The folders macOS keeps from the station, through still.fail Helper; their roots told again as its grants change.
+                // One with the agents' side (the directories people and agents name), where it made one.
                 deps.agents.helperFiles !== undefined
                   ? deps.agents.helperFiles
                   : deps.helper && platform.hasFolderPermissions
                     ? new HelperFiles({ helper: deps.helper, ...(deps.grants ? { grants: deps.grants } : {}), changed: () => deps.events?.overviewChanged() })
                     : null,
-            }),
+              ),
             changed: () => deps.events?.overviewChanged(),
             // Beside the files uploaded for a message (routes/hub.ts), swept as they are.
             stage: (name) => uploadPath(join(deps.agents!.hub.config().dataDir, "uploads"), name),
@@ -248,8 +254,9 @@ export class Admin {
   }
 
   private async answer(r: Request): Promise<Answer> {
-    // A viewer reads: no message sent, nothing changed (previews included).
-    if (readOnly(r.viewer) && !readOnlyMay(r)) return error(403, "read-only members cannot change this station");
+    // A viewer reads: no message sent, nothing changed (previews included); a module says what of its own a viewer
+    // changes too (their reading progress, say: its manifest's `viewerWrites`).
+    if (readOnly(r.viewer) && !readOnlyMay(r) && this.deps.modules?.viewerMay(r) !== true) return error(403, "read-only members cannot change this station");
     if (r.method === "POST" && /^\/*batch$/.test(r.path)) return this.batch(r);
     // A session, chat or job of another workspace than the viewer's is none for them (api/seen.ts).
     const hidden = this.deps.store ? elsewhere(this.deps.store, r.path, r.viewer) : null;
@@ -264,6 +271,9 @@ export class Admin {
       for (const [name, value] of answer.headers) joined[name] = name in joined ? `${joined[name]}, ${value}` : value;
       return { status: answer.status, headers: joined, body: answer.body };
     }
+    // A module's (modules/forward.ts): any method, its answer as it comes.
+    const module = moduleOf(r.path);
+    if (module !== null && this.deps.modules) return this.deps.modules.forward(r, module);
     for (const route of this.routes) {
       const found = r.method === route.method ? route.pattern.exec(r.path) : null;
       if (found) return route.handle(r, found.slice(1));

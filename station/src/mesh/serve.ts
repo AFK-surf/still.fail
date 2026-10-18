@@ -19,6 +19,7 @@ import type { ScreenHub } from "../screens/hub.ts";
 import { compressed } from "./compress.ts";
 import { Traces, parseParent, route } from "./traces.ts";
 import { FrameReader, SocketRefused, openSocket, previewTarget, pumpSocket } from "../jobs/preview.ts";
+import { isModulePath } from "../modules/modules.ts";
 
 export const ALPN = Buffer.from("stillfail/admin/1");
 export const FORMER_ALPN = Buffer.from("ember/admin/1");
@@ -76,6 +77,16 @@ export class Reader {
       if (size > MAX_BODY) throw new Error("request body too large");
     }
     return Buffer.concat(parts);
+  }
+
+  /// The rest as it comes, however long (a request passed on as it is: a module's).
+  async *chunks(): AsyncGenerator<Buffer> {
+    if (this.carry.length > 0) {
+      const first = this.carry;
+      this.carry = Buffer.alloc(0);
+      yield first;
+    }
+    for (let more = await this.stream.read(); more; more = await this.stream.read()) yield more;
   }
 }
 
@@ -363,7 +374,10 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     if (readOnly(viewer)) return answer(403, { error: "read-only members cannot change this station" });
     return socket(m, stream, reader, head, path);
   }
-  const body = await reader.rest();
+  // A module's request goes on to it as it comes (modules/forward.ts): a video uploaded is not held here whole, nor
+  // bound by MAX_BODY.
+  const streamed = isModulePath(path.slice("/admin/api".length));
+  const body = streamed ? Buffer.alloc(0) : await reader.rest();
   // The caller's headers go on, but not those of the hop, nor any of the station's own: who is asking is only what
   // the credential says.
   const headers: Record<string, string> = {};
@@ -387,6 +401,7 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     search: at < 0 ? "" : rest.slice(at),
     headers,
     body,
+    ...(streamed ? { upload: reader.chunks() } : {}),
     viewer,
     lang: langOfCore(headers),
   });

@@ -25,6 +25,8 @@ import { unreadableDir } from "../ops/files.ts";
 import { TooBig, zipFolder } from "./zip.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { type Fs, type Grant, type Protected, direct, protectedTop, realOf } from "./fs.ts";
+import type { ConfigFile } from "../ops/config.ts";
+import { ownPaths } from "../ops/own.ts";
 
 /// Why a request was refused (zdrive's codes, and `protected` for the station's own data), each with its status.
 export const CODES = {
@@ -231,6 +233,12 @@ export type DriveDeps = {
   home?: string;
 };
 
+/// The station's drive, one for the admin API's routes and the modules' local API (modules/local.ts): config.json's
+/// roots, the station's own data never reached (its data directory, config, the profiles' homes, ops/own.ts), the
+/// folders macOS protects through still.fail Helper (`files`, where there is one).
+export const stationDrive = (config: ConfigFile, profileHomes: () => string[], files: Protected | null) =>
+  new Drive({ config: () => config.raw(), protect: () => ownPaths(config.data, config.path, profileHomes()), files });
+
 export class Drive {
   private deps: DriveDeps;
   constructor(deps: DriveDeps) {
@@ -379,6 +387,24 @@ export class Drive {
       try {
         const got = await at.fs.read(at.found, offset, length);
         return { bytes: got.bytes, total: got.size, mtime: Math.round(got.mtimeMs), type: typeOf(at.parts.at(-1) ?? "") };
+      } catch (e) {
+        throw failed(e);
+      }
+    });
+  }
+
+  /// A file for what opens it by its path itself (the image codecs, a video's poster; modules/media.ts): where it is as
+  /// the file system has it (`found`, what it is known by), its name, size and time. `copy` is there when it is reached
+  /// through still.fail Helper, which the station does not open itself: the file copied to `to` (a new file of the
+  /// station's own) to be read there instead.
+  file(root: string, path: string, anywhere = false): Promise<{ found: string; name: string; size: number; mtime: number; copy: ((to: string) => Promise<void>) | null }> {
+    return this.#run(async () => {
+      const at = await this.place(root, path, anywhere);
+      try {
+        const s = await at.fs.stat(at.found);
+        if (s.dir) throw new DriveError("is_a_directory", "that is a folder");
+        const copy = at.fs.helper ? (to: string) => at.fs.copyTo(at.found, to).catch((e) => Promise.reject(failed(e))) : null;
+        return { found: at.found, name: at.parts.at(-1) ?? rootName(at.root), size: s.size, mtime: Math.round(s.mtimeMs), copy };
       } catch (e) {
         throw failed(e);
       }

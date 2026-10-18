@@ -40,6 +40,8 @@ export type OverviewDeps = {
   /// A pinned root as the drive shows it (drive.ts `rootViewThrough`: one in a folder macOS protects by what still.fail
   /// Helper's grant is known to be, never listed by the station); default `rootView`.
   rootView?: (path: string) => RootView;
+  /// The modules beside the station (modules/modules.ts), each named and whether it runs now.
+  modules?: () => { id: string; running: boolean }[];
 };
 
 /// This station's link to still.fail cloud, as the pages show it (server.rs MeshFile::status): in the viewer's workspace
@@ -142,7 +144,14 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     search: { files: platform.hasSpotlight ? "spotlight" : "walk", personal: raw?.search?.personal === true },
     // macOS's grants to still.fail Helper (a Mac's station only; a station from before them says none: not shown).
     ...withPermissions(d, viewer),
+    // The modules beside it (docs/station-modules.md), for clients to show theirs: said only where there is one.
+    ...withModules(d),
   };
+}
+
+function withModules(d: OverviewDeps): { modules?: { id: string; running: boolean }[] } {
+  const modules = d.modules?.() ?? [];
+  return modules.length === 0 ? {} : { modules };
 }
 
 function withPermissions(d: OverviewDeps, viewer: Viewer): { permissions?: unknown } {

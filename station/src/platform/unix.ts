@@ -467,5 +467,6 @@ export const unix: Platform = {
   hasQuickLook: MACOS,
   hasFolderPermissions: MACOS,
   hasSpotlight: MACOS,
+  hasUnixSockets: true,
   hasDesktopScreen: MACOS,
 };
