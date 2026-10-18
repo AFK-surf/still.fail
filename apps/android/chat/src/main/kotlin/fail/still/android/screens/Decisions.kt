@@ -193,11 +193,13 @@ internal fun DecisionUnder(ctx: Here, m: ChatMessage) {
     val app = LocalApp.current
     val station = ctx.station
     val busy = options.firstOrNull { app.isDoing("decision.answer", "station" to station, "thread" to m.thread, "seq" to m.seq, "option" to it.label) }?.label
+    // Closing in its turn among what changes the list's height (ListTurns.kt): the leave and its delayed close, what
+    // says how it was settled coming in its place in the same turn.
+    val open = inTurn(!resolved, CLOSE_TURN_MS)
     Column {
         // Match chat-list archive: the whole group shrinks/fades, then a delayed spring closes its space.
-        // Closing in its turn among what changes the list's height (ListTurns.kt): the leave and its delayed close.
         AnimatedVisibility(
-            visible = inTurn(!resolved, CLOSE_TURN_MS), enter = EnterTransition.None,
+            visible = open, enter = EnterTransition.None,
             exit = fadeOut(tween(LEAVE_MS, easing = CssEaseOut)) +
                 scaleOut(tween(LEAVE_MS, easing = CssEaseOut), targetScale = 0.9f) +
                 shrinkVertically(closeGap(IntSize.VisibilityThreshold), shrinkTowards = Alignment.Top, clip = false),
@@ -217,7 +219,7 @@ internal fun DecisionUnder(ctx: Here, m: ChatMessage) {
             }
         }
         AnimatedVisibility(
-            visible = inTurn(resolved && decision?.text != null, CLOSE_TURN_MS),
+            visible = !open && resolved && decision?.text != null,
             enter = fadeIn(tween(LEAVE_MS, delayMillis = LEAVE_MS, easing = CssEaseOut)) +
                 expandVertically(closeGap(IntSize.VisibilityThreshold), expandFrom = Alignment.Top),
         ) {

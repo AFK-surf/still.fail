@@ -39,8 +39,11 @@ internal class ListTurns {
     var still: () -> Boolean = { true }
     var scope: CoroutineScope? = null
 
-    /** `block` (its motion, from its start to its end) in its turn; the next goes once it is over and the list still. */
-    fun take(block: suspend () -> Unit): Job? = scope?.launch {
+    /** `block` (its motion, from its start to its end) in its turn; the next goes once it is over and the list still.
+     *  `after`: asked for a couple of frames on, after what else changed with it (what closes under a post as an
+     *  agent starts: the agent's line comes after it). */
+    fun take(after: Boolean = false, block: suspend () -> Unit): Job? = scope?.launch {
+        if (after) repeat(2) { withFrameNanos { } }
         mutex.withLock {
             withTimeoutOrNull(MOST_MS) { block() }
             // Looked at from two frames on (what it moved is laid out in the frame after it, the list sets out then).
@@ -51,11 +54,11 @@ internal class ListTurns {
         }
     }
 
-    /** The row `key` comes into the list in its turn, its own motion taking `ms`. */
-    fun admit(key: String, ms: Long) {
+    /** The row `key` comes into the list in its turn, its own motion taking `ms` (`after`: see take). */
+    fun admit(key: String, ms: Long, after: Boolean = false) {
         if (key in waiting) return
         waiting[key] = Unit
-        if (take { waiting.remove(key); delay(ms) } == null) waiting.remove(key)
+        if (take(after) { waiting.remove(key); delay(ms) } == null) waiting.remove(key)
     }
 
     /** Words sent: their row comes in its turn, which lasts till they have landed (`landed`). */

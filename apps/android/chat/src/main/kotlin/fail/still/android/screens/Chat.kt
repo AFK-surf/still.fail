@@ -565,7 +565,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
             (r is Entry.Working || (r is Entry.Said && !r.m.mine && !motion.emits(r.m.seq)))
     }
     val inList = all.filter { r -> r.id !in turns.waiting && r !in newcomers && !(turns.sendWaiting && sentRow(r)) }
-    SideEffect { newcomers.forEach { r -> admitted += r.id; turns.admit(r.id, if (r is Entry.Working) 220L else 320L) } }
+    SideEffect { newcomers.forEach { r -> admitted += r.id; turns.admit(r.id, if (r is Entry.Working) 220L else 320L, after = r is Entry.Working) } }
     val rows = if (reveal.count < inList.size) inList.takeLast(reveal.count) else inList
     // What is new is told here, as the list is composed: its rows are composed later (as it is laid out), after the
     // SideEffect below has counted them in. Nothing is new on the first draw, nor with the reader away from the end
