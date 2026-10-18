@@ -15,6 +15,8 @@ import { STILL, stillAtOnce, stillLoop } from "@stillfail/ui/styles/still.ts";
 export const msgName = style({ fontWeight: "600" });
 /** A chat's list of messages, on either screen (the wide screen's pane, the phone's page): what quotes jump within. */
 export const chatMessages = style({});
+/** A row waiting its turn among what changes the list's height (listQueue.ts): no room yet, nothing shown. */
+globalStyle(`${chatMessages} > [data-queued]`, { display: "none" });
 // Historical loading changes opacity only, all rows in a commit together: no queue, motion or repeated layout.
 globalStyle(`${chatMessages} > ${msg}[data-history-fade]`, { animation: `${fadeKeyframes} 180ms ${vars.easeOut}` });
 export const chatToBottom = style({

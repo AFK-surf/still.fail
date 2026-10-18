@@ -50,8 +50,8 @@ function helpers() {
       const p = pane();
       const rows = {};
       // Not one that shows nothing: a message waiting to come out of its avatar, an activity folded while its avatar flies,
-      // a message sent covered by the copy flying from the composer.
-      for (const el of p?.querySelectorAll(':scope > [data-vk]:not([data-held]):not([data-away]):not([data-send-covered])') ?? []) rows[el.dataset.vk] = Math.round(el.getBoundingClientRect().top * 10) / 10;
+      // a message sent covered by the copy flying from the composer, one waiting its turn (listQueue.ts).
+      for (const el of p?.querySelectorAll(':scope > [data-vk]:not([data-held]):not([data-away]):not([data-send-covered]):not([data-queued])') ?? []) rows[el.dataset.vk] = Math.round(el.getBoundingClientRect().top * 10) / 10;
       // An agent's line showing while the reader's message is still on its way to the list (it comes once that lands).
       const act = [...(p?.querySelectorAll(':scope > [data-vk^="a:"]') ?? [])].find((a) => !before.has(a.dataset.vk));
       const early = !!act && !!p.querySelector(':scope > [data-send-covered]') && act.getBoundingClientRect().height > 4 && +getComputedStyle(act).opacity > 0.1;
@@ -112,6 +112,22 @@ function jumps(frames, height) {
 }
 
 const CASES = {
+  // A whole turn: a message sent, its agent at work at once, then its reply said as it stops (in the same moment, as
+  // an agent's last post and its turn's end come).
+  async turn(page) {
+    await page.evaluate(() => check.set((c) => { c.running = null; }));
+    await page.waitForTimeout(1200);
+    const field = page.locator('textarea:not([aria-hidden])').filter({ visible: true }).last();
+    await field.fill('把登录页按钮改一下');
+    const watching = page.evaluate(() => check.sample(4200));
+    await field.press('Enter');
+    await page.evaluate(() => check.set((c) => { c.running = { activity: '读取 src/auth/LoginForm.tsx', since: Date.now(), started: true }; }));
+    await page.waitForTimeout(1600);
+    await page.evaluate(() => check.set((c) => { c.messages = [...c.messages, check.message(c, 'agent', '改好了：\n\n- 按钮撑满容器\n- 左右各 16px\n- 深色模式下也看得见')]; }));
+    await page.waitForTimeout(60);
+    await page.evaluate(() => check.set((c) => { c.running = null; }));
+    return watching;
+  },
   // A message written in the composer and sent, nothing asked.
   async send(page) {
     await page.waitForTimeout(300);

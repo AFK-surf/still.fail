@@ -7,10 +7,11 @@
 // it too (a grid row can't be pulled up into the gap: the item before gives it up instead). The list is told where its
 // row is going as it starts (rowHeights.ts), and its pane goes there along with it, by the same law (motion.ts GLIDE_*)
 // from the same frame: what is above and what is below move one way each, never there and back.
-import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { ENTER, ENTER_FROM, GLIDE_EASE, GLIDE_MS, glideValue, LEAVE, LEAVE_TO, play } from "@stillfail/ui/motion.ts";
+import { useLayoutEffect, useReducer, useRef, useState, type ReactNode, type RefObject } from "react";
+import { ENTER, ENTER_FROM, GLIDE_EASE, GLIDE_MS, glideValue, LEAVE, LEAVE_TO, motionMs, play } from "@stillfail/ui/motion.ts";
 import * as css from "./Chat.css.ts";
 import { closing as rowClosing } from "./rowHeights.ts";
+import { after, listQueue } from "./listQueue.ts";
 
 /** Its room opening, by the list's law (motion.ts GLIDE_*), as its pane goes along with it. */
 const CLOSE = { duration: GLIDE_MS, easing: GLIDE_EASE };
@@ -54,15 +55,34 @@ export function useSettling(box: RefObject<HTMLElement | null>, open: boolean, d
   // box goes, given back once the box is gone (in the same commit), or back.
   const closing = useRef<{ stop(): void } | null>(null);
   const taken = useRef<HTMLElement | null>(null);
+  // Its turn among what changes the list's height (listQueue.ts): closing waits for it, drawn as it was meanwhile, and
+  // gives it back once closed (or opened again).
+  const turn = useRef<{ granted: boolean; out(): void; over(): void } | null>(null);
+  const [turns, granted] = useReducer((n: number) => n + 1, 0);
+  const giveBack = () => {
+    const t = turn.current;
+    turn.current = null;
+    if (t?.granted) t.over();
+    else t?.out();
+  };
   const { arriving, gone } = to;
   useLayoutEffect(() => {
     if (open) {
       closing.current?.stop();
+      giveBack();
       if (!drawnOpen) setDrawnOpen(true);
       return;
     }
     if (!drawnOpen) return;
     const el = box.current;
+    if (el && el.childElementCount > 0 && moving()) {
+      if (!turn.current) {
+        const t = { granted: false, out: () => {}, over: () => {} };
+        turn.current = t;
+        t.out = listQueue(el).take(() => new Promise<void>((resolve) => { t.granted = true; t.over = resolve; granted(); }));
+      }
+      if (!turn.current.granted) return;
+    }
     leaving.current = null;
     if (el && el.childElementCount > 0 && moving()) {
       const rect = el.getBoundingClientRect();
@@ -71,8 +91,8 @@ export function useSettling(box: RefObject<HTMLElement | null>, open: boolean, d
       Object.assign(el.style, { height: `${rect.height}px`, overflow: "clip" });
     }
     setDrawnOpen(false);
-    if (!leaving.current) gone?.();
-  }, [box, open, drawnOpen, setDrawnOpen, gone]);
+    if (!leaving.current) { gone?.(); giveBack(); }
+  }, [box, open, drawnOpen, setDrawnOpen, gone, turns]); // eslint-disable-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     const was = leaving.current;
     const el = box.current;
@@ -91,10 +111,11 @@ export function useSettling(box: RefObject<HTMLElement | null>, open: boolean, d
       if (before) before.style.marginBottom = `${-gap * (was.height - h) / Math.max(1, was.height - end)}px`;
     });
     const letGo = () => { el.style.removeProperty("height"); el.style.removeProperty("overflow"); };
-    closing.current = { stop() { run.cancel(); closing.current = null; told(); letGo(); if (taken.current) { taken.current.style.removeProperty("margin-bottom"); taken.current = null; } } };
+    closing.current = { stop() { run.cancel(); closing.current = null; told(); letGo(); giveBack(); if (taken.current) { taken.current.style.removeProperty("margin-bottom"); taken.current = null; } } };
     void run.finished.then(() => {
       closing.current = null;
       told();
+      giveBack();
       // Gone: held at nothing until it is taken away (`gone`), the gap given back then.
       if (gone) gone();
       else letGo();
@@ -144,13 +165,20 @@ export function Settles({ shown, children }: { shown: boolean; children: ReactNo
     // Back while going (an answer that failed): at once.
     for (const a of el.getAnimations()) a.cancel();
     if (!shown || was || !moving()) return;
-    const height = el.getBoundingClientRect().height;
-    play(el, [{ height: "0px", overflow: "clip" }, { height: `${height}px`, overflow: "clip" }], CLOSE);
-    // The gap before it opens with it, given up by the item before until then.
-    given.current = giveGap(el);
-    for (const child of el.children) {
-      play(child, [ENTER_FROM, { opacity: 1, transform: "none" }], { ...ENTER, fill: "backwards" });
-    }
+    // In its turn among what changes the list's height (listQueue.ts): taking no room till then.
+    el.style.display = "none";
+    const out = listQueue(el).take(() => {
+      el.style.removeProperty("display");
+      const height = el.getBoundingClientRect().height;
+      play(el, [{ height: "0px", overflow: "clip" }, { height: `${height}px`, overflow: "clip" }], CLOSE);
+      // The gap before it opens with it, given up by the item before until then.
+      given.current = giveGap(el);
+      for (const child of el.children) {
+        play(child, [ENTER_FROM, { opacity: 1, transform: "none" }], { ...ENTER, fill: "backwards" });
+      }
+      return after(motionMs(CLOSE.duration));
+    });
+    return () => { out(); el.style.removeProperty("display"); };
   }, [shown]);
   if (!kept) return null;
   return <div ref={box} className={css.settles}>{(shown || drawn) && children}</div>;

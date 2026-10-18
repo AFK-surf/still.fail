@@ -10,6 +10,7 @@
 import { pageChanging, transitionLive } from "./ui.tsx";
 import { cubicBezier } from "motion";
 import { motionMs, play } from "@stillfail/ui/motion.ts";
+import { listQueue } from "./listQueue.ts";
 import * as msgCss from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 
@@ -344,14 +345,6 @@ export function sentAfter(chat: { messages: readonly { seq: number }[]; outbox: 
 
 /** Words sent in an open chat, waiting for their row or on their way to it; `done` lets them go (at once). */
 let flying: { done(): void } | null = null;
-/** Told once the words now on their way have landed (or at once, none being). */
-const landing: (() => void)[] = [];
-/** Calls `then` once what the reader just sent has landed in its chat's list (sendingHere), or now if nothing flies. */
-export function whenLanded(then: () => void): () => void {
-  if (!flying) { then(); return () => {}; }
-  landing.push(then);
-  return () => { const i = landing.indexOf(then); if (i >= 0) landing.splice(i, 1); };
-}
 
 /** Told once the row of what the reader just sent is in its chat's list (or it will not be): `sendingHere` waits for it. */
 const rowIn: (() => void)[] = [];
@@ -413,6 +406,8 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
       // Hide the row and its delayed status together, without changing opacity: the chat's emphasis transition
       // would otherwise fade the real row back in after its flying copy has already gone.
       el.dataset.sendCovered = "";
+      // Waiting its turn (listQueue.ts), it takes no room yet.
+      if (!begun) el.dataset.queued = "";
       rows.push(el);
     }
     return rows.findLast((el) => el.isConnected) ?? null;
@@ -432,8 +427,10 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     if (flying?.done === done) {
       flying = null;
       rowCame();
-      for (const then of landing.splice(0)) then();
     }
+    // Over: its turn ends once the list is where it moved it to; given up before it came, it is taken out.
+    if (turn) landed();
+    else out();
     observer.disconnect();
     clearTimeout(timeout);
     cancelAnimationFrame(frame);
@@ -441,7 +438,7 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     ghost?.remove();
     stand?.remove();
     for (const picture of pictures) picture.stand.remove();
-    for (const el of rows) delete el.dataset.sendCovered;
+    for (const el of rows) { delete el.dataset.sendCovered; delete el.dataset.queued; }
     delete field.dataset.madeHint;
     // The hint eases back (data-sent), then the field is as it was.
     setTimeout(() => {
@@ -523,10 +520,25 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     if (words && field.dataset.madeHint && copy.getBoundingClientRect().bottom <= composer.getBoundingClientRect().top) delete field.dataset.madeHint;
   };
   const tick = () => { place(); frame = requestAnimationFrame(tick); };
-  // The row comes as the list is drawn anew: its copy takes the words' place before the frame is painted.
+  // Its turn among what changes the list's height (listQueue.ts), asked as it is sent (what comes after it, the agent
+  // starting on it, waits for it): the words wait in the composer till then, its row taking no room. Its turn come
+  // before its row, it waits for the row. Over once it has landed.
+  let begun = false;
+  let turn = false;
+  let landed: () => void = () => {};
+  let out: () => void = () => {};
+  // The row comes as the list is drawn anew: in its turn, its copy takes the words' place before the frame is painted.
   const start = () => {
     const row = take();
-    if (!row || ghost) return;
+    if (!row || !turn || begun) return;
+    clearTimeout(timeout);
+    begun = true;
+    for (const el of rows) delete el.dataset.queued;
+    begin();
+  };
+  const begin = () => {
+    const row = take();
+    if (!row || ghost) { done(); return; }
     rowCame();
     const flies = (stand && row.querySelector(`.${msgCss.msgPlain}`)) || pictures.some((p) => row.querySelector(`[data-send-image="${p.key}"]`));
     if (!flies) { done(); return; }
@@ -548,9 +560,14 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     frame = requestAnimationFrame(tick);
     void clock.finished.then(done, () => {});
   };
-  const observer = new MutationObserver(() => { if (ghost) take(); else start(); });
+  const observer = new MutationObserver(() => { if (begun) take(); else start(); });
   observer.observe(list, { childList: true, subtree: true });
   const timeout = setTimeout(done, WAIT_FOR_ROW);
   flying = { done };
   rowAwaited = true;
+  out = listQueue(list).take(() => new Promise<void>((resolve) => {
+    landed = resolve;
+    turn = true;
+    start();
+  }));
 }

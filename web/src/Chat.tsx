@@ -25,7 +25,7 @@ import { thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
 import { useVirtualList, useVirtualModel, type VirtualList } from "./virtual/list.tsx";
 import type { Align, Item } from "./virtual/model.ts";
-import { animate, arrive, EASE_OUT, follower, glider, motionMs, moveState, type AnimationPlaybackControls, type Follower } from "@stillfail/ui/motion.ts";
+import { animate, arrive, EASE_OUT, ENTER, follower, glider, motionMs, moveState, type AnimationPlaybackControls, type Follower } from "@stillfail/ui/motion.ts";
 import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
 import { DraftKey, offerToDraft, pathWords, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
@@ -48,7 +48,8 @@ import * as cloudCss from "./styles/cloud.css.ts";
 import * as composerCss from "./styles/composer.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as dockCss from "./dock.css.ts";
-import { sendingHere, sentAfter, toMadeChat as toMadeChatOf, whenLanded } from "./madeChat.ts";
+import { sendingHere, sentAfter, toMadeChat as toMadeChatOf } from "./madeChat.ts";
+import { after, listQueue, queueRow } from "./listQueue.ts";
 import { thumbId } from "./viewerFlight.ts";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import { failure, useToast, useAct } from "@stillfail/ui/toast.tsx";
@@ -530,6 +531,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
     }
   }
   const virtual = useVirtualList(list, made, items, { short, trimmed, smooth, arrived, ...(cover ? { cover } : {}) });
+  useQueuedEntries(list);
 
   usePlace(virtual, place, messages, short, leave);
   useHistoryFade(list, messages);
@@ -569,6 +571,25 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   // Short of the end, the way there shows wherever the reader is, with how many wait there.
   const waiting = short ? chat.thread?.unread ?? 0 : 0;
   return { messages, away: away || short, waiting, toEnd, shown, rowOf, caughtAgent, poseOf: emissions.poseOf, virtual };
+}
+
+/**
+ * A message come in (eased in: `[data-enter]`, not one sent from here nor one out of its agent's avatar, which take
+ * their turns themselves) comes in its turn among what changes the list's height (listQueue.ts): its room not taken
+ * till then, it eases in as it takes it.
+ */
+function useQueuedEntries(list: RefObject<HTMLElement | null>) {
+  const seen = useRef(new WeakSet<Element>());
+  useLayoutEffect(() => {
+    const pane = list.current;
+    if (!pane) return;
+    // (The outbox's rows are what is sent from here: madeChat.ts sendingHere.)
+    for (const el of pane.querySelectorAll<HTMLElement>(":scope > [data-enter]:not([data-vk^='o:'])")) {
+      if (seen.current.has(el)) continue;
+      seen.current.add(el);
+      queueRow(el, () => after(motionMs(ENTER.duration)));
+    }
+  });
 }
 
 /** A list's way to one of its messages (by `ts`), by its pane: what is drawn in it finds it there. */
@@ -2305,8 +2326,27 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>, following: 
     f.el.remove();
     flight.current = null;
   };
+  // Their turn among what changes the list's height (listQueue.ts): taken as the first sets out, kept while one after
+  // another comes out, given back once none is left.
+  const slot = useRef<{ granted: boolean; out(): void; over(): void } | null>(null);
+  const giveBack = () => {
+    const s = slot.current;
+    slot.current = null;
+    if (s?.granted) s.over();
+    else s?.out();
+  };
   const nextAfter = (agent: string | null) => {
+    if (queue.current.length && !slot.current?.granted) {
+      // Not its turn yet: asked for once, and on from here when it comes (drawn again then).
+      if (!slot.current && list.current) {
+        const s = { granted: false, out: () => {}, over: () => {} };
+        slot.current = s;
+        s.out = listQueue(list.current).take(() => new Promise<void>((resolve) => { s.granted = true; s.over = resolve; rerender((n) => n + 1); }));
+      }
+      if (!slot.current?.granted) return;
+    }
     const next = queue.current.shift();
+    if (!next) giveBack();
     // The same agent's next message goes straight on: its activity is folded already, and its avatar out.
     setCurrent(next ? { ...next, pose: next.agent === agent ? "float" : "fold" } : null);
   };
@@ -2329,6 +2369,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>, following: 
     } else {
       land();
       setCurrent(null);
+      giveBack();
     }
     rerender((n) => n + 1);
   };
@@ -2436,7 +2477,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>, following: 
     }
     return () => { clearTimeout(timer); cancelAnimationFrame(frame); hop?.stop(); };
   }, [current?.seq, current?.pose]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => land, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { land(); giveBack(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     /** Agents whose activity must stay while their messages come out. */
@@ -2489,23 +2530,17 @@ function Activity({ agent, leaving, caught, pose, stoppable }: { agent: AgentAtW
   const row = useRef<HTMLDivElement>(null);
   const line = useRef<HTMLButtonElement>(null);
   const tail = useRef<HTMLSpanElement>(null);
-  // One there when the chat opened is there at once. One that starts as the reader's message is on its way from the
-  // composer (madeChat.ts sendingHere) comes once that has landed, under it: not first, then pushed down by it.
+  // One there when the chat opened is there at once. One that starts comes in its turn among what changes the list's
+  // height (listQueue.ts): after the reader's message on its way from the composer has landed, under it, not first and
+  // then pushed down by it.
   useLayoutEffect(() => {
     if (caught) return;
     const el = row.current!;
     const move = { duration: FADE_MS / 1000, ease: EASE_OUT };
-    const come = () => arrive([[el, { "grid-template-rows": "0px", opacity: "0" }], [line.current!, { transform: "scale(0.5)" }]], move);
-    let came = false;
-    const stop = whenLanded(() => {
-      came = true;
-      el.style.removeProperty("grid-template-rows");
-      el.style.removeProperty("opacity");
-      come();
+    return queueRow(el, () => {
+      arrive([[el, { "grid-template-rows": "0px", opacity: "0" }], [line.current!, { transform: "scale(0.5)" }]], move);
+      return after(motionMs(FADE_MS));
     });
-    // Still on its way: held folded and unseen till it lands.
-    if (!came) Object.assign(el.style, { gridTemplateRows: "0px", opacity: "0" });
-    return stop;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Set here, not by React: the change is made where what shows before it can be read.
   const was = useRef({ leaving: false, folded: false });

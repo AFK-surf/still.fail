@@ -76,7 +76,7 @@ type Made = {
 /** How much of the list's gap before it a row takes back (its own negative margin, list.css.ts): held back, all of it;
  *  going with the row before it (`data-joined`), all but JOINED_GAP. */
 function takenBack(row: HTMLElement, gap: number): number {
-  return row.hasAttribute("data-held") ? gap : row.hasAttribute("data-joined") ? gap - css.JOINED_GAP : 0;
+  return row.hasAttribute("data-held") || row.hasAttribute("data-queued") ? gap : row.hasAttribute("data-joined") ? gap - css.JOINED_GAP : 0;
 }
 
 /** A list's model, one for each `key` (a chat): made before its rows are, so where it opens can be said to it first. */
@@ -209,6 +209,14 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
     self.tell();
     return () => cancelAnimationFrame(later);
   });
+
+  // Known as a list's pane from its first rows on (listQueue.ts): whether it is where it goes.
+  useLayoutEffect(() => {
+    const el = pane.current;
+    if (!el) return;
+    stills.set(el, (px) => !(model.mode.kind === "follow" && Math.abs(model.target() - model.where) > px));
+    return () => { stills.delete(el); };
+  }, [pane, model]);
 
   // Its first rows drawn, the rows past the pane's edges are made, ready for a scroll: not in the frame the list opens
   // in, nor in the frames of what brings it in (a panel sliding open), but once that is over; at the reader's first
@@ -433,6 +441,11 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
 function spacer(key: string, height: number, where: "first" | "between" | "last" | "only"): ReactNode {
   return createElement("div", { key, className: css.spacer, "data-where": where, "aria-hidden": true, style: { height: `${height}px` } });
 }
+
+/** Each list's pane, and whether it is where it goes (its glide over, or within `px` of it): listQueue.ts. */
+const stills = new WeakMap<Element, (px: number) => boolean>();
+export const isListPane = (el: Element): boolean => stills.has(el);
+export const listStill = (pane: Element, px = 0.5): boolean => stills.get(pane)?.(px) ?? true;
 
 /** What of a layout the rows drawn depend on. */
 function signature(layout: Layout): string {
