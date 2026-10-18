@@ -153,6 +153,8 @@ async function main() {
   await page.waitForTimeout(3000);
   console.log(`the station says, archived: ${(await agentSearch(data, dir, "duckdb")).replace(/\s+/g, " ").slice(0, 400)}`);
   const archived = await switcher("duckdb", "desktop-duckdb-archived");
+  await page.waitForTimeout(6000);
+  console.log(`six seconds on: ${(await page.locator('[role="listbox"]').innerText()).replace(/\s+/g, " ").slice(0, 200)}`);
   check("an archived chat is found, its message from its station", archived.replace(/\s+/g, " ").slice(0, 300), /已归档/.test(archived) && /DuckDB/.test(archived));
   await page.emulateMedia({ colorScheme: "dark" });
   await switcher("部署", "desktop-deploy-dark");
