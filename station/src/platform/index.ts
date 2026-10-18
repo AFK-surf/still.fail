@@ -175,6 +175,8 @@ export type Platform = {
   hasQuickLook: boolean;
   /// Privacy permissions a folder can be denied by (macOS's).
   hasFolderPermissions: boolean;
+  /// Spotlight's index of the machine's files, asked with `mdfind` (macOS's): the search finds files through it.
+  hasSpotlight: boolean;
   /// The machine's display seen and driven from a client (docs/remote-screens.md; macOS's ScreenCaptureKit).
   hasDesktopScreen: boolean;
 };

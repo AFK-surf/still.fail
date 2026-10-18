@@ -9,6 +9,7 @@ import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join, sep } from "node:path";
 import { wall } from "../ops/fibers.ts";
+import { platform } from "../platform/index.ts";
 import type { Asker, Group, Hit } from "./index.ts";
 
 /// Where a Mac keeps its apps.
@@ -96,7 +97,7 @@ export class FileSearch {
 
   /// Whether files are found this way here (Spotlight on macOS); elsewhere the station's index has them.
   static here(): boolean {
-    return process.platform === "darwin";
+    return platform.hasSpotlight;
   }
 
   /// The files the words find for `asker`: those whose name has the first word first, then the most recently changed.

@@ -466,5 +466,6 @@ export const unix: Platform = {
   trash: MACOS ? "finder" : "freedesktop",
   hasQuickLook: MACOS,
   hasFolderPermissions: MACOS,
+  hasSpotlight: MACOS,
   hasDesktopScreen: MACOS,
 };
