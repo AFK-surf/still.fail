@@ -2,7 +2,7 @@
 
 > chat EMBER/1792171443.604000（2026-10-17 用户定：不在 station 之间借用、复制登录；每台 station 自己登录、自己持有和续期凭据，人在客户端远程完成；登录是机器级的；通用，跑工具自己的登录命令；浏览器那一步在客户端设备上、用这个人自己的浏览器完成；station 的浏览器和远程屏幕只是兜底；能操作这台 station 的人就能在上面登录，不分是哪个 workspace 的；两种都支持的工具默认用设备码）。同一 chat 后来又定：不按服务一个一个支持，只有一种通用的登录方式；登录区不列没登录的服务；不让用户输入命令：登录只由 agent 用 login 发起，人只在面板里完成；CLI 的交互由 agent 操作；人只做要本人身份的那一步（在自己浏览器里登录、填码）；设备码不要两个按钮，一个「复制并打开」。
 
-状态：第一步已实现（PR #496：station `station/src/logins/`、core `client/core-ts/src/station/machine-logins.ts`、web `web/src/MachineLogins.tsx`）；下面写「实现」的地方是代码里实际的做法，和最初的设计不同处随文说明。
+状态：第一步已实现（PR #496：station `station/src/logins/`、core `client/core-ts/src/station/machine-logins.ts`、web `web/src/MachineLogins.tsx`），安卓（卡片和回环转发）是第二步；下面写「实现」的地方是代码里实际的做法，和最初的设计不同处随文说明。
 
 ## 要解决的事
 
@@ -279,8 +279,24 @@ chat 里 agent 的消息下面、奏里、station 页「登录」区里进行中
 
 ### 安卓
 
-- 打开网址用 Chrome Custom Tab；回环回调由 app 自己听 `127.0.0.1:<端口>`（core 的 host 经 `client/shell` 加一个只听回环的监听），Custom Tab 在前台时 app 的进程还在。要实测：系统把 app 放后台后监听会不会被停，必要时登录期间起一个前台服务（通知栏「正在 studio 上登录 GitHub」）。
-- 第一步安卓只有设备码、打开网址、终端和贴地址兜底；回环转发放第二步。
+实现（第二步）：卡片 `apps/android/shared/.../screens/LoginCards.kt`（`LoginCard`、station 页的 `StationLogins`），和网页同一套状态、同一套文字（`web-main.logins.*`），用在 chat 里 agent 消息下面、奏、station 页「登录」区；agent 贴的登录链接（`/w/<ws>/s/<station>/login/<id>`，core `link.parse` 的 `login`）打开 station 页并把那张卡片滚到眼前、浅色底标出来。
+
+- 网页都在 Chrome Custom Tab 里打开（没有支持 Custom Tab 的浏览器就交给系统浏览器）。设备码「复制并打开」、点码只复制（toast「验证码已复制」）、只要打开网址，和网页一样。
+- 回环：core 的 `Host.listen` 在安卓上是 app 的（bridge 的 `listen.open/next/respond/close`，引擎把 `listen.*` 和 `secure.*` 一样交给 Kotlin：`:core` 的 `Loopback.kt`，`ServerSocket` 只绑 127.0.0.1 / ::1），所以 `canRelay` 为真，核对 Host、路径、state、只转一次、10 秒后关，全是 core 里桌面那一套（`Relays`）。没有改 Rust shell。
+- 后台：Custom Tab 在前面时 app 在后台；Android 14 起默认开着「缓存应用冻结」，进了后台的进程几秒后就被冻住，冻住的进程接不了浏览器的回调。所以监听开着的时候（只在那时）起一个前台服务 `LoginRelayService`（`:app` 的 `LoginRelay.kt`，通知「在 studio 上登录 gcloud · 正在等待浏览器」）：由打开浏览器的那一下起（app 在前台，Android 只允许这时起），最后一个监听关掉就自己结束（转完一次后 10 秒、登录结束或取消、最多 15 分钟）。类型用 `specialUse`（和共享调试一样）：没有别的类型合适，`shortService` 的 3 分钟对要第二步验证的登录太短。
+- 本机端口被占：core 记下原因（`MachineLoginShown.relayText`「本机 8085 端口被占用」），卡片上红字说，按钮还在、可以再试；不弹 toast、什么都不打开（网页桌面同样改成说在卡片上）。
+
+### 跨机器实测（2026-10-18）
+
+第一步的回环转发只有同机的确定性测试，这次第一次真的跨机器走通。studio 上起 dev cloud 和临时 station（临时 HOME），登录命令是一个假的回环登录（只听 127.0.0.1 的 `<端口>`，经 `BROWSER` 交出一个 https 登录页：httpbin 的 `redirect-to`，当作立刻跳回 `redirect_uri` 的服务商；state 对的回调到了就退出 0，别的请求退出 1）。登录都由 agent 用 station 的 `login` 工具起、再发卡片，studio 上没有人碰。
+
+| 客户端 | 怎么做 | 结果 |
+|---|---|---|
+| Mini1 上的 node host（桌面 app 的 core，`hosts/node.ts`），经局域网连 studio 的 dev cloud 和 relay | `machineLogin.open` → Mini1 本机监听 → 照浏览器那样请求登录页、跟着跳到 `http://localhost:18085/callback` | 回调经 mesh 转到 studio 上的命令，2.8 秒里卡片变成「已在 studio 上登录 fake-loopback」；之后那个端口只回「登录已完成」页 |
+| studio 上的安卓模拟器（自己的网络栈：它的 127.0.0.1 不是 studio 的，算「另一台机器」），adb reverse 只给 dev cloud 和 relay | 在 chat 的卡片上点「在浏览器里登录」→ Custom Tab → 跳回模拟器的 `localhost:18086` | 前台服务起来（`fg-service`），Custom Tab 显示命令自己的「signed in」页，登录完成；10 秒后监听关、服务结束 |
+| 同上，真的 `gcloud auth login`（studio 上，临时配置目录） | 打开 agent 贴的登录链接（station 页，卡片标出来）→「在浏览器里登录」| Custom Tab 停在 Google 的「登录 · 继续前往 Google Cloud SDK」，没有真的登录；在卡片上取消，命令结束，服务跟着结束 |
+
+这次实测查出一个只在手机上出的问题：core 核对回调时用了 `URLSearchParams`，安卓的 Hermes 没有它，浏览器的第一个请求一来 core 就崩、监听跟着没了（Chrome 显示连接被拒）。已改成手写解析，`hermes-safe.test.ts` 也拦 `URLSearchParams`。同一次里也看到了冻结：core 崩掉、服务结束以后，Custom Tab 还在前面，约 70 秒后系统日志 `freezing … fail.still.android.motion`。
 
 ## 安全
 
@@ -318,9 +334,12 @@ chat 里 agent 的消息下面、奏里、station 页「登录」区里进行中
 - agent：`login` 工具、`login` 卡片、登录结束的通知、instructions 和 migrations NOTE。
 - 验证：studio 上 dev cloud + 临时 station，临时 HOME，用 gh（设备码）、gcloud（回环 8085）、npm（只打开网址）各走通一次；回环转发（GET 和 form_post 的 POST、只听 `[::1]` 和只听 127.0.0.1 的两种）、端口被占、state 不对、命令已退出时的拒绝写确定性测试（假的登录命令 + 本机 HTTP 服务）。
 
+**第二步（安卓，已实现）**
+
+- 安卓卡片和回环转发，见上面「安卓」。
+
 **之后**
 
-- 安卓：回环转发（shell 加监听、Custom Tab、必要时前台服务）。
 - 网页的贴地址兜底、station 浏览器兜底（要 remote-screens 先合）。
 - 几台 station 一起登录。
 - `login {station}` 跨 station。
