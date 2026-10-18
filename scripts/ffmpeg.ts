@@ -18,7 +18,11 @@ import { join } from "node:path";
 export type FfmpegTarget = "darwin-arm64" | "linux-x64" | "linux-arm64";
 export const TARGETS: FfmpegTarget[] = ["darwin-arm64", "linux-x64", "linux-arm64"];
 
-type Source = { name: string; version: string; url: string; sha256: string; license: string };
+type Source = { name: string; version: string; url: string; sha256: string; license: string; file?: string };
+/// Where still.fail keeps its own copy of each shipped source, as the LGPL asks: the release `third-party-sources` of
+/// the repository, each tarball under `file` (or its upstream name), the same bytes as upstream's.
+const COPIES = "https://github.com/AFK-surf/still.fail/releases/download/third-party-sources";
+const copyOf = (s: Source): string | null => (s === NASM ? null : `${COPIES}/${s.file ?? s.url.split("/").pop()}`);
 export const FFMPEG: Source = {
   name: "FFmpeg",
   version: "9.0.2",
@@ -33,6 +37,7 @@ export const OPENH264: Source = {
   url: "https://github.com/cisco/openh264/archive/refs/tags/v2.6.0.tar.gz",
   sha256: "558544ad358283a7ab2930d69a9ceddf913f4a51ee9bf1bfb9e377322af81a69",
   license: "BSD-2-Clause",
+  file: "openh264-2.6.0.tar.gz",
 };
 /// Linux's zlib (the PNG decoder needs it; compressed MOV headers and Matroska tracks use it). macOS has its own.
 export const ZLIB: Source = {
@@ -127,10 +132,18 @@ function run(cmd: string, args: string[], options: SpawnSyncOptions = {}) {
   if (done.status !== 0) throw new Error(`${cmd} ${args.join(" ")}: exit ${done.status ?? done.signal}`);
 }
 
-/// `source`'s tarball unpacked in `work` (checked against its SHA-256 first): its directory.
+/// `source`'s tarball unpacked in `work` (checked against its SHA-256 first): its directory. From upstream, else from
+/// still.fail's copy.
 function fetchSource(source: Source, work: string): string {
   const file = join(work, source.url.split("/").pop()!);
-  run("curl", ["-fsSL", "--retry", "5", "--retry-all-errors", source.url, "-o", file]);
+  const copy = copyOf(source);
+  try {
+    run("curl", ["-fsSL", "--retry", "5", "--retry-all-errors", source.url, "-o", file]);
+  } catch (e) {
+    if (!copy) throw e;
+    console.error(`native: ${source.url} not fetched (${(e as Error).message}); from ${copy}`);
+    run("curl", ["-fsSL", "--retry", "5", "--retry-all-errors", copy, "-o", file]);
+  }
   const got = createHash("sha256").update(readFileSync(file)).digest("hex");
   if (got !== source.sha256) throw new Error(`${source.url}: sha256 ${got}, not ${source.sha256}`);
   const dir = join(work, `${source.name.toLowerCase()}-src`);
@@ -243,11 +256,12 @@ export function sourceNote(target: FfmpegTarget): string {
     `ffmpeg and ffprobe (${target}), as still.fail's media service runs them.`,
     "",
     `They are FFmpeg ${FFMPEG.version}, built as LGPL-2.1-or-later only (no GPL or non-free part), unmodified, from:`,
-    ...built.map((s) => `  ${s.name} ${s.version} (${s.license}): ${s.url}\n    sha256 ${s.sha256}`),
+    ...built.map((s) => `  ${s.name} ${s.version} (${s.license}): ${s.url}\n    still.fail's copy: ${copyOf(s)}\n    sha256 ${s.sha256}`),
     "",
     "FFmpeg is free software under the GNU Lesser General Public License, version 2.1 or later (ffmpeg-LICENSE.md,",
-    "ffmpeg-COPYING.LGPLv2.1). You may get its source above, rebuild it, change it and use your own build in place of",
-    "these (the media service runs $MEDIA_FFMPEG and $MEDIA_FFPROBE when they are set).",
+    "ffmpeg-COPYING.LGPLv2.1). You may get its source above (upstream's, or still.fail's copy of the same bytes),",
+    "rebuild it, change it and use your own build in place of these (the media service runs $MEDIA_FFMPEG and",
+    "$MEDIA_FFPROBE when they are set).",
     ...(target === "darwin-arm64" ? [] : [
       "OpenH264 (Copyright (c) 2013, Cisco Systems) is under the BSD 2-Clause license (openh264-LICENSE); zlib",
       "(Copyright (C) 1995-2026 Jean-loup Gailly and Mark Adler) under the zlib license (zlib-LICENSE).",

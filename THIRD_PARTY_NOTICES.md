@@ -15,7 +15,7 @@ These patched crates come from the corresponding crates.io releases. The iroh an
 
 ## FFmpeg in the media service's package
 
-The media service's package (`media/service`, installed by stations as the module `media`) carries `ffmpeg` and `ffprobe` in its `bin/`, one build per platform (darwin-arm64, linux-x64, linux-arm64). They are built in CI from the unmodified upstream sources below by `scripts/ffmpeg.ts` (the native part `ffmpeg` of `scripts/native.ts`), each tarball checked against its SHA-256. Each package's `bin/` also holds FFmpeg's `LICENSE.md` and `COPYING.LGPLv2.1` (as `ffmpeg-LICENSE.md`, `ffmpeg-COPYING.LGPLv2.1`), the notices of what is linked in, and `SOURCE`, which names these sources and the exact configure flags.
+The media service's package (`media/service`, installed by stations as the module `media`) carries `ffmpeg` and `ffprobe` in its `bin/`, one build per platform (darwin-arm64, linux-x64, linux-arm64). They are built in CI from the unmodified upstream sources below by `scripts/ffmpeg.ts` (the native part `ffmpeg` of `scripts/native.ts`), each tarball checked against its SHA-256. still.fail keeps a copy of each, the same bytes, in the release [`third-party-sources`](https://github.com/AFK-surf/still.fail/releases/tag/third-party-sources) of this repository (with `SHA256SUMS`); the build falls back to it when upstream cannot be reached. Each package's `bin/` also holds FFmpeg's `LICENSE.md` and `COPYING.LGPLv2.1` (as `ffmpeg-LICENSE.md`, `ffmpeg-COPYING.LGPLv2.1`), the notices of what is linked in, and `SOURCE`, which names these sources and the exact configure flags.
 
 | Component | Version | License | Source | In |
 | --- | --- | --- | --- | --- |
