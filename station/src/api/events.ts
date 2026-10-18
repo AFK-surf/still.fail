@@ -121,7 +121,7 @@ export class Events {
   }
 
   /// Where `live` sessions are followed from, the overview and process states (the agents' side, once it is made).
-  follow(more: Pick<EventsDeps, "live" | "overview" | "processState" | "followed" | "loginScreen">) {
+  follow(more: Partial<Pick<EventsDeps, "live" | "overview" | "processState" | "followed" | "loginScreen">>) {
     Object.assign(this.deps, more);
   }
 
