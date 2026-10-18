@@ -451,7 +451,8 @@ private fun ColumnScope.AgentEnvSheet(station: String) {
     if (typed != null && d?.text == typed) typed = null
     val text = typed ?: d?.text ?: ""
     val read = d?.takeIf { it.text == text }
-    val colours = remember(read) { read?.let { r -> EnvColours(r) } ?: VisualTransformation.None }
+    val palette = listOf(C.accent, C.ink, C.subtle, C.muted, C.red)
+    val colours = remember(read, palette) { read?.let { r -> EnvColours(r, palette) } ?: VisualTransformation.None }
     SheetGrab()
     SheetHead(t("android-settings.agentEnv.title"))
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -478,14 +479,17 @@ private fun ColumnScope.AgentEnvSheet(station: String) {
     }
 }
 
-/** The text as the core read it: names, values and comments in their colours, a line it cannot take in red. */
-private class EnvColours(private val read: AgentEnvDraft) : VisualTransformation {
+/**
+ * The text as the core read it: names, values and comments in their colours, a line it cannot take in red. `palette`:
+ * the theme's name, value, comment, other and wrong colours.
+ */
+private class EnvColours(private val read: AgentEnvDraft, private val palette: List<androidx.compose.ui.graphics.Color>) : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
         val coloured = buildAnnotatedString {
             read.lines.forEachIndexed { i, l ->
                 if (i > 0) append("\n")
                 l.parts.forEach { p ->
-                    val colour = if (l.error) C.red else when (p.kind) { "name" -> C.accent; "value" -> C.ink; "comment" -> C.subtle; else -> C.muted }
+                    val colour = palette[if (l.error) 4 else when (p.kind) { "name" -> 0; "value" -> 1; "comment" -> 2; else -> 3 }]
                     withStyle(SpanStyle(color = colour)) { append(p.text) }
                 }
             }
