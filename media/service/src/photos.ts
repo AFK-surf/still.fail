@@ -31,14 +31,14 @@ export function localDay(ms: number): string {
 }
 
 /// The most folders a library has.
-const MOST_FOLDERS = 64;
+export const MOST_FOLDERS = 64;
 /// The most folders watched at once (the station keeps 256 watches for everyone).
 export const WATCHES = 32;
 /// How deep a walk goes, and how many folders one pass lists at most.
-const DEPTH = 32;
-const MOST_DIRS = 100_000;
+export const DEPTH = 32;
+export const MOST_DIRS = 100_000;
 /// How often the library is gone over whole.
-const HOURLY = 60 * 60 * 1000;
+export const HOURLY = 60 * 60 * 1000;
 /// Folders a NAS or a system keeps its own things in; bundles that hold a library of their own.
 const SKIP_DIRS = new Set(["@eaDir", "@Recycle", "@Recently-Snapshot", "#recycle", "#snapshot", "$RECYCLE.BIN", "System Volume Information", "node_modules"]);
 const BUNDLES = /\.(photoslibrary|photolibrary|migratedphotolibrary|aplibrary|lrdata|app)$/i;
@@ -51,7 +51,7 @@ const WATCH_ID = "media-photos";
 /// Upload parts left this long are removed.
 const STALE_UPLOAD = 7 * 24 * 60 * 60 * 1000;
 /// While many thumbnails are made, the library is said to have changed at most this often.
-const FILL_TOLD = 15_000;
+export const FILL_TOLD = 15_000;
 
 export type Folder = { root: string; path: string };
 type Album = Folder & { id: string; title: string };
@@ -73,22 +73,22 @@ export type LibraryOptions = {
   changed: () => void;
 };
 
-const hidden = (name: string) => name.startsWith(".");
-const skipDir = (name: string) => hidden(name) || SKIP_DIRS.has(name) || BUNDLES.test(name);
-const parentOf = (p: string) => {
+export const hidden = (name: string) => name.startsWith(".");
+export const skipDir = (name: string) => hidden(name) || SKIP_DIRS.has(name) || BUNDLES.test(name);
+export const parentOf = (p: string) => {
   const d = posix.dirname(p);
   return d === "." || d === "/" ? "" : d;
 };
-const join2 = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
-const under = (dir: string, p: string) => dir === "" || p === dir || p.startsWith(`${dir}/`);
-const dirKey = (root: string, dir: string) => `${root}\n${dir}`;
+export const join2 = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
+export const under = (dir: string, p: string) => dir === "" || p === dir || p.startsWith(`${dir}/`);
+export const dirKey = (root: string, dir: string) => `${root}\n${dir}`;
 
 function run(cmd: string, args: string[]): Promise<void> {
   return new Promise((done, fail) => execFile(cmd, args, { timeout: 60_000 }, (e) => (e ? fail(e) : done())));
 }
 
 /// A folder's path as kept: relative, no `.`/`..`, no slashes at either end.
-function cleanPath(p: string): string {
+export function cleanPath(p: string): string {
   const parts = p.split("/").filter((x) => x !== "" && x !== ".");
   if (parts.some((x) => x === "..")) throw bad("路径（path）不能含 ..");
   return parts.join("/");

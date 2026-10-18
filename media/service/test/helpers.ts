@@ -7,6 +7,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
 import { sniff } from "../src/images.ts";
+import type { Tools } from "../src/ffmpeg.ts";
 import { startService, type Service } from "../src/server.ts";
 
 /// A zip of `files` (deflated unless `stored`), as an EPUB wants it when `mimetype` comes first and stored.
@@ -606,15 +607,16 @@ export function listen(socket: string, who: Who) {
 export const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /// The service started on a socket of its own, with a fake station; `stop` ends both. The photo library's backup
-/// folder is `<dir>/backup`; `sips` none unless given.
-export async function started(part = 4096, sips: string | null = null) {
+/// folder is `<dir>/backup`; `sips` none unless given; ffmpeg and ffprobe none unless given (`tools`), the HLS cache's
+/// cap as `hlsCap` says.
+export async function started(part = 4096, sips: string | null = null, tools: Tools = { ffmpeg: null, ffprobe: null }, hlsCap?: number) {
   // Short and real: a unix socket's path is at most 104 bytes on macOS, and the station is asked by real paths.
   const dir = realpathSync(mkdtempSync(join(process.platform === "darwin" ? "/tmp" : tmpdir(), "media-")));
   const token = "secret-token";
   const station = await fakeStation(dir, token, part);
   const socket = join(dir, "m.sock");
   const backup = join(dir, "backup");
-  const service: Service = await startService({ dir: join(dir, "data"), socket, station: { socket: station.socket, token }, backup, sips });
+  const service: Service = await startService({ dir: join(dir, "data"), socket, station: { socket: station.socket, token }, backup, sips, tools, ...(hlsCap ? { hlsCap } : {}) });
   return {
     dir,
     backup,

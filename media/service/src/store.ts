@@ -1,5 +1,6 @@
 // media.db (node:sqlite, WAL): the books of each workspace with their chapters and images, and each account's reading
-// place and notes; the station's photo library (its items, its folders). Its own schema version (`user_version`), moved forward by MIGRATIONS in order; a database newer
+// place and notes; the station's photo library (its items, its folders); its video library (films, episodes, shows)
+// and each account's place in them. Its own schema version (`user_version`), moved forward by MIGRATIONS in order; a database newer
 // than this service is refused.
 import { DatabaseSync } from "node:sqlite";
 import { type Parsed, type TocEntry, chapterChars } from "./blocks.ts";
@@ -93,6 +94,66 @@ CREATE TABLE photo_settings (
   value TEXT NOT NULL
 );
 `,
+  `
+CREATE TABLE video_items (
+  id TEXT PRIMARY KEY,
+  folder TEXT NOT NULL,
+  root TEXT NOT NULL,
+  path TEXT NOT NULL,
+  dir TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  mtime INTEGER NOT NULL,
+  sides TEXT NOT NULL,
+  title TEXT NOT NULL,
+  original_title TEXT,
+  year INTEGER,
+  plot TEXT,
+  genres TEXT NOT NULL,
+  runtime REAL,
+  show TEXT,
+  season INTEGER,
+  episode INTEGER,
+  episode_end INTEGER,
+  subs TEXT NOT NULL,
+  probe TEXT,
+  probe_state TEXT NOT NULL,
+  poster TEXT,
+  thumbhash TEXT,
+  added INTEGER NOT NULL,
+  seen INTEGER NOT NULL
+);
+CREATE INDEX video_items_folder ON video_items (folder);
+CREATE INDEX video_items_dir ON video_items (folder, dir);
+CREATE INDEX video_items_show ON video_items (show, season, episode);
+CREATE INDEX video_items_unprobed ON video_items (added) WHERE probe_state = 'pending';
+CREATE INDEX video_items_unposted ON video_items (added) WHERE thumbhash IS NULL;
+CREATE TABLE video_shows (
+  id TEXT PRIMARY KEY,
+  folder TEXT NOT NULL,
+  root TEXT NOT NULL,
+  dir TEXT NOT NULL,
+  title TEXT NOT NULL,
+  original_title TEXT,
+  year INTEGER,
+  plot TEXT,
+  genres TEXT NOT NULL,
+  nfo TEXT NOT NULL,
+  poster TEXT,
+  thumbhash TEXT,
+  added INTEGER NOT NULL
+);
+CREATE TABLE video_progress (
+  item TEXT NOT NULL,
+  sub TEXT NOT NULL,
+  position REAL NOT NULL,
+  duration REAL,
+  done INTEGER NOT NULL,
+  at INTEGER NOT NULL,
+  PRIMARY KEY (item, sub)
+);
+CREATE INDEX video_progress_sub ON video_progress (sub, at);
+`,
 ];
 
 export type BookRow = { id: string; workspace: string; title: string; author: string; format: string; root: string; path: string; size: number; mtime: number; added: number; cover: string | null; toc: TocEntry[] };
@@ -139,6 +200,49 @@ export type PhotoRow = {
   sha256: string | null;
   seen: number;
 };
+
+/// A film or an episode of the video library (`folder`: its library folder's id): what it was found to be (by its
+/// names and .nfo; `show`, `season`, `episode` for an episode), what ffprobe said (`probe`, JSON, when `probe_state`
+/// is `done`; else `pending`, `unreadable`: the service may not read the file, `no-ffprobe`, `failed`), its external
+/// subtitles (`subs`, JSON), the picture beside it it is shown by (`poster`: its name, mtime and size), the poster's
+/// ThumbHash (null until made, "" when none could be). `sides`: what of its folder it was found by.
+export type VideoRow = {
+  id: string;
+  folder: string;
+  root: string;
+  path: string;
+  dir: string;
+  kind: "movie" | "episode";
+  size: number;
+  mtime: number;
+  sides: string;
+  title: string;
+  original_title: string | null;
+  year: number | null;
+  plot: string | null;
+  genres: string;
+  runtime: number | null;
+  show: string | null;
+  season: number | null;
+  episode: number | null;
+  episode_end: number | null;
+  subs: string;
+  probe: string | null;
+  probe_state: string;
+  poster: string | null;
+  thumbhash: string | null;
+  added: number;
+  seen: number;
+};
+const VIDEO_COLUMNS = ["id", "folder", "root", "path", "dir", "kind", "size", "mtime", "sides", "title", "original_title", "year", "plot", "genres", "runtime", "show", "season", "episode", "episode_end", "subs", "probe", "probe_state", "poster", "thumbhash", "added", "seen"] as const;
+
+/// A show of the video library: its folder (`dir`, "" when its episodes lie loose in the library folder), what
+/// tvshow.nfo says (`nfo`: which one was read, "name:mtime:size"), its poster beside it, as a film's.
+export type ShowRow = { id: string; folder: string; root: string; dir: string; title: string; original_title: string | null; year: number | null; plot: string | null; genres: string; nfo: string; poster: string | null; thumbhash: string | null; added: number };
+const SHOW_COLUMNS = ["id", "folder", "root", "dir", "title", "original_title", "year", "plot", "genres", "nfo", "poster", "thumbhash", "added"] as const;
+
+/// An account's place in a film or an episode: seconds in, of how long it is (as the player said), whether it was seen.
+export type Progress = { position: number; duration: number | null; done: boolean; at: number };
 
 const PHOTO_COLUMNS = ["id", "root", "path", "dir", "album", "kind", "size", "mtime", "taken", "day", "w", "h", "duration", "camera", "lens", "lat", "lon", "thumbhash", "sha256", "seen"] as const;
 
@@ -217,6 +321,38 @@ export function openStore(file: string) {
     unhashed: db.prepare("SELECT * FROM photo_items WHERE thumbhash IS NULL ORDER BY taken DESC LIMIT ?"),
     setThumbhash: db.prepare("UPDATE photo_items SET thumbhash = ? WHERE id = ? AND mtime = ? AND size = ?"),
   };
+  const v = {
+    get: db.prepare("SELECT * FROM video_items WHERE id = ?"),
+    put: db.prepare(`INSERT OR REPLACE INTO video_items (${VIDEO_COLUMNS.join(", ")}) VALUES (${VIDEO_COLUMNS.map(() => "?").join(", ")})`),
+    see: db.prepare("UPDATE video_items SET seen = ? WHERE id = ?"),
+    remove: db.prepare("DELETE FROM video_items WHERE id = ?"),
+    ofFolder: db.prepare("SELECT id, path, dir, seen FROM video_items WHERE folder = ?"),
+    under: db.prepare("SELECT id, path, dir, seen FROM video_items WHERE folder = ? AND (dir = ? OR substr(dir, 1, length(?)) = ?)"),
+    folders: db.prepare("SELECT DISTINCT folder FROM video_items"),
+    movies: db.prepare("SELECT * FROM video_items WHERE kind = 'movie' ORDER BY added DESC, title, id"),
+    episodes: db.prepare("SELECT * FROM video_items WHERE kind = 'episode' AND show = ? ORDER BY season, episode IS NULL, episode, path"),
+    allEpisodes: db.prepare("SELECT * FROM video_items WHERE kind = 'episode' ORDER BY show, season, episode IS NULL, episode, path"),
+    unprobed: db.prepare("SELECT * FROM video_items WHERE probe_state = 'pending' ORDER BY added DESC, id LIMIT ?"),
+    reprobe: db.prepare("UPDATE video_items SET probe_state = 'pending' WHERE probe_state IN ('no-ffprobe', 'unreadable', 'failed')"),
+    setProbe: db.prepare("UPDATE video_items SET probe = ?, probe_state = ? WHERE id = ? AND mtime = ? AND size = ?"),
+    unposted: db.prepare("SELECT * FROM video_items WHERE thumbhash IS NULL ORDER BY added DESC, id LIMIT ?"),
+    setThumb: db.prepare("UPDATE video_items SET thumbhash = ? WHERE id = ? AND mtime = ? AND size = ?"),
+    show: db.prepare("SELECT * FROM video_shows WHERE id = ?"),
+    shows: db.prepare("SELECT * FROM video_shows ORDER BY added DESC, title, id"),
+    putShow: db.prepare(`INSERT OR REPLACE INTO video_shows (${SHOW_COLUMNS.join(", ")}) VALUES (${SHOW_COLUMNS.map(() => "?").join(", ")})`),
+    orphanShows: db.prepare("SELECT id FROM video_shows s WHERE NOT EXISTS (SELECT 1 FROM video_items i WHERE i.show = s.id)"),
+    removeShow: db.prepare("DELETE FROM video_shows WHERE id = ?"),
+    unpostedShows: db.prepare("SELECT * FROM video_shows WHERE thumbhash IS NULL ORDER BY added DESC, id LIMIT ?"),
+    setShowThumb: db.prepare("UPDATE video_shows SET thumbhash = ? WHERE id = ? AND coalesce(poster, '') = ?"),
+    progress: db.prepare("SELECT position, duration, done, at FROM video_progress WHERE item = ? AND sub = ?"),
+    progresses: db.prepare("SELECT item, position, duration, done, at FROM video_progress WHERE sub = ?"),
+    setProgress: db.prepare(
+      "INSERT INTO video_progress (item, sub, position, duration, done, at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (item, sub) DO UPDATE SET position = excluded.position, duration = excluded.duration, done = excluded.done, at = excluded.at WHERE excluded.at > video_progress.at",
+    ),
+  };
+  const progressOf = (r: Row): Progress => ({ position: r.position as number, duration: (r.duration as number | null) ?? null, done: r.done === 1, at: r.at as number });
+  type Found = { id: string; path: string; dir: string; seen: number };
+
   const photoOf = (r: Row): PhotoRow => r as PhotoRow;
   type Placed = { id: string; path: string; dir: string; album: string; seen: number };
 
@@ -375,6 +511,107 @@ export function openStore(file: string) {
     /// The ThumbHash of the item as it was (`mtime`, `size`) when its thumbnail was made; "" when none could be.
     setThumbhash(id: string, hash: string, mtime: number, size: number): boolean {
       return Number(q.setThumbhash.run(hash, id, mtime, size).changes) > 0;
+    },
+
+    // The video library.
+
+    video(id: string): VideoRow | undefined {
+      return v.get.get(id) as VideoRow | undefined;
+    },
+
+    putVideo(r: VideoRow) {
+      v.put.run(...VIDEO_COLUMNS.map((c) => r[c]));
+    },
+
+    seeVideo(id: string, seen: number) {
+      v.see.run(seen, id);
+    },
+
+    removeVideos(ids: string[]) {
+      if (ids.length > 0) tx(() => ids.forEach((id) => v.remove.run(id)));
+    },
+
+    /// What the library has of the library folder `folder`: all, or what is in its folder `dir` and below.
+    videosUnder(folder: string, dir?: string): Found[] {
+      return (dir === undefined ? v.ofFolder.all(folder) : v.under.all(folder, dir, `${dir}/`, `${dir}/`)) as Found[];
+    },
+
+    videoFolders(): string[] {
+      return (v.folders.all() as { folder: string }[]).map((r) => r.folder);
+    },
+
+    movies(): VideoRow[] {
+      return v.movies.all() as VideoRow[];
+    },
+
+    /// A show's episodes (all shows' when none is given), in order.
+    episodes(show?: string): VideoRow[] {
+      return (show === undefined ? v.allEpisodes.all() : v.episodes.all(show)) as VideoRow[];
+    },
+
+    unprobed(n: number): VideoRow[] {
+      return v.unprobed.all(n) as VideoRow[];
+    },
+
+    /// What could not be probed is tried again.
+    reprobe() {
+      v.reprobe.run();
+    },
+
+    setProbe(id: string, probe: string | null, state: string, mtime: number, size: number) {
+      v.setProbe.run(probe, state, id, mtime, size);
+    },
+
+    unposted(n: number): VideoRow[] {
+      return v.unposted.all(n) as VideoRow[];
+    },
+
+    setVideoThumbhash(id: string, hash: string, mtime: number, size: number) {
+      v.setThumb.run(hash, id, mtime, size);
+    },
+
+    show(id: string): ShowRow | undefined {
+      return v.show.get(id) as ShowRow | undefined;
+    },
+
+    shows(): ShowRow[] {
+      return v.shows.all() as ShowRow[];
+    },
+
+    putShow(r: ShowRow) {
+      v.putShow.run(...SHOW_COLUMNS.map((c) => r[c]));
+    },
+
+    /// Shows left without an episode are removed; answers how many.
+    dropEmptyShows(): number {
+      const ids = (v.orphanShows.all() as { id: string }[]).map((r) => r.id);
+      if (ids.length > 0) tx(() => ids.forEach((id) => v.removeShow.run(id)));
+      return ids.length;
+    },
+
+    unpostedShows(n: number): ShowRow[] {
+      return v.unpostedShows.all(n) as ShowRow[];
+    },
+
+    /// The show's poster's ThumbHash, unless its poster changed meanwhile.
+    setShowThumbhash(id: string, hash: string, poster: string | null) {
+      v.setShowThumb.run(hash, id, poster ?? "");
+    },
+
+    progress(item: string, sub: string): Progress | null {
+      const r = v.progress.get(item, sub) as Row | undefined;
+      return r ? progressOf(r) : null;
+    },
+
+    /// The account's places in the library, by film or episode.
+    progresses(sub: string): Map<string, Progress> {
+      return new Map((v.progresses.all(sub) as Row[]).map((r) => [r.item as string, progressOf(r)]));
+    },
+
+    /// Keeps `p` unless the place kept is as new or newer. Answers the place kept, and whether it is `p`.
+    setProgress(item: string, sub: string, p: Progress): { progress: Progress; changed: boolean } {
+      const changed = Number(v.setProgress.run(item, sub, p.position, p.duration, p.done ? 1 : 0, p.at).changes) > 0;
+      return { progress: this.progress(item, sub)!, changed };
     },
 
     close() {
